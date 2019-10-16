@@ -35,6 +35,7 @@ let optimise
               |> CLI.(add (long "optimise"))
               |> sync)
 
+(* Transformation infrastructure. *)
 type result = { program: Ir.program;
                 datatype: Types.datatype;
                 context: Context.t }
@@ -42,7 +43,9 @@ type result = { program: Ir.program;
 type transformer = (module IrTransform.S)
 type transforms = (string * transformer) array
 
-module Pipeline(T : sig
+(* This functor collapses an array of [transformers] into a single
+   [transformer]. *)
+module Collapse(T : sig
              val transforms : transforms
            end) : IrTransform.S = struct
   let program state program =
@@ -54,11 +57,12 @@ module Pipeline(T : sig
       apply (IrTransform.return state program) T.transforms
 end
 
-let lift : transforms -> transformer
+let collapse : transforms -> transformer
   = fun transforms ->
-  (module Pipeline(struct let transforms = transforms end))
+  (module Collapse(struct let transforms = transforms end))
 
-
+(* This functor constructs a transformer that is only run if
+   [condition] evaluates to `true`. *)
 module Conditional(T : sig
              include IrTransform.S
              val condition : unit -> bool
@@ -77,6 +81,10 @@ let only_if_any : bool Settings.setting list -> (module IrTransform.S) -> transf
   = fun settings (module T) ->
   (module Conditional(struct include T let condition () = List.exists Settings.get settings end))
 
+(* This functor constructs performs some effectful computation, but
+   leaves its given [program] unaltered. *)
+(* TODO(dhil): Maybe [perform] should return an updated state such
+   that we can alter the transformation state. *)
 module PerformEffect(T : sig val perform : IrTransform.state -> Ir.program -> unit end) : IrTransform.S = struct
   let program state program =
     T.perform state program;
@@ -92,7 +100,8 @@ let debug_tell : string -> transformer
 let print_program : transformer
   = (module PerformEffect(struct let perform _ program = Debug.print (Ir.string_of_program program) end))
 
-
+(* This functor instruments a transformer with performance measuring
+   capabilities. *)
 module Measure(T : sig include IrTransform.S val name : string end) = struct
   let program state program =
     Performance.measure_l T.name (lazy (T.program state program))
@@ -102,6 +111,7 @@ let measure : string -> transformer -> transformer
   = fun name (module T) ->
   (module Measure(struct include T let name = name end))
 
+(* Pipelines. *)
 let optimisations : transforms
   = [| "debug", debug_tell "optimising IR"
      ; "ElimDeadDefs", (module IrTraversals.ElimDeadDefs)
@@ -118,12 +128,13 @@ let simplify_type_structure : transforms
      ; "ElimBodiesFromMetaTypeVars", (module IrTraversals.ElimBodiesFromMetaTypeVars)
      ; "debug", debug_tell "simplified types" |]
 
+(* A collection of the above pipelines. *)
 let pipeline : transformer array
-  = [| only_if optimise (measure "optimise" (lift optimisations))
+  = [| only_if optimise (measure "optimise" (collapse optimisations))
      ; (module Closures)
      ; (module PerformEffect(struct let perform = BuildTables.program end))
-     ; only_if_any [IrCheck.typecheck; simplify_types] (lift simplify_type_structure)
-     ; only_if IrCheck.typecheck (lift typechecking)
+     ; only_if_any [IrCheck.typecheck; simplify_types] (collapse simplify_type_structure)
+     ; only_if IrCheck.typecheck (collapse typechecking)
      ; only_if show_compiled_ir_after_backend_transformations print_program |]
 
 let program context' datatype program =
