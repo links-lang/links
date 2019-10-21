@@ -161,7 +161,6 @@ let refresher (* sync_quantifiers_tyvars *) =
 
 
 
-
    method! function_definition : Sugartypes.function_definition -> 'self * Sugartypes.function_definition =
      fun { fun_binder;
            fun_linearity;
@@ -211,20 +210,12 @@ let refresher (* sync_quantifiers_tyvars *) =
 
 
 
-
-
     method handle_function =
       fun param_pats tyvars typ signature phrase ->
       let typ', _ = (refreshing_type_visitor maps)#typ typ in
 
 
       let tyvars', new_maps =
-        (* TODO: Implement this once we agreed on how to handle
-         quantifiers in signatures *)
-        (* if sync_quantifiers_tyvars then
-          let tyvars_typ', _ = TypeUtils.split_quantified_type typ' in
-          tyvars_typ', replace_quantifiers tyvars maps tyvars_typ'
-        else *)
           freshen_quantifiers tyvars maps
       in
 
@@ -237,12 +228,6 @@ let refresher (* sync_quantifiers_tyvars *) =
       let o, signature' = o#option (fun o -> o#datatype') signature in
 
       (* TODO: What to do with the patterns? *)
-
       o, (param_pats, tyvars', typ', signature', phrase')
-
-
-
-
-
 
     end
