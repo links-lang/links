@@ -46,7 +46,9 @@ let freshen_quantifiers
          (q :: new_qs), add_presence var (unwrap_presence_point f) imaps)
     qs ([], instantiation_maps)
 
-let replace_quantifiers
+
+(* Unused untill we integrate some syncing of tyvars and quantifiers *)
+let _replace_quantifiers
   (qs_old : Types.quantifier list)
   (instantiation_maps : instantiation_maps)
   (qs_new : Types.quantifier list) : instantiation_maps =
@@ -70,7 +72,7 @@ let replace_quantifiers
     qs_old qs_new instantiation_maps
 
 
-let refreshing_type_visitor instantiation_map =
+let renaming_type_visitor instantiation_map refresh_quantifiers =
   let open Types in
   object ((o : 'self_type))
     inherit Transform.visitor as super
@@ -82,10 +84,15 @@ let refreshing_type_visitor instantiation_map =
 
     method! typ : datatype -> (datatype * 'self_type) = function
       | `ForAll (qs, t) ->
-         let (qs', inst_maps) = freshen_quantifiers qs inst_maps in
-         let (substed_t, _) = {< inst_maps >}#typ t in
-
-         `ForAll (qs', substed_t), o
+         let qs', t' =
+           if refresh_quantifiers then
+             let (qs', inst_maps) = freshen_quantifiers qs inst_maps in
+             let (substed_t, _) = {< inst_maps >}#typ t in
+             qs' ,substed_t
+           else
+             qs, fst (o#typ t)
+         in
+         `ForAll (qs', t'), o
       | t -> super#typ t
 
     method! meta_type_var : meta_type_var -> (meta_type_var * 'self_type) = fun point ->
@@ -119,16 +126,32 @@ let refreshing_type_visitor instantiation_map =
   end
 
 
-let refresher (* sync_quantifiers_tyvars *) =
+let refresher initial_maps refresh_quantifiers =
   let open Sugartypes in
   object(o : 'self_type)
     inherit SugarTraversals.fold_map as super
 
-    val maps : instantiation_maps =
-      (IntMap.empty, IntMap.empty, IntMap.empty)
+    val maps : instantiation_maps = initial_maps
 
     method set_maps new_inst_maps =
       {< maps = new_inst_maps >}
+
+    method! typ = fun t ->
+      let t', _ = (renaming_type_visitor maps refresh_quantifiers)#typ t in
+      o, t'
+
+    method! type_row = fun r ->
+      let r', _ = (renaming_type_visitor maps refresh_quantifiers)#row r in
+      o, r'
+
+    method! type_field_spec = fun fs ->
+      let fs', _ = (renaming_type_visitor maps refresh_quantifiers)#field_spec fs in
+      o, fs'
+
+    method! tyvar = fun q -> (o,q)
+
+    method! unknown = fun _u ->
+      raise (internal_error "Must implement all method stubs")
 
 
     method! bindingnode : Sugartypes.bindingnode -> ('self_type * Sugartypes.bindingnode) =
@@ -136,7 +159,12 @@ let refresher (* sync_quantifiers_tyvars *) =
       | Val (pat, (tyvars, phrase), loc, signature) ->
           let (o, pat') = o#pattern pat in
 
-          let tyvars', new_maps = freshen_quantifiers tyvars maps in
+          let tyvars', new_maps =
+            if refresh_quantifiers then
+              freshen_quantifiers tyvars maps
+            else
+              tyvars, maps
+          in
           let _, phrase' = (o#set_maps new_maps)#phrase phrase in
 
           let (o, loc') = o#location loc in
@@ -195,16 +223,36 @@ let refresher (* sync_quantifiers_tyvars *) =
 
     method handle_function =
       fun param_pats tyvars typ signature phrase ->
-      let typ', _ = (refreshing_type_visitor maps)#typ typ in
 
-      let tyvars', new_maps = freshen_quantifiers tyvars maps in
+      let handle_pattern_list
+            (obj : 'self_type)
+            (pats : Sugartypes.Pattern.with_pos list)
+          : 'self_type * Sugartypes.Pattern.with_pos list =
+        obj#list (fun obj' pat -> obj'#pattern pat) pats
+      in
+
+      let _, param_pats' =
+        o#list (fun o plist -> handle_pattern_list o plist) param_pats
+      in
+      let typ', _ = (renaming_type_visitor maps refresh_quantifiers)#typ typ in
+
+      let tyvars', new_maps =
+        if refresh_quantifiers then
+          freshen_quantifiers tyvars maps
+        else
+          tyvars, maps
+      in
 
       let _, phrase' = (o#set_maps new_maps)#phrase phrase in
 
       (* For the time being, just visit the type in the signature *)
       let o, signature' = o#option (fun o -> o#datatype') signature in
 
-      (* TODO: What to do with the patterns? *)
-      o, (param_pats, tyvars', typ', signature', phrase')
+      o, (param_pats', tyvars', typ', signature', phrase')
 
     end
+
+
+
+let rename_phrase phrase inst_maps refresh_quantiifers =
+  snd ((refresher inst_maps refresh_quantiifers)#phrase phrase)
