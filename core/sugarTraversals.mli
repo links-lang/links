@@ -221,7 +221,7 @@ object ('self)
   method typ             : Types.datatype -> ('self * Types.datatype)
   method type_row        : Types.row -> ('self* Types.row)
   method type_arg        : Datatype.type_arg -> 'self * Datatype.type_arg
-  method tyvar           : Types.quantifier -> ('self * Types.quantifier)
+  method tyvar           : Quantifier.t -> ('self * Quantifier.t)
   method type_field_spec : Types.field_spec -> ('self * Types.field_spec)
   method tyarg           : Types.type_arg -> ('self * Types.type_arg)
   method tyunary_op      : tyarg list * UnaryOp.t -> 'self * (tyarg list * UnaryOp.t)

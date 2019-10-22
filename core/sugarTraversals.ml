@@ -2335,7 +2335,7 @@ class fold_map =
       | `Type t -> let o,t = o#typ t in o, `Type t
       | `Row r -> let o, r = o#type_row r in o, `Row r
       | `Presence p -> let o, p =o#type_field_spec p in o, `Presence p
-    method tyvar : Types.quantifier -> ('self_type * Types.quantifier) =
+    method tyvar : Quantifier.t -> ('self_type * Quantifier.t) =
       o#unknown
     method type_field_spec : Types.field_spec -> ('self_type * Types.field_spec) =
       o#unknown

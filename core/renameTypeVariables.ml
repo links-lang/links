@@ -1,5 +1,7 @@
 
 open Utility
+open CommonTypes
+
 
 let internal_error message =
   Errors.internal_error ~filename:"renameTypeVariables.ml" ~message
@@ -28,9 +30,9 @@ let unwrap_presence_point = function
     | _ -> assert false
 
 let freshen_quantifiers
-      (qs : Types.quantifier list)
+      (qs : Quantifier.t list)
       (instantiation_maps : instantiation_maps)
-    : (Types.quantifier list * instantiation_maps) =
+    : (Quantifier.t list * instantiation_maps) =
   let open CommonTypes.PrimaryKind in
   List.fold_right
     (fun q (new_qs, imaps) ->
@@ -49,9 +51,9 @@ let freshen_quantifiers
 
 (* Unused untill we integrate some syncing of tyvars and quantifiers *)
 let _replace_quantifiers
-  (qs_old : Types.quantifier list)
+  (qs_old : Quantifier.t list)
   (instantiation_maps : instantiation_maps)
-  (qs_new : Types.quantifier list) : instantiation_maps =
+  (qs_new : Quantifier.t list) : instantiation_maps =
   List.fold_right2
     (fun q_old q_new imaps ->
       let (var_old, (pk_old, sk_old)) = q_old in
@@ -196,15 +198,14 @@ let refresher initial_maps refresh_quantifiers =
      o,function_definition'
 
 
-     method! recursive_function : recursive_function -> 'self * recursive_function
+     method! recursive_functionnode : recursive_functionnode -> 'self * recursive_functionnode
          = fun { rec_binder;
               rec_linearity;
               rec_definition = ((tyvars, ty), lit);
               rec_location;
               rec_signature;
               rec_unsafe_signature;
-              rec_frozen;
-              rec_pos } ->
+              rec_frozen } ->
        let (pats, body) = lit in
        let o, (pats', tyvars', typ', signature', phrase') =
          o#handle_function pats tyvars (Binder.to_type rec_binder) rec_signature body in
@@ -215,8 +216,7 @@ let refresher initial_maps refresh_quantifiers =
            rec_location;
            rec_signature = signature';
            rec_unsafe_signature;
-           rec_frozen;
-           rec_pos }
+           rec_frozen }
        in
        o, recursive_definition'
 
