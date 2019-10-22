@@ -150,10 +150,10 @@ module Pattern = struct
     | Nil
     | Cons     of with_pos * with_pos
     | List     of with_pos list
-    | Variant  of Name.t * with_pos option
-    | Effect   of Name.t * with_pos list * with_pos
-    | Negative of Name.t list
-    | Record   of (Name.t * with_pos) list * with_pos option
+    | Variant  of Label.t * with_pos option
+    | Effect   of Label.t * with_pos list * with_pos
+    | Negative of Label.t list
+    | Record   of (Label.t * with_pos) list * with_pos option
     | Tuple    of with_pos list
     | Constant of Constant.t
     | Variable of Binder.with_pos
@@ -243,15 +243,15 @@ and phrasenode =
   | TAbstr           of tyvar list * phrase
   | TAppl            of phrase * type_arg' list
   | TupleLit         of phrase list
-  | RecordLit        of (Name.t * phrase) list * phrase option
-  | Projection       of phrase * Name.t
-  | With             of phrase * (Name.t * phrase) list
+  | RecordLit        of (Label.t * phrase) list * phrase option
+  | Projection       of phrase * Label.t
+  | With             of phrase * (Label.t * phrase) list
   | TypeAnnotation   of phrase * datatype'
   | Upcast           of phrase * datatype' * datatype'
   | Instantiate      of phrase
   | Generalise       of phrase
-  | ConstructorLit   of Name.t * phrase option * Types.datatype option
-  | DoOperation      of Name.t * phrase list * Types.datatype option
+  | ConstructorLit   of Label.t * phrase option * Types.datatype option
+  | DoOperation      of Label.t * phrase list * Types.datatype option
   | Handle           of handler
   | Switch           of phrase * (Pattern.with_pos * phrase) list *
                           Types.datatype option
@@ -259,11 +259,11 @@ and phrasenode =
   | DatabaseLit      of phrase * (phrase option * phrase option)
   | TableLit         of phrase * (Datatype.with_pos * (Types.datatype *
                            Types.datatype * Types.datatype) option) *
-                          (Name.t * fieldconstraint list) list * phrase * phrase
+                          (Label.t * fieldconstraint list) list * phrase * phrase
   | DBDelete         of Pattern.with_pos * phrase * phrase option
-  | DBInsert         of phrase * Name.t list * phrase * phrase option
+  | DBInsert         of phrase * Label.t list * phrase * phrase option
   | DBUpdate         of Pattern.with_pos * phrase * phrase option *
-                          (Name.t * phrase) list
+                          (Label.t * phrase) list
   | LensLit          of phrase * Lens.Type.t option
   (* the lens keys lit is a literal that takes an expression and is converted
      into a LensLit with the corresponding table keys marked in the lens_sort *)
@@ -278,7 +278,7 @@ and phrasenode =
   | LensGetLit       of phrase * Types.datatype option
   | LensCheckLit     of phrase * Lens.Type.t option
   | LensPutLit       of phrase * phrase * Types.datatype option
-  | Xml              of Name.t * (Name.t * (phrase list)) list * phrase option *
+  | Xml              of Label.t * (Label.t * (phrase list)) list * phrase option *
                           phrase list
   | TextNode         of string
   | Formlet          of phrase * phrase
@@ -287,7 +287,7 @@ and phrasenode =
   | PagePlacement    of phrase
   | FormBinding      of phrase * Pattern.with_pos
   (* choose *)
-  | Select           of Name.t * phrase
+  | Select           of Label.t * phrase
   (* choice *)
   | Offer            of phrase * (Pattern.with_pos * phrase) list *
                           Types.datatype option
