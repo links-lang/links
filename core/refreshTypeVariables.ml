@@ -27,7 +27,6 @@ let unwrap_presence_point = function
     | `Var point -> point
     | _ -> assert false
 
-
 let freshen_quantifiers
       (qs : Types.quantifier list)
       (instantiation_maps : instantiation_maps)
@@ -46,8 +45,6 @@ let freshen_quantifiers
          let q, f = Types.fresh_presence_quantifier subkind in
          (q :: new_qs), add_presence var (unwrap_presence_point f) imaps)
     qs ([], instantiation_maps)
-
-
 
 let replace_quantifiers
   (qs_old : Types.quantifier list)
@@ -72,6 +69,7 @@ let replace_quantifiers
          add_presence var_old (unwrap_presence_point f) imaps)
     qs_old qs_new instantiation_maps
 
+
 let refreshing_type_visitor instantiation_map =
   let open Types in
   object ((o : 'self_type))
@@ -82,19 +80,13 @@ let refreshing_type_visitor instantiation_map =
     method set_maps new_inst_maps =
       {< inst_maps = new_inst_maps >}
 
-
     method! typ : datatype -> (datatype * 'self_type) = function
       | `ForAll (qs, t) ->
-         let (qs', inst_maps') = freshen_quantifiers qs inst_maps in
-         let old_maps = inst_maps in
-         let o_new_maps = o#set_maps inst_maps' in
+         let (qs', inst_maps) = freshen_quantifiers qs inst_maps in
+         let (substed_t, _) = {< inst_maps >}#typ t in
 
-         let (substed_t, substed_o) = o_new_maps#typ t in
-         let o' = substed_o#set_maps old_maps in
-
-         `ForAll (qs', substed_t), o'
+         `ForAll (qs', substed_t), o
       | t -> super#typ t
-
 
     method! meta_type_var : meta_type_var -> (meta_type_var * 'self_type) = fun point ->
       match Unionfind.find point with
@@ -124,18 +116,13 @@ let refreshing_type_visitor instantiation_map =
          end
       | _ -> super#meta_presence_var point
 
-
   end
-
-
-
-
 
 
 let refresher (* sync_quantifiers_tyvars *) =
   let open Sugartypes in
   object(o : 'self_type)
-    inherit SugarTraversals.fold_map as _super
+    inherit SugarTraversals.fold_map as super
 
     val maps : instantiation_maps =
       (IntMap.empty, IntMap.empty, IntMap.empty)
@@ -150,15 +137,12 @@ let refresher (* sync_quantifiers_tyvars *) =
           let (o, pat') = o#pattern pat in
 
           let tyvars', new_maps = freshen_quantifiers tyvars maps in
-          let o = o#set_maps new_maps in
-          let o, phrase' = o#phrase phrase in
-          let o = o#set_maps maps in
+          let _, phrase' = (o#set_maps new_maps)#phrase phrase in
 
           let (o, loc') = o#location loc in
           let (o, signature') = o#option (fun o -> o#datatype') signature in
           (o, (Val ((pat', (tyvars', phrase'), loc', signature'))))
-      | other -> o#bindingnode other
-
+      | other -> super#bindingnode other
 
 
    method! function_definition : Sugartypes.function_definition -> 'self * Sugartypes.function_definition =
@@ -209,20 +193,13 @@ let refresher (* sync_quantifiers_tyvars *) =
        o, recursive_definition'
 
 
-
     method handle_function =
       fun param_pats tyvars typ signature phrase ->
       let typ', _ = (refreshing_type_visitor maps)#typ typ in
 
+      let tyvars', new_maps = freshen_quantifiers tyvars maps in
 
-      let tyvars', new_maps =
-          freshen_quantifiers tyvars maps
-      in
-
-      let o = o#set_maps new_maps in
-      let o, phrase' = o#phrase phrase in
-      let o = o#set_maps maps in
-
+      let _, phrase' = (o#set_maps new_maps)#phrase phrase in
 
       (* For the time being, just visit the type in the signature *)
       let o, signature' = o#option (fun o -> o#datatype') signature in
