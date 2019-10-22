@@ -2,7 +2,7 @@
 open Utility
 
 let internal_error message =
-  Errors.internal_error ~filename:"refreshTypeVariables.ml" ~message
+  Errors.internal_error ~filename:"renameTypeVariables.ml" ~message
 
 type instantiation_maps =
   (Types.meta_type_var IntMap.t *
