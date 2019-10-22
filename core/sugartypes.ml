@@ -73,11 +73,11 @@ let default_effect_subkind : Subkind.t = (lin_unl, res_any)
 type kind = PrimaryKind.t option * Subkind.t option
     [@@deriving show]
 
-type type_variable = Name.t * kind * Freedom.t
+type type_variable = Typename.t * kind * Freedom.t
     [@@deriving show]
 
 (* type variable of primary kind Type? *)
-type known_type_variable = Name.t * Subkind.t option * Freedom.t
+type known_type_variable = Typename.t * Subkind.t option * Freedom.t
     [@@deriving show]
 
 type quantifier = type_variable
@@ -98,10 +98,10 @@ type fieldconstraint = Readonly | Default
 module Datatype = struct
   type t =
     | TypeVar         of known_type_variable
-    | QualifiedTypeApplication of Name.t list * type_arg list
+    | QualifiedTypeApplication of Typename.t list * type_arg list
     | Function        of with_pos list * row * with_pos
     | Lolli           of with_pos list * row * with_pos
-    | Mu              of Name.t * with_pos
+    | Mu              of Typename.t * with_pos
     | Forall          of quantifier list * with_pos
     | Unit
     | Tuple           of with_pos list
@@ -124,7 +124,7 @@ module Datatype = struct
   and row_var =
     | Closed
     | Open of known_type_variable
-    | Recursive of Name.t * row
+    | Recursive of Typename.t * row
   and fieldspec =
     | Present of with_pos
     | Absent
