@@ -56,7 +56,7 @@ module type SugarConstructorsSig = sig
   val block_node  :            block_body -> phrasenode
   val datatype    : Datatype.with_pos -> Datatype.with_pos * 'a option
   val cp_unit     : t -> cp_phrase
-  val record      : ?ppos:t -> ?exp:phrase -> (Name.t * phrase) list -> phrase
+  val record      : ?ppos:t -> ?exp:phrase -> (Label.t * phrase) list -> phrase
   val tuple       : ?ppos:t -> phrase list -> phrase
   val orderby_tuple : ?ppos:t -> phrase list -> phrase
   val list        :
@@ -73,7 +73,7 @@ module type SugarConstructorsSig = sig
   val binder   : ?ppos:t -> ?ty:Types.datatype -> Name.t -> Binder.with_pos
 
   (* Imports *)
-  val import : ?ppos:t -> ?pollute:bool -> Name.t list -> binding
+  val import : ?ppos:t -> ?pollute:bool -> string list -> binding
 
   (* Patterns *)
   val variable_pat : ?ppos:t -> ?ty:Types.datatype -> Name.t -> Pattern.with_pos
@@ -127,9 +127,9 @@ module type SugarConstructorsSig = sig
 
   (* Database queries *)
   val db_exps
-      : ?ppos:t -> (Name.t * phrase) list -> phrase
+      : ?ppos:t -> (Label.t * phrase) list -> phrase
   val db_insert
-      : ?ppos:t -> phrase -> Name.t list -> phrase -> string option
+      : ?ppos:t -> phrase -> Label.t list -> phrase -> string option
      -> phrase
   val query
       : ?ppos:t -> (phrase * phrase) option -> QueryPolicy.t -> phrase -> phrase
@@ -143,8 +143,8 @@ module type SugarConstructorsSig = sig
   val validate_xml
       : ?tags:(string * string) -> phrase -> unit
   val xml
-      : ?ppos:t -> ?tags:(string * string) -> Name.t
-     -> (Name.t * (phrase list)) list -> phrase option -> phrase list
+      : ?ppos:t -> ?tags:(string * string) -> Label.t
+     -> (Label.t * (phrase list)) list -> phrase option -> phrase list
      -> phrase
 
   (* Handlers *)

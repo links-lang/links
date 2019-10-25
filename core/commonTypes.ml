@@ -204,6 +204,11 @@ module Typename = struct
     [@@deriving show]
 end
 
+module Typevar = struct
+  type t = string
+    [@@deriving show]
+end
+
 module Label = struct
   type t = string
     [@@deriving show]
