@@ -400,7 +400,7 @@ struct
         (`Select r', o)
      | `Choice r ->
          let (r', o) = o#row r in
-        (`Select r', o)
+        (`Choice r', o)
      | `End -> (`End, o)
 
 
