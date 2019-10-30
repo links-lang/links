@@ -898,7 +898,7 @@ struct
   and norm_comp env c = norm env (computation env c)
 
   let eval env e =
-    Debug.print ("Query.eval e: "^Ir.show_computation e);
+(*    Debug.print ("Query.eval e: "^Ir.show_computation e); *)
     Debug.debug_time "Query.eval" (fun () ->
       norm_comp (env_of_value_env env) e)
 

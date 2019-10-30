@@ -33,9 +33,9 @@ let if_set_l setting message =
 let debug_time msg f =
   if Settings.get_value(debugging_enabled)
   then
-    let start_time = Utility.time_milliseconds() in
+    let start_time = Utility.time_microseconds() in
     let raw_result = f () in
-    print (msg ^" time: " ^ string_of_int (Utility.time_milliseconds() - start_time));
+    print (msg ^" time: " ^ string_of_int (Utility.time_microseconds() - start_time));
     raw_result
   else f ();;
 

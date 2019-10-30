@@ -1086,6 +1086,7 @@ let string_of_float' : float -> string =
 
 let time_seconds() = int_of_float (Unix.time())
 let time_milliseconds() = int_of_float (Unix.gettimeofday() *. 1000.0)
+let time_microseconds() = int_of_float (Unix.gettimeofday() *. 1000000.0)
 
 let strip_leading_slash s =
   if s = "" then s else
