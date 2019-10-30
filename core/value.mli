@@ -1,4 +1,5 @@
 (* Values and environments *)
+open CommonTypes
 open ProcessTypes
 
 class type otherfield
@@ -147,7 +148,7 @@ module type CONTINUATION_EVALUATOR = sig
 
   (* trap invocation *)
   val trap : v t ->                        (* the continuation *)
-             (Ir.name * v) ->              (* operation name and its argument *)
+             (Name.t * v) ->              (* operation name and its argument *)
              trap_result
 end
 
@@ -286,3 +287,5 @@ val is_channel : t -> bool
 val session_exception_operation : string
 
 val row_columns_values : database -> t -> string list * string list list
+
+val from_json : Yojson.Basic.t -> t

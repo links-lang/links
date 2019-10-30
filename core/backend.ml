@@ -17,20 +17,38 @@ open Utility
      prelude.
   *)
 
+let show_compiled_ir_after_backend_transformations
+  = Settings.(flag "show_compiled_ir_after_backend_transformations"
+              |> convert parse_bool
+              |> sync)
+
+let simplify_types
+  = Settings.(flag "simplify_types"
+              |> convert parse_bool
+              |> sync)
+
+(* Optimization pass? *)
+let optimise
+  = Settings.(flag "optimise"
+              |> synopsis "Optimises the generated code"
+              |> convert parse_bool
+              |> CLI.(add (long "optimise"))
+              |> sync)
+
 
 let only_if predicate transformer =
               if predicate then transformer else (fun _ x -> x)
 let only_if_set setting =
-             only_if (Settings.get_value setting)
+             only_if (Settings.get setting)
 
 let only_if_any_set settings transformer =
-  if Utility.any_true (List.map Settings.get_value settings)
+  if Utility.any_true (List.map Settings.get settings)
   then transformer
   else (fun _ x -> x)
 
 let debug_tell msg =
   only_if_set
-    Basicsettings.debugging_enabled
+    Debug.enabled
     (fun _tyenv prog ->
       Debug.print msg; prog)
 
@@ -66,7 +84,7 @@ struct
         (* IrTraversals.ElimTypeAliases.program; *)
         IrTraversals.ElimBodiesFromMetaTypeVars.program;
         debug_tell "simplified types";
-        (only_if_set Basicsettings.Ir.show_compiled_ir_after_backend_transformations print_program)
+        (only_if_set show_compiled_ir_after_backend_transformations print_program)
       ]
 
     let simplify_type_structure_bindings () = [
@@ -76,7 +94,7 @@ struct
         (* IrTraversals.ElimTypeAliases.bindings; *)
         IrTraversals.ElimBodiesFromMetaTypeVars.bindings;
         debug_tell "simplified types";
-        (only_if_set Basicsettings.Ir.show_compiled_ir_after_backend_transformations print_bindings);
+        (only_if_set show_compiled_ir_after_backend_transformations print_bindings);
       ]
 
     let typechecking_pipeline () = [
@@ -100,10 +118,10 @@ struct
         perform_for_side_effects
           (BuildTables.program Lib.primitive_vars);
         only_if_any_set
-          [Basicsettings.Ir.typecheck_ir; Basicsettings.Ir.simplify_types]
+          [IrCheck.typecheck; simplify_types]
           (run simplify_type_structure_program);
         only_if_set
-          Basicsettings.Ir.typecheck_ir
+          IrCheck.typecheck
           (run typechecking_pipeline);
       ]
 
@@ -112,10 +130,10 @@ struct
         (fun tenv globals -> Closures.bindings tenv Lib.primitive_vars globals);
         (fun tenv globals -> BuildTables.bindings tenv Lib.primitive_vars globals; globals);
         only_if_any_set
-          [Basicsettings.Ir.typecheck_ir; Basicsettings.Ir.simplify_types]
+          [IrCheck.typecheck; simplify_types]
           (run simplify_type_structure_bindings);
         only_if_set
-          Basicsettings.Ir.typecheck_ir
+          IrCheck.typecheck
           (run prelude_typechecking_pipeline);
       ]
 

@@ -34,10 +34,10 @@ module SugarConstructors (Position : Pos)
 
   (* Stores either a name of variable to be used in a binding pattern or the
      pattern itself.  Used for passing an argument to val_binding. *)
-  type name_or_pat = PatName of name | Pat of Pattern.with_pos
+  type name_or_pat = PatName of Name.t | Pat of Pattern.with_pos
 
   (* Optionally stores a datatype signature.  Isomporphic to Option. *)
-  type signature = (name WithPos.t * datatype') WithPos.t option
+  type signature = (Name.t WithPos.t * datatype') WithPos.t option
 
   (* Produces a datatype if a name is accompanied by a signature.  Raises an
      exception if name does not match a name in a signature. *)
@@ -96,10 +96,7 @@ module SugarConstructors (Position : Pos)
 
   (** Binders **)
 
-  let binder ?(ppos=dp) ?ty name =
-    match ty with
-    | None -> with_pos ppos (Binder.make ~name ())
-    | Some ty -> with_pos ppos (Binder.make ~name ~ty ())
+  let binder ?(ppos=dp) ?ty name = with_pos ppos (Binder.make ~name ?ty ())
 
   (** Imports **)
 
@@ -220,9 +217,8 @@ module SugarConstructors (Position : Pos)
        opt_map (fun name -> constant_str ~ppos name) var_opt))
 
   (* Create a query. *)
-  let query ?(ppos=dp) phrases_opt blk =
-    with_pos ppos (Query (phrases_opt, blk, None))
-
+  let query ?(ppos=dp) phrases_opt policy blk =
+    with_pos ppos (Query (phrases_opt, policy, blk, None))
 
   (** Operator applications *)
   (* Apply a binary infix operator. *)

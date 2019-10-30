@@ -339,7 +339,7 @@ struct
             let lens, _, o = o#value lens in
             let data, _, o = o#value data in
             LensPut (lens, data, rtype), Types.make_tuple_type [], o
-        | Query (range, e, _) ->
+        | Query (range, policy, e, _) ->
             let range, o =
               o#optionu
                 (fun o (limit, offset) ->
@@ -348,7 +348,7 @@ struct
                      (limit, offset), o)
                 range in
             let e, t, o = o#computation e in
-              Query (range, e, t), t, o
+              Query (range, policy, e, t), t, o
         | InsertRows (source, rows) ->
             let source, _, o = o#value source in
 	    let rows, _, o = o#value rows in
@@ -618,7 +618,10 @@ end
 *)
 module ElimDeadDefs =
 struct
-  let show_rec_uses = Basicsettings.Ir.show_rec_uses
+  let show_rec_uses
+    = Settings.(flag "show_rec_uses"
+                |> convert parse_bool
+                |> sync)
 
   let counter tyenv =
   object (o : 'self_type)
@@ -835,9 +838,9 @@ let ir_type_mod_visitor tyenv type_visitor =
                let (t2, _) = type_visitor#typ t2 in
                let (t3, _) = type_visitor#typ t3 in
                super#special (Table (v1, v2, v3, (t1, t2, t3)))
-            | Query (opt, computation, datatype) ->
+            | Query (opt, policy, computation, datatype) ->
                let (datatype, _) = type_visitor#typ datatype in
-               super#special (Query (opt, computation, datatype))
+               super#special (Query (opt, policy, computation, datatype))
             | DoOperation (name, vallist, datatype) ->
                let (datatype, _) = type_visitor#typ datatype in
                super#special (DoOperation (name, vallist, datatype))

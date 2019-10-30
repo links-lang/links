@@ -3,6 +3,7 @@ import MvuHTML;
 open import MvuAttrs;
 open import MvuEvents;
 open import MvuSubscriptions;
+import MvuCommands;
 
 typename Model = (seconds : Int, minutes : Int, paused: Bool);
 typename Msg = [| Tick | Reset | TogglePause | Stop | NoOp |];
@@ -100,7 +101,9 @@ fun subscriptions(model) {
 
 fun mainPage(_) {
   var initialModel = (seconds = 0, minutes = 0, paused = true);
-  var evtHandler = Mvu.run("placeholder", initialModel, view, updt, subscriptions);
+  var evtHandler = Mvu.run("placeholder", initialModel, view,
+      fun(msg, model) { (updt(msg, model), MvuCommands.empty) },
+      subscriptions, MvuCommands.empty);
   page
   <html>
     <head>

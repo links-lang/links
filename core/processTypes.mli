@@ -6,7 +6,7 @@ module type NAME = sig
   val equal : t -> t -> bool
   val to_string : t -> string
   val of_string : string -> t
-  val to_json : t -> string
+  val to_json : t -> Yojson.Basic.t
   val pp : Format.formatter -> t -> unit
   val show : t -> string
 end

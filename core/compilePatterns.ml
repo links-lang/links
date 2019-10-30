@@ -14,6 +14,11 @@ open Utility
 open Ir
 open Var
 
+let show_pattern_compilation
+  = Settings.(flag "show_pattern_compilation2" (* There does not seem to be a "show_pattern_compilation1"... *)
+              |> convert parse_bool
+              |> sync)
+
 module type CONSTSET = Set with type elt = Constant.t
 module ConstSet = Set.Make(Constant)
 module ConstMap = Map.Make(Constant)
@@ -25,8 +30,8 @@ struct
     | Any
     | Nil
     | Cons     of t * t
-    | Variant  of name * t
-    | Effect   of name * t list * t
+    | Variant  of Name.t * t
+    | Effect   of Name.t * t list * t
     | Negative of StringSet.t
     | Record   of t StringMap.t * t option
     | Constant of Constant.t
@@ -231,9 +236,6 @@ struct
          [v1; v2])
 end
 open CompileEq
-
-
-let show_pattern_compilation = Basicsettings.CompilePatterns.show_pattern_compilation
 
 type annotation = Pattern.annotation_element list
 type annotated_pattern = annotation * Pattern.t

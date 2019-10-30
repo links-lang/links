@@ -3,7 +3,11 @@ open Types
 open CommonTypes
 
 (* debug flags *)
-let show_generalisation = Basicsettings.Generalise.show_generalisation
+let show_generalisation
+  = Settings.(flag "show_generalisation"
+              |> convert parse_bool
+              |> sync)
+
 let show_recursion = Instantiate.show_recursion
 
 let internal_error message = Errors.internal_error ~filename:"generalise" ~message
@@ -57,7 +61,7 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
         | `Alias ((_, _, ts), t) ->
             concat_map (get_type_arg_type_args kind bound_vars) ts @ gt t
         | `ForAll (qs, t) ->
-           get_type_args kind (List.fold_right (Types.type_var_number ->- TypeVarSet.add) qs bound_vars) t
+           get_type_args kind (TypeVarSet.add_quantifiers qs bound_vars) t
         | `Application (_, args) ->
             Utility.concat_map (get_type_arg_type_args kind bound_vars) args
         | `RecursiveApplication appl ->
@@ -173,7 +177,7 @@ let mono_type_args : type_arg -> unit =
 (** generalise:
     Universally quantify any free type variables in the expression.
 *)
-let generalise : gen_kind -> ?unwrap:bool -> environment -> datatype -> ((quantifier list * type_arg list) * datatype) =
+let generalise : gen_kind -> ?unwrap:bool -> environment -> datatype -> ((Quantifier.t list * type_arg list) * datatype) =
   fun kind ?(unwrap=true) env t ->
     (* throw away any existing top-level quantifiers *)
     Debug.if_set show_generalisation (fun () -> "Generalising : " ^ string_of_datatype t);
@@ -229,5 +233,5 @@ let generalise_rigid = generalise `Rigid
 (** generalise both rigid and flexible type variables *)
 let generalise = generalise `All
 
-let get_quantifiers_rigid (env : environment) (t : datatype) : quantifier list =
+let get_quantifiers_rigid (env : environment) (t : datatype) : Quantifier.t list =
   get_type_args `Rigid (env_type_vars env) t |> Types.quantifiers_of_type_args

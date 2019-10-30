@@ -300,7 +300,7 @@ let ordered_query v =
 let compile : Value.env -> (int * int) option * Ir.computation -> (Value.database * Sql.query * Types.datatype) option =
   fun env (range, e) ->
     (* Debug.print ("e: "^Ir.show_computation e); *)
-    let v = Q.Eval.eval env e in
+    let v = Q.Eval.eval QueryPolicy.Flat env e in
       (* Debug.print ("v: "^Q.string_of_t v); *)
       match Q.used_database v with
         | None -> None

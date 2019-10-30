@@ -791,7 +791,7 @@ let unordered_query_package t v =
 let compile_shredded : Value.env -> Ir.computation
                        -> (Value.database * (Sql.query * Shred.flat_type) Shred.package) option =
   fun env e ->
-    let v = Q.Eval.eval env e in
+    let v = Q.Eval.eval QueryPolicy.Nested env e in
       match Q.used_database v with
         | None    -> None
         | Some db ->

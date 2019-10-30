@@ -8,12 +8,6 @@ open Lens
 open Lens.Utility
 open Lens.Utility.O
 
-(* ensure links configuration is loaded *)
-let _ =
-  Option.iter
-    ~f:(Links_core.Settings.load_file false)
-    Links_core.Basicsettings.config_file_path
-
 let display_table_query_opt =
   Conf.make_bool "display_table_query" false
     "Show queries to take and manipulate tables."
@@ -22,8 +16,10 @@ let leave_tables_opt =
   Conf.make_bool "leave_tables" false "Do not delete tables after run."
 
 let database_args_opt =
+  let module Database = Links_core.Database in
+  let connection_args = Settings.get Database.connection_info in
   Conf.make_string "database_args"
-    ("links:" ^ Settings.get_value Basicsettings.database_args)
+    ("links:" ^ Links_core.Utility.from_option "" connection_args)
     "Database connection args."
 
 let verbose_opt = Conf.make_bool "v" false "Print verbose information."

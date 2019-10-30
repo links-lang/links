@@ -27,7 +27,7 @@ sig
       | Primitive of string
       | Var       of Var.var * Types.datatype StringMap.t
       | Constant  of Constant.t
-  and env = Value.env * t Env.Int.t
+  and env = { venv: Value.env; qenv: t Env.Int.t; policy: QueryPolicy.t }
       [@@deriving show]
 
   val reduce_where_then : t * t -> t
@@ -60,11 +60,11 @@ val sql_of_let_query : let_query -> Sql.query
 
 module Eval :
 sig
-  val env_of_value_env : 'a -> 'a * 'b Env.Int.t
-  val bind : 'a * 'b Env.Int.t -> Env.Int.name * 'b -> 'a * 'b Env.Int.t
+  val env_of_value_env : QueryPolicy.t -> Value.env -> Lang.env
+  val bind : Lang.env -> Env.Int.name * Lang.t -> Lang.env
   val eta_expand_var : Var.var * Types.datatype StringMap.t -> Lang.t
-  val computation : Value.t Value.Env.t * Lang.t Env.Int.t -> Ir.computation -> Lang.t
-  val eval : Value.t Value.Env.t -> Ir.computation -> Lang.t
+  val computation : Lang.env -> Ir.computation -> Lang.t
+  val eval : QueryPolicy.t -> Value.t Value.Env.t -> Ir.computation -> Lang.t
 end
 
 val compile_update : Value.database -> Value.env ->

@@ -87,7 +87,7 @@ struct
       body ^
       "\n  </body></html>\n"
 
-  let should_contain_client_id cgi_args =
+  let is_ajax_call cgi_args =
     (is_remote_call cgi_args) || (is_client_return cgi_args)
 
   (* jcheney: lifted from serve_request, to de-clutter *)
@@ -102,11 +102,11 @@ struct
 
 
   let get_websocket_url () =
-    if Webs.is_accepting_websocket_requests () then
-      Some (Settings.get_value Basicsettings.websocket_url)
-      else None
+    if Webs.is_accepting_websocket_requests ()
+    then Some (Webs.get_websocket_url ())
+    else None
 
-  let resolve_json_state req_data v =
+  let generate_json_state req_data v =
     let client_id = RequestData.get_client_id req_data in
     let json_state = Json.JsonState.empty client_id (get_websocket_url ()) in
     (* Add event handlers *)
@@ -130,8 +130,9 @@ struct
         Debug.print("Doing ClientReturn for client ID " ^ client_id_str);
         Proc.resolve_external_processes arg;
         Eval.apply_cont cont valenv arg >>= fun (_, result) ->
-        let json_state = resolve_json_state req_data result in
-        let result_json = Json.jsonize_value_with_state result json_state in
+        let json_state = generate_json_state req_data result in
+        let result_json =
+          Json.jsonize_value_with_state result json_state |> Json.json_to_string in
         Lwt.return ("text/plain", Utility.base64encode result_json)
       | RemoteCall(func, env, args) ->
         Debug.print("Doing RemoteCall for function " ^ Value.string_of_value func
@@ -149,10 +150,13 @@ struct
           (prerr_endline "Remaining  procs on server after remote call!";
            assert(false));
            *)
-        let json_state = resolve_json_state req_data r in
+        let json_state = generate_json_state req_data r in
+        let jsonized_val =
+          Json.jsonize_value_with_state r json_state
+            |> Json.json_to_string in
         Lwt.return
           ("text/plain",
-            Utility.base64encode (Json.jsonize_value_with_state r json_state))
+            Utility.base64encode jsonized_val)
       | EvalMain ->
          Debug.print("Doing EvalMain");
          run ()
@@ -160,14 +164,37 @@ struct
   let do_request ((valenv, _, _) as env) cgi_args run render_cont render_servercont_cont response_printer =
     let request = parse_request env cgi_args in
     let (>>=) f g = Lwt.bind f g in
-    Lwt.catch
-      (fun () -> perform_request valenv run render_cont render_servercont_cont request )
-      (function
+    (* We need to be a bit careful about what we respond here. If we are evaluating
+     * a ServerCont or EvalMain, that is fine -- but we need to construct a b64-encoded
+     * JSON object if we're responding to a ClientReturn or RemoteCall. *)
+
+    let handle_ajax_error = function
+      | Aborted r -> Lwt.return r
+      | e ->
+          let json =
+            `Assoc [("error", `String (Errors.format_exception e))] in
+         Lwt.return
+           ("text/plain", Utility.base64encode (Yojson.Basic.to_string json)) in
+
+    let handle_html_error e =
+      let mime_type = "text/html; charset=utf-8" in
+      match e with
        | Aborted r -> Lwt.return r
        | Failure msg as e ->
           prerr_endline msg;
-          Lwt.return ("text/html; charset=utf-8", error_page (Errors.format_exception_html e))
-       | exc -> Lwt.return ("text/html; charset=utf-8", error_page (Errors.format_exception_html exc)))
-    >>= fun (content_type, content) ->
-    response_printer [("Content-type", content_type)] content
+          Lwt.return (mime_type, error_page (Errors.format_exception_html e))
+       | exc ->
+           Lwt.return (mime_type, error_page (Errors.format_exception_html exc)) in
+
+    let handle_error e =
+      if (is_ajax_call cgi_args) then
+        handle_ajax_error e
+      else
+        handle_html_error e in
+
+    Lwt.catch
+      (fun () -> perform_request valenv run render_cont render_servercont_cont request )
+      (handle_error) >>=
+    fun (content_type, content) ->
+      response_printer [("Content-type", content_type)] content
 end

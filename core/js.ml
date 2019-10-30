@@ -1,5 +1,12 @@
 open Utility
 
+let hide_database_info =
+  Settings.(flag ~default:true "js_hide_database_info"
+            |> privilege `System
+            |> synopsis "Hides database credentials on the client-side"
+            |> convert parse_bool
+            |> sync)
+
 (** {0 Code generation} *)
 
 module Symbols =

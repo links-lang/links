@@ -4,8 +4,16 @@ open Types
 open Typevarcheck
 
 (* debug flags *)
-let show_unification = Basicsettings.Unify.show_unification
-let show_row_unification = Basicsettings.Unify.show_row_unification
+let show_unification
+  = Settings.(flag "show_unification"
+              |> convert parse_bool
+              |> sync)
+
+let show_row_unification
+  = Settings.(flag "show_row_unification"
+              |> convert parse_bool
+              |> sync)
+
 let show_recursion = Instantiate.show_recursion
 
 (*
@@ -14,7 +22,29 @@ let show_recursion = Instantiate.show_recursion
   "guarded"  - only allow guarded recursive types
   "positive" - only allow positive recursive types
  *)
-let infer_recursive_types = Basicsettings.Unify.infer_recursive_types
+type recursive_type_kind =
+  | All | Guarded | Positive
+
+let infer_recursive_types
+  = let parse_rec_type_kind v =
+      Some (match String.lowercase_ascii v with
+            | "all" -> All
+            | "guarded" -> Guarded
+            | "positive" -> Positive
+            | _ -> raise (Invalid_argument "accepted values: all, guarded, or positive"))
+    in
+    let string_of_rec_type_kind = function
+      | Some All -> "all"
+      | Some Guarded -> "guarded"
+      | Some Positive -> "positive"
+      | None -> "<none>"
+    in
+    Settings.(option ~default:(Some Guarded) "infer_recursive_types"
+              |> synopsis "Selects which kind of recursive types the inference engine is allowed to infer"
+              |> hint "<all|guarded|positive>"
+              |> to_string string_of_rec_type_kind
+              |> convert parse_rec_type_kind
+              |> sync)
 
 type error = [
   `Msg of string
@@ -32,18 +62,18 @@ type rec_unifier =
 exception Failure of error
 
 let occurs_check var t =
-  match Settings.get_value infer_recursive_types with
-    | "all" -> true
-    | "guarded" -> is_guarded var t
-    | "positive" -> not (is_negative var t)
-    | s -> raise (Errors.settings_error ("user setting infer_recursive_types ("^ s ^") must be set to 'all', 'guarded' or 'positive'"))
+  match Settings.get infer_recursive_types with (* TODO FIXME: validate the setting during set. *)
+    | Some All -> true
+    | Some Guarded -> is_guarded var t
+    | Some Positive -> not (is_negative var t)
+    | None -> raise (Errors.settings_error "user setting infer_recursive_types must be set to 'all', 'guarded' or 'positive'")
 
 let occurs_check_row var row =
-  match Settings.get_value infer_recursive_types with
-    | "all" -> true
-    | "guarded" -> is_guarded_row var row
-    | "positive" -> not (is_negative_row var row)
-    | s -> raise (Errors.settings_error ("user setting infer_recursive_types ("^ s ^") must be set to 'all', 'guarded' or 'positive'"))
+  match Settings.get infer_recursive_types with
+    | Some All -> true
+    | Some Guarded -> is_guarded_row var row
+    | Some Positive -> not (is_negative_row var row)
+    | None -> raise (Errors.settings_error "user setting infer_recursive_types must be set to 'all', 'guarded' or 'positive'")
 
 let var_is_free_in_type var datatype = TypeVarSet.mem var (free_type_vars datatype)
 
@@ -115,7 +145,7 @@ let rec eq_types : (datatype * datatype) -> bool =
       | `ForAll (qs, t) ->
           begin match unalias t2 with
             | `ForAll (qs', t') ->
-                List.for_all2 (fun q q' -> eq_quantifier (q, q')) qs qs' &&
+                List.for_all2 Quantifier.eq qs qs' &&
                   eq_types (t, t')
             | _ -> false
           end
@@ -144,9 +174,6 @@ and eq_sessions : (datatype * datatype) -> bool =
     eq_types (l, r)
   | `End, `End -> true
   | _, _ -> false
-and eq_quantifier : (quantifier * quantifier) -> bool =
-  function
-    | (lvar, _), (rvar, _) -> lvar = rvar
 and eq_rows : (row * row) -> bool =
   fun ((lfield_env, lrow_var, ldual), (rfield_env, rrow_var, rdual)) ->
     eq_field_envs (lfield_env, rfield_env) && eq_row_vars (lrow_var, rrow_var) && ldual=rdual
@@ -303,9 +330,9 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
     else
       raise (Failure (`Msg ("Cannot unify type variable "^string_of_int var^" with datatype "^string_of_datatype t^
                               " because "^
-                                match Settings.get_value infer_recursive_types with
-                                | "guarded" -> "the type variable occurs unguarded inside the datatype"
-                                | "positive" -> "the type variable occurs in a negative position inside the datatype"
+                                match Settings.get infer_recursive_types with
+                                | Some Guarded -> "the type variable occurs unguarded inside the datatype"
+                                | Some Positive -> "the type variable occurs in a negative position inside the datatype"
                                 | _ -> assert false))) in
 
   let ignore_empty_quantifiers =
@@ -563,7 +590,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
        unify_rec (RecAppl appl) t1
     | `ForAll l, `ForAll r ->
        let check_quantifier_kinds l r =
-         if Types.kind_of_quantifier l <> Types.kind_of_quantifier r then
+         if Quantifier.to_kind l <> Quantifier.to_kind r then
            raise (Failure (`Msg ("incompatible quantifier kinds")))
          else
            () in
@@ -594,8 +621,8 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
          List.fold_left2
            (fun (lenv, rs) l r ->
              check_quantifier_kinds l r;
-             (IntMap.add (Types.var_of_quantifier l) (Types.var_of_quantifier r) lenv,
-              IntSet.add (Types.var_of_quantifier r) rs))
+             (IntMap.add (Quantifier.to_var l) (Quantifier.to_var r) lenv,
+              IntSet.add (Quantifier.to_var r) rs))
            qenv
            ls
            rs in
@@ -692,7 +719,7 @@ and unify_presence' : unify_env -> (field_spec * field_spec -> unit) =
        | `Body f' -> unify_presence' rec_env (f, f')
      end
 
-and unify_rows' : ?var_sk:subkind -> unify_env -> ((row * row) -> unit) =
+and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row * row) -> unit) =
   let unwrap_row r =
     let r', rvar = unwrap_row r in
     (* Debug.print (Printf.sprintf "Unwrapped row %s giving %s\n" (string_of_row r) (string_of_row r')); *)
@@ -787,9 +814,9 @@ and unify_rows' : ?var_sk:subkind -> unify_env -> ((row * row) -> unit) =
     else
       raise (Failure (`Msg ("Cannot unify row variable "^string_of_int var^" with row "^string_of_row row^
                               " because "^
-                                match Settings.get_value infer_recursive_types with
-                                | "guarded" -> "the row variable occurs unguarded inside the row"
-                                | "positive" -> "the row variable occurs in a negative position inside the row"
+                                match Settings.get infer_recursive_types with
+                                | Some Guarded -> "the row variable occurs unguarded inside the row"
+                                | Some Positive -> "the row variable occurs in a negative position inside the row"
                                 | _ -> assert false))) in
 
   (*

@@ -915,6 +915,9 @@ struct
       | Some x :: rest -> aux (x::accum) rest
       | None :: _      -> None
     in aux [] e
+
+  let some : 'a -> 'a option
+    = fun x -> Some x
 end
 include OptionUtils
 
@@ -1271,7 +1274,10 @@ end = struct
     type t = link_t
 
     let follow link =
-      let node = Unix.stat (to_filename link) in
+      let node =
+        try Unix.stat (to_filename link)
+        with Unix.Unix_error _ -> raise (AccessError (to_filename link))
+      in
       match node.st_kind with
       | S_REG -> make_file node.st_ino (File.make link.root link.rev_suffix)
       | S_DIR -> make_dir node.st_ino (Directory.make link.root link.rev_suffix)
@@ -1400,3 +1406,24 @@ end = struct
       files root (Str.regexp pattern)
   end
 end
+
+(* Looks for a given file, either in the current directory or in the Links opam path *)
+let locate_file filename =
+  (* If LINKS_LIB is not defined then we search in current directory *)
+  let executable_dir = Filename.dirname Sys.executable_name in
+  if Sys.file_exists (Filename.concat executable_dir filename) then
+    executable_dir
+  else try
+      (* If all else failed we search for OPAM installation of Links and
+         use a prelude that it provides *)
+      let opam_links_lib =
+        input_line (Unix.open_process_in "opam config var links:lib 2>/dev/null") in
+      if Sys.file_exists (Filename.concat opam_links_lib filename)
+      then opam_links_lib
+      else (* But if no OPAM installation exists we fall back to current
+              directory so that user gets a reasonable error message *)
+        executable_dir
+    with End_of_file ->
+      (* User probably does not have OPAM, so fall back to current directory *)
+      executable_dir
+

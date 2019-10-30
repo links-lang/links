@@ -1,3 +1,5 @@
+open CommonTypes
+
 (** type destructors *)
 exception TypeDestructionError of string
 
@@ -27,8 +29,8 @@ val split_row : string -> Types.row -> (Types.datatype * Types.row)
 val split_variant_type : string -> Types.datatype -> (Types.datatype * Types.datatype)
 val variant_at : ?overstep_quantifiers:bool -> string -> Types.datatype -> Types.datatype
 
-val quantifiers : Types.datatype -> Types.quantifier list
-val split_quantified_type : Types.datatype -> (Types.quantifier list * Types.datatype)
+val quantifiers : Types.datatype -> Quantifier.t list
+val split_quantified_type : Types.datatype -> (Quantifier.t list * Types.datatype)
 
 val record_without : Types.datatype -> Utility.StringSet.t -> Types.datatype
 

@@ -49,7 +49,12 @@ open Var
    frontend and call/cc in the IR) is silly.
 *)
 
-let show_compiled_ir = Basicsettings.Sugartoir.show_compiled_ir
+let show_compiled_ir
+  = Settings.(flag "show_compiled_ir"
+              |> depends Debug.enabled
+              |> synopsis "Dumps the IR to stderr"
+              |> convert parse_bool
+              |> sync)
 
 type datatype = Types.datatype
 
@@ -109,7 +114,7 @@ sig
 
   val escape : (var_info * Types.row * (var -> tail_computation sem)) -> tail_computation sem
 
-  val tabstr : (Types.quantifier list * value sem) -> value sem
+  val tabstr : (Quantifier.t list * value sem) -> value sem
   val tappl : (value sem * Types.type_arg list) -> value sem
 
   val apply : (value sem * (value sem) list) -> tail_computation sem
@@ -120,15 +125,15 @@ sig
   val letvar : (var_info * tail_computation sem * tyvar list *
                (var -> tail_computation sem)) -> tail_computation sem
 
-  val xml : value sem * string * (name * (value sem) list) list * (value sem) list -> value sem
-  val record : (name * value sem) list * (value sem) option -> value sem
+  val xml : value sem * string * (Name.t * (value sem) list) list * (value sem) list -> value sem
+  val record : (Name.t * value sem) list * (value sem) option -> value sem
 
-  val project : value sem * name -> value sem
-  val update : value sem * (name * value sem) list -> value sem
+  val project : value sem * Name.t -> value sem
+  val update : value sem * (Name.t * value sem) list -> value sem
 
   val coerce : value sem * datatype -> value sem
 
-  val query : (value sem * value sem) option * tail_computation sem -> tail_computation sem
+  val query : (value sem * value sem) option * QueryPolicy.t * tail_computation sem -> tail_computation sem
 
   val db_insert : env -> (value sem * value sem) -> tail_computation sem
   val db_insert_returning : env -> (value sem * value sem * value sem) -> tail_computation sem
@@ -136,7 +141,7 @@ sig
   val db_update : env -> (CompilePatterns.Pattern.t * value sem * tail_computation sem option * tail_computation sem) -> tail_computation sem
   val db_delete : env -> (CompilePatterns.Pattern.t * value sem * tail_computation sem option) -> tail_computation sem
 
-  val do_operation : name * (value sem) list * Types.datatype -> tail_computation sem
+  val do_operation : Name.t * (value sem) list * Types.datatype -> tail_computation sem
 
   val handle : env -> (tail_computation sem *
                          (CompilePatterns.Pattern.t * (env -> tail_computation sem)) list *
@@ -147,7 +152,7 @@ sig
 
   val switch : env -> (value sem * (CompilePatterns.Pattern.t * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
 
-  val inject : name * value sem * datatype -> value sem
+  val inject : Name.t * value sem * datatype -> value sem
   (* val case : *)
   (*   value sem * string * (var_info * (var -> tail_computation sem)) * *)
   (*   (var_info * (var -> tail_computation sem)) option -> *)
@@ -178,19 +183,19 @@ sig
 
   val letfun :
     env ->
-    (var_info * (Types.quantifier list * (CompilePatterns.Pattern.t list * tail_computation sem)) * location) ->
+    (var_info * (Quantifier.t list * (CompilePatterns.Pattern.t list * tail_computation sem)) * location) ->
     (var -> tail_computation sem) ->
     tail_computation sem
 
   val letrec :
     env ->
-    (var_info * (Types.quantifier list * (CompilePatterns.Pattern.t list * (var list -> tail_computation sem))) * location) list ->
+    (var_info * (Quantifier.t list * (CompilePatterns.Pattern.t list * (var list -> tail_computation sem))) * location) list ->
     (var list -> tail_computation sem) ->
     tail_computation sem
 
-  val alien : var_info * name * language * (var -> tail_computation sem) -> tail_computation sem
+  val alien : var_info * Name.t * language * (var -> tail_computation sem) -> tail_computation sem
 
-  val select : name * value sem -> tail_computation sem
+  val select : Name.t * value sem -> tail_computation sem
 
   val offer : env -> (value sem * (CompilePatterns.Pattern.t * (env -> tail_computation sem)) list * Types.datatype) -> tail_computation sem
 end
@@ -278,7 +283,7 @@ struct
        * location) list ->
       (Var.var list) M.sem
 
-    val alien_binding : var_info * name * language -> var M.sem
+    val alien_binding : var_info * Name.t * language -> var M.sem
 
     val value_of_untyped_var : var M.sem * datatype -> value sem
   end =
@@ -601,17 +606,17 @@ struct
                  let where = CompilePatterns.let_pattern env p (Variable x, xt) (reify where, Types.bool_type) in
                    lift (Special (Delete ((xb, source), Some where)), Types.unit_type))
 
-  let query (range, s) =
+  let query (range, policy, s) =
     let bs, e = reify s in
       match range with
         | None ->
-            lift (Special (Query (None, (bs, e), sem_type s)), sem_type s)
+            lift (Special (Query (None, policy, (bs, e), sem_type s)), sem_type s)
         | Some (limit, offset) ->
             bind limit
               (fun limit ->
                  bind offset
                    (fun offset ->
-                      lift (Special (Query (Some (limit, offset), (bs, e), sem_type s)), sem_type s)))
+                      lift (Special (Query (Some (limit, offset), policy, (bs, e), sem_type s)), sem_type s)))
 
   let letvar (x_info, s, tyvars, body) =
     bind s
@@ -1010,8 +1015,8 @@ struct
                    (instantiate_mb "stringToXml",
                     [ev (WithPos.make ~pos (Sugartypes.Constant (Constant.String name)))]))
           | Block (bs, e) -> eval_bindings Scope.Local env bs e
-          | Query (range, e, _) ->
-              I.query (opt_map (fun (limit, offset) -> (ev limit, ev offset)) range, ec e)
+          | Query (range, policy, e, _) ->
+              I.query (opt_map (fun (limit, offset) -> (ev limit, ev offset)) range, policy, ec e)
 	  | DBInsert (source, _fields, rows, None) ->
 	      let source = ev source in
 	      let rows = ev rows in
@@ -1150,7 +1155,7 @@ struct
                           let outer  = Binder.to_type bndr in
                           let (inner, _) = OptionUtils.val_of inner_opt in
                               (f::fs, inner::inner_fts, outer::outer_fts))
-                        defs
+                        (nodes_of_list defs)
                         ([], [], []) in
                     let defs =
                       List.map
@@ -1169,7 +1174,7 @@ struct
                                ([], env) in
                            let body = fun vs -> eval (extend fs (List.combine vs inner_fts) body_env) body in
                              ((ft, f, scope), (tyvars, (ps, body)), location))
-                        defs
+                        (nodes_of_list defs)
                     in
                       I.letrec env defs (fun vs -> eval_bindings scope (extend fs (List.combine vs outer_fts) env) bs e)
                 | Foreign (bndr, raw_name, language, _file, _)

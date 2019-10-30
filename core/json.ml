@@ -4,7 +4,11 @@ open CommonTypes
 open Utility
 
 (* Setting *)
-let show_json = Basicsettings.Json.show_json
+let show_json
+  = Settings.(flag "show_json"
+              |> convert parse_bool
+              |> sync)
+
 
 (* Type synonyms *)
 type handler_id = int
@@ -14,11 +18,11 @@ type websocket_url = string
 type json_string = string
 
 let parse_json str =
-  Jsonparse.parse_json Jsonlex.jsonlex (Lexing.from_string str)
+  Yojson.Basic.from_string str |> Value.from_json
 
-let parse_json_b64 str = parse_json(Utility.base64decode str)
+let nil_literal = `Null
 
-let nil_literal = "null"
+let parse_json_b64 str = parse_json (Utility.base64decode str)
 
 (* Helper functions for jsonization *)
 (*
@@ -28,48 +32,40 @@ let nil_literal = "null"
     of view it certainly isn't a very good idea to pass this kind of
     information to the client.
 *)
-let json_of_db (db, params) =
+let json_of_db (db, params) : Yojson.Basic.t =
   let driver = db#driver_name() in
   let (name, args) = Value.parse_db_string params in
-    "{_db:{driver:\"" ^ driver ^ "\",name:\"" ^ name ^ "\", args:\"" ^ args ^ "\"}}"
+  `Assoc [("_db",
+      `Assoc [("driver", `String driver);
+              ("name", `String name);
+              ("args", `String args)])]
 
 (*
 WARNING:
   May need to be careful about free type variables / aliases in row
 *)
-let json_of_table ((db, params), name, keys, row) =
-  let json_of_key k = "[" ^ (mapstrcat ", " (fun x -> x) k) ^ "]" in
-  let json_of_keylist ks = "[" ^ (mapstrcat ", " json_of_key ks) ^ "]" in
-    "{_table:{db:'" ^ json_of_db (db, params) ^ "',name:\"" ^ name ^
-      "\",row:\"" ^ Types.string_of_datatype (`Record row) ^
-      "\",keys:\"" ^ json_of_keylist keys ^ "\"}}"
+let json_of_table ((db, params), name, keys, row) : Yojson.Basic.t =
+  let json_of_key k = `List (List.map (fun x -> `String x) k) in
+  let json_of_keylist ks = `List (List.map json_of_key ks)  in
+  `Assoc [
+    ("_table",
+      `Assoc [("db", json_of_db (db, params)); ("name", `String name);
+        ("row", `String (Types.string_of_datatype (`Record row)));
+        ("keys", json_of_keylist keys)])]
 
-let js_dq_escape_string str =
-  (* escape for placement in double-quoted string *)
-  Str.global_replace (Str.regexp_string "\"") "\\\""
-    (Str.global_replace (Str.regexp_string "\n") "\\n"
-      (Str.global_replace (Str.regexp_string "\r") "\\r"
-       (Str.global_replace (Str.regexp_string "\\") "\\\\"
-          str)))
+let jsonize_location loc = `String (
+  match loc with
+    | Location.Client  -> "client"
+    | Location.Server  -> "server"
+    | Location.Native  -> "native"
+    | Location.Unknown -> "unknown")
 
-(** Escape the argument for inclusion in a double-quoted string. *)
-let js_dq_escape_char =
-  function
-    '"' -> "\\\""
-  | '\\' -> "\\\\"
-  | ch -> String.make 1 ch
+let rec cons_listify : Yojson.Basic.t list -> Yojson.Basic.t = function
+  | [] -> `Null
+  | x::xs ->
+      `Assoc [("_head", x); ("_tail", cons_listify xs)]
 
-let jsonize_location : Ir.location -> string = function
-  | Location.Client  -> "client"
-  | Location.Server  -> "server"
-  | Location.Native  -> "native"
-  | Location.Unknown -> "unknown"
-
-let rec string_listify : string list -> string = function
-  | [] -> nil_literal
-  | x::xs -> Printf.sprintf "{\"_head\":%s, \"_tail\":%s}" x (string_listify xs)
-
-let rec jsonize_value' : Value.t -> json_string =
+let rec jsonize_value' : Value.t -> Yojson.Basic.t =
   function
   | `Lens _ -> raise (Errors.runtime_error "relational lens serialization not supported")
   | `PrimitiveFunction _
@@ -81,57 +77,58 @@ let rec jsonize_value' : Value.t -> json_string =
   | `FunctionPtr (f, fvs) ->
     let (_, _, _, location) = Tables.find Tables.fun_defs f in
     let location = jsonize_location location in
-    let env_string =
+    let env_entry =
       match fvs with
-      | None     -> ""
-      | Some fvs ->
-        let s = jsonize_value' fvs in
-        ", \"environment\":" ^ s in
-    "{\"func\":\"" ^ Js.var_name_var f ^ "\"," ^
-    " \"location\":\"" ^ location ^ "\"" ^ env_string ^ "}"
-  | `ClientDomRef i -> "{\"_domRefKey\":" ^ (string_of_int i) ^ "}"
-  | `ClientFunction name -> "{\"func\":\"" ^ name ^ "\"}"
+      | None     -> []
+      | Some fvs -> [("environment", jsonize_value' fvs)] in
+    let entries = [
+      ("func", `String (Js.var_name_var f));
+      ("location", location)] @ env_entry in
+    `Assoc entries
+  | `ClientDomRef i ->
+      `Assoc [("_domRefKey", `String (string_of_int i))]
+  | `ClientFunction name -> `Assoc [("func", `String name)]
   | #Value.primitive_value as p -> jsonize_primitive p
   | `Variant (label, value) ->
-    let s = jsonize_value' value in
-    "{\"_label\":\"" ^ label ^ "\",\"_value\":" ^ s ^ "}"
+      `Assoc [("_label", `String label); ("_value", jsonize_value' value)]
   | `Record fields ->
-    let ls, vs = List.split fields in
-    let ss = jsonize_values vs in
-      "{" ^
-        mapstrcat "," (fun (kj, s) -> "\"" ^ kj ^ "\":" ^ s) (List.combine ls ss)
-      ^ "}"
-  | `List l ->  string_listify (List.map jsonize_value' l)
+    `Assoc (List.map (fun (k, v) -> (k, jsonize_value' v )) fields)
+  | `List l ->  cons_listify (List.map jsonize_value' l)
   | `AccessPointID (`ClientAccessPoint (cid, apid)) ->
-      "{\"_clientAPID\": " ^ (AccessPointID.to_json apid) ^
-      ", \"_clientId\":" ^ (ClientID.to_json cid) ^  "}"
+      `Assoc
+        [("_clientAPID", AccessPointID.to_json apid);
+         ("_clientId", ClientID.to_json cid)]
   | `AccessPointID (`ServerAccessPoint (apid)) ->
-      "{\"_serverAPID\": " ^ (AccessPointID.to_json apid) ^ "}"
+      `Assoc [("_serverAPID", AccessPointID.to_json apid)]
   | `Pid (`ClientPid (client_id, process_id)) ->
-      "{\"_clientPid\":" ^ (ProcessID.to_json process_id) ^
-      ", \"_clientId\":" ^ (ClientID.to_json client_id) ^ "}"
+      `Assoc
+        [("_clientPid", ProcessID.to_json process_id);
+         ("_clientId", ClientID.to_json client_id) ]
   | `Pid (`ServerPid (process_id)) ->
-      "{\"_serverPid\":" ^ (ProcessID.to_json process_id) ^ "}"
+      `Assoc [("_serverPid", ProcessID.to_json process_id)]
   | `SessionChannel (ep1, ep2) ->
-      "{\"_sessEP1\":" ^ ChannelID.to_json ep1 ^
-      ",\"_sessEP2\":" ^ ChannelID.to_json ep2 ^ "}"
+      `Assoc
+        [("_sessEP1", ChannelID.to_json ep1);
+         ("_sessEP2", ChannelID.to_json ep2)]
   | `SpawnLocation (`ClientSpawnLoc client_id) ->
-      "{\"_clientSpawnLoc\":" ^ (ClientID.to_json client_id) ^ "}"
+      `Assoc
+        [("_clientSpawnLoc", ClientID.to_json client_id)]
   | `SpawnLocation (`ServerSpawnLoc) ->
-      "{\"_serverSpawnLoc\": [] }"
+      `Assoc [("_serverSpawnLoc", `List [])]
   | `Alien -> raise (Errors.runtime_error "Can't jsonize alien")
-and jsonize_primitive : Value.primitive_value -> string  = function
-  | `Bool value -> string_of_bool value
-  | `Int value -> string_of_int value
-  | `Float value -> string_of_float' value
-  | `Char c -> "{\"_c\":\"" ^ (js_dq_escape_char c) ^"\"}"
+and jsonize_primitive : Value.primitive_value -> Yojson.Basic.t  = function
+  | `Bool value -> `Bool value
+  | `Int value -> `Int value
+  | `Float value -> `Float value
+  | `Char c ->
+      `Assoc [("_c", `String (String.make 1 c))]
   | `Database db -> json_of_db db
   | `Table t -> json_of_table t
   | `XML xmlitem -> json_of_xmlitem xmlitem
-  | `String s -> "\"" ^ js_dq_escape_string s ^ "\""
+  | `String s -> `String s
 and json_of_xmlitem = function
   | Value.Text s ->
-      "{ \"type\": \"TEXT\", \"text\": \"" ^ js_dq_escape_string (s) ^ "\"}"
+      `Assoc [("type", `String "TEXT"); ("text", `String s)]
   (* TODO: check that we don't run into problems when HTML containing
      an event handler is copied *)
   | Value.NsNode (ns, tag, xml) ->
@@ -139,23 +136,25 @@ and json_of_xmlitem = function
         List.fold_right (fun xmlitem (attrs, body) ->
             match xmlitem with
             | Value.Attr (label, value) ->
-                ("\"" ^label ^ "\" : " ^ "\"" ^ js_dq_escape_string value ^ "\"") :: attrs, body
+                (label, `String value) :: attrs, body
             | Value.NsAttr (ns, label, value) ->
-                ("\"" ^ ns ^ ":" ^ label ^ "\" : " ^ "\"" ^ js_dq_escape_string value ^ "\"") :: attrs, body
+                (ns ^ ":" ^ label, `String value) :: attrs, body
             | _ ->
               let s = json_of_xmlitem xmlitem in
               attrs, s :: body) xml ([], [])
       in
-        "{ \"type\": \"ELEMENT\"," ^
-          "\"tagName\": \"" ^ tag ^ "\"," ^
-          (if (String.length(ns) > 0) then "\"namespace\": \"" ^ ns ^ "\"," else "") ^
-          "\"attrs\": {" ^ String.concat "," attrs ^ "}," ^
-          "\"children\":" ^ string_listify body ^
-        "}"
+        let assocKeys = [
+          ("type", `String "ELEMENT");
+          ("tagName", `String tag);
+          ("attrs", `Assoc attrs);
+          ("children", cons_listify body)] in
+        let nsKey =
+          if (String.length ns > 0) then [("namespace", `String ns)] else [] in
+        `Assoc (assocKeys @ nsKey)
   | Value.Node (name, children) -> json_of_xmlitem (Value.NsNode ("", name, children))
   | _ -> raise (Errors.runtime_error "Cannot jsonize a detached attribute.")
 
-and jsonize_values : Value.t list -> string list  =
+and jsonize_values : Value.t list -> Yojson.Basic.t list  =
   fun vs ->
     let ss =
       List.fold_left
@@ -164,21 +163,16 @@ and jsonize_values : Value.t list -> string list  =
            s::ss) [] vs in
     List.rev ss
 
-
-let value_with_state v s =
-  "{\"value\":" ^ v ^ ",\"state\":" ^ s ^ "}"
-
-
 let show_processes procs =
   (* Show the JSON for a prcess, including the PID, process to be run, and mailbox *)
   let show_process (pid, (proc, msgs)) =
-    let ps = jsonize_value' proc in
-    let ms = String.concat "," (List.map jsonize_value' msgs) in
-    "{\"pid\":" ^ (ProcessID.to_json pid) ^ "," ^
-    " \"process\":" ^ ps ^ "," ^
-    " \"messages\": [" ^ ms ^ "]}" in
+    let ms = `List (List.map jsonize_value' msgs) in
+    `Assoc
+      [("pid", ProcessID.to_json pid);
+       ("process", jsonize_value' proc);
+       ("messages", ms)] in
   let bnds = PidMap.bindings procs in
-  String.concat "," (List.map show_process bnds)
+  `List (List.map show_process bnds)
 
 let show_handlers evt_handlers =
   (* Show the JSON for an event handler: the evt handler key, and the associated process(es) *)
@@ -186,36 +180,41 @@ let show_handlers evt_handlers =
     (* If the list of processes handling each key is represented by a 'List term, we translate it to a
        JS Array. This Array is supposed to be processes  by jslib code only*)
     let jsonize_handler_list = function
-      | `List elems -> string_listify (List.map jsonize_value' elems)
+      | `List elems -> cons_listify (List.map jsonize_value' elems)
       | _ ->  jsonize_value' proc in
-    "{\"key\": " ^ string_of_int key ^ "," ^
-    " \"eventHandlers\":" ^ jsonize_handler_list proc ^ "}" in
+    `Assoc [
+      ("key", `Int key); ("eventHandlers", jsonize_handler_list proc)
+    ] in
   let bnds = IntMap.bindings evt_handlers in
-  String.concat "," (List.map show_evt_handler bnds)
+  `List (List.map show_evt_handler bnds)
 
 let show_aps aps =
-  let ap_list = AccessPointIDSet.elements aps in
-  String.concat "," (List.map (AccessPointID.to_json) ap_list)
+  let aps_json =
+    List.map AccessPointID.to_json (AccessPointIDSet.elements aps) in
+  `List aps_json
 
 let show_buffers bufs =
-  String.concat "," (List.map (fun (endpoint_id, values) ->
-    let json_vals = String.concat "," (List.map jsonize_value' values |> List.rev) in
-    "{\"buf_id\": " ^ (ChannelID.to_json endpoint_id) ^ "," ^
-    "\"values\": " ^ "[" ^ json_vals ^ "]" ^ "}"
-  ) (ChannelIDMap.bindings bufs))
+  let bufs =
+    List.map (fun (endpoint_id, values) ->
+      let json_values = `List (List.rev (List.map jsonize_value' values)) in
+      `Assoc [
+        ("buf_id", ChannelID.to_json endpoint_id);
+        ("values", json_values)]) (ChannelIDMap.bindings bufs) in
+  `List bufs
 
-let print_json_state client_id conn_url procs handlers aps bufs =
-    let ws_url_data =
-    (match conn_url with
-       | Some ws_conn_url -> "\"ws_conn_url\":\"" ^ ws_conn_url ^ "\","
-       | None -> "") in
-  "{\"client_id\":" ^ (ClientID.to_json client_id) ^ "," ^
-   ws_url_data ^
-   "\"access_points\":" ^ "[" ^ (show_aps aps) ^ "]" ^ "," ^
-   "\"buffers\":" ^ "[" ^ (show_buffers bufs) ^ "]" ^ "," ^
-   "\"processes\":" ^ "[" ^ (show_processes procs) ^ "]" ^ "," ^
-   "\"handlers\":" ^ "[" ^ (show_handlers handlers) ^ "]}"
-
+let serialise_json_state client_id conn_url procs handlers aps bufs =
+  let ws_url_data =
+  (match conn_url with
+     | Some ws_conn_url ->
+         [("ws_conn_url", `String ws_conn_url)]
+     | None -> []) in
+  let assoc_keys = [
+    ("client_id", ClientID.to_json client_id);
+    ("access_points", show_aps aps);
+    ("buffers", show_buffers bufs);
+    ("processes", show_processes procs);
+    ("handlers", show_handlers handlers) ] @ ws_url_data in
+  `Assoc assoc_keys
 
 (* JSON state definition *)
 module JsonState = struct
@@ -262,7 +261,7 @@ module JsonState = struct
   let get_carried_channels state = state.channels
 
   (** Serialises the state as a JSON string *)
-  let to_string s = print_json_state s.client_id s.ws_conn_url s.processes s.handlers s.aps s.buffers
+  let to_json s = serialise_json_state s.client_id s.ws_conn_url s.processes s.handlers s.aps s.buffers
 
   let _merge s s' =
     let select_left _ x _ = Some x in
@@ -283,20 +282,25 @@ end
 
 type json_state = JsonState.t
 
+let value_with_state v s =
+  `Assoc [("value", v); ("state", JsonState.to_json s)]
+
 (* External interface *)
 let jsonize_value_with_state value state =
   Debug.if_set show_json
       (fun () -> "jsonize_value_with_state => " ^ Value.string_of_value value);
   let jv = jsonize_value' value in
-  let jv_s = value_with_state jv (JsonState.to_string state) in
-  Debug.if_set show_json (fun () -> "jsonize_value_with_state <= " ^ jv_s);
+  let jv_s = value_with_state jv state in
+  let jv_str = Yojson.Basic.to_string jv_s in
+  Debug.if_set show_json (fun () -> "jsonize_value_with_state <= " ^ jv_str);
   jv_s
 
 let jsonize_value v =
   Debug.if_set show_json
       (fun () -> "jsonize_value => " ^ Value.string_of_value v);
   let jv = jsonize_value' v in
-  Debug.if_set show_json (fun () -> "jsonize_value <= " ^ jv);
+  let jv_str = Yojson.Basic.to_string jv in
+  Debug.if_set show_json (fun () -> "jsonize_value <= " ^ jv_str);
   jv
 
 
@@ -304,9 +308,13 @@ let encode_continuation (cont : Value.continuation) : string =
   Value.marshal_continuation cont
 
 let jsonize_call s cont name args =
-  let vs = jsonize_values args in
+  let arg_vs = jsonize_values args in
   let v =
-    "{\"__continuation\":\"" ^ (encode_continuation cont) ^"\"," ^
-    "\"__name\":\"" ^ name ^ "\"," ^
-    "\"__args\":[" ^ String.concat ", " vs ^ "]}" in
-  value_with_state v (JsonState.to_string s)
+    `Assoc [
+      ("__continuation", `String (encode_continuation cont));
+      ("__name", `String name);
+      ("__args", `List arg_vs)] in
+  value_with_state v s
+
+(* Eta expansion needed to suppress optional arguments *)
+let json_to_string json = Yojson.Basic.to_string json

@@ -484,8 +484,7 @@ struct
       | None -> Lwt.return ()
 
   let decode_message json_str =
-    Jsonparse.parse_websocket_request Jsonlex.jsonlex
-      (Lexing.from_string json_str)
+    WebsocketMessages.from_json (Yojson.Basic.from_string json_str)
 
   let decode_and_handle client_id data =
     match decode_message data with
@@ -560,74 +559,79 @@ struct
 
   let deliver_process_message client_id pid v =
     let json_val = Json.jsonize_value v in
-    let str_val =
-      "{\"opcode\":\"MESSAGE_DELIVERY\", \"dest_pid\":" ^ (ProcessID.to_json pid) ^
-      ", \"val\":" ^ json_val ^ "}" in
-    Debug.print @@ "Sending or buffering message " ^ str_val ^ " to client " ^ (ClientID.to_string client_id);
-    send_or_buffer_message client_id str_val
+    let json =
+      `Assoc [
+        ("opcode", `String "MESSAGE_DELIVERY");
+        ("dest_pid", ProcessID.to_json pid);
+        ("val", json_val)] in
+    let str_json = Json.json_to_string json in
+    Debug.print @@ "Sending or buffering message " ^ str_json ^ " to client " ^ (ClientID.to_string client_id);
+    send_or_buffer_message client_id str_json
 
   let send_ap_response cid pid ch =
     let json_ch = Json.jsonize_value (Value.box_channel ch) in
-    let str_val =
-      "{\"opcode\":\"AP_RESPONSE\", \"blocked_pid\":" ^ (ProcessID.to_json pid) ^
-      ", \"chan\": " ^ json_ch ^ "}" in
-    send_or_buffer_message cid str_val
+    let json_val =
+      `Assoc [
+        ("opcode", `String "AP_RESPONSE");
+        ("blocked_pid", ProcessID.to_json pid);
+        ("chan", json_ch)] in
+    let str_json = Json.json_to_string json_val in
+    send_or_buffer_message cid str_json
 
   let deliver_session_message client_id session_ep deleg_chans requires_lost_messages v =
     let json_val = Json.jsonize_value v in
 
-    let print_deleg_chan (chan, msgs) =
+    let jsonize_deleg_chan (chan, msgs) =
       (* Client representation of a buffer is the reverse of the server one, alas *)
-      let str_buf =
+      let json_buf =
         List.map (Json.jsonize_value) msgs
-        |> List.rev
-        |> String.concat "," in
-      "{\"ep_id\":" ^ (ChannelID.to_json (snd chan)) ^ ", \"buf\": [" ^ str_buf  ^ "]}" in
-    let deleg_chans_json = List.map print_deleg_chan deleg_chans |> String.concat "," in
-
-    let json_str =
-      "{\"opcode\":\"SESSION_MESSAGE_DELIVERY\"," ^
-        "\"ep_id\":" ^ (ChannelID.to_json session_ep) ^ "," ^
-        "\"deleg_chans\": [" ^ deleg_chans_json ^ "], " ^
-        "\"requires_lost_messages\":" ^
-          (string_of_bool requires_lost_messages) ^ "," ^
-        "\"msg\":" ^ json_val ^ "}" in
+        |> List.rev in
+      let json_buf = `List json_buf in
+      `Assoc [
+        ("ep_id", ChannelID.to_json (snd chan));
+        ("buf", json_buf)] in
+    let deleg_chans_json = `List (List.map jsonize_deleg_chan deleg_chans) in
+    let json =
+      `Assoc [
+        ("opcode", `String "SESSION_MESSAGE_DELIVERY");
+        ("ep_id", ChannelID.to_json session_ep);
+        ("deleg_chans", deleg_chans_json);
+        ("requires_lost_messages", `Bool requires_lost_messages);
+        ("msg", json_val)] in
+    let json_str = Json.json_to_string json in
     send_or_buffer_message client_id json_str
 
   let get_lost_messages client_id carrier_chan chan_ids =
-    let chan_ids_json =
-      chan_ids
-      |> List.map (ChannelID.to_json)
-      |> String.concat "," in
-
-    let json_str =
-      "{\"opcode\":\"GET_LOST_MESSAGES\"," ^
-       "\"carrier_ep\":" ^ (ChannelID.to_json carrier_chan) ^ "," ^
-       "\"ep_ids\":[" ^ chan_ids_json ^ "]}" in
+    let chan_ids_json = `List (List.map (ChannelID.to_json) chan_ids) in
+    let json =
+      `Assoc [
+        ("opcode", `String "GET_LOST_MESSAGES");
+        ("carrier_ep", ChannelID.to_json carrier_chan);
+        ("ep_ids", chan_ids_json)] in
+    let json_str = Json.json_to_string json in
     send_or_buffer_message client_id json_str
 
   let deliver_lost_messages client_id carrier_channel_id lost_msg_table =
-    let str_buf msgs =
-      List.map (Json.jsonize_value) msgs
-      |> List.rev
-      |> String.concat "," in
-
-    let json_table =
-      List.map (fun (cid, msgs) ->
-        ChannelID.to_json cid ^ ": [" ^ (str_buf msgs) ^ "]") lost_msg_table
-      |> String.concat "," in
-
-    let json_str =
-      "{\"opcode\":\"DELIVER_LOST_MESSAGES\"," ^
-       "\"ep_id\":" ^ (ChannelID.to_json carrier_channel_id) ^ "," ^
-       "\"lost_messages\":{" ^ json_table ^ "}}" in
+    let json_buf msgs = `List (List.map (Json.jsonize_value) msgs |> List.rev) in
+    let json_table : Yojson.Basic.t =
+      `Assoc
+        (List.map (fun (cid, msgs) ->
+          (ChannelID.to_string cid, json_buf msgs)) lost_msg_table) in
+    let json =
+      `Assoc [
+        ("opcode", `String "DELIVER_LOST_MESSAGES");
+        ("ep_id", ChannelID.to_json carrier_channel_id);
+        ("lost_messages", json_table)] in
+    let json_str = Json.json_to_string json in
     send_or_buffer_message client_id json_str
 
   let send_cancellation client_id ~notify_ep ~cancelled_ep =
-    let json_str =
-      "{\"opcode\":\"CHANNEL_CANCELLATION\"," ^
-      "\"notify_ep\":" ^ (ChannelID.to_json notify_ep) ^ "," ^
-      "\"cancelled_ep\":" ^ (ChannelID.to_json cancelled_ep) ^ "}" in
+    let json =
+      `Assoc [
+        ("opcode", `String "CHANNEL_CANCELLATION");
+        ("notify_ep", ChannelID.to_json notify_ep);
+        ("cancelled_ep", ChannelID.to_json cancelled_ep)] in
+    let json_str = Json.json_to_string json in
     send_or_buffer_message client_id json_str
 
   (* Debug *)
@@ -919,7 +923,7 @@ and Session : SESSION = struct
 
       (* Cancelling a channel twice is a no-op *)
       if ((is_endpoint_cancelled local_ep) ||
-         (not @@ Settings.get_value Basicsettings.Sessions.exceptions_enabled)) then Lwt.return () else
+         (not @@ Settings.get Basicsettings.Sessions.exceptions_enabled)) then Lwt.return () else
       begin
       cancel_endpoint local_ep;
       match lookup_endpoint local_ep with

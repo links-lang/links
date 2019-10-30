@@ -1,0 +1,48 @@
+# Commands: Allow things to be processed asynchronously and produce messages
+
+typename Command(a :: Type(Any, Any)) =
+  [| NoCommand
+   | CommandAppend : (Command(a), Command(a))
+   | Spawn: (() {}~> a)
+   |];
+
+var empty = NoCommand;
+
+sig spawnProc:
+  forall a :: Type(Any, Any) .
+    (() {}~> a) {}~> Command(a)
+fun spawnProc(f) { Spawn(f) }
+
+sig append : forall a :: Type(Any, Any), e :: Row .
+  (Command(a), Command(a)) -e-> Command(a)
+fun append(a1, a2) {
+  switch ((a1, a2)) {
+    case (NoCommand, a2) -> a2
+    case (a1, NoCommand) -> a1
+    case (a1, a2) -> CommandAppend(a1, a2)
+  }
+}
+
+
+sig +$ : forall a :: Type(Any, Any), e :: Row . (Command(a), Command(a)) -e-> Command(a)
+op a1 +$ a2 { append(a1, a2) }
+
+sig applySpawn: forall a :: Type(Any, Any) .
+  (() {}~> a) {}~> a
+fun applySpawn(f) { f() }
+
+sig processCommand :
+  forall msg :: Type(Any, Any), e :: Row . (Command(msg), AP(?msg.End)) ~e~> ()
+fun processCommand(cmd, ap) {
+  switch(cmd) {
+    case NoCommand -> ()
+    case CommandAppend(c1, c2) ->
+      processCommand(c1, ap);
+      processCommand(c2, ap)
+    case Spawn(f) ->
+      ignore(
+        spawn {
+          close(send(applySpawn(f), request(ap)))
+        })
+  }
+}
