@@ -57,6 +57,6 @@ end
 
 (* Operator section *)
 module Section = struct
-  type t = Minus | FloatMinus | Project of Name.t | Name of Name.t
+  type t = Minus | FloatMinus | Project of Label.t | Name of Name.t
     [@@deriving show]
 end
