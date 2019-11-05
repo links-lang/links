@@ -21,6 +21,16 @@ module TyEnv = Env.String
 
 let failure_op_name = Value.session_exception_operation
 
+let extension_guard pos =
+  let exceptions_enabled =
+    Basicsettings.Sessions.exceptions_enabled
+  in
+  let get_setting_name () =
+    Settings.get_name exceptions_enabled
+  in
+  Settings.get Basicsettings.Sessions.exceptions_enabled
+  || raise (Errors.disabled_extension ~pos ~setting:(get_setting_name (), true) "Session exceptions")
+
 class insert_toplevel_handlers env =
 object (o: 'self_type)
   inherit (TransformSugar.transform env) as super
@@ -69,7 +79,7 @@ object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
   method! phrase = function
-    | { node = Raise; pos } ->
+    | { node = Raise; pos } when extension_guard pos ->
         (* Compile `raise` as the following:
          * switch (do SessionFail) { }
          *
@@ -80,7 +90,8 @@ object (o : 'self_type)
         let with_pos x = SourceCode.WithPos.make ~pos x in
         (o, with_pos (Switch (with_pos doOp, [], Some ty)), ty)
     | { node = TryInOtherwise (_, _, _, _, None); _} -> assert false
-    | { node = TryInOtherwise (try_phr, pat, as_phr, otherwise_phr, (Some dt)); pos } ->
+    | { node = TryInOtherwise (try_phr, pat, as_phr, otherwise_phr, (Some dt)); pos }
+      when extension_guard pos ->
         let (o, try_phr, try_dt) = o#phrase try_phr in
         let envs = o#backup_envs in
         let (o, pat) = o#pattern pat in
@@ -138,21 +149,6 @@ object (o : 'self_type)
 end
 
 
-let contains_session_exceptions prog =
-  let o =
-    object
-      inherit SugarTraversals.predicate as super
-      val has_exceptions = false
-      method satisfied = has_exceptions
-
-      method! phrasenode = function
-        | TryInOtherwise _
-        | Raise -> {< has_exceptions = true >}
-        | p -> super#phrasenode p
-    end in
-  (o#program prog)#satisfied
-
-
 (*
  * The "naive" typing rule for try-in-otherwise is unsound
  * as it allows possibly-linear variables to be used twice:
@@ -203,16 +199,7 @@ let wrap_linear_handlers =
       | p -> super#phrase p
   end
 
-let settings_check prog =
-  if not (contains_session_exceptions prog) then ()
-  else if not (Settings.get Basicsettings.Sessions.exceptions_enabled)
-  then raise (
-           Errors.settings_error
-             ("File contains session exceptions but session_exceptions not enabled. " ^
-                "Please set 'session_exceptions' configuration flag to true."))
-  else ()
-
-let insert_toplevel_handlers env =
+let _insert_toplevel_handlers env =
   ((new insert_toplevel_handlers env) :
     insert_toplevel_handlers :> TransformSugar.transform)
 
@@ -220,10 +207,19 @@ let desugar_session_exceptions env =
   ((new desugar_session_exceptions env) :
     desugar_session_exceptions :> TransformSugar.transform)
 
-let desugar_program : TransformSugar.program_transformer =
-  fun env program -> snd3 ((desugar_session_exceptions env)#program program)
+module Typeable
+  = Transform.Typeable.Make(struct
+        let name = "session_exceptions (typeable)"
+        let obj env = (desugar_session_exceptions env : TransformSugar.transform :> Transform.Typeable.sugar_transformer)
+      end)
+module Untyped = struct
+  open Transform.Untyped
+  let name = "session_exceptions (untyped)"
+  let program state program =
+    let program' = wrap_linear_handlers#program program in
+    return state program'
 
-
-let show prog =
-  Printf.printf "%s\n\n" (Sugartypes.show_program prog);
-  prog
+  let sentence state sentence =
+    let sentence' = wrap_linear_handlers#sentence sentence in
+    return state sentence'
+end

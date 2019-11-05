@@ -183,3 +183,8 @@ object (_self)
         {< no_lattributes = false >}
     | e -> super#phrase e
 end
+
+module Untyped
+  = Transform.Untyped.Make.Transformer(struct
+        let name = "lattributes"
+        let obj = desugar_lattributes end)

@@ -51,20 +51,13 @@ sig
   end
 end
 
-module type PROGTRANSFORM =
-sig
-   val program : Types.datatype Env.Int.t -> program -> program
-   val bindings : Types.datatype Env.Int.t -> binding list -> binding list
-end
-
-
 module Transform : IR_VISITOR
 
-module Inline : PROGTRANSFORM
-module ElimDeadDefs : PROGTRANSFORM
-module ElimBodiesFromMetaTypeVars : PROGTRANSFORM
-module CheckForCycles : PROGTRANSFORM
-module ElimTypeAliases : PROGTRANSFORM
+module Inline : IrTransform.S
+module ElimDeadDefs : IrTransform.S
+module ElimBodiesFromMetaTypeVars : IrTransform.S
+module CheckForCycles : IrTransform.S
+module ElimTypeAliases : IrTransform.S
 module InstantiateTypes :
 sig
   val computation : Types.datatype Env.Int.t -> (Types.datatype IntMap.t * Types.row IntMap.t * Types.field_spec IntMap.t) -> computation -> computation

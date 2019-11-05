@@ -677,20 +677,13 @@ struct
     e
 end
 
-let program globals tyenv program =
-  (* Debug.print ("Before closure conversion: " ^ Ir.show_program program); *)
-  (* ensure that all top-level bindings are marked as global
-     (desugaring can break this invariant) *)
-  let program = Globalise.program program in
-  let fenv = ClosureVars.program tyenv globals program in
-  (* Debug.print ("fenv: " ^ Closures.show_fenv fenv); *)
-  let program = ClosureConvert.program tyenv fenv program in
-  (* Debug.print ("After closure conversion: " ^ Ir.show_program program); *)
-  program
+let name = "closure_conversion"
 
-let bindings tyenv globals bs =
-  (* List.iter (fun b -> Debug.print (Ir.show_binding b)) bs; *)
-  let bs = Globalise.bindings bs in
-  let fenv = ClosureVars.bindings tyenv globals bs in
-  let bs = ClosureConvert.bindings tyenv fenv bs in
-  bs
+let program state program =
+  let open IrTransform in
+  let globals = state.primitive_vars in
+  let tenv = Context.variable_environment (context state) in
+  let program' = Globalise.program program in
+  let fenv = ClosureVars.program tenv globals program' in
+  let program'' = ClosureConvert.program tenv fenv program' in
+  return state program''

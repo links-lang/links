@@ -140,8 +140,9 @@ end
 
 let desugar_cp env = ((new desugar_cp env) : desugar_cp :> TransformSugar.transform)
 
-let desugar_program : TransformSugar.program_transformer =
-  fun env program -> snd3 ((desugar_cp env)#program program)
+module Typeable
+  = Transform.Typeable.Make(struct
+        let name = "cp"
+        let obj env = (desugar_cp env : TransformSugar.transform :> Transform.Typeable.sugar_transformer)
+      end)
 
-let desugar_sentence : TransformSugar.sentence_transformer =
-  fun env sentence -> snd ((desugar_cp env)#sentence sentence)

@@ -187,12 +187,6 @@ end
 
 let desugar_formlets env = ((new desugar_formlets env) : desugar_formlets :> TransformSugar.transform)
 
-let desugar_program : TransformSugar.program_transformer =
-  fun env program -> snd3 ((desugar_formlets env)#program program)
-
-let desugar_sentence : TransformSugar.sentence_transformer =
-  fun env sentence -> snd ((desugar_formlets env)#sentence sentence)
-
 let has_no_formlets =
 object
   inherit SugarTraversals.predicate as super
@@ -204,3 +198,9 @@ object
     | Formlet _ -> {< has_no_formlets = false >}
     | e -> super#phrasenode e
 end
+
+module Typeable
+  = Transform.Typeable.Make(struct
+        let name = "formlets"
+        let obj env = (desugar_formlets env : TransformSugar.transform :> Transform.Typeable.sugar_transformer)
+      end)

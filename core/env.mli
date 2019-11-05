@@ -53,6 +53,8 @@ sig
   val filter : (name -> 'a -> bool) -> 'a t -> 'a t
 
   val filter_map : (name -> 'a -> 'b option) -> 'a t -> 'b t
+
+  val complement : 'a t -> 'a t -> 'a t
 end
 (** Output signature of the functor {!Env.Make}. *)
 

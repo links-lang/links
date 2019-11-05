@@ -15,7 +15,7 @@ sig
   val get_internal_base_url : unit -> string option
   val get_external_base_url : unit -> string option
 
-  val init : (Value.env * Ir.var Env.String.t * Types.typing_environment) -> Ir.binding list -> Loader.ext_dep list -> unit
+  val init : (Value.env * Ir.var Env.String.t * Types.typing_environment) -> Ir.binding list -> string list -> unit
   val set_prelude : Ir.binding list -> unit
   val add_route : bool -> string -> (string * (string * string) list, request_handler_fn) either -> unit
 

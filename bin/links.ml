@@ -1,5 +1,4 @@
 open Links_core
-open Performance
 open Utility
 
 module BS = Basicsettings
@@ -46,21 +45,47 @@ let _ =
             |> sync)
 
 
-let print_simple rtype value =
-  print_string (Value.string_of_value value);
-  print_endline
-    (if Settings.get (Repl.printing_types) then
-          " : " ^ Types.string_of_datatype rtype
-        else
-          "")
+let print_simple datatype value =
+  let oc = stdout in
+  if Settings.get Repl.printing_types
+  then Printf.fprintf oc
+         "%s : %s\n%!"
+         (Value.string_of_value value)
+         (Types.string_of_datatype datatype)
+  else Printf.fprintf oc "%s\n%!" (Value.string_of_value value)
 
-let process_filearg prelude envs file =
-  let result = Driver.NonInteractive.run_file prelude envs file in
-  print_simple result.Driver.result_type result.Driver.result_value
+let handle_errors comp =
+  Errors.display ~default:(fun _ -> exit 1) comp
 
-let process_exprarg envs expr =
-  let result = Driver.NonInteractive.evaluate_string_in envs expr in
-  print_simple result.Driver.result_type result.Driver.result_value
+let process_file context file =
+  let (context', datatype, value) =
+    handle_errors (lazy (Driver.Phases.whole_program context file))
+  in
+  print_simple datatype value; context'
+
+let process_expr context expr_string =
+  let (context', datatype, value) =
+    handle_errors (lazy (Driver.Phases.evaluate_string context expr_string))
+  in
+  print_simple datatype value; context'
+
+let isolate
+  = Settings.(flag ~default:true "isolation"
+              |> synopsis "Run file and expression arguments in isolation"
+              |> privilege `System
+              |> convert parse_bool
+              |> CLI.(add (long "isolate"))
+              |> sync)
+
+let for_each : Context.t -> (Context.t -> string -> Context.t) -> string list -> Context.t
+  = fun context f xs ->
+  List.fold_left
+    (fun context x ->
+      let context' = f context x in
+      if Settings.get isolate
+      then context
+      else context')
+    context xs
 
 let main () =
   (* Attempt to synchronise all settings. If any setting commands are
@@ -70,14 +95,15 @@ let main () =
   let file_list = Settings.get_anonymous_arguments () in
   let to_evaluate = Settings.get to_evaluate in
 
-  let prelude, envs = measure "prelude" Driver.NonInteractive.load_prelude () in
-
-  for_each to_evaluate (process_exprarg envs);
-    (* TBD: accumulate type/value environment so that "interact" has access *)
-
-  for_each file_list (process_filearg prelude envs);
+  let context = Driver.Phases.initialise () in
+  let context' =
+    for_each context process_expr to_evaluate
+  in
+  let context'' =
+    for_each context' process_file file_list
+  in
   match file_list, to_evaluate with
-  | [], [] -> Repl.interact envs
+  | [], [] -> Repl.interact context''
   | _, _ -> ()
 
 let _ =
@@ -86,6 +112,5 @@ let _ =
     | Some _ -> Settings.set BS.web_mode true
     | None -> ()
   end;
-
   main()
 

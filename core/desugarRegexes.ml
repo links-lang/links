@@ -97,12 +97,6 @@ object(self)
     | _ -> super#phrase ph
 end
 
-let desugar_program : TransformSugar.program_transformer =
-  fun env program -> snd3 ((desugar_regexes env)#program program)
-
-let desugar_sentence : TransformSugar.sentence_transformer =
-  fun env sentence -> snd ((desugar_regexes env)#sentence sentence)
-
 let has_no_regexes =
 object
   inherit SugarTraversals.predicate
@@ -111,3 +105,9 @@ object
   method satisfied = no_regexes
   method! regex _ = {< no_regexes = false >}
 end
+
+module Typeable
+  = Transform.Typeable.Make(struct
+        let name = "regexes"
+        let obj env = (desugar_regexes env : TransformSugar.transform :> Transform.Typeable.sugar_transformer)
+      end)
