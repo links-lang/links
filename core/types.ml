@@ -177,7 +177,7 @@ and type_arg =
 type session_type = (typ, row) session_type_basis
   [@@deriving show]
 
-let dummy_type = `Primitive Primitive.Int
+let dummy_type = `Not_typed
 
 let is_present =
   function
@@ -400,7 +400,7 @@ struct
         (`Select r', o)
      | `Choice r ->
          let (r', o) = o#row r in
-        (`Select r', o)
+        (`Choice r', o)
      | `End -> (`End, o)
 
 
