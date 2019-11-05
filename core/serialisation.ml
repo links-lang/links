@@ -262,8 +262,9 @@ module MarshalSerialiser : S = struct
     = fun compress x ->
     let cx = compress x in
     let pickle = Marshal.to_string cx [] in
-    if String.length pickle > 4096
-    then prerr_endline "Marshalled continuation larger than 4K";
+    Debug.eval_l
+      (lazy (if String.length pickle > 4096
+             then Printf.fprintf stderr "Marshalled continuation larger than 4K\n%!"));
     Utility.base64encode pickle
 
   let unmarshal : ('b -> 'a) -> string -> 'a
@@ -539,7 +540,8 @@ let get_serialiser : unit -> (module S)
   = fun () ->
   let name = Utility.val_of (Settings.get serialiser) in
   try List.assoc name serialisers
-  with Notfound.NotFound _ -> raise (internal_error (Printf.sprintf "Unknown serialisation method : %s" name))
+  with Notfound.NotFound _ ->
+    raise (internal_error (Printf.sprintf "Unknown serialisation method: %s" name))
 
 module Continuation = struct
   let serialise k =
