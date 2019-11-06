@@ -275,7 +275,7 @@ module Desugar = struct
      match node with
      | Function _ | Lolli _ -> true
      | TypeApplication (tycon, _) ->
-        begin match SEnv.find alias_env tycon with
+        begin match SEnv.find_opt tycon alias_env with
         | Some (`Alias (qs, _) | (`Mutual (qs, _))) ->
            begin match ListUtils.last_opt qs with
            | Some (_, (PrimaryKind.Row, (_, Restriction.Effect))) -> true
@@ -318,7 +318,7 @@ module Desugar = struct
          | Function (a, e, r) -> let a, e, r = do_fun a e r in Function (a, e, r)
          | Lolli (a, e, r) -> let a, e, r = do_fun a e r in Lolli (a, e, r)
          | TypeApplication (name, ts) ->
-            let tycon = SEnv.find alias_env name in
+            let tycon = SEnv.find_opt name alias_env in
             let rec go =
                (* We don't know if the arities match up yet (nor the final arities
                   of the definitions), so we handle mismatches, assuming spare rows
@@ -452,7 +452,7 @@ module Desugar = struct
              | _ -> self
              end
           | TypeApplication (name, ts) ->
-             let tycon = SEnv.find alias_env name in
+             let tycon = SEnv.find_opt name alias_env in
              let self =
                match tycon with
                | Some (`Alias (qs, _)) | Some (`Mutual (qs, _))
@@ -508,7 +508,7 @@ module Desugar = struct
               let o = o#datatype t in
               o
            | TypeApplication (name, ts) ->
-              let tycon = SEnv.find alias_env name in
+              let tycon = SEnv.find_opt name alias_env in
                  let rec go o =
                    (* We don't know if the arities match up yet, so we handle
                       mismatches, assuming spare rows are effects. *)
@@ -659,7 +659,7 @@ module Desugar = struct
               else
                 arity_err ()
             in
-            begin match SEnv.find alias_env tycon with
+            begin match SEnv.find_opt tycon alias_env with
               | None -> raise (UnboundTyCon (pos, tycon))
               | Some (`Alias (qs, _dt)) ->
                   let ts = match_quantifiers snd qs in
@@ -905,7 +905,7 @@ object (self)
           List.fold_left (fun (alias_env, venvs_map, ts) {node=(t, args, (d, _)); pos} ->
             let args = List.map fst args in
             let qs, var_env =  Desugar.desugar_quantifiers closed_env args d pos in
-            let alias_env = SEnv.bind alias_env (t, `Mutual (qs, tygroup_ref)) in
+            let alias_env = SEnv.bind t (`Mutual (qs, tygroup_ref)) alias_env in
             let venvs_map = StringMap.add t var_env venvs_map in
             let args = List.map2 (fun x y -> (x, Some y)) args qs in
             (alias_env, venvs_map, WithPos.make ~pos (t, args, (d, None)) :: ts))
@@ -946,7 +946,7 @@ object (self)
                 (* Add the new quantifier to the argument list and rebind. *)
                 let qs = List.map (snd ->- OptionUtils.val_of) args @ [q] in
                 let args = args @ [("<implicit effect>", (None, None), `Rigid), Some q] in
-                let alias_env = SEnv.bind alias_env (t, `Mutual (qs, tygroup_ref)) in
+                let alias_env = SEnv.bind t (`Mutual (qs, tygroup_ref)) alias_env in
                 (* Also augment the variable environment with this shared effect. *)
                 let var_env = StringMap.find t venvs_map in
                 let var_env = {
@@ -1013,7 +1013,7 @@ object (self)
             let dt = OptionUtils.val_of dt' in
             let semantic_qs = List.map (snd ->- val_of) args in
             let alias_env =
-              SEnv.bind alias_env (t, `Alias (List.map (snd ->- val_of) args, dt)) in
+              SEnv.bind t (`Alias (List.map (snd ->- val_of) args, dt)) alias_env in
             tygroup_ref :=
               { !tygroup_ref with
                   type_map = (StringMap.add t (semantic_qs, dt) !tygroup_ref.type_map);

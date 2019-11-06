@@ -79,7 +79,7 @@ struct
     (* val cenv = Env.empty *)
 
     method lookup_type : var -> datatype = fun var ->
-      Env.lookup tyenv var
+      Env.find var tyenv
 
     (* method private lookup_closure_type : var -> datatype = fun var -> *)
     (*   Env.lookup cenv var *)
@@ -497,7 +497,7 @@ struct
 
     method binder : binder -> (binder * 'self_type) =
       fun (var, info) ->
-        let tyenv = Env.bind tyenv (var, info_type info) in
+        let tyenv = Env.bind var (info_type info) tyenv in
           (var, info), {< tyenv=tyenv >}
 
     method program : program -> (program * datatype * 'self_type) = o#computation

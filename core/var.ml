@@ -74,6 +74,6 @@ let scope_of_binder (_, (_, _, scope) : binder) = scope
 let varify_env (nenv, tenv) : Types.datatype Env.Int.t =
   Env.String.fold
     (fun name t tenv ->
-       Env.Int.bind tenv (Env.String.lookup nenv name, t))
+       Env.Int.bind (Env.String.find name nenv) t tenv)
     tenv
     Env.Int.empty

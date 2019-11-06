@@ -38,8 +38,10 @@ object (o : 'self_type)
             let x = Binder.to_name bndr in
             let u = Binder.to_type bndr in
             let envs = o#backup_envs in
-            let venv = TyEnv.bind (TyEnv.bind (o#get_var_env ()) (x, u))
-                                  (c, s) in
+            let venv =
+              TyEnv.bind x u (o#get_var_env ())
+              |> TyEnv.bind c s
+            in
             let o = {< var_env = venv >} in
             let (o, e, t) = desugar_cp o p in
             let o = o#restore_envs envs in
@@ -56,7 +58,7 @@ object (o : 'self_type)
                  with_dummy_pos e), t
          | CPGive ((c, Some (`Output (_t, s), give_tyargs)), Some e, p) ->
             let envs = o#backup_envs in
-            let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >} in
+            let o = {< var_env = TyEnv.bind c s (o#get_var_env ()) >} in
             let (o, e, _typ) = o#phrase e in
             let (o, p, t) = desugar_cp o p in
             let o = o#restore_envs envs in
@@ -72,7 +74,7 @@ object (o : 'self_type)
             let c = Binder.to_name bndr in
             let s = Binder.to_type bndr in
             let envs = o#backup_envs in
-            let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, TypeUtils.select_type label s) >} in
+            let o = {< var_env = TyEnv.bind c (TypeUtils.select_type label s) (o#get_var_env ()) >} in
             let (o, p, t) = desugar_cp o p in
             let o = o#restore_envs envs in
             o, block_node
@@ -84,7 +86,7 @@ object (o : 'self_type)
             let s = Binder.to_type bndr in
             let desugar_branch (label, p) (o, cases) =
               let envs = o#backup_envs in
-              let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, TypeUtils.choice_at label s) >} in
+              let o = {< var_env = TyEnv.bind c (TypeUtils.choice_at label s) (o#get_var_env ()) >} in
               let (o, p, t) = desugar_cp o p in
               let pat : Pattern.with_pos = with_dummy_pos (Pattern.Variant (label,
                       Some (variable_pat ~ty:(TypeUtils.choice_at label s) c))) in
@@ -105,8 +107,8 @@ object (o : 'self_type)
             let c = Binder.to_name bndr in
             let s = Binder.to_type bndr in
             let envs = o#backup_envs in
-            let (o, left, _typ) = desugar_cp {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >} left in
-            let (o, right, t) = desugar_cp {< var_env = TyEnv.bind (o#get_var_env ()) (c, Types.dual_type s) >} right in
+            let (o, left, _typ) = desugar_cp {< var_env = TyEnv.bind c s (o#get_var_env ()) >} left in
+            let (o, right, t) = desugar_cp {< var_env = TyEnv.bind c (Types.dual_type s) (o#get_var_env ()) >} right in
             let o = o#restore_envs envs in
 
             let eff_fields, eff_row, eff_closed = Types.flatten_row o#lookup_effects in

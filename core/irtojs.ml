@@ -627,7 +627,7 @@ end = functor (K : CONTINUATION) -> struct
        end
     | Variable var ->
           (* HACK *)
-       let name = VEnv.lookup env var in
+       let name = VEnv.find var env in
        if Arithmetic.is name then
          Fn (["x"; "y"; __kappa],
              K.apply (K.reflect (Var __kappa))
@@ -675,7 +675,7 @@ end = functor (K : CONTINUATION) -> struct
        begin
          match f with
          | Variable f ->
-            let f_name = VEnv.lookup env f in
+            let f_name = VEnv.find f env in
             begin
               match vs with
               | [l; r] when Arithmetic.is f_name ->
@@ -828,7 +828,7 @@ end = functor (K : CONTINUATION) -> struct
          begin
            match f with
            | Variable f ->
-              let f_name = VEnv.lookup env f in
+              let f_name = VEnv.find f env in
               begin
                 match vs with
                 | [l; r] when Arithmetic.is f_name ->
@@ -873,7 +873,7 @@ end = functor (K : CONTINUATION) -> struct
            (fun kappa ->
              let gen_cont (xb, c) =
                let (x, x_name) = name_binder xb in
-               x_name, (snd (generate_computation (VEnv.bind env (x, x_name)) c kappa)) in
+               x_name, (snd (generate_computation (VEnv.bind x x_name env) c kappa)) in
              let cases = StringMap.map gen_cont cases in
              let default = opt_map gen_cont default in
              k (Case (x, cases, default)))
@@ -925,7 +925,7 @@ end = functor (K : CONTINUATION) -> struct
              let channel = Call (Var "LINKS.project", [Var result; strlit "2"]) in
              let generate_branch (cb, b) =
                let (c, cname) = name_binder cb in
-               cname, Bind (cname, channel, snd (generate_computation (VEnv.bind env (c, cname)) b K.(skappa <> kappa))) in
+               cname, Bind (cname, channel, snd (generate_computation (VEnv.bind c cname env) b K.(skappa <> kappa))) in
              let branches = StringMap.map generate_branch bs in
              Fn ([result], (Bind (received, scrutinee, (Case (received, branches, None)))))) in
 
@@ -995,8 +995,8 @@ end = functor (K : CONTINUATION) -> struct
          let vmap r y =
            Call (Var "_vmapOp", [r; y])
          in
-         let generate_body env binder body kappas =
-           let env' = VEnv.bind env binder in
+         let generate_body env (x, n) body kappas =
+           let env' = VEnv.bind x n env in
            snd (generate_computation env' body kappas)
          in
          begin match depth with
@@ -1005,9 +1005,13 @@ end = functor (K : CONTINUATION) -> struct
             let translate_parameters params =
               let is_parameterised = List.length params > 0 in
               let param_ptr_binder =
-                Var.fresh_binder (Var.make_local_info (`Not_typed, "_param_ptr"))
+                Var.fresh_binder
+                  (Var.make_local_info (`Not_typed, "_param_ptr"))
               in
-              let env = VEnv.bind env (name_binder param_ptr_binder) in
+              let env =
+                let (x, n) = name_binder param_ptr_binder in
+                VEnv.bind x n env
+              in
               let params =
                 List.mapi (fun i (binder,initial_value) -> (i, binder, initial_value)) params
               in
@@ -1057,7 +1061,10 @@ end = functor (K : CONTINUATION) -> struct
                   let s = project (Var (snd xb)) (strlit "s") in
                   make_resumption s
                 in
-                let env' = VEnv.bind env resume in
+                let env' =
+                  let (x, n) = resume in
+                  VEnv.bind x n env
+                in
                 let body = generate_body env' xb (parameterise body) kappas in
                 snd xb, Bind (snd resume, r,
                               Bind (snd xb, p, body))
@@ -1115,7 +1122,7 @@ end = functor (K : CONTINUATION) -> struct
           function
           | Ir.Let (b, (_, Ir.Return v)) :: bs ->
              let (x, x_name) = name_binder b in
-             let env', rest = gbs (VEnv.bind env (x, x_name)) kappa bs in
+             let env', rest = gbs (VEnv.bind x x_name env) kappa bs in
              (env', Bind (x_name, generate_value env v, rest))
           | Let (b, (_, tc)) :: bs ->
              let (x, x_name) = name_binder b in
@@ -1123,18 +1130,18 @@ end = functor (K : CONTINUATION) -> struct
              let env',skappa' =
                K.contify_with_env
                  (fun kappas ->
-                   let env', body = gbs (VEnv.bind env (x, x_name)) K.(skappa <> kappas) bs in
+                   let env', body = gbs (VEnv.bind x x_name env) K.(skappa <> kappas) bs in
                    env', Fn ([x_name], body))
              in
              env', bind (generate_tail_computation env tc K.(skappa' <> skappas))
           | Fun ((fb, _, _zs, _location) as def) :: bs ->
              let (f, f_name) = name_binder fb in
              let def_header = generate_function env [] def in
-             let env', rest = gbs (VEnv.bind env (f, f_name)) kappa bs in
+             let env', rest = gbs (VEnv.bind f f_name env) kappa bs in
              (env', LetFun (def_header, rest))
           | Rec defs :: bs ->
              let fs = List.map (fun (fb, _, _, _) -> name_binder fb) defs in
-             let env', rest = gbs (List.fold_left VEnv.bind env fs) kappa bs in
+             let env', rest = gbs (List.fold_left (fun env (x, n) -> VEnv.bind x n env) env fs) kappa bs in
              (env', LetRec (List.map (generate_function env fs) defs, rest))
           | Module _ :: bs
           | Alien _ :: bs -> gbs env kappa bs
@@ -1157,7 +1164,12 @@ end = functor (K : CONTINUATION) -> struct
       in
       let bs = List.map name_binder xsb in
       let _xs, xs_names = List.split bs in
-      let body_env = List.fold_left VEnv.bind env (fs @ bs) in
+      let body_env =
+        List.fold_left
+          (fun env (n, x) -> VEnv.bind n x env)
+          env
+          (fs @ bs)
+      in
       let body =
         match location with
         | Location.Client | Location.Unknown ->
@@ -1180,7 +1192,7 @@ end = functor (K : CONTINUATION) -> struct
     let affected_variables =
        VariableInspection.get_affected_variables (K.reify kappa) in
     (* Bind affected variables array to a fresh variable *)
-    let env = VEnv.bind env (fresh_var, affected_vars_name) in
+    let env = VEnv.bind fresh_var affected_vars_name env in
     (* Compile raise operation WRT reflected, bound continuation *)
     let raiseOp =
       generate_special env (DoOperation (
@@ -1207,7 +1219,7 @@ end = functor (K : CONTINUATION) -> struct
       | Let (b, _) ->
          let (x, x_name) = name_binder b in
       (* Debug.print ("let_binding: " ^ x_name); *)
-         let varenv = VEnv.bind varenv (x, x_name) in
+         let varenv = VEnv.bind x x_name varenv in
          let value = Value.Env.find x valenv in
          let jsonized_val = Json.jsonize_value value |> Json.json_to_string in
          let state = ResolveJsonState.add_value_information value state in
@@ -1217,7 +1229,7 @@ end = functor (K : CONTINUATION) -> struct
           fun code -> Bind (x_name, Lit jsonized_val, code))
       | Fun ((fb, _, _zs, _location) as def) ->
          let (f, f_name) = name_binder fb in
-         let varenv = VEnv.bind varenv (f, f_name) in
+         let varenv = VEnv.bind f f_name varenv in
          let def_header = generate_function varenv [] def in
          (state,
           varenv,
@@ -1225,11 +1237,15 @@ end = functor (K : CONTINUATION) -> struct
           fun code -> LetFun (def_header, code))
       | Rec defs ->
          let fs = List.map (fun (fb, _, _, _) -> name_binder fb) defs in
-         let varenv = List.fold_left VEnv.bind varenv fs in
+         let varenv =
+           List.fold_left
+             (fun env (n, x) -> VEnv.bind n x env)
+             varenv fs
+         in
          (state, varenv, None, fun code -> LetRec (List.map (generate_function varenv fs) defs, code))
       | Alien (bnd, raw_name, _lang) ->
         let (a, _a_name) = name_binder bnd in
-        let varenv = VEnv.bind varenv (a, raw_name) in
+        let varenv = VEnv.bind a raw_name varenv in
         state, varenv, None, (fun code -> code)
       | Module _ -> state, varenv, None, (fun code -> code)
 

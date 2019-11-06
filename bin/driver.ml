@@ -130,7 +130,7 @@ module Phases = struct
       (fun name var ->
         let (datatype : string) =
           Types.string_of_datatype
-            (Env.String.lookup Lib.typing_env.Types.var_env name)
+            (Env.String.find name Lib.typing_env.Types.var_env)
         in
         Printf.fprintf oc " %d -> %s : %s\n%!" var name datatype)
       Lib.nenv

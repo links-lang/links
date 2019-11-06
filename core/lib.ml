@@ -26,8 +26,7 @@ module AliasEnv = Env.String
 let alias_env : Types.tycon_environment = DefaultAliases.alias_env
 
 let alias_env : Types.tycon_environment =
-  AliasEnv.bind alias_env
-    ("Regex", `Alias ([], (DesugarDatatypes.read ~aliases:alias_env Linksregex.Regex.datatype)))
+  AliasEnv.bind "Regex" (`Alias ([], (DesugarDatatypes.read ~aliases:alias_env Linksregex.Regex.datatype))) alias_env
 
 let datatype = DesugarDatatypes.read ~aliases:alias_env
 
@@ -1562,21 +1561,21 @@ let impl : located_primitive -> primitive option = function
 
 let nenv =
   List.fold_left
-    (fun nenv (n, _) -> Env.String.bind nenv (n, Var.fresh_raw_var ()))
+    (fun nenv (n, _) -> Env.String.bind n (Var.fresh_raw_var ()) nenv)
     Env.String.empty
     env
 
 let venv =
   Env.String.fold
     (fun name var venv ->
-       Env.Int.bind venv (var, name))
+       Env.Int.bind var name venv)
     nenv
     Env.Int.empty
 
 let value_env : primitive option Env.Int.t =
   List.fold_right
     (fun (name, (p, _, _)) env ->
-       Env.Int.bind env (Env.String.lookup nenv name, impl p))
+       Env.Int.bind (Env.String.find name nenv) (impl p) env)
     env
     Env.Int.empty
 
@@ -1593,14 +1592,14 @@ let minvar =
 let value_array : primitive option array =
   let array = Array.make (maxvar+1) None in
   List.iter (fun (name, (p, _, _)) ->
-    Array.set array (Env.String.lookup nenv name) (impl p)) env;
+    Array.set array (Env.String.find name nenv) (impl p)) env;
   array
 
 let is_primitive_var var =
   minvar <= var && var <= maxvar
 
 let type_env : Types.environment =
-  List.fold_right (fun (n, (_,t,_)) env -> Env.String.bind env (n, t)) env Env.String.empty
+  List.fold_right (fun (n, (_,t,_)) env -> Env.String.bind n t env) env Env.String.empty
 
 let typing_env = {Types.var_env = type_env;
                   Types.rec_vars = StringSet.empty;
@@ -1612,7 +1611,7 @@ let primitive_names = StringSet.elements (Env.String.domain type_env)
 
 let primitive_vars = Env.String.fold (fun _name var vars -> IntSet.add var vars) nenv IntSet.empty
 
-let primitive_name = Env.Int.lookup venv
+let primitive_name n = Env.Int.find n venv
 
 let primitive_location (name:string) =
   match fst3 (List.assoc name env) with
@@ -1638,7 +1637,7 @@ let primitive_by_code var = Array.get value_array var
 
 
 let primitive_stub (name : string) : Value.t =
-  match Env.String.find nenv name with
+  match Env.String.find_opt name nenv with
     | Some var ->
         begin
           match primitive_by_code var with
@@ -1650,7 +1649,7 @@ let primitive_stub (name : string) : Value.t =
 
 (* jcheney: added to avoid Env.String.lookup *)
 let primitive_stub_by_code (var : Var.var) : Value.t =
-  let name = Env.Int.lookup venv var in
+  let name = Env.Int.find var venv in
   match primitive_by_code var with
   | Some (#Value.t as r) -> r
   | Some _ -> `PrimitiveFunction (name,Some var)
@@ -1668,9 +1667,10 @@ let apply_pfun_by_code var args req_data =
 
 
 let apply_pfun name args req_data =
-  match Env.String.find nenv name with
-    | Some var -> apply_pfun_by_code var args req_data
-    | None -> assert false
+  let var =
+    Env.String.find name nenv
+  in
+  apply_pfun_by_code var args req_data
 
 let is_primitive name = List.mem_assoc name env
 
@@ -1684,7 +1684,7 @@ let is_pure_primitive name =
 
 (** Construct IR for application of the primitive [name] to the
     arguments [args]. *)
-let prim_appln name args = Ir.Apply( Ir.Variable(Env.String.lookup nenv name),
+let prim_appln name args = Ir.Apply( Ir.Variable(Env.String.find name nenv),
                                   args)
 
 let cohttp_server_response headers body req_data =

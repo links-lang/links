@@ -99,7 +99,7 @@ module Env = struct
     match lookup_fun (var, None) with
     | Some v -> v
     | None -> (
-      match (Value.Env.lookup var val_env, LEnv.Int.find exp_env var) with
+      match (Value.Env.lookup var val_env, LEnv.Int.find_opt var exp_env) with
       | None, Some v -> v
       | Some v, None -> expression_of_value v
       | Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
@@ -109,7 +109,7 @@ module Env = struct
           raise (internal_error (Format.sprintf "Variable %d not found" var)) )
       )
 
-  let bind (val_env, exp_env) (x, v) = (val_env, Env.Int.bind exp_env (x, v))
+  let bind (val_env, exp_env) (x, v) = (val_env, Env.Int.bind x v exp_env)
 end
 
 module Of_ir_error = struct
