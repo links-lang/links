@@ -125,7 +125,7 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
                    (Types.string_of_tycon_spec s))
                (Lib.typing_env.Types.tycon_env) ();
              StringSet.iter (fun n ->
-                 let t = Env.String.lookup Lib.type_env n in
+                 let t = Env.String.find n Lib.type_env in
                  Printf.fprintf stderr " %-16s : %s\n"
                    n (Types.string_of_datatype t))
                (Env.String.domain Lib.type_env)),
@@ -143,7 +143,7 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
           in
           StringSet.iter
             (fun k ->
-              let t = Env.String.lookup typeenv k in
+              let t = Env.String.find k typeenv in
               Printf.fprintf stderr " %-16s : %s\n" k
                 (Types.string_of_datatype t))
             (StringSet.diff (Env.String.domain typeenv)
@@ -158,7 +158,7 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
             tenv.Types.tycon_env
           in
           StringSet.iter (fun k ->
-              let s = Env.String.lookup tycon_env k in
+              let s = Env.String.find k tycon_env in
               Printf.fprintf stderr " %s = %s\n"
                 (Module_hacks.Name.prettify k)
                 (Types.string_of_tycon_spec s))
@@ -178,7 +178,7 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
             (fun name var () ->
               if not (Lib.is_primitive name) then
                 let ty = (Types.string_of_datatype ~policy:Types.Print.default_policy ~refresh_tyvar_names:true
-                          -<- Env.String.lookup tyenv.Types.var_env) name in
+                          -<- (fun name -> Env.String.find name tyenv.Types.var_env)) name in
                 let name =
                   if Settings.get Debug.enabled
                   then Printf.sprintf "%s(%d)" name var
@@ -226,7 +226,7 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
                  StringSet.iter
                    (fun id ->
                      try begin
-                         let t' = Env.String.lookup tenv id in
+                         let t' = Env.String.find id tenv in
                          let ttype = Types.string_of_datatype t' in
                          let fresh_envs = Types.make_fresh_envs t' in
                          let t' = Instantiate.datatype fresh_envs t' in
@@ -292,7 +292,7 @@ let handle previous_context current_context = function
            match Tables.lookup Tables.fun_defs var with
            | None ->
               let v = Value.Env.find var valenv in
-              let t = Env.String.lookup var_env' name in
+              let t = Env.String.find name var_env' in
               v, t
            | Some (finfo, _, None, location) ->
               let v =

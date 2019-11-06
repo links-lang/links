@@ -15,8 +15,8 @@ let internal_error message =
 
 let type_section env =
   let open Section in function
-  | Minus -> TyEnv.lookup env "-"
-  | FloatMinus -> TyEnv.lookup env "-."
+  | Minus -> TyEnv.find "-" env
+  | FloatMinus -> TyEnv.find "-."env
   | Project label ->
       let ab, a = Types.fresh_type_quantifier (lin_any, res_any) in
       let rhob, (fields, rho, _) = Types.fresh_row_quantifier (lin_any, res_any) in
@@ -25,19 +25,19 @@ let type_section env =
       let r = `Record (StringMap.add label (`Present a) fields, rho, false) in
         `ForAll ([ab; rhob; eb],
                  `Function (Types.make_tuple_type [r], e, a))
-  | Name var -> TyEnv.lookup env var
+  | Name var -> TyEnv.find var env
 
 let type_unary_op env tycon_env =
   let datatype = DesugarDatatypes.read ~aliases:tycon_env in function
     | UnaryOp.Minus      -> datatype "(Int) -> Int"
     | UnaryOp.FloatMinus -> datatype "(Float) -> Float"
-    | UnaryOp.Name n     -> TyEnv.lookup env n
+    | UnaryOp.Name n     -> TyEnv.find n env
 
 let type_binary_op env tycon_env =
   let open BinaryOp in
   let datatype = DesugarDatatypes.read ~aliases:tycon_env in function
-  | Minus        -> TyEnv.lookup env "-"
-  | FloatMinus   -> TyEnv.lookup env "-."
+  | Minus        -> TyEnv.find "-" env
+  | FloatMinus   -> TyEnv.find "-." env
   | RegexMatch flags ->
       let nativep  = List.exists ((=) RegexNative)  flags
       and listp    = List.exists ((=) RegexList)    flags
@@ -50,8 +50,8 @@ let type_binary_op env tycon_env =
 
   | And
   | Or           -> datatype "(Bool,Bool) -> Bool"
-  | Cons         -> TyEnv.lookup env "Cons"
-  | Name "++"    -> TyEnv.lookup env "Concat"
+  | Cons         -> TyEnv.find "Cons" env
+  | Name "++"    -> TyEnv.find "Concat" env
   | Name ">"
   | Name ">="
   | Name "=="
@@ -63,8 +63,8 @@ let type_binary_op env tycon_env =
         `ForAll ([ab; eb],
                  `Function (Types.make_tuple_type [a; a], e,
                             `Primitive Primitive.Bool))
-  | Name "!"     -> TyEnv.lookup env "Send"
-  | Name n       -> TyEnv.lookup env n
+  | Name "!"     -> TyEnv.find "Send" env
+  | Name n       -> TyEnv.find n env
 
 let fun_effects t pss =
   let rec get_eff =
@@ -162,10 +162,10 @@ class transform (env : Types.typing_environment) =
       {< formlet_env = formlet_env >}
 
     method bind_tycon name tycon =
-      {< tycon_env = TyEnv.bind tycon_env (name, tycon) >}
+      {< tycon_env = TyEnv.bind name tycon tycon_env >}
 
     method lookup_type : Name.t -> Types.datatype = fun var ->
-      TyEnv.lookup var_env var
+      TyEnv.find var var_env
 
     method lookup_effects : Types.row = effect_row
 
@@ -832,7 +832,7 @@ class transform (env : Types.typing_environment) =
     method binder : Binder.with_pos -> ('self_type * Binder.with_pos) =
       fun bndr ->
       assert (Binder.has_type bndr);
-      let var_env = TyEnv.bind var_env (Binder.to_name bndr, Binder.to_type bndr) in
+      let var_env = TyEnv.bind (Binder.to_name bndr) (Binder.to_type bndr) var_env in
       ({< var_env=var_env >}, bndr)
 
     method cp_phrase : cp_phrase -> ('self_type * cp_phrase * Types.datatype) =
@@ -854,14 +854,14 @@ class transform (env : Types.typing_environment) =
       | CPGrab ((c, Some (`Input (_a, s), _grab_tyargs) as cbind), Some b, p) -> (* FYI: a = u *)
          let envs = o#backup_envs in
          let (o, b) = o#binder b in
-         let venv = TyEnv.bind (o#get_var_env ()) (c, s) in
+         let venv = TyEnv.bind c s (o#get_var_env ()) in
          let o = {< var_env = venv >} in
          let (o, p, t) = o#cp_phrase p in
          let o = o#restore_envs envs in
          o, CPGrab (cbind, Some b, p), t
       | CPGive ((c, Some (`Output (_t, s), _tyargs) as cbind), e, p) ->
          let envs = o#backup_envs in
-         let o = {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >} in
+         let o = {< var_env = TyEnv.bind c s (o#get_var_env ()) >} in
          let (o, e, _typ) = option o (fun o -> o#phrase) e in
          let (o, p, t) = o#cp_phrase p in
          let o = o#restore_envs envs in
@@ -896,9 +896,9 @@ class transform (env : Types.typing_environment) =
          let c = Binder.to_name bndr in
          let s = Binder.to_type bndr in
          let envs = o#backup_envs in
-         let (o, left, _typ) = {< var_env = TyEnv.bind (o#get_var_env ()) (c, s) >}#cp_phrase left in
+         let (o, left, _typ) = {< var_env = TyEnv.bind c s (o#get_var_env ()) >}#cp_phrase left in
          let whiny_dual_type s = try Types.dual_type s with Invalid_argument _ -> raise (Invalid_argument ("Attempted to dualize non-session type " ^ Types.string_of_datatype s)) in
-         let (o, right, t) = {< var_env = TyEnv.bind (o#get_var_env ()) (c, whiny_dual_type s) >}#cp_phrase right in
+         let (o, right, t) = {< var_env = TyEnv.bind c (whiny_dual_type s) (o#get_var_env ()) >}#cp_phrase right in
          let o = o#restore_envs envs in
          o, CPComp (bndr, left, right), t
   end

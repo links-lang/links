@@ -77,25 +77,25 @@ type env = nenv * tenv * Types.row * penv
 type raw_env = nenv * tenv * Types.row
 
 let bind_context var context (nenv, tenv, eff, penv) =
-  (nenv, tenv, eff, PEnv.bind penv (var, context))
+  (nenv, tenv, eff, PEnv.bind var context penv)
 
 let bind_type var t (nenv, tenv, eff, penv) =
-  (nenv, TEnv.bind tenv (var, t), eff, penv)
+  (nenv, TEnv.bind var t tenv, eff, penv)
 
 let mem_context var (_nenv, _tenv, _eff, penv) =
-  PEnv.has penv var
+  PEnv.has var penv
 
 let mem_type var (_nenv, tenv, _eff, _penv) =
-  TEnv.has tenv var
+  TEnv.has var tenv
 
 let lookup_context var (_nenv, _tenv, _eff, penv) =
-  PEnv.lookup penv var
+  PEnv.find var penv
 
 let lookup_type var (_nenv, tenv, _eff, _penv) =
-  TEnv.lookup tenv var
+  TEnv.find var tenv
 
 let lookup_name name (nenv, _tenv, _eff, _penv) =
-  NEnv.lookup nenv name
+  NEnv.find name nenv
 
 let lookup_effects (_nenv, _tenv, eff, _penv) = eff
 
@@ -109,7 +109,7 @@ let rec desugar_pattern : Types.row -> Sugartypes.Pattern.with_pos -> Pattern.t 
       let name = Sugartypes.Binder.to_name bndr in
       let t = Sugartypes.Binder.to_type bndr in
       let xb, x = Var.fresh_var (t, name, Scope.Local) in
-      xb, (NEnv.bind nenv (name, x), TEnv.bind tenv (x, t), eff)
+      xb, (NEnv.bind name x nenv, TEnv.bind x t tenv, eff)
     in
       let open Sugartypes.Pattern in
       match p with
@@ -187,7 +187,7 @@ struct
   (*   TEnv.lookup tenv var *)
 
   let lookup_name name (nenv, _tenv, _eff) =
-    NEnv.lookup nenv name
+    NEnv.find name nenv
 
   let lookup_effects (_nenv, _tenv, eff) = eff
 
@@ -223,7 +223,7 @@ struct
   (*   TEnv.lookup tenv var *)
 
   let lookup_name name (nenv, _tenv, _eff) =
-    NEnv.lookup nenv name
+    NEnv.find name nenv
 
   let lookup_effects (_nenv, _tenv, eff) = eff
 
@@ -1009,7 +1009,7 @@ let compile_handle_cases
         in
         let compiled_transformed_effect_cases =
           let dummy_var = Var.(make_local_info ->- fresh_binder ->- var_of_binder) (variant_type, "_m") in
-          let tenv = TEnv.bind tenv (dummy_var, variant_type) in
+          let tenv = TEnv.bind dummy_var variant_type tenv in
           let initial_env = (nenv, tenv, eff, PEnv.empty) in (* Need to bind raw continuation binders in tenv and nenv? *)
           match snd @@ match_cases [dummy_var] transformed_effect_clauses (fun _ -> ([], Special (Wrong comp_ty))) initial_env with
           | Case (_, clauses, _) -> clauses (* No default effect pattern *)
@@ -1069,7 +1069,7 @@ let compile_handle_cases
   let return : binder * computation =
     let (_, comp_ty, _, _) = Sugartypes.(desc.shd_types) in
     let scrutinee = Var.(make_local_info ->- fresh_binder) (comp_ty, "_return_value") in
-    let tenv = TEnv.bind tenv (Var.var_of_binder scrutinee, comp_ty) in
+    let tenv = TEnv.bind (Var.var_of_binder scrutinee) comp_ty tenv in
     let initial_env = (nenv, tenv, eff, PEnv.empty) in
     let clauses = List.map reduce_clause raw_value_clauses in
     let body = match_cases [Var.var_of_binder scrutinee] clauses (fun _ -> ([], Special (Wrong comp_ty))) initial_env in
