@@ -1660,8 +1660,7 @@ end = struct
   let incr ?(by=1) v usages =
     assert (by > 0);
     let uses =
-      try uses_of v usages
-      with Notfound.NotFound _ -> 0
+      uses_of v usages
     in
     Ident.Map.add v (uses + by) usages
 
