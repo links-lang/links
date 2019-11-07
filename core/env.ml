@@ -1,10 +1,10 @@
-module type S =
-sig
+module type S = sig
   type name
   type 'a t
   val pp : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
   val show : (Format.formatter -> 'a -> unit) -> 'a t -> string
   val empty : 'a t
+  val singleton : name -> 'a -> 'a t
   val bind : name -> 'a -> 'a t -> 'a t
   val unbind : name -> 'a t -> 'a t
   val extend : 'a t -> 'a t -> 'a t
@@ -37,6 +37,7 @@ struct
   let empty = M.empty
   let bind n v env = M.add n v env
   let unbind n env = M.remove n env
+  let singleton n v = bind n v empty
   let extend = M.superimpose
   let has name env = M.mem name env
   let find name env = M.find name env

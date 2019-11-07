@@ -11,6 +11,9 @@ module type S = sig
   val empty : 'a t
   (** The empty environment. *)
 
+  val singleton : name -> 'a -> 'a t
+  (** Create an environment with a single entry. *)
+
   val bind : name -> 'a -> 'a t -> 'a t
   (** Extend an environment with a new entry. *)
 
