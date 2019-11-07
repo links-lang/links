@@ -67,8 +67,8 @@ type tenv = Types.datatype TEnv.t
 type env = nenv * tenv * Types.row
 
 let lookup_name_and_type name (nenv, tenv, _eff) =
-  let var = NEnv.lookup nenv name in
-    var, TEnv.lookup tenv var
+  let var = NEnv.find name nenv in
+    var, TEnv.find var tenv
 
 let lookup_effects (_, _, eff) = eff
 
@@ -555,7 +555,7 @@ struct
              (comp_binding (Var.info_of_type (sem_type v), Return e))
              (fun var ->
                 let nenv, tenv, eff = env in
-                let tenv = TEnv.bind tenv (var, sem_type v) in
+                let tenv = TEnv.bind var (sem_type v) tenv in
                 let (bs, tc) = CompilePatterns.compile_choices (nenv, tenv, eff) (t, var, cases) in
                   reflect (bs, (tc, t))))
 
@@ -735,7 +735,7 @@ struct
              (comp_binding (Var.info_of_type (sem_type v), Return e))
              (fun var ->
                 let nenv, tenv, eff = env in
-                let tenv = TEnv.bind tenv (var, sem_type v) in
+                let tenv = TEnv.bind var (sem_type v) tenv in
                 let (bs, tc) = CompilePatterns.compile_cases (nenv, tenv, eff) (t, var, cases) in
                   reflect (bs, (tc, t))))
 
@@ -754,7 +754,7 @@ struct
   let extend xs vs (nenv, tenv, eff) =
     List.fold_left2
       (fun (nenv, tenv, eff) x (v, t) ->
-         (NEnv.bind nenv (x, v), TEnv.bind tenv (v, t), eff))
+         (NEnv.bind x v nenv, TEnv.bind v t tenv, eff))
       (nenv, tenv, eff)
       xs
       vs
@@ -1216,9 +1216,9 @@ struct
             begin
               match b with
                 | Let ((x, (_xt, x_name, Scope.Global)), _) ->
-                    partition (b::locals @ globals, [], Env.String.bind nenv (x_name, x)) bs
+                    partition (b::locals @ globals, [], Env.String.bind x_name x nenv) bs
                 | Fun ((f, (_ft, f_name, Scope.Global)), _, _, _) ->
-                    partition (b::locals @ globals, [], Env.String.bind nenv (f_name, f)) bs
+                    partition (b::locals @ globals, [], Env.String.bind f_name f nenv) bs
                 | Rec defs ->
                   (* we depend on the invariant that mutually
                      recursive definitions all have the same scope *)
@@ -1226,7 +1226,7 @@ struct
                       List.fold_left
                         (fun (scope, nenv) ((f, (_ft, f_name, f_scope)), _, _, _) ->
                            match f_scope with
-                             | Scope.Global -> Scope.Global, Env.String.bind nenv (f_name, f)
+                             | Scope.Global -> Scope.Global, Env.String.bind f_name f nenv
                              | Scope.Local -> scope, nenv)
                         (Scope.Local, nenv) defs
                     in
@@ -1238,7 +1238,7 @@ struct
                               partition (globals, b::locals, nenv) bs
                       end
                 | Alien ((f, (_ft, f_name, Scope.Global)), _, _) ->
-                    partition (b::locals @ globals, [], Env.String.bind nenv (f_name, f)) bs
+                    partition (b::locals @ globals, [], Env.String.bind f_name f nenv) bs
                 | _ -> partition (globals, b::locals, nenv) bs
             end in
     let globals, locals, nenv = partition ([], [], Env.String.empty) bs in
@@ -1275,3 +1275,28 @@ let desugar_definitions : env -> Sugartypes.binding list -> Ir.binding list * ne
   fun env bs ->
     let globals, _, nenv = desugar_program env (bs, None) in
       globals, nenv
+
+type result =
+  { globals: Ir.binding list;
+    program: Ir.program;
+    datatype: Types.datatype;
+    context: Context.t }
+
+let program : Context.t -> Types.datatype -> Sugartypes.program -> result
+  = fun context datatype program ->
+  let (nenv, _, _) as env =
+    let nenv = Context.name_environment context in
+    let tenv = Context.typing_environment context in
+    let venv = Context.variable_environment context in
+    (nenv, venv, tenv.Types.effect_row)
+  in
+  let program', _ = C.compile env program in
+  let globals, program'', nenv' = C.partition_program program' in
+  let nenv'' = Env.String.extend nenv nenv' in
+  let venv =
+    let tenv = Context.typing_environment context in
+    Var.varify_env (nenv'', tenv.Types.var_env)
+  in
+  { globals; datatype; program = program'';
+    context = Context.({ context with name_environment = nenv'';
+                                      variable_environment = venv }) }

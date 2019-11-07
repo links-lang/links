@@ -1,7 +1,6 @@
 (** Environments. *)
 
-module type S =
-sig
+module type S = sig
   type name
   (** The type of names. *)
 
@@ -12,24 +11,27 @@ sig
   val empty : 'a t
   (** The empty environment. *)
 
-  val bind : 'a t -> name * 'a -> 'a t
+  val singleton : name -> 'a -> 'a t
+  (** Create an environment with a single entry. *)
+
+  val bind : name -> 'a -> 'a t -> 'a t
   (** Extend an environment with a new entry. *)
 
-  val unbind : 'a t -> name -> 'a t
+  val unbind : name -> 'a t -> 'a t
   (** Remove an entry from an environment. *)
 
   val extend : 'a t -> 'a t -> 'a t
   (** Extend an environment with another.  Bindings from the right
       shadow bindings from the left. *)
 
-  val has : 'a t -> name -> bool
+  val has : name -> 'a t -> bool
   (** Whether a particular name is in an environment *)
 
-  val lookup : 'a t -> name -> 'a
+  val find : name -> 'a t -> 'a
   (** Look up a name in an environment.  Raise [NotFound name] if the
      name is not present. *)
 
-  val find : 'a t -> name -> 'a option
+  val find_opt : name -> 'a t -> 'a option
   (** Look up a name in an environment.  Return [None] if the name
       is not present. *)
 
@@ -53,6 +55,9 @@ sig
   val filter : (name -> 'a -> bool) -> 'a t -> 'a t
 
   val filter_map : (name -> 'a -> 'b option) -> 'a t -> 'b t
+
+  val complement : 'a t -> 'a t -> 'a t
+  (** Computes the relative complement B \ A *)
 end
 (** Output signature of the functor {!Env.Make}. *)
 

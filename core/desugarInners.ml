@@ -212,12 +212,6 @@ end
 
 let desugar_inners env = ((new desugar_inners env) : desugar_inners :> TransformSugar.transform)
 
-let desugar_program : TransformSugar.program_transformer =
-  fun env program -> snd3 ((desugar_inners env)#program program)
-
-let desugar_sentence : TransformSugar.sentence_transformer =
-  fun env sentence -> snd ((desugar_inners env)#sentence sentence)
-
 let has_no_inners =
 object
   inherit SugarTraversals.predicate as super
@@ -239,3 +233,9 @@ object
               defs >}
     | b -> super#bindingnode b
 end
+
+module Typeable
+  = Transform.Typeable.Make(struct
+        let name = "inners"
+        let obj env = (desugar_inners env : TransformSugar.transform :> Transform.Typeable.sugar_transformer)
+      end)

@@ -11,7 +11,8 @@ let ( >>= ) = Lwt.bind
 
 module WebIf = functor (Webs : WEBSERVER) ->
 struct
-
+  module S = Serialisation.MarshalSerialiser
+  module U = Serialisation.UnsafeJsonSerialiser
   module Eval = Evalir.Eval(Webs)
 
   type web_request =
@@ -31,9 +32,9 @@ struct
     let fname = Utility.base64decode (assoc "__name" cgi_args) in
     let args = Utility.base64decode (assoc "__args" cgi_args) in
     (* Debug.print ("args: " ^ Value.show (Json.parse_json args)); *)
-    let args = Value.untuple (Json.parse_json args) in
+    let args = Value.untuple (U.Value.load (Yojson.Basic.from_string args)) in
 
-    let fvs = Json.parse_json_b64 (assoc "__env" cgi_args) in
+    let fvs = U.Value.load (Yojson.Basic.from_string (Utility.base64decode (assoc "__env" cgi_args))) in
 
     let func =
       match fvs with
@@ -59,7 +60,7 @@ struct
 
   (** Extract continuation thunk from the CGI parameter _k *)
   let parse_server_cont (valenv, _, _) params =
-    ServerCont (Value.unmarshal_value valenv (assoc "_k" params))
+    ServerCont (S.Value.load ~globals:valenv (assoc "_k" params))
 
   let parse_client_return (valenv, _, _) cgi_args =
     let fixup_cont =
@@ -68,12 +69,12 @@ struct
       Str.global_replace (Str.regexp " ") "+"
     in
     let cont =
-      Value.unmarshal_continuation
-        valenv
+      S.Continuation.load
+        ~globals:valenv
         (fixup_cont (assoc "__continuation" cgi_args))
     in
     (* Debug.print("continuation: " ^ Value.show_continuation continuation); *)
-    let arg = Json.parse_json_b64 (assoc "__result" cgi_args) in
+    let arg = U.Value.load (Yojson.Basic.from_string (Utility.base64decode (assoc "__result" cgi_args))) in
     (* Debug.print ("arg: "^Value.show arg); *)
       ClientReturn(cont, arg)
 

@@ -108,6 +108,9 @@ val letm : ?tyvars:tyvar list -> binder * tail_computation -> binding
 val letmv : binder * value -> binding
 (*val letv : tybinder * value -> binding*)
 
+val unit : value
+val unit_comp : computation
+
 type program = computation
   [@@deriving show]
 

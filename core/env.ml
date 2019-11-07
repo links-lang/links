@@ -1,16 +1,16 @@
-module type S =
-sig
+module type S = sig
   type name
   type 'a t
   val pp : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
   val show : (Format.formatter -> 'a -> unit) -> 'a t -> string
   val empty : 'a t
-  val bind : 'a t -> name * 'a -> 'a t
-  val unbind : 'a t -> name -> 'a t
+  val singleton : name -> 'a -> 'a t
+  val bind : name -> 'a -> 'a t -> 'a t
+  val unbind : name -> 'a t -> 'a t
   val extend : 'a t -> 'a t -> 'a t
-  val has : 'a t -> name -> bool
-  val lookup : 'a t -> name -> 'a
-  val find : 'a t -> name -> 'a option
+  val has : name -> 'a t -> bool
+  val find : name -> 'a t -> 'a
+  val find_opt : name -> 'a t -> 'a option
   module Dom : Utility.Set.S
   val domain : 'a t -> Dom.t
   val range : 'a t -> 'a list
@@ -21,6 +21,8 @@ sig
   val fold : (name -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
   val filter : (name -> 'a -> bool) -> 'a t -> 'a t
   val filter_map : (name -> 'a -> 'b option) -> 'a t -> 'b t
+
+  val complement : 'a t -> 'a t -> 'a t
 end
 
 module Make (Ord : Utility.OrderedShow) :
@@ -33,12 +35,13 @@ struct
   type 'a t = 'a M.t
 
   let empty = M.empty
-  let bind env (n,v) = M.add n v env
-  let unbind env n = M.remove n env
+  let bind n v env = M.add n v env
+  let unbind n env = M.remove n env
+  let singleton n v = bind n v empty
   let extend = M.superimpose
-  let has env name = M.mem name env
-  let lookup env name = M.find name env
-  let find env name = M.lookup name env
+  let has name env = M.mem name env
+  let find name env = M.find name env
+  let find_opt name env = M.find_opt name env
   module Dom = Utility.Set.Make(Ord)
   let domain map = M.fold (fun k _ -> Dom.add k) map Dom.empty
   let range map = M.fold (fun _ v l -> v::l) map []
@@ -50,6 +53,13 @@ struct
   let show = M.show
   let filter = M.filter
   let filter_map = M.filter_map
+  let complement env env' =
+    fold
+      (fun key value env'' ->
+        if has key env
+        then env''
+        else bind key value env'')
+    env' empty
 end
 
 module String

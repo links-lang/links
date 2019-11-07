@@ -354,7 +354,6 @@ type sentence =
   | Definitions of binding list
   | Expression  of phrase
   | Directive   of directive
-
     [@@deriving show]
 
 type program = binding list * phrase option

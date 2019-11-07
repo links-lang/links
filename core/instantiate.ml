@@ -305,7 +305,7 @@ let instantiate : environment -> string -> type_arg list * datatype =
   fun env var ->
     let t =
       try
-        Env.String.lookup env var
+        Env.String.find var env
       with NotFound _ ->
         raise (Errors.UndefinedVariable ("Variable '"^ var ^ "' does not refer to a declaration"))
     in
@@ -318,7 +318,7 @@ let rigid : environment -> string -> type_arg list * datatype =
   fun env var ->
     let t =
       try
-        Env.String.lookup env var
+        Env.String.find var env
       with NotFound _ ->
         raise (Errors.UndefinedVariable ("Variable '"^ var ^ "' does not refer to a declaration"))
     in
@@ -448,7 +448,7 @@ let alias name tyargs env : Types.typ =
 
      (\Lambda x1 ... xn . t) (t1 ... tn) ~> t[ti/xi]
   *)
-  match (SEnv.find env name : Types.tycon_spec option) with
+  match (SEnv.find_opt name env : Types.tycon_spec option) with
     | None ->
         raise (internal_error (Printf.sprintf "Unrecognised type constructor: %s" name))
     | Some (`Abstract _)

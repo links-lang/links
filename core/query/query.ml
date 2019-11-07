@@ -133,7 +133,7 @@ struct
         | Constant (Constant.String _) -> Types.string_type
         | Project (Var (_, field_types), name) -> StringMap.find name field_types
         | Apply (Primitive "Empty", _) -> Types.bool_type (* HACK *)
-		| Apply (Primitive f, _) -> TypeUtils.return_type (Env.String.lookup Lib.type_env f)
+        | Apply (Primitive f, _) -> TypeUtils.return_type (Env.String.find f Lib.type_env)
         | e -> Debug.print("Can't deduce type for: " ^ show e); assert false
 
   let default_of_base_type =
@@ -177,7 +177,7 @@ struct
             List.fold_left
               (fun (gs', env') (x, source) ->
                 let y = Var.fresh_raw_var () in
-                  ((y, ffb source)::gs', Env.Int.bind env' (x, y)))
+                  ((y, ffb source)::gs', Env.Int.bind x y env'))
               ([], env)
               gs
           in
@@ -200,7 +200,7 @@ struct
         | Primitive f -> Primitive f
         | Var (x, ts) as v ->
           begin
-            match Env.Int.find env x with
+            match Env.Int.find_opt x env with
             | None -> v (* Var (x, ts) *)
             | Some y -> Var (y, ts)
           end
@@ -566,7 +566,7 @@ struct
 
   let bind env (x, v) =
     let open Lang in
-    { env with qenv = Env.Int.bind env.qenv (x, v) }
+    { env with qenv = Env.Int.bind x v env.qenv }
 
   let lookup env var =
     let open Lang in
@@ -576,7 +576,7 @@ struct
     | Some v -> v
     | None ->
       begin
-        match Value.Env.lookup var val_env, Env.Int.find exp_env var with
+        match Value.Env.lookup var val_env, Env.Int.find_opt var exp_env with
         | None, Some v -> v
         | Some v, None -> expression_of_value env v
         | Some _, Some v -> v (*query_error "Variable %d bound twice" var*)

@@ -27,7 +27,6 @@ type ir_snippet =
   | SVal   of value
   | SSpec  of special
   | SBind  of binding
-  | SBinds of binding list
   | SProg  of program
   | SNone
 
@@ -49,10 +48,6 @@ let string_of_occurrence : ir_snippet -> string =
     "occurring in IR binding:" ^
     nl ^
     Ir.string_of_binding b
-  | SBinds bs ->
-    "occurring in IR binding list:" ^
-    nl ^
-    String.concat nl (List.map Ir.string_of_binding bs)
   | SProg p ->
     "occurring in IR program:" ^
     nl ^
@@ -202,7 +197,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       match is_equal, lfd with
         | true, `Flexible -> true
         | true, `Rigid ->
-           begin match Env.find kind_env rid with
+           begin match Env.find_opt rid kind_env with
              | Some (primary_kind_env, subkind_env) ->
                 ensure
                   (primary_kind = primary_kind_env &&  rsk = subkind_env)
@@ -317,7 +312,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
                   let l_kind = Quantifier.to_kind lqvar in
                   let r_kind = Quantifier.to_kind rqvar in
                   let ctx' = { typevar_subst = IntMap.add lid rid context.typevar_subst;
-                               tyenv = Env.bind context.tyenv (rid, r_kind)
+                               tyenv = Env.bind rid r_kind context.tyenv
                              } in
                   (ctx', prev_eq && l_kind = r_kind)
                 ) (context,true) qs qs' in
@@ -467,7 +462,7 @@ struct
     val allowed_effects = Lib.typing_env.effect_row
 
     (* TODO: closure handling needs to be reworked properly *)
-    method lookup_closure_def_for_fun fid = Env.find closure_def_env fid
+    method lookup_closure_def_for_fun fid = Env.find_opt fid closure_def_env
 
     (* Creates a context for type equality checking *)
     method extract_type_equality_context () = { typevar_subst = IntMap.empty; tyenv = type_var_env }
@@ -477,12 +472,12 @@ struct
     method impose_presence_of_effect effect_name effect_typ occurrence : unit =
       ensure_effect_present_in_row (o#extract_type_equality_context ()) allowed_effects effect_name effect_typ occurrence
 
-    method add_typevar_to_context id kind = {< type_var_env = Env.bind type_var_env (id, kind)  >}
-    method remove_typevar_to_context id  = {< type_var_env = Env.unbind type_var_env id >}
+    method add_typevar_to_context id kind = {< type_var_env = Env.bind id kind type_var_env  >}
+    method remove_typevar_to_context id  = {< type_var_env = Env.unbind id type_var_env >}
     method get_type_var_env = type_var_env
 
-    method add_function_closure_binder f binder = {< closure_def_env = Env.bind closure_def_env (f, binder) >}
-    method remove_function_closure_binder f = {< closure_def_env = Env.unbind closure_def_env f  >}
+    method add_function_closure_binder f binder = {< closure_def_env = Env.bind f binder closure_def_env >}
+    method remove_function_closure_binder f = {< closure_def_env = Env.unbind f closure_def_env  >}
 
     method check_eq_types t1 t2 occurrence = check_eq_types (o#extract_type_equality_context ()) t1 t2 occurrence
 
@@ -1256,11 +1251,11 @@ struct
 
     method! binder : binder -> (binder * 'self_type) =
       fun (var, info) ->
-        let tyenv = Env.bind tyenv (var, info_type info) in
+        let tyenv = Env.bind var (info_type info) tyenv in
           (var, info), {< tyenv=tyenv >}
 
     method remove_binder : binder -> 'self_type = fun binder ->
-      let tyenv = Env.unbind tyenv (Var.var_of_binder binder) in
+      let tyenv = Env.unbind (Var.var_of_binder binder) tyenv in
       {< tyenv=tyenv >}
 
     method remove_binding : binding -> 'self_type = function
@@ -1275,8 +1270,7 @@ struct
                   let binder = Ir.binder_of_fun_def fundef in
                   let f = Var.var_of_binder binder in
                   let o = o#remove_binder binder in
-                  o#remove_function_closure_binder f
-                   )
+                  o#remove_function_closure_binder f)
                 o
                 fundefs
       | Alien (binder, _, _) -> o#remove_binder binder
@@ -1291,13 +1285,14 @@ struct
     method! get_type_environment : environment = tyenv
   end
 
-  let program tyenv p =
-    let lazy_check =
-      lazy (let p, _, _ = (checker tyenv)#computation p in p) in
-   handle_ir_type_error lazy_check p (SProg p)
+  let name = "ir_typechecker"
 
-  let bindings tyenv b =
-    let lazy_check =
-      lazy (let b, _ = (checker tyenv)#bindings b in b) in
-    handle_ir_type_error lazy_check b (SBinds b)
+  let program state program =
+    let open IrTransform in
+    let tenv = Context.variable_environment (context state) in
+    let check =
+      lazy (let program', _, _ = (checker tenv)#program program in program')
+    in
+    let program'' = handle_ir_type_error check program (SProg program) in
+    return state program''
 end

@@ -30,25 +30,24 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
      *)
     let tyenv =
       {Types.var_env =
-          Env.String.bind
-            (Env.String.bind tyenv.Types.var_env
-               ("ConcatMap", dt "((a) -> [b], [a]) -> [b]"))
-            ("stringifyB64", dt "(a) -> String");
+         (Env.String.bind "stringifyB64" (dt "(a) -> String") tyenv.Types.var_env
+          |> Env.String.bind "ConcatMap" (dt "((a) -> [b], [a]) -> [b]"));
        Types.rec_vars = StringSet.empty;
        Types.tycon_env = tyenv.Types.tycon_env;
        Types.effect_row = tyenv.Types.effect_row;
        Types.desugared = tyenv.Types.desugared } in
     let nenv =
-      Env.String.bind
-        (Env.String.bind nenv
-           ("ConcatMap", Var.fresh_raw_var ()))
-        ("stringifyB64", Var.fresh_raw_var ()) in
+      Env.String.bind "ConcatMap" (Var.fresh_raw_var ()) nenv
+      |>  Env.String.bind "stringifyB64" (Var.fresh_raw_var ())
+
+    in
 
     let venv =
       Env.String.fold
-        (fun name v venv -> VEnv.bind venv (v, name))
+        (fun name v venv -> VEnv.bind v name venv)
         nenv
-        VEnv.empty in
+        VEnv.empty
+    in
     let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
     (nenv, venv, tenv)
 
@@ -116,7 +115,7 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
   let page : ?cgi_env:(string * string) list ->
              wsconn_url:(Webserver_types.websocket_url option) ->
              (Var.var Env.String.t * Types.typing_environment) ->
-             Ir.binding list -> (Value.env * Value.t) -> Loader.ext_dep list -> string
+             Ir.binding list -> (Value.env * Value.t) -> string list -> string
     = fun ?(cgi_env=[]) ~wsconn_url (nenv, tyenv) defs (valenv, v) deps ->
     let open Json in
     let req_data = Value.Env.request_data valenv in

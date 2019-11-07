@@ -37,6 +37,7 @@ end
 val sync : 'a setting -> 'a setting
 
 (* Miscellaneous. *)
+val get_name : 'a setting -> string
 val from_string_option : string option -> string
 val string_of_paths : string list -> string
 val parse_paths : string -> string list

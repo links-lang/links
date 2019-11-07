@@ -38,3 +38,9 @@ object ((self : 'self_type))
           WithPos.make ~pos node
       | _ -> super#binding b
 end
+
+module Untyped
+  = Transform.Untyped.Make.Transformer(struct
+        let name = "lift_recursive"
+        let obj = lift_funs
+      end)

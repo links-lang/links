@@ -161,12 +161,6 @@ end
 
 let desugar_funs env = ((new desugar_funs env) : desugar_funs :> TransformSugar.transform)
 
-let desugar_program : TransformSugar.program_transformer =
-  fun env program -> snd3 ((desugar_funs env)#program program)
-
-let desugar_sentence : TransformSugar.sentence_transformer =
-  fun env sentence -> snd ((desugar_funs env)#sentence sentence)
-
 let has_no_funs =
 object
   inherit SugarTraversals.predicate as super
@@ -193,3 +187,9 @@ object
           super#bindingnode b
     | b -> super#bindingnode b
 end
+
+module Typeable
+  = Transform.Typeable.Make(struct
+        let name = "funs"
+        let obj env = (desugar_funs env : TransformSugar.transform :> Transform.Typeable.sugar_transformer)
+      end)

@@ -1,4 +1,2 @@
-val desugar_program : TransformSugar.program_transformer
-val desugar_sentence : TransformSugar.sentence_transformer
-
-val has_no_processes  : SugarTraversals.predicate
+val has_no_processes : SugarTraversals.predicate
+include Transform.Typeable.S

@@ -3,20 +3,6 @@ open Webserver
 open Performance
 open Utility
 
-module Eval = Evalir.Eval(Webserver)
-module Webif = Webif.WebIf(Webserver)
-
-type evaluation_env =   Value.env (* maps int identifiers to their values *)
-                      * Ir.var Env.String.t (* map string identifiers to int identifiers *)
-                      * Types.typing_environment (* typing info, using string identifiers *)
-
-type evaluation_result =
-  {
-    result_env : evaluation_env;
-    result_value : Value.t;
-    result_type : Types.datatype
-  }
-
 (** Name of the file containing the prelude code. *)
 let prelude_file =
   let prelude_dir =
@@ -36,140 +22,171 @@ let typecheck_only
               |> convert parse_bool
               |> sync)
 
-(** optimise and evaluate a program *)
-let process_program
-      (interacting : bool)
-      (envs : evaluation_env)
-      (program : Ir.program)
-      external_files
-          : (Value.env * Value.t) =
-  let (valenv, nenv, tyenv) = envs in
-  let tenv = (Var.varify_env (nenv, tyenv.Types.var_env)) in
+module Phases = struct
+  module Parse = struct
+    let run : Context.t -> string -> Sugartypes.program Loader.result
+      = Loader.load
 
-  let perform_optimisations = Settings.get Backend.optimise && not interacting in
-
-  let (globals, _main) as post_backend_pipeline_program =
-    Backend.transform_program perform_optimisations tenv program in
-
-
-  (if Settings.get typecheck_only then exit 0);
-
-  Webserver.init (valenv, nenv, tyenv) globals external_files;
-
-  lazy (Eval.run_program valenv post_backend_pipeline_program) |>measure_as<| "run_program"
-
-
-let process_program  interacting envs program external_files =
-  lazy (process_program  interacting envs program external_files) |>measure_as<| "process_program"
-
-let die_on_exception f x =
-  Errors.display ~default:(fun _ -> exit 1) (lazy (f x))
-
-let die_on_exception_unless_interacting is_interacting f x =
-  let handle exc =
-    if is_interacting then
-      raise exc
-    else
-      exit 1 in
-  Errors.display ~default:handle (lazy (f x))
-
-
-(** Read Links source code, then optimise and run it. *)
-let evaluate
-      ?(handle_errors=die_on_exception_unless_interacting)
-      interacting
-      parse_fun
-      (envs : evaluation_env)
-      filename
-          : evaluation_result =
-  let (_, nenv, tyenv) = envs in
-  let evaluate_inner f =
-    let (program, t), (nenv', tyenv'), external_files = parse_fun (nenv, tyenv) f in
-
-    let valenv, v = process_program interacting envs program external_files in
-    {
-    result_env = (valenv,
-      Env.String.extend nenv nenv',
-      Types.extend_typing_environment tyenv tyenv');
-    result_value = v;
-    result_type = t
-    }
-  in
-  let evaluate_inner f = lazy (evaluate_inner f) |>measure_as<| "evaluate" in
-  handle_errors interacting evaluate_inner filename
-
-
-(* For non-REPL use only *)
-module NonInteractive =
-struct
-
-  let show_lib_function_env
-    = Settings.(flag "show_lib_function_env"
-                |> synopsis "Print the lib.ml functions and their types. In particular, map their integer identifiers to their original names"
-                |> convert parse_bool
-                |> sync)
-
-  let run_file prelude envs filename : evaluation_result =
-    Webserver.set_prelude prelude;
-    let parse_and_desugar (nenv, tyenv) filename =
-      let source =
-        die_on_exception_unless_interacting false (Loader.load_file (nenv, tyenv)) filename
+    let string : Context.t -> string -> Sugartypes.program Loader.result
+      = fun context source_code ->
+      let program, pos_context =
+        Parse.parse_string
+          ~pp:(from_option "" (Settings.get Parse.pp))
+          Parse.program
+          source_code
       in
-        let open Loader in
-        let (nenv, tyenv) = source.envs in
-        let (globals, (locals, main), t) = source.program in
-        let external_files = source.external_dependencies in
-        ((globals @ locals, main), t), (nenv, tyenv), external_files
+      let context' = Context.({ context with source_code = pos_context }) in
+      Loader.({ program_ = program; context = context' })
+
+    let interactive : string -> Context.t -> Sugartypes.sentence Loader.result
+      = fun ps1 context ->
+      let program, pos_context =
+        Parse.Readline.parse ps1
+      in
+      let context' = Context.({ context with source_code = pos_context }) in
+      Loader.({ program_ = program; context = context' })
+  end
+
+  module Desugar = struct
+    let run : Sugartypes.program Loader.result -> Sugartypes.program Frontend.result
+      = fun Loader.({ context; program_ }) ->
+      Frontend.program context program_
+
+    let interactive : Sugartypes.sentence Loader.result -> Sugartypes.sentence Frontend.result
+      = fun Loader.({ context; program_ }) ->
+      Frontend.interactive context program_
+  end
+
+  module Compile = struct
+    module IR = struct
+      let run : Sugartypes.program Frontend.result -> Sugartoir.result
+        = fun Frontend.({ context; datatype; program }) ->
+        Sugartoir.program context datatype program
+    end
+  end
+
+  module Transform = struct
+    let run : Sugartoir.result -> Backend.result
+      = fun Sugartoir.({ context; datatype; globals; program }) ->
+      let program' =
+        Ir.with_bindings globals program (* TODO(dhil): This looks silly, and I think it may be wrong... *)
+      in
+      Backend.program context datatype program'
+  end
+
+  module Evaluate = struct
+    module Eval = Evalir.Eval(Webserver)
+
+    let run : Backend.result -> (Context.t * Types.datatype * Value.t)
+      = fun Backend.({ context; program; datatype }) ->
+      let valenv = Context.value_environment context in
+      let (valenv', v) =
+        lazy (Eval.run_program valenv program) |>measure_as<| "run_program"
+      in
+      (Context.({ context with value_environment = valenv' }), datatype, v)
+  end
+
+  module Interactive = struct
+    type result =
+      { context: Context.t;
+        sentence: [ `Definitions of Ir.binding list
+                  | `Expression of Types.datatype * Value.t
+                  | `Directive of string * string list ] }
+
+    let readline : string -> Context.t -> result
+      = fun ps1 context ->
+      let Frontend.({ context; program = sentence; datatype })
+        = Parse.interactive ps1 context
+          |> Desugar.interactive
+      in
+      let context, sentence =
+        match sentence with
+        | Sugartypes.Definitions defs ->
+           let program' = (defs, None) in
+           let Backend.({ program; _ }) as result =
+             Compile.IR.run Frontend.({ context; datatype; program = program' })
+             |> Transform.run
+           in
+           let (context', _, _) = Evaluate.run result in
+           context', `Definitions (fst program)
+        | Sugartypes.Expression expr ->
+           let program' = ([], Some expr) in
+           let result =
+             Compile.IR.run Frontend.({ context; datatype; program = program' })
+             |> Transform.run
+           in
+           let (context', datatype, value) = Evaluate.run result in
+           context', `Expression (datatype, value)
+        | Sugartypes.Directive d ->
+           context, `Directive d
+      in
+      { context; sentence }
+  end
+
+  let dump_lib : out_channel -> unit
+    = fun oc ->
+    Printf.fprintf oc "lib.ml mappings:\n%!";
+    Env.String.iter
+      (fun name var ->
+        let (datatype : string) =
+          Types.string_of_datatype
+            (Env.String.find name Lib.typing_env.Types.var_env)
+        in
+        Printf.fprintf oc " %d -> %s : %s\n%!" var name datatype)
+      Lib.nenv
+
+  (* Loads the prelude, and returns the 'initial' compilation context. *)
+  let initialise : unit -> Context.t
+    = fun () ->
+    let context = Context.({ empty with name_environment = Lib.nenv;
+                                        typing_environment = Lib.typing_env })
     in
-      evaluate false parse_and_desugar envs filename
-
-
-  let run_file prelude envs filename =
-    lazy (run_file prelude envs filename) |>measure_as<| ("run_file "^filename)
-
-
-
-  let evaluate_string_in envs  v =
-    let parse_and_desugar (nenv, tyenv) s =
-      let sugar, pos_context = Parse.parse_string ~pp:(from_option "" (Settings.get Parse.pp)) Parse.program s in
-      let (program, t, _), _ = Frontend.Pipeline.program tyenv pos_context sugar in
-
-      let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
-
-      let globals, (locals, main), _nenv = Sugartoir.desugar_program (nenv, tenv, tyenv.Types.effect_row) program in
-      ((globals @ locals, main), t), (nenv, tyenv), []
+    let filename = val_of (Settings.get prelude_file) in
+    let result =
+      Parse.run context filename
+      |> Desugar.run
+      |> (fun result ->
+        let context = result.Frontend.context in
+        let venv =
+          Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)
+        in
+        let context' = Context.({ context with variable_environment = venv }) in
+        Compile.IR.run Frontend.({ result with context = context' }))
+      |> Transform.run
     in
-      evaluate false parse_and_desugar envs v
+    let context', _, _ = Evaluate.run result in
+    let nenv = Context.name_environment context' in
+    let tenv = Context.typing_environment context' in
+    let venv = Var.varify_env (nenv, tenv.Types.var_env) in
+    (* Prepare the webserver. *)
+    Webserver.set_prelude (fst result.Backend.program);
+    (* Return the 'initial' compiler context. *)
+    Context.({ context' with variable_environment = venv })
 
+  let whole_program : Context.t -> string -> (Context.t * Types.datatype * Value.t)
+    = fun initial_context filename ->
+    (* Process source file (and its dependencies. *)
+    let result =
+      Parse.run initial_context filename
+      |> Desugar.run
+      |> (fun result -> if Settings.get typecheck_only then exit 0 else result)
+      |> Compile.IR.run
+      |> Transform.run
+    in
+    let context, (globals, _) = result.Backend.context, result.Backend.program in
+    let valenv    = Context.value_environment context in
+    let nenv      = Context.name_environment context in
+    let tenv      = Context.typing_environment context in
+    let ffi_files = Context.ffi_files context in
+    Webserver.init (valenv, nenv, tenv) globals ffi_files;
+    Evaluate.run result
 
-
-  (* TODO: Remove special handling of prelude once module processing is in place *)
-  let load_prelude () =
-    (if Settings.get show_lib_function_env then
-      (Debug.print "lib.ml mappings:";
-      Env.String.iter (fun name var -> Debug.print (string_of_int var ^ " -> " ^ name ^ " :: " ^
-        Types.string_of_datatype (Env.String.lookup Lib.typing_env.Types.var_env name ) )) Lib.nenv));
-
-    let load_prelude_inner () =
-      let open Loader in
-      let source =
-        (die_on_exception_unless_interacting false
-          (Loader.load_file (Lib.nenv, Lib.typing_env)) (val_of (Settings.get prelude_file)))
-      in
-      let (nenv, tyenv) = source.envs in
-      let (globals, _, _) = source.program in
-
-      let tenv = (Var.varify_env (Lib.nenv, Lib.typing_env.Types.var_env)) in
-
-      let globals = Backend.transform_prelude tenv globals in
-
-      let valenv = Eval.run_defs Value.Env.empty globals in
-      let envs =
-        (valenv,
-        Env.String.extend Lib.nenv nenv,
-        Types.extend_typing_environment Lib.typing_env tyenv)
-      in
-        globals, envs
-   in
-   die_on_exception load_prelude_inner ()
+  let evaluate_string : Context.t -> string -> (Context.t * Types.datatype * Value.t)
+    = fun initial_context source_code ->
+    Parse.string initial_context source_code
+    |> Desugar.run
+    |> (fun result -> if Settings.get typecheck_only then exit 0 else result)
+    |> Compile.IR.run
+    |> Transform.run
+    |> Evaluate.run
 end

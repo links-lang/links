@@ -24,7 +24,7 @@ SEP=" -o -name "
 FIND_STR="$( printf "${SEP}\"%s\"" "${PATTERNS[@]}" )"
 FIND_STR="${FIND_STR:${#SEP}}"
 FIND_STR="-name $FIND_STR"
-echo ${FIND_STR}
+#echo ${FIND_STR}
 
 for dir in ${DIRS[@]}; do
     for file in $(eval "find \""$dir"\" -type f \( ${FIND_STR} \)"); do

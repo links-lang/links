@@ -53,3 +53,7 @@ let debug_time_out f (withtime : int -> unit) =
   let _ = withtime time in
   raw_result
 
+let eval_l e =
+  if Settings.get enabled
+  then ignore (Lazy.force e)
+

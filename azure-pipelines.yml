@@ -36,8 +36,7 @@ steps:
   - bash: |
       case $AGENT_OS in
         "Linux") sudo apt-get install ocaml python3-setuptools python3-pip;;
-        "Darwin") brew install ocaml python3 &&
-                  brew postinstall python3;;
+        "Darwin") brew install ocaml;;
         *) exit 1 ;;
       esac
     displayName: 'System dependencies'

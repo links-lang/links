@@ -17,12 +17,7 @@ type websocket_url = string
 (* Types *)
 type json_string = string
 
-let parse_json str =
-  Yojson.Basic.from_string str |> Value.from_json
-
 let nil_literal = `Null
-
-let parse_json_b64 str = parse_json (Utility.base64decode str)
 
 (* Helper functions for jsonization *)
 (*
@@ -303,15 +298,11 @@ let jsonize_value v =
   Debug.if_set show_json (fun () -> "jsonize_value <= " ^ jv_str);
   jv
 
-
-let encode_continuation (cont : Value.continuation) : string =
-  Value.marshal_continuation cont
-
 let jsonize_call s cont name args =
   let arg_vs = jsonize_values args in
   let v =
     `Assoc [
-      ("__continuation", `String (encode_continuation cont));
+      ("__continuation", `String cont);
       ("__name", `String name);
       ("__args", `List arg_vs)] in
   value_with_state v s
