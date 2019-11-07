@@ -2074,7 +2074,7 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environme
       | Variable bndr ->
         let xtype = Types.fresh_type_variable (lin_any, res_any) in
         (Variable (Binder.set_type bndr xtype),
-         Env.bind (Binder.to_name bndr) xtype Env.empty,
+         Env.singleton (Binder.to_name bndr) xtype,
          (xtype, xtype))
       | Cons (p1, p2) ->
         let p1 = tp p1
@@ -2123,7 +2123,7 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environme
            | Variable bndr ->
               let xtype = fresh_resumption_type () in
               ( with_pos pos' (Variable (Binder.set_type bndr xtype))
-              , Env.bind (Binder.to_name bndr) xtype Env.empty, (xtype, xtype))
+              , Env.singleton (Binder.to_name bndr) xtype, (xtype, xtype))
            | As (bndr, pat') ->
               let p = type_resumption_pat pat' in
               let env' = Env.bind (Binder.to_name bndr) (it p) (env p) in
@@ -2251,7 +2251,7 @@ let rec pattern_env : Pattern.with_pos -> Types.datatype Env.t =
     | List ps
     | Tuple ps -> List.fold_right (pattern_env ->- Env.extend) ps Env.empty
     | Variable bndr ->
-       Env.bind (Binder.to_name bndr) (Binder.to_type bndr) Env.empty
+       Env.singleton (Binder.to_name bndr) (Binder.to_type bndr)
     | As (bndr, p) ->
        Env.bind (Binder.to_name bndr) (Binder.to_type bndr) (pattern_env p)
 
@@ -3740,7 +3740,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                              Types.make_function_type domain effs codomain
                            in
                            let env = Env.bind kname kt env in
-                           let env' = Env.bind kname kt Env.empty in
+                           let env' = Env.singleton kname kt in
                            (pat, env, effrow), (kpat, env', kt)
                         | _ -> assert false
                         end
@@ -3755,7 +3755,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                              | Some t -> t
                              | None -> assert false
                            in
-                           let env' = Env.bind kname kt Env.empty in
+                           let env' = Env.singleton kname kt in
                            (pat, env, effrow), (kpat, env', kt)
                         | Any ->
                            let kt =
@@ -4200,7 +4200,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                  fun_frozen = true;
                  fun_location; fun_signature = t_ann'; fun_unsafe_signature = unsafe },
              {empty_context with
-                var_env = Env.bind name ft Env.empty},
+                var_env = Env.singleton name ft},
              StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body))
       | Funs defs ->
           (*
