@@ -1605,19 +1605,136 @@ let unbind_var context v = {context with var_env = Env.unbind v context.var_env}
 let bind_tycon context (v, t) = {context with tycon_env = Env.bind v t context.tycon_env}
 let bind_effects context r = {context with effect_row = r}
 
+(* TODO(dhil): I have extracted the Usage abstraction from my name
+   hygiene/compilation unit patch. The below module is a compatibility
+   module which will make it easier for me to merge my other branch
+   with master in the future. This module will be removed once I have
+   land the aforementioned patch. *)
+module Ident = struct
+  type t = string
+
+  module Map = Utility.StringMap
+  module Set = Utility.StringSet
+end
+
+(* Track usages of identifiers. *)
+module Usage: sig
+  (* Disables unused warnings for members of this signature. *)
+  [@ocaml.warning "-32"]
+  type t
+
+  val empty : t
+  val add : Ident.t -> int -> t -> t
+  val remove : Ident.t -> t -> t
+  val mem : Ident.t -> t -> bool
+  val uses_of : Ident.t -> t -> int
+  val incr : ?by:int -> Ident.t -> t -> t
+  val singleton : Ident.t -> t
+  val combine : t -> t -> t
+  val combine_many : t list -> t
+  val bindings : t -> (Ident.t * int) list
+  val merge : (Ident.t -> int option -> int option -> int option) -> t -> t -> t
+  val filter : (Ident.t -> int -> bool) -> t -> t
+  val iter : (Ident.t -> int -> unit) -> t -> unit
+  val restrict : t -> Ident.Set.t -> t
+  val align : t list -> t
+end = struct
+  type t = int Ident.Map.t
+
+  let empty = Ident.Map.empty
+
+  let add v c usages =
+    assert (c >= 0);
+    Ident.Map.add v c usages
+
+  let remove v usages =
+    Ident.Map.remove v usages
+
+  let mem v usages =
+    Ident.Map.mem v usages
+
+  let uses_of v usages =
+    try Ident.Map.find v usages
+    with Notfound.NotFound _ -> 0
+
+  let incr ?(by=1) v usages =
+    assert (by > 0);
+    let uses =
+      try uses_of v usages
+      with Notfound.NotFound _ -> 0
+    in
+    Ident.Map.add v (uses + by) usages
+
+  let singleton v =
+    incr ~by:1 v empty
+
+  let combine usages usages' =
+    Ident.Map.merge
+      (fun _ x y ->
+        match x, y with
+        | Some x, Some y -> Some (x + y)
+        | Some _, None   -> x
+        | None, Some _   -> y
+        | None, None     -> None)
+    usages usages'
+
+  let combine_many usagess =
+    List.fold_left combine empty usagess
+
+  let bindings usages =
+    Ident.Map.bindings usages
+
+  let merge join usages usages' =
+    Ident.Map.merge join usages usages'
+
+  let filter f usages =
+    Ident.Map.filter f usages
+
+  let iter f usages =
+    Ident.Map.iter f usages
+
+  (* Think of name restriction from CCS. *)
+  let restrict usages idents =
+    filter (fun v _ -> not (Ident.Set.mem v idents)) usages
+
+  let align = function
+    | [] ->
+       (* HACK: for now we take the conservative choice of assuming
+          that no linear variables are used in empty cases. We could
+          keep track of all variables in scope so that we can treat
+          them as linear if possible. This would require a further map
+          recording all variables that have empty pattern matching
+          'sink'. *)
+       empty
+    | usages :: usagess  ->
+       let combine' : Ident.t -> int option -> int option -> int option
+         = fun _ident x y ->
+         let unlimited = max_int in
+         match x, y with
+         | None, None -> None
+         | Some x', Some y' when x' = y' -> x
+         (* We need to treat anything appearing in the below cases as
+            unlimited; 'max_int' assures that no matter whether the
+            variable in question is used anywhere else or not, it must
+            be unlimited. *)
+         | Some _, None | None, Some _ | Some _, Some _ -> Some unlimited
+       in
+       List.fold_left (merge combine') usages usagess
+end
+
 let type_section context s =
   let env = context.var_env in
   let ((tyargs, t), usages) =
     let open Section in match s with
-    | Minus         -> Utils.instantiate env "-", StringMap.empty
-    | FloatMinus    -> Utils.instantiate env "-.", StringMap.empty
+    | Minus         -> Utils.instantiate env "-", Usage.empty
+    | FloatMinus    -> Utils.instantiate env "-.", Usage.empty
     | Project label ->
        let a = Types.fresh_type_variable (lin_unl, res_any) in
        let rho = Types.fresh_row_variable (lin_unl, res_any) in
        let effects = Types.make_empty_open_row default_effect_subkind in (* projection is pure! *)
        let r = `Record (StringMap.add label (`Present a) StringMap.empty, rho, false) in
-         ([`Type a; `Row (StringMap.empty, rho, false); `Row effects], `Function (Types.make_tuple_type [r], effects, a)), StringMap.empty
-    | Name var      -> Utils.instantiate env var, StringMap.singleton var 1 in
+         ([`Type a; `Row (StringMap.empty, rho, false); `Row effects], `Function (Types.make_tuple_type [r], effects, a)), Usage.empty
+    | Name var      -> Utils.instantiate env var, Usage.singleton var in
   tappl (FreezeSection s, tyargs), t, usages
 
 let type_frozen_section context s =
@@ -1625,8 +1742,8 @@ let type_frozen_section context s =
   let t, usages =
     let open Section in
     match s with
-    | Minus         -> Env.find "-" env, StringMap.empty
-    | FloatMinus    -> Env.find "-." env, StringMap.empty
+    | Minus         -> Env.find "-" env, Usage.empty
+    | FloatMinus    -> Env.find "-." env, Usage.empty
     | Project label ->
        let a = Types.fresh_rigid_type_variable (lin_unl, res_any) in
        let rho = Types.fresh_rigid_row_variable (lin_unl, res_any) in
@@ -1635,21 +1752,21 @@ let type_frozen_section context s =
        Types.for_all
          (Types.quantifiers_of_type_args [`Type a; `Row (StringMap.empty, rho, false); `Row effects],
           `Function (Types.make_tuple_type [r], effects, a)),
-       StringMap.empty
-    | Name var      -> Env.find var env, StringMap.singleton var 1 in
+       Usage.empty
+    | Name var      -> Env.find var env, Usage.singleton var in
   FreezeSection s, t, usages
 
 
 let datatype aliases = Instantiate.typ -<- DesugarDatatypes.read ~aliases
 let add_usages (p, t) m = (p, t, m)
-let add_empty_usages (p, t) = (p, t, StringMap.empty)
+let add_empty_usages (p, t) = (p, t, Usage.empty)
 
 let type_unary_op env =
   let datatype = datatype env.tycon_env in
   function
   | UnaryOp.Minus      -> add_empty_usages (datatype "(Int) -> Int")
   | UnaryOp.FloatMinus -> add_empty_usages (datatype "(Float) -> Float")
-  | UnaryOp.Name n     -> add_usages (Utils.instantiate env.var_env n) (StringMap.singleton n 1)
+  | UnaryOp.Name n     -> add_usages (Utils.instantiate env.var_env n) (Usage.singleton n)
 
 let type_binary_op ctxt =
   let open BinaryOp in
@@ -1681,9 +1798,9 @@ let type_binary_op ctxt =
       let eff = Types.make_empty_open_row default_effect_subkind in
         ([`Type a; `Row eff],
          `Function (Types.make_tuple_type [a; a], eff, `Primitive Primitive.Bool),
-         StringMap.empty)
+         Usage.empty)
   | Name "!"     -> add_empty_usages (Utils.instantiate ctxt.var_env "Send")
-  | Name n       -> add_usages (Utils.instantiate ctxt.var_env n) (StringMap.singleton n 1)
+  | Name n       -> add_usages (Utils.instantiate ctxt.var_env n) (Usage.singleton n)
 
 (* close a pattern type relative to a list of patterns
 
@@ -2314,56 +2431,10 @@ let make_ft_poly_curry declared_linearity ps effects return_type =
   Types.for_all (ft ps)
 
 (** Make any unannotated parameters monomorphic. *)
-let make_mono pats = List.iter (List.iter (fun (_, _, t) -> Types.Mono.make_type t)) pats;
-
-type usagemap = int stringmap
-let merge_usages (ms:usagemap list) : usagemap =
-      match ms with
-      | [] -> StringMap.empty
-      | (m::ms) -> List.fold_right
-                     (fun m n ->
-                        StringMap.merge
-                          (fun _ xo yo ->
-                             match xo, yo with
-                             | Some x, Some y -> Some (x + y)
-                             | Some x, None   -> Some x
-                             | None, Some y   -> Some y
-                             | None, None     -> None
-                          ) m n) ms m
-
-let uses_of v us =
-  try
-    StringMap.find v us
-  with
-    _ -> 0
-
-let usage_compat =
-  function
-  | [] ->
-    (* HACK: for now we take the conservative choice of assuming that
-       no linear variables are used in empty cases. We could keep
-       track of all variables in scope so that we can treat them as
-       linear if possible. This would require a further map recording
-       all variables that have empty pattern matching 'sink'. *)
-    StringMap.empty
-  | (u::us) ->
-    let same m n =
-      let mvs = List.map fst (StringMap.bindings m) in
-      let vs  = List.append (List.filter (fun v -> not (List.mem v mvs)) (List.map fst (StringMap.bindings n)))
-          mvs in
-      let f v resulting_usages =
-        if StringMap.mem v m && StringMap.mem v n && StringMap.find v m = StringMap.find v n then
-          StringMap.add v (StringMap.find v m) resulting_usages
-        else
-        (* We need to treat anything appearing in this case as unlimited; '2' assures that no
-           matter whether the variable in question is used anywhere else or not, it must be
-           unlimited. *)
-          StringMap.add v 2 resulting_usages in
-      List.fold_right f vs StringMap.empty in
-    List.fold_right same us u
+let make_mono pats = List.iter (List.iter (fun (_, _, t) -> Types.Mono.make_type t)) pats
 
 let usages_cases bs =
-  usage_compat (List.map (fun (_, (_, _, m)) -> m) bs)
+  Usage.align (List.map (fun (_, (_, _, m)) -> m) bs)
 
 (* if we've already inferred a type from a previous type inference
    pass then use that in place of any other annotation *)
@@ -2378,7 +2449,7 @@ let resolve_type_annotation : Binder.with_pos -> Sugartypes.datatype' option -> 
     end
   | t -> Some t
 
-let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
+let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
   fun context {node=expr; pos} ->
     let _UNKNOWN_POS_ = "<unknown>" in
     let no_pos t = (_UNKNOWN_POS_, t) in
@@ -2404,7 +2475,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
     let pos_and_typ e = (exp_pos e, typ e) in
     let tpc p = type_pattern `Closed p
     and tpo p = type_pattern `Open p
-    and tc : phrase -> phrase * Types.datatype * usagemap = type_check context
+    and tc : phrase -> phrase * Types.datatype * Usage.t = type_check context
     and expr_string (p : Sugartypes.phrase) : string =
       let pos = WithPos.pos p in
       Position.Resolved.resolve pos |> Position.Resolved.source_expression
@@ -2433,7 +2504,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              let body = type_check (context ++ pattern_env pat) body in
              let () = unify ~handle:Gripers.switch_branches
                (pos_and_typ body, no_pos bt) in
-             let () = Env.iter (fun v t -> let uses = uses_of v (usages body) in
+             let () = Env.iter (fun v t -> let uses = Usage.uses_of v (usages body) in
                                            if uses <> 1 then
                                              if Types.Unl.can_type_be t then
                                                Types.Unl.make_type t
@@ -2441,7 +2512,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                                                Gripers.non_linearity pos uses v t)
                                (pattern_env pat) in
              let vs = Env.domain (pattern_env pat) in
-             let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages body) in
+             let us = Usage.restrict (usages body) vs in
              (pat, update_usages body us)::binders)
           binders []
       in
@@ -2467,7 +2538,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                | [] -> Var v
                | _ -> tappl (FreezeVar v, tyargs)
              in
-             e, t, StringMap.singleton v 1
+             e, t, Usage.singleton v
            with
              Errors.UndefinedVariable _msg ->
              Gripers.die pos ("Unknown variable " ^ v ^ ".")
@@ -2477,7 +2548,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            try
              check_recursive_usage (WithPos.make ~pos expr) v context;
              let t = Env.find v context.var_env in
-             FreezeVar v, t, StringMap.singleton v 1
+             FreezeVar v, t, Usage.singleton v
            with
              NotFound _ ->
              Gripers.die pos ("Unknown variable " ^ v ^ ".")
@@ -2486,13 +2557,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | FreezeSection s -> type_frozen_section context s
         (* literals *)
         | Constant c as c' ->
-           c', `Primitive (Constant.type_of c), StringMap.empty
+           c', `Primitive (Constant.type_of c), Usage.empty
         | TupleLit [p] ->
            let p = tc p in
               TupleLit [erase p], typ p, usages p (* When is a tuple not a tuple? *)
         | TupleLit ps ->
             let ps = List.map tc ps in
-              TupleLit (List.map erase ps), Types.make_tuple_type (List.map typ ps), merge_usages (List.map usages ps)
+              TupleLit (List.map erase ps), Types.make_tuple_type (List.map typ ps), Usage.combine_many (List.map usages ps)
         | RecordLit (fields, rest) ->
             let _ =
               (* check that each label only occurs once *)
@@ -2511,13 +2582,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                      ((label, e)::fields,
                       StringMap.add label (`Present t) field_env,
                       StringMap.add label `Absent absent_field_env,
-                      merge_usages [field_usages; usages e]))
-                fields ([], StringMap.empty, StringMap.empty, StringMap.empty) in
+                      Usage.combine field_usages (usages e)))
+                fields ([], StringMap.empty, StringMap.empty, Usage.empty) in
               begin match rest with
                 | None ->
                     RecordLit (alistmap erase fields, None), `Record (field_env, Unionfind.fresh `Closed, false), field_usages
                 | Some r ->
-                    let r : phrase * Types.datatype * usagemap = tc r in
+                    let r : phrase * Types.datatype * Usage.t = tc r in
 
                     (* FIXME:
 
@@ -2561,17 +2632,17 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                                               else
                                                 StringMap.add label (`Present t) field_env'
                                           | `Var _ -> assert false) rfield_env field_env in
-                    let usages = merge_usages [field_usages; usages r] in
+                    let usages = Usage.combine field_usages (usages r) in
                       RecordLit (alistmap erase fields, Some (erase r)), `Record (field_env', rrow_var, false), usages
               end
         | ListLit (es, _) ->
             begin match List.map tc es with
               | [] ->
                   let t = Types.fresh_type_variable (lin_any, res_any) in
-                    ListLit ([], Some t), `Application (Types.list, [`Type t]), StringMap.empty
+                    ListLit ([], Some t), `Application (Types.list, [`Type t]), Usage.empty
               | e :: es ->
                   List.iter (fun e' -> unify ~handle:Gripers.list_lit (pos_and_typ e, pos_and_typ e')) es;
-                  ListLit (List.map erase (e::es), Some (typ e)), `Application (Types.list, [`Type (typ e)]), merge_usages (List.map usages (e::es))
+                  ListLit (List.map erase (e::es), Some (typ e)), `Application (Types.list, [`Type (typ e)]), Usage.combine_many (List.map usages (e::es))
             end
         | FunLit (argss_prev, lin, (pats, body), location) ->
             let vs = check_for_duplicate_names pos (List.flatten pats) in
@@ -2589,7 +2660,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 
             let () =
               Env.iter (fun v t ->
-                let uses = uses_of v (usages body) in
+                let uses = Usage.uses_of v (usages body) in
                   if uses <> 1 then
                     if Types.Unl.can_type_be t then
                       Types.Unl.make_type t
@@ -2599,16 +2670,17 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 
             let () =
               if DeclaredLinearity.is_nonlinear lin then
-                StringMap.iter (fun v _ ->
-                                if not (List.mem v vs) then
-                                  let t = Env.find v env' in
-                                  if Types.Unl.can_type_be t then
-                                    Types.Unl.make_type t
-                                  else
-                                    Gripers.die pos ("Variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t ^ " is used in a non-linear function literal."))
-                               (usages body)
-              else () in
-
+                Usage.iter
+                  (fun v _ ->
+                    if not (List.mem v vs) then
+                      let t = Env.find v env' in
+                      if Types.Unl.can_type_be t then
+                        Types.Unl.make_type t
+                      else
+                        Gripers.die pos ("Variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t ^ " is used in a non-linear function literal."))
+                  (usages body)
+              else ()
+            in
             let ftype = make_ft lin pats effects (typ body) in
 
             (* Ensure the previously inferred arguments types match up with the
@@ -2643,13 +2715,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 arg_types (ftype, curried_argument_count) in
 
             let e = FunLit (Some argss, lin, (List.map (List.map erase_pat) pats, erase body), location) in
-            e, ftype, StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body)
+            let vs' = List.fold_right Ident.Set.add vs Ident.Set.empty in
+            e, ftype, Usage.restrict (usages body) vs'
 
         | ConstructorLit (c, None, _) ->
             let type' = `Variant (Types.make_singleton_open_row
                                     (c, `Present Types.unit_type)
                                     (lin_any, res_any)) in
-              ConstructorLit (c, None, Some type'), type', StringMap.empty
+              ConstructorLit (c, None, Some type'), type', Usage.empty
 
         | ConstructorLit (c, Some v, _) ->
             let v = tc v in
@@ -2664,7 +2737,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             and args   = opt_map tc args
             and name   = tc name in
               DatabaseLit (erase name, (opt_map erase driver, opt_map erase args)), `Primitive Primitive.DB,
-              merge_usages [from_option StringMap.empty (opt_map usages driver); from_option StringMap.empty (opt_map usages args); usages name]
+              Usage.combine_many [from_option Usage.empty (opt_map usages driver); from_option Usage.empty (opt_map usages args); usages name]
         | TableLit (tname, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db) ->
             let tname = tc tname
             and db = tc db
@@ -2674,7 +2747,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             and () = unify ~handle:Gripers.table_keys (pos_and_typ keys, no_pos Types.keys_type) in
               TableLit (erase tname, (dtype, Some (read_row, write_row, needed_row)), constraints, erase keys, erase db),
               `Table (read_row, write_row, needed_row),
-              merge_usages [usages tname; usages db]
+              Usage.combine (usages tname) (usages db)
         | TableLit _ -> assert false
         | LensLit (table, _) ->
            relational_lenses_guard pos;
@@ -2683,7 +2756,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let cols = Lens_type_conv.sort_cols_of_table ~table:"" (typ table) in
            let lens_sort = Sort.make cols in
            let typ = Lens.Type.ConcreteLens lens_sort in
-           LensLit (erase table, Some typ), `Lens typ, merge_usages [usages table]
+           LensLit (erase table, Some typ), `Lens typ, usages table
         | LensKeysLit (table, keys, _) ->
            relational_lenses_guard pos;
            let open Lens in
@@ -2693,7 +2766,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let fds = Fun_dep.Set.key_fds ~keys ~cols:(Column.List.present_aliases columns) in
            let lens_sort = Sort.make ~fds columns in
            let typ = Lens.Type.ConcreteLens lens_sort in
-           LensLit (erase table, Some typ), `Lens typ, merge_usages [usages table]
+           LensLit (erase table, Some typ), `Lens typ, usages table
         | LensFunDepsLit (table, fds, _) ->
            relational_lenses_guard pos;
            let table = tc table in
@@ -2701,7 +2774,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let typ =
              Lens.Type.type_lens_fun_dep ~fds ~columns
              |> Lens_errors.unpack_type_lens_result ~die:(Gripers.die pos) in
-           LensLit (erase table, Some typ), `Lens typ, merge_usages [usages table]
+           LensLit (erase table, Some typ), `Lens typ, usages table
         | LensDropLit (lens, drop, key, default, _) ->
            relational_lenses_guard pos;
            let open Lens in
@@ -2714,7 +2787,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              let key = Alias.Set.singleton key in
              Type.type_drop_lens lens ~default ~drop ~key
              |> Lens_errors.unpack_type_drop_lens_result ~die:(Gripers.die pos) in
-           LensDropLit (erase lens, drop, key, erase default, Some typ), `Lens typ, merge_usages [usages lens; usages default]
+           LensDropLit (erase lens, drop, key, erase default, Some typ), `Lens typ, Usage.combine (usages lens) (usages default)
         | LensSelectLit (lens, predicate, _) ->
            relational_lenses_guard pos;
            let lens = tc lens in
@@ -2736,7 +2809,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                          |> Lens_errors.unpack_type_select_lens_result ~die:(Gripers.die pos) in
                typ
            in
-           LensSelectLit(erase lens, erase tpredicate, Some typ), `Lens typ, merge_usages [usages lens]
+           LensSelectLit(erase lens, erase tpredicate, Some typ), `Lens typ, usages lens
         | LensJoinLit (lens1, lens2, on, left, right, _) ->
            relational_lenses_guard pos;
            let lens1 = tc lens1
@@ -2749,7 +2822,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              let del_right = Lens_sugar_conv.lens_sugar_phrase_of_sugar right in
              Lens.Type.type_join_lens lens1 lens2 ~on ~del_left ~del_right
            |> Lens_errors.unpack_type_join_lens_result ~die:(Gripers.die pos) in
-           LensJoinLit (erase lens1, erase lens2, on, left, right, Some typ), `Lens typ, merge_usages [usages lens1; usages lens2]
+           LensJoinLit (erase lens1, erase lens2, on, left, right, Some typ), `Lens typ, Usage.combine (usages lens1) (usages lens2)
         | LensGetLit (lens, _) ->
            relational_lenses_guard pos;
            let lens = tc lens in
@@ -2757,7 +2830,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            Lens.Type.ensure_checked typ |> Lens_errors.unpack_lens_checked_result ~die:(Gripers.die pos);
            let sort = Lens.Type.sort typ in
            let trowtype = Lens.Sort.record_type sort |> Lens_type_conv.type_of_lens_phrase_type in
-           LensGetLit (erase lens, Some trowtype), Types.make_list_type trowtype, merge_usages [usages lens]
+           LensGetLit (erase lens, Some trowtype), Types.make_list_type trowtype, usages lens
         | LensCheckLit (lens, _) ->
           relational_lenses_guard pos;
            let lens = tc lens in
@@ -2774,7 +2847,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let trow = Lens.Type.sort typ |> Lens.Sort.record_type in
            let ltrow = Lens_type_conv.type_of_lens_phrase_type trow in
            unify (pos_and_typ data, (exp_pos lens, Types.make_list_type ltrow)) ~handle:Gripers.lens_put_input;
-           LensPutLit (erase lens, erase data, Some Types.unit_type), make_tuple_type [], merge_usages [usages lens; usages data]
+           LensPutLit (erase lens, erase data, Some Types.unit_type), make_tuple_type [], Usage.combine (usages lens) (usages data)
         | DBDelete (pat, from, where) ->
             let pat  = tpc pat in
             let from = tc from in
@@ -2787,7 +2860,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 
             let hide =
               let bs = Env.domain (pattern_env pat) in
-              StringMap.filter (fun b _ -> not (StringSet.mem b bs)) in
+              (fun usages -> Usage.restrict usages bs) in
 
             let inner_effects = Types.make_empty_closed_row () in
             let context' = bind_effects (context ++ pattern_env pat) inner_effects in
@@ -2806,7 +2879,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects))
             in
               DBDelete (erase_pat pat, erase from, opt_map erase where), Types.unit_type,
-              merge_usages [usages from; hide (from_option StringMap.empty (opt_map usages where))]
+              Usage.combine (usages from) (hide (from_option Usage.empty (opt_map usages where)))
         | DBInsert (into, labels, values, id) ->
             let into   = tc into in
             let values = tc values in
@@ -2879,7 +2952,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects))
             in
               DBInsert (erase into, labels, erase values, opt_map erase id), return_type,
-              merge_usages [usages into; usages values; from_option StringMap.empty (opt_map usages id)]
+              Usage.combine_many [usages into; usages values; from_option Usage.empty (opt_map usages id)]
         | DBUpdate (pat, from, where, set) ->
             let pat  = tpc pat in
             let from = tc from in
@@ -2891,7 +2964,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
 
             let hide =
               let bs = Env.domain (pattern_env pat) in
-              StringMap.filter (fun b _ -> not (StringSet.mem b bs)) in
+              (fun usages -> Usage.restrict usages bs)
+            in
 
             (* the pattern should match the read type *)
             let () = unify ~handle:Gripers.update_pattern (ppos_and_typ pat, no_pos read) in
@@ -2943,12 +3017,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             in
               DBUpdate (erase_pat pat, erase from, opt_map erase where, List.map (fun (n,(p,_,_)) -> n, p) set),
               Types.unit_type,
-              merge_usages (usages from :: hide (from_option StringMap.empty (opt_map usages where)) :: List.map hide (List.map (usages -<- snd) set))
+              Usage.combine_many (usages from :: hide (from_option Usage.empty (opt_map usages where)) :: List.map hide (List.map (usages -<- snd) set))
         | Query (range, policy, p, _) ->
             let open QueryPolicy in
             let range, outer_effects, range_usages =
               match range with
-                | None -> None, Types.make_empty_open_row default_effect_subkind, StringMap.empty
+                | None -> None, Types.make_empty_open_row default_effect_subkind, Usage.empty
                 | Some (limit, offset) ->
                     let limit = tc limit in
                     let () = unify ~handle:Gripers.range_bound (pos_and_typ limit, no_pos Types.int_type) in
@@ -2957,7 +3031,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                     let outer_effects =
                       Types.make_singleton_open_row ("wild", `Present Types.unit_type) default_effect_subkind
                     in
-                      Some (erase limit, erase offset), outer_effects, merge_usages [usages limit; usages offset] in
+                    Some (erase limit, erase offset), outer_effects, Usage.combine (usages limit) (usages offset)
+            in
             let inner_effects = Types.make_empty_closed_row () in
             let () = unify ~handle:Gripers.query_outer
               (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
@@ -2976,7 +3051,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                          (`Record (StringMap.empty,
                             Types.fresh_row_variable (lin_any, res_base), false)) in
                      unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape) in
-            Query (range, policy, erase p, Some (typ p)), typ p, merge_usages [range_usages; usages p]
+            Query (range, policy, erase p, Some (typ p)), typ p, Usage.combine (range_usages) (usages p)
         (* mailbox-based concurrency *)
         | Spawn (Wait, l, p, old_inner) ->
             assert (l = NoSpawnLocation);
@@ -3080,7 +3155,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let r = Types.make_empty_open_row (lin_any, res_session) in
              unify ~handle:Gripers.offer_variant (no_pos pattern_type, no_pos (`Variant r));
              unify ~handle:Gripers.offer_patterns (pos_and_typ e, no_pos (`Choice r));
-             Offer (erase e, erase_cases branches, Some body_type), body_type, merge_usages [usages e; usages_cases branches]
+             Offer (erase e, erase_cases branches, Some body_type), body_type, Usage.combine (usages e) (usages_cases branches)
 
         (* No comment *)
         | CP p ->
@@ -3095,7 +3170,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
               unify ~handle:Gripers.unary_apply
                 ((UnaryOp.to_string op, opt),
                  no_pos (`Function (Types.make_tuple_type [typ p], context.effect_row, rettyp)));
-              UnaryAppl ((tyargs, op), erase p), rettyp, merge_usages [usages p; op_usage]
+              UnaryAppl ((tyargs, op), erase p), rettyp, Usage.combine (usages p) op_usage
         | InfixAppl ((_, op), l, r) ->
             let tyargs, opt, op_usages = type_binary_op context op in
             let l = tc l
@@ -3105,7 +3180,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 ((BinaryOp.to_string op, opt),
                  no_pos (`Function (Types.make_tuple_type [typ l; typ r],
                                     context.effect_row, rettyp)));
-              InfixAppl ((tyargs, op), erase l, erase r), rettyp, merge_usages [usages l; usages r; op_usages]
+              InfixAppl ((tyargs, op), erase l, erase r), rettyp, Usage.combine_many [usages l; usages r; op_usages]
         | RangeLit (l, r) ->
             let l, r = tc l, tc r in
 	    let outer_effects =
@@ -3119,7 +3194,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                                                          no_pos (`Record outer_effects))
             in RangeLit (erase l, erase r),
                Types.make_list_type Types.int_type,
-               merge_usages [usages l; usages r]
+               Usage.combine (usages l) (usages r)
         | FnAppl (f, ps) ->
             let f = tc f in
             let ps = List.map (tc) ps in
@@ -3188,7 +3263,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                             ((exp_pos f, ft), no_pos (mkft (Types.make_tuple_type (List.map typ ps),
                                                             context.effect_row,
                                                             rettyp)));
-                          e, rettyp, merge_usages (usages f :: List.map usages ps)
+                          e, rettyp, Usage.combine_many (usages f :: List.map usages ps)
                        | _ -> assert false
                      end
                   | ft ->
@@ -3204,7 +3279,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                         | `Lolli _ -> unify ~handle:Gripers.fun_apply (term, lolt)
                         | _ -> unify_or ~handle:Gripers.fun_apply ~pos (term, funt) (term, lolt)
                       end;
-                      FnAppl (erase f, List.map erase ps), rettyp, merge_usages (usages f :: List.map usages ps)
+                      FnAppl (erase f, List.map erase ps), rettyp, Usage.combine_many (usages f :: List.map usages ps)
               end
         | TAbstr (qs, e) ->
             let e, t, u = tc e in
@@ -3267,10 +3342,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                    opt_map erase attrexp,
                    List.map erase children),
               Types.xml_type,
-              merge_usages (List.concat [ List.concat (List.map snd (alistmap (List.map usages) attrs));
-                                          [from_option StringMap.empty (opt_map usages attrexp)];
-                                          List.map usages children ])
-        | TextNode _ as t -> t, Types.xml_type, StringMap.empty
+              Usage.combine_many (List.concat [ List.concat (List.map snd (alistmap (List.map usages) attrs))
+                                              ; [ from_option Usage.empty (opt_map usages attrexp) ]
+                                              ;  List.map usages children ] )
+        | TextNode _ as t -> t, Types.xml_type, Usage.empty
         | Formlet (body, yields) ->
            let body = type_check context body in
            let env = extract_formlet_bindings (erase body) in
@@ -3281,7 +3356,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            unify ~handle:Gripers.formlet_body (pos_and_typ body, no_pos Types.xml_type);
            (Formlet (erase body, erase yields),
             Instantiate.alias "Formlet" [`Type (typ yields)] context.tycon_env,
-            merge_usages [usages body; StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages yields)])
+            Usage.combine (usages body) (Usage.restrict (usages yields) vs))
         | Page e ->
             let e = tc e in
               unify ~handle:Gripers.page_body (pos_and_typ e, no_pos Types.xml_type);
@@ -3300,7 +3375,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             let () = unify ~handle:Gripers.render_attributes
               (pos_and_typ attributes, no_pos (Instantiate.alias "Attributes" [] context.tycon_env))
             in
-              FormletPlacement (erase f, erase h, erase attributes), Types.xml_type, merge_usages [usages f; usages h; usages attributes]
+              FormletPlacement (erase f, erase h, erase attributes), Types.xml_type, Usage.combine_many [usages f; usages h; usages attributes]
         | PagePlacement e ->
             let e = tc e in
             let pt = Instantiate.alias "Page" [] context.tycon_env in
@@ -3381,13 +3456,16 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   (pos_and_typ body, no_pos (Types.make_list_type (`Record (Types.make_empty_open_row (lin_unl, res_base))))) in
             let e = Iteration (generators, erase body, opt_map erase where, opt_map erase orderby) in
             let vs = List.fold_left StringSet.union StringSet.empty (List.map Env.domain environments) in
-            let us = merge_usages (List.append generator_usages
-                                               (List.map (StringMap.filter (fun v _ -> not (StringSet.mem v vs)))
-                                                         [usages body; from_option StringMap.empty (opt_map usages where); from_option StringMap.empty (opt_map usages orderby)])) in
-              if is_query then
-                Query (None, QueryPolicy.Default, with_pos pos e, Some (typ body)), typ body, us
-              else
-                e, typ body, us
+            let us = Usage.combine_many
+                       (List.append generator_usages
+                          (List.map (fun usages -> Usage.restrict usages vs)
+                             [ usages body
+                             ; from_option Usage.empty (opt_map usages where)
+                             ; from_option Usage.empty (opt_map usages orderby) ]))
+            in
+            if is_query
+            then Query (None, QueryPolicy.Default, with_pos pos e, Some (typ body)), typ body, us
+            else e, typ body, us
         | Escape (bndr, e) ->
             (* There's a question here whether to generalise the
                return type of continuations.  With `escape'
@@ -3430,7 +3508,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                   (no_pos (`Record context.effect_row), no_pos (`Record outer_effects)) in
 
             let () = unify ~handle:Gripers.escape (pos_and_typ e, no_pos f) in
-              Escape (Binder.set_type bndr cont_type, erase e), typ e, StringMap.filter (fun v _ -> v <> name) (usages e)
+              Escape (Binder.set_type bndr cont_type, erase e), typ e, Usage.restrict (usages e) (StringSet.singleton name)
         | Conditional (i,t,e) ->
             let i = tc i
             and t = tc t
@@ -3439,7 +3517,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 (pos_and_typ i, no_pos (`Primitive Primitive.Bool));
               unify ~handle:Gripers.if_branches
                 (pos_and_typ t, pos_and_typ e);
-              Conditional (erase i, erase t, erase e), (typ t), merge_usages [usages i; usage_compat [usages t; usages e]]
+              Conditional (erase i, erase t, erase e), (typ t), Usage.combine (usages i) (Usage.align [usages t; usages e])
         | Block (bindings, e) ->
             let context', bindings, usage_builder = type_bindings context bindings in
             let e = type_check (Types.extend_typing_environment context context') e in
@@ -3447,7 +3525,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
         | Regex r ->
             Regex (type_regex context r),
             Instantiate.alias "Regex" [] context.tycon_env,
-            StringMap.empty
+            Usage.empty
         | Projection (r,l) ->
             (*
               Take advantage of the type isomorphism:
@@ -3550,7 +3628,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                    else t)
                 rfields
             in
-              With (erase r, alistmap erase fields), `Record (rfields, row_var, false), merge_usages (usages r :: List.map usages (range fields))
+              With (erase r, alistmap erase fields), `Record (rfields, row_var, false), Usage.combine_many (usages r :: List.map usages (range fields))
         | TypeAnnotation (e, (_, Some t as dt)) ->
             let e = tc e in
               unify ~handle:Gripers.type_annotation (pos_and_typ e, no_pos t);
@@ -3781,7 +3859,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                           (pos_and_typ body, no_pos bt) in
                    let vs = Env.domain (pattern_env pat) in
                    let vs' = Env.domain henv.var_env in
-                   let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs || StringSet.mem v vs')) (usages body) in
+                   let us =
+                     let vs'' = Ident.Set.union vs vs' in
+                     Usage.restrict (usages body) vs''
+                   in
                    (pat, update_usages body us) :: cases)
                  val_cases []
              in
@@ -3795,7 +3876,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                    in
                    let vs = Env.domain (pattern_env pat) in
                    let vs' = Env.domain henv.var_env in
-                   let us = StringMap.filter (fun v _ -> not (StringSet.mem v vs || StringSet.mem v vs')) (usages body) in
+                   let us =
+                     let vs'' = Ident.Set.union vs vs' in
+                     Usage.restrict (usages body) vs''
+                   in
                    let () =
                      let pos' = (fst3 kpat) |> WithPos.pos |> Position.resolve_expression in
                      let kt = TypeUtils.return_type (pattern_typ kpat) in
@@ -3869,10 +3953,16 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                          shd_types = (Types.flatten_row inner_eff, typ m, Types.flatten_row outer_eff, body_type);
                          shd_raw_row = Types.make_empty_closed_row (); }
            in
+           let usages =
+             Usage.combine_many [ Usage.align (List.map (fun (_,(_, _, m)) -> m) params)
+                                ; usages m
+                                ; usages_cases eff_cases
+                                ; usages_cases val_cases ]
+           in
            Handle { sh_expr = erase m;
                     sh_effect_cases = erase_cases eff_cases;
                     sh_value_cases = erase_cases val_cases;
-                    sh_descr = descr }, body_type, merge_usages [usage_compat (List.map (fun (_,(_, _, m)) -> m) params); usages m; usages_cases eff_cases; usages_cases val_cases]
+                    sh_descr = descr }, body_type, usages
         | DoOperation (opname, args, _) ->
            (* Strategy:
               1. List.map tc args
@@ -3897,12 +3987,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
            let () = unify ~handle:Gripers.do_operation
              (no_pos (`Effect context.effect_row), (p, `Effect row))
            in
-             (DoOperation (opname, List.map erase args, Some return_type), return_type, StringMap.empty)
+             (DoOperation (opname, List.map erase args, Some return_type), return_type, Usage.combine_many (List.map usages args))
         | Switch (e, binders, _) ->
             let e = tc e in
             let binders, pattern_type, body_type = type_cases binders in
             let () = unify ~handle:Gripers.switch_pattern (pos_and_typ e, no_pos pattern_type) in
-              Switch (erase e, erase_cases binders, Some body_type), body_type, merge_usages [usages e; usages_cases binders]
+              Switch (erase e, erase_cases binders, Some body_type), body_type, Usage.combine (usages e) (usages_cases binders)
         | TryInOtherwise (try_phrase, pat, in_phrase, unless_phrase, _) ->
            (* Ensure that the body of the try has the SessionFail
               effect and that the remaining effects agree with the
@@ -3937,7 +4027,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
              * able to be made unrestricted *)
             let () =
               Env.iter (fun v t ->
-                let uses = uses_of v (usages in_phrase) in
+                let uses = Usage.uses_of v (usages in_phrase) in
                 if uses <> 1 then
                   if Types.Unl.can_type_be t then
                     Types.Unl.make_type t
@@ -3952,36 +4042,39 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
                 (pos_and_typ in_phrase, pos_and_typ unless_phrase);
 
             (* in_usages: usages in the in_phrase *not* bound in the pattern *)
-            let in_usages = StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages in_phrase) in
+            let in_usages = Usage.restrict (usages in_phrase) vs in
 
             (* Now, we need to ensure that all variables used in the in- and unless-
              * phrases are unrestricted (apart from the pattern variables!) *)
             let () =
-              StringMap.iter (fun v n ->
-                if n == 0 then () else
-                if Env.has v (pattern_env pat) then () else
-                  let ty = Env.find v context.var_env in
-                  if Types.Unl.can_type_be ty then
-                    Types.Unl.make_type ty
-                  else
-                    Gripers.try_in_unless_linearity pos v
-              ) (usages in_phrase) in
-
+              Usage.iter
+                (fun v n ->
+                  if n = 0 then () else
+                    if Env.has v (pattern_env pat) then () else
+                      let ty = Env.find v context.var_env in
+                      if Types.Unl.can_type_be ty then
+                        Types.Unl.make_type ty
+                      else
+                        Gripers.try_in_unless_linearity pos v
+                ) (usages in_phrase)
+            in
             let () =
-              StringMap.iter (fun v n ->
-                if n == 0 then () else
-                let ty = Env.find v context.var_env in
-                  if Types.Unl.can_type_be ty then
-                    Types.Unl.make_type ty
-                  else
-                    Gripers.try_in_unless_linearity pos v
-              ) (usages unless_phrase) in
+              Usage.iter
+                (fun v n ->
+                  if n = 0 then () else
+                    let ty = Env.find v context.var_env in
+                    if Types.Unl.can_type_be ty then
+                      Types.Unl.make_type ty
+                    else
+                      Gripers.try_in_unless_linearity pos v)
+                (usages unless_phrase)
+            in
 
 
             (* Calculate resulting usages *)
             let usages_res =
-              merge_usages [usages try_phrase;
-              (usage_compat [in_usages; (usages unless_phrase)])] in
+              Usage.combine (usages try_phrase) (Usage.align [in_usages; (usages unless_phrase)])
+            in
 
             let return_type = typ in_phrase in
 
@@ -3996,7 +4089,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
             in
             unify ~handle:Gripers.raise_effect
               (no_pos (`Effect context.effect_row), (Position.resolve_expression pos, `Effect effects));
-            (Raise, Types.fresh_type_variable (lin_any, res_any), StringMap.empty)
+            (Raise, Types.fresh_type_variable (lin_any, res_any), Usage.empty)
     in with_pos pos e, t, usages
 
 (* [type_binding] takes XXX YYY (FIXME)
@@ -4008,7 +4101,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * usagemap =
     The result includes the introduced bindings, along with the variable
     usage map from the binder's body.
  *)
-and type_binding : context -> binding -> binding * context * usagemap =
+and type_binding : context -> binding -> binding * context * Usage.t =
   fun context {node = def; pos} ->
     let _UNKNOWN_POS_ = "<unknown>" in
     let no_pos t = (_UNKNOWN_POS_, t) in
@@ -4120,28 +4213,29 @@ and type_binding : context -> binding -> binding * context * usagemap =
           let () = List.iter
                      (fun pat ->
                       Env.iter (fun v t ->
-                        let uses = uses_of v (usages body) in
+                        let uses = Usage.uses_of v (usages body) in
                         if uses <> 1 then
                           if Types.Unl.can_type_be t then
                             Types.Unl.make_type t
                           else
                             Gripers.non_linearity pos uses v t)
                                (pattern_env pat))
-                     (List.flatten pats) in
-
+                     (List.flatten pats)
+          in
           let () =
             if DeclaredLinearity.is_nonlinear lin then
-              StringMap.iter (fun v _ ->
-                              if not (List.mem v vs) then
-                                let t = Env.find v context_body.var_env in
-                                if Types.Unl.can_type_be t then
-                                  Types.Unl.make_type t
-                                else
-                                  Gripers.die pos ("Variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t ^
-                                                     " was used in a non-linear function definition"))
-                             (usages body)
-            else () in
-
+              Usage.iter
+                (fun v _ ->
+                  if not (List.mem v vs) then
+                    let t = Env.find v context_body.var_env in
+                    if Types.Unl.can_type_be t then
+                      Types.Unl.make_type t
+                    else
+                      Gripers.die pos ("Variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t ^
+                                         " was used in a non-linear function definition"))
+                (usages body)
+            else ()
+          in
           (* Check that quantifiers have not escaped into the typing context *)
           let check_escaped_quantifiers quantifiers env =
             let quantifier_set = IntSet.of_list (List.map fst quantifiers) in
@@ -4194,6 +4288,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                end in
 
           (* let ft = Instantiate.freshen_quantifiers ft in *)
+          let vs' = List.fold_right Ident.Set.add vs Ident.Set.empty in
           (Fun { fun_binder = Binder.set_type bndr ft;
                  fun_linearity = lin;
                  fun_definition = (tyvars, (List.map (List.map erase_pat) pats, erase body));
@@ -4201,7 +4296,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                  fun_location; fun_signature = t_ann'; fun_unsafe_signature = unsafe },
              {empty_context with
                 var_env = Env.singleton name ft},
-             StringMap.filter (fun v _ -> not (List.mem v vs)) (usages body))
+             Usage.restrict (usages body) vs')
       | Funs defs ->
           (*
             Compute initial types for the functions using
@@ -4310,7 +4405,7 @@ and type_binding : context -> binding -> binding * context * usagemap =
                       let () =
                         Env.iter
                           (fun v t ->
-                            let uses = uses_of v (usages body) in
+                            let uses = Usage.uses_of v (usages body) in
                               if uses <> 1 then
                                 begin
                                   if Types.Unl.can_type_be t then
@@ -4322,17 +4417,19 @@ and type_binding : context -> binding -> binding * context * usagemap =
                       let used =
                         let vs = StringSet.add name (Env.domain pat_env) in
                         if DeclaredLinearity.is_nonlinear lin then
-                          StringMap.iter (fun v _ ->
-                                          if not (StringSet.mem v vs) then
-                                            let t = Env.find v body_context.var_env in
-                                            if Types.Unl.can_type_be t then
-                                              Types.Unl.make_type t
-                                            else
-                                              Gripers.die pos ("Use of variable " ^ v ^ " of linear type " ^
-                                                                 Types.string_of_datatype t ^ " in unlimited function binding.")
-                                          else ())
-                                         (usages body);
-                        StringMap.filter (fun v _ -> not (StringSet.mem v vs)) (usages body) in
+                          Usage.iter
+                            (fun v _ ->
+                              if not (Ident.Set.mem v vs) then
+                                let t = Env.find v body_context.var_env in
+                                if Types.Unl.can_type_be t then
+                                  Types.Unl.make_type t
+                                else
+                                  Gripers.die pos ("Use of variable " ^ v ^ " of linear type " ^
+                                                     Types.string_of_datatype t ^ " in unlimited function binding.")
+                              else ())
+                            (usages body);
+                        Usage.restrict (usages body) vs
+                      in
 
                       (* check that the inferred type doesn't contradict any type annotation *)
                       let shape = make_ft lin pats effects (typ body) in
@@ -4429,19 +4526,20 @@ and type_binding : context -> binding -> binding * context * usagemap =
             in
               List.rev defs, outer_env in
 
-          let defined = List.map (fun x -> Binder.to_name x.node.rec_binder) defs
-
+          let defined =
+            let vs = List.map (fun x -> Binder.to_name x.node.rec_binder) defs in
+            List.fold_right Ident.Set.add vs Ident.Set.empty
           in
-            Funs defs, {empty_context with var_env = outer_env}, (StringMap.filter (fun v _ -> not (List.mem v defined)) (merge_usages used))
+          Funs defs, {empty_context with var_env = outer_env}, Usage.restrict (Usage.combine_many used) defined
 
       | Foreign (bndr, raw_name, language, file, (dt1, Some datatype)) ->
           ignore (if String.contains (Binder.to_name bndr) '\'' then raise (Errors.prime_alien pos));
           (* Ensure that we quantify FTVs *)
           let (_tyvars, _args), datatype = Utils.generalise context.var_env datatype in
           let datatype = Instantiate.freshen_quantifiers datatype in
-          (Foreign (Binder.set_type bndr datatype, raw_name, language, file, (dt1, Some datatype)),
-           (bind_var empty_context (Binder.to_name bndr, datatype)),
-           StringMap.empty)
+          ( Foreign (Binder.set_type bndr datatype, raw_name, language, file, (dt1, Some datatype))
+           , (bind_var empty_context (Binder.to_name bndr, datatype))
+           , Usage.empty )
       | Foreign _ -> assert false
       | Typenames ts ->
           let env = List.fold_left (fun env {node=(name, vars, (_, dt')); _} ->
@@ -4450,8 +4548,8 @@ and type_binding : context -> binding -> binding * context * usagemap =
                     bind_tycon env (name, `Alias (List.map (snd ->- val_of) vars, dt))
                 | None -> raise (internal_error "typeSugar.ml: unannotated type")
           ) empty_context ts in
-          (Typenames ts, env, StringMap.empty)
-      | Infix -> Infix, empty_context, StringMap.empty
+          (Typenames ts, env, Usage.empty)
+      | Infix -> Infix, empty_context, Usage.empty
       | Exp e ->
           let e = tc e in
           let () = unify pos ~handle:Gripers.bind_exp
@@ -4493,31 +4591,33 @@ and type_bindings (globals : context)  bindings =
          result_ctxt, (binding::bindings, (binding.pos,ctxt'.var_env,usage)::uinf))
       (empty_context globals.effect_row globals.desugared, ([], [])) bindings in
   let usage_builder body_usage =
-    List.fold_left (fun usages (pos,env,usage) ->
-                    let vs = Env.domain env in
-                    Env.iter
-                      (fun v t ->
-                        let uses = uses_of v usages in
-                          if uses <> 1 then
-                            if Types.Unl.can_type_be t then
-                              Types.Unl.make_type t
-                            else
-                              Gripers.non_linearity pos uses v t)
-                      env;
-                    merge_usages [usage; StringMap.filter (fun v _ -> not (StringSet.mem v vs)) usages])
-                   body_usage uinf
+    List.fold_left
+      (fun usages (pos,env,usage) ->
+        let vs = Env.domain env in
+        Env.iter
+          (fun v t ->
+            let uses = Usage.uses_of v usages in
+            if uses <> 1 then
+              if Types.Unl.can_type_be t then
+                Types.Unl.make_type t
+              else
+                Gripers.non_linearity pos uses v t)
+          env;
+        Usage.combine usage (Usage.restrict usages vs))
+      body_usage uinf
   in
-    tyenv, List.rev bindings, usage_builder
+  tyenv, List.rev bindings, usage_builder
 and type_cp (context : context) = fun {node = p; pos} ->
   let with_channel = fun c s (p, t, u) ->
-    if uses_of c u <> 1 then
+    if Usage.uses_of c u <> 1 then
       if Types.Unl.can_type_be s then
         Types.Unl.make_type s
       else
-        Gripers.non_linearity pos (uses_of c u) c s;
-    (p, t, StringMap.remove c u) in
+        Gripers.non_linearity pos (Usage.uses_of c u) c s;
+    (p, t, Usage.remove c u)
+  in
 
-  let use s u = StringMap.add s 1 u in
+  let use s u = Usage.incr ~by:1 s u in
 
   let unify ~pos ~handle (t, u) = unify_or_raise ~pos:pos ~handle:handle (("<unknown>", t), ("<unknown>", u)) in
 
@@ -4546,7 +4646,7 @@ and type_cp (context : context) = fun {node = p; pos} ->
        unify ~pos:pos ~handle:(Gripers.cp_grab c)
              (t, ctype);
        let (p, pt, u) = with_channel c s (type_cp (bind_var (bind_var context (c, s)) (x, a)) p) in
-       let uses = uses_of x u in
+       let uses = Usage.uses_of x u in
        if uses <> 1 then
          if Types.Unl.can_type_be a then
            Types.Unl.make_type a
@@ -4564,7 +4664,7 @@ and type_cp (context : context) = fun {node = p; pos} ->
               | _ -> assert false
             end
          | _ -> assert false in
-       CPGrab ((c, Some (ctype, tyargs)), Some (Binder.set_type bndr a), p), pt, use c (StringMap.remove x u)
+       CPGrab ((c, Some (ctype, tyargs)), Some (Binder.set_type bndr a), p), pt, use c (Usage.remove x u)
     | CPGive ((c, _), None, p) ->
        let (_, t, _) = type_check context (with_pos pos (Var c)) in
        let ctype = `Output (Types.unit_type, `End) in
@@ -4592,12 +4692,12 @@ and type_cp (context : context) = fun {node = p; pos} ->
               | _ -> assert false
             end
          | _ -> assert false in
-       CPGive ((c, Some (ctype, tyargs)), Some e, p), t, use c (merge_usages [u; u'])
+       CPGive ((c, Some (ctype, tyargs)), Some e, p), t, use c (Usage.combine u u')
     | CPGiveNothing bndr ->
        let c = Binder.to_name bndr in
        let _, t, _ = type_check context (var c) in
        unify ~pos:pos ~handle:Gripers.(cp_give c) (t, Types.make_endbang_type);
-       CPGiveNothing (Binder.set_type bndr t), t, StringMap.singleton c 1
+       CPGiveNothing (Binder.set_type bndr t), t, Usage.singleton c
     | CPSelect (bndr, label, p) ->
        let c = Binder.to_name bndr in
        let (_, t, _) = type_check context (var c) in
@@ -4622,12 +4722,12 @@ and type_cp (context : context) = fun {node = p; pos} ->
          let r = Types.make_singleton_open_row (label, `Present s) (lin_any, res_session) in
          unify ~pos:pos ~handle:(Gripers.cp_offer_choice c) (t, `Choice r);
          let (p, t, u) = with_channel c s (type_cp (bind_var context (c, s)) body) in
-         (label, p), t, u in
+         (label, p), t, u
+       in
        let branches = List.map check_branch branches in
        let t' = Types.fresh_type_variable (lin_any, res_any) in
        List.iter (fun (_, t, _) -> unify ~pos:pos ~handle:Gripers.cp_offer_branches (t, t')) branches;
-       let u = usage_compat (List.map (fun (_, _, u) -> u) branches) in
-
+       let u = Usage.align (List.map (fun (_, _, u) -> u) branches) in
        CPOffer (Binder.set_type bndr t, List.map (fun (x, _, _) -> x) branches), t', use c u
     | CPLink (bndr1, bndr2) ->
       let c = Binder.to_name bndr1 in
@@ -4639,14 +4739,15 @@ and type_cp (context : context) = fun {node = p; pos} ->
         unify ~pos:pos ~handle:Gripers.cp_link_session
           (td, Types.fresh_type_variable (lin_any, res_session));
         unify ~pos:pos ~handle:Gripers.cp_link_dual (Types.dual_type tc, td);
-        CPLink (Binder.set_type bndr1 tc, Binder.set_type bndr1 td), Types.make_endbang_type, merge_usages [uc; ud]
+        CPLink (Binder.set_type bndr1 tc, Binder.set_type bndr1 td), Types.make_endbang_type, Usage.combine uc ud
     | CPComp (bndr, left, right) ->
        let c = Binder.to_name bndr in
        let s = Types.fresh_session_variable lin_any in
        let left, t, u = with_channel c s (type_cp (bind_var context (c, s)) left) in
        let right, t', u' = with_channel c (`Dual s) (type_cp (bind_var context (c, `Dual s)) right) in
        unify ~pos:pos ~handle:Gripers.cp_comp_left (Types.make_endbang_type, t);
-       CPComp (Binder.set_type bndr s, left, right), t', merge_usages [u; u'] in
+       CPComp (Binder.set_type bndr s, left, right), t', Usage.combine u u'
+  in
   WithPos.make ~pos p, t, u
 
 let type_check_general context body =
