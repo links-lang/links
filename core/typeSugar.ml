@@ -1623,20 +1623,38 @@ module Usage: sig
   [@ocaml.warning "-32"]
   type t
 
+  (* Empty usage container. *)
   val empty : t
+  (* Adds an entry to a given container. Any preexisting entry with
+     the same identifier will be overwritten. *)
   val add : Ident.t -> int -> t -> t
+  (* Removes an entry from a given container. *)
   val remove : Ident.t -> t -> t
+  (* Tests whether an entry exists. *)
   val mem : Ident.t -> t -> bool
+  (* Returns the uses of an identifier. Returns 0 if `mem` returns
+     false. *)
   val uses_of : Ident.t -> t -> int
+  (* Increments the usage of an identifier by a positive amount. *)
   val incr : ?by:int -> Ident.t -> t -> t
-  val singleton : Ident.t -> t
+  (* Constructs a new container with a single usage mapping. *)
+  val singleton : ?count:int -> Ident.t -> t
+  (* Combines two containers. *)
   val combine : t -> t -> t
+  (* Combines many containers. *)
   val combine_many : t list -> t
+  (* Returns the contents of the container as an association list. *)
   val bindings : t -> (Ident.t * int) list
+  (* Merges two containers. *)
   val merge : (Ident.t -> int option -> int option -> int option) -> t -> t -> t
+  (* Filters entries in a given container. *)
   val filter : (Ident.t -> int -> bool) -> t -> t
+  (* Iterates over entries in a given container. *)
   val iter : (Ident.t -> int -> unit) -> t -> unit
+  (* Returns a usage container that does not contain any of the names
+     in the given set. *)
   val restrict : t -> Ident.Set.t -> t
+  (* Aligns disjunctive uses of variables. *)
   val align : t list -> t
 end = struct
   type t = int Ident.Map.t
@@ -1664,8 +1682,8 @@ end = struct
     in
     Ident.Map.add v (uses + by) usages
 
-  let singleton v =
-    incr ~by:1 v empty
+  let singleton ?(count=1) v =
+    incr ~by:count v empty
 
   let combine usages usages' =
     Ident.Map.merge
@@ -1692,7 +1710,6 @@ end = struct
   let iter f usages =
     Ident.Map.iter f usages
 
-  (* Think of name restriction from CCS. *)
   let restrict usages idents =
     filter (fun v _ -> not (Ident.Set.mem v idents)) usages
 
