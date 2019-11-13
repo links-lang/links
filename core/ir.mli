@@ -64,7 +64,9 @@ and binding =
   | Let        of binder * (tyvar list * tail_computation)
   | Fun        of fun_def
   | Rec        of fun_def list
-  | Alien      of binder * string * ForeignLanguage.t
+  | Alien      of { binder: binder;
+                    language: ForeignLanguage.t;
+                    object_name: string }
   | Module     of string * binding list option
 and special =
   | Wrong      of Types.datatype

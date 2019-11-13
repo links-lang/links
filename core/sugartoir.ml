@@ -333,7 +333,7 @@ struct
 
     let alien_binding (x_info, object_name, language) =
       let xb, x = Var.fresh_var x_info in
-        lift_binding (Alien (xb, object_name, language)) x
+      lift_binding (Alien { binder = xb; object_name; language }) x
 
     let value_of_untyped_var (s, t) =
       M.bind s (fun x -> lift (Variable x, t))
@@ -1241,7 +1241,10 @@ struct
                           | Scope.Local ->
                               partition (globals, b::locals, nenv) bs
                       end
-                | Alien ((f, (_ft, f_name, Scope.Global)), _, _) ->
+                | Alien { binder; _ }
+                     when Var.Scope.isGlobal (Var.scope_of_binder binder) ->
+                   let f = Var.var_of_binder binder in
+                   let f_name = Var.name_of_binder binder in
                     partition (b::locals @ globals, [], Env.String.bind f_name f nenv) bs
                 | _ -> partition (globals, b::locals, nenv) bs
             end in
