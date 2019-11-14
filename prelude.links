@@ -1420,3 +1420,62 @@ fun serveThese(routes) {
   var _ = map(fun ((s,p)) {addRoute(s,fun (_) {p()})}, routes);
   servePages()
 }
+
+# Operations on (ASCII) characters
+sig isLower : (Char) -> Bool
+fun isLower(ch) {
+  var c = ord(ch);
+  (97 <= c && c <= 122) # ord('a') = 97, ord('z') = 122
+}
+
+sig isUpper : (Char) -> Bool
+fun isUpper(ch) {
+  var c = ord(ch);
+  (65 <= c && c <= 90) # ord('A') = 65, ord('Z') = 90
+}
+
+sig isAlpha : (Char) -> Bool
+fun isAlpha(ch) {
+  isLower(ch) || isUpper(ch)
+}
+
+sig isDigit : (Char) -> Bool
+fun isDigit(ch) {
+  var c = ord(ch);
+  (48 <= c && c <= 57)
+}
+
+sig isAlnum : (Char) -> Bool
+fun isAlnum(ch) {
+ isAlpha(ch) || isDigit(ch)
+}
+
+sig isXDigit : (Char) -> Bool
+fun isXDigit(ch) {
+  isDigit(ch)
+  || ({ var c = ord(ch);
+        (65 <= c && c <= 70)        # ord('F') = 70
+        || (97 <= c && c <= 102) }) # ord('f') = 102
+}
+
+sig isBlank : (Char) -> Bool
+fun isBlank(ch) {
+  var c = ord(ch);
+  c == 32 || c == 9 # ord(' ') = 32, ord('\t') = 9
+}
+
+# Implements the behaviour of Char.uppercase_ascii in OCaml.
+sig toUpper : (Char) -> Char
+fun toUpper(ch) {
+  if (isLower(ch)) {
+    chr(ord(ch) - 32)
+  } else ch
+}
+
+# Implements the behaviour of Char.lowercase_ascii in OCaml.
+sig toLower : (Char) -> Char
+fun toLower(ch) {
+  if (isUpper(ch)) {
+    chr(ord(ch) + 32)
+  } else ch
+}
