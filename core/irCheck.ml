@@ -1231,9 +1231,9 @@ struct
             Rec defs, o
 
 
-        | Alien (x, name, language) ->
-            let x, o = o#binder x in
-              Alien (x, name, language), o
+        | Alien { binder; object_name; language } ->
+           let x, o = o#binder binder in
+           Alien { binder = x; object_name; language }, o
 
         | Module (name, defs) ->
             let defs, o =
@@ -1273,7 +1273,7 @@ struct
                   o#remove_function_closure_binder f)
                 o
                 fundefs
-      | Alien (binder, _, _) -> o#remove_binder binder
+      | Alien { binder; _ } -> o#remove_binder binder
       | Module _ -> o
 
     method remove_bindings : binding list -> 'self_type =

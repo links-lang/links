@@ -4548,15 +4548,21 @@ and type_binding : context -> binding -> binding * context * Usage.t =
           in
           Funs defs, {empty_context with var_env = outer_env}, Usage.restrict (Usage.combine_many used) defined
 
-      | Foreign (bndr, raw_name, language, file, (dt1, Some datatype)) ->
-          ignore (if String.contains (Binder.to_name bndr) '\'' then raise (Errors.prime_alien pos));
-          (* Ensure that we quantify FTVs *)
-          let (_tyvars, _args), datatype = Utils.generalise context.var_env datatype in
-          let datatype = Instantiate.freshen_quantifiers datatype in
-          ( Foreign (Binder.set_type bndr datatype, raw_name, language, file, (dt1, Some datatype))
-           , (bind_var empty_context (Binder.to_name bndr, datatype))
-           , Usage.empty )
-      | Foreign _ -> assert false
+      | Foreign alien ->
+         let binder, dt, datatype =
+           match Alien.declaration alien with
+           | (b, (dt, Some datatype)) -> (b, dt, datatype)
+           | _ -> assert false
+         in
+         ignore (if String.contains (Binder.to_name binder) '\''
+                 then raise (Errors.prime_alien pos));
+         (* Ensure that we quantify FTVs *)
+         let (_tyvars, _args), datatype = Utils.generalise context.var_env datatype in
+         let datatype = Instantiate.freshen_quantifiers datatype in
+         let binder = Binder.set_type binder datatype in
+         ( Foreign (Alien.modify ~declarations:[(binder, (dt, Some datatype))] alien)
+         , bind_var empty_context (Binder.to_name binder, datatype)
+         , Usage.empty )
       | Typenames ts ->
           let env = List.fold_left (fun env {node=(name, vars, (_, dt')); _} ->
               match dt' with

@@ -463,20 +463,26 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
          let pat' = self#pattern pat in
          let dt' = self#option (fun o -> o#datatype') dt in
          Val (pat', (tvs, body'), loc, dt')
-      | Foreign (bndr, raw_name, lang, ext_file, dt) ->
-         let dt' = self#datatype' dt in
-         let bndr' = self#binder bndr in
-         Foreign (bndr', raw_name, lang, ext_file, dt')
-      | AlienBlock (lang, lib, decls) ->
+      | Foreign alien ->
+         let declarations =
+           self#list
+             (fun o (b, dt) ->
+               let dt = o#datatype' dt in
+               let b = o#binder b in
+               (b, dt))
+             (Alien.declarations alien)
+         in
+         Foreign (Alien.modify ~declarations alien)
+      | AlienBlock aliendecls ->
          let decls' =
            self#list
              (fun o (bndr, dt) ->
                let dt' = o#datatype' dt in
                let bndr' = o#binder bndr in
                (bndr', dt'))
-             decls
+             Alien.(declarations aliendecls)
          in
-         AlienBlock (lang, lib, decls')
+         AlienBlock (Alien.modify ~declarations:decls' aliendecls)
       | Module _ | Import _ | Open _ -> assert false (* Should have been processed by this point. *)
       | b -> super#bindingnode b
 
