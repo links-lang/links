@@ -366,9 +366,6 @@ struct
             | Location.Client ->
               raise (Errors.runtime_error ("Attempt to use client function: " ^
                 Js.var_name_binder (f, finfo) ^ " in query"))
-            | Location.Native ->
-              raise (Errors.runtime_error ("Attempt to use native function: " ^
-                Var.show_binder (f, finfo) ^ " in query"))
           end
       end
     | None -> None
@@ -691,7 +688,7 @@ struct
               | Let (xb, (_, tc)) ->
                   let x = Var.var_of_binder xb in
                     computation (bind env (x, tail_computation env tc)) (bs, tailcomp)
-              | Fun (_, _, _, (Location.Client | Location.Native)) ->
+              | Fun (_, _, _, Location.Client) ->
                   eval_error "Client function"
               | Fun ((f, _), _, _, _) ->
                 (* This should never happen now that we have closure conversion*)
