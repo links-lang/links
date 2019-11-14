@@ -232,9 +232,10 @@ struct
                 defs in
 
             o#close_cont (IntSet.union fvs fvs') bs
-        | Alien (f, _, _language)::bs ->
-            let fvs = IntSet.remove (Var.var_of_binder f) fvs in
-              o#close_cont fvs bs
+        | Alien { binder; _ } :: bs ->
+           let f = Var.var_of_binder binder in
+           let fvs = IntSet.remove f fvs in
+           o#close_cont fvs bs
         | Module _::_ ->
             assert false
 

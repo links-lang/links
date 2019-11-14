@@ -54,3 +54,4 @@ val driver_locate_failure : string -> exn
 val illformed_plugin_description : string -> exn
 val dependency_load_failure : string -> Dynlink.error -> exn
 val load_failure : string -> Dynlink.error -> exn
+val client_call_outside_webmode : string -> exn

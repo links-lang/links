@@ -38,10 +38,17 @@ object(self)
   method get_bindings = List.rev bindings
 
   method! binding = function
-    | {node=AlienBlock (lang, lib, decls); _} ->
-        self#list (fun o ((bnd, dt)) ->
-          let name = Binder.to_name bnd in
-          o#add_binding (with_dummy_pos (Foreign (bnd, name, lang, lib, dt)))) decls
+    | {node=AlienBlock alien; _} ->
+       self#list
+         (fun o ((bnd, dt)) ->
+           let alien =
+             Foreign (Alien.single
+                        (Alien.language alien)
+                        (Alien.object_file alien)
+                        bnd dt)
+           in
+           o#add_binding (with_dummy_pos alien))
+      (Alien.declarations alien)
     | {node=Module ({ members; _ } as module') ; _} ->
         let flattened_bindings =
           List.concat (
