@@ -346,6 +346,7 @@ interactive:
 | END                                                          { Directive ("quit", []) (* rather hackish *) }
 
 file:
+| END                                                          { ([], None) }
 | declarations exp? END                                        { ($1, $2     ) }
 | exp END                                                      { ([], Some $1) }
 
