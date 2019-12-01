@@ -1022,10 +1022,11 @@ object (self)
         ) alias_env desugared_mutuals in
 
         ({< alias_env = alias_env >}, Typenames desugared_mutuals)
-    | Foreign (bind, raw_name, lang, file, dt) ->
-        let _, bind = self#binder bind in
-        let dt' = Desugar.foreign alias_env dt in
-        self, Foreign (bind, raw_name, lang, file, dt')
+    | Foreign alien ->
+       let binder, datatype = Alien.declaration alien in
+       let _, binder = self#binder binder in
+       let datatype = Desugar.foreign alias_env datatype in
+       self, Foreign (Alien.modify ~declarations:[(binder, datatype)] alien)
     | b -> super#bindingnode b
 
   method! sentence =

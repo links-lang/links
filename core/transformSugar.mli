@@ -90,6 +90,7 @@ object ('self)
   method directive       : directive -> 'self * directive
 *)
   method unary_op        : UnaryOp.t -> 'self * UnaryOp.t * Types.datatype
+  method foreign_language : ForeignLanguage.t -> 'self * ForeignLanguage.t
 end
 
 val fun_effects : Types.datatype -> Sugartypes.Pattern.with_pos list list -> Types.row
