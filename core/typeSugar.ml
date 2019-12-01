@@ -1738,7 +1738,7 @@ end = struct
        List.fold_left (merge combine') usages usagess
 end
 
-let type_section context s =
+let type_section pos context s =
   let env = context.var_env in
   let ((tyargs, t), usages) =
     let open Section in match s with
@@ -1750,7 +1750,11 @@ let type_section context s =
        let effects = Types.make_empty_open_row default_effect_subkind in (* projection is pure! *)
        let r = `Record (StringMap.add label (`Present a) StringMap.empty, rho, false) in
          ([`Type a; `Row (StringMap.empty, rho, false); `Row effects], `Function (Types.make_tuple_type [r], effects, a)), Usage.empty
-    | Name var      -> Utils.instantiate env var, Usage.singleton var in
+    | Name var      ->
+       try Utils.instantiate env var, Usage.singleton var
+       with Errors.UndefinedVariable _msg ->
+         Gripers.die pos (Printf.sprintf "Unknown variable %s." var)
+  in
   tappl (FreezeSection s, tyargs), t, usages
 
 let type_frozen_section context s =
@@ -1777,14 +1781,19 @@ let datatype aliases = Instantiate.typ -<- DesugarDatatypes.read ~aliases
 let add_usages (p, t) m = (p, t, m)
 let add_empty_usages (p, t) = (p, t, Usage.empty)
 
-let type_unary_op env =
+let type_unary_op pos env =
   let datatype = datatype env.tycon_env in
   function
   | UnaryOp.Minus      -> add_empty_usages (datatype "(Int) -> Int")
   | UnaryOp.FloatMinus -> add_empty_usages (datatype "(Float) -> Float")
-  | UnaryOp.Name n     -> add_usages (Utils.instantiate env.var_env n) (Usage.singleton n)
+  | UnaryOp.Name n     ->
+     try
+       add_usages (Utils.instantiate env.var_env n) (Usage.singleton n)
+     with
+       Errors.UndefinedVariable _msg ->
+       Gripers.die pos (Printf.sprintf "Unknown variable %s." n)
 
-let type_binary_op ctxt =
+let type_binary_op pos ctxt =
   let open BinaryOp in
   let datatype = datatype ctxt.tycon_env in function
   | Minus        -> add_empty_usages (Utils.instantiate ctxt.var_env "-")
@@ -1816,7 +1825,12 @@ let type_binary_op ctxt =
          `Function (Types.make_tuple_type [a; a], eff, `Primitive Primitive.Bool),
          Usage.empty)
   | Name "!"     -> add_empty_usages (Utils.instantiate ctxt.var_env "Send")
-  | Name n       -> add_usages (Utils.instantiate ctxt.var_env n) (Usage.singleton n)
+  | Name n       ->
+     try
+       add_usages (Utils.instantiate ctxt.var_env n) (Usage.singleton n)
+     with
+       Errors.UndefinedVariable _msg ->
+       Gripers.die pos (Printf.sprintf "Unknown variable %s." n)
 
 (* close a pattern type relative to a list of patterns
 
@@ -2569,7 +2583,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
              NotFound _ ->
              Gripers.die pos ("Unknown variable " ^ v ^ ".")
            end
-        | Section s -> type_section context s
+        | Section s -> type_section pos context s
         | FreezeSection s -> type_frozen_section context s
         (* literals *)
         | Constant c as c' ->
@@ -3180,7 +3194,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
 
         (* applications of various sorts *)
         | UnaryAppl ((_, op), p) ->
-            let tyargs, opt, op_usage = type_unary_op context op
+            let tyargs, opt, op_usage = type_unary_op pos context op
             and p = tc p
             and rettyp = Types.fresh_type_variable (lin_any, res_any) in
               unify ~handle:Gripers.unary_apply
@@ -3188,7 +3202,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                  no_pos (`Function (Types.make_tuple_type [typ p], context.effect_row, rettyp)));
               UnaryAppl ((tyargs, op), erase p), rettyp, Usage.combine (usages p) op_usage
         | InfixAppl ((_, op), l, r) ->
-            let tyargs, opt, op_usages = type_binary_op context op in
+            let tyargs, opt, op_usages = type_binary_op pos context op in
             let l = tc l
             and r = tc r
             and rettyp = Types.fresh_type_variable (lin_any, res_any) in
@@ -4548,15 +4562,21 @@ and type_binding : context -> binding -> binding * context * Usage.t =
           in
           Funs defs, {empty_context with var_env = outer_env}, Usage.restrict (Usage.combine_many used) defined
 
-      | Foreign (bndr, raw_name, language, file, (dt1, Some datatype)) ->
-          ignore (if String.contains (Binder.to_name bndr) '\'' then raise (Errors.prime_alien pos));
-          (* Ensure that we quantify FTVs *)
-          let (_tyvars, _args), datatype = Utils.generalise context.var_env datatype in
-          let datatype = Instantiate.freshen_quantifiers datatype in
-          ( Foreign (Binder.set_type bndr datatype, raw_name, language, file, (dt1, Some datatype))
-           , (bind_var empty_context (Binder.to_name bndr, datatype))
-           , Usage.empty )
-      | Foreign _ -> assert false
+      | Foreign alien ->
+         let binder, dt, datatype =
+           match Alien.declaration alien with
+           | (b, (dt, Some datatype)) -> (b, dt, datatype)
+           | _ -> assert false
+         in
+         ignore (if String.contains (Binder.to_name binder) '\''
+                 then raise (Errors.prime_alien pos));
+         (* Ensure that we quantify FTVs *)
+         let (_tyvars, _args), datatype = Utils.generalise context.var_env datatype in
+         let datatype = Instantiate.freshen_quantifiers datatype in
+         let binder = Binder.set_type binder datatype in
+         ( Foreign (Alien.modify ~declarations:[(binder, (dt, Some datatype))] alien)
+         , bind_var empty_context (Binder.to_name binder, datatype)
+         , Usage.empty )
       | Typenames ts ->
           let env = List.fold_left (fun env {node=(name, vars, (_, dt')); _} ->
               match dt' with

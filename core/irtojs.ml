@@ -1241,10 +1241,17 @@ end = functor (K : CONTINUATION) -> struct
              varenv fs
          in
          (state, varenv, None, fun code -> LetRec (List.map (generate_function varenv fs) defs, code))
-      | Alien (bnd, raw_name, _lang) ->
-        let (a, _a_name) = name_binder bnd in
-        let varenv = VEnv.bind a raw_name varenv in
-        state, varenv, None, (fun code -> code)
+      | Alien { binder; object_name; language } ->
+         begin
+           let open ForeignLanguage in
+           (* TODO(dhil): If the foreign language isn't JavaScript,
+              then I think a server-call should be generated. *)
+           match language with
+           | JavaScript ->
+              let (a, _a_name) = name_binder binder in
+              let varenv = VEnv.bind a object_name varenv in
+              state, varenv, None, (fun code -> code)
+         end
       | Module _ -> state, varenv, None, (fun code -> code)
 
   let rec generate_toplevel_bindings : Value.env -> Json.json_state -> venv -> Ir.binding list -> Json.json_state * venv * string list * (code -> code) =

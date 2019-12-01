@@ -48,6 +48,7 @@ exception DynlinkError of string
 exception ModuleError of string * Position.t option
 exception DisabledExtension of Position.t option * (string * bool) option * string option * string
 exception PrimeAlien of Position.t
+exception ClientCallOutsideWebMode of string
 
 exception LocateFailure of string
 let driver_locate_failure driver = LocateFailure driver
@@ -180,6 +181,8 @@ let format_exception =
      pos_prefix (Printf.sprintf "Error: Cannot load plugin dependency '%s' (link error: %s)\n" file (Dynlink.error_message err))
   | LoadFailure (file, err) ->
      pos_prefix (Printf.sprintf "Error: Cannot load plugin '%s' (link error: %s)\n" file (Dynlink.error_message err))
+  | ClientCallOutsideWebMode fn ->
+     pos_prefix (Printf.sprintf "Error: Cannot call client side function '%s' outside of web mode\n" fn)
   | Sys.Break -> "Caught interrupt"
   | exn -> pos_prefix ("Error: " ^ Printexc.to_string exn)
 
@@ -209,3 +212,4 @@ let module_error ?pos message = (ModuleError (message, pos))
 let disabled_extension ?pos ?setting ?flag name =
   DisabledExtension (pos, setting, flag, name)
 let prime_alien pos = PrimeAlien pos
+let client_call_outside_webmode fn = ClientCallOutsideWebMode fn

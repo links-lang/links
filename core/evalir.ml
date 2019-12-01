@@ -130,7 +130,7 @@ struct
 
        fun req_data name cont args ->
          if not(Settings.get Basicsettings.web_mode) then
-           raise (internal_error "Can't make client call outside web mode.");
+           raise (Errors.client_call_outside_webmode name);
          (*if not(Proc.singlethreaded()) then
            raise (internal_error "Remaining procs on server at client call!"); *)
          Debug.print("Making client call to " ^ name);
@@ -536,7 +536,7 @@ struct
        eval_error "Continuation applied to multiple (or zero) arguments"
     | `Resumption r, vs ->
        resume env cont r vs
-    | `Alien, _ -> eval_error "Can't make alien call on the server.";
+    | `Alien, _ -> eval_error "Cannot make alien call on the server.";
     | v, _ -> type_error ~action:"apply" "function" v
   and resume env (cont : continuation) (r : resumption) vs =
     Proc.yield (fun () -> K.Eval.resume ~env cont r vs)
@@ -547,22 +547,25 @@ struct
   and computation env (cont : continuation) (bindings, tailcomp) : result =
     match bindings with
       | [] -> tail_computation env cont tailcomp
-      | b::bs -> match b with
-        | Let ((var, _) as b, (_, tc)) ->
-           let locals = Value.Env.localise env var in
-           let cont' =
-             K.(let frame = Frame.make (Var.scope_of_binder b) var locals (bs, tailcomp) in
-                frame &> cont)
-           in
-           tail_computation env cont' tc
-        (* function definitions are stored in the global fun map *)
-        | Fun _ ->
-          computation env cont (bs, tailcomp)
-        | Rec _ ->
-          computation env cont (bs, tailcomp)
-        | Alien ((var, _) as b, _, _) ->
-          computation (Value.Env.bind var (`Alien, Var.scope_of_binder b) env) cont (bs, tailcomp)
-        | Module _ -> raise (internal_error "Not implemented interpretation of modules yet")
+      | b::bs ->
+         match b with
+         | Let ((var, _) as b, (_, tc)) ->
+            let locals = Value.Env.localise env var in
+            let cont' =
+              K.(let frame = Frame.make (Var.scope_of_binder b) var locals (bs, tailcomp) in
+                 frame &> cont)
+            in
+            tail_computation env cont' tc
+         (* function definitions are stored in the global fun map *)
+         | Fun _ ->
+            computation env cont (bs, tailcomp)
+         | Rec _ ->
+            computation env cont (bs, tailcomp)
+         | Alien { binder; _ } ->
+            let var = Var.var_of_binder binder in
+            let scope = Var.scope_of_binder binder in
+            computation (Value.Env.bind var (`Alien, scope) env) cont (bs, tailcomp)
+         | Module _ -> raise (internal_error "Not implemented interpretation of modules yet")
   and tail_computation env (cont : continuation) : Ir.tail_computation -> result = function
     | Ir.Return v   -> apply_cont cont env (value env v)
     | Apply (f, ps) -> apply cont env (value env f, List.map (value env) ps)

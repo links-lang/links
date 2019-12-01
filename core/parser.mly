@@ -31,6 +31,10 @@ open SourceCode
 open Sugartypes
 open SugarConstructors
 
+(* Workaround path bug in OCaml 4.07 when using menhir and dune
+(c.f. https://github.com/ocaml/dune/issues/1504). *)
+module Links_core = struct end
+
 (* Construction of nodes using positions produced by Menhir parser *)
 module ParserPosition
        : Pos with type t = (SourceCode.Lexpos.t * SourceCode.Lexpos.t) = struct
@@ -232,6 +236,12 @@ module MutualBindings = struct
     type_binding mut_types @ fun_binding mut_funs
 end
 
+let parse_foreign_language pos lang =
+  try ForeignLanguage.of_string lang
+  with Invalid_argument _ ->
+    raise (ConcreteSyntaxError
+             (pos, Printf.sprintf "Unrecognised foreign language '%s'." lang))
+
 %}
 
 %token END
@@ -336,6 +346,7 @@ interactive:
 | END                                                          { Directive ("quit", []) (* rather hackish *) }
 
 file:
+| END                                                          { ([], None) }
 | declarations exp? END                                        { ($1, $2     ) }
 | exp END                                                      { ([], Some $1) }
 
@@ -375,9 +386,13 @@ declaration:
 
 nofun_declaration:
 | alien_block                                                  { $1 }
-| ALIEN VARIABLE STRING VARIABLE COLON datatype SEMICOLON      { with_pos $loc
-                                                                          (Foreign (binder ~ppos:$loc($4) $4,
-                                                                                     $4, $2, $3, datatype $6)) }
+| ALIEN VARIABLE STRING VARIABLE COLON datatype SEMICOLON      { let alien =
+                                                                   let binder = binder ~ppos:$loc($4) $4 in
+                                                                   let datatype = datatype $6 in
+                                                                   let language = parse_foreign_language (pos $loc($1)) $2 in
+                                                                   Alien.single language $3 binder datatype
+                                                                 in
+                                                                 with_pos $loc (Foreign alien) }
 | fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
                                                                  set assoc (from_option default_fixity $2) (WithPos.node $3);
                                                                  with_pos $loc Infix }
@@ -395,7 +410,8 @@ links_module:
 | MODULE name = CONSTRUCTOR members = moduleblock              { module_binding ~ppos:$loc($1) (binder ~ppos:$loc(name) name) members }
 
 alien_block:
-| ALIEN VARIABLE STRING LBRACE alien_datatypes RBRACE          { with_pos $loc (AlienBlock ($2, $3, $5)) }
+| ALIEN VARIABLE STRING LBRACE alien_datatypes RBRACE          { let lang = parse_foreign_language (pos $loc($1)) $2 in
+                                                                 with_pos $loc (AlienBlock (Alien.multi lang $3 $5)) }
 
 fun_declarations:
 | fun_declaration+                                             { $1 }
