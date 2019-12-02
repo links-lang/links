@@ -63,12 +63,6 @@ module Env = struct
                    ( Js.var_name_binder (f, finfo)
                    |> Format.asprintf
                         "Attempt to use client function: %s in query" ))
-          | Location.Native ->
-              raise
-                (Errors.runtime_error
-                   ( Var.show_binder (f, finfo)
-                   |> Format.asprintf
-                        "Attempt to use native function: %s in query" ))
         in
         Some fn
     | None -> None
@@ -255,7 +249,7 @@ let lens_sugar_phrase_of_ir p env =
           Result.bind
             ~f:(fun v -> computation (Env.bind env (x, v)) (bs, tailcomp))
             v
-      | I.Fun (_, _, _, (Location.Client | Location.Native)) ->
+      | I.Fun (_, _, _, Location.Client) ->
           Result.error Of_ir_error.Client_function
       | I.Fun _ ->
           Result.error @@ Of_ir_error.Internal_error "Unexpected function."
