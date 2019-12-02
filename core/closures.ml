@@ -215,6 +215,13 @@ struct
           let o = o#reset in
 
 
+          (* We must process the binder f to check its type for free type variables.
+             This must happen before adding the tyvars to o, as they are not bound in
+             the annotation on f.
+             Note that as a result, we call o#binder on f inside and outside of the
+             reset/restore block *)
+          let f, o = o#binder f in
+
           let o = List.fold_left (fun o q -> o#quantifier q) o tyvars in
           let (xs, o) =
             List.fold_right
@@ -233,6 +240,7 @@ struct
 
           (*Debug.print ("free type vars of " ^ (string_of_int (Var.var_of_binder f)) ^ " " ^ (IntSet.show o#get_free_type_vars));
           Debug.print ("bound type vars at  " ^ (string_of_int (Var.var_of_binder f)) ^  " " ^ (IntMap.show (Types.pp_kind) o#get_bound_type_vars));*)
+
           let fenv_entry = o#create_fenv_entry in
            (*Debug.print ("fventry of  " ^ (string_of_int (Var.var_of_binder f)) ^ " " ^ (show_freevars fenv_entry));*)
 
@@ -255,7 +263,11 @@ struct
 
           (* it's important to traverse the function binders first in
              order to make sure they're in scope for all of the
-             function bodies *)
+             function bodies.
+             Further, this ensures that all free type variables in
+             binder annotations are added to fenv_entry, before
+             bringing the tyvars into scope (which are not bound
+             in the function type itself) *)
           let _, o =
             List.fold_right
               (fun (f, _, _, _) (fs, o) ->
