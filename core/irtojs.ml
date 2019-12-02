@@ -742,7 +742,7 @@ end = functor (K : CONTINUATION) -> struct
          advantage of dynamic scoping *)
 
         match location with
-        | Location.Client | Location.Native | Location.Unknown ->
+        | Location.Client | Location.Unknown ->
            let xs_names'' = xs_names'@[__kappa] in
            LetFun ((Js.var_name_binder fb,
                     xs_names'',
@@ -1175,8 +1175,6 @@ end = functor (K : CONTINUATION) -> struct
         | Location.Client | Location.Unknown ->
            snd (generate_computation body_env body (K.reflect (Var __kappa)))
         | Location.Server -> generate_remote_call f xs_names (Dict [])
-        | Location.Native ->
-            raise (Errors.runtime_error ("Not implemented native calls yet"))
       in
       (f_name,
        xs_names @ [__kappa],

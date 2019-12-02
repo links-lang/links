@@ -86,7 +86,6 @@ struct
           Some (`FunctionPtr (f, None))
         | Location.Client ->
           Some (`ClientFunction (Js.var_name_binder (f, finfo)))
-        | Location.Native -> assert false
       end
     | _ -> assert false
 
