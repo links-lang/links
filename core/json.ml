@@ -48,12 +48,7 @@ let json_of_table ((db, params), name, keys, row) : Yojson.Basic.t =
         ("row", `String (Types.string_of_datatype (`Record row)));
         ("keys", json_of_keylist keys)])]
 
-let jsonize_location loc = `String (
-  match loc with
-    | Location.Client  -> "client"
-    | Location.Server  -> "server"
-    | Location.Native  -> "native"
-    | Location.Unknown -> "unknown")
+let jsonize_location loc = `String (Location.to_string loc)
 
 let rec cons_listify : Yojson.Basic.t list -> Yojson.Basic.t = function
   | [] -> `Null
