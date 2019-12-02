@@ -102,9 +102,9 @@ object (o : 'self_type)
     let f = gensym ~prefix:"_fun_" () in
     let (bndr, lin, (_, def), loc) =
       unwrap_def (binder ~ty:ft f, lin, ([], lam), location) in
-    let (tvs, tyargs), ft =
+    let (tvs, tyargs), gen_ft =
       Generalise.generalise (o#get_var_env ()) (Binder.to_type bndr) in
-    let bndr = Binder.set_type bndr ft in
+    let bndr = Binder.set_type bndr gen_ft in
     let o = o#bind_binder bndr in
     let e = block_node ([with_dummy_pos
                            (Fun { fun_binder           = bndr
