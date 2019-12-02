@@ -13,8 +13,8 @@ strategy:
   matrix:
     linux:
       imageName: 'ubuntu-latest'
-    mac:
-      imageName: 'macos-latest'
+#    mac:
+#      imageName: 'macos-latest'
 
 pool:
   vmImage: $(imageName)
