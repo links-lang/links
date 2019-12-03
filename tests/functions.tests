@@ -121,7 +121,6 @@ stdout : fun : (a) -> (c::Any) -> (a, c::Any)
 Linearity (3) (#795)
 fun (x)(y) {(x, y)}
 stdout : fun : (a) -> (c::Any) -> (a, c::Any)
-ignore : Failing test case
 
 Linearity (4)
 linfun (x){ linfun (y) {(x, y)}}
@@ -130,3 +129,11 @@ stdout : fun : (a::Any) -@ (c::Any) -@ (a::Any, c::Any)
 Linearity (5)
 linfun (x)(y) {(x, y)}
 stdout : fun : (a::Any) -@ (c::Any) -@ (a::Any, c::Any)
+
+Linearity (6) (#797)
+fun f(x)(y) {(x, y)} f
+stdout : fun : (a) -> (c::Any) -> (a, c::Any)
+
+Linearity (7) (#797)
+fun f(x)(y) {f(x)(y)} f
+stdout : fun : (_) -> (_::Any) ~> _::Any
