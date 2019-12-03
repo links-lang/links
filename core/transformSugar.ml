@@ -164,6 +164,9 @@ class transform (env : Types.typing_environment) =
     method bind_tycon name tycon =
       {< tycon_env = TyEnv.bind name tycon tycon_env >}
 
+    method bind_binder bndr =
+      {< var_env = TyEnv.bind (Binder.to_name bndr)  (Binder.to_type bndr) var_env >}
+
     method lookup_type : Name.t -> Types.datatype = fun var ->
       TyEnv.find var var_env
 
@@ -327,10 +330,12 @@ class transform (env : Types.typing_environment) =
           let (o, e2, _) = o#phrase e2 in
             (o, RangeLit (e1, e2), Types.make_list_type Types.int_type)
       | Iteration (gens, body, cond, orderby) ->
+          let envs = o#backup_envs in
           let (o, gens) = listu o (fun o -> o#iterpatt) gens in
           let (o, body, t) = o#phrase body in
           let (o, cond, _) = option o (fun o -> o#phrase) cond in
           let (o, orderby, _) = option o (fun o -> o#phrase) orderby in
+          let o = o#restore_envs envs in
             (o, Iteration (gens, body, cond, orderby), t)
       | Escape (b, e) ->
           let envs = o#backup_envs in

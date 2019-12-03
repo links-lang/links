@@ -2,21 +2,25 @@
 config: tests/typed_ir.tests.config
 ---
 
-Anonymous constant function
+Anonymous constant function (#693)
 fun (x) {1}
-stdout : fun : (_::(Unl,Mono)) -> Int
+stdout : fun : forall a,b::Row.(a) -b-> Int
 
-Anonymous identity function
+Anonymous identity function (#693)
 fun (x) {x}
-stdout : fun : (a::(Any,Mono)) -> a::(Any,Mono)
+stdout : fun : forall a::(Any,Any),b::Row.(a::Any) -b-> a::Any
 
-Anonymous composition function
+Anonymous composition function (#693)
 fun (f,g) {fun (x){f (g(x))}}
-stdout : fun : ((a::(Any,Mono)) -b-> c::(Any,Mono), (d::(Any,Mono)) -b-> a::(Any,Mono)) -> (d::(Any,Mono)) -b-> c::(Any,Mono)
+stdout : fun : forall a::(Any,Any),b::Row,c::(Any,Any),d::(Any,Any),e::Row.((a::Any) -b-> c::Any, (d::Any) -b-> a::Any) -e-> (d::Any) -b-> c::Any
 
-XML typing
+Anonymous application function (#693)
+fun (f) {fun (x){f (x)}}
+stdout : fun : forall a::(Any,Any),b::Row,c::(Any,Any),d::Row.((a::Any) -b-> c::Any) -d-> (a::Any) -b-> c::Any
+
+XML typing (#693)
 fun (x) {<a>{x}</a>}
-stdout : fun : (Xml) -> Xml
+stdout : fun : forall a::Row.(Xml) -a-> Xml
 
 ConcatMap (#368)
 tests/typed_ir/T368.links
@@ -27,3 +31,13 @@ Quantifiers on let-bound values (#620)
 tests/typed_ir/T620.links
 filemode : true
 stdout : () : ()
+
+Bound quantifiers in `and` and `all` (#692)
+tests/typed_ir/T692.links
+filemode : true
+stdout : () : ()
+
+Bound quantifiers in a query (#694)
+tests/typed_ir/T694.links
+filemode : true
+stdout : fun : forall a::Row,b::Row(Any,Base).() -a-> [(|b::(Any,Base))]

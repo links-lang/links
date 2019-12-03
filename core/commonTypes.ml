@@ -157,7 +157,7 @@ module Quantifier = struct
 end
 
 module Location = struct
-  type t = Client | Server | Native | Unknown
+  type t = Client | Server | Unknown
     [@@deriving show]
 
   let is_client = function
@@ -168,10 +168,6 @@ module Location = struct
     | Server -> true
     | _      -> false
 
-  let is_native = function
-    | Native -> true
-    | _      -> false
-
   let is_unknown = function
     | Unknown -> true
     | _      -> false
@@ -179,14 +175,12 @@ module Location = struct
   let to_string = function
     | Client -> "client"
     | Server -> "server"
-    | Native -> "native"
     | Unknown -> "unknown"
 end
 
 (* Convenient aliases for constructing values *)
 let loc_client  = Location.Client
 let loc_server  = Location.Server
-let loc_native  = Location.Native
 let loc_unknown = Location.Unknown
 
 module Freedom = struct

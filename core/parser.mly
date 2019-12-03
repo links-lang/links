@@ -270,7 +270,7 @@ let parse_foreign_language pos lang =
 %token LENSPUT LENSGET LENSCHECK
 %token READONLY DEFAULT
 %token ESCAPE
-%token CLIENT SERVER NATIVE
+%token CLIENT SERVER
 %token SEMICOLON
 %token TRUE FALSE
 %token BARBAR AMPAMP
@@ -346,6 +346,7 @@ interactive:
 | END                                                          { Directive ("quit", []) (* rather hackish *) }
 
 file:
+| END                                                          { ([], None) }
 | declarations exp? END                                        { ($1, $2     ) }
 | exp END                                                      { ([], Some $1) }
 
@@ -482,7 +483,6 @@ fixity:
 perhaps_location:
 | SERVER                                                       { loc_server  }
 | CLIENT                                                       { loc_client  }
-| NATIVE                                                       { loc_native  }
 | /* empty */                                                  { loc_unknown }
 
 constant:

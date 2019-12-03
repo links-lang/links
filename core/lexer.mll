@@ -197,7 +197,6 @@ let keywords = [
  "module"   , MODULE;
  "mu"       , MU;
  "mutual"   , MUTUAL;
- "native"   , NATIVE;
  "nu"       , NU;
  "offer"    , OFFER;
  "on"       , ON;

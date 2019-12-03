@@ -1,4 +1,5 @@
 open Utility
+open Transform
 
 let _show s program =
   Debug.print (s ^ ": " ^ Sugartypes.show_program program);
@@ -71,7 +72,7 @@ type 'a result =
     datatype: Types.datatype;
     context: Context.t }
 
-open Transform
+
 
 (* The [Untyped] module contains the infrastructure for untyped
    transform passes. *)
@@ -304,7 +305,7 @@ let transform show untyped_run typeable_run typechecker_run context program =
   in
   (* Dump the decorated AST. *)
   Debug.if_set show_post_frontend_ast
-    (fun () -> Printf.sprintf "AST after frontend transformations:\n%s\n\n" (show program));
+    (fun () -> Printf.sprintf "AST after frontend transformations:\n%s\n\n" (show result.program)) ;
   result
 
 let program =

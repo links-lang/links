@@ -109,3 +109,24 @@ Quantifiers should not escape their scopes (#687)
 filemode : true
 stderr : @.*escape their scope.*
 exit : 1
+
+Linearity (1)
+fun (x, y) {(x, y)}
+stdout : fun : (a::Any, b::Any) -> (a::Any, b::Any)
+
+Linearity (2)
+fun (x) {fun (y) {(x, y)}}
+stdout : fun : (a) -> (c::Any) -> (a, c::Any)
+
+Linearity (3) (#795)
+fun (x)(y) {(x, y)}
+stdout : fun : (a) -> (c::Any) -> (a, c::Any)
+ignore : Failing test case
+
+Linearity (4)
+linfun (x){ linfun (y) {(x, y)}}
+stdout : fun : (a::Any) -@ (c::Any) -@ (a::Any, c::Any)
+
+Linearity (5)
+linfun (x)(y) {(x, y)}
+stdout : fun : (a::Any) -@ (c::Any) -@ (a::Any, c::Any)
