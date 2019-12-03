@@ -392,6 +392,7 @@ sig
   val cp_link_dual : griper
 
   val non_linearity : Position.t -> int -> string -> Types.datatype -> unit
+  val linear_recursive_function : Position.t -> string -> unit
 
   val try_in_unless_pat : griper
   val try_in_unless_branches : griper
@@ -1509,6 +1510,9 @@ end
       die pos ("Variable " ^ v ^ " has linear type " ^ nli () ^
                 code ppr_t                           ^ nl  () ^
                "but is used " ^ string_of_int uses ^ " times.")
+
+    let linear_recursive_function pos f =
+      die pos ("Recursive function " ^ f ^ " cannot be linear.")
 
     (* Affine session exception handling *)
     let try_in_unless_pat ~pos ~t1:l ~t2:r ~error:_ =
@@ -4378,10 +4382,12 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                             rec_frozen = frozen;
                             _ }; _ } ->
                  let name = Binder.to_name bndr in
+                 (* recursive functions can't be linear! *)
+                 if DeclaredLinearity.is_linear lin then
+                   Gripers.linear_recursive_function pos name;
                  let _ = check_for_duplicate_names pos (List.flatten pats) in
                  let (pats_init, pats_tail) = from_option ([], []) (unsnoc_opt pats) in
-                 let tpc' = if DeclaredLinearity.is_linear lin then tpc else tpcu in
-                 let pats = List.append (List.map (List.map tpc') pats_init)
+                 let pats = List.append (List.map (List.map tpcu) pats_init)
                               [List.map tpc pats_tail] in
                  let t_ann = match def with
                    | Some (ty, _) -> Some ty

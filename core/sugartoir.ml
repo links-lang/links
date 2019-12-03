@@ -681,7 +681,7 @@ struct
                | `ForAll (_, t')
                | t' ->
                    begin match TypeUtils.concrete_type t' with
-                     | `Function _ | `Lolli _ as ft' ->
+                     | `Function _ as ft' ->
                          let args = TypeUtils.arg_types ft' in
                            List.map (Var.fresh_binder_of_type) args
                      | _ -> assert false

@@ -144,4 +144,5 @@ stdout : fun : (a::Any) -@ (c::Any) -@ (a::Any, c::Any)
 
 Linearity (9) - linear recursive functions should be disallowed
 linfun f(x) {f(x)} f
-stderr : @.*
+stderr : @.*cannot be linear.*
+exit : 1
