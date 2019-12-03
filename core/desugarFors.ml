@@ -144,6 +144,7 @@ object (o : 'self_type)
     function
     | Iteration (generators, body, filter, sort) ->
         let eff = o#lookup_effects in
+        let envs = o#backup_envs in
         let o, (es, ps, xs, ts) = o#qualifiers generators in
         let o, body, body_type = o#phrase body in
         let o, filter, _ = TransformSugar.option o (fun o -> o#phrase) filter in
@@ -185,6 +186,7 @@ object (o : 'self_type)
         let e : phrasenode =
           fn_appl_node "concatMap" [`Type arg_type; `Row eff; `Type elem_type]
                        [f; results] in
+        let o = o#restore_envs envs in
         (o, e, body_type)
     | e -> super#phrasenode e
 end

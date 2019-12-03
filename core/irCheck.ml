@@ -609,7 +609,7 @@ struct
                 let inner_instantiation_maps = (inner_typemap, inner_rowmap, inner_presencemap) in
 
                 let uninstantiated_type_of_environment = (Var.type_of_binder binder) in
-                Debug.print (IntMap.show Types.pp_datatype (fst3 inner_instantiation_maps));
+                (* Debug.print (IntMap.show Types.pp_datatype (fst3 inner_instantiation_maps)); *)
                 let type_of_environment = Instantiate.datatype inner_instantiation_maps uninstantiated_type_of_environment in
                 o#check_eq_types type_of_environment zt (SVal orig)
               | _, None -> raise_ir_type_error "Providing closure to a function that does not need one" (SVal orig)

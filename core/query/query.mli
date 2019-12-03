@@ -21,14 +21,17 @@ sig
       | Erase     of t * StringSet.t
       | Variant   of string * t
       | XML       of Value.xmlitem
-      | Apply     of string * t list
-      | Closure   of (Ir.var list * Ir.computation) * env
+      | Apply     of t * t list
+      | Closure   of (Var.var list * Ir.computation) * env
+      | Case      of t * (Var.binder * t) StringMap.t * (Var.binder * t) option
       | Primitive of string
       | Var       of Var.var * Types.datatype StringMap.t
       | Constant  of Constant.t
   and env = { venv: Value.env; qenv: t Env.Int.t; policy: QueryPolicy.t }
       [@@deriving show]
 
+  val reduce_where_then : t * t -> t
+  val reduce_and : t * t -> t
 end
 
 val unbox_xml : Lang.t -> Value.xmlitem
@@ -61,8 +64,6 @@ sig
   val bind : Lang.env -> Env.Int.name * Lang.t -> Lang.env
   val eta_expand_var : Var.var * Types.datatype StringMap.t -> Lang.t
   val computation : Lang.env -> Ir.computation -> Lang.t
-  val reduce_where_then : Lang.t * Lang.t -> Lang.t
-  val reduce_and : Lang.t * Lang.t -> Lang.t
   val eval : QueryPolicy.t -> Value.t Value.Env.t -> Ir.computation -> Lang.t
 end
 
