@@ -142,6 +142,6 @@ Linearity (8) (#797)
 linfun f(x)(y) {(x, y)} f
 stdout : fun : (a::Any) -@ (c::Any) -@ (a::Any, c::Any)
 
-Linearity (9) (#797)
-linfun f(x)(y) {f(x)(y)} f
-stdout : fun : (_::Any) -@ (_::Any) ~@ _::Any
+Linearity (9) - linear recursive functions should be disallowed
+linfun f(x) {f(x)} f
+stderr : @.*
