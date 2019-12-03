@@ -2205,11 +2205,17 @@ let rec pattern_env : Pattern.with_pos -> Types.datatype Env.t =
     | As (bndr, p) ->
        Env.bind (Binder.to_name bndr) (Binder.to_type bndr) (pattern_env p)
 
-let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environment * Types.datatype =
+let type_pattern ?(linear_vars=false) closed
+    : Pattern.with_pos -> Pattern.with_pos * Types.environment * Types.datatype =
   let make_singleton_row =
     match closed with
       | `Closed -> Types.make_singleton_closed_row
       | `Open -> (fun var -> Types.make_singleton_open_row var (lin_any, res_any)) in
+
+  let fresh_var () =
+    if linear_vars
+    then Types.fresh_type_variable (lin_unl, res_any)
+    else Types.fresh_type_variable (lin_any, res_any) in
 
   (* type_pattern p types the pattern p returning a typed pattern, a
      type environment for the variables bound by the pattern and two
@@ -2234,7 +2240,7 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environme
       let open Pattern in
       match pattern with
       | Nil ->
-        let t = Types.make_list_type (Types.fresh_type_variable (lin_any, res_any)) in
+        let t = Types.make_list_type (fresh_var ()) in
         Nil, (t, t)
       | Any ->
         let t = Types.fresh_type_variable (lin_unl, res_any) in
@@ -2243,7 +2249,7 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environme
         let t = `Primitive (Constant.type_of c) in
         c', (t, t)
       | Variable bndr ->
-        let xtype = Types.fresh_type_variable (lin_any, res_any) in
+        let xtype = fresh_var () in
         Variable (Binder.set_type bndr xtype), (xtype, xtype)
       | Cons (p1, p2) ->
         let p1 = tp p1
@@ -2261,7 +2267,7 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environme
           Types.make_list_type (typ p) in
         let ts =
           match ps' with
-          | [] -> let t = Types.fresh_type_variable (lin_any, res_any) in t, t
+          | [] -> let t = fresh_var () in t, t
           | p::ps ->
             list_type p ps ot, list_type p ps it
         in
@@ -2277,8 +2283,8 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environme
          (* Auxiliary machinery for typing effect patterns *)
          let rec type_resumption_pat (kpat : Pattern.with_pos) : Pattern.with_pos * (Types.datatype * Types.datatype) =
            let fresh_resumption_type () =
-             let domain   = Types.fresh_type_variable (lin_any, res_any) in
-             let codomain = Types.fresh_type_variable (lin_any, res_any) in
+             let domain   = fresh_var () in
+             let codomain = fresh_var () in
              let effrow   = Types.make_empty_open_row default_effect_subkind in
              Types.make_function_type [domain] effrow codomain
            in
@@ -2329,7 +2335,7 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environme
         let positive, negative =
           List.fold_right
             (fun name (positive, negative) ->
-               let a = Types.fresh_type_variable (lin_any, res_any) in
+               let a = fresh_var () in
                (StringMap.add name (`Present a) positive,
                 StringMap.add name `Absent negative))
             names (StringMap.empty, StringMap.empty) in
@@ -2483,8 +2489,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
       Position.Resolved.source_expression in
     let exp_pos (p,_,_) = uexp_pos p in
     let pos_and_typ e = (exp_pos e, typ e) in
-    let tpc p = type_pattern `Closed p
-    and tpo p = type_pattern `Open p
+    let tpc p = type_pattern `Closed p in
+    let tpcl p = type_pattern ~linear_vars:true `Closed p in
+    let tpo p = type_pattern `Open p
     and tc : phrase -> phrase * Types.datatype * Usage.t = type_check context
     and expr_string (p : Sugartypes.phrase) : string =
       let pos = WithPos.pos p in
@@ -2656,7 +2663,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             end
         | FunLit (argss_prev, lin, (pats, body), location) ->
             let vs = check_for_duplicate_names pos (List.flatten pats) in
-            let pats = List.map (List.map tpc) pats in
+            let (pats_init, pats_tail) = from_option ([], []) (unsnoc_opt pats) in
+            let pats = List.append (List.map (List.map tpcl) pats_init)
+                                   [List.map tpc pats_tail] in
             let pat_env = List.fold_left (List.fold_left (fun env pat' -> Env.extend env (pattern_env pat'))) Env.empty pats in
             let env' = Env.extend context.var_env pat_env in
 
