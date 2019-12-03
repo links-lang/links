@@ -137,3 +137,11 @@ stdout : fun : (a) -> (c::Any) -> (a, c::Any)
 Linearity (7) (#797)
 fun f(x)(y) {f(x)(y)} f
 stdout : fun : (_) -> (_::Any) ~> _::Any
+
+Linearity (8) (#797)
+linfun f(x)(y) {(x, y)} f
+stdout : fun : (a::Any) -@ (c::Any) -@ (a::Any, c::Any)
+
+Linearity (9) (#797)
+linfun f(x)(y) {f(x)(y)} f
+stdout : fun : (_::Any) -@ (_::Any) ~@ _::Any

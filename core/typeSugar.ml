@@ -4212,7 +4212,8 @@ and type_binding : context -> binding -> binding * context * Usage.t =
           let name = Binder.to_name bndr in
           let vs = name :: check_for_duplicate_names pos (List.flatten pats) in
           let (pats_init, pats_tail) = from_option ([], []) (unsnoc_opt pats) in
-          let pats = List.append (List.map (List.map tpcu) pats_init)
+          let tpc' = if DeclaredLinearity.is_linear lin then tpc else tpcu in
+          let pats = List.append (List.map (List.map tpc') pats_init)
                        [List.map tpc pats_tail] in
           let effects = Types.make_empty_open_row default_effect_subkind in
           let return_type = Types.fresh_type_variable (lin_any, res_any) in
@@ -4379,7 +4380,8 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                  let name = Binder.to_name bndr in
                  let _ = check_for_duplicate_names pos (List.flatten pats) in
                  let (pats_init, pats_tail) = from_option ([], []) (unsnoc_opt pats) in
-                 let pats = List.append (List.map (List.map tpcu) pats_init)
+                 let tpc' = if DeclaredLinearity.is_linear lin then tpc else tpcu in
+                 let pats = List.append (List.map (List.map tpc') pats_init)
                               [List.map tpc pats_tail] in
                  let t_ann = match def with
                    | Some (ty, _) -> Some ty
