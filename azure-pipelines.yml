@@ -13,8 +13,8 @@ strategy:
   matrix:
     linux:
       imageName: 'ubuntu-latest'
-    mac:
-      imageName: 'macos-latest'
+#    mac:
+#      imageName: 'macos-latest'
 
 pool:
   vmImage: $(imageName)
@@ -81,7 +81,7 @@ steps:
                  sudo systemctl reload postgresql &&
                  sudo -u postgres createuser -s $(whoami) &&
                  sudo -u postgres createdb -O $(whoami) links;;
-        "Darwin") brew install postgresql libpq sqlite3 &&
+        "Darwin") brew install postgresql@9.5 libpq sqlite3 &&
                   pg_ctl -D /usr/local/var/postgres start &&
                   sleep 5 &&
                   /usr/local/opt/postgres/bin/createdb -O $(whoami) links ;;
