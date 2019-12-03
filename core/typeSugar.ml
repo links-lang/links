@@ -392,6 +392,7 @@ sig
   val cp_link_dual : griper
 
   val non_linearity : Position.t -> int -> string -> Types.datatype -> unit
+  val linear_recursive_function : Position.t -> string -> unit
 
   val try_in_unless_pat : griper
   val try_in_unless_branches : griper
@@ -1510,6 +1511,9 @@ end
                 code ppr_t                           ^ nl  () ^
                "but is used " ^ string_of_int uses ^ " times.")
 
+    let linear_recursive_function pos f =
+      die pos ("Recursive function " ^ f ^ " cannot be linear.")
+
     (* Affine session exception handling *)
     let try_in_unless_pat ~pos ~t1:l ~t2:r ~error:_ =
       build_tyvar_names [snd l; snd r];
@@ -2179,11 +2183,17 @@ let check_unsafe_signature context unify inner = function
      unsafe
   | Some (_, None) -> raise (internal_error "Sugartypes.datatype' without a Types.typ instance")
 
-let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environment * Types.datatype =
+let type_pattern ?(linear_vars=true) closed
+    : Pattern.with_pos -> Pattern.with_pos * Types.environment * Types.datatype =
   let make_singleton_row =
     match closed with
       | `Closed -> Types.make_singleton_closed_row
       | `Open -> (fun var -> Types.make_singleton_open_row var (lin_any, res_any)) in
+
+  let fresh_var () =
+    if linear_vars
+    then Types.fresh_type_variable (lin_any, res_any)
+    else Types.fresh_type_variable (lin_unl, res_any) in
 
   (* type_pattern p types the pattern p returning a typed pattern, a
      type environment for the variables bound by the pattern and two
@@ -2210,7 +2220,7 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environme
       let open Pattern in
       match pattern with
       | Nil ->
-        let t = Types.make_list_type (Types.fresh_type_variable (lin_any, res_any)) in
+        let t = Types.make_list_type (fresh_var ()) in
         Nil, Env.empty, (t, t)
       | Any ->
         let t = Types.fresh_type_variable (lin_unl, res_any) in
@@ -2219,7 +2229,7 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environme
         let t = `Primitive (Constant.type_of c) in
         c', Env.empty, (t, t)
       | Variable bndr ->
-        let xtype = Types.fresh_type_variable (lin_any, res_any) in
+        let xtype = fresh_var () in
         (Variable (Binder.set_type bndr xtype),
          Env.singleton (Binder.to_name bndr) xtype,
          (xtype, xtype))
@@ -2240,7 +2250,7 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environme
           Types.make_list_type (typ p) in
         let ts =
           match ps' with
-          | [] -> let t = Types.fresh_type_variable (lin_any, res_any) in t, t
+          | [] -> let t = fresh_var () in t, t
           | p::ps ->
             list_type p ps ot, list_type p ps it
         in
@@ -2256,8 +2266,8 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environme
          (* Auxiliary machinery for typing effect patterns *)
          let rec type_resumption_pat (kpat : Pattern.with_pos) : Pattern.with_pos * Types.environment * (Types.datatype * Types.datatype) =
            let fresh_resumption_type () =
-             let domain   = Types.fresh_type_variable (lin_any, res_any) in
-             let codomain = Types.fresh_type_variable (lin_any, res_any) in
+             let domain   = fresh_var () in
+             let codomain = fresh_var () in
              let effrow   = Types.make_empty_open_row default_effect_subkind in
              Types.make_function_type [domain] effrow codomain
            in
@@ -2316,7 +2326,7 @@ let type_pattern closed : Pattern.with_pos -> Pattern.with_pos * Types.environme
         let positive, negative =
           List.fold_right
             (fun name (positive, negative) ->
-               let a = Types.fresh_type_variable (lin_any, res_any) in
+               let a = fresh_var () in
                (StringMap.add name (`Present a) positive,
                 StringMap.add name `Absent negative))
             names (StringMap.empty, StringMap.empty) in
@@ -2503,8 +2513,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
       Position.Resolved.source_expression in
     let exp_pos (p,_,_) = uexp_pos p in
     let pos_and_typ e = (exp_pos e, typ e) in
-    let tpc p = type_pattern `Closed p
-    and tpo p = type_pattern `Open p
+    let tpc p = type_pattern `Closed p in
+    let tpcu p = type_pattern ~linear_vars:false `Closed p in
+    let tpo p = type_pattern `Open p
     and tc : phrase -> phrase * Types.datatype * Usage.t = type_check context
     and expr_string (p : Sugartypes.phrase) : string =
       let pos = WithPos.pos p in
@@ -2676,7 +2687,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             end
         | FunLit (argss_prev, lin, (pats, body), location) ->
             let vs = check_for_duplicate_names pos (List.flatten pats) in
-            let pats = List.map (List.map tpc) pats in
+            let (pats_init, pats_tail) = from_option ([], []) (unsnoc_opt pats) in
+            let tpc' = if DeclaredLinearity.is_linear lin then tpc else tpcu in
+            let pats = List.append (List.map (List.map tpc') pats_init)
+                                   [List.map tpc pats_tail] in
             let pat_env = List.fold_left (List.fold_left (fun env pat' -> Env.extend env (pattern_env pat'))) Env.empty pats in
             let env' = Env.extend context.var_env pat_env in
 
@@ -4145,6 +4159,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
     and pattern_typ (_, _, t) = t
     and tc = type_check context
     and tpc = type_pattern `Closed
+    and tpcu p = type_pattern ~linear_vars:false `Closed p
     and pattern_env (_, e, _) = e
     and (++) ctxt env' = {ctxt with var_env = Env.extend ctxt.var_env env'} in
     let pattern_pos ({pos=p;_},_,_) = Position.resolve_expression p in
@@ -4200,8 +4215,10 @@ and type_binding : context -> binding -> binding * context * Usage.t =
 
           let name = Binder.to_name bndr in
           let vs = name :: check_for_duplicate_names pos (List.flatten pats) in
-          let pats = List.map (List.map tpc) pats in
-
+          let (pats_init, pats_tail) = from_option ([], []) (unsnoc_opt pats) in
+          let tpc' = if DeclaredLinearity.is_linear lin then tpc else tpcu in
+          let pats = List.append (List.map (List.map tpc') pats_init)
+                       [List.map tpc pats_tail] in
           let effects = Types.make_empty_open_row default_effect_subkind in
           let return_type = Types.fresh_type_variable (lin_any, res_any) in
 
@@ -4365,8 +4382,13 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                             rec_frozen = frozen;
                             _ }; _ } ->
                  let name = Binder.to_name bndr in
+                 (* recursive functions can't be linear! *)
+                 if DeclaredLinearity.is_linear lin then
+                   Gripers.linear_recursive_function pos name;
                  let _ = check_for_duplicate_names pos (List.flatten pats) in
-                 let pats = List.map (List.map tpc) pats in
+                 let (pats_init, pats_tail) = from_option ([], []) (unsnoc_opt pats) in
+                 let pats = List.append (List.map (List.map tpcu) pats_init)
+                              [List.map tpc pats_tail] in
                  let t_ann = match def with
                    | Some (ty, _) -> Some ty
                    | None -> resolve_type_annotation bndr t_ann'
