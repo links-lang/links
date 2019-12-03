@@ -226,6 +226,7 @@ val make_type_variable : int -> Subkind.t -> datatype
 val make_rigid_type_variable : int -> Subkind.t -> datatype
 val make_row_variable : int -> Subkind.t -> row_var
 val make_rigid_row_variable : int -> Subkind.t -> row_var
+val make_rigid_presence_variable : int -> Subkind.t -> field_spec
 
 (** fresh type variable generation *)
 val fresh_type_variable : Subkind.t -> datatype

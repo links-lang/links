@@ -98,7 +98,7 @@ stdout : 2 : Int
 
 Closure at top-level (issue #422) [2]
 switch(Foo(fun(x) { x })) { case Foo(id) -> fun(x) { id(x) } }
-stdout : fun : (a::(Any,Mono)) -> a::(Any,Mono)
+stdout : fun : (a::Any) -> a::Any
 
 Constructor names with primes (1)
 Foo'
