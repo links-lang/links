@@ -733,7 +733,7 @@ struct
                   let x = Var.var_of_binder xb in
                     computation (bind env (x, tail_computation env tc)) (bs, tailcomp)
               | Fun (_, _, _, Location.Client) ->
-                  eval_error "Client function"
+                  query_error "Client function"
               | Fun ((f, _), _, _, _) ->
                 (* This should never happen now that we have closure conversion*)
                 raise (internal_error
