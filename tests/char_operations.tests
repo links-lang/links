@@ -1,0 +1,131 @@
+isBlank [1]
+isBlank(' ')
+stdout : true : Bool
+
+isBlank [2]
+isBlank('\t')
+stdout : true : Bool
+
+isBlank [3]
+isBlank('\n')
+stdout : false : Bool
+
+isBlank [4]
+isBlank('$')
+stdout : false : Bool
+
+isBlank [5]
+isBlank('M')
+stdout : false : Bool
+
+isLower [1]
+isLower('a')
+stdout : true : Bool
+
+isLower [2]
+isLower('z')
+stdout : true : Bool
+
+isLower [3]
+isLower('j')
+stdout : true : Bool
+
+isLower [4]
+isLower('A')
+stdout : false : Bool
+
+isLower [5]
+isLower('{')
+stdout : false : Bool
+
+isLower [7]
+isLower('`')
+stdout : false : Bool
+
+isUpper [1]
+isUpper('A')
+stdout : true : Bool
+
+isUpper [2]
+isUpper('Z')
+stdout : true : Bool
+
+isUpper [3]
+isUpper('J')
+stdout : true : Bool
+
+isUpper [4]
+isUpper('a')
+stdout : false : Bool
+
+isUpper [5]
+isUpper('[')
+stdout : false : Bool
+
+isUpper [6]
+isUpper('@')
+stdout : false : Bool
+
+isAlnum [1]
+isAlnum('a') && isAlnum('z') && isAlnum('A') && isAlnum('Z') && isAlnum('0') && isAlnum('1') && isAlnum('2') && isAlnum('3') && isAlnum('4') && isAlnum('5') && isAlnum('6') && isAlnum('7') && isAlnum('8') && isAlnum('9')
+stdout : true : Bool
+
+isAlnum [2]
+isAlnum('/') || isAlnum('$') || isAlnum('*') || isAlnum('{')
+stdout : false : Bool
+
+isXDigit [1]
+isXDigit('A') && isXDigit('B') && isXDigit('C') && isXDigit('D') && isXDigit('E') && isXDigit('F') && isXDigit('a') && isXDigit('b') && isXDigit('c') && isXDigit('d') && isXDigit('e') && isXDigit('f') && isXDigit('0') && isXDigit('1') && isXDigit('2') && isXDigit('3') && isXDigit('4') && isXDigit('5') && isXDigit('6') && isXDigit('7') && isXDigit('8') && isXDigit('9')
+stdout : true : Bool
+
+isXDigit [2]
+isXDigit('/') || isXDigit('[')
+stdout : false : Bool
+
+toUpper [1]
+toUpper('a')
+stdout : 'A' : Char
+
+toUpper [2]
+toUpper('z')
+stdout : 'Z' : Char
+
+toUpper [3]
+toUpper('k')
+stdout : 'K' : Char
+
+toUpper [4]
+toUpper('$')
+stdout : '$' : Char
+
+toUpper [5]
+toUpper('[')
+stdout : '[' : Char
+
+toUpper [6]
+toUpper('7')
+stdout : '7' : Char
+
+toLower [1]
+toLower('A')
+stdout : 'a' : Char
+
+toLower [2]
+toLower('Z')
+stdout : 'z' : Char
+
+toLower [3]
+toLower('O')
+stdout : 'o' : Char
+
+toLower [4]
+toLower('$')
+stdout : '$' : Char
+
+toLower [5]
+toLower('{')
+stdout : '{' : Char
+
+toLower [6]
+toLower('5')
+stdout : '5' : Char

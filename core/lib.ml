@@ -72,22 +72,6 @@ let string_to_xml : Value.t -> Value.t = function
   | _ -> raise (runtime_type_error "non-string value passed to xml conversion routine")
 
 (* The following functions expect 1 argument. Assert false otherwise. *)
-let char_test_op fn pure =
-  (`PFun (fun _ args ->
-      match args with
-        | [c] -> (`Bool (fn (Value.unbox_char c)))
-        | _ -> assert false),
-   datatype "(Char) ~> Bool",
-   pure)
-
-let char_conversion fn pure =
-  (`PFun (fun _ args ->
-      match args with
-        | [c] -> (Value.box_char (fn (Value.unbox_char c)))
-        | _ -> assert false),
-   datatype "(Char) -> Char",
-   pure)
-
 let float_fn fn pure =
   (`PFun (fun _ args ->
       match args with
@@ -1124,19 +1108,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                 "args", Value.box_string args])),
    datatype "() ~> (driver:String, args:String)",
   IMPURE);
-
-  (* some char functions *)
-  "isAlpha",  char_test_op Char.isAlpha PURE;
-  "isAlnum",  char_test_op Char.isAlnum PURE;
-  "isLower",  char_test_op Char.isLower PURE;
-  "isUpper",  char_test_op Char.isUpper PURE;
-  "isDigit",  char_test_op Char.isDigit PURE;
-  "isXDigit", char_test_op Char.isXDigit PURE;
-  "isBlank",  char_test_op Char.isBlank PURE;
-  (* isCntrl, isGraph, isPrint, isPunct, isSpace *)
-
-  "toUpper", char_conversion Char.uppercase_ascii PURE;
-  "toLower", char_conversion Char.lowercase_ascii PURE;
 
   "ord",
   (p1 (fun c -> Value.box_int (Char.code (Value.unbox_char c))),
