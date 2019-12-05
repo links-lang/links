@@ -13,7 +13,7 @@ let to_links_map m =
     m Utility.StringMap.empty
 
 let lookup_alias context ~alias =
-  match Env.String.find context alias with
+  match Env.String.find_opt alias context with
   | Some (`Alias (_, t)) -> `Alias ((alias, [], []), t)
   | _ -> Errors.MissingBuiltinType alias |> raise
 

@@ -2884,7 +2884,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            let sort = Lens.Type.sort typ in
            let {tycon_env = context;_} = context in
            let trowtype = Lens.Sort.record_type sort |> Lens_type_conv.type_of_lens_phrase_type ~context in
-           LensGetLit (erase lens, Some trowtype), Types.make_list_type trowtype, usages usages lens
+           LensGetLit (erase lens, Some trowtype), Types.make_list_type trowtype, usages lens
         | LensCheckLit (lens, _) ->
           relational_lenses_guard pos;
            let lens = tc lens in
