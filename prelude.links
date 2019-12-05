@@ -1480,7 +1480,7 @@ fun toLower(ch) {
   } else ch
 }
 
-typename Serial = [| Key:Int | NewKey | NewMappedKey:Int |];
+typename Serial = [| Key:Int | NewKey | NewKeyMapped:Int |];
 
 sig isNew : (Serial) -> Bool
 fun isNew(x) {
