@@ -2183,209 +2183,6 @@ let check_unsafe_signature context unify inner = function
      unsafe
   | Some (_, None) -> raise (internal_error "Sugartypes.datatype' without a Types.typ instance")
 
-let type_pattern ?(linear_vars=true) closed
-    : Pattern.with_pos -> Pattern.with_pos * Types.environment * Types.datatype =
-  let make_singleton_row =
-    match closed with
-      | `Closed -> Types.make_singleton_closed_row
-      | `Open -> (fun var -> Types.make_singleton_open_row var (lin_any, res_any)) in
-
-  let fresh_var () =
-    if linear_vars
-    then Types.fresh_type_variable (lin_any, res_any)
-    else Types.fresh_type_variable (lin_unl, res_any) in
-
-  (* type_pattern p types the pattern p returning a typed pattern, a
-     type environment for the variables bound by the pattern and two
-     types. The first type is the type of the pattern 'viewed from the
-     outside' - in the case of variant patterns it must be open in
-     order to allow cases to unify. The second type is the type of the
-     pattern 'viewed from the inside'. Type annotations are only
-     applied to the inner pattern. The type environment is constructed
-     using types from the inner type.
-
-  *)
-  let rec type_pattern {node = pattern; pos = pos'} : Pattern.with_pos * Types.environment * (Types.datatype * Types.datatype) =
-    let _UNKNOWN_POS_ = "<unknown>" in
-    let tp = type_pattern in
-    let unify (l, r) = unify_or_raise ~pos:pos' (l, r)
-    and erase (p,_, _) = p
-    and ot (_,_,(t,_)) = t
-    and it (_,_,(_,t)) = t
-    and env (_,e,_) = e
-    and pos ({pos = p;_},_,_) = Position.Resolved.resolve p |> Position.Resolved.source_expression
-    and (++) = Env.extend in
-    let (p, env, (outer_type, inner_type)) :
-      Pattern.t * Types.environment * (Types.datatype * Types.datatype) =
-      let open Pattern in
-      match pattern with
-      | Nil ->
-        let t = Types.make_list_type (fresh_var ()) in
-        Nil, Env.empty, (t, t)
-      | Any ->
-        let t = Types.fresh_type_variable (lin_unl, res_any) in
-        Any, Env.empty, (t, t)
-      | Constant c as c' ->
-        let t = `Primitive (Constant.type_of c) in
-        c', Env.empty, (t, t)
-      | Variable bndr ->
-        let xtype = fresh_var () in
-        (Variable (Binder.set_type bndr xtype),
-         Env.singleton (Binder.to_name bndr) xtype,
-         (xtype, xtype))
-      | Cons (p1, p2) ->
-        let p1 = tp p1
-        and p2 = tp p2 in
-        let () = unify ~handle:Gripers.cons_pattern ((pos p1, Types.make_list_type (ot p1)),
-                                                     (pos p2, ot p2)) in
-        let () = unify ~handle:Gripers.cons_pattern ((pos p1, Types.make_list_type (it p1)),
-                                                     (pos p2, it p2)) in
-        Cons (erase p1, erase p2), env p1 ++ env p2, (ot p2, it p2)
-      | List ps ->
-        let ps' = List.map tp ps in
-        let env' = List.fold_right (env ->- (++)) ps' Env.empty in
-        let list_type p ps typ =
-          let () = List.iter (fun p' -> unify ~handle:Gripers.list_pattern ((pos p, typ p),
-                                                                            (pos p', typ p'))) ps in
-          Types.make_list_type (typ p) in
-        let ts =
-          match ps' with
-          | [] -> let t = fresh_var () in t, t
-          | p::ps ->
-            list_type p ps ot, list_type p ps it
-        in
-        List (List.map erase ps'), env', ts
-      | Variant (name, None) ->
-        let vtype () = `Variant (make_singleton_row (name, `Present Types.unit_type)) in
-        Variant (name, None), Env.empty, (vtype (), vtype ())
-      | Variant (name, Some p) ->
-        let p = tp p in
-        let vtype typ = `Variant (make_singleton_row (name, `Present (typ p))) in
-        Variant (name, Some (erase p)), env p, (vtype ot, vtype it)
-      | Effect (name, ps, k) ->
-         (* Auxiliary machinery for typing effect patterns *)
-         let rec type_resumption_pat (kpat : Pattern.with_pos) : Pattern.with_pos * Types.environment * (Types.datatype * Types.datatype) =
-           let fresh_resumption_type () =
-             let domain   = fresh_var () in
-             let codomain = fresh_var () in
-             let effrow   = Types.make_empty_open_row default_effect_subkind in
-             Types.make_function_type [domain] effrow codomain
-           in
-           let pos' = kpat.pos in
-           let open Pattern in
-           match kpat.node with
-           | Any ->
-              let t = fresh_resumption_type () in
-              kpat, Env.empty, (t, t)
-           | Variable bndr ->
-              let xtype = fresh_resumption_type () in
-              ( with_pos pos' (Variable (Binder.set_type bndr xtype))
-              , Env.singleton (Binder.to_name bndr) xtype, (xtype, xtype))
-           | As (bndr, pat') ->
-              let p = type_resumption_pat pat' in
-              let env' = Env.bind (Binder.to_name bndr) (it p) (env p) in
-              with_pos pos' (As ((Binder.set_type bndr (it p), erase p))), env', (ot p, it p)
-           | HasType (p, (_, Some t)) ->
-              let p = type_resumption_pat p in
-              let () = unify ~handle:Gripers.type_resumption_with_annotation ((pos p, it p), (_UNKNOWN_POS_, t)) in
-              erase p, env p, (ot p, t)
-           | _ -> Gripers.die pos' "Improper pattern matching on resumption"
-         in
-         (* Typing of effect patterns *)
-         let ps = List.map tp ps in
-         let k = type_resumption_pat k in
-         let eff typ =
-           let domain = List.map typ ps in
-           let codomain = TypeUtils.arg_types (typ k) in
-           let t =
-             (* Construct operation type, i.e. op : A -> B or op : B *)
-             match domain, codomain with
-             | [], [] | _, [] -> assert false (* The continuation is at least unary *)
-             | [], [t] -> `Function (Types.unit_type, Types.make_empty_closed_row (), t)
-             | [], ts -> Types.make_tuple_type ts
-             | ts, [t] ->
-                Types.make_function_type ts (Types.make_empty_closed_row ()) t
-             | ts, ts' ->
-                (* parameterised continuation *)
-                let t = ListUtils.last ts' in
-                Types.make_function_type ts (Types.make_empty_closed_row ()) t
-           in
-           `Effect (make_singleton_row (name, `Present t))
-         in
-         let env =
-           let penv =
-             List.fold_right (env ->- (++)) ps Env.empty
-           in
-           let kenv = env k in
-           penv ++ kenv
-         in
-         Effect (name, List.map erase ps, erase k), env, (eff ot, eff it)
-      | Negative names ->
-        let row_var = Types.fresh_row_variable (lin_any, res_any) in
-
-        let positive, negative =
-          List.fold_right
-            (fun name (positive, negative) ->
-               let a = fresh_var () in
-               (StringMap.add name (`Present a) positive,
-                StringMap.add name `Absent negative))
-            names (StringMap.empty, StringMap.empty) in
-
-        let outer_type = `Variant (positive, row_var, false) in
-        let inner_type = `Variant (negative, row_var, false) in
-        Negative names, Env.empty, (outer_type, inner_type)
-      | Record (ps, default) ->
-        let ps = alistmap tp ps in
-        let default = opt_map tp default in
-        let initial_outer, initial_inner, denv =
-          match default with
-          | None ->
-            let row = Types.make_empty_closed_row () in
-            row, row, Env.empty
-          | Some r ->
-            let make_closed_row typ =
-              let row =
-                List.fold_right
-                  (fun (label, _) ->
-                     Types.row_with (label, `Absent))
-                  ps (Types.make_empty_open_row (lin_any, res_any)) in
-              let () = unify ~handle:Gripers.record_pattern (("", `Record row),
-                                                             (pos r, typ r))
-              in
-              row
-            in
-            make_closed_row ot, make_closed_row it, env r in
-        let rtype typ initial =
-          `Record (List.fold_right
-                     (fun (l, f) -> Types.row_with (l, `Present (typ f)))
-                     ps initial) in
-        let penv =
-          List.fold_right (snd ->- env ->- (++)) ps Env.empty
-        in
-        (Record (alistmap erase ps, opt_map erase default),
-         penv ++ denv,
-         (rtype ot initial_outer, rtype it initial_inner))
-      | Tuple ps ->
-        let ps' = List.map tp ps in
-        let env' = List.fold_right (env ->- (++)) ps' Env.empty in
-        let make_tuple typ = Types.make_tuple_type (List.map typ ps') in
-        Tuple (List.map erase ps'), env', (make_tuple ot, make_tuple it)
-      | As (bndr, p) ->
-        let p = tp p in
-        let env' = Env.bind (Binder.to_name bndr) (it p) (env p) in
-        As (Binder.set_type bndr (it p), erase p), env', (ot p, it p)
-      | HasType (p, (_,Some t as t')) ->
-        let p = tp p in
-        let () = unify ~handle:Gripers.pattern_annotation ((pos p, it p), (_UNKNOWN_POS_, t)) in
-        HasType (erase p, t'), env p, (ot p, t)
-      | HasType _ -> assert false in
-    with_pos pos' p, env, (outer_type, inner_type)
-  in
-  fun pattern ->
-    let _ = check_for_duplicate_names pattern.pos [pattern] in
-    let pos, env, (outer_type, _) = type_pattern pattern in
-    pos, env, outer_type
-
 let rec pattern_env : Pattern.with_pos -> Types.datatype Env.t =
   fun { node = p; _} -> let open Pattern in
   match p with
@@ -2412,6 +2209,189 @@ let rec pattern_env : Pattern.with_pos -> Types.datatype Env.t =
     | As (bndr, p) ->
        Env.bind (Binder.to_name bndr) (Binder.to_type bndr) (pattern_env p)
 
+let type_pattern ?(linear_vars=true) closed
+    : Pattern.with_pos -> Pattern.with_pos * Types.environment * Types.datatype =
+  let make_singleton_row =
+    match closed with
+      | `Closed -> Types.make_singleton_closed_row
+      | `Open -> (fun var -> Types.make_singleton_open_row var (lin_any, res_any)) in
+
+  let fresh_var () =
+    if linear_vars
+    then Types.fresh_type_variable (lin_any, res_any)
+    else Types.fresh_type_variable (lin_unl, res_any) in
+
+  (* type_pattern p types the pattern p returning a typed pattern, a
+     type environment for the variables bound by the pattern and two
+     types. The first type is the type of the pattern 'viewed from the
+     outside' - in the case of variant patterns it must be open in
+     order to allow cases to unify. The second type is the type of the
+     pattern 'viewed from the inside'. Type annotations are only
+     applied to the inner pattern. The type environment is constructed
+     using types from the inner type.
+
+  *)
+  let rec type_pattern {node = pattern; pos = pos'} : Pattern.with_pos * (Types.datatype * Types.datatype) =
+    let _UNKNOWN_POS_ = "<unknown>" in
+    let tp = type_pattern in
+    let unify (l, r) = unify_or_raise ~pos:pos' (l, r)
+    and erase (p, _) = p
+    and ot (_,(t,_)) = t
+    and it (_,(_,t)) = t
+    and pos ({pos = p;_},_) = Position.Resolved.resolve p |> Position.Resolved.source_expression in
+    let (p, (outer_type, inner_type)) :
+          Pattern.t * (Types.datatype * Types.datatype) =
+      let open Pattern in
+      match pattern with
+      | Nil ->
+        let t = Types.make_list_type (fresh_var ()) in
+        Nil, (t, t)
+      | Any ->
+        let t = Types.fresh_type_variable (lin_unl, res_any) in
+        Any, (t, t)
+      | Constant c as c' ->
+        let t = `Primitive (Constant.type_of c) in
+        c', (t, t)
+      | Variable bndr ->
+        let xtype = fresh_var () in
+        Variable (Binder.set_type bndr xtype), (xtype, xtype)
+      | Cons (p1, p2) ->
+        let p1 = tp p1
+        and p2 = tp p2 in
+        let () = unify ~handle:Gripers.cons_pattern ((pos p1, Types.make_list_type (ot p1)),
+                                                     (pos p2, ot p2)) in
+        let () = unify ~handle:Gripers.cons_pattern ((pos p1, Types.make_list_type (it p1)),
+                                                     (pos p2, it p2)) in
+        Cons (erase p1, erase p2), (ot p2, it p2)
+      | List ps ->
+        let ps' = List.map tp ps in
+        let list_type p ps typ =
+          let () = List.iter (fun p' -> unify ~handle:Gripers.list_pattern ((pos p, typ p),
+                                                                            (pos p', typ p'))) ps in
+          Types.make_list_type (typ p) in
+        let ts =
+          match ps' with
+          | [] -> let t = fresh_var () in t, t
+          | p::ps ->
+            list_type p ps ot, list_type p ps it
+        in
+        List (List.map erase ps'), ts
+      | Variant (name, None) ->
+        let vtype () = `Variant (make_singleton_row (name, `Present Types.unit_type)) in
+        Variant (name, None), (vtype (), vtype ())
+      | Variant (name, Some p) ->
+        let p = tp p in
+        let vtype typ = `Variant (make_singleton_row (name, `Present (typ p))) in
+        Variant (name, Some (erase p)), (vtype ot, vtype it)
+      | Effect (name, ps, k) ->
+         (* Auxiliary machinery for typing effect patterns *)
+         let rec type_resumption_pat (kpat : Pattern.with_pos) : Pattern.with_pos * (Types.datatype * Types.datatype) =
+           let fresh_resumption_type () =
+             let domain   = fresh_var () in
+             let codomain = fresh_var () in
+             let effrow   = Types.make_empty_open_row default_effect_subkind in
+             Types.make_function_type [domain] effrow codomain
+           in
+           let pos' = kpat.pos in
+           let open Pattern in
+           match kpat.node with
+           | Any ->
+              let t = fresh_resumption_type () in
+              kpat, (t, t)
+           | Variable bndr ->
+              let xtype = fresh_resumption_type () in
+              ( with_pos pos' (Variable (Binder.set_type bndr xtype))
+              , (xtype, xtype))
+           | As (bndr, pat') ->
+              let p = type_resumption_pat pat' in
+              with_pos pos' (As ((Binder.set_type bndr (it p), erase p))), (ot p, it p)
+           | HasType (p, (_, Some t)) ->
+              let p = type_resumption_pat p in
+              let () = unify ~handle:Gripers.type_resumption_with_annotation ((pos p, it p), (_UNKNOWN_POS_, t)) in
+              erase p, (ot p, t)
+           | _ -> Gripers.die pos' "Improper pattern matching on resumption"
+         in
+         (* Typing of effect patterns *)
+         let ps = List.map tp ps in
+         let k = type_resumption_pat k in
+         let eff typ =
+           let domain = List.map typ ps in
+           let codomain = TypeUtils.arg_types (typ k) in
+           let t =
+             (* Construct operation type, i.e. op : A -> B or op : B *)
+             match domain, codomain with
+             | [], [] | _, [] -> assert false (* The continuation is at least unary *)
+             | [], [t] -> `Function (Types.unit_type, Types.make_empty_closed_row (), t)
+             | [], ts -> Types.make_tuple_type ts
+             | ts, [t] ->
+                Types.make_function_type ts (Types.make_empty_closed_row ()) t
+             | ts, ts' ->
+                (* parameterised continuation *)
+                let t = ListUtils.last ts' in
+                Types.make_function_type ts (Types.make_empty_closed_row ()) t
+           in
+           `Effect (make_singleton_row (name, `Present t))
+         in
+         Effect (name, List.map erase ps, erase k), (eff ot, eff it)
+      | Negative names ->
+        let row_var = Types.fresh_row_variable (lin_any, res_any) in
+
+        let positive, negative =
+          List.fold_right
+            (fun name (positive, negative) ->
+               let a = fresh_var () in
+               (StringMap.add name (`Present a) positive,
+                StringMap.add name `Absent negative))
+            names (StringMap.empty, StringMap.empty) in
+
+        let outer_type = `Variant (positive, row_var, false) in
+        let inner_type = `Variant (negative, row_var, false) in
+        Negative names, (outer_type, inner_type)
+      | Record (ps, default) ->
+        let ps = alistmap tp ps in
+        let default = opt_map tp default in
+        let initial_outer, initial_inner =
+          match default with
+          | None ->
+            let row = Types.make_empty_closed_row () in
+            row, row
+          | Some r ->
+            let make_closed_row typ =
+              let row =
+                List.fold_right
+                  (fun (label, _) ->
+                     Types.row_with (label, `Absent))
+                  ps (Types.make_empty_open_row (lin_any, res_any)) in
+              let () = unify ~handle:Gripers.record_pattern (("", `Record row),
+                                                             (pos r, typ r))
+              in
+              row
+            in
+            make_closed_row ot, make_closed_row it in
+        let rtype typ initial =
+          `Record (List.fold_right
+                     (fun (l, f) -> Types.row_with (l, `Present (typ f)))
+                     ps initial) in
+        (Record (alistmap erase ps, opt_map erase default),
+         (rtype ot initial_outer, rtype it initial_inner))
+      | Tuple ps ->
+        let ps' = List.map tp ps in
+        let make_tuple typ = Types.make_tuple_type (List.map typ ps') in
+        Tuple (List.map erase ps'), (make_tuple ot, make_tuple it)
+      | As (bndr, p) ->
+        let p = tp p in
+        As (Binder.set_type bndr (it p), erase p), (ot p, it p)
+      | HasType (p, (_,Some t as t')) ->
+        let p = tp p in
+        let () = unify ~handle:Gripers.pattern_annotation ((pos p, it p), (_UNKNOWN_POS_, t)) in
+        HasType (erase p, t'), (ot p, t)
+      | HasType _ -> assert false in
+    with_pos pos' p, (outer_type, inner_type)
+  in
+  fun pattern ->
+    let _ = check_for_duplicate_names pattern.pos [pattern] in
+    let pattern', (outer_type, _) = type_pattern pattern in
+    pattern', pattern_env pattern', outer_type
 
 let update_pattern_vars env =
 (object (self)
