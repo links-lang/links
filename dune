@@ -13,7 +13,6 @@
   (flags (:standard
           ;; The following flags are the same as for the "dev" profile.
           -strict-formats -strict-sequence -safe-string -annot
-          -warn-error @A   ;; Treat warnings as errors...
           -w A-4-44-45-60  ;; ... except for warnings 4, 44, 45, and 60 which are ignored.
           ))
   (ocamlopt_flags (:standard
