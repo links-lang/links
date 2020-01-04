@@ -1,0 +1,8 @@
+exp is the inverse of log
+exp(log(2.0))
+stdout : 2.0 : Float
+
+log is the inverse of exp
+log(exp(2.0))
+stdout : 2.0 : Float
+

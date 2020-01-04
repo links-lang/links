@@ -1127,6 +1127,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "tan",     float_fn tan PURE;
   "log",     float_fn log PURE;
   "log10",   float_fn log10 PURE;
+  "exp",     float_fn exp PURE;
   "sqrt",    float_fn sqrt PURE;
 
   ("environment",
