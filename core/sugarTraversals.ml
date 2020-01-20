@@ -91,8 +91,8 @@ class map =
            TUnresolved (name', subkind_opt', freedom')
         | TResolved _p ->
            let message =
-             "if using SugarTraverals after datatype desugaring,"
-             ^ "must determine what do do with resolved type variables" in
+             "if using SugarTraverals after datatype desugaring,
+              must determine what do do with resolved type variables" in
            raise (internal_error message)
 
 
@@ -883,8 +883,8 @@ class fold =
            o
         | TResolved _p ->
            let message =
-             "if using SugarTraverals after datatype desugaring,"
-             ^ "must determine what do do with resolved type variables" in
+             "if using SugarTraverals after datatype desugaring,
+              must determine what do do with resolved type variables" in
            raise (internal_error message)
 
    method quantifier : type_variable -> 'self_type =
@@ -1596,8 +1596,8 @@ class fold_map =
            o, TUnresolved (name', subkind_opt', freedom')
         | TResolved _p ->
            let message =
-             "if using SugarTraverals after datatype desugaring,"
-             ^ "must determine what do do with resolved type variables" in
+             "if using SugarTraverals after datatype desugaring,
+              must determine what do do with resolved type variables" in
            raise (internal_error message)
 
 

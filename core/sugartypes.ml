@@ -113,8 +113,10 @@ let get_unresolved_exn = function
   | TUnresolved (name, subkind, freedom) ->
      name, subkind, freedom
   | TResolved _ ->
-     raise (internal_error
-       "Requesting unresolved type var when it has already been resolved")
+     raise
+       (internal_error
+          "Requesting unresolved type var when
+           it has already been resolved")
 
  let get_unresolved_name_exn =
    get_unresolved_exn ->- fst3
@@ -124,8 +126,10 @@ let get_unresolved_exn = function
 let get_resolved_exn = function
   | TResolved v -> v
   | TUnresolved _ ->
-     raise (internal_error
-       "Requesting resolved type var before it has been resolved")
+     raise
+       (internal_error
+          "Requesting resolved type var before
+           it has been resolved")
 
 end
 
