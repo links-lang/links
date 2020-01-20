@@ -5,6 +5,9 @@ open Utility
 
 (** The syntax tree created by the parser. *)
 
+let internal_error message =
+  Errors.internal_error ~filename:"sugartypes.ml" ~message
+
 module Binder: sig
   type t
   and with_pos = t WithPos.t
@@ -90,17 +93,43 @@ type quantifier = type_variable
 module SugarTypeVar =
 struct
 
+
+(* Note that an unresolved type variable may not contain information
+   about its primary kind. This is filled in when resolving the variable *)
 type t =
   | TUnresolved of Name.t * Subkind.t option * Freedom.t
-  | TResolved of Types.type_var Types.point
+  | TResolved of Types.type_var Types.point [@printer fun fmt _p -> fprintf fmt "<TResolved>"]
+     [@@deriving show]
 
 
 
 let from_sem var_point = TResolved var_point
 
+
+let mk_unresolved name subkind_opt freedom_opt =
+  TUnresolved (name, subkind_opt, freedom_opt)
+
+let mk_resolved point : t =
+  TResolved point
+
+
+let get_unresolved_exn = function
+  | TUnresolved (name, subkind, freedom) ->
+     name, subkind, freedom
+  | TResolved _ ->
+     raise (internal_error
+       "Requesting unresolved type var when it has already been resolved")
+
+ let get_unresolved_name_exn =
+   get_unresolved_exn ->- fst3
+
+
+
 let get_resolved_exn = function
   | TResolved v -> v
-  | TUnresolved _ -> failwith "bad"
+  | TUnresolved _ ->
+     raise (internal_error
+       "Requesting resolved type var before it has been resolved")
 
 end
 
@@ -138,7 +167,7 @@ type fieldconstraint = Readonly | Default
 
 module Datatype = struct
   type t =
-    | TypeVar         of known_type_variable
+    | TypeVar         of SugarTypeVar.t
     | QualifiedTypeApplication of Name.t list * type_arg list
     | Function        of with_pos list * row * with_pos
     | Lolli           of with_pos list * row * with_pos
@@ -164,12 +193,12 @@ module Datatype = struct
   and row = (string * fieldspec) list * row_var
   and row_var =
     | Closed
-    | Open of known_type_variable
+    | Open of SugarTypeVar.t
     | Recursive of Name.t * row
   and fieldspec =
     | Present of with_pos
     | Absent
-    | Var of known_type_variable
+    | Var of SugarTypeVar.t
   and type_arg =
     | Type of with_pos
     | Row of row
@@ -502,8 +531,11 @@ let tappl : phrasenode * tyarg list -> phrasenode = fun (e, tys) ->
   match tys with
     | [] -> e
     | _  ->
+       let tv = SugarTypeVar.mk_unresolved "$none" None `Rigid in
        let make_arg ty =
-         (Datatype.Type (WithPos.make (Datatype.TypeVar ("$none", None, `Rigid))), Some ty)
+         (Datatype.Type
+            (WithPos.make (Datatype.TypeVar tv)),
+          Some ty)
        in
        TAppl (WithPos.make e, List.map make_arg tys)
 
@@ -511,8 +543,9 @@ let tappl' : phrase * tyarg list -> phrasenode = fun (e, tys) ->
   match tys with
     | [] -> WithPos.node e
     | _  ->
+       let tv = SugarTypeVar.mk_unresolved "$none" None `Rigid in
        let make_arg ty =
-         (Datatype.Type (WithPos.make (Datatype.TypeVar ("$none", None, `Rigid))), Some ty)
+         Datatype.Type (WithPos.make (Datatype.TypeVar tv)), Some ty
        in
        TAppl (e, List.map make_arg tys)
 

@@ -126,7 +126,9 @@ let concrete_subkind =
   | Some subkind -> subkind
   | None         -> default_subkind
 
-let is_anon x = x.[0] = '$'
+let is_anon stv =
+  let (name, _, _) = SugarTypeVar.get_unresolved_exn stv in
+  name.[0] = '$'
 
 (** Ensure this variable has some kind, if {!infer_kinds} is disabled. *)
 let ensure_kinded = function
@@ -201,23 +203,29 @@ object (self)
 
   method! datatypenode = let open Datatype in
     function
-    | TypeVar (x, _, _) when is_anon x -> self
-    | TypeVar (x, k, freedom) -> self#add (x, (Some pk_type, k), freedom)
+    | TypeVar stv when is_anon stv -> self
+    | TypeVar stv ->
+       let (x, k, freedom) = SugarTypeVar.get_unresolved_exn stv in
+       self#add (x, (Some pk_type, k), freedom)
     | Mu (v, t)       -> self#quantified (fun o -> o#datatype t) [(v, (Some pk_type, None), `Rigid)]
     | Forall (qs, t)  -> self#quantified (fun o -> o#datatype t) qs
     | dt -> super#datatypenode dt
 
   method! row_var = let open Datatype in function
     | Closed               -> self
-    | Open (x, _, _) when is_anon x -> self
-    | Open (x, k, freedom) -> self#add (x, (Some pk_row, k), freedom)
+    | Open stv when is_anon stv -> self
+    | Open stv ->
+       let (x, k, freedom) = SugarTypeVar.get_unresolved_exn stv in
+       self#add (x, (Some pk_row, k), freedom)
     | Recursive (s, r)     -> self#quantified (fun o -> o#row r) [(s, (Some pk_row, None), `Rigid)]
 
   method! fieldspec = let open Datatype in function
     | Absent -> self
     | Present t -> self#datatype t
-    | Var (x, _, _) when is_anon x -> self
-    | Var (x, k, freedom) -> self#add (x, (Some pk_presence, k), freedom)
+    | Var stv when is_anon stv -> self
+    | Var stv ->
+       let (x, k, freedom) = SugarTypeVar.get_unresolved_exn stv in
+       self#add (x, (Some pk_presence, k), freedom)
 end
 
 type var_env = {
@@ -367,9 +375,17 @@ module Desugar = struct
              fields
          in
 
+         let gue = SugarTypeVar.get_unresolved_exn in
          let var = match var with
-           | Datatype.Open ("$eff", sk, fr) when not allow_shared || not has_effect_sugar -> Datatype.Open ("$", sk, fr)
-           | Datatype.Open ("$", None, `Rigid) when has_effect_sugar -> Datatype.Open ("$eff", None, `Rigid)
+           | Datatype.Open stv
+                when (not allow_shared || not has_effect_sugar)
+                     && SugarTypeVar.get_unresolved_name_exn stv = "$eff" ->
+              let (_, sk, fr) = gue stv in
+              let stv' = SugarTypeVar.mk_unresolved "$" sk fr in
+              Datatype.Open stv'
+           | Datatype.Open stv when has_effect_sugar && gue stv = ("$", None, `Rigid) ->
+              let stv' = SugarTypeVar.mk_unresolved "$eff" None `Rigid in
+              Datatype.Open stv'
            | _ -> var
          in
          self#row (fields, var)
@@ -448,7 +464,9 @@ module Desugar = struct
           match dt with
           | Function (_, (_, eff_var), _) | Lolli (_, (_, eff_var), _) ->
              begin match eff_var with
-             | Datatype.Open ("$eff", None, `Rigid) -> self#with_implicit
+             | Datatype.Open stv
+                  when SugarTypeVar.get_unresolved_exn stv = ("$eff", None, `Rigid) ->
+                self#with_implicit
              | _ -> self
              end
           | TypeApplication (name, ts) ->
@@ -539,7 +557,9 @@ module Desugar = struct
          method effect_row ((fields, var) : Datatype.row) =
            let self =
              match var with
-             | Datatype.Open (var, _, _) -> List.fold_left (fun o (op, _) -> o#add var op) self fields
+             | Datatype.Open stv ->
+                let var = SugarTypeVar.get_unresolved_name_exn stv in
+                List.fold_left (fun o (op, _) -> o#add var op) self fields
              | _ -> self
            in
            self#row (fields, var)
@@ -566,9 +586,12 @@ module Desugar = struct
     | { node = t; pos } ->
       let open Datatype in
       match t with
-        | TypeVar (name, sk, freedom) when is_anon name ->
+        | TypeVar stv when is_anon stv ->
+           let (_name, sk, freedom) = SugarTypeVar.get_unresolved_exn stv in
            `MetaTypeVar (make_anon_point var_env pos sk freedom)
-        | TypeVar (s, _, _) -> `MetaTypeVar (lookup_tvar pos s var_env)
+        | TypeVar stv ->
+           let s = SugarTypeVar.get_unresolved_name_exn stv in
+           `MetaTypeVar (lookup_tvar pos s var_env)
         | QualifiedTypeApplication _ -> assert false (* will have been erased *)
         | Function (f, e, t) ->
             `Function (Types.make_tuple_type (List.map (datatype var_env) f),
@@ -709,24 +732,30 @@ module Desugar = struct
     match fs with
     | Absent -> `Absent
     | Present t -> `Present (datatype var_env alias_env t)
-    | Var (name, sk, freedom) when is_anon name ->
+    | Var stv when is_anon stv ->
+       let (_name, sk, freedom) = SugarTypeVar.get_unresolved_exn stv in
        `Var (make_anon_point var_env pos sk freedom)
-    | Var (name, _, _) -> `Var (lookup_pvar pos name var_env)
+    | Var stv ->
+       let name = SugarTypeVar.get_unresolved_name_exn stv in
+       `Var (lookup_pvar pos name var_env)
 
   and row var_env alias_env (fields, rv) (node : 'a WithPos.t) =
     let seed =
       let open Datatype in
       match rv with
         | Closed -> Types.make_empty_closed_row ()
-        | Open ("$eff", _, _) ->
+        | Open stv when SugarTypeVar.get_unresolved_name_exn stv = "$eff" ->
            let eff = match var_env.shared_effect with
              | None -> raise (internal_error "Needed shared effect, but not given one.")
              | Some s -> Lazy.force s
            in
            (StringMap.empty, eff, false)
-        | Open (name, sk, freedom) when is_anon name ->
+        | Open stv when is_anon stv ->
+           let (_name, sk, freedom) = SugarTypeVar.get_unresolved_exn stv in
            (StringMap.empty, make_anon_point var_env node.pos sk freedom, false)
-        | Open (rv, _, _) -> (StringMap.empty, lookup_rvar node.pos rv var_env, false)
+        | Open stv ->
+           let rv = SugarTypeVar.get_unresolved_name_exn stv in
+           (StringMap.empty, lookup_rvar node.pos rv var_env, false)
         | Recursive (name, r) ->
             let var = Types.fresh_raw_variable () in
             let point = Unionfind.fresh (`Var (var, default_subkind, `Flexible)) in
@@ -742,7 +771,8 @@ module Desugar = struct
     let (fields, rho, dual) = row var_env alias_env (fields, rv) node in
     let fields =
       match rv with
-      | Datatype.Open (v, _, _) ->
+      | Datatype.Open stv ->
+         let v = SugarTypeVar.get_unresolved_name_exn stv in
          begin match StringMap.find_opt v var_env.row_operations with
          | Some ops ->
             let ops = StringMap.fold (fun k _ -> StringMap.remove k) fields ops in

@@ -13,6 +13,11 @@ open CommonTypes
 open SourceCode
 open Sugartypes
 
+
+let internal_error message =
+  Errors.internal_error ~filename:"sugarTraversals.ml" ~message
+
+
 class map =
   object ((o : 'self_type))
     method string : string -> string = o#unknown
@@ -76,11 +81,27 @@ class map =
 
     method freedom : Freedom.t -> Freedom.t = fun x -> x
 
-    method type_variable : type_variable -> type_variable =
+    method type_variable : SugarTypeVar.t -> SugarTypeVar.t =
+      let open SugarTypeVar in
+      function
+        | TUnresolved (name, subkind_opt, freedom) ->
+           let name' = o#name name in
+           let subkind_opt' = o#option (fun o -> o#subkind) subkind_opt in
+           let freedom' = o#freedom freedom in
+           TUnresolved (name', subkind_opt', freedom')
+        | TResolved _p ->
+           let message =
+             "if using SugarTraverals after datatype desugaring,"
+             ^ "must determine what do do with resolved type variables" in
+           raise (internal_error message)
+
+
+  method quantifier : type_variable -> type_variable =
       fun (_x, _x_i1, _x_i2) ->
         let _x = o#name _x in
         let _x_i1 = o#kind _x_i1 in
         let _x_i2 = o#freedom _x_i2 in (_x, _x_i1, _x_i2)
+
 
     method known_type_variable : known_type_variable -> known_type_variable =
       fun (_x, _x_i1, _x_i2) ->
@@ -88,12 +109,14 @@ class map =
         let _x_i1 = o#option (fun o -> o#subkind) _x_i1 in
         let _x_i2 = o#freedom _x_i2 in (_x, _x_i1, _x_i2)
 
+
+
     method row_var : Datatype.row_var -> Datatype.row_var =
       let open Datatype in
       function
       | Closed -> Closed
       | Open _x ->
-          let _x = o#known_type_variable _x in Open _x
+          let _x = o#type_variable _x in Open _x
       | Recursive ((_x, _x_i1)) ->
           let _x = o#name _x in
           let _x_i1 = o#row _x_i1 in Recursive ((_x, _x_i1))
@@ -568,7 +591,7 @@ class map =
       let open Datatype in function
       | Present _x -> let _x = o#datatype _x in Present _x
       | Absent -> Absent
-      | Var _x -> let _x = o#known_type_variable _x in Var _x
+      | Var _x -> let _x = o#type_variable _x in Var _x
 
     method fieldconstraint : fieldconstraint -> fieldconstraint =
       fun fc -> fc
@@ -582,7 +605,7 @@ class map =
       let open Datatype in
       function
       | TypeVar _x ->
-          let _x = o#known_type_variable _x in TypeVar _x
+          let _x = o#type_variable _x in TypeVar _x
       | QualifiedTypeApplication (ns, args) ->
           let ns = o#list (fun o -> o#name) ns in
           let args = o#list (fun o -> o#type_arg) args in
@@ -857,7 +880,21 @@ class fold =
 
     method freedom : Freedom.t -> 'self_type = fun _ -> o
 
-    method type_variable : type_variable -> 'self_type =
+    method type_variable : SugarTypeVar.t -> 'self_type =
+      let open SugarTypeVar in
+      function
+        | TUnresolved (name, subkind_opt, freedom) ->
+           let o = o#name name in
+           let o = o#option (fun o -> o#subkind) subkind_opt in
+           let o = o#freedom freedom in
+           o
+        | TResolved _p ->
+           let message =
+             "if using SugarTraverals after datatype desugaring,"
+             ^ "must determine what do do with resolved type variables" in
+           raise (internal_error message)
+
+   method quantifier : type_variable -> 'self_type =
       fun (_x, _x_i1, _x_i2) ->
         let o = o#name _x in
         let o = o#kind _x_i1 in
@@ -873,7 +910,7 @@ class fold =
       let open Datatype in function
       | Closed -> o
       | Open _x ->
-          let o = o#known_type_variable _x in o
+          let o = o#type_variable _x in o
       | Recursive ((_x, _x_i1)) ->
           let o = o#name _x in let o = o#row _x_i1 in o
 
@@ -1283,7 +1320,7 @@ class fold =
       let open Datatype in function
       | Present _x -> let o = o#datatype _x in o
       | Absent -> o
-      | Var _x -> let o = o#known_type_variable _x in o
+      | Var _x -> let o = o#type_variable _x in o
 
     method fieldconstraint : fieldconstraint -> 'self_type =
       fun _ -> o
@@ -1298,7 +1335,7 @@ class fold =
       let open Datatype in
       function
       | TypeVar _x ->
-          let o = o#known_type_variable _x in o
+          let o = o#type_variable _x in o
       | QualifiedTypeApplication (ns, args) ->
           let o = o#list (fun o -> o#name) ns in
           let o = o#list (fun o -> o#type_arg) args in
@@ -1562,7 +1599,22 @@ class fold_map =
 
     method freedom : Freedom.t -> ('self_type * Freedom.t) = fun k -> (o, k)
 
-    method type_variable : type_variable -> ('self_type * type_variable) =
+    method type_variable : SugarTypeVar.t -> ('self_type * SugarTypeVar.t) =
+      let open SugarTypeVar in
+      function
+        | TUnresolved (name, subkind_opt, freedom) ->
+           let o, name' = o#name name in
+           let o, subkind_opt' = o#option (fun o -> o#subkind) subkind_opt in
+           let o, freedom' = o#freedom freedom in
+           o, TUnresolved (name', subkind_opt', freedom')
+        | TResolved _p ->
+           let message =
+             "if using SugarTraverals after datatype desugaring,"
+             ^ "must determine what do do with resolved type variables" in
+           raise (internal_error message)
+
+
+    method quantifier : type_variable -> ('self_type * type_variable) =
       fun (_x, _x_i1, _x_i2) ->
         let (o, _x) = o#name _x in
         let (o, _x_i1) = o#kind _x_i1 in
@@ -1578,7 +1630,7 @@ class fold_map =
       let open Datatype in function
       | Closed -> (o, Closed)
       | Open _x ->
-          let (o, _x) = o#known_type_variable _x in (o, (Open _x))
+          let (o, _x) = o#type_variable _x in (o, (Open _x))
       | Recursive ((_x, _x_i1)) ->
           let (o, _x) = o#name _x in
           let (o, _x_i1) = o#row _x_i1 in (o, Recursive ((_x, _x_i1)))
@@ -2107,7 +2159,7 @@ class fold_map =
       let open Datatype in function
       | Present _x -> let (o, _x) = o#datatype _x in (o, Present _x)
       | Absent -> (o, Absent)
-      | Var _x -> let (o, _x) = o#known_type_variable _x in (o, Var _x)
+      | Var _x -> let (o, _x) = o#type_variable _x in (o, Var _x)
 
     method fieldconstraint : fieldconstraint -> ('self_type * fieldconstraint) =
       fun fc -> (o, fc)
@@ -2127,7 +2179,7 @@ class fold_map =
       let open Datatype in
       function
       | TypeVar _x ->
-          let (o, _x) = o#known_type_variable _x in (o, (TypeVar _x))
+          let (o, _x) = o#type_variable _x in (o, (TypeVar _x))
       | QualifiedTypeApplication (ns, args) ->
           let (o, ns) = o#list (fun o -> o#name) ns in
           let (o, args) = o#list (fun o -> o#type_arg) args in
