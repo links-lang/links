@@ -73,6 +73,9 @@ let default_effect_subkind : Subkind.t = (lin_unl, res_any)
 type kind = PrimaryKind.t option * Subkind.t option
     [@@deriving show]
 
+
+(* type variable of primary kind Type? *)
+
 type type_variable = Name.t * kind * Freedom.t
     [@@deriving show]
 
@@ -82,6 +85,44 @@ type known_type_variable = Name.t * Subkind.t option * Freedom.t
 
 type quantifier = type_variable
   [@@deriving show]
+
+
+module SugarTypeVar =
+struct
+
+type t =
+  | TUnresolved of Name.t * Subkind.t option * Freedom.t
+  | TResolved of Types.type_var Types.point
+
+
+
+let from_sem var_point = TResolved var_point
+
+let get_resolved_exn = function
+  | TResolved v -> v
+  | TUnresolved _ -> failwith "bad"
+
+end
+
+
+module SugarQuantifier =
+struct
+
+  type t =
+    | QUnresolved of Name.t * kind * Freedom.t
+    | QResolved of Quantifier.t
+
+
+  let to_resolved_exn = function
+    | QResolved q -> q
+    | QUnresolved _ -> failwith "bad"
+
+
+  let from_sem q = QResolved q
+
+end
+
+
 
 let rigidify (name, kind, _) = (name, kind, `Rigid)
 
