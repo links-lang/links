@@ -103,13 +103,6 @@ class map =
         let _x_i2 = o#freedom _x_i2 in (_x, _x_i1, _x_i2)
 
 
-    method known_type_variable : known_type_variable -> known_type_variable =
-      fun (_x, _x_i1, _x_i2) ->
-        let _x = o#name _x in
-        let _x_i1 = o#option (fun o -> o#subkind) _x_i1 in
-        let _x_i2 = o#freedom _x_i2 in (_x, _x_i1, _x_i2)
-
-
 
     method row_var : Datatype.row_var -> Datatype.row_var =
       let open Datatype in
@@ -900,12 +893,6 @@ class fold =
         let o = o#kind _x_i1 in
         let o = o#freedom _x_i2 in o
 
-    method known_type_variable : known_type_variable -> 'self_type =
-      fun (_x, _x_i1, _x_i2) ->
-        let o = o#name _x in
-        let o = o#option (fun o -> o#subkind) _x_i1 in
-        let o = o#freedom _x_i2 in o
-
     method row_var : Datatype.row_var -> 'self_type =
       let open Datatype in function
       | Closed -> o
@@ -1620,11 +1607,6 @@ class fold_map =
         let (o, _x_i1) = o#kind _x_i1 in
         let (o, _x_i2) = o#freedom _x_i2 in (o, (_x, _x_i1, _x_i2))
 
-    method known_type_variable : known_type_variable -> ('self_type * known_type_variable) =
-      fun (_x, _x_i1, _x_i2) ->
-        let (o, _x) = o#name _x in
-        let (o, _x_i1) = o#option (fun o -> o#subkind) _x_i1 in
-        let (o, _x_i2) = o#freedom _x_i2 in (o, (_x, _x_i1, _x_i2))
 
     method row_var : Datatype.row_var -> ('self_type * Datatype.row_var) =
       let open Datatype in function

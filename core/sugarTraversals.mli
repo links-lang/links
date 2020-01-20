@@ -35,7 +35,6 @@ class map :
     method freedom         : Freedom.t -> Freedom.t
     method quantifier   : type_variable -> type_variable
     method type_variable   : SugarTypeVar.t -> SugarTypeVar.t
-    method known_type_variable   : known_type_variable -> known_type_variable
     method row_var         : Datatype.row_var -> Datatype.row_var
     method row             : Datatype.row -> Datatype.row
     method replace_rhs     : replace_rhs -> replace_rhs
@@ -116,7 +115,6 @@ class fold :
     method freedom         : Freedom.t -> 'self
     method type_variable   : SugarTypeVar.t -> 'self
     method quantifier   : type_variable -> 'self
-    method known_type_variable : known_type_variable -> 'self
     method row_var         : Datatype.row_var -> 'self
     method row             : Datatype.row -> 'self
     method replace_rhs     : replace_rhs -> 'self
@@ -222,7 +220,6 @@ object ('self)
   method freedom         : Freedom.t -> 'self * Freedom.t
   method quantifier      : type_variable -> 'self * type_variable
   method type_variable   : SugarTypeVar.t -> 'self * SugarTypeVar.t
-  method known_type_variable : known_type_variable -> 'self * known_type_variable
   method typ             : Types.datatype -> ('self * Types.datatype)
   method type_row        : Types.row -> ('self* Types.row)
   method type_arg        : Datatype.type_arg -> 'self * Datatype.type_arg
