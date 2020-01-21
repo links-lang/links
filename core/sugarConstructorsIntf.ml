@@ -110,7 +110,7 @@ module type SugarConstructorsSig = sig
      -> ((DeclaredLinearity.t * bool) * Name.t * Pattern.with_pos list list * Location.t * phrase)
      -> binding
   val fun_binding'
-      : ?ppos:t -> ?linearity:DeclaredLinearity.t -> ?tyvars:tyvar list
+      : ?ppos:t -> ?linearity:DeclaredLinearity.t -> ?tyvars:SugarQuantifier.t list
      -> ?location:Location.t -> ?annotation:datatype'
      -> Binder.with_pos -> funlit
      -> binding

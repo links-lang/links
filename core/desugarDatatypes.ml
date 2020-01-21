@@ -60,6 +60,10 @@ module SEnv = Env.String
 
 let internal_error message = Errors.internal_error ~filename:"desugarDatatypes.ml" ~message
 
+type opt_kinded_type_variable = Name.t * Subkind.t option * Freedom.t
+type kinded_type_variable = Name.t * Sugartypes.kind * Freedom.t
+
+
 let infer_kinds
   = Settings.(flag "infer_kinds"
               |> convert parse_bool
@@ -75,14 +79,14 @@ let typevar_primary_kind_mismatch pos var ~expected ~actual =
           (CommonTypes.PrimaryKind.to_string actual)
           (CommonTypes.PrimaryKind.to_string expected) )
 
-let typevar_mismatch pos (v1 : type_variable) (v2 : type_variable) =
+let typevar_mismatch pos (v1 : kinded_type_variable) (v2 : kinded_type_variable) =
   let var, _, _ = v1 in
   Type_error
     ( pos,
       Printf.sprintf "Mismatch in kind for type variable `%s'.\n" var
       ^ Printf.sprintf "  Declared as `%s' and `%s'."
-          (string_of_type_variable v1)
-          (string_of_type_variable v2) )
+          ("fixme")
+          ("fixme") )
 
 let duplicate_var pos var =
   Type_error (pos, Printf.sprintf "Multiple definitions of type variable `%s'." var)
@@ -142,7 +146,7 @@ object (self)
   inherit SugarTraversals.fold as super
 
   val tyvar_list : Name.t list = []
-  val tyvars : type_variable StringMap.t = StringMap.empty
+  val tyvars : kinded_type_variable StringMap.t = StringMap.empty
 
   (* fill in subkind with the default *)
   val fill = fun (name, (kind, subkind), freedom) ->
@@ -183,13 +187,18 @@ object (self)
       end
     else (self#register tv)#add_name name
 
-  method quantified action qs =
-    let o = List.fold_left (fun o q ->
-      let q = ensure_kinded (rigidify q) in
+  method quantified action (qs : SugarQuantifier.t list) =
+    let o = List.fold_left (fun o sq ->
+      let q =
+         ensure_kinded (rigidify (SugarQuantifier.get_unresolved_exn sq)) in
       o#bind (rigidify q)) self qs
     in
     let o = action o in
-    List.fold_left (fun o (q, _, _) -> o#replace q tyvars) o qs
+    List.fold_left
+      (fun o sq ->
+        o#replace (SugarQuantifier.get_unresolved_name_exn sq) tyvars)
+      o
+      qs
 
   method! bindingnode = function
     (* Type declarations bind variables; exclude those from the
@@ -207,7 +216,9 @@ object (self)
     | TypeVar stv ->
        let (x, k, freedom) = SugarTypeVar.get_unresolved_exn stv in
        self#add (x, (Some pk_type, k), freedom)
-    | Mu (v, t)       -> self#quantified (fun o -> o#datatype t) [(v, (Some pk_type, None), `Rigid)]
+    | Mu (v, t)       ->
+       let sq = SugarQuantifier.mk_unresolved v (Some pk_type, None) `Rigid in
+       self#quantified (fun o -> o#datatype t) [sq]
     | Forall (qs, t)  -> self#quantified (fun o -> o#datatype t) qs
     | dt -> super#datatypenode dt
 
@@ -217,7 +228,9 @@ object (self)
     | Open stv ->
        let (x, k, freedom) = SugarTypeVar.get_unresolved_exn stv in
        self#add (x, (Some pk_row, k), freedom)
-    | Recursive (s, r)     -> self#quantified (fun o -> o#row r) [(s, (Some pk_row, None), `Rigid)]
+    | Recursive (s, r)     ->
+       let sq = SugarQuantifier.mk_unresolved s (Some pk_row, None) `Rigid in
+       self#quantified (fun o -> o#row r) [sq]
 
   method! fieldspec = let open Datatype in function
     | Absent -> self
@@ -395,18 +408,23 @@ module Desugar = struct
      variable environment.
 
      This is used within the `typename` and `Forall` desugaring. *)
-  let desugar_quantifiers (var_env: var_env) (qs: Sugartypes.quantifier list) body pos :
+  let desugar_quantifiers (var_env: var_env) (qs: SugarQuantifier.t list) body pos :
       (Quantifier.t list * var_env) =
     (* Bind all quantified variables, and then do a naive {!typevars} pass over this set to infer
        any unannotated kinds, and verify existing kinds/subkinds match up.
 
        Also verify no duplicate variables exist. *)
     let tvs, _ = List.fold_left
-      (fun (o, names) ((name, _, _) as v) ->
+      (fun (o, names) sq ->
+        let ((name, _, _) as v) = SugarQuantifier.get_unresolved_exn sq in
         if StringSet.mem name names then raise (duplicate_var pos name);
         (o#bind (ensure_kinded v), StringSet.add name names)) (typevars, StringSet.empty) qs in
     let tvs = (tvs#datatype body)#tyvars in
-    let qs = List.map (fun (name, _, _) -> StringMap.find name tvs) qs in
+    let qs =
+      List.map
+        (fun sq -> StringMap.find (SugarQuantifier.get_unresolved_name_exn sq) tvs)
+        qs
+    in
 
     ListLabels.fold_right ~init:([], var_env) qs
       ~f:(fun (name, (primarykind, subkind), _freedom)
@@ -501,10 +519,18 @@ module Desugar = struct
 
          method replace name map = {<operations = StringMap.update name (fun _ -> StringMap.find_opt name map) operations>}
 
-         method quantified action qs =
-           let mask_operations = List.fold_left (fun o (q, _, _) -> StringMap.remove q o) operations qs in
+         method quantified action (qs : SugarQuantifier.t list) =
+           let mask_operations =
+             List.fold_left
+               (fun o sq -> StringMap.remove (SugarQuantifier.get_unresolved_name_exn sq) o)
+               operations
+               qs
+           in
            let o = action {<operations = mask_operations>} in
-           List.fold_left (fun o (q, _, _) -> o#replace q operations) o qs
+           List.fold_left
+             (fun o sq -> o#replace (SugarQuantifier.get_unresolved_name_exn sq) operations)
+             o
+             qs
 
          method add var op =
            if TypeUtils.is_builtin_effect op || var = "$" then
@@ -544,7 +570,9 @@ module Desugar = struct
               | _ -> self#list (fun o -> o#type_arg) ts
               end
 
-           | Mu (v, t) -> self#quantified (fun o -> o#datatype t) [(v, (Some pk_type, None), `Rigid)]
+           | Mu (v, t) ->
+              let sq = SugarQuantifier.mk_unresolved v (Some pk_type, None) `Rigid in
+              self#quantified (fun o -> o#datatype t) [sq]
            | Forall (qs, t) -> self#quantified (fun o -> o#datatype t) qs
            | dt -> super#datatypenode dt
 
@@ -552,7 +580,9 @@ module Desugar = struct
            let open Datatype in
            function
            | Closed | Open _ -> self
-           | Recursive (s, r) -> self#quantified (fun o -> o#row r) [(s, (Some pk_row, None), `Rigid)]
+           | Recursive (s, r) ->
+              let sq = SugarQuantifier.mk_unresolved s (Some pk_row, None) `Rigid in
+              self#quantified (fun o -> o#row r) [sq]
 
          method effect_row ((fields, var) : Datatype.row) =
            let self =
@@ -792,7 +822,7 @@ module Desugar = struct
     | Presence f -> `Presence (fieldspec var_env alias_env f node)
 
   (* pre condition: all subkinds have been filled in *)
-  let generate_var_mapping (vars : type_variable list) : Quantifier.t list * var_env =
+  let generate_var_mapping (vars : kinded_type_variable list) : Quantifier.t list * var_env =
     let addt x t envs = { envs with tyvars = StringMap.add x (`Type t) envs.tyvars } in
     let addr x r envs = { envs with tyvars = StringMap.add x (`Row r) envs.tyvars } in
     let addf x f envs = { envs with tyvars = StringMap.add x (`Presence f) envs.tyvars } in
@@ -975,7 +1005,7 @@ object (self)
                 let q = (var, (PrimaryKind.Row, (lin_unl, res_effect))) in
                 (* Add the new quantifier to the argument list and rebind. *)
                 let qs = List.map (snd ->- OptionUtils.val_of) args @ [q] in
-                let args = args @ [("<implicit effect>", (None, None), `Rigid), Some q] in
+                let args = args @ [(SugarQuantifier.mk_unresolved "<implicit effect>" (None, None) `Rigid), Some q] in
                 let alias_env = SEnv.bind t (`Mutual (qs, tygroup_ref)) alias_env in
                 (* Also augment the variable environment with this shared effect. *)
                 let var_env = StringMap.find t venvs_map in

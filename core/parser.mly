@@ -129,7 +129,9 @@ let subkind_of p =
   | "Eff"     -> Some (lin_unl, res_effect)
   | sk        -> raise (ConcreteSyntaxError (pos p, "Invalid subkind: " ^ sk))
 
-let attach_kind (t, k) = (t, k, `Rigid)
+let named_quantifier name kind freedom = SugarQuantifier.mk_unresolved name kind freedom
+
+let attach_kind (t, k) = SugarQuantifier.mk_unresolved t k `Rigid
 
 let attach_subkind_helper update sk = update sk
 
@@ -469,7 +471,7 @@ subkind:
 | COLONCOLON CONSTRUCTOR                                       { subkind_of $loc($2) $2     }
 
 typearg:
-| VARIABLE                                                     { (($1, (None, None), `Rigid), None) }
+| VARIABLE                                                     { (named_quantifier $1 (None, None) `Rigid), None }
 | VARIABLE kind                                                { (attach_kind ($1, $2), None)        }
 
 varlist:

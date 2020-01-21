@@ -58,7 +58,7 @@ end = struct
 end
 
 (* type variables *)
-type tyvar = Quantifier.t
+(* type tyvar = Quantifier.t *)
   [@@deriving show]
 type tyarg = Types.type_arg
   [@@deriving show]
@@ -140,14 +140,35 @@ struct
   type t =
     | QUnresolved of Name.t * kind * Freedom.t
     | QResolved of Quantifier.t
+      [@@deriving show]
 
 
-  let to_resolved_exn = function
+  let mk_unresolved name kind freedom =
+    QUnresolved (name, kind, freedom)
+
+  let mk_resolved quantifier =
+    QResolved quantifier
+
+
+  let get_unresolved_exn = function
+    | QUnresolved (name, kind, freedom) -> name, kind, freedom
+    | QResolved _q ->
+       raise
+         (internal_error
+            "Requesting unresolved quantifier when
+             it has already been resolved")
+
+ let get_unresolved_name_exn =
+   get_unresolved_exn ->- fst3
+
+
+  let get_resolved_exn = function
     | QResolved q -> q
-    | QUnresolved _ -> failwith "bad"
-
-
-  let from_sem q = QResolved q
+    | QUnresolved _ ->
+       raise
+         (internal_error
+            "Requesting resolved type var before
+             it has been resolved")
 
 end
 
@@ -155,12 +176,13 @@ end
 
 let rigidify (name, kind, _) = (name, kind, `Rigid)
 
-let string_of_type_variable ((var, (kind, subkind), _) : type_variable) =
-  match kind with
-  | None -> var
-  | Some kind ->
-     let subkind = OptionUtils.opt_app Subkind.to_string "" subkind in
-     var ^ "::" ^ PrimaryKind.to_string kind ^ subkind
+let string_of_type_variable (_v : SugarTypeVar.t) =
+  failwith "fixme"
+  (* match kind with
+   * | None -> var
+   * | Some kind ->
+   *    let subkind = OptionUtils.opt_app Subkind.to_string "" subkind in
+   *    var ^ "::" ^ PrimaryKind.to_string kind ^ subkind *)
 
 type fieldconstraint = Readonly | Default
     [@@deriving show]
@@ -172,7 +194,7 @@ module Datatype = struct
     | Function        of with_pos list * row * with_pos
     | Lolli           of with_pos list * row * with_pos
     | Mu              of Name.t * with_pos
-    | Forall          of quantifier list * with_pos
+    | Forall          of SugarQuantifier.t list * with_pos
     | Unit
     | Tuple           of with_pos list
     | Record          of row
@@ -399,7 +421,7 @@ and phrasenode =
   | Regex            of regex
   | UnaryAppl        of (tyarg list * UnaryOp.t) * phrase
   | FnAppl           of phrase * phrase list
-  | TAbstr           of tyvar list * phrase
+  | TAbstr           of SugarQuantifier.t list * phrase
   | TAppl            of phrase * type_arg' list
   | TupleLit         of phrase list
   | RecordLit        of (Name.t * phrase) list * phrase option
@@ -457,7 +479,7 @@ and phrasenode =
   | Raise
 and phrase = phrasenode WithPos.t
 and bindingnode =
-  | Val     of Pattern.with_pos * (tyvar list * phrase) * Location.t *
+  | Val     of Pattern.with_pos * (SugarQuantifier.t list * phrase) * Location.t *
                  datatype' option
   | Fun     of function_definition
   | Funs    of recursive_function list
@@ -485,12 +507,12 @@ and cp_phrasenode =
   | CPLink        of Binder.with_pos * Binder.with_pos
   | CPComp        of Binder.with_pos * cp_phrase * cp_phrase
 and cp_phrase = cp_phrasenode WithPos.t
-and typenamenode = (Name.t * (quantifier * tyvar option) list * datatype')
+and typenamenode = (Name.t * (SugarQuantifier.t * Quantifier.t option) list * datatype')
 and typename = typenamenode WithPos.t
 and function_definition = {
     fun_binder: Binder.with_pos;
     fun_linearity: DeclaredLinearity.t;
-    fun_definition: tyvar list * funlit;
+    fun_definition: SugarQuantifier.t list * funlit;
     fun_location: Location.t;
     fun_signature: datatype' option;
     fun_unsafe_signature: bool;
@@ -499,7 +521,7 @@ and function_definition = {
 and recursive_functionnode = {
     rec_binder: Binder.with_pos;
     rec_linearity: DeclaredLinearity.t;
-    rec_definition: (tyvar list * (Types.datatype * int option list) option) * funlit;
+    rec_definition: (SugarQuantifier.t list * (Types.datatype * int option list) option) * funlit;
     rec_location: Location.t;
     rec_signature: datatype' option;
     rec_unsafe_signature: bool;
@@ -522,7 +544,7 @@ type program = binding list * phrase option
 
 exception ConcreteSyntaxError       of (Position.t * string)
 
-let tabstr : tyvar list * phrasenode -> phrasenode = fun (tyvars, e) ->
+let tabstr : SugarQuantifier.t list * phrasenode -> phrasenode = fun (tyvars, e) ->
   match tyvars with
     | [] -> e
     | _  -> TAbstr (tyvars, WithPos.make e)

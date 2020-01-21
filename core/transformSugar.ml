@@ -382,11 +382,12 @@ class transform (env : Types.typing_environment) =
             (o, FnAppl (f, args), TypeUtils.return_type ft)
       | TAbstr (tyvars, e) ->
           let outer_tyvars = o#backup_quantifiers in
-          let (o, qs) = o#quantifiers tyvars in
+          let (o, sqs) = o#quantifiers tyvars in
           let (o, e, t) = o#phrase e in
           let o = o#restore_quantifiers outer_tyvars in
+          let qs = List.map SugarQuantifier.get_resolved_exn sqs in
           let t = Types.for_all (qs, t) in
-            (o, tabstr (qs, e.node), t)
+            (o, tabstr (sqs, e.node), t)
       | TAppl (e, tyargs) ->
           let (o, e, t) = o#phrase e in
             check_type_application
@@ -734,7 +735,7 @@ class transform (env : Types.typing_environment) =
         | Constant.Bool v   -> (o, Constant.Bool v  , Types.bool_type  )
         | Constant.Char v   -> (o, Constant.Char v  , Types.char_type  )
 
-    method quantifiers : Quantifier.t list -> ('self_type * Quantifier.t list) =
+    method quantifiers : SugarQuantifier.t list -> ('self_type * SugarQuantifier.t list) =
       fun qs -> (o, qs)
     method backup_quantifiers : IntSet.t = IntSet.empty
     method restore_quantifiers : IntSet.t -> 'self_type = fun _ -> o

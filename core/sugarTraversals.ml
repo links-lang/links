@@ -96,11 +96,12 @@ class map =
            raise (internal_error message)
 
 
-  method quantifier : type_variable -> type_variable =
-      fun (_x, _x_i1, _x_i2) ->
-        let _x = o#name _x in
-        let _x_i1 = o#kind _x_i1 in
-        let _x_i2 = o#freedom _x_i2 in (_x, _x_i1, _x_i2)
+  method quantifier : SugarQuantifier.t -> SugarQuantifier.t =
+    o#unknown
+      (* fun (_x, _x_i1, _x_i2) ->
+       *   let _x = o#name _x in
+       *   let _x_i1 = o#kind _x_i1 in
+       *   let _x_i2 = o#freedom _x_i2 in (_x, _x_i1, _x_i2) *)
 
 
 
@@ -236,7 +237,7 @@ class map =
           let _x_i1 = o#list (fun o -> o#phrase) _x_i1
           in FnAppl ((_x, _x_i1))
       | TAbstr ((_x, _x_i1)) ->
-          let _x = o#list (fun o -> o#tyvar) _x in
+          let _x = o#list (fun o -> o#quantifier) _x in
           let _x_i1 = o#phrase _x_i1 in
           TAbstr ((_x, _x_i1))
       | TAppl ((_x, _x_i1)) ->
@@ -688,7 +689,7 @@ class map =
       function
       | Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let _x    = o#pattern _x in
-          let _x_i1 = o#list (fun o -> o#tyvar) _x_i1 in
+          let _x_i1 = o#list (fun o -> o#quantifier) _x_i1 in
           let _x_i2 = o#phrase _x_i2 in
           let _x_i3 = o#location _x_i3 in
           let _x_i4 = o#option (fun o -> o#datatype') _x_i4
@@ -761,7 +762,7 @@ class map =
               fun_frozen;
               fun_unsafe_signature; } ->
       let fun_binder = o#binder fun_binder in
-      let tyvar = o#list (fun o -> o#tyvar) tyvar in
+      let tyvar = o#list (fun o -> o#quantifier) tyvar in
       let lit = o#funlit lit in
       let fun_location = o#location fun_location in
       let fun_signature = o#option (fun o -> o#datatype') fun_signature in
@@ -782,7 +783,7 @@ class map =
               rec_unsafe_signature;
               rec_frozen } ->
       let rec_binder = o#binder rec_binder in
-      let tyvar = o#list (fun o -> o#tyvar) tyvar in
+      let tyvar = o#list (fun o -> o#quantifier) tyvar in
       let ty = o#option (fun o (t, x)-> o#typ t, x) ty in
       let lit = o#funlit lit in
       let rec_location = o#location rec_location in
@@ -812,7 +813,7 @@ class map =
       | `Type t -> `Type (o#typ t)
       | `Row r -> `Row (o#type_row r)
       | `Presence p -> `Presence (o#type_field_spec p)
-    method tyvar : tyvar -> tyvar = o#unknown
+    (* method tyvar : tyvar -> tyvar = o#unknown *)
 
     method unknown : 'a. 'a -> 'a = fun x -> x
   end
@@ -887,11 +888,8 @@ class fold =
               must determine what do do with resolved type variables" in
            raise (internal_error message)
 
-   method quantifier : type_variable -> 'self_type =
-      fun (_x, _x_i1, _x_i2) ->
-        let o = o#name _x in
-        let o = o#kind _x_i1 in
-        let o = o#freedom _x_i2 in o
+   method quantifier : SugarQuantifier.t -> 'self_type =
+      o#unknown
 
     method row_var : Datatype.row_var -> 'self_type =
       let open Datatype in function
@@ -1002,7 +1000,7 @@ class fold =
           let o = o#phrase _x in
           let o = o#list (fun o -> o#phrase) _x_i1 in o
       | TAbstr ((_x, _x_i1)) ->
-          let o = o#list (fun o -> o#tyvar) (_x) in
+          let o = o#list (fun o -> o#quantifier) (_x) in
           let o = o#phrase _x_i1 in o
       | TAppl ((_x, _x_i1)) ->
           let o = o#phrase _x in
@@ -1316,7 +1314,7 @@ class fold =
       fun (_x, _x_i1) ->
         let o = o#string _x in let o = o#list (fun o -> o#string) _x_i1 in o
 
-    method tyvar : tyvar -> 'self_type = fun _ -> o
+    (* method tyvar : tyvar -> 'self_type = fun _ -> o *)
 
     method datatypenode : Datatype.t -> 'self_type =
       let open Datatype in
@@ -1407,7 +1405,7 @@ class fold =
       function
       | Val ((_x, (_x_i1, _x_i2), _x_i3, _x_i4)) ->
           let o = o#pattern _x in
-          let o = o#list (fun o -> o#tyvar) _x_i1 in
+          let o = o#list (fun o -> o#quantifier) _x_i1 in
           let o = o#phrase _x_i2 in
           let o = o#location _x_i3 in
           let o = o#option (fun o -> o#datatype') _x_i4 in o
@@ -1459,7 +1457,7 @@ class fold =
       let o =
         o#list
           (fun o (_x, _x_i1) ->
-            let o = o#option (fun o -> o#tyvar) _x_i1
+            let o = o#quantifier _x
             in o) _x_i1 in
       let o = o#datatype' _x_i2 in
       o
@@ -1479,7 +1477,7 @@ class fold =
               fun_frozen = _;
               fun_unsafe_signature = _ } ->
           let o = o#binder fun_binder in
-          let o = o#list (fun o -> o#tyvar) tyvar in
+          let o = o#list (fun o -> o#quantifier) tyvar in
           let o = o#funlit lit in
           let o = o#location fun_location in
           let o = o#option (fun o -> o#datatype') fun_signature in
@@ -1494,7 +1492,7 @@ class fold =
               rec_unsafe_signature = _;
               rec_frozen = _} ->
       let o = o#binder rec_binder in
-      let o = o#list (fun o -> o#tyvar) tyvar in
+      let o = o#list (fun o -> o#quantifier) tyvar in
       let o = o#funlit lit in
       let o = o#location rec_location in
       let o = o#option (fun o -> o#datatype') rec_signature in
@@ -1601,11 +1599,8 @@ class fold_map =
            raise (internal_error message)
 
 
-    method quantifier : type_variable -> ('self_type * type_variable) =
-      fun (_x, _x_i1, _x_i2) ->
-        let (o, _x) = o#name _x in
-        let (o, _x_i1) = o#kind _x_i1 in
-        let (o, _x_i2) = o#freedom _x_i2 in (o, (_x, _x_i1, _x_i2))
+    method quantifier : SugarQuantifier.t -> ('self_type * SugarQuantifier.t) =
+      o#unknown
 
 
     method row_var : Datatype.row_var -> ('self_type * Datatype.row_var) =
@@ -1748,7 +1743,7 @@ class fold_map =
           let (o, _x_i1) = o#list (fun o -> o#phrase) _x_i1
           in (o, (FnAppl ((_x, _x_i1))))
       | TAbstr ((_x, _x_i1)) ->
-          let o, _x = o#list (fun o -> o#tyvar) _x in
+          let o, _x = o#list (fun o -> o#quantifier) _x in
           let (o, _x_i1) = o#phrase _x_i1 in
           (o, (TAbstr ((_x, _x_i1))))
       | TAppl ((_x, _x_i1)) ->
@@ -2348,7 +2343,7 @@ class fold_map =
               fun_frozen;
               fun_unsafe_signature; }->
       let o, fun_binder = o#binder fun_binder in
-      let o, tyvar = o#list (fun o -> o#tyvar) tyvar in
+      let o, tyvar = o#list (fun o -> o#quantifier) tyvar in
       let o, lit = o#funlit lit in
       let o, fun_location = o#location fun_location in
       let o, fun_signature = o#option (fun o -> o#datatype') fun_signature in
@@ -2369,7 +2364,7 @@ class fold_map =
               rec_unsafe_signature;
               rec_frozen } ->
       let o, rec_binder = o#binder rec_binder in
-      let o, tyvar = o#list (fun o -> o#tyvar) tyvar in
+      let o, tyvar = o#list (fun o -> o#quantifier) tyvar in
       let o, ty = o#option (fun o (t, x)-> let o, t = o#typ t in o, (t, x)) ty in
       let o, lit = o#funlit lit in
       let o, rec_location = o#location rec_location in
@@ -2407,8 +2402,8 @@ class fold_map =
       | `Row r -> let o, r = o#type_row r in o, `Row r
       | `Presence p -> let o, p =o#type_field_spec p in o, `Presence p
 
-    method tyvar : Quantifier.t -> ('self_type * Quantifier.t) =
-      o#unknown
+    (* method tyvar : Quantifier.t -> ('self_type * Quantifier.t) =
+     *   o#unknown *)
 
     method type_field_spec : Types.field_spec -> ('self_type * Types.field_spec) =
       o#unknown
