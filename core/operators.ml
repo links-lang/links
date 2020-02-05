@@ -17,7 +17,7 @@ type regexflag = RegexList | RegexNative | RegexGlobal | RegexReplace
     [@@deriving show]
 
 module Associativity = struct
-  type t = Left | Right | None | Pre | Post
+  type t = Left | Right | None
     [@@deriving show]
 end
 

@@ -289,21 +289,11 @@ let parse_foreign_language pos lang =
 %token <string> QUOTEDMETA
 %token <string> SLASHFLAGS
 %token UNDERSCORE AS
-%token <Operators.Associativity.t -> int -> string -> unit> INFIX INFIXL INFIXR PREFIX POSTFIX
+%token <Operators.Associativity.t> FIXITY
 %token TYPENAME
 %token TYPE ROW PRESENCE
 %token TRY OTHERWISE RAISE
-%token <string> PREFIXOP POSTFIXOP
-%token <string> INFIX0 INFIXL0 INFIXR0
-%token <string> INFIX1 INFIXL1 INFIXR1
-%token <string> INFIX2 INFIXL2 INFIXR2
-%token <string> INFIX3 INFIXL3 INFIXR3
-%token <string> INFIX4 INFIXL4 INFIXR4
-%token <string> INFIX5 INFIXL5 INFIXR5
-%token <string> INFIX6 INFIXL6 INFIXR6
-%token <string> INFIX7 INFIXL7 INFIXR7
-%token <string> INFIX8 INFIXL8 INFIXR8
-%token <string> INFIX9 INFIXL9 INFIXR9
+%token <string> OPERATOR
 
 %start just_datatype
 %start interactive
@@ -393,9 +383,9 @@ nofun_declaration:
                                                                    Alien.single language $3 binder datatype
                                                                  in
                                                                  with_pos $loc (Foreign alien) }
-| fixity perhaps_uinteger op SEMICOLON                         { let assoc, set = $1 in
-                                                                 set assoc (from_option default_fixity $2) (WithPos.node $3);
-                                                                 with_pos $loc Infix }
+| FIXITY UINTEGER? op SEMICOLON                                { let precedence = from_option default_fixity $2 in
+                                                                 let node = Infix { name = WithPos.node $3; precedence; assoc = $1 } in
+                                                                 with_pos $loc node }
 | signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) $1 $2 }
 | typedecl SEMICOLON | links_module | links_open SEMICOLON     { $1 }
 | pollute = boption(OPEN) IMPORT CONSTRUCTOR SEMICOLON         { import ~ppos:$loc($2) ~pollute [$3] }
@@ -420,9 +410,6 @@ fun_declaration:
 | tlfunbinding                                                 { fun_binding ~ppos:$loc($1) None $1 }
 | signatures tlfunbinding                                      { fun_binding ~ppos:$loc($2) (fst $1) ~unsafe_sig:(snd $1) $2 }
 
-perhaps_uinteger:
-| UINTEGER?                                                    { $1 }
-
 linearity:
 | FUN                                                          { dl_unl }
 | LINFUN                                                       { dl_lin }
@@ -436,8 +423,8 @@ fun_kind:
 tlfunbinding:
 | fun_kind VARIABLE arg_lists perhaps_location block           { ($1, $2, $3, $4, $5)                }
 | OP pattern sigop pattern perhaps_location block              { ((dl_unl, false), WithPos.node $3, [[$2; $4]], $5, $6) }
-| OP PREFIXOP pattern perhaps_location block                   { ((dl_unl, false), $2, [[$3]], $4, $5)          }
-| OP pattern POSTFIXOP perhaps_location block                  { ((dl_unl, false), $3, [[$2]], $4, $5)          }
+| OP OPERATOR pattern perhaps_location block                   { ((dl_unl, false), $2, [[$3]], $4, $5)          }
+| OP pattern OPERATOR perhaps_location block                  { ((dl_unl, false), $3, [[$2]], $4, $5)          }
 
 tlvarbinding:
 | VAR VARIABLE perhaps_location EQ exp                         { (PatName $2, $5, $3) }
@@ -472,13 +459,6 @@ typearg:
 
 varlist:
 | separated_nonempty_list(COMMA, typearg)                      { $1 }
-
-fixity:
-| INFIX                                                        { (Associativity.None , $1) }
-| INFIXL                                                       { (Associativity.Left , $1) }
-| INFIXR                                                       { (Associativity.Right, $1) }
-| PREFIX                                                       { (Associativity.Pre  , $1) }
-| POSTFIX                                                      { (Associativity.Post , $1) }
 
 perhaps_location:
 | SERVER                                                       { loc_server  }
@@ -574,16 +554,7 @@ sigop:
 | op                                                           { $1 }
 
 op:
-| INFIX0 | INFIXL0 | INFIXR0
-| INFIX1 | INFIXL1 | INFIXR1
-| INFIX2 | INFIXL2 | INFIXR2
-| INFIX3 | INFIXL3 | INFIXR3
-| INFIX4 | INFIXL4 | INFIXR4
-| INFIX5 | INFIXL5 | INFIXR5
-| INFIX6 | INFIXL6 | INFIXR6
-| INFIX7 | INFIXL7 | INFIXR7
-| INFIX8 | INFIXL8 | INFIXR8
-| INFIX9 | INFIXL9 | INFIXR9                                   { with_pos $loc $1 }
+| OPERATOR                                                     { with_pos $loc $1 }
 
 spawn_expression:
 | SPAWNAT LPAREN exp COMMA block RPAREN                        { spawn ~ppos:$loc Demon (ExplicitSpawnLocation $3) $5 }
@@ -599,7 +570,6 @@ query_policy:
 
 postfix_expression:
 | primary_expression | spawn_expression                        { $1 }
-| primary_expression POSTFIXOP                                 { unary_appl ~ppos:$loc (UnaryOp.Name $2) $1 }
 | block                                                        { $1 }
 | QUERY query_policy block                                     { query ~ppos:$loc None $2 $3 }
 | QUERY LBRACKET exp RBRACKET query_policy block               { query ~ppos:$loc (Some ($3, with_pos $loc (Constant (Constant.Int 0)))) $5 $6 }
@@ -625,113 +595,25 @@ perhaps_exps:
 unary_expression:
 | MINUS unary_expression                                       { unary_appl ~ppos:$loc UnaryOp.Minus      $2 }
 | MINUSDOT unary_expression                                    { unary_appl ~ppos:$loc UnaryOp.FloatMinus $2 }
-| PREFIXOP unary_expression                                    { unary_appl ~ppos:$loc (UnaryOp.Name $1)  $2 }
+| OPERATOR unary_expression                                    { unary_appl ~ppos:$loc (UnaryOp.Name $1)  $2 }
 | postfix_expression | constructor_expression                  { $1 }
 | DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (DoOperation ($2, $3, None)) }
 
-
-infixr_9:
+infix_appl:
 | unary_expression                                             { $1 }
-| unary_expression INFIX9 unary_expression
-| unary_expression INFIXR9 infixr_9                            { infix_appl ~ppos:$loc $1 $2 $3 }
-
-infixl_9:
-| infixr_9                                                     { $1 }
-| infixl_9 INFIXL9 infixr_9                                    { infix_appl ~ppos:$loc $1 $2 $3 }
-
-infixr_8:
-| infixl_9                                                     { $1 }
-| infixl_9 INFIX8  infixl_9
-| infixl_9 INFIXR8 infixr_8                                    { infix_appl  ~ppos:$loc $1 $2            $3 }
-| infixl_9 COLONCOLON infixr_8                                 { infix_appl' ~ppos:$loc $1 BinaryOp.Cons $3 }
-
-infixl_8:
-| infixr_8                                                     { $1 }
-| infixl_8 INFIXL8 infixr_8                                    { infix_appl ~ppos:$loc $1 $2 $3 }
-
-infixr_7:
-| infixl_8                                                     { $1 }
-| infixl_8 INFIX7  infixl_8
-| infixl_8 INFIXR7 infixr_7                                    { infix_appl ~ppos:$loc $1 $2 $3 }
-
-infixl_7:
-| infixr_7                                                     { $1 }
-| infixl_7 INFIXL7 infixr_7                                    { infix_appl ~ppos:$loc $1 $2 $3 }
-
-infixr_6:
-| infixl_7                                                     { $1 }
-| infixl_7 INFIX6  infixl_7
-| infixl_7 INFIXR6 infixr_6                                    { infix_appl ~ppos:$loc $1 $2 $3 }
-
-infixl_6:
-| infixr_6                                                     { $1 }
-| infixl_6 INFIXL6 infixr_6                                    { infix_appl  ~ppos:$loc $1 $2                  $3 }
-| infixl_6 MINUS infixr_6                                      { infix_appl' ~ppos:$loc $1 BinaryOp.Minus      $3 }
-| infixl_6 MINUSDOT infixr_6                                   { infix_appl' ~ppos:$loc $1 BinaryOp.FloatMinus $3 }
-/* HACK: the type variables should get inserted later... */
-| infixl_6 BANG infixr_6                                       { infix_appl  ~ppos:$loc $1 "!" $3         }
-
-infixr_5:
-| infixl_6                                                     { $1 }
-| infixl_6 INFIX5  infixl_6
-| infixl_6 INFIXR5 infixr_5                                    { infix_appl ~ppos:$loc $1 $2 $3 }
-
-infixl_5:
-| infixr_5                                                     { $1 }
-| infixl_5 INFIXL5 infixr_5                                    { infix_appl ~ppos:$loc $1 $2 $3 }
-
-infixr_4:
-| infixl_5                                                     { $1 }
-| infixl_5 INFIX4    infixl_5
-| infixl_5 INFIXR4   infixr_4                                  { infix_appl ~ppos:$loc $1 $2 $3 }
-| infixr_5 EQUALSTILDE regex                                   { let r, flags = $3 in
+| unary_expression OPERATOR                                    { unary_appl ~ppos:$loc (UnaryOp.Name $2) $1 } /* TODO(dhil): This is more general than the previous rule as in it will permit more expressions to be chained together. */
+| unary_expression OPERATOR infix_appl                         { infix_appl' ~ppos:$loc $1 (BinaryOp.Name $2) $3 }
+| unary_expression COLONCOLON infix_appl                       { infix_appl' ~ppos:$loc $1 BinaryOp.Cons $3 }
+| unary_expression MINUS infix_appl                            { infix_appl' ~ppos:$loc $1 BinaryOp.Minus $3 }
+| unary_expression MINUSDOT infix_appl                         { infix_appl' ~ppos:$loc $1 BinaryOp.FloatMinus $3 }
+| unary_expression DOLLAR infix_appl                           { infix_appl' ~ppos:$loc $1 (BinaryOp.Name "$") $3 }
+| unary_expression BANG infix_appl                             { infix_appl' ~ppos:$loc $1 (BinaryOp.Name "!") $3 }
+| unary_expression EQUALSTILDE regex                           { let r, flags = $3 in
                                                                  infix_appl' ~ppos:$loc $1 (BinaryOp.RegexMatch flags) r }
-
-infixl_4:
-| infixr_4                                                     { $1 }
-| infixl_4 INFIXL4 infixr_4                                    { infix_appl ~ppos:$loc $1 $2 $3 }
-
-infixr_3:
-| infixl_4                                                     { $1 }
-| infixl_4 INFIX3  infixl_4
-| infixl_4 INFIXR3 infixr_3                                    { infix_appl ~ppos:$loc $1 $2 $3 }
-
-infixl_3:
-| infixr_3                                                     { $1 }
-| infixl_3 INFIXL3 infixr_3                                    { infix_appl ~ppos:$loc $1 $2 $3 }
-
-infixr_2:
-| infixl_3                                                     { $1 }
-| infixl_3 INFIX2  infixl_3
-| infixl_3 INFIXR2 infixr_2                                    { infix_appl ~ppos:$loc $1 $2 $3 }
-
-infixl_2:
-| infixr_2                                                     { $1 }
-| infixl_2 INFIXL2 infixr_2                                    { infix_appl ~ppos:$loc $1 $2 $3 }
-
-infixr_1:
-| infixl_2                                                     { $1 }
-| infixl_2 INFIX1  infixl_2
-| infixl_2 INFIXR1 infixr_1                                    { infix_appl ~ppos:$loc $1 $2 $3 }
-
-infixl_1:
-| infixr_1                                                     { $1 }
-| infixl_1 INFIXL1 infixr_1                                    { infix_appl ~ppos:$loc $1 $2 $3 }
-
-infixr_0:
-| infixl_1                                                     { $1 }
-| infixl_1 INFIX0    infixl_1
-| infixl_1 INFIXR0   infixr_0                                  { infix_appl ~ppos:$loc $1 $2 $3 }
-| infixl_1 DOLLAR    infixr_0                                  { infix_appl ~ppos:$loc $1 "$" $3 }
-
-infixl_0:
-| infixr_0                                                     { $1 }
-| infixl_0 INFIXL0 infixr_0                                    { infix_appl ~ppos:$loc $1 $2 $3 }
-
 logical_expression:
-| infixl_0                                                     { $1 }
-| logical_expression BARBAR infixl_0                           { infix_appl' ~ppos:$loc $1 BinaryOp.Or  $3 }
-| logical_expression AMPAMP infixl_0                           { infix_appl' ~ppos:$loc $1 BinaryOp.And $3 }
+| infix_appl                                                   { $1 }
+| logical_expression BARBAR infix_appl                         { infix_appl' ~ppos:$loc $1 BinaryOp.Or  $3 }
+| logical_expression AMPAMP infix_appl                         { infix_appl' ~ppos:$loc $1 BinaryOp.And $3 }
 
 typed_expression:
 | logical_expression                                           { $1 }

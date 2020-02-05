@@ -126,6 +126,7 @@ module Untyped = struct
     = [| (module ResolvePositions)
        ; (module CheckXmlQuasiquotes)
        ; (module DesugarModules)
+       ; (module Shunting)
        ; (module Collect_FFI_Files)
        ; only_if Basicsettings.Sessions.exceptions_enabled (module DesugarSessionExceptions)
        ; (module DesugarLAttributes)

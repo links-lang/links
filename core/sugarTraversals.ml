@@ -700,7 +700,8 @@ class map =
       | Typenames ts ->
           let _x = o#list (fun o -> o#typename) ts in
           Typenames _x
-      | Infix -> Infix
+      | Infix { name; assoc; precedence } ->
+         Infix { name = o#name name; assoc; precedence }
       | Exp _x -> let _x = o#phrase _x in Exp _x
       | Module { binder; members } ->
           let binder = o#binder binder in
@@ -1408,7 +1409,8 @@ class fold =
       | Typenames ts ->
           let o = o#list (fun o -> o#typename) ts in
           o
-      | Infix -> o
+      | Infix { name; _ } ->
+         o#name name
       | Exp _x -> let o = o#phrase _x in o
       | Module { binder; members } ->
           let o = o#binder binder in
@@ -2259,7 +2261,9 @@ class fold_map =
       | Typenames ts ->
           let (o, _x) = o#list (fun o -> o#typename) ts in
           (o, (Typenames _x))
-      | Infix -> (o, Infix)
+      | Infix { name; assoc; precedence } ->
+         let (o, name) = o#name name in
+         (o, Infix { name; assoc; precedence })
       | Exp _x -> let (o, _x) = o#phrase _x in (o, (Exp _x))
       | Module { binder; members } ->
           let (o, binder) = o#binder binder in
