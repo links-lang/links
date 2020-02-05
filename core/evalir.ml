@@ -31,7 +31,6 @@ module type EVALUATOR = sig
   val apply : Value.continuation -> Value.env -> v * v list -> result
   val apply_cont : Value.continuation -> Value.env -> v -> result
   val run_program : Value.env -> Ir.program -> (Value.env * v)
-  val run_defs : Value.env -> Ir.binding list -> Value.env
 end
 
 module Exceptions = struct
@@ -912,15 +911,6 @@ struct
   let eval : Value.env -> program -> result =
     fun env -> computation env K.empty
 
-  let run_program_with_cont : Value.continuation -> Value.env -> Ir.program ->
-    (Value.env * Value.t) =
-    fun cont env program ->
-      try (
-        Proc.run (fun () -> computation env cont program)
-      ) with
-        | NotFound s -> raise (internal_error ("NotFound " ^ s ^
-                    " while interpreting."))
-
   let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
     fun env program ->
       try (
@@ -930,35 +920,6 @@ struct
             raise (internal_error ("NotFound " ^ s ^
               " while interpreting."))
         | Not_found  -> raise (internal_error ("Not_found while interpreting."))
-
-  let run_defs : Value.env -> Ir.binding list -> Value.env =
-    fun env bs ->
-    let (env, _value) = run_program env (bs, Ir.Return (Ir.Extend(StringMap.empty, None))) in env
-
-  (** [apply_cont_toplevel cont env v] applies a continuation to a value
-      and returns the result. Finishing the main thread normally comes
-      here immediately. *)
-
-  let apply_cont_toplevel (cont : continuation) env v =
-    try snd (Proc.run (fun () -> apply_cont cont env v)) with
-    | NotFound s ->
-        raise (internal_error ("NotFound " ^ s ^
-                               " while interpreting."))
-
-  let apply_with_cont (cont : continuation) env (f, vs) =
-    try snd (Proc.run (fun () -> apply cont env (f, vs))) with
-    |  NotFound s ->
-        raise (internal_error ("NotFound " ^ s ^
-                               " while interpreting."))
-
-
-  let apply_toplevel env (f, vs) = apply_with_cont K.empty env (f, vs)
-
-  let eval_toplevel env program =
-    try snd (Proc.run (fun () -> eval env program)) with
-    | NotFound s ->
-        raise (internal_error ("NotFound " ^ s ^
-                               " while interpreting."))
 end
 
 module type EVAL = functor (Webs : WEBSERVER) -> sig
