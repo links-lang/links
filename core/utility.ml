@@ -1427,3 +1427,27 @@ let locate_file filename =
       (* User probably does not have OPAM, so fall back to current directory *)
       executable_dir
 
+
+module LwtHelpers =
+struct
+  open Lwt.Infix
+
+  let foldl_lwt : ('a -> 'b -> 'a Lwt.t) -> 'a -> 'b list -> 'a Lwt.t =
+    fun f z xs ->
+      List.fold_left (fun acc y -> acc >>= fun acc -> f acc y) (Lwt.return z) xs
+
+  let foldr_lwt : ('a -> 'b -> 'b Lwt.t) -> 'a list -> 'b -> 'b Lwt.t =
+    fun f xs z ->
+      List.fold_right (fun y acc -> acc >>= fun acc -> f y acc) xs (Lwt.return z)
+
+
+  (* sequence : [m a] -> m [a] *)
+  let rec sequence = function
+    | [] -> Lwt.return []
+    | x :: xs ->
+        x >>= fun x ->
+        (sequence xs) >>= fun xs ->
+        Lwt.return (x :: xs)
+end
+
+
