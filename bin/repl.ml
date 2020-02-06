@@ -263,9 +263,18 @@ let execute_directive context (name, args) =
 let handle previous_context current_context = function
   | `Definitions _defs ->
      let tycon_env' =
-       let tenv = Context.typing_environment previous_context in
+       let tenv  = Context.typing_environment previous_context in
        let tenv' = Context.typing_environment current_context in
-       Env.String.complement tenv.Types.tycon_env tenv'.Types.tycon_env
+       let tycon_env, tycon_env' =
+         Types.(tenv.tycon_env, tenv'.tycon_env)
+       in
+       Env.String.fold
+         (fun name def new_tycons ->
+           (* This is a bit of a hack, but it will have to do until names become hygienic. *)
+           if not (Env.String.has name tycon_env) || not (Env.String.find name tycon_env == def)
+           then Env.String.bind name def new_tycons
+           else new_tycons)
+         tycon_env' Env.String.empty
      in
      Env.String.fold
        (fun name spec () ->
@@ -273,17 +282,30 @@ let handle previous_context current_context = function
            (Module_hacks.Name.prettify name)
            (Types.string_of_tycon_spec spec))
        tycon_env' ();
-     let nenv' =
-       let nenv  = Context.name_environment previous_context in
-       let nenv' = Context.name_environment current_context in
-       Env.String.complement nenv nenv'
+     let diff previous_context current_context =
+       let new_vars =
+         let nenv, nenv' =
+           ( Context.name_environment previous_context
+           , Context.name_environment current_context )
+         in
+         let vars, vars' =
+           ( Env.String.fold (fun _ var vars -> IntSet.add var vars) nenv IntSet.empty
+           , Env.String.fold (fun _ var vars -> IntSet.add var vars) nenv' IntSet.empty )
+         in
+         IntSet.diff vars' vars
+       in
+       let nenv' =
+         let nenv = Context.name_environment current_context in
+         Env.String.filter (fun _ var -> IntSet.mem var new_vars) nenv
+       in
+       nenv'
+     in
+     let nenv' = diff previous_context current_context in
+     let var_env' =
+       let tenv = Context.typing_environment current_context in
+       tenv.Types.var_env
      in
      let valenv = Context.value_environment current_context in
-     let var_env' =
-       let tenv  = Context.typing_environment previous_context in
-       let tenv' = Context.typing_environment current_context in
-       Env.String.complement tenv.Types.var_env tenv'.Types.var_env
-     in
      Env.String.fold
        (fun name var () ->
          let v, t =
