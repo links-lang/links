@@ -1432,17 +1432,26 @@ module LwtHelpers =
 struct
   open Lwt.Infix
 
-  let foldl_lwt : ('a -> 'b -> 'a Lwt.t) -> 'a -> 'b list -> 'a Lwt.t =
+  let foldl_lwt : ('a -> 'b -> 'a Lwt.t) -> 'a Lwt.t -> 'b list -> 'a Lwt.t =
     fun f z xs ->
-      List.fold_left (fun acc y -> acc >>= fun acc -> f acc y) (Lwt.return z) xs
+      let rec go acc xs =
+        match xs with
+          | [] -> acc
+          | x :: xs ->
+              acc >>= fun acc ->
+              go (f acc x) xs in
+      go z xs
 
-  let foldr_lwt : ('a -> 'b -> 'b Lwt.t) -> 'a list -> 'b -> 'b Lwt.t =
-    fun f xs z ->
-      List.fold_right (fun y acc -> acc >>= fun acc -> f y acc) xs (Lwt.return z)
-
+  let rec foldr_lwt : ('a -> 'b -> 'b Lwt.t) -> 'a list -> 'b Lwt.t -> 'b Lwt.t =
+    fun f xs acc ->
+        match xs with
+          | [] -> acc
+          | x :: xs ->
+              (foldr_lwt f xs acc) >>= fun acc ->
+              f x acc
 
   (* sequence : [m a] -> m [a] *)
-  let rec sequence = function
+  let rec sequence : ('a Lwt.t) list -> ('a list) Lwt.t  = function
     | [] -> Lwt.return []
     | x :: xs ->
         x >>= fun x ->

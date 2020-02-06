@@ -164,25 +164,18 @@ struct
           opt_app (value env) (Lwt.return (`Record [])) r >>= fun res ->
           match res with
             | `Record fs ->
-                (* HACK
-                   Prepending the fields to r in this order shouldn't
-                   be necessary but without the List.rev, deriving
-                   somehow manages to serialise things in the wrong
-                   order on the "Your Shopping Cart" page of the
-                   winestore example. *)
                 let fields = StringMap.bindings fields in
                 LwtHelpers.foldr_lwt
                    (fun (label, v) (fs: (string * Value.t) list)  ->
                       if List.mem_assoc label fs then
-                        (* (label, value env v) :: (List.remove_assoc label fs) *)
                         eval_error
                           "Error adding fields: label %s already present" label
                       else
                         value env v >>= fun v ->
                         Lwt.return ((label, v)::fs))
                    fields
-                   [] >>= fun res ->
-                Lwt.return (`Record (List.rev res @ fs))
+                   (Lwt.return []) >>= fun res ->
+                Lwt.return (`Record (res @ fs))
             | v -> type_error ~action:"add field to" "record" v
         end
     | Project (label, r) ->
@@ -214,13 +207,13 @@ struct
             (fun v children ->
               value env v >>= fun v ->
                Lwt.return (List.map Value.unbox_xml (Value.unbox_list v) @ children))
-            children [] >>= fun children ->
+            children (Lwt.return []) >>= fun children ->
           let attrs = StringMap.bindings attrs in
           LwtHelpers.foldr_lwt
             (fun (name, v) attrs ->
                value env v >>= fun str ->
                Lwt.return (Value.Attr (name, Value.unbox_string str) :: attrs))
-            attrs children >>= fun children ->
+            (List.rev attrs) (Lwt.return children) >>= fun children ->
           Lwt.return (Value.box_list [Value.box_xml (Value.Node (tag, children))])
     | ApplyPure (f, args) ->
       value env f >>= fun f ->
@@ -849,7 +842,7 @@ struct
                 let var = Var.var_of_binder b in
                 value env initial_value >>= fun initial_value ->
                 Lwt.return (Value.Env.bind var (initial_value, Scope.Local) env, var :: vars))
-              params (env, []) >>= fun (env, vars) ->
+              params (Lwt.return (env, [])) >>= fun (env, vars) ->
             Lwt.return (env, `Deep vars)
        end >>= fun (env, depth) ->
        let handler = K.Handler.make ~env ~return ~clauses ~depth in
