@@ -590,7 +590,8 @@ struct
       let open Lens in
       begin
           let sort = Type.sort t in
-          match value env table with
+          value env table >>= fun table ->
+          match table with
             | `Table (((db,_), table, _, _) as tinfo) ->
               let database = Lens_database_conv.lens_db_of_db db in
               let sort = Sort.update_table_name sort ~table in
