@@ -35,7 +35,7 @@ steps:
 
   - bash: |
       case $AGENT_OS in
-        "Linux") sudo apt-get install ocaml python3-setuptools python3-pip;;
+        "Linux") sudo apt-get install ocaml python3-setuptools python3-pip conf-libev;;
         "Darwin") brew install ocaml;;
         *) exit 1 ;;
       esac
