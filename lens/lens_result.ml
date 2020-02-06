@@ -16,6 +16,11 @@ let ok_exn v =
   | Result.Ok v -> v
   | _ -> failwith "Unexpected error unpacking result."
 
+let ok_internal v ~pp =
+  match v with
+  | Result.Ok v -> v
+  | Result.Error err -> Lens_exception.Internal.raise pp err
+
 let of_option v ~error =
   match v with
   | Some v -> return v

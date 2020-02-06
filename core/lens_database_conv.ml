@@ -12,14 +12,43 @@ let lens_db_of_db (db : Value.database) =
     | `QueryError msg -> failwith @@ "Error executing database command: " ^ msg
   in
   let execute_select query ~field_types =
-    let field_types =
+    let field_types_links =
       List.map
-        ~f:(fun (n, v) -> (n, Lens_type_conv.type_of_lens_phrase_type v))
+        ~f:(fun (n, v) ->
+          let context = Env.String.empty in
+          let typ =
+            match v with
+            | Lens.Phrase.Type.Serial -> `Primitive CommonTypes.Primitive.Int
+            | _ -> Lens_type_conv.type_of_lens_phrase_type ~context v
+          in
+          (n, typ))
         field_types
     in
-    let result, rs = Database.execute_select_result field_types query db in
+    let result, rs =
+      Database.execute_select_result field_types_links query db
+    in
+    let scolumns =
+      field_types
+      |> List.filter (fun (_, t) -> t = Lens.Phrase.Type.Serial)
+      |> List.map ~f:(fun (n, _) -> n)
+      |> Lens.Alias.Set.of_list
+    in
     Database.build_result (result, rs)
     |> Value.unbox_list
+    (* convert all key values from type int into type serial *)
+    |> List.map ~f:(fun row ->
+           let vs =
+             List.map
+               ~f:(fun (k, v) ->
+                 let v =
+                   if Lens.Alias.Set.mem k scolumns then
+                     Value.box_variant "Key" v
+                   else v
+                 in
+                 (k, v))
+               (Value.unbox_record row)
+           in
+           Value.box_record vs)
     |> List.map ~f:Lens_value_conv.lens_phrase_value_of_value
   in
   { Lens.Database.driver_name

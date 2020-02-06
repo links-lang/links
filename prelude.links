@@ -1479,3 +1479,14 @@ fun toLower(ch) {
     chr(ord(ch) + 32)
   } else ch
 }
+
+typename Serial = [| Key:Int | NewKey | NewKeyMapped:Int |];
+
+sig isNew : (Serial) -> Bool
+fun isNew(x) {
+  switch (x) {
+    case NewKey -> true
+    case NewKeyMapped (x) -> true
+    case Key (x) -> false
+  }
+}

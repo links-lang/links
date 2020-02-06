@@ -48,6 +48,8 @@ val plus_rows : t -> Simple_record.t array
 
 val neg_rows : t -> Simple_record.t array
 
+val map_values : f:(Phrase_value.t -> Phrase_value.t) -> t -> t
+
 (** The record set does not contain negative entries. *)
 val is_positive : t -> bool
 
@@ -89,14 +91,32 @@ val filter : t -> predicate:Phrase.t -> t
 (** Perform a delta merge (\oplus) between two record sets. *)
 val merge : t -> t -> t
 
+module Reorder_error : sig
+  type t = Not_subset of {first: string list; cols: string list}
+
+  val pp : t Format.fmt_fn
+end
+
 (** Reorder the columns, so that the columns [first] appear at the beginning. *)
-val reorder : t -> first:string list -> t
+val reorder : t -> first:string list -> (t, Reorder_error.t) result
+
+val reorder_exn : t -> first:string list -> t
+
+module Join_error : sig
+  type elt = t
+  type t = Reorder_error of {error: Reorder_error.t; left: elt; right: elt}
+
+  val pp : t Format.fmt_fn
+end
 
 (** Perform a relational join on two sets. [on] consists out of tuples with the order:
     - output name
     - left input name
     - right input name *)
-val join : t -> t -> on:(string * string * string) list -> t
+val join :
+  t -> t -> on:(string * string * string) list -> (t, Join_error.t) result
+
+val join_exn : t -> t -> on:(string * string * string) list -> t
 
 (** Swap positive and negative entries. *)
 val negate : t -> t
@@ -131,12 +151,28 @@ val relational_merge : t -> fun_deps:Fun_dep.Set.t -> update_with:t -> t
     the relational data [data] containing the functional dependency [key] -> [by].
     Use the default value specified if no entry in [data] is found. *)
 val relational_extend :
+     t
+  -> key:string
+  -> by:string
+  -> data:t
+  -> default:Phrase_value.t
+  -> (t, Reorder_error.t) result
+
+val relational_extend_exn :
   t -> key:string -> by:string -> data:t -> default:Phrase_value.t -> t
 
 (** Get all distinct values of both positive and negative records in this set in a sorted list. *)
 val all_values : t -> Simple_record.t list
 
 val to_diff :
+     t
+  -> key:string list
+  -> ( string list
+       * (Simple_record.t list * Simple_record.t list * Simple_record.t list)
+     , Reorder_error.t )
+     result
+
+val to_diff_exn :
      t
   -> key:string list
   -> string list

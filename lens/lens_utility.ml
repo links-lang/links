@@ -1,4 +1,5 @@
 module String = Lens_string
+module Int = Lens_int
 module Option = Lens_option
 module Format = Lens_format
 module List = Lens_list

@@ -129,6 +129,7 @@ struct
     | Offer _
     | CP _
     | LensLit _
+    | LensSerialLit _
     | LensKeysLit _
     | LensFunDepsLit _
     | LensDropLit _
@@ -2775,6 +2776,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            let lens_sort = Sort.make cols in
            let typ = Lens.Type.ConcreteLens lens_sort in
            LensLit (erase table, Some typ), `Lens typ, usages table
+        | LensSerialLit(lens, columns, _) ->
+          let lens = tc lens in
+          let typ =
+            let columns = Lens.Alias.Set.of_list columns in
+            let lens = typ lens |> Lens_type_conv.lens_type_of_type ~die:(Gripers.die pos) |> Lens.Type.set_serial ~columns in
+            lens in
+          LensSerialLit (erase lens, columns, Some typ), `Lens typ, usages lens
         | LensKeysLit (table, keys, _) ->
            relational_lenses_guard pos;
            let open Lens in
@@ -2813,7 +2821,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            let typ =
              let tlens = typ lens |> Lens_type_conv.lens_type_of_type ~die:(Gripers.die pos) in
              let trow = Lens.Type.sort tlens |> Lens.Sort.record_type in
-             let ltrow = Lens_type_conv.type_of_lens_phrase_type trow in
+             let {tycon_env = context;_} = context in
+             let ltrow = Lens_type_conv.type_of_lens_phrase_type ~context trow in
              let tmatch = Types.make_pure_function_type [ltrow] Types.bool_type in
              unify (pos_and_typ tpredicate, (exp_pos lens, tmatch)) ~handle:Gripers.lens_predicate;
              if Lens_sugar_conv.is_static trow predicate
@@ -2847,7 +2856,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            let typ = typ lens |> Lens_type_conv.lens_type_of_type ~die:(Gripers.die pos) in
            Lens.Type.ensure_checked typ |> Lens_errors.unpack_lens_checked_result ~die:(Gripers.die pos);
            let sort = Lens.Type.sort typ in
-           let trowtype = Lens.Sort.record_type sort |> Lens_type_conv.type_of_lens_phrase_type in
+           let {tycon_env = context;_} = context in
+           let trowtype = Lens.Sort.record_type sort |> Lens_type_conv.type_of_lens_phrase_type ~context in
            LensGetLit (erase lens, Some trowtype), Types.make_list_type trowtype, usages lens
         | LensCheckLit (lens, _) ->
           relational_lenses_guard pos;
@@ -2863,7 +2873,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            Lens.Type.ensure_checked typ |> Lens_errors.unpack_lens_checked_result ~die:(Gripers.die pos);
            let data = tc data in
            let trow = Lens.Type.sort typ |> Lens.Sort.record_type in
-           let ltrow = Lens_type_conv.type_of_lens_phrase_type trow in
+           let {tycon_env = context;_} = context in
+           let ltrow = Lens_type_conv.type_of_lens_phrase_type ~context trow in
            unify (pos_and_typ data, (exp_pos lens, Types.make_list_type ltrow)) ~handle:Gripers.lens_put_input;
            LensPutLit (erase lens, erase data, Some Types.unit_type), make_tuple_type [], Usage.combine (usages lens) (usages data)
         | DBDelete (pat, from, where) ->

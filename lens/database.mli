@@ -88,6 +88,7 @@ module Insert : sig
     { table: string
     ; columns: string list
     ; values: Phrase_value.t list list
+    ; returning: string list
     ; db: db }
 
   val fmt : Format.formatter -> t -> unit

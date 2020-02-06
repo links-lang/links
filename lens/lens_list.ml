@@ -8,6 +8,8 @@ let rec mem t v ~equal =
 
 let iter t ~f = iter f t
 
+let mapi t ~f = mapi f t
+
 let map t ~f = map f t
 
 let rec map_result t ~f =
@@ -92,3 +94,19 @@ let rec to_seq l () =
   | x :: xs -> Seq.Cons (x, to_seq xs)
 
 let for_all2_exn s t ~f = for_all2 f s t
+
+let groupBy (type a b) (module M : Lens_map.S with type key = a) ~(f : b -> a)
+    (s : b list) : (a * b list) list =
+  let open M in
+  let grps =
+    List.fold_right
+      (fun v acc ->
+        let key = f v in
+        M.update key
+          (function
+            | None -> Some [v]
+            | Some vs -> Some (v :: vs))
+          acc)
+      s empty
+  in
+  M.to_list (fun k v -> (k, v)) grps

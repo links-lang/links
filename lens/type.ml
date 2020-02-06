@@ -25,6 +25,15 @@ let sort v =
   | ConcreteLens sort -> sort
   | AbstractLens {sort; _} -> sort
 
+let set_serial sort ~columns =
+  match sort with
+  | ConcreteLens sort ->
+      let sort = Sort.set_serial sort ~columns in
+      ConcreteLens sort
+  | AbstractLens {sort; checked} ->
+      let sort = Sort.set_serial sort ~columns in
+      AbstractLens {sort; checked}
+
 let equal t1 t2 =
   match (t1, t2) with
   | ConcreteLens sort1, ConcreteLens sort2 -> Sort.equal sort1 sort2

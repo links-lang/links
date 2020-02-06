@@ -12,18 +12,24 @@ let to_links_map m =
     (fun k v m -> Utility.StringMap.add k v m)
     m Utility.StringMap.empty
 
-let rec type_of_lens_phrase_type t =
+let lookup_alias context ~alias =
+  match Env.String.find_opt alias context with
+  | Some (`Alias (_, t)) -> `Alias ((alias, [], []), t)
+  | _ -> Errors.MissingBuiltinType alias |> raise
+
+let rec type_of_lens_phrase_type ~context t =
   match t with
   | LPT.Bool -> PT.Bool |> primitive
   | LPT.Int -> PT.Int |> primitive
+  | LPT.Serial -> lookup_alias context ~alias:"Serial"
   | LPT.Char -> PT.Char |> primitive
   | LPT.Float -> PT.Float |> primitive
   | LPT.String -> PT.String |> primitive
   | LPT.Tuple ts ->
-      let _ts = List.map ~f:type_of_lens_phrase_type ts in
+      let _ts = List.map ~f:(type_of_lens_phrase_type ~context) ts in
       failwith "Tuple type not yet supported."
   | LPT.Record r ->
-      let ts = String.Map.map type_of_lens_phrase_type r in
+      let ts = String.Map.map (type_of_lens_phrase_type ~context) r in
       T.make_record_type (to_links_map ts)
 
 let rec lens_phrase_type_of_type t =

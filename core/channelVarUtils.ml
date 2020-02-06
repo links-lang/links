@@ -93,6 +93,7 @@ let variables_in_computation comp =
         traverse_stringmap (fun (_, c) ->
           traverse_computation c) clauses
     | Lens (value, _)
+    | LensSerial { lens = value; _ }
     | LensSelect { lens = value; _ }
     | LensCheck (value, _)
     | LensGet (value, _) -> traverse_value value

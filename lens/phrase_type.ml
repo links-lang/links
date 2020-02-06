@@ -3,6 +3,7 @@ open Lens_utility
 type t =
   | Bool
   | Int
+  | Serial
   | Float
   | String
   | Char
@@ -15,6 +16,7 @@ let rec pp_pretty f v =
   match v with
   | Bool -> const "Bool"
   | Int -> const "Int"
+  | Serial -> const "Serial"
   | Float -> const "Float"
   | String -> const "String"
   | Char -> const "Char"
@@ -25,3 +27,8 @@ let rec pp_pretty f v =
       |> Format.fprintf f "Record(%a)" (Format.pp_comma_list pp_entry)
 
 let equal s t = s = t
+
+let simplify t =
+  match t with
+  | Serial -> Int
+  | _ -> t
