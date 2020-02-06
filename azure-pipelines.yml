@@ -35,7 +35,7 @@ steps:
 
   - bash: |
       case $AGENT_OS in
-        "Linux") sudo apt-get install ocaml python3-setuptools python3-pip libev-dev;;
+        "Linux") sudo apt-get install ocaml python3-setuptools python3-pip;;
         "Darwin") brew install ocaml;;
         *) exit 1 ;;
       esac
@@ -71,11 +71,6 @@ steps:
 
   - script: |
       eval `./opam2_local env`
-      ./opam2_local install conf-libev -y
-    displayName: 'Libev'
-
-  - script: |
-      eval `./opam2_local env`
       make rule-check
     displayName: 'Rule check'
 
@@ -83,7 +78,7 @@ steps:
       case $AGENT_OS in
         "Linux") sudo apt-get install libev-dev &&
                  eval `./opam2_local env` &&
-                ./opam2_local install conf-libev ;;
+                ./opam2_local install conf-libev -y ;;
         *) exit 1 ;;
       esac
     displayName: 'Install libev (necessary step to make Lwt 5 compile in this container)'
