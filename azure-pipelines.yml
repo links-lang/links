@@ -35,7 +35,7 @@ steps:
 
   - bash: |
       case $AGENT_OS in
-        "Linux") sudo apt-get install ocaml python3-setuptools python3-pip conf-libev;;
+        "Linux") sudo apt-get install ocaml python3-setuptools python3-pip libev-dev;;
         "Darwin") brew install ocaml;;
         *) exit 1 ;;
       esac
@@ -68,6 +68,11 @@ steps:
       eval `./opam2_local env`
       ./opam2_local install ocamlformat -y
     displayName: 'Ocamlformat'
+
+  - script: |
+      eval `./opam2_local env`
+      ./opam2_local install conf-libev -y
+    displayName: 'Libev'
 
   - script: |
       eval `./opam2_local env`
