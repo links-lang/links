@@ -9,6 +9,9 @@ module E = Env
 let internal_error message =
   Errors.internal_error ~filename:"value.ml" ~message
 
+let runtime_error message =
+  Errors.runtime_error message
+
 (** Set this to [true] to print the body and environment of a
     function. When [false], functions are simply printed as [fun] *)
 let printing_functions
@@ -1070,25 +1073,26 @@ and xmlitem_of_variant =
     | `Variant ("Node", `Record([ ("1", boxed_name); ("2", variant_children) ])) ->
         let name = unbox_string(boxed_name) in
         if (String.contains name ':')
-        then raise (internal_error "Illegal character in tagname")
+        then raise (runtime_error "Illegal character in tagname")
         else Node(unbox_string(boxed_name), xml_of_variants variant_children)
     | `Variant ("NsAttr", `Record([ ("1", boxed_ns); ("2", boxed_name); ("3", boxed_value) ])) ->
         let ns = unbox_string(boxed_ns) in
         let name = unbox_string(boxed_name) in
         if (String.contains ns ':')
-        then raise (internal_error "Illegal character in namespace")
+        then raise (runtime_error "Illegal character in namespace")
         else if (String.contains name ':')
-        then raise (internal_error "Illegal character in attrname")
+        then raise (runtime_error "Illegal character in attrname")
         else NsAttr(ns, name, unbox_string(boxed_value))
     | `Variant ("NsNode", `Record([ ("1", boxed_ns); ("2", boxed_name); ("3", variant_children) ])) ->
         let ns = unbox_string(boxed_ns) in
         let name = unbox_string(boxed_name) in
         if (String.contains ns ':')
-        then raise (internal_error "Illegal character in namespace")
+        then raise (runtime_error "Illegal character in namespace")
         else if (String.contains name ':')
-        then raise (internal_error "Illegal character in tagname")
+        then raise (runtime_error "Illegal character in tagname")
         else NsNode(ns, name, xml_of_variants variant_children)
-    | v -> raise (type_error ~action:"construct XML from" "variant" v)
+    | v ->
+        raise (type_error ~action:"construct XML from" "variant" v)
 
 (* Some utility functions for databases used by insertion *)
 
