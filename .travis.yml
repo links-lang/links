@@ -6,11 +6,12 @@ services:
 before_install:
   - sudo add-apt-repository -y ppa:avsm/ppa
   - sudo apt-get -qq update
-  - sudo apt-get install -y ocaml-nox ocaml-native-compilers python3-setuptools python3-pip
+  - sudo apt-get install -y ocaml-nox ocaml-native-compilers python3-setuptools python3-pip libev-dev
   - pip3 install -U Sphinx
   - ./install_local_opam2.sh
   - ./opam2_local switch create ocaml-base-compiler.4.06.0
   - eval `./opam2_local config env`
+  - ./opam2_local install conf-libev
   - ./opam2_local install -y postgresql ounit2 ocamlformat
   - make rule-check
   - psql -c 'create database links;' -U postgres
