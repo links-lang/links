@@ -906,7 +906,7 @@ lens_expression:
 | LENS exp DEFAULT                                             { with_pos $loc (LensLit ($2, None))}
 | LENS exp TABLEKEYS exp                                       { with_pos $loc (LensKeysLit ($2, $4, None))}
 | LENS exp WITH LBRACE fn_deps RBRACE                          { with_pos $loc (LensFunDepsLit ($2, $5, None))}
-| LENSSERIAL exp WITH VARIABLE+                                               { with_pos $loc (LensSerialLit ($2, $4, None))}
+| LENSSERIAL exp WITH VARIABLE+                                { with_pos $loc (LensSerialLit ($2, $4, None))}
 | LENSDROP field_label DETERMINED BY
   field_label DEFAULT exp FROM exp                             { with_pos $loc (LensDropLit ($9, $2, $5, $7, None)) }
 | LENSSELECT FROM exp BY exp                                   { with_pos $loc (LensSelectLit ($3, $5, None)) }
