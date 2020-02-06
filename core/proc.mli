@@ -34,11 +34,13 @@ sig
   val block : thread -> thread_result Lwt.t
   val abort : abort_type -> thread_result Lwt.t
 
-  val atomically : thread -> Value.t
+  val atomically : thread -> Value.t Lwt.t
 
   val singlethreaded : unit -> bool (* Exposed to prevent client calls from killing server-side threads... *)
 
-  val run : (unit -> 'a Lwt.t) -> 'a
+  val start : (unit -> 'a Lwt.t) -> 'a
+
+  val run : (unit -> 'a Lwt.t) -> 'a Lwt.t
 end
 
 (* Operations on websockets used to send and receive messages remotely. *)

@@ -285,26 +285,29 @@ struct
     Lwt.fail (Aborted v)
 
   let run' pfun =
-   Lwt_main.run (Lwt.with_value current_pid_key (Some main_process_pid) pfun >>= fun r ->
-                 (if not !atomic then
-                    Lwt.join (Hashtbl.fold (fun _ t ts -> t :: ts) state.angels [])
-                  else
-                    Lwt.return ()) >>= fun _ ->
-                 Lwt.return r)
+    (Lwt.with_value current_pid_key (Some main_process_pid) pfun >>= fun r ->
+     (if not !atomic then
+        Lwt.join (Hashtbl.fold (fun _ t ts -> t :: ts) state.angels [])
+      else
+        Lwt.return ()) >>= fun _ ->
+     Lwt.return r)
 
   let run pfun =
     reset_step_counter ();
     run' pfun
 
+  let start pfun =
+    Lwt_main.run (run pfun)
+
   let atomically_inner pfun =
     let previously_atomic = !atomic in
     atomic := true;
-    let v = run' pfun in
+    run' pfun >>= fun v ->
     atomic := previously_atomic;
-    v
+    Lwt.return v
 
   let atomically pfun =
-    snd @@ atomically_inner pfun
+    atomically_inner pfun >>= fun v -> Lwt.return (snd v)
 end
 
 exception UnknownProcessID of process_id
