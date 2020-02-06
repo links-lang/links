@@ -31,7 +31,6 @@ module type EVALUATOR = sig
   val apply : Value.continuation -> Value.env -> v * v list -> result
   val apply_cont : Value.continuation -> Value.env -> v -> result
   val run_program : Value.env -> Ir.program -> (Value.env * v)
-  val run_defs : Value.env -> Ir.binding list -> Value.env
 end
 
 module Exceptions = struct
@@ -149,99 +148,80 @@ struct
         affected_channels
 
   (** {0 Evaluation} *)
-  let rec value env : Ir.value -> Value.t = function
-    | Constant (Constant.Bool   b) -> `Bool b
-    | Constant (Constant.Int    n) -> `Int n
-    | Constant (Constant.Char   c) -> `Char c
-    | Constant (Constant.String s) -> Value.box_string s
-    | Constant (Constant.Float  f) -> `Float f
-    | Variable var -> lookup_var var env
-(*
-        begin
-          match lookup_var var env with
-            | Some v -> v
-            | _      -> eval_error "Variable not found: %d" var
-        end
-*)
+  let rec value env : Ir.value -> Value.t Lwt.t = fun v ->
+    let constant = function
+      | Constant.Bool   b -> `Bool b
+      | Constant.Int    n -> `Int n
+      | Constant.Char   c -> `Char c
+      | Constant.String s -> Value.box_string s
+      | Constant.Float  f -> `Float f in
+
+    match v with
+    | Constant c -> Lwt.return (constant c)
+    | Variable var -> Lwt.return (lookup_var var env)
     | Extend (fields, r) ->
         begin
-          match opt_app (value env) (`Record []) r with
+          opt_app (value env) (Lwt.return (`Record [])) r >>= fun res ->
+          match res with
             | `Record fs ->
-                (* HACK
-
-                   Pre-pending the fields to r in this order shouldn't
-                   be necessary but without the List.rev, deriving
-                   somehow manages to serialise things in the wrong
-                   order on the "Your Shopping Cart" page of the
-                   winestore example. *)
-                `Record (List.rev
-                           (StringMap.fold
-                              (fun label v fs ->
-                                 if List.mem_assoc label fs then
-                                   (* (label, value env v) :: (List.remove_assoc label fs) *)
-                                   eval_error
-                                     "Error adding fields: label %s already present" label
-                                 else
-                                   (label, value env v)::fs)
-                              fields
-                              []) @ fs)
-(*                 `Record (StringMap.fold  *)
-(*                            (fun label v fs -> *)
-(*                               (label, value env v)::fs) *)
-(*                            fields *)
-(*                            fs) *)
+                let fields = StringMap.bindings fields in
+                LwtHelpers.foldr_lwt
+                   (fun (label, v) (fs: (string * Value.t) list)  ->
+                      if List.mem_assoc label fs then
+                        eval_error
+                          "Error adding fields: label %s already present" label
+                      else
+                        value env v >>= fun v ->
+                        Lwt.return ((label, v)::fs))
+                   fields
+                   (Lwt.return []) >>= fun res ->
+                Lwt.return (`Record (res @ fs))
             | v -> type_error ~action:"add field to" "record" v
         end
     | Project (label, r) ->
+        value env r >>= fun v ->
         begin
-          match value env r with
+          match v with
             | `Record fields when List.mem_assoc label fields ->
-                List.assoc label fields
+                Lwt.return (List.assoc label fields)
             | v -> type_error ~action:("projecting label " ^ label) "record" v
         end
     | Erase (labels, r) ->
+        value env r >>= fun v ->
         begin
-          match value env r with
+          match v with
             | `Record fields when
                 StringSet.for_all (fun label -> List.mem_assoc label fields) labels ->
-                `Record (StringSet.fold (fun label fields -> List.remove_assoc label fields) labels fields)
+                  Lwt.return (
+                `Record (StringSet.fold (fun label fields -> List.remove_assoc label fields) labels fields))
             | v ->
                type_error ~action:(Printf.sprintf "erase labels {%s}" (String.concat "," (StringSet.elements labels)))
                  "record" v
         end
-    | Inject (label, v, _) -> `Variant (label, value env v)
+    | Inject (label, v, _) ->
+        value env v >>= fun v -> Lwt.return (`Variant (label, v))
     | TAbs (_, v) -> value env v
     | TApp (v, _) -> value env v
     | XmlNode (tag, attrs, children) ->
-        let children =
-          List.fold_right
+          LwtHelpers.foldr_lwt
             (fun v children ->
-               let v = value env v in
-                 List.map Value.unbox_xml (Value.unbox_list v) @ children)
-            children [] in
-        let children =
-          StringMap.fold
-            (fun name v attrs ->
-               Value.Attr (name, Value.unbox_string (value env v)) :: attrs)
-            attrs children
-        in
-          Value.box_list [Value.box_xml (Value.Node (tag, children))]
+              value env v >>= fun v ->
+               Lwt.return (List.map Value.unbox_xml (Value.unbox_list v) @ children))
+            children (Lwt.return []) >>= fun children ->
+          let attrs = StringMap.bindings attrs in
+          LwtHelpers.foldr_lwt
+            (fun (name, v) attrs ->
+               value env v >>= fun str ->
+               Lwt.return (Value.Attr (name, Value.unbox_string str) :: attrs))
+            (List.rev attrs) (Lwt.return children) >>= fun children ->
+          Lwt.return (Value.box_list [Value.box_xml (Value.Node (tag, children))])
     | ApplyPure (f, args) ->
-      Proc.atomically (fun () -> apply K.empty env (value env f, List.map (value env) args))
+      value env f >>= fun f ->
+      (LwtHelpers.sequence (List.map (value env) args)) >>= fun args ->
+      Proc.atomically (fun () -> apply K.empty env (f, args))
     | Closure (f, _, v) ->
-      (* begin *)
-
-      (* TODO: consider getting rid of `ClientFunction *)
-      (* Currently, it's only necessary for built-in client
-         functions *)
-
-      (* let (finfo, _, z, location) = find_fun f in *)
-      (* match location with *)
-      (* | `Server | `Unknown | `Client -> *)
-      `FunctionPtr (f, Some (value env v))
-      (* | `Client -> *)
-      (*   `ClientFunction (Js.var_name_binder (f, finfo)) *)
-      (* end *)
+      value env v >>= fun v ->
+      Lwt.return (`FunctionPtr (f, Some v))
     | Coerce (v, _) -> value env v
   and apply_access_point (cont : continuation) env : Value.spawn_location -> result = function
       | `ClientSpawnLoc cid ->
@@ -567,11 +547,17 @@ struct
             computation (Value.Env.bind var (`Alien, scope) env) cont (bs, tailcomp)
          | Module _ -> raise (internal_error "Not implemented interpretation of modules yet")
   and tail_computation env (cont : continuation) : Ir.tail_computation -> result = function
-    | Ir.Return v   -> apply_cont cont env (value env v)
-    | Apply (f, ps) -> apply cont env (value env f, List.map (value env) ps)
+    | Ir.Return v   ->
+        value env v >>= fun v ->
+        apply_cont cont env v
+    | Apply (f, ps) ->
+        value env f >>= fun f ->
+        LwtHelpers.sequence (List.map (value env) ps) >>= fun ps ->
+        apply cont env (f, ps)
     | Special s     -> special env cont s
     | Case (v, cases, default) ->
-      begin match value env v with
+      value env v >>= fun v ->
+      begin match v with
         | `Variant (label, _) as v ->
           begin
             match StringMap.lookup label cases, default, v with
@@ -584,8 +570,9 @@ struct
         | v -> type_error ~action:"take case of" "variant" v
       end
     | If (c,t,e)    ->
+        value env c >>= fun c ->
         computation env cont
-          (match value env c with
+          (match c with
              | `Bool true     -> t
              | `Bool false    -> e
              | _              -> eval_error "Conditional was not a boolean")
@@ -596,13 +583,16 @@ struct
         [], `Not_typed)) in
     function
     | Wrong _                    -> raise Exceptions.Wrong
-    | Database v                 -> apply_cont cont env (`Database (db_connect (value env v)))
+    | Database v                 ->
+        value env v >>= fun v ->
+        apply_cont cont env (`Database (db_connect v))
     | Lens (table, t) ->
       let open Lens in
       begin
           let sort = Type.sort t in
           let typ = Type.record_type t |> Lens_type_conv.type_of_lens_phrase_type in
-          match value env table, (TypeUtils.concrete_type typ) with
+          value env table >>= fun table ->
+          match table, (TypeUtils.concrete_type typ) with
             | `Table (((db,_), table, _, _) as tinfo), `Record _row ->
               let database = Lens_database_conv.lens_db_of_db db in
               let sort = Sort.update_table_name sort ~table in
@@ -615,8 +605,8 @@ struct
       end
     | LensDrop {lens; drop; key; default; _} ->
         let open Lens in
-        let lens = value env lens |> get_lens in
-        let default = value env default |> Lens_value_conv.lens_phrase_value_of_value in
+        value env lens >|= get_lens >>= fun lens ->
+        value env default >|= Lens_value_conv.lens_phrase_value_of_value >>= fun default ->
         let sort =
           Lens.Sort.drop_lens_sort
             (Lens.Value.sort lens)
@@ -629,7 +619,7 @@ struct
         apply_cont cont env (`Lens (Value.LensDrop { lens; drop; key; default; sort }))
     | LensSelect { lens; predicate; _ } ->
         let open Lens in
-        let lens = value env lens |> get_lens in
+        value env lens >|= get_lens >>= fun lens ->
         let predicate =
           match predicate with
           | Static predicate -> predicate
@@ -646,8 +636,8 @@ struct
         apply_cont cont env (`Lens (Value.LensSelect {lens; predicate; sort}))
     | LensJoin { left; right; on; del_left; del_right; _ } ->
         let open Lens in
-        let lens1 = value env left |> get_lens in
-        let lens2 = value env right |> get_lens in
+        value env left >|= get_lens >>= fun lens1 ->
+        value env right >|= get_lens >>= fun lens2 ->
         let left, right=
           if Lens.Sort.join_lens_should_swap
                (Lens.Value.sort lens1)
@@ -663,17 +653,16 @@ struct
           |> Lens_errors.unpack_sort_join_result ~die:(eval_error "%s") in
         apply_cont cont env (`Lens (Value.LensJoin {left; right; on; del_left; del_right; sort}))
     | LensCheck (lens, _typ) ->
-        let lens = value env lens in
-        apply_cont cont env lens
+        value env lens >>= apply_cont cont env
     | LensGet (lens, _rtype) ->
-        let lens = value env lens |> get_lens in
+        value env lens >|= get_lens >>= fun lens ->
         (* let callfn = fun fnptr -> fnptr in *)
         let res = Lens.Value.lens_get lens in
         let res = List.map Lens_value_conv.value_of_lens_phrase_value res |> Value.box_list in
           apply_cont cont env res
     | LensPut (lens, data, _rtype) ->
-        let lens = value env lens |> get_lens in
-        let data = value env data |> Value.unbox_list in
+        value env lens >|= get_lens >>= fun lens ->
+        value env data >|= Value.unbox_list >>= fun data ->
         let data = List.map Lens_value_conv.lens_phrase_value_of_value data in
         let behaviour =
           if Settings.get Lens.classic_lenses
@@ -685,7 +674,10 @@ struct
       begin
         (* OPTIMISATION: we could arrange for concrete_type to have
            already been applied here *)
-        match value env db, value env name, value env keys, (TypeUtils.concrete_type readtype) with
+        value env db >>= fun db ->
+        value env name >>= fun name ->
+        value env keys >>= fun keys ->
+        match db, name, keys, (TypeUtils.concrete_type readtype) with
           | `Database (db, params), name, keys, `Record row ->
             let unboxed_keys =
               List.map
@@ -696,11 +688,14 @@ struct
           | _ -> eval_error "Error evaluating table handle"
       end
     | Query (range, policy, e, _t) ->
-       let range =
+       begin
          match range with
-         | None -> None
-         | Some (limit, offset) ->
-            Some (Value.unbox_int (value env limit), Value.unbox_int (value env offset)) in
+           | None -> Lwt.return None
+           | Some (limit, offset) ->
+              value env limit >>= fun limit ->
+              value env offset >>= fun offset ->
+              Lwt.return (Some (Value.unbox_int limit, Value.unbox_int offset))
+       end >>= fun range ->
        let evaluator =
          let open QueryPolicy in
          match policy with
@@ -764,7 +759,9 @@ struct
        end
     | InsertRows (source, rows) ->
         begin
-          match value env source, value env rows with
+          value env source >>= fun source ->
+          value env rows >>= fun rows ->
+          match source, rows with
           | `Table _, `List [] ->  apply_cont cont env (`Record [])
           | `Table ((db, _params), table_name, _, _), rows ->
               let (field_names,vss) = Value.row_columns_values db rows in
@@ -785,7 +782,10 @@ struct
   *)
     | InsertReturning (source, rows, returning) ->
         begin
-          match value env source, value env rows, value env returning with
+          value env source >>= fun source ->
+          value env rows >>= fun rows ->
+          value env returning >>= fun returning ->
+          match source, rows, returning with
           | `Table _, `List [], _ ->
               raise (internal_error "InsertReturning: undefined for empty list of rows")
           | `Table ((db, _params), table_name, _, _), rows, returning ->
@@ -798,57 +798,65 @@ struct
           | _ -> raise (internal_error "insert row into non-database")
         end
     | Update ((xb, source), where, body) ->
-      let db, table, field_types =
-        match value env source with
+      begin
+        value env source >>= fun source ->
+        match source with
           | `Table ((db, _), table, _, (fields, _, _)) ->
-            db, table, (StringMap.map (function
+              Lwt.return
+            (db, table, (StringMap.map (function
                                         | `Present t -> t
-                                        | _ -> assert false) fields)
-          | _ -> assert false in
+                                        | _ -> assert false) fields))
+          | _ -> assert false
+      end >>= fun (db, table, field_types) ->
       let update_query =
         Query.compile_update db env ((Var.var_of_binder xb, table, field_types), where, body) in
       let () = ignore (Database.execute_command update_query db) in
         apply_cont cont env (`Record [])
     | Delete ((xb, source), where) ->
-      let db, table, field_types =
-        match value env source with
+        value env source >>= fun source ->
+        begin
+        match source with
           | `Table ((db, _), table, _, (fields, _, _)) ->
-            db, table, (StringMap.map (function
+              Lwt.return
+            (db, table, (StringMap.map (function
                                         | `Present t -> t
-                                        | _ -> assert false) fields)
-          | _ -> assert false in
+                                        | _ -> assert false) fields))
+          | _ -> assert false
+        end >>= fun (db, table, field_types) ->
       let delete_query =
         Query.compile_delete db env ((Var.var_of_binder xb, table, field_types), where) in
       let () = ignore (Database.execute_command delete_query db) in
         apply_cont cont env (`Record [])
     | CallCC f ->
-       apply cont env (value env f, [`Continuation cont])
+       value env f >>= fun f ->
+       apply cont env (f, [`Continuation cont])
     (* Handlers *)
     | Handle { ih_comp = m; ih_cases = clauses; ih_return = return; ih_depth = depth } ->
        (* Slight hack *)
-       let env, depth =
-        match depth with
-        | Shallow -> env, `Shallow
-        | Deep params ->
-           let env, vars =
-             List.fold_right
-               (fun (b, initial_value) (env, vars) ->
-                 let var = Var.var_of_binder b in
-                 Value.Env.bind var (value env initial_value, Scope.Local) env, var :: vars)
-               params (env, [])
-           in
-           env, `Deep vars
-       in
+       begin
+         match depth with
+         | Shallow -> Lwt.return (env, `Shallow)
+         | Deep params ->
+            LwtHelpers.foldr_lwt
+              (fun (b, initial_value) (env, vars) ->
+                let var = Var.var_of_binder b in
+                value env initial_value >>= fun initial_value ->
+                Lwt.return (Value.Env.bind var (initial_value, Scope.Local) env, var :: vars))
+              params (Lwt.return (env, [])) >>= fun (env, vars) ->
+            Lwt.return (env, `Deep vars)
+       end >>= fun (env, depth) ->
        let handler = K.Handler.make ~env ~return ~clauses ~depth in
        let cont = K.set_trap_point ~handler cont in
        computation env cont m
     | DoOperation (name, vs, _) ->
        let open Value.Trap in
-       let v =
+       begin
          match List.map (value env) vs with
          | [v] -> v
-         | vs  -> Value.box vs
-       in
+         | vs  ->
+             LwtHelpers.sequence vs >>= fun vs ->
+             Lwt.return (Value.box vs)
+       end >>= fun v ->
        begin
        match K.Eval.trap cont (name, v) with
          | Trap cont_thunk -> cont_thunk ()
@@ -862,7 +870,7 @@ struct
        end
     (* Session stuff *)
     | Select (name, v) ->
-      let chan = value env v in
+      value env v >>= fun chan ->
       Debug.print ("selecting: " ^ name ^ " from: " ^ Value.string_of_value chan);
       let ch = Value.unbox_channel chan in
       let (outp, _inp) = ch in
@@ -872,7 +880,7 @@ struct
     | Choice (v, cases) ->
       begin
         let open Session in
-        let chan = value env v in
+        value env v >>= fun chan ->
         Debug.print("choosing from: " ^ Value.string_of_value chan);
         let unboxed_chan = Value.unbox_channel chan in
         let inp = receive_port unboxed_chan in
@@ -912,53 +920,15 @@ struct
   let eval : Value.env -> program -> result =
     fun env -> computation env K.empty
 
-  let run_program_with_cont : Value.continuation -> Value.env -> Ir.program ->
-    (Value.env * Value.t) =
-    fun cont env program ->
-      try (
-        Proc.run (fun () -> computation env cont program)
-      ) with
-        | NotFound s -> raise (internal_error ("NotFound " ^ s ^
-                    " while interpreting."))
-
   let run_program : Value.env -> Ir.program -> (Value.env * Value.t) =
     fun env program ->
       try (
-        Proc.run (fun () -> eval env program)
+        Proc.start (fun () -> eval env program)
       ) with
         | NotFound s ->
             raise (internal_error ("NotFound " ^ s ^
               " while interpreting."))
         | Not_found  -> raise (internal_error ("Not_found while interpreting."))
-
-  let run_defs : Value.env -> Ir.binding list -> Value.env =
-    fun env bs ->
-    let (env, _value) = run_program env (bs, Ir.Return (Ir.Extend(StringMap.empty, None))) in env
-
-  (** [apply_cont_toplevel cont env v] applies a continuation to a value
-      and returns the result. Finishing the main thread normally comes
-      here immediately. *)
-
-  let apply_cont_toplevel (cont : continuation) env v =
-    try snd (Proc.run (fun () -> apply_cont cont env v)) with
-    | NotFound s ->
-        raise (internal_error ("NotFound " ^ s ^
-                               " while interpreting."))
-
-  let apply_with_cont (cont : continuation) env (f, vs) =
-    try snd (Proc.run (fun () -> apply cont env (f, vs))) with
-    |  NotFound s ->
-        raise (internal_error ("NotFound " ^ s ^
-                               " while interpreting."))
-
-
-  let apply_toplevel env (f, vs) = apply_with_cont K.empty env (f, vs)
-
-  let eval_toplevel env program =
-    try snd (Proc.run (fun () -> eval env program)) with
-    | NotFound s ->
-        raise (internal_error ("NotFound " ^ s ^
-                               " while interpreting."))
 end
 
 module type EVAL = functor (Webs : WEBSERVER) -> sig
