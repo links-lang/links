@@ -604,7 +604,8 @@ struct
       end
     | LensSerial { lens; columns; _ } ->
       let open Lens in
-      let lens = value env lens |> get_lens |> Value.set_serial ~columns in
+      value env lens >>= fun lens ->
+      let lens = get_lens lens |> Value.set_serial ~columns in
       apply_cont cont env (`Lens lens)
     | LensDrop {lens; drop; key; default; _} ->
         let open Lens in
