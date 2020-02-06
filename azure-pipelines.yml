@@ -67,12 +67,21 @@ steps:
   - script: |
       eval `./opam2_local env`
       ./opam2_local install ocamlformat -y
-    displayName: 'Ocamlformat'
+    displayName: 'OCamlformat'
 
   - script: |
       eval `./opam2_local env`
       make rule-check
     displayName: 'Rule check'
+
+  - bash: |
+      case $AGENT_OS in
+        "Linux") sudo apt-get install libev-dev &&
+                 eval `./opam2_local env` &&
+                ./opam2_local install conf-libev ;;
+        *) exit 1 ;;
+      esac
+    displayName: 'Install libev (necessary step to make Lwt 5 compile in this container)'
 
   - bash: |
       case $AGENT_OS in
