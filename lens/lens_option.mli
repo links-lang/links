@@ -28,3 +28,5 @@ val is_some : 'a t -> bool
 val is_none : 'a t -> bool
 
 val negate : 'b option -> value:'a -> 'a option
+
+val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool

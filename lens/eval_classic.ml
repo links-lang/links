@@ -17,8 +17,8 @@ let lens_put_set_step lens data (fn : Value.t -> Sorted.t -> unit) =
       let on_left = List.map (fun v -> (v, v, v)) columns in
       let m =
         Sorted.merge
-          (Sorted.join r data ~on:on_left)
-          (Sorted.join nplus a ~on:[])
+          (Sorted.join_exn r data ~on:on_left)
+          (Sorted.join_exn nplus a ~on:[])
       in
       let res =
         Sorted.relational_update
@@ -41,9 +41,9 @@ let lens_put_set_step lens data (fn : Value.t -> Sorted.t -> unit) =
           ~update_with:(Sorted.project_onto data ~columns:(cols right))
           s
       in
-      let l = Sorted.minus (Sorted.join m0 n0 ~on) data in
+      let l = Sorted.minus (Sorted.join_exn m0 n0 ~on) data in
       let join_cols = cols lens |> List.map (fun v -> (v, v, v)) in
-      let ll = Sorted.join l data ~on:join_cols in
+      let ll = Sorted.join_exn l data ~on:join_cols in
       let la = Sorted.minus l ll in
       let m =
         Sorted.minus
@@ -86,7 +86,8 @@ let apply_table_data ~table ~database data =
   let values = Sorted.plus_rows data |> Array.to_list in
   let fmt_insert f values =
     let values = [values] in
-    let insert = {Database.Insert.table; columns; values; db} in
+    let returning = [] in
+    let insert = {Database.Insert.table; columns; values; db; returning} in
     Database.Insert.fmt f insert
   in
   let fmt_cmd_sep f () = Format.pp_print_string f ";\n" in

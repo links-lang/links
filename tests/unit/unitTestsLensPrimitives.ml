@@ -88,13 +88,15 @@ let initlist n fn =
 let test_put test_ctx lens res =
   let classic_opt = UnitTestsLensCommon.classic_opt test_ctx in
   let benchmark_opt = UnitTestsLensCommon.benchmark_opt test_ctx in
-  let step =
-    if classic_opt then Lens.Eval.Classic.lens_put_step lens res
+  let step cb =
+    if classic_opt then Lens.Eval.Classic.lens_put_step lens res cb
     else
       let data = Lens.Eval.Incremental.lens_get_delta lens res in
       H.print_verbose test_ctx
         ("Delta Size: " ^ string_of_int (Lens.Sorted_records.total_size data)) ;
-      Lens.Eval.Incremental.lens_put_set_step lens data
+      let env = Int.Map.empty in
+      let cb ~env:_ lens data = cb lens data ; env in
+      Lens.Eval.Incremental.lens_put_set_step ~env lens data cb |> ignore
   in
   let run () =
     step (fun _ res ->
@@ -321,11 +323,15 @@ let test_put_delta test_ctx =
       let neg = Lens.Sorted_records.negate delta in
       H.print_verbose test_ctx
         ("Delta Size: " ^ string_of_int (Sorted.total_size delta)) ;
+      let sort = Lens.Value.sort l1 in
+      let env = Int.Map.empty in
       let run () =
-        Lens.Eval.Incremental.apply_delta ~table ~database:db delta
+        Lens.Eval.Incremental.apply_delta ~table ~database:db ~sort ~env delta
+        |> ignore
       in
       let revert () =
-        Lens.Eval.Incremental.apply_delta ~table ~database:db neg
+        Lens.Eval.Incremental.apply_delta ~table ~database:db ~sort ~env neg
+        |> ignore
       in
       (run, revert)
   in
@@ -394,8 +400,11 @@ let test_join_lens_2 n test_ctx =
   in
   H.print_verbose test_ctx (Phrase.Value.show_values (Lens.Value.lens_get l3)) ;
   H.print_verbose test_ctx (Phrase.Value.show_values res) ;
-  Lens.Eval.Incremental.lens_put_step l3 res (fun _ res ->
-      H.print_verbose test_ctx (Format.asprintf "%a" Sorted.pp_tabular res)) ;
+  let env = Int.Map.empty in
+  Lens.Eval.Incremental.lens_put_step l3 res ~env (fun ~env _ res ->
+      H.print_verbose test_ctx (Format.asprintf "%a" Sorted.pp_tabular res) ;
+      env)
+  |> ignore ;
   Lens.Eval.Incremental.lens_put l3 res ;
   let upd = Lens.Value.lens_get l3 in
   H.print_verbose test_ctx (Phrase.Value.show_values upd) ;
@@ -422,8 +431,11 @@ let test_join_lens_dr_2 n test_ctx =
   in
   H.print_verbose test_ctx (Phrase.Value.show_values (Lens.Value.lens_get l3)) ;
   H.print_verbose test_ctx (Phrase.Value.show_values res) ;
-  Lens.Eval.Incremental.lens_put_step l3 res (fun _ res ->
-      H.print_verbose test_ctx (Format.asprintf "%a" Sorted.pp_tabular res)) ;
+  let env = Int.Map.empty in
+  Lens.Eval.Incremental.lens_put_step l3 res ~env (fun ~env _ res ->
+      H.print_verbose test_ctx (Format.asprintf "%a" Sorted.pp_tabular res) ;
+      env)
+  |> ignore ;
   Lens.Eval.Incremental.lens_put l3 res ;
   let upd = Lens.Value.lens_get l3 in
   H.print_verbose test_ctx (Phrase.Value.show_values upd) ;

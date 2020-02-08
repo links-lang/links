@@ -1,6 +1,7 @@
 type t =
   | Bool of bool
   | Int of int
+  | Serial of [`Key of int | `NewKey | `NewKeyMapped of int]
   | Float of float
   | String of string
   | Char of char
@@ -16,6 +17,9 @@ type values = t list [@@deriving show]
 
 val equal : t -> t -> bool
 
+(** Determine if the phrase value is a new key that should be determined by the database. *)
+val is_new_key : t -> bool
+
 val box_bool : bool -> t
 
 val unbox_bool : t -> bool
@@ -23,6 +27,10 @@ val unbox_bool : t -> bool
 val box_int : int -> t
 
 val unbox_int : t -> int
+
+val unbox_serial_newkeymapped : t -> int
+
+val unbox_serial_key : t -> int
 
 val box_float : float -> t
 
