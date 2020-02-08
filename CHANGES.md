@@ -81,6 +81,21 @@ used, then the query will evaluated using the default evaluator, and
 if `nested` is used, then the query will be shredded. If the policy is
 omitted, then the `shredding` setting is used to decide, as before.
 
+## Relational Lenses: Support for Serial Type Columns
+
+The Relational Lenses extension now supports postgresql serial type
+columns. In Links, the serial type is encoded as a variant type
+`Serial` with three constructors:
+
+- `Key(Int)` which indicates a known key value retrieved from the
+database.
+- `NewKey` which indicates that a value should be chosen by the
+database server.
+- `NewKeyMapped(Int)` which is similar to `NewKey`, except that it
+allows multiple entries to refer to the same key (e.g. in the case of
+a table join, where two new entries are inserted referring to the same
+right table).
+
 ## Miscellaneous
 
 - Links now builds with Lwt version 5.
