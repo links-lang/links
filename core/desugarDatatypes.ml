@@ -64,10 +64,7 @@ type opt_kinded_type_variable = Name.t * Subkind.t option * Freedom.t
 type kinded_type_variable = Name.t * Sugartypes.kind * Freedom.t
 
 
-let infer_kinds
-  = Settings.(flag "infer_kinds"
-              |> convert parse_bool
-              |> sync)
+let infer_kinds = DesugarTypeVariables.infer_kinds
 
 let has_effect_sugar () = Settings.get Types.effect_sugar
 
