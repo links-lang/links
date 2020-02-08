@@ -15,6 +15,8 @@ let present t = t.present
 
 let typ t = t.typ
 
+let set_typ ~typ t = {t with typ}
+
 let table t = t.table
 
 let hide t = {t with present= false}

@@ -42,6 +42,9 @@ val update_predicate :
 (** Update all columns with a table name *)
 val update_table_name : t -> table:string -> t
 
+(** Change the specified columns to be of serial type. *)
+val set_serial : t -> columns:Alias.Set.t -> t
+
 (** Determines if the lenses should be swapped, because the right lens defines
     the left lens. *)
 val join_lens_should_swap : t -> t -> on:string list -> bool

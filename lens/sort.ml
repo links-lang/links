@@ -28,6 +28,16 @@ let present_colset t = t.cols |> Column.List.present |> Column.Set.of_list
 let make ?(fds = Fun_dep.Set.empty) ?(predicate = None) ?(query = None) cols =
   {fds; predicate; query; cols}
 
+let set_serial sort ~columns =
+  let cols =
+    cols sort
+    |> List.map ~f:(fun c ->
+           if Alias.Set.mem (Column.alias c) columns then
+             Column.set_typ ~typ:Phrase_type.Serial c
+           else c)
+  in
+  {sort with cols}
+
 let find_col_alias t ~alias = Column.List.find_alias ~alias t.cols
 
 let update_table_name t ~table =

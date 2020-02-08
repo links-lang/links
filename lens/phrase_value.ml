@@ -3,6 +3,7 @@ open Lens_utility
 type t =
   | Bool of bool
   | Int of int
+  | Serial of [`Key of int | `NewKey | `NewKeyMapped of int]
   | Float of float
   | String of string
   | Char of char
@@ -12,7 +13,19 @@ type t =
 
 type values = t list [@@deriving show]
 
-let equal v1 v2 = v1 = v2
+(** Equality considers two `NewKey values as different. *)
+let equal v1 v2 =
+  match (v1, v2) with
+  | Serial `NewKey, _ -> false
+  | _, Serial `NewKey -> false
+  | _ -> v1 = v2
+
+let is_new_key v =
+  match v with
+  | Serial `NewKey
+   |Serial (`NewKeyMapped _) ->
+      true
+  | _ -> false
 
 module Unbox_error = struct
   exception E of {value: t; expected: string}
@@ -44,6 +57,16 @@ let unbox_int v =
   match v with
   | Int b -> b
   | _ -> unbox_error v "Int"
+
+let unbox_serial_newkeymapped v =
+  match v with
+  | Serial (`NewKeyMapped v) -> v
+  | _ -> unbox_error v "Serial `NewKeyMapped"
+
+let unbox_serial_key v =
+  match v with
+  | Serial (`Key v) -> v
+  | _ -> unbox_error v "Serial `Key"
 
 let box_float f = Float f
 
@@ -77,6 +100,7 @@ let rec type_of v =
   match v with
   | Bool _ -> Phrase_type.Bool
   | Int _ -> Phrase_type.Int
+  | Serial _ -> Phrase_type.Serial
   | Char _ -> Phrase_type.Char
   | Float _ -> Phrase_type.Float
   | String _ -> Phrase_type.String
@@ -89,6 +113,7 @@ let rec default_value t =
   match t with
   | Phrase_type.Bool -> Bool false
   | Phrase_type.Int -> Int 0
+  | Phrase_type.Serial -> Serial `NewKey
   | Phrase_type.Char -> Char 'a'
   | Phrase_type.Float -> Float 0.0
   | Phrase_type.String -> String ""
@@ -110,5 +135,7 @@ module Record = struct
     |> box_record
 
   let match_on t1 t2 ~on =
-    List.for_all ~f:(fun key -> equal (get t1 ~key) (get t2 ~key)) on
+    List.for_all
+      ~f:(fun key -> (Option.equal equal) (get t1 ~key) (get t2 ~key))
+      on
 end

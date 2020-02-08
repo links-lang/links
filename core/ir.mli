@@ -72,6 +72,7 @@ and special =
   | Wrong      of Types.datatype
   | Database   of value
   | Lens of value * Lens.Type.t
+  | LensSerial of { lens: value; columns : Lens.Alias.Set.t; typ : Lens.Type.t }
   | LensDrop   of { lens : value; drop : string; key : string; default : value; typ : Lens.Type.t }
   | LensSelect of { lens : value; predicate : lens_predicate; typ : Lens.Type.t }
   | LensJoin   of { left : value; right : value; on : string list; del_left : Lens.Phrase.t; del_right : Lens.Phrase.t; typ : Lens.Type.t }

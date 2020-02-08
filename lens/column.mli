@@ -20,6 +20,9 @@ val table : t -> string
 (** Return the column type. *)
 val typ : t -> Phrase_type.t
 
+(** Change a column type. *)
+val set_typ : typ:Phrase_type.t -> t -> t
+
 (** Determine if the column is present. *)
 val present : t -> bool
 

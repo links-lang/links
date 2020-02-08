@@ -305,6 +305,9 @@ struct
         | Lens (table, rtype) ->
             let table, _, o = o#value table in
               Lens (table, rtype), `Lens rtype, o
+        | LensSerial {lens; columns; typ} ->
+            let lens, _, o = o#value lens in
+              LensSerial {lens; columns; typ}, `Lens typ, o
         | LensDrop {lens; drop; key; default; typ} ->
             let lens, _, o = o#value lens in
             let default, _, o = o#value default in

@@ -41,12 +41,16 @@ val generate_query : t -> Database.Select.t
 (** Fetch the records of a lens from the database. *)
 val lens_get : t -> Phrase_value.t list
 
-(** Construct a select lens using the specified underlying lens and select predicate.
-    This should not be used to construct lenses in general, as it may have a bad put
-    direction. *)
+(** Construct a select lens using the specified underlying lens and select
+   predicate. This should not be used to construct lenses in general, as it may
+   have a bad put direction. *)
 val lens_select_internal : t -> predicate:Phrase.t -> t
 
 (** Generate a select lens from the specified lens and query its results. *)
 val lens_get_select_opt : t -> predicate:Phrase.t option -> Phrase_value.t list
 
 val query_exists : t -> Phrase.t -> bool
+
+(** Change the type of the specified columns to be of serial type. Only
+   primitive lenses supported. *)
+val set_serial : t -> columns:Alias.Set.t -> t

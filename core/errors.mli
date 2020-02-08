@@ -36,6 +36,7 @@ exception TypeApplicationKindMismatch of
 exception SettingsError of string
 exception DynlinkError of string
 exception ModuleError of string * Position.t option
+exception MissingBuiltinType of string
 
 val format_exception : exn -> string
 val format_exception_html : exn -> string

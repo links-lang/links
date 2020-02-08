@@ -1027,6 +1027,7 @@ struct
           (DoOperation (name, vs, t), t, o)
 
         | Lens _
+        | LensSerial _
         | LensDrop _
         | LensSelect _
         | LensGet _

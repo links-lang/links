@@ -59,6 +59,8 @@ let fmt_phrase_value ~db f v =
     | LPV.Float v ->
         let s = string_of_float v in
         if s.[String.length s - 1] = '.' then s ^ "0" else s
+    | LPV.Serial (`Key k) ->
+        string_of_int k (* only support converting known keys. *)
     | _ -> Format.asprintf "Unexpected phrase value %a." LPV.pp v |> failwith
     )
 
@@ -269,6 +271,7 @@ module Insert = struct
     { table: string
     ; columns: string list
     ; values: Phrase_value.t list list
+    ; returning: string list
     ; db: db }
 
   let fmt_table ~db f v = Format.fprintf f "%s" @@ db.quote_field v
@@ -280,9 +283,19 @@ module Insert = struct
     let fmt_vals f v =
       Format.fprintf f "(%a)" (fmt_phrase_value ~db |> Format.pp_comma_list) v
     in
-    Format.fprintf f "INSERT INTO %a (%a) VALUES %a" (fmt_table ~db) v.table
+    let fmt_returning f () =
+      match v.returning with
+      | [] -> ()
+      | _ ->
+          Format.fprintf f " RETURNING %a"
+            (fmt_col ~db |> Format.pp_comma_list)
+            v.returning
+    in
+    Format.fprintf f "INSERT INTO %a (%a) VALUES %a%a" (fmt_table ~db) v.table
       (fmt_col ~db |> Format.pp_comma_list)
       v.columns
       (fmt_vals |> Format.pp_comma_list)
-      v.values
+      v.values fmt_returning ()
+
+  (* optionally add a returning statement if required *)
 end

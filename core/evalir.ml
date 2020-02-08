@@ -590,19 +590,23 @@ struct
       let open Lens in
       begin
           let sort = Type.sort t in
-          let typ = Type.record_type t |> Lens_type_conv.type_of_lens_phrase_type in
           value env table >>= fun table ->
-          match table, (TypeUtils.concrete_type typ) with
-            | `Table (((db,_), table, _, _) as tinfo), `Record _row ->
+          match table with
+            | `Table (((db,_), table, _, _) as tinfo) ->
               let database = Lens_database_conv.lens_db_of_db db in
               let sort = Sort.update_table_name sort ~table in
               let table = Lens_database_conv.lens_table_of_table tinfo in
                  apply_cont cont env (`Lens (Value.Lens { sort; database; table; }))
-            | `List records, `Record _row ->
+            | `List records ->
               let records = List.map Lens_value_conv.lens_phrase_value_of_value records in
               apply_cont cont env (`Lens (Value.LensMem { records; sort; }))
             | _ -> raise (internal_error ("Unsupported underlying lens value."))
       end
+    | LensSerial { lens; columns; _ } ->
+      let open Lens in
+      value env lens >>= fun lens ->
+      let lens = get_lens lens |> Value.set_serial ~columns in
+      apply_cont cont env (`Lens lens)
     | LensDrop {lens; drop; key; default; _} ->
         let open Lens in
         value env lens >|= get_lens >>= fun lens ->
@@ -615,7 +619,6 @@ struct
             ~key:(Alias.Set.singleton key)
           |> Lens_errors.unpack_type_drop_lens_result ~die:(eval_error "%s")
         in
-
         apply_cont cont env (`Lens (Value.LensDrop { lens; drop; key; default; sort }))
     | LensSelect { lens; predicate; _ } ->
         let open Lens in

@@ -49,6 +49,7 @@ exception ModuleError of string * Position.t option
 exception DisabledExtension of Position.t option * (string * bool) option * string option * string
 exception PrimeAlien of Position.t
 exception ClientCallOutsideWebMode of string
+exception MissingBuiltinType of string
 
 exception LocateFailure of string
 let driver_locate_failure driver = LocateFailure driver
@@ -183,6 +184,7 @@ let format_exception =
      pos_prefix (Printf.sprintf "Error: Cannot load plugin '%s' (link error: %s)\n" file (Dynlink.error_message err))
   | ClientCallOutsideWebMode fn ->
      pos_prefix (Printf.sprintf "Error: Cannot call client side function '%s' outside of web mode\n" fn)
+  | MissingBuiltinType alias -> Printf.sprintf "Error: Missing builtin type with alias '%s'. Is it defined in the prelude?" alias
   | Sys.Break -> "Caught interrupt"
   | exn -> pos_prefix ("Error: " ^ Printexc.to_string exn)
 
