@@ -20,7 +20,7 @@ script:
   - ./opam2_local pin add links-postgresql . -y
   - ./opam2_local pin add links-sqlite3 . -y
   - make doc
-  - make all-release
+  - make all-ci
   - make tests
   - ./run-tests db-only shredding
   - ./run-tests db-only relational-lenses

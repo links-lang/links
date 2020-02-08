@@ -50,6 +50,7 @@ DB_SOURCES=links-postgresql,links-sqlite3
 COMMON_FLAGS=--only-packages $(SOURCES) --build-dir=$(BUILD_DIR)
 DEV_FLAGS=$(COMMON_FLAGS) --profile=dev
 REL_FLAGS=$(COMMON_FLAGS) --profile=release
+CI_FLAGS=$(COMMON_FLAGS) --profile=ci
 
 # Build rules.
 
@@ -61,6 +62,10 @@ all: build-dev-all create-startup-script
 # Builds everything in release mode.
 .PHONY: all-release
 all-release: build-release-all create-startup-script
+
+# Builds everything in continuous integration mode.
+.PHONY: all-ci
+all-ci: build-ci-all create-startup-script
 
 # Legacy rule to remain backwards compatible with the OCamlMakefile
 # interface.
@@ -85,6 +90,11 @@ create-startup-script:
 	@echo "LINKS_LIB=\"$(ABS_BUILD_DIR)/default/lib\" $(ABS_BUILD_DIR)/default/bin/links.exe \"\$$@\"" >> links
 	@chmod +x links
 	ln -fs links linx
+
+# Invokes `dune' to build everything in continuous integration mode.
+.PHONY: build-ci-all
+build-ci-all: dune dune-project include-db-sources
+	$(BUILD) $(CI_FLAGS) @install
 
 # Invokes `dune' to build everything in development mode.
 .PHONY: build-dev-all
