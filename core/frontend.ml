@@ -131,6 +131,7 @@ module Untyped = struct
        ; only_if Basicsettings.Sessions.exceptions_enabled (module DesugarSessionExceptions)
        ; (module DesugarLAttributes)
        ; (module LiftRecursive)
+       ; (module DesugarTypeVariables)
        ; (module DesugarDatatypes)
       |]
 

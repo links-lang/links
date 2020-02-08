@@ -27,14 +27,14 @@ type 'a point = 'a Unionfind.point [@@deriving show]
 (* A "type" variable in the broadest sense,
    meaning that it is used for type, row, and presence variables *)
 type type_var =
- [ `Var of (int * Subkind.t * Freedom.t)]
+ [ `Var of (int * Subkind.t * Freedom.t)] [@@deriving show]
 
 let inject_type_var : type_var -> ([> `Var of (int * Subkind.t * Freedom.t)] as 'a) =  function
   | `Var x -> `Var x
 
 
 type 't meta_type_var_non_rec_basis =
-    [ `Var of (int * Subkind.t * Freedom.t)
+    [ type_var
     | `Body of 't ]
       [@@deriving show]
 
