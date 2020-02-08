@@ -1,3 +1,95 @@
+# 0.9.1
+
+This minor release contains various bug fixes and improvements.
+
+## Listing Command Line Options
+
+Invoking Links with either `--help` or `--h` option causes a help
+message to be printed to standard out. The help message describes the
+usage format and lists some typical options with their default values.
+
+```
+usage: links.exe [options] [source-files [-- arguments]]
+
+Options are:
+     --config=<file>             Initialises Links according to the given configuration file (default: /home/links/.opam/4.09.0/etc/links/config)
+ -d, --debug                     Prints internal debugging information (development) (default: false)
+     --enable-handlers           Enables the effect handlers extension (default: false)
+ -e, --evaluate=<expression>     Evaluates an expression
+ -h, --help                      Print help message and exit
+     --path=<dir[,dir']...>      Search paths for Links modules (default: .)
+     --measure_performance       Instruments the server-side runtime to measure various performance characteristics (default: false)
+ -r, --rlwrap                    Selects whether to use the native readline support in REPL mode (default: true)
+     --optimise                  Optimises the generated code (default: false)
+     --print-keywords            Print keywords and exit
+     --session-exceptions        Enables the session exceptions extension (default: false)
+     --set=<setting=value>       Sets the value of a particular setting via the commandline
+ -v, --version                   Print version and exit
+ -w, --web-mode                  Start Links in web mode (default: false)
+```
+
+The `--set` option provides a lightweight means for setting the value
+of some setting at invocation of time of Links. The command line
+options are lexically scoped, meaning the effect of later options may
+shadow the effect of earlier options. For example using the options
+`--set=debug=false --set=debug=true` will cause Links to start in
+debug mode.
+
+The command line interface also supports enabling of transitive
+dependencies, meaning that is no longer necessary to pass
+`--enable-handlers` at the same time as `--session-exceptions`. Simply
+passing `--session-exceptions` starts Links with the effect handlers
+runtime.
+
+## Modules as a Core Feature
+
+Modules are now a core feature and therefore enabled by default. The
+command line option `-m` and setting `modules` have been removed.
+
+## MVU Commands
+
+The Links MVU library now supports commands. Commands allow
+side-effecting computations to be performed inside the MVU event
+loop. A particularly important side-effect is to spawn a computation
+which evaluates asynchronously, returning a message when it is
+complete.
+
+Key changes:
+
+- add a new type, `Command(Message)` which describes a computation which
+  will produce a message of type Message
+- revise most general type of updt function from `(Message, Model) ~>
+  Model` to `(Message, Model) ~> (Model, Command(Message))`
+
+You can see the gist of the new functionality in the
+examples/mvu/commands.links example, which spawns an expensive
+computation asynchronously and awaits the result.
+
+## Simultaneous Support for Flat and Shredded Queries
+
+It is now possible to specify whether a query should be treated as
+flat or shredded. The query syntax has been extended as follows:
+
+```
+query [range] policy {
+  ...
+}
+```
+
+where `policy` is either `plain`, `nested`, or omitted. If `plain` is
+used, then the query will evaluated using the default evaluator, and
+if `nested` is used, then the query will be shredded. If the policy is
+omitted, then the `shredding` setting is used to decide, as before.
+
+## Miscellaneous
+
+- Links now builds with Lwt version 5.
+- Added the `log10` and `exp` functions to the standard library.
+- The hear syntactic sugar is now more flexible (#739).
+- Fixed process identifier serialisation (#759).
+- Fixed printing of values and typenames in the REPL (#805).
+- Fixed handling of linearity in arguments in anonymous functions (#797).
+
 # 0.9 (Burghmuirhead)
 
 Version 0.9 (Burghmuirhead) presents multiple major new features, bugfixes, as
