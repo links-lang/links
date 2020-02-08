@@ -251,9 +251,40 @@ object (o : 'self)
       Type_error (pos', msg) when pos' = Position.dummy ->
       raise (Type_error (WithPos.pos ty, msg))
 
+
+  (* Used for Forall and Typenames *)
+  method quantified : 'a. SugarQuantifier.t list -> ('self -> 'self * 'a) -> 'self * SugarQuantifier.t list * 'a =
+    fun unresolved_qs action ->
+    let original_o = o in
+    let bind_quantifier (o, names) sq =
+      let (name, ((_pk, sk)), _) as v =
+        SugarQuantifier.get_unresolved_exn sq in
+      let pos = SourceCode.Position.dummy in
+      if StringSet.mem name names then raise (duplicate_var pos name);
+      let (_, kind, _) = ensure_kinded v in
+      let point = make_opt_kinded_point sk `Rigid in
+      let o' = o#bind name kind point in
+      let names' = StringSet.add name names in
+      (o', names')
+    in
+    let unbind_quantifier
+          (sq : SugarQuantifier.t)
+          (o, (rqs : SugarQuantifier.t list)) =
+      let name = SugarQuantifier.get_unresolved_name_exn sq in
+      let (o, (var, (pk, sk), _freedom)) = o#unbind name original_o in
+      let q : Quantifier. t = var, (pk, sk) in
+      let rq = SugarQuantifier.mk_resolved q in
+      o, (rq :: rqs)
+    in
+    let o, _ = List.fold_left bind_quantifier (o, StringSet.empty) unresolved_qs in
+    let o, action_result = action o in
+    let o, resolved_qs = List.fold_right unbind_quantifier unresolved_qs (o, []) in
+    o, resolved_qs, action_result
+
+
+
   method! datatypenode =
     let open Datatype in
-    let open SourceCode in
     function
     (*| TypeVar utv when is_anonymous utv ->
        let (_, sk_opt, freedom) = SugarTypeVar.get_unresolved_exn utv in
@@ -265,34 +296,38 @@ object (o : 'self)
        let o, point = o#add (name, (Some pk_type, k), freedom) in
        let resolved_tv = Sugartypes.SugarTypeVar.mk_resolved point in
        o, TypeVar resolved_tv
-    | Forall (unresolved_qs, wpt) ->
-       let t = WithPos.node wpt in
-       let tpos = WithPos.pos wpt in
-       let original_o = o in
-       let bind_quantifier (o, names) sq =
-         let (name, ((_pk, sk)), _) as v =
-           SugarQuantifier.get_unresolved_exn sq in
-         let pos = SourceCode.Position.dummy in
-         if StringSet.mem name names then raise (duplicate_var pos name);
-         let (_, kind, _) = ensure_kinded v in
-         let point = make_opt_kinded_point sk `Rigid in
-         let o' = o#bind name kind point in
-         let names' = StringSet.add name names in
-         (o', names')
-       in
-       let unbind_quantifier
-             (sq : SugarQuantifier.t)
-             (o, (rqs : SugarQuantifier.t list)) =
-         let name = SugarQuantifier.get_unresolved_name_exn sq in
-         let (o, (var, (pk, sk), _freedom)) = o#unbind name original_o in
-         let q : Quantifier. t = var, (pk, sk) in
-         let rq = SugarQuantifier.mk_resolved q in
-         o, (rq :: rqs)
-       in
-       let o, _ = List.fold_left bind_quantifier (o, StringSet.empty) unresolved_qs in
-       let o, t = o#datatypenode t in
-       let o, resolved_qs = List.fold_right unbind_quantifier unresolved_qs (o, []) in
-       o, Forall (resolved_qs, WithPos.make ~pos:tpos t)
+    | Forall (unresolved_qs, body) ->
+
+       (* let t = WithPos.node wpt in *)
+       let o, resolved_qs, body = o#quantified unresolved_qs (fun o' -> o'#datatype body) in
+       o, Forall (resolved_qs, body)
+
+
+       (* let original_o = o in
+        * let bind_quantifier (o, names) sq =
+        *   let (name, ((_pk, sk)), _) as v =
+        *     SugarQuantifier.get_unresolved_exn sq in
+        *   let pos = SourceCode.Position.dummy in
+        *   if StringSet.mem name names then raise (duplicate_var pos name);
+        *   let (_, kind, _) = ensure_kinded v in
+        *   let point = make_opt_kinded_point sk `Rigid in
+        *   let o' = o#bind name kind point in
+        *   let names' = StringSet.add name names in
+        *   (o', names')
+        * in
+        * let unbind_quantifier
+        *       (sq : SugarQuantifier.t)
+        *       (o, (rqs : SugarQuantifier.t list)) =
+        *   let name = SugarQuantifier.get_unresolved_name_exn sq in
+        *   let (o, (var, (pk, sk), _freedom)) = o#unbind name original_o in
+        *   let q : Quantifier. t = var, (pk, sk) in
+        *   let rq = SugarQuantifier.mk_resolved q in
+        *   o, (rq :: rqs)
+        * in
+        * let o, _ = List.fold_left bind_quantifier (o, StringSet.empty) unresolved_qs in
+        * let o, t = o#datatypenode t in
+        * let o, resolved_qs = List.fold_right unbind_quantifier unresolved_qs (o, []) in
+        * o, Forall (resolved_qs, WithPos.make ~pos:tpos t) *)
     | Mu (name, t) ->
        let original_o = o in
        (* let var = Types.fresh_raw_variable () in
@@ -345,25 +380,30 @@ object (o : 'self)
        o, Var resolved_pv
 
 
+
+  method typenamemnode (name, params, body) =
+    let unresolved_qs = List.map fst params in
+    let o, resolved_qs, body = o#quantified unresolved_qs (fun o' -> o'#datatype body) in
+    let params = List.map2 (fun rq param -> (rq, snd param)) resolved_qs params in
+    o, (name, params, body)
+
+
   method super_bindingnode = super#bindingnode
 
   method set_toplevelness at_toplevel = {< at_toplevel >}
 
-  method! bindingnode = function
-    | (Typenames _) as orig  ->
-       (* We don't touch type definitons but let later stages deal with that *)
-       o, orig
-    | b ->
-       (* legacy type variables scoping hack *)
-       let o = o#set_toplevelness false in
-       let o, b = o#super_bindingnode b in
-       let o =
-         if at_toplevel then
-           o#reset_vars
-         else
-           o
-       in
-       o, b
+
+  method! bindingnode b =
+   (* legacy type variables scoping hack *)
+   let o = o#set_toplevelness false in
+   let o, b = o#super_bindingnode b in
+   let o =
+     if at_toplevel then
+       o#reset_vars
+     else
+       o
+   in
+   o, b
 
 
 
