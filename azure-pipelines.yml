@@ -111,7 +111,7 @@ steps:
 
   - script: |
       eval `./opam2_local env`
-      make all-release
+      make all-ci
     displayName: 'Build Links (release)'
 
   - script: |

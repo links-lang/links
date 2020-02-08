@@ -8,17 +8,24 @@
           -warn-error -a   ;; Do not treat warnings as errors.
           -w A-4-44-45-60  ;; Ignores warnings 4, 44, 45, and 60.
           -g               ;; Adds debugging information to the resulting executable / library.
-         )))
+ )))
  (release
   (flags (:standard
           ;; The following flags are the same as for the "dev" profile.
           -strict-formats -strict-sequence -safe-string -annot
-          -warn-error @A   ;; Treat warnings as errors...
           -w A-4-44-45-60  ;; ... except for warnings 4, 44, 45, and 60 which are ignored.
-          ))
+  ))
   (ocamlopt_flags (:standard
                    -O3 ;; Applies (aggressive) optimisations to the resulting executable.
-                  ))))
+ )))
+ (ci      ;; Same as release, except warnings are treated as errors.
+  (flags (:standard
+          -strict-formats -strict-sequence -safe-string -annot
+          -warn-error @A   ;; Treat warnings as errors...
+          -w A-4-44-45-60  ;; ... except for warnings 4, 44, 45, and 60 which are ignored.
+  ))
+  (ocamlopt_flags (:standard -O3))
+))
 
 (install
  (package links)
