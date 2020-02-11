@@ -40,8 +40,17 @@ open Sugartypes
 
 type kinded_type_variable = Name.t * Sugartypes.kind * Freedom.t
 
-type tyvar_map_entry = Sugartypes.kind * (Types.type_var Unionfind.point)
+
+
+
+type tyvar_map_entry =
+  | TVUnkinded of Subkind.t option * Freedom.t
+  | TVType     of Subkind.t option * Types.meta_type_var     [@printer fun fmt _p -> fprintf fmt "<TResolvedType>"]
+  | TVRow      of Subkind.t option * Types.meta_row_var      [@printer fun fmt _p -> fprintf fmt "<TResolvedRow>"]
+  | TVPresence of Subkind.t option * Types.meta_presence_var [@printer fun fmt _p -> fprintf fmt "<TResolvedPresence>"]
+
 type tyvar_map = tyvar_map_entry StringMap.t
+
 
 (* FIXME: must remove from desugarDatatypes *)
 let infer_kinds
@@ -68,6 +77,10 @@ let duplicate_var pos var =
   Errors.Type_error (pos, Printf.sprintf "Multiple definitions of type variable `%s'." var)
 
 
+let concrete_subkind =
+  function
+  | Some subkind -> subkind
+  | None         -> default_subkind
 
 let free_type_variable ?var pos =
   let desc = match var with
@@ -80,20 +93,160 @@ let free_type_variable ?var pos =
 
 
 
-let lookup_tyvar_exn name (map : tyvar_map)
-    : Sugartypes.kind * Freedom.t * Types.type_var Unionfind.point =
-  let kind, point = StringMap.find name map in
-  let `Var (_, _, freedom) =  Unionfind.find point in
-  kind, freedom, point
+let get_entry_var_info (entry : tyvar_map_entry ) :  (int * Subkind.t  * Freedom.t) option =
+  let extract_data  =
+    function
+    | `Var (var, sk, freedom) -> var, sk, freedom
+    | _ -> raise (internal_error "A this stage, all meta_*_var things must be a `Var ")
+  in
+  match entry with
+  | TVUnkinded (_,_)    -> None
+  | TVType (_, mtv)     -> Some (extract_data (Unionfind.find mtv))
+  | TVRow  (_, mrv)     -> Some (extract_data (Unionfind.find mrv))
+  | TVPresence (_, mpv) -> Some (extract_data (Unionfind.find mpv))
+
+
+
+
+let lookup_tyvar_exn name (map : tyvar_map) : Sugartypes.kind * Freedom.t * tyvar_map_entry =
+  let extract_freedom =
+    (* Consistency check: If the tyvar map contains subkind info,
+       then it must coindice with the subkind in the Unionfind point *)
+    function
+    | None,        `Var (_, _subkind, freedom)                   -> freedom
+    | Some map_sk, `Var (_,  subkind, freedom) when map_sk = subkind -> freedom
+    | Some map_sk, `Var (_,  subkind, freedom) when map_sk <> subkind ->
+       raise (internal_error "kind information in map and point diverged")
+    | _ ->
+       raise (internal_error "A this stage, all meta_*_var things must be a `Var")
+  in
+  let open Sugartypes.SugarTypeVar in
+  let entry = StringMap.find name map in
+  match entry with
+  | TVUnkinded (sk, fd) -> (None, sk), fd, entry
+  | TVType (sk, mtv) ->
+     let fd = extract_freedom (sk, (Unionfind.find mtv)) in
+     (Some PrimaryKind.Type, sk), fd, entry
+  | TVRow (sk, mrv) ->
+     let fd = extract_freedom (sk, (Unionfind.find mrv)) in
+     (Some PrimaryKind.Row, sk), fd, entry
+  | TVPresence (sk, mpv) ->
+     let fd = extract_freedom (sk, (Unionfind.find mpv)) in
+     (Some PrimaryKind.Presence, sk), fd, entry
+
+
+(* taken from DesugarDatatypes.desugar_quantifiers
+note that we fill primary kind and subkind info.
+However, this is not the same as setting defaults. Instead,
+the info in the map takes precedence.
+
+*)
+let make_opt_kinded_var sk_opt freedom : [> `Var of (int * Subkind.t * Freedom.t)] =
+  let var = Types.fresh_raw_variable () in
+  let sk = concrete_subkind sk_opt in
+  `Var (var, sk, freedom)
+
+let get_var_info (info : [> `Var of (int * Subkind.t * Freedom.t)]) =
+  match info with
+  | `Var (var, sk, fd) -> (var, sk, fd)
+  | _ -> raise (internal_error "at this stage, all meta_*_var things must be `Var")
+
+
+
+let make_fresh_entry pk_opt sk_opt freedom : tyvar_map_entry =
+  let open PrimaryKind in
+  match pk_opt with
+    | None -> TVUnkinded (sk_opt, freedom)
+    | Some Type ->
+       let point = Unionfind.fresh (make_opt_kinded_var sk_opt freedom) in
+       TVType (sk_opt, point)
+    | Some Row ->
+       let point = Unionfind.fresh (make_opt_kinded_var sk_opt freedom) in
+       TVRow (sk_opt, point)
+    | Some Presence ->
+       let point = Unionfind.fresh (make_opt_kinded_var sk_opt freedom) in
+       TVPresence (sk_opt, point)
+
+
+
+
+
+(* does not do all sanity checks *)
+(* Note that this always reuses existing points! *)
+let update_entry pk sk_opt freedom existing_entry : tyvar_map_entry =
+  let con_sk = concrete_subkind sk_opt in
+  let open PrimaryKind in
+  match pk, existing_entry with
+    | _, TVUnkinded _ ->
+       make_fresh_entry (Some pk) sk_opt freedom
+    | Type, TVType (_, point) ->
+       let (var, prev_sk, _) = get_var_info (Unionfind.find point) in
+       (if con_sk <> prev_sk then Unionfind.change point (`Var (var, con_sk, freedom)));
+       TVType (sk_opt, point)
+    | Row, TVRow (_, point) ->
+       let (var, prev_sk, _) = get_var_info (Unionfind.find point) in
+       (if con_sk <> prev_sk then Unionfind.change point (`Var (var, con_sk, freedom)));
+       TVRow (sk_opt, point)
+    | Presence, TVPresence (_, point) ->
+       let (var, prev_sk, _) = get_var_info (Unionfind.find point) in
+       (if con_sk <> prev_sk then Unionfind.change point (`Var (var, con_sk, freedom)));
+       TVPresence (sk_opt, point)
+    | _ -> raise (internal_error "inconsistent kind information")
+
+
+let resolved_var_of_entry =
+  let open Sugartypes.SugarTypeVar in
+  function
+    | TVUnkinded _->
+       raise
+         (internal_error "tried to resolve variable without known primary kind")
+    | TVType (_, point) -> TResolvedType point
+    | TVRow (_, point) -> TResolvedRow point
+    | TVPresence (_, point) -> TResolvedPresence point
+
+
+
+
+(* let make_sugartyvar name pk sk freedom =
+ *   let open PrimaryKind in
+ *   let open SugarTypeVar in
+ *   match pk with
+ *     | None          -> TUnresolved (name, sk, freedom)
+ *     | Some Type     -> TResolvedType (make_opt_kinded_point sk freedom)
+ *     | Some Row      -> TResolvedRow (make_opt_kinded_point sk freedom)
+ *     | Some Presence -> TResolvedPresence (make_opt_kinded_point sk freedom) *)
+
+
+
+(* let create_updated_variable_info
+ *       (existing_entry  : tyvar_map_entry opion)
+ *       name
+ *       (pk : PrimaryKind.t option)
+ *       sk
+ *       freedom
+ *     : tyvar_map_entry * SugarTypeVar.t =
+ *   let make_map_entry () =
+ *     let open CommonTypes.PrimaryKind in
+ *     match pk with
+ *     | Type ->
+ *        let point = Unionfind.fresh (make_opt_kinded_var sk freedom) in
+ *
+ *
+ *
+ *
+ *   match existing_entry, pk with
+ *     | Some _, None -> raise (internal_error "Cannot decrease PK information"
+ *     |
+ *
+ *     | Some var_info ->
+ *
+ *   Unionfind.change point *)
 
 
 let default_kind : PrimaryKind.t = PrimaryKind.Type
 let default_subkind : Subkind.t = (lin_unl, res_any)
 
-let concrete_subkind =
-  function
-  | Some subkind -> subkind
-  | None         -> default_subkind
+
 
 let is_anonymous_name name =
   name.[0] = '$'
@@ -115,16 +268,6 @@ let ensure_kinded = function
 
 
 
-(* taken from DesugarDatatypes.desugar_quantifiers
-note that we fill primary kind and subkind info.
-However, this is not the same as setting defaults. Instead,
-the info in the map takes precedence.
-
-*)
-let make_opt_kinded_point sk freedom : Types.type_var Unionfind.point=
-  let var = Types.fresh_raw_variable () in
-  let con_sk = concrete_subkind sk in
-  Unionfind.fresh (`Var (var, con_sk, freedom))
 
 
 
@@ -150,76 +293,65 @@ object (o : 'self)
 
   method bind
            name
-           (kind : Sugartypes.kind)
-           (point : Types.type_var Unionfind.point)  =
-    {< tyvar_map = StringMap.add name (kind, point) tyvar_map >}
+           (entry: tyvar_map_entry)  =
+    {< tyvar_map = StringMap.add name entry tyvar_map >}
 
 
 
     (* Return all information obtained about the given variable,
        possibly filling in default kinding info.
        Restore the info stored about the variable in a previous object *)
-  method unbind name (restore_from : 'self) : 'self * (int * Kind.t * Freedom.t) =
-    let check_subkind actual_sk expected_sk =
-      if actual_sk <> expected_sk then
-        raise (internal_error "Map and point info about subkind diverged")
-    in
+  method unbind name (restore_from : 'self) : 'self * (Kind.t * Freedom.t) * tyvar_map_entry =
+    let (pk_opt, sk_opt), fd, cur_entry = lookup_tyvar_exn name tyvar_map in
 
-    match StringMap.lookup name tyvar_map with
-      | Some ((pk_opt, sk_opt), point) ->
+    let pk = from_option default_kind pk_opt in
+    let sk = from_option default_subkind sk_opt in
 
-         let `Var (var, point_sk, freedom) = Unionfind.find point in
-
-         (* as a concisteny check, make sure that the kinding information
-            stored in the point coincide with the info in the map *)
-         OptionUtils.opt_iter (check_subkind point_sk) sk_opt;
-
-         let pk = from_option default_kind pk_opt in
-         let sk = from_option default_subkind sk_opt in
-
-         let old_map = restore_from#get_vars in
-         let o = match StringMap.lookup name old_map with
-           | Some (old_kind, old_point) ->
-              o#bind name old_kind old_point
-           | None ->
-              o
-         in
-         o, (var, (pk, sk), freedom)
-
-
+    let old_map = restore_from#get_vars in
+    let o = match StringMap.lookup name old_map with
+      | Some old_entry ->
+         o#bind name old_entry
       | None ->
-         raise (internal_error "trying to unbind unknown variable")
+         o
+    in
+    o, ((pk, sk), fd), cur_entry
+
 
 
 
 
   (* used for type/row/presence variables found along the way, including anonymous ones *)
-  method add ?pos (name, (pk, sk), freedom) : 'self * Types.type_var Unionfind.point =
+  method add ?pos name (pk : PrimaryKind.t) (sk : Subkind.t option) freedom : 'self * SugarTypeVar.t =
     let anon = is_anonymous_name name in
     let pos = OptionUtils.from_option SourceCode.Position.dummy pos in
     if not anon && StringMap.mem name tyvar_map then
       begin
-        let (pk', sk'), freedom', point  = lookup_tyvar_exn name tyvar_map in
+        let (pk', sk'), freedom', existing_entry  = lookup_tyvar_exn name tyvar_map in
         let union = function
           | Some x, None | None, Some x -> Some x, Some x
           | x, y -> x, y
         in
         (* monotonically increase subkinding information *)
-        let (sk, sk') = union (sk, sk') in
-        let (pk, pk') = union (pk, pk') in
-        let tv = (name, (pk, sk), freedom) in
-        let tv' = (name, (pk', sk'), freedom') in
-        (* check that duplicate type variables have the same kind *)
+        let (sk_union, sk_union') = union (sk, sk') in
+        let (pk_union, pk_union') = union (Some pk, pk') in
+        let tv = (name, (pk_union, sk_union), freedom) in
+        let tv' = (name, (pk_union', sk_union'), freedom') in
+        (* check that new info is consistent with existing knowledge *)
         if tv <> tv' then
           raise (typevar_mismatch SourceCode.Position.dummy tv tv');
 
-        (* Update the union-find point with potential new information *)
-        let `Var (var_id, _point_sk, _) = Unionfind.find point in
-        (match sk with
-          | Some sk -> Unionfind.change point (`Var (var_id, sk, freedom))
-          | None -> () );
+        (* Check if we learned anything new at all.
+           If so, update the entry to put in the tyvar map. This also updates
+           the *existing* unionfind point carried inside the entry *)
+        let entry =
+          if pk' <> pk_union' || sk' <> sk_union' then
+            update_entry pk sk freedom existing_entry
+          else
+            existing_entry
+        in
 
-        o#bind name (pk, sk) point, point
+        let resolved_var = resolved_var_of_entry entry in
+        o#bind name entry, resolved_var
       end
     else
       begin
@@ -227,15 +359,15 @@ object (o : 'self)
           let name_opt = if anon then None else Some name in
           raise (free_type_variable ?var:name_opt pos));
 
-        (* We create a new union-find point for this variable.
-           To do so, we need to give it a non-optional subkind.
-           If we don't know the subkind, yet, we choose the default
-           here. But the entry in the map takes precedence
+        (* We create a new entry for the tyvar map.
+           Since at this point we know the primary kind,
+           this will always result in the creation of a unionfind point.
          *)
-        let point = make_opt_kinded_point sk freedom in
+        let entry = make_fresh_entry (Some pk) sk freedom in
         let o =
-          if anon then o else o#bind name (pk, sk) point in
-        o, point
+          if anon then o else o#bind name entry in
+        let resolved_var = resolved_var_of_entry entry in
+        o, resolved_var
       end
 
 
@@ -257,13 +389,14 @@ object (o : 'self)
     fun unresolved_qs action ->
     let original_o = o in
     let bind_quantifier (o, names) sq =
-      let (name, ((_pk, sk)), _) as v =
+      let (name, ((_pk, sk)), freedom) as v =
         SugarQuantifier.get_unresolved_exn sq in
       let pos = SourceCode.Position.dummy in
       if StringSet.mem name names then raise (duplicate_var pos name);
-      let (_, kind, _) = ensure_kinded v in
-      let point = make_opt_kinded_point sk `Rigid in
-      let o' = o#bind name kind point in
+      let (_, (pk, sk), _) = ensure_kinded v in
+      (* let point = make_opt_kinded_point sk `Rigid in *)
+      let entry = make_fresh_entry pk sk freedom in
+      let o' = o#bind name entry in
       let names' = StringSet.add name names in
       (o', names')
     in
@@ -271,7 +404,11 @@ object (o : 'self)
           (sq : SugarQuantifier.t)
           (o, (rqs : SugarQuantifier.t list)) =
       let name = SugarQuantifier.get_unresolved_name_exn sq in
-      let (o, (var, (pk, sk), _freedom)) = o#unbind name original_o in
+      let o, ((pk, sk), _freedom), entry = o#unbind name original_o in
+      let var = match get_entry_var_info entry with
+          | Some (var, _, _) -> var
+          | None -> raise (internal_error "must have a Unionfind `Var at this time")
+      in
       let q : Quantifier. t = var, (pk, sk) in
       let rq = SugarQuantifier.mk_resolved q in
       o, (rq :: rqs)
@@ -292,9 +429,9 @@ object (o : 'self)
        let rtv = SugarTypeVar.mk_resolved point in
        o, TypeVar rtv *)
     | TypeVar stv ->
-       let (name, k, freedom) = SugarTypeVar.get_unresolved_exn stv in
-       let o, point = o#add (name, (Some pk_type, k), freedom) in
-       let resolved_tv = Sugartypes.SugarTypeVar.mk_resolved point in
+       let (name, sk, freedom) = SugarTypeVar.get_unresolved_exn stv in
+       let o, resolved_tv = o#add name pk_type sk freedom in
+       (* let resolved_tv = resolved_var_of_entry entry in *)
        o, TypeVar resolved_tv
     | Forall (unresolved_qs, body) ->
 
@@ -332,10 +469,11 @@ object (o : 'self)
        let original_o = o in
        (* let var = Types.fresh_raw_variable () in
         * let point = Unionfind.fresh (`Var (var, default_subkind, `Flexible)) in *)
-       let point = make_opt_kinded_point (Some default_subkind) `Flexible in
-       let o = o#bind name (Some pk_type, Some default_subkind) point in
+       (* let point = make_opt_kinded_point (Some default_subkind) `Flexible in *)
+       let entry = make_fresh_entry (Some PrimaryKind.Type) (Some default_subkind) `Flexible in
+       let o = o#bind name entry in
        let o, t = o#datatype t in
-       let o, _ = o#unbind name original_o in
+       let o, _, _ = o#unbind name original_o in
        (* must change to Recursive in desugarDatatypes *)
        (* Unionfind.change point (`Recursive (var, t)); *)
        o, Mu (name, t)
@@ -349,16 +487,15 @@ object (o : 'self)
        (* We leave these to be handled by desugarEffectSugar *)
        o, orig
     | Open srv ->
-       let (name, k, freedom) = SugarTypeVar.get_unresolved_exn srv in
-       let o, point = o#add (name, (Some pk_row, k), freedom) in
-       let resolved_rv = Sugartypes.SugarTypeVar.mk_resolved point in
+       let (name, sk, freedom) = SugarTypeVar.get_unresolved_exn srv in
+       let o, resolved_rv = o#add name pk_row sk freedom in
        o, Datatype.Open resolved_rv
     | Recursive (name, r) ->
        let original_o = o in
-       let point = make_opt_kinded_point (Some default_subkind) `Flexible in
-       let o = o#bind name (Some pk_row, Some default_subkind) point in
+       let entry =  make_fresh_entry (Some PrimaryKind.Row) (Some default_subkind) `Flexible in
+       let o = o#bind name entry in
        let o, t = o#row r in
-       let o, _ = o#unbind name original_o in
+       let o, _, _ = o#unbind name original_o in
        (* must change to Recursive in desugarDatatypes *)
        (* Unionfind.change point (`Recursive (var, t)); *)
        o, Recursive (name, t)
@@ -374,9 +511,8 @@ object (o : 'self)
        let rtv = SugarTypeVar.mk_resolved point in
        o, Var rtv *)
     | Var utv ->
-       let (name, k, freedom) = SugarTypeVar.get_unresolved_exn utv in
-       let o, point = o#add (name, (Some pk_type, k), freedom) in
-       let resolved_pv = Sugartypes.SugarTypeVar.mk_resolved point in
+       let (name, sk, freedom) = SugarTypeVar.get_unresolved_exn utv in
+       let o, resolved_pv = o#add name pk_presence sk freedom in
        o, Var resolved_pv
 
 

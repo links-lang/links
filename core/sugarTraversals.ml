@@ -89,7 +89,7 @@ class map =
            let subkind_opt' = o#option (fun o -> o#subkind) subkind_opt in
            let freedom' = o#freedom freedom in
            TUnresolved (name', subkind_opt', freedom')
-        | TResolved _p ->
+        | _ ->
            let message =
              "if using SugarTraverals after datatype desugaring,
               must determine what do do with resolved type variables" in
@@ -882,7 +882,7 @@ class fold =
            let o = o#option (fun o -> o#subkind) subkind_opt in
            let o = o#freedom freedom in
            o
-        | TResolved _p ->
+        | _ ->
            let message =
              "if using SugarTraverals after datatype desugaring,
               must determine what do do with resolved type variables" in
@@ -1592,7 +1592,7 @@ class fold_map =
            let o, subkind_opt' = o#option (fun o -> o#subkind) subkind_opt in
            let o, freedom' = o#freedom freedom in
            o, TUnresolved (name', subkind_opt', freedom')
-        | TResolved _p ->
+        | _ ->
            let message =
              "if using SugarTraverals after datatype desugaring,
               must determine what do do with resolved type variables" in

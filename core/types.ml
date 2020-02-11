@@ -29,8 +29,6 @@ type 'a point = 'a Unionfind.point [@@deriving show]
 type type_var =
  [ `Var of (int * Subkind.t * Freedom.t)] [@@deriving show]
 
-let inject_type_var : type_var -> ([> `Var of (int * Subkind.t * Freedom.t)] as 'a) =  function
-  | `Var x -> `Var x
 
 
 type 't meta_type_var_non_rec_basis =

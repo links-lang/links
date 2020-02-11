@@ -613,12 +613,15 @@ module Desugar = struct
     | { node = t; pos } ->
       let open Datatype in
       match t with
-        | TypeVar stv when is_anon stv ->
+        (*| TypeVar stv when is_anon stv ->
            let (_name, sk, freedom) = SugarTypeVar.get_unresolved_exn stv in
            `MetaTypeVar (make_anon_point var_env pos sk freedom)
         | TypeVar stv ->
            let s = SugarTypeVar.get_unresolved_name_exn stv in
-           `MetaTypeVar (lookup_tvar pos s var_env)
+           `MetaTypeVar (lookup_tvar pos s var_env) *)
+        | TypeVar stv ->
+           let point = SugarTypeVar.get_resolved_type_exn stv in
+           `MetaTypeVar point
         | QualifiedTypeApplication _ -> assert false (* will have been erased *)
         | Function (f, e, t) ->
             `Function (Types.make_tuple_type (List.map (datatype var_env) f),
@@ -762,9 +765,9 @@ module Desugar = struct
     | Var stv when is_anon stv ->
        let (_name, sk, freedom) = SugarTypeVar.get_unresolved_exn stv in
        `Var (make_anon_point var_env pos sk freedom)
-    | Var stv ->
-       let name = SugarTypeVar.get_unresolved_name_exn stv in
-       `Var (lookup_pvar pos name var_env)
+    | Var spv ->
+       let resolved_pv = SugarTypeVar.get_resolved_presence_exn spv in
+       `Var resolved_pv
 
   and row var_env alias_env (fields, rv) (node : 'a WithPos.t) =
     let seed =
@@ -780,9 +783,9 @@ module Desugar = struct
         | Open stv when is_anon stv ->
            let (_name, sk, freedom) = SugarTypeVar.get_unresolved_exn stv in
            (StringMap.empty, make_anon_point var_env node.pos sk freedom, false)
-        | Open stv ->
-           let rv = SugarTypeVar.get_unresolved_name_exn stv in
-           (StringMap.empty, lookup_rvar node.pos rv var_env, false)
+        | Open srv ->
+           let rv = SugarTypeVar.get_resolved_row_exn srv in
+           (StringMap.empty, rv, false)
         | Recursive (name, r) ->
             let var = Types.fresh_raw_variable () in
             let point = Unionfind.fresh (`Var (var, default_subkind, `Flexible)) in

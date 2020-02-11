@@ -90,46 +90,59 @@ module SugarTypeVar =
 struct
 
 
-(* Note that an unresolved type variable may not contain information
+(* Note that an unresolved type variable does not contain information
    about its primary kind. This is filled in when resolving the variable *)
 type t =
-  | TUnresolved of Name.t * Subkind.t option * Freedom.t
-  | TResolved of Types.type_var Types.point [@printer fun fmt _p -> fprintf fmt "<TResolved>"]
+  | TUnresolved       of Name.t * Subkind.t option * Freedom.t
+  (* This is why we can't have nice things ... *)
+  | TResolvedType     of Types.meta_type_var     [@printer fun fmt _p -> fprintf fmt "<TResolvedType>"]
+  | TResolvedRow      of Types.meta_row_var      [@printer fun fmt _p -> fprintf fmt "<TResolvedRow>"]
+  | TResolvedPresence of Types.meta_presence_var [@printer fun fmt _p -> fprintf fmt "<TResolvedPresence>"]
      [@@deriving show]
 
 
-
-let from_sem var_point = TResolved var_point
 
 
 let mk_unresolved name subkind_opt freedom_opt =
   TUnresolved (name, subkind_opt, freedom_opt)
 
-let mk_resolved point : t =
-  TResolved point
+let mk_resolved_tye point : t =
+  TResolvedType point
+
+let mk_resolved_row point : t =
+  TResolvedRow point
+
+let mk_resolved_presence point : t =
+  TResolvedPresence point
 
 
 let get_unresolved_exn = function
   | TUnresolved (name, subkind, freedom) ->
      name, subkind, freedom
-  | TResolved _ ->
+  | _ ->
      raise
        (internal_error
           "Requesting unresolved type var when
            it has already been resolved")
 
- let get_unresolved_name_exn =
-   get_unresolved_exn ->- fst3
+let get_unresolved_name_exn =
+  get_unresolved_exn ->- fst3
 
+ let get_resolved_type_exn =
+   function
+   | TResolvedType point -> point
+   | _ -> raise (internal_error "requested kind does not match existing kind info")
 
+let get_resolved_row_exn =
+  function
+  | TResolvedRow point -> point
+  | _ -> raise (internal_error "requested kind does not match existing kind info")
 
-let get_resolved_exn = function
-  | TResolved v -> v
-  | TUnresolved _ ->
-     raise
-       (internal_error
-          "Requesting resolved type var before
-           it has been resolved")
+let get_resolved_presence_exn =
+  function
+  | TResolvedPresence point -> point
+  | _ -> raise (internal_error "requested kind does not match existing kind info")
+
 
 end
 
