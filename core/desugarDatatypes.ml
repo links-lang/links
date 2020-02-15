@@ -689,6 +689,8 @@ module Desugar = struct
              o
              qs
 
+         method! type_variable _x = self
+
          method add (var : SugarTypeVar.t) op =
            if TypeUtils.is_builtin_effect op || not (RowVarMap.is_relevant var) then
              self
