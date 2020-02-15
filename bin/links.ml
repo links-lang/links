@@ -95,7 +95,9 @@ let main () =
   let file_list = Settings.get_anonymous_arguments () in
   let to_evaluate = Settings.get to_evaluate in
 
-  let context = Driver.Phases.initialise () in
+  let context =
+    handle_errors (lazy (Driver.Phases.initialise ()))
+  in
   let context' =
     for_each context process_expr to_evaluate
   in
