@@ -85,7 +85,7 @@ let concrete_subkind =
 let free_type_variable ?var pos =
   let desc = match var with
     | None -> "anonymous type variable"
-    | Some name -> "type variable " ^ name
+    | Some name -> Printf.sprintf "type variable `%s'"  name
   in Errors.Type_error
        (pos,
         "Unbound " ^ desc ^ " in position where
