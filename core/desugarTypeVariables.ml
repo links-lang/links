@@ -517,9 +517,9 @@ object (o : 'self)
 
 
 
-  method typenamemnode (name, params, body) =
+  method! typenamenode (name, params, body) =
     let unresolved_qs = List.map fst params in
-    let o, resolved_qs, body = o#quantified unresolved_qs (fun o' -> o'#datatype body) in
+    let o, resolved_qs, body = o#quantified unresolved_qs (fun o' -> o'#datatype' body) in
     let params = List.map2 (fun rq param -> (rq, snd param)) resolved_qs params in
     o, (name, params, body)
 

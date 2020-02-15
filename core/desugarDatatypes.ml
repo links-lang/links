@@ -596,7 +596,7 @@ module Desugar = struct
 
    (** Gathers some information about type names, used for later analysis. *)
    let gather_mutual_info (alias_env : Types.tycon_environment) =
-     (object
+     (object(o)
         inherit SugarTraversals.fold as super
 
         val has_implicit = false
@@ -614,6 +614,8 @@ module Desugar = struct
 
         method with_implicit = {<has_implicit = true>}
         method with_mutual ty = {<mutuals = StringSet.add ty mutuals>}
+
+        method! type_variable _x = o
 
         method! datatypenode dt =
           let open Datatype in
