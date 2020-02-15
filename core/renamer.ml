@@ -131,6 +131,7 @@ let renaming_type_visitor instantiation_map =
          end
       | _ -> super#meta_presence_var point
 
+
   end
 
 
@@ -250,7 +251,11 @@ let renamer qs_from qs_to =
           `ForAll (qs_to, t')
        | t -> snd (o#typ t)
 
-    end
+
+     (* We do not rename inside the syntactic representation of types *)
+     method! type_variable x = o, x
+
+  end
 
 let rename_function_definition : function_definition -> function_definition =
   fun { fun_binder

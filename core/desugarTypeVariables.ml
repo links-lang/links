@@ -465,18 +465,23 @@ object (o : 'self)
         * let o, t = o#datatypenode t in
         * let o, resolved_qs = List.fold_right unbind_quantifier unresolved_qs (o, []) in
         * o, Forall (resolved_qs, WithPos.make ~pos:tpos t) *)
-    | Mu (name, t) ->
+    | Mu (stv, t) ->
        let original_o = o in
        (* let var = Types.fresh_raw_variable () in
         * let point = Unionfind.fresh (`Var (var, default_subkind, `Flexible)) in *)
        (* let point = make_opt_kinded_point (Some default_subkind) `Flexible in *)
+
+       (* ignores subkind and freedom info of stv *)
+       let name = SugarTypeVar.get_unresolved_name_exn stv in
        let entry = make_fresh_entry (Some PrimaryKind.Type) None `Rigid in
        let o = o#bind name entry in
        let o, t = o#datatype t in
        let o, _, _ = o#unbind name original_o in
-       (* must change to Recursive in desugarDatatypes *)
-       (* Unionfind.change point (`Recursive (var, t)); *)
-       o, Mu (name, t)
+       let resolved_tv = resolved_var_of_entry entry in
+
+       (* At this point, the body of the Unionfind point inside of entry is a `Var.
+          DesugarDatatypes changes that to `Recusive *)
+       o, Mu (resolved_tv, t)
     | dt -> super#datatypenode dt
 
 
@@ -490,15 +495,19 @@ object (o : 'self)
        let (name, sk, freedom) = SugarTypeVar.get_unresolved_exn srv in
        let o, resolved_rv = o#add name pk_row sk freedom in
        o, Datatype.Open resolved_rv
-    | Recursive (name, r) ->
+    | Recursive (stv, r) ->
        let original_o = o in
-       let entry =  make_fresh_entry (Some PrimaryKind.Row) (Some default_subkind) `Rigid in
+
+       let name = SugarTypeVar.get_unresolved_name_exn stv in
+       let entry = make_fresh_entry (Some PrimaryKind.Row) (Some default_subkind) `Rigid in
        let o = o#bind name entry in
        let o, t = o#row r in
        let o, _, _ = o#unbind name original_o in
-       (* must change to Recursive in desugarDatatypes *)
-       (* Unionfind.change point (`Recursive (var, t)); *)
-       o, Recursive (name, t)
+       let resolved_rv = resolved_var_of_entry entry in
+
+       (* At this point, the body of the Unionfind point inside of entry is a `Var.
+          DesugarDatatypes changes that to `Recusive *)
+       o, Recursive (resolved_rv, t)
 
   method! fieldspec = let open Datatype in function
     | Absent -> o, Absent

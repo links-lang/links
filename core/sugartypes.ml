@@ -208,7 +208,7 @@ module Datatype = struct
     | QualifiedTypeApplication of Name.t list * type_arg list
     | Function        of with_pos list * row * with_pos
     | Lolli           of with_pos list * row * with_pos
-    | Mu              of Name.t * with_pos
+    | Mu              of SugarTypeVar.t * with_pos
     | Forall          of SugarQuantifier.t list * with_pos
     | Unit
     | Tuple           of with_pos list
@@ -231,7 +231,7 @@ module Datatype = struct
   and row_var =
     | Closed
     | Open of SugarTypeVar.t
-    | Recursive of Name.t * row
+    | Recursive of SugarTypeVar.t * row
   and fieldspec =
     | Present of with_pos
     | Absent

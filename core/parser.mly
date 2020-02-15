@@ -911,7 +911,7 @@ squiggly_arrow:
 | parenthesized_datatypes SQUIGLOLLI datatype                  { Datatype.Lolli    ($1, row_with_wp fresh_effects, $3) }
 
 mu_datatype:
-| MU VARIABLE DOT mu_datatype                                  { Datatype.Mu ($2, with_pos $loc($4) $4) }
+| MU VARIABLE DOT mu_datatype                                  { Datatype.Mu (named_typevar $2 `Rigid, with_pos $loc($4) $4) }
 | forall_datatype                                              { $1 }
 
 forall_datatype:
@@ -1086,7 +1086,7 @@ nonrec_row_var:
  */
 row_var:
 | nonrec_row_var                                               { $1 }
-| LPAREN MU VARIABLE DOT vfields RPAREN                        { Datatype.Recursive ($3, $5) }
+| LPAREN MU VARIABLE DOT vfields RPAREN                        { Datatype.Recursive (named_typevar $3 `Rigid, $5) }
 
 kinded_nonrec_row_var:
 | nonrec_row_var subkind                                       { attach_row_subkind ($1, $2) }

@@ -112,7 +112,7 @@ class map =
       | Open _x ->
           let _x = o#type_variable _x in Open _x
       | Recursive ((_x, _x_i1)) ->
-          let _x = o#name _x in
+          let _x = o#type_variable _x in
           let _x_i1 = o#row _x_i1 in Recursive ((_x, _x_i1))
 
     method row : Datatype.row -> Datatype.row =
@@ -613,7 +613,7 @@ class map =
           let _x_i1 = o#row _x_i1 in
           let _x_i2 = o#datatype _x_i2 in Lolli (_x, _x_i1, _x_i2)
       | Mu (_x, _x_i1) ->
-          let _x = o#name _x in
+          let _x = o#type_variable _x in
           let _x_i1 = o#datatype _x_i1 in Mu (_x, _x_i1)
       | Forall (_x, _x_i1) ->
           let _x_i1 = o#datatype _x_i1 in Forall (_x, _x_i1)
@@ -897,7 +897,7 @@ class fold =
       | Open _x ->
           let o = o#type_variable _x in o
       | Recursive ((_x, _x_i1)) ->
-          let o = o#name _x in let o = o#row _x_i1 in o
+          let o = o#type_variable _x in let o = o#row _x_i1 in o
 
     method row : Datatype.row -> 'self_type =
       fun (_x, _x_i1) ->
@@ -1332,7 +1332,8 @@ class fold =
           let o = o#list (fun o -> o#datatype) _x in
           let o = o#row _x_i1 in let o = o#datatype _x_i2 in o
       | Mu (_x, _x_i1) ->
-          let o = o#name _x in let o = o#datatype _x_i1 in o
+          let o = o#type_variable _x in
+          let o = o#datatype _x_i1 in o
       | Forall (_x, _x_i1) ->
           let o = o#datatype _x_i1 in o
       | Unit -> o
@@ -1609,7 +1610,7 @@ class fold_map =
       | Open _x ->
           let (o, _x) = o#type_variable _x in (o, (Open _x))
       | Recursive ((_x, _x_i1)) ->
-          let (o, _x) = o#name _x in
+          let (o, _x) = o#type_variable _x in
           let (o, _x_i1) = o#row _x_i1 in (o, Recursive ((_x, _x_i1)))
 
     method row : Datatype.row -> ('self_type * Datatype.row) =
@@ -2172,7 +2173,7 @@ class fold_map =
           let (o, _x_i2) = o#datatype _x_i2
           in (o, (Lolli (_x, _x_i1, _x_i2)))
       | Mu (_x, _x_i1) ->
-          let (o, _x) = o#name _x in
+          let (o, _x) = o#type_variable _x in
           let (o, _x_i1) = o#datatype _x_i1 in (o, (Mu (_x, _x_i1)))
       | Forall (_x, _x_i1) ->
           (*let (o, _x) = o#list (fun o -> o#quantifier) _x in*)
