@@ -101,7 +101,9 @@ type t =
      [@@deriving show]
 
 
-
+let is_resolved = function
+  | TUnresolved _ -> false
+  | _ -> true
 
 let mk_unresolved name subkind_opt freedom_opt =
   TUnresolved (name, subkind_opt, freedom_opt)

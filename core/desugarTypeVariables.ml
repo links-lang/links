@@ -38,7 +38,7 @@ open Sugartypes
 
 
 
-type kinded_type_variable = Name.t * Sugartypes.kind * Freedom.t
+type kinded_type_variable = Name.t * Sugartypes.kind * Freedom.t [@@deriving show]
 
 
 
@@ -64,14 +64,14 @@ let internal_error message =
 
 (* Errors *)
 
-let typevar_mismatch pos (v1 : kinded_type_variable) (_v2 : kinded_type_variable) =
+let typevar_mismatch pos (v1 : kinded_type_variable) (v2 : kinded_type_variable) =
   let var, _, _ = v1 in
   Errors.Type_error
     ( pos,
       Printf.sprintf "Mismatch in kind for type variable `%s'.\n" var
       ^ Printf.sprintf "  Declared as `%s' and `%s'."
-          ("fixme")
-          ("fixme") )
+          (show_kinded_type_variable v1)
+          (show_kinded_type_variable v2))
 
 let duplicate_var pos var =
   Errors.Type_error (pos, Printf.sprintf "Multiple definitions of type variable `%s'." var)
@@ -113,14 +113,13 @@ let lookup_tyvar_exn name (map : tyvar_map) : Sugartypes.kind * Freedom.t * tyva
     (* Consistency check: If the tyvar map contains subkind info,
        then it must coindice with the subkind in the Unionfind point *)
     function
-    | None,        `Var (_, _subkind, freedom)                   -> freedom
-    | Some map_sk, `Var (_,  subkind, freedom) when map_sk = subkind -> freedom
-    | Some map_sk, `Var (_,  subkind, freedom) when map_sk <> subkind ->
+    | None,        `Var (_, _subkind,  freedom)                       -> freedom
+    | Some map_sk, `Var (_,  subkind,  freedom) when map_sk = subkind -> freedom
+    | Some map_sk, `Var (_,  subkind, _freedom) when map_sk <> subkind ->
        raise (internal_error "kind information in map and point diverged")
     | _ ->
        raise (internal_error "A this stage, all meta_*_var things must be a `Var")
   in
-  let open Sugartypes.SugarTypeVar in
   let entry = StringMap.find name map in
   match entry with
   | TVUnkinded (sk, fd) -> (None, sk), fd, entry
@@ -378,7 +377,8 @@ object (o : 'self)
   method! datatype ty =
     let open Errors in
     let open SourceCode in
-    try super#datatype ty
+    try
+      super#datatype ty
     with
       Type_error (pos', msg) when pos' = Position.dummy ->
       raise (Type_error (WithPos.pos ty, msg))
@@ -389,11 +389,11 @@ object (o : 'self)
     fun unresolved_qs action ->
     let original_o = o in
     let bind_quantifier (o, names) sq =
-      let (name, ((_pk, sk)), freedom) as v =
+      let (name, _, _) as v =
         SugarQuantifier.get_unresolved_exn sq in
       let pos = SourceCode.Position.dummy in
       if StringSet.mem name names then raise (duplicate_var pos name);
-      let (_, (pk, sk), _) = ensure_kinded v in
+      let (_, (pk, sk), freedom) = ensure_kinded v in
       (* let point = make_opt_kinded_point sk `Rigid in *)
       let entry = make_fresh_entry pk sk freedom in
       let o' = o#bind name entry in
@@ -470,7 +470,7 @@ object (o : 'self)
        (* let var = Types.fresh_raw_variable () in
         * let point = Unionfind.fresh (`Var (var, default_subkind, `Flexible)) in *)
        (* let point = make_opt_kinded_point (Some default_subkind) `Flexible in *)
-       let entry = make_fresh_entry (Some PrimaryKind.Type) (Some default_subkind) `Flexible in
+       let entry = make_fresh_entry (Some PrimaryKind.Type) None `Rigid in
        let o = o#bind name entry in
        let o, t = o#datatype t in
        let o, _, _ = o#unbind name original_o in
@@ -492,7 +492,7 @@ object (o : 'self)
        o, Datatype.Open resolved_rv
     | Recursive (name, r) ->
        let original_o = o in
-       let entry =  make_fresh_entry (Some PrimaryKind.Row) (Some default_subkind) `Flexible in
+       let entry =  make_fresh_entry (Some PrimaryKind.Row) (Some default_subkind) `Rigid in
        let o = o#bind name entry in
        let o, t = o#row r in
        let o, _, _ = o#unbind name original_o in
@@ -530,9 +530,12 @@ object (o : 'self)
 
 
   method! bindingnode b =
+    (* Debug.print (Sugartypes.show_bindingnode b); *)
+
    (* legacy type variables scoping hack *)
    let o = o#set_toplevelness false in
    let o, b = o#super_bindingnode b in
+   let o = o#set_toplevelness at_toplevel in
    let o =
      if at_toplevel then
        o#reset_vars
@@ -551,7 +554,9 @@ let program p =
   snd (v#program p)
 
 
-let sentence = function
+let sentence =
+
+function
   | Definitions bs ->
      let v = visitor StringMap.empty in
      let _, bs = v#list (fun o b -> o#binding b) bs in
@@ -560,7 +565,13 @@ let sentence = function
      let v = visitor StringMap.empty in
      let _o, p = v#phrase p in
       Expression p
-  | Directive   d  -> Directive d
+  | Directive   d  ->
+     Directive d
+
+let datatype t =
+  let v = visitor StringMap.empty in
+  snd (v#datatype t)
+
 
 
 module Untyped = struct

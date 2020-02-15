@@ -60,7 +60,7 @@ module SEnv = Env.String
 
 let internal_error message = Errors.internal_error ~filename:"desugarDatatypes.ml" ~message
 
-type opt_kinded_type_variable = Name.t * Subkind.t option * Freedom.t
+
 type kinded_type_variable = Name.t * Sugartypes.kind * Freedom.t
 
 
@@ -68,6 +68,7 @@ let infer_kinds = DesugarTypeVariables.infer_kinds
 
 let has_effect_sugar () = Settings.get Types.effect_sugar
 
+(*
 let typevar_primary_kind_mismatch pos var ~expected ~actual =
   Type_error
     ( pos,
@@ -75,6 +76,8 @@ let typevar_primary_kind_mismatch pos var ~expected ~actual =
       ^ Printf.sprintf "  This has kind `%s', but we require a `%s' here."
           (CommonTypes.PrimaryKind.to_string actual)
           (CommonTypes.PrimaryKind.to_string expected) )
+
+*)
 
 let typevar_mismatch pos (v1 : kinded_type_variable) (v2 : kinded_type_variable) =
   let var, _, _ = v1 in
@@ -85,8 +88,9 @@ let typevar_mismatch pos (v1 : kinded_type_variable) (v2 : kinded_type_variable)
           ("fixme")
           ("fixme") )
 
-let duplicate_var pos var =
+(*let duplicate_var pos var =
   Type_error (pos, Printf.sprintf "Multiple definitions of type variable `%s'." var)
+*)
 
 (** Construct an error for when a type alias has free variables within it. *)
 let free_type_variable ?var pos =
@@ -137,6 +141,119 @@ let ensure_kinded = function
       (name, (Some pk_type, subkind), freedom)
   | v -> v
 
+
+
+(* Name used to indicate that a certain (originally anonymous) row variable
+   should be replaced by a shared row variabled later on. *)
+let sharable_effect_var_name = "$eff"
+
+
+
+(* A map with SugarTypeVar as keys, use for associating the former
+   with information about what
+
+*)
+
+module type ROW_VAR_MAP =
+sig
+
+  type key = SugarTypeVar.t
+  type 'a t
+
+  val empty : 'a t
+
+  val add : key -> 'a -> 'a t -> 'a t
+  val find_opt : key -> 'a t -> 'a option
+  val map : ('a -> 'b) -> 'a t -> 'b t
+
+
+
+
+
+  (* Predicate telling you if a given sugar variable should/can be
+     handled by this map *)
+  val is_relevant : SugarTypeVar.t -> bool
+
+  (* like remove, but remove an entry by using the int id in the quantifier *)
+  val remove_by_quantifier : SugarQuantifier.t -> 'a t -> 'a t
+  val update_by_quantifier : SugarQuantifier.t -> ('a option -> 'a option) -> 'a t -> 'a t
+  val find_opt_by_quantifier : SugarQuantifier.t -> 'a t -> 'a option
+
+end
+
+module RowVarMap : ROW_VAR_MAP =
+struct
+
+  type key = SugarTypeVar.t
+
+  (* internal representation, hidden *)
+  type 'a t = 'a IntMap.t
+
+  let is_relevant : SugarTypeVar.t -> bool =
+    let open SugarTypeVar in function
+    | TUnresolved (name, _, _) when name <> sharable_effect_var_name -> false
+    | _ -> true
+
+
+  (* helpers *)
+  let unpack_var_id = function
+          | `Var (id, _, _) -> id
+          | _ -> raise (internal_error "Every meta_*_var in a SugarTypeVar must be a `Var at this point")
+
+  let get_var = let open SugarTypeVar in function
+        | TUnresolved       (name, _, _) when name = sharable_effect_var_name ->
+           (* magic number specially used for $eff *)
+           -1
+        | TUnresolved       (_, _, _) ->
+           raise (internal_error ("must only use SugarTypeVarMap on resoled SugarTypeVars OR the special unresolved one
+                                  named " ^ sharable_effect_var_name))
+        | TResolvedType     mtv ->
+           unpack_var_id (Unionfind.find mtv)
+        | TResolvedRow      mrv ->
+           unpack_var_id (Unionfind.find mrv)
+        | TResolvedPresence mpv ->
+           unpack_var_id (Unionfind.find mpv)
+
+  let var_id_from_quantifier =
+    let open SugarQuantifier in
+    function
+      | QResolved (var, _) -> var
+      | QUnresolved (_, _, _) -> raise
+          (internal_error "must not call *_by_quantifier functions on unresolved quantifiers")
+
+  (* functions using SugarTypeVar.t as key *)
+  let find_opt : key -> 'a t -> 'a option = fun k m ->
+    let var = get_var k in
+    IntMap.find_opt var m
+
+  let add : key -> 'a -> 'a t -> 'a t = fun k v m ->
+    let var = get_var k in
+    IntMap.add var v m
+
+  let empty = IntMap.empty
+
+  let map : ('a -> 'b) -> 'a t -> 'b t = fun f m ->
+    IntMap.map f m
+
+
+  (* functions using SugarQuantifier.t as key *)
+  let update_by_quantifier : SugarQuantifier.t -> ('a option -> 'a option) -> 'a t -> 'a t = fun q f m ->
+    let var = var_id_from_quantifier q in
+    IntMap.update var f m
+
+  let find_opt_by_quantifier : SugarQuantifier.t -> 'a t -> 'a option = fun q m ->
+    let var = var_id_from_quantifier q in
+    IntMap.find_opt var m
+
+  let remove_by_quantifier q map =
+    let var = var_id_from_quantifier q in
+    IntMap.remove var map
+
+
+end
+
+
+
 (** Find all unbound named type variables in a term *)
 let typevars =
 object (self)
@@ -163,6 +280,8 @@ object (self)
   method replace name map = {<tyvars = StringMap.update name (fun _ -> StringMap.find_opt name map) tyvars>}
 
   method bind tv = self#register tv
+
+  method! type_variable _x = self
 
   method add ((name, (pk, sk), freedom) as tv) =
     if StringMap.mem name tyvars then
@@ -209,8 +328,8 @@ object (self)
 
   method! datatypenode = let open Datatype in
     function
-    | TypeVar stv when is_anon stv -> self
-    | TypeVar stv ->
+    | TypeVar stv when (not (SugarTypeVar.is_resolved stv)) && is_anon stv -> self
+    | TypeVar stv when (not (SugarTypeVar.is_resolved stv)) ->
        let (x, k, freedom) = SugarTypeVar.get_unresolved_exn stv in
        self#add (x, (Some pk_type, k), freedom)
     | Mu (v, t)       ->
@@ -221,27 +340,29 @@ object (self)
 
   method! row_var = let open Datatype in function
     | Closed               -> self
-    | Open stv when is_anon stv -> self
-    | Open stv ->
+    | Open stv when (not (SugarTypeVar.is_resolved stv)) && is_anon stv -> self
+    | Open stv when (not (SugarTypeVar.is_resolved stv))->
        let (x, k, freedom) = SugarTypeVar.get_unresolved_exn stv in
        self#add (x, (Some pk_row, k), freedom)
     | Recursive (s, r)     ->
        let sq = SugarQuantifier.mk_unresolved s (Some pk_row, None) `Rigid in
        self#quantified (fun o -> o#row r) [sq]
+    | Open _ -> self
 
   method! fieldspec = let open Datatype in function
     | Absent -> self
     | Present t -> self#datatype t
-    | Var stv when is_anon stv -> self
-    | Var stv ->
+    | Var stv when (not (SugarTypeVar.is_resolved stv)) && is_anon stv -> self
+    | Var stv when (not (SugarTypeVar.is_resolved stv))->
        let (x, k, freedom) = SugarTypeVar.get_unresolved_exn stv in
        self#add (x, (Some pk_presence, k), freedom)
+    | Var _ -> self
 end
 
 type var_env = {
     tyvars : meta_var StringMap.t; (** The currently in-scope type variables. *)
     shared_effect : meta_row_var Lazy.t option; (** The active shared effect variable, if set. *)
-    row_operations : meta_presence_var Lazy.t StringMap.t StringMap.t;
+    row_operations : meta_presence_var Lazy.t StringMap.t RowVarMap.t;
     (** Map of effect variables to all mentioned operations, and their
        corresponding effect variables. *)
     allow_fresh : bool; (** Whether to allow creating anonymous type variables. *)
@@ -250,12 +371,13 @@ type var_env = {
 let empty_env allow_fresh = {
     tyvars = StringMap.empty;
     shared_effect = None;
-    row_operations = StringMap.empty;
+    row_operations = RowVarMap.empty;
     allow_fresh
   }
 
 let closed_env = empty_env false
 
+(*
 let kind_error pos var expected = function
   | Some d ->
       let actual =
@@ -267,6 +389,9 @@ let kind_error pos var expected = function
       typevar_primary_kind_mismatch pos var ~expected ~actual
   | None -> free_type_variable ~var pos
 
+*)
+
+(*
 let lookup_tvar pos t { tyvars; _ } =
   match StringMap.find_opt t tyvars with
   | Some (`Type v) -> v
@@ -281,6 +406,8 @@ let lookup_pvar pos t { tyvars; _ } =
   match StringMap.find_opt t tyvars with
   | Some (`Presence v) -> v
   | x -> raise (kind_error pos t PrimaryKind.Presence x)
+
+*)
 
 module Desugar = struct
    (** Whether this type may have an shared effect variable appear within it.
@@ -357,6 +484,8 @@ module Desugar = struct
             end
          | t -> super#datatypenode t
 
+       method! type_variable x = x
+
        method effect_row ~allow_shared (fields, var) =
          let open Datatype in
          let fields =
@@ -389,11 +518,14 @@ module Desugar = struct
          let var = match var with
            | Datatype.Open stv
                 when (not allow_shared || not has_effect_sugar)
+                     && (not (SugarTypeVar.is_resolved stv))
                      && SugarTypeVar.get_unresolved_name_exn stv = "$eff" ->
               let (_, sk, fr) = gue stv in
               let stv' = SugarTypeVar.mk_unresolved "$" sk fr in
               Datatype.Open stv'
-           | Datatype.Open stv when has_effect_sugar && gue stv = ("$", None, `Rigid) ->
+           | Datatype.Open stv when has_effect_sugar
+                                    && (not (SugarTypeVar.is_resolved stv))
+                                    && gue stv = ("$", None, `Rigid) ->
               let stv' = SugarTypeVar.mk_unresolved "$eff" None `Rigid in
               Datatype.Open stv'
            | _ -> var
@@ -405,13 +537,13 @@ module Desugar = struct
      variable environment.
 
      This is used within the `typename` and `Forall` desugaring. *)
-  let desugar_quantifiers (var_env: var_env) (qs: SugarQuantifier.t list) body pos :
+  let desugar_quantifiers (var_env: var_env) (sqs: SugarQuantifier.t list) _body _pos :
       (Quantifier.t list * var_env) =
     (* Bind all quantified variables, and then do a naive {!typevars} pass over this set to infer
        any unannotated kinds, and verify existing kinds/subkinds match up.
 
        Also verify no duplicate variables exist. *)
-    let tvs, _ = List.fold_left
+    (*let tvs, _ = List.fold_left
       (fun (o, names) sq ->
         let ((name, _, _) as v) = SugarQuantifier.get_unresolved_exn sq in
         if StringSet.mem name names then raise (duplicate_var pos name);
@@ -446,6 +578,16 @@ module Desugar = struct
              { env with
                tyvars = StringMap.add name def env.tyvars;
                row_operations = StringMap.remove name env.row_operations }) )
+     *)
+    let extract_resolved_quantifier sq (qs, var_env) =
+      let q = SugarQuantifier.get_resolved_exn sq in
+      let new_env =
+      { var_env with
+        row_operations = RowVarMap.remove_by_quantifier sq var_env.row_operations }
+      in
+      (q :: qs), new_env
+    in
+    List.fold_right extract_resolved_quantifier sqs ([], var_env)
 
    let make_anon_point var_env pos sk freedom =
      if not var_env.allow_fresh then raise (free_type_variable pos);
@@ -511,34 +653,37 @@ module Desugar = struct
        object(self)
          inherit SugarTraversals.fold as super
 
-         val operations = StringMap.empty
+         val operations = RowVarMap.empty
          method operations = operations
 
-         method replace name map = {<operations = StringMap.update name (fun _ -> StringMap.find_opt name map) operations>}
+         method replace quantifier map =
+           let ubq = RowVarMap.update_by_quantifier in
+           let fobq = RowVarMap.find_opt_by_quantifier in
+           {<operations = ubq quantifier (fun _ -> fobq quantifier map) operations>}
 
          method quantified action (qs : SugarQuantifier.t list) =
            let mask_operations =
              List.fold_left
-               (fun o sq -> StringMap.remove (SugarQuantifier.get_unresolved_name_exn sq) o)
+               (fun o sq -> RowVarMap.remove_by_quantifier sq o)
                operations
                qs
            in
            let o = action {<operations = mask_operations>} in
            List.fold_left
-             (fun o sq -> o#replace (SugarQuantifier.get_unresolved_name_exn sq) operations)
+             (fun o sq -> o#replace sq operations)
              o
              qs
 
-         method add var op =
-           if TypeUtils.is_builtin_effect op || var = "$" then
+         method add (var : SugarTypeVar.t) op =
+           if TypeUtils.is_builtin_effect op || not (RowVarMap.is_relevant var) then
              self
            else
              let ops =
-               match StringMap.find_opt var operations with
+               match RowVarMap.find_opt var operations with
                | None -> StringSet.singleton op
                | Some t -> StringSet.add op t
              in
-             {<operations = StringMap.add var ops operations>}
+             {<operations = RowVarMap.add var ops operations>}
 
          method! datatypenode =
            let open Datatype in
@@ -585,8 +730,8 @@ module Desugar = struct
            let self =
              match var with
              | Datatype.Open stv ->
-                let var = SugarTypeVar.get_unresolved_name_exn stv in
-                List.fold_left (fun o (op, _) -> o#add var op) self fields
+
+                List.fold_left (fun o (op, _) -> o#add stv op) self fields
              | _ -> self
            in
            self#row (fields, var)
@@ -594,7 +739,7 @@ module Desugar = struct
      in
      if var_env.allow_fresh && has_effect_sugar () then
        (o#datatype dt)#operations
-       |> StringMap.map (fun v ->
+       |> RowVarMap.map (fun v ->
               StringSet.fold
                 (fun op m ->
                   let point =
@@ -605,7 +750,7 @@ module Desugar = struct
                   in
                   StringMap.add op point m) v StringMap.empty)
      else
-       StringMap.empty
+       RowVarMap.empty
 
   let rec datatype var_env (alias_env : Types.tycon_environment) t' =
     let datatype var_env t' = datatype var_env alias_env t' in
@@ -636,8 +781,9 @@ module Desugar = struct
             (* FIXME: shouldn't we support other subkinds for recursive types? *)
             let point = Unionfind.fresh (`Var (var, default_subkind, `Flexible)) in
             let tyvars = StringMap.add name (`Type point) var_env.tyvars in
-            let row_operations = StringMap.remove name var_env.row_operations in
-            let _ = Unionfind.change point (`Recursive (var, datatype { var_env with tyvars; row_operations } t)) in
+            (* TODO: this removal is superfluous *)
+            (* let row_operations = IntMap.remove var var_env.row_operations in *)
+            let _ = Unionfind.change point (`Recursive (var, datatype { var_env with tyvars} t)) in
               `MetaTypeVar point
         | Forall (qs, t) ->
             let (qs: Quantifier.t list), var_env = desugar_quantifiers var_env qs t pos in
@@ -700,7 +846,11 @@ module Desugar = struct
                    (* If we've got a typename with an effect variable as the
                       last argument, and we're not applying it fully, then add
                       the implicit effect var. *)
-                   let fields = match StringMap.find_opt "$eff" var_env.row_operations with
+
+                   (* Looking for this gives us the operations associcated with
+                      the $eff var. The kind and freedom info are ignored *)
+                   let eff_sugar_var = SugarTypeVar.mk_unresolved sharable_effect_var_name None `Rigid in
+                   let fields = match RowVarMap.find_opt eff_sugar_var var_env.row_operations with
                      | None -> StringMap.empty
                      | Some ops -> StringMap.fold (fun op p -> StringMap.add op (`Var (Lazy.force p))) ops StringMap.empty
                    in
@@ -757,14 +907,14 @@ module Desugar = struct
     | End           -> `End
     | _ -> assert false
 
-  and fieldspec var_env alias_env fs { pos; _ } =
+  and fieldspec var_env alias_env fs _ =
     let open Datatype in
     match fs with
     | Absent -> `Absent
     | Present t -> `Present (datatype var_env alias_env t)
-    | Var stv when is_anon stv ->
-       let (_name, sk, freedom) = SugarTypeVar.get_unresolved_exn stv in
-       `Var (make_anon_point var_env pos sk freedom)
+    (* | Var stv when is_anon stv ->
+     *    let (_name, sk, freedom) = SugarTypeVar.get_unresolved_exn stv in
+     *    `Var (make_anon_point var_env pos sk freedom) *)
     | Var spv ->
        let resolved_pv = SugarTypeVar.get_resolved_presence_exn spv in
        `Var resolved_pv
@@ -774,13 +924,15 @@ module Desugar = struct
       let open Datatype in
       match rv with
         | Closed -> Types.make_empty_closed_row ()
-        | Open stv when SugarTypeVar.get_unresolved_name_exn stv = "$eff" ->
+        | Open stv when
+               (not (SugarTypeVar.is_resolved stv))
+               && SugarTypeVar.get_unresolved_name_exn stv = "$eff" ->
            let eff = match var_env.shared_effect with
              | None -> raise (internal_error "Needed shared effect, but not given one.")
              | Some s -> Lazy.force s
            in
            (StringMap.empty, eff, false)
-        | Open stv when is_anon stv ->
+        | Open stv when (not (SugarTypeVar.is_resolved stv)) && is_anon stv ->
            let (_name, sk, freedom) = SugarTypeVar.get_unresolved_exn stv in
            (StringMap.empty, make_anon_point var_env node.pos sk freedom, false)
         | Open srv ->
@@ -790,8 +942,8 @@ module Desugar = struct
             let var = Types.fresh_raw_variable () in
             let point = Unionfind.fresh (`Var (var, default_subkind, `Flexible)) in
             let tyvars = StringMap.add name (`Row point) var_env.tyvars in
-            let row_operations = StringMap.remove name var_env.row_operations in
-            let _ = Unionfind.change point (`Recursive (var, row { var_env with tyvars; row_operations } alias_env r node)) in
+            (* let row_operations = StringMap.remove name var_env.row_operations in *)
+            let _ = Unionfind.change point (`Recursive (var, row { var_env with tyvars} alias_env r node)) in
             (StringMap.empty, point, false)
     in
     let fields = List.map (fun (k, p) -> (k, fieldspec var_env alias_env p node)) fields in
@@ -801,9 +953,8 @@ module Desugar = struct
     let (fields, rho, dual) = row var_env alias_env (fields, rv) node in
     let fields =
       match rv with
-      | Datatype.Open stv ->
-         let v = SugarTypeVar.get_unresolved_name_exn stv in
-         begin match StringMap.find_opt v var_env.row_operations with
+      | Datatype.Open stv when RowVarMap.is_relevant stv ->
+         begin match RowVarMap.find_opt stv var_env.row_operations with
          | Some ops ->
             let ops = StringMap.fold (fun k _ -> StringMap.remove k) fields ops in
             let fields = StringMap.fold (fun op p -> StringMap.add op (`Var (Lazy.force p))) ops fields
@@ -1155,6 +1306,7 @@ let sentence typing_env = function
 let read ~aliases s =
   let dt, _ = parse_string ~in_context:(LinksLexer.fresh_context ()) datatype s in
   let _, var_env = Desugar.generate_var_mapping (typevars#datatype dt)#tyvar_list in
+  let dt = DesugarTypeVariables.datatype dt in
   let _, ty = Generalise.generalise Env.String.empty (Desugar.datatype var_env aliases dt) in
   ty
 
