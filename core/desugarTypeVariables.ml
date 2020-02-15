@@ -289,6 +289,10 @@ object (o : 'self)
 
   method get_vars = tyvar_map
 
+  method set_toplevelness at_toplevel = {< at_toplevel >}
+
+  method set_new_vars_allowed new_vars_allowed = {< new_vars_allowed >}
+
 
   method bind
            name
@@ -489,6 +493,7 @@ object (o : 'self)
     let open Datatype in function
     | Closed -> o, Closed
     | Open stv as orig when is_anonymous stv ->
+       (* FIXME: How do we detect errors here if no fresh variables are allowed? *)
        (* We leave these to be handled by desugarEffectSugar *)
        o, orig
     | Open srv ->
@@ -528,14 +533,16 @@ object (o : 'self)
 
   method! typenamenode (name, params, body) =
     let unresolved_qs = List.map fst params in
+    (* Don't allow unbound type variables in type definitions *)
+    let o = o#set_new_vars_allowed false in
     let o, resolved_qs, body = o#quantified unresolved_qs (fun o' -> o'#datatype' body) in
+    let o = o#set_new_vars_allowed new_vars_allowed in
     let params = List.map2 (fun rq param -> (rq, snd param)) resolved_qs params in
     o, (name, params, body)
 
 
   method super_bindingnode = super#bindingnode
 
-  method set_toplevelness at_toplevel = {< at_toplevel >}
 
 
   method! bindingnode b =
