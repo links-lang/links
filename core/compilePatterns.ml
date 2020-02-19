@@ -268,9 +268,37 @@ let let_pattern : raw_env -> Pattern.t -> value * Types.datatype -> computation 
             let body = lp case_type patt (Variable case_variable) body in
             let cases = StringMap.singleton name (case_binder, body) in
               [], Case (value, cases, None)
-        | Pattern.Negative _ ->
-            (* TODO: compile this properly! *)
-            body
+        | Pattern.Negative names ->
+           (* The following expands the negative pattern into
+              a switch-case expression:
+
+              [| var -(l1,...,lN) = value; body |]
+            = switch (value) {
+                case l1 -> Wrong
+                     ...
+                case lN -> Wrong
+                case _  -> body
+              }
+            *)
+            let negative_cases, t' =
+              StringSet.fold
+                (fun label (cases, t) ->
+                  let case_type = TypeUtils.variant_at label t in
+                  let case_binder = Var.fresh_binder_of_type case_type in
+                  let body = ([], Special (Wrong body_type)) in
+                  let cases' = StringMap.add label (case_binder, body) cases in
+                  let t' =
+                    let row = TypeUtils.extract_row t in
+                    `Variant (Types.row_with (label, `Absent) row)
+                  in
+                  (cases', t'))
+                names (StringMap.empty, t)
+            in
+            let success_case =
+              let case_binder = Var.fresh_binder_of_type t' in
+              (case_binder, body)
+            in
+            [], Case (value, negative_cases, Some success_case)
         | Pattern.Record (fields, rest) ->
             let body =
               match rest with

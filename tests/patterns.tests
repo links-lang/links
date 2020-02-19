@@ -83,3 +83,57 @@ stdout : fun : (Bool) -> Int
 Pattern matching twice against the same expression
 fun (x) {(switch (x) {case A -> 0 case _ -> 1}) + (switch (x) {case A -> 0 case _ -> 1})}
 stdout : @fun : \(\[\|A\|_\|\]\) -> Int
+
+Negative pattern [1]
+fun (-Foo) { () }
+stdout : fun : ([|Foo:_::Any|_::Any|]) -> ()
+
+Negative pattern [2]
+(fun (-Foo) { () })(Bar)
+stdout : () : ()
+
+Negative pattern [3]
+(fun (-Foo) { () })(Foo)
+stderr : @..*
+exit : 1
+
+Negative pattern [4]
+fun (-(Foo,Bar,Baz)) { () }
+stdout : fun : ([|Bar:_::Any|Baz:_::Any|Foo:_::Any|_::Any|]) -> ()
+
+Negative pattern [5]
+(fun (-(Foo,Bar,Baz)) { () })(Bar)
+stderr : @..*
+exit : 1
+
+Negative pattern [6]
+(fun (-(Foo,Bar,Baz)) { () })(Baz)
+stderr : @..*
+exit : 1
+
+Negative pattern [5]
+(fun (-(Foo,Bar,Baz)) { () })(Foo)
+stderr : @..*
+exit : 1
+
+Negative pattern [6]
+(fun (-(Foo,Bar,Baz)) { 42 })(Quux)
+stdout : 42 : Int
+
+Negative pattern [7]
+(fun() { var -Foo = Foo; () })()
+stderr : @..*
+exit : 1
+
+Negative pattern [8]
+(fun() { var -(Foo,Bar,Baz) = Bar; () })()
+stderr : @..*
+exit : 1
+
+Negative pattern [9]
+(fun() { var -(Foo,Bar,Baz) = Quux; 42 })()
+stdout : 42 : Int
+
+Negative pattern [10]
+fun(-Foo as r) { r }
+stdout : fun : ([|Foo:_::Any|b::Any|]) -> [|Foo-|b::Any|]
