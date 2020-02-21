@@ -1222,7 +1222,7 @@ let compile_delete : Value.database -> Value.env ->
   ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> string =
   fun db env ((x, table, field_types), where) ->
     let env = Eval.bind (Eval.env_of_value_env QueryPolicy.Default env) (x, Q.Var (x, field_types)) in
-    let where = opt_map (Eval.computation env) where in
+    let where = opt_map (Eval.norm_comp env) where in
     let q = delete db ((x, table), where) in
       Debug.print ("Generated update query: "^q);
       q
