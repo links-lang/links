@@ -424,7 +424,7 @@ tlfunbinding:
 | fun_kind VARIABLE arg_lists perhaps_location block           { ($1, $2, $3, $4, $5)                }
 | OP pattern sigop pattern perhaps_location block              { ((dl_unl, false), WithPos.node $3, [[$2; $4]], $5, $6) }
 | OP OPERATOR pattern perhaps_location block                   { ((dl_unl, false), $2, [[$3]], $4, $5)          }
-| OP pattern OPERATOR perhaps_location block                  { ((dl_unl, false), $3, [[$2]], $4, $5)          }
+| OP pattern OPERATOR perhaps_location block                   { ((dl_unl, false), $3, [[$2]], $4, $5)          }
 
 tlvarbinding:
 | VAR VARIABLE perhaps_location EQ exp                         { (PatName $2, $5, $3) }
