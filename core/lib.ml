@@ -314,7 +314,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "Send",
   (p2 (fun _pid _msg ->
          assert(false)), (* Now handled in evalir.ml *)
-   datatype "forall a::Type(Any, Any).(Process ({hear:a|e}), a) ~> ()",
+   datatype "forall a::Type(Any, Any), e::Row(Unl, Any).(Process ({hear:a|e}), a) ~e~> ()",
    IMPURE);
 
   "self",
@@ -431,12 +431,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "send",
   (`PFun (fun _ -> assert false),
-   datatype "forall a::Type(Any, Any), s::Type(Any, Session).(a, !a.s) ~> s",
+   datatype "forall a::Type(Any, Any), s::Type(Any, Session), e::Row(Unl, Any).(a, !a.s) ~e~> s",
    IMPURE);
 
   "receive",
   (`PFun (fun _ -> assert false),
-   datatype "forall a::Type(Any, Any), s::Type(Any, Session). (?a.s) ~> (a, s)",
+   datatype "forall a::Type(Any, Any), s::Type(Any, Session), e::Row(Unl, Any). (?a.s) ~e~> (a, s)",
    IMPURE);
 
   "link",
@@ -447,37 +447,37 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* access points *)
   "new",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session).() ~> AP(s)",
+   datatype "forall s::Type(Any, Session), e::Row(Unl, Any).() ~e~> AP(s)",
    IMPURE);
 
   "newAP",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session). (Location) ~> AP(s)",
+   datatype "forall s::Type(Any, Session), e::Row(Unl, Any). (Location) ~e~> AP(s)",
    IMPURE);
 
   "newClientAP",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session).() ~> AP(s)",
+   datatype "forall s::Type(Any, Session), e::Row(Unl, Any).() ~e~> AP(s)",
    IMPURE);
 
   "newServerAP",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session).() ~> AP(s)",
+   datatype "forall s::Type(Any, Session), e::Row(Unl, Any).() ~e~> AP(s)",
    IMPURE);
 
   "accept",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session).(AP(s)) ~> s",
+   datatype "forall s::Type(Any, Session), e::Row(Unl, Any).(AP(s)) ~e~> s",
    IMPURE);
 
   "request",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session).(AP(s)) ~> ~s",
+   datatype "forall s::Type(Any, Session), e::Row(Unl, Any).(AP(s)) ~e~> ~s",
    IMPURE);
 
   "cancel",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session).(s) ~> ()",
+   datatype "forall s::Type(Any, Session), e::Row(Unl, Any).(s) ~e~> ()",
    IMPURE);
 
   "close",
