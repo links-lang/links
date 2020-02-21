@@ -325,7 +325,7 @@ object (o : 'self)
       | Some old_entry ->
          o#bind name old_entry
       | None ->
-         o
+         {< tyvar_map = StringMap.remove name tyvar_map >}
     in
     o, ((pk, sk), fd), cur_entry
 
