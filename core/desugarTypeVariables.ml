@@ -276,7 +276,16 @@ object (o : 'self)
 
   val tyvar_map : tyvar_map = initial_map
 
-  val new_vars_allowed = true
+
+  (* Are named unbound type variables okay in the current context?.
+     This only affects rigid variables.
+   *)
+  val new_named_vars_allowed = true
+
+  (* Are anonynmous (hence also unbound) type variables okay in the current context?
+     This only affects rigid variables.
+   *)
+  val new_anon_vars_allowed = true
 
 
   (* part of legacy compatibility, remove later *)
@@ -291,7 +300,8 @@ object (o : 'self)
 
   method set_toplevelness at_toplevel = {< at_toplevel >}
 
-  method set_new_vars_allowed new_vars_allowed = {< new_vars_allowed >}
+  method set_new_named_vars_allowed new_named_vars_allowed = {< new_named_vars_allowed >}
+  method set_new_anon_vars_allowed new_anon_vars_allowed = {< new_anon_vars_allowed >}
 
 
   method bind
@@ -358,9 +368,12 @@ object (o : 'self)
       end
     else
       begin
-        (if not new_vars_allowed then
-          let name_opt = if anon then None else Some name in
-          raise (free_type_variable ?var:name_opt pos));
+        (if        (anon &&  (not new_anon_vars_allowed)  && freedom = `Rigid)
+           || ((not anon) && (not new_named_vars_allowed) && freedom = `Rigid) then
+           let name_opt = if anon then None else Some name in
+           raise (free_type_variable ?var:name_opt pos));
+
+
 
         (* We create a new entry for the tyvar map.
            Since at this point we know the primary kind,
@@ -440,7 +453,11 @@ object (o : 'self)
     | Forall (unresolved_qs, body) ->
 
        (* let t = WithPos.node wpt in *)
+       let o = o#set_new_named_vars_allowed false in
+       let o = o#set_new_anon_vars_allowed false in
        let o, resolved_qs, body = o#quantified unresolved_qs (fun o' -> o'#datatype body) in
+       let o = o#set_new_named_vars_allowed new_named_vars_allowed in
+       let o = o#set_new_anon_vars_allowed new_anon_vars_allowed in
        o, Forall (resolved_qs, body)
 
 
@@ -492,9 +509,12 @@ object (o : 'self)
   method! row_var =
     let open Datatype in function
     | Closed -> o, Closed
-    | Open stv as orig when is_anonymous stv ->
-       (* FIXME: How do we detect errors here if no fresh variables are allowed? *)
-       (* We leave these to be handled by desugarEffectSugar *)
+    | Open srv as orig when is_anonymous srv ->
+       let (name, sk, freedom) = SugarTypeVar.get_unresolved_exn srv in
+       let _ = o#add name pk_row sk freedom in
+       (* The call to o#add is only done to yield an error if we are not allowed
+          to find anoynomous variables right now. Note that we discard the result.
+          The row variable stays unresolved. *)
        o, orig
     | Open srv ->
        let (name, sk, freedom) = SugarTypeVar.get_unresolved_exn srv in
@@ -533,10 +553,20 @@ object (o : 'self)
 
   method! typenamenode (name, params, body) =
     let unresolved_qs = List.map fst params in
-    (* Don't allow unbound type variables in type definitions *)
-    let o = o#set_new_vars_allowed false in
+
+    (* Don't allow unbound named type variables in type definitions.
+       We do allow unbound *anoynmous* variables, because those may be
+       effect variables that the effect sugar handling will generalize the
+       type binding over.
+       Hence, we must re-check the free variables in the type definiton later on. *)
+
+    let o = o#set_new_named_vars_allowed false in
+    let o = o#set_new_anon_vars_allowed true in
+
     let o, resolved_qs, body = o#quantified unresolved_qs (fun o' -> o'#datatype' body) in
-    let o = o#set_new_vars_allowed new_vars_allowed in
+
+    let o = o#set_new_named_vars_allowed new_named_vars_allowed in
+    let o = o#set_new_anon_vars_allowed new_anon_vars_allowed in
     let params = List.map2 (fun rq param -> (rq, snd param)) resolved_qs params in
     o, (name, params, body)
 
