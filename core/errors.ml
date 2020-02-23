@@ -207,6 +207,20 @@ let internal_error ~filename ~message =
 let desugaring_error ~pos ~stage ~message =
   DesugaringError { pos; stage; message }
 
+
+let rethrow_errors_if_better_position alternative_position f x =
+  if alternative_position = Position.dummy then
+    f x
+  else
+    try
+      f x
+    with
+    | Type_error (pos, msg) when pos = Position.dummy ->
+       raise (Type_error (alternative_position, msg))
+    | UnboundTyCon (pos, tycon) when pos = Position.dummy ->
+       raise (UnboundTyCon (alternative_position, tycon))
+
+
 let settings_error message = (SettingsError message)
 let runtime_error message = (RuntimeError message)
 let dynlink_error message = (DynlinkError message)
