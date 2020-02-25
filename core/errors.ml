@@ -40,6 +40,8 @@ exception UnboundTyCon of (Position.t * string)
 exception InternalError of { filename: string; message: string }
 exception TypeApplicationArityMismatch of
   { pos: Position.t; name: string; expected: int; provided: int}
+
+(* tyarg_number is 1-based index *)
 exception TypeApplicationKindMismatch of
   { pos: Position.t; name: string; tyarg_number: int;
     expected: string; provided: string }
