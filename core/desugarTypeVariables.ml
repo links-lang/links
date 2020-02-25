@@ -27,6 +27,13 @@
 
    Note: This leaves anonymous row variables un-resolved, because the
    effect sugar pass takes care of those.
+   It also doesn't catch errors when an anonymous row variable appears in a
+   position where it isn't allowed to.
+
+
+   Inference of kinds: not from type applications
+
+   TODO: guarantees uniqueness
 
 
 *)
@@ -267,29 +274,18 @@ let ensure_kinded = function
 
 
 
-
-
-
-let visitor initial_map =
+class typevar_visitor initial_map =
 object (o : 'self)
   inherit SugarTraversals.fold_map as super
 
   val tyvar_map : tyvar_map = initial_map
 
-
-  (* Are named unbound type variables okay in the current context?.
-     This only affects rigid variables.
-   *)
-  val new_named_vars_allowed = true
-
-  (* Are anonynmous (hence also unbound) type variables okay in the current context?
-     This only affects rigid variables.
-   *)
-  val new_anon_vars_allowed = true
-
+  (** Allow implicitly bound type/row/presence variables in the current context? *)
+  val allow_implictly_bound_vars = true
 
   (* part of legacy compatibility, remove later *)
   val at_toplevel = true
+
 
   method reset_vars =
     (* just let unbind do its sanity check on all variables *)
@@ -300,8 +296,8 @@ object (o : 'self)
 
   method set_toplevelness at_toplevel = {< at_toplevel >}
 
-  method set_new_named_vars_allowed new_named_vars_allowed = {< new_named_vars_allowed >}
-  method set_new_anon_vars_allowed new_anon_vars_allowed = {< new_anon_vars_allowed >}
+  method set_allow_implictly_bound_vars allow_implictly_bound_vars = {< allow_implictly_bound_vars >}
+
 
 
   method bind
@@ -368,8 +364,7 @@ object (o : 'self)
       end
     else
       begin
-        (if        (anon &&  (not new_anon_vars_allowed)  && freedom = `Rigid)
-           || ((not anon) && (not new_named_vars_allowed) && freedom = `Rigid) then
+        (if (not allow_implictly_bound_vars)  && freedom = `Rigid then
            let name_opt = if anon then None else Some name in
            raise (free_type_variable ?var:name_opt pos));
 
@@ -388,17 +383,12 @@ object (o : 'self)
 
 
 
-  (* In many instances we don't have accurate position information when raising
-     type errors. In such a case, we re-throw the error using the position
-     information of the closest surrounding datatype with such position info *)
+  (* Improve exceptions by adding location if otherwise absent *)
   method! datatype ty =
-    let open Errors in
-    let open SourceCode in
-    try
-      super#datatype ty
-    with
-      Type_error (pos', msg) when pos' = Position.dummy ->
-      raise (Type_error (WithPos.pos ty, msg))
+    Errors.rethrow_errors_if_better_position
+      (SourceCode.WithPos.pos ty)
+      super#datatype
+      ty
 
 
   (* Used for Forall and Typenames *)
@@ -451,13 +441,10 @@ object (o : 'self)
        (* let resolved_tv = resolved_var_of_entry entry in *)
        o, TypeVar resolved_tv
     | Forall (unresolved_qs, body) ->
-
        (* let t = WithPos.node wpt in *)
-       let o = o#set_new_named_vars_allowed false in
-       let o = o#set_new_anon_vars_allowed false in
+       let o = o#set_allow_implictly_bound_vars false in
        let o, resolved_qs, body = o#quantified unresolved_qs (fun o' -> o'#datatype body) in
-       let o = o#set_new_named_vars_allowed new_named_vars_allowed in
-       let o = o#set_new_anon_vars_allowed new_anon_vars_allowed in
+       let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
        o, Forall (resolved_qs, body)
 
 
@@ -510,11 +497,8 @@ object (o : 'self)
     let open Datatype in function
     | Closed -> o, Closed
     | Open srv as orig when is_anonymous srv ->
-       let (name, sk, freedom) = SugarTypeVar.get_unresolved_exn srv in
-       let _ = o#add name pk_row sk freedom in
-       (* The call to o#add is only done to yield an error if we are not allowed
-          to find anoynomous variables right now. Note that we discard the result.
-          The row variable stays unresolved. *)
+       (* This transformation pass does not check whether anonymous row variables
+          appear in contexts where implictly scoped variables are allowed.  *)
        o, orig
     | Open srv ->
        let (name, sk, freedom) = SugarTypeVar.get_unresolved_exn srv in
@@ -560,13 +544,12 @@ object (o : 'self)
        type binding over.
        Hence, we must re-check the free variables in the type definiton later on. *)
 
-    let o = o#set_new_named_vars_allowed false in
-    let o = o#set_new_anon_vars_allowed true in
+    let o = o#set_allow_implictly_bound_vars false in
 
     let o, resolved_qs, body = o#quantified unresolved_qs (fun o' -> o'#datatype' body) in
 
-    let o = o#set_new_named_vars_allowed new_named_vars_allowed in
-    let o = o#set_new_anon_vars_allowed new_anon_vars_allowed in
+
+    let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
     let params = List.map2 (fun rq param -> (rq, snd param)) resolved_qs params in
     o, (name, params, body)
 
@@ -596,7 +579,7 @@ end
 
 
 let program p =
-  let v = visitor StringMap.empty in
+  let v = new typevar_visitor StringMap.empty in
   snd (v#program p)
 
 
@@ -604,18 +587,18 @@ let sentence =
 
 function
   | Definitions bs ->
-     let v = visitor StringMap.empty in
+     let v = new typevar_visitor StringMap.empty in
      let _, bs = v#list (fun o b -> o#binding b) bs in
      Definitions bs
   | Expression  p  ->
-     let v = visitor StringMap.empty in
+     let v = new typevar_visitor StringMap.empty in
      let _o, p = v#phrase p in
       Expression p
   | Directive   d  ->
      Directive d
 
 let datatype t =
-  let v = visitor StringMap.empty in
+  let v = new typevar_visitor StringMap.empty in
   snd (v#datatype t)
 
 

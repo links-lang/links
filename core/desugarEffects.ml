@@ -2,6 +2,16 @@ open Utility
 open CommonTypes
 open Sugartypes
 
+(*
+
+TODO: after this, the presence variables inserted for fixing effect rows
+may violate the uniquuness coniditon for type variables,
+because we may insert the same variable twice, but they are scoped differently (TODO: rethink ?)
+
+*)
+
+
+
 (* Name used to indicate that a certain (originally anonymous) row variable
    should be replaced by a shared row variabled later on. *)
 let shared_effect_var_name = "$eff"
