@@ -28,6 +28,14 @@ type simple_tycon_env = tycon_info SEnv.t
 
 let simplify_tycon_env = failwith "123"
 
+let is_anon stv =
+  let (name, _, _) = SugarTypeVar.get_unresolved_exn stv in
+  name.[0] = '$'
+
+
+let make_anon_point sk freedom =
+     let var = Types.fresh_raw_variable () in
+     Unionfind.fresh (`Var (var, DesugarTypeVariables.concrete_subkind sk, freedom))
 
 (* A map with SugarTypeVar as keys, use for associating the former
    with information about what
@@ -461,15 +469,30 @@ class main_traversal =
   object (o : 'self_type)
     inherit SugarTraversals.fold_map as super
 
+
+    (** True if we are visiting a type at the moment.
+       Using this, whenever we vistit a datatype we can ditinguish
+       between this node being a child node of another type or not.
+       Some special processing must be done at the "top" of each type node,
+       but not on its children. *)
     val inside_type = false
 
-    (* Allow anonymous (and hence fresh) row variables. *)
-    val allow_fresh_anon_row_vars = true
+
+    (** The active shared effect variable, if allowed to be used. *)
+    val shared_effect : Types.meta_row_var Lazy.t option = None
+
+    (** Allow implicitly bound type/row/presence variables in the current context?
+       This does not effect the special, implictly bound effect variable
+       whose appearance is controled by {!shared_effect} being None *)
+    val allow_implictly_bound_vars = true
+
+
+    (*  val allow_implict_effect_variable = true *)
+
 
     val tycon_env : simple_tycon_env = SEnv.empty
 
-    (** The active shared effect variable, if set. *)
-    val shared_effect : Types.meta_row_var Lazy.t option = None
+
 
     (** Map of effect variables to all mentioned operations, and their
         corresponding effect variables. *)
@@ -479,6 +502,7 @@ class main_traversal =
 
     method set_tycon_env tycon_env = {< tycon_env>}
 
+    method disallowed_shared_effect = {< shared_effect = None >}
 
 
    method! phrasenode =
@@ -513,64 +537,179 @@ class main_traversal =
         if (not (SugarTypeVar.is_resolved stv)) then
           raise (internal_error "All type variables (of kind Type) must have been resolved at this point");
         o, TypeVar stv
-     | TypeApplication (_tycon, _ts) -> failwith "todo"
+     | TypeApplication (tycon, ts) ->
+        (* We need to process the arguments for a type constructor.
+           For rows as arguments, we need the expected kinding info to tell
+           us whether to process as normal row or effect row.
+           Finally, for types expecting a new implicit effect var,
+           we add it as the final argument.
+           We have to report certain cases of arity/kinding mismatch errors
+           here, but we are not exhaustively catching all problems with
+           type applications. This must be done in later passes. *)
+        let pos = SourceCode.Position.dummy in
+        begin
+          match SEnv.find_opt tycon tycon_env with
+          | None -> raise (Errors.UnboundTyCon (pos, tycon))
+          | Some (qs, has_implicit_eff) ->
+             let qn = List.length qs in
+             let tn = List.length ts in
+             let arity_err () =
+               raise (Errors.TypeApplicationArityMismatch { pos; name = tycon; expected = qn; provided = tn })
+             in
+             let module PK = PrimaryKind in
+             let process_type_arg i : (Quantifier.t * type_arg) -> Datatype.type_arg = function
+               | (_, (PK.Row, (_, Restriction.Effect))), Row r ->
+                  let _o, erow = o#effect_row r in
+                  Row erow
+               | (_, (PK.Row, _)) , Row r ->
+                  let _o, row = o#row r in
+                  Row row
+               | q, Row _ ->
+                  (* Here we don't know how to transform the row.
+                     Transforming it the wrong way may lead to type errors
+                     distracting the user from the actual error: the kind missmatch.
+                     Hence, we must report a proper error here. *)
+                  let q_kind = Quantifier.to_primary_kind q in
+                  raise
+                    (Errors.TypeApplicationKindMismatch
+                       { pos;
+                         name = tycon;
+                         tyarg_number = i;
+                         expected = PrimaryKind.to_string q_kind;
+                         provided = PrimaryKind.to_string pk_row
+                       })
+               | _, ta ->
+                  snd (o#type_arg ta)
+             in
+             let rec match_args_to_params index = function
+               | q :: qs, ta :: tas ->
+                  process_type_arg index (q, ta) :: (match_args_to_params (index+1) (qs, tas))
+               | _q :: _qs, [] ->
+                  (* this *may* be an arity mismatch, but not handling it
+                     here doesn't cause trouble. *)
+                  []
+               | [], _ta :: _tas ->
+                  (* As above, must report proper error here to avoid confusion *)
+                  arity_err ()
+               | [], [] -> []
+             in
+             let ts = match_args_to_params 1 (qs, ts) in
+             let ts = match has_implicit_eff, shared_effect with
+               | true, Some lazy_eff ->
+                  (* insert shared effect as final argument *)
+
+                  (* Looking for this gives us the operations associcated with
+                  the $eff var. The kind and freedom info are ignored for the lookup *)
+                  let eff_sugar_var = SugarTypeVar.mk_unresolved shared_effect_var_name None `Rigid in
+
+                  let fields = match RowVarMap.find_opt eff_sugar_var row_operations with
+                    | None -> []
+                    | Some ops ->
+                       StringMap.fold
+                         (fun op p fields ->
+                           let concern =
+                             (Errors.Type_error
+                                (pos,
+                                 "The effect sugar requires inserting an effect row as a type argument here. "
+                                  ^ "This effect row uses an implicitly bound presence variable for the effect "
+                                  ^ op ^ ". However, in the current context, implictly bound (presence) variables are disallowed")) in
+                           let mpv : Types.meta_presence_var = Lazy.force p in
+                           let fieldspec = Datatype.Var (SugarTypeVar.mk_resolved_presence mpv) in
+                           if not allow_implictly_bound_vars then
+                             raise concern;
+                           (op, fieldspec) :: fields)
+                         ops
+                         []
+                  in
+                  let row_var = Datatype.Open (Lazy.force lazy_eff |> SugarTypeVar.mk_resolved_row) in
+                  let eff : Datatype.row = (fields, row_var) in
+                  ts @ [ Row eff ]
+               | true, None ->
+                  let concern =
+                    Errors.Type_error
+                      (pos,
+                       "The effect sugar requires inserting an open effect row as a type argument here. " ^
+                       "However, we are not allowed to introduce an implicitly bound (effect) variable in the current context.")
+                  in
+                  raise concern
+               | false, _ -> ts
+             in
+             o, TypeApplication (tycon, ts)
+        end
+
      | Forall (_qs, _t) -> failwith "todo disallow anon vars"
      | t -> super#datatypenode t
 
 
-   method! row r =
-     (* and row var_env alias_env (fields, rv) (node : 'a WithPos.t) =
-     * let seed =
-     *   let open Datatype in
-     *   match rv with
-     *     | Closed -> Types.make_empty_closed_row ()
-     *     | Open stv when
-     *            (not (SugarTypeVar.is_resolved stv))
-     *            && SugarTypeVar.get_unresolved_name_exn stv = "$eff" ->
-     *        let eff = match var_env.shared_effect with
-     *          | None -> raise (internal_error "Needed shared effect, but not given one.")
-     *          | Some s -> Lazy.force s
-     *        in
-     *        (StringMap.empty, eff, false)
-     *     | Open stv when (not (SugarTypeVar.is_resolved stv)) && is_anon stv ->
-     *        let (_name, sk, freedom) = SugarTypeVar.get_unresolved_exn stv in
-     *        (StringMap.empty, make_anon_point var_env node.pos sk freedom, false)
-     *     | Open srv ->
-     *        let rv = SugarTypeVar.get_resolved_row_exn srv in
-     *        (StringMap.empty, rv, false)
-     *     | Recursive (stv, r) ->
-     *        let mrv = SugarTypeVar.get_resolved_row_exn stv in
-     *
-     *        let row_operations = RowVarMap.remove stv var_env.row_operations in
-     *        let var, _sk = unpack_var_id (Unionfind.find mrv) in
-     *        let r = row { var_env with row_operations} alias_env r node in
-     *
-     *        (\* Turn mrv into a proper recursive row *\)
-     *        Unionfind.change mrv (`Recursive (var, r));
-     *        (StringMap.empty, mrv, false)
-     *
-     * in
-     * let fields = List.map (fun (k, p) -> (k, fieldspec var_env alias_env p node)) fields in
-     * fold_right Types.row_with fields seed *)
-     o, r
+   method! row (fields, rv) =
+        let dpos = SourceCode.Position.dummy in
+        let module D = Datatype in
+        let o, rv = match rv with
+          | D.Closed -> o, rv
+          | D.Open stv when
+                 (not (SugarTypeVar.is_resolved stv))
+                 && SugarTypeVar.get_unresolved_name_exn stv = shared_effect_var_name ->
+             begin
+               match shared_effect with
+               | None ->
+                  raise
+                    (Errors.Type_error
+                       (dpos, "Trying to use (shared) effect variable that is implicitly bound in in context where no such implictly binding of type variables is allowed." ))
+               | Some s -> o, D.Open (Lazy.force s |> SugarTypeVar.mk_resolved_row)
+             end
+          | D.Open stv when (not (SugarTypeVar.is_resolved stv)) && is_anon stv ->
+             if (not allow_implictly_bound_vars) then
+               raise (DesugarTypeVariables.free_type_variable dpos);
 
-     method effect_row (r : Datatype.row) =
-       (* and effect_row var_env alias_env (fields, rv) node =
-     * let (fields, rho, dual) = row var_env alias_env (fields, rv) node in
-     * let fields =
-     *   match rv with
-     *   | Datatype.Open stv when RowVarMap.is_relevant stv ->
-     *      begin match RowVarMap.find_opt stv var_env.row_operations with
-     *      | Some ops ->
-     *         let ops = StringMap.fold (fun k _ -> StringMap.remove k) fields ops in
-     *         let fields = StringMap.fold (fun op p -> StringMap.add op (`Var (Lazy.force p))) ops fields
-     *         in fields
-     *      | None -> fields
-     *      end
-     *   | _ -> fields
-     * in
-     * (fields, rho, dual) *)
-       o, r
+             let (_name, sk, freedom) = SugarTypeVar.get_unresolved_exn stv in
+             let mtv = make_anon_point sk freedom in
+             let rtv = SugarTypeVar.mk_resolved_row mtv in
+             o, D.Open rtv
+          | D.Open srv when (not (SugarTypeVar.is_resolved srv)) ->
+             raise (internal_error "Encountered non-anonymous, unresolved effect variable. All such variables must have been resolved by earlier transformations.")
+          | D.Open _ ->
+             o, rv
+          | D.Recursive (stv, r) ->
+             let o, r = o#row r in
+             o, D.Recursive (stv, r)
+         in
+         let o, fields =
+           o#list
+             (fun o (name, fs) -> let o, fs = o#fieldspec fs in o, (name, fs))
+             fields
+         in
+         o, (fields, rv)
+
+
+
+     method effect_row ((fields, rv) : Datatype.row) =
+       let o, (fields, rv) = o#row (fields, rv) in
+       let dpos = SourceCode.Position.dummy in
+       let fields =
+         match rv with
+         | Datatype.Open stv when RowVarMap.is_relevant stv ->
+            begin match RowVarMap.find_opt stv row_operations with
+            | Some ops ->
+               let ops_to_add = List.fold_left (fun ops (op, _) -> StringMap.remove op ops) ops fields in
+               let add_op op pres_var fields =
+                 if not allow_implictly_bound_vars then
+                   (* Alternatively, we could just decide not to touch the row and let the type checker
+                      complain about the incompatible rows? *)
+                   raise
+                     (Errors.Type_error
+                                (dpos,
+                                 "To fix the kinds of the effect variable, need to insert operation " ^ op ^
+                                   "here, and make it polymorphic in its presence.
+                                    However, in the current context, implictly bound (presence) variables are disallowed."));
+                 let rpv = SugarTypeVar.mk_resolved_presence (Lazy.force pres_var)  in
+                 (op, Datatype.Var rpv) :: fields
+               in
+               StringMap.fold add_op ops_to_add fields
+            | None -> fields
+            end
+         | _ -> fields
+       in
+       o, (fields, rv)
 
 
 
@@ -642,7 +781,7 @@ class main_traversal =
           if inside_type then
             raise (internal_error "a type definition should never be a child-node of a type");
           let shared_effect = StringMap.find name shared_eff_vars in
-          let o = {< tycon_env; shared_effect; allow_fresh_anon_row_vars = false >} in
+          let o = {< tycon_env; shared_effect; allow_implictly_bound_vars = false >} in
 
           (* TODO: no info to flow back out? *)
           let _o, dt' = o#datatype' dt in
@@ -670,7 +809,7 @@ class main_traversal =
             preprocess_type
               dt
               tycon_env
-              allow_fresh_anon_row_vars
+              allow_implictly_bound_vars
               shared_effect
           in
           dt, {< row_operations; shared_effect >}
@@ -682,8 +821,5 @@ class main_traversal =
         Errors.rethrow_errors_if_better_position pos o#super_datatype dt in
       let o = o#set_inside_type inside_type in
       o, dt
-
-
-
 
   end
