@@ -577,7 +577,7 @@ class main_traversal simple_tycon_env =
              let qn = List.length params in
              let tn = List.length ts in
              let arity_err () =
-               raise (Errors.TypeApplicationArityMismatch { pos; name = tycon; expected = qn; provided = tn })
+               Errors.TypeApplicationArityMismatch { pos; name = tycon; expected = qn; provided = tn }
              in
              let module PK = PrimaryKind in
              let process_type_arg i : (Kind.t * type_arg) -> Datatype.type_arg = function
@@ -612,12 +612,25 @@ class main_traversal simple_tycon_env =
                   []
                | [], _ta :: _tas ->
                   (* As above, must report proper error here to avoid confusion *)
-                  arity_err ()
+                  raise (arity_err ())
                | [], [] -> []
              in
              let ts = match_args_to_params 1 (params, ts) in
-             let ts = match has_implicit_eff, shared_effect with
-               | true, Some lazy_eff ->
+
+             (* now insert implict effect as argument if necessary*)
+             let ts = match has_implicit_eff, shared_effect, (qn - tn) with
+               | _, _, 0 ->
+                  (* already fully applied, do nothing *)
+                  ts
+               | false, _, 1 ->
+                  (* One argument missing, but type doesn't have implict param *)
+                  raise (arity_err ())
+               | _, _, n  when n > 1 || n < 0 ->
+                  (* either too many args or more than one missing*)
+                    raise (arity_err ())
+
+               (* from here onwards, the 1st component must be true and the 3rd component must be 1*)
+               | true, Some lazy_eff, 1 ->
                   (* insert shared effect as final argument *)
 
                   (* Looking for this gives us the operations associcated with
@@ -646,7 +659,8 @@ class main_traversal simple_tycon_env =
                   let row_var = Datatype.Open (Lazy.force lazy_eff |> SugarTypeVar.mk_resolved_row) in
                   let eff : Datatype.row = (fields, row_var) in
                   ts @ [ Row eff ]
-               | true, None ->
+
+               | true, None, 1 ->
                   let concern =
                     Errors.Type_error
                       (pos,
@@ -654,7 +668,8 @@ class main_traversal simple_tycon_env =
                        "However, we are not allowed to introduce an implicitly bound (effect) variable in the current context.")
                   in
                   raise concern
-               | false, _ -> ts
+
+               | _, _, _ -> assert false (* unreachable, but compiler can't tell *)
              in
              o, TypeApplication (tycon, ts)
         end
