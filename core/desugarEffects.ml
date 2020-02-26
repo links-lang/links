@@ -831,8 +831,8 @@ class main_traversal simple_tycon_env =
 
        | b -> o#bindingnode b
 
+    method super_datatype = super#datatype
 
-    method super_datatype = o#datatype
 
     method! datatype dt =
       Debug.print "datatype";
