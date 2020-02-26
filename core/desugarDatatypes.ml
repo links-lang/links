@@ -63,19 +63,6 @@ let internal_error message = Errors.internal_error ~filename:"desugarDatatypes.m
 
 
 
-(* let infer_kinds = DesugarTypeVariables.infer_kinds *)
-
-let has_effect_sugar () = Settings.get Types.effect_sugar
-
-
-
-(** Construct an error for when a type alias has free variables within it. *)
-let free_type_variable ?var pos =
-  match var with
-  | None -> Type_error (pos, "Unbound anonymous type variable.")
-  | Some name -> Type_error (pos, Printf.sprintf "Unbound type variable `%s'." name)
-
-
 
 
 let found_non_var_meta_var =
@@ -108,12 +95,6 @@ object (self)
     | TableLit (_, (_, None), _, _, _) -> {< all_desugared = false >}
     | p -> super#phrasenode p
 end
-
-let concrete_subkind =
-  function
-  | Some subkind -> subkind
-  | None         -> default_subkind
-
 
 
 
@@ -193,14 +174,13 @@ module Desugar = struct
                          expected = PrimaryKind.to_string q_kind;
                          provided = PrimaryKind.to_string t_kind
                        })
-                else (q, t)
+                else t
               in
               let type_args qs ts =
                 List.combine qs ts
                 |> List.mapi
                      (fun i (q,t) ->
-                       let (q, t) = match_kinds i (q, t) in
-                       let _, q_sk = proj q in
+                       let  t = match_kinds i (q, t) in
                        type_arg alias_env t t')
               in
 
@@ -374,7 +354,7 @@ object (self)
        this point, so we ignore them.  *)
     | p -> super#phrasenode p
 
-(*
+
   method! bindingnode = function
     | Typenames ts ->
         (* Maps syntactic types in the recursive group to semantic types. *)
@@ -388,76 +368,23 @@ object (self)
           linearity_map = StringMap.empty
         } in
 
-        (* Each type will have its own variable environment, used in
-         * later passes.*)
-        let venvs_map = StringMap.empty in
 
         (* Add all type declarations in the group to the alias
          * environment, as mutuals. Quantifiers need to be desugared. *)
-        let (mutual_env, venvs_map, ts) =
-          List.fold_left (fun (alias_env, venvs_map, ts) {node=(t, args, (d, _)); pos} ->
+        let ((mutual_env : tycon_spec SEnv.t) , ts) =
+          List.fold_left (fun (alias_env, ts) {node=(t, args, (d, _)); pos} ->
             let args = List.map fst args in
             let qs = Desugar.desugar_quantifiers args  in
             let alias_env = SEnv.bind t (`Mutual (qs, tygroup_ref)) alias_env in
-            let venvs_map = StringMap.add t venvs_map in
             let args = List.map2 (fun x y -> (x, Some y)) args qs in
-            (alias_env, venvs_map, WithPos.make ~pos (t, args, (d, None)) :: ts))
-            (alias_env, venvs_map, []) ts in
-
-        (* First gather any types which require an implicit effect variable. *)
-        let (implicits, dep_graph) =
-          List.fold_left (fun (implicits, dep_graph) {node=(t, _, (d, _)); _} ->
-              let d = Desugar.cleanup_effects mutual_env d in
-              let eff = Desugar.gather_mutual_info mutual_env d in
-              let has_imp = eff#has_implicit in
-              let implicits = StringMap.add t has_imp implicits in
-              let dep_graph = StringMap.add t (StringSet.elements eff#mutuals) dep_graph in
-              implicits, dep_graph)
-            (StringMap.empty, StringMap.empty) ts
-        in
-        (* We also gather a dependency graph of our mutually recursive types. Group this into SCCs
-           and toposort it. We can then trivially propagate the implicit effect requirement - if
-           anyone in our component has an implicit effect, or depends on a type which does, then we
-           must too! *)
-        let has_implicit implicits name =
-          StringMap.find name implicits
-          || List.exists (flip StringMap.find implicits) (StringMap.find name dep_graph)
-        in
-        let sorted_graph = Graph.topo_sort_sccs (StringMap.bindings dep_graph) in
-        let implicits =
-          List.fold_left (fun implicits scc ->
-              let scc_imp = List.exists (has_implicit implicits) scc in
-              List.fold_left (fun acc x -> StringMap.add x scc_imp acc) implicits scc)
-            implicits sorted_graph
-        in
-        (* Now patch up the types to include this effect variable. *)
-        let (mutual_env, venvs_map, ts) =
-          List.fold_left (fun (alias_env, venvs_map, ts) ({node=(t, args, (d, _)); pos} as tn) ->
-              if StringMap.find t implicits then
-                let var = Types.fresh_raw_variable () in
-                let q = (var, (PrimaryKind.Row, (lin_unl, res_effect))) in
-                (* Add the new quantifier to the argument list and rebind. *)
-                let qs = List.map (snd ->- OptionUtils.val_of) args @ [q] in
-                let args = args @ [(SugarQuantifier.mk_unresolved "<implicit effect>" (None, None) `Rigid), Some q] in
-                let alias_env = SEnv.bind t (`Mutual (qs, tygroup_ref)) alias_env in
-                (* Also augment the variable environment with this shared effect. *)
-                let var_env = StringMap.find t venvs_map in
-                let var_env = {
-                    var_env with
-                    shared_effect = Some (lazy (Unionfind.fresh (`Var (var, (lin_unl, res_effect), `Rigid)))) }
-                in
-                let venvs_map = StringMap.add t var_env venvs_map in
-                (alias_env, venvs_map, WithPos.make ~pos (t, args, (d, None)) :: ts)
-              else
-                (alias_env, venvs_map, tn :: ts)) (mutual_env, venvs_map, []) ts
-        in
+            (alias_env, WithPos.make ~pos (t, args, (d, None)) :: ts))
+            (alias_env, []) ts in
 
         (* Desugar all DTs, given the temporary new alias environment. *)
         let desugared_mutuals =
           List.map (fun {node=(name, args, dt); pos} ->
             (* Desugar the datatype *)
-            let var_env = StringMap.find name venvs_map in
-            let dt' = Desugar.datatype' var_env mutual_env dt in
+            let dt' = Desugar.datatype' mutual_env dt in
             (* Check if the datatype has actually been desugared *)
             let (t, dt) =
               match dt' with
@@ -468,15 +395,19 @@ object (self)
 
         (* Given the desugared datatypes, we now need to handle linearity.
            First, calculate linearity up to recursive application *)
-        let linearity_env =
-          List.fold_left (fun lin_map {node=(name, _, (_, dt)); _} ->
+        let (linearity_env, dep_graph) =
+          List.fold_left (fun (lin_map, dep_graph) mutual   ->
+            let (name, _, (_, dt)) = SourceCode.WithPos.node mutual in
             let dt = OptionUtils.val_of dt in
             let lin_map = StringMap.add name (not @@ Unl.type_satisfies dt) lin_map in
-            lin_map) StringMap.empty desugared_mutuals in
+            let deps = recursive_applications dt in
+            let dep_graph = (name, deps) :: dep_graph in
+            (lin_map, dep_graph)
+          ) (StringMap.empty, []) desugared_mutuals in
         (* Next, use the toposorted dependency graph from above. We need to
            reverse since we propagate linearity information downwards from the
            SCCs which everything depends on, rather than upwards. *)
-        let sorted_graph = List.rev sorted_graph in
+        let sorted_graph = Graph.topo_sort_sccs dep_graph |> List.rev in
         (* Next, propagate the linearity information through the graph,
            in order to construct the final linearity map.
          * Given the topo-sorted dependency graph, we propagate linearity based
@@ -522,7 +453,7 @@ object (self)
        self, Foreign (Alien.modify ~declarations:[(binder, datatype)] alien)
     | b -> super#bindingnode b
 
-*)
+
 
   method! sentence =
     (* return any aliases bound to the interactive loop so that they
@@ -541,8 +472,7 @@ object (self)
 end
 
 let phrase alias_env p =
-  let tvars = [] in
-    (desugar alias_env)#phrase p
+  (desugar alias_env)#phrase p
 
 let binding alias_env ({ node; pos } as b : binding) =
   match node with
@@ -550,14 +480,12 @@ let binding alias_env ({ node; pos } as b : binding) =
       let bnds =
         List.map
           (fun bnd ->
-            let tvars = [] in
             (desugar alias_env)#recursive_function bnd
             |> snd )
           bnds
       in
       (alias_env, WithPos.make ~pos (Funs bnds))
   | _ ->
-      let tvars = [] in
       let o, b = (desugar alias_env)#binding b in
       (o#aliases, b)
 
