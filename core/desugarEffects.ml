@@ -782,7 +782,8 @@ class main_traversal simple_tycon_env =
               let eff = gather_mutual_info tycon_env d in
               let has_imp = eff#has_implicit in
               let implicits = StringMap.add t has_imp implicits in
-              let dep_graph = StringMap.add t (StringSet.elements eff#used_types) dep_graph in
+              let used_mutuals = StringSet.inter eff#used_types tycons in
+              let dep_graph = StringMap.add t (StringSet.elements used_mutuals) dep_graph in
               implicits, dep_graph)
             (StringMap.empty, StringMap.empty) ts
         in
