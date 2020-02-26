@@ -833,6 +833,7 @@ class main_traversal simple_tycon_env =
 
     method super_datatype = super#datatype
 
+    method! type_variable x = o, x
 
     method! datatype dt =
       Debug.print "datatype";
