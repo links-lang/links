@@ -132,6 +132,7 @@ module Untyped = struct
        ; (module DesugarLAttributes)
        ; (module LiftRecursive)
        ; (module DesugarTypeVariables)
+       ; (module DesugarEffects)
        ; (module DesugarDatatypes)
       |]
 

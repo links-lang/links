@@ -839,3 +839,40 @@ class main_traversal =
       o, dt
 
   end
+
+
+let program p =
+  let v = new main_traversal in
+  snd (v#program p)
+
+
+let sentence =
+  function
+  | Definitions bs ->
+     let v = new main_traversal in
+     let _, bs = v#list (fun o b -> o#binding b) bs in
+     Definitions bs
+  | Expression  p  ->
+     let v = new main_traversal in
+     let _o, p = v#phrase p in
+      Expression p
+  | Directive   d  ->
+     Directive d
+
+
+
+module Untyped = struct
+  open Transform.Untyped
+
+  let name = "effects"
+
+  let program state program' =
+    let _tyenv = Context.typing_environment (context state) in
+    let program' = program program' in
+    return state program'
+
+  let sentence state sentence' =
+    let _tyenv = Context.typing_environment (context state) in
+    let sentence'' = sentence sentence' in
+    return state sentence''
+end
