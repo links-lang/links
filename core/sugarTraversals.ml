@@ -743,8 +743,7 @@ class map =
     method typenamenode : typenamenode -> typenamenode =
       fun (_x, _x_i1, _x_i2) ->
       let _x = o#name _x in
-      let _x_i1 = o#list (fun o (_x, _x_i1) ->
-                      let _x_i1 = o#unknown _x_i1 in (_x, _x_i1))
+      let _x_i1 = o#list (fun o x -> o#quantifier x)
                     _x_i1 in
       let _x_i2 = o#datatype' _x_i2 in
       (_x, _x_i1, _x_i2)
@@ -1457,7 +1456,7 @@ class fold =
       let o = o#name _x in
       let o =
         o#list
-          (fun o (_x, _x_i1) ->
+          (fun o _x ->
             let o = o#quantifier _x
             in o) _x_i1 in
       let o = o#datatype' _x_i2 in
@@ -2322,9 +2321,9 @@ class fold_map =
       let (o, _x) = o#name _x in
       let (o, _x_i1) =
         o#list
-          (fun o (_x, _x_i1) ->
-            let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1
-            in (o, (_x, _x_i1)))
+          (fun o _x ->
+            let (o, _x) = o#quantifier _x
+            in (o, _x))
           _x_i1 in
       let (o, _x_i2) = o#datatype' _x_i2
       in (o, (_x, _x_i1, _x_i2))

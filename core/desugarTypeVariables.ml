@@ -535,8 +535,7 @@ object (o : 'self)
 
 
 
-  method! typenamenode (name, params, body) =
-    let unresolved_qs = List.map fst params in
+  method! typenamenode (name, unresolved_qs, body) =
 
     (* Don't allow unbound named type variables in type definitions.
        We do allow unbound *anoynmous* variables, because those may be
@@ -548,10 +547,9 @@ object (o : 'self)
 
     let o, resolved_qs, body = o#quantified unresolved_qs (fun o' -> o'#datatype' body) in
 
-
     let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
-    let params = List.map2 (fun rq param -> (rq, snd param)) resolved_qs params in
-    o, (name, params, body)
+
+    o, (name, resolved_qs, body)
 
 
   method super_bindingnode = super#bindingnode

@@ -829,7 +829,7 @@ class transform (env : Types.typing_environment) =
               match dt' with
                 | Some dt ->
                    let o = o#bind_tycon name
-                     (`Alias (List.map (snd ->- val_of) vars, dt)) in
+                     (`Alias (List.map (SugarQuantifier.get_resolved_exn) vars, dt)) in
                    (o, WithPos.make ~pos (name, vars, (x, dt')))
                 | None -> raise (internal_error "Unannotated type alias")
             ) ts in

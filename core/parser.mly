@@ -471,8 +471,8 @@ subkind:
 | COLONCOLON CONSTRUCTOR                                       { subkind_of $loc($2) $2     }
 
 typearg:
-| VARIABLE                                                     { (named_quantifier $1 (None, None) `Rigid), None }
-| VARIABLE kind                                                { (attach_kind ($1, $2), None)        }
+| VARIABLE                                                     { (named_quantifier $1 (None, None) `Rigid) }
+| VARIABLE kind                                                { attach_kind ($1, $2)                            }
 
 varlist:
 | separated_nonempty_list(COMMA, typearg)                      { $1 }
@@ -915,7 +915,7 @@ mu_datatype:
 | forall_datatype                                              { $1 }
 
 forall_datatype:
-| FORALL varlist DOT datatype                                  { Datatype.Forall (labels $2, $4) }
+| FORALL varlist DOT datatype                                  { Datatype.Forall ($2, $4) }
 | session_datatype                                             { $1 }
 
 /* Parenthesised dts disambiguate between sending qualified types and recursion variables.

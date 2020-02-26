@@ -4603,7 +4603,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
           let env = List.fold_left (fun env {node=(name, vars, (_, dt')); _} ->
               match dt' with
                 | Some dt ->
-                    bind_tycon env (name, `Alias (List.map (snd ->- val_of) vars, dt))
+                    bind_tycon env (name, `Alias (List.map (SugarQuantifier.get_resolved_exn) vars, dt))
                 | None -> raise (internal_error "typeSugar.ml: unannotated type")
           ) empty_context ts in
           (Typenames ts, env, Usage.empty)

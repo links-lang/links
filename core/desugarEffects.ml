@@ -729,7 +729,6 @@ class main_traversal =
           let tycon_env =
           List.fold_left
             (fun alias_env {node=(t, args, _); _} ->
-              let args = List.map fst args in
               let qs = List.map (SugarQuantifier.get_resolved_exn) args in
               SEnv.bind t (qs, false) alias_env)
             tycon_env
@@ -769,8 +768,8 @@ class main_traversal =
             let q = (var, (PrimaryKind.Row, (lin_unl, res_effect))) in
             (* Add the new quantifier to the argument list and rebind. *)
             (* let qs = List.map (snd ->- OptionUtils.val_of) args @ [q] in *)
-            let args = args @ [SugarQuantifier.mk_resolved q, Some q] in
-            let tycon_env = SEnv.bind t (List.map (fst ->- SugarQuantifier.get_resolved_exn) args, true) tycon_env in
+            let args = args @ [SugarQuantifier.mk_resolved q] in
+            let tycon_env = SEnv.bind t (List.map SugarQuantifier.get_resolved_exn args, true) tycon_env in
             let shared_effect_var : Types.meta_row_var Lazy.t  =
               lazy (Unionfind.fresh (`Var (var, (lin_unl, res_effect), `Rigid)))
             in

@@ -371,12 +371,10 @@ object (self)
 
         (* Add all type declarations in the group to the alias
          * environment, as mutuals. Quantifiers need to be desugared. *)
-        let ((mutual_env : tycon_spec SEnv.t) , ts) =
+        let ((mutual_env : tycon_spec SEnv.t), ts) =
           List.fold_left (fun (alias_env, ts) {node=(t, args, (d, _)); pos} ->
-            let args = List.map fst args in
             let qs = Desugar.desugar_quantifiers args  in
             let alias_env = SEnv.bind t (`Mutual (qs, tygroup_ref)) alias_env in
-            let args = List.map2 (fun x y -> (x, Some y)) args qs in
             (alias_env, WithPos.make ~pos (t, args, (d, None)) :: ts))
             (alias_env, []) ts in
 
@@ -435,9 +433,9 @@ object (self)
         let alias_env =
           List.fold_left (fun alias_env {node=(t, args, (_, dt')); _} ->
             let dt = OptionUtils.val_of dt' in
-            let semantic_qs = List.map (snd ->- val_of) args in
+            let semantic_qs = List.map SugarQuantifier.get_resolved_exn args in
             let alias_env =
-              SEnv.bind t (`Alias (List.map (snd ->- val_of) args, dt)) alias_env in
+              SEnv.bind t (`Alias (semantic_qs, dt)) alias_env in
             tygroup_ref :=
               { !tygroup_ref with
                   type_map = (StringMap.add t (semantic_qs, dt) !tygroup_ref.type_map);

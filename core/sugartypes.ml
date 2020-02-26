@@ -522,7 +522,7 @@ and cp_phrasenode =
   | CPLink        of Binder.with_pos * Binder.with_pos
   | CPComp        of Binder.with_pos * cp_phrase * cp_phrase
 and cp_phrase = cp_phrasenode WithPos.t
-and typenamenode = (Name.t * (SugarQuantifier.t * Quantifier.t option) list * datatype')
+and typenamenode = Name.t * SugarQuantifier.t list * datatype'
 and typename = typenamenode WithPos.t
 and function_definition = {
     fun_binder: Binder.with_pos;
