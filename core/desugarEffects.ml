@@ -744,19 +744,21 @@ class main_traversal simple_tycon_env =
      method! bindingnode = function
        | Typenames ts ->
           let open SourceCode.WithPos in
-          let tycon_env =
-          List.fold_left
-            (fun alias_env {node=(t, args, _); _} ->
-              let params =
-                List.map
-                  (SugarQuantifier.get_resolved_exn ->- Quantifier.to_kind)
-                  args
-              in
-              (* initially pretend that no type needs an implict parameter *)
-              SEnv.bind t (params, false) alias_env)
-            tycon_env
-            ts
-        in
+          let tycon_env, tycons =
+            List.fold_left
+              (fun (alias_env, tycons) {node=(t, args, _); _} ->
+                let params =
+                  List.map
+                    (SugarQuantifier.get_resolved_exn ->- Quantifier.to_kind)
+                    args
+                in
+                (* initially pretend that no type needs an implict parameter *)
+                let env' = SEnv.bind t (params, false) alias_env in
+                let tycons' = StringSet.add t tycons in
+                env', tycons')
+              (tycon_env, StringSet.empty)
+              ts
+          in
 
         (* First determine which types require an implicit effect variable. *)
         let (implicits, dep_graph) =
@@ -819,11 +821,7 @@ class main_traversal simple_tycon_env =
           (* TODO: no info to flow back out? *)
           let _o, dt' = o#datatype' dt in
 
-          let (t, dt) =
-            match dt' with
-            | (t, Some dt) -> (t, dt)
-            | _ -> assert false in
-          SourceCode.WithPos.make ~pos (name, args, (t, Some dt))
+          SourceCode.WithPos.make ~pos (name, args, dt')
         in
 
         let ts' = List.map traverse_body ts in
