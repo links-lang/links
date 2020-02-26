@@ -454,6 +454,34 @@ struct
       end
 end
 
+
+module GetRecursiveApplications =
+struct
+  class visitor =
+    object(o)
+      inherit Transform.visitor as super
+      val rec_appls = StringSet.empty
+
+      method get_applications = rec_appls
+
+      method! typ = function
+        | `Alias _ as a ->
+            (* Don't expand aliases -- RecursiveApplications to previous type
+             * groups are not of interest in this pass *)
+            (a, o)
+        | `RecursiveApplication { r_name; r_args; _ } as ra ->
+            let apps =
+              List.fold_left (fun acc x ->
+                let (_, o) = o#type_arg x in
+                let apps = o#get_applications in
+                StringSet.union acc apps) StringSet.empty r_args in
+            let apps = StringSet.(union apps (singleton r_name)) in
+            (ra, {< rec_appls = apps >})
+        | x -> super#typ x
+    end
+end
+
+
 module DecycleTypes  =
 struct
   let elim_recursive_type_cycles_visitor = new ElimRecursiveTypeCyclesTransform.visitor
@@ -2632,6 +2660,12 @@ let make_pure_function_type : datatype list -> datatype -> datatype
 let make_thunk_type : row -> datatype -> datatype
   = fun effs rtype ->
   make_function_type [] effs rtype
+
+let recursive_applications t =
+  let o = new GetRecursiveApplications.visitor in
+  let (_, o) = o#typ t in
+  o#get_applications |> StringSet.elements
+
 
 (* We replace some of the generated printing functions here such that
    they may use our own printing functions instead. If the generated functions are

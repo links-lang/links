@@ -374,6 +374,10 @@ val make_thunk_type : row -> datatype -> datatype
 val pp_datatype : Format.formatter -> datatype -> unit
 val pp_tycon_spec: Format.formatter -> tycon_spec -> unit
 
+(* Recursive type applications *)
+val recursive_applications : datatype -> string list
+
+
 module type TYPE_VISITOR =
 sig
   class visitor :
