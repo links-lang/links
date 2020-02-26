@@ -829,7 +829,8 @@ class main_traversal simple_tycon_env =
         let ts' = List.map traverse_body ts in
         ({< tycon_env >}, Typenames ts')
 
-       | b -> o#bindingnode b
+       | b -> super#bindingnode b
+
 
     method super_datatype = super#datatype
 
