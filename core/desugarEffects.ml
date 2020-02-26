@@ -31,12 +31,24 @@ let unpack_var_id = function
 
 module SEnv = Env.String
 
-type tycon_info = Quantifier.t list * bool
+type tycon_info = Kind.t list * bool
 
 type simple_tycon_env = tycon_info SEnv.t
 
 
-let simplify_tycon_env = failwith "123"
+let simplify_tycon_env (tycon_env : Types.tycon_environment) : simple_tycon_env =
+  let simplify_tycon name tycon simpl_env =
+    let param_kinds = match tycon with
+      | `Alias (qs, _) -> List.map Quantifier.to_kind qs
+      | `Abstract abs -> Types.Abstype.arity abs
+      | `Mutual _ -> raise (internal_error "Found `Mutual in global tycon env")
+    in
+    SEnv.bind name (param_kinds, false) simpl_env
+  in
+  SEnv.fold simplify_tycon tycon_env SEnv.empty
+
+
+
 
 let is_anon stv =
   let (name, _, _) = SugarTypeVar.get_unresolved_exn stv in
@@ -213,13 +225,13 @@ let cleanup_effects tycon_env =
               | _, [] -> []
               | [], Row t :: ts  ->
                  Row (self#effect_row ~allow_shared:false t) :: go ([], ts)
-              | (_, (PrimaryKind.Row, (_, Restriction.Effect))) :: qs, Row t :: ts ->
+              | (PrimaryKind.Row, (_, Restriction.Effect)) :: qs, Row t :: ts ->
                  Row (self#effect_row ~allow_shared:false t) :: go (qs, ts)
               | ([] as qs | _ :: qs), t :: ts -> self#type_arg t  :: go (qs, ts)
             in
             let ts =
               match tycon_info with
-              | Some (qs, _) -> go (qs, ts)
+              | Some (params, _) -> go (params, ts)
               | None -> raise (Errors.UnboundTyCon (pos, name))
             in
             TypeApplication (name, ts)
@@ -392,14 +404,14 @@ let cleanup_effects tycon_env =
                       mismatches, assuming spare rows are effects. *)
                 function
                 | _, [] -> o
-                | (_, (PrimaryKind.Row, (_, Restriction.Effect))) :: qs, Row t :: ts ->
+                | (PrimaryKind.Row, (_, Restriction.Effect)) :: qs, Row t :: ts ->
                    go (o#effect_row t) (qs, ts)
                 | ([] as qs | _ :: qs), t :: ts -> go (o#type_arg t) (qs, ts)
               in
               begin
                 match tycon_info with
-                | Some (qs, _has_implict_eff) ->
-                   go self (qs, ts)
+                | Some (params, _has_implict_eff) ->
+                   go self (params, ts)
                 | None ->
                    raise (Errors.UnboundTyCon (pos, name))
               end
@@ -475,7 +487,7 @@ let preprocess_type (dt : Datatype.with_pos) tycon_env allow_fresh shared_effect
   dt, row_operations, shared_effect
 
 
-class main_traversal =
+class main_traversal simple_tycon_env =
   object (o : 'self_type)
     inherit SugarTraversals.fold_map as super
 
@@ -497,7 +509,7 @@ class main_traversal =
     val allow_implictly_bound_vars = true
 
 
-    val tycon_env : simple_tycon_env = SEnv.empty
+    val tycon_env : simple_tycon_env = simple_tycon_env
 
 
 
@@ -561,41 +573,40 @@ class main_traversal =
         begin
           match SEnv.find_opt tycon tycon_env with
           | None -> raise (Errors.UnboundTyCon (pos, tycon))
-          | Some (qs, has_implicit_eff) ->
-             let qn = List.length qs in
+          | Some (params, has_implicit_eff) ->
+             let qn = List.length params in
              let tn = List.length ts in
              let arity_err () =
                raise (Errors.TypeApplicationArityMismatch { pos; name = tycon; expected = qn; provided = tn })
              in
              let module PK = PrimaryKind in
-             let process_type_arg i : (Quantifier.t * type_arg) -> Datatype.type_arg = function
-               | (_, (PK.Row, (_, Restriction.Effect))), Row r ->
+             let process_type_arg i : (Kind.t * type_arg) -> Datatype.type_arg = function
+               | (PK.Row, (_, Restriction.Effect)), Row r ->
                   let _o, erow = o#effect_row r in
                   Row erow
-               | (_, (PK.Row, _)) , Row r ->
+               | (PK.Row, _), Row r ->
                   let _o, row = o#row r in
                   Row row
-               | q, Row _ ->
+               | k, Row _ ->
                   (* Here we don't know how to transform the row.
                      Transforming it the wrong way may lead to type errors
                      distracting the user from the actual error: the kind missmatch.
                      Hence, we must report a proper error here. *)
-                  let q_kind = Quantifier.to_primary_kind q in
                   raise
                     (Errors.TypeApplicationKindMismatch
                        { pos;
                          name = tycon;
                          tyarg_number = i;
-                         expected = PrimaryKind.to_string q_kind;
+                         expected = PrimaryKind.to_string (fst k);
                          provided = PrimaryKind.to_string pk_row
                        })
                | _, ta ->
                   snd (o#type_arg ta)
              in
              let rec match_args_to_params index = function
-               | q :: qs, ta :: tas ->
-                  process_type_arg index (q, ta) :: (match_args_to_params (index+1) (qs, tas))
-               | _q :: _qs, [] ->
+               | k :: ks, ta :: tas ->
+                  process_type_arg index (k, ta) :: (match_args_to_params (index+1) (ks, tas))
+               | _k :: _ks, [] ->
                   (* this *may* be an arity mismatch, but not handling it
                      here doesn't cause trouble. *)
                   []
@@ -604,7 +615,7 @@ class main_traversal =
                   arity_err ()
                | [], [] -> []
              in
-             let ts = match_args_to_params 1 (qs, ts) in
+             let ts = match_args_to_params 1 (params, ts) in
              let ts = match has_implicit_eff, shared_effect with
                | true, Some lazy_eff ->
                   (* insert shared effect as final argument *)
@@ -736,8 +747,13 @@ class main_traversal =
           let tycon_env =
           List.fold_left
             (fun alias_env {node=(t, args, _); _} ->
-              let qs = List.map (SugarQuantifier.get_resolved_exn) args in
-              SEnv.bind t (qs, false) alias_env)
+              let params =
+                List.map
+                  (SugarQuantifier.get_resolved_exn ->- Quantifier.to_kind)
+                  args
+              in
+              (* initially pretend that no type needs an implict parameter *)
+              SEnv.bind t (params, false) alias_env)
             tycon_env
             ts
         in
@@ -776,7 +792,8 @@ class main_traversal =
             (* Add the new quantifier to the argument list and rebind. *)
             (* let qs = List.map (snd ->- OptionUtils.val_of) args @ [q] in *)
             let args = args @ [SugarQuantifier.mk_resolved q] in
-            let tycon_env = SEnv.bind t (List.map SugarQuantifier.get_resolved_exn args, true) tycon_env in
+            let env_args = List.map (SugarQuantifier.get_resolved_exn ->- Quantifier.to_kind) args in
+            let tycon_env = SEnv.bind t (env_args, true) tycon_env in
             let shared_effect_var : Types.meta_row_var Lazy.t  =
               lazy (Unionfind.fresh (`Var (var, (lin_unl, res_effect), `Rigid)))
             in
@@ -818,6 +835,7 @@ class main_traversal =
     method super_datatype = o#datatype
 
     method! datatype dt =
+      Debug.print "datatype";
       let pos = SourceCode.WithPos.pos dt in
       let dt, o =
         if not inside_type then
@@ -841,24 +859,30 @@ class main_traversal =
   end
 
 
-let program p =
-  let v = new main_traversal in
+let program (tycon_env : Types.tycon_environment) p =
+  let s_env = simplify_tycon_env tycon_env in
+  let v = new main_traversal s_env in
   snd (v#program p)
 
 
-let sentence =
+let sentence (tycon_env : Types.tycon_environment) =
+  let s_env = simplify_tycon_env tycon_env in
   function
   | Definitions bs ->
-     let v = new main_traversal in
+     let v = new main_traversal s_env in
      let _, bs = v#list (fun o b -> o#binding b) bs in
      Definitions bs
   | Expression  p  ->
-     let v = new main_traversal in
+     let v = new main_traversal s_env in
      let _o, p = v#phrase p in
       Expression p
   | Directive   d  ->
      Directive d
 
+let datatype (tycon_env : Types.tycon_environment) t =
+  let s_env = simplify_tycon_env tycon_env in
+  let v = new main_traversal s_env in
+  snd (v#datatype t)
 
 
 module Untyped = struct
@@ -867,12 +891,15 @@ module Untyped = struct
   let name = "effects"
 
   let program state program' =
-    let _tyenv = Context.typing_environment (context state) in
-    let program' = program program' in
+    let open Types in
+    let tyenv = Context.typing_environment (context state) in
+    let program' = program tyenv.tycon_env program' in
+    Debug.print (Sugartypes.show_program program');
     return state program'
 
   let sentence state sentence' =
-    let _tyenv = Context.typing_environment (context state) in
-    let sentence'' = sentence sentence' in
+    let open Types in
+    let tyenv = Context.typing_environment (context state) in
+    let sentence'' = sentence tyenv.tycon_env sentence' in
     return state sentence''
 end
