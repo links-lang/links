@@ -497,9 +497,6 @@ class main_traversal =
     val allow_implictly_bound_vars = true
 
 
-    (*  val allow_implict_effect_variable = true *)
-
-
     val tycon_env : simple_tycon_env = SEnv.empty
 
 
@@ -512,7 +509,11 @@ class main_traversal =
 
     method set_tycon_env tycon_env = {< tycon_env>}
 
-    method disallowed_shared_effect = {< shared_effect = None >}
+    method set_allow_implictly_bound_vars allow_implictly_bound_vars = {< allow_implictly_bound_vars>}
+
+    method set_shared_effect shared_effect = {< shared_effect >}
+
+    method disallow_shared_effect = {< shared_effect = None >}
 
 
    method! phrasenode =
@@ -647,7 +648,13 @@ class main_traversal =
              o, TypeApplication (tycon, ts)
         end
 
-     | Forall (_qs, _t) -> failwith "todo disallow anon vars"
+     | Forall (qs, t) ->
+        let o = o#set_allow_implictly_bound_vars false in
+        let o = o#disallow_shared_effect in
+        let o, t = o#datatype t in
+        let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
+        let o = o#set_shared_effect shared_effect in
+        o, Forall (qs, t)
      | t -> super#datatypenode t
 
 
