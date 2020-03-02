@@ -849,7 +849,6 @@ class main_traversal simple_tycon_env =
     method! type_variable x = o, x
 
     method! datatype dt =
-      Debug.print "datatype";
       let pos = SourceCode.WithPos.pos dt in
       let dt, o =
         if not inside_type then
@@ -908,7 +907,6 @@ module Untyped = struct
     let open Types in
     let tyenv = Context.typing_environment (context state) in
     let program' = program tyenv.tycon_env program' in
-    Debug.print (Sugartypes.show_program program');
     return state program'
 
   let sentence state sentence' =
