@@ -557,19 +557,32 @@ object (o : 'self)
 
 
   method! bindingnode b =
-    (* Debug.print (Sugartypes.show_bindingnode b); *)
-
-   (* legacy type variables scoping hack *)
-   let o = o#set_toplevelness false in
-   let o, b = o#super_bindingnode b in
-   let o = o#set_toplevelness at_toplevel in
-   let o =
-     if at_toplevel then
-       o#reset_vars
-     else
-       o
-   in
-   o, b
+    (* legacy type variables scoping hack *)
+    let apply f x =
+      let o, b = f x in
+      let o = o#set_toplevelness at_toplevel in
+      let o =
+        if at_toplevel then
+          o#reset_vars
+        else
+          o
+      in
+      o,b
+    in
+     match b with
+    | Funs fs ->
+       (* Toplevel mutuals don't share type variables *)
+       let (o, fs) =
+         o#list
+           (fun o ->
+             let o = o#set_toplevelness false in
+             apply o#recursive_function)
+           fs
+       in
+       (o, (Funs fs))
+    | _ ->
+       let o = o#set_toplevelness false in
+       apply o#super_bindingnode b
 
 
 
