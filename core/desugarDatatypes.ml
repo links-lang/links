@@ -63,8 +63,6 @@ let internal_error message = Errors.internal_error ~filename:"desugarDatatypes.m
 
 
 
-
-
 let found_non_var_meta_var =
   internal_error "Every meta_*_var in a SugarTypeVar must be a `Var at this point"
 
@@ -108,8 +106,6 @@ module Desugar = struct
 
   let desugar_quantifiers  (sqs: SugarQuantifier.t list) :  Quantifier.t list =
     List.map SugarQuantifier.get_resolved_exn sqs
-
-
 
   let rec datatype (alias_env : Types.tycon_environment) t' =
     let datatype t' = datatype alias_env t' in

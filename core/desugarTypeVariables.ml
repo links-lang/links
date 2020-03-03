@@ -1,40 +1,23 @@
 (*
 
-  1. Annotaions on binders are lifted to signatures: fun f(x : a) {x}
-   is equivalent to sig f : a {%e}~> %b fun (x : a) {x}
+  This pass resolves type variables and reports errors w.r.t. their
+  scoping. Specifically, this means that the pass returns all TUnresolved of
+  {Sugartypes.SugarTypeVar.t by appropriate TResolved*. The latter contain
+  Unionfind points and the pass guarantees that syntactic/unresolved variables
+  referring to the same variable will be assigned the same Unionfind point.
+  This pass reports errrors about type variables occuring in positions where
+  they are not allowed to (e.g., an unbound, named variable occuring in a
+  context where no type variables must be bound implicitly).xs
 
+  However, see the restriction on anonymous effect variables below.
 
-  2. The scope of variables bound in type annotations on binders is
-   the same as the scope of the bound variable itself: sig f : a -> a
-   fun (x) { a is bound here }
+  Likewise, all occurences of QUnresolved from {Sugartypes.SugarQuantifier.t}
+  are replaced by appropriate QResolved*
 
-  3. Type variables on expressions are in scope up to the next
-   enclosing generalisation point (let binding or type abstraction),
-   independently from whether or not we actually generalise there
-
-  4. Flexible type variables: same behavior as rigid variables for now
-
-  5. recursive functions: mut { fun f(x : a) {g(x)}
-
-        fun g(x : a) {f(x)}
-
-     }
-
-    due to the binder-to-sig rule (1.), the two a are not the same
-   here, but the functions are both exhibiting polymorphic recursion
-
-
-
-   Note: This leaves anonymous row variables un-resolved, because the
-   effect sugar pass takes care of those.
-   It also doesn't catch errors when an anonymous row variable appears in a
-   position where it isn't allowed to.
-
-
-   Inference of kinds: not from type applications
-
-   TODO: guarantees uniqueness
-
+  Handling of anonymous effect variables: This pass ignores all anonymous effect
+  variables, i.e., it leaves them as TUnresolved. Further, it does not report
+  errors about such variables in places where they are not allowed.  Both must
+  be dealt with later.
 
 *)
 
@@ -52,14 +35,13 @@ type kinded_type_variable = Name.t * Sugartypes.kind * Freedom.t [@@deriving sho
 
 type tyvar_map_entry =
   | TVUnkinded of Subkind.t option * Freedom.t
-  | TVType     of Subkind.t option * Types.meta_type_var     [@printer fun fmt _p -> fprintf fmt "<TResolvedType>"]
-  | TVRow      of Subkind.t option * Types.meta_row_var      [@printer fun fmt _p -> fprintf fmt "<TResolvedRow>"]
-  | TVPresence of Subkind.t option * Types.meta_presence_var [@printer fun fmt _p -> fprintf fmt "<TResolvedPresence>"]
+  | TVType     of Subkind.t option * Types.meta_type_var
+  | TVRow      of Subkind.t option * Types.meta_row_var
+  | TVPresence of Subkind.t option * Types.meta_presence_var
 
 type tyvar_map = tyvar_map_entry StringMap.t
 
 
-(* FIXME: must remove from desugarDatatypes *)
 let infer_kinds
   = Settings.(flag "infer_kinds"
               |> convert parse_bool
@@ -229,43 +211,6 @@ let resolved_var_of_entry =
 
 
 
-
-(* let make_sugartyvar name pk sk freedom =
- *   let open PrimaryKind in
- *   let open SugarTypeVar in
- *   match pk with
- *     | None          -> TUnresolved (name, sk, freedom)
- *     | Some Type     -> TResolvedType (make_opt_kinded_point sk freedom)
- *     | Some Row      -> TResolvedRow (make_opt_kinded_point sk freedom)
- *     | Some Presence -> TResolvedPresence (make_opt_kinded_point sk freedom) *)
-
-
-
-(* let create_updated_variable_info
- *       (existing_entry  : tyvar_map_entry opion)
- *       name
- *       (pk : PrimaryKind.t option)
- *       sk
- *       freedom
- *     : tyvar_map_entry * SugarTypeVar.t =
- *   let make_map_entry () =
- *     let open CommonTypes.PrimaryKind in
- *     match pk with
- *     | Type ->
- *        let point = Unionfind.fresh (make_opt_kinded_var sk freedom) in
- *
- *
- *
- *
- *   match existing_entry, pk with
- *     | Some _, None -> raise (internal_error "Cannot decrease PK information"
- *     |
- *
- *     | Some var_info ->
- *
- *   Unionfind.change point *)
-
-
 let default_kind : PrimaryKind.t = PrimaryKind.Type
 let default_subkind : Subkind.t = (lin_unl, res_any)
 
@@ -278,10 +223,6 @@ let is_anonymous stv =
   let (name, _, _) = SugarTypeVar.get_unresolved_exn stv in
   name.[0] = '$'
 
-
-(* let make_anon_point subkind freedom =
- *   let var = Types.fresh_raw_variable () in
- *   Unionfind.fresh (`Var (var, concrete_subkind subkind, freedom)) *)
 
 (** Ensure this variable has some kind, if {!infer_kinds} is disabled. *)
 let ensure_kinded = function
@@ -449,54 +390,17 @@ object (o : 'self)
   method! datatypenode =
     let open Datatype in
     function
-    (*| TypeVar utv when is_anonymous utv ->
-       let (_, sk_opt, freedom) = SugarTypeVar.get_unresolved_exn utv in
-       let point = make_anon_point sk_opt freedom in
-       let rtv = SugarTypeVar.mk_resolved point in
-       o, TypeVar rtv *)
     | TypeVar stv ->
        let (name, sk, freedom) = SugarTypeVar.get_unresolved_exn stv in
        let o, resolved_tv = o#add name pk_type sk freedom in
        (* let resolved_tv = resolved_var_of_entry entry in *)
        o, TypeVar resolved_tv
     | Forall (unresolved_qs, body) ->
-       (* let t = WithPos.node wpt in *)
        let o, resolved_qs, body = o#quantified unresolved_qs (fun o' -> o'#datatype body) in
        o, Forall (resolved_qs, body)
 
-
-       (* let original_o = o in
-        * let bind_quantifier (o, names) sq =
-        *   let (name, ((_pk, sk)), _) as v =
-        *     SugarQuantifier.get_unresolved_exn sq in
-        *   let pos = SourceCode.Position.dummy in
-        *   if StringSet.mem name names then raise (duplicate_var pos name);
-        *   let (_, kind, _) = ensure_kinded v in
-        *   let point = make_opt_kinded_point sk `Rigid in
-        *   let o' = o#bind name kind point in
-        *   let names' = StringSet.add name names in
-        *   (o', names')
-        * in
-        * let unbind_quantifier
-        *       (sq : SugarQuantifier.t)
-        *       (o, (rqs : SugarQuantifier.t list)) =
-        *   let name = SugarQuantifier.get_unresolved_name_exn sq in
-        *   let (o, (var, (pk, sk), _freedom)) = o#unbind name original_o in
-        *   let q : Quantifier. t = var, (pk, sk) in
-        *   let rq = SugarQuantifier.mk_resolved q in
-        *   o, (rq :: rqs)
-        * in
-        * let o, _ = List.fold_left bind_quantifier (o, StringSet.empty) unresolved_qs in
-        * let o, t = o#datatypenode t in
-        * let o, resolved_qs = List.fold_right unbind_quantifier unresolved_qs (o, []) in
-        * o, Forall (resolved_qs, WithPos.make ~pos:tpos t) *)
     | Mu (stv, t) ->
        let original_o = o in
-       (* let var = Types.fresh_raw_variable () in
-        * let point = Unionfind.fresh (`Var (var, default_subkind, `Flexible)) in *)
-       (* let point = make_opt_kinded_point (Some default_subkind) `Flexible in *)
-
-       (* ignores subkind and freedom info of stv *)
        let name = SugarTypeVar.get_unresolved_name_exn stv in
        let entry = make_fresh_entry (Some PrimaryKind.Type) None `Rigid in
        let o = o#bind name entry in
@@ -540,11 +444,6 @@ object (o : 'self)
     | Present t ->
        let o, t = o#datatype t in
        o, Present t
-    (*| Var utv when is_anonymous utv ->
-       let (_, sk_opt, freedom) = SugarTypeVar.get_unresolved_exn utv in
-       let point = make_anon_point sk_opt freedom in
-       let rtv = SugarTypeVar.mk_resolved point in
-       o, Var rtv *)
     | Var utv ->
        let (name, sk, freedom) = SugarTypeVar.get_unresolved_exn utv in
        let o, resolved_pv = o#add name pk_presence sk freedom in
