@@ -732,7 +732,6 @@ class main_traversal simple_tycon_env =
 
 
      method effect_row ((fields, rv) : Datatype.row) =
-       let o, (fields, rv) = o#row (fields, rv) in
        let dpos = SourceCode.Position.dummy in
        let fields =
          match rv with
@@ -758,6 +757,10 @@ class main_traversal simple_tycon_env =
             end
          | _ -> fields
        in
+       (* We need to perform the actions above prior to calling o#row.
+          Otherwise, we resolve $eff already, and the lookup in row_operations
+          yields no info *)
+       let o, (fields, rv) = o#row (fields, rv) in
        o, (fields, rv)
 
 
