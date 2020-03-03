@@ -281,7 +281,7 @@ let cleanup_effects tycon_env =
             let (_, sk, fr) = gue stv in
             let stv' = SugarTypeVar.mk_unresolved "$" sk fr in
             Datatype.Open stv'
-         | Datatype.Open stv when allow_shared && has_effect_sugar
+         | Datatype.Open stv   when  has_effect_sugar
                                   && (not (SugarTypeVar.is_resolved stv))
                                   && gue stv = ("$", None, `Rigid) ->
             let stv' = SugarTypeVar.mk_unresolved "$eff" None `Rigid in
