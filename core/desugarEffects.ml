@@ -176,8 +176,11 @@ let may_have_shared_eff (tycon_env : simple_tycon_env) dt =
   match node with
   | Function _ | Lolli _ -> true
   | TypeApplication (tycon, _) ->
-     let _, has_implicit_effect = SEnv.find tycon tycon_env in
-     has_implicit_effect
+     let param_kinds, _has_implicit_effect = SEnv.find tycon tycon_env in
+     begin match ListUtils.last_opt param_kinds with
+     | Some  (PrimaryKind.Row, (_, Restriction.Effect)) -> true
+     | _ -> false
+     end
   (* TODO: in the original version, this was true for every tycon with a Row var with restriction effect as the last param *)
   | _ -> false
 
@@ -335,8 +338,13 @@ let cleanup_effects tycon_env =
              let self = self#list(fun o ta -> o#type_arg ta) ts in
              begin
                match tycon_info with
-               | Some (_, other_has_implicit) when other_has_implicit ->
-                  self#with_implicit#with_used_type name
+               | Some (param_kinds, _other_has_implicit) when List.length param_kinds = List.length ts + 1 ->
+                  let poss_with_implicit =
+                    match ListUtils.last param_kinds with
+                    | PrimaryKind.Row, (_, Restriction.Effect) -> self#with_implicit
+                    | _ -> self
+                  in
+                  poss_with_implicit#with_used_type name
                | Some _->
                   self#with_used_type name
                | None ->
