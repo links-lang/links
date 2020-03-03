@@ -114,6 +114,23 @@ let get_entry_var_info (entry : tyvar_map_entry ) :  (int * Subkind.t  * Freedom
 
 
 
+(* Given the signature on a var/function binder, returns whether or not
+   we allow implictly bound type variables both in the signature itself
+   and in the body of the binding *)
+let sig_allows_implcitly_bound_vars :  datatype' option -> bool  =
+  let open Datatype in
+  function
+  | Some (t_wp,  _) ->
+     begin
+       match SourceCode.WithPos.node t_wp with
+         | Forall (_, _) -> false
+         | _ -> true
+     end
+  | None -> true
+
+
+
+
 
 let lookup_tyvar_exn name (map : tyvar_map) : Sugartypes.kind * Freedom.t * tyvar_map_entry =
   let extract_freedom =
@@ -294,6 +311,8 @@ object (o : 'self)
 
   method get_vars = tyvar_map
 
+  method set_vars tyvar_map = {< tyvar_map >}
+
   method set_toplevelness at_toplevel = {< at_toplevel >}
 
   method set_allow_implictly_bound_vars allow_implictly_bound_vars = {< allow_implictly_bound_vars >}
@@ -442,9 +461,7 @@ object (o : 'self)
        o, TypeVar resolved_tv
     | Forall (unresolved_qs, body) ->
        (* let t = WithPos.node wpt in *)
-       let o = o#set_allow_implictly_bound_vars false in
        let o, resolved_qs, body = o#quantified unresolved_qs (fun o' -> o'#datatype body) in
-       let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
        o, Forall (resolved_qs, body)
 
 
@@ -535,6 +552,63 @@ object (o : 'self)
 
 
 
+  (* To simulate the legacy scoping behavior, we traverse the signature before the body *)
+  method! function_definition : function_definition -> 'self * function_definition
+      = fun { fun_binder;
+              fun_linearity;
+              fun_definition = (tyvar, lit);
+              fun_location;
+              fun_signature;
+              fun_frozen;
+              fun_unsafe_signature; } ->
+    let implicits_allowed = sig_allows_implcitly_bound_vars fun_signature in
+    let o = o#set_allow_implictly_bound_vars implicits_allowed in
+
+    let o, fun_binder = o#binder fun_binder in
+    let o, tyvar = o#list (fun o -> o#quantifier) tyvar in
+    let o, fun_signature = o#option (fun o -> o#datatype') fun_signature in
+    let o, lit = o#funlit lit in
+    let o, fun_location = o#location fun_location in
+
+    let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
+    (o, { fun_binder;
+          fun_linearity;
+          fun_definition = (tyvar, lit);
+          fun_location;
+          fun_signature;
+          fun_frozen;
+          fun_unsafe_signature; })
+
+
+    (* See {function_definition}* )
+  method! recursive_functionnode  : recursive_functionnode -> 'self * recursive_functionnode
+    = fun { rec_binder;
+            rec_linearity;
+            rec_definition = ((tyvar, ty), lit);
+            rec_location;
+            rec_signature;
+            rec_unsafe_signature;
+            rec_frozen } ->
+      let implicits_allowed = sig_allows_implcitly_bound_vars rec_signature in
+      let o = o#set_allow_implictly_bound_vars implicits_allowed in
+
+      let o, rec_binder = o#binder rec_binder in
+      let o, tyvar = o#list (fun o -> o#quantifier) tyvar in
+      let o, ty = o#option (fun o (t, x)-> let o, t = o#typ t in o, (t, x)) ty in
+      let o, rec_signature = o#option (fun o -> o#datatype') rec_signature in
+      let o, lit = o#funlit lit in
+      let o, rec_location = o#location rec_location in
+
+      let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
+      (o, { rec_binder;
+            rec_linearity;
+            rec_definition = ((tyvar, ty), lit);
+            rec_location;
+            rec_signature;
+            rec_unsafe_signature;
+            rec_frozen})
+
+
   method! typenamenode (name, unresolved_qs, body) =
 
     (* Don't allow unbound named type variables in type definitions.
@@ -544,10 +618,12 @@ object (o : 'self)
        Hence, we must re-check the free variables in the type definiton later on. *)
 
     let o = o#set_allow_implictly_bound_vars false in
+    let o = o#reset_vars in
 
     let o, resolved_qs, body = o#quantified unresolved_qs (fun o' -> o'#datatype' body) in
 
     let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
+    let o = o#set_vars tyvar_map in
 
     o, (name, resolved_qs, body)
 
@@ -580,6 +656,16 @@ object (o : 'self)
            fs
        in
        (o, (Funs fs))
+    | Val (_pat, (_qs, _body), _loc, signature) ->
+
+       let implicits_allowed = sig_allows_implcitly_bound_vars signature in
+       let o = o#set_allow_implictly_bound_vars implicits_allowed in
+       let o = o#set_toplevelness false in
+
+       let (o, b) = apply o#super_bindingnode b in
+
+       let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
+       (o, b)
     | _ ->
        let o = o#set_toplevelness false in
        apply o#super_bindingnode b

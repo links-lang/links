@@ -755,6 +755,16 @@ class main_traversal simple_tycon_env =
 
 
      method! bindingnode = function
+       | Val (_pat, (_qs, _body), _loc, signature) as b->
+
+          let implicits_allowed =
+            DesugarTypeVariables.sig_allows_implcitly_bound_vars signature in
+          let o = o#set_allow_implictly_bound_vars implicits_allowed in
+
+          let (o, b) = o#super_bindingnode b in
+
+          let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
+       (o, b)
        | Typenames ts ->
           let open SourceCode.WithPos in
           let tycon_env, tycons =
@@ -868,6 +878,43 @@ class main_traversal simple_tycon_env =
         Errors.rethrow_errors_if_better_position pos o#super_datatype dt in
       let o = o#set_inside_type inside_type in
       o, dt
+
+
+  method super_function_definition = super#function_definition
+  method super_recursive_functionnode = super#recursive_functionnode
+  method super_bindingnode = super#bindingnode
+
+
+
+  method! function_definition : function_definition -> 'self * function_definition
+    = fun fun_def ->
+    let implicits_allowed =
+      DesugarTypeVariables.sig_allows_implcitly_bound_vars fun_def.fun_signature in
+    let o = o#set_allow_implictly_bound_vars implicits_allowed in
+
+    let o, fun_def = o#super_function_definition fun_def in
+
+    (* restore previous state *)
+    let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
+
+    o, fun_def
+
+
+
+
+  method! recursive_functionnode  : recursive_functionnode -> 'self * recursive_functionnode
+    = fun rec_def ->
+    let implicits_allowed =
+      DesugarTypeVariables.sig_allows_implcitly_bound_vars rec_def.rec_signature in
+    let o = o#set_allow_implictly_bound_vars implicits_allowed in
+
+    let o, rec_def = o#super_recursive_functionnode rec_def in
+
+    (* restore previous state *)
+    let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
+
+    o, rec_def
+
 
   end
 
