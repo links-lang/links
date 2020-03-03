@@ -769,7 +769,7 @@ class main_traversal simple_tycon_env =
        | Val (_pat, (_qs, _body), _loc, signature) as b->
 
           let implicits_allowed =
-            DesugarTypeVariables.sig_allows_implcitly_bound_vars signature in
+            DesugarTypeVariables.sig_allows_implicitly_bound_vars signature in
           let o = o#set_allow_implictly_bound_vars implicits_allowed in
 
           let (o, b) = o#super_bindingnode b in
@@ -900,7 +900,7 @@ class main_traversal simple_tycon_env =
   method! function_definition : function_definition -> 'self * function_definition
     = fun fun_def ->
     let implicits_allowed =
-      DesugarTypeVariables.sig_allows_implcitly_bound_vars fun_def.fun_signature in
+      DesugarTypeVariables.sig_allows_implicitly_bound_vars fun_def.fun_signature in
     let o = o#set_allow_implictly_bound_vars implicits_allowed in
 
     let o, fun_def = o#super_function_definition fun_def in
@@ -916,7 +916,7 @@ class main_traversal simple_tycon_env =
   method! recursive_functionnode  : recursive_functionnode -> 'self * recursive_functionnode
     = fun rec_def ->
     let implicits_allowed =
-      DesugarTypeVariables.sig_allows_implcitly_bound_vars rec_def.rec_signature in
+      DesugarTypeVariables.sig_allows_implicitly_bound_vars rec_def.rec_signature in
     let o = o#set_allow_implictly_bound_vars implicits_allowed in
 
     let o, rec_def = o#super_recursive_functionnode rec_def in

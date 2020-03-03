@@ -117,7 +117,7 @@ let get_entry_var_info (entry : tyvar_map_entry ) :  (int * Subkind.t  * Freedom
 (* Given the signature on a var/function binder, returns whether or not
    we allow implictly bound type variables both in the signature itself
    and in the body of the binding *)
-let sig_allows_implcitly_bound_vars :  datatype' option -> bool  =
+let sig_allows_implicitly_bound_vars :  datatype' option -> bool  =
   let open Datatype in
   function
   | Some (t_wp,  _) ->
@@ -561,7 +561,7 @@ object (o : 'self)
               fun_signature;
               fun_frozen;
               fun_unsafe_signature; } ->
-    let implicits_allowed = sig_allows_implcitly_bound_vars fun_signature in
+    let implicits_allowed = sig_allows_implicitly_bound_vars fun_signature in
     let o = o#set_allow_implictly_bound_vars implicits_allowed in
 
     let o, fun_binder = o#binder fun_binder in
@@ -580,7 +580,7 @@ object (o : 'self)
           fun_unsafe_signature; })
 
 
-    (* See {function_definition}* )
+    (* See {function_definition} *)
   method! recursive_functionnode  : recursive_functionnode -> 'self * recursive_functionnode
     = fun { rec_binder;
             rec_linearity;
@@ -589,7 +589,7 @@ object (o : 'self)
             rec_signature;
             rec_unsafe_signature;
             rec_frozen } ->
-      let implicits_allowed = sig_allows_implcitly_bound_vars rec_signature in
+      let implicits_allowed = sig_allows_implicitly_bound_vars rec_signature in
       let o = o#set_allow_implictly_bound_vars implicits_allowed in
 
       let o, rec_binder = o#binder rec_binder in
@@ -658,7 +658,7 @@ object (o : 'self)
        (o, (Funs fs))
     | Val (_pat, (_qs, _body), _loc, signature) ->
 
-       let implicits_allowed = sig_allows_implcitly_bound_vars signature in
+       let implicits_allowed = sig_allows_implicitly_bound_vars signature in
        let o = o#set_allow_implictly_bound_vars implicits_allowed in
        let o = o#set_toplevelness false in
 
