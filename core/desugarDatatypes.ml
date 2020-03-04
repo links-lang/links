@@ -61,8 +61,6 @@ module SEnv = Env.String
 let internal_error message = Errors.internal_error ~filename:"desugarDatatypes.ml" ~message
 
 
-
-
 let found_non_var_meta_var =
   internal_error "Every meta_*_var in a SugarTypeVar must be a `Var at this point"
 

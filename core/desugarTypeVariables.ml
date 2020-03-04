@@ -1,14 +1,13 @@
 (*
 
   This pass resolves type variables and reports errors w.r.t. their
-  scoping. Specifically, this means that the pass returns all TUnresolved of
-  {Sugartypes.SugarTypeVar.t by appropriate TResolved*. The latter contain
+  scoping. Specifically, this means that the pass replaces all TUnresolved from
+  {Sugartypes.SugarTypeVar.t} by appropriate TResolved*. The latter contain
   Unionfind points and the pass guarantees that syntactic/unresolved variables
   referring to the same variable will be assigned the same Unionfind point.
   This pass reports errrors about type variables occuring in positions where
   they are not allowed to (e.g., an unbound, named variable occuring in a
-  context where no type variables must be bound implicitly).xs
-
+  context where no type variables must be bound implicitly).
   However, see the restriction on anonymous effect variables below.
 
   Likewise, all occurences of QUnresolved from {Sugartypes.SugarQuantifier.t}
@@ -26,12 +25,7 @@ open Utility
 open Sugartypes
 
 
-
-
 type kinded_type_variable = Name.t * Sugartypes.kind * Freedom.t [@@deriving show]
-
-
-
 
 type tyvar_map_entry =
   | TVUnkinded of Subkind.t option * Freedom.t
@@ -47,9 +41,13 @@ let infer_kinds
               |> convert parse_bool
               |> sync)
 
+
 let internal_error message =
   Errors.internal_error ~filename:"desugarTypeVariables.ml" ~message
 
+
+let found_non_var_meta_var =
+  internal_error "Every meta_*_var in a SugarTypeVar must be a `Var at this point"
 
 (* Errors *)
 
@@ -62,14 +60,10 @@ let typevar_mismatch pos (v1 : kinded_type_variable) (v2 : kinded_type_variable)
           (show_kinded_type_variable v1)
           (show_kinded_type_variable v2))
 
+
 let duplicate_var pos var =
   Errors.Type_error (pos, Printf.sprintf "Multiple definitions of type variable `%s'." var)
 
-
-let concrete_subkind =
-  function
-  | Some subkind -> subkind
-  | None         -> default_subkind
 
 let free_type_variable ?var pos =
   let desc = match var with
@@ -81,12 +75,17 @@ let free_type_variable ?var pos =
         no free type variables are allowed")
 
 
+let concrete_subkind =
+  function
+  | Some subkind -> subkind
+  | None         -> default_subkind
+
 
 let get_entry_var_info (entry : tyvar_map_entry ) :  (int * Subkind.t  * Freedom.t) option =
   let extract_data  =
     function
     | `Var (var, sk, freedom) -> var, sk, freedom
-    | _ -> raise (internal_error "A this stage, all meta_*_var things must be a `Var ")
+    | _ -> raise found_non_var_meta_var
   in
   match entry with
   | TVUnkinded (_,_)    -> None
@@ -111,9 +110,6 @@ let sig_allows_implicitly_bound_vars :  datatype' option -> bool  =
   | None -> true
 
 
-
-
-
 let lookup_tyvar_exn name (map : tyvar_map) : Sugartypes.kind * Freedom.t * tyvar_map_entry =
   let extract_freedom =
     (* Consistency check: If the tyvar map contains subkind info,
@@ -124,7 +120,7 @@ let lookup_tyvar_exn name (map : tyvar_map) : Sugartypes.kind * Freedom.t * tyva
     | Some map_sk, `Var (_,  subkind, _freedom) when map_sk <> subkind ->
        raise (internal_error "kind information in map and point diverged")
     | _ ->
-       raise (internal_error "A this stage, all meta_*_var things must be a `Var")
+       raise found_non_var_meta_var
   in
   let entry = StringMap.find name map in
   match entry with
@@ -154,7 +150,7 @@ let make_opt_kinded_var sk_opt freedom : [> `Var of (int * Subkind.t * Freedom.t
 let get_var_info (info : [> `Var of (int * Subkind.t * Freedom.t)]) =
   match info with
   | `Var (var, sk, fd) -> (var, sk, fd)
-  | _ -> raise (internal_error "at this stage, all meta_*_var things must be `Var")
+  | _ -> raise found_non_var_meta_var
 
 
 
@@ -171,8 +167,6 @@ let make_fresh_entry pk_opt sk_opt freedom : tyvar_map_entry =
     | Some Presence ->
        let point = Unionfind.fresh (make_opt_kinded_var sk_opt freedom) in
        TVPresence (sk_opt, point)
-
-
 
 
 
@@ -220,8 +214,7 @@ let is_anonymous_name name =
   name.[0] = '$'
 
 let is_anonymous stv =
-  let (name, _, _) = SugarTypeVar.get_unresolved_exn stv in
-  name.[0] = '$'
+  SugarTypeVar.get_unresolved_name_exn stv |> is_anonymous_name
 
 
 (** Ensure this variable has some kind, if {!infer_kinds} is disabled. *)
@@ -267,9 +260,9 @@ object (o : 'self)
 
 
 
-    (* Return all information obtained about the given variable,
-       possibly filling in default kinding info.
-       Restore the info stored about the variable in a previous object *)
+  (** Return all information obtained about the given variable,
+     possibly filling in default kinding info.
+     Restore the info stored about the variable in a previous object *)
   method unbind name (restore_from : 'self) : 'self * (Kind.t * Freedom.t) * tyvar_map_entry =
     let (pk_opt, sk_opt), fd, cur_entry = lookup_tyvar_exn name tyvar_map in
 
@@ -289,7 +282,7 @@ object (o : 'self)
 
 
 
-  (* used for type/row/presence variables found along the way, including anonymous ones *)
+  (** Used for type/row/presence variables found along the way, including anonymous ones *)
   method add ?pos name (pk : PrimaryKind.t) (sk : Subkind.t option) freedom : 'self * SugarTypeVar.t =
     let anon = is_anonymous_name name in
     let pos = OptionUtils.from_option SourceCode.Position.dummy pos in
@@ -327,8 +320,6 @@ object (o : 'self)
         (if (not allow_implictly_bound_vars)  && freedom = `Rigid then
            let name_opt = if anon then None else Some name in
            raise (free_type_variable ?var:name_opt pos));
-
-
 
         (* We create a new entry for the tyvar map.
            Since at this point we know the primary kind,
@@ -451,7 +442,7 @@ object (o : 'self)
 
 
 
-  (* To simulate the legacy scoping behavior, we traverse the signature before the body *)
+
   method! function_definition : function_definition -> 'self * function_definition
       = fun { fun_binder;
               fun_linearity;
@@ -463,6 +454,7 @@ object (o : 'self)
     let implicits_allowed = sig_allows_implicitly_bound_vars fun_signature in
     let o = o#set_allow_implictly_bound_vars implicits_allowed in
 
+    (* To simulate the legacy scoping behavior, we traverse the signature before the body *)
     let o, fun_binder = o#binder fun_binder in
     let o, tyvar = o#list (fun o -> o#quantifier) tyvar in
     let o, fun_signature = o#option (fun o -> o#datatype') fun_signature in
@@ -556,7 +548,6 @@ object (o : 'self)
        in
        (o, (Funs fs))
     | Val (_pat, (_qs, _body), _loc, signature) ->
-
        let implicits_allowed = sig_allows_implicitly_bound_vars signature in
        let o = o#set_allow_implictly_bound_vars implicits_allowed in
        let o = o#set_toplevelness false in
@@ -568,9 +559,6 @@ object (o : 'self)
     | _ ->
        let o = o#set_toplevelness false in
        apply o#super_bindingnode b
-
-
-
 end
 
 
