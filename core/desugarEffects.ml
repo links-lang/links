@@ -29,33 +29,24 @@ let cannot_insert_presence_var pos op =
   Errors.Type_error
     (pos,
      "To fix the kinds of the effect variable, need to insert operation "
-     ^ op ^ "here, and make it polymorphic in its presence. However, in "
-     ^ "the current context, implictly bound (presence) variables are disallowed.")
+     ^ op ^ "here, and make it polymorphic in its presence. However, in the current context, implictly bound (presence) variables are disallowed.")
 
 
 let cannot_insert_presence_var2 pos op =
   Errors.Type_error
     (pos,
-     "The effect sugar requires inserting an effect row as a type argument"
-      ^ " here. This effect row uses an implicitly bound presence variable"
-      ^ " for the effect " ^ op ^ ". However, in the current context,"
-      ^ " implictly bound (presence) variables are disallowed")
+     "The effect sugar requires inserting an effect row as a type argument here. This effect row uses an implicitly bound presence variable for the effect " ^ op ^ ". However, in the current context, implictly bound (presence) variables are disallowed")
 
 
 let unexpected_effects_on_abstract_op pos name =
  Errors.Type_error
     (pos,
-      "The abstract operation " ^ name ^ " has unexpected "
-      ^ "effects in its signature. The effect signature on an "
-      ^ "abstract operation arrow is always supposed to be empty, "
-      ^ "since any effects it might have are ultimately conferred by its handler.")
+      "The abstract operation " ^ name ^ " has unexpected effects in its signature. The effect signature on an abstract operation arrow is always supposed to be empty, since any effects it might have are ultimately conferred by its handler.")
 
 
 let shared_effect_forbidden_here pos =
   Errors.Type_error
-    (pos, "Trying to use (shared) effect variable that is implicitly bound"
-          ^ " in in context where no such implictly binding of type "
-          ^ " variables is allowed." )
+    (pos, "Trying to use (shared) effect variable that is implicitly bound in in context where no such implictly binding of type variables is allowed." )
 
 
 let unpack_var_id = function
