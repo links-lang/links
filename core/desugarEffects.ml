@@ -84,20 +84,13 @@ let simplify_tycon_env (tycon_env : Types.tycon_environment) : simple_tycon_env 
 
 
 
-let is_anon stv =
-  let (name, _, _) = SugarTypeVar.get_unresolved_exn stv in
-  name.[0] = '$'
-
-
 let make_anon_point sk freedom =
      let var = Types.fresh_raw_variable () in
      Unionfind.fresh (`Var (var, DesugarTypeVariables.concrete_subkind sk, freedom))
 
-(* A map with SugarTypeVar as keys, use for associating the former
+(** A map with SugarTypeVar as keys, use for associating the former
    with information about what
-
 *)
-
 module type ROW_VAR_MAP =
 sig
 
@@ -110,9 +103,6 @@ sig
   val find_opt : key -> 'a t -> 'a option
   val map : ('a -> 'b) -> 'a t -> 'b t
   (* val remove : key -> 'a t -> 'a t *)
-
-
-
 
 
   (* Predicate telling you if a given sugar variable should/can be
@@ -725,7 +715,7 @@ class main_traversal simple_tycon_env =
                   raise (shared_effect_forbidden_here dpos)
                | Some s -> o, D.Open (Lazy.force s |> SugarTypeVar.mk_resolved_row)
              end
-          | D.Open stv when (not (SugarTypeVar.is_resolved stv)) && is_anon stv ->
+          | D.Open stv when (not (SugarTypeVar.is_resolved stv)) && DesugarTypeVariables.is_anonymous stv ->
              if (not allow_implictly_bound_vars) then
                raise (DesugarTypeVariables.free_type_variable dpos);
 

@@ -1,5 +1,4 @@
 (*
-
   This pass resolves type variables and reports errors w.r.t. their
   scoping. Specifically, this means that the pass replaces all TUnresolved from
   {Sugartypes.SugarTypeVar.t} by appropriate TResolved*. The latter contain
@@ -17,7 +16,6 @@
   variables, i.e., it leaves them as TUnresolved. Further, it does not report
   errors about such variables in places where they are not allowed.  Both must
   be dealt with later.
-
 *)
 
 open CommonTypes
@@ -25,7 +23,8 @@ open Utility
 open Sugartypes
 
 
-type kinded_type_variable = Name.t * Sugartypes.kind * Freedom.t [@@deriving show]
+type kinded_type_variable = Name.t * Sugartypes.kind * Freedom.t
+  [@@deriving show]
 
 type tyvar_map_entry =
   | TVUnkinded of Subkind.t option * Freedom.t
@@ -33,8 +32,18 @@ type tyvar_map_entry =
   | TVRow      of Subkind.t option * Types.meta_row_var
   | TVPresence of Subkind.t option * Types.meta_presence_var
 
-type tyvar_map = tyvar_map_entry StringMap.t
 
+(**
+  Maps used for storing info about type variables.  Note that kinding info is
+  stored both in {Sugartypes.kind} and the meta_*_ Unionfind points of the
+  resolved constructors.  However, in the former, the kinding info is optional,
+  whereas it is mandatory in the second. We use the convention that information
+  the information Sugartypes.kind takes precedence over the kinding info in the
+  Unionfind points. This allows us to properly express the absence of kinding
+  information. Once an entry of Sugartypes.kind is present, it must of course be
+  consistent with the information in the Unionfind point
+*)
+type tyvar_map = tyvar_map_entry StringMap.t
 
 let infer_kinds
   = Settings.(flag "infer_kinds"
@@ -42,14 +51,13 @@ let infer_kinds
               |> sync)
 
 
+(* Errors *)
+
 let internal_error message =
   Errors.internal_error ~filename:"desugarTypeVariables.ml" ~message
 
-
 let found_non_var_meta_var =
   internal_error "Every meta_*_var in a SugarTypeVar must be a `Var at this point"
-
-(* Errors *)
 
 let typevar_mismatch pos (v1 : kinded_type_variable) (v2 : kinded_type_variable) =
   let var, _, _ = v1 in
@@ -60,10 +68,8 @@ let typevar_mismatch pos (v1 : kinded_type_variable) (v2 : kinded_type_variable)
           (show_kinded_type_variable v1)
           (show_kinded_type_variable v2))
 
-
 let duplicate_var pos var =
   Errors.Type_error (pos, Printf.sprintf "Multiple definitions of type variable `%s'." var)
-
 
 let free_type_variable ?var pos =
   let desc = match var with
@@ -74,12 +80,29 @@ let free_type_variable ?var pos =
         "Unbound " ^ desc ^ " in position where
         no free type variables are allowed")
 
-
 let concrete_subkind =
   function
   | Some subkind -> subkind
   | None         -> default_subkind
 
+
+let default_kind : PrimaryKind.t = PrimaryKind.Type
+let default_subkind : Subkind.t = (lin_unl, res_any)
+
+
+
+let is_anonymous_name name =
+  name.[0] = '$'
+
+let is_anonymous stv =
+  SugarTypeVar.get_unresolved_name_exn stv |> is_anonymous_name
+
+
+(** Ensure this variable has some kind, if {!infer_kinds} is disabled. *)
+let ensure_kinded = function
+  | name, (None, subkind), freedom when not (Settings.get infer_kinds) ->
+      (name, (Some pk_type, subkind), freedom)
+  | v -> v
 
 let get_entry_var_info (entry : tyvar_map_entry ) :  (int * Subkind.t  * Freedom.t) option =
   let extract_data  =
@@ -136,8 +159,8 @@ let lookup_tyvar_exn name (map : tyvar_map) : Sugartypes.kind * Freedom.t * tyva
      (Some PrimaryKind.Presence, sk), fd, entry
 
 
-(* taken from DesugarDatatypes.desugar_quantifiers
-note that we fill primary kind and subkind info.
+(*
+Note that we fill primary kind and subkind info here.
 However, this is not the same as setting defaults. Instead,
 the info in the map takes precedence.
 
@@ -202,26 +225,6 @@ let resolved_var_of_entry =
     | TVType (_, point) -> TResolvedType point
     | TVRow (_, point) -> TResolvedRow point
     | TVPresence (_, point) -> TResolvedPresence point
-
-
-
-let default_kind : PrimaryKind.t = PrimaryKind.Type
-let default_subkind : Subkind.t = (lin_unl, res_any)
-
-
-
-let is_anonymous_name name =
-  name.[0] = '$'
-
-let is_anonymous stv =
-  SugarTypeVar.get_unresolved_name_exn stv |> is_anonymous_name
-
-
-(** Ensure this variable has some kind, if {!infer_kinds} is disabled. *)
-let ensure_kinded = function
-  | name, (None, subkind), freedom when not (Settings.get infer_kinds) ->
-      (name, (Some pk_type, subkind), freedom)
-  | v -> v
 
 
 
@@ -342,7 +345,7 @@ object (o : 'self)
       ty
 
 
-  (* Used for Forall and Typenames *)
+  (**  Used for Forall and Typenames *)
   method quantified : 'a. SugarQuantifier.t list -> ('self -> 'self * 'a) -> 'self * SugarQuantifier.t list * 'a =
     fun unresolved_qs action ->
     let original_o = o in
@@ -509,6 +512,7 @@ object (o : 'self)
        Hence, we must re-check the free variables in the type definiton later on. *)
 
     let o = o#set_allow_implictly_bound_vars false in
+    (* Typenames must never use type variables from an outer scope *)
     let o = o#reset_vars in
 
     let o, resolved_qs, body = o#quantified unresolved_qs (fun o' -> o'#datatype' body) in
