@@ -14,9 +14,6 @@ open SourceCode
 open Sugartypes
 
 
-let internal_error message =
-  Errors.internal_error ~filename:"sugarTraversals.ml" ~message
-
 
 class map =
   object ((o : 'self_type))
@@ -89,11 +86,7 @@ class map =
            let subkind_opt' = o#option (fun o -> o#subkind) subkind_opt in
            let freedom' = o#freedom freedom in
            TUnresolved (name', subkind_opt', freedom')
-        | _ ->
-           let message =
-             "if using SugarTraverals after datatype desugaring,
-              must determine what do do with resolved type variables" in
-           raise (internal_error message)
+        | v -> o#unknown v
 
 
   method quantifier : SugarQuantifier.t -> SugarQuantifier.t =
@@ -881,11 +874,7 @@ class fold =
            let o = o#option (fun o -> o#subkind) subkind_opt in
            let o = o#freedom freedom in
            o
-        | _ ->
-           let message =
-             "if using SugarTraverals after datatype desugaring,
-              must determine what do do with resolved type variables" in
-           raise (internal_error message)
+        | v -> o#unknown v
 
    method quantifier : SugarQuantifier.t -> 'self_type =
       o#unknown
@@ -1592,11 +1581,7 @@ class fold_map =
            let o, subkind_opt' = o#option (fun o -> o#subkind) subkind_opt in
            let o, freedom' = o#freedom freedom in
            o, TUnresolved (name', subkind_opt', freedom')
-        | _ ->
-           let message =
-             "if using SugarTraverals after datatype desugaring,
-              must determine what do do with resolved type variables" in
-           raise (internal_error message)
+        | v -> o#unknown v
 
 
     method quantifier : SugarQuantifier.t -> ('self_type * SugarQuantifier.t) =

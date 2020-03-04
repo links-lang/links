@@ -300,7 +300,6 @@ let cleanup_effects tycon_env =
        in
        SourceCode.WithPos.with_node dt res_t
 
-     method! type_variable x = x
 
      method effect_row ~allow_shared (fields, var) =
        let open Datatype in
@@ -359,7 +358,7 @@ let cleanup_effects tycon_env =
 (** Gathers some information about type names, used for later analysis.
     Precondition: cleanup_effects ran on this type. *)
 let gather_mutual_info (tycon_env : simple_tycon_env) =
-  (object (o)
+  (object
      inherit SugarTraversals.fold as super
 
      val has_implicit = false
@@ -378,8 +377,6 @@ let gather_mutual_info (tycon_env : simple_tycon_env) =
      method with_implicit = {<has_implicit = true>}
 
      method with_used_type ty = {<used_types = StringSet.add ty used_types>}
-
-     method! type_variable _x = o
 
      method! datatype dt =
        let open Datatype in
@@ -440,8 +437,6 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
         in
         let o = action {<operations = mask_operations>} in
         List.fold_left (fun o sq -> o#replace sq operations) o qs
-
-      method! type_variable _x = self
 
       method add (var : SugarTypeVar.t) op =
         if TypeUtils.is_builtin_effect op || not (RowVarMap.is_relevant var)
@@ -943,8 +938,6 @@ class main_traversal simple_tycon_env =
       | b -> super#bindingnode b
 
     method super_datatype = super#datatype
-
-    method! type_variable x = (o, x)
 
     method! datatype dt =
       let pos = SourceCode.WithPos.pos dt in
