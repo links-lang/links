@@ -611,7 +611,6 @@ function
      Directive d
 
 let standalone_signature t =
-  (* We assume that the given type is for a function signature *)
   let allow_implicits = sig_allows_implicitly_bound_vars (Some (t, None)) in
   let v = new typevar_visitor StringMap.empty allow_implicits in
   snd (v#datatype t)
