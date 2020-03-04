@@ -75,7 +75,7 @@ sig
   val add : key -> 'a -> 'a t -> 'a t
   val find_opt : key -> 'a t -> 'a option
   val map : ('a -> 'b) -> 'a t -> 'b t
-  val remove : key -> 'a t -> 'a t
+  (* val remove : key -> 'a t -> 'a t *)
 
 
 
@@ -142,9 +142,9 @@ struct
   let map : ('a -> 'b) -> 'a t -> 'b t = fun f m ->
     IntMap.map f m
 
-  let remove : key -> 'a t -> 'a t = fun k m ->
-    let var = get_var k in
-    IntMap.remove var m
+  (* let remove : key -> 'a t -> 'a t = fun k m ->
+   *   let var = get_var k in
+   *   IntMap.remove var m *)
 
 
   (* functions using SugarQuantifier.t as key *)
