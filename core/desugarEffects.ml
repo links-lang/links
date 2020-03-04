@@ -24,6 +24,40 @@ let internal_error message =
 let found_non_var_meta_var =
   internal_error "Every meta_*_var in a SugarTypeVar must be a `Var at this point"
 
+
+let cannot_insert_presence_var pos op =
+  Errors.Type_error
+    (pos,
+     "To fix the kinds of the effect variable, need to insert operation "
+     ^ op ^ "here, and make it polymorphic in its presence. However, in "
+     ^ "the current context, implictly bound (presence) variables are disallowed.")
+
+
+let cannot_insert_presence_var2 pos op =
+  Errors.Type_error
+    (pos,
+     "The effect sugar requires inserting an effect row as a type argument"
+      ^ " here. This effect row uses an implicitly bound presence variable"
+      ^ " for the effect " ^ op ^ ". However, in the current context,"
+      ^ " implictly bound (presence) variables are disallowed")
+
+
+let unexpected_effects_on_abstract_op pos name =
+ Errors.Type_error
+    (pos,
+      "The abstract operation " ^ name ^ " has unexpected "
+      ^ "effects in its signature. The effect signature on an "
+      ^ "abstract operation arrow is always supposed to be empty, "
+      ^ "since any effects it might have are ultimately conferred by its handler.")
+
+
+let shared_effect_forbidden_here pos =
+  Errors.Type_error
+    (pos, "Trying to use (shared) effect variable that is implicitly bound"
+          ^ " in in context where no such implictly binding of type "
+          ^ " variables is allowed." )
+
+
 let unpack_var_id = function
   | `Var (id, subkind, _) -> id, subkind
   | _ -> raise found_non_var_meta_var
@@ -163,8 +197,6 @@ struct
 
 end
 
-let raise_unbound_tycon name pos =
-  raise (Errors.UnboundTyCon (pos, name))
 
 (** Whether this type may have an shared effect variable appear within it.
  We insert the shared effect variable at the right most candidate on any
@@ -261,14 +293,7 @@ let cleanup_effects tycon_env =
                   (* might need an extra check on recursive rows *)
                   (name, Present (SourceCode.WithPos.make ~pos (Function (domain, ([], Closed), codomain))))
                | _, _ ->
-                  raise
-                    (Errors.Type_error
-                       ( pos,
-                         "The abstract operation " ^ name ^ " has unexpected "
-                         ^ "effects in its signature. The effect signature on an "
-                         ^ "abstract operation arrow is always supposed to be empty, "
-                         ^ "since any effects it might have are ultimately conferred by its handler."
-             )) )
+                  raise (unexpected_effects_on_abstract_op pos name))
              | name, Present node when not (TypeUtils.is_builtin_effect name) ->
                 (* Elaborates `Op : a' to `Op : () {}-> a' *)
                 name, Present (SourceCode.WithPos.make ~pos:node.pos (Function ([], ([], Closed), node)))
@@ -566,7 +591,9 @@ class main_traversal simple_tycon_env =
         o, Lolli (a, e, r)
      | TypeVar stv ->
         if (not (SugarTypeVar.is_resolved stv)) then
-          raise (internal_error "All type variables (of kind Type) must have been resolved at this point");
+          raise
+            (internal_error ("All type variables (of kind Type) must have been"
+             ^ " resolved at this point"));
         o, TypeVar stv
      | TypeApplication (tycon, ts) ->
         (* We need to process the arguments for a type constructor.
@@ -658,16 +685,10 @@ class main_traversal simple_tycon_env =
                     | Some ops ->
                        StringMap.fold
                          (fun op p fields ->
-                           let concern =
-                             (Errors.Type_error
-                                (pos,
-                                 "The effect sugar requires inserting an effect row as a type argument here. "
-                                  ^ "This effect row uses an implicitly bound presence variable for the effect "
-                                  ^ op ^ ". However, in the current context, implictly bound (presence) variables are disallowed")) in
                            let mpv : Types.meta_presence_var = Lazy.force p in
                            let fieldspec = Datatype.Var (SugarTypeVar.mk_resolved_presence mpv) in
                            if not allow_implictly_bound_vars then
-                             raise concern;
+                             raise (cannot_insert_presence_var2 pos op);
                            (op, fieldspec) :: fields)
                          ops
                          []
@@ -701,9 +722,7 @@ class main_traversal simple_tycon_env =
              begin
                match shared_effect with
                | None ->
-                  raise
-                    (Errors.Type_error
-                       (dpos, "Trying to use (shared) effect variable that is implicitly bound in in context where no such implictly binding of type variables is allowed." ))
+                  raise (shared_effect_forbidden_here dpos)
                | Some s -> o, D.Open (Lazy.force s |> SugarTypeVar.mk_resolved_row)
              end
           | D.Open stv when (not (SugarTypeVar.is_resolved stv)) && is_anon stv ->
@@ -715,7 +734,10 @@ class main_traversal simple_tycon_env =
              let rtv = SugarTypeVar.mk_resolved_row mtv in
              o, D.Open rtv
           | D.Open srv when (not (SugarTypeVar.is_resolved srv)) ->
-             raise (internal_error "Encountered non-anonymous, unresolved effect variable. All such variables must have been resolved by earlier transformations.")
+             raise
+               (internal_error ("Encountered non-anonymous, unresolved effect "
+                ^ " variable. All such variables must have been resolved by "
+                ^ " earlier transformations."))
           | D.Open _ ->
              o, rv
           | D.Recursive (stv, r) ->
@@ -743,12 +765,7 @@ class main_traversal simple_tycon_env =
                  if not allow_implictly_bound_vars then
                    (* Alternatively, we could just decide not to touch the row and let the type checker
                       complain about the incompatible rows? *)
-                   raise
-                     (Errors.Type_error
-                                (dpos,
-                                 "To fix the kinds of the effect variable, need to insert operation " ^ op ^
-                                   "here, and make it polymorphic in its presence.
-                                    However, in the current context, implictly bound (presence) variables are disallowed."));
+                   raise (cannot_insert_presence_var dpos op);
                  let rpv = SugarTypeVar.mk_resolved_presence (Lazy.force pres_var)  in
                  (op, Datatype.Var rpv) :: fields
                in
