@@ -552,6 +552,8 @@ object (o : 'self)
        in
        (o, (Funs fs))
     | Val (_pat, (_qs, _body), _loc, signature) ->
+       (* For Val bindings, signature determines whether implicitly
+          bound vars are allowed *)
        let implicits_allowed = sig_allows_implicitly_bound_vars signature in
        let o = o#set_allow_implictly_bound_vars implicits_allowed in
        let o = o#set_toplevelness false in
@@ -560,6 +562,29 @@ object (o : 'self)
 
        let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
        (o, b)
+
+    | Foreign alien ->
+       (* For alien bindings, signature determines whether implicitly
+          bound vars are allowed *)
+       let handle (o, b, dt) =
+         let o, b = o#binder b in
+         let o, dt = o#datatype' dt in
+         o, (b, dt)
+       in
+       let o, declarations =
+         (* (Binder.with_pos * datatype') list *)
+         o#list
+           (fun o (b, (dt : datatype')) ->
+             let implicits_allowed = sig_allows_implicitly_bound_vars (Some dt) in
+             let o = o#set_allow_implictly_bound_vars implicits_allowed in
+             let o = o#set_toplevelness false in
+             let o, (b, dt) = apply handle (o, b, dt) in
+             let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
+             o, (b, dt))
+           (Alien.declarations alien)
+       in
+       let o, language = o#foreign_language (Alien.language alien) in
+       o, Foreign (Alien.modify ~declarations ~language alien)
     | _ ->
        let o = o#set_toplevelness false in
        apply o#super_bindingnode b
@@ -567,7 +592,7 @@ end
 
 
 let program p =
-  let v = new typevar_visitor StringMap.empty false in
+  let v = new typevar_visitor StringMap.empty true in
   snd (v#program p)
 
 
@@ -575,7 +600,7 @@ let sentence =
 
 function
   | Definitions bs ->
-     let v = new typevar_visitor StringMap.empty false in
+     let v = new typevar_visitor StringMap.empty true in
      let _, bs = v#list (fun o b -> o#binding b) bs in
      Definitions bs
   | Expression  p  ->
