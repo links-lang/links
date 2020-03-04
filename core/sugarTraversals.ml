@@ -90,11 +90,14 @@ class map =
 
 
   method quantifier : SugarQuantifier.t -> SugarQuantifier.t =
-    o#unknown
-      (* fun (_x, _x_i1, _x_i2) ->
-       *   let _x = o#name _x in
-       *   let _x_i1 = o#kind _x_i1 in
-       *   let _x_i2 = o#freedom _x_i2 in (_x, _x_i1, _x_i2) *)
+    let open SugarQuantifier in
+    function
+    | QUnresolved (name, kind, freedom) ->
+       let name' = o#name name in
+       let kind' = o#kind kind in
+       let freedom' = o#freedom freedom in
+       QUnresolved (name', kind', freedom')
+    | (QResolved _) as rq -> rq
 
 
 
@@ -877,7 +880,14 @@ class fold =
         | v -> o#unknown v
 
    method quantifier : SugarQuantifier.t -> 'self_type =
-      o#unknown
+     let open SugarQuantifier in
+     function
+     | QUnresolved (name, kind, freedom) ->
+        let o = o#name name in
+        let o = o#kind kind in
+        let o = o#freedom freedom in
+        o
+     | QResolved _  -> o
 
     method row_var : Datatype.row_var -> 'self_type =
       let open Datatype in function
@@ -1585,7 +1595,14 @@ class fold_map =
 
 
     method quantifier : SugarQuantifier.t -> ('self_type * SugarQuantifier.t) =
-      o#unknown
+      let open SugarQuantifier in
+      function
+      | QUnresolved (name, kind, freedom) ->
+         let o, name' = o#name name in
+         let o, kind' = o#kind kind in
+         let o, freedom' = o#freedom freedom in
+         o, QUnresolved (name', kind', freedom')
+      | (QResolved _) as rq -> o, rq
 
 
     method row_var : Datatype.row_var -> ('self_type * Datatype.row_var) =
