@@ -232,14 +232,14 @@ let ensure_kinded = function
 
 
 
-class typevar_visitor initial_map =
+class typevar_visitor initial_map allow_implicits =
 object (o : 'self)
   inherit SugarTraversals.fold_map as super
 
   val tyvar_map : tyvar_map = initial_map
 
   (** Allow implicitly bound type/row/presence variables in the current context? *)
-  val allow_implictly_bound_vars = true
+  val allow_implictly_bound_vars = allow_implicits
 
   (* part of legacy compatibility, remove later *)
   val at_toplevel = true
@@ -575,7 +575,7 @@ end
 
 
 let program p =
-  let v = new typevar_visitor StringMap.empty in
+  let v = new typevar_visitor StringMap.empty false in
   snd (v#program p)
 
 
@@ -583,11 +583,11 @@ let sentence =
 
 function
   | Definitions bs ->
-     let v = new typevar_visitor StringMap.empty in
+     let v = new typevar_visitor StringMap.empty false in
      let _, bs = v#list (fun o b -> o#binding b) bs in
      Definitions bs
   | Expression  p  ->
-     let v = new typevar_visitor StringMap.empty in
+     let v = new typevar_visitor StringMap.empty true in
      let _o, p = v#phrase p in
       Expression p
   | Directive   d  ->
