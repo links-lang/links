@@ -1,46 +1,8 @@
 (** Desugar datatypes converts types from their syntactic representation
    (defined in {!Sugartypes}) to the semantic one defined in {!Types}. It also
-   handles various forms of syntactic sugar within types, and translates them
-   appropriately.
-
-   The desugar pass transforms types in several passes:
-
-   1. For every top-level node (either a binder or expression), we gather all
-      free type variables, and determine their subkind (and kind if
-      [infer_kinds] is enabled). From here, we build up a mapping of type
-      variables to a corresponding {!meta_var}.
-
-   This is done by {!tyvars} and {!Desugar.generate_var_mapping}.
-
-   2. We then traverse the body of this node with these new type variables in
-      scope. For each type signature, we apply several transformations:
-
-      First ensure the effect type has the appropriate form, using
-      {!Datatype.cleanup_effects}:
-
-      1. Elaborate operators, converting the various short forms [{Op:Int}],
-         [{Op:()->Int}] into the "correct" [{Op:() {}-> Int}] form.
-
-      2. {!Datatype.remap_anon_effects}: Convert unnamed effect variables into
-         the appropriate "$eff" (the shared effect variable) or the generic "$"
-         one.
-
-      While these passes {i could} potentially be done together with later ones,
-      this initial transform makes it easier to do more complex analysis of effect
-      rows.
-
-      3. {!Datatype.gather_operations}: If the effect sugar is enabled, we now
-         attempt to do a naive form of row kind inference for effect rows. This
-         finds which operations are used on each effect row, and builds up a map
-         of operation->presence variables for that row.
-
-      4. {!Desugar.datatype}: We now finally convert the syntactic type to the
-         semantic one. This goes largely as you would expect:
-          - Named fresh variables are looked up in the environment.
-          - Unnamed type variables ("$") are mapped to fresh ones.
-          - The shared effect variable ("$eff") is mapped to the appropriate one.
-          - When visiting an effect row, we insert presence variables according
-            to the previously determined operation map. *)
+   handles some limited  forms of syntactic sugar within types, and translates
+   them appropriately.
+ *)
 
 module Transform' = Transform (* One of the modules below defines a
                                  module named 'Transform' which

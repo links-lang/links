@@ -2,13 +2,45 @@ open Utility
 open CommonTypes
 open Sugartypes
 
-(*
+(**
 
-TODO: after this, the presence variables inserted for fixing effect rows
-may violate the uniquuness coniditon for type variables,
-because we may insert the same variable twice, but they are scoped differently (TODO: rethink ?)
+This pass handles effect variables and the "effect sugar" (if enabled).
 
-*)
+This pass assumes that all type variables have been resolved expect
+anonymous row variables. All non-anonymous effect variables must have been
+resolved such that different variables use `Var Unionfind points whose integer
+ids are different.
+
+The following steps are always performed:
+
+  1. Elaborate operators in effect rows, converting the various short forms
+     [{Op:Int}], [{Op:()->Int}] into the "correct" [{Op:() {}-> Int}] form.
+
+  2. Resolve anonymous effect variables, by translating from TUnresolved
+     (from {Sugartypes.SugarTypeVar.t} to TResolvedRow. Further, report
+     error about such variables occuring in a positon where they are not
+     permitted.
+
+The following steps are only performed when effect_sugar is enabled:
+
+  1. Try a simple form of kind inference: For each effect variable, track
+     which fields occur in the row it is used (see {gather_operations}).
+     Then, for each usage of the variable, insert the missing fields as
+     being polymorphic in their presence.
+
+  2. Treat various anonymous effect variables occuring in the same type
+     as being the same variable (this is called the "implicit effect variable")
+
+  3. Typenames whose body contains an anonymous effect variable are
+     parameterized over an additional effect variable.
+     Similar, make provide the implicit effect variable as an additional
+     argument in type applications that satisfy the following conditions:
+
+     - The applied type constructor has an effect as the last parameter
+     - The type application misses exactly one argument.
+
+ *)
+
 
 (* Name used to indicate that a certain (originally anonymous) row variable
    should be replaced by a shared row variabled later on. *)
