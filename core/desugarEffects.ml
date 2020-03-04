@@ -950,7 +950,7 @@ let sentence (tycon_env : Types.tycon_environment) =
   | Directive   d  ->
      Directive d
 
-let datatype (tycon_env : Types.tycon_environment) t =
+let standalone_signature (tycon_env : Types.tycon_environment) t =
   let s_env = simplify_tycon_env tycon_env in
   let v = new main_traversal s_env in
   snd (v#datatype t)

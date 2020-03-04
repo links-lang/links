@@ -511,8 +511,8 @@ let sentence typing_env = function
 
 let read ~aliases s =
   let dt, _ = parse_string ~in_context:(LinksLexer.fresh_context ()) datatype s in
-  let dt = DesugarTypeVariables.datatype dt in
-  let dt = DesugarEffects.datatype aliases dt in
+  let dt = DesugarTypeVariables.standalone_signature dt in
+  let dt = DesugarEffects.standalone_signature aliases dt in
   let _, ty = Generalise.generalise Env.String.empty (Desugar.datatype aliases dt) in
   ty
 
