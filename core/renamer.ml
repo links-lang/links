@@ -131,7 +131,6 @@ let renaming_type_visitor instantiation_map =
          end
       | _ -> super#meta_presence_var point
 
-
   end
 
 

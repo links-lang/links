@@ -14,7 +14,6 @@ open SourceCode
 open Sugartypes
 
 
-
 class map =
   object ((o : 'self_type))
     method string : string -> string = o#unknown
