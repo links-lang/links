@@ -76,7 +76,6 @@ class map :
     method typ             : Types.datatype -> Types.datatype
     method type_row        : Types.row -> Types.row
     method tyarg           : tyarg -> tyarg
-    (* method tyvar           : tyvar -> tyvar *)
     method type_field_spec : Types.field_spec -> Types.field_spec
     method unknown         : 'a. 'a -> 'a
   end
@@ -134,11 +133,9 @@ class fold :
     method iterpatt        : iterpatt -> 'self
     method funlit          : funlit -> 'self
     method handle_params   : handler_parameterisation -> 'self
-    (* method quantifier      : quantifier -> 'self *)
     method fieldspec       : Datatype.fieldspec -> 'self
     method fieldconstraint : fieldconstraint -> 'self
     method directive       : directive -> 'self
-    (* method tyvar           : tyvar -> 'self *)
     method datatype        : Datatype.with_pos -> 'self
     method datatypenode    : Datatype.t -> 'self
     method datatype'       : datatype' -> 'self
@@ -223,7 +220,6 @@ object ('self)
   method typ             : Types.datatype -> ('self * Types.datatype)
   method type_row        : Types.row -> ('self* Types.row)
   method type_arg        : Datatype.type_arg -> 'self * Datatype.type_arg
-  (* method tyvar           : Quantifier.t -> ('self * Quantifier.t) *)
   method type_field_spec : Types.field_spec -> ('self * Types.field_spec)
   method tyarg           : Types.type_arg -> ('self * Types.type_arg)
   method tyunary_op      : tyarg list * UnaryOp.t -> 'self * (tyarg list * UnaryOp.t)
