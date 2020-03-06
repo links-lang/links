@@ -173,9 +173,8 @@ let opchar = [ '.' '!' '$' '&' '*' '+' '/' '<' '=' '>' '@' '\\' '^' '-' '|' ]
 *)
 
 rule lex ctxt nl = parse
-  | eof                                 { END }
+  | eof                                 { EOF }
   | '#' ([^ '\n'] *)                    { lex ctxt nl lexbuf }
-  | "End"                               { END }
   | ';'                                 { SEMICOLON }
   | directive_prefix (def_id as id)     { KEYWORD id}
   | '\n'                                { nl (); bump_lines lexbuf 1; lex ctxt nl lexbuf }
@@ -250,7 +249,7 @@ rule lex ctxt nl = parse
   | def_blank                           { lex ctxt nl lexbuf }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
 and starttag ctxt nl = parse
-  | eof                                 { END }
+  | eof                                 { EOF }
   | def_qname as var                    { VARIABLE var }
   | '='                                 { EQ }
   | '#' ([^ '\n'] *)                    { starttag ctxt nl lexbuf }
@@ -271,7 +270,7 @@ and xmlcomment_lex ctxt nl = parse
   | "--"                                { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
   | _                                   { xmlcomment_lex ctxt nl lexbuf }
 and xmllex ctxt nl = parse
-  | eof                                 { END }
+  | eof                                 { EOF }
   | "<!--"                              { xmlcomment_lex ctxt nl lexbuf }
   | "{{"                                { CDATA "{" }
   | "}}"                                { CDATA "}" }
@@ -290,7 +289,7 @@ and xmllex ctxt nl = parse
                                           ctxt#push_lexer (starttag ctxt nl); LXML var }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
 and attrlex ctxt nl = parse
-  | eof                                 { END }
+  | eof                                 { EOF }
   | '"'                                 { (* fall back *)
                                           ctxt#pop_lexer; RQUOTE }
   | '{'                                 { (* scan the expression, then back here *)
@@ -298,7 +297,7 @@ and attrlex ctxt nl = parse
   | [^ '{' '"']* as string              { bump_lines lexbuf (count_newlines string); STRING string }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
 and regex' ctxt nl = parse
-  | eof                                 { END }
+  | eof                                 { EOF }
   | '/'                                 { ctxt#push_lexer (regex ctxt nl); SLASH }
   | "s/"                                { ctxt#push_lexer (regexrepl ctxt nl); (* push twice is intentional *)
                       ctxt#push_lexer (regexrepl ctxt nl);
@@ -308,7 +307,7 @@ and regex' ctxt nl = parse
   | '\n'                                { nl (); bump_lines lexbuf 1; regex' ctxt nl lexbuf }
   | def_blank                           { regex' ctxt nl lexbuf }
 and regex ctxt nl = parse
-  | eof                                 { END }
+  | eof                                 { EOF }
   | '/'                                 { ctxt#pop_lexer; ctxt#pop_lexer; SLASH }
   | '/' (regex_flags as f)              { ctxt#pop_lexer; ctxt#pop_lexer; SLASHFLAGS (f) }
   | '.'                                 { DOT }
@@ -328,7 +327,7 @@ and regex ctxt nl = parse
   | def_blank                           { regex ctxt nl lexbuf }
   | (_ as c)                            { STRING (String.make 1 c) }
 and regexrepl ctxt nl = parse
-  | eof                                 { END }
+  | eof                                 { EOF }
   | regexrepl_fsa as var                { REGEXREPL(var) }
   | '{'                                 { (* scan the expression, then back here *)
                                           ctxt#push_lexer (lex ctxt nl); LBRACE }

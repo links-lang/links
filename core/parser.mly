@@ -244,7 +244,7 @@ let parse_foreign_language pos lang =
 
 %}
 
-%token END
+%token EOF
 %token EQ IN
 %token FUN LINFUN FROZEN_FUN FROZEN_LINFUN RARROW LOLLI FATRARROW VAR OP
 %token SQUIGRARROW SQUIGLOLLI TILDE
@@ -333,12 +333,12 @@ interactive:
 | SEMICOLON                                                    { Definitions []   }
 | exp SEMICOLON                                                { Expression $1    }
 | directive                                                    { Directive $1     }
-| END                                                          { Directive ("quit", []) (* rather hackish *) }
+| EOF                                                          { Directive ("quit", []) (* rather hackish *) }
 
 file:
-| END                                                          { ([], None) }
-| declarations exp? END                                        { ($1, $2     ) }
-| exp END                                                      { ([], Some $1) }
+| EOF                                                          { ([], None) }
+| declarations exp? EOF                                        { ($1, $2     ) }
+| exp EOF                                                      { ([], Some $1) }
 
 directive:
 | KEYWORD args SEMICOLON                                       { ($1, $2) }
@@ -854,7 +854,7 @@ labeled_exps:
  * Datatype grammar
  */
 just_datatype:
-| datatype END                                                 { $1 }
+| datatype EOF                                                 { $1 }
 
 datatype:
 | mu_datatype | straight_arrow | squiggly_arrow                { with_pos $loc $1 }
@@ -922,7 +922,6 @@ session_datatype:
 | QUESTION primary_datatype_pos DOT datatype                   { Datatype.Input  ($2, $4) }
 | LBRACKETPLUSBAR row BARPLUSRBRACKET                          { Datatype.Select $2       }
 | LBRACKETAMPBAR row BARAMPRBRACKET                            { Datatype.Choice $2       }
-| END                                                          { Datatype.End             }
 | primary_datatype                                             { $1                       }
 | qualified_type_name                                          { Datatype.QualifiedTypeApplication ($1, []) }
 | qualified_type_name LPAREN type_arg_list RPAREN              { Datatype.QualifiedTypeApplication ($1, $3) }
@@ -956,6 +955,7 @@ primary_datatype:
                                                                    | "XmlItem" -> Primitive Primitive.XmlItem
                                                                    | "String"  -> Primitive Primitive.String
                                                                    | "Database"-> DB
+                                                                   | "End"     -> Datatype.End
                                                                    | t         -> TypeApplication (t, [])
                                                                }
 | CONSTRUCTOR LPAREN type_arg_list RPAREN                      { Datatype.TypeApplication ($1, $3) }
