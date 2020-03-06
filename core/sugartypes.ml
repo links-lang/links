@@ -57,9 +57,6 @@ end = struct
       )
 end
 
-(* type variables *)
-(* type tyvar = Quantifier.t *)
-  [@@deriving show]
 type tyarg = Types.type_arg
   [@@deriving show]
 
@@ -76,14 +73,6 @@ let default_effect_subkind : Subkind.t = (lin_unl, res_any)
 type kind = PrimaryKind.t option * Subkind.t option
     [@@deriving show]
 
-
-(* type variable of primary kind Type? *)
-
-type type_variable = Name.t * kind * Freedom.t
-    [@@deriving show]
-
-type quantifier = type_variable
-  [@@deriving show]
 
 
 module SugarTypeVar =
