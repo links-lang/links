@@ -77,3 +77,9 @@ stdout : [1, 2, 4, 8] : [Int]
 List concatenation
 1 :: [] ++ [] ++ 2 :: 3 :: 4 :: [] ++ 5 :: []
 stdout : [1, 2, 3, 4, 5] : [Int]
+
+Fixity tests
+./fixity.links
+filemode : true
+stdout : () : ()
+args : --path=tests/

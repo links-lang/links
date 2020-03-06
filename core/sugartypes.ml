@@ -395,7 +395,9 @@ and bindingnode =
   | Import of { pollute: bool; path : Name.t list }
   | Open of Name.t list
   | Typenames of typename list
-  | Infix
+  | Infix   of { assoc: Associativity.t;
+                 precedence: int;
+                 name: string }
   | Exp     of phrase
   | Module  of { binder: Binder.with_pos; members: binding list }
   | AlienBlock of Alien.multi Alien.t
@@ -643,8 +645,10 @@ struct
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
     | Import _
     | Open _
-    | Typenames _
-    | Infix -> empty, empty
+    | Typenames _ -> empty, empty
+    (* This is technically a declaration, thus the name should
+       probably be treated as bound rather than free. *)
+    | Infix { name; _ } -> empty, singleton name
     | Exp p -> empty, phrase p
     | Foreign alien ->
        let bound_foreigns =

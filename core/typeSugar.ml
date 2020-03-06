@@ -152,7 +152,7 @@ struct
     | Module _
     | Fun _
     | Funs _
-    | Infix
+    | Infix _
     | Typenames _
     | Foreign _ -> true
     | Exp p -> is_pure p
@@ -4599,7 +4599,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                 | None -> raise (internal_error "typeSugar.ml: unannotated type")
           ) empty_context ts in
           (Typenames ts, env, Usage.empty)
-      | Infix -> Infix, empty_context, Usage.empty
+      | Infix def -> Infix def, empty_context, Usage.empty
       | Exp e ->
           let e = tc e in
           let () = unify pos ~handle:Gripers.bind_exp

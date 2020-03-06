@@ -38,109 +38,9 @@ open Utility
 open Parser
 open Operators
 
-(* Constructors are not first class in OCaml *)
-let infix0  x = INFIX0  x
-let infixl0 x = INFIXL0 x
-let infixr0 x = INFIXR0 x
-let infix1  x = INFIX1  x
-let infixl1 x = INFIXL1 x
-let infixr1 x = INFIXR1 x
-let infix2  x = INFIX2  x
-let infixl2 x = INFIXL2 x
-let infixr2 x = INFIXR2 x
-let infix3  x = INFIX3  x
-let infixl3 x = INFIXL3 x
-let infixr3 x = INFIXR3 x
-let infix4  x = INFIX4  x
-let infixl4 x = INFIXL4 x
-let infixr4 x = INFIXR4 x
-let infix5  x = INFIX5  x
-let infixl5 x = INFIXL5 x
-let infixr5 x = INFIXR5 x
-let infix6  x = INFIX6  x
-let infixl6 x = INFIXL6 x
-let infixr6 x = INFIXR6 x
-let infix7  x = INFIX7  x
-let infixl7 x = INFIXL7 x
-let infixr7 x = INFIXR7 x
-let infix8  x = INFIX8  x
-let infixl8 x = INFIXL8 x
-let infixr8 x = INFIXR8 x
-let infix9  x = INFIX9  x
-let infixl9 x = INFIXL9 x
-let infixr9 x = INFIXR9 x
-let prefix  x = PREFIXOP x
-let postfix x = POSTFIXOP x
-
-let precs =
-  [
-    infix0, infixl0, infixr0;
-    infix1, infixl1, infixr1;
-    infix2, infixl2, infixr2;
-    infix3, infixl3, infixr3;
-    infix4, infixl4, infixr4;
-    infix5, infixl5, infixr5;
-    infix6, infixl6, infixr6;
-    infix7, infixl7, infixr7;
-    infix8, infixl8, infixr8;
-    infix9, infixl9, infixr9;
-  ]
-
-let initial_optable =
-(* lifted from the definition of Haskell *)
-  [
-    "!"  , infix9;
-
-    "^"  , infixr8;
-    "^^" , infixr8;
-    "**" , infixr8;
-
-    "*"  , infixl7;
-    "/"  , infixl7;
-    "+"  , infixl6;
-    "*." , infixl7;
-    "/." , infixl7;
-    "+." , infixl6;
-
-    "-"  , infixl6;
-    ".-" , infixl6;
-
-    "::" , infixr5;
-    "++" , infixr5;
-
-    "==" , infix4;
-    "<>" , infix4;
-    "<"  , infix4;
-    "<=" , infix4;
-    ">=" , infix4;
-    ">"  , infix4;
-
-    "&&" , infixr3;
-
-    "||" , infixr2;
-    ">>" , infixl1;
-  ]
-
-let default_precedence = infixl9
-
 class lexer_context =
 object
-  val mutable optable = initial_optable
   val          lexers = Stack.create ()
-
-  method precedence name =
-    try List.assoc name optable name
-    with NotFound _ -> default_precedence name
-
-  method setprec (assoc : Associativity.t) level name =
-    let value = match List.nth precs level, assoc with
-      | (a,_,_), Associativity.None -> a
-      | (_,a,_), Associativity.Left -> a
-      | (_,_,a), Associativity.Right -> a
-      | _,       Associativity.Pre -> prefix
-      | _,       Associativity.Post -> postfix
-    in
-      optable <- (name, value) :: optable
 
   method push_lexer (lexer : Lexing.lexbuf -> Parser.token) =
     Stack.push lexer lexers
@@ -326,21 +226,21 @@ rule lex ctxt nl = parse
   | '@'                                 { AT }
   | "%" def_id as var                   { PERCENTVAR var }
   | '%'                                 { PERCENT }
-  | initopchar opchar * as op           { ctxt#precedence op }
+  | initopchar opchar * as op           { OPERATOR op }
   | '`' (def_id as var) '`'             { if List.mem_assoc var keywords || Char.isUpper var.[0] then
                                               raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf))
-                                          else ctxt#precedence var }
+                                          else OPERATOR var }
   | "'" (char_contents as c) "'"        { let c' = decode_escapes c in
                                             if String.length c' = 1 then CHAR (c'.[0])
                                             else raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
   | def_integer as var                  { UINTEGER (int_of_string var) }
   | def_float as var                    { UFLOAT (float_of_string var) }
   | ('\"' (string_contents as var) '\"'){ STRING (decode_escapes var) }
-  | "infix"                             { INFIX ctxt#setprec }
-  | "infixl"                            { INFIXL ctxt#setprec }
-  | "infixr"                            { INFIXR ctxt#setprec }
-  | "prefix"                            { PREFIX ctxt#setprec }
-  | "postfix"                           { POSTFIX ctxt#setprec }
+  | "infix"                             { FIXITY Associativity.None }
+  | "infixl"                            { FIXITY Associativity.Left }
+  | "infixr"                            { FIXITY Associativity.Right }
+  | "prefix"                            { FIXITY Associativity.Right }
+  | "postfix"                           { FIXITY Associativity.Left }
   | "~fun"                              { FROZEN_FUN }
   | "~linfun"                           { FROZEN_LINFUN }
   | def_id as var                       { try List.assoc var keywords

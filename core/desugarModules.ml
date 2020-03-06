@@ -280,6 +280,12 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
       self#bind_term name name';
       Binder.set_name bndr name'
 
+    method fixity : string -> string
+      = fun name ->
+      let name' = if toplevel then Epithet.expand renamer name else name in
+      self#bind_term name name';
+      name'
+
     method bind_term name name' =
       scope <- Scope.Extend.var name name' scope
 
@@ -483,6 +489,8 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
              Alien.(declarations aliendecls)
          in
          AlienBlock (Alien.modify ~declarations:decls' aliendecls)
+      | Infix { name; assoc; precedence } ->
+         Infix { name = self#fixity name; assoc; precedence }
       | Module _ | Import _ | Open _ -> assert false (* Should have been processed by this point. *)
       | b -> super#bindingnode b
 
