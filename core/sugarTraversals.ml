@@ -89,15 +89,15 @@ class map =
         | v -> o#unknown v
 
 
-  method quantifier : SugarQuantifier.t -> SugarQuantifier.t =
-    let open SugarQuantifier in
-    function
-    | QUnresolved (name, kind, freedom) ->
-       let name' = o#name name in
-       let kind' = o#kind kind in
-       let freedom' = o#freedom freedom in
-       QUnresolved (name', kind', freedom')
-    | (QResolved _) as rq -> rq
+    method quantifier : SugarQuantifier.t -> SugarQuantifier.t =
+      let open SugarQuantifier in
+      function
+      | QUnresolved (name, kind, freedom) ->
+         let name' = o#name name in
+         let kind' = o#kind kind in
+         let freedom' = o#freedom freedom in
+         QUnresolved (name', kind', freedom')
+      | (QResolved _) as rq -> rq
 
 
 
