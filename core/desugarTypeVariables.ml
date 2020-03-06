@@ -23,9 +23,6 @@ open Utility
 open Sugartypes
 
 
-type kinded_type_variable = Name.t * Sugartypes.kind * Freedom.t
-  [@@deriving show]
-
 type tyvar_map_entry =
   | TVUnkinded of Subkind.t option * Freedom.t
   | TVType     of Subkind.t option * Types.meta_type_var
@@ -59,14 +56,21 @@ let internal_error message =
 let found_non_var_meta_var =
   internal_error "Every meta_*_var in a SugarTypeVar must be a `Var at this point"
 
-let typevar_mismatch pos (v1 : kinded_type_variable) (v2 : kinded_type_variable) =
+let typevar_mismatch pos v1 v2 =
+  let string_of_kinded_type_var (name, (kind, subkind), _freedom)  =
+    match kind with
+    | None -> name
+    | Some kind ->
+       let subkind = OptionUtils.opt_app Subkind.to_string "" subkind in
+       name ^ "::" ^ PrimaryKind.to_string kind ^ subkind
+  in
   let var, _, _ = v1 in
   Errors.Type_error
     ( pos,
       Printf.sprintf "Mismatch in kind for type variable `%s'.\n" var
       ^ Printf.sprintf "  Declared as `%s' and `%s'."
-          (show_kinded_type_variable v1)
-          (show_kinded_type_variable v2))
+          (string_of_kinded_type_var v1)
+          (string_of_kinded_type_var v2))
 
 let duplicate_var pos var =
   Errors.Type_error (pos, Printf.sprintf "Multiple definitions of type variable `%s'." var)

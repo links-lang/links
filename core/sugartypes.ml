@@ -179,13 +179,6 @@ end
 
 let rigidify (name, kind, _) = (name, kind, `Rigid)
 
-let string_of_type_variable (_v : SugarTypeVar.t) =
-  failwith "fixme"
-  (* match kind with
-   * | None -> var
-   * | Some kind ->
-   *    let subkind = OptionUtils.opt_app Subkind.to_string "" subkind in
-   *    var ^ "::" ^ PrimaryKind.to_string kind ^ subkind *)
 
 type fieldconstraint = Readonly | Default
     [@@deriving show]
