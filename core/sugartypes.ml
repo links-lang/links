@@ -78,7 +78,6 @@ type kind = PrimaryKind.t option * Subkind.t option
 module SugarTypeVar =
 struct
 
-
 (* Note that an unresolved type variable does not contain information
    about its primary kind. This is filled in when resolving the variable *)
 type t =
