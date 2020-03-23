@@ -40,7 +40,7 @@ module type SugarConstructorsSig = sig
   val with_dummy_pos : 'a -> 'a WithPos.t
 
   (* Fresh type variables. *)
-  val fresh_known_type_variable  : Freedom.t -> known_type_variable
+  val fresh_type_variable  : Freedom.t -> SugarTypeVar.t
 
   (* Helper data types and functions for passing arguments to smart
      constructors.  *)
@@ -110,7 +110,7 @@ module type SugarConstructorsSig = sig
      -> ((DeclaredLinearity.t * bool) * Name.t * Pattern.with_pos list list * Location.t * phrase)
      -> binding
   val fun_binding'
-      : ?ppos:t -> ?linearity:DeclaredLinearity.t -> ?tyvars:tyvar list
+      : ?ppos:t -> ?linearity:DeclaredLinearity.t -> ?tyvars:SugarQuantifier.t list
      -> ?location:Location.t -> ?annotation:datatype'
      -> Binder.with_pos -> funlit
      -> binding

@@ -59,7 +59,7 @@ object ('self)
   method funlit          : Types.row -> funlit -> 'self * funlit * Types.datatype
   method iterpatt        : iterpatt -> 'self * iterpatt
 
-  method quantifiers     : Quantifier.t list -> 'self * Quantifier.t list
+  method quantifiers     : SugarQuantifier.t list -> 'self * SugarQuantifier.t list
   method backup_quantifiers : Utility.IntSet.t
   method restore_quantifiers : Utility.IntSet.t -> 'self
 

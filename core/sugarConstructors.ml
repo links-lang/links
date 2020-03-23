@@ -25,9 +25,10 @@ module SugarConstructors (Position : Pos)
 
   let type_variable_counter = ref 0
 
-  let fresh_known_type_variable freedom : known_type_variable =
+  let fresh_type_variable freedom : SugarTypeVar.t =
     incr type_variable_counter;
-    ("_" ^ string_of_int (!type_variable_counter), None, freedom)
+    let name = "_" ^ string_of_int (!type_variable_counter) in
+    SugarTypeVar.mk_unresolved name None freedom
 
   (** Helper data types and functions for passing arguments to smart
       constructors. *)

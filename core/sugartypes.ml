@@ -5,6 +5,9 @@ open Utility
 
 (** The syntax tree created by the parser. *)
 
+let internal_error message =
+  Errors.internal_error ~filename:"sugartypes.ml" ~message
+
 module Binder: sig
   type t
   and with_pos = t WithPos.t
@@ -54,9 +57,6 @@ end = struct
       )
 end
 
-(* type variables *)
-type tyvar = Quantifier.t
-  [@@deriving show]
 type tyarg = Types.type_arg
   [@@deriving show]
 
@@ -73,36 +73,124 @@ let default_effect_subkind : Subkind.t = (lin_unl, res_any)
 type kind = PrimaryKind.t option * Subkind.t option
     [@@deriving show]
 
-type type_variable = Name.t * kind * Freedom.t
-    [@@deriving show]
 
-(* type variable of primary kind Type? *)
-type known_type_variable = Name.t * Subkind.t option * Freedom.t
-    [@@deriving show]
 
-type quantifier = type_variable
-  [@@deriving show]
+module SugarTypeVar =
+struct
+
+(* Note that an unresolved type variable does not contain information
+   about its primary kind. This is filled in when resolving the variable *)
+type t =
+  | TUnresolved       of Name.t * Subkind.t option * Freedom.t
+  (* This is why we can't have nice things ... *)
+  | TResolvedType     of Types.meta_type_var
+  | TResolvedRow      of Types.meta_row_var
+  | TResolvedPresence of Types.meta_presence_var
+     [@@deriving show]
+
+
+let is_resolved = function
+  | TUnresolved _ -> false
+  | _ -> true
+
+let mk_unresolved name subkind_opt freedom_opt =
+  TUnresolved (name, subkind_opt, freedom_opt)
+
+let mk_resolved_tye point : t =
+  TResolvedType point
+
+let mk_resolved_row point : t =
+  TResolvedRow point
+
+let mk_resolved_presence point : t =
+  TResolvedPresence point
+
+
+let get_unresolved_exn = function
+  | TUnresolved (name, subkind, freedom) ->
+     name, subkind, freedom
+  | _ ->
+     raise
+       (internal_error
+          "Requesting unresolved type var when
+           it has already been resolved")
+
+let get_unresolved_name_exn =
+  get_unresolved_exn ->- fst3
+
+ let get_resolved_type_exn =
+   function
+   | TResolvedType point -> point
+   | _ -> raise (internal_error "requested kind does not match existing kind info")
+
+let get_resolved_row_exn =
+  function
+  | TResolvedRow point -> point
+  | _ -> raise (internal_error "requested kind does not match existing kind info")
+
+let get_resolved_presence_exn =
+  function
+  | TResolvedPresence point -> point
+  | _ -> raise (internal_error "requested kind does not match existing kind info")
+
+
+end
+
+
+module SugarQuantifier =
+struct
+
+  type t =
+    | QUnresolved of Name.t * kind * Freedom.t
+    | QResolved of Quantifier.t
+      [@@deriving show]
+
+
+  let mk_unresolved name kind freedom =
+    QUnresolved (name, kind, freedom)
+
+  let mk_resolved quantifier =
+    QResolved quantifier
+
+
+  let get_unresolved_exn = function
+    | QUnresolved (name, kind, freedom) -> name, kind, freedom
+    | QResolved _q ->
+       raise
+         (internal_error
+            "Requesting unresolved quantifier when
+             it has already been resolved")
+
+ let get_unresolved_name_exn =
+   get_unresolved_exn ->- fst3
+
+
+  let get_resolved_exn = function
+    | QResolved q -> q
+    | QUnresolved _ ->
+       raise
+         (internal_error
+            "Requesting resolved type var before
+             it has been resolved")
+
+end
+
+
 
 let rigidify (name, kind, _) = (name, kind, `Rigid)
 
-let string_of_type_variable ((var, (kind, subkind), _) : type_variable) =
-  match kind with
-  | None -> var
-  | Some kind ->
-     let subkind = OptionUtils.opt_app Subkind.to_string "" subkind in
-     var ^ "::" ^ PrimaryKind.to_string kind ^ subkind
 
 type fieldconstraint = Readonly | Default
     [@@deriving show]
 
 module Datatype = struct
   type t =
-    | TypeVar         of known_type_variable
+    | TypeVar         of SugarTypeVar.t
     | QualifiedTypeApplication of Name.t list * type_arg list
     | Function        of with_pos list * row * with_pos
     | Lolli           of with_pos list * row * with_pos
-    | Mu              of Name.t * with_pos
-    | Forall          of quantifier list * with_pos
+    | Mu              of SugarTypeVar.t * with_pos
+    | Forall          of SugarQuantifier.t list * with_pos
     | Unit
     | Tuple           of with_pos list
     | Record          of row
@@ -123,12 +211,12 @@ module Datatype = struct
   and row = (string * fieldspec) list * row_var
   and row_var =
     | Closed
-    | Open of known_type_variable
-    | Recursive of Name.t * row
+    | Open of SugarTypeVar.t
+    | Recursive of SugarTypeVar.t * row
   and fieldspec =
     | Present of with_pos
     | Absent
-    | Var of known_type_variable
+    | Var of SugarTypeVar.t
   and type_arg =
     | Type of with_pos
     | Row of row
@@ -329,7 +417,7 @@ and phrasenode =
   | Regex            of regex
   | UnaryAppl        of (tyarg list * UnaryOp.t) * phrase
   | FnAppl           of phrase * phrase list
-  | TAbstr           of tyvar list * phrase
+  | TAbstr           of SugarQuantifier.t list * phrase
   | TAppl            of phrase * type_arg' list
   | TupleLit         of phrase list
   | RecordLit        of (Name.t * phrase) list * phrase option
@@ -387,7 +475,7 @@ and phrasenode =
   | Raise
 and phrase = phrasenode WithPos.t
 and bindingnode =
-  | Val     of Pattern.with_pos * (tyvar list * phrase) * Location.t *
+  | Val     of Pattern.with_pos * (SugarQuantifier.t list * phrase) * Location.t *
                  datatype' option
   | Fun     of function_definition
   | Funs    of recursive_function list
@@ -415,12 +503,12 @@ and cp_phrasenode =
   | CPLink        of Binder.with_pos * Binder.with_pos
   | CPComp        of Binder.with_pos * cp_phrase * cp_phrase
 and cp_phrase = cp_phrasenode WithPos.t
-and typenamenode = (Name.t * (quantifier * tyvar option) list * datatype')
+and typenamenode = Name.t * SugarQuantifier.t list * datatype'
 and typename = typenamenode WithPos.t
 and function_definition = {
     fun_binder: Binder.with_pos;
     fun_linearity: DeclaredLinearity.t;
-    fun_definition: tyvar list * funlit;
+    fun_definition: SugarQuantifier.t list * funlit;
     fun_location: Location.t;
     fun_signature: datatype' option;
     fun_unsafe_signature: bool;
@@ -429,7 +517,7 @@ and function_definition = {
 and recursive_functionnode = {
     rec_binder: Binder.with_pos;
     rec_linearity: DeclaredLinearity.t;
-    rec_definition: (tyvar list * (Types.datatype * int option list) option) * funlit;
+    rec_definition: (SugarQuantifier.t list * (Types.datatype * int option list) option) * funlit;
     rec_location: Location.t;
     rec_signature: datatype' option;
     rec_unsafe_signature: bool;
@@ -452,7 +540,7 @@ type program = binding list * phrase option
 
 exception ConcreteSyntaxError       of (Position.t * string)
 
-let tabstr : tyvar list * phrasenode -> phrasenode = fun (tyvars, e) ->
+let tabstr : SugarQuantifier.t list * phrasenode -> phrasenode = fun (tyvars, e) ->
   match tyvars with
     | [] -> e
     | _  -> TAbstr (tyvars, WithPos.make e)
@@ -461,8 +549,11 @@ let tappl : phrasenode * tyarg list -> phrasenode = fun (e, tys) ->
   match tys with
     | [] -> e
     | _  ->
+       let tv = SugarTypeVar.mk_unresolved "$none" None `Rigid in
        let make_arg ty =
-         (Datatype.Type (WithPos.make (Datatype.TypeVar ("$none", None, `Rigid))), Some ty)
+         (Datatype.Type
+            (WithPos.make (Datatype.TypeVar tv)),
+          Some ty)
        in
        TAppl (WithPos.make e, List.map make_arg tys)
 
@@ -470,8 +561,9 @@ let tappl' : phrase * tyarg list -> phrasenode = fun (e, tys) ->
   match tys with
     | [] -> WithPos.node e
     | _  ->
+       let tv = SugarTypeVar.mk_unresolved "$none" None `Rigid in
        let make_arg ty =
-         (Datatype.Type (WithPos.make (Datatype.TypeVar ("$none", None, `Rigid))), Some ty)
+         Datatype.Type (WithPos.make (Datatype.TypeVar tv)), Some ty
        in
        TAppl (e, List.map make_arg tys)
 

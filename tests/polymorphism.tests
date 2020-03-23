@@ -158,3 +158,38 @@ Varying arities of foralls (2)
 (~id) : forall a::Any. forall e::Row. forall b. (a) -e-> a
 exit : 1
 stderr : @.*Type error:.*
+
+Signatures (fun): free variable on parameter without sig (1)
+fun f(x : a) {x} f
+exit : 0
+stdout : fun : (a) -> a
+
+Signatures (fun): free variable in body without sig (2)
+fun f(x) {x : a} f
+exit : 0
+stdout : fun : (a) -> a
+
+Signatures (fun): free variable on parameeter with unquantified sig (3)
+sig f : (a) -> a fun f(x : a) {x} f
+exit : 0
+stdout : fun : (a) -> a
+
+Signatures (fun): free variable on parameter with quantified sig (4)
+sig f : forall a. (a) -> a fun f(x : a) {x} f
+exit : 1
+stderr : @.*Type error:.*
+
+Signatures (fun): free variable on body with quantified sig (5)
+sig f : forall a. (a) -> a fun f(x) {x : a} f
+exit : 1
+stderr : @.*Type error:.*
+
+Signatures (var): free variable in body, no sig (6)
+fun f(x) {x}     var x = f : ((a) -> a); x
+exit : 0
+stdout : fun : (a) -> a
+
+Signatures (var): free variable in body, quantified sig (7)
+fun f(x) {x}     sig x : forall a. (a) -> a var x = f : ((a) -> a); x
+exit : 1
+stderr : @.*Type error:.*

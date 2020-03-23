@@ -17,6 +17,12 @@ module TypeVarMap : Utility.INTMAP
 (* points *)
 type 'a point = 'a Unionfind.point
 
+(* A "type" variable in the broadest sense,
+   meaning that it is used for type, row, and presence variables *)
+type type_var =
+ [ `Var of (int * Subkind.t * Freedom.t)]
+
+
 type 't meta_type_var_non_rec_basis =
     [ `Var of (int * Subkind.t * Freedom.t)
     | `Body of 't ]
@@ -367,6 +373,10 @@ val make_thunk_type : row -> datatype -> datatype
 
 val pp_datatype : Format.formatter -> datatype -> unit
 val pp_tycon_spec: Format.formatter -> tycon_spec -> unit
+
+(* Recursive type applications *)
+val recursive_applications : datatype -> string list
+
 
 module type TYPE_VISITOR =
 sig

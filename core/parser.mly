@@ -129,21 +129,29 @@ let subkind_of p =
   | "Eff"     -> Some (lin_unl, res_effect)
   | sk        -> raise (ConcreteSyntaxError (pos p, "Invalid subkind: " ^ sk))
 
-let attach_kind (t, k) = (t, k, `Rigid)
+let named_quantifier name kind freedom = SugarQuantifier.mk_unresolved name kind freedom
+
+let attach_kind (t, k) = SugarQuantifier.mk_unresolved t k `Rigid
 
 let attach_subkind_helper update sk = update sk
 
 let attach_subkind (t, subkind) =
   let update sk =
     match t with
-    | Datatype.TypeVar (x, _, freedom) -> Datatype.TypeVar (x, sk, freedom)
+    | Datatype.TypeVar stv ->
+       let (x, _, freedom) = SugarTypeVar.get_unresolved_exn stv in
+       let stv' = SugarTypeVar.mk_unresolved x sk freedom in
+       Datatype.TypeVar stv'
     | _ -> assert false
   in attach_subkind_helper update subkind
 
 let attach_row_subkind (r, subkind) =
   let update sk =
     match r with
-    | Datatype.Open (x, _, freedom) -> Datatype.Open (x, sk, freedom)
+    | Datatype.Open stv ->
+       let (x, _, freedom) = SugarTypeVar.get_unresolved_exn stv in
+       let stv' = SugarTypeVar.mk_unresolved x sk freedom in
+       Datatype.Open stv'
     | _ -> assert false
   in attach_subkind_helper update subkind
 
@@ -161,8 +169,17 @@ let parseRegexFlags f =
               | 'g' -> RegexGlobal
               | _ -> assert false) (asList f 0 [])
 
-let fresh_typevar freedom = ("$", None, freedom)
-let fresh_effects = ([], Datatype.Open ("$eff", None, `Rigid))
+
+
+let named_typevar name freedom : SugarTypeVar.t =
+  SugarTypeVar.mk_unresolved name None freedom
+
+let fresh_typevar freedom : SugarTypeVar.t =
+  named_typevar "$" freedom
+
+let fresh_effects =
+  let stv = SugarTypeVar.mk_unresolved "$eff" None `Rigid in
+  ([], Datatype.Open stv)
 
 module MutualBindings = struct
 
@@ -454,8 +471,8 @@ subkind:
 | COLONCOLON CONSTRUCTOR                                       { subkind_of $loc($2) $2     }
 
 typearg:
-| VARIABLE                                                     { (($1, (None, None), `Rigid), None) }
-| VARIABLE kind                                                { (attach_kind ($1, $2), None)        }
+| VARIABLE                                                     { (named_quantifier $1 (None, None) `Rigid) }
+| VARIABLE kind                                                { attach_kind ($1, $2)                            }
 
 varlist:
 | separated_nonempty_list(COMMA, typearg)                      { $1 }
@@ -894,11 +911,11 @@ squiggly_arrow:
 | parenthesized_datatypes SQUIGLOLLI datatype                  { Datatype.Lolli    ($1, row_with_wp fresh_effects, $3) }
 
 mu_datatype:
-| MU VARIABLE DOT mu_datatype                                  { Datatype.Mu ($2, with_pos $loc($4) $4) }
+| MU VARIABLE DOT mu_datatype                                  { Datatype.Mu (named_typevar $2 `Rigid, with_pos $loc($4) $4) }
 | forall_datatype                                              { $1 }
 
 forall_datatype:
-| FORALL varlist DOT datatype                                  { Datatype.Forall (labels $2, $4) }
+| FORALL varlist DOT datatype                                  { Datatype.Forall ($2, $4) }
 | session_datatype                                             { $1 }
 
 /* Parenthesised dts disambiguate between sending qualified types and recursion variables.
@@ -961,8 +978,8 @@ primary_datatype:
 | CONSTRUCTOR LPAREN type_arg_list RPAREN                      { Datatype.TypeApplication ($1, $3) }
 
 type_var:
-| VARIABLE                                                     { Datatype.TypeVar ($1, None, `Rigid)    }
-| PERCENTVAR                                                   { Datatype.TypeVar ($1, None, `Flexible) }
+| VARIABLE                                                     { Datatype.TypeVar (named_typevar $1  `Rigid)   }
+| PERCENTVAR                                                   { Datatype.TypeVar (named_typevar $1 `Flexible) }
 | UNDERSCORE                                                   { Datatype.TypeVar (fresh_typevar `Rigid)    }
 | PERCENT                                                      { Datatype.TypeVar (fresh_typevar `Flexible) }
 
@@ -1052,14 +1069,14 @@ fieldspec:
 | LBRACE COLON datatype RBRACE                                 { Datatype.Present $3 }
 | MINUS                                                        { Datatype.Absent }
 | LBRACE MINUS RBRACE                                          { Datatype.Absent }
-| LBRACE VARIABLE RBRACE                                       { Datatype.Var ($2, None, `Rigid) }
-| LBRACE PERCENTVAR RBRACE                                     { Datatype.Var ($2, None, `Flexible) }
+| LBRACE VARIABLE RBRACE                                       { Datatype.Var (named_typevar $2 `Rigid) }
+| LBRACE PERCENTVAR RBRACE                                     { Datatype.Var (named_typevar $2 `Flexible) }
 | LBRACE UNDERSCORE RBRACE                                     { Datatype.Var (fresh_typevar `Rigid)    }
 | LBRACE PERCENT RBRACE                                        { Datatype.Var (fresh_typevar `Flexible) }
 
 nonrec_row_var:
-| VARIABLE                                                     { Datatype.Open ($1, None, `Rigid   ) }
-| PERCENTVAR                                                   { Datatype.Open ($1, None, `Flexible) }
+| VARIABLE                                                     { Datatype.Open (named_typevar $1 `Rigid   ) }
+| PERCENTVAR                                                   { Datatype.Open (named_typevar $1 `Flexible) }
 | UNDERSCORE                                                   { Datatype.Open (fresh_typevar `Rigid)    }
 | PERCENT                                                      { Datatype.Open (fresh_typevar `Flexible) }
 
@@ -1069,7 +1086,7 @@ nonrec_row_var:
  */
 row_var:
 | nonrec_row_var                                               { $1 }
-| LPAREN MU VARIABLE DOT vfields RPAREN                        { Datatype.Recursive ($3, $5) }
+| LPAREN MU VARIABLE DOT vfields RPAREN                        { Datatype.Recursive (named_typevar $3 `Rigid, $5) }
 
 kinded_nonrec_row_var:
 | nonrec_row_var subkind                                       { attach_row_subkind ($1, $2) }

@@ -24,8 +24,15 @@ module TypeVarMap = Utility.IntMap
 (* points *)
 type 'a point = 'a Unionfind.point [@@deriving show]
 
+(* A "type" variable in the broadest sense,
+   meaning that it is used for type, row, and presence variables *)
+type type_var =
+ [ `Var of (int * Subkind.t * Freedom.t)] [@@deriving show]
+
+
+
 type 't meta_type_var_non_rec_basis =
-    [ `Var of (int * Subkind.t * Freedom.t)
+    [ type_var
     | `Body of 't ]
       [@@deriving show]
 
@@ -446,6 +453,34 @@ struct
 
       end
 end
+
+
+module GetRecursiveApplications =
+struct
+  class visitor =
+    object(o)
+      inherit Transform.visitor as super
+      val rec_appls = StringSet.empty
+
+      method get_applications = rec_appls
+
+      method! typ = function
+        | `Alias _ as a ->
+            (* Don't expand aliases -- RecursiveApplications to previous type
+             * groups are not of interest in this pass *)
+            (a, o)
+        | `RecursiveApplication { r_name; r_args; _ } as ra ->
+            let apps =
+              List.fold_left (fun acc x ->
+                let (_, o) = o#type_arg x in
+                let apps = o#get_applications in
+                StringSet.union acc apps) StringSet.empty r_args in
+            let apps = StringSet.(union apps (singleton r_name)) in
+            (ra, {< rec_appls = apps >})
+        | x -> super#typ x
+    end
+end
+
 
 module DecycleTypes  =
 struct
@@ -2625,6 +2660,12 @@ let make_pure_function_type : datatype list -> datatype -> datatype
 let make_thunk_type : row -> datatype -> datatype
   = fun effs rtype ->
   make_function_type [] effs rtype
+
+let recursive_applications t =
+  let o = new GetRecursiveApplications.visitor in
+  let (_, o) = o#typ t in
+  o#get_applications |> StringSet.elements
+
 
 (* We replace some of the generated printing functions here such that
    they may use our own printing functions instead. If the generated functions are

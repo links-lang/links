@@ -104,12 +104,13 @@ object (o : 'self_type)
       unwrap_def (binder ~ty:ft f, lin, ([], lam), location) in
     let (tvs, tyargs), gen_ft =
       Generalise.generalise (o#get_var_env ()) (Binder.to_type bndr) in
+    let s_tvs = List.map SugarQuantifier.mk_resolved tvs in
     let bndr = Binder.set_type bndr gen_ft in
     let o = o#bind_binder bndr in
     let e = block_node ([with_dummy_pos
                            (Fun { fun_binder           = bndr
                                 ; fun_linearity        = lin
-                                ; fun_definition       = (tvs, def)
+                                ; fun_definition       = (s_tvs, def)
                                 ; fun_location         = loc
                                 ; fun_signature        = None
                                 ; fun_frozen           = true
@@ -134,9 +135,10 @@ object (o : 'self_type)
 
         let pss = [[variable_pat ~ty:r x]] in
         let body = with_dummy_pos (Projection (var x, name)) in
+        let tyvars = List.map SugarQuantifier.mk_resolved [ab; rhob; effb] in
         let e : phrasenode =
           block_node
-            ([fun_binding' ~tyvars:[ab; rhob; effb] (binder ~ty:ft f) (pss, body)],
+            ([fun_binding' ~tyvars:tyvars (binder ~ty:ft f) (pss, body)],
              freeze_var f)
         in (o, e, ft)
     | e -> super#phrasenode e

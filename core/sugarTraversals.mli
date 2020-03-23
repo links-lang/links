@@ -33,8 +33,8 @@ class map :
     method subkind         : Subkind.t -> Subkind.t
     method kind            : kind -> kind
     method freedom         : Freedom.t -> Freedom.t
-    method type_variable   : type_variable -> type_variable
-    method known_type_variable   : known_type_variable -> known_type_variable
+    method quantifier      :  SugarQuantifier.t -> SugarQuantifier.t
+    method type_variable   : SugarTypeVar.t -> SugarTypeVar.t
     method row_var         : Datatype.row_var -> Datatype.row_var
     method row             : Datatype.row -> Datatype.row
     method replace_rhs     : replace_rhs -> replace_rhs
@@ -76,7 +76,6 @@ class map :
     method typ             : Types.datatype -> Types.datatype
     method type_row        : Types.row -> Types.row
     method tyarg           : tyarg -> tyarg
-    method tyvar           : tyvar -> tyvar
     method type_field_spec : Types.field_spec -> Types.field_spec
     method unknown         : 'a. 'a -> 'a
   end
@@ -113,8 +112,8 @@ class fold :
     method subkind         : Subkind.t -> 'self
     method kind            : kind -> 'self
     method freedom         : Freedom.t -> 'self
-    method type_variable   : type_variable -> 'self
-    method known_type_variable : known_type_variable -> 'self
+    method type_variable   : SugarTypeVar.t -> 'self
+    method quantifier      : SugarQuantifier.t -> 'self
     method row_var         : Datatype.row_var -> 'self
     method row             : Datatype.row -> 'self
     method replace_rhs     : replace_rhs -> 'self
@@ -134,11 +133,9 @@ class fold :
     method iterpatt        : iterpatt -> 'self
     method funlit          : funlit -> 'self
     method handle_params   : handler_parameterisation -> 'self
-    (* method quantifier      : quantifier -> 'self *)
     method fieldspec       : Datatype.fieldspec -> 'self
     method fieldconstraint : fieldconstraint -> 'self
     method directive       : directive -> 'self
-    method tyvar           : tyvar -> 'self
     method datatype        : Datatype.with_pos -> 'self
     method datatypenode    : Datatype.t -> 'self
     method datatype'       : datatype' -> 'self
@@ -207,7 +204,6 @@ object ('self)
   method cp_phrase       : cp_phrase -> 'self * cp_phrase
   method position        : Position.t -> 'self * Position.t
   method program         : program -> 'self * program
-  (* method quantifier      : quantifier -> 'self * quantifier *)
   method regex           : regex -> 'self * regex
   method regexflag       : regexflag -> 'self * regexflag
   method replace_rhs     : replace_rhs -> 'self * replace_rhs
@@ -219,12 +215,11 @@ object ('self)
   method subkind         : Subkind.t -> 'self * Subkind.t
   method kind            : kind -> 'self * kind
   method freedom         : Freedom.t -> 'self * Freedom.t
-  method type_variable   : type_variable -> 'self * type_variable
-  method known_type_variable : known_type_variable -> 'self * known_type_variable
+  method quantifier      : SugarQuantifier.t -> 'self * SugarQuantifier.t
+  method type_variable   : SugarTypeVar.t -> 'self * SugarTypeVar.t
   method typ             : Types.datatype -> ('self * Types.datatype)
   method type_row        : Types.row -> ('self* Types.row)
   method type_arg        : Datatype.type_arg -> 'self * Datatype.type_arg
-  method tyvar           : Quantifier.t -> ('self * Quantifier.t)
   method type_field_spec : Types.field_spec -> ('self * Types.field_spec)
   method tyarg           : Types.type_arg -> ('self * Types.type_arg)
   method tyunary_op      : tyarg list * UnaryOp.t -> 'self * (tyarg list * UnaryOp.t)

@@ -3287,7 +3287,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                           let rettyp = Types.for_all (rqs, rettyp) in
                           let ft = `Function (fps, fe, rettyp) in
                           let f' = erase f in
-                          let e = tabstr (rqs, FnAppl (with_dummy_pos (tappl (f'.node, tyargs)), List.map erase ps)) in
+                          let sugar_rqs = List.map SugarQuantifier.mk_resolved rqs in
+                          let e = tabstr (sugar_rqs, FnAppl (with_dummy_pos (tappl (f'.node, tyargs)), List.map erase ps)) in
                           unify ~handle:Gripers.fun_apply
                             ((exp_pos f, ft), no_pos (mkft (Types.make_tuple_type (List.map typ ps),
                                                             context.effect_row,
@@ -3310,10 +3311,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                       end;
                       FnAppl (erase f, List.map erase ps), rettyp, Usage.combine_many (usages f :: List.map usages ps)
               end
-        | TAbstr (qs, e) ->
+        | TAbstr (sugar_qs, e) ->
             let e, t, u = tc e in
+            let qs = List.map SugarQuantifier.get_resolved_exn sugar_qs in
             let t = Types.for_all(qs, t) in
-              tabstr (qs, e.node), t, u
+              tabstr (sugar_qs, e.node), t, u
         | TAppl (e, tyargs) ->
            let e, t, u = tc e in
 
@@ -3341,10 +3343,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
         | Generalise e ->
            let e, t, u = tc e in
            if Utils.is_generalisable e then
-             let ((tyvars, _), t) = Utils.generalise ~unwrap:false context.var_env t in
-             match tyvars with
+             let ((qs, _), t) = Utils.generalise ~unwrap:false context.var_env t in
+             match qs with
              | [] -> WithPos.node e, t, u
-             | _ -> TAbstr (tyvars, e), t, u
+             | _ ->
+                let tyvars = List.map SugarQuantifier.mk_resolved qs in
+                TAbstr (tyvars, e), t, u
            else
              Gripers.generalise_value_restriction pos (uexp_pos e)
 
@@ -3614,7 +3618,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                              no_pos (`Record (Types.make_singleton_closed_row
                                                 (l, `Present (Types.fresh_type_variable (lin_any, res_any))))));
                           let r' = erase r in
-                          let e = tabstr (pqs, Projection (with_dummy_pos (tappl (r'.node, tyargs)), l)) in
+                          let sugar_pqs = List.map SugarQuantifier.mk_resolved pqs in
+                          let e = tabstr (sugar_pqs, Projection (with_dummy_pos (tappl (r'.node, tyargs)), l)) in
                           e, fieldtype, usages r
                         | Some (`Absent | `Var _)
                         | None ->
@@ -4184,7 +4189,8 @@ and type_binding : context -> binding -> binding * context * Usage.t =
               | [] -> [], erase_pat pat, penv
               | _ -> Gripers.value_restriction pos bt
           in
-            Val (pat, (tyvars, body), location, datatype),
+          let sugar_tyvars = List.map SugarQuantifier.mk_resolved tyvars in
+            Val (pat, (sugar_tyvars, body), location, datatype),
             {empty_context with
               var_env = penv},
             usage
@@ -4325,9 +4331,10 @@ and type_binding : context -> binding -> binding * context * Usage.t =
 
           (* let ft = Instantiate.freshen_quantifiers ft in *)
           let vs' = List.fold_right Ident.Set.add vs Ident.Set.empty in
+          let sugar_tyvars = List.map SugarQuantifier.mk_resolved tyvars in
           (Fun { fun_binder = Binder.set_type bndr ft;
                  fun_linearity = lin;
-                 fun_definition = (tyvars, (List.map (List.map erase_pat) pats, erase body));
+                 fun_definition = (sugar_tyvars, (List.map (List.map erase_pat) pats, erase body));
                  fun_frozen = true;
                  fun_location; fun_signature = t_ann'; fun_unsafe_signature = unsafe },
              {empty_context with
@@ -4562,9 +4569,10 @@ and type_binding : context -> binding -> binding * context * Usage.t =
 
                    let pats = List.map (List.map erase_pat) pats in
                    let body = erase body in
+                   let sugar_tyvars = List.map SugarQuantifier.mk_resolved tyvars in
                    (make ~pos { fn with
                       rec_binder = Binder.set_type bndr outer;
-                      rec_definition = ((tyvars, Some inner), (pats, body)) }::defs,
+                      rec_definition = ((sugar_tyvars, Some inner), (pats, body)) }::defs,
                       Env.bind name outer outer_env))
                 ([], Env.empty) defs patss
             in
@@ -4595,7 +4603,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
           let env = List.fold_left (fun env {node=(name, vars, (_, dt')); _} ->
               match dt' with
                 | Some dt ->
-                    bind_tycon env (name, `Alias (List.map (snd ->- val_of) vars, dt))
+                    bind_tycon env (name, `Alias (List.map (SugarQuantifier.get_resolved_exn) vars, dt))
                 | None -> raise (internal_error "typeSugar.ml: unannotated type")
           ) empty_context ts in
           (Typenames ts, env, Usage.empty)
@@ -4808,9 +4816,10 @@ let type_check_general context body =
     | ([], _), typ -> body, typ
     | (qs, _), qtyp ->
        let ppos = WithPos.pos body in
+       let sugar_qs = List.map SugarQuantifier.mk_resolved qs in
        let open SugarConstructors.SugartypesPositions in
        block ~ppos
-         ([with_pos ppos (Val (variable_pat ~ppos ~ty:qtyp "it", (qs, body), loc_unknown, None))],
+         ([with_pos ppos (Val (variable_pat ~ppos ~ty:qtyp "it", (sugar_qs, body), loc_unknown, None))],
           freeze_var ~ppos "it"),
        qtyp
   else

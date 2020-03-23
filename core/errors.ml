@@ -40,6 +40,8 @@ exception UnboundTyCon of (Position.t * string)
 exception InternalError of { filename: string; message: string }
 exception TypeApplicationArityMismatch of
   { pos: Position.t; name: string; expected: int; provided: int}
+
+(* tyarg_number is 1-based index *)
 exception TypeApplicationKindMismatch of
   { pos: Position.t; name: string; tyarg_number: int;
     expected: string; provided: string }
@@ -206,6 +208,20 @@ let internal_error ~filename ~message =
 
 let desugaring_error ~pos ~stage ~message =
   DesugaringError { pos; stage; message }
+
+
+let rethrow_errors_if_better_position alternative_position f x =
+  if alternative_position = Position.dummy then
+    f x
+  else
+    try
+      f x
+    with
+    | Type_error (pos, msg) when pos = Position.dummy ->
+       raise (Type_error (alternative_position, msg))
+    | UnboundTyCon (pos, tycon) when pos = Position.dummy ->
+       raise (UnboundTyCon (alternative_position, tycon))
+
 
 let settings_error message = (SettingsError message)
 let runtime_error message = (RuntimeError message)

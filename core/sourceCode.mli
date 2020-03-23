@@ -108,6 +108,8 @@ module WithPos : sig
   val map2 : 'a t -> f_pos:(Position.t -> Position.t) -> f_node:('a -> 'b)
           -> 'b t
 
+  val with_node : 'a t -> 'b -> 'b t
+
   (** Discard positions from elements in a list **)
   val nodes_of_list : 'a t list -> 'a list
 
