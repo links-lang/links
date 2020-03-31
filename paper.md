@@ -1,5 +1,5 @@
 ---
-title: 'Links: a functional tier-less web programming language'
+title: 'Links: Linking Theory to Practice for the Web'
 tags:
   - functional programming
   - web programming
@@ -16,3 +16,10 @@ date: 31 March 2020
 bibliography: paper.bib
 ---
 
+# Statement of Need
+
+# Summary
+
+# Acknowledgements
+
+# References
