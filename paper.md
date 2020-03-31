@@ -18,11 +18,11 @@ bibliography: paper.bib
 
 Here's how you cite:
 
-`@HillerstromLA20`
+@HillerstromLA20
 
-`[@HillerstromLA20]`
+[@HillerstromLA20]
 
-`[@HillerstromLA20; FehrenbachC19]`
+[@HillerstromLA20; FehrenbachC19]
 
 
 Statement of Need
