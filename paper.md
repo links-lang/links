@@ -16,10 +16,26 @@ date: 31 March 2020
 bibliography: paper.bib
 ---
 
-# Statement of Need
+Here's how you cite:
 
-# Summary
+`@HillerstromLA20`
 
-# Acknowledgements
+`[@HillerstromLA20]`
 
-# References
+`[@HillerstromLA20; FehrenbachC19]`
+
+
+Statement of Need
+=================
+
+
+Summary
+=======
+
+
+Acknowledgements
+================
+
+
+References
+==========
