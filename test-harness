@@ -2,7 +2,7 @@
 
 links = './links'
 
-import sys, re, time
+import sys, re, time, os, signal
 import concurrent.futures, threading, multiprocessing
 from os import path
 from subprocess import Popen, PIPE
@@ -115,7 +115,9 @@ def evaluate(name, code, config_file, stdout='', stderr='', exit = '0', env = No
     if not filemode.startswith('true'):
         arg_array += ["-e"]
 
-    proc = Popen([links] + arg_array + [code] + rest_array, stdout=PIPE, stderr=PIPE, env=env)
+    #starts shell executing links in new session. This allows us to kill the
+    #shell and its sub-processes (i.e., links) in case of a timeout
+    proc = Popen([links] + arg_array + [code] + rest_array, stdout=PIPE, stderr=PIPE, env=env, start_new_session=True)
 
     passed = True
     errors = []
@@ -145,6 +147,9 @@ def evaluate(name, code, config_file, stdout='', stderr='', exit = '0', env = No
         else:
             time.sleep(0.01)
 
+    #Kill the whole process group we started earlier due to timeout
+    pgid = os.getpgid(proc.pid)
+    os.killpg(pgid, signal.SIGKILL)
     with the_lock:
         failures += 1
         print('!FAILURE: %s [TIMED OUT]' % name)
