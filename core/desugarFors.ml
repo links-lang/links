@@ -131,7 +131,7 @@ object (o : 'self_type)
 
                    let e = fn_appl "AsList" [r; w; n] [e] in
                    let var = Utility.gensym ~prefix:"_for_" () in
-                   let xb = binder ~ty:t var in
+                   let xb = binder ~ty:element_type var in
                      o, (e::es, with_dummy_pos (Pattern.As (xb, p))::ps,
                          var::xs, element_type::ts))
           (o, ([], [], [], []))

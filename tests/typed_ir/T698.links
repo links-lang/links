@@ -1,0 +1,11 @@
+sig concatMap : ((a) -b-> [c], [a]) -b-> [c]
+fun concatMap(f, l) {
+  #dummy to avoid problems with unsafe signatures currently
+  #not being supported by IR type-checker
+  []
+}
+
+#The function we are actually interested in
+fun asList(t) server {
+  for (x <-- t) [x]
+}
