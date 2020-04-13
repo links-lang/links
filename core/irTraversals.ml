@@ -960,7 +960,7 @@ module InstantiateTypes = struct
             | `Not_typed -> (t, o) (* instantiate.ml dies on `Not_typed *)
             | _ -> (Instantiate.datatype instantiation_maps t, o)
 
-        method! row r = (Instantiate.row instantiation_maps r, o)
+        method! row r = Instantiate.row instantiation_maps r, o
 
         method! field_spec p = Instantiate.presence instantiation_maps p, o
 
