@@ -41,3 +41,8 @@ Bound quantifiers in a query (#694)
 tests/typed_ir/T694.links
 filemode : true
 stdout : fun : forall a::Row,b::Row(Any,Base).() -a-> [(|b::(Any,Base))]
+
+Curry (#574)
+tests/typed_ir/T574.links
+filemode : true
+stdout : () : ()

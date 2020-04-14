@@ -1,0 +1,4 @@
+#Unchanged from prelude
+fun curry(f) {
+  fun (x)(y) { f(x,y) }
+}

@@ -801,7 +801,9 @@ module ElimDeadDefs = struct
     return state program'
 end
 
-(** Applies a type visitor to all types occuring in an IR program**)
+(** Applies a type visitor to all types occuring in an IR program
+    Note that the "roots" of type objects found in the AST are types, quantifiers, or type arguments
+**)
 let ir_type_mod_visitor tyenv type_visitor =
   object
     inherit Transform.visitor(tyenv) as super
@@ -958,6 +960,9 @@ module InstantiateTypes = struct
             | `Not_typed -> (t, o) (* instantiate.ml dies on `Not_typed *)
             | _ -> (Instantiate.datatype instantiation_maps t, o)
 
+        method! row r = Instantiate.row instantiation_maps r, o
+
+        method! field_spec p = Instantiate.presence instantiation_maps p, o
 
       end
 
