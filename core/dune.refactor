@@ -1,0 +1,39 @@
+;; TODO remove
+
+(ocamllex
+  (modules lexer xmlLexer))
+
+(menhir
+  (modules parser xmlParser)
+  (flags "--table") ;; slower parser, but compilation *much* faster
+)
+
+(library
+  (name links_core)
+  (public_name links.core)
+  (synopsis "Links compiler library")
+  (modes native)
+  (modules
+   basicsettings
+   commonTypes
+   env
+   errors
+   module_hacks
+   notfound
+   settings
+   sourceCode
+   types
+   unionfind
+   utility)
+  (libraries str linenoise base64 safepass unix result
+             yojson ppx_deriving_yojson.runtime
+             lwt lwt.unix
+             cohttp cohttp-lwt-unix cohttp-lwt
+             conduit-lwt-unix uri
+             websocket websocket-lwt-unix.cohttp
+             findlib menhirLib links.lens)
+  (preprocess (pps ppx_deriving.std ppx_deriving_yojson)))
+
+;; Make Query modules available.
+;;(copy_files# query/*.ml)
+;;(copy_files# query/*.mli)

@@ -44,6 +44,7 @@ BUILD_DIR:=$(ROOT)/_build
 
 # The build command and some standard build system flags
 BUILD=dune build
+CLEAN=dune clean
 SOURCES=links
 DB_SOURCES=links-postgresql,links-sqlite3
 # Note: this relies on lazy expansion of `SOURCES'.
@@ -130,7 +131,7 @@ tests: links
 # Cleans the project directory.
 .PHONY: clean
 clean:
-	dune clean
+	$(CLEAN)
 	rm -rf *.install
 	rm -rf links linx
 	rm -rf doc/_build
@@ -175,3 +176,29 @@ opam-pkg:
 	$(MAKE) $(PKGS:%=link-url-%)
 	dune-release opam pkg --dist-file=$(BUILD_DIR)/links-$(TAG_NAME).tbz
 	$(MAKE) $(PKGS:%=pkg-%)
+
+# TODO REMOVE
+.PHONY: refactor
+refactor: refactor-build create-startup-script
+
+.PHONY: refactor-build
+refactor-build: clean bin/dune.refactor bin/links_refactor.ml core/dune.refactor core/types_refactor.mli core/types_refactor.ml
+	test -e bin/dune.org || cp bin/dune bin/dune.org
+	test -e bin/links.ml.org || cp bin/links.ml bin/links.ml.org
+	test -e core/dune.org || cp core/dune core/dune.org
+	test -e core/types.mli.org || cp core/types.mli core/types.mli.org
+	test -e core/types.ml.org || cp core/types.ml core/types.ml.org
+	cp bin/dune.refactor bin/dune
+	cp bin/links_refactor.ml bin/links.ml
+	cp core/dune.refactor core/dune
+	cp core/types_refactor.mli core/types.mli
+	cp core/types_refactor.ml core/types.ml
+	$(BUILD) $(DEV_FLAGS) @install
+
+.PHONY: restore
+restore: clean bin/dune.org bin/links.ml.org core/dune.org core/types.mli.org core/types.ml.org
+	cp bin/dune.org bin/dune
+	cp bin/links.ml.org bin/links.ml
+	cp core/dune.org core/dune
+	cp core/types.mli.org core/types.mli
+	cp core/types.ml.org core/types.ml
