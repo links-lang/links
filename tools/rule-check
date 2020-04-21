@@ -32,7 +32,7 @@ for script in $(find $RULEDIR -maxdepth 1 -perm -111 -type f -not -name "*~"); d
             continue
         else
             echo "Running '$script'..."
-            /usr/bin/env bash "$script" | sed 's/^/  - /' ; test ${PIPESTATUS[0]} -eq 0
+            "./$script" | sed 's/^/  - /' ; test ${PIPESTATUS[0]} -eq 0
             ret_code=$?
             if [[ $ret_code -ne 0 ]]; then
                 ERRORS=$(($ERRORS+$ret_code))
