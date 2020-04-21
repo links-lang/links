@@ -1,3 +1,4 @@
+#IGNORED_BY_TEST_REGISTRATION_RULE_CHECKING_SCRIPT
 # c.f. issue #606
 fun concat(xs) {
   fold_right((^^), "", xs)

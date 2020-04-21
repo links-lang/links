@@ -1,3 +1,4 @@
+#IGNORED_BY_TEST_REGISTRATION_RULE_CHECKING_SCRIPT
 sig head : forall a, e::Row. ([a]) -e-> a
 fun head(x :: _) { x }
 
