@@ -3,6 +3,14 @@
 DIRS=("core" "bin" "tests" "examples")
 
 
+# Do we have the find from GNU findutils available?
+# Note that 0 indicates true
+function has_gnu_find()
+{
+  find --version | grep  -q "GNU findutils"
+}
+
+
 # Files we are interested in scanning
 PATTERNS=("*.ml" "*.mli" "*.mly" "*.mll" "*.py" "*.pl" "*.html" "*.js"\
           "*.txt" "*.links" "*.css" "*.sh" "*.el" "*.vim" "*.opam"\

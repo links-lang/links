@@ -9,14 +9,19 @@ source tools/rule_helpers
 ERRORS=0
 
 
-for dir in ${DIRS[@]}; do
-    # trailing $ in string literal activates c-style
-    # escape sequences
-    TAB_REGEX=$'\t'
-    EVAL_CMD="find \""$dir"\" -type f \( ${FIND_STR} \) \
-      -exec egrep -l \"$TAB_REGEX\" {} \;"
-    for file in $(eval "$EVAL_CMD"); do
-        echo "Tab character found in $file, alerting authorities."
-        exit 1
-    done
-done
+if has_gnu_find ; then
+  for dir in ${DIRS[@]}; do
+      # trailing $ in string literal activates c-style
+      # escape sequences
+      TAB_REGEX=$'\t'
+      EVAL_CMD="find \""$dir"\" \
+        -type f \( ${FIND_STR} \) \
+        -exec egrep -l \"$TAB_REGEX\" {} \; "
+      for file in $(eval "$EVAL_CMD"); do
+          echo "Tab character found in $file, alerting authorities."
+          exit 1
+      done
+  done
+else
+  echo "Warning: GNU find not found, skipping test"
+fi

@@ -3212,7 +3212,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               InfixAppl ((tyargs, op), erase l, erase r), rettyp, Usage.combine_many [usages l; usages r; op_usages]
         | RangeLit (l, r) ->
             let l, r = tc l, tc r in
-	    let outer_effects =
+            let outer_effects =
               Types.make_singleton_open_row ("wild", `Present Types.unit_type)
                                             default_effect_subkind in
             let () = unify ~handle:Gripers.range_bound  (pos_and_typ l,

@@ -78,7 +78,7 @@ let variables_in_computation comp =
     | InsertReturning (v, r, s) ->
         traverse_value v;
         traverse_value r;
-	traverse_value s
+        traverse_value s
     | Update ((_, v), c_opt, c) ->
         traverse_value v;
         OptionUtils.opt_iter (traverse_computation) c_opt;
@@ -165,4 +165,3 @@ let affected_channels raise_env frames =
       fun acc c ->
         (affected_in_context raise_env c) @ acc) [] frames in
   unduplicate (fun v1 v2 -> v1 = v2) (affected_context_chans)
-

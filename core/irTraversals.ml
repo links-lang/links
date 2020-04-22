@@ -347,12 +347,12 @@ struct
               Query (range, policy, e, t), t, o
         | InsertRows (source, rows) ->
             let source, _, o = o#value source in
-	    let rows, _, o = o#value rows in
+            let rows, _, o = o#value rows in
               InsertRows(source, rows), Types.unit_type, o
         | InsertReturning (source, rows, returning) ->
             let source, _, o = o#value source in
-	    let rows, _, o = o#value rows in
-	    let returning, _, o = o#value returning in
+            let rows, _, o = o#value rows in
+            let returning, _, o = o#value returning in
               InsertReturning(source, rows, returning), Types.unit_type, o
         | Update ((x, source), where, body) ->
             let source, _, o = o#value source in
