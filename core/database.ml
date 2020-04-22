@@ -128,7 +128,7 @@ let result_signature field_types result =
           if start_of ~is:"order_" name then
             (* ignore ordering fields *)
             rs (i+1)
-	  else if start_of ~is:"@unit@" name then
+          else if start_of ~is:"@unit@" name then
             let fields,null_query = rs (i+1) in
             (name, (Types.unit_type,i)) :: fields,
             null_query

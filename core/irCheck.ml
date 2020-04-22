@@ -778,7 +778,7 @@ struct
               Query (range, policy, e, t), t, o
 
         | InsertRows (source, rows)
-	| InsertReturning (source, rows, _) ->
+        | InsertReturning (source, rows, _) ->
             (* Most logic is shared between InsertRow and InsetReturning.
                We disambiguate between the two later on. *)
 

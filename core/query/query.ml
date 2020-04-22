@@ -808,7 +808,7 @@ struct
       in
         project (norm env r, label)
     | Q.Erase (r, labels) ->
-	let rec erase (r, labels) =
+        let rec erase (r, labels) =
           match r with
           | Q.Record fields ->
             assert (StringSet.for_all

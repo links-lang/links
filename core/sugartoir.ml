@@ -569,18 +569,18 @@ struct
   let db_insert _env (source, rows) =
     bind source
       (fun source ->
-	bind rows
-	  (fun rows ->
+        bind rows
+          (fun rows ->
             lift (Special (InsertRows (source, rows)), Types.unit_type)))
 
   let db_insert_returning _env (source, rows, returning) =
     bind source
       (fun source ->
-	bind rows
-	  (fun rows ->
-	    bind returning
-	      (fun returning ->
-		lift (Special (InsertReturning (source, rows, returning)), Types.int_type))))
+        bind rows
+          (fun rows ->
+            bind returning
+              (fun returning ->
+                lift (Special (InsertReturning (source, rows, returning)), Types.int_type))))
 
   let db_update env (p, source, where, body) =
     let source_type = sem_type source in
@@ -1029,15 +1029,15 @@ struct
           | Block (bs, e) -> eval_bindings Scope.Local env bs e
           | Query (range, policy, e, _) ->
               I.query (opt_map (fun (limit, offset) -> (ev limit, ev offset)) range, policy, ec e)
-	  | DBInsert (source, _fields, rows, None) ->
-	      let source = ev source in
-	      let rows = ev rows in
-	      I.db_insert env (source, rows)
-	  | DBInsert (source, _fields, rows, Some returning) ->
-	      let source = ev source in
-	      let rows = ev rows in
-	      let returning = ev returning in
-	      I.db_insert_returning env (source, rows, returning)
+          | DBInsert (source, _fields, rows, None) ->
+              let source = ev source in
+              let rows = ev rows in
+              I.db_insert env (source, rows)
+          | DBInsert (source, _fields, rows, Some returning) ->
+              let source = ev source in
+              let rows = ev rows in
+              let returning = ev returning in
+              I.db_insert_returning env (source, rows, returning)
           | DBUpdate (p, source, where, fields) ->
               let p, penv = CompilePatterns.desugar_pattern (lookup_effects env) p in
               let env' = env ++ penv in
