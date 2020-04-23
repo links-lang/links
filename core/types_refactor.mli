@@ -17,29 +17,6 @@ module TypeVarMap : Utility.INTMAP
 (* points *)
 type 'a point = 'a Unionfind.point
 
-(* A "type" variable in the broadest sense,
-   meaning that it is used for type, row, and presence variables *)
-type type_var =
- [ `Var of (int * Subkind.t * Freedom.t)]
-
-
-type 't meta_type_var_non_rec_basis =
-    [ `Var of (int * Subkind.t * Freedom.t)
-    | `Body of 't ]
-
-
-type 't meta_type_var_basis =
-    [ 't meta_type_var_non_rec_basis
-    | `Recursive of (int * 't) ]
-
-
-type 't meta_row_var_basis =
-     [ 't meta_type_var_basis | `Closed ]
-
-type 't meta_presence_var_basis = 't meta_type_var_non_rec_basis
-
-type 't meta_max_basis = 't meta_row_var_basis
-
 module Abstype :
 sig
   type t [@@deriving eq,show]
@@ -70,14 +47,6 @@ val access_point : Abstype.t
 val socket       : Abstype.t
 val spawn_location : Abstype.t
 
-type ('t, 'r) session_type_basis =
-    [ `Input of 't * 't
-    | `Output of 't * 't
-    | `Select of 'r
-    | `Choice of 'r
-    | `Dual of 't
-    | `End ]
-
 (* Type groups *)
 
 type rec_id =
@@ -91,7 +60,7 @@ module RecIdSet : RECIDSET
 
 type tygroup = {
   id: int;
-  type_map: ((Quantifier.t list * typ) Utility.StringMap.t);
+  type_map: ((Quantifier.t list * t) Utility.StringMap.t);
   linearity_map: bool Utility.StringMap.t
 }
 
@@ -101,41 +70,55 @@ and rec_appl = {
   r_dual: bool;
   r_unique_name: string;
   r_quantifiers : Kind.t list;
-  r_args: type_arg list;
-  r_unwind: type_arg list -> bool -> typ;
+  r_args: t list;
+  r_unwind: t list -> bool -> t;
   r_linear: unit -> bool option
-}
-and typ =
-    [ `Not_typed
-    | `Primitive of Primitive.t
-    | `Function of (typ * row * typ)
-    | `Lolli of (typ * row * typ)
-    | `Record of row
-    | `Variant of row
-    | `Effect of row
-    | `Table of typ * typ * typ
-    | `Lens of unit (* Lens.Type.t *)
-    | `Alias of ((string * Kind.t list * type_arg list) * typ)
-    | `Application of (Abstype.t * type_arg list)
-    | `RecursiveApplication of rec_appl
-    | `MetaTypeVar of meta_type_var
-    | `ForAll of (Quantifier.t list * typ)
-    | (typ, row) session_type_basis ]
-and field_spec = [ `Present of typ | `Absent | `Var of meta_presence_var ]
-and field_spec_map = field_spec field_env
-and row_var = meta_row_var
-and row = field_spec_map * row_var * bool
-and meta_type_var = (typ meta_type_var_basis) point
-and meta_row_var = (row meta_row_var_basis) point
-and meta_presence_var = (field_spec meta_presence_var_basis) point
-and meta_var = [ `Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var ]
-and type_arg =
-    [ `Type of typ | `Row of row | `Presence of field_spec ]
-    [@@deriving show]
-
-type session_type = (typ, row) session_type_basis
-
-type datatype = typ
+  }
+and tident = int
+and arrow = { domain: t list; row: t; codomain: t }
+and t =
+  (* Special types. *)
+  | Not_typed
+  (* Regular types. *)
+  | Primitive of Primitive.t
+  | Meta of t point
+  | Var of { ident: tident; kind: Kind.t; freedom: Freedom.t }
+  | Recursive of { binder: tident; body: t }
+  | ForAll of { quantifiers: Quantifier.t list; body: t }
+  | Function of arrow
+  | Lolli of arrow
+  | Alias of { constructor: (string * Kind.t list * t list); expansion: t }
+  | Application of { typ: Abstype.t; args: t list }
+  | RecursiveApplication of rec_appl
+  | Record of t
+  | Variant of t
+  | Effect of t
+  | Table of { read: t; write: t; needed: t }
+  | Lens of unit (* TODO FIXME *)
+  (* Row-y types. *)
+  | Row of { fields: t Utility.StringMap.t; dual: bool; var: t }
+  | Absent
+  | Present of t
+  (* Session-y types. *)
+  | Input of { supply: t; continuation: t }
+  | Output of { demand: t; continuation: t }
+  | Select of t
+  | Choice of t
+  | Dual of t
+  | End
+and session_type = t
+and datatype = t
+and typ = t
+and type_arg = t
+and field_spec = t
+and field_spec_map = t Utility.StringMap.t
+and meta_type_var = t
+and meta_row_var = t
+and meta_presence_var = t
+and meta_var = t
+and row = t
+and row_var = t
+  [@@deriving show]
 
 (** A constraint that a subkind imposes on types. *)
 module type Constraint = sig
@@ -404,9 +387,9 @@ class virtual type_predicate :
     method var_satisfies : (int * Subkind.t * Freedom.t) -> bool
     method type_satisfies : visit_context -> typ -> bool
     method point_satisfies :
-      'a 'c . (visit_context -> 'a -> bool) ->
+      'a. (visit_context -> 'a -> bool) ->
         visit_context ->
-        ([< 'a meta_max_basis] as 'c) point ->
+        typ point ->
         bool
     method field_satisfies : visit_context -> field_spec -> bool
     method row_satisfies : visit_context -> row -> bool
