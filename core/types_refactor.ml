@@ -117,7 +117,7 @@ and rec_appl = {
   r_unwind: t list -> bool -> t;
   r_linear: unit -> bool option
   }
-and tident = int
+and tid = int
 and arrow = { domain: t list; row: t; codomain: t }
 and t =
   (* Special types. *)
@@ -125,13 +125,13 @@ and t =
   (* Regular types. *)
   | Primitive of Primitive.t
   | Meta of t point
-  | Var of { ident: tident; kind: Kind.t; freedom: Freedom.t }
-  | Recursive of { binder: tident; body: t }
-  | ForAll of { quantifiers: Quantifier.t list; body: t }
+  | Var of { name: tid; kind: Kind.t; freedom: Freedom.t }
+  | Recursive of { binder: tid; body: t }
+  | ForAll of { binders: Quantifier.t list; body: t }
   | Function of arrow
   | Lolli of arrow
-  | Alias of { constructor: (string * Kind.t list * t list); expansion: t }
-  | Application of { typ: Abstype.t; args: t list }
+  | Alias of { tycon: (string * Kind.t list * t list); body: t }
+  | Application of { tycon: Abstype.t; args: t list }
   | RecursiveApplication of rec_appl
   | Record of t
   | Variant of t
@@ -139,12 +139,12 @@ and t =
   | Table of { read: t; write: t; needed: t }
   | Lens of unit (* TODO FIXME *)
   (* Row-y types. *)
-  | Row of { fields: t StringMap.t; dual: bool; var: t }
+  | Row of { fields: t Utility.StringMap.t; dual: bool; var: t option }
   | Absent
   | Present of t
   (* Session-y types. *)
-  | Input of { supply: t; continuation: t }
-  | Output of { demand: t; continuation: t }
+  | Input of  { payload: t; cont: t }
+  | Output of { payload: t; cont: t }
   | Select of t
   | Choice of t
   | Dual of t
@@ -166,7 +166,7 @@ and row_var = t
 let dummy_type = Not_typed
 
 let is_present = function
-  | Present _           -> true
+  | Present _          -> true
   | Absent | Var _     -> false
   | _ -> failwith "Expected presence constructor."
 
