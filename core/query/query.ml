@@ -2,6 +2,25 @@ open Utility
 open CommonTypes
 open Var
 
+module Notations =
+struct
+
+  let (<|) f x = f x
+  let (|>) x f = f x
+  let (>>=) (o : 'a option) (f : 'a -> 'b option) =
+      match o with
+      | Some a -> f a
+      | _ -> None
+
+  let (||=) o o' =
+      match o with
+      | None -> o'
+      | _ -> o
+  
+end
+
+open Notations
+
 exception DbEvaluationError of string
 
 let internal_error message =
@@ -38,6 +57,8 @@ struct
       | Database  of (Value.database * string)
       | Singleton of t
       | Concat    of t list
+      | Dedup     of t
+      | Prom      of t
       | Record    of t StringMap.t
       | Project   of t * string
       | Erase     of t * StringSet.t
@@ -63,6 +84,8 @@ struct
       | Table     of Value.table
       | Singleton of pt
       | Concat    of pt list
+      | Dedup     of pt
+      | Prom      of pt
       | Record    of pt StringMap.t
       | Project   of pt * string
       | Erase     of pt * StringSet.t
@@ -88,6 +111,8 @@ struct
         | Table t -> S.Table t
         | Singleton v -> S.Singleton (bt v)
         | Concat vs -> S.Concat (List.map bt vs)
+        | Dedup q -> S.Dedup (bt q)
+        | Prom q -> S.Prom (bt q)
         | Record fields -> S.Record (StringMap.map bt fields)
         | Variant (name, v) -> S.Variant (name, bt v)
         | XML xmlitem -> S.XML xmlitem
@@ -110,6 +135,33 @@ struct
         | For (_tag, _gs, _os, If (_, t, Concat [])) -> tt (For (_tag, _gs, _os, t))
         | _ -> (* Debug.print ("v: "^string_of_t v); *) assert false
 
+  let rec contains_free fvs =
+      let rec cfree bvs = function
+      | Var (w,tyw) -> List.mem w fvs && not (List.mem w bvs)
+      | If (c,t,e) -> cfree bvs c || cfree bvs t || cfree bvs e
+      | Closure ((wl,b),e) ->
+          (* FIXME: needs to be remade *)
+          (*
+          let bvs' = bvs @ wl @ Env.map (fun (w,_) -> w) e in
+          cfree bvs' b || Map.exists (fun _ q -> cfree bvs q) e
+          *)
+          failwith "Query.contains_free"
+      | Apply (t, args) -> cfree bvs t || List.exists (cfree bvs) args
+      | Singleton t
+      | Dedup t
+      | Prom t
+      | Project (t,_) -> cfree bvs t
+      | Erase (_t,_) -> (* XXX: is it needed *) failwith "Query.contains_free"
+      | Variant (_, t) -> cfree bvs t
+      | Concat tl -> List.exists (cfree bvs) tl
+      | For (_, gs, _os, b) -> 
+          (* FIXME we need to consider os! (or not?) *)
+          let bvs'', res = List.fold_left (fun (bvs',acc) (w,q) -> w::bvs', acc || cfree bvs' q) (bvs, false) gs in
+          res || cfree bvs'' b
+      | Record fl -> StringMap.exists (fun _ t -> cfree bvs t) fl
+      | _ -> false
+      in cfree []
+
   (** Return the type associated with an expression *)
   (* Inferring the type of an expression is straightforward because all
      variables are annotated with their types. *)
@@ -126,6 +178,8 @@ struct
         | Record fields -> record fields
         | If (_, t, _) -> te t
         | Table (_, _, _, row) -> `Record row
+        | Dedup u
+        | Prom u -> te u
         | Constant (Constant.Bool   _) -> Types.bool_type
         | Constant (Constant.Int    _) -> Types.int_type
         | Constant (Constant.Char   _) -> Types.char_type
@@ -187,6 +241,8 @@ struct
         | Singleton v -> Singleton (ffb v)
         | Database db -> Database db
         | Concat vs -> Concat (List.map ffb vs)
+        | Dedup q -> ffb q
+        | Prom q -> ffb q
         | Record fields -> Record (StringMap.map ffb fields)
         | Variant (name, v) -> Variant (name, ffb v)
         | XML xmlitem -> XML xmlitem
@@ -210,6 +266,24 @@ struct
     StringMap.map (function
                     | `Present t -> t
                     | _ -> assert false) fields
+
+  (*
+  let field_types_of_row (fsm, _, _) : Types.datatype stringmap =
+    StringMap.fold (fun k s acc ->
+      match s with
+      | `Present (ty : Types.datatype) -> StringMap.add k ty acc
+      | _ -> acc) fsm StringMap.empty
+  *)
+
+  let field_types_of_for_var gen = 
+    match Types.unwrap_list_type (type_of_expression gen) with
+    | `Record (fields, _, _ as _row) -> 
+        (* field_types_of_row row *)
+        StringMap.map (function
+                    | `Present t -> t
+                    | _ -> assert false) fields
+    (* BUGBUG can't synthesize a type for the variable (but then it probably doesn't matter) *)
+    | _ -> assert false
 
   let unbox_xml =
     function
@@ -330,6 +404,7 @@ struct
 
       | Concat vs ->
         reduce_concat (List.map (fun v -> reduce_where_then (c, v)) vs)
+      | Prom t' -> Prom (reduce_where_then (c, t'))
       | For (_, gs, os, body) ->
         For (None, gs, os, reduce_where_then (c, body))
       | If (c', t', Concat []) ->
@@ -342,16 +417,16 @@ struct
       | For (_, gs', os', body') -> For (None, gs @ gs', os @ os', body')
       | _                         -> For (None, gs, os, body)
 
-  let rec reduce_for_source : t * (t -> t) -> t =
-    fun (source, body) ->
-      let rs = fun source -> reduce_for_source (source, body) in
+  let rec reduce_for_source : t * Types.datatype * (t -> t) -> t =
+    fun (source, ty, body) ->
+      let rs = fun (source, ty) -> reduce_for_source (source, ty, body) in
         match source with
           | Singleton v -> body v
           | Concat vs ->
-            reduce_concat (List.map rs vs)
+            reduce_concat (List.map (fun x -> rs (x,ty)) vs)
           | If (c, t, Concat []) ->
             reduce_for_source
-              (t, fun v -> reduce_where_then (c, body v))
+              (t, ty, fun v -> reduce_where_then (c, body v))
           | For (_, gs, os, v) ->
             (* NOTE:
 
@@ -365,14 +440,21 @@ struct
                it isn't bound in the environment.
 
             *)
-            reduce_for_body (gs, os, rs v)
-          | Table table ->
+            let tyv = type_of_expression v in
+            reduce_for_body (gs, os, rs (v,tyv))
+          | Table table
+          | Dedup (Table table) ->
             let field_types = table_field_types table in
             (* we need to generate a fresh variable in order to
                correctly handle self joins *)
             let x = Var.fresh_raw_var () in
               (* Debug.print ("fresh variable: " ^ string_of_int x); *)
               reduce_for_body ([(x, source)], [], body (Var (x, field_types)))
+          (* BUGBUG: what should we do when we have a Prom? *)
+          | Prom _ -> 
+              let x = Var.fresh_raw_var () in 
+              let field_types = field_types_of_for_var source
+              in reduce_for_body ([(x,source)], [], body (Var (x, field_types)))
           | v -> query_error "Bad source in for comprehension: %s" (string_of_t v)
 
   let rec reduce_if_body (c, t, e) =
