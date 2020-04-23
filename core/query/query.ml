@@ -267,23 +267,23 @@ struct
                     | `Present t -> t
                     | _ -> assert false) fields
 
-  (*
-  let field_types_of_row (fsm, _, _) : Types.datatype stringmap =
-    StringMap.fold (fun k s acc ->
-      match s with
-      | `Present (ty : Types.datatype) -> StringMap.add k ty acc
-      | _ -> acc) fsm StringMap.empty
-  *)
+  let labels_of_field_types field_types =
+    StringMap.fold
+      (fun name _ labels' ->
+        StringSet.add name labels')
+      field_types
+      StringSet.empty
+
+  let record_field_types (t : Types.datatype) : Types.datatype StringMap.t =
+    let (field_spec_map, _, _) = TypeUtils.extract_row t in
+    StringMap.map (function
+                    | `Present t -> t
+                    | _ -> assert false) field_spec_map
 
   let field_types_of_for_var gen = 
-    match Types.unwrap_list_type (type_of_expression gen) with
-    | `Record (fields, _, _ as _row) -> 
-        (* field_types_of_row row *)
-        StringMap.map (function
-                    | `Present t -> t
-                    | _ -> assert false) fields
-    (* BUGBUG can't synthesize a type for the variable (but then it probably doesn't matter) *)
-    | _ -> assert false
+    type_of_expression gen
+    |> Types.unwrap_list_type
+    |> record_field_types
 
   let unbox_xml =
     function
@@ -545,19 +545,6 @@ let used_database v : Value.database option =
 
 let string_of_t = Q.string_of_t
 
-let labels_of_field_types field_types =
-  StringMap.fold
-    (fun name _ labels' ->
-      StringSet.add name labels')
-    field_types
-    StringSet.empty
-
-let record_field_types (t : Types.datatype) : Types.datatype StringMap.t =
-  let (field_spec_map, _, _) = TypeUtils.extract_row t in
-  StringMap.map (function
-                  | `Present t -> t
-                  | _ -> assert false) field_spec_map
-
 module Eval =
 struct
   let env_of_value_env policy value_env =
@@ -684,6 +671,7 @@ struct
   | Q.Apply (Q.Primitive "stringToXml", [u]) ->
     Q.Singleton (Q.XML (Value.Text (Q.unbox_string u)))
   | Q.Apply (Q.Primitive "AsList", [xs]) -> xs
+  | Q.Apply (Q.Primitive "distinct", [u]) -> Q.Prom (Q.Dedup u) 
   | u -> u
 
   let check_policies_compatible env_policy block_policy =
