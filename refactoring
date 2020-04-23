@@ -1,0 +1,86 @@
+# Refactoring allocations
+Branch: types-refactor
+
+- Daniel
+ + types.ml
+ + types.mli
+- Frank
+ + type checking
+- Janek
+ + frontend
+- Rudi
+ + lens*.ml
+ + lens*.mli
+- Sam
+ + type checking
+ + unify
+- Simon
+ + backend, evalir, ir
+
+
+./backend.ml
+./buildTables.ml
+./closures.ml
+./compilePatterns.ml
+./context.ml
+./database.ml
+./defaultAliases.ml
+./desugarCP.ml
+./desugarDatatypes.ml
+./desugarEffects.ml
+./desugarFormlets.ml
+./desugarFors.ml
+./desugarFuns.ml
+./desugarInners.ml
+./desugarPages.ml
+./desugarProcesses.ml
+./desugarRegexes.ml
+./desugarSessionExceptions.ml
+./desugarTypeVariables.ml
+./evalir.ml
+./frontend.ml
+./generalise.ml
+./instantiate.ml
+./irCheck.ml
+./ir.ml
+./irtojs.ml
+./irTransform.ml
+./irTraversals.ml
+./json.ml
+./lens_database_conv.ml
+./lens_type_conv.ml
+./lib.ml
+./page.ml
+./query/evalNestedQuery.ml
+./query/evalQuery.ml
+./query/query.ml
+./renamer.ml
+./serialisation.ml
+./sugarConstructorsIntf.ml
+./sugarConstructors.ml
+./sugartoir.ml
+./sugarTraversals.ml
+./sugartypes.ml
+./transform.ml
+./transformSugar.ml
+./types.ml
+./types.ml.org
+./types_refactor.ml
+./typeSugar.ml
+./typeUtils.ml
+./unify.ml
+./value.ml
+./var.ml
+./webserver.ml
+./webserver_types.ml
+
+
+./generalise.ml
+./instantiate.ml
+./irCheck.ml
+./irTraversals.ml
+./lib.ml
+./renamer.ml
+./typeUtils.ml
+./typevarcheck.ml
+./unify.ml
