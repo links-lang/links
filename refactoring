@@ -16,10 +16,10 @@ Branch: types-refactor
     desugarFuns.ml
     desugarInners.ml
     desugarPages.ml
-    desugarProcesses.ml
-    desugarRegexes.ml
     desugarTypeVariables.ml
  + done:
+    desugarProcesses.ml
+    desugarRegexes.ml
     desugarSessionExceptions.ml
     sugarConstructorsIntf.ml
     sugarConstructors.ml

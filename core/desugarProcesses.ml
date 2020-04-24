@@ -30,19 +30,19 @@ object (o : 'self_type)
         let o = o#with_effects outer_eff in
 
         let e : phrasenode =
-          fn_appl_node "spawnWait" [`Row inner_eff; `Type body_type; `Row outer_eff]
+          fn_appl_node "spawnWait" [inner_eff; body_type; outer_eff]
             [fun_lit ~args:[(Types.make_tuple_type [], inner_eff)] dl_unl [[]] body]
         in
           (o, e, body_type)
     | Spawn (k, spawn_loc, body, Some inner_eff) ->
         (* bring the inner effects into scope, then restore the
            outer effects afterwards *)
-        let process_type = `Application (Types.process, [`Row inner_eff]) in
-        let fun_effects = Types.row_with ("wild", `Present Types.unit_type) inner_eff in
+        let process_type = Types.Application {tycon=Types.process; args=[inner_eff]} in
+        let fun_effects = Types.row_with ("wild", Types.Present Types.unit_type) inner_eff in
         let fun_effects =
           if Settings.get Basicsettings.Sessions.exceptions_enabled then
             let ty = Types.make_pure_function_type [] (Types.empty_type) in
-            Types.row_with (Value.session_exception_operation, `Present ty) fun_effects
+            Types.row_with (Value.session_exception_operation, Types.Present ty) fun_effects
           else fun_effects
         in
 
@@ -55,8 +55,8 @@ object (o : 'self_type)
         let spawn_loc_phr =
           match spawn_loc with
             | ExplicitSpawnLocation phr -> phr
-            | SpawnClient -> fn_appl "there" [`Row outer_eff] []
-            | NoSpawnLocation -> fn_appl "here" [`Row outer_eff] [] in
+            | SpawnClient -> fn_appl "there" [outer_eff] []
+            | NoSpawnLocation -> fn_appl "here" [outer_eff] [] in
 
         let spawn_fun =
           match k with
@@ -69,19 +69,19 @@ object (o : 'self_type)
          * corresponded to the spawn type. *)
 
         let e : phrasenode =
-          fn_appl_node spawn_fun [`Row inner_eff; `Type body_type; `Row outer_eff]
+          fn_appl_node spawn_fun [inner_eff; body_type; outer_eff]
              [spawn_loc_phr;
               fun_lit ~args:[(Types.make_tuple_type [], fun_effects)] dl_lin [[]] body]
         in
           (o, e, process_type)
     | Receive (cases, Some t) ->
-        let fields, row_var, _ = o#lookup_effects in
-        let other_effects = StringMap.remove "hear" (StringMap.remove "wild" fields), row_var, false in
+        let Row {fields; dual; _} = o#lookup_effects in
+        let other_effects = Types.Row {fields = StringMap.remove "hear" (StringMap.remove "wild" fields); dual; var = None} in
           begin
             match StringMap.find "hear" fields with
-              | (`Present mbt) ->
+              | (Types.Present mbt) ->
                   o#phrasenode
-                    (Switch (fn_appl "recv" [`Type mbt; `Row other_effects] [],
+                    (Switch (fn_appl "recv" [mbt; other_effects] [],
                              cases,
                              Some t))
               | _ -> assert false
