@@ -277,8 +277,8 @@ module SugarConstructors (Position : Pos)
       sh_value_cases  = val_cases;
       sh_descr = {
           shd_depth = depth;
-          shd_types = ( Types.make_empty_closed_row (), `Not_typed
-                      , Types.make_empty_closed_row (), `Not_typed);
+          shd_types = ( Types.make_empty_closed_row (), Types.Not_typed
+                      , Types.make_empty_closed_row (), Types.Not_typed);
           shd_raw_row = Types.make_empty_closed_row ();
           shd_params = opt_map (fun pps -> {shp_bindings = pps; shp_types = []})
                                parameters
