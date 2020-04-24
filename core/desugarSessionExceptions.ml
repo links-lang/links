@@ -60,7 +60,7 @@ object (o: 'self_type)
         let envs = o#backup_envs in
         (* Now, process body using inner effects *)
         let outer_effects = o#lookup_effects in
-        let process_type = `Application (Types.process, [`Row inner_effects]) in
+        let process_type = Types.Application {tycon=Types.process; args=[inner_effects]} in
         let o = o#with_effects inner_effects in
         let (o, body, _body_dt) = o#phrase body in
         (* Restore outer effects *)
@@ -112,7 +112,7 @@ object (o : 'self_type)
 
         let inner_effects =
           effect_row
-            |> Types.row_with (failure_op_name, `Present fail_cont_ty)
+            |> Types.row_with (failure_op_name, Types.Present fail_cont_ty)
             |> Types.flatten_row in
 
         let cont_pat = variable_pat ~ty:(Types.make_function_type [] inner_effects (Types.empty_type))
@@ -127,7 +127,7 @@ object (o : 'self_type)
         let effect_cases = [otherwise_clause] in
 
         (* Manually construct a row with the two hardwired handler cases. *)
-        let raw_row = Types.row_with ("Return", (`Present try_dt)) inner_effects in
+        let raw_row = Types.row_with ("Return", (Types.Present try_dt)) inner_effects in
         (* Dummy types *)
         let types =
           (inner_effects, try_dt, outer_effects, otherwise_dt) in

@@ -18,9 +18,9 @@ Branch: types-refactor
     desugarPages.ml
     desugarProcesses.ml
     desugarRegexes.ml
-    desugarSessionExceptions.ml
     desugarTypeVariables.ml
  + done:
+    desugarSessionExceptions.ml
     sugarConstructorsIntf.ml
     sugarConstructors.ml
     sugarTraversals.ml
