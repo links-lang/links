@@ -2,6 +2,13 @@ open List
 open CommonTypes
 open Utility
 
+(* DELETE AFTER REFACTOR *)
+module TypeUtils = struct
+  include TypeUtils
+  let concrete_type t = t
+end
+module Types = Types_refactor
+
 let connection_info
   = Settings.(option "database_args"
               |> synopsis "Database host, name, user, and password"
@@ -42,7 +49,7 @@ end
 
 let value_of_db_string (value:string) t =
   match TypeUtils.concrete_type t with
-    | `Primitive Primitive.Bool ->
+    | Types.Primitive Primitive.Bool ->
         (* HACK:
 
            This should probably be part of the database driver as
@@ -52,9 +59,9 @@ let value_of_db_string (value:string) t =
            mysql appears to use 0/1 and postgres f/t
         *)
         Value.box_bool (value = "1" || value = "t" || value = "true")
-    | `Primitive Primitive.Char -> Value.box_char (String.get value 0)
-    | `Primitive Primitive.String -> Value.box_string value
-    | `Primitive Primitive.Int  ->
+    | Types.Primitive Primitive.Char -> Value.box_char (String.get value 0)
+    | Types.Primitive Primitive.String -> Value.box_string value
+    | Types.Primitive Primitive.Int  ->
         (* HACK: Currently Links does not properly handle integers
          * if they are null. This is a temporary workaround (hack) to
          * allow us to at least interface with DBs containing nulls,
@@ -69,7 +76,7 @@ let value_of_db_string (value:string) t =
             raise (Errors.RuntimeError ("Attempted to read null integer from the database"))
         else
           Value.box_int (int_of_string value)
-    | `Primitive Primitive.Float ->
+    | Types.Primitive Primitive.Float ->
        if value = "" then Value.box_float 0.00      (* HACK HACK *)
        else Value.box_float (float_of_string value)
     | t -> raise (runtime_error

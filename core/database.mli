@@ -1,3 +1,6 @@
+(* DELETE THIS *)
+module Types = Types_refactor
+
 (** A generic interface for SQL-style databases. Vendor-specific implementations are elsewhere *)
 
 val connection_info : string option Settings.setting
