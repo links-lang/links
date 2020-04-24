@@ -7,7 +7,24 @@ Branch: types-refactor
 - Frank
  + type checking
 - Janek
- + frontend
+ + pending:
+    desugarCP.ml
+    desugarDatatypes.ml
+    desugarEffects.ml
+    desugarFormlets.ml
+    desugarFors.ml
+    desugarFuns.ml
+    desugarInners.ml
+    desugarPages.ml
+    desugarProcesses.ml
+    desugarRegexes.ml
+    desugarSessionExceptions.ml
+    desugarTypeVariables.ml
+    sugarConstructorsIntf.ml
+    sugarConstructors.ml
+    sugarTraversals.ml
+    sugartypes.ml
+ + done:
 - Rudi
  + lens*.ml
  + lens*.mli
@@ -25,18 +42,6 @@ Branch: types-refactor
 ./context.ml
 ./database.ml
 ./defaultAliases.ml
-./desugarCP.ml
-./desugarDatatypes.ml
-./desugarEffects.ml
-./desugarFormlets.ml
-./desugarFors.ml
-./desugarFuns.ml
-./desugarInners.ml
-./desugarPages.ml
-./desugarProcesses.ml
-./desugarRegexes.ml
-./desugarSessionExceptions.ml
-./desugarTypeVariables.ml
 ./evalir.ml
 ./frontend.ml
 ./generalise.ml
@@ -56,11 +61,7 @@ Branch: types-refactor
 ./query/query.ml
 ./renamer.ml
 ./serialisation.ml
-./sugarConstructorsIntf.ml
-./sugarConstructors.ml
 ./sugartoir.ml
-./sugarTraversals.ml
-./sugartypes.ml
 ./transform.ml
 ./transformSugar.ml
 ./types.ml
