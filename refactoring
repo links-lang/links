@@ -20,11 +20,12 @@ Branch: types-refactor
     desugarRegexes.ml
     desugarSessionExceptions.ml
     desugarTypeVariables.ml
+ + done:
     sugarConstructorsIntf.ml
     sugarConstructors.ml
     sugarTraversals.ml
     sugartypes.ml
- + done:
+    transformSugar.ml
 - Rudi
  + lens*.ml
  + lens*.mli
@@ -34,6 +35,11 @@ Branch: types-refactor
 - Simon
  + backend, evalir, ir
 
+Fuckups:
+  - defaultAliases.ml - creates `Alias with structure that doesn't correspons to
+    Alias in types.ml.  The former takes a list as first argument, the latter a
+    triple
+
 
 ./backend.ml
 ./buildTables.ml
@@ -41,7 +47,6 @@ Branch: types-refactor
 ./compilePatterns.ml
 ./context.ml
 ./database.ml
-./defaultAliases.ml
 ./evalir.ml
 ./frontend.ml
 ./generalise.ml
@@ -63,7 +68,6 @@ Branch: types-refactor
 ./serialisation.ml
 ./sugartoir.ml
 ./transform.ml
-./transformSugar.ml
 ./types.ml
 ./types.ml.org
 ./types_refactor.ml
