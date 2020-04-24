@@ -804,9 +804,9 @@ class map =
     method type_row : Types.row -> Types.row = o#unknown
     method type_field_spec : Types.field_spec -> Types.field_spec = o#unknown
     method tyarg : tyarg -> tyarg = function
-      | `Type t -> `Type (o#typ t)
-      | `Row r -> `Row (o#type_row r)
-      | `Presence p -> `Presence (o#type_field_spec p)
+      | Types.Row r      -> o#type_row (Types.Row r)
+      | Types.Present p  -> Types.Present (o#type_field_spec p)
+      | t                -> (o#typ t)
 
     method unknown : 'a. 'a -> 'a = fun x -> x
   end
@@ -2396,9 +2396,9 @@ class fold_map =
 
     method tyarg : Types.type_arg -> ('self_type * Types.type_arg) =
       function
-      | `Type t -> let o,t = o#typ t in o, `Type t
-      | `Row r -> let o, r = o#type_row r in o, `Row r
-      | `Presence p -> let o, p =o#type_field_spec p in o, `Presence p
+      | Types.Row r -> o#type_row (Types.Row r)
+      | Types.Present p -> let o, p =o#type_field_spec p in o, Types.Present p
+      | t -> let o,t = o#typ t in o, t
 
     method type_field_spec : Types.field_spec -> ('self_type * Types.field_spec) =
       o#unknown
