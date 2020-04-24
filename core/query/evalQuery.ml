@@ -103,7 +103,7 @@ struct
   let gen : (Var.var * QL.t) -> QL.t list =
     function
       | (x, QL.Table t) ->
-        let field_types = Q.table_field_types t in
+        let field_types = QL.table_field_types t in
           List.rev
             (StringMap.fold
                (fun name _t es ->

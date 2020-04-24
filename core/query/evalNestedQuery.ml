@@ -25,6 +25,8 @@ let tag_query : QL.t -> QL.t =
         | Singleton e -> Singleton (tag e)
         | Concat es ->
           Concat (List.map tag es)
+        | Dedup q -> Dedup (tag q)
+        | Prom q -> Prom (tag q)
         | Record fields -> Record (StringMap.map tag fields)
         | Project (e, l) -> Project (tag e, l)
         | Erase (e, fields) -> Erase (tag e, fields)
@@ -436,7 +438,7 @@ struct
                (fun (x, source) ->
                  match source with
                    | QL.Table t ->
-                     Q.Eval.eta_expand_var (x, Q.table_field_types t)
+                     QL.eta_expand_var (x, QL.table_field_types t)
                    | _ -> assert false)
                gs_out) in
     let r_out_type =
@@ -456,7 +458,7 @@ struct
     let q = Var.fresh_raw_var () in
     let z = Var.fresh_raw_var () in
     let z_fields =
-      Q.record_field_types
+      QL.record_field_types
         (Types.make_tuple_type
            [r_out_type; index_type])
     in

@@ -2,25 +2,6 @@ open Utility
 open CommonTypes
 open Var
 
-module Notations =
-struct
-
-  let (<|) f x = f x
-  let (|>) x f = f x
-  let (>>=) (o : 'a option) (f : 'a -> 'b option) =
-      match o with
-      | Some a -> f a
-      | _ -> None
-
-  let (||=) o o' =
-      match o with
-      | None -> o'
-      | _ -> o
-  
-end
-
-open Notations
-
 exception DbEvaluationError of string
 
 let internal_error message =
@@ -135,11 +116,11 @@ struct
         | For (_tag, _gs, _os, If (_, t, Concat [])) -> tt (For (_tag, _gs, _os, t))
         | _ -> (* Debug.print ("v: "^string_of_t v); *) assert false
 
-  let rec contains_free fvs =
+  let contains_free fvs =
       let rec cfree bvs = function
-      | Var (w,tyw) -> List.mem w fvs && not (List.mem w bvs)
+      | Var (w,_tyw) -> List.mem w fvs && not (List.mem w bvs)
       | If (c,t,e) -> cfree bvs c || cfree bvs t || cfree bvs e
-      | Closure ((wl,b),e) ->
+      | Closure ((_wl,_b),_e) ->
           (* FIXME: needs to be remade *)
           (*
           let bvs' = bvs @ wl @ Env.map (fun (w,_) -> w) e in
@@ -333,6 +314,18 @@ struct
       | If (_, _, Concat []) -> true
       | _ -> false
 
+  let eta_expand_var (x, field_types) =
+    Record
+      (StringMap.fold
+         (fun name _t fields ->
+            StringMap.add name (Project (Var (x, field_types), name)) fields)
+         field_types
+         StringMap.empty)
+
+  let eta_expand_list xs =
+    let x = Var.fresh_raw_var () in
+    let field_types = field_types_of_list xs in
+      ([x, xs], [], Singleton (eta_expand_var (x, field_types)))
 
   (* simple optimisations *)
   let reduce_and (a, b) =
@@ -421,7 +414,18 @@ struct
     fun (source, ty, body) ->
       let rs = fun (source, ty) -> reduce_for_source (source, ty, body) in
         match source with
-          | Singleton v -> body v
+          | Singleton v ->
+            begin
+              match body v with
+              (* the normal form of a For does not have Prom in its body
+                 --> we hoist it to a generator *)
+              | Prom _ as q -> 
+                  let z = Var.fresh_raw_var () in
+                  let tyq = type_of_expression q in
+                  let ftys = record_field_types tyq in 
+                  reduce_for_body ([(z,q)], [], Singleton (eta_expand_var (z, ftys)))
+              | q -> q
+            end
           | Concat vs ->
             reduce_concat (List.map (fun x -> rs (x,ty)) vs)
           | If (c, t, Concat []) ->
@@ -654,19 +658,6 @@ struct
           end
       end
 
-  let eta_expand_var (x, field_types) =
-    Q.Record
-      (StringMap.fold
-         (fun name _t fields ->
-            StringMap.add name (Q.Project (Q.Var (x, field_types), name)) fields)
-         field_types
-         StringMap.empty)
-
-  let eta_expand_list xs =
-    let x = Var.fresh_raw_var () in
-    let field_types = Q.field_types_of_list xs in
-      ([x, xs], [], Q.Singleton (eta_expand_var (x, field_types)))
-
   let reduce_artifacts = function
   | Q.Apply (Q.Primitive "stringToXml", [u]) ->
     Q.Singleton (Q.XML (Value.Text (Q.unbox_string u)))
@@ -697,7 +688,7 @@ struct
           match lookup env var with
             | Q.Var (x, field_types) ->
                 (* eta-expand record variables *)
-                eta_expand_var (x, field_types)
+                Q.eta_expand_var (x, field_types)
             | Q.Primitive "Nil" -> Q.nil
             (* We could consider detecting and eta-expand tables here.
                The only other possible sources of table values would
@@ -824,18 +815,17 @@ struct
         check_policies_compatible env.policy policy;
         computation env e
     | Special (Ir.Table (db, name, keys, (readtype, _, _))) as _s ->
-       (** WR: this case is because shredding needs to access the keys of tables
-           but can we avoid it (issue #432)? *)
+       (* WR: this case is because shredding needs to access the keys of tables
+          but can we avoid it (issue #432)? *)
        (* Copied almost verbatim from evalir.ml, which seems wrong, we should probably call into that. *)
        begin
          match xlate env db, xlate env name, xlate env keys, (TypeUtils.concrete_type readtype) with
          | Q.Database (db, params), name, keys, `Record row ->
-        let unboxed_keys =
-          List.map
-        (fun key ->
-         List.map Q.unbox_string (Q.unbox_list key))
-        (Q.unbox_list keys)
-        in
+            let unboxed_keys =
+              List.map
+                (fun key -> List.map Q.unbox_string (Q.unbox_list key))
+                (Q.unbox_list keys)
+            in
             Q.Table ((db, params), Q.unbox_string name, unboxed_keys, row)
          | _ -> query_error "Error evaluating table handle"
        end
@@ -859,10 +849,21 @@ struct
       let e = computation env e in
         Q.If (c, t, e)
 
-  let rec norm env : Q.t -> Q.t =
+  let expand_collection = function
+    | Q.For (_, gs, os', body) -> gs, os', body
+    | Q.Concat (_::_)
+    | Q.Singleton _
+    | Q.Table _ as xs ->
+        (* I think we can omit the `Table case as it
+            can never occur *)
+        (* eta-expand *)
+        Q.eta_expand_list xs
+    | _ -> assert false
+
+  let rec norm in_dedup env : Q.t -> Q.t =
     function
-    | Q.Record fl -> Q.Record (StringMap.map (norm env) fl)
-    | Q.Concat xs -> Q.reduce_concat (List.map (norm env) xs)
+    | Q.Record fl -> Q.Record (StringMap.map (norm false env) fl)
+    | Q.Concat xs -> Q.reduce_concat (List.map (norm in_dedup env) xs)
     | Q.Project (r, label) ->
       let rec project (r, label) =
         match r with
@@ -876,7 +877,7 @@ struct
             Q.Project (r, label)
           | _ -> query_error ("Error projecting from record: %s") (string_of_t r)
       in
-        project (norm env r, label)
+        retn in_dedup (project (norm false env r, label))
     | Q.Erase (r, labels) ->
         let rec erase (r, labels) =
           match r with
@@ -895,15 +896,34 @@ struct
           | Q.If (c, t, e) ->
             Q.If (c, erase (t, labels), erase (e, labels))
           | Q.Var (_x, field_types) ->
-            assert (StringSet.subset labels (labels_of_field_types field_types));
+            assert (StringSet.subset labels (Q.labels_of_field_types field_types));
             Q.Erase (r, labels)
           | _ -> query_error "Error erasing from record"
       in
-        erase (norm env r, labels)
-    | Q.Variant (label, v) -> Q.Variant (label, norm env v)
-    | Q.Apply (f, xs) -> apply env (norm env f, List.map (norm env) xs)
+        erase (norm false env r, labels)
+    | Q.Variant (label, v) -> Q.Variant (label, norm false env v)
+    | Q.Apply (f, xs) -> apply in_dedup env (norm false env f, List.map (norm false env) xs)
+    | Q.For (_, gs, os, u) -> 
+        let rec reduce_gs env = function
+        | [] -> 
+          begin
+            match norm in_dedup env u with
+            (* this special case allows us to hoist a non-standard For body into a generator *)
+            | Q.Prom _ as u' ->
+                let z = Var.fresh_raw_var () in
+                let tyz = Q.type_of_expression u' in
+                let ftz = Q.record_field_types tyz in
+                let vz = Q.Var (z, ftz) in
+                Q.reduce_for_source (u', tyz, fun v -> norm in_dedup (bind env (z,v)) (Q.Singleton vz))
+            | u' -> u'
+          end
+        | (x,g)::gs' -> (* equivalent to xs = For gs' u, body = g, but possibly the arguments aren't normalized *)
+            let tyg = Q.type_of_expression g in
+            Q.reduce_for_source (norm in_dedup env g, tyg, fun v -> reduce_gs (bind env (x,v)) gs')
+        in
+        Q.reduce_for_body ([], os, reduce_gs env gs)
     | Q.If (c, t, e) ->
-        Q.reduce_if_condition (norm env c, norm env t, norm env e)
+        Q.reduce_if_condition (norm false env c, norm in_dedup env t, norm in_dedup env e)
     | Q.Case (v, cases, default) ->
       let rec reduce_case (v, cases, default) =
         match v with
@@ -911,9 +931,9 @@ struct
             begin
               match StringMap.lookup label cases, default with
                 | Some ((x, _), c), _ ->
-                  norm (bind env (x, v)) c
+                  norm in_dedup (bind env (x, v)) c
                 | None, Some ((z, _), c) ->
-                  norm (bind env (z, w)) c
+                  norm in_dedup (bind env (z, w)) c
                 | None, None -> query_error "Pattern matching failed"
             end
           | Q.If (c, t, e) ->
@@ -923,10 +943,10 @@ struct
                reduce_case (e, cases, default))
           |  _ -> assert false
       in
-        reduce_case (norm env v, cases, default)
-    | v -> v
+        reduce_case (norm false env v, cases, default)
+    | v -> retn in_dedup v
 
-  and apply env : Q.t * Q.t list -> Q.t = function
+  and apply in_dedup env : Q.t * Q.t list -> Q.t = function
     | Q.Closure ((xs, body), closure_env), args ->
       (* Debug.print ("Applying closure"); *)
       (* Debug.print ("body: " ^ Ir.show_computation body); *)
@@ -936,27 +956,25 @@ struct
         let env = List.fold_right2 (fun x arg env ->
             bind env (x, arg)) xs args env in
         (* Debug.print("Applied"); *)
-          norm_comp env body
+          norm_comp in_dedup env body
     | Q.Primitive "Cons", [x; xs] ->
-        Q.reduce_concat [Q.Singleton x; xs]
+        norm in_dedup env (Q.Concat [Q.Singleton x; xs])
     | Q.Primitive "Concat", ([_xs; _ys] as l) ->
-        Q.reduce_concat l
+        norm in_dedup env (Q.Concat l)
     | Q.Primitive "ConcatMap", [f; xs] ->
         begin
           match f with
             | Q.Closure (([x], body), closure_env) ->
-                let env = env ++ closure_env in
-                  Q.reduce_for_source
-                    (xs, fun v -> norm_comp (bind env (x, v)) body)
+                let cenv = env ++ closure_env in
+                norm in_dedup env (Q.For (None, [x,xs], [], computation cenv body))
             | _ -> assert false
         end
     | Q.Primitive "Map", [f; xs] ->
         begin
           match f with
             | Q.Closure (([x], body), closure_env) ->
-                let env = env ++ closure_env in
-                  Q.reduce_for_source
-                    (xs, fun v -> Q.Singleton (norm_comp (bind env (x, v)) body))
+                let cenv = env ++ closure_env in
+                norm in_dedup env (Q.For (None, [x,xs], [], Q.Singleton (computation cenv body)))
             | _ -> assert false
         end
     | Q.Primitive "SortBy", [f; xs] ->
@@ -964,32 +982,30 @@ struct
           match xs with
             | Q.Concat [] -> Q.Concat []
             | _ ->
-                let gs, os', body =
-                  match xs with
-                    | Q.For (_, gs, os', body) -> gs, os', body
-                    | Q.Concat (_::_)
-                    | Q.Singleton _
-                    | Q.Table _ ->
-                        (* I think we can omit the `Table case as it
-                           can never occur *)
-                        (* eta-expand *)
-                        eta_expand_list xs
-                    | _ -> assert false in
+                let gs, os', body = expand_collection xs in
                 let xs = Q.For (None, gs, os', body) in
-                  begin
-                    match f with
-                      | Q.Closure (([x], os), closure_env) ->
-                          let os =
-                            let env = bind (env ++ closure_env) (x, Q.tail_of_t xs) in
-                              let o = norm_comp env os in
-                                match o with
-                                  | Q.Record fields ->
-                                      List.rev (StringMap.fold (fun _ o os -> o::os) fields [])
-                                  | _ -> assert false
-                          in
-                            Q.For (None, gs, os @ os', body)
-                      | _ -> assert false
-                  end
+                begin
+                  match f with
+                  | Q.Closure (([x], os), closure_env) ->
+                      let os =
+                        let cenv = bind (env ++ closure_env) (x, Q.tail_of_t xs) in
+                          
+                          let o = norm_comp false cenv os in
+                            match o with
+                              | Q.Record fields ->
+                                  List.rev (StringMap.fold (fun _ o os -> o::os) fields [])
+                              | _ -> assert false
+                      in
+                      (* this is unsmart: everything is normalized here, but we have to potentially
+                         propagate an external in_dedup, which requires to scan the full term again;
+                         the easiest way to do that is to call again norm, but maybe we should use an
+                         auxiliary do_dedup function *)
+                      let out = Q.For (None, gs, os @ os', body) in
+                      if in_dedup 
+                        then norm true env out 
+                        else out
+                  | _ -> assert false
+                end
         end
     | Q.Primitive "not", [v] ->
       Q.reduce_not (v)
@@ -1002,12 +1018,15 @@ struct
     | Q.Primitive f, args ->
         Q.Apply (Q.Primitive f, args)
     | Q.If (c, t, e), args ->
-        Q.reduce_if_condition (c, apply env (t, args), apply env (e, args))
+        Q.reduce_if_condition (c, apply in_dedup env (t, args), apply in_dedup env (e, args))
     | Q.Apply (f, args), args' ->
-        apply env (f, args @ args')
+        apply in_dedup env (f, args @ args')
     | t, _ -> query_error "Application of non-function: %s" (string_of_t t)
 
-  and norm_comp env c = norm env (computation env c)
+  and norm_comp in_dedup env c = norm in_dedup env (computation env c)
+  and retn in_dedup u = if in_dedup then Q.Dedup u else u
+
+  let norm_comp = norm_comp false
 
   let eval policy env e =
 (*    Debug.print ("e: "^Ir.show_computation e); *)
@@ -1199,7 +1218,7 @@ type let_query = let_clause list
 let gens_index (gs : (Var.var * Q.t) list)   =
   let all_fields t =
     let field_types = Q.table_field_types t in
-    labels_of_field_types field_types
+    Q.labels_of_field_types field_types
   in
  (* Use keys if available *)
   let key_fields t =
@@ -1298,7 +1317,6 @@ let compile_delete : Value.database -> Value.env ->
       q
 
 let is_list = Q.is_list
-let table_field_types = Q.table_field_types
 let value_of_expression = Q.value_of_expression
 let default_of_base_type = Q.default_of_base_type
 let type_of_expression = Q.type_of_expression

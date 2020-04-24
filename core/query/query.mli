@@ -16,6 +16,8 @@ sig
       | Database  of (Value.database * string)
       | Singleton of t
       | Concat    of t list
+      | Dedup     of t
+      | Prom      of t
       | Record    of t StringMap.t
       | Project   of t * string
       | Erase     of t * StringSet.t
@@ -29,6 +31,11 @@ sig
       | Constant  of Constant.t
   and env = { venv: Value.env; qenv: t Env.Int.t; policy: QueryPolicy.t }
       [@@deriving show]
+
+  val record_field_types : Types.datatype -> Types.datatype StringMap.t
+  val table_field_types : Value.table -> Types.typ Utility.StringMap.t
+  val labels_of_field_types : 'a Utility.StringMap.t -> Utility.StringSet.t
+  val eta_expand_var : Var.var * Types.datatype StringMap.t -> t
 
   val reduce_where_then : t * t -> t
   val reduce_and : t * t -> t
@@ -46,9 +53,6 @@ val default_of_base_type : Primitive.t -> Lang.t
 
 val value_of_expression : Lang.t -> Value.t
 
-val labels_of_field_types : 'a Utility.StringMap.t -> Utility.StringSet.t
-val record_field_types : Types.datatype -> Types.datatype StringMap.t
-val table_field_types : Value.table -> Types.typ Utility.StringMap.t
 val is_list : Lang.t -> bool
 
 val sql_of_query : Lang.t -> Sql.query
@@ -62,7 +66,6 @@ module Eval :
 sig
   val env_of_value_env : QueryPolicy.t -> Value.env -> Lang.env
   val bind : Lang.env -> Env.Int.name * Lang.t -> Lang.env
-  val eta_expand_var : Var.var * Types.datatype StringMap.t -> Lang.t
   val computation : Lang.env -> Ir.computation -> Lang.t
   val eval : QueryPolicy.t -> Value.t Value.Env.t -> Ir.computation -> Lang.t
 end
