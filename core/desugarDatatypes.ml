@@ -75,40 +75,40 @@ module Desugar = struct
       match t with
         | TypeVar stv ->
            let point = SugarTypeVar.get_resolved_type_exn stv in
-           `MetaTypeVar point
+           Meta point
         | QualifiedTypeApplication _ -> assert false (* will have been erased *)
         | Function (f, e, t) ->
-            `Function (Types.make_tuple_type (List.map datatype f),
-                      row alias_env e t',
-                      datatype t)
+            Types.Function { Types.domain=[Types.make_tuple_type (List.map datatype f)]
+                           ; row=row alias_env e t'
+                           ; codomain=datatype t }
         | Lolli (f, e, t) ->
-            `Lolli (Types.make_tuple_type (List.map datatype f),
-                    row alias_env e t',
-                    datatype t)
+            Types.Lolli { Types.domain=[Types.make_tuple_type (List.map datatype f)]
+                        ; row=row alias_env e t'
+                        ; codomain=datatype t }
         | Mu (stv, t) ->
            let mtv = SugarTypeVar.get_resolved_type_exn stv in
            let var, _sk = unpack_var_id (Unionfind.find mtv) in
            let t = datatype t in
 
             (* Turn mtv into a proper recursive type *)
-            Unionfind.change mtv (`Recursive (var, t));
-            `MetaTypeVar mtv
+            Unionfind.change mtv (Types.Recursive {binder=var; body=t});
+            Meta mtv
         | Forall (qs, t) ->
             let qs: Quantifier.t list = desugar_quantifiers qs in
             let t = datatype t in
-              `ForAll (qs, t)
+              ForAll {binders=qs; body=t}
         | Unit -> Types.unit_type
         | Tuple ks ->
             let labels = map string_of_int (Utility.fromTo 1 (1 + length ks)) in
             let unit = Types.make_empty_closed_row () in
-            let present (s, x) = (s, `Present x)
+            let present (s, x) = (s, Types.Present x)
             in
-              `Record (fold_right2 (curry (Types.row_with -<- present)) labels (map datatype ks) unit)
-        | Record r -> `Record (row alias_env r t')
-        | Variant r -> `Variant (row alias_env r t')
-        | Effect r -> `Effect (row alias_env r t')
-        | Table (r, w, n) -> `Table (datatype r, datatype w, datatype n)
-        | List k -> `Application (Types.list, [ `Type (datatype k) ])
+              Types.Record (fold_right2 (curry (Types.row_with -<- present)) labels (map datatype ks) unit)
+        | Record r -> Types.Record (row alias_env r t')
+        | Variant r -> Types.Variant (row alias_env r t')
+        | Effect r -> Types.Effect (row alias_env r t')
+        | Table (r, w, n) -> Types.Table {read=datatype r; write=datatype w; needed=datatype n}
+        | List k -> Types.Application {tycon=Types.list; args=[datatype k]}
         | TypeApplication (tycon, ts) ->
             (* Matches kinds of the quantifiers against the type arguments.
              * Returns Types.type_args based on the given frontend type arguments. *)
@@ -153,7 +153,7 @@ module Desugar = struct
                   Instantiate.alias tycon ts alias_env
               | Some (`Abstract abstype) ->
                   let ts = match_quantifiers identity (Abstype.arity abstype) in
-                  `Application (abstype, ts)
+                  Application {tycon=abstype; args=ts}
               | Some (`Mutual (qs, tygroup_ref)) ->
                   (* Check that the quantifiers / kinds match up, then generate
                    * a `RecursiveApplication. *)
@@ -165,7 +165,7 @@ module Desugar = struct
                   in
                   let r_unique_name = tycon ^ string_of_int !tygroup_ref.id in
                   let r_linear () = StringMap.lookup tycon !tygroup_ref.linearity_map in
-                  `RecursiveApplication
+                  RecursiveApplication
                     { r_name = tycon;
                       r_dual = false;
                       r_unique_name;
@@ -173,8 +173,8 @@ module Desugar = struct
                       r_args; r_unwind; r_linear
                     }
             end
-        | Primitive k -> `Primitive k
-        | DB -> `Primitive Primitive.DB
+        | Primitive k -> Types.Primitive k
+        | DB -> Types.Primitive Primitive.DB
         | (Input _ | Output _ | Select _ | Choice _ | Dual _ | End) as s ->
             session_type alias_env s t'
 
@@ -183,19 +183,19 @@ module Desugar = struct
     (* HACKY *)
     let open Datatype in
     match st with
-    | Input (t, s)  -> `Input (datatype  alias_env t, datatype alias_env s)
-    | Output (t, s) -> `Output (datatype alias_env t, datatype alias_env s)
-    | Select r      -> `Select (row alias_env r node)
-    | Choice r      -> `Choice (row alias_env r node)
-    | Dual s        -> `Dual (datatype alias_env s)
-    | End           -> `End
+    | Input (t, s)  -> Types.Input  {payload=datatype alias_env t; cont=datatype alias_env s}
+    | Output (t, s) -> Types.Output {payload=datatype alias_env t; cont=datatype alias_env s}
+    | Select r      -> Types.Select (row alias_env r node)
+    | Choice r      -> Types.Choice (row alias_env r node)
+    | Dual s        -> Types.Dual (datatype alias_env s)
+    | End           -> Types.End
     | _ -> assert false
 
   and fieldspec alias_env fs _ =
     let open Datatype in
     match fs with
-    | Absent -> `Absent
-    | Present t -> `Present (datatype alias_env t)
+    | Absent -> Types.Absent
+    | Present t -> Types.Present (datatype alias_env t)
     (* | Var stv when is_anon stv ->
      *    let (_name, sk, freedom) = SugarTypeVar.get_unresolved_exn stv in
      *    `Var (make_anon_point var_env pos sk freedom) *)

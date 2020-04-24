@@ -11,13 +11,13 @@ Branch: types-refactor
     desugarCP.ml
     desugarDatatypes.ml
     desugarEffects.ml
+    desugarTypeVariables.ml
+ + done:
     desugarFormlets.ml
     desugarFors.ml
     desugarFuns.ml
     desugarInners.ml
     desugarPages.ml
-    desugarTypeVariables.ml
- + done:
     desugarProcesses.ml
     desugarRegexes.ml
     desugarSessionExceptions.ml
