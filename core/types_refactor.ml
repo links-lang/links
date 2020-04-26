@@ -139,7 +139,7 @@ and t =
   | Table of { read: t; write: t; needed: t }
   | Lens of unit (* TODO FIXME *)
   (* Row-y types. *)
-  | Row of { fields: t Utility.StringMap.t; dual: bool; var: t option }
+  | Row of { fields: t Utility.StringMap.t; var: t option; dual: bool  }
   | Absent
   | Present of t
   (* Session-y types. *)
