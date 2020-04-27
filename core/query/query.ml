@@ -865,18 +865,18 @@ struct
     | Q.Record fl -> Q.Record (StringMap.map (norm false env) fl)
     | Q.Concat xs -> Q.reduce_concat (List.map (norm in_dedup env) xs)
     | Q.Project (r, label) ->
-      let rec project (r, label) =
-        match r with
-          | Q.Record fields ->
-            assert (StringMap.mem label fields);
-            StringMap.find label fields
-          | Q.If (c, t, e) ->
-            Q.If (c, project (t, label), project (e, label))
-          | Q.Var (_x, field_types) ->
-            assert (StringMap.mem label field_types);
-            Q.Project (r, label)
-          | _ -> query_error ("Error projecting from record: %s") (string_of_t r)
-      in
+        let rec project (r, label) =
+          match r with
+            | Q.Record fields ->
+              assert (StringMap.mem label fields);
+              StringMap.find label fields
+            | Q.If (c, t, e) ->
+              Q.If (c, project (t, label), project (e, label))
+            | Q.Var (_x, field_types) ->
+              assert (StringMap.mem label field_types);
+              Q.Project (r, label)
+            | _ -> query_error ("Error projecting from record: %s") (string_of_t r)
+        in
         retn in_dedup (project (norm false env r, label))
     | Q.Erase (r, labels) ->
         let rec erase (r, labels) =
@@ -899,7 +899,7 @@ struct
             assert (StringSet.subset labels (Q.labels_of_field_types field_types));
             Q.Erase (r, labels)
           | _ -> query_error "Error erasing from record"
-      in
+        in
         erase (norm false env r, labels)
     | Q.Variant (label, v) -> Q.Variant (label, norm false env v)
     | Q.Apply (f, xs) -> apply in_dedup env (norm false env f, List.map (norm false env) xs)
@@ -944,6 +944,10 @@ struct
           |  _ -> assert false
       in
         reduce_case (norm false env v, cases, default)
+    | Q.Dedup v -> norm true env v
+    | Q.Prom v when in_dedup -> norm false env v
+    | Q.Prom v (* when not in_dedup *) -> 
+        Q.Prom (norm false env v)
     | v -> retn in_dedup v
 
   and apply in_dedup env : Q.t * Q.t list -> Q.t = function
@@ -1026,6 +1030,9 @@ struct
   and norm_comp in_dedup env c = norm in_dedup env (computation env c)
   and retn in_dedup u = if in_dedup then Q.Dedup u else u
 
+  (* specialize norm_* with in_dedup = false at the start of normalization *)
+  (* (norm is currently unused outside query.ml, so we comment the following) *)
+  (* let norm = norm false *)
   let norm_comp = norm_comp false
 
   let eval policy env e =
