@@ -1,3 +1,6 @@
+#IGNORED_BY_TEST_REGISTRATION_RULE_CHECKING_SCRIPT
+# Imported from other modules
+
 fun bar() {
   "hello from c!"
 }

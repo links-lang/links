@@ -1,3 +1,6 @@
+#IGNORED_BY_TEST_REGISTRATION_RULE_CHECKING_SCRIPT
+# Part of a group of files invoked via runmulti script
+
 open CyclicB;
 
 fun bar() {
