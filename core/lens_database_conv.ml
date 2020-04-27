@@ -5,8 +5,7 @@ let lens_db_of_db (db : Value.database) =
   let escape_string s = "'" ^ db#escape_string s ^ "'" in
   let quote_field s = db#quote_field s in
   let execute query =
-    db#exec query
-    |> fun result ->
+    db#exec query |> fun result ->
     match result#status with
     | `QueryOk -> ()
     | `QueryError msg -> failwith @@ "Error executing database command: " ^ msg
@@ -51,13 +50,15 @@ let lens_db_of_db (db : Value.database) =
            Value.box_record vs)
     |> List.map ~f:Lens_value_conv.lens_phrase_value_of_value
   in
-  { Lens.Database.driver_name
-  ; escape_string
-  ; quote_field
-  ; execute
-  ; execute_select }
+  {
+    Lens.Database.driver_name;
+    escape_string;
+    quote_field;
+    execute;
+    execute_select;
+  }
 
 let lens_table_of_table (table : Value.table) =
   let _, table, keys, _ = table in
   let open Lens.Database.Table in
-  {name= table; keys}
+  { name = table; keys }

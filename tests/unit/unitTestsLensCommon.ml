@@ -25,8 +25,7 @@ let database_args_opt =
 let verbose_opt = Conf.make_bool "v" false "Print verbose information."
 
 let classic_opt =
-  Conf.make_bool "classic_lenses" false
-    "Use non incremental relational lenses."
+  Conf.make_bool "classic_lenses" false "Use non incremental relational lenses."
 
 let benchmark_opt = Conf.make_bool "benchmark" false "Benchmark operations."
 
@@ -86,7 +85,7 @@ module LensTestHelpers = struct
       Lens.Fun_dep.Set.fold
         (fun fd fld ->
           Lens.Alias.Set.union_all
-            [Lens.Fun_dep.left fd; Lens.Fun_dep.right fd; fld])
+            [ Lens.Fun_dep.left fd; Lens.Fun_dep.right fd; fld ])
         fds Lens.Alias.Set.empty
     in
     let cols = Lens.Alias.Set.elements cols in
@@ -94,7 +93,7 @@ module LensTestHelpers = struct
       Column.make ~table ~name ~alias:name ~typ:Phrase.Type.Int ~present:true
     in
     let sort = Sort.make ~fds (List.map ~f:(colFn name) cols) in
-    Value.LensMem {records; sort}
+    Value.LensMem { records; sort }
 
   let mem_lens_str fds name data = mem_lens (fundepset_of_string fds) name data
 
@@ -106,7 +105,7 @@ module LensTestHelpers = struct
     in
     let del_left = Lens.Phrase.Constant.bool true in
     let del_right = Lens.Phrase.Constant.bool false in
-    Value.LensJoin {left; right; on; del_left; del_right; sort}
+    Value.LensJoin { left; right; on; del_left; del_right; sort }
 
   let join_lens_dr left right on =
     let sort, on =
@@ -116,21 +115,21 @@ module LensTestHelpers = struct
     in
     let del_left = Lens.Phrase.Constant.bool false in
     let del_right = Lens.Phrase.Constant.bool true in
-    Value.LensJoin {left; right; on; del_left; del_right; sort}
+    Value.LensJoin { left; right; on; del_left; del_right; sort }
 
   let select_lens lens predicate =
     let sort = Lens.Value.sort lens in
     let sort = Lens.Sort.select_lens_sort sort ~predicate |> Result.ok_exn in
-    Lens.Value.LensSelect {lens; predicate; sort}
+    Lens.Value.LensSelect { lens; predicate; sort }
 
   let drop_lens lens drop key default =
     let key' = Alias.Set.singleton key in
     let sort = Value.sort lens in
     let sort =
-      Sort.drop_lens_sort sort ~drop:[drop] ~default:[default] ~key:key'
+      Sort.drop_lens_sort sort ~drop:[ drop ] ~default:[ default ] ~key:key'
       |> Result.ok_exn
     in
-    Value.LensDrop {lens; drop; key; default; sort}
+    Value.LensDrop { lens; drop; key; default; sort }
 
   let select_query l predicate =
     let predicate = Some predicate in
@@ -156,7 +155,7 @@ module LensTestHelpers = struct
           (List.hd primary_key) (List.tl primary_key)
       ^ "));"
     in
-    print_table_query test_ctx query ;
+    print_table_query test_ctx query;
     let open Database in
     db.execute query
 
@@ -192,7 +191,7 @@ module LensTestHelpers = struct
     let returning = [] in
     let open Database.Insert in
     let insert =
-      Format.asprintf "%a" fmt {table; db; columns; values; returning}
+      Format.asprintf "%a" fmt { table; db; columns; values; returning }
     in
     let open Database in
     db.execute insert
@@ -200,13 +199,13 @@ module LensTestHelpers = struct
   let drop_if_exists test_ctx (db : Database.t) table =
     let open Database in
     let query = "DROP TABLE IF EXISTS " ^ db.quote_field table in
-    print_table_query test_ctx query ;
+    print_table_query test_ctx query;
     db.execute query
 
   let drop_if_cleanup test_ctx (db : Database.t) table =
     if leave_tables_opt test_ctx |> not then drop_if_exists test_ctx db table
 
-  type col_gen_type = [`Seq | `Constant of int | `RandTo of int | `Rand]
+  type col_gen_type = [ `Seq | `Constant of int | `RandTo of int | `Rand ]
 
   (* is there a more standardized function for this? *)
   let rec range a b = if a > b then [] else a :: range (a + 1) b
@@ -230,9 +229,9 @@ module LensTestHelpers = struct
   let create_record_type (cols : (string * Links_core.Types.typ) list) =
     let cols = List.map ~f:(fun (a, b) -> (a, `Present b)) cols in
     `Record
-      ( Links_core.Utility.StringMap.from_alist cols
-      , Links_core.Unionfind.fresh `Closed
-      , false )
+      ( Links_core.Utility.StringMap.from_alist cols,
+        Links_core.Unionfind.fresh `Closed,
+        false )
 
   let create_lens_db database tablename fd (key : string list)
       (cols : string list) =
@@ -240,11 +239,11 @@ module LensTestHelpers = struct
       Column.make ~alias:name ~name ~table ~typ:Phrase.Type.Int ~present:true
     in
     (* table is `Table of (database * db : str) * tablename : str * keys : string list list * row type *)
-    let table = Database.Table.{name= tablename; keys= [key]} in
+    let table = Database.Table.{ name = tablename; keys = [ key ] } in
     let fds = Lens.Fun_dep.Set.singleton fd in
     let cols = List.map ~f:(colFn tablename) cols in
     let sort = Lens.Sort.make ~fds cols in
-    let l1 = Value.Lens {database; table; sort} in
+    let l1 = Value.Lens { database; table; sort } in
     l1
 
   let drop_create_populate_table test_ctx (db : Database.t) table str str2
@@ -252,18 +251,15 @@ module LensTestHelpers = struct
     let fd = fundep_of_string str in
     let left = Lens.Fun_dep.left fd in
     let cols = colslist_of_string str2 in
-    drop_if_exists test_ctx db table |> ignore ;
-    create_table test_ctx db table (Lens.Alias.Set.elements left) cols
-    |> ignore ;
+    drop_if_exists test_ctx db table |> ignore;
+    create_table test_ctx db table (Lens.Alias.Set.elements left) cols |> ignore;
     let data = gen_data colGen cnt in
     if List.length data > 0 then
       let data = box_int_record_list cols data in
       let _ = insert_rows db table data in
       ()
-    else () ;
-    let lens =
-      create_lens_db db table fd (Lens.Alias.Set.elements left) cols
-    in
+    else ();
+    let lens = create_lens_db db table fd (Lens.Alias.Set.elements left) cols in
     lens
 
   let print_query_time () =
@@ -272,15 +268,16 @@ module LensTestHelpers = struct
     Format.printf "Query Time: %d / %d queries" qtime qcount
 
   let time_query _in_mem fn =
-    Lens.Statistics.reset () ;
+    Lens.Statistics.reset ();
     let res =
       Lens.Statistics.debug_time_out fn (fun time ->
           print_endline ("Total Time: " ^ string_of_int time))
     in
-    print_query_time () ; res
+    print_query_time ();
+    res
 
   let time_op fn =
-    Lens.Statistics.reset () ;
+    Lens.Statistics.reset ();
     let ttime = ref 0 in
     let _ = Lens.Statistics.debug_time_out fn (fun time -> ttime := time) in
     (Lens.Statistics.get_query_time (), !ttime)
@@ -321,4 +318,4 @@ let test_fundep_of_string _test_ctx =
     "A B -> C; C -> D; D -> E F"
 
 let suite =
-  "lens_common_helpers" >::: ["fundep_of_string" >:: test_fundep_of_string]
+  "lens_common_helpers" >::: [ "fundep_of_string" >:: test_fundep_of_string ]

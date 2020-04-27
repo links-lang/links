@@ -26,9 +26,9 @@ module Drop = struct
       make ~fds cols
     in
     let _sort' =
-      let drop = ["C"] in
+      let drop = [ "C" ] in
       let key = cols "B" in
-      let default = [Lens.Phrase.Value.Int 0] in
+      let default = [ Lens.Phrase.Value.Int 0 ] in
       drop_lens_sort sort ~drop ~key ~default |> Result.ok_exn
     in
     ()
@@ -40,9 +40,9 @@ module Drop = struct
       make ~fds cols
     in
     let error =
-      let drop = ["D"] in
+      let drop = [ "D" ] in
       let key = cols "E" in
-      let default = [Lens.Phrase.Value.Int 0] in
+      let default = [ Lens.Phrase.Value.Int 0 ] in
       drop_lens_sort sort ~drop ~key ~default |> Result.unpack_error_exn
     in
     assert_equal_drop_error ~ctxt
@@ -56,9 +56,9 @@ module Drop = struct
       make ~fds cols
     in
     let error =
-      let drop = ["D"] in
+      let drop = [ "D" ] in
       let key = cols "B" in
-      let default = [Lens.Phrase.Value.Int 0] in
+      let default = [ Lens.Phrase.Value.Int 0 ] in
       drop_lens_sort sort ~drop ~key ~default |> Result.unpack_error_exn
     in
     assert_equal_drop_error ~ctxt Lens.Sort.Drop_sort_error.DropNotDefinedByKey
@@ -71,21 +71,23 @@ module Drop = struct
       make ~fds cols
     in
     let error =
-      let drop = ["C"] in
+      let drop = [ "C" ] in
       let key = cols "B" in
-      let default = [Lens.Phrase.Value.String "test"] in
+      let default = [ Lens.Phrase.Value.String "test" ] in
       drop_lens_sort sort ~drop ~key ~default |> Result.unpack_error_exn
     in
     assert_equal_drop_error ~ctxt
       (Lens.Sort.Drop_sort_error.DropTypeError
-         {column= "C"; default_type= PT.String; column_type= PT.Int})
+         { column = "C"; default_type = PT.String; column_type = PT.Int })
       error
 
   let suite =
-    [ "simple" >:: simple
-    ; "unbound_column" >:: unbound_column
-    ; "defining_fd_not_found" >:: drop_not_defined_by_key
-    ; "column_type_error" >:: column_type_error ]
+    [
+      "simple" >:: simple;
+      "unbound_column" >:: unbound_column;
+      "defining_fd_not_found" >:: drop_not_defined_by_key;
+      "column_type_error" >:: column_type_error;
+    ]
 end
 
-let suite = "lens_sort" >::: ["drop" >::: Drop.suite]
+let suite = "lens_sort" >::: [ "drop" >::: Drop.suite ]

@@ -93,15 +93,17 @@ module Env = struct
     match lookup_fun (var, None) with
     | Some v -> v
     | None -> (
-      match (Value.Env.lookup var val_env, LEnv.Int.find_opt var exp_env) with
-      | None, Some v -> v
-      | Some v, None -> expression_of_value v
-      | Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
-      | None, None -> (
-        try expression_of_value (Lib.primitive_stub (Lib.primitive_name var))
-        with NotFound _ ->
-          raise (internal_error (Format.sprintf "Variable %d not found" var)) )
-      )
+        match (Value.Env.lookup var val_env, LEnv.Int.find_opt var exp_env) with
+        | None, Some v -> v
+        | Some v, None -> expression_of_value v
+        | Some _, Some v -> v (*eval_error "Variable %d bound twice" var*)
+        | None, None -> (
+            try
+              expression_of_value (Lib.primitive_stub (Lib.primitive_name var))
+            with NotFound _ ->
+              raise
+                (internal_error (Format.sprintf "Variable %d not found" var)) )
+        )
 
   let bind (val_env, exp_env) (x, v) = (val_env, Env.Int.bind x v exp_env)
 end
@@ -242,20 +244,20 @@ let lens_sugar_phrase_of_ir p env =
     match binders with
     | [] -> tail_computation env tailcomp
     | b :: bs -> (
-      match b with
-      | I.Let (xb, (_, tc)) ->
-          let x = Var.var_of_binder xb in
-          let v = tail_computation env tc in
-          Result.bind
-            ~f:(fun v -> computation (Env.bind env (x, v)) (bs, tailcomp))
-            v
-      | I.Fun (_, _, _, Location.Client) ->
-          Result.error Of_ir_error.Client_function
-      | I.Fun _ ->
-          Result.error @@ Of_ir_error.Internal_error "Unexpected function."
-      | I.Rec _ -> Result.error Of_ir_error.Recursive_function
-      | I.Alien _ -> computation env (bs, tailcomp)
-      | I.Module _ -> Result.error Of_ir_error.Modules_unsupported )
+        match b with
+        | I.Let (xb, (_, tc)) ->
+            let x = Var.var_of_binder xb in
+            let v = tail_computation env tc in
+            Result.bind
+              ~f:(fun v -> computation (Env.bind env (x, v)) (bs, tailcomp))
+              v
+        | I.Fun (_, _, _, Location.Client) ->
+            Result.error Of_ir_error.Client_function
+        | I.Fun _ ->
+            Result.error @@ Of_ir_error.Internal_error "Unexpected function."
+        | I.Rec _ -> Result.error Of_ir_error.Recursive_function
+        | I.Alien _ -> computation env (bs, tailcomp)
+        | I.Module _ -> Result.error Of_ir_error.Modules_unsupported )
   and unpack_phrase v =
     match v with
     | IrValue.Phrase p -> Result.return p
@@ -269,20 +271,15 @@ let lens_sugar_phrase_of_ir p env =
           List.fold_right2 (fun x arg env -> Env.bind env (x, arg)) xs args env
         in
         computation env body
-    | IrValue.Primitive f, [v1; v2] ->
-        Primitives.binary_of_string f
-        >>= fun op ->
-        unpack_phrase v1
-        >>= fun v1 ->
-        unpack_phrase v2
-        >>| fun v2 ->
+    | IrValue.Primitive f, [ v1; v2 ] ->
+        Primitives.binary_of_string f >>= fun op ->
+        unpack_phrase v1 >>= fun v1 ->
+        unpack_phrase v2 >>| fun v2 ->
         let p = Lens.Phrase.infix op v1 v2 in
         IrValue.Phrase p
-    | IrValue.Primitive f, [v1] ->
-        Primitives.unary_of_string f
-        >>= fun op ->
-        unpack_phrase v1
-        >>| fun v1 ->
+    | IrValue.Primitive f, [ v1 ] ->
+        Primitives.unary_of_string f >>= fun op ->
+        unpack_phrase v1 >>| fun v1 ->
         let p = Lens.Phrase.UnaryAppl (op, v1) in
         IrValue.Phrase p
     | _ -> Result.error Of_ir_error.Application_of_nonfunction
@@ -291,26 +288,22 @@ let lens_sugar_phrase_of_ir p env =
     match comp with
     | I.Return v -> value env v
     | I.If (v, ct, cf) -> (
-        value env v
-        >>= fun v ->
-        unpack_phrase v
-        >>= fun v ->
-        computation env ct
-        >>= fun ct ->
-        computation env cf
-        >>= fun cf ->
+        value env v >>= fun v ->
+        unpack_phrase v >>= fun v ->
+        computation env ct >>= fun ct ->
+        computation env cf >>= fun cf ->
         match cf with
         | IrValue.Phrase (Lens.Phrase.Constant (Lens.Phrase.Value.Bool false))
           ->
-            unpack_phrase ct
-            >>| fun ct -> IrValue.Phrase (Lens.Phrase.and' v ct)
+            unpack_phrase ct >>| fun ct ->
+            IrValue.Phrase (Lens.Phrase.and' v ct)
         | _ -> (
-          match ct with
-          | IrValue.Phrase (Lens.Phrase.Constant (Lens.Phrase.Value.Bool true))
-            ->
-              unpack_phrase cf
-              >>| fun cf -> IrValue.Phrase (Lens.Phrase.or' v cf)
-          | _ -> Result.error (Of_ir_error.Unsupported_arbitrary_if comp) ) )
+            match ct with
+            | IrValue.Phrase
+                (Lens.Phrase.Constant (Lens.Phrase.Value.Bool true)) ->
+                unpack_phrase cf >>| fun cf ->
+                IrValue.Phrase (Lens.Phrase.or' v cf)
+            | _ -> Result.error (Of_ir_error.Unsupported_arbitrary_if comp) ) )
     | I.Apply (f, args) ->
         let f = value env f in
         let args = List.map_result ~f:(value env) args in
@@ -330,8 +323,7 @@ let lens_sugar_phrase_of_ir p env =
     | I.TApp (v, _) -> value env v
     | I.Coerce (v, _) -> value env v
     | I.Project (n, r) ->
-        value env r
-        >>= fun r ->
+        value env r >>= fun r ->
         ( match r with
         | IrValue.Record -> Lens.Phrase.var n |> Result.return
         | IrValue.Phrase (Lens.Phrase.Constant c) ->
@@ -354,8 +346,7 @@ let lens_sugar_phrase_of_ir p env =
     | I.Variable v -> lookup_val env v
     | I.Extend (ext_fields, r) ->
         let r = Option.map ~f:(links_value env) r in
-        Option.value r ~default:(`Record [] |> Result.return)
-        >>= fun r ->
+        Option.value r ~default:(`Record [] |> Result.return) >>= fun r ->
         let fields = StringMap.to_alist ext_fields in
         List.map_result
           ~f:(fun (k, v) -> links_value env v >>| fun v -> (k, v))
@@ -375,7 +366,7 @@ let lens_sugar_phrase_of_ir p env =
     let open Result.O in
     let initial_val env v =
       match v with
-      | IrValue.Closure (([v], comp), closure_env) ->
+      | IrValue.Closure (([ v ], comp), closure_env) ->
           let env = Env.append env closure_env in
           let env = Env.bind env (v, IrValue.Record) in
           computation env comp
@@ -387,8 +378,8 @@ let lens_sugar_phrase_of_ir p env =
     | I.TApp (v, _) -> initial env v
     | I.Coerce (v, _) -> initial env v
     | I.Closure (var, _, args) ->
-        links_value env args
-        >>= fun args -> initial_val env (Env.find_fun (var, Some args))
+        links_value env args >>= fun args ->
+        initial_val env (Env.find_fun (var, Some args))
     | I.Variable var -> initial_val env (Env.lookup env var)
     | _ -> Format.asprintf "unsupported initial %a" I.pp_value p |> failwith
   in
