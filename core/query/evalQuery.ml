@@ -145,20 +145,20 @@ struct
       let open QL in
       function
         | Concat vs ->
-          let cs = queries gs cond vs in
+            let cs = queries gs cond vs in
             Node ([], cs)
         | If (cond', v, Concat []) ->
-          query gs (QL.reduce_and (cond, cond')) v
+            query gs (QL.reduce_and (cond, cond')) v
         | For (_, gs', os, Concat vs) ->
-          let os' = lift_vals os @ lift_gens gs' in
-          let cs = queries (gs @ gs') cond vs in
+            let os' = lift_vals os @ lift_gens gs' in
+            let cs = queries (gs @ gs') cond vs in
             Node (os', cs)
         | For (_, gs', os, body) ->
-          Leaf ((gs @ gs',
-                  QL.reduce_where_then (cond, body)),
-                 lift_vals os @ lift_gens gs @ lift_tail_gens gs')
+            Leaf ((gs @ gs',
+              QL.reduce_where_then (cond, body)),
+              lift_vals os @ lift_gens gs @ lift_tail_gens gs')
         | Singleton r ->
-          Leaf ((gs, QL.reduce_where_then (cond, Singleton r)), [])
+            Leaf ((gs, QL.reduce_where_then (cond, Singleton r)), [])
         | _ -> assert false
   and queries : context -> QL.t -> QL.t list -> (int * query_tree) list =
     fun gs cond vs ->
