@@ -5,7 +5,7 @@ module Sugar = Phrase_sugar
 module Types = Phrase_type
 module Value = Phrase_value
 
-type 'a error = {msg: string; data: 'a}
+type 'a error = { msg : string; data : 'a }
 
 let rec typ_constant constant =
   match constant with
@@ -18,47 +18,47 @@ let rec typ_constant constant =
   | _ -> failwith "Unsupported constant."
 
 let rec tc_infix ~env ~data ~op p q =
-  tc ~env p
-  >>= fun p ->
-  tc ~env q
-  >>= fun q ->
+  tc ~env p >>= fun p ->
+  tc ~env q >>= fun q ->
   match op with
   | Binary.LogicalAnd
    |Binary.LogicalOr -> (
-    match (p, q) with
-    | Types.Bool, Types.Bool -> Result.return Types.Bool
-    | _ ->
-        Result.error {data; msg= "Logical operator requires boolean operands."}
-    )
+      match (p, q) with
+      | Types.Bool, Types.Bool -> Result.return Types.Bool
+      | _ ->
+          Result.error
+            { data; msg = "Logical operator requires boolean operands." } )
   | Binary.Greater
    |Binary.GreaterEqual
    |Binary.Less
    |Binary.LessEqual
    |Binary.Equal ->
       if Types.equal p q then Result.return Types.Bool
-      else Result.error {data; msg= "Types do not match."}
+      else Result.error { data; msg = "Types do not match." }
   | Binary.Minus
    |Binary.Plus
    |Binary.Multiply
    |Binary.Divide -> (
-    match (p, q) with
-    | Types.Int, Types.Int -> Types.Int |> Result.return
-    | Types.Float, Types.Float -> Types.Float |> Result.return
-    | _ -> Result.error {data; msg= "Incorrect or unmatching numeric types."} )
+      match (p, q) with
+      | Types.Int, Types.Int -> Types.Int |> Result.return
+      | Types.Float, Types.Float -> Types.Float |> Result.return
+      | _ ->
+          Result.error { data; msg = "Incorrect or unmatching numeric types." }
+      )
 
 and tc_unary ~env ~data ~op p =
-  tc ~env p
-  >>= fun p ->
+  tc ~env p >>= fun p ->
   match op with
   | Unary.Not -> (
-    match p with
-    | Types.Bool -> Result.return Types.Bool
-    | _ -> Result.error {msg= "Unsupported unary negation operand."; data} )
+      match p with
+      | Types.Bool -> Result.return Types.Bool
+      | _ -> Result.error { msg = "Unsupported unary negation operand."; data }
+      )
   | Unary.Minus -> (
-    match p with
-    | Types.Int -> Result.Ok Types.Int
-    | Types.Float -> Result.Ok Types.Float
-    | _ -> Result.Error {msg= "Unsuported unary minus operand."; data} )
+      match p with
+      | Types.Int -> Result.Ok Types.Int
+      | Types.Float -> Result.Ok Types.Float
+      | _ -> Result.Error { msg = "Unsuported unary minus operand."; data } )
 
 and tc ~env (data, phrase) =
   match phrase with
@@ -67,7 +67,7 @@ and tc ~env (data, phrase) =
       let res = Alias.Map.find ~key:v env in
       Result.of_option res ~error:(fun _ ->
           let msg = Format.asprintf "Column '%s' is not bound." v in
-          Result.error {data; msg})
+          Result.error { data; msg })
   | Sugar.InfixAppl (op, p, q) -> tc_infix ~env ~data ~op p q
   | Sugar.UnaryAppl (op, p) -> tc_unary ~env ~data ~op p
 

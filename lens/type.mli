@@ -1,6 +1,6 @@
 type t =
   | ConcreteLens of Sort.t  (** A statically fully checked lens. *)
-  | AbstractLens of {checked: bool; sort: Sort.t}
+  | AbstractLens of { checked : bool; sort : Sort.t }
       (** The type of a lens where not all checks have been performed.
           The predicate value is a dummy value (None) and not the actual predicate. *)
 [@@deriving show]
@@ -11,9 +11,9 @@ val sort : t -> Sort.t
 val equal : t -> t -> bool
 
 val type_lens_fun_dep :
-     fds:(string list * string list) list
-  -> columns:Column.List.t
-  -> (t, Sort.Lens_sort_error.t) result
+  fds:(string list * string list) list ->
+  columns:Column.List.t ->
+  (t, Sort.Lens_sort_error.t) result
 
 (** Change the specified columns to be of serial type. *)
 val set_serial : t -> columns:Alias.Set.t -> t
@@ -35,11 +35,11 @@ module Drop_lens_error : sig
 end
 
 val type_drop_lens :
-     t
-  -> drop:Alias.t list
-  -> default:Phrase_type.t list
-  -> key:Alias.Set.t
-  -> (t, Drop_lens_error.t) result
+  t ->
+  drop:Alias.t list ->
+  default:Phrase_type.t list ->
+  key:Alias.Set.t ->
+  (t, Drop_lens_error.t) result
 
 module Join_lens_error : sig
   type lens = Left | Right
@@ -51,12 +51,12 @@ module Join_lens_error : sig
 end
 
 val type_join_lens :
-     t
-  -> t
-  -> on:(string * string * string) list
-  -> del_left:'a Phrase_sugar.phrase
-  -> del_right:'a Phrase_sugar.phrase
-  -> (t, 'a Join_lens_error.t) result
+  t ->
+  t ->
+  on:(string * string * string) list ->
+  del_left:'a Phrase_sugar.phrase ->
+  del_right:'a Phrase_sugar.phrase ->
+  (t, 'a Join_lens_error.t) result
 
 val record_type : t -> Phrase_type.t
 

@@ -26,11 +26,11 @@ val present_colset : t -> Column.Set.t
 
 (** Construct a lens sort *)
 val make :
-     ?fds:Fun_dep.Set.t
-  -> ?predicate:Phrase.t option
-  -> ?query:Phrase.t option
-  -> Column.t list
-  -> t
+  ?fds:Fun_dep.Set.t ->
+  ?predicate:Phrase.t option ->
+  ?query:Phrase.t option ->
+  Column.t list ->
+  t
 
 (** Find the column with the specified alias *)
 val find_col_alias : t -> alias:string -> Column.t option
@@ -58,10 +58,13 @@ val lens_sort :
 
 module Select_sort_error : sig
   type t =
-    | PredicateDoesntIgnoreOutputs of {fds: Fun_dep.Set.t; columns: Alias.Set.t}
+    | PredicateDoesntIgnoreOutputs of {
+        fds : Fun_dep.Set.t;
+        columns : Alias.Set.t;
+      }
         (** The underlying lens predicate doesn't ignore the outputs of the
             functional dependencies. *)
-    | TreeFormError of {error: Fun_dep.Tree.Tree_form_error.t}
+    | TreeFormError of { error : Fun_dep.Tree.Tree_form_error.t }
         (** The functional dependencies are not in tree form. *)
     | UnboundColumns of Alias.Set.t
         (** The specified columns are not bound by the lens. *)
@@ -91,10 +94,11 @@ module Drop_sort_error : sig
           of default values specified. *)
     | DefaultDoesntMatchPredicate
         (** The default value a for A does not satisfy P[A]. *)
-    | DropTypeError of
-        { column: Alias.t
-        ; default_type: Phrase_type.t
-        ; column_type: Phrase_type.t }
+    | DropTypeError of {
+        column : Alias.t;
+        default_type : Phrase_type.t;
+        column_type : Phrase_type.t;
+      }
         (** The type of [column] is [column_type] does not match the
           type [default_type] of the default value. *)
     | NotIndependent of Alias.Set.t
@@ -108,24 +112,24 @@ module Join_sort_error : sig
   type t =
     | UnboundColumn of Alias.Set.t
     | AlreadyBound of Alias.Set.t
-    | TreeFormError of {error: Fun_dep.Tree.Tree_form_error.t}
+    | TreeFormError of { error : Fun_dep.Tree.Tree_form_error.t }
   [@@deriving eq]
 end
 
 (** Create a drop lens sort. *)
 val drop_lens_sort :
-     t
-  -> drop:Alias.t list
-  -> default:Phrase.Value.t list
-  -> key:Alias.Set.t
-  -> (t, Drop_sort_error.t) result
+  t ->
+  drop:Alias.t list ->
+  default:Phrase.Value.t list ->
+  key:Alias.Set.t ->
+  (t, Drop_sort_error.t) result
 
 (** Create a sort as the join of two other sorts on the columns specified by [on] *)
 val join_lens_sort :
-     t
-  -> t
-  -> on:(string * string * string) list
-  -> (t * (string * string * string) list, Join_sort_error.t) result
+  t ->
+  t ->
+  on:(string * string * string) list ->
+  (t * (string * string * string) list, Join_sort_error.t) result
 
 (** Convert the sort into a phrase type. *)
 val record_type : t -> Phrase_type.t

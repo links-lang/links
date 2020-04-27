@@ -9,11 +9,11 @@ let lens_put_set_step lens data (fn : Value.t -> Sorted.t -> unit) =
   in
   match lens with
   | Lens _ -> fn lens data
-  | LensDrop {lens= l; drop; key; default; _} ->
+  | LensDrop { lens = l; drop; key; default; _ } ->
       let r = get l in
       let columns = Value.cols_present_aliases lens in
       let nplus = Sorted.minus data (Sorted.project_onto r ~columns) in
-      let a = Sorted.construct ~records:[box_record [(drop, default)]] in
+      let a = Sorted.construct ~records:[ box_record [ (drop, default) ] ] in
       let on_left = List.map (fun v -> (v, v, v)) columns in
       let m =
         Sorted.merge
@@ -22,11 +22,11 @@ let lens_put_set_step lens data (fn : Value.t -> Sorted.t -> unit) =
       in
       let res =
         Sorted.relational_update
-          ~fun_deps:(Fun_dep.Set.of_lists [([key], [drop])])
+          ~fun_deps:(Fun_dep.Set.of_lists [ ([ key ], [ drop ]) ])
           m ~update_with:r
       in
       fn l res
-  | LensJoin {left; right; on; del_left; del_right; _} ->
+  | LensJoin { left; right; on; del_left; del_right; _ } ->
       let getfds l = Value.fundeps l in
       let cols l = Value.cols_present_aliases l in
       let r = get left in
@@ -59,8 +59,9 @@ let lens_put_set_step lens data (fn : Value.t -> Sorted.t -> unit) =
              (Sorted.filter la ~predicate:del_right)
              ~columns:(cols right))
       in
-      fn left m ; fn right n
-  | LensSelect {lens= l; predicate; _} ->
+      fn left m;
+      fn right n
+  | LensSelect { lens = l; predicate; _ } ->
       let sort = Value.sort l in
       let r = get l in
       let m1 =
@@ -81,13 +82,13 @@ let apply_table_data ~table ~database data =
   let exec cmd = Statistics.time_query (fun () -> database.execute cmd) in
   let cmd = "delete from " ^ database.quote_field table ^ " where TRUE" in
   let _ = exec cmd in
-  if show_query then print_endline cmd else () ;
+  if show_query then print_endline cmd else ();
   let columns = Sorted.columns data in
   let values = Sorted.plus_rows data |> Array.to_list in
   let fmt_insert f values =
-    let values = [values] in
+    let values = [ values ] in
     let returning = [] in
-    let insert = {Database.Insert.table; columns; values; db; returning} in
+    let insert = { Database.Insert.table; columns; values; db; returning } in
     Database.Insert.fmt f insert
   in
   let fmt_cmd_sep f () = Format.pp_print_string f ";\n" in
@@ -96,7 +97,7 @@ let apply_table_data ~table ~database data =
   in
   let cmds = Format.asprintf "%a" fmt_all () in
   if String.equal "" cmds |> not then (
-    if show_query then print_endline cmds ;
+    if show_query then print_endline cmds;
     exec cmds |> ignore )
 
 let lens_put_step lens data (fn : Value.t -> Sorted.t -> unit) =
@@ -110,7 +111,7 @@ let lens_put_step lens data (fn : Value.t -> Sorted.t -> unit) =
 let lens_put (lens : Value.t) (data : Phrase_value.t list) =
   let rec do_step_rec lens data =
     match lens with
-    | Lens {table; database; _} -> apply_table_data ~table ~database data
+    | Lens { table; database; _ } -> apply_table_data ~table ~database data
     | _ -> lens_put_set_step lens data do_step_rec
   in
   do_step_rec lens

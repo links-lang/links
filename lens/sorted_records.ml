@@ -70,10 +70,11 @@ module Simple_record = struct
   let equal v1 v2 = List.for_all2 equal_val v1 v2
 end
 
-type t =
-  { columns: string list
-  ; plus_rows: Simple_record.t array
-  ; neg_rows: Simple_record.t array }
+type t = {
+  columns : string list;
+  plus_rows : Simple_record.t array;
+  neg_rows : Simple_record.t array;
+}
 
 module Inconsistent_columns_error = struct
   exception E of string list * string list
@@ -101,8 +102,8 @@ let construct_cols ~columns ~records =
     List.map2 (fun a (k, v) -> if a = k then v else col_val a r) columns r
   in
   let plus_rows = Array.of_list (List.map ~f:simpl_rec recs) in
-  Array.sort compare plus_rows ;
-  {columns; plus_rows; neg_rows= [||]}
+  Array.sort compare plus_rows;
+  { columns; plus_rows; neg_rows = [||] }
 
 let construct ~records =
   let recs = List.map ~f:Value.unbox_record records in
@@ -110,14 +111,15 @@ let construct ~records =
   construct_cols ~columns ~records
 
 let sort rs =
-  Array.sort Simple_record.compare rs.plus_rows ;
+  Array.sort Simple_record.compare rs.plus_rows;
   Array.sort Simple_record.compare rs.neg_rows
 
 let construct_full ~columns ~plus ~neg =
   let v =
-    {columns; plus_rows= Array.of_list plus; neg_rows= Array.of_list neg}
+    { columns; plus_rows = Array.of_list plus; neg_rows = Array.of_list neg }
   in
-  sort v ; v
+  sort v;
+  v
 
 let columns t = t.columns
 
@@ -165,17 +167,17 @@ let pp_tabular f rs =
     in
     Format.pp_print_list ~pp_sep pp_str f rs.columns
   in
-  Format.fprintf f "%a\n%a\n%a\n%a\n%a" pp_header rs.columns pp_v_sep ()
-    pp_rows rs.plus_rows pp_v_sep () pp_rows rs.neg_rows
+  Format.fprintf f "%a\n%a\n%a\n%a\n%a" pp_header rs.columns pp_v_sep () pp_rows
+    rs.plus_rows pp_v_sep () pp_rows rs.neg_rows
 
 let find rs ~record =
   Simple_record.find_index rs.plus_rows ~record |> Option.is_some
 
 let map_values ~f rs =
-  let {plus_rows; neg_rows; columns} = rs in
+  let { plus_rows; neg_rows; columns } = rs in
   let plus_rows = Array.map (Simple_record.map ~f) plus_rows in
   let neg_rows = Array.map (Simple_record.map ~f) neg_rows in
-  {plus_rows; neg_rows; columns}
+  { plus_rows; neg_rows; columns }
 
 (** Construct a function which returns the nth value of a list, correspodning to the position of
     that column in cols *)
@@ -203,11 +205,11 @@ let get_cols_map rs ~columns =
 
 let sort_uniq rs =
   let fn r = Array.of_list (List.sort_uniq compare (Array.to_list r)) in
-  {rs with plus_rows= fn rs.plus_rows; neg_rows= fn rs.neg_rows}
+  { rs with plus_rows = fn rs.plus_rows; neg_rows = fn rs.neg_rows }
 
-let negate rs = {rs with plus_rows= rs.neg_rows; neg_rows= rs.plus_rows}
+let negate rs = { rs with plus_rows = rs.neg_rows; neg_rows = rs.plus_rows }
 
-let negative rs = {rs with plus_rows= [||]}
+let negative rs = { rs with plus_rows = [||] }
 
 (* filter out the records which don't satisfy pred *)
 let filter rs ~predicate =
@@ -223,9 +225,11 @@ let filter rs ~predicate =
          (fun r -> Phrase.eval predicate (get_col_val r) = Value.box_bool true)
          (Array.to_list rows))
   in
-  { columns= rs.columns
-  ; plus_rows= filter rs.plus_rows
-  ; neg_rows= filter rs.neg_rows }
+  {
+    columns = rs.columns;
+    plus_rows = filter rs.plus_rows;
+    neg_rows = filter rs.neg_rows;
+  }
 
 (* ensures that all columns in contains are in cols *)
 let cols_contain cols contains =
@@ -235,16 +239,16 @@ let zip_delta_merge left right =
   let rec do_next left right =
     match (left, right) with
     | x :: xs, y :: ys -> (
-      match compare x y with
-      | a when a < 0 ->
-          (* x < y, so take x and see if can find y *)
-          let left, right = do_next xs right in
-          (x :: left, right)
-      | a when a > 0 ->
-          (* x > y, so take y and try find x *)
-          let left, right = do_next left ys in
-          (left, y :: right)
-      | _ -> (* x = y, so skip both *) do_next xs ys )
+        match compare x y with
+        | a when a < 0 ->
+            (* x < y, so take x and see if can find y *)
+            let left, right = do_next xs right in
+            (x :: left, right)
+        | a when a > 0 ->
+            (* x > y, so take y and try find x *)
+            let left, right = do_next left ys in
+            (left, y :: right)
+        | _ -> (* x = y, so skip both *) do_next xs ys )
     | _ -> (left, right)
     (* one of them is empty so return rest *)
   in
@@ -257,10 +261,8 @@ let project_onto rs ~columns =
   let neg_rows = Array.map maps rs.neg_rows |> Array.to_list in
   let columns = maps rs.columns in
   let plus_rows, neg_rows = zip_delta_merge plus_rows neg_rows in
-  let plus_rows, neg_rows =
-    (Array.of_list plus_rows, Array.of_list neg_rows)
-  in
-  {columns; plus_rows; neg_rows}
+  let plus_rows, neg_rows = (Array.of_list plus_rows, Array.of_list neg_rows) in
+  { columns; plus_rows; neg_rows }
 
 let project_onto_set rs ~onto = project_onto rs ~columns:onto.columns
 
@@ -275,9 +277,11 @@ let merge rs1 rs2 =
   in
   let neg = List.sort compare neg in
   let plus, neg = zip_delta_merge plus neg in
-  { columns= rs1.columns
-  ; plus_rows= Array.of_list plus
-  ; neg_rows= Array.of_list neg }
+  {
+    columns = rs1.columns;
+    plus_rows = Array.of_list plus;
+    neg_rows = Array.of_list neg;
+  }
 
 let minus rs1 rs2 =
   if is_positive rs2 |> not then
@@ -290,14 +294,14 @@ let minus rs1 rs2 =
       @@ Array.to_list rs1.plus_rows
       |> Array.of_list
     in
-    {rs1 with plus_rows}
+    { rs1 with plus_rows }
 
 module Reorder_error = struct
-  type t = Not_subset of {first: string list; cols: string list}
+  type t = Not_subset of { first : string list; cols : string list }
 
   let pp f v =
     match v with
-    | Not_subset {first; cols} ->
+    | Not_subset { first; cols } ->
         Format.fprintf f
           "Could not reorder the columns { %a } to the left as they are not a \
            subset of { %a }."
@@ -306,7 +310,7 @@ end
 
 let reorder_cols cols ~first =
   if not (cols_contain cols first) then
-    Reorder_error.Not_subset {first; cols} |> Result.error
+    Reorder_error.Not_subset { first; cols } |> Result.error
   else
     let rest =
       List.filter (fun a -> not (List.mem ~equal:String.equal first a)) cols
@@ -325,7 +329,8 @@ let subtract_cols cols remove =
 
 module Join_error = struct
   type elt = t
-  type t = Reorder_error of {error: Reorder_error.t; left: elt; right: elt}
+  type t =
+    | Reorder_error of { error : Reorder_error.t; left : elt; right : elt }
 
   let pp f v =
     let pp_data f (left, right) =
@@ -333,9 +338,9 @@ module Join_error = struct
         pp_tabular right
     in
     match v with
-    | Reorder_error {error; left; right} ->
-        Format.fprintf f "Error reordering columns: %a%a" Reorder_error.pp
-          error pp_data (left, right)
+    | Reorder_error { error; left; right } ->
+        Format.fprintf f "Error reordering columns: %a%a" Reorder_error.pp error
+          pp_data (left, right)
 end
 
 let join left right ~on =
@@ -343,7 +348,7 @@ let join left right ~on =
   let on_out, on_left, on_right = List.unzip3 on in
   reorder_cols right.columns ~first:on_right
   |> Result.map_error ~f:(fun error ->
-         Join_error.Reorder_error {left; right; error})
+         Join_error.Reorder_error { left; right; error })
   >>| fun right_cols ->
   let right = project_onto right ~columns:right_cols in
   let lmap = get_cols_map left ~columns:on_left in
@@ -361,7 +366,7 @@ let join left right ~on =
           let matching = Simple_record.find_all_record l2 ~record:proj in
           let joined =
             List.map
-              ~f:(fun r2 -> List.flatten [r1; rjoinmap_right r2])
+              ~f:(fun r2 -> List.flatten [ r1; rjoinmap_right r2 ])
               (Array.to_list matching)
           in
           joined)
@@ -373,9 +378,11 @@ let join left right ~on =
   let pos = List.sort compare pos in
   let neg =
     List.flatten
-      [ join_list left.plus_rows right.neg_rows
-      ; join_list left.neg_rows right.plus_rows
-      ; join_list left.neg_rows right.neg_rows ]
+      [
+        join_list left.plus_rows right.neg_rows;
+        join_list left.neg_rows right.plus_rows;
+        join_list left.neg_rows right.neg_rows;
+      ]
   in
   let neg = List.sort compare neg in
   let pos, neg = zip_delta_merge pos neg in
@@ -385,8 +392,8 @@ let join left right ~on =
       ~f:(fun v -> String.Map.find_opt v l_map |> Option.value ~default:v)
       left.columns
   in
-  let columns = List.flatten [l_cols; rjoinmap_right' right_cols] in
-  {columns; plus_rows= Array.of_list pos; neg_rows= Array.of_list neg}
+  let columns = List.flatten [ l_cols; rjoinmap_right' right_cols ] in
+  { columns; plus_rows = Array.of_list pos; neg_rows = Array.of_list neg }
 
 let join_exn left right ~on =
   join left right ~on |> Result.ok_internal ~pp:Join_error.pp
@@ -442,7 +449,7 @@ let relational_update t ~fun_deps ~update_with =
                ~f:(fun mp ->
                  match mp with
                  | None -> []
-                 | Some a -> [a])
+                 | Some a -> [ a ])
                col_maps)
         in
         (* get a function which compares column with change *)
@@ -459,8 +466,8 @@ let relational_update t ~fun_deps ~update_with =
     List.map
       ~f:(fun ((_cols_l, cols_r), _l) ->
         (* upd cols returns a function which, given a record another record containing cols_r,
-       * replaces every column value in the first record from that in the second record if it
-       * matches *)
+           * replaces every column value in the first record from that in the second record if it
+           * matches *)
         let rec upd cols =
           match cols with
           | [] -> fun _r _target -> []
@@ -499,13 +506,13 @@ let relational_update t ~fun_deps ~update_with =
   in
   let plus_rows = update t.plus_rows in
   let neg_rows = [||] in
-  let res = {t with neg_rows; plus_rows} in
+  let res = { t with neg_rows; plus_rows } in
   sort_uniq res
 
 let abs t =
   let plus_rows = t.plus_rows in
   let columns = t.columns in
-  {plus_rows; columns; neg_rows= [||]}
+  { plus_rows; columns; neg_rows = [||] }
 
 let relational_merge t ~fun_deps ~update_with =
   let updated = relational_update t ~fun_deps ~update_with in
@@ -513,9 +520,8 @@ let relational_merge t ~fun_deps ~update_with =
 
 let relational_extend t ~key ~by ~data ~default =
   let open Result.O in
-  let colmap = get_cols_map t ~columns:[key] in
-  reorder data ~first:[key]
-  >>| fun data ->
+  let colmap = get_cols_map t ~columns:[ key ] in
+  reorder data ~first:[ key ] >>| fun data ->
   let relevant_value_map = Option.value_exn (get_col_map data ~column:by) in
   let extend row =
     let find = colmap row in
@@ -525,12 +531,12 @@ let relational_extend t ~key ~by ~data ~default =
       | None -> default
       | Some r -> relevant_value_map r
     in
-    List.append row [v]
+    List.append row [ v ]
   in
   let plus_rows = Array.map extend t.plus_rows in
   let neg_rows = Array.map extend t.neg_rows in
-  let columns = List.append t.columns [by] in
-  {columns; plus_rows; neg_rows}
+  let columns = List.append t.columns [ by ] in
+  { columns; plus_rows; neg_rows }
 
 let relational_extend_exn t ~key ~by ~data ~default =
   relational_extend t ~key ~by ~data ~default
@@ -545,8 +551,7 @@ let all_values t =
 let to_diff t ~key =
   let open Result.O in
   let key_len = List.length key in
-  reorder t ~first:key
-  >>| fun t ->
+  reorder t ~first:key >>| fun t ->
   let insert_vals, update_vals =
     List.partition
       (fun row ->
@@ -569,6 +574,6 @@ let to_diff_exn t ~key =
 
 let force_positive t =
   let t =
-    {t with plus_rows= Array.append t.plus_rows t.neg_rows; neg_rows= [||]}
+    { t with plus_rows = Array.append t.plus_rows t.neg_rows; neg_rows = [||] }
   in
   sort_uniq t

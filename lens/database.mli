@@ -1,15 +1,14 @@
-type t =
-  { driver_name: unit -> string
-  ; escape_string: string -> string
-  ; quote_field: string -> string
-  ; execute: string -> unit
-  ; execute_select:
-         string
-      -> field_types:(string * Phrase_type.t) list
-      -> Phrase_value.t list }
+type t = {
+  driver_name : unit -> string;
+  escape_string : string -> string;
+  quote_field : string -> string;
+  execute : string -> unit;
+  execute_select :
+    string -> field_types:(string * Phrase_type.t) list -> Phrase_value.t list;
+}
 
 module Table : sig
-  type t = {name: string; keys: string list list}
+  type t = { name : string; keys : string list list }
 
   val name : t -> string
 end
@@ -38,11 +37,12 @@ val to_string_dummy : Phrase.t -> string
 module Select : sig
   type db = t
 
-  type t =
-    { tables: (string * string) list
-    ; cols: Column.t list
-    ; predicate: Phrase.Option.t
-    ; db: db }
+  type t = {
+    tables : (string * string) list;
+    cols : Column.t list;
+    predicate : Phrase.Option.t;
+    db : db;
+  }
 
   (** Add a further selection criterion to an existing predicate. *)
   val select : t -> predicate:Phrase.Option.t -> t
@@ -53,10 +53,10 @@ module Select : sig
   val fmt : Format.formatter -> t -> unit
 
   val execute :
-       t
-    -> database:db
-    -> field_types:(string * Phrase_type.t) list
-    -> Phrase_value.t list
+    t ->
+    database:db ->
+    field_types:(string * Phrase_type.t) list ->
+    Phrase_value.t list
 
   val query_exists : t -> database:db -> bool
 end
@@ -64,7 +64,7 @@ end
 module Delete : sig
   type db = t
 
-  type t = {table: string; predicate: Phrase.Option.t; db: db}
+  type t = { table : string; predicate : Phrase.Option.t; db : db }
 
   val fmt : Format.formatter -> t -> unit
 end
@@ -72,11 +72,12 @@ end
 module Update : sig
   type db = t
 
-  type t =
-    { table: string
-    ; predicate: Phrase.Option.t
-    ; set: (string * Phrase_value.t) list
-    ; db: db }
+  type t = {
+    table : string;
+    predicate : Phrase.Option.t;
+    set : (string * Phrase_value.t) list;
+    db : db;
+  }
 
   val fmt : Format.formatter -> t -> unit
 end
@@ -84,12 +85,13 @@ end
 module Insert : sig
   type db = t
 
-  type t =
-    { table: string
-    ; columns: string list
-    ; values: Phrase_value.t list list
-    ; returning: string list
-    ; db: db }
+  type t = {
+    table : string;
+    columns : string list;
+    values : Phrase_value.t list list;
+    returning : string list;
+    db : db;
+  }
 
   val fmt : Format.formatter -> t -> unit
 end

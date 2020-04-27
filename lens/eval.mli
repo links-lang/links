@@ -8,7 +8,7 @@ module Error : sig
 end
 
 val put :
-     ?behaviour:behaviour
-  -> Value.t
-  -> Phrase_value.t list
-  -> (unit, Error.t) result
+  ?behaviour:behaviour ->
+  Value.t ->
+  Phrase_value.t list ->
+  (unit, Error.t) result
