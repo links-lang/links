@@ -43,6 +43,22 @@ for test_file in glob.glob(os.path.join(TEST_DIR, "**", "*.tests"), recursive=Tr
             prev_line = line
 
 
+#Iterate testsuite.config files, containing paths (relative from their location) to database tests
+for testsuite_file in glob.glob(os.path.join(TEST_DIR, "**", "testsuite.config"), recursive=True):
+    path_dir = os.path.dirname(testsuite_file)
+
+    with open(testsuite_file, "r") as f:
+        for line in f:
+            path_file = line.strip() + ".links"
+
+            combined_path = os.path.join(path_dir,path_file)
+            normed = normed = os.path.normpath(combined_path)
+            if normed in links_files:
+                    #print("found %s" %line)
+                    links_files.remove(normed)
+
+
+
 #Those .links files remaining in test_files are the ones we haven't found a .tests file for
 if links_files:
     print("Error: The following .links files in the %s subfolder are neither mentioned in a .tests files nor do they start with \'%s\'" % (TEST_DIR, BLACKLIST_STRING))
