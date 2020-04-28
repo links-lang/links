@@ -6,6 +6,9 @@ open Utility
 open Proc
 open Var
 
+(* SJF: Remove after refactor is complete. *)
+module Types = Types_refactor
+
 let internal_error message =
   Errors.internal_error ~filename:"evalir.ml" ~message
 
@@ -713,7 +716,7 @@ struct
            | Some (db, q, t) ->
                let q = Sql.string_of_query db range q in
                let (fieldMap, _, _), _ =
-               Types.unwrap_row(TypeUtils.extract_row t) in
+               Types.unwrap_row (TypeUtils.extract_row t) in
                let fields =
                StringMap.fold
                    (fun name t fields ->

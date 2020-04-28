@@ -1,5 +1,8 @@
 open Utility
 
+(* SJF: Remove after refactor is complete. *)
+module Types = Types_refactor
+
  (* TODO: optimisation *)
 
   (* We need to be careful here as, for instance, running ElimDeadDefs
@@ -37,7 +40,7 @@ let optimise
 
 (* Transformation infrastructure. *)
 type result = { program: Ir.program;
-                datatype: Types.datatype;
+                datatype: Types.t;
                 context: Context.t }
 
 type transformer = (module IrTransform.S)
