@@ -114,10 +114,10 @@ and datatype = typ
 and type_arg = typ
 and field_spec = typ
 and field_spec_map = typ Utility.StringMap.t
-and meta_type_var = typ
-and meta_row_var = typ
-and meta_presence_var = typ
-and meta_var = typ
+and meta_type_var = typ point
+and meta_row_var = row point
+and meta_presence_var = typ point
+and meta_var = typ point
 and row = typ
 and row_var = typ
   [@@deriving show]
