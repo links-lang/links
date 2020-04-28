@@ -2,7 +2,7 @@ open Lens_utility
 
 type t =
   | ConcreteLens of Sort.t
-  | AbstractLens of {checked: bool; sort: Sort.t}
+  | AbstractLens of { checked : bool; sort : Sort.t }
 
 let pp f _ = Format.fprintf f "Lens"
 
@@ -11,33 +11,34 @@ let show _ = "Lens"
 let cols v =
   match v with
   | ConcreteLens sort -> Sort.cols sort
-  | AbstractLens {sort; _} -> Sort.cols sort
+  | AbstractLens { sort; _ } -> Sort.cols sort
 
 let update v f1 f2 =
   let open Result.O in
   match v with
   | ConcreteLens sort -> f1 sort >>| fun sort -> ConcreteLens sort
-  | AbstractLens {sort; _} ->
-      f2 sort >>| fun sort -> AbstractLens {sort; checked= false}
+  | AbstractLens { sort; _ } ->
+      f2 sort >>| fun sort -> AbstractLens { sort; checked = false }
 
 let sort v =
   match v with
   | ConcreteLens sort -> sort
-  | AbstractLens {sort; _} -> sort
+  | AbstractLens { sort; _ } -> sort
 
 let set_serial sort ~columns =
   match sort with
   | ConcreteLens sort ->
       let sort = Sort.set_serial sort ~columns in
       ConcreteLens sort
-  | AbstractLens {sort; checked} ->
+  | AbstractLens { sort; checked } ->
       let sort = Sort.set_serial sort ~columns in
-      AbstractLens {sort; checked}
+      AbstractLens { sort; checked }
 
 let equal t1 t2 =
   match (t1, t2) with
   | ConcreteLens sort1, ConcreteLens sort2 -> Sort.equal sort1 sort2
-  | AbstractLens {sort; checked}, AbstractLens {sort= sort'; checked= chk'} ->
+  | ( AbstractLens { sort; checked },
+      AbstractLens { sort = sort'; checked = chk' } ) ->
       Sort.equal sort sort' && checked = chk'
   | _ -> false
 
@@ -58,16 +59,16 @@ let type_select_lens_dynamic t =
   sort t
   |> Sort.select_lens_sort_dynamic
   |> Result.map_error ~f:(fun v -> Select_lens_error.SortError v)
-  >>| fun sort -> AbstractLens {checked= false; sort}
+  >>| fun sort -> AbstractLens { checked = false; sort }
 
 let type_select_lens t ~predicate =
   let open Result.O in
   let columns = cols t in
-  Phrase_typesugar.tc_columns ~columns predicate
-  |> Result.map_error ~f:(fun v -> Select_lens_error.PredicateTypeError v)
-  >>= (function
-        | Phrase_type.Bool -> Phrase.of_sugar predicate |> Result.return
-        | _ as t -> Select_lens_error.PredicateNotBoolean t |> Result.error)
+  (Phrase_typesugar.tc_columns ~columns predicate
+   |> Result.map_error ~f:(fun v -> Select_lens_error.PredicateTypeError v)
+   >>= function
+   | Phrase_type.Bool -> Phrase.of_sugar predicate |> Result.return
+   | _ as t -> Select_lens_error.PredicateNotBoolean t |> Result.error)
   >>= fun predicate ->
   update t
     (fun sort -> Sort.select_lens_sort sort ~predicate)
@@ -99,17 +100,17 @@ let type_join_lens s t ~on ~del_left ~del_right =
   let open Join_lens_error in
   let cols1 = cols s in
   let cols2 = cols t in
-  Phrase_typesugar.tc_columns ~columns:cols1 del_left
-  |> Result.map_error ~f:(fun v -> PredicateTypeError (Left, v))
-  >>= (function
-        | Phrase_type.Bool -> Phrase.of_sugar del_left |> Result.return
-        | _ as t -> PredicateNotBoolean (Left, t) |> Result.error)
+  (Phrase_typesugar.tc_columns ~columns:cols1 del_left
+   |> Result.map_error ~f:(fun v -> PredicateTypeError (Left, v))
+   >>= function
+   | Phrase_type.Bool -> Phrase.of_sugar del_left |> Result.return
+   | _ as t -> PredicateNotBoolean (Left, t) |> Result.error)
   >>= fun _del_left ->
-  Phrase_typesugar.tc_columns ~columns:cols2 del_right
-  |> Result.map_error ~f:(fun v -> PredicateTypeError (Right, v))
-  >>= (function
-        | Phrase_type.Bool -> Phrase.of_sugar del_right |> Result.return
-        | _ as t -> PredicateNotBoolean (Right, t) |> Result.error)
+  (Phrase_typesugar.tc_columns ~columns:cols2 del_right
+   |> Result.map_error ~f:(fun v -> PredicateTypeError (Right, v))
+   >>= function
+   | Phrase_type.Bool -> Phrase.of_sugar del_right |> Result.return
+   | _ as t -> PredicateNotBoolean (Right, t) |> Result.error)
   >>= fun _del_right ->
   let f sort1 sort2 =
     Sort.join_lens_sort sort1 sort2 ~on
@@ -117,12 +118,12 @@ let type_join_lens s t ~on ~del_left ~del_right =
     >>| fst
   in
   match (s, t) with
-  | AbstractLens {sort= sort1; _}, _ ->
+  | AbstractLens { sort = sort1; _ }, _ ->
       let sort2 = sort t in
-      f sort1 sort2 >>| fun sort -> AbstractLens {sort; checked= false}
-  | _, AbstractLens {sort= sort2; _} ->
+      f sort1 sort2 >>| fun sort -> AbstractLens { sort; checked = false }
+  | _, AbstractLens { sort = sort2; _ } ->
       let sort1 = sort s in
-      f sort1 sort2 >>| fun sort -> AbstractLens {sort; checked= false}
+      f sort1 sort2 >>| fun sort -> AbstractLens { sort; checked = false }
   | _ ->
       let sort1 = sort s in
       let sort2 = sort t in
@@ -141,7 +142,7 @@ let is_abstract s =
 
 let is_checked s =
   match s with
-  | AbstractLens {checked; _} -> checked
+  | AbstractLens { checked; _ } -> checked
   | ConcreteLens _ -> true
 
 let ensure_checked s =
@@ -150,5 +151,5 @@ let ensure_checked s =
 
 let make_checked s =
   match s with
-  | AbstractLens {sort; _} -> AbstractLens {sort; checked= true}
+  | AbstractLens { sort; _ } -> AbstractLens { sort; checked = true }
   | _ -> s

@@ -77,9 +77,9 @@ module Set : sig
   val transitive_closure : t -> cols:Alias.Set.t -> Alias.Set.t
 
   val checked_fds_of_lists :
-       (Alias.t list * Alias.t list) list
-    -> columns:Alias.Set.t
-    -> (t, Check_error.t) result
+    (Alias.t list * Alias.t list) list ->
+    columns:Alias.Set.t ->
+    (t, Check_error.t) result
 
   (** Get all columns which are defined by other columns. *)
   val outputs : t -> Alias.Set.t

@@ -18,16 +18,16 @@ module Make (Ord : OrderedShow) = struct
   let union_all s = List.fold_right union s empty
 
   let pp formatter set =
-    Format.pp_open_box formatter 0 ;
-    Format.pp_print_string formatter "{" ;
+    Format.pp_open_box formatter 0;
+    Format.pp_print_string formatter "{";
     iter
       (fun elt ->
-        Format.pp_open_box formatter 0 ;
-        Ord.pp formatter elt ;
-        Format.fprintf formatter ";@;" ;
+        Format.pp_open_box formatter 0;
+        Ord.pp formatter elt;
+        Format.fprintf formatter ";@;";
         Format.pp_close_box formatter ())
-      set ;
-    Format.pp_print_string formatter "}" ;
+      set;
+    Format.pp_print_string formatter "}";
     Format.pp_close_box formatter ()
 
   let show : t -> string = fun x -> Format.asprintf "%a" pp x

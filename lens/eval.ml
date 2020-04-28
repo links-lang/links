@@ -50,8 +50,7 @@ let satisfies_fds sort records =
       Sorted_records.project_onto records
         ~columns:(Fun_dep.left fd |> Alias.Set.elements)
     in
-    if
-      Sorted_records.total_size proj_both > Sorted_records.total_size proj_left
+    if Sorted_records.total_size proj_both > Sorted_records.total_size proj_left
     then Error.raise (Error.ViolatesFunDepConstraint fd)
   in
   try Fun_dep.Set.iter check_fd fds |> Result.return
@@ -60,10 +59,8 @@ let satisfies_fds sort records =
 let put ?(behaviour = Incremental) lens data =
   let open Result.O in
   let sort = Value.sort lens in
-  satisfies_predicate sort data
-  >>= fun () ->
-  satisfies_fds sort data
-  >>| fun () ->
+  satisfies_predicate sort data >>= fun () ->
+  satisfies_fds sort data >>| fun () ->
   match behaviour with
   | Incremental -> Eval_incremental.lens_put lens data
   | Classic -> Eval_classic.lens_put lens data

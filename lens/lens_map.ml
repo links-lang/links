@@ -18,18 +18,18 @@ module Make (Ord : OrderedShow) = struct
   let to_list f m = fold (fun k v l -> f k v :: l) m []
 
   let pp af formatter map =
-    Format.pp_open_box formatter 0 ;
-    Format.pp_print_string formatter "{" ;
+    Format.pp_open_box formatter 0;
+    Format.pp_print_string formatter "{";
     iter
       (fun key value ->
-        Format.pp_open_box formatter 0 ;
-        Ord.pp formatter key ;
-        Format.pp_print_string formatter " => " ;
-        af formatter value ;
-        Format.fprintf formatter ";@;" ;
+        Format.pp_open_box formatter 0;
+        Ord.pp formatter key;
+        Format.pp_print_string formatter " => ";
+        af formatter value;
+        Format.fprintf formatter ";@;";
         Format.pp_close_box formatter ())
-      map ;
-    Format.pp_print_string formatter "}" ;
+      map;
+    Format.pp_print_string formatter "}";
     Format.pp_close_box formatter ()
 
   let show af x = Format.asprintf "%a" (pp af) x

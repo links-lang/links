@@ -1,20 +1,22 @@
 type t =
-  | Lens of {table: Database.Table.t; database: Database.t; sort: Sort.t}
-  | LensMem of {records: Phrase_value.t list; sort: Sort.t}
-  | LensSelect of {lens: t; predicate: Phrase.t; sort: Sort.t}
-  | LensJoin of
-      { left: t
-      ; right: t
-      ; on: (string * string * string) list
-      ; del_left: Phrase.t
-      ; del_right: Phrase.t
-      ; sort: Sort.t }
-  | LensDrop of
-      { lens: t
-      ; drop: string
-      ; key: string
-      ; default: Phrase_value.t
-      ; sort: Sort.t }
+  | Lens of { table : Database.Table.t; database : Database.t; sort : Sort.t }
+  | LensMem of { records : Phrase_value.t list; sort : Sort.t }
+  | LensSelect of { lens : t; predicate : Phrase.t; sort : Sort.t }
+  | LensJoin of {
+      left : t;
+      right : t;
+      on : (string * string * string) list;
+      del_left : Phrase.t;
+      del_right : Phrase.t;
+      sort : Sort.t;
+    }
+  | LensDrop of {
+      lens : t;
+      drop : string;
+      key : string;
+      default : Phrase_value.t;
+      sort : Sort.t;
+    }
 [@@deriving show]
 
 val string_of_value : t -> string

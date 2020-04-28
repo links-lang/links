@@ -20,9 +20,9 @@ let combine v1 v2 ~f =
   match v1 with
   | None -> v2
   | Some v1 -> (
-    match v2 with
-    | None -> Some v1
-    | Some v2 -> Some (f v1 v2) )
+      match v2 with
+      | None -> Some v1
+      | Some v2 -> Some (f v1 v2) )
 
 let value v ~default =
   match v with
