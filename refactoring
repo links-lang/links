@@ -5,7 +5,11 @@ Branch: types-refactor
  + types.ml
  + types.mli
 - Frank
- + type checking
+ + pending:
+    typeSugar.ml
+    generalise.ml
+    instantiate.ml
+    typevarcheck.ml
 - Janek
  + pending:
     desugarDatatypes.ml
@@ -28,8 +32,8 @@ Branch: types-refactor
  + lens*.ml
  + lens*.mli
 - Sam
- + type checking
- + unify
+ + pending:
+    unify.ml
 - Simon
  + pending:
   - evalir.ml (depends on some non-compiling files)
@@ -56,8 +60,6 @@ Fuckups:
 ./database.ml
 ./evalir.ml
 ./frontend.ml
-./generalise.ml
-./instantiate.ml
 ./irCheck.ml
 ./ir.ml
 ./irtojs.ml
@@ -87,12 +89,8 @@ Fuckups:
 ./webserver_types.ml
 
 
-./generalise.ml
-./instantiate.ml
 ./irCheck.ml
 ./irTraversals.ml
 ./lib.ml
 ./renamer.ml
 ./typeUtils.ml
-./typevarcheck.ml
-./unify.ml
