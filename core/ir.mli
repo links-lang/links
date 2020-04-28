@@ -1,9 +1,6 @@
 (** Monadic IR *)
 open CommonTypes
 
-(* SJF: Remove after refactor is complete. *)
-module Types = Types_refactor
-
 type scope = Var.Scope.t
   [@@deriving show]
 

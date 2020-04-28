@@ -2,9 +2,6 @@
 
 open CommonTypes
 
-(* SJF: Remove after refactor is complete. *)
-module Types = Types_refactor
-
 type scope = Var.Scope.t
   [@@deriving show]
 (* term variables *)
@@ -41,7 +38,7 @@ type value =
   | Extend     of value name_map * value option
   | Project    of Name.t * value
   | Erase      of name_set * value
-  | Inject     of Name.t * value * Types.datatype
+  | Inject     of Name.t * value * Types.t
 
   | TAbs       of tyvar list * value
   | TApp       of value * tyarg list
@@ -51,7 +48,7 @@ type value =
 
   | Closure    of var * tyarg list * value
 
-  | Coerce     of value * Types.datatype
+  | Coerce     of value * Types.t
 and tail_computation =
   | Return     of value
   | Apply      of value * value list
@@ -70,7 +67,7 @@ and binding =
                     object_name: string }
   | Module     of string * binding list option
 and special =
-  | Wrong      of Types.datatype
+  | Wrong      of Types.t
   | Database   of value
   | Lens       of value * Lens.Type.t
   | LensSerial of { lens: value; columns : Lens.Alias.Set.t; typ : Lens.Type.t }
@@ -78,10 +75,10 @@ and special =
   | LensSelect of { lens : value; predicate : lens_predicate; typ : Lens.Type.t }
   | LensJoin   of { left : value; right : value; on : string list; del_left : Lens.Phrase.t; del_right : Lens.Phrase.t; typ : Lens.Type.t }
   | LensCheck  of value * Lens.Type.t
-  | LensGet    of value * Types.datatype
-  | LensPut    of value * value * Types.datatype
-  | Table      of value * value * value * (Types.datatype * Types.datatype * Types.datatype)
-  | Query      of (value * value) option * QueryPolicy.t * computation * Types.datatype
+  | LensGet    of value * Types.t
+  | LensPut    of value * value * Types.t
+  | Table      of value * value * value * (Types.t * Types.t * Types.t)
+  | Query      of (value * value) option * QueryPolicy.t * computation * Types.t
   | InsertRows of value * value
   | InsertReturning of value * value * value
   | Update     of (binder * value) * computation option * computation
@@ -90,7 +87,7 @@ and special =
   | Select     of Name.t * value
   | Choice     of value * (binder * computation) name_map
   | Handle     of handler
-  | DoOperation of Name.t * value list * Types.datatype
+  | DoOperation of Name.t * value list * Types.t
 and computation = binding list * tail_computation
 and effect_case = binder * binder * computation
 and handler = {
