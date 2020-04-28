@@ -60,7 +60,7 @@ module RecIdSet : RECIDSET
 
 type tygroup = {
   id: int;
-  type_map: ((Quantifier.t list * t) Utility.StringMap.t);
+  type_map: ((Quantifier.t list * typ) Utility.StringMap.t);
   linearity_map: bool Utility.StringMap.t
 }
 
@@ -70,54 +70,56 @@ and rec_appl = {
   r_dual: bool;
   r_unique_name: string;
   r_quantifiers : Kind.t list;
-  r_args: t list;
-  r_unwind: t list -> bool -> t;
+  r_args: typ list;
+  r_unwind: typ list -> bool -> typ;
   r_linear: unit -> bool option
   }
 and tid = int
-and arrow = { domain: t list; row: t; codomain: t }
-and t =
-  (* Special types. *)
+and typ =
+  (* Unspecified kind *)
   | Not_typed
-  (* Regular types. *)
-  | Primitive of Primitive.t
-  | Meta of t point
-  | Var of { name: tid; kind: Kind.t; freedom: Freedom.t }
-  | Recursive of { binder: tid; body: t }
-  | ForAll of { binders: Quantifier.t list; body: t }
-  | Function of arrow
-  | Lolli of arrow
-  | Alias of { tycon: (string * Kind.t list * t list); body: t }
-  | Application of { tycon: Abstype.t; args: t list }
+  | Var of (tid * Kind.t * Freedom.t)
+  | Recursive of (tid * Kind.t * typ)
+  | Alias of ((string * Kind.t list * type_arg list) * typ)
+  | Application of (Abstype.t * type_arg list)
   | RecursiveApplication of rec_appl
-  | Record of t
-  | Variant of t
-  | Effect of t
-  | Table of { read: t; write: t; needed: t }
-  | Lens of unit (* TODO FIXME *)
-  (* Row-y types. *)
-  | Row of { fields: t Utility.StringMap.t; dual: bool; var: t option }
+  | Meta of typ point
+  (* Type *)
+  | Primitive of Primitive.t
+  | Function of (typ * row * typ)
+  | Lolli of (typ * row * typ)
+  | Record of row
+  | Variant of row
+  | Table of (typ * typ * typ)
+  | Lens of unit (* FIXME *)
+  | ForAll of (Quantifier.t list * typ)
+  (* Effect *)
+  | Effect of row
+  (* Row *)
+  | Row of (field_spec_map * typ * bool)
+  | Closed
+  (* Presence *)
   | Absent
-  | Present of t
-  (* Session-y types. *)
-  | Input of  { payload: t; cont: t }
-  | Output of { payload: t; cont: t }
-  | Select of t
-  | Choice of t
-  | Dual of t
+  | Present of typ
+  (* Session *)
+  | Input of (typ * typ)
+  | Output of (typ * typ)
+  | Select of row
+  | Choice of row
+  | Dual of typ
   | End
-and session_type = t
-and datatype = t
-and typ = t
-and type_arg = t
-and field_spec = t
-and field_spec_map = t Utility.StringMap.t
-and meta_type_var = t
-and meta_row_var = t
-and meta_presence_var = t
-and meta_var = t
-and row = t
-and row_var = t
+and t = typ
+and session_type = typ
+and datatype = typ
+and type_arg = typ
+and field_spec = typ
+and field_spec_map = typ Utility.StringMap.t
+and meta_type_var = typ
+and meta_row_var = typ
+and meta_presence_var = typ
+and meta_var = typ
+and row = typ
+and row_var = typ
   [@@deriving show]
 
 (** A constraint that a subkind imposes on types. *)
