@@ -1,11 +1,18 @@
 open Lens.Utility
+
+(* DELETE THESE 6 LINES AFTER*)
+module Types = Types_refactor
+module TypeUtils = struct
+  include TypeUtils
+
+  let concrete_type t = t
+end
+
 module T = Types
 module PT = CommonTypes.Primitive
 module LPT = Lens.Phrase.Type
 
 type 'a die = string -> 'a
-
-let primitive t = `Primitive t
 
 let to_links_map m =
   String.Map.fold
@@ -14,45 +21,48 @@ let to_links_map m =
 
 let lookup_alias context ~alias =
   match Env.String.find_opt alias context with
-  | Some (`Alias (_, t)) -> `Alias ((alias, [], []), t)
+  | Some (`Alias (_, body)) ->
+      let tycon = (alias, [], []) in
+      T.Alias { tycon; body }
   | _ -> Errors.MissingBuiltinType alias |> raise
 
 let rec type_of_lens_phrase_type ~context t =
   match t with
-  | LPT.Bool -> PT.Bool |> primitive
-  | LPT.Int -> PT.Int |> primitive
+  | LPT.Bool -> T.bool_type
+  | LPT.Int -> T.int_type
   | LPT.Serial -> lookup_alias context ~alias:"Serial"
-  | LPT.Char -> PT.Char |> primitive
-  | LPT.Float -> PT.Float |> primitive
-  | LPT.String -> PT.String |> primitive
+  | LPT.Char -> T.char_type
+  | LPT.Float -> T.float_type
+  | LPT.String -> T.string_type
   | LPT.Tuple ts ->
-      let _ts = List.map ~f:(type_of_lens_phrase_type ~context) ts in
-      failwith "Tuple type not yet supported."
+      let ts = List.map ~f:(type_of_lens_phrase_type ~context) ts in
+      T.make_tuple_type ts
   | LPT.Record r ->
       let ts = String.Map.map (type_of_lens_phrase_type ~context) r in
       T.make_record_type (to_links_map ts)
 
 let rec lens_phrase_type_of_type t =
   match TypeUtils.concrete_type t with
-  | `Primitive p -> (
-    match p with
-    | PT.Bool -> LPT.Bool
-    | PT.Int -> LPT.Int
-    | PT.Char -> LPT.Char
-    | PT.Float -> LPT.Float
-    | PT.String -> LPT.String
-    | _ ->
-        failwith
-        @@ Format.asprintf
-             "Unsupported primitive type %a in lens_phrase_type_of_type."
-             Types.pp_typ t )
-  | `Record (r, _, _) ->
+  | T.Primitive p -> (
+      match p with
+      | PT.Bool -> LPT.Bool
+      | PT.Int -> LPT.Int
+      | PT.Char -> LPT.Char
+      | PT.Float -> LPT.Float
+      | PT.String -> LPT.String
+      | _ ->
+          failwith
+          @@ Format.asprintf
+               "Unsupported primitive type %a in lens_phrase_type_of_type." T.pp
+               t )
+  | T.Record r -> lens_phrase_type_of_type r
+  | T.Row { fields; _ } ->
       let fields =
-        Utility.StringMap.to_alist r
+        Utility.StringMap.to_alist fields
         |> String.Map.from_alist
         |> String.Map.map (fun v ->
                match v with
-               | `Present t -> lens_phrase_type_of_type t
+               | T.Present t -> lens_phrase_type_of_type t
                | _ ->
                    failwith
                      "lens_phrase_type_of_type only works on records with \
@@ -61,12 +71,12 @@ let rec lens_phrase_type_of_type t =
       LPT.Record fields
   | _ ->
       failwith
-      @@ Format.asprintf "Unsupported type %a in lens_phrase_type_of_type."
-           Types.pp_typ t
+      @@ Format.asprintf "Unsupported type %a in lens_phrase_type_of_type." T.pp
+           t
 
 let lens_type_of_type ~die t =
   match TypeUtils.concrete_type t with
-  | `Lens l -> l
+  | T.Lens l -> l
   | _ -> die "Expected a lens type."
 
 let sort_cols_of_table t ~table =
@@ -89,9 +99,10 @@ let sort_cols_of_table t ~table =
   (* get the underlying record type of either a table, a record or an application *)
   let extract_record_type t =
     match TypeUtils.concrete_type t with
-    | `Record _ as r -> r
-    | `Application (_, [`Type (`Record _ as r)]) -> r
-    | `Table (r, _, _) -> r
+    | T.Application { args = [ r ]; _ } ->
+        r (* get the first argument of a type application *)
+    | T.Table { read; _ } -> read (* use the read type of a table *)
+    | T.Record r -> r (* Use the row of a record type. *)
     | _ -> failwith "LensTypes does not type."
   in
   let rt = extract_record_type t |> lens_phrase_type_of_type in

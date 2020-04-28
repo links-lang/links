@@ -1,3 +1,6 @@
+(* DELETE FOLLOWING LINE AFTER REFACTOR *)
+module Types = Types_refactor
+
 type 'a die = string -> 'a
 
 (** Lookup a type alias in the typing environment context. *)

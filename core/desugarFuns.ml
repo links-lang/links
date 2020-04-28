@@ -94,9 +94,10 @@ object (o : 'self_type)
     let inner_mb     = snd (last argss) in
     let (o, lam, rt) = o#funlit inner_mb lam in
     let ft = List.fold_right (fun (args, mb) rt ->
+                 let open Types in
                  if DeclaredLinearity.is_linear lin
-                 then `Lolli (args, mb, rt)
-                 else `Function (args, mb, rt))
+                 then Lolli    {domain=args; row=mb; codomain=rt}
+                 else Function {domain=args; row=mb; codomain=rt})
                argss rt in
 
     let f = gensym ~prefix:"_fun_" () in
@@ -122,16 +123,17 @@ object (o : 'self_type)
     | FunLit (Some argss, lin, lam, location) ->
        o#desugarFunLit argss lin lam location
     | Section (Section.Project name) | FreezeSection (Section.Project name) ->
+        let open Types in
         let ab, a = Types.fresh_type_quantifier (lin_unl, res_any) in
-        let rhob, (fields, rho, _) = Types.fresh_row_quantifier (lin_unl, res_any) in
-        let effb, eff = Types.fresh_row_quantifier default_effect_subkind in
+        let rhob, Row {fields; dual; _} = fresh_row_quantifier (lin_unl, res_any) in
+        let effb, row = fresh_row_quantifier default_effect_subkind in
 
-        let r = `Record (StringMap.add name (`Present a) fields, rho, false) in
+        let r = Record (Row {fields=StringMap.add name (Present a) fields; dual; var=None}) in
 
         let f = gensym ~prefix:"_fun_" () in
         let x = gensym ~prefix:"_fun_" () in
-        let ft : Types.datatype = `ForAll ([ab; rhob;  effb],
-                                           `Function (Types.make_tuple_type [r], eff, a)) in
+        let ft : datatype = ForAll { binders = [ab; rhob;  effb]
+                                   ; body    = Function {domain=[Types.make_tuple_type [r]]; row; codomain=a}} in
 
         let pss = [[variable_pat ~ty:r x]] in
         let body = with_dummy_pos (Projection (var x, name)) in

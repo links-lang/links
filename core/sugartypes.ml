@@ -34,7 +34,7 @@ end = struct
   and with_pos = t WithPos.t
   [@@deriving show]
 
-  let make ?(name="") ?(ty=`Not_typed) () = (name, ty)
+  let make ?(name="") ?(ty=Types.Not_typed) () = (name, ty)
 
   let to_name b = let (n, _ ) = WithPos.node b in n
   let to_type b = let (_, ty) = WithPos.node b in ty
@@ -42,8 +42,8 @@ end = struct
   let set_name b name = WithPos.map ~f:(fun (_   , ty) -> name, ty ) b
   let set_type b typ  = WithPos.map ~f:(fun (name, _ ) -> name, typ) b
 
-  let erase_type b = WithPos.map ~f:(fun (name, _) -> name, `Not_typed) b
-  let has_type   b = match to_type b with `Not_typed -> false | _ -> true
+  let erase_type b = WithPos.map ~f:(fun (name, _) -> name, Types.Not_typed) b
+  let has_type   b = match to_type b with Types.Not_typed -> false | _ -> true
 
   let traverse_map : with_pos -> o:'o
             -> f_pos:('o -> Position.t -> 'a * Position.t)
