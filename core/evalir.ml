@@ -6,9 +6,6 @@ open Utility
 open Proc
 open Var
 
-(* SJF: Remove after refactor is complete. *)
-module Types = Types_refactor
-
 let internal_error message =
   Errors.internal_error ~filename:"evalir.ml" ~message
 
@@ -236,7 +233,7 @@ struct
   and apply (cont : continuation) env : Value.t * Value.t list -> result =
     let invoke_session_exception () =
       special env cont (DoOperation (Value.session_exception_operation,
-        [], `Not_typed)) in
+        [], Types.Not_typed)) in
     function
     | `FunctionPtr (f, fvs), ps ->
       let (_finfo, (xs, body), z, _location) = find_fun f in
@@ -583,7 +580,7 @@ struct
     let get_lens l = match l with | `Lens l -> l | _ -> raise (internal_error "Expected a lens.") in
     let invoke_session_exception () =
       special env cont (DoOperation (Value.session_exception_operation,
-        [], `Not_typed)) in
+        [], Types.Not_typed)) in
     function
     | Wrong _                    -> raise Exceptions.Wrong
     | Database v                 ->
