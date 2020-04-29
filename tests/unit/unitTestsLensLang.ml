@@ -17,7 +17,7 @@ let test_gtv_01 _test_ctx =
     v "A" < i 20 && v "B" > i 5
   in
   let grouped = GV.gtv phrase in
-  assert_gtv_equal grouped [["A"]; ["B"]]
+  assert_gtv_equal grouped [ [ "A" ]; [ "B" ] ]
 
 let test_gtv_02 _test_ctx =
   let phrase =
@@ -25,7 +25,7 @@ let test_gtv_02 _test_ctx =
     v "A" < i 20 || v "B" > i 5
   in
   let grouped = GV.gtv phrase in
-  assert_gtv_equal grouped [["A"; "B"]]
+  assert_gtv_equal grouped [ [ "A"; "B" ] ]
 
 let test_gtv_03 _test_ctx =
   let phrase =
@@ -33,18 +33,20 @@ let test_gtv_03 _test_ctx =
     v "A" < i 20 || i 30 > i 5
   in
   let grouped = GV.gtv phrase in
-  assert_gtv_equal grouped [["A"]]
+  assert_gtv_equal grouped [ [ "A" ] ]
 
 let test_partial_overlaps _test_ctx =
-  let gtvs = GV.of_lists [["A"]; ["A"; "B"]; ["C"; "D"]] in
-  assert_partial_overlaps gtvs ~cols:["A"] true ;
-  assert_partial_overlaps gtvs ~cols:["A"; "B"] false ;
-  assert_partial_overlaps gtvs ~cols:["B"; "C"] true ;
-  assert_partial_overlaps gtvs ~cols:["A"; "B"; "C"; "D"] false
+  let gtvs = GV.of_lists [ [ "A" ]; [ "A"; "B" ]; [ "C"; "D" ] ] in
+  assert_partial_overlaps gtvs ~cols:[ "A" ] true;
+  assert_partial_overlaps gtvs ~cols:[ "A"; "B" ] false;
+  assert_partial_overlaps gtvs ~cols:[ "B"; "C" ] true;
+  assert_partial_overlaps gtvs ~cols:[ "A"; "B"; "C"; "D" ] false
 
 let suite =
   "lang"
-  >::: [ "gtv_01" >:: test_gtv_01
-       ; "gtv_02" >:: test_gtv_02
-       ; "gtv_03" >:: test_gtv_03
-       ; "partial_overlaps_01" >:: test_partial_overlaps ]
+  >::: [
+         "gtv_01" >:: test_gtv_01;
+         "gtv_02" >:: test_gtv_02;
+         "gtv_03" >:: test_gtv_03;
+         "partial_overlaps_01" >:: test_partial_overlaps;
+       ]

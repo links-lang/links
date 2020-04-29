@@ -1,7 +1,7 @@
 type t =
   | Bool of bool
   | Int of int
-  | Serial of [`Key of int | `NewKey | `NewKeyMapped of int]
+  | Serial of [ `Key of int | `NewKey | `NewKeyMapped of int ]
   | Float of float
   | String of string
   | Char of char
@@ -10,7 +10,7 @@ type t =
 [@@deriving show]
 
 module Unbox_error : sig
-  exception E of {value: t; expected: string}
+  exception E of { value : t; expected : string }
 end
 
 type values = t list [@@deriving show]

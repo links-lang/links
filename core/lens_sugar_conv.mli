@@ -8,8 +8,7 @@ module Error : sig
 end
 
 (** Convert a Links unary operator to a Relational Lenses unary operator. *)
-val unary_of_sugartype_op :
-  Operators.UnaryOp.t -> Lens.Operators.Unary.t option
+val unary_of_sugartype_op : Operators.UnaryOp.t -> Lens.Operators.Unary.t option
 
 (** Convert a Links binary operator to a Relational Lenses binary operator. *)
 val binary_of_sugartype_op :
