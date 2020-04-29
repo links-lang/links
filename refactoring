@@ -37,12 +37,12 @@ Branch: types-refactor
 - Simon
  + pending:
   - evalir.ml (depends on some non-compiling files)
-  - desugarTypeVariables.ml
   - serialisation.ml (depends on desugarDatatypes, which is a big one)
  + done:
   - ir.ml
   - desugarCP.ml
   - json.ml
+  - desugarTypeVariables.ml
 
  + backend, evalir, ir
 
