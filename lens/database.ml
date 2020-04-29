@@ -2,18 +2,17 @@ open Operators
 open Lens_utility
 module LPV = Phrase_value
 
-type t =
-  { driver_name: unit -> string
-  ; escape_string: string -> string
-  ; quote_field: string -> string
-  ; execute: string -> unit
-  ; execute_select:
-         string
-      -> field_types:(string * Phrase_type.t) list
-      -> Phrase_value.t list }
+type t = {
+  driver_name : unit -> string;
+  escape_string : string -> string;
+  quote_field : string -> string;
+  execute : string -> unit;
+  execute_select :
+    string -> field_types:(string * Phrase_type.t) list -> Phrase_value.t list;
+}
 
 module Table = struct
-  type t = {name: string; keys: string list list}
+  type t = { name : string; keys : string list list }
 
   let name t = t.name
 end
@@ -28,7 +27,7 @@ let dummy_database =
   let execute_select _ ~field_types:_ =
     failwith "Dummy database exec not supported."
   in
-  {driver_name; escape_string; quote_field; execute; execute_select}
+  { driver_name; escape_string; quote_field; execute; execute_select }
 
 let fmt_comma_seperated v =
   let pp_sep f () = Format.fprintf f ", " in
@@ -61,20 +60,18 @@ let fmt_phrase_value ~db f v =
         if s.[String.length s - 1] = '.' then s ^ "0" else s
     | LPV.Serial (`Key k) ->
         string_of_int k (* only support converting known keys. *)
-    | _ -> Format.asprintf "Unexpected phrase value %a." LPV.pp v |> failwith
-    )
+    | _ -> Format.asprintf "Unexpected phrase value %a." LPV.pp v |> failwith )
 
 module Precedence = struct
   type t = Or | And | Not | Add | Sub | Mult | Divide | Cmp
 
-  let ordering = [Or; And; Cmp; Not; Add; Sub; Mult; Divide]
+  let ordering = [ Or; And; Cmp; Not; Add; Sub; Mult; Divide ]
 
   let first = List.hd ordering
 
   let order t =
-    List.findi ordering ~f:(fun v -> v = t)
-    |> Option.map ~f:fst
-    |> fun v -> Option.value_exn v
+    List.findi ordering ~f:(fun v -> v = t) |> Option.map ~f:fst |> fun v ->
+    Option.value_exn v
 
   let pp_eq pr npr fmt f v =
     if order npr < order pr then Format.fprintf f "(%a)" fmt v
@@ -152,9 +149,7 @@ let rec fmt_phrase_ex ?(precedence = Precedence.And) ~db ~map f expr =
         let fmt_case f (k, v) =
           Format.fprintf f "WHEN %a THEN %a" (fmt Pr.first) k (fmt Pr.first) v
         in
-        f
-          (Format.pp_print_list ~pp_sep fmt_case)
-          cases (fmt Pr.first) otherwise
+        f (Format.pp_print_list ~pp_sep fmt_case) cases (fmt Pr.first) otherwise
 
 let fmt_phrase ~db ~map f expr = fmt_phrase_ex ~db ~map f expr
 
@@ -168,15 +163,16 @@ let to_string_dummy expr = Format.asprintf "%a" fmt_phrase_dummy expr
 module Select = struct
   type db = t
 
-  type t =
-    { tables: (string * string) list
-    ; cols: Column.t list
-    ; predicate: Phrase.t option
-    ; db: db }
+  type t = {
+    tables : (string * string) list;
+    cols : Column.t list;
+    predicate : Phrase.t option;
+    db : db;
+  }
 
   let select t ~predicate =
     let predicate = Phrase.Option.combine_and t.predicate predicate in
-    {t with predicate}
+    { t with predicate }
 
   let of_sort t ~sort =
     let predicate = Sort.query sort in
@@ -186,7 +182,7 @@ module Select = struct
       |> List.sort_uniq String.compare
       |> List.map ~f:(fun c -> (c, c))
     in
-    {predicate; cols; tables; db= t}
+    { predicate; cols; tables; db = t }
 
   let fmt f v =
     let db = v.db in
@@ -211,17 +207,17 @@ module Select = struct
 
   let query_exists query ~database =
     let sql = Format.asprintf "SELECT EXISTS (%a) AS t" fmt query in
-    let field_types = [("t", Phrase_type.Bool)] in
+    let field_types = [ ("t", Phrase_type.Bool) ] in
     let res = database.execute_select sql ~field_types in
     match res with
-    | [Phrase_value.Record [(_, Phrase_value.Bool b)]] -> b
+    | [ Phrase_value.Record [ (_, Phrase_value.Bool b) ] ] -> b
     | _ -> failwith "Expected singleton value."
 end
 
 module Delete = struct
   type db = t
 
-  type t = {table: string; predicate: Phrase.t option; db: db}
+  type t = { table : string; predicate : Phrase.t option; db : db }
 
   let fmt_table ~(db : db) f v = Format.fprintf f "%s" @@ db.quote_field v
 
@@ -238,15 +234,15 @@ end
 module Update = struct
   type db = t
 
-  type t =
-    { table: string
-    ; predicate: Phrase.t option
-    ; set: (string * Phrase_value.t) list
-    ; db: db }
+  type t = {
+    table : string;
+    predicate : Phrase.t option;
+    set : (string * Phrase_value.t) list;
+    db : db;
+  }
 
   let fmt_set_value ~db f (key, value) =
-    Format.fprintf f "%s = %a" (db.quote_field key) (fmt_phrase_value ~db)
-      value
+    Format.fprintf f "%s = %a" (db.quote_field key) (fmt_phrase_value ~db) value
 
   let fmt_set_values ~db f vs = Format.pp_comma_list (fmt_set_value ~db) f vs
 
@@ -267,12 +263,13 @@ end
 module Insert = struct
   type db = t
 
-  type t =
-    { table: string
-    ; columns: string list
-    ; values: Phrase_value.t list list
-    ; returning: string list
-    ; db: db }
+  type t = {
+    table : string;
+    columns : string list;
+    values : Phrase_value.t list list;
+    returning : string list;
+    db : db;
+  }
 
   let fmt_table ~db f v = Format.fprintf f "%s" @@ db.quote_field v
 

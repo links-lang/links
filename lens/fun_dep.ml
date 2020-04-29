@@ -10,8 +10,7 @@ let right (_, r) = r
 
 let pp_pretty f fd =
   let pp_cols =
-    Format.pp_print_list ~pp_sep:(Format.pp_constant " ")
-      Format.pp_print_string
+    Format.pp_print_list ~pp_sep:(Format.pp_constant " ") Format.pp_print_string
   in
   Format.fprintf f "%a -> %a" pp_cols
     (left fd |> Alias.Set.elements)
@@ -70,9 +69,7 @@ module Set = struct
 
   let remove_defines t ~cols =
     (* first try and find the fd X -> Y where Y is a subset of [cols]. *)
-    let def_fd =
-      find_first_opt (right >> fun r -> Alias.Set.subset cols r) t
-    in
+    let def_fd = find_first_opt (right >> fun r -> Alias.Set.subset cols r) t in
     Result.of_option def_fd ~error:(fun _ ->
         Remove_defines_error.DefiningFDNotFound cols |> Result.error)
     >>| fun def_fd ->
@@ -91,7 +88,7 @@ module Set = struct
     (* if our updated X -> Y where Y has [cols] removed is empty, don't re-add it *)
     if Alias.Set.is_empty right then t else add (make new_def right) t
 
-  let key_fds ~keys ~cols = of_list [key_fd ~keys ~cols]
+  let key_fds ~keys ~cols = of_list [ key_fd ~keys ~cols ]
 
   (* Find the a functional dependency at the root, which is the functional dependency that defines all other nodes *)
   let root_fds fds =
@@ -150,7 +147,7 @@ module Set = struct
     elements fds |> List.map ~f:cols |> Alias.Set.union_all
 
   let all_nodes fds =
-    let nodes fd = Alias.Set.Set.of_list [left fd; right fd] in
+    let nodes fd = Alias.Set.Set.of_list [ left fd; right fd ] in
     elements fds |> List.map ~f:nodes |> Alias.Set.Set.union_all
 
   let outputs fds =
@@ -174,12 +171,12 @@ module Tree = struct
 
   let rec pp_pretty fmt v =
     let pp_node node =
-      Format.pp_force_newline fmt () ;
-      Format.pp_open_box fmt 2 ;
-      Format.pp_print_string fmt "-" ;
-      Format.pp_print_space fmt () ;
-      Alias.Set.pp_pretty fmt (cols node) ;
-      pp_pretty fmt (subnodes node) ;
+      Format.pp_force_newline fmt ();
+      Format.pp_open_box fmt 2;
+      Format.pp_print_string fmt "-";
+      Format.pp_print_space fmt ();
+      Alias.Set.pp_pretty fmt (cols node);
+      pp_pretty fmt (subnodes node);
       Format.pp_close_box fmt ()
     in
     List.iter ~f:pp_node v
@@ -217,10 +214,10 @@ module Tree = struct
     let joint = ref Alias.Set.empty in
     let rec traverse (FDNode (c, subnodes)) =
       if Alias.Set.subset c !columns then (
-        columns := Alias.Set.diff !columns c ;
+        columns := Alias.Set.diff !columns c;
         List.for_all ~f:traverse subnodes )
       else (
-        joint := c ;
+        joint := c;
         false )
     in
     List.for_all ~f:traverse tree
@@ -241,7 +238,8 @@ module Tree = struct
     let not_included = Alias.Set.diff (Set.all_columns fds) (all_cols tree) in
     Alias.Set.is_empty not_included
     |> Result.of_bool ~error:(Check_error.ProbablyCycle not_included)
-    >>= fun () -> is_disjoint tree ~columns >>| fun () -> tree
+    >>= fun () ->
+    is_disjoint tree ~columns >>| fun () -> tree
 
   let split_fds fds colsets =
     let split_fd fd =
@@ -274,9 +272,9 @@ module Tree = struct
     let rec find_cycle node bt =
       match bt with
       | x :: xs ->
-          if Alias.Set.equal x node then List.append bt [node]
+          if Alias.Set.equal x node then List.append bt [ node ]
           else find_cycle node xs
-      | [] -> [Alias.Set.singleton "ERROR RECONSTRUCTING CYCLE"]
+      | [] -> [ Alias.Set.singleton "ERROR RECONSTRUCTING CYCLE" ]
     in
     let rec f bt acc fd =
       let acc = Alias.Set.union acc (left fd) in
@@ -292,9 +290,7 @@ module Tree = struct
 
   let in_tree_form fds =
     let open Result.O in
-    let lefts =
-      Set.elements fds |> List.map ~f:left |> Alias.Set.Set.of_list
-    in
+    let lefts = Set.elements fds |> List.map ~f:left |> Alias.Set.Set.of_list in
     let rights = Set.elements fds |> List.map ~f:right in
     (* the left column sets are all either identical and are mapped to a
        single set element or should be disjoint *)
@@ -306,8 +302,7 @@ module Tree = struct
     |> Result.map_error ~f:(fun v -> Tree_form_error.NotDisjoint v)
     >>= fun () ->
     let fds = split_fds fds lefts in
-    is_acyclic fds
-    >>= fun () ->
+    is_acyclic fds >>= fun () ->
     Alias.Set.Set.is_disjoint (Set.all_nodes fds)
     |> Result.map_error ~f:(fun v -> Tree_form_error.NotDisjoint v)
     >>| fun () -> fds

@@ -6,7 +6,7 @@ stdout : Cons(1, Cons(2, Cons(3, Nil))) : List (Int)
 Lists (Type argument mismatch)
 ./tests/mutual/listWrong.links
 filemode : true
-stderr : @.*
+stderr : @.*Type error.*
 exit : 1
 
 Lists (Map)
@@ -27,31 +27,31 @@ stdout : false : Bool
 Only functions and typenames in mutual blocks
 ./tests/mutual/badMutualBinding.links
 filemode : true
-stderr : @.*
+stderr : @.*Only `fun` and `typename`.*
 exit : 1
 
 Unguarded recursive applications disallowed (1)
 ./tests/mutual/unguarded1.links
 filemode : true
-stderr : @.*
+stderr : @.*Type error.*
 exit : 1
 
 Unguarded recursive applications disallowed (2)
 ./tests/mutual/unguarded2.links
 filemode : true
-stderr : @.*
+stderr : @.*Type error.*
 exit : 1
 
 Type variables not shared in a mutual block
 ./tests/mutual/tyvarSharingDisallowed.links
 filemode : true
-stderr : @.*
+stderr : @.*Type error.*
 exit : 1
 
 Linearity (1)
 ./tests/mutual/linearity1.links
 filemode : true
-stderr : @.*
+stderr : @.*Type error.*
 exit : 1
 
 Linearity (2)
@@ -67,13 +67,13 @@ stdout : () : ()
 Duplicate type bindings disallowed
 ./tests/mutual/duplicateType.links
 filemode : true
-stderr : @.*
+stderr : @.*Duplicate mutually.*
 exit : 1
 
 Duplicate function bindings disallowed
-./tests/mutual/duplicateType.links
+./tests/mutual/duplicateFun.links
 filemode : true
-stderr : @.*
+stderr : @.*Duplicate mutually.*
 exit : 1
 
 Use structural unification if nominal unification fails
@@ -84,7 +84,7 @@ stdout : 123 : Int
 Use structural unification if nominal unification fails (type error)
 ./tests/mutual/structural2.links
 filemode : true
-stderr : @.*
+stderr : @.*Type error.*
 exit : 1
 
 Top level functions within a mutal do not share type variables

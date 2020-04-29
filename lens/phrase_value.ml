@@ -3,7 +3,7 @@ open Lens_utility
 type t =
   | Bool of bool
   | Int of int
-  | Serial of [`Key of int | `NewKey | `NewKeyMapped of int]
+  | Serial of [ `Key of int | `NewKey | `NewKeyMapped of int ]
   | Float of float
   | String of string
   | Char of char
@@ -28,11 +28,11 @@ let is_new_key v =
   | _ -> false
 
 module Unbox_error = struct
-  exception E of {value: t; expected: string}
+  exception E of { value : t; expected : string }
 
   let pp f e =
     match e with
-    | E {value; expected} ->
+    | E { value; expected } ->
         Format.fprintf f "Type error unboxing %a as %s." pp value expected
     | _ -> ()
 
@@ -42,7 +42,7 @@ module Unbox_error = struct
       | _ -> None)
 end
 
-let unbox_error value expected = raise (Unbox_error.E {value; expected})
+let unbox_error value expected = raise (Unbox_error.E { value; expected })
 
 let box_bool b = Bool b
 

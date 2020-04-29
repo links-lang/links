@@ -219,3 +219,21 @@ Open is not include
 filemode : true
 args : --path=tests/modules
 stdout : [1, 2] : [Int]
+
+Record accesses
+./tests/modules/records.links
+filemode : true
+args : --path=tests/modules
+stdout : "LinksModules" : String
+
+Switch expression
+./tests/modules/switch-test.links
+filemode : true
+args : --path=tests/modules
+stdout : "hello!" : String
+
+Qualified module reference
+./tests/modules/varRefA.links
+filemode : true
+args : --path=tests/modules
+stdout : "hello from b!" : String

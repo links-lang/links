@@ -2,7 +2,7 @@ module A {
     var x = 5;
 }
 
-open A
+open A;
 
 switch(x) {
     case(5) -> "hello!"

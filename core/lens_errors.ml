@@ -10,8 +10,7 @@ let format_lens_sort_error f e =
   let open Sort.Lens_sort_error in
   match e with
   | UnboundColumns c ->
-      Format.fprintf f "The columns { %a } are not bound." Alias.Set.pp_pretty
-        c
+      Format.fprintf f "The columns { %a } are not bound." Alias.Set.pp_pretty c
 
 let unpack_lens_sort_result ~die res =
   unpack ~die ~fmt:format_lens_sort_error res
@@ -39,12 +38,12 @@ let format_select_sort_error f e =
       Format.fprintf f
         "The columns { %a } in the predicate are not bound by the lens."
         Alias.Set.pp_pretty c
-  | PredicateDoesntIgnoreOutputs {columns; fds} ->
+  | PredicateDoesntIgnoreOutputs { columns; fds } ->
       Format.fprintf f
-        "The lens has restrictions on the columns { %a }, which are defined \
-         as outputs of the functional dependencies { %a }."
+        "The lens has restrictions on the columns { %a }, which are defined as \
+         outputs of the functional dependencies { %a }."
         Alias.Set.pp_pretty columns Fun_dep.Set.pp_pretty fds
-  | TreeFormError {error} ->
+  | TreeFormError { error } ->
       Format.fprintf f "The functional dependencies were not in tree form. %a"
         format_fun_dep_tree_form_error error
 
@@ -62,7 +61,7 @@ let format_drop_sort_error f e =
       Format.fprintf f
         "The number of default values does not match the number of drop \
          columns."
-  | DropTypeError {column; default_type; column_type} ->
+  | DropTypeError { column; default_type; column_type } ->
       Format.fprintf f
         "The type of column '%s' is %a, but the default value is of type %a."
         column Phrase.Type.pp column_type Phrase.Type.pp default_type
@@ -75,14 +74,13 @@ let format_drop_sort_error f e =
       Format.fprintf f
         "The default value specified does not satisfy the lens predicate."
   | NotIndependent c ->
-      Format.fprintf f
-        "The columns { %a} are not independent in the predicate."
+      Format.fprintf f "The columns { %a} are not independent in the predicate."
         Alias.Set.pp_pretty c
 
 let unpack_type_drop_lens_result ~die res =
   unpack ~die ~fmt:format_drop_sort_error res
 
-let format_phrase_typesugar_error f {Lens.Phrase.Typesugar.msg; data= _} =
+let format_phrase_typesugar_error f { Lens.Phrase.Typesugar.msg; data = _ } =
   Format.fprintf f "%s" msg
 
 let format_type_select_error f e =
@@ -110,12 +108,11 @@ let format_sort_join_error f e =
   let open Sort.Join_sort_error in
   match e with
   | UnboundColumn c ->
-      Format.fprintf f "The columns { %a } are not bound." Alias.Set.pp_pretty
-        c
+      Format.fprintf f "The columns { %a } are not bound." Alias.Set.pp_pretty c
   | AlreadyBound c ->
       Format.fprintf f "The columns { %a } are already bound."
         Alias.Set.pp_pretty c
-  | TreeFormError {error} ->
+  | TreeFormError { error } ->
       Format.fprintf f "The functional dependencies were not in tree form. %a"
         format_fun_dep_tree_form_error error
 
