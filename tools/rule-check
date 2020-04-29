@@ -21,7 +21,7 @@ function is_blacklisted () {
 
 ERRORS=0
 
-for script in $(find $RULEDIR -maxdepth 1 -perm -111 -type f -not -name "*~"); do
+for script in $(find $RULEDIR -maxdepth 1 -type f -not -name "*~"); do
     # Only run the script if it is under revision control.
     git ls-files --error-unmatch "$script" > /dev/null 2>&1 # Returns 1 when the file is untracked.
     if [[ $? -eq 0 ]]; then
@@ -30,6 +30,9 @@ for script in $(find $RULEDIR -maxdepth 1 -perm -111 -type f -not -name "*~"); d
         if [[ $? -eq 1 ]]; then
             echo "Skipping '$script' as it is blacklisted..."
             continue
+	elif [[ ! -x "$script" ]]; then
+	    echo "Error: Found non-executable file $script in rules directory $RULEDIR"
+	    ERRORS=$(($ERRORS+1))
         else
             echo "Running '$script'..."
             "./$script" | sed 's/^/  - /' ; test ${PIPESTATUS[0]} -eq 0
