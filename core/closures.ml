@@ -101,7 +101,7 @@ struct
       method! var =
         fun var ->
           let var, t, o = super#var var in
-          let o = o#typ (`Type t) in
+          let o = o#typ t in
           var, t, o#register_term_var var
 
       method! value = fun v -> match v with
@@ -113,12 +113,12 @@ struct
           let o = List.fold_left (fun o arg -> o#typ arg) o tyargs in
           o#super_value v
         | Inject (_, _, t) ->
-          let o = o#typ (`Type t) in
+          let o = o#typ t in
           o#super_value v
         | TAbs (quantifiers, v) ->
           let o = List.fold_left (fun o q -> o#quantifier q) o quantifiers in
           let (_, ti, o) = o#value v in
-          let t = `ForAll (quantifiers, ti) in
+          let t = Types.ForAll (quantifiers, ti) in
           let o = List.fold_left (fun o q -> o#quantifier_remove q) o quantifiers in
           (v, t, o)
         | _ -> o#super_value v
@@ -129,12 +129,12 @@ struct
         (* We need to find all types occuring in the given IR fragment *)
         let o = match s with
           | Table (_, _, _, (t1, t2, t3)) ->
-            let o1 = o#typ (`Type t1) in
-            let o2 = o1#typ (`Type t2) in
-            o2#typ (`Type t3)
+            let o1 = o#typ t1 in
+            let o2 = o1#typ t2 in
+            o2#typ t3
           | Query (_, _, _, t)
           | DoOperation (_, _, t) ->
-            o#typ (`Type t)
+            o#typ t
           | _ -> o in
         o#super_special s
 
@@ -159,7 +159,7 @@ struct
       method! binder ((_, (_, _, scope)) as b) =
         let b, o = super#binder b in
         let t = Var.type_of_binder b in
-        let o = o#typ (`Type t) in
+        let o = o#typ t in
         match scope with
         | Scope.Global -> b, o#global (Var.var_of_binder b)
         | Scope.Local  -> b, o#bound_termvar (Var.var_of_binder b)
@@ -602,19 +602,22 @@ struct
           let primary_kind = Quantifier.to_primary_kind oldq in
           let subkind = Quantifier.to_subkind oldq in
           let newvar = Types.fresh_raw_variable () in
-          let make_new_type_variable () = Unionfind.fresh (`Var (newvar, subkind, `Rigid)) in
+          let make_new_type_variable () = Unionfind.fresh (Types.Var (newvar, (primary_kind, subkind), `Rigid)) in
           let updated_maps = match primary_kind with
             | PrimaryKind.Type ->
               let new_type_variable = make_new_type_variable () in
-              let t = `MetaTypeVar new_type_variable in
+              let t = Types.Meta new_type_variable in
               (IntMap.add typevar t type_map, row_map, presence_map)
             | PrimaryKind.Row ->
               let new_type_variable = make_new_type_variable () in
-              let r = (Types.empty_field_env, new_type_variable, false) in
+              let r = Types.Row (Types.empty_field_env, Types.Meta new_type_variable, false) in
               (type_map, IntMap.add typevar r row_map, presence_map)
             | PrimaryKind.Presence ->
               let new_type_variable = make_new_type_variable () in
+              (* SJF: This might be incorrect -- old code was:
               let p = `Var new_type_variable in
+              *)
+              let p = Types.Meta new_type_variable in
               (type_map, row_map, IntMap.add typevar p presence_map) in
           let new_quantifier = (newvar, (primary_kind, subkind)) in
           (new_quantifier :: qs, updated_maps)
@@ -636,10 +639,10 @@ struct
               match TypeUtils.split_quantified_type f_type with
                 | [], t  ->
                   let t' = Instantiate.datatype outer_maps t in
-                  `ForAll (outer_quantifiers, t')
+                  Types.ForAll (outer_quantifiers, t')
                 | (f_quantifiers, t) ->
                   let t' = Instantiate.datatype outer_maps t in
-                  `ForAll ((outer_quantifiers @ f_quantifiers), t') in
+                  Types.ForAll ((outer_quantifiers @ f_quantifiers), t') in
               Var.update_type f_type_generalized f_binder
             end
 

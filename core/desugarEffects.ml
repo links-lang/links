@@ -8,7 +8,7 @@ This pass handles effect variables and the "effect sugar" (if enabled).
 
 This pass assumes that all type variables have been resolved expect
 anonymous row variables. All non-anonymous effect variables must have been
-resolved such that different variables use `Var Unionfind points whose integer
+resolved such that different variables use Var Unionfind points whose integer
 ids are different.
 
 The following steps are always performed:
@@ -53,7 +53,7 @@ let internal_error message =
 
 let found_non_var_meta_var =
   internal_error
-    "Every meta_*_var in a SugarTypeVar must be a `Var at this point"
+    "Every meta_*_var in a SugarTypeVar must be a Var at this point"
 
 let cannot_insert_presence_var pos op =
   Errors.Type_error
@@ -90,7 +90,7 @@ let shared_effect_forbidden_here pos =
        context where no such implictly binding of type variables is allowed." )
 
 let unpack_var_id = function
-  | `Var (id, subkind, _) -> (id, subkind)
+  | Types.Var (id, kind, _) -> (id, kind)
   | _ -> raise found_non_var_meta_var
 
 module SEnv = Env.String
@@ -112,10 +112,10 @@ let simplify_tycon_env (tycon_env : Types.tycon_environment) : simple_tycon_env
   in
   SEnv.fold simplify_tycon tycon_env SEnv.empty
 
-let make_anon_point sk freedom =
+let make_anon_point k sk freedom =
   let var = Types.fresh_raw_variable () in
   Unionfind.fresh
-    (`Var (var, DesugarTypeVariables.concrete_subkind sk, freedom))
+    (Types.Var (var, (k, DesugarTypeVariables.concrete_subkind sk), freedom))
 
 (** A map with SugarTypeVar as keys, use for associating the former
    with information about what
@@ -476,7 +476,7 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
             | None -> raise (Errors.UnboundTyCon (pos, name)) )
         | Mu (v, t) ->
             let mtv = SugarTypeVar.get_resolved_type_exn v in
-            let var, sk = unpack_var_id (Unionfind.find mtv) in
+            let var, (_, sk) = unpack_var_id (Unionfind.find mtv) in
             let q : Quantifier.t = (var, (pk_type, sk)) in
             let sq = SugarQuantifier.mk_resolved q in
             self#quantified (fun o -> o#datatype t) [ sq ]
@@ -491,7 +491,7 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
             self
         | Recursive (v, r) ->
             let mtv = SugarTypeVar.get_resolved_type_exn v in
-            let var, sk = unpack_var_id (Unionfind.find mtv) in
+            let var, (_, sk) = unpack_var_id (Unionfind.find mtv) in
             let q : Quantifier.t = (var, (pk_row, sk)) in
             let sq = SugarQuantifier.mk_resolved q in
             self#quantified (fun o -> o#row r) [ sq ]
@@ -514,7 +514,7 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
                let point =
                  lazy
                    (let var = Types.fresh_raw_variable () in
-                    Unionfind.fresh (`Var (var, default_subkind, `Rigid)))
+                    Unionfind.fresh (Types.Var (var, (PrimaryKind.Row, default_subkind), `Rigid)))
                in
                StringMap.add op point m)
              v StringMap.empty)
@@ -530,7 +530,8 @@ let preprocess_type (dt : Datatype.with_pos) tycon_env allow_fresh shared_effect
         let point =
           lazy
             (let var = Types.fresh_raw_variable () in
-             Unionfind.fresh (`Var (var, (lin_unl, res_any), `Rigid)))
+             Unionfind.fresh
+               (Types.Var (var, (PrimaryKind.Type, (lin_unl, res_any)), `Rigid)))
         in
         Some point
     | _ ->
@@ -757,7 +758,7 @@ class main_traversal simple_tycon_env =
               raise (DesugarTypeVariables.free_type_variable dpos);
 
             let _name, sk, freedom = SugarTypeVar.get_unresolved_exn stv in
-            let mtv = make_anon_point sk freedom in
+            let mtv = make_anon_point (PrimaryKind.Row) sk freedom in
             let rtv = SugarTypeVar.mk_resolved_row mtv in
             (o, D.Open rtv)
         | D.Open srv when not (SugarTypeVar.is_resolved srv) ->
@@ -897,7 +898,7 @@ class main_traversal simple_tycon_env =
               let tycon_env = SEnv.bind t (env_args, true) tycon_env in
               let shared_effect_var : Types.meta_row_var Lazy.t =
                 lazy
-                  (Unionfind.fresh (`Var (var, (lin_unl, res_effect), `Rigid)))
+                  (Unionfind.fresh (Types.Var (var, (PrimaryKind.Row, (lin_unl, res_effect)), `Rigid)))
               in
               let shared_var_env =
                 StringMap.add t (Some shared_effect_var) shared_var_env
