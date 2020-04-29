@@ -162,7 +162,7 @@ and meta_row_var = row point
 and meta_presence_var = typ point
 and meta_var = typ point
 and row = typ
-and row_var = typ
+and row_var = meta_row_var
   [@@deriving show]
 
 let dummy_type = Not_typed
@@ -870,7 +870,7 @@ module Env = Env.String
 
 (* type ops stuff *)
   let empty_field_env = FieldEnv.empty
-  let closed_row_var = Not_typed (* Unionfind.fresh `Closed *)
+  let closed_row_var = Unionfind.fresh Closed
 
   let build_type_variable freedom var subkind = assert false (* Unionfind.fresh (`Var (var, subkind, freedom)) *)
   let make_type_variable var subkind = assert false (* `MetaTypeVar (build_type_variable `Flexible var subkind) *)

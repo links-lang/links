@@ -119,7 +119,7 @@ and meta_row_var = row point
 and meta_presence_var = typ point
 and meta_var = typ point
 and row = typ
-and row_var = typ
+and row_var = meta_row_var
   [@@deriving show]
 
 (** A constraint that a subkind imposes on types. *)
