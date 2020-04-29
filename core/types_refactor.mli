@@ -369,6 +369,8 @@ sig
     method remove_rec_type_binding : int ->'self_type
 
     method primitive : Primitive.t -> (Primitive.t * 'self_type)
+    method list : ('self_type -> 'a -> 'b * 'self_type) -> 'a list -> ('b list * 'self_type)
+    method types : typ list -> (typ list * 'self_type)
     method typ : typ -> (typ * 'self_type)
     method row : row -> (row * 'self_type)
     method row_var : row_var -> (row_var * 'self_type)

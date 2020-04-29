@@ -6,6 +6,9 @@ open CommonTypes
 let internal_error message =
   Errors.internal_error ~filename:"types.ml" ~message
 
+let tag_expectation_mismatch =
+  internal_error "Type tag expectation mismatch"
+
 module FieldEnv = Utility.StringMap
 type 'a stringmap = 'a Utility.stringmap [@@deriving show]
 type 'a field_env = 'a stringmap [@@deriving show]
@@ -196,6 +199,8 @@ sig
     method remove_rec_type_binding : int ->'self_type
 
     method primitive : Primitive.t -> (Primitive.t * 'self_type)
+    method list : ('self_type -> 'a -> 'b * 'self_type) -> 'a list -> ('b list * 'self_type)
+    method types : typ list -> (typ list * 'self_type)
     method typ : typ -> (typ * 'self_type)
     method row : row -> (row * 'self_type)
     method row_var : row_var -> (row_var * 'self_type)
@@ -235,61 +240,74 @@ struct
        *   ((fsp', rv', d), o) *)
 
 
-    method meta_type_var : meta_type_var -> (meta_type_var * 'self_type) = fun point ->
-      assert false
-      (* match Unionfind.find point with
-       *   | `Recursive (var, t) ->
-       *     let (rec_types, rec_rows) = rec_vars in
-       *     if IntMap.mem var rec_types then
-       *       (IntMap.find var rec_types), o
-       *     else
-       *       let var' = fresh_raw_variable () in
-       *       let point' : meta_type_var = Unionfind.fresh (`Var (var', (lin_any, res_any), `Flexible)) in
-       *       let rec_types' : (meta_type_var) IntMap.t = IntMap.add var point' rec_types in
-       *       let o_extended_rec_env = {< rec_vars = (rec_types', rec_rows) >} in
-       *       let (t', o') = o_extended_rec_env#typ t in
-       *       let o'_reduced_rec_env = o'#remove_rec_type_binding var in
-       *       Unionfind.change point' (`Recursive (var', t'));
-       *       (point', o'_reduced_rec_env)
-       *   | `Body t ->
-       *       let (t', o) = o#typ t in Unionfind.fresh (`Body t'), o
-       *   | `Var _  -> point, o *)
+    method meta_type_var : meta_type_var -> (meta_type_var * 'self_type) =
+      fun point ->
+      match Unionfind.find point with
+        | Recursive (var, kind, t) ->
+          let (rec_types, rec_rows) = rec_vars in
+          if IntMap.mem var rec_types then
+            (IntMap.find var rec_types), o
+          else
+            let var' = fresh_raw_variable () in
+            let point' : meta_type_var =
+              (* TODO(dhil): Decide whether it is correct to reuse [kind]. *)
+              Unionfind.fresh (Var (var', kind, `Flexible))
+            in
+            let rec_types' : (meta_type_var) IntMap.t = IntMap.add var point' rec_types in
+            let o_extended_rec_env = {< rec_vars = (rec_types', rec_rows) >} in
+            let (t', o') = o_extended_rec_env#typ t in
+            let o'_reduced_rec_env = o'#remove_rec_type_binding var in
+            Unionfind.change point' (Recursive (var', kind, t'));
+            (point', o'_reduced_rec_env)
+        (* | Body t ->
+         *     let (t', o) = o#typ t in Unionfind.fresh (`Body t'), o *)
+        | Var _  -> point, o
+        | _ -> raise tag_expectation_mismatch
 
-    method meta_row_var : meta_row_var -> (meta_row_var * 'self_type) = fun point ->
-      assert false
-      (* match Unionfind.find point with
-       *   | `Closed -> point, o
-       *   | `Recursive (var, r) ->
-       *     let (rec_types, rec_rows) = rec_vars in
-       *     if IntMap.mem var rec_rows then
-       *       (IntMap.find var rec_rows), o
-       *     else
-       *       let var' = fresh_raw_variable () in
-       *       let point' = Unionfind.fresh (`Var (var', (lin_any, res_any), `Flexible)) in
-       *       let rec_rows' = IntMap.add var point' rec_rows in
-       *       let o_extended_rec_env = {< rec_vars = (rec_types, rec_rows') >} in
-       *       let (r', o') = o_extended_rec_env#row r in
-       *       let o'_reduced_rec_env = o'#remove_rec_row_binding var in
-       *       Unionfind.change point' (`Recursive (var', r'));
-       *       (point', o'_reduced_rec_env)
-       *   | `Body r ->
-       *       let (t', o) = o#row r in Unionfind.fresh (`Body t'), o
-       *   | `Var _  -> point, o *)
+    method meta_row_var : meta_row_var -> (meta_row_var * 'self_type) =
+      fun point ->
+      match Unionfind.find point with
+        | Closed -> point, o
+        | Recursive (var, kind, r) ->
+          let (rec_types, rec_rows) = rec_vars in
+          if IntMap.mem var rec_rows then
+            (IntMap.find var rec_rows), o
+          else
+            let var' = fresh_raw_variable () in
+            (* TODO(dhil): Decide whether it is correct to reuse [kind]. *)
+            let point' = Unionfind.fresh (Var (var', kind, `Flexible)) in
+            let rec_rows' = IntMap.add var point' rec_rows in
+            let o_extended_rec_env = {< rec_vars = (rec_types, rec_rows') >} in
+            let (r', o') = o_extended_rec_env#row r in
+            let o'_reduced_rec_env = o'#remove_rec_row_binding var in
+            Unionfind.change point' (Recursive (var', kind, r'));
+            (point', o'_reduced_rec_env)
+        (* | `Body r ->
+         *     let (t', o) = o#row r in Unionfind.fresh (`Body t'), o *)
+        | Var _  -> point, o
+        | _ -> raise tag_expectation_mismatch
 
-    method row_var : row_var -> (row_var * 'self_type) = assert false (* o#meta_row_var *)
+    method row_var : row_var -> (row_var * 'self_type) = o#meta_row_var
 
-    method meta_var : meta_var -> (meta_var * 'self_type) = assert false (* function
+    method meta_var : meta_var -> (meta_var * 'self_type) =
+      fun point ->
+      let t, o = o#typ (Unionfind.find point) in
+      (Unionfind.fresh t, o)
+      (* function
        * | `Type  mtv -> let (mtv', o) = o#meta_type_var mtv in (`Type mtv', o)
        * | `Row mrv -> let (mrv', o) =  o#meta_row_var mrv in (`Row mrv', o)
        * | `Presence mpv -> let (mpv', o) = o#meta_presence_var mpv in (`Presence mpv', o) *)
 
-    method meta_presence_var :  meta_presence_var -> (meta_presence_var * 'self_type) = fun point -> assert false
+    method meta_presence_var :  meta_presence_var -> (meta_presence_var * 'self_type) =
+      fun point -> o#meta_var point
       (* let (newVar, o) = begin match Unionfind.find point with
        *                             | `Body fs ->
        *                                let (fs',o) = o#field_spec fs in (`Body fs', o)
        *                             | `Var (id,sk,fd) -> (`Var (id,sk,fd), o) end in
        *                           (Unionfind.fresh newVar, o) *)
-    method field_spec :  field_spec -> (field_spec * 'self_type) = assert false (* function
+    method field_spec :  field_spec -> (field_spec * 'self_type) =
+      fun field_spec -> o#typ field_spec
+    (* function
        * | `Present t ->
        *    let (t',o) = o#typ t in
        *      (`Present t', o)
@@ -298,16 +316,20 @@ struct
        *    let (mpv', o) = o#meta_presence_var mpv in
        *      (`Var mpv', o) *)
 
-    method field_spec_map :  field_spec_map -> (field_spec_map * 'self_type) = fun map ->
-      assert false
-      (* Utility.StringMap.fold (fun k v (new_map, o) ->
-       *   let (fs, o) = o#field_spec v in
-       *     (StringMap.add k fs new_map, o)
-       *  ) map (StringMap.empty, o) *)
+    method field_spec_map :  field_spec_map -> (field_spec_map * 'self_type) =
+      fun fsmap ->
+      StringMap.fold
+        (fun lbl fs (fsmap', o) ->
+          let (fs, o) = o#field_spec fs in
+          (StringMap.add lbl fs fsmap', o))
+        fsmap (StringMap.empty, o)
 
-   method quantifier : Quantifier.t -> (Quantifier.t * 'self_type) = fun _ -> assert false
+    method quantifier : Quantifier.t -> (Quantifier.t * 'self_type) =
+      fun q -> (q, o)
 
-   method type_arg : type_arg -> (type_arg * 'self_type) = fun _ -> assert false (* function
+    method type_arg : type_arg -> (type_arg * 'self_type) =
+      fun t -> o#typ t
+    (* function
       * | `Type t ->
       *    let (t', o) = o#typ t in (`Type t', o)
       * | `Row r ->
@@ -315,8 +337,66 @@ struct
       * | `Presence p ->
       *    let (p', o) = o#field_spec p in (`Presence p', o) *)
 
-   method typ : typ -> (typ * 'self_type) = fun _ -> assert false (* function
-      * | `Not_typed ->
+    method list : 'a 'b. ('self_type -> 'a -> 'b * 'self_type) -> 'a list -> ('b list * 'self_type)
+      = fun f xs ->
+      List.fold_right
+        (fun x (xs', o) ->
+          let (x', o) = f o x in
+          (x' :: xs', o))
+        xs ([], o)
+
+    method types : typ list -> (typ list * 'self_type) =
+      fun ts -> o#list (fun o -> o#typ) ts
+
+    method typ : typ -> (typ * 'self_type) = function
+      | Not_typed ->
+         (Not_typed, o)
+      | ((Var _) as x) | ((Recursive _) as x) ->
+         (x, o)
+      | Alias ((name, params, args), t) ->
+         let (args', o) = o#types args in
+         let (t', o) = o#typ t in
+         (Alias ((name, params, args'), t'), o)
+      | Application (con, args) ->
+         let (args', o) = o#types args in
+         (Application (con, args'), o)
+      | RecursiveApplication payload ->
+         let (r_args, o) = o#types payload.r_args in
+         (RecursiveApplication { payload with r_args }, o)
+      | Meta point ->
+         let (point', o) = o#meta_var point in
+         (Meta point', o)
+      | Primitive prim ->
+         let (prim', o) = o#primitive prim in
+         (Primitive prim', o)
+      | Function (dom, eff, cod) ->
+         let (dom', o) = o#typ dom in
+         let (eff', o) = o#row eff in
+         let (cod', o) = o#typ cod in
+         (Function (dom', eff', cod'), o)
+      | Lolli (dom, eff, cod) ->
+         let (dom', o) = o#typ dom in
+         let (eff', o) = o#row eff in
+         let (cod', o) = o#typ cod in
+         (Lolli (dom', eff', cod'), o)
+      | Record row ->
+         let (row', o) = o#row row in
+         (Record row', o)
+      | Variant row ->
+         let (row', o) = o#row row in
+         (Variant row', o)
+      | Table (read, write, needed) ->
+         let (read', o) = o#typ read in
+         let (write', o) = o#typ write in
+         let (needed', o) = o#typ needed in
+         (Table (read', write', needed'), o)
+      | Lens _ -> assert false (* TODO FIXME *)
+      | ForAll (names, body) ->
+         let (names', o) = o#list (fun o -> o#quantifier) names in
+         let (body', o) = o#typ body in
+         (ForAll (names', body'), o)
+      | _ -> assert false
+     (* | `Not_typed ->
       *    (`Not_typed, o)
       * | `Primitive p ->
       *    let (p', o) = o#primitive p in (`Primitive p', o)
