@@ -18,10 +18,17 @@
    commonTypes
    env
    errors
+   lens
    module_hacks
    notfound
+   operators
+   regex
    settings
    sourceCode
+   sugarConstructors
+   sugarConstructorsIntf
+   sugarTraversals
+   sugartypes
    types
    typevarcheck
    unionfind
