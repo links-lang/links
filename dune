@@ -9,6 +9,16 @@
           -w A-4-44-45-60-67  ;; Ignores warnings 4, 44, 45, 60, and 67.
           -g                  ;; Adds debugging information to the resulting executable / library.
  )))
+(nowarnings
+  (flags (:standard
+          -strict-formats     ;; Disallows legacy formats.
+          -strict-sequence    ;; Enforces the lhs of a sequence to have type `unit'.
+          -safe-string        ;; Immutable strings.
+          -annot              ;; Dumps information per (file) module about types, bindings, tail-calls, etc. Used by some tools.
+          -warn-error -a      ;; Do not treat warnings as errors.
+          -w -A               ;; Ignore all warnings
+          -g                  ;; Adds debugging information to the resulting executable / library.
+ )))
  (release
   (flags (:standard
           ;; The following flags are the same as for the "dev" profile.
