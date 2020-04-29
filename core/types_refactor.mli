@@ -96,7 +96,7 @@ and typ =
   (* Effect *)
   | Effect of row
   (* Row *)
-  | Row of (field_spec_map * typ * bool)
+  | Row of (field_spec_map * row_var * bool)
   | Closed
   (* Presence *)
   | Absent

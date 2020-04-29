@@ -142,7 +142,7 @@ and typ =
   (* Effect *)
   | Effect of row
   (* Row *)
-  | Row of (field_spec_map * typ * bool)
+  | Row of (field_spec_map * row_var * bool)
   | Closed
   (* Presence *)
   | Absent
@@ -215,13 +215,22 @@ sig
   end
 end
 
+(* HACK: to check that this type could plausibly be a row *)
+let maybe_row = function
+  | (Not_typed | Var _ | Recursive _ | Alias _ | Application _ | RecursiveApplication _ | Meta _
+     | Row _ | Closed) -> true
+  | _ -> false
 
+(* HACK: to check that this type could plausibly be a field_spec *)
+let maybe_field_spec = function
+  | (Not_typed | Var _ | Recursive _ | Alias _ | Application _ | RecursiveApplication _ | Meta _
+     | Present _ | Absent) -> true
+  | _ -> false
 
 module Transform : TYPE_VISITOR =
 struct
   class visitor  =
   object ((o : 'self_type))
-
     val rec_vars : (meta_type_var) IntMap.t * (meta_row_var) IntMap.t = (IntMap.empty, IntMap.empty)
     method remove_rec_type_binding id =
       let (rec_types, rec_rows) = rec_vars in
@@ -231,14 +240,13 @@ struct
       let (rec_types, rec_rows) = rec_vars in
       {< rec_vars = (rec_types, IntMap.remove id rec_rows) >}
 
-
-
     method primitive : Primitive.t -> (Primitive.t * 'self_type) = fun p -> (p,o)
-    method row :  row -> (row * 'self_type) = fun _ -> assert false (* fun (fsp, rv, d) ->
-       * let (fsp', o) = o#field_spec_map fsp in
-       * let (rv', o) = o#row_var rv in
-       *   ((fsp', rv', d), o) *)
-
+    method row : row -> (row * 'self_type) =
+      fun row ->
+      if maybe_row row then
+        o#typ row
+      else
+        raise tag_expectation_mismatch
 
     method meta_type_var : meta_type_var -> (meta_type_var * 'self_type) =
       fun point ->
@@ -250,42 +258,20 @@ struct
           else
             let var' = fresh_raw_variable () in
             let point' : meta_type_var =
-              (* TODO(dhil): Decide whether it is correct to reuse [kind]. *)
-              Unionfind.fresh (Var (var', kind, `Flexible))
-            in
+              Unionfind.fresh (Var (var', kind, `Flexible)) in
             let rec_types' : (meta_type_var) IntMap.t = IntMap.add var point' rec_types in
             let o_extended_rec_env = {< rec_vars = (rec_types', rec_rows) >} in
             let (t', o') = o_extended_rec_env#typ t in
             let o'_reduced_rec_env = o'#remove_rec_type_binding var in
             Unionfind.change point' (Recursive (var', kind, t'));
             (point', o'_reduced_rec_env)
-        (* | Body t ->
-         *     let (t', o) = o#typ t in Unionfind.fresh (`Body t'), o *)
         | Var _  -> point, o
-        | _ -> raise tag_expectation_mismatch
+        | t ->
+            let (t', o) = o#typ t in
+            Unionfind.fresh t', o
 
     method meta_row_var : meta_row_var -> (meta_row_var * 'self_type) =
-      fun point ->
-      match Unionfind.find point with
-        | Closed -> point, o
-        | Recursive (var, kind, r) ->
-          let (rec_types, rec_rows) = rec_vars in
-          if IntMap.mem var rec_rows then
-            (IntMap.find var rec_rows), o
-          else
-            let var' = fresh_raw_variable () in
-            (* TODO(dhil): Decide whether it is correct to reuse [kind]. *)
-            let point' = Unionfind.fresh (Var (var', kind, `Flexible)) in
-            let rec_rows' = IntMap.add var point' rec_rows in
-            let o_extended_rec_env = {< rec_vars = (rec_types, rec_rows') >} in
-            let (r', o') = o_extended_rec_env#row r in
-            let o'_reduced_rec_env = o'#remove_rec_row_binding var in
-            Unionfind.change point' (Recursive (var', kind, r'));
-            (point', o'_reduced_rec_env)
-        (* | `Body r ->
-         *     let (t', o) = o#row r in Unionfind.fresh (`Body t'), o *)
-        | Var _  -> point, o
-        | _ -> raise tag_expectation_mismatch
+      o#meta_type_var
 
     method row_var : row_var -> (row_var * 'self_type) = o#meta_row_var
 
@@ -293,28 +279,15 @@ struct
       fun point ->
       let t, o = o#typ (Unionfind.find point) in
       (Unionfind.fresh t, o)
-      (* function
-       * | `Type  mtv -> let (mtv', o) = o#meta_type_var mtv in (`Type mtv', o)
-       * | `Row mrv -> let (mrv', o) =  o#meta_row_var mrv in (`Row mrv', o)
-       * | `Presence mpv -> let (mpv', o) = o#meta_presence_var mpv in (`Presence mpv', o) *)
 
     method meta_presence_var :  meta_presence_var -> (meta_presence_var * 'self_type) =
-      fun point -> o#meta_var point
-      (* let (newVar, o) = begin match Unionfind.find point with
-       *                             | `Body fs ->
-       *                                let (fs',o) = o#field_spec fs in (`Body fs', o)
-       *                             | `Var (id,sk,fd) -> (`Var (id,sk,fd), o) end in
-       *                           (Unionfind.fresh newVar, o) *)
+      o#meta_var
     method field_spec :  field_spec -> (field_spec * 'self_type) =
-      fun field_spec -> o#typ field_spec
-    (* function
-       * | `Present t ->
-       *    let (t',o) = o#typ t in
-       *      (`Present t', o)
-       * | `Absent -> (`Absent, o)
-       * | `Var mpv ->
-       *    let (mpv', o) = o#meta_presence_var mpv in
-       *      (`Var mpv', o) *)
+      fun field_spec ->
+      if maybe_field_spec field_spec then
+        o#typ field_spec
+      else
+        raise tag_expectation_mismatch
 
     method field_spec_map :  field_spec_map -> (field_spec_map * 'self_type) =
       fun fsmap ->
@@ -328,7 +301,9 @@ struct
       fun q -> (q, o)
 
     method type_arg : type_arg -> (type_arg * 'self_type) =
-      fun t -> o#typ t
+      o#typ
+    (* TODO: delete this once we've convinced ourselves we really
+       don't need to know the kinds of type arguments *)
     (* function
       * | `Type t ->
       *    let (t', o) = o#typ t in (`Type t', o)
@@ -349,10 +324,11 @@ struct
       fun ts -> o#list (fun o -> o#typ) ts
 
     method typ : typ -> (typ * 'self_type) = function
+      (* Unspecified kind *)
       | Not_typed ->
          (Not_typed, o)
-      | ((Var _) as x) | ((Recursive _) as x) ->
-         (x, o)
+      | (Var _ | Recursive _) ->
+         failwith ("freestanding Var / Recursive not implemented yet (must be inside Meta)")
       | Alias ((name, params, args), t) ->
          let (args', o) = o#types args in
          let (t', o) = o#typ t in
@@ -364,8 +340,10 @@ struct
          let (r_args, o) = o#types payload.r_args in
          (RecursiveApplication { payload with r_args }, o)
       | Meta point ->
+         (* FIXME: currently the meta_var method handles Var and Recursive *)
          let (point', o) = o#meta_var point in
          (Meta point', o)
+      (* Type *)
       | Primitive prim ->
          let (prim', o) = o#primitive prim in
          (Primitive prim', o)
@@ -395,84 +373,40 @@ struct
          let (names', o) = o#list (fun o -> o#quantifier) names in
          let (body', o) = o#typ body in
          (ForAll (names', body'), o)
-      | _ -> assert false
-     (* | `Not_typed ->
-      *    (`Not_typed, o)
-      * | `Primitive p ->
-      *    let (p', o) = o#primitive p in (`Primitive p', o)
-      * | `Function (at, r, rt) ->
-      *    let (at', o) = o#typ at in
-      *    let (r', o) = o#row r in
-      *    let (rt', o) = o#typ rt in
-      *      (`Function (at', r', rt'), o)
-      * | `Lolli (at, r, rt) ->
-      *    let (at', o) = o#typ at in
-      *    let (r', o) = o#row r in
-      *    let (rt', o) = o#typ rt in
-      *      (`Lolli (at', r', rt'), o)
-      * | `Record r ->
-      *    let (r', o) = o#row r in
-      *      (`Record r', o)
-      * | `Variant r ->
-      *    let (r', o) = o#row r in
-      *      (`Variant r', o)
-      * | `Effect r ->
-      *    let (r', o) = o#row r in
-      *      (`Effect r', o)
-      * | `Table (t1, t2, t3) ->
-      *    let (t1', o) = o#typ t1 in
-      *    let (t2', o) = o#typ t2 in
-      *    let (t3', o) = o#typ t3 in
-      *      (`Table (t1', t2', t3'), o)
-      * | `Lens _sort -> failwith "Not yet implemented"
-      *      (\* (`Lens _sort, o) *\)
-      * | `Alias ((name, qs, args), t) ->
-      *    let (args', o) = List.fold_right (fun arg (acc_args, o) ->
-      *        let (arg', o) = o#type_arg arg in
-      *        (arg' :: acc_args, o)
-      *      ) args ([],o) in
-      *    let (t',o) = o#typ t in
-      *      (`Alias ((name, qs, args'), t'), o)
-      * | `Application (abst, args) ->
-      *    let (args', o) = List.fold_right (fun arg (acc_args, o) ->
-      *        let (arg', o) = o#type_arg arg in
-      *        (arg' :: acc_args, o)
-      *      ) args ([], o) in
-      *      (`Application (abst, args'), o)
-      * | `RecursiveApplication appl ->
-      *    let (args', o) = List.fold_right (fun arg (acc_args, o) ->
-      *        let (arg', o) = o#type_arg arg in
-      *        (arg' :: acc_args, o)
-      *      ) appl.r_args ([], o) in
-      *      (`RecursiveApplication { appl with r_args = args' }, o)
-      * | `MetaTypeVar mtv ->
-      *    let (mtv', o) = o#meta_type_var mtv in
-      *      (`MetaTypeVar mtv', o)
-      * | `ForAll (rqs,t) ->
-      *     let (qs', o) = List.fold_right (fun q (acc_qs, o) ->
-      *        let (q',o) = o#quantifier q in
-      *        (q' :: acc_qs,o)
-      *      ) rqs ([],o) in
-      *     let (t', o) = o#typ t in
-      *     (`ForAll (qs', t'), o)
-      * | `Input (t1, t2) ->
-      *     let (t1', o) = o#typ t1 in
-      *     let (t2', o) = o#typ t2 in
-      *     (`Input (t1', t2'), o)
-      * | `Output (t1, t2) ->
-      *     let (t1', o) = o#typ t1 in
-      *     let (t2', o) = o#typ t2 in
-      *     (`Output (t1', t2'), o)
-      * | `Dual t ->
-      *    let (t', o) = o#typ t in
-      *    (`Dual t', o)
-      * | `Select r ->
-      *     let (r', o) = o#row r in
-      *    (`Select r', o)
-      * | `Choice r ->
-      *     let (r', o) = o#row r in
-      *    (`Choice r', o)
-      * | `End -> (`End, o) *)
+      (* Effect *)
+      | Effect row ->
+         let (row', o) = o#row row in
+         (Effect row', o)
+      (* Row *)
+      | Row (fsp, rv, d) ->
+         let (fsp', o) = o#field_spec_map fsp in
+         let (rv', o) = o#row_var rv in
+         (Row (fsp', rv', d), o)
+      | Closed -> (Closed, o)
+      (* Presence *)
+      | Present t ->
+         let (t',o) = o#typ t in
+         (Present t', o)
+      | Absent -> (Absent, o)
+      (* FIXME: change some typs to session_types *)
+      | Input (t, s) ->
+         let (t', o) = o#typ t in
+         let (s', o) = o#typ s in
+         (Input (t', s'), o)
+      | Output (t, s) ->
+         let (t', o) = o#typ t in
+         let (s', o) = o#typ s in
+         (Output (t', s'), o)
+      | Dual s ->
+         let (s', o) = o#typ s in
+         (Dual s', o)
+      | Select r ->
+         let (r', o) = o#row r in
+         (Select r', o)
+      | Choice r ->
+         let (r', o) = o#row r in
+         (Choice r', o)
+      | End -> (End, o)
   end
 end
 
