@@ -42,6 +42,7 @@ Branch: types-refactor
   - ir.ml
   - desugarCP.ml
   - json.ml
+  - closures.ml
   - desugarTypeVariables.ml
   - desugarEffects.ml
 
