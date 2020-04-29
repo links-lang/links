@@ -23,6 +23,7 @@
    settings
    sourceCode
    types
+   typevarcheck
    unionfind
    utility)
   (libraries str linenoise base64 safepass unix result
