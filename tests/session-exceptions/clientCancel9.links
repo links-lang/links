@@ -1,3 +1,5 @@
+#IGNORED_BY_TEST_REGISTRATION_RULE_CHECKING_SCRIPT
+# Not run by usual testsuite
 open Cancel9
 fun main() { addRoute("/", fun (_) { ignore(spawnClient {print(Cancel9.go()) }); page <#><h1>Yup</h1></#>} ); serveWebsockets(); servePages() }
 main()

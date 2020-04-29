@@ -1,3 +1,6 @@
+#IGNORED_BY_TEST_REGISTRATION_RULE_CHECKING_SCRIPT
+# Not run by usual testsuite
+
 fun go() {
   var ap = new();
   try {

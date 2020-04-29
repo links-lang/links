@@ -1,3 +1,5 @@
+#IGNORED_BY_TEST_REGISTRATION_RULE_CHECKING_SCRIPT
+# Not run by usual testsuite
 #open Cancel2
 
 fun makePage() {
