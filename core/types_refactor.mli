@@ -14,6 +14,8 @@ end
 
 module TypeVarMap : Utility.INTMAP
 
+val tag_expectation_mismatch : exn
+
 (* points *)
 type 'a point = 'a Unionfind.point
 
