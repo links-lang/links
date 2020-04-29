@@ -9,7 +9,6 @@ Branch: types-refactor
     typeSugar.ml
     generalise.ml
     instantiate.ml
-    typevarcheck.ml
 - Janek
  + pending:
     desugarDatatypes.ml
@@ -32,6 +31,7 @@ Branch: types-refactor
  + lens*.mli
 - Sam
  + pending:
+    typevarcheck.ml
     unify.ml
 - Simon
  + pending:
