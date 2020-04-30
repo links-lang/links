@@ -276,7 +276,7 @@ struct
     method row_var : row_var -> (row_var * 'self_type) = o#meta_row_var
 
     method meta_var : meta_var -> (meta_var * 'self_type) =
-      fun point ->
+      fun _point ->
       assert false
       (* let t, o = o#typ (Unionfind.find point) in
        * (Unionfind.fresh t, o) *)
@@ -341,7 +341,7 @@ struct
          let (r_args, o) = o#types payload.r_args in
          (RecursiveApplication { payload with r_args }, o)
       | Meta point ->
-         (* FIXME: currently the meta_var method handles Var and Recursive *)
+         (* FIXME: currently the meta_type_var method handles Var and Recursive *)
          let (point', o) = o#meta_type_var point in
          (Meta point', o)
       (* Type *)
