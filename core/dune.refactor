@@ -31,6 +31,7 @@
    sugarTraversals
    sugartypes
    types
+   typeUtils
    typevarcheck
    unionfind
    utility)
