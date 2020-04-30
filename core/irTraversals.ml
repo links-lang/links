@@ -178,8 +178,8 @@ struct
                 | Some t ->
                     begin
                       match TypeUtils.concrete_type t with
-                        | `Record row ->
-                            `Record (extend_row field_types row)
+                        | Types.Record row ->
+                            Types.Record (extend_row field_types row)
                         | _ -> assert false
                     end
             in
@@ -296,22 +296,22 @@ struct
         | Wrong t -> Wrong t, t, o
         | Database v ->
             let v, _, o = o#value v in
-              Database v, `Primitive Primitive.DB, o
+              Database v, Types.Primitive Primitive.DB, o
         | Table (db, table_name, keys, tt) ->
             let db, _, o = o#value db in
             let keys, _, o = o#value keys in
             let table_name, _, o = o#value table_name in
-              Table (db, table_name, keys, tt), `Table tt, o
+              Table (db, table_name, keys, tt), Types.Table tt, o
         | Lens (table, rtype) ->
             let table, _, o = o#value table in
-              Lens (table, rtype), `Lens rtype, o
+              Lens (table, rtype), Types.Lens rtype, o
         | LensSerial {lens; columns; typ} ->
             let lens, _, o = o#value lens in
-              LensSerial {lens; columns; typ}, `Lens typ, o
+              LensSerial {lens; columns; typ}, Types.Lens typ, o
         | LensDrop {lens; drop; key; default; typ} ->
             let lens, _, o = o#value lens in
             let default, _, o = o#value default in
-              LensDrop {lens; drop; key; default; typ}, `Lens typ, o
+              LensDrop {lens; drop; key; default; typ}, Types.Lens typ, o
         | LensSelect {lens; predicate; typ} ->
             let lens, _, o = o#value lens in
             let predicate, o =
@@ -320,14 +320,14 @@ struct
                  let predicate, _, o = o#value predicate in
                  Dynamic predicate, o
               | Static predicate -> Static predicate, o) in
-              LensSelect {lens; predicate; typ}, `Lens typ, o
+              LensSelect {lens; predicate; typ}, Types.Lens typ, o
         | LensJoin {left; right; on; del_left; del_right; typ} ->
             let left, _, o = o#value left in
             let right, _, o = o#value right in
-              LensJoin {left; right; on; del_left; del_right; typ}, `Lens typ, o
+              LensJoin {left; right; on; del_left; del_right; typ}, Types.Lens typ, o
         | LensCheck (lens, t) ->
             let lens, _, o = o#value lens in
-              LensCheck (lens, t), `Lens t, o
+              LensCheck (lens, t), Types.Lens t, o
         | LensGet (lens, rtype) ->
             let lens, _, o = o#value lens in
               LensGet (lens, rtype), Types.make_list_type rtype, o
