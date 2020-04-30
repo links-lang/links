@@ -550,31 +550,31 @@ class transform (env : Types.typing_environment) =
       | LensLit (table, Some t) ->
          let (o, table, _) = o#phrase table in
          let (o, t) = o#lens_type t in
-            (o, LensLit (table, Some t), Lens ()) (* TODO for Rudi *)
+            (o, LensLit (table, Some t), Lens t)
       | LensSerialLit (lens,columns,Some t) ->
          let (o, lens, _) = o#phrase lens in
          let (o, t) = o#lens_type t in
-            (o, LensSerialLit (lens, columns, Some t), Lens ()) (* TODO for Rudi *)
+            (o, LensSerialLit (lens, columns, Some t), Lens t)
       | LensDropLit (lens, drop, key, default, Some t) ->
           let (o, lens, _) = o#phrase lens in
           let (o, t) = o#lens_type t in
           let (o, default, _) = o#phrase default in
-            (o, LensDropLit (lens, drop, key, default, Some t), Lens ())  (* TODO for Rudi *)
+            (o, LensDropLit (lens, drop, key, default, Some t), Lens t)
       | LensSelectLit (lens, predicate, Some t) ->
           let (o, lens, _) = o#phrase lens in
           let (o, predicate, _) = o#phrase predicate in
           let (o, t) = o#lens_type t in
-            (o, LensSelectLit (lens, predicate, Some t), Lens ()) (* TODO for Rudi *)
+            (o, LensSelectLit (lens, predicate, Some t), Lens t)
       | LensJoinLit (lens1, lens2, on, left, right, Some t) ->
           let (o, lens1, _) = o#phrase lens1 in
           let (o, lens2, _) = o#phrase lens2 in
           let (o, t) = o#lens_type t in
-            (o, LensJoinLit (lens1, lens2, on, left, right, Some t), Lens ())  (* TODO for Rudi *)
+            (o, LensJoinLit (lens1, lens2, on, left, right, Some t), Lens t)
 
       | LensCheckLit (lens, Some t) ->
           let (o, lens, _) = o#phrase lens in
           let (o, t) = o#lens_type t in
-            (o, LensCheckLit (lens, Some t), Lens ())  (* TODO for Rudi *)
+            (o, LensCheckLit (lens, Some t), Lens t)
       | LensGetLit (lens, Some t) ->
           let (o, lens, _) = o#phrase lens in
           let (o, t) = o#datatype t in
