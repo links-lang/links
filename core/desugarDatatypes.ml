@@ -199,7 +199,8 @@ module Desugar = struct
      *    let (_name, sk, freedom) = SugarTypeVar.get_unresolved_exn stv in
      *    `Var (make_anon_point var_env pos sk freedom) *)
     | Datatype.Var spv ->
-       Unionfind.find( SugarTypeVar.get_resolved_presence_exn spv )
+       let resolved_pv = SugarTypeVar.get_resolved_presence_exn spv in
+       Types.Meta resolved_pv
 
   and row alias_env (fields, rv) (node : 'a WithPos.t) =
     let seed =
