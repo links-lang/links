@@ -11,8 +11,6 @@ Branch: types-refactor
     instantiate.ml
 - Janek
  + pending:
-    desugarDatatypes.ml
- + done:
     desugarFormlets.ml
     desugarFors.ml
     desugarFuns.ml
@@ -21,11 +19,14 @@ Branch: types-refactor
     desugarProcesses.ml
     desugarRegexes.ml
     desugarSessionExceptions.ml
-    sugarConstructorsIntf.ml
+    transformSugar.ml
+ + done:
+    desugarDatatypes.ml
+    frontend.ml
     sugarConstructors.ml
+    sugarConstructorsIntf.ml
     sugarTraversals.ml
     sugartypes.ml
-    transformSugar.ml
 - Rudi
  + lens*.ml
  + lens*.mli
@@ -62,7 +63,6 @@ Fuckups:
 ./context.ml
 ./database.ml
 ./evalir.ml
-./frontend.ml
 ./irCheck.ml
 ./ir.ml
 ./irtojs.ml
