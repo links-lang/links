@@ -34,6 +34,10 @@ sig
 
   val nil : t
 
+  val contains_free : Var.var list -> t -> bool
+
+  val value_of_expression : t -> Value.t
+
   val flatfield : string -> string -> string
   val flattened_pair : t -> t -> t
   val flattened_pair_ft : t -> t -> Types.datatype stringmap
@@ -70,7 +74,7 @@ val sql_of_let_query : let_query -> Sql.query
 
 module Eval :
 sig
-  val empty_env : Lang.env
+  val empty_env : QueryPolicy.t -> Lang.env
   val env_of_value_env : QueryPolicy.t -> Value.env -> Lang.env
   val query_bindings_of_env : Lang.env -> (Var.var * Lang.t) list
   val bind : Lang.env -> Env.Int.name * Lang.t -> Lang.env
@@ -78,6 +82,8 @@ sig
   val norm : Lang.env -> Lang.t -> Lang.t
   val eval : QueryPolicy.t -> Value.t Value.Env.t -> Ir.computation -> Lang.t
 end
+
+val likeify : Lang.t -> string option
 
 val compile_update : Value.database -> Value.env ->
   ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> string

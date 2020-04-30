@@ -7,7 +7,11 @@ type query =
   | Union     of bool * query list * int  (* not is_set = UnionAll *)
   | Select    of bool * select_clause     (* is_set = SelectDistinct *)
   | With      of Var.var * query * Var.var * query
-and select_clause = (base * string) list * (string * Var.var) list * base * base list
+and select_clause = (base * string) list * (from_clause * Var.var) list * base * base list
+and from_clause =
+  | FromQuery      of bool * query      (* is_lateral? *)
+  | FromTable      of string
+  | FromDedupTable of string 
 and base =
   | Case      of base * base * base
   | Constant  of Constant.t
@@ -163,6 +167,14 @@ let rec string_of_query db ignore_fields q =
     in
     selectstr is_set ^ fields ^ " from " ^ tables ^ where ^ orderby
   in
+  let string_of_from_clause (t, v) = 
+    let st = 
+      match t with
+      | FromTable n -> db#quote_field n
+      | FromDedupTable n -> "(select distinct * from " ^ db#quote_field n ^ ")"
+      | FromQuery (is_lat, q) -> lateralstr is_lat ^ "(" ^ sq q ^ ")"
+    in st ^ " as " ^ (string_of_table_var v)
+  in
   match q with
   (* is_set is only meaningful for proper Unions of two or more clauses *)
   | Union (_is_set, [], _) -> "select 42 as \"@unit@\" where false"
@@ -176,13 +188,13 @@ let rec string_of_query db ignore_fields q =
       let fields = string_of_fields fields in
       selectstr is_set ^ "* from (select " ^ fields ^ ") as " ^ fresh_dummy_var () ^ " where " ^ sb condition
   | Select (is_set, (fields, tables, condition, os)) ->
-      let tables = List.map (fun (t, x) -> db#quote_field t ^ " as " ^ (string_of_table_var x)) tables
-      in string_of_select is_set fields tables condition os
+      let tables = tables |> List.map string_of_from_clause in
+      string_of_select is_set fields tables condition os
   | With (_, q, z, q') ->
       match q' with
       | Select (is_set, (fields, tables, condition, os)) ->
           (* Inline the query *)
-          let tables = List.map (fun (t, x) -> db#quote_field t ^ " as " ^ (string_of_table_var x)) tables in
+          let tables = tables |> List.map string_of_from_clause in
           let q = "(" ^ sq q ^ ") as " ^ string_of_table_var z in
           string_of_select is_set fields (q::tables) condition os
       | _ -> assert false

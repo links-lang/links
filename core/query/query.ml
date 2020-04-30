@@ -264,7 +264,7 @@ struct
   let query_field_types (q : t) =
     let (field_spec_map,_,_) = 
       type_of_expression q
-      |> TypeUtils.element_type
+      |> TypeUtils.element_type ~overstep_quantifiers:true
       |> TypeUtils.extract_row
     in 
     StringMap.map (function
@@ -1160,7 +1160,7 @@ let rec select_clause : Sql.index -> bool -> Q.t -> Sql.select_clause =
           begin
             match body with
               | (fields, tables, condition, []) ->
-                  (fields, (table, x)::tables, condition, os)
+                  (fields, (Sql.FromTable table, x)::tables, condition, os)
               | _ -> assert false
           end
     | If (c, body, Concat []) ->
@@ -1183,7 +1183,7 @@ let rec select_clause : Sql.index -> bool -> Q.t -> Sql.select_clause =
              fields
              [])
       in
-        (fields, [(table, var)], Sql.Constant (Constant.Bool true), [])
+        (fields, [(Sql.FromTable table, var)], Sql.Constant (Constant.Bool true), [])
     | Singleton _ when unit_query ->
       (* If we're inside an Sql.Empty or a Sql.Length it's safe to ignore
          any fields here. *)
@@ -1202,7 +1202,7 @@ let rec select_clause : Sql.index -> bool -> Q.t -> Sql.select_clause =
         (fields, [], Sql.Constant (Constant.Bool true), [])
     | _ -> assert false
 and clause : Sql.index -> bool -> Q.t -> Sql.query =
-  fun index unit_query v -> Sql.Select(select_clause index unit_query v)
+  fun index unit_query v -> Sql.Select(false, select_clause index unit_query v)
 and base : Sql.index -> Q.t -> Sql.base = fun index ->
   let open Q in
   function
@@ -1248,7 +1248,7 @@ and unit_query v =
   (* queries passed to Empty and Length
      (where we don't care about what data they return)
   *)
-  Sql.UnionAll (List.map (clause [] true) (prepare_clauses v), 0)
+  Sql.Union (false, List.map (clause [] true) (prepare_clauses v), 0)
 and sql_of_query v =
   clause [] false v
 
@@ -1310,7 +1310,7 @@ let let_clause : let_clause -> Sql.query =
 
 let sql_of_let_query : let_query -> Sql.query =
   fun cs ->
-    Sql.UnionAll (List.map (let_clause) cs, 0)
+    Sql.Union (false, List.map (let_clause) cs, 0)
 
 let update : Value.database -> ((Ir.var * string) * Q.t option * Q.t) -> string =
   fun db ((_, table), where, body) ->

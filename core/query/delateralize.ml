@@ -1,6 +1,10 @@
+(*****************************************************************************
+ ** Delateralize.ml - Implements the delateralization algorithm             **
+ **                                                                         **
+ ** author: Wilmer Ricciotti                                                **
+ *****************************************************************************)
 open Utility
 open CommonTypes
-open Var
 
 module Q = Query.Lang
 
@@ -14,8 +18,9 @@ let (||=) o o' =
     | None -> o'
     | _ -> o
 
-let squash o = o >>= fun x -> x
+(* let squash o = o >>= fun x -> x *)
 
+(* conjunctive bind for option lists, not used
 let rec (>>>=) (l : ('a option) list) (f : 'a -> 'b option) : ('b list) option =
     match l with
     | [] -> Some []
@@ -24,6 +29,7 @@ let rec (>>>=) (l : ('a option) list) (f : 'a -> 'b option) : ('b list) option =
            f a >>= fun b ->
            (ol >>>= f) >>= fun bl -> 
            Some (b :: bl)
+*)
 
 let unopt_default ox x' = match ox with None -> x' | Some x'' -> x''
 
@@ -86,7 +92,7 @@ let prom_delateralize gs q1 x (q2,ty2) y (q3,ty3) =
                 StringMap.empty)
     in
     let q1_rp =
-        let env =  Query.Eval.bind Query.Eval.empty_env (y,rp) in
+        let env =  Query.Eval.bind (Query.Eval.empty_env QueryPolicy.Default) (y,rp) in
         Query.Eval.norm env q1
     in
     Q.For (None, 
@@ -102,7 +108,7 @@ let occurs_free (v : Var.var) =
             then Some tyw
             else None
     | Q.If (c,t,e) -> occf bvs c ||= occf bvs t ||= occf bvs e
-    | Q.Closure ((wl,b),e) ->
+    | Q.Closure ((_wl,_b),_e) ->
         (* XXX: to be checked
            we use this function only in normalized queries, so there shouldn't be any closure;
            recursion on b would require deeper analysis of computations, so for the moment 
@@ -193,7 +199,7 @@ let rec delateralize_step q =
     | _ -> None
 
 let rec delateralize q =
-    let q = Query.Eval.norm Query.Eval.empty_env q in
+    let q = Query.Eval.norm (Query.Eval.empty_env QueryPolicy.Default) q in
     Debug.print "*** normalization step\n";
     Debug.print (Q.show q ^ "\n\n");
     match delateralize_step q with
