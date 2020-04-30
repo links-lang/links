@@ -37,7 +37,7 @@ object (o : 'self_type)
     | Spawn (k, spawn_loc, body, Some inner_eff) ->
         (* bring the inner effects into scope, then restore the
            outer effects afterwards *)
-        let process_type = Types.Application {tycon=Types.process; args=[inner_eff]} in
+        let process_type = Types.Application (Types.process, [inner_eff]) in
         let fun_effects = Types.row_with ("wild", Types.Present Types.unit_type) inner_eff in
         let fun_effects =
           if Settings.get Basicsettings.Sessions.exceptions_enabled then
@@ -75,8 +75,8 @@ object (o : 'self_type)
         in
           (o, e, process_type)
     | Receive (cases, Some t) ->
-        let Row {fields; dual; _} = o#lookup_effects in
-        let other_effects = Types.Row {fields = StringMap.remove "hear" (StringMap.remove "wild" fields); dual; var = None} in
+        let Row (fields, rho, _) = o#lookup_effects in
+        let other_effects = Types.Row (StringMap.remove "hear" (StringMap.remove "wild" fields), rho, false) in
           begin
             match StringMap.find "hear" fields with
               | (Types.Present mbt) ->
