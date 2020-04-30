@@ -10,8 +10,6 @@ Branch: types-refactor
     generalise.ml
     instantiate.ml
 - Janek
- + pending:
-    transformSugar.ml
  + done:
     desugarDatatypes.ml
     desugarFormlets.ml
@@ -27,6 +25,7 @@ Branch: types-refactor
     sugarConstructorsIntf.ml
     sugarTraversals.ml
     sugartypes.ml
+    transformSugar.ml
 - Rudi
  + lens*.ml
  + lens*.mli
