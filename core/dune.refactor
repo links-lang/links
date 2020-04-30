@@ -16,6 +16,7 @@
   (modules
    basicsettings
    commonTypes
+   debug
    env
    errors
    lens
