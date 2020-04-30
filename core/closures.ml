@@ -610,7 +610,7 @@ struct
               (IntMap.add typevar t type_map, row_map, presence_map)
             | PrimaryKind.Row ->
               let new_type_variable = make_new_type_variable () in
-              let r = Types.Row (Types.empty_field_env, Types.Meta new_type_variable, false) in
+              let r = Types.Row (Types.empty_field_env, new_type_variable, false) in
               (type_map, IntMap.add typevar r row_map, presence_map)
             | PrimaryKind.Presence ->
               let new_type_variable = make_new_type_variable () in
