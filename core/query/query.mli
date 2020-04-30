@@ -32,8 +32,14 @@ sig
   and env = { venv: Value.env; qenv: t Env.Int.t; policy: QueryPolicy.t }
       [@@deriving show]
 
+  val nil : t
+
+  val flatfield : string -> string -> string
+  val flattened_pair : t -> t -> t
+  val flattened_pair_ft : t -> t -> Types.datatype stringmap
   val record_field_types : Types.datatype -> Types.datatype StringMap.t
   val table_field_types : Value.table -> Types.typ Utility.StringMap.t
+  val query_field_types : t -> Types.datatype StringMap.t
   val labels_of_field_types : 'a Utility.StringMap.t -> Utility.StringSet.t
   val eta_expand_var : Var.var * Types.datatype StringMap.t -> t
 
@@ -64,9 +70,12 @@ val sql_of_let_query : let_query -> Sql.query
 
 module Eval :
 sig
+  val empty_env : Lang.env
   val env_of_value_env : QueryPolicy.t -> Value.env -> Lang.env
+  val query_bindings_of_env : Lang.env -> (Var.var * Lang.t) list
   val bind : Lang.env -> Env.Int.name * Lang.t -> Lang.env
   val computation : Lang.env -> Ir.computation -> Lang.t
+  val norm : Lang.env -> Lang.t -> Lang.t
   val eval : QueryPolicy.t -> Value.t Value.Env.t -> Ir.computation -> Lang.t
 end
 

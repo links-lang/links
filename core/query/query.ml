@@ -261,10 +261,48 @@ struct
                     | `Present t -> t
                     | _ -> assert false) field_spec_map
 
+  let query_field_types (q : t) =
+    let (field_spec_map,_,_) = 
+      type_of_expression q
+      |> TypeUtils.element_type
+      |> TypeUtils.extract_row
+    in 
+    StringMap.map (function
+                    | `Present t -> t
+                    | _ -> assert false) field_spec_map
+
+
   let field_types_of_for_var gen = 
     type_of_expression gen
     |> Types.unwrap_list_type
     |> record_field_types
+
+  let flatfield f1 f2 = f1 ^ "@" ^ f2
+
+  let rec flattened_pair x y = 
+    match x, y with
+    | Var (_nx, ftx), _ ->
+        let x' = Record (StringMap.fold (fun f _ acc -> StringMap.add f (Project (x,f)) acc) ftx StringMap.empty)
+        in flattened_pair x' y
+    | _, Var (_ny, fty) ->
+        let y' = Record (StringMap.fold (fun f _ acc -> StringMap.add f (Project (y,f)) acc) fty StringMap.empty)
+        in flattened_pair x y'
+    | Record fty1, Record fty2 ->
+        let out1 = 
+            StringMap.fold (fun f v acc -> StringMap.add (flatfield "1" f) v acc) fty1 StringMap.empty
+        in 
+        let out2 = StringMap.fold (fun f v acc -> StringMap.add (flatfield "2" f) v acc) fty2 out1
+        in Record out2
+    | _ -> assert false
+
+  let flattened_pair_ft x y = 
+    match x, y with
+    | Var (_nx, ftx), Var (_ny, fty) -> 
+        let out1 = 
+            StringMap.fold (fun f t acc -> StringMap.add (flatfield "1" f) t acc) ftx StringMap.empty
+        in 
+        StringMap.fold (fun f t acc -> StringMap.add (flatfield "2" f) t acc) fty out1
+    | _ -> assert false
 
   let unbox_xml =
     function
@@ -558,6 +596,10 @@ struct
   let empty_env policy =
     let open Lang in
     { venv = Value.Env.empty; qenv = Env.Int.empty; policy }
+
+  let query_bindings_of_env e =
+    let open Lang in 
+    Env.Int.bindings (e.qenv)
 
   let (++) e1 e2 =
     let open Lang in
@@ -1032,7 +1074,7 @@ struct
 
   (* specialize norm_* with in_dedup = false at the start of normalization *)
   (* (norm is currently unused outside query.ml, so we comment the following) *)
-  (* let norm = norm false *)
+  let norm = norm false
   let norm_comp = norm_comp false
 
   let eval policy env e =
