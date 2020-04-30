@@ -16,6 +16,7 @@
   (modules
    basicsettings
    commonTypes
+   databaseDriver
    debug
    env
    errors
@@ -23,18 +24,21 @@
    module_hacks
    notfound
    operators
+   processTypes
    regex
+   requestData
    settings
    sourceCode
    sugarConstructors
    sugarConstructorsIntf
    sugarTraversals
    sugartypes
-   types
    typeUtils
+   types
    typevarcheck
    unionfind
-   utility)
+   utility
+   var)
   (libraries str linenoise base64 safepass unix result
              yojson ppx_deriving_yojson.runtime
              lwt lwt.unix
