@@ -106,7 +106,7 @@ object (o : 'self_type)
                *)
               let ft =
                 List.fold_right
-                  (fun t ft -> Types.Function {domain=[Types.make_tuple_type [t]]; row=closed_wild; codomain=ft})
+                  (fun t ft -> Types.Function (Types.make_tuple_type [t], closed_wild, ft))
                   ts' (tt ts)
               in
                 begin
@@ -178,7 +178,7 @@ object (o : 'self_type)
           fn_appl_node atatat_str
              [arg_type; yields_type; eff]
              [body; fn_appl pure_str
-                    [Types.Function {Types.domain=[Types.make_tuple_type [arg_type]]; row=closed_wild; codomain=yields_type}; eff]
+                    [Types.Function (Types.make_tuple_type [arg_type], closed_wild, yields_type); eff]
                     [fun_lit ~args:[Types.make_tuple_type [arg_type], closed_wild] dl_unl pss yields]]
         in
           (o, e, Instantiate.alias "Formlet" [yields_type] tycon_env)
