@@ -60,7 +60,7 @@ object (o: 'self_type)
         let envs = o#backup_envs in
         (* Now, process body using inner effects *)
         let outer_effects = o#lookup_effects in
-        let process_type = Types.Application {tycon=Types.process; args=[inner_effects]} in
+        let process_type = Types.Application (Types.process, [inner_effects]) in
         let o = o#with_effects inner_effects in
         let (o, body, _body_dt) = o#phrase body in
         (* Restore outer effects *)

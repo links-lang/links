@@ -11,8 +11,6 @@ Branch: types-refactor
     instantiate.ml
 - Janek
  + pending:
-    desugarRegexes.ml
-    desugarSessionExceptions.ml
     transformSugar.ml
  + done:
     desugarDatatypes.ml
@@ -22,6 +20,8 @@ Branch: types-refactor
     desugarInners.ml
     desugarPages.ml
     desugarProcesses.ml
+    desugarRegexes.ml
+    desugarSessionExceptions.ml
     frontend.ml
     sugarConstructors.ml
     sugarConstructorsIntf.ml
