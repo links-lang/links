@@ -20,13 +20,12 @@ let type_section env =
   | FloatMinus -> TyEnv.find "-."env
   | Project label ->
       let ab, a = Types.fresh_type_quantifier (lin_any, res_any) in
-      let rhob, Row {fields; dual; _} = fresh_row_quantifier (lin_any, res_any) in
+      let rhob, Row (fields, rho, _) = fresh_row_quantifier (lin_any, res_any) in
       let eb, e = Types.fresh_row_quantifier default_effect_subkind in
 
-      let r = Record (Row {fields = StringMap.add label (Present a) fields; dual; var=None}) in
-        ForAll {
-            binders = [ab; rhob; eb];
-            body    = Function {domain = [r]; row=e; codomain=a}}
+      let r = Record (Row (StringMap.add label (Present a) fields, rho, false)) in
+        ForAll ([ab; rhob; eb],
+                Function (Types.make_tuple_type [r], e, a))
   | Name var -> TyEnv.find var env
 
 let type_unary_op env tycon_env =
@@ -60,25 +59,25 @@ let type_binary_op env tycon_env =
   | Name "<"
   | Name "<="
   | Name "<>" ->
-      let ab, a = fresh_type_quantifier (lin_any, res_any) in
-      let eb, e = fresh_row_quantifier (lin_any, res_any) in
-        ForAll { binders = [ab; eb]
-               ; body = Function {domain = [a; a]; row=e;
-                                  codomain = Primitive Primitive.Bool}}
+      let ab, a = Types.fresh_type_quantifier (lin_any, res_any) in
+      let eb, e = Types.fresh_row_quantifier (lin_any, res_any) in
+        ForAll ([ab; eb],
+                Function (Types.make_tuple_type [a; a], e,
+                          Primitive Primitive.Bool ))
   | Name "!"     -> TyEnv.find "Send" env
   | Name n       -> TyEnv.find n env
 
 let fun_effects t pss =
   let rec get_eff =
     function
-      | Function {row; _}, [_]
-      | Lolli    {row; _}, [_] -> row
-      | Function {codomain; _}, _::pss
-      | Lolli    {codomain; _}, _::pss -> get_eff (TypeUtils.concrete_type codomain, pss)
+      | Function (_, effects, _), [_]
+      | Lolli    (_, effects, _), [_] -> effects
+      | Function (_, _, t), _::pss
+      | Lolli    (_, _, t), _::pss -> get_eff (TypeUtils.concrete_type t, pss)
       | _ -> assert false in
   let t =
     match TypeUtils.concrete_type t with
-      | ForAll {body;_} -> TypeUtils.concrete_type body
+      | ForAll (_, body) -> TypeUtils.concrete_type body
       | t -> t
   in
     get_eff (t, pss)
@@ -266,10 +265,10 @@ class transform (env : Types.typing_environment) =
           let (o, lam, rt) = o#funlit inner_e lam in
           let (o, t) =
             List.fold_right
-              (fun (args, effects) (o, codomain) ->
+              (fun (args, effects) (o, rt) ->
                  let (o, args) = o#datatype args in
                  let (o, row) = o#row effects in
-                   (o, Function {domain=[args]; row; codomain}))
+                   (o, Function (args, row, rt)))
               argss
               (o, rt)
           in
@@ -290,8 +289,7 @@ class transform (env : Types.typing_environment) =
           let (o, spawn_loc) = o#given_spawn_location spawn_loc in
           let envs = o#backup_envs in
           let (o, inner_effects) = o#row inner_effects in
-          let process_type =
-            Application {tycon=Types.process; args = [inner_effects]} in
+          let process_type = Application (Types.process, [inner_effects]) in
           let o = o#with_effects inner_effects in
           let (o, body, _) = o#phrase body in
           let o = o#restore_envs envs in
@@ -448,9 +446,9 @@ class transform (env : Types.typing_environment) =
           in
           let t = match Types.concrete_type t with
             | Record row ->
-               let Row { fields=fs; dual; var } = Types.flatten_row row in
-               let fields = List.fold_left2 (fun fs (name, _) t -> StringMap.add name (Present t) fs) fs fields ts in
-               Record (Row {fields; dual; var})
+               let Row ( fs, rv, closed ) = Types.flatten_row row in
+               let fs = List.fold_left2 (fun fs (name, _) t -> StringMap.add name (Present t) fs) fs fields ts in
+               Record (Row (fs, rv, closed))
             | _ -> t
           in
           (o, With (e, fields), t)
@@ -590,10 +588,10 @@ class transform (env : Types.typing_environment) =
           let (o, name, _) = o#phrase name in
           let (o, db, _) = o#phrase db in
           let (o, dtype) = o#sugar_datatype dtype in
-          let (o, read) = o#datatype read_row in
-          let (o, write) = o#datatype write_row in
-          let (o, needed) = o#datatype needed_row in
-            (o, TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db), Table {read; write; needed})
+          let (o, read_row) = o#datatype read_row in
+          let (o, write_row) = o#datatype write_row in
+          let (o, needed_row) = o#datatype needed_row in
+            (o, TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db), Table (read_row, write_row, needed_row))
       | DBDelete (p, from, where) ->
           let (o, from, _) = o#phrase from in
           let (o, p) = o#pattern p in
@@ -873,17 +871,17 @@ class transform (env : Types.typing_environment) =
       | CPGrab (cbind, None, p) ->
          let (o, p, t) = o#cp_phrase p in
          o, CPGrab (cbind, None, p), t
-      | CPGrab ((c, Some (Input {cont;_}, _grab_tyargs) as cbind), Some b, p) -> (* FYI: a = u *)
+      | CPGrab ((c, Some (Input (_a, s), _grab_tyargs) as cbind), Some b, p) -> (* FYI: a = u *)
          let envs = o#backup_envs in
          let (o, b) = o#binder b in
-         let venv = TyEnv.bind c cont (o#get_var_env ()) in
+         let venv = TyEnv.bind c s (o#get_var_env ()) in
          let o = {< var_env = venv >} in
          let (o, p, t) = o#cp_phrase p in
          let o = o#restore_envs envs in
          o, CPGrab (cbind, Some b, p), t
-      | CPGive ((c, Some (Output {cont;_}, _tyargs) as cbind), e, p) ->
+      | CPGive ((c, Some (Output (_t, s), _tyargs) as cbind), e, p) ->
          let envs = o#backup_envs in
-         let o = {< var_env = TyEnv.bind c cont (o#get_var_env ()) >} in
+         let o = {< var_env = TyEnv.bind c s (o#get_var_env ()) >} in
          let (o, e, _typ) = option o (fun o -> o#phrase) e in
          let (o, p, t) = o#cp_phrase p in
          let o = o#restore_envs envs in
