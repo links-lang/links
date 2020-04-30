@@ -137,7 +137,7 @@ and typ =
   | Record of row
   | Variant of row
   | Table of (typ * typ * typ)
-  | Lens of unit (* FIXME *)
+  | Lens of Lens.Type.t
   | ForAll of (Quantifier.t list * typ)
   (* Effect *)
   | Effect of row

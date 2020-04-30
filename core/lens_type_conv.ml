@@ -23,7 +23,7 @@ let lookup_alias context ~alias =
   match Env.String.find_opt alias context with
   | Some (`Alias (_, body)) ->
       let tycon = (alias, [], []) in
-      T.Alias { tycon; body }
+      T.Alias (tycon, body)
   | _ -> Errors.MissingBuiltinType alias |> raise
 
 let rec type_of_lens_phrase_type ~context t =
@@ -56,7 +56,7 @@ let rec lens_phrase_type_of_type t =
                "Unsupported primitive type %a in lens_phrase_type_of_type." T.pp
                t )
   | T.Record r -> lens_phrase_type_of_type r
-  | T.Row { fields; _ } ->
+  | T.Row (fields, _, _) ->
       let fields =
         Utility.StringMap.to_alist fields
         |> String.Map.from_alist
@@ -99,9 +99,9 @@ let sort_cols_of_table t ~table =
   (* get the underlying record type of either a table, a record or an application *)
   let extract_record_type t =
     match TypeUtils.concrete_type t with
-    | T.Application { args = [ r ]; _ } ->
+    | T.Application (_, (* args *) [ r ]) ->
         r (* get the first argument of a type application *)
-    | T.Table { read; _ } -> read (* use the read type of a table *)
+    | T.Table (read, _, _) -> read (* use the read type of a table *)
     | T.Record r -> r (* Use the row of a record type. *)
     | _ -> failwith "LensTypes does not type."
   in
