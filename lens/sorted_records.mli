@@ -37,10 +37,10 @@ val construct : records:Phrase_value.t list -> t
 val construct_cols : columns:string list -> records:Phrase_value.t list -> t
 
 val construct_full :
-     columns:string list
-  -> plus:Simple_record.t list
-  -> neg:Simple_record.t list
-  -> t
+  columns:string list ->
+  plus:Simple_record.t list ->
+  neg:Simple_record.t list ->
+  t
 
 val columns : t -> string list
 
@@ -92,7 +92,7 @@ val filter : t -> predicate:Phrase.t -> t
 val merge : t -> t -> t
 
 module Reorder_error : sig
-  type t = Not_subset of {first: string list; cols: string list}
+  type t = Not_subset of { first : string list; cols : string list }
 
   val pp : t Format.fmt_fn
 end
@@ -104,7 +104,8 @@ val reorder_exn : t -> first:string list -> t
 
 module Join_error : sig
   type elt = t
-  type t = Reorder_error of {error: Reorder_error.t; left: elt; right: elt}
+  type t =
+    | Reorder_error of { error : Reorder_error.t; left : elt; right : elt }
 
   val pp : t Format.fmt_fn
 end
@@ -131,17 +132,16 @@ val minus : t -> t -> t
 val to_value : t -> Phrase_value.t list
 
 val project_fun_dep :
-     t
-  -> fun_dep:Fun_dep.t
-  -> (string list * string list)
-     * (Simple_record.t * Simple_record.t) array
-     * (Simple_record.t * Simple_record.t) array
+  t ->
+  fun_dep:Fun_dep.t ->
+  (string list * string list)
+  * (Simple_record.t * Simple_record.t) array
+  * (Simple_record.t * Simple_record.t) array
 
 val calculate_fd_changelist :
-     t
-  -> fun_deps:Fun_dep.Set.t
-  -> ((string list * string list) * (Simple_record.t * Simple_record.t) list)
-     list
+  t ->
+  fun_deps:Fun_dep.Set.t ->
+  ((string list * string list) * (Simple_record.t * Simple_record.t) list) list
 
 val relational_update : t -> fun_deps:Fun_dep.Set.t -> update_with:t -> t
 
@@ -151,12 +151,12 @@ val relational_merge : t -> fun_deps:Fun_dep.Set.t -> update_with:t -> t
     the relational data [data] containing the functional dependency [key] -> [by].
     Use the default value specified if no entry in [data] is found. *)
 val relational_extend :
-     t
-  -> key:string
-  -> by:string
-  -> data:t
-  -> default:Phrase_value.t
-  -> (t, Reorder_error.t) result
+  t ->
+  key:string ->
+  by:string ->
+  data:t ->
+  default:Phrase_value.t ->
+  (t, Reorder_error.t) result
 
 val relational_extend_exn :
   t -> key:string -> by:string -> data:t -> default:Phrase_value.t -> t
@@ -165,17 +165,17 @@ val relational_extend_exn :
 val all_values : t -> Simple_record.t list
 
 val to_diff :
-     t
-  -> key:string list
-  -> ( string list
-       * (Simple_record.t list * Simple_record.t list * Simple_record.t list)
-     , Reorder_error.t )
-     result
+  t ->
+  key:string list ->
+  ( string list
+    * (Simple_record.t list * Simple_record.t list * Simple_record.t list),
+    Reorder_error.t )
+  result
 
 val to_diff_exn :
-     t
-  -> key:string list
-  -> string list
-     * (Simple_record.t list * Simple_record.t list * Simple_record.t list)
+  t ->
+  key:string list ->
+  string list
+  * (Simple_record.t list * Simple_record.t list * Simple_record.t list)
 
 val force_positive : t -> t

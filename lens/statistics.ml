@@ -13,13 +13,13 @@ let debug_time_out f (withtime : int -> unit) =
   raw_result
 
 let add_query time =
-  query_timer := !query_timer + time ;
+  query_timer := !query_timer + time;
   query_count := !query_count + 1
 
 let time_query fn = debug_time_out fn add_query
 
 let reset () =
-  query_count := 0 ;
+  query_count := 0;
   query_timer := 0
 
 let get_query_time () = !query_timer

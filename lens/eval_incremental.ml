@@ -52,13 +52,13 @@ let lens_put_set_step ~env lens delt
     (fn : env:env -> Value.t -> Sorted.t -> env) =
   match lens with
   | Lens _ -> fn ~env lens delt
-  | LensDrop {lens= l; drop; key; default; _} ->
-      let relevant = query_project_records l delt [key] [drop] in
+  | LensDrop { lens = l; drop; key; default; _ } ->
+      let relevant = query_project_records l delt [ key ] [ drop ] in
       let delt =
         Sorted.relational_extend_exn delt ~key ~by:drop ~default ~data:relevant
       in
       fn ~env l delt
-  | LensJoin {left; right; on; del_left; del_right; _} ->
+  | LensJoin { left; right; on; del_left; del_right; _ } ->
       let cols_simp = List.map ~f:(fun (a, _, _) -> a) on in
       let sort1 = Value.sort left in
       let proj1 =
@@ -109,7 +109,7 @@ let lens_put_set_step ~env lens delt
       in
       let env = fn ~env right delta_n in
       fn ~env left delta_m
-  | LensSelect {lens; predicate; _} ->
+  | LensSelect { lens; predicate; _ } ->
       let delta_m1 =
         Sorted.merge
           (delta_merge_affected
@@ -163,15 +163,15 @@ end
 module MapBoolList = Lens_map.Make (OrderedBoolList)
 
 let apply_delta ~table ~database:db ~sort ~env data =
-  let {Database.Table.name= table; keys} = table in
+  let { Database.Table.name = table; keys } = table in
   let exec cmd =
     let open Database in
-    Debug.print cmd ;
+    Debug.print cmd;
     Statistics.time_query (fun () -> db.execute cmd)
   in
   let exec_select cmd ~field_types =
     let open Database in
-    Debug.print cmd ;
+    Debug.print cmd;
     Statistics.time_query (fun () -> db.execute_select cmd ~field_types)
   in
   (* get the first key, otherwise return an empty key *)
@@ -191,9 +191,9 @@ let apply_delta ~table ~database:db ~sort ~env data =
           ~f:(fun v ->
             match v with
             | Serial (`NewKeyMapped key) -> (
-              match Int.Map.find ~key env with
-              | Some key -> Serial (`Key key)
-              | None -> v )
+                match Int.Map.find ~key env with
+                | Some key -> Serial (`Key key)
+                | None -> v )
             | _ -> v)
           r)
       vals
@@ -201,6 +201,7 @@ let apply_delta ~table ~database:db ~sort ~env data =
   let insert_vals = map_env insert_vals in
   let update_vals = map_env update_vals in
   let delete_vals = map_env delete_vals in
+
   (* when inserting the data we need to split the to be inserted rows into
      different batches, where each batch has the same serial column insert
      pattern. Example: given a table
@@ -221,8 +222,8 @@ let apply_delta ~table ~database:db ~sort ~env data =
     |> List.map ~f:(fun v ->
            ( List.findi columns ~f:(( = ) (Column.alias v))
              |> Option.map ~f:fst
-             |> Option.value ~default:0
-           , v ))
+             |> Option.value ~default:0,
+             v ))
     |> List.filter (snd >> Column.typ >> Phrase_type.equal Phrase_type.Serial)
   in
   (* Pattern for records with no new keys. *)
@@ -232,8 +233,8 @@ let apply_delta ~table ~database:db ~sort ~env data =
     |> List.map ~f:(fun row ->
            ( scolumns
              |> List.map ~f:(fun (i, _) ->
-                    List.nth row i |> Phrase_value.is_new_key)
-           , row ))
+                    List.nth row i |> Phrase_value.is_new_key),
+             row ))
     |> List.groupBy (module MapBoolList) ~f:(fun (k, _) -> k)
     |> List.map ~f:(fun (k, v) -> (k, v |> List.map ~f:(fun (_, v) -> v)))
   in
@@ -256,19 +257,19 @@ let apply_delta ~table ~database:db ~sort ~env data =
   let fmt_cmd_sep f () = Format.pp_print_string f ";\n" in
   let fmt_delete f row =
     let predicate = prepare_where row in
-    let delete = {Database.Delete.table; predicate; db} in
+    let delete = { Database.Delete.table; predicate; db } in
     Database.Delete.fmt f delete
   in
   let fmt_update f row =
     let predicate = prepare_where row in
     let set = List.zip_exn columns row |> List.drop ~n:(List.length key) in
-    let update = {Database.Update.table; predicate; db; set} in
+    let update = { Database.Update.table; predicate; db; set } in
     Database.Update.fmt f update
   in
   let fmt_insert f values =
-    let values = [values] in
+    let values = [ values ] in
     let returning = [] in
-    let insert = {Database.Insert.table; columns; values; db; returning} in
+    let insert = { Database.Insert.table; columns; values; db; returning } in
     Database.Insert.fmt f insert
   in
   let fmt_insert_cmds = List.map ~f:(fun v -> (fmt_insert, v)) insert_vals in
@@ -277,10 +278,10 @@ let apply_delta ~table ~database:db ~sort ~env data =
   let fmt_fmt f (fmt, v) = fmt f v in
   let fmt_all f () =
     Format.pp_print_list ~pp_sep:fmt_cmd_sep fmt_fmt f
-    @@ List.flatten [fmt_insert_cmds; fmt_delete_cmds; fmt_update_cmds]
+    @@ List.flatten [ fmt_insert_cmds; fmt_delete_cmds; fmt_update_cmds ]
   in
   let cmds = Format.asprintf "%a%!" fmt_all () in
-  if String.equal "" cmds |> not then exec cmds ;
+  if String.equal "" cmds |> not then exec cmds;
   (* generate commands where we need  the returning id *)
   List.fold_right
     (fun (k, values_all) env ->
@@ -294,14 +295,13 @@ let apply_delta ~table ~database:db ~sort ~env data =
       in
       let returnings = Lens_string.Set.of_list returning in
       let values =
-        values_all
-        |> List.map ~f:(List.filter (Phrase_value.is_new_key >> not))
+        values_all |> List.map ~f:(List.filter (Phrase_value.is_new_key >> not))
       in
       let columns =
         columns |> List.filter (fun v -> String.Set.mem v returnings |> not)
       in
       let insert =
-        {Database.Insert.table; columns; values; db; returning}
+        { Database.Insert.table; columns; values; db; returning }
         |> Format.asprintf "%a" Database.Insert.fmt
       in
       let field_types =
@@ -337,7 +337,11 @@ let get_fds (fds : (string list * string list) list) (cols : Column.t list) :
           failwith ("The column " ^ alias ^ " does not exist."))
       xs
   in
-  List.iter ~f:(fun (left, right) -> check_col left ; check_col right) fds ;
+  List.iter
+    ~f:(fun (left, right) ->
+      check_col left;
+      check_col right)
+    fds;
   let fd_of (left, right) =
     Fun_dep.make (Alias.Set.of_list left) (Alias.Set.of_list right)
   in
@@ -362,7 +366,7 @@ let map_keys (delta : Sorted.t) =
       match v with
       | Serial `NewKey ->
           let key = !next_key in
-          next_key := key + 1 ;
+          next_key := key + 1;
           Serial (`NewKeyMapped key)
       | _ -> v)
     delta
@@ -371,7 +375,7 @@ let lens_put (lens : Value.t) (data : Phrase_value.t list) =
   let env = Int.Map.empty in
   let rec do_step_rec ~env lens delt =
     match lens with
-    | Lens {table; database; sort} ->
+    | Lens { table; database; sort } ->
         apply_delta ~table ~database ~sort ~env delt
     | _ -> lens_put_set_step lens delt ~env do_step_rec
   in

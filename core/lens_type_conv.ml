@@ -35,17 +35,17 @@ let rec type_of_lens_phrase_type ~context t =
 let rec lens_phrase_type_of_type t =
   match TypeUtils.concrete_type t with
   | `Primitive p -> (
-    match p with
-    | PT.Bool -> LPT.Bool
-    | PT.Int -> LPT.Int
-    | PT.Char -> LPT.Char
-    | PT.Float -> LPT.Float
-    | PT.String -> LPT.String
-    | _ ->
-        failwith
-        @@ Format.asprintf
-             "Unsupported primitive type %a in lens_phrase_type_of_type."
-             Types.pp_typ t )
+      match p with
+      | PT.Bool -> LPT.Bool
+      | PT.Int -> LPT.Int
+      | PT.Char -> LPT.Char
+      | PT.Float -> LPT.Float
+      | PT.String -> LPT.String
+      | _ ->
+          failwith
+          @@ Format.asprintf
+               "Unsupported primitive type %a in lens_phrase_type_of_type."
+               Types.pp_typ t )
   | `Record (r, _, _) ->
       let fields =
         Utility.StringMap.to_alist r
@@ -90,7 +90,7 @@ let sort_cols_of_table t ~table =
   let extract_record_type t =
     match TypeUtils.concrete_type t with
     | `Record _ as r -> r
-    | `Application (_, [`Type (`Record _ as r)]) -> r
+    | `Application (_, [ `Type (`Record _ as r) ]) -> r
     | `Table (r, _, _) -> r
     | _ -> failwith "LensTypes does not type."
   in

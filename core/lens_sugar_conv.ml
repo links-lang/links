@@ -38,7 +38,7 @@ let cols_of_phrase key : string list =
   in
   match WithPos.node key with
   | TupleLit keys -> List.map ~f:var_name keys
-  | Var name -> [name]
+  | Var name -> [ name ]
   | _ -> failwith "Expected a tuple or a variable."
 
 module Error = struct
@@ -61,7 +61,7 @@ let is_static _typ p =
        if body contains any external references. If it does, then it is dynamic,
        otherwise it is static. *)
   match WithPos.node p with
-  | S.FunLit (_, _, ([[var]], body), _) -> (
+  | S.FunLit (_, _, ([ [ var ] ], body), _) -> (
       let var = WithPos.node var in
       match var with
       | S.Pattern.Variable x -> no_ext_deps x body
@@ -75,7 +75,8 @@ let rec lens_sugar_phrase_of_body v p =
   ( match WithPos.node p with
   | S.InfixAppl ((_, op), p, q) ->
       let op = binary_of_sugartype_op op |> fun v -> Option.value_exn v in
-      conv p >>= fun p -> conv q >>| fun q -> LPS.InfixAppl (op, p, q)
+      conv p >>= fun p ->
+      conv q >>| fun q -> LPS.InfixAppl (op, p, q)
   | S.UnaryAppl ((_, op), p) ->
       let op = unary_of_sugartype_op op |> fun v -> Option.value_exn v in
       conv p >>| fun p -> LPS.UnaryAppl (op, p)
@@ -104,7 +105,7 @@ let rec lens_sugar_phrase_of_body v p =
 
 let lens_sugar_phrase_of_sugar p =
   ( match WithPos.node p with
-  | S.FunLit (_, _, ([[var]], body), _) -> (
+  | S.FunLit (_, _, ([ [ var ] ], body), _) -> (
       let var = WithPos.node var in
       match var with
       | S.Pattern.Variable x ->

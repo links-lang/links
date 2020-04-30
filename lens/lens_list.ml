@@ -16,12 +16,12 @@ let rec map_result t ~f =
   match t with
   | [] -> Lens_result.return []
   | x :: xs -> (
-    match f x with
-    | Result.Ok x -> (
-      match map_result xs ~f with
-      | Result.Ok xs -> x :: xs |> Lens_result.return
+      match f x with
+      | Result.Ok x -> (
+          match map_result xs ~f with
+          | Result.Ok xs -> x :: xs |> Lens_result.return
+          | Result.Error _ as err -> err )
       | Result.Error _ as err -> err )
-    | Result.Error _ as err -> err )
 
 let map_if t ~b ~f =
   let f x = if b x then f x else x in
@@ -57,9 +57,9 @@ let rec filter_map t ~f =
   match t with
   | [] -> []
   | x :: xs -> (
-    match f x with
-    | None -> filter_map xs ~f
-    | Some y -> y :: filter_map xs ~f )
+      match f x with
+      | None -> filter_map xs ~f
+      | Some y -> y :: filter_map xs ~f )
 
 let rec unzip3 l =
   match l with
@@ -104,7 +104,7 @@ let groupBy (type a b) (module M : Lens_map.S with type key = a) ~(f : b -> a)
         let key = f v in
         M.update key
           (function
-            | None -> Some [v]
+            | None -> Some [ v ]
             | Some vs -> Some (v :: vs))
           acc)
       s empty

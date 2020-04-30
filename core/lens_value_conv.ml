@@ -18,9 +18,7 @@ let rec lens_phrase_value_of_value t =
   | `Char c -> LPV.Char c
   | `String s -> LPV.String s
   | `Record l ->
-      let l =
-        List.map ~f:(fun (n, v) -> (n, lens_phrase_value_of_value v)) l
-      in
+      let l = List.map ~f:(fun (n, v) -> (n, lens_phrase_value_of_value v)) l in
       LPV.Record l
   | `Variant ("NewKey", `Record []) -> LPV.Serial `NewKey
   | `Variant ("NewKeyMapped", `Int i) -> LPV.Serial (`NewKeyMapped i)
@@ -41,9 +39,7 @@ let rec value_of_lens_phrase_value t =
   | LPV.Serial (`NewKeyMapped i) -> V.box_variant "NewKeyMapped" (V.box_int i)
   | LPV.Serial (`Key i) -> V.box_variant "Key" (V.box_int i)
   | LPV.Record r ->
-      let r =
-        List.map ~f:(fun (n, v) -> (n, value_of_lens_phrase_value v)) r
-      in
+      let r = List.map ~f:(fun (n, v) -> (n, value_of_lens_phrase_value v)) r in
       V.box_record r
   | _ ->
       failwith

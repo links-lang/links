@@ -28,7 +28,7 @@ let not' v1 = UnaryAppl (Unary.Not, v1)
 
 let tuple v = TupleLit v
 
-let tuple_singleton v = tuple [v]
+let tuple_singleton v = tuple [ v ]
 
 let rec of_sugar (_, phrase) =
   let module LPS = Phrase_sugar in
@@ -69,7 +69,7 @@ let get_vars expr =
     traverse expr ~f:(fun expr ->
         match expr with
         | Var n ->
-            cols := Alias.Set.add n !cols ;
+            cols := Alias.Set.add n !cols;
             expr
         | _ -> expr)
   in
@@ -144,22 +144,22 @@ let eval_unary op arg =
   match op with
   | Unary.Not -> unbox_bool arg |> not |> box_bool
   | Unary.Minus -> (
-    match arg with
-    | Value.Float v -> -.v |> box_float
-    | Value.Int v -> -v |> box_int
-    | _ ->
-        failwith
-          (Format.asprintf
-             "Value '%a' does not support the unary minus operator." Value.pp
-             arg) )
+      match arg with
+      | Value.Float v -> -.v |> box_float
+      | Value.Int v -> -v |> box_int
+      | _ ->
+          failwith
+            (Format.asprintf
+               "Value '%a' does not support the unary minus operator." Value.pp
+               arg) )
 
 let rec eval expr get_val =
   let open Value in
   match expr with
   | Constant c -> c
   | Var v -> (
-    try get_val v
-    with Not_found -> failwith ("Could not find column " ^ v ^ ".") )
+      try get_val v
+      with Not_found -> failwith ("Could not find column " ^ v ^ ".") )
   | InfixAppl (op, a1, a2) ->
       let a1 = eval a1 get_val in
       let a2 = eval a2 get_val in
@@ -336,8 +336,7 @@ module Grouped_variables = struct
       (fun e acc -> Alias.Set.Set.map (Alias.Set.union e) acc)
       s1 s2
 
-  let of_lists l =
-    Lens_list.map ~f:Alias.Set.of_list l |> Alias.Set.Set.of_list
+  let of_lists l = Lens_list.map ~f:Alias.Set.of_list l |> Alias.Set.Set.of_list
 
   let rec gtv p =
     match p with

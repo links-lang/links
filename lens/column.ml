@@ -1,11 +1,17 @@
 open Lens_utility
 module Type = Phrase_type
 
-type t =
-  {table: string; name: string; alias: string; typ: Type.t; present: bool}
+type t = {
+  table : string;
+  name : string;
+  alias : string;
+  typ : Type.t;
+  present : bool;
+}
 [@@deriving show]
 
-let make ~table ~name ~alias ~typ ~present = {table; name; alias; typ; present}
+let make ~table ~name ~alias ~typ ~present =
+  { table; name; alias; typ; present }
 
 let name t = t.name
 
@@ -15,19 +21,19 @@ let present t = t.present
 
 let typ t = t.typ
 
-let set_typ ~typ t = {t with typ}
+let set_typ ~typ t = { t with typ }
 
 let table t = t.table
 
-let hide t = {t with present= false}
+let hide t = { t with present = false }
 
-let rename t ~alias = {t with alias}
+let rename t ~alias = { t with alias }
 
 let equal c1 c2 =
   (* Equality in this case can be the simple structural equality *)
   c1 = c2
 
-let set_table t ~table = {t with table}
+let set_table t ~table = { t with table }
 
 module Compare = struct
   type elt = t [@@deriving show]
@@ -43,7 +49,7 @@ module Set = struct
   include Set.Make (Compare)
 
   let dummy_alias alias =
-    {alias; present= true; table= ""; name= ""; typ= Phrase_type.Bool}
+    { alias; present = true; table = ""; name = ""; typ = Phrase_type.Bool }
 
   let alias_set t =
     to_seq t |> Seq.filter present |> Seq.map alias |> Alias.Set.of_seq
