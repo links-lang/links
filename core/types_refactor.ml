@@ -277,11 +277,12 @@ struct
 
     method meta_var : meta_var -> (meta_var * 'self_type) =
       fun point ->
-      let t, o = o#typ (Unionfind.find point) in
-      (Unionfind.fresh t, o)
+      assert false
+      (* let t, o = o#typ (Unionfind.find point) in
+       * (Unionfind.fresh t, o) *)
 
     method meta_presence_var :  meta_presence_var -> (meta_presence_var * 'self_type) =
-      o#meta_var
+      o#meta_type_var
     method field_spec :  field_spec -> (field_spec * 'self_type) =
       fun field_spec ->
       if maybe_field_spec field_spec then
@@ -341,7 +342,7 @@ struct
          (RecursiveApplication { payload with r_args }, o)
       | Meta point ->
          (* FIXME: currently the meta_var method handles Var and Recursive *)
-         let (point', o) = o#meta_var point in
+         let (point', o) = o#meta_type_var point in
          (Meta point', o)
       (* Type *)
       | Primitive prim ->
