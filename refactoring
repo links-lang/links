@@ -13,15 +13,15 @@ Branch: types-refactor
  + pending:
     desugarFors.ml
     desugarInners.ml
-    desugarPages.ml
     desugarProcesses.ml
     desugarRegexes.ml
     desugarSessionExceptions.ml
     transformSugar.ml
  + done:
+    desugarDatatypes.ml
     desugarFormlets.ml
     desugarFuns.ml
-    desugarDatatypes.ml
+    desugarPages.ml
     frontend.ml
     sugarConstructors.ml
     sugarConstructorsIntf.ml
