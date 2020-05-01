@@ -251,6 +251,6 @@ module Constant = struct
 end
 
 module QueryPolicy = struct
-  type t = Flat | Nested | Default
+  type t = Flat | Nested | Mixing | Default
     [@@deriving show]
 end

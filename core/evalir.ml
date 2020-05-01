@@ -691,75 +691,104 @@ struct
           | _ -> eval_error "Error evaluating table handle"
       end
     | Query (range, policy, e, _t) ->
-       begin
-         match range with
-           | None -> Lwt.return None
-           | Some (limit, offset) ->
+        begin
+          match range with
+          | None -> Lwt.return None
+          | Some (limit, offset) ->
               value env limit >>= fun limit ->
               value env offset >>= fun offset ->
               Lwt.return (Some (Value.unbox_int limit, Value.unbox_int offset))
-       end >>= fun range ->
-       let evaluator =
-         let open QueryPolicy in
-         match policy with
-           | Flat -> `Flat
-           | Nested -> `Nested
-           | Default ->
-               if Settings.get Database.shredding then `Nested else `Flat in
+        end >>= fun range ->
+          let evaluator =
+            let open QueryPolicy in
+            match policy with
+              | Flat -> `Flat
+              | Nested -> `Nested
+              | Mixing -> `Mixing
+              | Default ->
+                  if Settings.get Database.heterogeneous
+                    then `Mixing
+                    else if Settings.get Database.shredding then `Nested else `Flat 
+          in
 
-       let evaluate_standard () =
-         match EvalQuery.compile env (range, e) with
-           | None -> computation env cont e
-           | Some (db, q, t) ->
-               let q = Sql.string_of_query db range q in
-               let (fieldMap, _, _), _ =
-               Types.unwrap_row(TypeUtils.extract_row t) in
-               let fields =
-               StringMap.fold
-                   (fun name t fields ->
-                     match t with
-                     | `Present t -> (name, t)::fields
-                     | `Absent -> assert false
-                     | `Var _ -> assert false)
-                   fieldMap
-                   []
-               in
-               apply_cont cont env (Database.execute_select fields q db) in
-
-       let evaluate_nested () =
-         if range != None then eval_error "Range is not supported for nested queries";
-           match EvalNestedQuery.compile_shredded env e with
-           | None -> computation env cont e
-           | Some (db, p) ->
-              if db#supports_shredding () then
-                let get_fields t =
-                  match t with
-                  | `Record fields ->
-                     StringMap.to_list (fun name p -> (name, `Primitive p)) fields
-                  | _ -> assert false
+          let evaluate_standard () =
+            match EvalQuery.compile env (range, e) with
+            | None -> computation env cont e
+            | Some (db, q, t) ->
+                let q = Sql.string_of_query db range q in
+                let (fieldMap, _, _), _ =
+                  Types.unwrap_row(TypeUtils.extract_row t) in
+                let fields =
+                  StringMap.fold
+                    (fun name t fields ->
+                      match t with
+                      | `Present t -> (name, t)::fields
+                      | `Absent -> assert false
+                      | `Var _ -> assert false)
+                    fieldMap
+                    []
                 in
-                let execute_shredded_raw (q, t) =
-                  let q = Sql.string_of_query db range q in
-                  Database.execute_select_result (get_fields t) q db, t in
-                let raw_results =
-                  EvalNestedQuery.Shred.pmap execute_shredded_raw p in
-                let mapped_results =
-                  EvalNestedQuery.Shred.pmap EvalNestedQuery.Stitch.build_stitch_map raw_results in
-                apply_cont cont env
-                  (EvalNestedQuery.Stitch.stitch_mapped_query mapped_results)
-              else
-                let error_msg =
-                  Printf.sprintf
-                    "The database driver '%s' does not support shredding."
-                    (db#driver_name ())
-                in
-                raise (Errors.runtime_error error_msg) in
+                apply_cont cont env (Database.execute_select fields q db) 
+          in
 
-       begin
-         match evaluator with
-           | `Flat -> evaluate_standard ()
-           | `Nested -> evaluate_nested ()
-       end
+          let evaluate_mixing () =
+            if range != None then eval_error "Range is not supported for heterogeneous queries";
+            match SimplSqlGen.compile_mixing env e with
+            | None -> computation env cont e
+            | Some (db, q, t) ->
+                let q = Sql.string_of_query db range q in
+                let (fieldMap, _, _), _ =
+                  Types.unwrap_row(TypeUtils.extract_row t) in
+                let fields =
+                  StringMap.fold
+                    (fun name t fields ->
+                      match t with
+                      | `Present t -> (name, t)::fields
+                      | `Absent -> assert false
+                      | `Var _ -> assert false)
+                    fieldMap
+                    []
+                in
+                apply_cont cont env (Database.execute_select fields q db) 
+          in
+
+          let evaluate_nested () =
+            if range != None then eval_error "Range is not supported for nested queries";
+              match EvalNestedQuery.compile_shredded env e with
+              | None -> computation env cont e
+              | Some (db, p) ->
+                  if db#supports_shredding () then
+                    let get_fields t =
+                      match t with
+                      | `Record fields ->
+                        StringMap.to_list (fun name p -> (name, `Primitive p)) fields
+                      | _ -> assert false
+                    in
+                    let execute_shredded_raw (q, t) =
+                      let q = Sql.string_of_query db range q in
+                      Database.execute_select_result (get_fields t) q db, t in
+                    let raw_results =
+                      EvalNestedQuery.Shred.pmap execute_shredded_raw p in
+                    let mapped_results =
+                      EvalNestedQuery.Shred.pmap EvalNestedQuery.Stitch.build_stitch_map raw_results in
+                    apply_cont cont env
+                      (EvalNestedQuery.Stitch.stitch_mapped_query mapped_results)
+                  else
+                    let error_msg =
+                      Printf.sprintf
+                        "The database driver '%s' does not support shredding."
+                        (db#driver_name ())
+                    in
+                    raise (Errors.runtime_error error_msg)
+          in
+
+          begin
+            match evaluator with
+              | `Flat -> evaluate_standard ()
+              | `Nested -> evaluate_nested ()
+              | `Mixing -> evaluate_mixing ()
+          end
+
     | InsertRows (source, rows) ->
         begin
           value env source >>= fun source ->

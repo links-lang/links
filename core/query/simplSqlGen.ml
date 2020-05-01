@@ -74,3 +74,23 @@ and base_exp = function
 | e ->
     Debug.print ("Not a base expression: " ^ (Q.show e) ^ "\n");
     failwith "base_exp"
+
+let compile_mixing : Value.env -> Ir.computation -> (Value.database * Sql.query * Types.datatype) option =
+  fun env e ->
+    (* Debug.print ("e: "^Ir.show_computation e); *)
+    (* XXX: I don't see how the evaluation here is different depending on the policy *)
+    let evaluator =
+        if Settings.get Database.delateralize
+            then Delateralize.eval QueryPolicy.Flat
+            else Query.Eval.eval QueryPolicy.Flat
+    in
+    let v = evaluator env e in
+      (* Debug.print ("v: "^Q.string_of_t v); *)
+      match Query.used_database v with
+        | None -> None
+        | Some db ->
+            let t = Types.unwrap_list_type (Query.type_of_expression v) in
+            let q = sql_of_query false v in
+            let range = None in
+              Debug.print ("Generated query: "^(Sql.string_of_query db range q));
+              Some (db, q, t)

@@ -3070,10 +3070,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               match policy with
                 | Nested -> `Nested
                 | Flat -> `Flat
+                | Mixing -> `Mixing
                 | Default -> if (Settings.get Database.shredding) then `Nested else `Flat in
             let () =
               match evaluator with
                 | `Nested -> ()
+                (* WR: XXX: what is this for? **)
+                | `Mixing
                 | `Flat  ->
                      let shape =
                        Types.make_list_type

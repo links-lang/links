@@ -712,9 +712,10 @@ struct
     let resolve = function
       | Flat -> `Flat
       | Nested -> `Nested
+      | Mixing -> `Mixing
       | Default ->
           if (Settings.get Database.shredding) then `Nested else `Flat in
-    let show = function | `Nested -> "nested" | `Flat -> "flat" in
+    let show = function | `Nested -> "nested" | `Flat -> "flat" | `Mixing -> "mixing" in
     let expected = resolve env_policy in
     let actual = resolve block_policy in
     if expected = actual then () else
@@ -904,6 +905,44 @@ struct
 
   let rec norm in_dedup env : Q.t -> Q.t =
     function
+    (* XXX: this is a quick and dirty fix to implement substitution into a term via normalization:
+       normally at this point free variables should already have been substituted (by xlate)
+       but sometimes we use norm with open terms and a specially crafted env to perform substitution.
+       It should be tested, and may be more complicated than required because it was ported from xlate *)
+    | Q.Var (var, _) ->
+        begin
+          match lookup env var with
+            (* XXX it should never be in_dedup, should it? *)
+            | Q.Var (x, field_types) when not in_dedup ->
+                (* eta-expand record variables *)
+                Q.eta_expand_var (x, field_types)
+            (* We could consider detecting and eta-expand tables here.
+               The only other possible sources of table values would
+               be `Special or built-in functions that return table
+               values. (Currently there are no pure built-in functions
+               that return table values.)
+               Currently eta-expansion happens later, in the SQL
+               module.
+               On second thoughts, we *never* need to explicitly
+               eta-expand tables, as it is not possible to call
+               "AsList" directly. The "asList" function in the prelude
+               is defined as:
+               fun asList(t) server {for (x <-- t) [x]}
+            *)
+            | v ->
+              (* In order to maintain the invariant that each
+                 bound variable is unique we freshen all for-bound
+                 variables in v here.
+                 This is necessary in order to ensure that each
+                 instance of a table in a self-join is given a
+                 distinct alias, as the alias is generated from the
+                 name of the variable binding the table.
+                 We are assuming that any closure-bound variables will
+                 be eliminated anyway.
+              *)
+              (* Debug.print ("env v: "^string_of_int var^" = "^string_of_t v); *)
+                Q.freshen_for_bindings Env.Int.empty (retn in_dedup v)
+        end
     | Q.Record fl -> Q.Record (StringMap.map (norm false env) fl)
     | Q.Concat xs -> Q.reduce_concat (List.map (norm in_dedup env) xs)
     | Q.Project (r, label) ->

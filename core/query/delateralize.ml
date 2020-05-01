@@ -208,3 +208,10 @@ let rec delateralize q =
         Debug.print (Q.show q' ^ "\n\n");
         delateralize q'
     | None -> q
+
+let eval policy env e =
+    (*    Debug.print ("e: "^Ir.show_computation e); *)
+    Debug.debug_time "Query.eval" (fun () ->
+        e
+        |> Query.Eval.computation (Query.Eval.env_of_value_env policy env)
+        |> delateralize)

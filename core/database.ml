@@ -14,6 +14,18 @@ let relax_query_type_constraint =
             |> convert parse_bool
             |> sync)
 
+let heterogeneous =
+  Settings.(flag "heterogeneous"
+            |> synopsis "Enables experimental support for heterogeneous queries"
+            |> convert parse_bool
+            |> sync)
+
+let delateralize =
+  Settings.(flag "delateralize"
+            |> synopsis "Enables experimental support for delateralization of queries"
+            |> convert parse_bool
+            |> sync)
+
 let shredding =
   Settings.(flag "shredding"
             |> synopsis "Enables database query shredding"

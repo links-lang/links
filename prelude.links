@@ -93,6 +93,20 @@ fun elem(x, l) {
   not(l==[]) && (x == hd(l) || x `elem` tl(l))
 }
 
+fun distinct(l) {
+	fun aux(vl, rl) {
+		switch (rl) {
+			case [] -> []
+			case r::rl0 ->
+				if (r `elem` vl)
+          aux(vl, rl0)
+				else 
+          r::aux(r::vl, rl0)
+		}
+	}
+	aux([], l) 
+}
+
 fun odd(i)  { i `mod` 2 == 1 }
 fun even(i) { i `mod` 2 == 0 }
 
