@@ -24,6 +24,7 @@ val abs_type     : Types.datatype -> Types.datatype
 val app_type     : Types.datatype -> Types.datatype -> Types.datatype
 
 val extract_row : Types.datatype -> Types.row
+val extract_row_parts : Types.t -> (Types.field_spec_map * Types.row_var * bool)
 val iter_row : (string -> Types.field_spec -> unit) -> Types.row -> unit
 val split_row : string -> Types.row -> (Types.datatype * Types.row)
 val split_variant_type : string -> Types.datatype -> (Types.datatype * Types.datatype)
