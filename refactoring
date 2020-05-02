@@ -30,10 +30,9 @@ Branch: types-refactor
  + lens*.ml
  + lens*.mli
 - Sam
- + pending:
-    unify.ml
  + done:
     typevarcheck.ml
+    unify.ml
 - Simon
  + pending:
   - evalir.ml (depends on some non-compiling files)

@@ -6,4 +6,4 @@ type error = [
 exception Failure of error
 
 val datatypes : Types.datatype * Types.datatype -> unit
-val rows : Types.row * Types.row -> unit
+val rows : Types.row' * Types.row' -> unit

@@ -36,6 +36,7 @@
    typeUtils
    types
    typevarcheck
+   unify
    unionfind
    utility
    var)
@@ -46,7 +47,8 @@
              conduit-lwt-unix uri
              websocket websocket-lwt-unix.cohttp
              findlib menhirLib links.lens)
-  (preprocess (pps ppx_deriving.std ppx_deriving_yojson)))
+  (preprocess (pps ppx_deriving.std ppx_deriving_yojson))
+  (flags (:standard -w A-4-26-27-36-44-45-60-67)))
 
 ;; Make Query modules available.
 ;;(copy_files# query/*.ml)

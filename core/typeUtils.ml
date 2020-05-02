@@ -58,7 +58,7 @@ let extract_row t = match concrete_type t with
          ^ string_of_datatype t)
 
 
-let extract_row_parts : Types.t -> (field_spec_map * row_var * bool) = function
+let extract_row_parts : Types.t -> Types.row' = function
     | Row parts -> parts
     | t -> error
              ("Internal error: attempt to extract row parts from a datatype that is not a row "

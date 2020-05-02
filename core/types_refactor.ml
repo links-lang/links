@@ -165,6 +165,7 @@ and meta_row_var = row point
 and meta_presence_var = typ point
 and meta_var = typ point
 and row = typ
+and row' = field_spec_map * row_var * bool
 and row_var = meta_row_var
   [@@deriving show]
 
