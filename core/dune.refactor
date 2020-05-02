@@ -18,6 +18,7 @@
    commonTypes
    databaseDriver
    debug
+   defaultAliases
    env
    errors
    lens
