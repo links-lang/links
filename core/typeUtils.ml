@@ -276,4 +276,134 @@ let record_without t names =
     | _ -> assert false
 
 
-let _ = "delete me"
+
+
+(* FIXME: use better exceptions than failwith *)
+(* FIXME: This is WIP, fill in todos *)
+(**
+    Determines the primary kind of a type and checks the well-formedness
+    of the type in the process.
+    Note: This doesn't catch errors related to ill-formed session types.
+*)
+let primary_kind_of_type =
+  let check_kind expected actual =
+    if actual = expected then
+      actual
+    else
+      failwith "ill-formed type"
+  in
+  let rec typ rec_env t =
+    check_kind
+      pk_type
+      (main rec_env t)
+  and row rec_env r =
+    check_kind
+      pk_row
+      (main rec_env r)
+  and field_spec rec_env fs =
+    check_kind
+      pk_presence
+      (main rec_env fs)
+
+  and meta rec_env ~allow_row_var p =
+    (* row variables must be specifically allowed, because currently
+       we only allow Row (_, _, \rho) but not standalone \rho *)
+    match Unionfind.find p, allow_row_var with
+    | Var (_, kind, _), false  when Kind.to_primary_kind kind = pk_row ->
+       failwith ("freestanding row variables not implemented yet (must be inside Row)")
+    | Var (_, kind, _), _ -> Kind.to_primary_kind kind
+    | Recursive (var, var_kind, body), _ ->
+       let pk =
+         if IntMap.mem var rec_env then
+           IntMap.find var rec_env
+         else
+           let rec_env' =
+             IntMap.add var (Kind.to_primary_kind var_kind) rec_env
+           in
+           main rec_env' body
+       in
+       if pk = pk_presence then
+         failwith "recursive types of kind presence are not allowed"
+       else
+         pk
+    | body, _ -> main rec_env body
+
+  and main rec_env =
+    let ityp t = ignore (typ rec_env t) in
+    let irow r = ignore (row rec_env r) in
+    let ifs fs = ignore (field_spec rec_env fs) in
+    function
+    | Not_typed -> failwith "Not_typed has no kind"
+    | (Var _ | Recursive _) ->
+         failwith ("freestanding Var / Recursive not implemented yet (must be inside Meta)")
+    | Primitive _  -> pk_type
+    | Function (f, m, t)
+    | Lolli (f, m, t) ->
+       ityp f; irow m; ityp t;
+       pk_type
+    | Record row
+    | Variant row ->
+       irow row;
+       pk_type
+    | Effect row ->
+       irow row;
+       (* FIXME: what is the correct kind here? *)
+       failwith "fixme"
+    | Table (f, d, r) ->
+       ityp f; ityp d; ityp r;
+       pk_type
+    | ForAll (qs, t) ->
+       ityp t;
+       pk_type
+    | Meta p ->
+       meta rec_env ~allow_row_var:false p
+    | Alias ((name, qs, ts), d) ->
+       (* TODO: check qs vs ts?*)
+       main rec_env d
+    | Application (n, elem_type) ->
+       (* TODO: check args vs expected*)
+       (* todo: check args *)
+       pk_type
+    | RecursiveApplication app ->
+       failwith "todo"
+
+      (* session stuff. would have to check sub-kinds for full well-formedness check *)
+    | Input (t, s)
+    | Output (t, s) ->
+       ityp t; ityp s;
+       pk_type
+    | Select fields
+    | Choice fields ->
+       irow fields;
+       pk_type
+    | Dual s -> main rec_env s
+    | Lens s ->
+       (* todo?*)
+       pk_type
+    | End -> pk_type
+
+    (* presence stuff*)
+    | Present t ->
+       ityp t;
+       pk_presence
+    | Absent -> pk_presence
+
+    (* rows *)
+    | Closed -> failwith "freestanding Closed not implemented yet (must be inside Row)"
+    | Row (field_spec_map, row_var, dual) ->
+       let handle_fs _label f =
+         ifs f
+       in
+       StringMap.iter handle_fs field_spec_map;
+       (* must deal with special constructs allowed only in row_var positon:
+          - Closed is allowed in row_var position
+          - Var with row variable allowed in row_var *)
+       begin
+       match Unionfind.find row_var with
+         | Meta p -> meta rec_env ~allow_row_var:true p
+         | Closed -> pk_row
+         | body -> row rec_env body
+       end
+
+  in
+  main IntMap.empty
