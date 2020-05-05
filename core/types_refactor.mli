@@ -104,8 +104,8 @@ and typ =
   | Absent
   | Present of typ
   (* Session *)
-  | Input of (typ * typ)
-  | Output of (typ * typ)
+  | Input of (typ * session_type)
+  | Output of (typ * session_type)
   | Select of row
   | Choice of row
   | Dual of typ
@@ -390,13 +390,9 @@ end
 type visit_context = Utility.StringSet.t * TypeVarSet.t * TypeVarSet.t
 class virtual type_predicate :
   object('self_type)
-    method var_satisfies : (int * Subkind.t * Freedom.t) -> bool
+    method var_satisfies : (int * Kind.t * Freedom.t) -> bool
     method type_satisfies : visit_context -> typ -> bool
-    method point_satisfies :
-      'a. (visit_context -> 'a -> bool) ->
-        visit_context ->
-        typ point ->
-        bool
+    method point_satisfies : (visit_context -> typ -> bool) -> visit_context -> typ point -> bool
     method field_satisfies : visit_context -> field_spec -> bool
     method row_satisfies : visit_context -> row -> bool
     method type_satisfies_arg : visit_context -> type_arg -> bool
