@@ -20,7 +20,8 @@ let type_section env =
   | FloatMinus -> TyEnv.find "-."env
   | Project label ->
       let ab, a = Types.fresh_type_quantifier (lin_any, res_any) in
-      let rhob, Row (fields, rho, _) = fresh_row_quantifier (lin_any, res_any) in
+      let rhob, row  = fresh_row_quantifier (lin_any, res_any) in
+      let (fields, rho, _) = TypeUtils.extract_row_parts row in
       let eb, e = Types.fresh_row_quantifier default_effect_subkind in
 
       let r = Record (Row (StringMap.add label (Present a) fields, rho, false)) in
@@ -446,7 +447,9 @@ class transform (env : Types.typing_environment) =
           in
           let t = match Types.concrete_type t with
             | Record row ->
-               let Row ( fs, rv, closed ) = Types.flatten_row row in
+               let  ( fs, rv, closed ) =
+                 Types.flatten_row row |> TypeUtils.extract_row_parts
+               in
                let fs = List.fold_left2 (fun fs (name, _) t -> StringMap.add name (Present t) fs) fs fields ts in
                Record (Row (fs, rv, closed))
             | _ -> t

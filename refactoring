@@ -30,10 +30,10 @@ Branch: types-refactor
  + lens*.ml
  + lens*.mli
 - Sam
- + pending:
-    unify.ml
  + done:
+    defaultAliases.ml
     typevarcheck.ml
+    unify.ml
 - Simon
  + pending:
   - evalir.ml (depends on some non-compiling files)
@@ -48,12 +48,6 @@ Branch: types-refactor
   - desugarEffects.ml
 
  + backend, evalir, ir
-
-Fuckups:
-  - defaultAliases.ml - creates `Alias with structure that doesn't correspons to
-    Alias in types.ml.  The former takes a list as first argument, the latter a
-    triple
-
 
 ./backend.ml
 ./buildTables.ml

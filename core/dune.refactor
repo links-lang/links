@@ -16,23 +16,31 @@
   (modules
    basicsettings
    commonTypes
+   databaseDriver
+   debug
+   defaultAliases
    env
    errors
    lens
    module_hacks
    notfound
    operators
+   processTypes
    regex
+   requestData
    settings
    sourceCode
    sugarConstructors
    sugarConstructorsIntf
    sugarTraversals
    sugartypes
+   typeUtils
    types
    typevarcheck
+   unify
    unionfind
-   utility)
+   utility
+   var)
   (libraries str linenoise base64 safepass unix result
              yojson ppx_deriving_yojson.runtime
              lwt lwt.unix
@@ -40,7 +48,8 @@
              conduit-lwt-unix uri
              websocket websocket-lwt-unix.cohttp
              findlib menhirLib links.lens)
-  (preprocess (pps ppx_deriving.std ppx_deriving_yojson)))
+  (preprocess (pps ppx_deriving.std ppx_deriving_yojson))
+  (flags (:standard -w A-4-26-27-36-44-45-60-67)))
 
 ;; Make Query modules available.
 ;;(copy_files# query/*.ml)
