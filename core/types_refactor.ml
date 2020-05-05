@@ -167,7 +167,7 @@ and meta_var = typ point
 and row = typ
 and row' = field_spec_map * row_var * bool
 and row_var = meta_row_var
-  [@@deriving show]
+   [@@deriving show]
 
 let dummy_type = Not_typed
 
