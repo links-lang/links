@@ -711,7 +711,7 @@ struct
          match EvalQuery.compile env (range, e) with
            | None -> computation env cont e
            | Some (db, q, t) ->
-               let q = Sql.string_of_query db range q in
+               let q = db#string_of_query range q in
                let (fieldMap, _, _), _ =
                Types.unwrap_row(TypeUtils.extract_row t) in
                let fields =
@@ -739,7 +739,7 @@ struct
                   | _ -> assert false
                 in
                 let execute_shredded_raw (q, t) =
-                  let q = Sql.string_of_query db range q in
+                  let q = db#string_of_query range q in
                   Database.execute_select_result (get_fields t) q db, t in
                 let raw_results =
                   EvalNestedQuery.Shred.pmap execute_shredded_raw p in
@@ -767,9 +767,12 @@ struct
           match source, rows with
           | `Table _, `List [] ->  apply_cont cont env (`Record [])
           | `Table ((db, _params), table_name, _, _), rows ->
-              let (field_names,vss) = Value.row_columns_values db rows in
-              Debug.print ("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
-              let () = ignore (Database.execute_insert (table_name, field_names, vss) db) in
+              let (field_names,rows) = Value.row_columns_values rows in
+              let q =
+                Query.insert table_name field_names rows
+                |> db#string_of_query None in
+              Debug.print ("RUNNING INSERT QUERY:\n" ^ q);
+              let () = ignore (Database.execute_command q db) in
               apply_cont cont env (`Record [])
           | _ -> raise (internal_error "insert row into non-database")
         end
@@ -792,12 +795,13 @@ struct
           | `Table _, `List [], _ ->
               raise (internal_error "InsertReturning: undefined for empty list of rows")
           | `Table ((db, _params), table_name, _, _), rows, returning ->
-              let (field_names,vss) = Value.row_columns_values db rows in
+              let (field_names,vss) = Value.row_columns_values rows in
               let returning = Value.unbox_string returning in
+              let q = Query.insert table_name field_names vss in
               Debug.print ("RUNNING INSERT ... RETURNING QUERY:\n" ^
                            String.concat "\n"
-                             (db#make_insert_returning_query(table_name, field_names, vss, returning)));
-              apply_cont cont env (Database.execute_insert_returning (table_name, field_names, vss, returning) db)
+                             (db#make_insert_returning_query returning q));
+              apply_cont cont env (Database.execute_insert_returning returning q db)
           | _ -> raise (internal_error "insert row into non-database")
         end
     | Update ((xb, source), where, body) ->
@@ -813,7 +817,7 @@ struct
       end >>= fun (db, table, field_types) ->
       let update_query =
         Query.compile_update db env ((Var.var_of_binder xb, table, field_types), where, body) in
-      let () = ignore (Database.execute_command update_query db) in
+      let () = ignore (Database.execute_command (db#string_of_query None update_query) db) in
         apply_cont cont env (`Record [])
     | Delete ((xb, source), where) ->
         value env source >>= fun source ->
@@ -828,7 +832,7 @@ struct
         end >>= fun (db, table, field_types) ->
       let delete_query =
         Query.compile_delete db env ((Var.var_of_binder xb, table, field_types), where) in
-      let () = ignore (Database.execute_command delete_query db) in
+      let () = ignore (Database.execute_command (db#string_of_query None delete_query) db) in
         apply_cont cont env (`Record [])
     | CallCC f ->
        value env f >>= fun f ->

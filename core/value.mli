@@ -28,9 +28,12 @@ class virtual database :
     method virtual escape_string : string -> string
     method virtual quote_field : string -> string
     method virtual exec : string -> dbvalue
-    method make_insert_query : (string * string list * string list list) -> string
-    method make_insert_returning_query : (string * string list * string list list * string) -> string list
+    method make_insert_returning_query :
+      string (* "returning" field *) ->
+      Sql.query ->
+      string list
     method virtual supports_shredding : unit -> bool
+    method string_of_query : Sql.range -> Sql.query -> string
   end
 
 
@@ -295,4 +298,4 @@ val is_channel : t -> bool
 
 val session_exception_operation : string
 
-val row_columns_values : database -> t -> string list * string list list
+val row_columns_values : t -> string list * t list list

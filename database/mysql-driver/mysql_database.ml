@@ -255,10 +255,12 @@ class mysql_database spec = object(self)
   method escape_string = Mysql.escape
   method quote_field f =
     "`" ^ Str.global_replace (Str.regexp "`") "``" f ^ "`"
-  method! make_insert_returning_query : (string * string list * string list list * string) -> string list =
-    fun (table_name, field_names, vss, _returning) ->
-      [self#make_insert_query(table_name, field_names, vss);
-       "select last_insert_id()"]
+
+  method! make_insert_returning_query : string -> Sql.query -> string list =
+    fun _returning q ->
+      assert (match q with | Sql.Insert _ -> true | _ -> false);
+      [self#string_of_query None q; "select last_insert_id()"]
+
   method supports_shredding () = false
 end
 

@@ -168,6 +168,22 @@ struct
                                  fields []))
         | _ -> assert false
 
+  let rec expression_of_base_value : Value.t -> t = function
+    | `Bool b -> Constant (Constant.Bool b)
+    | `Char c -> Constant (Constant.Char c)
+    | `Float f -> Constant (Constant.Float f)
+    | `Int i -> Constant (Constant.Int i)
+    | `String s -> Constant (Constant.String s)
+    | `Record fields ->
+        let fields =
+          fields
+          |> List.map (fun (k, v) -> (k, expression_of_base_value v))
+          |> StringMap.from_alist in
+        Record fields
+    | other ->
+        raise (internal_error ("expression_of_base_value undefined for " ^
+          Value.string_of_value other))
+
   let rec freshen_for_bindings : Var.var Env.Int.t -> t -> t =
     fun env v ->
       let ffb = freshen_for_bindings env in
@@ -229,6 +245,11 @@ struct
       | Concat vs -> concat_map unbox_list vs
       | Singleton v -> [v]
       | _ -> raise (runtime_type_error "failed to unbox list")
+
+  let unbox_record =
+    function
+      | Record r -> r
+      | _ -> raise (runtime_type_error "failed to unbox record")
 
   let unbox_string =
     function
@@ -1174,58 +1195,50 @@ let sql_of_let_query : let_query -> Sql.query =
   fun cs ->
     Sql.UnionAll (List.map (let_clause) cs, 0)
 
-let update : Value.database -> ((Ir.var * string) * Q.t option * Q.t) -> string =
-  fun db ((_, table), where, body) ->
-    Sql.reset_dummy_counter ();
-    let base = (base []) ->- (Sql.string_of_base db true) in
-    let where =
-      match where with
-        | None -> ""
-        | Some where ->
-            " where (" ^ base where ^ ")" in
-    let fields =
-      match body with
-        | Q.Record fields ->
-            String.concat ","
-              (List.map
-                (fun (label, v) -> db#quote_field label ^ " = " ^ base v)
-                (StringMap.to_alist fields))
-        | _ -> assert false
-    in
-      "update "^table^" set "^fields^where
+let update : ((Ir.var * string) * Q.t option * Q.t) -> Sql.query =
+  fun ((_, table), where, body) ->
+    let open Sql in
+    let upd_where =
+      OptionUtils.opt_map (base []) where in
+    let upd_fields =
+      Q.unbox_record body
+      |> StringMap.map (base [])
+      |> StringMap.to_alist in
+    Update { upd_table = table; upd_fields; upd_where }
 
-let delete : Value.database -> ((Ir.var * string) * Q.t option) -> string =
-  fun db ((_, table), where) ->
-  Sql.reset_dummy_counter ();
-  let base = base [] ->- (Sql.string_of_base db true) in
-  let where =
-    match where with
-      | None -> ""
-      | Some where ->
-          " where (" ^ base where ^ ")"
-  in
-    "delete from "^table^where
+let delete : ((Ir.var * string) * Q.t option) -> Sql.query =
+  fun ((_, table), where) ->
+    let open Sql in
+    let del_where = OptionUtils.opt_map (base []) where in
+    Delete { del_table = table; del_where }
 
 let compile_update : Value.database -> Value.env ->
-  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> string =
+  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> Sql.query =
   fun db env ((x, table, field_types), where, body) ->
     let env = Eval.bind (Eval.env_of_value_env QueryPolicy.Default env) (x, Q.Var (x, field_types)) in
 (*      let () = opt_iter (fun where ->  Debug.print ("where: "^Ir.show_computation where)) where in*)
     let where = opt_map (Eval.norm_comp env) where in
 (*       Debug.print ("body: "^Ir.show_computation body); *)
     let body = Eval.norm_comp env body in
-    let q = update db ((x, table), where, body) in
-      Debug.print ("Generated update query: "^q);
+    let q = update ((x, table), where, body) in
+      Debug.print ("Generated update query: " ^ (db#string_of_query None q));
       q
 
 let compile_delete : Value.database -> Value.env ->
-  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> string =
+  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> Sql.query =
   fun db env ((x, table, field_types), where) ->
     let env = Eval.bind (Eval.env_of_value_env QueryPolicy.Default env) (x, Q.Var (x, field_types)) in
     let where = opt_map (Eval.norm_comp env) where in
-    let q = delete db ((x, table), where) in
-      Debug.print ("Generated update query: "^q);
+    let q = delete ((x, table), where) in
+      Debug.print ("Generated update query: " ^ (db#string_of_query None q));
       q
+
+let insert table_name field_names rows =
+  let rows = List.map (List.map (Q.expression_of_base_value ->- base [])) rows in
+  Sql.(Insert {
+      ins_table = table_name;
+      ins_fields = field_names;
+      ins_records = rows })
 
 let is_list = Q.is_list
 let table_field_types = Q.table_field_types
