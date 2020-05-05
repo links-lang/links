@@ -41,7 +41,7 @@ sig
   val flatfield : string -> string -> string
   val flattened_pair : t -> t -> t
   val flattened_pair_ft : t -> t -> Types.datatype stringmap
-  val record_field_types : Types.datatype -> Types.datatype StringMap.t
+  val recdty_field_types : Types.datatype -> Types.datatype StringMap.t
   val table_field_types : Value.table -> Types.typ Utility.StringMap.t
   val query_field_types : t -> Types.datatype StringMap.t
   val labels_of_field_types : 'a Utility.StringMap.t -> Utility.StringSet.t

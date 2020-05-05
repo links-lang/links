@@ -1,6 +1,7 @@
 open Utility
 open CommonTypes
 open Var
+open Errors
 
 exception DbEvaluationError of string
 
@@ -255,11 +256,14 @@ struct
       field_types
       StringSet.empty
 
-  let record_field_types (t : Types.datatype) : Types.datatype StringMap.t =
+  let recdty_field_types (t : Types.datatype) : Types.datatype StringMap.t =
     let (field_spec_map, _, _) = TypeUtils.extract_row t in
     StringMap.map (function
                     | `Present t -> t
                     | _ -> assert false) field_spec_map
+
+  let record_field_types =
+    type_of_expression ->- recdty_field_types
 
   let query_field_types (q : t) =
     let (field_spec_map,_,_) = 
@@ -275,7 +279,7 @@ struct
   let field_types_of_for_var gen = 
     type_of_expression gen
     |> Types.unwrap_list_type
-    |> record_field_types
+    |> recdty_field_types
 
   let flatfield f1 f2 = f1 ^ "@" ^ f2
 
@@ -460,7 +464,7 @@ struct
               | Prom _ as q -> 
                   let z = Var.fresh_raw_var () in
                   let tyq = type_of_expression q in
-                  let ftys = record_field_types tyq in 
+                  let ftys = recdty_field_types tyq in 
                   reduce_for_body ([(z,q)], [], Singleton (eta_expand_var (z, ftys)))
               | q -> q
             end
@@ -903,45 +907,56 @@ struct
         Q.eta_expand_list xs
     | _ -> assert false
 
+  let mk_for_term env (x,xs) body_f =
+    let ftys = Q.record_field_types xs in
+    (* let newx = Var.fresh_raw_var () in *)
+    let vx = Q.Var (x, ftys) in
+    let cenv = bind env (x, vx) in
+    (* Debug.print ("mk_for_term: " ^ string_of_int newx ^ " for " ^ string_of_int x); *)
+    Q.For (None, [x,xs], [], body_f cenv)
+
   let rec norm in_dedup env : Q.t -> Q.t =
     function
     (* XXX: this is a quick and dirty fix to implement substitution into a term via normalization:
        normally at this point free variables should already have been substituted (by xlate)
        but sometimes we use norm with open terms and a specially crafted env to perform substitution.
        It should be tested, and may be more complicated than required because it was ported from xlate *)
-    | Q.Var (var, _) ->
+    | Q.Var (var, _) as orig ->
         begin
-          match lookup env var with
-            (* XXX it should never be in_dedup, should it? *)
-            | Q.Var (x, field_types) when not in_dedup ->
-                (* eta-expand record variables *)
-                Q.eta_expand_var (x, field_types)
-            (* We could consider detecting and eta-expand tables here.
-               The only other possible sources of table values would
-               be `Special or built-in functions that return table
-               values. (Currently there are no pure built-in functions
-               that return table values.)
-               Currently eta-expansion happens later, in the SQL
-               module.
-               On second thoughts, we *never* need to explicitly
-               eta-expand tables, as it is not possible to call
-               "AsList" directly. The "asList" function in the prelude
-               is defined as:
-               fun asList(t) server {for (x <-- t) [x]}
-            *)
-            | v ->
-              (* In order to maintain the invariant that each
-                 bound variable is unique we freshen all for-bound
-                 variables in v here.
-                 This is necessary in order to ensure that each
-                 instance of a table in a self-join is given a
-                 distinct alias, as the alias is generated from the
-                 name of the variable binding the table.
-                 We are assuming that any closure-bound variables will
-                 be eliminated anyway.
+          try
+            match lookup env var with
+              (* XXX it should never be in_dedup, should it? *)
+              | Q.Var (x, field_types) when not in_dedup ->
+                  (* eta-expand record variables *)
+                  Q.eta_expand_var (x, field_types)
+              (* We could consider detecting and eta-expand tables here.
+                The only other possible sources of table values would
+                be `Special or built-in functions that return table
+                values. (Currently there are no pure built-in functions
+                that return table values.)
+                Currently eta-expansion happens later, in the SQL
+                module.
+                On second thoughts, we *never* need to explicitly
+                eta-expand tables, as it is not possible to call
+                "AsList" directly. The "asList" function in the prelude
+                is defined as:
+                fun asList(t) server {for (x <-- t) [x]}
               *)
-              (* Debug.print ("env v: "^string_of_int var^" = "^string_of_t v); *)
-                Q.freshen_for_bindings Env.Int.empty (retn in_dedup v)
+              | v ->
+                (* In order to maintain the invariant that each
+                  bound variable is unique we freshen all for-bound
+                  variables in v here.
+                  This is necessary in order to ensure that each
+                  instance of a table in a self-join is given a
+                  distinct alias, as the alias is generated from the
+                  name of the variable binding the table.
+                  We are assuming that any closure-bound variables will
+                  be eliminated anyway.
+                *)
+                (* Debug.print ("env v: "^string_of_int var^" = "^string_of_t v); *)
+                  Q.freshen_for_bindings Env.Int.empty (retn in_dedup v)
+          with
+          | InternalError _ -> retn in_dedup orig
         end
     | Q.Record fl -> Q.Record (StringMap.map (norm false env) fl)
     | Q.Concat xs -> Q.reduce_concat (List.map (norm in_dedup env) xs)
@@ -993,7 +1008,7 @@ struct
             | Q.Prom _ as u' ->
                 let z = Var.fresh_raw_var () in
                 let tyz = Q.type_of_expression u' in
-                let ftz = Q.record_field_types tyz in
+                let ftz = Q.recdty_field_types tyz in
                 let vz = Q.Var (z, ftz) in
                 Q.reduce_for_source (u', tyz, fun v -> norm in_dedup (bind env (z,v)) (Q.Singleton vz))
             | u' -> u'
@@ -1050,16 +1065,18 @@ struct
         begin
           match f with
             | Q.Closure (([x], body), closure_env) ->
-                let cenv = env ++ closure_env in
-                norm in_dedup env (Q.For (None, [x,xs], [], computation cenv body))
+                (fun cenv -> computation cenv body)
+                |> mk_for_term (env ++ closure_env) (x,xs)
+                |> norm in_dedup env
             | _ -> assert false
         end
     | Q.Primitive "Map", [f; xs] ->
         begin
           match f with
             | Q.Closure (([x], body), closure_env) ->
-                let cenv = env ++ closure_env in
-                norm in_dedup env (Q.For (None, [x,xs], [], Q.Singleton (computation cenv body)))
+                (fun cenv -> Q.Singleton (computation cenv body))
+                |> mk_for_term (env ++ closure_env) (x,xs)
+                |> norm in_dedup env
             | _ -> assert false
         end
     | Q.Primitive "SortBy", [f; xs] ->
@@ -1108,7 +1125,9 @@ struct
         apply in_dedup env (f, args @ args')
     | t, _ -> query_error "Application of non-function: %s" (string_of_t t)
 
-  and norm_comp in_dedup env c = norm in_dedup env (computation env c)
+  and norm_comp in_dedup env c = 
+    computation env c
+    |> norm in_dedup env
   and retn in_dedup u = if in_dedup then Q.Dedup u else u
 
   (* specialize norm_* with in_dedup = false at the start of normalization *)

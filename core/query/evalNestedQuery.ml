@@ -458,7 +458,7 @@ struct
     let q = Var.fresh_raw_var () in
     let z = Var.fresh_raw_var () in
     let z_fields =
-      QL.record_field_types
+      QL.recdty_field_types
         (Types.make_tuple_type
            [r_out_type; index_type])
     in
