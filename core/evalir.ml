@@ -711,7 +711,7 @@ struct
          match EvalQuery.compile env (range, e) with
            | None -> computation env cont e
            | Some (db, q, t) ->
-               let q = db#string_of_query range q in
+               let q = db#string_of_query ~range q in
                let (fieldMap, _, _), _ =
                Types.unwrap_row(TypeUtils.extract_row t) in
                let fields =
@@ -739,7 +739,7 @@ struct
                   | _ -> assert false
                 in
                 let execute_shredded_raw (q, t) =
-                  let q = db#string_of_query range q in
+                  let q = db#string_of_query ~range q in
                   Database.execute_select_result (get_fields t) q db, t in
                 let raw_results =
                   EvalNestedQuery.Shred.pmap execute_shredded_raw p in
@@ -770,7 +770,7 @@ struct
               let (field_names,rows) = Value.row_columns_values rows in
               let q =
                 Query.insert table_name field_names rows
-                |> db#string_of_query None in
+                |> db#string_of_query in
               Debug.print ("RUNNING INSERT QUERY:\n" ^ q);
               let () = ignore (Database.execute_command q db) in
               apply_cont cont env (`Record [])
@@ -817,7 +817,7 @@ struct
       end >>= fun (db, table, field_types) ->
       let update_query =
         Query.compile_update db env ((Var.var_of_binder xb, table, field_types), where, body) in
-      let () = ignore (Database.execute_command (db#string_of_query None update_query) db) in
+      let () = ignore (Database.execute_command (db#string_of_query update_query) db) in
         apply_cont cont env (`Record [])
     | Delete ((xb, source), where) ->
         value env source >>= fun source ->
@@ -832,7 +832,7 @@ struct
         end >>= fun (db, table, field_types) ->
       let delete_query =
         Query.compile_delete db env ((Var.var_of_binder xb, table, field_types), where) in
-      let () = ignore (Database.execute_command (db#string_of_query None delete_query) db) in
+      let () = ignore (Database.execute_command (db#string_of_query delete_query) db) in
         apply_cont cont env (`Record [])
     | CallCC f ->
        value env f >>= fun f ->

@@ -2,27 +2,24 @@ open Utility
 open CommonTypes
 
 type index = (Var.var * string) list
-type range = (int * int) option
+type range = int * int
 
 type query =
   | UnionAll  of query list * int
   | Select    of select_clause
-  | Insert    of insert_query
-  | Update    of update_query
-  | Delete    of delete_query
+  | Insert    of {
+      ins_table: string;
+      ins_fields: string list;
+      ins_records: base list list
+    }
+  | Update    of {
+      upd_table: string;
+      upd_fields: (string * base) list;
+      upd_where: base option
+    }
+  | Delete    of { del_table: string; del_where: base option }
   | With      of Var.var * query * Var.var * query
 and select_clause = (base * string) list * (string * Var.var) list * base * base list
-and insert_query = {
-  ins_table: string;
-  ins_fields: string list;
-  ins_records: base list list
-}
-and update_query  = {
-  upd_table: string;
-  upd_fields: (string * base) list;
-  upd_where: base option
-}
-and delete_query  = { del_table: string; del_where: base option }
 and base =
   | Case      of base * base * base
   | Constant  of Constant.t

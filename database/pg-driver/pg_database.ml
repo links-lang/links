@@ -127,9 +127,9 @@ class pg_database host port dbname user password = object(self)
       : string -> Sql.query -> string list =
     fun returning q ->
       assert (match q with | Sql.Insert _ -> true | _ -> false);
-      [Printf.sprintf "%s returning %s" (self#string_of_query None q) returning]
+      [Printf.sprintf "%s returning %s" (self#string_of_query q) returning]
 
-  method! string_of_query range =
+  method! string_of_query ?(range=None) =
     let string_of_insert table_name field_names vss =
       let insert_table = "insert into " ^ table_name in
       let quoted_field_names = (List.map self#quote_field field_names) in
@@ -166,7 +166,7 @@ class pg_database host port dbname user password = object(self)
               (List.map (Sql.string_of_base self#quote_field true))
               ins_records in
           string_of_insert ins_table ins_fields vss
-      | q -> super#string_of_query range q
+      | q -> super#string_of_query ~range q
 
   method supports_shredding () = true
 end

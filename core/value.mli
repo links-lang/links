@@ -33,7 +33,7 @@ class virtual database :
       Sql.query ->
       string list
     method virtual supports_shredding : unit -> bool
-    method string_of_query : Sql.range -> Sql.query -> string
+    method string_of_query : ?range:(Sql.range option) -> Sql.query -> string
   end
 
 

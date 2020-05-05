@@ -307,5 +307,5 @@ let compile : Value.env -> (int * int) option * Ir.computation -> (Value.databas
         | Some db ->
             let t = Types.unwrap_list_type (Q.type_of_expression v) in
             let q = ordered_query v in
-              Debug.print ("Generated query: "^(db#string_of_query range q));
+              Debug.print ("Generated query: "^(db#string_of_query ~range q));
               Some (db, q, t)

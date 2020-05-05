@@ -1221,7 +1221,7 @@ let compile_update : Value.database -> Value.env ->
 (*       Debug.print ("body: "^Ir.show_computation body); *)
     let body = Eval.norm_comp env body in
     let q = update ((x, table), where, body) in
-      Debug.print ("Generated update query: " ^ (db#string_of_query None q));
+      Debug.print ("Generated update query: " ^ (db#string_of_query q));
       q
 
 let compile_delete : Value.database -> Value.env ->
@@ -1230,7 +1230,7 @@ let compile_delete : Value.database -> Value.env ->
     let env = Eval.bind (Eval.env_of_value_env QueryPolicy.Default env) (x, Q.Var (x, field_types)) in
     let where = opt_map (Eval.norm_comp env) where in
     let q = delete ((x, table), where) in
-      Debug.print ("Generated update query: " ^ (db#string_of_query None q));
+      Debug.print ("Generated update query: " ^ (db#string_of_query q));
       q
 
 let insert table_name field_names rows =
