@@ -1,8 +1,5 @@
 open Utility
 
-(* SJF: Remove after refactor is complete. *)
-module Types = Types_refactor
-
  (* TODO: optimisation *)
 
   (* We need to be careful here as, for instance, running ElimDeadDefs

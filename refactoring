@@ -36,10 +36,10 @@ Branch: types-refactor
     unify.ml
 - Simon
  + pending:
-  - evalir.ml (depends on some non-compiling files)
-  - backend.ml (depends on a few things)
  + done:
   - ir.ml
+  - evalir.ml
+  - backend.ml
   - lib.ml
   - desugarCP.ml
   - serialisation.ml
