@@ -126,7 +126,7 @@ module Compressible = struct
       | `XML x -> `XML x
       | `String s -> `String s
       | `Table ((_database, db), table, keys, row) ->
-         `Table (db, table, keys, Types.string_of_datatype (`Record row))
+         `Table (db, table, keys, Types.string_of_datatype (Types.Record row))
       | `Database (_database, s) -> `Database s
 
     let rec compress : t -> compressed_t = function
@@ -154,7 +154,7 @@ module Compressible = struct
       | `Table (db_name, table_name, keys, t) ->
          let row =
            match DesugarDatatypes.read ~aliases:DefaultAliases.alias_env t with
-           | `Record row -> row
+           | Types.Record row -> row
            | _ -> assert false in
          let driver, params = parse_db_string db_name in
          let database = db_connect driver params in
@@ -449,7 +449,7 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
          let row =
            begin
              match row_type with
-             | `Record row -> row
+             | Types.Record row -> row
              | _ -> raise (error ("tables must have record type"))
            end in
          let keys = List.assoc "keys" bs |> unwrap_list in
