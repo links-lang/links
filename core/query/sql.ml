@@ -265,7 +265,7 @@ and string_of_projection quote one_table (var, label) =
   else
     string_of_table_var var ^ "." ^ (quote label)
 
-let string_of_query quote range q =
+let string_of_query ?(range=None) quote q =
   let range =
     match range with
       | None -> ""

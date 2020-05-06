@@ -80,7 +80,7 @@ class virtual database = object(self)
   method virtual supports_shredding : unit -> bool
 
   method string_of_query ?(range=None) =
-    Sql.string_of_query self#quote_field range
+    Sql.string_of_query ~range self#quote_field
 end
 
 let equal_database db1 db2 = db1 == db2
