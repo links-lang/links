@@ -1,7 +1,5 @@
 open Lens.Utility
 
-module Types = Types_refactor
-
 let lens_db_of_db (db : Value.database) =
   let driver_name = db#driver_name in
   let escape_string s = "'" ^ db#escape_string s ^ "'" in

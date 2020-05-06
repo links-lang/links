@@ -2,13 +2,6 @@ open List
 open CommonTypes
 open Utility
 
-(* DELETE AFTER REFACTOR *)
-module TypeUtils = struct
-  include TypeUtils
-  let concrete_type t = t
-end
-module Types = Types_refactor
-
 let connection_info
   = Settings.(option "database_args"
               |> synopsis "Database host, name, user, and password"

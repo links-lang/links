@@ -1,13 +1,5 @@
 open Lens.Utility
 
-(* DELETE THESE 6 LINES AFTER*)
-module Types = Types_refactor
-module TypeUtils = struct
-  include TypeUtils
-
-  let concrete_type t = t
-end
-
 module T = Types
 module PT = CommonTypes.Primitive
 module LPT = Lens.Phrase.Type
