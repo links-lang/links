@@ -84,12 +84,16 @@ struct
      expression. *)
   let rec nested_type_of_type : Types.datatype -> nested_type =
     fun t ->
+    let open Types in
     match TypeUtils.concrete_type t with
-    | `Primitive t -> `Primitive t
-    | `Record (fields, _, _) -> `Record (StringMap.map (function
-                                                         | `Present t -> nested_type_of_type t
-                                                         | _ -> assert false) fields)
-    | `Application (l, [`Type t]) when l = Types.list ->
+    | Types.Primitive t -> `Primitive t
+    | Types.Record row ->
+        let (fields, _, _) = TypeUtils.extract_row_parts row in
+        `Record (StringMap.map
+          (function
+             | Present t -> nested_type_of_type t
+             | _ -> assert false) fields)
+    | Types.Application (l, [t]) when l = Types.list ->
        `List (nested_type_of_type t)
     | t ->
        Debug.print ("Can't convert to nested_type: " ^ Types.string_of_datatype t);
@@ -445,7 +449,7 @@ struct
            (fun (_, source) ->
              match source with
                | QL.Table (_, _, _, row) ->
-                 `Record row
+                 Types.Record row
                | _ -> assert false)
            gs_out) in
 
@@ -727,8 +731,9 @@ Avoiding unnecessary static indexes, or multiplexing pairs (a,d) where a is usua
     fun template array ->
     let rec build t =
       match t with
-    `Record rcd -> `Record (List.map (fun (n,t') -> (n,build t')) rcd)
-      | `Primitive (ty,idx) -> Database.value_of_db_string (Array.get array idx) ty
+        | `Record rcd -> `Record (List.map (fun (n,t') -> (n,build t')) rcd)
+        | `Primitive (ty,idx) ->
+            Database.value_of_db_string (Array.get array idx) ty
 
     in build template
 
@@ -740,7 +745,7 @@ Avoiding unnecessary static indexes, or multiplexing pairs (a,d) where a is usua
       (* HACK HACK
          dummy empty queries don't have indices, so we can't find "1@1" or "1@2"
          in rs: we output a dummy column position (-1) instead *)
-      | _ when x = "1@1" || x = "1@2" -> (`Primitive Primitive.Int, -1)
+      | _ when x = "1@1" || x = "1@2" -> (Types.Primitive Primitive.Int, -1)
       | _ -> assert false
     in
     let idx_and_val = function

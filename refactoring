@@ -47,6 +47,9 @@ Branch: types-refactor
   - closures.ml
   - desugarTypeVariables.ml
   - desugarEffects.ml
+  - query.ml
+  - evalQuery.ml
+  - evalNestedQuery.ml
 
  + backend, evalir, ir
 
