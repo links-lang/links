@@ -7,7 +7,6 @@ Branch: types-refactor
 - Frank
  + pending:
     typeSugar.ml
-    generalise.ml
     instantiate.ml
 - Janek
  + done:
@@ -32,6 +31,7 @@ Branch: types-refactor
 - Sam
  + done:
     defaultAliases.ml
+    generalise.ml
     typevarcheck.ml
     unify.ml
 - Simon
