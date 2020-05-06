@@ -125,7 +125,7 @@ struct
         | Singleton t -> Types.make_list_type (te t)
         | Record fields -> record fields
         | If (_, t, _) -> te t
-        | Table (_, _, _, row) -> `Record row
+        | Table (_, _, _, row) -> Types.Record row
         | Constant (Constant.Bool   _) -> Types.bool_type
         | Constant (Constant.Int    _) -> Types.int_type
         | Constant (Constant.Char   _) -> Types.char_type
@@ -206,9 +206,10 @@ struct
           end
         | Constant c -> Constant c
 
-  let table_field_types (_, _, _, (fields, _, _)) =
+  let table_field_types (_, _, _, row) =
+    let (fields, _, _) = TypeUtils.extract_row_parts row in
     StringMap.map (function
-                    | `Present t -> t
+                    | Types.Present t -> t
                     | _ -> assert false) fields
 
   let unbox_xml =
@@ -471,9 +472,9 @@ let labels_of_field_types field_types =
     StringSet.empty
 
 let record_field_types (t : Types.datatype) : Types.datatype StringMap.t =
-  let (field_spec_map, _, _) = TypeUtils.extract_row t in
+  let (field_spec_map, _, _) = TypeUtils.extract_row_parts t in
   StringMap.map (function
-                  | `Present t -> t
+                  | Types.Present t -> t
                   | _ -> assert false) field_spec_map
 
 module Eval =
@@ -759,7 +760,7 @@ struct
        (* Copied almost verbatim from evalir.ml, which seems wrong, we should probably call into that. *)
        begin
          match xlate env db, xlate env name, xlate env keys, (TypeUtils.concrete_type readtype) with
-         | Q.Database (db, params), name, keys, `Record row ->
+         | Q.Database (db, params), name, keys, Types.Record row ->
         let unboxed_keys =
           List.map
         (fun key ->
@@ -1032,7 +1033,8 @@ let rec select_clause : Sql.index -> bool -> Q.t -> Sql.select_clause =
       let (fields, tables, c', os) = select_clause index unit_query body in
       let c = Sql.smart_and c c' in
       (fields, tables, c, os)
-    | Table (_db, table, _keys, (fields, _, _)) ->
+    | Table (_db, table, _keys, row) ->
+      let (fields, _, _) = TypeUtils.extract_row_parts row in
       (* eta expand tables. We might want to do this earlier on.  *)
       (* In fact this should never be necessary as it is impossible
          to produce non-eta expanded tables. *)
