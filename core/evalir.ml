@@ -681,7 +681,7 @@ struct
         value env name >>= fun name ->
         value env keys >>= fun keys ->
         match db, name, keys, (TypeUtils.concrete_type readtype) with
-          | `Database (db, params), name, keys, `Record row ->
+          | `Database (db, params), name, keys, Types.Record row ->
             let unboxed_keys =
               List.map
                 (fun key ->
@@ -712,15 +712,17 @@ struct
            | None -> computation env cont e
            | Some (db, q, t) ->
                let q = Sql.string_of_query db range q in
-               let (fieldMap, _, _), _ =
-               Types.unwrap_row (TypeUtils.extract_row t) in
+               let (fieldMap, _, _) =
+                  Types.unwrap_row t
+                   |> fst
+                   |> TypeUtils.extract_row_parts in
                let fields =
                StringMap.fold
                    (fun name t fields ->
+                     let open Types in
                      match t with
-                     | `Present t -> (name, t)::fields
-                     | `Absent -> assert false
-                     | `Var _ -> assert false)
+                       | Present t -> (name, t)::fields
+                       | _ -> assert false)
                    fieldMap
                    []
                in
@@ -735,7 +737,7 @@ struct
                 let get_fields t =
                   match t with
                   | `Record fields ->
-                     StringMap.to_list (fun name p -> (name, `Primitive p)) fields
+                     StringMap.to_list (fun name p -> (name, Types.Primitive p)) fields
                   | _ -> assert false
                 in
                 let execute_shredded_raw (q, t) =
@@ -804,11 +806,8 @@ struct
       begin
         value env source >>= fun source ->
         match source with
-          | `Table ((db, _), table, _, (fields, _, _)) ->
-              Lwt.return
-            (db, table, (StringMap.map (function
-                                        | `Present t -> t
-                                        | _ -> assert false) fields))
+          | `Table ((db, _), table, _, row) ->
+              Lwt.return (db, table, TypeUtils.row_present_types row)
           | _ -> assert false
       end >>= fun (db, table, field_types) ->
       let update_query =
@@ -819,11 +818,8 @@ struct
         value env source >>= fun source ->
         begin
         match source with
-          | `Table ((db, _), table, _, (fields, _, _)) ->
-              Lwt.return
-            (db, table, (StringMap.map (function
-                                        | `Present t -> t
-                                        | _ -> assert false) fields))
+          | `Table ((db, _), table, _, row) ->
+              Lwt.return (db, table, TypeUtils.row_present_types row)
           | _ -> assert false
         end >>= fun (db, table, field_types) ->
       let delete_query =

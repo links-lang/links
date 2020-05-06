@@ -407,3 +407,13 @@ let primary_kind_of_type =
 
   in
   main IntMap.empty
+
+let row_present_types t =
+  extract_row t
+   |> extract_row_parts
+   |> fst3
+   |> StringMap.filter_map
+      (fun _ v ->
+        match v with
+          | Present t -> Some t
+          | _ -> None)
