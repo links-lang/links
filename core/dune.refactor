@@ -15,33 +15,61 @@
   (modes native)
   (modules
    basicsettings
+   channelVarUtils
    commonTypes
+   context
+   database
    databaseDriver
    debug
    defaultAliases
+   desugarEffects
+   desugarTypeVariables
    env
    errors
+   eventHandlers
    generalise
+   graph
+   ir
+   js
+   json
    lens
+   lens_database_conv
+   lens_errors
+   lens_type_conv
+   lens_value_conv
+   lexer
+   linksregex
    module_hacks
    notfound
    operators
+   parse
+   parseXml
+   parser
    processTypes
    regex
    requestData
+   scanner
    settings
    sourceCode
+   sql
    sugarConstructors
    sugarConstructorsIntf
    sugarTraversals
    sugartypes
+   tables
+   transform
    typeUtils
    types
    typevarcheck
    unify
    unionfind
    utility
-   var)
+   value
+   var
+   webserver_types
+   xmlLexer
+   xmlParser
+   )
   (libraries str linenoise base64 safepass unix result
              yojson ppx_deriving_yojson.runtime
              lwt lwt.unix
@@ -53,5 +81,5 @@
   (flags (:standard -w A-4-26-27-36-44-45-60-67)))
 
 ;; Make Query modules available.
-;;(copy_files# query/*.ml)
-;;(copy_files# query/*.mli)
+(copy_files# query/*.ml)
+(copy_files# query/*.mli)
