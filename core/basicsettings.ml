@@ -26,7 +26,14 @@ let version = Settings.(option ~default:(Some version) ~readonly:true "version"
                         |> CLI.(add (fun arg -> short 'v' (long "version" arg)))
                         |> sync)
 
-(* Handlers stuff *)
+module Types = struct
+  let show_recursion
+    = Settings.(flag "show_recursion"
+                |> depends Debug.enabled
+                |> convert parse_bool
+                |> sync)
+end
+
 module Handlers = struct
   let enabled
     = Settings.(flag "enable_handlers"

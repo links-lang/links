@@ -14,15 +14,7 @@ let show_row_unification
               |> convert parse_bool
               |> sync)
 
-(* FIXME: use the flag from instantiate.ml once Frank gets round to
-   refactoring it *)
-let show_recursion
-  = Settings.(flag "show_recursion"
-              |> depends Debug.enabled
-              |> convert parse_bool
-              |> sync)
-(* let show_recursion = Instantiate.show_recursion *)
-
+let show_recursion = Basicsettings.Types.show_recursion
 
 (*
   what kind of recursive types to allow

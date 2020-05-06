@@ -21,6 +21,7 @@
    defaultAliases
    env
    errors
+   generalise
    lens
    module_hacks
    notfound

@@ -8,7 +8,7 @@ let show_generalisation
               |> convert parse_bool
               |> sync)
 
-let show_recursion = Instantiate.show_recursion
+let show_recursion = Basicsettings.Types.show_recursion
 
 let internal_error message = Errors.internal_error ~filename:"generalise" ~message
 
@@ -26,101 +26,122 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
   fun kind bound_vars t ->
     let gt = get_type_args kind bound_vars in
       match t with
-        | `Not_typed -> raise (internal_error "Not_typed encountered in get_type_args")
-        | `Primitive _ -> []
-        | `MetaTypeVar point ->
+        (* Unspecified kind *)
+        | Not_typed -> raise (internal_error "Not_typed encountered in get_type_args")
+        | (Var _ | Recursive _) ->
+           failwith ("freestanding Var / Recursive not implemented yet (must be inside Meta)")
+        | Alias ((_, _, ts), t) ->
+           concat_map (get_type_arg_type_args kind bound_vars) ts @ gt t
+        | Application (_, args) ->
+           Utility.concat_map (get_type_arg_type_args kind bound_vars) args
+        | RecursiveApplication appl ->
+           Utility.concat_map (get_type_arg_type_args kind bound_vars) appl.r_args
+        | Meta point ->
             begin
               match Unionfind.find point with
-                | `Var (var, _, _) when TypeVarSet.mem var bound_vars -> []
-                | `Var (_, _, `Flexible) when kind=`All -> [`Type (`MetaTypeVar point)]
-                | `Var (_, _, `Flexible) -> []
-                | `Var (_, _, `Rigid) -> [`Type (`MetaTypeVar point)]
-                | `Recursive (var, body) ->
-                    Debug.if_set (show_recursion) (fun () -> "rec (get_type_args): " ^(string_of_int var));
-                    if TypeVarSet.mem var bound_vars then
-                      []
-                    else
-                      get_type_args kind (TypeVarSet.add var bound_vars) body
-                | `Body t -> gt t
+              | Var (var, _, _) when TypeVarSet.mem var bound_vars -> []
+              | Var (_, _, `Flexible) when kind=`All -> [Meta point]
+              | Var (_, _, `Flexible) -> []
+              | Var (_, _, `Rigid) -> [Meta point]
+              | Recursive (var, _kind, body) ->
+                 Debug.if_set (show_recursion) (fun () -> "rec (get_type_args): " ^(string_of_int var));
+                 if TypeVarSet.mem var bound_vars then
+                   []
+                 else
+                   get_type_args kind (TypeVarSet.add var bound_vars) body
+              | t -> gt t
             end
-        | `Function (f, m, t) ->
+        (* Types *)
+        | Primitive _ -> []
+        | Function (f, m, t) ->
             let from_gens = gt f
             and effect_gens = get_row_type_args kind bound_vars m
             and to_gens = gt t in
               from_gens @ effect_gens @ to_gens
-        | `Lolli (f, m, t) ->
+        | Lolli (f, m, t) ->
             let from_gens = gt f
             and effect_gens = get_row_type_args kind bound_vars m
             and to_gens = gt t in
               from_gens @ effect_gens @ to_gens
-        | `Record row
-        | `Effect row
-        | `Variant row -> get_row_type_args kind bound_vars row
-        | `Table (r, w, n) -> gt r @ gt w @ gt n
-        | `Lens _ -> []
-        | `Alias ((_, _, ts), t) ->
-            concat_map (get_type_arg_type_args kind bound_vars) ts @ gt t
-        | `ForAll (qs, t) ->
+        | Record row
+        | Variant row -> get_row_type_args kind bound_vars row
+        | Table (r, w, n) -> gt r @ gt w @ gt n
+        | Lens _ -> []
+        | ForAll (qs, t) ->
            get_type_args kind (TypeVarSet.add_quantifiers qs bound_vars) t
-        | `Application (_, args) ->
-            Utility.concat_map (get_type_arg_type_args kind bound_vars) args
-        | `RecursiveApplication appl ->
-            Utility.concat_map (get_type_arg_type_args kind bound_vars) appl.r_args
-        | `Input (t, s)
-        | `Output (t, s) -> gt t @ gt s
-        | `Select fields -> get_row_type_args kind bound_vars fields
-        | `Choice fields -> get_row_type_args kind bound_vars fields
-        | `Dual s -> gt s
-        | `End -> []
+        (* Effect *)
+        | Effect row -> get_row_type_args kind bound_vars row
+        (* Row *)
+        | Row (field_env, row_var, _) ->
+           let field_vars =
+             StringMap.fold
+               (fun _ field_spec vars ->
+                 vars @ get_presence_type_args kind bound_vars field_spec
+               ) field_env [] in
+           let row_vars = get_row_var_type_args kind bound_vars (row_var:row_var)
+           in
+           field_vars @ row_vars
+        | Closed -> []
+        (* Presence *)
+        | Absent -> []
+        | Present t -> gt t
+        (* Session *)
+        | Input (t, s)
+        | Output (t, s) -> gt t @ gt s
+        | Select fields -> get_row_type_args kind bound_vars fields
+        | Choice fields -> get_row_type_args kind bound_vars fields
+        | Dual s -> gt s
+        | End -> []
 
 and get_row_var_type_args : gen_kind -> TypeVarSet.t -> row_var -> type_arg list =
-  fun kind bound_vars row_var ->
-    match Unionfind.find row_var with
-      | `Closed -> []
-      | `Var (var, _, _) when TypeVarSet.mem var bound_vars -> []
-      | `Var (_, _, `Flexible) when kind=`All -> [`Row (StringMap.empty, row_var, false)]
-      | `Var (_, _, `Flexible) -> []
-      | `Var (_, _, `Rigid) -> [`Row (StringMap.empty, row_var, false)]
-      | `Recursive (var, rec_row) ->
-          Debug.if_set (show_recursion) (fun () -> "rec (get_row_var_type_args): " ^(string_of_int var));
-          (if TypeVarSet.mem var bound_vars then
-             []
-           else
-             get_row_type_args kind (TypeVarSet.add var bound_vars) rec_row)
-      | `Body row -> get_row_type_args kind bound_vars row
+  fun kind bound_vars row_var -> get_type_args kind bound_vars (Meta row_var)
+    (* match Unionfind.find row_var with
+     *   | `Closed -> []
+     *   | `Var (var, _, _) when TypeVarSet.mem var bound_vars -> []
+     *   | `Var (_, _, `Flexible) when kind=`All -> [`Row (StringMap.empty, row_var, false)]
+     *   | `Var (_, _, `Flexible) -> []
+     *   | `Var (_, _, `Rigid) -> [`Row (StringMap.empty, row_var, false)]
+     *   | `Recursive (var, rec_row) ->
+     *       Debug.if_set (show_recursion) (fun () -> "rec (get_row_var_type_args): " ^(string_of_int var));
+     *       (if TypeVarSet.mem var bound_vars then
+     *          []
+     *        else
+     *          get_row_type_args kind (TypeVarSet.add var bound_vars) rec_row)
+     *   | `Body row -> get_row_type_args kind bound_vars row *)
 
 and get_presence_type_args : gen_kind -> TypeVarSet.t -> field_spec -> type_arg list =
-  fun kind bound_vars ->
-    function
-      | `Present t -> get_type_args kind bound_vars t
-      | `Absent -> []
-      | `Var point ->
-          begin
-            match Unionfind.find point with
-              | `Var (var, _, _) when TypeVarSet.mem var bound_vars -> []
-              | `Var (_, _, `Flexible) when kind=`All -> [`Presence (`Var point)]
-              | `Var (_, _, `Flexible) -> []
-              | `Var (_, _,`Rigid) -> [`Presence (`Var point)]
-              | `Body f -> get_presence_type_args kind bound_vars f
-          end
+  fun kind bound_vars -> get_type_args kind bound_vars
+    (* function
+     *   | `Present t -> get_type_args kind bound_vars t
+     *   | `Absent -> []
+     *   | `Var point ->
+     *       begin
+     *         match Unionfind.find point with
+     *           | `Var (var, _, _) when TypeVarSet.mem var bound_vars -> []
+     *           | `Var (_, _, `Flexible) when kind=`All -> [`Presence (`Var point)]
+     *           | `Var (_, _, `Flexible) -> []
+     *           | `Var (_, _,`Rigid) -> [`Presence (`Var point)]
+     *           | `Body f -> get_presence_type_args kind bound_vars f
+     *       end *)
 
 and get_row_type_args : gen_kind -> TypeVarSet.t -> row -> type_arg list =
-  fun kind bound_vars (field_env, row_var, _) ->
-    let field_vars =
-      StringMap.fold
-        (fun _ field_spec vars ->
-           vars @ get_presence_type_args kind bound_vars field_spec
-        ) field_env [] in
-    let row_vars = get_row_var_type_args kind bound_vars (row_var:row_var)
-    in
-      field_vars @ row_vars
+  fun kind bound_vars row -> get_type_args kind bound_vars row
+(* (field_env, row_var, _) ->
+ *     let field_vars =
+ *       StringMap.fold
+ *         (fun _ field_spec vars ->
+ *            vars @ get_presence_type_args kind bound_vars field_spec
+ *         ) field_env [] in
+ *     let row_vars = get_row_var_type_args kind bound_vars (row_var:row_var)
+ *     in
+ *       field_vars @ row_vars *)
 
 and get_type_arg_type_args : gen_kind -> TypeVarSet.t -> type_arg -> type_arg list =
-  fun kind bound_vars ->
-    function
-      | `Type t -> get_type_args kind bound_vars t
-      | `Row r -> get_row_type_args kind bound_vars r
-      | `Presence f -> get_presence_type_args kind bound_vars f
+  fun kind bound_vars -> get_type_args kind bound_vars
+    (* function
+     *   | `Type t -> get_type_args kind bound_vars t
+     *   | `Row r -> get_row_type_args kind bound_vars r
+     *   | `Presence f -> get_presence_type_args kind bound_vars f *)
 
 (** Determine if two points have the same quantifier.
 
@@ -128,15 +149,16 @@ and get_type_arg_type_args : gen_kind -> TypeVarSet.t -> type_arg -> type_arg li
    it is not safe to use {!Unionfind.equivalent}. *)
 let equivalent_tyarg l r =
   match Unionfind.find l, Unionfind.find r with
-  | `Var (v, _, _), `Var (v', _, _) -> v = v'
+  | Var (v, _, _), Var (v', _, _) -> v = v'
   | _ -> assert false
 
 let remove_duplicates =
   unduplicate (fun l r ->
                  match l, r with
-                   | `Type (`MetaTypeVar l), `Type (`MetaTypeVar r) -> equivalent_tyarg l r
-                   | `Row (_, l, ld), `Row (_, r, rd) -> ld=rd && equivalent_tyarg l r
-                   | `Presence (`Var l), `Presence (`Var r) -> equivalent_tyarg l r
+                   | Meta l, Meta r -> equivalent_tyarg l r
+                   (* | `Type (`MetaTypeVar l), `Type (`MetaTypeVar r) -> equivalent_tyarg l r
+                    * | `Row (_, l, ld), `Row (_, r, rd) -> ld=rd && equivalent_tyarg l r
+                    * | `Presence (`Var l), `Presence (`Var r) -> equivalent_tyarg l r *)
                    | _ -> false)
 
 let get_type_args kind bound_vars t =
@@ -148,14 +170,15 @@ let env_type_vars (env : Types.environment) =
 let rigidify_type_arg : type_arg -> unit =
   let rigidify_point point =
     match Unionfind.find point with
-    | `Var (var, subkind, `Flexible) -> Unionfind.change point (`Var (var, subkind, `Rigid))
-    | `Var _ -> ()
+    | Var (var, kind, `Flexible) -> Unionfind.change point (Var (var, kind, `Rigid))
+    | Var _ -> ()
     | _ -> assert false
   in
     function
-    | `Type (`MetaTypeVar point) -> rigidify_point point
-    | `Row (_, point, _)         -> rigidify_point point
-    | `Presence (`Var point)    -> rigidify_point point
+    | Meta point -> rigidify_point point
+    (* | `Type (`MetaTypeVar point) -> rigidify_point point
+     * | `Row (_, point, _)         -> rigidify_point point
+     * | `Presence (`Var point)    -> rigidify_point point *)
     | _ -> raise (internal_error "Not a type-variable argument.")
 
 (** Only flexible type variables should have the mono restriction. When we
@@ -164,14 +187,15 @@ let rigidify_type_arg : type_arg -> unit =
 let mono_type_args : type_arg -> unit =
   let check_sk point =
     match Unionfind.find point with
-    | `Var (var, (lin, Restriction.Mono), `Flexible) ->
-       Unionfind.change point (`Var (var, (lin, Restriction.Any), `Flexible))
+    | Var (var, (primary_kind, (lin, Restriction.Mono)), `Flexible) ->
+       Unionfind.change point (Var (var, (primary_kind, (lin, Restriction.Any)), `Flexible))
     | _ -> ()
   in
   function
-  | `Type (`MetaTypeVar point) -> check_sk point
-  | `Row (_, point, _) -> check_sk point
-  | `Presence (`Var point) -> check_sk point
+  | Meta point -> check_sk point
+  (* | `Type (`MetaTypeVar point) -> check_sk point
+   * | `Row (_, point, _) -> check_sk point
+   * | `Presence (`Var point) -> check_sk point *)
   | _ -> ()
 
 (** generalise:
@@ -182,7 +206,7 @@ let generalise : gen_kind -> ?unwrap:bool -> environment -> datatype -> ((Quanti
     (* throw away any existing top-level quantifiers *)
     Debug.if_set show_generalisation (fun () -> "Generalising : " ^ string_of_datatype t);
     let t = match Types.concrete_type t with
-      | `ForAll (_, t) when unwrap -> t
+      | ForAll (_, t) when unwrap -> t
       | _ -> t in
     let vars_in_env = env_type_vars env in
     let type_args = get_type_args kind vars_in_env t in
