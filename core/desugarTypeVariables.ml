@@ -176,7 +176,7 @@ let make_opt_kinded_var k sk_opt freedom : Types.t =
 
 let get_var_info (info : Types.t) =
   match info with
-  | Var (var, k, fd) -> (var, k, fd)
+  | Types.Var (var, k, fd) -> (var, k, fd)
   | _ -> raise found_non_var_meta_var
 
 let make_fresh_entry pk_opt sk_opt freedom : tyvar_map_entry =
