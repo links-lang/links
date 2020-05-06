@@ -292,6 +292,7 @@ struct
               If (v, left, right), t, o
 
     method special : special -> (special * datatype * 'self_type) =
+      let open Ir in
       function
         | Wrong t -> Wrong t, t, o
         | Database v ->
@@ -908,13 +909,13 @@ module ElimBodiesFromMetaTypeVars = struct
         inherit Types.Transform.visitor as super
 
         method! typ = function
-          | `MetaTypeVar point ->
-          begin
-            match Unionfind.find point with
-              | `Body t ->
-                  o#typ t
-              | _ -> `MetaTypeVar point, o
-          end
+          | Types.Meta point ->
+            begin
+              match Unionfind.find point with
+                | Types.Var _ -> Types.Meta point, o
+
+                | t -> o#typ t
+            end
           | other -> super#typ other
       end
 
@@ -934,7 +935,7 @@ module ElimTypeAliases = struct
         inherit Types.Transform.visitor as super
 
         method! typ = function
-          | `Alias (_, typ) -> o#typ typ
+          | Types.Alias (_, typ) -> o#typ typ
           | other -> super#typ other
       end
 
@@ -957,7 +958,7 @@ module InstantiateTypes = struct
 
         method! typ t =
           match t with
-            | `Not_typed -> (t, o) (* instantiate.ml dies on `Not_typed *)
+            | Types.Not_typed -> (t, o) (* instantiate.ml dies on `Not_typed *)
             | _ -> (Instantiate.datatype instantiation_maps t, o)
 
         method! row r = Instantiate.row instantiation_maps r, o
