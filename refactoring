@@ -40,6 +40,7 @@ Branch: types-refactor
   - backend.ml (depends on a few things)
  + done:
   - ir.ml
+  - lib.ml
   - desugarCP.ml
   - serialisation.ml
   - json.ml

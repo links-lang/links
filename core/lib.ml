@@ -2,7 +2,6 @@ open CommonTypes
 open List
 
 (*open Value*)
-open Types
 open Utility
 open Proc
 
@@ -62,9 +61,10 @@ let conversion_op' ~unbox ~conv ~(box :'a->Value.t): Value.t list -> Value.t = f
     | _ -> assert false
 
 let conversion_op ~from ~unbox ~conv ~(box :'a->Value.t) ~into pure : located_primitive * Types.datatype * pure =
+  let open Types in
   ((`PFun (fun _ x -> conversion_op' ~unbox:unbox ~conv:conv ~box:box x) : located_primitive),
-   (let q, r = Types.fresh_row_quantifier (lin_any, res_any) in
-      (`ForAll ([q], `Function (make_tuple_type [from], r, into)) : Types.datatype)),
+   (let q, r = fresh_row_quantifier (lin_any, res_any) in
+      (ForAll ([q], Function (make_tuple_type [from], r, into)) : datatype)),
    pure)
 
 let string_to_xml : Value.t -> Value.t = function
@@ -228,7 +228,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    PURE);
 
   (* Conversions (any missing?) *)
-  "intToString",   conversion_op ~from:(`Primitive Primitive.Int)
+  "intToString",   conversion_op ~from:(Types.Primitive Primitive.Int)
                                  ~unbox:Value.unbox_int
                                  ~conv:string_of_int
                                  ~box:Value.box_string
@@ -238,21 +238,21 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                                  ~unbox:Value.unbox_string
                                  ~conv:int_of_string
                                  ~box:Value.box_int
-                                 ~into:(`Primitive Primitive.Int)
+                                 ~into:(Types.Primitive Primitive.Int)
                                  IMPURE;
-  "intToFloat",    conversion_op ~from:(`Primitive Primitive.Int)
+  "intToFloat",    conversion_op ~from:(Types.Primitive Primitive.Int)
                                  ~unbox:Value.unbox_int
                                  ~conv:float_of_int
                                  ~box:Value.box_float
-                                 ~into:(`Primitive Primitive.Float)
+                                 ~into:(Types.Primitive Primitive.Float)
                                  PURE;
-  "floatToInt",    conversion_op ~from:(`Primitive Primitive.Float)
+  "floatToInt",    conversion_op ~from:(Types.Primitive Primitive.Float)
                                  ~unbox:Value.unbox_float
                                  ~conv:int_of_float
                                  ~box:Value.box_int
-                                 ~into:(`Primitive Primitive.Int)
+                                 ~into:(Types.Primitive Primitive.Int)
                                  PURE;
-  "floatToString", conversion_op ~from:(`Primitive Primitive.Float)
+  "floatToString", conversion_op ~from:(Types.Primitive Primitive.Float)
                                  ~unbox:Value.unbox_float
                                  ~conv:string_of_float'
                                  ~box:Value.box_string
@@ -262,7 +262,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
                                  ~unbox:Value.unbox_string
                                  ~conv:float_of_string
                                  ~box:Value.box_float
-                                 ~into:(`Primitive Primitive.Float)
+                                 ~into:(Types.Primitive Primitive.Float)
                                  IMPURE;
 
   "stringToXml",
@@ -1576,7 +1576,7 @@ let type_env : Types.environment =
 let typing_env = {Types.var_env = type_env;
                   Types.rec_vars = StringSet.empty;
                   tycon_env = alias_env;
-                  Types.effect_row = Types.make_singleton_closed_row ("wild", `Present Types.unit_type);
+                  Types.effect_row = Types.make_singleton_closed_row ("wild", Types.(Present unit_type));
                   Types.desugared = false }
 
 let primitive_names = StringSet.elements (Env.String.domain type_env)
@@ -1592,10 +1592,12 @@ let primitive_location (name:string) =
     | #primitive -> Location.Unknown
 
 let rec function_arity =
+  let open Types in
   function
-    | `Function(`Record (l, _, _), _, _) ->
+    | Function (Record row, _, _) ->
+        let (l, _, _) = TypeUtils.extract_row_parts row in
         (Some (StringMap.size l))
-    | `ForAll (_, t) -> function_arity t
+    | ForAll (_, t) -> function_arity t
     | _ -> None
 
 let primitive_arity (name : string) =
