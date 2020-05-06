@@ -111,7 +111,9 @@ object (o : 'self_type)
             let (o, right, t) = desugar_cp {< var_env = TyEnv.bind c (Types.dual_type s) (o#get_var_env ()) >} right in
             let o = o#restore_envs envs in
 
-            let Row (eff_fields, eff_row, eff_closed) = Types.flatten_row o#lookup_effects in
+            let (eff_fields, eff_row, eff_closed) =
+              Types.flatten_row o#lookup_effects
+              |> TypeUtils.extract_row_parts in
             let eff_fields = StringMap.remove wild_str eff_fields in
             let eff_fields =
               if Settings.get Basicsettings.Sessions.exceptions_enabled then
@@ -126,10 +128,10 @@ object (o : 'self_type)
                       val_binding (variable_pat ~ty:Types.make_endbang_type c)
                                   (with_dummy_pos left)],
                     fn_appl_var close_str c))
-                      ~row:(Row (eff_fields, eff_row, eff_closed)) in
+                      ~row:(Types.Row (eff_fields, eff_row, eff_closed)) in
             let o = o#restore_envs envs in
             o, block_node
-                  ([val_binding (variable_pat ~ty:(Application (Types.access_point, [s])) c)
+                  ([val_binding (variable_pat ~ty:(Types.Application (Types.access_point, [s])) c)
                                 (fn_appl new_str [] []);
                     val_binding (any_pat dp) left_block;
                     val_binding (variable_pat ~ty:(Types.dual_type s) c)
