@@ -1616,22 +1616,22 @@ let normalise_row = normalise_row IntSet.empty
 
 (* TODO(dhil): Dubious inference of kinds. *)
 let quantifier_of_type_arg =
-  let quantifier_of_point point kind =
+  let quantifier_of_point point =
     match Unionfind.find point with
-    | Var (var, kind', _) -> (var, (kind, Kind.subkind kind'))
+    | Var (var, kind', _) -> (var, kind')
     | _ -> assert false
   in function
-  | Meta point -> quantifier_of_point point PrimaryKind.Type
-  | Row (fields, point, _dual) ->
-     assert (StringMap.is_empty fields);
-     quantifier_of_point point PrimaryKind.Row
-  | Present (Meta point) -> quantifier_of_point point PrimaryKind.Presence
+  | Meta point -> quantifier_of_point point
+  (* | Row (fields, point, _dual) ->
+   *    assert (StringMap.is_empty fields);
+   *    quantifier_of_point point PrimaryKind.Row
+   * | Present (Meta point) -> quantifier_of_point point PrimaryKind.Presence *)
   | _ -> assert false
 
 let quantifiers_of_type_args = List.map quantifier_of_type_arg
 
-let for_all : Quantifier.t list * datatype -> datatype = fun _ (* (qs, t) *) -> Not_typed
-  (* concrete_type (`ForAll (qs, t)) *)
+let for_all : Quantifier.t list * datatype -> datatype =
+  fun (qs, t) -> concrete_type (ForAll (qs, t))
 
 (* useful types *)
 let unit_type     = Record (make_empty_closed_row ())
@@ -1675,12 +1675,13 @@ let is_tuple ?(allow_onetuples=false) row =
      b && (allow_onetuples || n <> 1)
   | _ -> false
 
-let extract_tuple _ (* (field_env, _, _) *) = assert false
-  (* FieldEnv.to_list (fun _ ->
-   *                     function
-   *                       | `Present t -> t
-   *                       | `Absent
-   *                       | `Var _ -> assert false) field_env *)
+let extract_tuple = function
+  | Row (field_env, _, _) ->
+     FieldEnv.to_list (fun _ -> function
+         | Present t -> t
+         | Absent | Meta _ -> assert false
+         | _ -> raise tag_expectation_mismatch) field_env
+  | _ -> raise tag_expectation_mismatch
 
 let show_raw_type_vars
   = Settings.(flag "show_raw_type_vars"
