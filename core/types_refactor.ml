@@ -228,6 +228,26 @@ let maybe_field_spec = function
      | Present _ | Absent) -> true
   | _ -> false
 
+(* FIXME: we may need to distinguish the case of checking the body of
+   a type we expect to be an ordinary data type and the case of
+   checking the body of a type whose kind is unspecified (e.g. because
+   it arises from a type argument) *)
+
+(* HACK: check that this type could be the body of a typ *)
+let is_type_body = function
+  | (Var _ | Recursive _) -> false
+  | _ -> true
+
+(* HACK: check that this type could be the body of a row *)
+let is_row_body = function
+  | (Var _ | Recursive _ | Closed) -> false
+  | _ -> true
+
+(* HACK: check that this type could be the body of a field_spec *)
+let is_field_spec_body = function
+  | (Var _) -> false
+  | _ -> true
+
 module Transform : TYPE_VISITOR =
 struct
   class visitor  =
@@ -267,6 +287,7 @@ struct
             Unionfind.change point' (Recursive (var', kind, t'));
             (point', o'_reduced_rec_env)
         | Var _  -> point, o
+        | Closed -> point, o
         | t ->
             let (t', o) = o#typ t in
             Unionfind.fresh t', o
@@ -329,8 +350,8 @@ struct
       (* Unspecified kind *)
       | Not_typed ->
          (Not_typed, o)
-      | (Var _ | Recursive _) ->
-         failwith ("freestanding Var / Recursive not implemented yet (must be inside Meta)")
+      | (Var _ | Recursive _ | Closed) ->
+         failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
       | Alias ((name, params, args), t) ->
          let (args', o) = o#types args in
          let (t', o) = o#typ t in
@@ -342,7 +363,9 @@ struct
          let (r_args, o) = o#types payload.r_args in
          (RecursiveApplication { payload with r_args }, o)
       | Meta point ->
-         (* FIXME: currently the meta_type_var method handles Var and Recursive *)
+         (* FIXME: Currently the meta_type_var method handles Var,
+            Recursive, and closed. Ulimately these constructors should
+            be handled in this method. *)
          let (point', o) = o#meta_type_var point in
          (Meta point', o)
       (* Type *)
@@ -384,7 +407,6 @@ struct
          let (fsp', o) = o#field_spec_map fsp in
          let (rv', o) = o#row_var rv in
          (Row (fsp', rv', d), o)
-      | Closed -> (Closed, o)
       (* Presence *)
       | Present t ->
          let (t',o) = o#typ t in
@@ -568,8 +590,8 @@ class virtual type_predicate = object(self)
     fun ((rec_appl, rec_vars, quant_vars) as vars) typ ->
     match typ with
     | Not_typed -> assert false
-    | Var _ | Recursive _ ->
-       failwith ("freestanding Var / Recursive not implemented yet (must be inside Meta)")
+    | Var _ | Recursive _ | Closed ->
+       failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
     | Alias (_, t) -> self#type_satisfies vars t
     | Application (_, ts) ->
        (* This does assume that all abstract types satisfy the predicate. *)
@@ -587,7 +609,10 @@ class virtual type_predicate = object(self)
     | Table _ -> true
     | Lens _ -> failwith "Not yet implemented" (* true *)
     | ForAll (qs, t) -> self#type_satisfies (rec_appl, rec_vars, TypeVarSet.add_quantifiers qs quant_vars) t
-    | Row _ | Closed -> assert false
+    | Row (fields, row_var, _) ->
+       let row_var = self#point_satisfies self#row_satisfies vars row_var in
+       let fields = FieldEnv.for_all (fun _ f -> self#field_satisfies vars f) fields in
+       row_var && fields
     | Absent -> true
     | Present t -> self#type_satisfies vars t
     | Select r | Choice r -> self#row_satisfies vars r
@@ -603,13 +628,7 @@ class virtual type_predicate = object(self)
       raise tag_expectation_mismatch
 
   method row_satisfies : visit_context -> row -> bool =
-    fun vars row ->
-    match row with
-    | Row (fields, row_var, _) ->
-       let row_var = self#point_satisfies self#row_satisfies vars row_var in
-       let fields = FieldEnv.for_all (fun _ f -> self#field_satisfies vars f) fields in
-       row_var && fields
-    | _ -> raise tag_expectation_mismatch
+    fun vars row -> self#type_satisfies vars row
 
   method type_satisfies_arg : visit_context -> type_arg -> bool
     = fun vars (arg : type_arg) ->
@@ -647,8 +666,8 @@ class virtual type_iter = object(self)
     match typ with
     (* Unspecified kind *)
     | Not_typed -> assert false
-    | Var _ | Recursive _ ->
-       failwith ("freestanding Var / Recursive not implemented yet (must be inside Meta)")
+    | Var _ | Recursive _ | Closed ->
+       failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
     | Alias (_, t) -> self#visit_type vars t
     | Application (_, ts) -> List.iter (self#visit_type_arg vars) ts
     | RecursiveApplication { r_args; _ } -> List.iter (self#visit_type_arg vars) r_args
@@ -668,7 +687,6 @@ class virtual type_iter = object(self)
     | Row (fields, row_var, _dual) ->
        self#visit_point self#visit_row vars row_var;
        FieldEnv.iter (fun _ f -> self#visit_field vars f) fields
-    | Closed -> ()
     (* Presence *)
     | Absent -> ()
     | Present t ->
@@ -733,8 +751,7 @@ let make_restriction_transform ?(ensure=false) restriction =
        | (_, kind, _) when Kind.restriction kind = restriction -> ()
        | (v, kind, `Flexible) ->
           begin
-            let sk = Kind.subkind kind in
-            let res = Subkind.restriction sk in
+            let res = Kind.restriction kind in
             match Restriction.min res restriction with
             | Some res when res = restriction ->
                Unionfind.change point (Var (v, kind, `Flexible))
@@ -775,7 +792,8 @@ module Unl : Constraint = struct
 
     method! type_satisfies vars = function
       | Not_typed -> assert false
-      | Var _ | Recursive _ -> assert false
+      | Var _ | Recursive _ | Closed ->
+         failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
       | Effect _ | Primitive _ | Function _ -> true
       | Lolli _ -> false
       | (Record _ | Variant _ | Alias _ | Meta _ | ForAll _ | Dual _) as t
@@ -800,7 +818,6 @@ module Unl : Constraint = struct
              o#type_satisfies vars t || acc)
            fields false
          || o#point_satisfies o#type_satisfies vars row_var
-      | Closed -> false
       | Absent -> false
       | Present t -> o#type_satisfies vars t
       | Input _ | Output _ | Choice _ | Select _ | End -> false
@@ -829,6 +846,8 @@ module Unl : Constraint = struct
 
      method! visit_type vars = function
        | Not_typed -> assert false
+       | Var _ | Recursive _ | Closed ->
+          failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
        | Effect _ | Primitive _ | Function _ | Table _ | Application _ -> ()
        | (Record _ | Variant _ | Alias _ | Meta _ | ForAll _ | Dual _) as t
          -> super#visit_type vars t
@@ -852,6 +871,9 @@ module Session : Constraint = struct
       inherit type_predicate as super
 
       method! type_satisfies ((rec_appls, _, _) as vars) = function
+        | Not_typed -> assert false
+        | Var _ | Recursive _ | Closed ->
+           failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
         | Input _ | Output _ | Dual _ | Choice _ | Select _ | End -> true
         | (Alias _ | Meta _) as t -> super#type_satisfies vars t
         | (RecursiveApplication { r_unique_name; _ }) as t ->
@@ -1064,12 +1086,12 @@ let concrete_type rec_names t =
       | Meta point ->
           begin
             match Unionfind.find point with
+            | t when is_type_body t -> ct rec_names t
             | Recursive (var, _kind, t) ->
                if IntSet.mem var rec_names
                then Meta point
                else ct (IntSet.add var rec_names) t
-            | t ->
-               ct rec_names t
+            | _ -> t
           end
       | ForAll (qs, t) ->
           begin
@@ -1108,8 +1130,8 @@ let free_type_vars, free_row_type_vars, free_tyarg_vars =
   let rec free_type_vars' : S.t -> datatype -> S.t = fun rec_vars t ->
     match t with
     | Not_typed               -> S.empty
-    | Var _ | Recursive _ ->
-       failwith ("freestanding Var / Recursive not implemented yet (must be inside Meta)")
+    | Var _ | Recursive _ | Closed ->
+       failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
     | Primitive _             -> S.empty
     | Function (f, m, t)      ->
        S.union_all [free_type_vars' rec_vars f; free_row_type_vars' rec_vars m; free_type_vars' rec_vars t]
@@ -1130,6 +1152,7 @@ let free_type_vars, free_row_type_vars, free_tyarg_vars =
     | Meta point       ->
        begin
          match Unionfind.find point with
+         | Closed -> S.empty
          | Var (var, _, _) -> S.singleton(var)
          | Recursive (var, _kind, body) ->
             if S.mem var rec_vars
@@ -1146,7 +1169,7 @@ let free_type_vars, free_row_type_vars, free_tyarg_vars =
            field_env S.empty
        in
        S.union (free_type_vars' rec_vars (Meta row_var)) free_field_type_vars
-    | Closed | Absent -> S.empty
+    | Absent -> S.empty
     | Present t -> free_type_vars' rec_vars t
     | Input (t, s) | Output (t, s) -> S.union (free_type_vars' rec_vars t) (free_type_vars' rec_vars s)
     | Select fields | Choice fields -> free_row_type_vars' rec_vars fields
@@ -1263,6 +1286,7 @@ let rec dual_type : var_map -> datatype -> datatype =
   | Meta point ->
      begin
        match Unionfind.find point with
+       | Closed -> assert false (* TODO: check that this can never happen *)
        | Var _ -> Dual (Meta point)
        | Recursive (var, kind, t) ->
           if TypeVarMap.mem var rec_points
@@ -1297,7 +1321,7 @@ and dual_row : var_map -> row -> row =
           | Absent -> Absent
           | Present t ->
              Present (dual_type rec_points t)
-          | Var _ -> assert false (* TODO: what should happen here? *)
+          | Meta _ -> assert false (* TODO: what should happen here? *)
           | _ -> raise tag_expectation_mismatch)
          fields
      in
@@ -1310,8 +1334,8 @@ and subst_dual_type : var_map -> datatype -> datatype =
   let sdr r = subst_dual_row rec_points r in
   match t with
   | Not_typed | Primitive _ -> t
-  | Var _ | Recursive _ ->
-     failwith ("freestanding Var / Recursive not implemented yet (must be inside Meta)")
+  | Var _ | Recursive _ | Closed ->
+     failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
   | Function (f, m, t) -> Function (sdt f, sdr m, sdt t)
   | Lolli (f, m, t) -> Lolli (sdt f, sdr m, sdt t)
   | Record row -> Record (sdr row)
@@ -1331,7 +1355,8 @@ and subst_dual_type : var_map -> datatype -> datatype =
   | Meta point ->
      begin
        match Unionfind.find point with
-       | Var _ -> Meta point
+       | Closed -> t
+       | Var _ -> t
        | Recursive (var, kind, t) ->
           if TypeVarMap.mem var rec_points then
             let (dual, point) = TypeVarMap.find var rec_points in
@@ -1347,7 +1372,6 @@ and subst_dual_type : var_map -> datatype -> datatype =
        | s -> sdt s
      end
   | (Row _) as row -> subst_dual_row rec_points row
-  | Closed -> Closed
   | (Present _ | Absent) as t -> subst_dual_field_spec rec_points t
   | Input (t, s) -> Input (sdt t, sdt s)
   | Output (t, s) -> Output (sdt t, sdt s)
@@ -1361,6 +1385,7 @@ and subst_dual_type : var_map -> datatype -> datatype =
      end
   | End                  -> End
 and subst_dual_row : var_map -> row -> row =
+  (* TODO: check that it's OK to not bother traversing the row_var *)
   fun rec_points row ->
   match fst (unwrap_row row) with
   | Row (fields, row_var, dual) ->
@@ -1500,8 +1525,8 @@ and normalise_datatype rec_names t =
   let nr = normalise_row rec_names in
   match t with
   | Not_typed -> t
-  | Var _ | Recursive _ ->
-     failwith ("freestanding Var / Recursive not implemented yet (must be inside Meta)")
+  | Var _ | Recursive _ | Closed ->
+     failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
   | Primitive _             -> t
   | Function (f, m, t)      ->
      Function (nt f, nr m, nt t)
@@ -1532,6 +1557,7 @@ and normalise_datatype rec_names t =
   | Meta point       ->
      begin
        match Unionfind.find point with
+       | Closed -> t
        | Var _ -> t
        | Recursive (var, kind, body) ->
           if IntSet.mem var rec_names
@@ -1561,7 +1587,6 @@ and normalise_datatype rec_names t =
          FieldEnv.empty
      in
      Row (fields, row_var, dual)
-  | Closed -> Closed
   | Present t -> Present (nt t)
   | Absent -> Absent
   | Input (t, s)         -> Input (nt t, nt s)
@@ -1614,7 +1639,6 @@ let normalise_row = normalise_row IntSet.empty
 
 (** building quantified types *)
 
-(* TODO(dhil): Dubious inference of kinds. *)
 let quantifier_of_type_arg =
   let quantifier_of_point point =
     match Unionfind.find point with
@@ -1622,10 +1646,6 @@ let quantifier_of_type_arg =
     | _ -> assert false
   in function
   | Meta point -> quantifier_of_point point
-  (* | Row (fields, point, _dual) ->
-   *    assert (StringMap.is_empty fields);
-   *    quantifier_of_point point PrimaryKind.Row
-   * | Present (Meta point) -> quantifier_of_point point PrimaryKind.Presence *)
   | _ -> assert false
 
 let quantifiers_of_type_args = List.map quantifier_of_type_arg
@@ -1667,7 +1687,7 @@ let is_tuple ?(allow_onetuples=false) row =
                && (match FieldEnv.find (string_of_int i) field_env with
                    | Present _ -> true
                    | Absent    -> false
-                   | Meta _     -> false (* TODO(dhil): Decide whether it is sufficient to check for Meta. *)
+                   | Meta _    -> false
                    | _ -> raise tag_expectation_mismatch))
              (fromTo 1 n))
      in
@@ -1718,19 +1738,19 @@ struct
     let fbtv = free_bound_type_vars bound_vars in
       match t with
       | Not_typed -> []
-      | Var _ | Recursive _ ->
-         failwith ("freestanding Var / Recursive not implemented yet (must be inside Meta)")
+      | Var _ | Recursive _ | Closed ->
+         failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
       | Primitive _ -> []
       | Meta point ->
          begin
            match Unionfind.find point with
-           | Var (var, _kind, freedom) ->
-              [var, ((freedom :> flavour), pk_type, `Free)]
-           | Recursive (var, _kind, body) ->
-              if TypeVarSet.mem var bound_vars then
-                [var, (`Recursive, pk_type, `Bound)]
-              else
-                (var, (`Recursive, pk_type, `Bound))::(free_bound_type_vars (TypeVarSet.add var bound_vars) body)
+           | Closed -> []
+           | Var (var, (primary_kind, _), freedom) ->
+              [var, ((freedom :> flavour), primary_kind, `Free)]
+           | Recursive (var, (primary_kind, _), body) ->
+              if TypeVarSet.mem var bound_vars
+              then [var, (`Recursive, primary_kind, `Bound)]
+              else (var, (`Recursive, primary_kind, `Bound))::(free_bound_type_vars (TypeVarSet.add var bound_vars) body)
            | t -> fbtv t
          end
       | Function (f, m, t) ->
@@ -1766,7 +1786,6 @@ struct
              field_env [] in
          let row_var = free_bound_row_var_vars bound_vars row_var in
          field_type_vars @ row_var
-      | Closed -> []
       | Present t -> free_bound_type_vars bound_vars t
       | Absent -> []
       | Input (t, s) | Output (t, s) ->
@@ -1794,16 +1813,16 @@ struct
      *     field_env [] in
      * let row_var = free_bound_row_var_vars bound_vars row_var in
      *   field_type_vars @ row_var *)
-  and free_bound_row_var_vars bound_vars row_var =
-    match Unionfind.find row_var with
-      | Closed -> []
-      | Var (var, _, freedom) ->
-         [var, ((freedom :> flavour), pk_row, `Free)]
-      | Recursive (var, _kind, row) ->
-          if TypeVarSet.mem var bound_vars
-          then [var, (`Recursive, pk_row, `Bound)]
-          else (var, (`Recursive, pk_row, `Bound))::(free_bound_row_type_vars (TypeVarSet.add var bound_vars) row)
-      | row -> free_bound_row_type_vars bound_vars row
+  and free_bound_row_var_vars bound_vars row_var = free_bound_type_vars bound_vars (Meta row_var)
+    (* match Unionfind.find row_var with
+     *   | Closed -> []
+     *   | Var (var, _, freedom) ->
+     *      [var, ((freedom :> flavour), pk_row, `Free)]
+     *   | Recursive (var, _kind, row) ->
+     *       if TypeVarSet.mem var bound_vars
+     *       then [var, (`Recursive, pk_row, `Bound)]
+     *       else (var, (`Recursive, pk_row, `Bound))::(free_bound_row_type_vars (TypeVarSet.add var bound_vars) row)
+     *   | row -> free_bound_row_type_vars bound_vars row *)
   and free_bound_tyarg_vars bound_vars = free_bound_type_vars bound_vars
     (* function
      *   | `Type t -> free_bound_type_vars bound_vars t
@@ -1898,6 +1917,8 @@ let effect_sugar
 
 (** Type printers *)
 
+
+(* TODO: check over the pretty-printer in light of the types refactoring *)
 module Print =
 struct
   module BS = Basicsettings
@@ -2181,12 +2202,13 @@ struct
             end
       in match t with
          | Not_typed       -> "not typed"
-         | Var _ | Recursive _ ->
-            failwith ("freestanding Var / Recursive not implemented yet (must be inside Meta)")
+         | Var _ | Recursive _ | Closed ->
+            failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
          | Primitive p     -> Primitive.to_string p
          | Meta point ->
             begin
               match Unionfind.find point with
+              | Closed -> ""
               | Var (var, k, `Flexible) when policy.flavours ->
                  (name_of_type var (Kind.subkind k) "%" (fun name -> "%" ^ name))
               | Var (var, k, _) ->
@@ -2236,7 +2258,7 @@ struct
                  "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype { context with bound_vars } p body
             else
               "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype { context with bound_vars } p body
-         | Row _ | Closed | Present _ | Absent -> failwith "Not yet implemented."
+         | Row _ | Present _ | Absent -> failwith "Not yet implemented."
          | Input  (t, s) -> "?(" ^ sd t ^ ")." ^ sd s
          | Output (t, s) -> "!(" ^ sd t ^ ")." ^ sd s
          | Select bs -> "[+|" ^ row "," context p bs ^ "|+]"
@@ -2543,7 +2565,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
   in
   let rec make_env boundvars = function
     | Not_typed -> empties
-    | Var _ | Recursive _ ->
+    | Var _ | Recursive _ | Closed ->
        failwith ("freestanding Var / Recursive not implemented yet (must be inside Meta)")
     | Primitive _             -> empties
     | Function (f, m, t)      -> union [make_env boundvars f; make_env boundvars m; make_env boundvars t]
@@ -2590,7 +2612,6 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
          | row -> make_env boundvars row
        in
        union [field_vars; row_vars]
-    | Closed -> empties
     | Present t -> make_env boundvars t
     | Absent -> empties
     | Input (t, s) | Output (t, s) -> union [make_env boundvars t; make_env boundvars s]
@@ -2635,6 +2656,9 @@ let is_sub_type, is_sub_row =
   let rec is_sub_type = fun rec_vars (t, t') ->
     match t, t' with
       | Not_typed, Not_typed -> true
+      | (Var _ | Recursive _ | Closed), _
+      | _, (Var _ | Recursive _ | Closed) ->
+         failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
       | Primitive p, Primitive q -> p=q
       | Function (f, eff, t), Function (f', eff', t') ->
           is_sub_type rec_vars (f', f)
@@ -2659,12 +2683,13 @@ let is_sub_type, is_sub_row =
       | Meta point, Meta point' ->
           begin
             match Unionfind.find point, Unionfind.find point' with
-              | Var (var, _, _), Var (var', _, _) -> var=var'
-              | Recursive _, Recursive _ ->
-                 raise (internal_error "not implemented subtyping on recursive types yet")
-              | t, t' -> is_sub_type rec_vars (t, t')
-              (* | _, t -> is_sub_type rec_vars (t, t') *)
-              (* | _, _ -> false *)
+            | Closed, _ | _, Closed -> assert false
+            | Var (var, _, _), Var (var', _, _) -> var=var'
+            | t, _  when is_type_body t  -> is_sub_type rec_vars (t, t')
+            | _, t' when is_type_body t' -> is_sub_type rec_vars (t, t')
+            | Recursive _, Recursive _ ->
+               raise (internal_error "not implemented subtyping on recursive types yet")
+            | _, _ -> false
           end
       | Meta point, _ ->
           begin
@@ -2695,38 +2720,36 @@ let is_sub_type, is_sub_row =
     fun rec_vars (lrow, rrow) ->
     match lrow, rrow with
     | Row (lfield_env, lrow_var, ldual), Row (rfield_env, rrow_var, rdual) ->
-      assert (not ldual);
-      assert (not rdual);
-      let sub_fields =
-        FieldEnv.fold (fun name f _ ->
-                         match f with
-                           | Present t ->
-                               if FieldEnv.mem name rfield_env then
-                                 match FieldEnv.find name rfield_env with
-                                   | Present t' ->
-                                       (is_sub_type rec_vars (t, t') &&
-                                          is_sub_type rec_vars (t', t))
-                                   | Absent
-                                     | Meta _ -> false (* TODO(dhil): Is Var => Meta replacement always correct? *)
-                                   | _ -> raise tag_expectation_mismatch
-                               else
-                                 false
-                           | Absent -> true
-                           | Meta _ -> assert false (* TODO *)
-                           | _ -> raise tag_expectation_mismatch
-          ) lfield_env true
-      in
-      let sub_row_vars =
-        match Unionfind.find lrow_var, Unionfind.find rrow_var with
-          | Var (var, _, _), Var (var', _, _) -> var = var'
-          | Closed, _ -> true
-          | Recursive _, Recursive _ ->
-             assert false
-          | lrow, rrow -> is_sub_eff rec_vars (lrow, rrow) (* TODO(dhil): I am not sure this refactoring is correct. *)
-          (* | _, rrow -> is_sub_eff rec_vars (lrow, rrow) *)
-          (* | _, _ -> false *)
-      in
-      sub_fields && sub_row_vars
+       assert (not ldual);
+       assert (not rdual);
+       let sub_fields =
+         FieldEnv.fold (fun name f _ ->
+             match f with
+             | Present t ->
+                if FieldEnv.mem name rfield_env then
+                  match FieldEnv.find name rfield_env with
+                  | Present t' ->
+                     (is_sub_type rec_vars (t, t') &&
+                        is_sub_type rec_vars (t', t))
+                  | Absent
+                  | Meta _ -> false
+                  | _ -> raise tag_expectation_mismatch
+                else
+                  false
+             | Absent -> true
+             | Meta _ -> assert false (* TODO *)
+             | _ -> raise tag_expectation_mismatch
+           ) lfield_env true in
+       let sub_row_vars =
+         match Unionfind.find lrow_var, Unionfind.find rrow_var with
+         | Var (var, _, _), Var (var', _, _) -> var = var'
+         | Closed, _ -> true
+         | lrow, _ when is_row_body lrow -> is_sub_row rec_vars (lrow, rrow)
+         | _, rrow when is_row_body rrow -> is_sub_row rec_vars (lrow, rrow)
+         | Recursive _, Recursive _ ->
+            raise (internal_error "not implemented subtyping on recursive rows yet")
+         | _, _ -> false in
+       sub_fields && sub_row_vars
     | _ -> raise tag_expectation_mismatch
   and is_sub_row =
     fun rec_vars (lrow, rrow) ->
@@ -2744,8 +2767,7 @@ let is_sub_type, is_sub_row =
                                    | _ -> raise tag_expectation_mismatch
                                else
                                  false
-                           | Absent ->
-                               true
+                           | Absent -> true
                            | Meta _ -> assert false (* TODO *)
                            | _ -> raise tag_expectation_mismatch
           ) lfield_env true
@@ -2755,11 +2777,11 @@ let is_sub_type, is_sub_row =
         match Unionfind.find lrow_var, Unionfind.find rrow_var with
           | Var (var, _, _), Var (var', _, _) -> ldual=rdual && var=var'
           | Closed, _ -> true
+          | lrow, _ when is_row_body lrow -> is_sub_row rec_vars (dual_if ldual lrow, rrow)
+          | _, rrow when is_row_body rrow -> is_sub_row rec_vars (lrow, dual_if rdual rrow)
           | Recursive _, Recursive _ ->
              raise (internal_error "not implemented subtyping on recursive rows yet")
-          | lrow, rrow -> is_sub_row rec_vars ((dual_if ldual lrow), (dual_if rdual rrow)) (* TODO(dhil): Dubious refactoring. *)
-          (* | _, rrow -> is_sub_row rec_vars (lrow, dual_if rdual rrow) *)
-          (* | _, _ -> false *)
+          | _, _ -> false
       in
       sub_fields && sub_row_vars
     | _ -> raise tag_expectation_mismatch
