@@ -148,8 +148,8 @@ and typ =
   | Absent
   | Present of typ
   (* Session *)
-  | Input of (typ * typ)
-  | Output of (typ * typ)
+  | Input of (typ * session_type)
+  | Output of (typ * session_type)
   | Select of row
   | Choice of row
   | Dual of typ
