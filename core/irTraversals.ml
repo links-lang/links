@@ -912,8 +912,8 @@ module ElimBodiesFromMetaTypeVars = struct
           | Types.Meta point ->
             begin
               match Unionfind.find point with
+                | Types.Recursive _
                 | Types.Var _ -> Types.Meta point, o
-
                 | t -> o#typ t
             end
           | other -> super#typ other
