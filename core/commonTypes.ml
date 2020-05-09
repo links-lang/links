@@ -147,9 +147,7 @@ module Kind = struct
   let as_session (pk, sk) =
     (pk, Subkind.as_session sk)
 
-  let to_primary_kind (pk, _) = pk (* TODO(dhil): Frank forgot to add
-                                      this function. Rename to
-                                      `primary_kind`. *)
+  let primary_kind (pk, _) = pk
 end
 
 module Quantifier = struct

@@ -282,7 +282,7 @@ let rec primary_kind_of_type t =
   | Not_typed ->
      failwith "Not_typed has no kind"
   | Var (_, kind, _) ->
-     Kind.to_primary_kind kind
+     Kind.primary_kind kind
   | Recursive r ->
      failwith "Top-level Recursive should have been removed by concrete_type call"
   | Meta p ->
@@ -345,17 +345,17 @@ let check_type_wellformdness t : unit =
     (* row variables must be specifically allowed, because currently
        we only allow Row (_, _, \rho) but not standalone \rho *)
     match Unionfind.find p, allow_row_var with
-    | Var (_, kind, _), false  when Kind.to_primary_kind kind = pk_row ->
+    | Var (_, kind, _), false  when Kind.primary_kind kind = pk_row ->
        (* freestanding row variables not implemented yet (must be inside Row) *)
        raise tag_expectation_mismatch
-    | Var (_, kind, _), _ -> Kind.to_primary_kind kind
+    | Var (_, kind, _), _ -> Kind.primary_kind kind
     | Recursive (var, var_kind, body), _ ->
        let pk =
          if IntMap.mem var rec_env then
            IntMap.find var rec_env
          else
            let rec_env' =
-             IntMap.add var (Kind.to_primary_kind var_kind) rec_env
+             IntMap.add var (Kind.primary_kind var_kind) rec_env
            in
            main rec_env' body
        in
@@ -367,7 +367,7 @@ let check_type_wellformdness t : unit =
     | body, _ -> main rec_env body
 
   and compare_kinds rec_env k t =
-    ignore (check_kind (Kind.to_primary_kind k) (main rec_env t))
+    ignore (check_kind (Kind.primary_kind k) (main rec_env t))
   and main rec_env =
     let ityp t = ignore (typ rec_env t) in
     let irow r = ignore (row rec_env r) in
