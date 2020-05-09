@@ -30,6 +30,7 @@
    generalise
    graph
    ir
+   instantiate
    js
    json
    lens
