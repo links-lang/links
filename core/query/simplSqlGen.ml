@@ -13,6 +13,9 @@ module S = Sql
 
 let mapstrcat sep f l = l |> List.map f |> String.concat sep
 
+let dummy_sql_empty_query = 
+    ([(S.Constant (Constant.Int 42), "@unit@")], [], S.Constant (Constant.Bool false), [])
+
 (* convert an NRC-style query into an SQL-style query *)
 let rec sql_of_query is_set = function
 | Q.Concat ds -> S.Union (is_set, List.map (disjunct is_set) ds, 0)
@@ -20,13 +23,7 @@ let rec sql_of_query is_set = function
 
 and disjunct is_set = function
 | Q.Prom p -> sql_of_query true p
-| Q.For (_, gs, os, j) ->
-    let _, froms =
-        List.fold_left (fun (locvars,acc) (v,_q as g) -> (v::locvars, generator locvars g::acc)) ([],[]) gs
-    in
-    let os = List.map base_exp os in
-    let selects, where = body j in
-    S.Select (is_set, (selects, List.rev froms, where, os))
+| Q.For (_, gs, os, j) -> S.Select (is_set, body gs os j)
 | _ -> failwith "disjunct"
 
 and generator locvars = function
@@ -35,14 +32,28 @@ and generator locvars = function
 | (v, Q.Dedup (Q.Table (_, tname, _, _))) -> (S.FromDedupTable tname, v)
 | _ -> failwith "generator"
 
-and body = function
-| Q.Singleton (Q.Record fields) ->
-    (List.map (fun (f,x) -> (base_exp x, f)) (StringMap.to_alist fields), Sql.Constant (Constant.Bool true))
-| Q.If (c, Q.Singleton (Q.Record fields), Q.Concat []) -> 
-    let c' = base_exp c in
-    let t = List.map (fun (f,x) -> (base_exp x, f)) (StringMap.to_alist fields) in
-    (t, c')
-| _ -> failwith "body"
+and body gs os j = 
+    let selquery body where =
+        let froms =
+            gs
+            |> List.fold_left (fun (locvars,acc) (v,_q as g) -> (v::locvars, generator locvars g::acc)) ([],[])
+            |> snd
+            |> List.rev
+        in
+        let os = List.map base_exp os in
+        (body, List.rev froms, where, os)
+    in
+    match j with
+    | Q.Concat [] -> dummy_sql_empty_query
+    | Q.Singleton (Q.Record fields) ->
+        selquery
+        <| List.map (fun (f,x) -> (base_exp x, f)) (StringMap.to_alist fields)
+        <| Sql.Constant (Constant.Bool true)
+    | Q.If (c, Q.Singleton (Q.Record fields), Q.Concat []) -> 
+        selquery
+        <| List.map (fun (f,x) -> (base_exp x, f)) (StringMap.to_alist fields)
+        <| base_exp c
+    | _ -> failwith "body"
 
 and base_exp = function
 (* XXX: Project expects a (numbered) var, but we have a table name 
@@ -90,7 +101,8 @@ let compile_mixing : Value.env -> Ir.computation -> (Value.database * Sql.query 
         | None -> None
         | Some db ->
             let t = Types.unwrap_list_type (Query.type_of_expression v) in
+            Debug.print ("Generated NRC query: " ^ Q.show v );
             let q = sql_of_query false v in
             let range = None in
-              Debug.print ("Generated query: "^(Sql.string_of_query db range q));
+              Debug.print ("Generated SQL query: "^(Sql.string_of_query db range q));
               Some (db, q, t)

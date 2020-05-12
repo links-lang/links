@@ -144,6 +144,24 @@ struct
       | _ -> false
       in cfree []
 
+  let table_field_types (_, _, _, (fields, _, _)) =
+    StringMap.map (function
+                    | `Present t -> t
+                    | _ -> assert false) fields
+
+  let labels_of_field_types field_types =
+    StringMap.fold
+      (fun name _ labels' ->
+        StringSet.add name labels')
+      field_types
+      StringSet.empty
+
+  let recdty_field_types (t : Types.datatype) : Types.datatype StringMap.t =
+    let (field_spec_map, _, _) = TypeUtils.extract_row t in
+    StringMap.map (function
+                    | `Present t -> t
+                    | _ -> assert false) field_spec_map
+
   (** Return the type associated with an expression *)
   (* Inferring the type of an expression is straightforward because all
      variables are annotated with their types. *)
@@ -152,25 +170,59 @@ struct
     let record fields : Types.datatype =
       Types.make_record_type (StringMap.map te fields)
     in
-      match v with
-        | Concat [] -> Types.make_list_type(Types.unit_type)
-        | Concat (v::_) -> te v
-        | For (_, _, _os, body) -> te body
-        | Singleton t -> Types.make_list_type (te t)
-        | Record fields -> record fields
-        | If (_, t, _) -> te t
-        | Table (_, _, _, row) -> `Record row
-        | Dedup u
-        | Prom u -> te u
-        | Constant (Constant.Bool   _) -> Types.bool_type
-        | Constant (Constant.Int    _) -> Types.int_type
-        | Constant (Constant.Char   _) -> Types.char_type
-        | Constant (Constant.Float  _) -> Types.float_type
-        | Constant (Constant.String _) -> Types.string_type
-        | Project (Var (_, field_types), name) -> StringMap.find name field_types
-        | Apply (Primitive "Empty", _) -> Types.bool_type (* HACK *)
-        | Apply (Primitive f, _) -> TypeUtils.return_type (Env.String.find f Lib.type_env)
-        | e -> Debug.print("Can't deduce type for: " ^ show e); assert false
+    match v with
+    | Var (_,ftys) -> Types.make_record_type ftys
+    | Concat [] -> Types.make_list_type(Types.unit_type)
+    | Concat (v::_) -> te v
+    | For (_, _, _os, body) -> te body
+    | Singleton t -> Types.make_list_type (te t)
+    | Record fields -> record fields
+    | If (_, t, _) -> te t
+    | Table (_, _, _, row) -> Types.make_list_type (`Record row)
+    | Dedup u
+    | Prom u -> te u
+    | Constant (Constant.Bool   _) -> Types.bool_type
+    | Constant (Constant.Int    _) -> Types.int_type
+    | Constant (Constant.Char   _) -> Types.char_type
+    | Constant (Constant.Float  _) -> Types.float_type
+    | Constant (Constant.String _) -> Types.string_type
+    | Project (w, name) -> 
+        begin 
+          match te w with
+          | `Record _ as rty -> StringMap.find name (recdty_field_types rty)
+          | ty -> 
+              failwith 
+                (Printf.sprintf 
+                  ("term:\n" ^^
+                    "%s\n" ^^
+                    "has type:\n" ^^
+                    "%s\n" ^^
+                    "but it was expected to have a record type.") 
+                  (string_of_t w) (Types.show_typ ty))
+        end
+    | Apply (Primitive "Empty", _) -> Types.bool_type (* HACK *)
+    | Apply (Primitive f, _) -> TypeUtils.return_type (Env.String.find f Lib.type_env)
+    | e -> Debug.print("Can't deduce type for: " ^ show e); assert false
+
+  let record_field_types =
+    type_of_expression ->- recdty_field_types
+
+  let query_field_types (q : t) =
+    let (field_spec_map,_,_) = 
+      type_of_expression q
+      |> TypeUtils.element_type ~overstep_quantifiers:true
+      |> TypeUtils.extract_row
+    in 
+    StringMap.map (function
+                    | `Present t -> t
+                    | _ -> assert false) field_spec_map
+
+
+  let field_types_of_for_var gen = 
+    type_of_expression gen
+    |> Types.unwrap_list_type
+    |> recdty_field_types
+
 
   let default_of_base_type =
     function
@@ -207,79 +259,48 @@ struct
   let rec freshen_for_bindings : Var.var Env.Int.t -> t -> t =
     fun env v ->
       let ffb = freshen_for_bindings env in
-        match v with
-        | For (tag, gs, os, b) ->
-          let gs', env' =
-            List.fold_left
-              (fun (gs', env') (x, source) ->
-                let y = Var.fresh_raw_var () in
-                  ((y, ffb source)::gs', Env.Int.bind x y env'))
-              ([], env)
-              gs
-          in
-            For (tag, List.rev gs', List.map (freshen_for_bindings env') os, freshen_for_bindings env' b)
-        | If (c, t, e) -> If (ffb c, ffb t, ffb e)
-        | Table _ as t -> t
-        | Singleton v -> Singleton (ffb v)
-        | Database db -> Database db
-        | Concat vs -> Concat (List.map ffb vs)
-        | Dedup q -> ffb q
-        | Prom q -> ffb q
-        | Record fields -> Record (StringMap.map ffb fields)
-        | Variant (name, v) -> Variant (name, ffb v)
-        | XML xmlitem -> XML xmlitem
-        | Project (v, name) -> Project (ffb v, name)
-        | Erase (v, names) -> Erase (ffb v, names)
-        | Apply (u, vs) -> Apply (ffb u, List.map ffb vs)
-        | Closure _ as c ->
-          (* we don't attempt to freshen closure bindings *)
-          c
-        | Case (u, cl, d) -> Case (ffb u, StringMap.map (fun (x,y) -> (x, ffb y)) cl, opt_app (fun (x,y) -> Some (x, ffb y)) None d)
-        | Primitive f -> Primitive f
-        | Var (x, ts) as v ->
-          begin
-            match Env.Int.find_opt x env with
-            | None -> v (* Var (x, ts) *)
-            | Some y -> Var (y, ts)
-          end
-        | Constant c -> Constant c
-
-  let table_field_types (_, _, _, (fields, _, _)) =
-    StringMap.map (function
-                    | `Present t -> t
-                    | _ -> assert false) fields
-
-  let labels_of_field_types field_types =
-    StringMap.fold
-      (fun name _ labels' ->
-        StringSet.add name labels')
-      field_types
-      StringSet.empty
-
-  let recdty_field_types (t : Types.datatype) : Types.datatype StringMap.t =
-    let (field_spec_map, _, _) = TypeUtils.extract_row t in
-    StringMap.map (function
-                    | `Present t -> t
-                    | _ -> assert false) field_spec_map
-
-  let record_field_types =
-    type_of_expression ->- recdty_field_types
-
-  let query_field_types (q : t) =
-    let (field_spec_map,_,_) = 
-      type_of_expression q
-      |> TypeUtils.element_type ~overstep_quantifiers:true
-      |> TypeUtils.extract_row
-    in 
-    StringMap.map (function
-                    | `Present t -> t
-                    | _ -> assert false) field_spec_map
-
-
-  let field_types_of_for_var gen = 
-    type_of_expression gen
-    |> Types.unwrap_list_type
-    |> recdty_field_types
+      let rec var_lookup x = 
+        match Env.Int.find_opt x env with
+        | None -> x
+        | Some y -> var_lookup y
+      in
+      match v with
+      | For (tag, gs, os, b) ->
+        let gs', env' =
+          List.fold_left
+            (fun (gs', env') (x, source) ->
+              let y = Var.fresh_raw_var () in
+              ((y, ffb source)::gs', Env.Int.bind x y env'))
+            ([], env)
+            gs
+        in
+          For (tag, List.rev gs', List.map (freshen_for_bindings env') os, freshen_for_bindings env' b)
+      | If (c, t, e) -> If (ffb c, ffb t, ffb e)
+      | Table _ as t -> t
+      | Singleton v -> Singleton (ffb v)
+      | Database db -> Database db
+      | Concat vs -> Concat (List.map ffb vs)
+      | Dedup q -> ffb q
+      | Prom q -> ffb q
+      | Record fields -> Record (StringMap.map ffb fields)
+      | Variant (name, v) -> Variant (name, ffb v)
+      | XML xmlitem -> XML xmlitem
+      | Project (v, name) -> Project (ffb v, name)
+      | Erase (v, names) -> Erase (ffb v, names)
+      | Apply (u, vs) -> Apply (ffb u, List.map ffb vs)
+      | Closure _ as c ->
+        (* we don't attempt to freshen closure bindings *)
+        c
+      | Case (u, cl, d) -> Case (ffb u, StringMap.map (fun (x,y) -> (x, ffb y)) cl, opt_app (fun (x,y) -> Some (x, ffb y)) None d)
+      | Primitive f -> Primitive f
+      | Var (x, ts) as _v ->
+        (* begin
+          match Env.Int.find_opt x env with
+          | None -> v (* Var (x, ts) *)
+          | Some y -> Var (y, ts)
+        end *)
+          Var (var_lookup x, ts)
+      | Constant c -> Constant c
 
   let flatfield f1 f2 = f1 ^ "@" ^ f2
 
@@ -432,25 +453,29 @@ struct
         | vs -> Concat vs
 
   let rec reduce_where_then (c, t) =
-    match t with
-      (* optimisation *)
-      | Constant (Constant.Bool true) -> t
-      | Constant (Constant.Bool false) -> Concat []
+    match c, t with
+    (* optimisation *)
+    | Constant (Constant.Bool true), _
+    | _, Constant (Constant.Bool true) -> t
+    | Constant (Constant.Bool false), _
+    | _, Constant (Constant.Bool false) -> Concat []
 
-      | Concat vs ->
+    | _, Concat vs ->
         reduce_concat (List.map (fun v -> reduce_where_then (c, v)) vs)
-      | Prom t' -> Prom (reduce_where_then (c, t'))
-      | For (_, gs, os, body) ->
+    | _, Prom t' -> Prom (reduce_where_then (c, t'))
+    | _, For (_, gs, os, body) ->
         For (None, gs, os, reduce_where_then (c, body))
-      | If (c', t', Concat []) ->
+    | _, If (c', t', Concat []) ->
         reduce_where_then (reduce_and (c, c'), t')
-      | _ ->
+    | _ ->
         If (c, t, Concat [])
 
-  let reduce_for_body (gs, os, body) =
+  (* FIXME: we can't deal with ordering correctly, so we generate empty ordering clauses for now *)
+  let reduce_for_body (gs, _os, body) =
     match body with
-      | For (_, gs', os', body') -> For (None, gs @ gs', os @ os', body')
-      | _                         -> For (None, gs, os, body)
+      (* | Concat []                 -> body *)
+      | For (_, gs', _os', body') -> For (None, gs @ gs', [] (*os @ os'*), body')
+      | _                         -> For (None, gs, [] (* os *), body)
 
   let rec reduce_for_source : t * Types.datatype * (t -> t) -> t =
     fun (source, ty, body) ->
@@ -490,10 +515,10 @@ struct
             reduce_for_body (gs, os, rs (v,tyv))
           | Table table
           | Dedup (Table table) ->
-            let field_types = table_field_types table in
-            (* we need to generate a fresh variable in order to
-               correctly handle self joins *)
-            let x = Var.fresh_raw_var () in
+              let field_types = table_field_types table in
+              (* we need to generate a fresh variable in order to
+                correctly handle self joins *)
+              let x = Var.fresh_raw_var () in
               (* Debug.print ("fresh variable: " ^ string_of_int x); *)
               reduce_for_body ([(x, source)], [], body (Var (x, field_types)))
           (* BUGBUG: what should we do when we have a Prom? *)
@@ -908,7 +933,7 @@ struct
     | _ -> assert false
 
   let mk_for_term env (x,xs) body_f =
-    let ftys = Q.record_field_types xs in
+    let ftys = Q.query_field_types xs in
     (* let newx = Var.fresh_raw_var () in *)
     let vx = Q.Var (x, ftys) in
     let cenv = bind env (x, vx) in
@@ -954,11 +979,13 @@ struct
                   be eliminated anyway.
                 *)
                 (* Debug.print ("env v: "^string_of_int var^" = "^string_of_t v); *)
-                  Q.freshen_for_bindings Env.Int.empty (retn in_dedup v)
+                  (* Q.freshen_for_bindings Env.Int.empty (retn in_dedup v) *)
+                  Q.freshen_for_bindings Env.Int.empty (norm in_dedup env v)
           with
           | InternalError _ -> retn in_dedup orig
         end
     | Q.Record fl -> Q.Record (StringMap.map (norm false env) fl)
+    | Q.Singleton v -> Q.Singleton (norm false env v)
     | Q.Concat xs -> Q.reduce_concat (List.map (norm in_dedup env) xs)
     | Q.Project (r, label) ->
         let rec project (r, label) =
@@ -971,7 +998,7 @@ struct
             | Q.Var (_x, field_types) ->
               assert (StringMap.mem label field_types);
               Q.Project (r, label)
-            | _ -> query_error ("Error projecting from record: %s") (string_of_t r)
+            | _ -> query_error ("Error projecting label %s from record: %s") label (string_of_t r)
         in
         retn in_dedup (project (norm false env r, label))
     | Q.Erase (r, labels) ->
@@ -999,7 +1026,7 @@ struct
         erase (norm false env r, labels)
     | Q.Variant (label, v) -> Q.Variant (label, norm false env v)
     | Q.Apply (f, xs) -> apply in_dedup env (norm false env f, List.map (norm false env) xs)
-    | Q.For (_, gs, os, u) -> 
+    | Q.For (_, gs, os, u) as _orig -> 
         let rec reduce_gs env = function
         | [] -> 
           begin
@@ -1079,8 +1106,10 @@ struct
                 |> norm in_dedup env
             | _ -> assert false
         end
-    | Q.Primitive "SortBy", [f; xs] ->
-        begin
+    | Q.Primitive "SortBy", [_f; xs] ->
+        (* FIXME: we can't deal with ordering clauses correctly at this time, so we ignore SortBy *)
+        norm in_dedup env xs
+        (* begin
           match xs with
             | Q.Concat [] -> Q.Concat []
             | _ ->
@@ -1108,7 +1137,7 @@ struct
                         else out
                   | _ -> assert false
                 end
-        end
+        end *)
     | Q.Primitive "not", [v] ->
       Q.reduce_not (v)
     | Q.Primitive "&&", [v; w] ->

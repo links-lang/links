@@ -198,15 +198,15 @@ let rec delateralize_step q =
     (* XXX: assumes no Closures are left *)
     | _ -> None
 
-let rec delateralize q =
-    let q = Query.Eval.norm (Query.Eval.empty_env QueryPolicy.Default) q in
+let rec delateralize policy q =
+    let q = Query.Eval.norm (Query.Eval.empty_env policy) q in
     Debug.print "*** normalization step\n";
     Debug.print (Q.show q ^ "\n\n");
     match delateralize_step q with
     | Some q' -> 
         Debug.print "*** delateralization step";
         Debug.print (Q.show q' ^ "\n\n");
-        delateralize q'
+        delateralize policy q'
     | None -> q
 
 let eval policy env e =
@@ -214,4 +214,4 @@ let eval policy env e =
     Debug.debug_time "Query.eval" (fun () ->
         e
         |> Query.Eval.computation (Query.Eval.env_of_value_env policy env)
-        |> delateralize)
+        |> delateralize policy)
