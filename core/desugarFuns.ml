@@ -125,7 +125,8 @@ object (o : 'self_type)
     | Section (Section.Project name) | FreezeSection (Section.Project name) ->
         let open Types in
         let ab, a = Types.fresh_type_quantifier (lin_unl, res_any) in
-        let rhob, Row (fields, rho, _) = fresh_row_quantifier (lin_unl, res_any) in
+        let rhob, row = fresh_row_quantifier (lin_unl, res_any) in
+        let (fields, rho, _) = TypeUtils.extract_row_parts row in
         let effb, row = fresh_row_quantifier default_effect_subkind in
 
         let r = Record (Row (StringMap.add name (Present a) fields, rho, false)) in

@@ -75,7 +75,7 @@ object (o : 'self_type)
         in
           (o, e, process_type)
     | Receive (cases, Some t) ->
-        let Row (fields, rho, _) = o#lookup_effects in
+        let (fields, rho, _) = TypeUtils.extract_row_parts (o#lookup_effects) in
         let other_effects = Types.Row (StringMap.remove "hear" (StringMap.remove "wild" fields), rho, false) in
           begin
             match StringMap.find "hear" fields with
