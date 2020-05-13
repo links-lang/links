@@ -5,7 +5,8 @@ Branch: types-refactor
  + types.ml
  + types.mli
 - Frank
- + pending:
+ + done:
+    typeUtils.ml
     typeSugar.ml
     instantiate.ml
 - Janek

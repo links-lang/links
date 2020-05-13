@@ -45,6 +45,7 @@
    lens
    lens_database_conv
    lens_errors
+   lens_sugar_conv
    lens_type_conv
    lens_value_conv
    lexer
@@ -72,6 +73,7 @@
    transformSugar
    typeUtils
    types
+   typeSugar
    typevarcheck
    unify
    unionfind
