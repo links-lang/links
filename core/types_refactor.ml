@@ -977,6 +977,8 @@ module Env = Env.String
     Meta (build_type_variable `Flexible var (PrimaryKind.Presence, subkind))
   let make_rigid_presence_variable var subkind =
     Meta (build_type_variable `Rigid var (PrimaryKind.Presence, subkind))
+  let make_rigid_variable var kind =
+    Meta (build_type_variable `Rigid var kind)
 
   let type_arg_of_quantifier : Quantifier.t -> type_arg =
     fun (var, (pk, sk)) ->

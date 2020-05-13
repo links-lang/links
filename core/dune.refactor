@@ -57,6 +57,7 @@
    parser
    processTypes
    regex
+   renamer
    requestData
    scanner
    settings
