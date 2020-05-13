@@ -8,6 +8,7 @@ Branch: types-refactor
  + done:
     typeUtils.ml
     typeSugar.ml
+    renamer.ml
     instantiate.ml
 - Janek
  + done:
@@ -74,15 +75,12 @@ Branch: types-refactor
 ./query/evalNestedQuery.ml
 ./query/evalQuery.ml
 ./query/query.ml
-./renamer.ml
 ./serialisation.ml
 ./sugartoir.ml
 ./transform.ml
 ./types.ml
 ./types.ml.org
 ./types_refactor.ml
-./typeSugar.ml
-./typeUtils.ml
 ./unify.ml
 ./value.ml
 ./var.ml
@@ -93,5 +91,3 @@ Branch: types-refactor
 ./irCheck.ml
 ./irTraversals.ml
 ./lib.ml
-./renamer.ml
-./typeUtils.ml
