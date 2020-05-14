@@ -41,7 +41,7 @@ and body gs os j =
             |> List.rev
         in
         let os = List.map base_exp os in
-        (body, List.rev froms, where, os)
+        (body, froms, where, os)
     in
     match j with
     | Q.Concat [] -> dummy_sql_empty_query
@@ -88,7 +88,8 @@ and base_exp = function
 
 let compile_mixing : Value.env -> Ir.computation -> (Value.database * Sql.query * Types.datatype) option =
   fun env e ->
-    (* Debug.print ("e: "^Ir.show_computation e); *)
+    (* Debug.print ("env: "^Value.show_env env);
+    Debug.print ("e: "^Ir.show_computation e); *)
     (* XXX: I don't see how the evaluation here is different depending on the policy *)
     let evaluator =
         if Settings.get Database.delateralize
@@ -101,8 +102,8 @@ let compile_mixing : Value.env -> Ir.computation -> (Value.database * Sql.query 
         | None -> None
         | Some db ->
             let t = Types.unwrap_list_type (Query.type_of_expression v) in
-            Debug.print ("Generated NRC query: " ^ Q.show v );
+            (* Debug.print ("Generated NRC query: " ^ Q.show v ); *)
             let q = sql_of_query false v in
             let range = None in
-              Debug.print ("Generated SQL query: "^(Sql.string_of_query db range q));
+              (* Debug.print ("Generated SQL query: "^(Sql.string_of_query db range q)); *)
               Some (db, q, t)

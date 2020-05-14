@@ -55,6 +55,37 @@ let list_tryPick f l =
         None
         l
 
+let rec subst t x u =
+    let srec t = subst t x u in
+    match t with
+    | Q.Var (var, _) when var = x -> u
+    | Q.Record fl -> Q.Record (StringMap.map srec fl)
+    | Q.Singleton v -> Q.Singleton (srec v)
+    | Q.Concat xs -> Q.Concat (List.map srec xs)
+    | Q.Project (r, label) -> Q.Project (srec r, label)
+    | Q.Erase (r, labels) -> Q.Erase (srec r, labels)
+    | Q.Variant (label, v) -> Q.Variant (label, srec v)
+    | Q.Apply (f, xs) -> Q.Apply (srec f, List.map srec xs)
+    | Q.For (_, gs, os, u) ->
+        (* XXX: assuming fresh x!*) 
+        let gs' = List.map (fun (v,g) -> (v, srec g)) gs in
+        let os' = List.map srec os in
+        let u' = srec u in
+        Q.For (None, gs', os', u')
+    | Q.If (c, t, e) ->
+        Q.If (srec c, srec t, srec e)
+    | Q.Case (v, cases, default) ->
+        let v' = srec v in
+        let cases' = StringMap.map (fun (v,q) -> (v,srec q)) cases in
+        let default' = default >>= fun d -> Some (fst d, srec (snd d)) in
+        Q.Case (v', cases', default')
+    | Q.Dedup v -> Q.Dedup (srec v)
+    | Q.Prom v -> Q.Prom (srec v)
+    | Q.Closure (c, closure_env) ->
+        let cenv = Query.Eval.bind closure_env (x,u) in
+        Q.Closure (c, cenv)
+    | v -> v
+
 (* C(q1, x.q2) := for x :- q1, #y :- q2 do {(x,#y)}
    also returns the fieltypes of the graph *)
 let graph_query (q1,ty1) x (q2,ty2) =
@@ -91,9 +122,7 @@ let prom_delateralize gs q1 x (q2,ty2) y (q3,ty3) =
                 ty3
                 StringMap.empty)
     in
-    let q1_rp =
-        let env =  Query.Eval.bind (Query.Eval.empty_env QueryPolicy.Default) (y,rp) in
-        Query.Eval.norm env q1
+    let q1_rp = subst q1 y rp
     in
     Q.For (None, 
         gs @ [(p, Q.Prom graph)],
@@ -199,20 +228,20 @@ let rec delateralize_step q =
     | _ -> None
 
 let rec delateralize env q =
-    (* let q = Query.Eval.norm (Query.Eval.empty_env policy) q in *)
     let q = Query.Eval.norm env q in
-    Debug.print "*** normalization step\n";
-    Debug.print (Q.show q ^ "\n\n");
+    (* Debug.print "*** normalization step\n";
+    Debug.print (Q.show q ^ "\n\n"); *)
     match delateralize_step q with
     | Some q' -> 
-        Debug.print "*** delateralization step";
-        Debug.print (Q.show q' ^ "\n\n");
+        (* Debug.print "*** delateralization step";
+        Debug.print (Q.show q' ^ "\n\n"); *)
         delateralize env q'
     | None -> q
 
 let eval policy env e =
     (*    Debug.print ("e: "^Ir.show_computation e); *)
+    let env = Query.Eval.env_of_value_env policy env in
     Debug.debug_time "Query.eval" (fun () ->
         e
-        |> Query.Eval.computation (Query.Eval.env_of_value_env policy env)
-        |> delateralize (Query.Eval.env_of_value_env policy env))
+        |> Query.Eval.computation env
+        |> delateralize env)

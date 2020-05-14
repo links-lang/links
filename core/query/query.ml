@@ -201,6 +201,7 @@ struct
                   (string_of_t w) (Types.show_typ ty))
         end
     | Apply (Primitive "Empty", _) -> Types.bool_type (* HACK *)
+    | Apply (Primitive "Distinct", [q]) -> type_of_expression q
     | Apply (Primitive f, _) -> TypeUtils.return_type (Env.String.find f Lib.type_env)
     | e -> Debug.print("Can't deduce type for: " ^ show e); assert false
 
@@ -646,6 +647,9 @@ struct
       Some
       begin
         match Var.name_of_binder (f, finfo) with
+        | "dedup"
+        | "distinct" ->
+          Q.Primitive "Distinct"
         | "concatMap" ->
           Q.Primitive "ConcatMap"
         | "map" ->
@@ -709,31 +713,31 @@ struct
     let open Lang in
     { env with qenv = Env.Int.bind x v env.qenv }
 
-  let lookup env var =
-    let open Lang in
-    let val_env = env.venv in
-    let exp_env = env.qenv in
-    match lookup_fun env (var, None) with
-    | Some v -> v
-    | None ->
-      begin
-        match Value.Env.lookup var val_env, Env.Int.find_opt var exp_env with
-        | None, Some v -> v
-        | Some v, None -> expression_of_value env v
-        | Some _, Some v -> v (*query_error "Variable %d bound twice" var*)
-        | None, None ->
-          begin
-            try expression_of_value env (Lib.primitive_stub (Lib.primitive_name var)) with
-            | NotFound _ ->
-                raise (internal_error ("Variable " ^ string_of_int var ^ " not found"));
-          end
-      end
-
+    let lookup env var =
+      let open Lang in
+      let val_env = env.venv in
+      let exp_env = env.qenv in
+      match lookup_fun env (var, None) with
+      | Some v -> v
+      | None ->
+        begin
+          match Value.Env.lookup var val_env, Env.Int.find_opt var exp_env with
+          | None, Some v -> v
+          | Some v, None -> expression_of_value env v
+          | Some _, Some v -> v (*query_error "Variable %d bound twice" var*)
+          | None, None ->
+            begin
+              try expression_of_value env (Lib.primitive_stub (Lib.primitive_name var)) with
+              | NotFound _ ->
+                  raise (internal_error ("Variable " ^ string_of_int var ^ " not found"));
+            end
+        end
+  
   let reduce_artifacts = function
   | Q.Apply (Q.Primitive "stringToXml", [u]) ->
     Q.Singleton (Q.XML (Value.Text (Q.unbox_string u)))
   | Q.Apply (Q.Primitive "AsList", [xs]) -> xs
-  | Q.Apply (Q.Primitive "distinct", [u]) -> Q.Prom (Q.Dedup u) 
+  | Q.Apply (Q.Primitive "Distinct", [u]) -> Q.Prom (Q.Dedup u) 
   | u -> u
 
   let check_policies_compatible env_policy block_policy =
@@ -1035,7 +1039,7 @@ struct
             | Q.Prom _ as u' ->
                 let z = Var.fresh_raw_var () in
                 let tyz = Q.type_of_expression u' in
-                let ftz = Q.recdty_field_types tyz in
+                let ftz = Q.recdty_field_types (Types.unwrap_list_type tyz) in
                 let vz = Q.Var (z, ftz) in
                 Q.reduce_for_source (u', tyz, fun v -> norm in_dedup (bind env (z,v)) (Q.Singleton vz))
             | u' -> u'
@@ -1138,6 +1142,7 @@ struct
                   | _ -> assert false
                 end
         end *)
+    | Q.Primitive "Distinct", [v] -> Q.Prom (norm true env v)
     | Q.Primitive "not", [v] ->
       Q.reduce_not (v)
     | Q.Primitive "&&", [v; w] ->
@@ -1165,7 +1170,6 @@ struct
   let norm_comp = norm_comp false
 
   let eval policy env e =
-(*    Debug.print ("e: "^Ir.show_computation e); *)
     Debug.debug_time "Query.eval" (fun () ->
       norm_comp (env_of_value_env policy env) e)
 end
