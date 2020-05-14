@@ -22,7 +22,16 @@
    databaseDriver
    debug
    defaultAliases
+   desugarDatatypes
    desugarEffects
+   desugarFormlets
+   desugarFors
+   desugarFuns
+   desugarInners
+   desugarPages
+   desugarProcesses
+   desugarRegexes
+   desugarSessionExceptions
    desugarTypeVariables
    env
    errors
@@ -30,11 +39,13 @@
    generalise
    graph
    ir
+   instantiate
    js
    json
    lens
    lens_database_conv
    lens_errors
+   lens_sugar_conv
    lens_type_conv
    lens_value_conv
    lexer
@@ -47,6 +58,7 @@
    parser
    processTypes
    regex
+   renamer
    requestData
    scanner
    settings
@@ -58,8 +70,10 @@
    sugartypes
    tables
    transform
+   transformSugar
    typeUtils
    types
+   typeSugar
    typevarcheck
    unify
    unionfind

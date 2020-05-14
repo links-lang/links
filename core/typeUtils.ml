@@ -277,20 +277,56 @@ let record_without t names =
 
 
 
+let rec primary_kind_of_type t =
+  match concrete_type t with
+  | Not_typed ->
+     failwith "Not_typed has no kind"
+  | Var (_, kind, _) ->
+     Kind.primary_kind kind
+  | Recursive r ->
+     failwith "Top-level Recursive should have been removed by concrete_type call"
+  | Meta p ->
+     primary_kind_of_type (Unionfind.find p)
+  | Alias (_, d) ->
+     primary_kind_of_type d
+  | Primitive _
+  | Function _
+  | Lolli _
+  | Record _
+  | Variant _
+  | Table _
+  | ForAll _
+  | Application _
+  | RecursiveApplication _
+  | Input _
+  | Output _
+  | Select _
+  | Choice _
+  | Dual _
+  | Lens _
+  | End ->
+     pk_type
+  | Present _
+  | Absent ->
+     pk_presence
+  | Closed
+  | Effect _
+  | Row _ ->
+     pk_row
 
-(* FIXME: use better exceptions than failwith *)
-(* FIXME: This is WIP, fill in todos *)
+
+
 (**
     Determines the primary kind of a type and checks the well-formedness
     of the type in the process.
     Note: This doesn't catch errors related to ill-formed session types.
 *)
-let primary_kind_of_type =
+let check_type_wellformdness t : unit =
   let check_kind expected actual =
     if actual = expected then
       actual
     else
-      failwith "ill-formed type"
+      raise tag_expectation_mismatch
   in
   let rec typ rec_env t =
     check_kind
@@ -309,33 +345,40 @@ let primary_kind_of_type =
     (* row variables must be specifically allowed, because currently
        we only allow Row (_, _, \rho) but not standalone \rho *)
     match Unionfind.find p, allow_row_var with
-    | Var (_, kind, _), false  when Kind.to_primary_kind kind = pk_row ->
-       failwith ("freestanding row variables not implemented yet (must be inside Row)")
-    | Var (_, kind, _), _ -> Kind.to_primary_kind kind
+    | Var (_, kind, _), false  when Kind.primary_kind kind = pk_row ->
+       (* freestanding row variables not implemented yet (must be inside Row) *)
+       raise tag_expectation_mismatch
+    | Var (_, kind, _), _ -> Kind.primary_kind kind
     | Recursive (var, var_kind, body), _ ->
        let pk =
          if IntMap.mem var rec_env then
            IntMap.find var rec_env
          else
            let rec_env' =
-             IntMap.add var (Kind.to_primary_kind var_kind) rec_env
+             IntMap.add var (Kind.primary_kind var_kind) rec_env
            in
            main rec_env' body
        in
        if pk = pk_presence then
-         failwith "recursive types of kind presence are not allowed"
+         (* recursive types of kind presence are not allowed right now *)
+         raise tag_expectation_mismatch
        else
          pk
     | body, _ -> main rec_env body
 
+  and compare_kinds rec_env k t =
+    ignore (check_kind (Kind.primary_kind k) (main rec_env t))
   and main rec_env =
     let ityp t = ignore (typ rec_env t) in
     let irow r = ignore (row rec_env r) in
     let ifs fs = ignore (field_spec rec_env fs) in
     function
-    | Not_typed -> failwith "Not_typed has no kind"
+    | Not_typed ->
+       (* Not_typed has no kind *)
+       raise tag_expectation_mismatch
     | (Var _ | Recursive _) ->
-         failwith ("freestanding Var / Recursive not implemented yet (must be inside Meta)")
+       (* freestanding Var / Recursive not implemented yet (must be inside Meta) *)
+       raise tag_expectation_mismatch
     | Primitive _  -> pk_type
     | Function (f, m, t)
     | Lolli (f, m, t) ->
@@ -347,8 +390,7 @@ let primary_kind_of_type =
        pk_type
     | Effect row ->
        irow row;
-       (* FIXME: what is the correct kind here? *)
-       failwith "fixme"
+       pk_row
     | Table (f, d, r) ->
        ityp f; ityp d; ityp r;
        pk_type
@@ -358,15 +400,14 @@ let primary_kind_of_type =
     | Meta p ->
        meta rec_env ~allow_row_var:false p
     | Alias ((name, qs, ts), d) ->
-       (* TODO: check qs vs ts?*)
+       List.iter2 (compare_kinds rec_env) qs ts;
        main rec_env d
-    | Application (n, elem_type) ->
-       (* TODO: check args vs expected*)
-       (* todo: check args *)
+    | Application (abs_type, args) ->
+       List.iter2 (compare_kinds rec_env) (Types.Abstype.arity abs_type) args;
        pk_type
     | RecursiveApplication app ->
-       failwith "todo"
-
+       List.iter2 (compare_kinds rec_env) app.r_quantifiers app.r_args;
+       pk_type
       (* session stuff. would have to check sub-kinds for full well-formedness check *)
     | Input (t, s)
     | Output (t, s) ->
@@ -389,7 +430,9 @@ let primary_kind_of_type =
     | Absent -> pk_presence
 
     (* rows *)
-    | Closed -> failwith "freestanding Closed not implemented yet (must be inside Row)"
+    | Closed ->
+       (* freestanding Closed not implemented yet (must be inside Row) *)
+       raise tag_expectation_mismatch
     | Row (field_spec_map, row_var, dual) ->
        let handle_fs _label f =
          ifs f
@@ -406,7 +449,7 @@ let primary_kind_of_type =
        end
 
   in
-  main IntMap.empty
+  ignore (main IntMap.empty t)
 
 let row_present_types t =
   extract_row t
