@@ -86,11 +86,8 @@ let execute_command  (query:string) (db: database) : Value.t =
               ("An error occurred executing the query " ^ query ^ ": " ^ msg))
     end
 
-let execute_insert (table_name, field_names, vss) db =
-  execute_command (db#make_insert_query (table_name, field_names, vss)) db
-
-let execute_insert_returning (table_name, field_names, vss, returning) db =
-  let qs = db#make_insert_returning_query (table_name, field_names, vss, returning) in
+let execute_insert_returning returning q db =
+  let qs = db#make_insert_returning_query returning q in
   let rec run =
     function
       | [] -> assert false

@@ -26,7 +26,5 @@ val execute_select : (string * Types.datatype) list -> string -> Value.database 
 
 val execute_untyped_select : string -> Value.database -> Value.t
 
-val execute_insert : (string * string list * string list list) ->  Value.database -> Value.t
-
-val execute_insert_returning : (string * string list * string list list * string) ->  Value.database -> Value.t
+val execute_insert_returning : string -> Sql.query ->  Value.database -> Value.t
 

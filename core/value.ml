@@ -74,16 +74,13 @@ class virtual database = object(self)
   method virtual escape_string : string -> string
   method virtual quote_field : string -> string
   method virtual exec : string -> dbvalue
-  method make_insert_query : (string * string list * string list list) -> string =
-    fun (table_name, field_names, vss) ->
-      "insert into " ^ table_name ^
-        "("^String.concat "," field_names ^") values "^
-        String.concat "," (List.map (fun vs -> "(" ^ String.concat "," vs ^")") vss)
-  method make_insert_returning_query : (string * string list * string list list * string) -> string list =
-    fun _ ->
+  method make_insert_returning_query : string -> Sql.query -> string list =
+    fun _ _ ->
     raise (raise (internal_error ("insert ... returning is not yet implemented for the database driver: "^self#driver_name())))
   method virtual supports_shredding : unit -> bool
 
+  method string_of_query ?(range=None) =
+    Sql.string_of_query ~range self#quote_field
 end
 
 let equal_database db1 db2 = db1 == db2
@@ -1096,23 +1093,18 @@ and xmlitem_of_variant =
 
 (* Some utility functions for databases used by insertion *)
 
-let row_columns_values db v =
-  let escaped_string_of_value db =
-    function
-      | `String s -> "\'" ^ db # escape_string s ^ "\'"
-      | v -> string_of_value v
-  in
+let row_columns_values v =
   let row_columns : t -> string list = function
     | `List ((`Record fields)::_) -> List.map fst fields
     | v -> raise (type_error ~action:"form query columns from" "a list of records" v)
   in
-  let row_values db = function
+  let row_values = function
     | `List records ->
     (List.map (function
-          | `Record fields -> List.map (escaped_string_of_value db -<- snd) fields
+          | `Record fields -> List.map snd fields
           | v -> raise (type_error ~action:"form query field from" "record" v)) records)
     | v -> raise (type_error ~action:"form query row from" "list" v)
   in
-  (row_columns v, row_values db v)
+  (row_columns v, row_values v)
 
 
