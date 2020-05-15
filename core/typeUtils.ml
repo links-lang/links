@@ -283,7 +283,7 @@ let rec primary_kind_of_type t =
      failwith "Not_typed has no kind"
   | Var (_, kind, _) ->
      Kind.primary_kind kind
-  | Recursive r ->
+  | Recursive _ ->
      failwith "Top-level Recursive should have been removed by concrete_type call"
   | Meta p ->
      primary_kind_of_type (Unionfind.find p)
@@ -319,7 +319,8 @@ let rec primary_kind_of_type t =
 (**
     Determines the primary kind of a type and checks the well-formedness
     of the type in the process.
-    Note: This doesn't catch errors related to ill-formed session types.
+    Note: This doesn't catch errors related to ill-formed session and lens
+    types.
 *)
 let check_type_wellformdness t : unit =
   let check_kind expected actual =
@@ -394,12 +395,12 @@ let check_type_wellformdness t : unit =
     | Table (f, d, r) ->
        ityp f; ityp d; ityp r;
        pk_type
-    | ForAll (qs, t) ->
+    | ForAll (_qs, t) ->
        ityp t;
        pk_type
     | Meta p ->
        meta rec_env ~allow_row_var:false p
-    | Alias ((name, qs, ts), d) ->
+    | Alias ((_name, qs, ts), d) ->
        List.iter2 (compare_kinds rec_env) qs ts;
        main rec_env d
     | Application (abs_type, args) ->
@@ -418,8 +419,8 @@ let check_type_wellformdness t : unit =
        irow fields;
        pk_type
     | Dual s -> main rec_env s
-    | Lens s ->
-       (* todo?*)
+    | Lens _s ->
+       (* todo *)
        pk_type
     | End -> pk_type
 
@@ -433,7 +434,7 @@ let check_type_wellformdness t : unit =
     | Closed ->
        (* freestanding Closed not implemented yet (must be inside Row) *)
        raise tag_expectation_mismatch
-    | Row (field_spec_map, row_var, dual) ->
+    | Row (field_spec_map, row_var, _dual) ->
        let handle_fs _label f =
          ifs f
        in

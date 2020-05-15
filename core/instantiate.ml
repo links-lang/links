@@ -206,9 +206,9 @@ let instantiate_typ : bool -> datatype -> (type_arg list * datatype) = fun rigid
             (fun () -> "Instantiating datatype: " ^ string_of_datatype dtype) in
 
         let typ (var, kind) (inst_env, tys) =
-          let var_id = fresh_raw_variable () in
+          let var' = fresh_raw_variable () in
           let rigidity = if rigid then `Rigid else `Flexible in
-          let new_var= Var (var, kind, rigidity) in
+          let new_var= Var (var', kind, rigidity) in
           let point = Unionfind.fresh new_var in
           let t = Meta point in
             IntMap.add var t inst_env,  t :: tys in

@@ -2044,7 +2044,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
           begin
             match Unionfind.find point with
               | Var _ -> t
-              | Recursive (i, kind, t') when not (Hashtbl.mem rec_vars_seen i) ->
+              | Recursive (i, _kind, t') when not (Hashtbl.mem rec_vars_seen i) ->
                  Hashtbl.add rec_vars_seen i ();
                  cpt pats t'
               | Recursive _ -> t
