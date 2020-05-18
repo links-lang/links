@@ -375,6 +375,8 @@ struct
       | Table _
       | Singleton _
       | Concat _
+      | Prom _
+      | Dedup _
       | If (_, _, Concat []) -> true
       | _ -> false
 
@@ -476,6 +478,12 @@ struct
     match body with
       (* | Concat []                 -> body *)
       | For (_, gs', _os', body') -> For (None, gs @ gs', [] (*os @ os'*), body')
+      (* | Prom _ as u               ->           
+            let z = Var.fresh_raw_var () in
+            let tyz = type_of_expression u in
+            let ftz = recdty_field_types (Types.unwrap_list_type tyz) in
+            let vz = Var (z, ftz) in
+            For (None, gs @ [(z, u)], [] (* os *), (Singleton vz)) *)
       | _                         -> For (None, gs, [] (* os *), body)
 
   let rec reduce_for_source : t * Types.datatype * (t -> t) -> t =
@@ -1042,7 +1050,7 @@ struct
                 let ftz = Q.recdty_field_types (Types.unwrap_list_type tyz) in
                 let vz = Q.Var (z, ftz) in
                 Q.reduce_for_source (u', tyz, fun v -> norm in_dedup (bind env (z,v)) (Q.Singleton vz))
-            | u' -> u'
+            | u' -> u' 
           end
         | (x,g)::gs' -> (* equivalent to xs = For gs' u, body = g, but possibly the arguments aren't normalized *)
             let tyg = Q.type_of_expression g in

@@ -53,7 +53,7 @@ and body gs os j =
         selquery
         <| List.map (fun (f,x) -> (base_exp x, f)) (StringMap.to_alist fields)
         <| base_exp c
-    | _ -> failwith "body"
+    | _ -> Debug.print ("error in SimpleSqlGen.body: unexpected j = " ^ Q.show j); failwith "body"
 
 and base_exp = function
 (* XXX: Project expects a (numbered) var, but we have a table name 
