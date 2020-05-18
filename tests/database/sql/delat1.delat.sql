@@ -1,0 +1,1 @@
+select (t2242."2@f") as "f" from "factorials" as t2239,(select distinct (t2240."f") as "1@f",(t2240."i") as "1@i",(t2240."f") as "2@f" from (select distinct * from "factorials") as t2240,(select distinct * from "factorials") as t2241 where (t2240."i") = (t2241."f")) as t2242 where ((t2239."f") = (t2242."1@f")) and ((t2239."i") = (t2242."1@i"))

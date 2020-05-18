@@ -1,0 +1,16 @@
+var db = database "links";
+var factorials = table "factorials" with (i : Int, f : Int) from db;
+
+fun blobOf(v) {
+    dedup(for (x' <-- factorials) where (x'.f > 1) [v])
+}
+
+query {
+    for (x1 <-- factorials)
+    for (x2 <- dedup(for (z <- blobOf(x1)) [z]))
+    for (x3 <- dedup(for (z1 <- blobOf(x1), z2 <- blobOf(x2)) [(i1=z1.i, f1=z1.f, i2=z2.i, f2=z2.f)]))
+    for (x4 <- dedup(for (z1 <- blobOf(x1), z2 <- blobOf(x2), z3 <- blobOf(x3)) 
+        [(i1=z1.i, f4=z3.f2)]))
+    where (x4.f4 <= x3.i1)
+    blobOf(x4)
+}
