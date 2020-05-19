@@ -323,8 +323,8 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
            match (Unionfind.find point) with
            | Recursive (var, _kind, _) when IntSet.mem var rec_types -> true
            | Recursive (var, _kind, body) -> is_unguarded (IntSet.add var rec_types) body
-           | t -> is_unguarded rec_types t
-           (* | _ -> false *)
+           | t when is_type_body t -> is_unguarded rec_types t
+           | _ -> false
          end
       |  _ -> false
     in
@@ -504,7 +504,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                   check_subkind var (lin, rest) t2;
                   Unionfind.union lpoint rpoint
                 end
-           | _, Var (var, (primary_kind, (lin, rest)), `Flexible) ->
+           | _, Var (var, (_primary_kind, (lin, rest)), `Flexible) ->
               let tidy =
                 if var_is_free_in_type var t1 then
                   begin
@@ -731,6 +731,8 @@ and unify_presence' : unify_env -> (field_spec * field_spec -> unit) =
      (* TODO: take into account subkinds! *)
      begin
        match Unionfind.find lpoint, Unionfind.find rpoint with
+       | l', _ when is_field_spec_body l' -> unify_presence' rec_env (l', r)
+       | _, r' when is_field_spec_body r' -> unify_presence' rec_env (l, r')
        | Var (lvar, _, `Rigid), Var (rvar, _, `Rigid) when compatible_quantifiers (lvar, rvar) rec_env.qenv ->
           ()
        | Var (flexible_var, _, `Flexible), Var (rigid_var, _, `Rigid)
@@ -750,7 +752,8 @@ and unify_presence' : unify_env -> (field_spec * field_spec -> unit) =
           Unionfind.union lpoint rpoint
        | _, Var (_, _, `Flexible) ->
           Unionfind.union rpoint lpoint
-       | l, r -> unify_presence' rec_env (l, r)
+       | _, _ -> assert false
+       (* | l, r -> unify_presence' rec_env (l, r) *)
      end
   | Meta point, f | f, Meta point ->
      begin
@@ -797,7 +800,7 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
       StringMap.is_empty field_env &&
         (match Unionfind.find row_var with
          | Closed
-           | Var _ -> false
+         | Var _ -> false
          | Recursive (var, _, _) when IntSet.mem var rec_rows -> true
          | Recursive (var, _, row) -> is_unguarded (IntSet.add var rec_rows) (TypeUtils.extract_row_parts row)
          | Row row -> is_unguarded rec_rows row

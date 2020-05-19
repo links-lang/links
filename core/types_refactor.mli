@@ -125,6 +125,10 @@ and row' = field_spec_map * row_var * bool
 and row_var = meta_row_var
   [@@deriving show]
 
+val is_type_body : typ -> bool
+val is_row_body : row -> bool
+val is_field_spec_body : field_spec -> bool
+
 (** A constraint that a subkind imposes on types. *)
 module type Constraint = sig
   val type_satisfies : datatype -> bool
