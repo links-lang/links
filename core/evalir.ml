@@ -712,8 +712,11 @@ struct
            | None -> computation env cont e
            | Some (db, q, t) ->
               let q = db#string_of_query ~range q in
-              let (fieldMap, _, _), _ =
-                Types.unwrap_row(TypeUtils.extract_row t) in
+              let fieldMap =
+                Types.unwrap_row t
+                  |> fst
+                  |> TypeUtils.extract_row_parts
+                  |> fst3 in
               let fields =
                 StringMap.fold
                   (fun name t fields ->
