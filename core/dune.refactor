@@ -16,12 +16,14 @@
   (modules
    basicsettings
    channelVarUtils
+   closures
    commonTypes
    context
    database
    databaseDriver
    debug
    defaultAliases
+   desugarCP
    desugarDatatypes
    desugarEffects
    desugarFormlets
@@ -35,20 +37,27 @@
    desugarTypeVariables
    env
    errors
+   evalir
+   evalQuery
+   evalNestedQuery
    eventHandlers
    generalise
    graph
    ir
+   irTraversals
+   irTransform
    instantiate
    js
    json
    lens
    lens_database_conv
    lens_errors
+   lens_ir_conv
    lens_sugar_conv
    lens_type_conv
    lens_value_conv
    lexer
+   lib
    linksregex
    module_hacks
    notfound
@@ -56,11 +65,16 @@
    parse
    parseXml
    parser
+   performance
+   proc
    processTypes
+   query
    regex
    renamer
    requestData
+   resolveJsonState
    scanner
+   serialisation
    settings
    sourceCode
    sql
@@ -81,6 +95,7 @@
    value
    var
    webserver_types
+   websocketMessages
    xmlLexer
    xmlParser
    )

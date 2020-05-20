@@ -595,9 +595,9 @@ struct
 
       (** Given a list of free variables, return a tuple containing the following:
         - a list of fresh quantifiers, each corresponding to one free variable
-        - Three maps mapping the old free variables to fresh ones (to be used with Instantiate)  **)
+        - A map mapping the old free variables to fresh ones (to be used with Instantiate)  **)
       method create_substitutions_replacing_free_variables (free_type_vars : Quantifier.t list) =
-        List.fold_right (fun oldq (qs, (type_map, row_map, presence_map) ) ->
+        List.fold_right (fun oldq (qs, type_map ) ->
           let typevar = Quantifier.to_var oldq in
           let primary_kind = Quantifier.to_primary_kind oldq in
           let subkind = Quantifier.to_subkind oldq in
@@ -607,21 +607,21 @@ struct
             | PrimaryKind.Type ->
               let new_type_variable = make_new_type_variable () in
               let t = Types.Meta new_type_variable in
-              (IntMap.add typevar t type_map, row_map, presence_map)
+              (IntMap.add typevar t type_map)
             | PrimaryKind.Row ->
               let new_type_variable = make_new_type_variable () in
               let r = Types.Row (Types.empty_field_env, new_type_variable, false) in
-              (type_map, IntMap.add typevar r row_map, presence_map)
+              (IntMap.add typevar r type_map)
             | PrimaryKind.Presence ->
               let new_type_variable = make_new_type_variable () in
               (* SJF: This might be incorrect -- old code was:
               let p = `Var new_type_variable in
               *)
               let p = Types.Meta new_type_variable in
-              (type_map, row_map, IntMap.add typevar p presence_map) in
+              (IntMap.add typevar p type_map) in
           let new_quantifier = (newvar, (primary_kind, subkind)) in
           (new_quantifier :: qs, updated_maps)
-        ) free_type_vars ([], (IntMap.empty, IntMap.empty, IntMap.empty))
+        ) free_type_vars ([], IntMap.empty)
 
 
       method generalize_function_type_for_hoisting f_binder =

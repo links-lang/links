@@ -60,5 +60,5 @@ module CheckForCycles : IrTransform.S
 module ElimTypeAliases : IrTransform.S
 module InstantiateTypes :
 sig
-  val computation : Types.datatype Env.Int.t -> (Types.datatype IntMap.t * Types.row IntMap.t * Types.field_spec IntMap.t) -> computation -> computation
+  val computation : Types.datatype Env.Int.t -> Types.typ IntMap.t -> computation -> computation
 end
