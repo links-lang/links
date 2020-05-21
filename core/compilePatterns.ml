@@ -193,14 +193,14 @@ struct
 
   let nil env t : value =
     TApp (Variable (lookup_name "Nil" env),
-           [`Type t])
+           [t])
 
   let list_head env t : value -> tail_computation = fun v ->
     let eff = lookup_effects env in
       Apply
         (TApp
            (Variable (lookup_name "hd" env),
-            [`Type t; `Row eff]),
+            [t; eff]),
          [v])
 
   let list_tail env t : value -> tail_computation = fun v ->
@@ -208,7 +208,7 @@ struct
       Apply
         (TApp
            (Variable (lookup_name "tl" env),
-            [`Type t; `Row eff]),
+            [t; eff]),
          [v])
 end
 open CompileLists
@@ -232,7 +232,7 @@ struct
       ApplyPure
         (TApp
            (Variable (lookup_name "==" env),
-            [`Type t; `Row eff]),
+            [t; eff]),
          [v1; v2])
 end
 open CompileEq
@@ -289,7 +289,7 @@ let let_pattern : raw_env -> Pattern.t -> value * Types.datatype -> computation 
                   let cases' = StringMap.add label (case_binder, body) cases in
                   let t' =
                     let row = TypeUtils.extract_row t in
-                    `Variant (Types.row_with (label, `Absent) row)
+                    Types.Variant (Types.row_with (label, Types.Absent) row)
                   in
                   (cases', t'))
                 names (StringMap.empty, t)
@@ -679,8 +679,8 @@ and match_variant
                    let _, t = TypeUtils.split_variant_type name t in t) cs t in
               begin
                 match default_type with
-                  | `Variant row
-                  | `Choice row ->
+                  | Types.Variant row
+                  | Types.Choice row ->
                       if Types.is_empty_row row && Types.is_closed_row row then
                         ([], Case (Variable var, cases, None))
                       else
@@ -898,7 +898,7 @@ and match_record
         let bindings =
           let qs =
             match restt with
-              | `ForAll (qs, _) -> qs
+              | Types.ForAll (qs, _) -> qs
               | _ -> [] in
           let tyargs = List.map Types.type_arg_of_quantifier qs in
             Let (restb, (qs, Return (tapp (Erase (names, Variable var), tyargs)))) :: bindings in
@@ -936,7 +936,7 @@ let handle_parameter_pattern : raw_env -> (Pattern.t * Types.datatype) -> Ir.com
       bs @ [letm (pb', tc)]
     in
     let inner_bindings =
-         fun cont -> let_pattern env pat (Variable p, t) (cont, `Not_typed)
+         fun cont -> let_pattern env pat (Variable p, t) (cont, Types.Not_typed)
     in
     (pb, Variable p'), (inner_bindings, outer_bindings)
 
@@ -980,26 +980,26 @@ let compile_handle_cases
     else begin
         let (comp_eff, comp_ty, _, _) = Sugartypes.(desc.shd_types) in
         let variant_type =
-          let (fields,_,_) = comp_eff in
+          let (fields,_,_) = comp_eff |> TypeUtils.extract_row_parts in
           let fields' =
             StringMap.filter
               (fun _ ->
                 function
-                | `Present _ -> true
+                | Types.Present _ -> true
                 | _ -> false)
               fields
           in
           let fields'' =
             StringMap.map
               (function
-              | `Present t ->
+              | Types.Present t ->
                  begin match TypeUtils.concrete_type t with
-                 | `Function (domain, _, _) ->
-                    let (fields, _, _) = TypeUtils.extract_row domain in
+                 | Types.Function (domain, _, _) ->
+                    let (fields, _, _) = TypeUtils.extract_row domain |> TypeUtils.extract_row_parts in
                     let arity = StringMap.size fields in
                     if arity = 1 then
                       match StringMap.find "1" fields with
-                      | `Present t -> t
+                      | Types.Present t -> t
                       | _ -> assert false
                     else
                       domain (* n-ary operation *)
@@ -1070,7 +1070,7 @@ let compile_handle_cases
             match StringMap.find effname continuation_binders with
             | [] ->
                let resume =
-                 Var.(make_local_info ->- fresh_binder) (`Not_typed, "_resume")
+                 Var.(make_local_info ->- fresh_binder) (Types.Not_typed, "_resume")
                in
                (x, resume, body)
             | [resume] -> (* micro-optimisation: if there is only one
@@ -1152,4 +1152,3 @@ let compile_choices
       Debug.if_set (show_pattern_compilation)
         (fun () -> "Compiled choices: "^(string_of_computation result));
       result
-

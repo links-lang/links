@@ -248,7 +248,7 @@ struct
     in
       e
 
-  let dummy_computation = Special (Wrong `Not_typed)
+  let dummy_computation = Special (Wrong Types.Not_typed)
   let sem_type s =
     let (_, t) =
       s (fun (_, t) -> ([], dummy_computation), t)
@@ -354,7 +354,7 @@ struct
     bind s (fun v -> lift (Return v, sem_type s))
 
   (* eval parameters *)
-  let constant c = lift (Constant c, `Primitive (Constant.type_of c))
+  let constant c = lift (Constant c, Types.Primitive (Constant.type_of c))
   let var (x, t) = lift (Variable x, t)
 
   let apply (s, ss) =
@@ -422,7 +422,7 @@ struct
                 (fun fields ->
                    lift (Extend (StringMap.from_alist fields, None), t))
         | Some s ->
-            let t = `Record (Types.extend_row field_types (TypeUtils.extract_row (sem_type s))) in
+            let t = Types.Record (Types.extend_row field_types (TypeUtils.extract_row (sem_type s))) in
               bind s
                 (fun r ->
                    M.bind s'
@@ -477,7 +477,7 @@ struct
               lift (Case (v, StringMap.empty, None), t))
 
   let database s =
-    bind s (fun v -> lift (Special (Database v), `Primitive Primitive.DB))
+    bind s (fun v -> lift (Special (Database v), Types.Primitive Primitive.DB))
 
   let table_handle (database, table, keys, (r, w, n)) =
     bind database
@@ -486,24 +486,24 @@ struct
            (fun table ->
          bind keys
         (fun keys ->  lift (Special (Table (database, table, keys, (r, w, n))),
-                               `Table (r, w, n)))))
+                               Types.Table (r, w, n)))))
 
   let lens_handle (table, t) =
       bind table
         (fun table ->
-            lift (Special (Lens (table, t)), `Lens t))
+            lift (Special (Lens (table, t)), Types.Lens t))
 
   let lens_serial (lens, columns, typ) =
     bind lens
       (fun lens ->
-         lift (Special (LensSerial {lens; columns; typ}), `Lens typ))
+         lift (Special (LensSerial {lens; columns; typ}), Types.Lens typ))
 
   let lens_drop_handle (lens, drop, key, default, typ) =
       bind lens
         (fun lens ->
             bind default
             (fun default ->
-               lift (Special (LensDrop {lens; drop; key; default; typ}), `Lens typ)))
+               lift (Special (LensDrop {lens; drop; key; default; typ}), Types.Lens typ)))
 
   let lens_select_handle (lens, pred, typ) =
       bind lens
@@ -513,22 +513,22 @@ struct
              bind pred
                (fun predicate ->
                   let predicate = Dynamic predicate in
-                  lift (Special (LensSelect {lens; predicate; typ}), `Lens typ))
+                  lift (Special (LensSelect {lens; predicate; typ}), Types.Lens typ))
            | `Static predicate ->
              let predicate = Static predicate in
-             lift (Special (LensSelect {lens; predicate; typ}), `Lens typ))
+             lift (Special (LensSelect {lens; predicate; typ}), Types.Lens typ))
 
   let lens_join_handle (left, right, on, del_left, del_right, typ) =
       bind left
         (fun left ->
           bind right
           (fun right ->
-            lift (Special (LensJoin {left; right; on; del_left; del_right; typ}), `Lens typ)))
+            lift (Special (LensJoin {left; right; on; del_left; del_right; typ}), Types.Lens typ)))
 
   let lens_check (lens, t) =
       bind lens
          (fun lens ->
-            lift (Special (LensCheck (lens, t)), `Lens t))
+            lift (Special (LensCheck (lens, t)), Types.Lens t))
 
   let lens_get (lens, rtype) =
       bind lens
@@ -644,7 +644,7 @@ struct
     let body = body k in
     let body_type = sem_type body in
     let body = reify body in
-    let ft = `Function (Types.make_tuple_type [kt], eff, body_type) in
+    let ft = Types.Function (Types.make_tuple_type [kt], eff, body_type) in
     let f_info = (ft, "", Scope.Local) in
     let rest f : tail_computation sem = lift (Special (CallCC (Variable f)),
                                               body_type) in
@@ -655,10 +655,10 @@ struct
       (* It is important to rename the quantifiers in the type to be
          those used in the body of the function. *)
       match Instantiate.replace_quantifiers ft tyvars with
-        | `ForAll (_, t')
+        | Types.ForAll (_, t')
         | t' ->
             begin match TypeUtils.concrete_type t' with
-              | `Function _ | `Lolli _ as ft' ->
+              | Types.Function _ | Types.Lolli _ as ft' ->
                   let args = TypeUtils.arg_types ft' in
                     List.map (fun arg -> Var.fresh_binder_of_type arg) args
               | _ -> assert false
@@ -685,10 +685,10 @@ struct
              (* It is important to rename the quantifiers in the type to be those used in
                 the body of the function. *)
              match Instantiate.replace_quantifiers ft tyvars with
-               | `ForAll (_, t')
+               | Types.ForAll (_, t')
                | t' ->
                    begin match TypeUtils.concrete_type t' with
-                     | `Function _ as ft' ->
+                     | Types.Function _ as ft' ->
                          let args = TypeUtils.arg_types ft' in
                            List.map (Var.fresh_binder_of_type) args
                      | _ -> assert false
@@ -794,7 +794,7 @@ struct
 
       let eff = lookup_effects env in
 
-      let instantiate_mb name = instantiate name [`Row eff] in
+      let instantiate_mb name = instantiate name [eff] in
       let cofv = I.comp_of_value in
       let ec = eval env in
       let ev = evalv env in
@@ -807,9 +807,9 @@ struct
           | RangeLit (low, high) ->
               I.apply (instantiate_mb "intRange", [ev low; ev high])
           | ListLit ([], Some t) ->
-              cofv (instantiate "Nil" [`Type t])
+              cofv (instantiate "Nil" [t])
           | ListLit (e::es, Some t) ->
-              cofv (I.apply_pure(instantiate "Cons" [`Type t; `Row eff],
+              cofv (I.apply_pure(instantiate "Cons" [t; eff],
                                  [ev e; ev (WithPos.make ~pos (ListLit (es, Some t)))]))
           | Escape (bndr, body) when Binder.has_type bndr ->
              let k  = Binder.to_name bndr in
@@ -1006,15 +1006,15 @@ struct
           | Xml (tag, attrs, attrexp, children) ->
                if tag = "#" then
                  cofv (I.concat (instantiate "Nil"
-                                   [`Type (`Primitive Primitive.XmlItem)],
+                                   [Types.Primitive Primitive.XmlItem],
                                  instantiate "Concat"
-                                   [ `Type (`Primitive Primitive.XmlItem)
-                                   ; `Row eff],
+                                   [Types.Primitive Primitive.XmlItem
+                                   ; eff],
                                  List.map ev children))
                 else
                   let attrs    = alistmap (List.map ev) attrs in
                   let children = List.map ev children in
-                  let body     = I.xml (instantiate "^^" [`Row eff], tag, attrs,
+                  let body     = I.xml (instantiate "^^" [eff], tag, attrs,
                                         children) in
                   begin match attrexp with
                   | None   -> cofv body

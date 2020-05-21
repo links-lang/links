@@ -17,6 +17,7 @@
    basicsettings
    channelVarUtils
    closures
+   compilePatterns
    commonTypes
    context
    database
@@ -80,6 +81,7 @@
    sql
    sugarConstructors
    sugarConstructorsIntf
+   sugartoir
    sugarTraversals
    sugartypes
    tables
