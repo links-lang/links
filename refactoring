@@ -6,7 +6,6 @@ Branch: types-refactor
  + types.mli
 - Frank
  + pending:
-
     sugartoir.ml
  + done:
     irCheck.ml
