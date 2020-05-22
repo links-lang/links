@@ -6,7 +6,7 @@
           -safe-string        ;; Immutable strings.
           -annot              ;; Dumps information per (file) module about types, bindings, tail-calls, etc. Used by some tools.
           -warn-error -a      ;; Do not treat warnings as errors.
-          -w A-4-44-45-48-60-67  ;; Ignores warnings 4, 44, 45, 48, 60, and 67.
+          -w A-4-42-44-45-48-60-67  ;; Ignores warnings 4, 42, 44, 45, 48, 60, and 67.
           -g                  ;; Adds debugging information to the resulting executable / library.
  )))
 (nowarnings
@@ -23,7 +23,7 @@
   (flags (:standard
           ;; The following flags are the same as for the "dev" profile.
           -strict-formats -strict-sequence -safe-string -annot
-          -w A-4-44-45-48-60-67  ;; Ignores warnings 4, 44, 45, 48, 60, and 67.
+          -w A-4-42-44-45-48-60-67  ;; Ignores warnings 4, 42, 44, 45, 48, 60, and 67.
   ))
   (ocamlopt_flags (:standard
                    -O3 ;; Applies (aggressive) optimisations to the resulting executable.
