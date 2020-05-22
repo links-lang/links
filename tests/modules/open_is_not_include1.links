@@ -1,4 +1,3 @@
-#IGNORED_BY_TEST_REGISTRATION_RULE_CHECKING_SCRIPT
 # c.f. issue #606
 import Open_is_not_include0;
 open Open_is_not_include0;
