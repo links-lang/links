@@ -484,6 +484,7 @@ struct
             let ftz = recdty_field_types (Types.unwrap_list_type tyz) in
             let vz = Var (z, ftz) in
             For (None, gs @ [(z, u)], [] (* os *), (Singleton vz)) *)
+      | _ when gs = [] (* && _os = [] *) -> body
       | _                         -> For (None, gs, [] (* os *), body)
 
   let rec reduce_for_source : t * Types.datatype * (t -> t) -> t =
