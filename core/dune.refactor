@@ -45,6 +45,7 @@
    generalise
    graph
    ir
+   irCheck
    irTraversals
    irTransform
    instantiate

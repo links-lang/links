@@ -2,6 +2,9 @@ open CommonTypes
 open Utility
 open Ir
 
+module T = Types
+
+
 let typecheck
   = Settings.(flag "typecheck_ir"
               |> synopsis "Type check the IR (development)"
@@ -145,11 +148,11 @@ struct
 
 
         method! meta_type_var point = match Unionfind.find point with
-          | `Recursive _ -> (point, {< found_recursion = true >})
+          | T.Recursive _ -> (point, {< found_recursion = true >})
           | _ -> super#meta_type_var point
 
         method! meta_row_var point = match Unionfind.find point with
-          | `Recursive _ -> (point, {< found_recursion = true >})
+          | T.Recursive _ -> (point, {< found_recursion = true >})
           | _ -> super#meta_row_var point
 
 
@@ -164,43 +167,43 @@ end
 
 
 
-(* For both rows and types, detect recursion at top-level or immeiately under
-   a `Body or `Alias *)
+(* For both rows and types, detect recursion at top-level or immediately under
+   a Body or Alias *)
 let rec is_toplevel_rec_type = function
-  | `MetaTypeVar mtv ->
+  | T.Meta mtv ->
      begin match Unionfind.find mtv with
-       | `Recursive _ -> true
-       | `Body b -> is_toplevel_rec_type b
+       | T.Recursive _ -> true
        | _ -> false
      end
-  | `Alias (_, t') -> is_toplevel_rec_type t'
+  | T.Alias (_, t') -> is_toplevel_rec_type t'
   | _ -> false
 
-let rec is_toplevel_rec_row (_, row_var, _) =
+let is_toplevel_rec_row  row =
+  let (_, row_var, _) = TypeUtils.extract_row_parts row in
   match Unionfind.find row_var with
-       | `Recursive _ -> true
-       | `Body r -> is_toplevel_rec_row r
+       | T.Recursive _ -> true
        | _ -> false
 
 
 
 let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -> bool =
+  let open Types in
   fun context (t1, t2) ->
     let lookupVar lvar map =
       match IntMap.find_opt lvar map with
       | Some rvar' -> rvar'
       | None       -> lvar in
-    let handle_variable primary_kind (lid, lsk, lfd) (rid, rsk, rfd) ctx =
+    let handle_variable  (lid, (lpk, lsk), lfd) (rid, (rpk, rsk), rfd) ctx =
       let subst_map, kind_env = ctx.typevar_subst, ctx.tyenv in
       let rvar' = lookupVar lid subst_map in
-      let is_equal = rid = rvar' && lsk = rsk && lfd = rfd in
+      let is_equal = rid = rvar' && lpk = rpk &&lsk = rsk && lfd = rfd in
       match is_equal, lfd with
         | true, `Flexible -> true
         | true, `Rigid ->
            begin match Env.find_opt rid kind_env with
              | Some (primary_kind_env, subkind_env) ->
                 ensure
-                  (primary_kind = primary_kind_env &&  rsk = subkind_env)
+                  (lpk = primary_kind_env &&  rsk = subkind_env)
                   "Mismatch between (sub) kind information in variable vs stored in kind environment"
                   SNone;
                 true
@@ -210,16 +213,17 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
 
     let remove_absent_fields_if_closed row =
       (* assumes that row is flattened already and ignores recursive rows *)
-      let (field_env, row_var, dual) = row in
+      let (field_env, row_var, dual) as unpacked_row =
+        row |> TypeUtils.extract_row_parts in
       if Types.is_closed_row row then
         let field_env' =
           Utility.StringMap.filter
             ( fun _ v -> match v with
-              | `Absent -> false
+              | T.Absent -> false
               | _ -> true )
             field_env
         in (field_env', row_var, dual)
-      else row in
+      else unpacked_row in
 
     (* typevar_subst of ctx maps rigid typed/row/presence variables of t1 to corresponding ones of t2 *)
     let rec eqt ((context, t1, t2) : (type_eq_context * Types.datatype * Types.datatype)) =
@@ -233,78 +237,80 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
         end
       else
       begin
-      (* Collapses nested Foralls, unpacks `Alias, `Body *)
+      (* Collapses nested Foralls, unpacks Alias, Body *)
       let t1 = TypeUtils.concrete_type t1 in
       let t2 = TypeUtils.concrete_type t2 in
       match t1 with
-      | `Not_typed ->
+      | Not_typed ->
           begin match t2 with
-              `Not_typed -> true
+              Not_typed -> true
             | _          -> false
           end
-      | `Primitive x ->
+      | Primitive x ->
           begin match t2 with
-              `Primitive y -> x = y
+              Primitive y -> x = y
             | _            -> false
           end
-      | `MetaTypeVar lpoint ->
+      | Meta lpoint ->
           begin match Unionfind.find lpoint with
-            | `Recursive _ -> assert false (* removed by now *)
+            | Recursive _ -> assert false (* removed by now *)
             | lpoint_cont ->
               begin match t2 with
-                `MetaTypeVar rpoint ->
+                Meta rpoint ->
                 begin match lpoint_cont, Unionfind.find rpoint with
-                | `Var lv, `Var rv -> handle_variable pk_type lv rv context
-                | `Body _, `Body _ -> assert false (* removed by now *)
+                | Var lv, Var rv -> handle_variable lv rv context
                 | _ -> false
                 end
-                | _                   -> false
+                | _                   ->
+                   (* This correponds to the old `Body cases,
+                      which must have been lifted out of Meta by now*)
+                   false
               end
           end
-      | `Function (lfrom, lm, lto) ->
+      | Function (lfrom, lm, lto) ->
           begin match t2 with
-            | `Function (rfrom, rm, rto) ->
+            | Function (rfrom, rm, rto) ->
               eqt     (context, lfrom, rfrom) &&
               eqt     (context, lto  , rto  ) &&
               eq_rows (context, lm   , rm   )
             | _ -> false
           end
-      | `Lolli (lfrom, lm, lto) ->
+      | Lolli (lfrom, lm, lto) ->
           begin match t2 with
-            | `Function (rfrom, rm, rto) ->
+            | Function (rfrom, rm, rto) ->
               eqt     (context, lfrom, rfrom) &&
               eqt     (context, lto  , rto  ) &&
               eq_rows (context, lm   , rm   )
             | _  -> false
           end
-      | `Record l ->
+      | Record l ->
          begin match t2 with
-         | `Record r -> eq_rows (context, l, r)
+         | Record r -> eq_rows (context, l, r)
          | _         -> false
          end
-      | `Variant l ->
+      | Variant l ->
          begin match t2 with
-           `Variant r -> eq_rows (context, l, r)
+           Variant r -> eq_rows (context, l, r)
          | _          -> false
          end
-      | `Effect l ->
+      | Effect l ->
          begin match t2 with
-         | `Effect r -> eq_rows (context, l, r)
+         | Effect r -> eq_rows (context, l, r)
          | _         -> false
          end
-      | `Application (s, ts) ->
+      | Application (s, ts) ->
          begin match t2 with
-         | `Application (s', ts') ->
+         | Application (s', ts') ->
             Types.Abstype.equal s s' &&
             List.length ts = List.length ts' &&
             List.for_all2 (fun larg rarg -> eq_type_args (context, larg, rarg)) ts ts'
          | _ -> false
          end
-      | `RecursiveApplication _ ->
+      | RecursiveApplication _ ->
          Debug.print "IR typechecker encountered recursive type"; true
-      | `ForAll (qs, t) ->
+      | ForAll (qs, t) ->
          begin match t2 with
-         | `ForAll (qs', t') ->
+         | ForAll (qs', t') ->
             let (context', quantifiers_match) =
               List.fold_left2 (fun (context, prev_eq) lqvar rqvar ->
                   let lid, _ = lqvar in
@@ -321,36 +327,50 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
             else false
          | _ -> false
          end
-      | #Types.session_type as l ->
+      | Input (lt, _) ->
          begin match t2 with
-         | #Types.session_type as r -> eq_sessions (context, l, r)
-         | _          -> false
+         |  Input (rt, _) -> eqt (context, lt, rt)
+         | _ -> false
          end
-
-      | `Alias (_, _) -> assert false
-      | `Table (lt1, lt2, lt3) ->
+      | Output (lt, _) ->
          begin match t2 with
-         | `Table (rt1, rt2, rt3) ->
+         |  Output (rt, _) -> eqt (context, lt, rt)
+         | _ -> false
+         end
+      | Select lr ->
+         begin match t2 with
+         |  Select (rr) -> eq_rows (context, lr, rr)
+         | _ -> false
+         end
+      | Choice lr ->
+         begin match t2 with
+         |  Choice rr -> eq_rows (context, lr, rr)
+         | _ -> false
+         end
+      | End ->
+         begin match t2 with
+         |  End -> true
+         | _ -> false
+         end
+      | Alias (_, _) -> assert false
+      | Table (lt1, lt2, lt3) ->
+         begin match t2 with
+         | Table (rt1, rt2, rt3) ->
             eqt (context, lt1, rt1) &&
             eqt (context, lt2, rt2) &&
             eqt (context, lt3, rt3)
          | _ -> false
          end
-      | `Lens _ -> raise (internal_error "The IR type equality check does not support lenses (yet)")
+      | Lens _ -> raise (internal_error "The IR type equality check does not support lenses (yet)")
+      | Row _ ->
+         begin match t2 with
+         |  Row _ -> eq_rows (context, t1, t2)
+         | _ -> false
+         end
+      | (Closed | Absent | Var _ | Recursive _ | Present _ |Dual _) ->
+         raise Types.tag_expectation_mismatch
       end
 
-    and eq_sessions (context, l, r) =
-      match (l,r) with
-      | `Input (lt, _), `Input (rt, _)
-        | `Output (lt, _), `Output (rt, _) ->
-         eqt (context, lt, rt)
-      | `Select l, `Select r
-        | `Choice l, `Choice r ->
-         eq_rows (context, l, r)
-      | `Dual l, `Dual r ->
-         eqt (context, l, r)
-      | `End, `End -> true
-      | _, _ -> false
     and eq_rows (context, r1, r2) =
       if is_toplevel_rec_row r1 || is_toplevel_rec_row r2 then
         (Debug.print "IR typechecker encountered recursive type";
@@ -363,15 +383,14 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
           r1 && r2 && ldual=rdual
     and eq_presence (context, l, r) =
       match Types.concrete_field_spec l, Types.concrete_field_spec r with
-      | `Absent, `Absent -> true
-      | `Present lt, `Present rt -> eqt (context, lt, rt)
-      | `Var lpoint, `Var rpoint ->
+      | Absent, Absent -> true
+      | Present lt, Present rt -> eqt (context, lt, rt)
+      | Meta lpoint, Meta rpoint ->
           begin
             match Unionfind.find lpoint, Unionfind.find rpoint with
-              | `Body _, _
-              | _, `Body _ ->
-                  raise (internal_error "should have removed all `Body variants by now")
-              | `Var lv, `Var rv -> handle_variable pk_presence lv rv context
+            | Var lv, Var rv -> handle_variable lv rv context
+            | _, _ ->
+               raise (internal_error "should have removed all non-Vars in Meta of presence info by now")
               end
       | _, _ -> false
     and eq_field_envs (context, lfield_env, rfield_env) =
@@ -384,16 +403,19 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       lfields_in_rfields  && StringMap.cardinal lfield_env = StringMap.cardinal rfield_env
     and eq_row_vars (context, lpoint, rpoint) =
       match Unionfind.find lpoint, Unionfind.find rpoint with
-      | `Closed, `Closed ->  true
-      | `Var lv, `Var rv ->   handle_variable pk_row lv rv context
-      | `Recursive _, _
-      | _, `Recursive _ -> Debug.print "IR typechecker encountered recursive type"; true
+      | Closed, Closed ->  true
+      | Var lv, Var rv ->   handle_variable lv rv context
+      | Recursive _, _
+      | _, Recursive _ -> Debug.print "IR typechecker encountered recursive type"; true
       | _ ->  false
     and eq_type_args  (context, l, r)  =
-      match l,r with
-      | `Type lt, `Type rt -> eqt (context, lt, rt)
-      | `Row lr, `Row rr -> eq_rows (context, lr, rr)
-      | `Presence lf, `Presence rf -> eq_presence (context, lf, rf)
+      let lpk = TypeUtils.primary_kind_of_type l in
+      let rpk = TypeUtils.primary_kind_of_type r in
+      let open CommonTypes.PrimaryKind in
+      match lpk, rpk with
+      | Type, Type -> eqt (context, l, r)
+      | Row , Row -> eq_rows (context, l, r)
+      | Presence , Presence -> eq_presence (context, l, r)
       | _, _ -> false
     in
       eqt  (context, t1, t2)
@@ -417,16 +439,16 @@ let check_eq_type_lists = fun (ctx : type_eq_context) exptl actl occurrence ->
 
 
 let ensure_effect_present_in_row ctx allowed_effects required_effect_name required_effect_type occurrence =
-  let (map, _, _) = fst (Types.unwrap_row allowed_effects) in
+  let (map, _, _) = fst (Types.unwrap_row allowed_effects) |> TypeUtils.extract_row_parts in
   match StringMap.find_opt required_effect_name map with
-    | Some (`Present et) -> check_eq_types ctx et required_effect_type occurrence
+    | Some (T.Present et) -> check_eq_types ctx et required_effect_type occurrence
     | _ -> raise_ir_type_error ("Required effect " ^ required_effect_name ^ " not present in effect row " ^ Types.string_of_row allowed_effects) occurrence
 
 
 
 let ensure_effect_rows_compatible ctx allowed_effects imposed_effects_row occurrence =
   ensure
-    (eq_types occurrence ctx (`Record allowed_effects, `Record imposed_effects_row))
+    (eq_types occurrence ctx (T.Record allowed_effects, T.Record imposed_effects_row))
     (let allowed_str = Types.string_of_row allowed_effects in
      let actual_str  = Types.string_of_row ~refresh_tyvar_names:false
                                            imposed_effects_row in
@@ -495,7 +517,7 @@ struct
             let (base, base_type, o) = o#option (fun o -> o#value) base in
 
             let handle_extended_record = function
-              | Some t -> `Record t
+              | Some t -> Record t
               | None -> raise_ir_type_error "Record already contains one of the extension fields" (SVal orig) in
 
             let t =
@@ -504,7 +526,7 @@ struct
                 | Some t ->
                     begin
                       match t with
-                        | `Record row ->
+                        | Record row ->
                             handle_extended_record (extend_row_safe field_types row)
                         | _ -> raise_ir_type_error "Trying to extend non-record type" (SVal orig)
                     end
@@ -522,7 +544,7 @@ struct
         | Inject (name, v, t) ->
             let v, vt, o = o#value v in
             let _ = match t with
-              | `Variant _ ->
+              | Variant _ ->
                  o#check_eq_types  (variant_at ~overstep_quantifiers:false name t) vt (SVal orig)
               | _ -> raise_ir_type_error "trying to inject into non-variant type" (SVal orig) in
             Inject (name, v, t), t, o
@@ -549,7 +571,7 @@ struct
             let (attributes, attribute_types, o) = o#name_map (fun o -> o#value) attributes in
             let (children  , children_types, o) = o#list (fun o -> o#value) children in
 
-            let _ = StringMap.iter (fun _ t -> o#check_eq_types  (`Primitive Primitive.String) t (SVal orig)) attribute_types in
+            let _ = StringMap.iter (fun _ t -> o#check_eq_types  (Primitive Primitive.String) t (SVal orig)) attribute_types in
             let _ = List.iter (fun t -> o#check_eq_types  Types.xml_type t (SVal orig)) children_types in
               XmlNode (tag, attributes, children), Types.xml_type, o
 
@@ -576,7 +598,7 @@ struct
 
           let ft_instantiated, instantiation_maps = if tyargs = []
             then
-              (ft, (IntMap.empty, IntMap.empty, IntMap.empty))
+              (ft, IntMap.empty)
             else
               let (remaining_type, instantiation_maps) = Instantiate.instantiation_maps_of_type_arguments false ft tyargs in
               Instantiate.datatype instantiation_maps remaining_type, instantiation_maps  in
@@ -603,10 +625,7 @@ struct
                       IntMap.add inner_var oldvalue resultmap
                     ) map IntMap.empty in
 
-                let inner_typemap = tranform_outer_instantiation_map_to_inner (fst3 instantiation_maps) in
-                let inner_rowmap = tranform_outer_instantiation_map_to_inner (snd3 instantiation_maps) in
-                let inner_presencemap = tranform_outer_instantiation_map_to_inner (thd3 instantiation_maps) in
-                let inner_instantiation_maps = (inner_typemap, inner_rowmap, inner_presencemap) in
+                let inner_instantiation_maps = tranform_outer_instantiation_map_to_inner instantiation_maps in
 
                 let uninstantiated_type_of_environment = (Var.type_of_binder binder) in
                 (* Debug.print (IntMap.show Types.pp_datatype (fst3 inner_instantiation_maps)); *)
@@ -664,13 +683,14 @@ struct
         | Ir.Case (v, cases, default) ->
             let v, vt, o = o#value v in
             begin match vt with
-            | `Variant row as variant ->
-               let unwrapped_row = fst (unwrap_row row) in
+            | Variant row as variant ->
+               let unwrapped_row = fst (unwrap_row row) |> TypeUtils.extract_row_parts in
                let present_fields, has_presence_polymorphism  =
                  StringMap.fold (fun field field_spec (fields, poly) -> match field_spec with
-                                           | `Present _  -> (StringSet.add field fields), poly
-                                           | `Var _ -> fields, true
-                                           | `Absent -> fields, poly)
+                                           | Present _  -> (StringSet.add field fields), poly
+                                           | Meta _ -> fields, true
+                                           | Absent -> fields, poly
+                                           | _ -> raise Types.tag_expectation_mismatch)
                    (fst3 unwrapped_row) (StringSet.empty, false) in
                let is_closed = is_closed_row row in
                let has_default = OptionUtils.is_some default in
@@ -715,7 +735,7 @@ struct
             let v, vt, o = o#value v in
             let left, lt, o = o#computation left in
             let right, rt, o = o#computation right in
-            o#check_eq_types vt (`Primitive Primitive.Bool) (STC orig);
+            o#check_eq_types vt (Primitive Primitive.Bool) (STC orig);
             o#check_eq_types lt rt (STC orig);
             If (v, left, right), lt, o
 
@@ -734,7 +754,7 @@ struct
             List.iter (fun field ->
                 o#check_eq_types (project_type field vt) Types.string_type (SSpec special)
               ) ["name"; "args"; "driver"];
-            Database v, `Primitive Primitive.DB, o
+            Database v, Primitive Primitive.DB, o
 
         | Table (db, table_name, keys, tt) ->
             let db, db_type, o = o#value db in
@@ -745,7 +765,7 @@ struct
             o#check_eq_types keys_type Types.keys_type (SSpec special);
             (* TODO: tt is a tuple of three records. Discussion pending about what kind of checks we should do here
                From an implementation perspective, we should check the consistency of the read, write, needed info here *)
-              Table (db, table_name, keys, tt), `Table tt, o
+              Table (db, table_name, keys, tt), Table tt, o
 
         | Query (range, policy, e, original_t) ->
             let range, o =
@@ -799,13 +819,14 @@ struct
             ensure (Types.is_closed_row rows_r) "Inserted record must have closed row" (SSpec special);
             TypeUtils.iter_row (fun field presence_spec ->
                  match presence_spec with
-                  | `Present actual_type_field ->
+                  | Present actual_type_field ->
                     (* Ensure that the field we update is in the write row and the types match
                        As an invariant of Table types, it should then also be in the read row *)
                     let write_type = TypeUtils.project_type field table_write in
                     o#check_eq_types actual_type_field write_type (SSpec special);
-                  | `Absent -> () (* This is a closed row, ignore Absent *)
-                  | `Var _  -> raise_ir_type_error "Found presence polymorphism in inserted row" (SSpec special)
+                  | Absent -> () (* This is a closed row, ignore Absent *)
+                  | Meta _  -> raise_ir_type_error "Found presence polymorphism in inserted row" (SSpec special)
+                  | _ -> raise Types.tag_expectation_mismatch
               ) rows_r;
 
 
@@ -813,12 +834,13 @@ struct
             ensure (Types.is_closed_row table_needed_r) "Needed row of table type must be closed" (SSpec special);
             TypeUtils.iter_row (fun field presence_spec ->
                  match presence_spec with
-                  | `Present needed_type ->
-                    (* Ensure that all fields `Present in the needed row are being inserted *)
+                  | Present needed_type ->
+                    (* Ensure that all fields Present in the needed row are being inserted *)
                     let inserted_type = TypeUtils.project_type field rows_t in
                     o#check_eq_types inserted_type needed_type (SSpec special)
-                  | `Absent
-                  | `Var _  -> ()
+                  | Absent
+                  | Meta _  -> ()
+                  | _ -> raise Types.tag_expectation_mismatch
               ) table_needed_r;
 
             begin match special with
@@ -856,12 +878,13 @@ struct
             ensure (Types.is_closed_row body_record_row) "Open row as result of update" (SSpec special);
             TypeUtils.iter_row (fun field presence_spec ->
                 match presence_spec with
-                  | `Present actual_type_field ->
+                  | Present actual_type_field ->
                     (* Ensure that the field we update is in the write row and the types match *)
                     let expected_type_field = TypeUtils.project_type field table_write in
                     o#check_eq_types expected_type_field actual_type_field (SSpec special)
-                  | `Absent -> () (* This is a closed row, ignore Absent *)
-                  | `Var _  -> raise_ir_type_error "Found presence polymorphism in the result of an update" (SSpec special)
+                  | Absent -> () (* This is a closed row, ignore Absent *)
+                  | Meta _  -> raise_ir_type_error "Found presence polymorphism in the result of an update" (SSpec special)
+                  | _ -> raise Types.tag_expectation_mismatch
               ) body_record_row;
             let o = o#remove_binder x in
             let o, _ = o#set_allowed_effects outer_effects in
@@ -906,7 +929,8 @@ struct
            Choice (v, bs), t, o
         | Handle ({ ih_comp; ih_cases; ih_return; ih_depth }) ->
           (* outer effects is R_d in the IR formalization *)
-          let outer_effects = Types.flatten_row allowed_effects in
+          let outer_effects = Types.flatten_row allowed_effects  in
+          let outer_effects_parts = TypeUtils.extract_row_parts outer_effects in
 
           (* return_t is A_d in the IR formalization *)
           let (return, return_t, return_binder_type, o) =
@@ -933,17 +957,17 @@ struct
                   let (resume, o) = o#binder resume in
                   let resume_type = Var.type_of_binder resume in
                   let (cur_resume_args, cur_resume_effects, cur_resume_ret) = match TypeUtils.concrete_type resume_type with
-                    | `Function (a, b, c) -> a, b, c
+                    | Function (a, b, c) -> a, b, c
                     | _ -> raise_ir_type_error "Resumptions has non-function type" (SSpec special) in
 
-                  let presence_spec_funtype = `Function (x_type, Types.make_empty_closed_row (), cur_resume_args) in
+                  let presence_spec_funtype = Function (x_type, Types.make_empty_closed_row (), cur_resume_args) in
 
                   (match !resumption_effects, !resumption_return_type with
                     | (None, None) ->
                       resumption_effects := Some cur_resume_effects;
                       resumption_return_type := Some  cur_resume_ret
                     | (Some existing_resumption_effects, Some existing_resumption_rettype) ->
-                      o#check_eq_types (`Effect existing_resumption_effects) (`Effect cur_resume_effects) (SSpec special);
+                      o#check_eq_types (Effect existing_resumption_effects) (Effect cur_resume_effects) (SSpec special);
                       o#check_eq_types existing_resumption_rettype cur_resume_ret (SSpec special)
                     | _ -> assert false);
 
@@ -958,9 +982,9 @@ struct
 
 
           (* We now construct the inner effects from the outer effects and branch_presence_spec_types *)
-          let (outer_effects_map, outer_effects_var, outer_effects_dualized) = outer_effects in
+          let (outer_effects_map, outer_effects_var, outer_effects_dualized) = outer_effects_parts in
           (* For each case branch, the corresponding entry goes directly into the field spec map of the inner effect row *)
-          let inner_effects_map_from_branches = StringMap.map (fun x -> `Present x) branch_presence_spec_types in
+          let inner_effects_map_from_branches = StringMap.map (fun x -> Present x) branch_presence_spec_types in
           (* We now add all entries from the outer effects that were not touched by the handler to the inner effects *)
           let inner_effects_map = StringMap.fold (fun effect outer_presence_spec map ->
               if StringMap.mem effect inner_effects_map_from_branches then
@@ -968,7 +992,7 @@ struct
               else
                 StringMap.add effect outer_presence_spec map
             )  inner_effects_map_from_branches outer_effects_map in
-          let inner_effects = (inner_effects_map, outer_effects_var, outer_effects_dualized) in
+          let inner_effects = Row (inner_effects_map, outer_effects_var, outer_effects_dualized) in
 
         (if not (Types.is_closed_row outer_effects) then
           let outer_effects_contain e = StringMap.mem e outer_effects_map in
@@ -998,10 +1022,10 @@ struct
 
         (match !resumption_effects, !resumption_return_type, depth with
           | Some re, Some rrt, (Deep _) ->
-            o#check_eq_types (`Effect re) (`Effect outer_effects) (SSpec special);
+            o#check_eq_types (Effect re) (Effect outer_effects) (SSpec special);
             o#check_eq_types return_t rrt (SSpec special)
           | Some re, Some rrt, Shallow ->
-            o#check_eq_types (`Effect re) (`Effect inner_effects) (SSpec special);
+            o#check_eq_types (Effect re) (Effect inner_effects) (SSpec special);
             o#check_eq_types comp_t rrt (SSpec special)
           | _ -> ());
 
@@ -1017,7 +1041,7 @@ struct
            (* contrary to normal functions, the argument type is not tuple-ified if there is only a single argument.
               Therefore, can't use return_type and arg_types from TypeUtils here, because these have those assumptions hard-coded *)
           let (arg_type_expected, effects, ret_type_expected) = match TypeUtils.concrete_type effect_type with
-            | `Function (at, et, rt) -> (at, et, rt)
+            | Function (at, et, rt) -> (at, et, rt)
             | _ -> raise_ir_type_error "Non-function type associated with effect" (SSpec special) in
 
           ensure (Types.is_empty_row effects) "Effect case's function type has non-empty effect row" (SSpec special);
