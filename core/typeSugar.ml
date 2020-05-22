@@ -3495,7 +3495,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                              [ usages body
                              ; from_option Usage.empty (opt_map usages where)
                              ; from_option Usage.empty (opt_map usages orderby) ]))
-            in e, typ body, us
+            in
+            e, typ body, us
         | Escape (bndr, e) ->
             (* There's a question here whether to generalise the
                return type of continuations.  With `escape'

@@ -1,9 +1,6 @@
 open Utility
 open CommonTypes
 open Sugartypes
-open SourceCode
-open SourceCode.WithPos
-
 (*
  * Ensures that table iterators are wrapped in a query block:
  *
@@ -24,27 +21,31 @@ class wrap_iterators env =
   object (o : 'self_type)
     inherit (TransformSugar.transform env) as super
 
-    method! phrase = function
-      | { node = Iteration (gens, body, cond, orderby); pos } ->
-          let wp = WithPos.make ~pos in
+    method! phrasenode = function
+      | Query (_, _, _, Some t) as q ->
+          (* We don't need to perform this pass inside a query block.
+           * Indeed, if we do, it results in nontermination. *)
+          (o, q, t)
+      | Iteration (gens, body, cond, orderby) ->
           let envs = o#backup_envs in
+          let dp = SourceCode.WithPos.dummy in
           let (o, gens) = listu o (fun o -> o#iterpatt) gens in
           let (o, body, t) = o#phrase body in
           let (o, cond, _) = option o (fun o -> o#phrase) cond in
           let (o, orderby, _) = option o (fun o -> o#phrase) orderby in
-          let o = o#restore_envs envs in
           let is_query = List.exists
               (function
                  | List  _ -> false
                  | Table _ -> true) gens in
+          let iter = Iteration (gens, body, cond, orderby) in
           let node =
             if is_query then
-              Query (None, QueryPolicy.Default,
-                wp (Iteration (gens, body, cond, orderby)), Some t)
+              Query (None, QueryPolicy.Default, dp iter, Some t)
             else
-              Iteration (gens, body, cond, orderby) in
-          (o, wp node, t)
-      | p -> super#phrase p
+              iter in
+          let o = o#restore_envs envs in
+          (o, node, t)
+      | p -> super#phrasenode p
   end
 
 
