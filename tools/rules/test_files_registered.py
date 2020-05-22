@@ -59,11 +59,9 @@ links_files = set()
 for links_file in glob.glob(os.path.join(TEST_DIR, "**", "*.links"), recursive=True):
     with open(links_file) as f:
         normed = os.path.normpath(links_file)
-        print(normed)
         first_line = f.readline().strip()
         if(normed not in BLACKLIST):
             links_files.add(normed)
-            #print("normed : %s" % normed)
 
 
 #Iterate all .tests files, looking for the .links files accumulated above
@@ -84,9 +82,7 @@ for test_file in glob.glob(os.path.join(TEST_DIR, "**", "*.tests"), recursive=Tr
             #If this is the second line in a test case def, it may be the path of a  .links file
             if(test_offset == 2 and re.match(".*\.links", line)):
                 normed = os.path.normpath(line)
-                #print("normed: %s" % normed)
                 if normed in links_files:
-                    #print("found %s" %line)
                     links_files.remove(normed)
             prev_line = line
 
@@ -102,7 +98,6 @@ for testsuite_file in glob.glob(os.path.join(TEST_DIR, "**", "testsuite.config")
             combined_path = os.path.join(path_dir,path_file)
             normed = normed = os.path.normpath(combined_path)
             if normed in links_files:
-                    #print("found %s" %line)
                     links_files.remove(normed)
 
 
