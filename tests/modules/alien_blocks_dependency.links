@@ -1,6 +1,3 @@
-#IGNORED_BY_TEST_REGISTRATION_RULE_CHECKING_SCRIPT
-# imported from alien_blocks_importer.links
-
 # c.f. issue #292.
 alien javascript "/my/js/file.js" {
   foo: () ~> ();

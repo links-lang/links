@@ -1,5 +1,3 @@
-#IGNORED_BY_TEST_REGISTRATION_RULE_CHECKING_SCRIPT
-# Not run by usual testsuite
 open Cancel2
 fun main() { addRoute("/", fun (_) { ignore(spawnClient {print(Cancel2.go()) }); page <#><h1>Yup</h1></#>} ); serveWebsockets(); servePages() }
 main()
