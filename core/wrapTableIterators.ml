@@ -8,14 +8,9 @@ open Sugartypes
  *  --->
  * query { for (x <-- y) M }
  *
- * Note that this is safe if we're in another query block:
- *
- * query { for (x <-- y) M }
- *  --->
- * query { query { for (x <-- y) M } }
- *
- * Since nested query blocks are removed by the normaliser.
-*)
+ * Note that since we can't "break out" of a query block, we
+ * do not have to perform the pass inside query blocks.
+ *)
 class wrap_iterators env =
   let open TransformSugar in
   object (o : 'self_type)
