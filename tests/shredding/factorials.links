@@ -7,6 +7,7 @@ fun insertOne() {
 }
 
 fun main() {
+  insertOne();
   var res1 = query flat { for (x <-- factorials) [(a=x.i,b=x.f)] };
   assertEq(res1, [(a=1, b=1)]);
   var res2 = query flat { for (x <- asList(factorials)) [(a=x.i,b=x.f)] };
