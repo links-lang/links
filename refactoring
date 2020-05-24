@@ -6,13 +6,13 @@ Branch: types-refactor
  + types.mli
 - Frank
  + pending:
-    sugartoir.ml
  + done:
     irCheck.ml
     typeUtils.ml
     typeSugar.ml
     renamer.ml
     instantiate.ml
+    sugartoir.ml
 - Janek
  + done:
     desugarDatatypes.ml
