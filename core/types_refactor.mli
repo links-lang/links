@@ -331,6 +331,8 @@ val make_fresh_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMap
 val make_rigid_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMap.t * field_spec Utility.IntMap.t
 val make_wobbly_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMap.t * field_spec Utility.IntMap.t
 
+val combine_per_kind_envs : datatype Utility.IntMap.t * row Utility.IntMap.t * field_spec Utility.IntMap.t -> datatype Utility.IntMap.t
+
 val effect_sugar : bool Settings.setting
 
 (** pretty printing *)

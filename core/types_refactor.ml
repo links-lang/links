@@ -2651,6 +2651,15 @@ let make_wobbly_envs datatype : datatype IntMap.t * row IntMap.t * field_spec Ut
      IntMap.map (fun _ -> Row (StringMap.empty, fresh_row_variable (lin_any, res_any), false)) renv,
      IntMap.map (fun _ -> fresh_presence_variable (lin_any, res_any)) penv)
 
+let combine_per_kind_envs : datatype IntMap.t * row IntMap.t * field_spec IntMap.t -> datatype IntMap.t =
+  fun (tenv, renv, penv) ->
+  let envs = [tenv; renv; penv] in
+  let union =
+    (* let union_one a b = IntMap.fold IntMap.add a b in *)
+    List.fold_left (IntMap.fold IntMap.add) IntMap.empty
+  in
+  union envs
+
 
 (* subtyping *)
 let is_sub_type, is_sub_row =
