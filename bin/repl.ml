@@ -228,7 +228,7 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
                      try begin
                          let t' = Env.String.find id tenv in
                          let ttype = Types.string_of_datatype t' in
-                         let fresh_envs = Types.make_fresh_envs t' in
+                         let fresh_envs = Types.make_fresh_envs t' |> Types.combine_per_kind_envs in
                          let t' = Instantiate.datatype fresh_envs t' in
                          Unify.datatypes (t,t');
                          Printf.fprintf stderr " %s : %s\n" id ttype
