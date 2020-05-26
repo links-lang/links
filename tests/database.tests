@@ -63,8 +63,8 @@ exit : 0
 
 Nested query annotations (2)
 query nested { query { for (i <- [1,2,3]) [(x = i)] } }
-stderr : @..*
-exit : 1
+stdout : [(x = 1), (x = 2), (x = 3)] : [(x:Int)]
+exit : 0
 
 Nested query annotations (3)
 query { query nested { for (i <- [1,2,3]) [(x = i)] } }
