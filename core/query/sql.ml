@@ -69,6 +69,12 @@ let string_of_label label =
   else
     label
 
+(* concatenation implement with Buffer module*)
+let buffer_concat xs =
+  let buf = Buffer.create 0 in (* maybe a better heuristic init size? *)
+  List.iter (Buffer.add_string buf) xs;
+  Buffer.contents buf
+
 module Arithmetic :
 sig
   val is : string -> bool
@@ -137,10 +143,10 @@ let order_by_clause n =
    returned. This allows these operators to take lists that have any
    element type at all. *)
 
-let rec string_of_query quote ignore_fields q =
-  let sq = string_of_query quote ignore_fields in
-  let sb = string_of_base quote false in
-  let sbt = string_of_base quote true in
+let rec string_of_query buf quote ignore_fields q =
+  let sq = string_of_query buf quote ignore_fields in
+  let sb = string_of_base buf quote false in
+  let sbt = string_of_base buf quote true in
   let string_of_fields fields =
     if ignore_fields then
       "0 as \"@unit@\"" (* SQL doesn't support empty records! *)
@@ -150,7 +156,7 @@ let rec string_of_query quote ignore_fields q =
         | fields ->
           mapstrcat ","
             (fun (b, l) ->
-              "(" ^ sb b ^ ") as "^ quote l) (* string_of_label l) *)
+              buffer_concat ["("; sb b; ") as "; quote l]) (* string_of_label l) *)
             fields
   in
   let string_of_select fields tables condition os =
@@ -159,28 +165,28 @@ let rec string_of_query quote ignore_fields q =
     let orderby =
       match os with
         | [] -> ""
-        | _ -> " order by " ^ mapstrcat "," sb os in
+        | _ ->  buffer_concat [" order by "; mapstrcat "," sb os] in
     let where =
       match condition with
         | Constant (Constant.Bool true) -> ""
-        | _ ->  " where " ^ sb condition
+        | _ ->   buffer_concat [" where "; sb condition]
     in
-      "select " ^ fields ^ " from " ^ tables ^ where ^ orderby
+       buffer_concat ["select "; fields; " from "; tables; where; orderby]
   in
   let string_of_delete table where =
     let where =
       OptionUtils.opt_app
-        (fun x -> "where (" ^ sbt x ^ ")") "" where in
+        (fun x ->  buffer_concat ["where ("; sbt x; ")"]) "" where in
     Printf.sprintf "delete from %s %s" table where
   in
   let string_of_update table fields where =
     let fields =
-      List.map (fun (k, v) -> quote k ^ " = " ^ sbt v) fields
+      List.map (fun (k, v) -> buffer_concat [quote k; " = "; sbt v]) fields
       |> String.concat ", " in
 
     let where =
       OptionUtils.opt_app
-        (fun x -> "where (" ^ sbt x ^ ")") "" where in
+        (fun x -> buffer_concat ["where ("; sbt x; ")"]) "" where in
     Printf.sprintf "update %s set %s %s" table fields where
   in
   let string_of_insert table fields values =
@@ -196,18 +202,18 @@ let rec string_of_query quote ignore_fields q =
   in
     match q with
       | UnionAll ([], _) -> "select 42 as \"@unit@\" where false"
-      | UnionAll ([q], n) -> sq q ^ order_by_clause n
+      | UnionAll ([q], n) -> buffer_concat [sq q; order_by_clause n]
       | UnionAll (qs, n) ->
-        mapstrcat " union all " (fun q -> "(" ^ sq q ^ ")") qs ^ order_by_clause n
+        mapstrcat " union all " (fun q -> buffer_concat ["("; sq q; ")"]) qs ^ order_by_clause n
       | Select (fields, [], Constant (Constant.Bool true), _os) ->
           let fields = string_of_fields fields in
-            "select " ^ fields
+            buffer_concat ["select "; fields]
       | Select (fields, [], condition, _os) ->
           let fields = string_of_fields fields in
-            "select * from (select " ^ fields ^ ") as " ^ fresh_dummy_var () ^ " where " ^ sb condition
+            buffer_concat ["select * from (select "; fields; ") as "; fresh_dummy_var (); " where "; sb condition]
       | Select (fields, tables, condition, os) ->
           (* using quote_field assumes tables contains table names (not nested queries) *)
-          let tables = List.map (fun (t, x) -> quote t ^ " as " ^ (string_of_table_var x)) tables
+          let tables = List.map (fun (t, x) -> buffer_concat [quote t; " as "; (string_of_table_var x)]) tables
           in string_of_select fields tables condition os
       | Delete { del_table; del_where } ->
           string_of_delete del_table del_where
@@ -219,56 +225,56 @@ let rec string_of_query quote ignore_fields q =
           match q' with
           | Select (fields, tables, condition, os) ->
               (* Inline the query *)
-              let tables = List.map (fun (t, x) -> quote t ^ " as " ^ (string_of_table_var x)) tables in
-              let q = "(" ^ sq q ^ ") as " ^ string_of_table_var z in
+              let tables = List.map (fun (t, x) -> buffer_concat [quote t; " as "; (string_of_table_var x)]) tables in
+              let q = buffer_concat ["("; sq q; ") as "; string_of_table_var z] in
               string_of_select fields (q::tables) condition os
           | _ -> assert false
 
-and string_of_base quote one_table b =
-  let sb = string_of_base quote one_table in
+and string_of_base buf quote one_table b =
+  let sb = string_of_base buf quote one_table in
     match b with
       | Case (c, t, e) ->
-          "case when " ^ sb c ^ " then " ^sb t ^ " else "^ sb e ^ " end"
+          buffer_concat ["case when "; sb c; " then "; sb t; " else "; sb e; " end"]
       | Constant c -> Constant.to_string c
       | Project (var, label) -> string_of_projection quote one_table (var, label)
       | Apply (op, [l; r]) when Arithmetic.is op
           -> Arithmetic.gen (sb l, op, sb r)
       | Apply (("intToString" | "stringToInt" | "intToFloat" | "floatToString"
                 | "stringToFloat"), [v]) -> sb v
-      | Apply ("floatToInt", [v]) -> "floor("^sb v^")"
+      | Apply ("floatToInt", [v]) -> buffer_concat ["floor("; sb v; ")"]
 
       (* optimisation *)
-      | Apply ("not", [Empty q]) -> "exists (" ^ string_of_query quote true q ^ ")"
-
-      | Apply ("not", [v]) -> "not (" ^ sb v ^ ")"
-      | Apply (("negate" | "negatef"), [v]) -> "-(" ^ sb v ^ ")"
-      | Apply ("&&", [v; w]) -> "(" ^ sb v ^ ")" ^ " and " ^ "(" ^ sb w ^ ")"
-      | Apply ("||", [v; w]) -> "(" ^ sb v ^ ")" ^ " or " ^ "(" ^ sb w ^ ")"
-      | Apply ("==", [v; w]) -> "(" ^ sb v ^ ")" ^ " = " ^ "(" ^ sb w ^ ")"
-      | Apply ("<>", [v; w]) -> "(" ^ sb v ^ ")" ^ " <> " ^ "(" ^ sb w ^ ")"
-      | Apply ("<", [v; w]) -> "(" ^ sb v ^ ")" ^ " < " ^ "(" ^ sb w ^ ")"
-      | Apply (">", [v; w]) -> "(" ^ sb v ^ ")" ^ " > " ^ "(" ^ sb w ^ ")"
-      | Apply ("<=", [v; w]) -> "(" ^ sb v ^ ")" ^ " <= " ^ "(" ^ sb w ^ ")"
-      | Apply (">=", [v; w]) -> "(" ^ sb v ^ ")" ^ " >= " ^ "(" ^ sb w ^ ")"
-      | Apply ("RLIKE", [v; w]) -> "(" ^ sb v ^ ")" ^ " RLIKE " ^ "(" ^ sb w ^ ")"
-      | Apply ("LIKE", [v; w]) -> "(" ^ sb v ^ ")" ^ " LIKE " ^ "(" ^ sb w ^ ")"
-      | Apply (f, args) when SqlFuns.is f -> SqlFuns.name f ^ "(" ^ String.concat "," (List.map sb args) ^ ")"
-      | Apply (f, args) -> f ^ "(" ^ String.concat "," (List.map sb args) ^ ")"
-      | Empty q -> "not exists (" ^ string_of_query quote true q ^ ")"
-      | Length q -> "select count(*) from (" ^ string_of_query quote true q ^ ") as " ^ fresh_dummy_var ()
+      | Apply ("not", [Empty q]) -> buffer_concat ["exists ("; string_of_query buf quote true q; ")"]
+      | Apply ("not", [v]) -> buffer_concat ["not ("; sb v; ")"]
+      | Apply (("negate" | "negatef"), [v]) -> buffer_concat ["-("; sb v; ")"]
+      | Apply ("&&", [v; w]) -> buffer_concat ["("; sb v; ")"; " and "; "("; sb w; ")"]
+      | Apply ("||", [v; w]) -> buffer_concat ["("; sb v; ")"; " or "; "("; sb w; ")"]
+      | Apply ("==", [v; w]) -> buffer_concat ["("; sb v; ")"; " = "; "("; sb w; ")"]
+      | Apply ("<>", [v; w]) -> buffer_concat ["("; sb v; ")"; " <> "; "("; sb w; ")"]
+      | Apply ("<", [v; w]) -> buffer_concat ["("; sb v; ")"; " < "; "("; sb w; ")"]
+      | Apply (">", [v; w]) -> buffer_concat ["("; sb v; ")"; " > "; "("; sb w; ")"]
+      | Apply ("<=", [v; w]) -> buffer_concat ["("; sb v; ")"; " <= "; "("; sb w; ")"]
+      | Apply (">=", [v; w]) -> buffer_concat ["("; sb v; ")"; " >= "; "("; sb w; ")"]
+      | Apply ("RLIKE", [v; w]) -> buffer_concat ["("; sb v; ")"; " RLIKE "; "("; sb w; ")"]
+      | Apply ("LIKE", [v; w]) -> buffer_concat ["("; sb v; ")"; " LIKE "; "("; sb w; ")"]
+      | Apply (f, args) when SqlFuns.is f -> buffer_concat [SqlFuns.name f; "("; String.concat "," (List.map sb args); ")"]
+      | Apply (f, args) -> buffer_concat [f; "("; String.concat "," (List.map sb args); ")"]
+      | Empty q -> buffer_concat ["not exists ("; string_of_query buf quote true q; ")"]
+      | Length q -> buffer_concat ["select count(*) from ("; string_of_query buf quote true q; ") as "; fresh_dummy_var ()]
       | RowNumber [] -> "1"
       | RowNumber ps ->
-        "row_number() over (order by " ^ String.concat "," (List.map (string_of_projection quote one_table) ps) ^ ")"
+        buffer_concat ["row_number() over (order by "; String.concat "," (List.map (string_of_projection quote one_table) ps); ")"]
 and string_of_projection quote one_table (var, label) =
   if one_table then
     quote label
   else
-    string_of_table_var var ^ "." ^ (quote label)
+    buffer_concat [string_of_table_var var; "."; (quote label)]
 
 let string_of_query ?(range=None) quote q =
+  let buf = Buffer.create 0 in
   let range =
     match range with
       | None -> ""
-      | Some (limit, offset) -> " limit " ^string_of_int limit^" offset "^string_of_int offset
+      | Some (limit, offset) -> buffer_concat [" limit "; string_of_int limit; " offset "; string_of_int offset]
   in
-    string_of_query quote false q ^ range
+    buffer_concat [string_of_query buf quote false q; range]
