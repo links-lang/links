@@ -3431,10 +3431,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                              | List  _ -> false
                              | Table _ -> true) generators in*)
             let context =
-(*              if is_query
+(*            if is_query
               then { context with effect_row = Types.make_empty_closed_row () }
-		else *)
-	      begin
+              else *)
+              begin
                   unify ~handle:Gripers.iteration_unl_effect (no_pos (`Effect context.effect_row), no_pos (`Effect (Types.make_empty_open_row default_effect_subkind)));
                   context
               end
