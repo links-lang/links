@@ -42,6 +42,6 @@ val split_choice_type : string -> Types.datatype -> (Types.datatype * Types.data
 val choice_at : string -> Types.datatype -> Types.datatype
 
 val primary_kind_of_type : Types.datatype -> PrimaryKind.t
-val check_type_wellformdness : Types.datatype -> unit
+val check_type_wellformedness : Types.datatype -> unit
 
 val row_present_types : Types.datatype -> Types.datatype Utility.StringMap.t

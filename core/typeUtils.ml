@@ -316,141 +316,118 @@ let rec primary_kind_of_type t =
 
 
 
-(**
-    Determines the primary kind of a type and checks the well-formedness
-    of the type in the process.
-    Note: This doesn't catch errors related to ill-formed session and lens
-    types.
-*)
-let check_type_wellformdness t : unit =
+(** Infer the primary kind of a data type and check the
+   well-formedness of the type (up to its primary kind) in the
+   process. *)
+let check_type_wellformedness t : unit =
   let check_kind expected actual =
     if actual = expected then
       actual
     else
-      raise tag_expectation_mismatch
-  in
-  let rec typ rec_env t =
+      failwith "Kind mismatch" in
+
+  let rec datatype rec_env t =
     check_kind
       pk_type
-      (main rec_env t)
+      (typ rec_env t)
   and row rec_env r =
     check_kind
       pk_row
-      (main rec_env r)
+      (typ rec_env r)
   and field_spec rec_env fs =
     check_kind
       pk_presence
-      (main rec_env fs)
+      (typ rec_env fs)
 
-  and meta rec_env ~allow_row_var p =
-    (* row variables must be specifically allowed, because currently
-       we only allow Row (_, _, \rho) but not standalone \rho *)
-    match Unionfind.find p, allow_row_var with
-    | Var (_, kind, _), false  when Kind.primary_kind kind = pk_row ->
-       (* freestanding row variables not implemented yet (must be inside Row) *)
-       raise tag_expectation_mismatch
-    | Var (_, kind, _), _ -> Kind.primary_kind kind
-    | Recursive (var, var_kind, body), _ ->
+  and meta rec_env p =
+    match Unionfind.find p with
+    | Var (_, kind, _) -> Kind.primary_kind kind
+    | Recursive (var, var_kind, body) ->
        let pk =
          if IntMap.mem var rec_env then
            IntMap.find var rec_env
          else
-           let rec_env' =
-             IntMap.add var (Kind.primary_kind var_kind) rec_env
-           in
-           main rec_env' body
-       in
+           let rec_env' = IntMap.add var (Kind.primary_kind var_kind) rec_env in
+           typ rec_env' body in
        if pk = pk_presence then
          (* recursive types of kind presence are not allowed right now *)
-         raise tag_expectation_mismatch
+         failwith "Kind mistmatch (recursive presence)"
        else
          pk
-    | body, _ -> main rec_env body
+    | Closed -> pk_row
+    | body -> typ rec_env body
 
   and compare_kinds rec_env k t =
-    ignore (check_kind (Kind.primary_kind k) (main rec_env t))
-  and main rec_env =
-    let ityp t = ignore (typ rec_env t) in
+    ignore (check_kind (Kind.primary_kind k) (typ rec_env t))
+  and typ rec_env =
+    let idatatype t = ignore (datatype rec_env t) in
     let irow r = ignore (row rec_env r) in
-    let ifs fs = ignore (field_spec rec_env fs) in
+    let ifield_spec fs = ignore (field_spec rec_env fs) in
+
     function
+    (* Unspecified kind *)
     | Not_typed ->
        (* Not_typed has no kind *)
        raise tag_expectation_mismatch
-    | (Var _ | Recursive _) ->
-       (* freestanding Var / Recursive not implemented yet (must be inside Meta) *)
+    | (Var _ | Recursive _ | Closed) ->
+       (* freestanding Var / Recursive / Closed not implemented yet (must be inside Meta) *)
        raise tag_expectation_mismatch
-    | Primitive _  -> pk_type
-    | Function (f, m, t)
-    | Lolli (f, m, t) ->
-       ityp f; irow m; ityp t;
-       pk_type
-    | Record row
-    | Variant row ->
-       irow row;
-       pk_type
-    | Effect row ->
-       irow row;
-       pk_row
-    | Table (f, d, r) ->
-       ityp f; ityp d; ityp r;
-       pk_type
-    | ForAll (_qs, t) ->
-       ityp t;
-       pk_type
-    | Meta p ->
-       meta rec_env ~allow_row_var:false p
     | Alias ((_name, qs, ts), d) ->
        List.iter2 (compare_kinds rec_env) qs ts;
-       main rec_env d
+       typ rec_env d
     | Application (abs_type, args) ->
        List.iter2 (compare_kinds rec_env) (Types.Abstype.arity abs_type) args;
        pk_type
     | RecursiveApplication app ->
        List.iter2 (compare_kinds rec_env) app.r_quantifiers app.r_args;
        pk_type
-      (* session stuff. would have to check sub-kinds for full well-formedness check *)
+    | Meta p ->
+       meta rec_env p
+    (* Type *)
+    | Primitive _  -> pk_type
+    | Function (f, m, t)
+    | Lolli (f, m, t) ->
+       idatatype f; irow m; idatatype t;
+       pk_type
+    | Record row
+    | Variant row ->
+       irow row;
+       pk_type
+    | Table (f, d, r) ->
+       idatatype f; idatatype d; idatatype r;
+       pk_type
+    | Lens _s ->
+       (* todo *)
+       assert false
+    | ForAll (_qs, t) ->
+       idatatype t;
+       pk_type
+    (* Effect *)
+    | Effect row ->
+       irow row;
+       pk_row
+    (* Presence *)
+    | Present t ->
+       idatatype t;
+       pk_presence
+    | Absent -> pk_presence
+    (* Row *)
+    | Row (field_spec_map, row_var, _dual) ->
+       let handle_fs _label f = ifield_spec f in
+       StringMap.iter handle_fs field_spec_map;
+       meta rec_env row_var
+    (* Session *)
     | Input (t, s)
     | Output (t, s) ->
-       ityp t; ityp s;
+       idatatype t; idatatype s;
        pk_type
     | Select fields
     | Choice fields ->
        irow fields;
        pk_type
-    | Dual s -> main rec_env s
-    | Lens _s ->
-       (* todo *)
-       pk_type
-    | End -> pk_type
-
-    (* presence stuff*)
-    | Present t ->
-       ityp t;
-       pk_presence
-    | Absent -> pk_presence
-
-    (* rows *)
-    | Closed ->
-       (* freestanding Closed not implemented yet (must be inside Row) *)
-       raise tag_expectation_mismatch
-    | Row (field_spec_map, row_var, _dual) ->
-       let handle_fs _label f =
-         ifs f
-       in
-       StringMap.iter handle_fs field_spec_map;
-       (* must deal with special constructs allowed only in row_var positon:
-          - Closed is allowed in row_var position
-          - Var with row variable allowed in row_var *)
-       begin
-       match Unionfind.find row_var with
-         | Meta p -> meta rec_env ~allow_row_var:true p
-         | Closed -> pk_row
-         | body -> row rec_env body
-       end
-
-  in
-  ignore (main IntMap.empty t)
+    | Dual s -> typ rec_env s
+    | End -> pk_type in
+  ignore (datatype IntMap.empty t)
 
 let row_present_types t =
   extract_row t
