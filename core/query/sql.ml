@@ -148,7 +148,7 @@ let rec string_of_query buf quote ignore_fields q =
   let sq = string_of_query buf quote ignore_fields in
   let sb = string_of_base buf quote false in
   let sbt = string_of_base buf quote true in
-  let buf_mapstrcat buf list = 
+  let buf_mapstrcat list = 
     let load b l = buf_add "("; sb b; buf_add ") as "; buf_add (quote l) in (* string_of_label l) *)
     match list with
       | [] -> ()
@@ -165,12 +165,12 @@ let rec string_of_query buf quote ignore_fields q =
     else
       match fields with
         | [] -> buf_add "0 as \"@unit@\"" (* SQL doesn't support empty records! *)
-        | fields -> buf_mapstrcat buf fields (* string_of_label l) *)
+        | fields -> buf_mapstrcat fields (* string_of_label l) *)
   in
   let string_of_select fields tables condition os =
     let tables = String.concat "," tables in
     let fields = string_of_fields fields in
-    let buf_mapstrcat2 buf list = 
+    let buf_mapstrcat2 list = 
       let load os = sb os in (* string_of_label l) *)
       match list with
         | [] -> ()
@@ -184,7 +184,7 @@ let rec string_of_query buf quote ignore_fields q =
     let orderby =
       match os with
         | [] -> ()
-        | _ ->  buf_add " order by "; buf_mapstrcat2 buf os in
+        | _ ->  buf_add " order by "; buf_mapstrcat2 os in
     let where =
       match condition with
         | Constant (Constant.Bool true) -> ()
@@ -202,7 +202,7 @@ let rec string_of_query buf quote ignore_fields q =
     Printf.sprintf "delete from %s %s" table where *)
   in
   let string_of_update table fields where =
-    let buf_mapstrcat3 buf list = 
+    let buf_mapstrcat3 list = 
       let load k v = buf_add (quote k); buf_add " = "; sbt v in (* string_of_label l) *)
       match list with
         | [] -> ()
@@ -216,7 +216,11 @@ let rec string_of_query buf quote ignore_fields q =
     (* let fields =
       List.map (fun (k, v) -> buf_add (quote k); buf_add " = "; sbt v) fields
       |> String.concat ", " in *)
-    buf_mapstrcat3 buf fields;
+    buf_add "update ";
+    buf_add table;
+    buf_add " set ";
+    buf_mapstrcat3 fields;
+    buf_add " ";
     (* let where = *)
       OptionUtils.opt_app
         (fun x -> buf_add "where ("; sbt x; buf_add ")") () where 
@@ -224,7 +228,7 @@ let rec string_of_query buf quote ignore_fields q =
     Printf.sprintf "update %s set %s %s" table fields where *)
   in
   let string_of_insert table fields values =
-    let buf_mapstrcat4 buf list = 
+    let buf_mapstrcat4 list = 
         let load x = buf_add x in
         match list with
           | [] -> ()
@@ -235,7 +239,7 @@ let rec string_of_query buf quote ignore_fields q =
                 | x -> buf_add ","; load x) 
               xs
     in
-    let buf_mapstrcat5 buf list = 
+    let buf_mapstrcat5 list = 
         let load x = buf_add "("; sbt x; buf_add ")" in
         match list with
           | [] -> ()
@@ -246,23 +250,22 @@ let rec string_of_query buf quote ignore_fields q =
                 | x -> buf_add ","; load x) 
               xs
     in
-    let buf_mapstrcat6 buf list = 
-        let load x = buf_add x in
+    let buf_mapstrcat6 list =
         match list with
           | [] -> ()
-          | [x] ->  buf_mapstrcat5 buf x
+          | [x] ->  buf_mapstrcat5 x
           | x :: xs -> 
-            buf_mapstrcat5 buf x; 
+            buf_mapstrcat5 x; 
             List.iter(function
-                | x -> buf_add ","; buf_mapstrcat5 buf x) 
+                | x -> buf_add ","; buf_mapstrcat5 x) 
               xs
     in
     buf_add "insert into ";
     buf_add table;
     buf_add " (";
-    buf_mapstrcat4 buf fields;
+    buf_mapstrcat4 fields;
     buf_add ") values ";
-    buf_mapstrcat6 buf values;
+    buf_mapstrcat6 values;
     (* let fields = String.concat ", " fields in
     let values =
       values
@@ -278,7 +281,7 @@ let rec string_of_query buf quote ignore_fields q =
       | UnionAll ([], _) -> buf_add "select 42 as \"@unit@\" where false"
       | UnionAll ([q], n) -> sq q; buf_add (order_by_clause n)
       | UnionAll (qs, n) ->
-        let buf_mapstrcat6 buf list = 
+        let buf_mapstrcat7 list = 
             let load x = buf_add "("; sq x; buf_add ")" in
             match list with
               | [] -> ()
@@ -289,7 +292,7 @@ let rec string_of_query buf quote ignore_fields q =
                     | x -> buf_add " union all "; load x) 
                   xs
         in
-        buf_mapstrcat6 buf qs;
+        buf_mapstrcat7 qs;
         buf_add (order_by_clause n)
         (* mapstrcat " union all " (fun q -> buffer_concat ["("; sq q; ")"]) qs ^ order_by_clause n *)
       | Select (fields, [], Constant (Constant.Bool true), _os) ->
@@ -320,7 +323,9 @@ let rec string_of_query buf quote ignore_fields q =
           | Select (fields, tables, condition, os) ->
               (* Inline the query *)
               let tables = List.map (fun (t, x) -> buffer_concat [quote t; " as "; (string_of_table_var x)]) tables in
-              let q = buffer_concat ["("; sq q; ") as "; string_of_table_var z] in
+              let buf2 = Buffer.create 0 in
+              let q2 = string_of_query buf2 quote ignore_fields q; Buffer.contents buf2 in 
+              let q = buffer_concat ["("; q2; ") as "; string_of_table_var z] in
               string_of_select fields (q::tables) condition os
           | _ -> assert false
 
@@ -333,7 +338,7 @@ and string_of_base buf quote one_table b =
   in
   let buf_add = Buffer.add_string buf in
   let sb = string_of_base buf quote one_table in
-  let buf_mapstrcat7 buf list = 
+  let buf_mapstrcat8 list = 
     let load x = sb x in
     match list with
       | [] -> ()
@@ -349,8 +354,12 @@ and string_of_base buf quote one_table b =
           buf_add "case when "; sb c; buf_add " then "; sb t; buf_add " else "; sb e; buf_add " end"
       | Constant c -> buf_add (Constant.to_string c)
       | Project (var, label) -> buf_add (string_of_projection quote one_table (var, label))
-      | Apply (op, [l; r]) when Arithmetic.is op
-          -> Arithmetic.gen (sb l, op, sb r)
+      | Apply (op, [l; r]) when Arithmetic.is op -> 
+        let buf2 = Buffer.create 0 in
+        let buf3 = Buffer.create 0 in
+        let l2 = string_of_base buf2 quote one_table l; Buffer.contents buf2 in
+        let r2 = string_of_base buf3 quote one_table r; Buffer.contents buf3 in
+        buf_add (Arithmetic.gen (l2, op, r2))
       | Apply (("intToString" | "stringToInt" | "intToFloat" | "floatToString"
                 | "stringToFloat"), [v]) -> sb v
       | Apply ("floatToInt", [v]) -> buf_add "floor("; sb v; buf_add ")"
@@ -369,8 +378,8 @@ and string_of_base buf quote one_table b =
       | Apply (">=", [v; w]) -> buf_add "("; sb v; buf_add ")"; buf_add " >= "; buf_add "("; sb w; buf_add ")"
       | Apply ("RLIKE", [v; w]) -> buf_add "("; sb v; buf_add ")"; buf_add " RLIKE "; buf_add "("; sb w; buf_add ")"
       | Apply ("LIKE", [v; w]) -> buf_add "("; sb v; buf_add ")"; buf_add " LIKE "; buf_add "("; sb w; buf_add ")"
-      | Apply (f, args) when SqlFuns.is f -> buf_add (SqlFuns.name f); buf_add "("; buf_mapstrcat7 buf args; buf_add ")"
-      | Apply (f, args) -> buf_add f; buf_add "("; buf_mapstrcat7 buf args; buf_add ")"
+      | Apply (f, args) when SqlFuns.is f -> buf_add (SqlFuns.name f); buf_add "("; buf_mapstrcat8 args; buf_add ")"
+      | Apply (f, args) -> buf_add f; buf_add "("; buf_mapstrcat8 args; buf_add ")"
       | Empty q -> buf_add "not exists ("; string_of_query buf quote true q; buf_add ")"
       | Length q -> buf_add "select count(*) from ("; string_of_query buf quote true q; buf_add ") as "; buf_add (fresh_dummy_var ())
       | RowNumber [] -> buf_add "1"
@@ -386,4 +395,4 @@ let string_of_query ?(range=None) quote q =
       | None -> ""
       | Some (limit, offset) -> buffer_concat [" limit "; string_of_int limit; " offset "; string_of_int offset]
   in
-    string_of_query buf quote false q; buf_add range
+    string_of_query buf quote false q; buf_add range; Buffer.contents buf
