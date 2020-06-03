@@ -335,7 +335,6 @@ sig
   val iteration_body : griper
   val iteration_where : griper
   val iteration_base_order : griper
-(* XXX val iteration_base_body : griper*)
 
   val escape : griper
   val escape_outer : griper
@@ -960,7 +959,7 @@ end
 
     let query_base_row ~pos ~t1:(lexpr, lt) ~t2:_ ~error:_ =
       build_tyvar_names [lt];
-      with_but pos ("Query blocks must have LOROB type") (lexpr, lt)
+      with_but pos ("Flat query blocks must return a list of records of base type") (lexpr, lt)
 
     let receive_mailbox ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
       build_tyvar_names [lt; rt];
@@ -1148,13 +1147,6 @@ end
       with_but pos
         ("An orderby clause must return a list of records of base type")
         (expr, t)
-
-(* XXX   let iteration_base_body ~pos ~t1:(expr,t) ~t2:_ ~error:_ =
-      build_tyvar_names [t];
-      with_but pos
-        ("A database comprehension must return a list of records of base type")
-        (expr, t)
-*)
 
     let escape ~pos ~t1:l ~t2:(_,t) ~error:_ =
       build_tyvar_names [snd l; t];
@@ -3426,17 +3418,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
 
         (* various expressions *)
         | Iteration (generators, body, where, orderby) ->
-(* XXX           let is_query =
-              List.exists (function
-                             | List  _ -> false
-                             | Table _ -> true) generators in*)
             let context =
-(*            if is_query
-              then { context with effect_row = Types.make_empty_closed_row () }
-              else *)
               begin
-                  unify ~handle:Gripers.iteration_unl_effect (no_pos (`Effect context.effect_row), no_pos (`Effect (Types.make_empty_open_row default_effect_subkind)));
-                  context
+                unify ~handle:Gripers.iteration_unl_effect
+		  (no_pos (`Effect context.effect_row),
+		   no_pos (`Effect (Types.make_empty_open_row default_effect_subkind)));
+                context
               end
             in
             let generators, generator_usages, environments =
@@ -3485,11 +3472,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                 (fun order ->
                    unify ~handle:Gripers.iteration_base_order
                      (pos_and_typ order, no_pos (`Record (Types.make_empty_open_row (lin_unl, res_base))))) orderby in
-(* XXX           let () =
-              if is_query && not (Settings.get Database.relax_query_type_constraint) then
-                unify ~handle:Gripers.iteration_base_body
-                  (pos_and_typ body, no_pos (Types.make_list_type (`Record (Types.make_empty_open_row (lin_unl, res_base))))) in
-*)
             let e = Iteration (generators, erase body, opt_map erase where, opt_map erase orderby) in
             let vs = List.fold_left StringSet.union StringSet.empty (List.map Env.domain environments) in
             let us = Usage.combine_many

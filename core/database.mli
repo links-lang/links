@@ -1,7 +1,6 @@
 (** A generic interface for SQL-style databases. Vendor-specific implementations are elsewhere *)
 
 val connection_info : string option Settings.setting
-(* XXX val relax_query_type_constraint : bool Settings.setting *)
 val shredding : bool Settings.setting
 
 class virtual db_args : string -> object
