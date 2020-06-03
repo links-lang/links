@@ -55,6 +55,14 @@ fun unwrappedLookup(n) server {
     [(i=row.i, f=row.f)]
 }
 
+fun trivialNested1() server {
+  query { for (y <- for (x <-- factorials) [(b=[])]) [(a=0)]}
+}
+
+fun trivialNested2() server {
+  query { for (y <- for (x <- asList( factorials)) [(b=[])]) [(a=0)]}
+}
+
 fun test() {
   insertOne();
   deleteAll();
@@ -75,6 +83,8 @@ fun test() {
   assertEq(lookupFactorials(10), [(f=2,i=2),(f=1,i=1)]);
   updateTwoThree();
   assertEq(lookupFactorials(10), [(f=3,i=2),(f=1,i=1)]);
+  assertEq(trivialNested1(),[(a=0),(a=0)]);
+  assertEq(trivialNested2(),[(a=0),(a=0)]);
 }
 
 test()
