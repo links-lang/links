@@ -38,7 +38,8 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
   let rec inst_typ : instantiation_maps -> inst_env -> datatype -> datatype = fun inst_map rec_env datatype ->
     let inst = inst_typ inst_map rec_env in
     let instr = inst_row inst_map rec_env in
-      match datatype with
+    (* let () = TypeUtils.check_type_wellformedness datatype in *)
+    match datatype with
         | Not_typed -> raise (internal_error "Not_typed' passed to `instantiate'")
         | Primitive _  -> datatype
         | Meta point ->
@@ -151,19 +152,24 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
            add f)
       field_env
       StringMap.empty in
-    let field_env'', row_var', dual' =
-      inst_row_var inst_map rec_env row_var dual |> TypeUtils.extract_row_parts
-    in
-      Row (StringMap.fold StringMap.add field_env' field_env'', row_var', dual')
+    let field_env'', row_var', dual' = inst_row_var inst_map rec_env row_var dual |> TypeUtils.extract_row_parts in
+    Row (StringMap.fold StringMap.add field_env' field_env'', row_var', dual')
         (* precondition: row_var has been flattened *)
   and inst_row_var : instantiation_maps -> inst_env -> row_var -> bool -> row = fun inst_map rec_env row_var dual ->
+    (* HACK: fix the ill-formed rows that are introduced in the
+       instantiation maps *)
+    let rowify t =
+      match t with
+      | Row _ -> t
+      | Meta row_var -> Row (StringMap.empty, row_var, false)
+      | _ -> assert false in
     let instr = inst_row inst_map rec_env in
     let dual_if = if dual then dual_row else fun x -> x in
     match Unionfind.find row_var with
     | Closed -> Row (StringMap.empty, row_var, dual)
     | Var (var, _, _) ->
         if IntMap.mem var inst_map then
-          dual_if (IntMap.find var inst_map)
+          dual_if (rowify (IntMap.find var inst_map))
         else
           Row (StringMap.empty, row_var, dual)
     | Recursive (var, kind, rec_row) ->
@@ -208,7 +214,7 @@ let instantiate_typ : bool -> datatype -> (type_arg list * datatype) = fun rigid
         let typ (var, kind) (inst_env, tys) =
           let var' = fresh_raw_variable () in
           let rigidity = if rigid then `Rigid else `Flexible in
-          let new_var= Var (var', kind, rigidity) in
+          let new_var = Var (var', kind, rigidity) in
           let point = Unionfind.fresh new_var in
           let t = Meta point in
             IntMap.add var t inst_env,  t :: tys in
