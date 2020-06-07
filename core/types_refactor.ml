@@ -173,8 +173,9 @@ let dummy_type = Not_typed
 
 let is_present = function
   | Present _          -> true
-  | Absent | Var _     -> false
-  | _ -> failwith "Expected presence constructor."
+  | Absent | Meta _     -> false
+  | _ ->
+     failwith "Expected presence constructor."
 
 type alias_type = Quantifier.t list * typ [@@deriving show]
 
@@ -692,8 +693,8 @@ class virtual type_iter = object(self)
     | Present t ->
        self#visit_type vars t
     (* Session *)
-    | Select r | Choice r -> self#visit_row vars r
     | Input (a, b) | Output (a, b) -> self#visit_type vars a; self#visit_type vars b
+    | Select r | Choice r -> self#visit_row vars r
     | Dual s -> self#visit_type vars s
     | End -> ()
 
@@ -774,9 +775,27 @@ module Base : Constraint = struct
         | _ -> super#point_satisfies f vars point
 
       method! type_satisfies vars = function
+        (* Unspecified kind *)
+        | Not_typed -> assert false
+        | Var _ | Recursive _ | Closed ->
+           failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
+        | Alias _  as t  -> super#type_satisfies vars t
+        | (Application _ | RecursiveApplication _) -> false
+        | Meta _ as t  -> super#type_satisfies vars t
+        (* Type *)
         | Primitive (Bool | Int | Char | Float | String) -> true
-        | (Alias _ | Meta _) as t  -> super#type_satisfies vars t
-        | _ -> false
+        | Primitive _ -> false
+        | (Function _ | Lolli _ | Record _ | Variant _ | Table _ | Lens _ | ForAll (_::_, _)) -> false
+        | ForAll ([], t) -> super#type_satisfies vars t
+        (* Effect *)
+        | Effect _ as t -> super#type_satisfies vars t
+        (* Row *)
+        | Row _ as t -> super#type_satisfies vars t
+        (* Presence *)
+        | Absent -> true
+        | Present t -> super#type_satisfies vars t
+        (* Session *)
+        | Input _ | Output _ | Select _ | Choice _ | Dual _ | End -> false
     end
   end
 
@@ -791,18 +810,14 @@ module Unl : Constraint = struct
     inherit type_predicate as super
 
     method! type_satisfies vars = function
+      (* Unspecified kind *)
       | Not_typed -> assert false
       | Var _ | Recursive _ | Closed ->
          failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
-      | Effect _ | Primitive _ | Function _ -> true
-      | Lolli _ -> false
-      | (Record _ | Variant _ | Alias _ | Meta _ | ForAll _ | Dual _) as t
-        -> super#type_satisfies vars t
-      | Table _ -> true
-      | Lens _sort -> failwith "Not yet implemented" (* true *)
-        (* We might support linear lists like this...
-           but we'd need to replace hd and tl with a split operation. *)
-        (* | `Application ({Abstype.id="List"}, [`Type t]) -> Unl.satisfies_type (rec_vars, quant_vars) t  *)
+      | Alias _ as t -> super#type_satisfies vars t
+      (* We might support linear lists like this...
+         but we'd need to replace hd and tl with a split operation. *)
+      (* | `Application ({Abstype.id="List"}, [`Type t]) -> Unl.satisfies_type (rec_vars, quant_vars) t  *)
       | Application _ -> true (* TODO: change this if we add linear abstract types *)
       | RecursiveApplication { r_linear ; _ } ->
             (* An application is linear if the type it refers to is
@@ -812,15 +827,27 @@ module Unl : Constraint = struct
              * block is unrestricted. With this in hand, we can calculate
              * linearity information, meaning that (r_linear ()) will return (Some lin). *)
          OptionUtils.opt_app not true (r_linear ())
+      | Meta _ as t -> super#type_satisfies vars t
+      (* Type *)
+      | Primitive _ | Function _ -> true
+      | Lolli _ -> false
+      | (Record _ | Variant _) as t -> super#type_satisfies vars t
+      | (Table _ | Lens _) -> true
+      | ForAll _ as t -> super#type_satisfies vars t
+      (* Effect *)
+      | Effect _  -> true
+      (* Row *)
       | Row (fields, row_var, _dual) ->
          StringMap.fold
            (fun _ t acc ->
              o#type_satisfies vars t || acc)
            fields false
          || o#point_satisfies o#type_satisfies vars row_var
+      (* Presence *)
       | Absent -> false
       | Present t -> o#type_satisfies vars t
-      | Input _ | Output _ | Choice _ | Select _ | End -> false
+      (* Session *)
+      | Input _ | Output _ | Select _ | Choice _ | Dual _ | End -> false
   end
 
   let type_satisfies, row_satisfies =
@@ -845,15 +872,33 @@ module Unl : Constraint = struct
      inherit type_iter as super
 
      method! visit_type vars = function
+       (* Unspecified kind *)
        | Not_typed -> assert false
        | Var _ | Recursive _ | Closed ->
           failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
-       | Effect _ | Primitive _ | Function _ | Table _ | Application _ -> ()
-       | (Record _ | Variant _ | Alias _ | Meta _ | ForAll _ | Dual _) as t
-         -> super#visit_type vars t
+       | Alias _ as t -> super#visit_type vars t
+       | Application _ -> ()
        | RecursiveApplication _ -> ()
-       | Lens _ -> failwith "Not yet implemented"
-       | _ -> assert false
+       | Meta _ as t -> super#visit_type vars t
+       (* Type *)
+       | Primitive _ -> ()
+       | Function _ -> ()
+       | Lolli _ -> assert false
+       | (Record _ | Variant _) as t -> super#visit_type vars t
+       | Table _ | Lens _ -> ()
+       | ForAll _ as t -> super#visit_type vars t
+       (* Effect *)
+       | Effect _ -> ()
+       (* Row *)
+       | Row _ as t -> super#visit_type vars t
+       (* Presence *)
+       | Absent -> ()
+       | Present _ as t -> super#visit_type vars t
+       (* Session *)
+       (* FIXME: the following line is patently wrong, but was present
+          in the previous code and appears to be being relied upon *)
+       | Dual _ as t -> super#visit_type vars t
+       | (Input _ | Output _ | Select _ | Choice _ | End) -> assert false
 
      method! visit_var point = function
        | (_, kind, _) when Subkind.linearity (Kind.subkind kind) = Linearity.Unl-> ()
@@ -2108,7 +2153,7 @@ struct
           FieldEnv.fold
             (fun i f tuple_env ->
                match f with
-                 | Present t         -> IntMap.add (int_of_string i) t tuple_env
+                 | Present t        -> IntMap.add (int_of_string i) t tuple_env
                  | (Absent | Var _) -> assert false
                  | _ -> raise tag_expectation_mismatch)
             field_env
@@ -2203,105 +2248,10 @@ struct
             | _ -> assert false
             end
       in match t with
+         (* Unspecified kind *)
          | Not_typed       -> "not typed"
          | Var _ | Recursive _ | Closed ->
             failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
-         | Primitive p     -> Primitive.to_string p
-         | Meta point ->
-            begin
-              match Unionfind.find point with
-              | Closed -> ""
-              | Var (var, k, `Flexible) when policy.flavours ->
-                 (name_of_type var (Kind.subkind k) "%" (fun name -> "%" ^ name))
-              | Var (var, k, _) ->
-                 (name_of_type var (Kind.subkind k) "_" (fun name -> name))
-              | Recursive (var, _kind, body) ->
-                 if TypeVarSet.mem var bound_vars then
-                   Vars.find var vars
-                 else
-                   "mu " ^ Vars.find var vars ^ " . " ^
-                     datatype { context with bound_vars = TypeVarSet.add var bound_vars } p body
-              | t -> sd t
-            end
-         | Function (args, effects, t) ->
-            let ht fields =
-              match FieldEnv.find "hear" fields with
-              | Present t -> sd t
-              | _          -> assert false in
-            ppr_function_type args effects t ">" ht
-         | Lolli    (args, effects, t) ->
-            let ht fields =
-              sd (match FieldEnv.find "hear" fields with
-                  | Present t -> t
-                  | _          -> assert false)
-            in ppr_function_type args effects t "@" ht
-         | Record r ->
-            let ur = unwrap r in
-            let r = match r with
-              | Row (fields, row_var, dual) ->
-                 fields, row_var, dual
-              | _ -> raise tag_expectation_mismatch
-            in
-            (if is_tuple ur then string_of_tuple context r
-             else "(" ^ row "," context p (Row r) ^ ")")
-         | Variant r -> "[|" ^ row "|" context p r ^ "|]"
-         | Effect r -> "{" ^ row "," context p r ^ "}"
-         | ForAll (tyvars, body) ->
-            let bound_vars =
-              List.fold_left
-                (fun bound_vars tyvar ->
-                  TypeVarSet.add (Quantifier.to_var tyvar) bound_vars)
-                bound_vars tyvars
-            in
-            if not (policy.flavours) then
-              match tyvars with
-              | [] -> datatype { context with bound_vars } p body
-              | _ ->
-                 "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype { context with bound_vars } p body
-            else
-              "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype { context with bound_vars } p body
-         | Row _ | Present _ | Absent -> failwith "Not yet implemented."
-         | Input  (t, s) -> "?(" ^ sd t ^ ")." ^ sd s
-         | Output (t, s) -> "!(" ^ sd t ^ ")." ^ sd s
-         | Select bs -> "[+|" ^ row "," context p bs ^ "|+]"
-         | Choice bs -> "[&|" ^ row "," context p bs ^ "|&]"
-         | Dual s -> "~" ^ sd s
-         | End -> "End"
-         | Table (r, w, n)   ->
-            (* TODO: pretty-print this using constraints? *)
-            "TableHandle(" ^
-              sd r ^ "," ^
-                sd w ^ "," ^
-                  sd n ^ ")"
-         | Lens _typ ->
-            failwith "Not yet implemented"
-         (* let open Lens in
-          * let sort = Type.sort _typ in
-          * let cols = Sort.present_colset sort |> Column.Set.elements in
-          * let fds = Sort.fds sort in
-          * let predicate =
-          *   Sort.predicate sort
-          *   |> OptionUtils.from_option (Phrase.Constant.bool true) in
-          * let pp_col f col =
-          *   Format.fprintf f "%s : %a"
-          *     (Lens.Column.alias col)
-          *     Lens.Phrase.Type.pp_pretty (Lens.Column.typ col) in
-          * if Lens.Type.is_abstract _typ
-          * then
-          *   if Lens.Type.is_checked _typ
-          *   then
-          *     Format.asprintf "LensChecked((%a), { %a })"
-          *       (Lens.Utility.Format.pp_comma_list pp_col) cols
-          *       Lens.Fun_dep.Set.pp_pretty fds
-          *   else
-          *     Format.asprintf "LensUnchecked((%a), { %a })"
-          *       (Lens.Utility.Format.pp_comma_list pp_col) cols
-          *       Lens.Fun_dep.Set.pp_pretty fds
-          * else
-          *   Format.asprintf "Lens((%a), %a, { %a })"
-          *     (Lens.Utility.Format.pp_comma_list pp_col) cols
-          *     Lens.Database.fmt_phrase_dummy predicate
-          *     Lens.Fun_dep.Set.pp_pretty fds *)
          | Alias ((s, _, ts), _) | RecursiveApplication { r_name = s; r_args = ts; _ } ->
             let ts =
               match ListUtils.unsnoc_opt ts, context.shared_effect with
@@ -2331,6 +2281,110 @@ struct
          | Application (s, ts) ->
             let vars = String.concat "," (List.map (type_arg context p) ts) in
             Printf.sprintf "%s (%s)" (Abstype.name s) vars
+         | Meta point ->
+            begin
+              match Unionfind.find point with
+              | Closed -> ""
+              | Var (var, k, `Flexible) when policy.flavours ->
+                 (name_of_type var (Kind.subkind k) "%" (fun name -> "%" ^ name))
+              | Var (var, k, _) ->
+                 (name_of_type var (Kind.subkind k) "_" (fun name -> name))
+              | Recursive (var, _kind, body) ->
+                 if TypeVarSet.mem var bound_vars then
+                   Vars.find var vars
+                 else
+                   "mu " ^ Vars.find var vars ^ " . " ^
+                     datatype { context with bound_vars = TypeVarSet.add var bound_vars } p body
+              | t -> sd t
+            end
+         (* Types *)
+         | Primitive p     -> Primitive.to_string p
+         | Function (args, effects, t) ->
+            let ht fields =
+              match FieldEnv.find "hear" fields with
+              | Present t -> sd t
+              | _          -> assert false in
+            ppr_function_type args effects t ">" ht
+         | Lolli    (args, effects, t) ->
+            let ht fields =
+              sd (match FieldEnv.find "hear" fields with
+                  | Present t -> t
+                  | _          -> assert false)
+            in ppr_function_type args effects t "@" ht
+         | Record r ->
+            let ur = unwrap r in
+            let r = match r with
+              | Row (fields, row_var, dual) ->
+                 fields, row_var, dual
+              | _ -> raise tag_expectation_mismatch
+            in
+            (if is_tuple ur then string_of_tuple context r
+             else "(" ^ row "," context p (Row r) ^ ")")
+         | Variant r -> "[|" ^ row "|" context p r ^ "|]"
+         | Table (r, w, n)   ->
+            (* TODO: pretty-print this using constraints? *)
+            "TableHandle(" ^
+              sd r ^ "," ^
+                sd w ^ "," ^
+                  sd n ^ ")"
+         | Lens _typ ->
+            "Lens (Not yet implemented lens pretty-printing)"
+
+         (* let open Lens in
+          * let sort = Type.sort _typ in
+          * let cols = Sort.present_colset sort |> Column.Set.elements in
+          * let fds = Sort.fds sort in
+          * let predicate =
+          *   Sort.predicate sort
+          *   |> OptionUtils.from_option (Phrase.Constant.bool true) in
+          * let pp_col f col =
+          *   Format.fprintf f "%s : %a"
+          *     (Lens.Column.alias col)
+          *     Lens.Phrase.Type.pp_pretty (Lens.Column.typ col) in
+          * if Lens.Type.is_abstract _typ
+          * then
+          *   if Lens.Type.is_checked _typ
+          *   then
+          *     Format.asprintf "LensChecked((%a), { %a })"
+          *       (Lens.Utility.Format.pp_comma_list pp_col) cols
+          *       Lens.Fun_dep.Set.pp_pretty fds
+          *   else
+          *     Format.asprintf "LensUnchecked((%a), { %a })"
+          *       (Lens.Utility.Format.pp_comma_list pp_col) cols
+          *       Lens.Fun_dep.Set.pp_pretty fds
+          * else
+          *   Format.asprintf "Lens((%a), %a, { %a })"
+          *     (Lens.Utility.Format.pp_comma_list pp_col) cols
+          *     Lens.Database.fmt_phrase_dummy predicate
+          *     Lens.Fun_dep.Set.pp_pretty fds *)
+
+         | ForAll (tyvars, body) ->
+            let bound_vars =
+              List.fold_left
+                (fun bound_vars tyvar ->
+                  TypeVarSet.add (Quantifier.to_var tyvar) bound_vars)
+                bound_vars tyvars
+            in
+            if not (policy.flavours) then
+              match tyvars with
+              | [] -> datatype { context with bound_vars } p body
+              | _ ->
+                 "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype { context with bound_vars } p body
+            else
+              "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype { context with bound_vars } p body
+         (* Effect *)
+         | Effect r -> "{" ^ row "," context p r ^ "}"
+         (* Row *)
+         | Row _ as t -> "{" ^ row "," context p t ^ "}"
+         (* Presence *)
+         | (Present _ | Absent) as t -> presence context p t
+         (* Session *)
+         | Input  (t, s) -> "?(" ^ sd t ^ ")." ^ sd s
+         | Output (t, s) -> "!(" ^ sd t ^ ")." ^ sd s
+         | Select bs -> "[+|" ^ row "," context p bs ^ "|+]"
+         | Choice bs -> "[&|" ^ row "," context p bs ^ "|&]"
+         | Dual s -> "~" ^ sd s
+         | End -> "End"
   and presence ({ bound_vars; _ } as context) ((policy, vars) as p) = function
       | Present t ->
         begin
