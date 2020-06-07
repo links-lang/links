@@ -843,7 +843,7 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
             StringSet.iter
               (fun label ->
                 match StringMap.find label env with
-                | (Absent | Var _) as f ->
+                | (Absent | Meta _) as f ->
                    unify_presence' rec_env (f, Absent)
                 | _ ->
                    raise (Failure (`Msg ("Field environments\n "^ string_of_row (Row (lenv, closed_row_var, false))
@@ -1111,7 +1111,7 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
           ()
         else
           match f with
-          | (Absent | Var _) when closed ->
+          | (Absent | Meta _) when closed ->
              (* closed rows don't need to explicitly mention absent *)
              unify_presence' rec_env (f, Absent)
           | _ ->
