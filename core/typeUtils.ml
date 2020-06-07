@@ -319,7 +319,7 @@ let rec primary_kind_of_type t =
 (** Infer the primary kind of a data type and check the
    well-formedness of the type (up to its primary kind) in the
    process. *)
-let check_type_wellformedness t : unit =
+let check_type_wellformedness primary_kind t : unit =
   let check_kind expected actual =
     if actual = expected then
       actual
@@ -427,7 +427,12 @@ let check_type_wellformedness t : unit =
        pk_type
     | Dual s -> typ rec_env s
     | End -> pk_type in
-  ignore (datatype IntMap.empty t)
+  let open PrimaryKind in
+  match primary_kind with
+  | Some Type -> ignore (datatype IntMap.empty t)
+  | Some Row ->  ignore (row IntMap.empty t)
+  | Some Presence ->  ignore (field_spec IntMap.empty t)
+  | None -> ignore (typ IntMap.empty t)
 
 let row_present_types t =
   extract_row t
