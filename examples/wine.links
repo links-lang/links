@@ -686,7 +686,7 @@ mutual {
 
   fun wine_count(region_id, wine_type) {
     var result =
-      query { 
+      query {
         for (wine <-- wineTable)
         where (wine_type == 1 || wine.wine_type == wine_type)
         {

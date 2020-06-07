@@ -3451,7 +3451,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                             pattern_env pattern :: environments)
                      | Table (pattern, e) ->
                          unify ~handle:Gripers.iteration_ambient_effect
-                           (no_pos (`Effect context.effect_row), 
+                           (no_pos (`Effect context.effect_row),
                             no_pos (`Effect (Types.make_empty_closed_row ())));
                          let a = `Record (Types.make_empty_open_row (lin_unl, res_base)) in
                          let b = `Record (Types.make_empty_open_row (lin_unl, res_base)) in
