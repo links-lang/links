@@ -107,7 +107,6 @@ stdout : 2 : Int
 Case patterns (with redefined hd)
 { fun hd(_) { 1 } switch (['a']) { case [y] -> y }}
 stdout : 'a' : Char
-ignore : Known hygiene problem
 
 With parentheses:
 switch ([1]) { case (x::xs) -> 1  case x -> 2 }
