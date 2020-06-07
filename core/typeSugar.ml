@@ -328,6 +328,7 @@ sig
   val form_binding_pattern : griper
 
   val iteration_unl_effect : griper
+  val iteration_ambient_effect : griper
   val iteration_list_body : griper
   val iteration_list_pattern : griper
   val iteration_table_body : griper
@@ -1106,6 +1107,16 @@ end
       let ppr_rt = show_type rt in
       let ppr_lt = show_type lt in
       die pos ("Iterations effects cannot be linear" ^ nli () ^
+                code ppr_rt                            ^ nl  () ^
+               "but the currently allowed effects are" ^ nli () ^
+                code ppr_lt)
+
+    let iteration_ambient_effect ~pos ~t1:(_, lt) ~t2:(_, rt) ~error:_ =
+      build_tyvar_names [lt; rt];
+      let ppr_rt = show_type rt in
+      let ppr_lt = show_type lt in
+      die pos ("Iterations over tables are only allowed in tame contexts." ^ nli () ^
+               "This iteration has ambient effect"     ^ nli () ^
                 code ppr_rt                            ^ nl  () ^
                "but the currently allowed effects are" ^ nli () ^
                 code ppr_lt)
@@ -3418,14 +3429,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
 
         (* various expressions *)
         | Iteration (generators, body, where, orderby) ->
-            let context =
-              begin
-                unify ~handle:Gripers.iteration_unl_effect
-                  (no_pos (`Effect context.effect_row),
-                   no_pos (`Effect (Types.make_empty_open_row default_effect_subkind)));
-                context
-              end
-            in
+            begin
+              unify ~handle:Gripers.iteration_unl_effect
+                (no_pos (`Effect context.effect_row),
+                 no_pos (`Effect (Types.make_empty_open_row default_effect_subkind)))
+            end;
             let generators, generator_usages, environments =
               List.fold_left
                 (fun (generators, generator_usages, environments) ->
@@ -3442,6 +3450,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                             usages e :: generator_usages,
                             pattern_env pattern :: environments)
                      | Table (pattern, e) ->
+                         unify ~handle:Gripers.iteration_ambient_effect
+                           (no_pos (`Effect context.effect_row), 
+                            no_pos (`Effect (Types.make_empty_closed_row ())));
                          let a = `Record (Types.make_empty_open_row (lin_unl, res_base)) in
                          let b = `Record (Types.make_empty_open_row (lin_unl, res_base)) in
                          let c = `Record (Types.make_empty_open_row (lin_unl, res_base)) in
