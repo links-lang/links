@@ -2920,22 +2920,20 @@ let recursive_applications t =
    to be used, we remove potential cycles arising from recursive types/rows first.
    They are here because they are needed
    by the generated code for printing the IR, do not call them yourself.
-   Use string_of_* instead *)
-let pp_datatype : Format.formatter -> datatype -> unit = fun fmt t ->
+   Use string_of_* instead
+   Make sure that none of the printing functions generated for types
+   possibly containg cycles escape this module without having one
+   a version below that removes the cycles first! *)
+let pp : Format.formatter -> t -> unit = fun fmt t ->
   if Settings.get print_types_pretty then
     Format.pp_print_string fmt (string_of_datatype t)
   else
-    pp_datatype fmt (DecycleTypes.datatype t)
-let pp_quantifier : Format.formatter -> Quantifier.t -> unit = fun fmt t ->
-  if Settings.get print_types_pretty then
-    Format.pp_print_string fmt (string_of_quantifier t)
-  else
-    Quantifier.pp fmt (DecycleTypes.quantifier t)
-let pp_type_arg : Format.formatter -> type_arg -> unit = fun fmt t ->
-  if Settings.get print_types_pretty then
-    Format.pp_print_string fmt (string_of_type_arg t)
-  else
-    pp_type_arg fmt (DecycleTypes.type_arg t)
+    pp fmt (DecycleTypes.datatype t)
+
+let pp_type_arg = pp
+let pp_row = pp
+let pp_datatype = pp
+
 let pp_tycon_spec : Format.formatter -> tycon_spec -> unit = fun fmt t ->
   let decycle_tycon_spec = function
     | `Alias (qlist, ty) -> `Alias (List.map DecycleTypes.quantifier qlist, DecycleTypes.datatype ty)
@@ -2945,11 +2943,7 @@ let pp_tycon_spec : Format.formatter -> tycon_spec -> unit = fun fmt t ->
     Format.pp_print_string fmt (string_of_tycon_spec t)
   else
     pp_tycon_spec fmt (decycle_tycon_spec t)
-let pp_row : Format.formatter -> row -> unit = fun fmt t ->
-  if Settings.get print_types_pretty then
-    Format.pp_print_string fmt (string_of_row t)
-  else
-    pp_row fmt (DecycleTypes.row t)
+
 
 let unwrap_list_type = function
   | Application ({Abstype.id = "List"; _}, [t]) -> t

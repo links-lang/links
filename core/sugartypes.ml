@@ -83,10 +83,10 @@ struct
 type t =
   | TUnresolved       of Name.t * Subkind.t option * Freedom.t
   (* This is why we can't have nice things ... *)
-  | TResolvedType     of Types.meta_type_var
-  | TResolvedRow      of Types.meta_row_var
-  | TResolvedPresence of Types.meta_presence_var
-     [@@deriving show]
+  | TResolvedType     of Types.meta_type_var     [@printer fun fmt _ -> Format.pp_print_string fmt "TResolvedType"]
+  | TResolvedRow      of Types.meta_row_var      [@printer fun fmt _ -> Format.pp_print_string fmt "TResolvedRow"]
+  | TResolvedPresence of Types.meta_presence_var [@printer fun fmt _ -> Format.pp_print_string fmt "TResolvedPresence"]
+  [@@deriving show]
 
 
 let is_resolved = function

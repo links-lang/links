@@ -67,6 +67,8 @@ type tygroup = {
 }
 
 (* Types *)
+(* Do NOT add [@@deriving show] to this group!
+   See comment on pp_functions in types.ml for details *)
 and rec_appl = {
   r_name: string;
   r_dual: bool;
@@ -123,7 +125,7 @@ and meta_var = typ point
 and row = typ
 and row' = field_spec_map * row_var * bool
 and row_var = meta_row_var
-  [@@deriving show]
+
 
 val is_type_body : typ -> bool
 val is_row_body : row -> bool
@@ -364,7 +366,17 @@ val make_pure_function_type : datatype list -> datatype -> datatype
 val make_function_type      : ?linear:bool -> datatype list -> row -> datatype -> datatype
 val make_thunk_type : row -> datatype -> datatype
 
-(* val pp_datatype : Format.formatter -> datatype -> unit *)
+
+
+(* Do not add pp_ functions for types here that need
+  decycling without implementing a version that does
+  the decycling!
+  See the (hand-written) defintions of the pp_* functions
+  in types.ml for details *)
+val pp : Format.formatter -> t -> unit
+val pp_datatype : Format.formatter -> t -> unit
+val pp_row : Format.formatter -> row -> unit
+val pp_type_arg : Format.formatter -> type_arg -> unit
 val pp_tycon_spec: Format.formatter -> tycon_spec -> unit
 
 (* Recursive type applications *)
