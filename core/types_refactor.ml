@@ -1448,7 +1448,7 @@ and subst_dual_field_spec : var_map -> field_spec -> field_spec =
   match field_spec with
   | Absent -> Absent
   | Present t -> Present (subst_dual_type rec_points t)
-  | Var _ -> (* TODO: what should happen here? *) assert false
+  | Meta _ -> (* TODO: what should happen here? *) assert false
   | _ -> raise tag_expectation_mismatch
 and subst_dual_type_arg : var_map -> type_arg -> type_arg =
   fun rec_points t -> subst_dual_type rec_points t
@@ -1784,10 +1784,16 @@ struct
     fun bound_vars t ->
     let fbtv = free_bound_type_vars bound_vars in
       match t with
+      (* Unspecified kind *)
       | Not_typed -> []
       | Var _ | Recursive _ | Closed ->
          failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
-      | Primitive _ -> []
+      | Alias ((_, _, ts), _) ->
+         concat_map (free_bound_tyarg_vars bound_vars) ts
+      | Application (_, tyargs) ->
+         List.concat (List.map (free_bound_tyarg_vars bound_vars) tyargs)
+      | RecursiveApplication { r_args; _ } ->
+         List.concat (List.map (free_bound_tyarg_vars bound_vars) r_args)
       | Meta point ->
          begin
            match Unionfind.find point with
@@ -1800,15 +1806,16 @@ struct
               else (var, (`Recursive, primary_kind, `Bound))::(free_bound_type_vars (TypeVarSet.add var bound_vars) body)
            | t -> fbtv t
          end
+      (* Type *)
+      | Primitive _ -> []
       | Function (f, m, t) ->
          (fbtv f) @ (free_bound_row_type_vars bound_vars m) @ (fbtv t)
       | Lolli (f, m, t) ->
          (fbtv f) @ (free_bound_row_type_vars bound_vars m) @ (fbtv t)
       | Record row
-        | Variant row -> free_bound_row_type_vars bound_vars row
-      | Lens _ -> failwith "Not yet implemented" (* [] *)
-      | Effect row -> free_bound_row_type_vars bound_vars row
+      | Variant row -> free_bound_row_type_vars bound_vars row
       | Table (r, w, n) -> (fbtv r) @ (fbtv w) @ (fbtv n)
+      | Lens _ -> []
       | ForAll (tyvars, body) ->
          let bound_vars, vars =
            List.fold_left
@@ -1819,12 +1826,9 @@ struct
              tyvars
          in
          (List.rev vars) @ (free_bound_type_vars bound_vars body)
-      | Alias ((_, _, ts), _) ->
-         concat_map (free_bound_tyarg_vars bound_vars) ts
-      | Application (_, tyargs) ->
-         List.concat (List.map (free_bound_tyarg_vars bound_vars) tyargs)
-      | RecursiveApplication { r_args; _ } ->
-         List.concat (List.map (free_bound_tyarg_vars bound_vars) r_args)
+      (* Effect *)
+      | Effect row -> free_bound_row_type_vars bound_vars row
+      (* Row *)
       | Row (field_env, row_var, _) ->
          let field_type_vars =
            FieldEnv.fold
@@ -1833,8 +1837,10 @@ struct
              field_env [] in
          let row_var = free_bound_row_var_vars bound_vars row_var in
          field_type_vars @ row_var
+      (* Presence *)
       | Present t -> free_bound_type_vars bound_vars t
       | Absent -> []
+      (* Session *)
       | Input (t, s) | Output (t, s) ->
          free_bound_type_vars bound_vars t @ free_bound_type_vars bound_vars s
       | Select row | Choice row -> free_bound_row_type_vars bound_vars row
@@ -2154,7 +2160,7 @@ struct
             (fun i f tuple_env ->
                match f with
                  | Present t        -> IntMap.add (int_of_string i) t tuple_env
-                 | (Absent | Var _) -> assert false
+                 | (Absent | Meta _) -> assert false
                  | _ -> raise tag_expectation_mismatch)
             field_env
             IntMap.empty in

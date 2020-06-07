@@ -73,8 +73,8 @@ let split_row name row =
         | Present t -> t
         | Absent ->
             error ("Attempt to split row "^string_of_row row ^" on absent field " ^ name)
-        | Var _ ->
-            error ("Attempt to split row "^string_of_row row ^" on var field " ^ name)
+        | Meta _ ->
+            error ("Attempt to split row "^string_of_row row ^" on meta field " ^ name)
         | _ -> raise Types.tag_expectation_mismatch
     else
       error ("Attempt to split row "^string_of_row row ^" on absent field " ^ name)
@@ -148,8 +148,8 @@ let rec erase_type ?(overstep_quantifiers=true) names t =
                 StringMap.add name Absent field_env
             | Some Absent ->
               error ("Attempt to remove absent field "^name^" from row "^string_of_row row)
-            | Some (Var _) ->
-              error ("Attempt to remove var field "^name^" from row "^string_of_row row)
+            | Some (Meta _) ->
+              error ("Attempt to remove meta field "^name^" from row "^string_of_row row)
             | Some _ ->
               raise Types.tag_expectation_mismatch
             | None ->
