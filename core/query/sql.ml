@@ -75,11 +75,11 @@ let buffer_concat xs =
   List.iter (Buffer.add_string buf) xs;
   Buffer.contents buf
 
-let rec buf_mapstrcat buf list f sep = 
+let rec buf_mapstrcat buf list f sep =
   match list with
     | [] -> ()
     | [x] -> f x
-    | x :: xs -> 
+    | x :: xs ->
       f x; Buffer.add_string buf sep; buf_mapstrcat buf xs f sep
 
 module Arithmetic :
@@ -161,10 +161,10 @@ let rec string_of_query buf quote ignore_fields q =
     else
       match fields with
         | [] -> buf_add "0 as \"@unit@\"" (* SQL doesn't support empty records! *)
-        | fields -> buf_mapstrcat buf fields 
-                      (fun (b, l) -> 
+        | fields -> buf_mapstrcat buf fields
+                      (fun (b, l) ->
                         buf_add "("; sb b; buf_add ") as "; buf_add (quote l))
-                      "," 
+                      ","
   in
   let string_of_select fields tables condition os =
     let tables = String.concat "," tables in
@@ -183,9 +183,9 @@ let rec string_of_query buf quote ignore_fields q =
       buf_add "delete from ";
       buf_add table;
       OptionUtils.opt_app
-        (fun x ->  buf_add "where ("; sbt x; buf_add ")") 
-        () 
-        where 
+        (fun x ->  buf_add "where ("; sbt x; buf_add ")")
+        ()
+        where
   in
   let string_of_update table fields where =
     buf_add "update ";
@@ -194,19 +194,19 @@ let rec string_of_query buf quote ignore_fields q =
     buf_mapstrcat buf fields (fun (k, v) -> buf_add (quote k); buf_add " = "; sbt v) ",";
     buf_add " ";
     OptionUtils.opt_app
-      (fun x -> buf_add "where ("; sbt x; buf_add ")") 
-      () 
-      where 
+      (fun x -> buf_add "where ("; sbt x; buf_add ")")
+      ()
+      where
   in
-  let string_of_insert table fields values = 
+  let string_of_insert table fields values =
     buf_add "insert into ";
     buf_add table;
     buf_add " (";
     buf_mapstrcat buf fields (fun x -> buf_add x) ",";
     buf_add ") values ";
-    buf_mapstrcat buf values 
-      (fun list -> 
-        buf_mapstrcat buf list (fun x -> buf_add "("; sbt x; buf_add ")") ",") 
+    buf_mapstrcat buf values
+      (fun list ->
+        buf_mapstrcat buf list (fun x -> buf_add "("; sbt x; buf_add ")") ",")
       ",";
   in
     match q with
@@ -240,7 +240,7 @@ let rec string_of_query buf quote ignore_fields q =
               (* Inline the query *)
               let tables = List.map (fun (t, x) -> buffer_concat [quote t; " as "; (string_of_table_var x)]) tables in
               let buf2 = Buffer.create 0 in
-              let q2 = string_of_query buf2 quote ignore_fields q; Buffer.contents buf2 in 
+              let q2 = string_of_query buf2 quote ignore_fields q; Buffer.contents buf2 in
               let q = buffer_concat ["("; q2; ") as "; string_of_table_var z] in
               string_of_select fields (q::tables) condition os
           | _ -> assert false
@@ -259,7 +259,7 @@ and string_of_base buf quote one_table b =
           buf_add "case when "; sb c; buf_add " then "; sb t; buf_add " else "; sb e; buf_add " end"
       | Constant c -> buf_add (Constant.to_string c)
       | Project (var, label) -> buf_add (string_of_projection quote one_table (var, label))
-      | Apply (op, [l; r]) when Arithmetic.is op -> 
+      | Apply (op, [l; r]) when Arithmetic.is op ->
         let buf2 = Buffer.create 0 in
         let buf3 = Buffer.create 0 in
         let l2 = string_of_base buf2 quote one_table l; Buffer.contents buf2 in
@@ -291,7 +291,7 @@ and string_of_base buf quote one_table b =
       | RowNumber ps ->
         buf_add "row_number() over (order by "; buf_add (String.concat "," (List.map (string_of_projection quote one_table) ps)); buf_add ")"
 
-let string_of_base quote one_table b = 
+let string_of_base quote one_table b =
   let buf = Buffer.create 0 in
   string_of_base buf quote one_table b; Buffer.contents buf
 
