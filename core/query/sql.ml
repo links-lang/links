@@ -199,7 +199,7 @@ let rec string_of_query buf quote ignore_fields q =
       () 
       where 
   in
-  let string_of_insert table fields values =
+  let string_of_insert table fields values = 
     buf_add "insert into ";
     buf_add table;
     buf_add " (";
@@ -291,6 +291,16 @@ and string_of_base buf quote one_table b =
       | RowNumber [] -> buf_add "1"
       | RowNumber ps ->
         buf_add "row_number() over (order by "; buf_add (String.concat "," (List.map (string_of_projection quote one_table) ps)); buf_add ")"
+
+(* let string_of_insert table fields values =
+  let buf = Buffer.create 0 in
+  let buf_add = Buffer.add_string buf in
+  string_of_insert buf table fields values;
+  Buffer.contents buf *)
+
+let string_of_base quote one_table b = 
+  let buf = Buffer.create 0 in
+  string_of_base buf quote one_table b; Buffer.contents buf
 
 
 let string_of_query ?(range=None) quote q =
