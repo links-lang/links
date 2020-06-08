@@ -183,11 +183,6 @@ sig
 end
   =
 struct
-  (* XXX let lookup_type var (_nenv, tenv, _eff) = *)
-  (*   TEnv.lookup tenv var *)
-
-(* XXX  let _lookup_name name (nenv, _tenv, _eff) =
-    NEnv.find name nenv *)
 
   let lookup_effects (_nenv, _tenv, eff) = eff
 
@@ -219,11 +214,6 @@ sig
 end
   =
 struct
-  (* XXX let lookup_type var (_nenv, tenv, _eff) = *)
-  (*   TEnv.lookup tenv var *)
-
-(* XXX  let _lookup_name name (nenv, _tenv, _eff) =
-    NEnv.find name nenv *)
 
   let lookup_effects (_nenv, _tenv, eff) = eff
 
