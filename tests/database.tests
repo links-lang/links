@@ -98,11 +98,10 @@ exit : 0
 
 Tame calls inside query blocks need to be enclosed by explicit query (1)
 sig firstField : (TableHandle ((|r::Base), (|w::Base), (|n::Base)), ((|r)) {}-> Bool, ((|r)) {}-> a) ~e~> (a::Base) fun firstField(t, p, body) { var matches = query { for (r <-- t) where (p(r)) [(v=body(r))] }; hd(matches).v}
-stdout : firstField = fun : (TableHandle((|a::Base),(|_::Base),(|_::Base)), ((|a::Base)) {}-> Bool, ((|a::Base)) {}-> d::Base) ~> d::Base
+stdout : () : ()
 exit : 0
 
 Tame calls inside query blocks need to be enclosed by explicit query (2)
 sig firstField : (TableHandle ((|r::Base), (|w::Base), (|n::Base)), ((|r)) {}-> Bool, ((|r)) {}-> a) ~e~> (a::Base) fun firstField(t, p, body) { var matches = for (r <-- t) where (p(r)) [(v=body(r))] ; hd(matches).v}
-stdout : firstField = fun : (TableHandle((|a::Base),(|_::Base),(|_::Base)), ((|a::Base)) {}-> Bool, ((|a::Base)) {}-> d::Base) ~> d::Base
 exit : 1
-stderr :  @..*
+stderr : @..*
