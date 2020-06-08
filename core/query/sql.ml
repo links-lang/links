@@ -168,20 +168,19 @@ let rec string_of_query buf quote ignore_fields q =
   in
   let string_of_select fields tables condition os =
     let tables = String.concat "," tables in
-    let fields = string_of_fields fields in
-    let orderby =
+    let orderby = fun () ->
       match os with
         | [] -> ()
         | _ ->  buf_add " order by "; buf_mapstrcat buf os (fun os -> sb os) "," in
-    let where =
+    let where = fun () ->
       match condition with
         | Constant (Constant.Bool true) -> ()
-        | _ ->  buf_add " where "; (* sb condition*)
+        | _ ->  buf_add " where "; sb condition
     in
-       buf_add "select "; fields; buf_add " from "; buf_add tables; where; orderby
+       buf_add "select "; string_of_fields fields; buf_add " from "; buf_add tables; where (); orderby ()
   in
   let string_of_delete table where =
-      buf_add "delete from";
+      buf_add "delete from ";
       buf_add table;
       OptionUtils.opt_app
         (fun x ->  buf_add "where ("; sbt x; buf_add ")") 
