@@ -163,16 +163,16 @@ let rec string_of_query buf quote ignore_fields q =
         | [] -> buf_add "0 as \"@unit@\"" (* SQL doesn't support empty records! *)
         | fields -> buf_mapstrcat buf fields 
                       (fun (b, l) -> 
-                        buf_add "("; sb b; buf_add ") as "; buf_add (quote l)) (* string_of_label l) *)
+                        buf_add "("; sb b; buf_add ") as "; buf_add (quote l))
                       "," 
   in
   let string_of_select fields tables condition os =
     let tables = String.concat "," tables in
-    let orderby = fun () ->
+    let orderby = fun () -> (* thunking:  delay the side effect*)
       match os with
         | [] -> ()
         | _ ->  buf_add " order by "; buf_mapstrcat buf os (fun os -> sb os) "," in
-    let where = fun () ->
+    let where = fun () -> (* thunking:  delay the side effect*)
       match condition with
         | Constant (Constant.Bool true) -> ()
         | _ ->  buf_add " where "; sb condition
@@ -291,16 +291,9 @@ and string_of_base buf quote one_table b =
       | RowNumber ps ->
         buf_add "row_number() over (order by "; buf_add (String.concat "," (List.map (string_of_projection quote one_table) ps)); buf_add ")"
 
-(* let string_of_insert table fields values =
-  let buf = Buffer.create 0 in
-  let buf_add = Buffer.add_string buf in
-  string_of_insert buf table fields values;
-  Buffer.contents buf *)
-
 let string_of_base quote one_table b = 
   let buf = Buffer.create 0 in
   string_of_base buf quote one_table b; Buffer.contents buf
-
 
 let string_of_query ?(range=None) quote q =
   let buf = Buffer.create 0 in
