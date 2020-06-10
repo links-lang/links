@@ -21,15 +21,15 @@ let star_str         = "Star"
 let plus_str         = "Plus"
 let question_str     = "Question"
 
-let desugar_regex phrase regex_type regex : phrase =
+let desugar_regex phrase regex_type repeat_type regex : phrase =
   (* Desugar a regex, making sure that only variables are embedded
      within.  Any expressions that are spliced into the regex must be
      let-bound beforehand.  *)
   let constructor' ?body name = constructor name ?body ~ty:regex_type in
   let desugar_repeat : Regex.repeat -> phrase = function
-    | Regex.Star      -> constructor' star_str
-    | Regex.Plus      -> constructor' plus_str
-    | Regex.Question  -> constructor' question_str in
+    | Regex.Star      -> constructor star_str ~ty:repeat_type
+    | Regex.Plus      -> constructor plus_str ~ty:repeat_type
+    | Regex.Question  -> constructor question_str ~ty:repeat_type in
   let exprs = ref [] in
   let expr e =
     let (_, e, t) = phrase e in
@@ -48,7 +48,7 @@ let desugar_regex phrase regex_type regex : phrase =
       | StartAnchor        -> constructor' start_anchor_str
       | EndAnchor          -> constructor' end_anchor_str
       | Seq rs             ->
-        constructor' seq_str ~body:(list ~ty:(Types.make_list_type regex_type)
+        constructor' seq_str ~body:(list ~ty:regex_type
                                          (List.map (fun s -> aux s) rs))
       | Alternate (r1, r2) ->
         constructor' alternative_str ~body:(tuple [aux r1; aux r2])
@@ -71,6 +71,7 @@ object(self)
   inherit (TransformSugar.transform env) as super
 
   val regex_type = Instantiate.alias "Regex" [] env.Types.tycon_env
+  val repeat_type = Instantiate.alias "Repeat" [] env.Types.tycon_env
 
   method! phrase ({node=p; pos} as ph) = match p with
     | InfixAppl ((tyargs, BinaryOp.RegexMatch flags), e1, {node=Regex((Replace(_,_) as r)); _}) ->
@@ -79,7 +80,7 @@ object(self)
           then "sntilde"
           else "stilde" in
           self#phrase (fn_appl libfn tyargs
-                            [e1; desugar_regex self#phrase regex_type r])
+                            [e1; desugar_regex self#phrase regex_type repeat_type r])
     | InfixAppl ((tyargs, BinaryOp.RegexMatch flags), e1, {node=Regex r; _}) ->
         let nativep = List.exists ((=) RegexNative) flags
         and listp   = List.exists ((=) RegexList)   flags in
@@ -89,7 +90,7 @@ object(self)
           | false, false -> "tilde"
           | false, true  -> "ntilde" in
           self#phrase (fn_appl libfn tyargs
-                            [e1; desugar_regex self#phrase regex_type r])
+                            [e1; desugar_regex self#phrase regex_type repeat_type r])
     | InfixAppl ((_tyargs, BinaryOp.RegexMatch _), _, _) ->
         let (_, expr) = SourceCode.Position.resolve_start_expr pos in
         let message = "Unexpected RHS of regex operator: " ^ expr in

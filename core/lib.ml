@@ -26,7 +26,11 @@ module AliasEnv = Env.String
 let alias_env : Types.tycon_environment = DefaultAliases.alias_env
 
 let alias_env : Types.tycon_environment =
+  AliasEnv.bind "Repeat" (`Alias ([], (DesugarDatatypes.read ~aliases:alias_env Linksregex.Repeat.datatype))) alias_env
+
+let alias_env : Types.tycon_environment =
   AliasEnv.bind "Regex" (`Alias ([], (DesugarDatatypes.read ~aliases:alias_env Linksregex.Regex.datatype))) alias_env
+
 
 let datatype = DesugarDatatypes.read ~aliases:alias_env
 
