@@ -31,7 +31,6 @@ let alias_env : Types.tycon_environment =
 let alias_env : Types.tycon_environment =
   AliasEnv.bind "Regex" (`Alias ([], (DesugarDatatypes.read ~aliases:alias_env Linksregex.Regex.datatype))) alias_env
 
-
 let datatype = DesugarDatatypes.read ~aliases:alias_env
 
 type primitive =
