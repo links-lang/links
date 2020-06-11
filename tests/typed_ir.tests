@@ -51,3 +51,7 @@ asList (#698)
 tests/typed_ir/T698.links
 filemode : true
 stdout : () : ()
+
+isInt (#575)
+sig isInt : (String) -> Bool fun isInt (x) { x =~ /-?[0-9]+$/ }
+stdout : () : ()
