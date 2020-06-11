@@ -47,8 +47,25 @@ tests/typed_ir/T574.links
 filemode : true
 stdout : () : ()
 
-Effects compatibility on recursive functions (#697)
-tests/typed_ir/T697.links
+Unsafe type signatures #1 (#691)
+tests/typed_ir/T691a.links
+filemode : true
+exit : 1
+stderr : @..*
+
+Unsafe type signatures #2 (#691)
+tests/typed_ir/T691b.links
+filemode : true
+exit : 1
+stderr : @..*
+
+Wild effect compatibility #1 (#697)
+tests/typed_ir/T697a.links
+filemode : true
+stdout : () : ()
+
+Wild effect compatibility #2 (#697)
+tests/typed_ir/T697b.links
 filemode : true
 stdout : () : ()
 
