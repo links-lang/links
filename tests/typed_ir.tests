@@ -47,6 +47,11 @@ tests/typed_ir/T574.links
 filemode : true
 stdout : () : ()
 
+Effects compatibility on recursive functions (#697)
+tests/typed_ir/T697.links
+filemode : true
+stdout : () : ()
+
 asList (#698)
 tests/typed_ir/T698.links
 filemode : true
