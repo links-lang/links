@@ -6,7 +6,7 @@ CREATE TABLE agencies (
     name     text,
     based_in text,
     phone    text
-) WITH OIDS;
+);
 
 CREATE TABLE externaltours (
     id          integer primary key,
@@ -14,7 +14,7 @@ CREATE TABLE externaltours (
     destination text,
     type        text,
     price       integer
-) WITH OIDS;
+);
 
 insert into agencies (id, name, based_in, phone) values
   (1, 'BayTours', 'San Francisco', '415-1200'),
