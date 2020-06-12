@@ -100,7 +100,6 @@ let rec select_type name t = match concrete_type t with
   | `ForAll (_, t) -> select_type name t
   | `Select row ->
     let t, _ = split_row name row in t
-(*  | `Alias (_,t) -> select_type name t*)
   | t ->
     error ("Attempt to select from non-selection type "^string_of_datatype t)
 

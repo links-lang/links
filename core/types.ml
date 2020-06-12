@@ -1061,7 +1061,7 @@ let free_type_vars, free_row_type_vars, free_tyarg_vars =
           S.union_all
             [free_type_vars' rec_vars r; free_type_vars' rec_vars w; free_type_vars' rec_vars n]
       | `Lens _          -> S.empty
-      | `Alias ((_, _, ts,_), datatype) ->
+      | `Alias ((_, _, ts, _), datatype) ->
           S.union (S.union_all (List.map (free_tyarg_vars' rec_vars) ts)) (free_type_vars' rec_vars datatype)
       | `Application (_, tyargs) -> S.union_all (List.map (free_tyarg_vars' rec_vars) tyargs)
       | `RecursiveApplication { r_args; _ } ->
@@ -1235,13 +1235,7 @@ let rec dual_type : var_map -> datatype -> datatype =
       | `RecursiveApplication appl ->
           `RecursiveApplication { appl with r_dual = (not appl.r_dual) }
       | `End -> `End
-      (* it sometimes seems tempting to preserve aliases here, but it
-         won't always work - e.g. when we use dual_type to expose a
-         concrete type *)
       | `Alias ((f,ks,args,isdual),t)         -> `Alias ((f,ks,args,not(isdual)),dt t)
-      (* Still, we might hope to find a way of preserving 'dual
-         aliases' in order to simplify the pretty-printing of types... *)
-      (*| `Alias (_, t) -> dt t*)
       | t -> raise (Invalid_argument ("Attempt to dualise non-session type: " ^ show_datatype t))
 and dual_row : var_map -> row -> row =
   fun rec_points row ->
@@ -2408,7 +2402,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
       | `Variant row             -> make_env_r boundvars row
       | `Table (r, w, n)         -> union [make_env boundvars r; make_env boundvars w; make_env boundvars n]
       | `Lens _                  -> empties
-      | `Alias ((_, _, ts,_), d) -> union (List.map (make_env_ta boundvars) ts @ [make_env boundvars d])
+      | `Alias ((_, _, ts, _), d) -> union (List.map (make_env_ta boundvars) ts @ [make_env boundvars d])
       | `Application (_, ds)     -> union (List.map (make_env_ta boundvars) ds)
       | `RecursiveApplication { r_args ; _ } -> union (List.map (make_env_ta boundvars) r_args)
       | `ForAll (qs, t)          ->
