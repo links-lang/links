@@ -4689,7 +4689,7 @@ and type_cp (context : context) = fun {node = p; pos} ->
          CPUnquote (bindings, e), t, usage_builder u
     | CPGrab ((c, _), None, p) ->
        let (_, t, _) = type_check context (var c) in
-       let ctype = `Alias (("EndQuery", [], []), `Input (Types.unit_type, `End)) in
+       let ctype = `Alias (("EndQuery", [], [], false), `Input (Types.unit_type, `End)) in
        unify ~pos:pos ~handle:(Gripers.cp_grab c) (t, ctype);
        let (p, pt, u) = type_cp (unbind_var context c) p in
        CPGrab ((c, Some (ctype, [])), None, p), pt, use c u

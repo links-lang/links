@@ -117,7 +117,7 @@ and typ =
     | `Effect of row
     | `Table of typ * typ * typ
     | `Lens of Lens.Type.t
-    | `Alias of ((string * Kind.t list * type_arg list) * typ)
+    | `Alias of ((string * Kind.t list * type_arg list * bool) * typ)
     | `Application of (Abstype.t * type_arg list)
     | `RecursiveApplication of rec_appl
     | `MetaTypeVar of meta_type_var

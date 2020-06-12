@@ -51,7 +51,7 @@ let rec desugar_page (o, page_type) =
             let formlet_type = Types.concrete_type formlet_type in
             let a = Types.fresh_type_variable (lin_any, res_any) in
             let b = Types.fresh_type_variable (lin_any, res_any) in
-              Unify.datatypes (`Alias (("Formlet", [(PrimaryKind.Type, default_subkind)], [`Type a]), b), formlet_type);
+              Unify.datatypes (`Alias (("Formlet", [(PrimaryKind.Type, default_subkind)], [`Type a], false), b), formlet_type);
               fn_appl "formP" [`Type a; `Row (o#lookup_effects)]
                       [formlet; handler; attributes]
         | PagePlacement (page) -> page

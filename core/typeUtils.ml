@@ -38,7 +38,7 @@ let concrete_type t =
                       | _ -> `ForAll (qs, t)
                   end
           end
-      | `Dual s -> dual_type s
+      | `Dual s -> dual_type (ct rec_names s)
       | `RecursiveApplication ({ r_unique_name; r_dual; r_args; r_unwind ; _ } as appl) ->
           if (RecIdSet.mem (NominalId r_unique_name) rec_names) then
             `RecursiveApplication appl
@@ -100,8 +100,9 @@ let rec select_type name t = match concrete_type t with
   | `ForAll (_, t) -> select_type name t
   | `Select row ->
     let t, _ = split_row name row in t
+(*  | `Alias (_,t) -> select_type name t*)
   | t ->
-    error ("Attempt to select from non-selection type "^string_of_datatype (concrete_type t))
+    error ("Attempt to select from non-selection type "^string_of_datatype t)
 
 let rec split_choice_type name t = match concrete_type t with
   | `ForAll (_, t) -> split_choice_type name t

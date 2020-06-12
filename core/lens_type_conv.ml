@@ -14,7 +14,7 @@ let to_links_map m =
 
 let lookup_alias context ~alias =
   match Env.String.find_opt alias context with
-  | Some (`Alias (_, t)) -> `Alias ((alias, [], []), t)
+  | Some (`Alias (_, t)) -> `Alias ((alias, [], [], false), t)
   | _ -> Errors.MissingBuiltinType alias |> raise
 
 let rec type_of_lens_phrase_type ~context t =
