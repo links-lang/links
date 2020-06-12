@@ -47,7 +47,33 @@ tests/typed_ir/T574.links
 filemode : true
 stdout : () : ()
 
+Unsafe type signatures #1 (#691)
+tests/typed_ir/T691a.links
+filemode : true
+exit : 1
+stderr : @..*
+
+Unsafe type signatures #2 (#691)
+tests/typed_ir/T691b.links
+filemode : true
+exit : 1
+stderr : @..*
+
+Wild effect compatibility #1 (#697)
+tests/typed_ir/T697a.links
+filemode : true
+stdout : () : ()
+
+Wild effect compatibility #2 (#697)
+tests/typed_ir/T697b.links
+filemode : true
+stdout : () : ()
+
 asList (#698)
 tests/typed_ir/T698.links
 filemode : true
+stdout : () : ()
+
+isInt (#575)
+sig isInt : (String) -> Bool fun isInt (x) { x =~ /-?[0-9]+$/ }
 stdout : () : ()
