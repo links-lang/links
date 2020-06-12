@@ -204,7 +204,6 @@ module Typeability_preserving = struct
            Basicsettings.Sessions.exceptions_enabled
            (module DesugarSessionExceptions)
        ; (module DesugarProcesses)
-(* XXX       ; (module WrapTableIterators) *)
        ; (module DesugarFors)
        ; (module DesugarRegexes)
        ; (module DesugarFormlets)
