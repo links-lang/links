@@ -1156,13 +1156,13 @@ let concrete_type rec_names t =
   in
   ct rec_names t
 
-(** remove any redundant top-level `Vars from a presence flag. *)
+(** remove any redundant top-level 'Meta's from a presence flag. *)
 let rec concrete_field_spec f =
   match f with
     | Meta point ->
         begin
           match Unionfind.find point with
-            | Var _ -> f
+            | Meta _ -> f
             | f -> concrete_field_spec f
         end
     (* The following may be tempting, but can lead to an infinite loop *)
