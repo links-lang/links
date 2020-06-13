@@ -107,6 +107,7 @@ struct
       method! value = fun v -> match v with
         (* We need to find all types occuring in the given IR fragment *)
         | TApp (_, args) ->
+           (* Debug.print ("args: " ^ (String.concat "," (List.map (fun t -> Types.string_of_type_arg t) args))); *)
           let o = List.fold_left (fun o arg -> o#typ arg) o args in
           o#super_value v
         | Closure (_, tyargs, _) ->
@@ -433,7 +434,7 @@ struct
           let rec var_val x : (Ir.value * Types.datatype ) =
             let x_type = o#lookup_type x in
             if IntSet.mem x cvars then
-              (* We cannot return t as the type of the result here. If x refers to a hoisted function that was generalized, then
+              (* We cannot return t as the type of the result here. If x refers to a hoisted function that was generalised, then
                  t has additional quantifiers that are not present in the corresponding type of projecting x from parent_env *)
               let projected_t = TypeUtils.project_type (string_of_int x) (snd3 (o#var parent_env)) in
               Project (string_of_int x, Variable parent_env), projected_t
@@ -521,8 +522,8 @@ struct
               Some zb, o in
           let body, _, o = o#computation body in
           let o = o#set_context parents' parent_env' cvars' in
-          let fb, o = o#binder (o# generalize_function_type_for_hoisting fb) in
-          let fundef = o#generalize_function_body_for_hoisting (fb, (tyvars, xs, body), zb, location) in
+          let fb, o = o#binder (o# generalise_function_type_for_hoisting fb) in
+          let fundef = o#generalise_function_body_for_hoisting (fb, (tyvars, xs, body), zb, location) in
           let o = o#push_binding (Fun  fundef) in
           let bs, o = o#bindings bs in
           bs, o
@@ -533,8 +534,8 @@ struct
             let fbs, defs, o =
               List.fold_right
                 (fun (f, (tyvars, xs, body), zb, location) (fs, defs,  o) ->
-                   (* We have generalize the function's type here, but its body will only be generalized later on *)
-                   let f, o = o#binder (o#generalize_function_type_for_hoisting f) in
+                   (* We have generalise the function's type here, but its body will only be generalised later on *)
+                   let f, o = o#binder (o#generalise_function_type_for_hoisting f) in
                    let def = (f, (tyvars, xs, body), zb, location) in
                      (f::fs, def::defs, o))
                 defs
@@ -579,7 +580,7 @@ struct
                        Some zb, o#set_context fbs z cvars in
                    let body, _, o = o#computation body in
                    let o = o#set_context parents' parent_env' cvars' in
-                   let fundef = o#generalize_function_body_for_hoisting (fb, (tyvars, xs, body), zb, location) in
+                   let fundef = o#generalise_function_body_for_hoisting (fb, (tyvars, xs, body), zb, location) in
                    fundef::defs, o)
                 ([], o)
                 defs in
@@ -624,7 +625,7 @@ struct
         ) free_type_vars ([], IntMap.empty)
 
 
-      method generalize_function_type_for_hoisting f_binder =
+      method generalise_function_type_for_hoisting f_binder =
         let f_var = Var.var_of_binder f_binder in
 
         let free_type_vars = (IntMap.find f_var fenv).typevars in
@@ -634,7 +635,7 @@ struct
         else
           begin
             let outer_quantifiers, outer_maps = o#create_substitutions_replacing_free_variables free_type_vars in
-            let f_type_generalized =
+            let f_type_generalised =
               let f_type = Var.type_of_binder f_binder in
               match TypeUtils.split_quantified_type f_type with
                 | [], t  ->
@@ -643,16 +644,16 @@ struct
                 | (f_quantifiers, t) ->
                   let t' = Instantiate.datatype outer_maps t in
                   Types.ForAll ((outer_quantifiers @ f_quantifiers), t') in
-              Var.update_type f_type_generalized f_binder
+              Var.update_type f_type_generalised f_binder
             end
 
 
-      method generalize_function_body_for_hoisting : Ir.fun_def ->  Ir.fun_def = fun fundef ->
+      method generalise_function_body_for_hoisting : Ir.fun_def ->  Ir.fun_def = fun fundef ->
         let (f, (tyvars, xs, body), z, location) = fundef in
         let f_var = Var.var_of_binder f in
         let free_type_vars = (IntMap.find f_var fenv).typevars in
 
-        (* We must have used generalize_function_type_for_hoisting on this function before and generalized the type in f (i.e., the binder)  already *)
+        (* We must have used generalise_function_type_for_hoisting on this function before and generalised the type in f (i.e., the binder)  already *)
 
         if free_type_vars = [] then
           fundef
@@ -669,7 +670,7 @@ struct
                 let newtype = Instantiate.datatype inner_maps (Var.type_of_binder x) in
                 (Var.update_type newtype x)::xs
               ) xs [] in
-            (*Debug.print ("function currently being hoisted, before instantiation:\n" ^ Ir.string_of_binding (`Fun (f, (tyvars, xs, body), z, location)));*)
+            (* Debug.print ("function currently being hoisted, before instantiation:\n" ^ Ir.string_of_binding (Fun (f, (tyvars, xs, body), z, location))); *)
             let body = IrTraversals.InstantiateTypes.computation (o#get_type_environment) inner_maps body in
             (f, (tyvars, xs, body), z, location)
           end
