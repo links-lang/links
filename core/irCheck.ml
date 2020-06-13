@@ -241,31 +241,48 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       let t1 = TypeUtils.concrete_type t1 in
       let t2 = TypeUtils.concrete_type t2 in
       match t1 with
+      (* Unspecified kind *)
       | Not_typed ->
           begin match t2 with
               Not_typed -> true
             | _          -> false
           end
-      | Primitive x ->
-          begin match t2 with
-              Primitive y -> x = y
-            | _            -> false
-          end
+      | (Var _ | Recursive _ | Closed) ->
+         raise Types.tag_expectation_mismatch
+      | Alias (_, _) -> assert false
+      | Application (s, ts) ->
+         begin match t2 with
+         | Application (s', ts') ->
+            Types.Abstype.equal s s' &&
+            List.length ts = List.length ts' &&
+            List.for_all2 (fun larg rarg -> eq_type_args (context, larg, rarg)) ts ts'
+         | _ -> false
+         end
+      | RecursiveApplication _ ->
+         Debug.print "IR typechecker encountered recursive type"; true
       | Meta lpoint ->
           begin match Unionfind.find lpoint with
             | Recursive _ -> assert false (* removed by now *)
             | lpoint_cont ->
-              begin match t2 with
-                Meta rpoint ->
-                begin match lpoint_cont, Unionfind.find rpoint with
-                | Var lv, Var rv -> handle_variable lv rv context
-                | _ -> false
-                end
-                | _                   ->
-                   (* This correponds to the old `Body cases,
-                      which must have been lifted out of Meta by now*)
-                   false
-              end
+               begin match t2 with
+               | Meta rpoint ->
+                  begin match lpoint_cont, Unionfind.find rpoint with
+                  | Var lv, Var rv ->
+                     handle_variable lv rv context
+                  | _ ->
+                     false
+                  end
+               | _ ->
+                  (* This correponds to the old `Body cases,
+                     which must have been lifted out of Meta by now*)
+                  false
+               end
+          end
+      (* Type *)
+      | Primitive x ->
+          begin match t2 with
+              Primitive y -> x = y
+            | _            -> false
           end
       | Function (lfrom, lm, lto) ->
           begin match t2 with
@@ -293,21 +310,15 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
            Variant r -> eq_rows (context, l, r)
          | _          -> false
          end
-      | Effect l ->
+      | Table (lt1, lt2, lt3) ->
          begin match t2 with
-         | Effect r -> eq_rows (context, l, r)
-         | _         -> false
-         end
-      | Application (s, ts) ->
-         begin match t2 with
-         | Application (s', ts') ->
-            Types.Abstype.equal s s' &&
-            List.length ts = List.length ts' &&
-            List.for_all2 (fun larg rarg -> eq_type_args (context, larg, rarg)) ts ts'
+         | Table (rt1, rt2, rt3) ->
+            eqt (context, lt1, rt1) &&
+            eqt (context, lt2, rt2) &&
+            eqt (context, lt3, rt3)
          | _ -> false
          end
-      | RecursiveApplication _ ->
-         Debug.print "IR typechecker encountered recursive type"; true
+      | Lens _ -> raise (internal_error "The IR type equality check does not support lenses (yet)")
       | ForAll (qs, t) ->
          begin match t2 with
          | ForAll (qs', t') ->
@@ -327,6 +338,30 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
             else false
          | _ -> false
          end
+      (* Effect *)
+      | Effect l ->
+         begin match t2 with
+         | Effect r -> eq_rows (context, l, r)
+         | _         -> false
+         end
+      (* Row *)
+      | Row _ ->
+         begin match t2 with
+         |  Row _ -> eq_rows (context, t1, t2)
+         | _ -> false
+         end
+      (* Presence *)
+      | Absent ->
+         begin match t2 with
+         | Absent -> true
+         | _ -> false
+         end
+      | Present lt ->
+         begin match t2 with
+         | Present rt -> eqt (context, lt, rt)
+         | _ -> false
+         end
+      (* Session *)
       | Input (lt, _) ->
          begin match t2 with
          |  Input (rt, _) -> eqt (context, lt, rt)
@@ -347,28 +382,16 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
          |  Choice rr -> eq_rows (context, lr, rr)
          | _ -> false
          end
+      | Dual lt ->
+         begin match t2 with
+         |  Dual rt -> eqt (context, lt, rt)
+         | _ -> false
+         end
       | End ->
          begin match t2 with
          |  End -> true
          | _ -> false
          end
-      | Alias (_, _) -> assert false
-      | Table (lt1, lt2, lt3) ->
-         begin match t2 with
-         | Table (rt1, rt2, rt3) ->
-            eqt (context, lt1, rt1) &&
-            eqt (context, lt2, rt2) &&
-            eqt (context, lt3, rt3)
-         | _ -> false
-         end
-      | Lens _ -> raise (internal_error "The IR type equality check does not support lenses (yet)")
-      | Row _ ->
-         begin match t2 with
-         |  Row _ -> eq_rows (context, t1, t2)
-         | _ -> false
-         end
-      | (Closed | Absent | Var _ | Recursive _ | Present _ |Dual _) ->
-         raise Types.tag_expectation_mismatch
       end
 
     and eq_rows (context, r1, r2) =
@@ -384,7 +407,9 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
     and eq_presence (context, l, r) =
       match Types.concrete_field_spec l, Types.concrete_field_spec r with
       | Absent, Absent -> true
-      | Present lt, Present rt -> eqt (context, lt, rt)
+      | Present lt, Present rt ->
+         let b = eqt (context, lt, rt) in
+         b
       | Meta lpoint, Meta rpoint ->
           begin
             match Unionfind.find lpoint, Unionfind.find rpoint with
@@ -413,9 +438,9 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       let rpk = TypeUtils.primary_kind_of_type r in
       let open CommonTypes.PrimaryKind in
       match lpk, rpk with
-      | Type, Type -> eqt (context, l, r)
-      | Row , Row -> eq_rows (context, l, r)
-      | Presence , Presence -> eq_presence (context, l, r)
+      | Type,     Type     -> eqt (context, l, r)
+      | Row,      Row      -> eq_rows (context, l, r)
+      | Presence, Presence -> eq_presence (context, l, r)
       | _, _ -> false
     in
       eqt  (context, t1, t2)
@@ -564,9 +589,11 @@ struct
               TAbs (tyvars, v), t, o
 
         | TApp (v, ts)  ->
-            let v, t, o = o#value v in
-            let t = Instantiate.apply_type t ts in
-            TApp (v, ts), t, o
+           List.iter (TypeUtils.check_type_wellformedness None) ts;
+           (* Debug.print ("ts: " ^ (String.concat "," (List.map (fun t -> Types.string_of_type_arg t) ts))); *)
+           let v, t, o = o#value v in
+           let t = Instantiate.apply_type t ts in
+           TApp (v, ts), t, o
         | XmlNode (tag, attributes, children) ->
             let (attributes, attribute_types, o) = o#name_map (fun o -> o#value) attributes in
             let (children  , children_types, o) = o#list (fun o -> o#value) children in
