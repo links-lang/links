@@ -18,12 +18,13 @@ let concrete_type t =
       | Meta point ->
           begin
             match Unionfind.find point with
-              | Recursive (var, _kind, t) ->
-                  if RecIdSet.mem (MuBoundId var) rec_names then
-                    Meta point
-                  else
-                    ct (RecIdSet.add (MuBoundId var) rec_names) t
-              | t -> ct rec_names t
+            | Var _ -> t
+            | Recursive (var, _kind, t) ->
+             if RecIdSet.mem (MuBoundId var) rec_names then
+               Meta point
+             else
+               ct (RecIdSet.add (MuBoundId var) rec_names) t
+            | t -> ct rec_names t
           end
       | ForAll (qs, t) ->
           begin
