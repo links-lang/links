@@ -1,5 +1,6 @@
 (* FIXME: need to properly account for unifying type arguments - use
-   the primary kind inference function *)
+   the primary kind inference function.
+*)
 
 open CommonTypes
 open Utility
@@ -93,8 +94,8 @@ let rec eq_types : (datatype * datatype) -> bool =
           | Not_typed -> true
           | _         -> false
           end
-      | (Var _ | Recursive _) ->
-         failwith ("freestanding Var / Recursive not implemented yet (must be inside Meta)")
+      | (Var _ | Recursive _ | Closed) ->
+         failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
       | Alias  _ -> assert false
       | Application (s, ts) ->
           begin match unalias t2 with
@@ -169,11 +170,6 @@ let rec eq_types : (datatype * datatype) -> bool =
          | Row (rfield_env, rrow_var, rdual) ->
             eq_field_envs (lfield_env, rfield_env) && eq_row_vars (lrow_var, rrow_var) && ldual=rdual
          | _ -> assert false
-         end
-      | Closed ->
-         begin match unalias t2 with
-         | Closed -> true
-         | _ -> false
          end
       (* Presence *)
       | Present l ->
@@ -377,10 +373,9 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
      - Unionfind.find point = t
      - var is free in t
    *)
-  let rec_intro point (var, t) =
+  let rec_intro kind point (var, t) =
     if occurs_check var t then
-      (* FIXME: we need to know the kind here! *)
-      Unionfind.change point (Recursive (var, assert false, t))
+      Unionfind.change point (Recursive (var, kind, t))
     else
       raise (Failure (`Msg ("Cannot unify type variable "^string_of_int var^" with datatype "^string_of_datatype t^
                               " because "^
@@ -484,7 +479,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                 in
                 Unionfind.change lpoint (Var (lvar, (lprimary_kind, (lin, rest)), `Flexible))
               end
-           | Var (var, (primary_kind, (lin, rest)), `Flexible), _ ->
+           | Var (var, ((primary_kind, (lin, rest)) as kind), `Flexible), _ ->
               assert (primary_kind = PrimaryKind.Type);
               let tidy =
                 if var_is_free_in_type var t2 then
@@ -493,7 +488,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                     if Restriction.is_base rest then
                       raise (Failure (`Msg ("Cannot infer a recursive type for the base type variable "^ string_of_int var ^
                                               " with the body "^ string_of_datatype t2)));
-                    rec_intro rpoint (var, Types.concrete_type t2);
+                    rec_intro kind rpoint (var, Types.concrete_type t2);
                     true
                   end
                 else
@@ -504,7 +499,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                   check_subkind var (lin, rest) t2;
                   Unionfind.union lpoint rpoint
                 end
-           | _, Var (var, (_primary_kind, (lin, rest)), `Flexible) ->
+           | _, Var (var, ((_primary_kind, (lin, rest)) as kind), `Flexible) ->
               let tidy =
                 if var_is_free_in_type var t1 then
                   begin
@@ -512,7 +507,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                     if Restriction.is_base rest then
                       raise (Failure (`Msg ("Cannot infer a recursive type for the base type variable "^ string_of_int var ^
                                               " with the body "^ string_of_datatype t1)));
-                    rec_intro lpoint (var, Types.concrete_type t1);
+                    rec_intro kind lpoint (var, Types.concrete_type t1);
                     true
                   end
                 else
@@ -591,7 +586,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
               raise (Failure (`Msg ("Couldn't unify the rigid type variable "^ string_of_int l ^
                                       " with the type "^ string_of_datatype t)))
             end
-         | Var (var, (primary_kind, (lin, rest)), `Flexible) ->
+         | Var (var, ((primary_kind, (lin, rest)) as kind), `Flexible) ->
             assert (primary_kind = PrimaryKind.Type);
             if var_is_free_in_type var t then
               begin
@@ -602,7 +597,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
                   raise (Failure (`Msg ("Cannot infer a recursive type for the type variable "^ string_of_int var ^
                                           " with the body "^ string_of_datatype t)));
                 let point' = Unionfind.fresh t in
-                rec_intro point' (var, t);
+                rec_intro kind point' (var, t);
                 Unionfind.union point point'
               end
             else
@@ -692,12 +687,12 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
     | Effect (Row l), Effect (Row r) -> ur (l, r)
     (* Session *)
     | Input (t, s), Input (t', s')
-      | Output (t, s), Output (t', s') -> unify' rec_env (t, t'); ut (s, s')
+    | Output (t, s), Output (t', s') -> unify' rec_env (t, t'); ut (s, s')
     | Select (Row row), Select (Row row')
-      | Choice (Row row), Choice (Row row') ->
+    | Choice (Row row), Choice (Row row') ->
        unify_rows' ~var_sk:(lin_any, res_session) rec_env (row, row')
     | Dual s, Dual s' -> ut (s, s')
-    (* DODGEYNESS: dual_type doesn't doesn't necessarily make the type smaller -
+    (* DODGEYNESS: dual_type doesn't necessarily make the type smaller -
        the following could potentially lead to non-termination *)
     | Dual s, s' ->
        begin
@@ -1199,9 +1194,17 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
     (fun () -> "Unified rows: " ^ (string_of_row (Row lrow)) ^ " and: " ^ (string_of_row (Row rrow)))
 
 and unify_type_args' : unify_env -> (type_arg * type_arg) -> unit =
+  fun rec_env (l, r) ->
+  let open PrimaryKind in
+  match TypeUtils.primary_kind_of_type l, TypeUtils.primary_kind_of_type r with
+  | Type, Type -> unify' rec_env (l, r)
+  | PrimaryKind.Row, PrimaryKind.Row -> unify' rec_env (l, r)
+  | Presence, Presence -> unify_presence' rec_env (l, r)
+  | _, _ ->
+     raise (Failure (`Msg ("Couldn't match "^ string_of_type_arg l ^" against "^ string_of_type_arg r)))
   (* deferring to unify' means that unify' must handle kinds Row and
      Presence as well as Type (which it does) *)
-  fun rec_env -> unify' rec_env
+(*  fun rec_env -> unify' rec_env*)
   (* function
    * | `Type lt, `Type rt -> unify' rec_env (lt, rt)
    * | `Row lr, `Row rr -> unify_rows' rec_env (lr, rr)
