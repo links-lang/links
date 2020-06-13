@@ -1872,9 +1872,8 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
                  | Present t ->
                        let pats = List.map (unwrap_at ((int_of_string name) - 1)) pats in
                          StringMap.add name (Present (cpt pats t))
-                   | Absent
-                   | Var _ -> assert false
-                   | _ -> raise Types.tag_expectation_mismatch) fields StringMap.empty in
+                 | (Absent | Meta _) -> assert false
+                 | _ -> raise Types.tag_expectation_mismatch) fields StringMap.empty in
             Record (Row (fields, row_var, dual))
       | Record row ->
           let fields, row_var, lr = (Types.unwrap_row row |> fst |> TypeUtils.extract_row_parts) in
@@ -1901,8 +1900,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
                    | Present t ->
                        let pats = List.map (unwrap_at name) pats in
                          StringMap.add name (Present (cpt pats t))
-                   | Absent
-                   | Var _ -> assert false
+                   | (Absent | Meta _) -> assert false
                    | _ -> raise Types.tag_expectation_mismatch) fields StringMap.empty in
             Record (Row (fields, row_var, false))
       | Variant row ->
@@ -1937,8 +1935,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
                        let pats = concat_map (unwrap_at name) pats in
                        let t = cpt pats t in
                          (StringMap.add name (Present t)) env
-                   | Absent
-                   | Var _ -> assert false
+                   | (Absent | Meta _) -> assert false
                    | _ -> raise Types.tag_expectation_mismatch) fields StringMap.empty
           in
             if are_open pats then
@@ -2673,7 +2670,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                                                             ") because the labels overlap")
                                               else
                                                 StringMap.add label (T.Present t) field_env'
-                                          | T.Var _ -> assert false
+                                          | T.Meta _ -> assert false
                                           | _ -> raise Types.tag_expectation_mismatch)
                         rfield_env field_env in
                     let usages = Usage.combine field_usages (usages r) in
@@ -3657,7 +3654,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                           let sugar_pqs = List.map SugarQuantifier.mk_resolved pqs in
                           let e = tabstr (sugar_pqs, Projection (with_dummy_pos (tappl (r'.node, tyargs)), l)) in
                           e, fieldtype, usages r
-                        | Some (T.Absent | T.Var _)
+                        | Some (T.Absent | T.Meta _)
                         | None ->
                           let fieldtype = Types.fresh_type_variable (lin_any, res_any) in
                           unify ~handle:Gripers.projection
