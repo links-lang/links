@@ -48,7 +48,7 @@ let ps1 = "links> "
 
 (** Print a value (including its type if `printing_types' is [true]). *)
 let print_value rtype value =
-  if Settings.get BS.web_mode || not (Settings.get print_pretty)
+  if Settings.get Webserver_types.webs_running || not (Settings.get print_pretty)
   then begin
       print_string (Value.string_of_value value);
       print_endline (if Settings.get printing_types then
@@ -361,4 +361,3 @@ let interact : Context.t -> unit
   in
   Sys.set_signal Sys.sigint (Sys.Signal_handle (fun _ -> raise Sys.Break));
   loop context
-
