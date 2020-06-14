@@ -1,4 +1,6 @@
 open Mysql
+open Links_core
+open Utility
 
 let string_of_error_code = function
 | Aborting_connection              -> "Aborting connection"
@@ -259,7 +261,7 @@ class mysql_database spec = object(self)
   method! make_insert_returning_query : string -> Sql.query -> string list =
     fun _returning q ->
       assert (match q with | Sql.Insert _ -> true | _ -> false);
-      [self#string_of_query None q; "select last_insert_id()"]
+      [self#string_of_query q; "select last_insert_id()"]
 
   method supports_shredding () = false
 end
