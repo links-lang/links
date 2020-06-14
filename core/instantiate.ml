@@ -46,6 +46,7 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
             let t = Unionfind.find point in
               begin
                 match t with
+                  | Closed -> datatype
                   | Var (var, _, _) ->
                      (* TODO: kinding check here? *)
                       if IntMap.mem var inst_map then
@@ -147,7 +148,9 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
                    | f ->
                       add f
                 end
-             | _ -> unexpected_tag ()
+             | _ ->
+                (* Debug.print ("t: "^string_of_datatype t); *)
+                unexpected_tag ()
          in
            add f)
       field_env
@@ -314,7 +317,12 @@ module SEnv = Env.String
 let populate_instantiation_map ~name qs tyargs =
   List.fold_right2
     (fun q tyarg inst_map ->
+      (* TypeUtils.check_type_wellformedness None tyarg; *)
+      (* Debug.print ("tyarg: " ^ string_of_datatype tyarg); *)
       let arg_kind = TypeUtils.primary_kind_of_type tyarg in
+      (* match tyarg with
+       * | Closed -> assert false
+       * | _ -> (); *)
       if arg_kind <> Quantifier.to_primary_kind q then
         raise
           (internal_error
