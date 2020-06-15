@@ -740,11 +740,11 @@ let make_restriction_predicate (klass : (module TypePredicate)) restr flexibles 
      inherit M.klass
 
      method! var_satisfies = function
-       | (_, kind, _) when Kind.restriction kind = restr -> true
-       | (_, _, `Rigid) -> false
-       | (_, kind, `Flexible) ->
+       | (_, (_, (_, sk)), _) when sk = restr -> true
+       | (_, (_, _), `Rigid) -> false
+       | (_, (_, (_, sk)), `Flexible) ->
           flexibles &&
-            match Restriction.min (Kind.restriction kind) restr with
+            match Restriction.min sk restr with
             | Some sk -> sk = restr
             | _ -> false
    end)#predicates
@@ -754,20 +754,16 @@ let make_restriction_predicate (klass : (module TypePredicate)) restr flexibles 
 
    If a type variable cannot be made compatible, and [ensure] is true, then an
    error is thrown. *)
-let make_restriction_transform ?(ensure=false) restriction =
+let make_restriction_transform ?(ensure=false) subkind =
   (object
      inherit type_iter
 
      method! visit_var point = function
-       | (_, kind, _) when Kind.restriction kind = restriction -> ()
-       | (v, kind, `Flexible) ->
+       | (_, (_, (_, sk)), _) when sk = subkind -> ()
+       | (v, (pk, (l, sk)), `Flexible) ->
           begin
-            let res = Kind.restriction kind in
-            match Restriction.min res restriction with
-            | Some res when res = restriction ->
-               let (pk, (lin, _)) = kind in
-               let kind' = (pk, (lin, restriction)) in
-               Unionfind.change point (Var (v, kind', `Flexible))
+            match Restriction.min sk subkind with
+            | Some sk when sk = subkind -> Unionfind.change point (Var (v, (pk, (l, sk)), `Flexible))
             | _ -> assert ensure
           end
        | (_, _, `Rigid) -> assert ensure
