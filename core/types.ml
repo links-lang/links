@@ -1474,12 +1474,18 @@ and subst_dual_type_arg : var_map -> type_arg -> type_arg =
   | Presence -> (Presence, subst_dual_field_spec rec_points t)
 
 and flatten_row : row -> row = fun row ->
+  let row =
+    match row with
+    | Row _ -> row
+    (* HACK: this probably shouldn't happen! *)
+    | Meta row_var -> Row (StringMap.empty, row_var, false)
+    | _ -> assert false in
   let dual_if =
     match row with
     | Row (_, _, dual) ->
        fun r -> if dual then dual_row TypeVarMap.empty r else r
     | _ ->
-       (* Debug.print ("row: " ^ show_row row); *)
+       Debug.print ("row: " ^ show_row row);
        raise tag_expectation_mismatch
   in
   let rec flatten_row' : meta_row_var IntMap.t -> row -> row =
@@ -1704,15 +1710,30 @@ let normalise_row = normalise_row IntSet.empty
 
 (** building quantified types *)
 
+(* let quantifier_of_type_arg =
+ *   let quantifier_of_point point =
+ *     match Unionfind.find point with
+ *     | Var (var, kind', _) -> (var, kind')
+ *     | _ -> assert false in
+ *   fun (_pk, t) ->
+ *   match t with
+ *   | Meta point -> quantifier_of_point point
+ *   | _ -> assert false *)
+
 let quantifier_of_type_arg =
-  let quantifier_of_point point =
-    match Unionfind.find point with
-    | Var (var, kind', _) -> (var, kind')
+  let open PrimaryKind in
+  let quantifier_of_point point = match Unionfind.find point with
+    | Var (var, kind, _) -> (var, kind)
     | _ -> assert false in
-  fun (_pk, t) ->
-  match t with
-  | Meta point -> quantifier_of_point point
-  | _ -> assert false
+  function
+  | Type, Meta point -> quantifier_of_point point
+  | Row, Row (fields, point, _dual) ->
+     assert (StringMap.is_empty fields);
+     quantifier_of_point point
+  | Presence, Meta point -> quantifier_of_point point
+  (* HACK: this probably shouldn't happen *)
+  | Row, Meta point -> quantifier_of_point point
+  | _, _ -> assert false
 
 let quantifiers_of_type_args = List.map quantifier_of_type_arg
 

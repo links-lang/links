@@ -867,7 +867,7 @@ struct
               let qs = List.map SugarQuantifier.get_resolved_exn tyvars in
                 cofv (I.tabstr (qs, v))
           | TAppl (e, tyargs) ->
-Debug.print ("TAppl...: "^ Sugartypes.show_phrasenode (TAppl (e, tyargs)));
+(* Debug.print ("TAppl...: "^ Sugartypes.show_phrasenode (TAppl (e, tyargs))); *)
               let v = ev e in
               let vt = I.sem_type v in
                 begin

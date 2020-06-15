@@ -963,15 +963,9 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
                match Types.get_restriction_constraint rest with
                | None -> ()
                | Some const ->
-                  Debug.print "C";
-                  if rest = Restriction.Base then
-                    Debug.print "Base!";
                   let module M = (val const) in
                   if M.can_row_be (Row extension_row) then
-                    begin
-                      M.make_row (Row extension_row);
-                      Debug.print ("row: "^ string_of_row (Row extension_row))
-                    end
+                      M.make_row (Row extension_row)
                   else
                     let message = Printf.sprintf "Cannot unify the %s row variable %d with the non-%s row %s."
                                     (Restriction.to_string rest) var (Restriction.to_string rest) (string_of_row (Row extension_row))
@@ -1153,9 +1147,8 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
     let (rfield_env', rrow_var', rdual') as rrow' = TypeUtils.extract_row_parts rrow' in
     (* let (lfield_env', lrow_var', ldual') as lrow', lrec_row = unwrap_row lrow in
      * let (rfield_env', rrow_var', rdual') as rrow', rrec_row = unwrap_row rrow in *)
-Debug.print "A";
-Debug.print ("lrow': " ^ string_of_row (Row lrow'));
-Debug.print ("rrow': " ^ string_of_row (Row rrow'));
+    (* Debug.print ("lrow': " ^ string_of_row (Row lrow'));
+     * Debug.print ("rrow': " ^ string_of_row (Row rrow')); *)
     let rec_env' =
       (register_rec_rows
          (lfield_env, lfield_env', lrec_row, lrow')
@@ -1176,7 +1169,7 @@ Debug.print ("rrow': " ^ string_of_row (Row rrow'));
 
            (* each row can contain fields missing from the other *)
            let rextension = StringMap.filter (fun label _ -> not (StringMap.mem label rfield_env')) lfield_env' in
-Debug.print ("rext: "^string_of_row (Row (rextension, fresh_row_var, false)));
+(* Debug.print ("rext: "^string_of_row (Row (rextension, fresh_row_var, false))); *)
            unify_row_var_with_row rec_env (rrow_var', rdual', (rextension, fresh_row_var, false));
 
            let lextension = StringMap.filter (fun label _ -> not (StringMap.mem label lfield_env')) rfield_env' in

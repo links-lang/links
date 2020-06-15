@@ -163,10 +163,12 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
   and inst_row_var : instantiation_maps -> inst_env -> row_var -> bool -> row = fun inst_map rec_env row_var dual ->
     (* HACK: fix the ill-formed rows that are introduced in the
        instantiation maps *)
+    (* TODO: ensure that this never happens or embrace it? *)
+    (* We should at least track down *where* these Meta variables of row kind are being introduced *)
     let rowify t =
       match t with
       | Row _ -> t
-      (* | Meta row_var -> Row (StringMap.empty, row_var, false) *)
+      | Meta row_var -> Row (StringMap.empty, row_var, false)
       | _ -> assert false in
     let instr = inst_row inst_map rec_env in
     let dual_if = if dual then dual_row else fun x -> x in

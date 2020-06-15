@@ -177,15 +177,16 @@ let rigidify_type_arg : type_arg -> unit =
     | Var (var, kind, `Flexible) -> Unionfind.change point (Var (var, kind, `Rigid))
     | Var _ -> ()
     | _ -> assert false in
-  fun (_pk, t) ->
-  match t with
-  | Meta point -> rigidify_point point
-  | _ -> raise (internal_error "Not a type-variable argument.")
-  (* let open PrimaryKind in
-   * match pk with
-   * | Type     -> rigidify_point point
-   * | Row      -> rigidify_point point
-   * | Presence -> rigidify_point point *)
+  let open PrimaryKind in
+  function
+  | Type, Meta point -> rigidify_point point
+  | Presence, Meta point -> rigidify_point point
+  | Row, Row (fields, point, _dual) ->
+     assert (StringMap.is_empty fields);
+     rigidify_point point
+  (* HACK: probably shouldn't happen *)
+  | Row, Meta point -> rigidify_point point
+  | _ -> raise (internal_error "Not a type-variable argument")
 
 (** Only flexible type variables should have the mono restriction. When we
    quantify over such variables (and so rigidify them), we need to convert any
@@ -196,10 +197,20 @@ let mono_type_args : type_arg -> unit =
     | Var (var, (primary_kind, (lin, Restriction.Mono)), `Flexible) ->
        Unionfind.change point (Var (var, (primary_kind, (lin, Restriction.Any)), `Flexible))
     | _ -> () in
-  fun (_pk, t) ->
-  match t with
-  | Meta point -> check_sk point
-  | _ -> ()
+  let open PrimaryKind in
+  function
+  | Type, Meta point -> check_sk point
+  | Presence, Meta point -> check_sk point
+  | Row, Row (fields, point, _dual) ->
+     assert (StringMap.is_empty fields);
+     check_sk point
+  (* HACK: probably shouldn't happen *)
+  | Row, Meta point -> check_sk point
+  | _ -> raise (internal_error "Not a type-variable argument (mono_type_args)")
+  (* fun (_pk, t) ->
+   * match t with
+   * | Meta point -> check_sk point
+   * | _ -> () *)
   (* | `Type (`MetaTypeVar point) -> check_sk point
    * | `Row (_, point, _) -> check_sk point
    * | `Presence (`Var point) -> check_sk point *)
