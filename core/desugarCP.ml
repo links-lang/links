@@ -16,6 +16,7 @@ let wait_str      = "wait"
 let wild_str      = "wild"
 
 class desugar_cp env =
+  let open CommonTypes.PrimaryKind in
 object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
@@ -100,7 +101,7 @@ object (o : 'self_type)
             let c = Binder.to_name bndr in
             let ct = Binder.to_type bndr in
             let d = Binder.to_name bndr' in
-            o, fn_appl_node link_sync_str [ct; o#lookup_effects]
+            o, fn_appl_node link_sync_str [(Type, ct); (Row, o#lookup_effects)]
                             [var c; var d],
             Types.make_endbang_type
          | CPComp (bndr, left, right) ->
@@ -119,8 +120,7 @@ object (o : 'self_type)
               if Settings.get Basicsettings.Sessions.exceptions_enabled then
                 StringMap.remove Value.session_exception_operation eff_fields
               else
-                eff_fields
-            in
+                eff_fields in
 
             let left_block =
                 spawn Angel NoSpawnLocation (block (
@@ -131,7 +131,7 @@ object (o : 'self_type)
                       ~row:(Types.Row (eff_fields, eff_row, eff_closed)) in
             let o = o#restore_envs envs in
             o, block_node
-                  ([val_binding (variable_pat ~ty:(Types.Application (Types.access_point, [s])) c)
+                  ([val_binding (variable_pat ~ty:(Types.Application (Types.access_point, [(Type, s)])) c)
                                 (fn_appl new_str [] []);
                     val_binding (any_pat dp) left_block;
                     val_binding (variable_pat ~ty:(Types.dual_type s) c)

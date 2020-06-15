@@ -2,7 +2,7 @@ open CommonTypes
 open Utility
 
 (* TODO: after Types refactoring, turn this into singular *)
-type instantiation_maps = Types.datatype IntMap.t
+type instantiation_maps = Types.type_arg IntMap.t
 
 exception ArityMismatch of (int * int) (* Expected, provided *)
 

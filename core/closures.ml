@@ -108,10 +108,10 @@ struct
         (* We need to find all types occuring in the given IR fragment *)
         | TApp (_, args) ->
            (* Debug.print ("args: " ^ (String.concat "," (List.map (fun t -> Types.string_of_type_arg t) args))); *)
-          let o = List.fold_left (fun o arg -> o#typ arg) o args in
+          let o = List.fold_left (fun o arg -> o#type_arg arg) o args in
           o#super_value v
         | Closure (_, tyargs, _) ->
-          let o = List.fold_left (fun o arg -> o#typ arg) o tyargs in
+          let o = List.fold_left (fun o arg -> o#type_arg arg) o tyargs in
           o#super_value v
         | Inject (_, _, t) ->
           let o = o#typ t in
@@ -140,11 +140,17 @@ struct
         o#super_special s
 
 
-      (* t is a type_arg, which ranges over ordinary types, rows and presence specs *)
-      method typ (t : Types.type_arg) =
-        let free_type_vars = Types.free_tyarg_vars t in
+      method typ t =
+        let free_type_vars = Types.free_type_vars t in
         (*Debug.print ("free type vars:" ^ (IntSet.show free_type_vars));*)
         Types.TypeVarSet.fold (fun tvar o ->  o#register_type_var tvar) free_type_vars o
+
+
+      method type_arg (_pk, t) =
+        o#typ t
+        (* let free_type_vars = Types.free_type_vars t in
+         * (\*Debug.print ("free type vars:" ^ (IntSet.show free_type_vars));*\)
+         * Types.TypeVarSet.fold (fun tvar o ->  o#register_type_var tvar) free_type_vars o *)
 
 
       method quantifier q =
@@ -598,28 +604,29 @@ struct
         - a list of fresh quantifiers, each corresponding to one free variable
         - A map mapping the old free variables to fresh ones (to be used with Instantiate)  **)
       method create_substitutions_replacing_free_variables (free_type_vars : Quantifier.t list) =
-        List.fold_right (fun oldq (qs, type_map ) ->
+        let open PrimaryKind in
+        List.fold_right (fun oldq (qs, type_map) ->
           let typevar = Quantifier.to_var oldq in
           let primary_kind = Quantifier.to_primary_kind oldq in
           let subkind = Quantifier.to_subkind oldq in
           let newvar = Types.fresh_raw_variable () in
           let make_new_type_variable () = Unionfind.fresh (Types.Var (newvar, (primary_kind, subkind), `Rigid)) in
           let updated_maps = match primary_kind with
-            | PrimaryKind.Type ->
+            | Type ->
               let new_type_variable = make_new_type_variable () in
               let t = Types.Meta new_type_variable in
-              (IntMap.add typevar t type_map)
-            | PrimaryKind.Row ->
+              (IntMap.add typevar (Type, t) type_map)
+            | Row ->
               let new_type_variable = make_new_type_variable () in
               let r = Types.Row (Types.empty_field_env, new_type_variable, false) in
-              (IntMap.add typevar r type_map)
-            | PrimaryKind.Presence ->
+              (IntMap.add typevar (Row, r) type_map)
+            | Presence ->
               let new_type_variable = make_new_type_variable () in
               (* SJF: This might be incorrect -- old code was:
               let p = `Var new_type_variable in
               *)
               let p = Types.Meta new_type_variable in
-              (IntMap.add typevar p type_map) in
+              (IntMap.add typevar (Presence, p) type_map) in
           let new_quantifier = (newvar, (primary_kind, subkind)) in
           (new_quantifier :: qs, updated_maps)
         ) free_type_vars ([], IntMap.empty)

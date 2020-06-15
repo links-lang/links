@@ -208,7 +208,7 @@ let is_builtin_effect = function
 
 let rec element_type ?(overstep_quantifiers=true) t = match (concrete_type t, overstep_quantifiers) with
   | (ForAll (_, t), true) -> element_type t
-  | Application (l, [t]), _
+  | Application (l, [(_pk, t)]), _
       when Types.Abstype.equal l Types.list -> t
   | (t, _) ->
       error ("Attempt to take element type of non-list: " ^ string_of_datatype t)
@@ -358,8 +358,9 @@ let check_type_wellformedness primary_kind t : unit =
     | Closed -> pk_row
     | body -> typ rec_env body
 
-  and compare_kinds rec_env k t =
-    ignore (check_kind (Kind.primary_kind k) (typ rec_env t))
+  and compare_kinds _rec_env k (pk, _t) =
+    (* ignore (check_kind (Kind.primary_kind k) (typ rec_env t)) *)
+    ignore (check_kind (Kind.primary_kind k) pk)
   and typ rec_env =
     let idatatype t = ignore (datatype rec_env t) in
     let irow r = ignore (row rec_env r) in

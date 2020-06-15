@@ -181,8 +181,9 @@ sig
   val list_head : raw_env -> Types.datatype -> value -> tail_computation
   val list_tail : raw_env -> Types.datatype -> value -> tail_computation
 end
-  =
+=
 struct
+  open PrimaryKind
   (* let lookup_type var (_nenv, tenv, _eff) = *)
   (*   TEnv.lookup tenv var *)
 
@@ -193,14 +194,14 @@ struct
 
   let nil env t : value =
     TApp (Variable (lookup_name "Nil" env),
-           [t])
+           [(Type, t)])
 
   let list_head env t : value -> tail_computation = fun v ->
     let eff = lookup_effects env in
       Apply
         (TApp
            (Variable (lookup_name "hd" env),
-            [t; eff]),
+            [(Type, t); (Row, eff)]),
          [v])
 
   let list_tail env t : value -> tail_computation = fun v ->
@@ -208,7 +209,7 @@ struct
       Apply
         (TApp
            (Variable (lookup_name "tl" env),
-            [t; eff]),
+            [(Type, t); (Row, eff)]),
          [v])
 end
 open CompileLists
@@ -219,6 +220,7 @@ sig
 end
   =
 struct
+  open PrimaryKind
   (* let lookup_type var (_nenv, tenv, _eff) = *)
   (*   TEnv.lookup tenv var *)
 
@@ -227,13 +229,13 @@ struct
 
   let lookup_effects (_nenv, _tenv, eff) = eff
 
-  let eq env t : value -> value -> value = fun v1 v2 ->
+  let eq env t v1 v2 =
     let eff = lookup_effects env in
-      ApplyPure
-        (TApp
-           (Variable (lookup_name "==" env),
-            [t; eff]),
-         [v1; v2])
+    ApplyPure
+      (TApp
+         (Variable (lookup_name "==" env),
+          [(Type, t); (Row, eff)]),
+       [v1; v2])
 end
 open CompileEq
 

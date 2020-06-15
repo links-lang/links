@@ -71,6 +71,7 @@ let results :  Types.row ->
                 (List.map2 (fun x t -> (variable_pat ~ty:t x, var x)) xs ts) in
             let qb, q = (variable_pat ~ty:t x, var x) in
 
+            let open PrimaryKind in
             let inner : Sugartypes.phrase =
               let ps =
                 match qsb with
@@ -82,9 +83,9 @@ let results :  Types.row ->
               let a = Types.make_tuple_type (t :: ts) in
                 fun_lit ~args:[Types.make_tuple_type [t], eff]
                         dl_unl [[qb]]
-                        (fn_appl "map" [qst; eff; a] [inner; r]) in
+                        (fn_appl "map" [(Type, qst); (Row, eff); (Type, a)] [inner; r]) in
             let a = Types.make_tuple_type (t :: ts) in
-            fn_appl "concatMap" [qt; eff; a] [outer; e]
+            fn_appl "concatMap" [(Type, qt); (Row, eff); (Type, a)] [outer; e]
         | _, _, _ -> assert false
     in
       results (es, xs, ts)
@@ -127,7 +128,8 @@ object (o : 'self_type)
                    let w = TypeUtils.table_write_type  t in
                    let n = TypeUtils.table_needed_type t in
 
-                   let e = fn_appl "AsList" [r; w; n] [e] in
+                   let open PrimaryKind in
+                   let e = fn_appl "AsList" [(Type, r); (Type, w); (Type, n)] [e] in
                    let var = Utility.gensym ~prefix:"_for_" () in
                    let xb = binder ~ty:element_type var in
                      o, (e::es, with_dummy_pos (Pattern.As (xb, p))::ps,
@@ -165,24 +167,24 @@ object (o : 'self_type)
         let f : phrase = fun_lit ~args:[Types.make_tuple_type [arg_type], eff]
                                  dl_unl [arg] body in
 
+        let open PrimaryKind in
+
         let results = results eff (es, xs, ts) in
         let results =
           match sort, sort_type with
             | None, None -> results
             | Some sort, Some sort_type ->
-                let sort_by, sort_type_arg =
-                  "sortByBase", TypeUtils.extract_row sort_type in
-
-                let g : phrase =
-                  fun_lit ~args:[Types.make_tuple_type [arg_type], eff]
-                          dl_unl [arg] sort
-                in
-                fn_appl sort_by [arg_type; eff; sort_type_arg]
-                        [g; results]
+               let sort_by, sort_type_arg =
+                 "sortByBase", TypeUtils.extract_row sort_type in
+               let g : phrase =
+                 fun_lit ~args:[Types.make_tuple_type [arg_type], eff]
+                   dl_unl [arg] sort in
+               fn_appl sort_by [(Type, arg_type); (Row, eff); (Type, sort_type_arg)]
+                 [g; results]
             | _, _ -> assert false in
 
         let e : phrasenode =
-          fn_appl_node "concatMap" [arg_type; eff; elem_type]
+          fn_appl_node "concatMap" [(Type, arg_type); (Row, eff); (Type, elem_type)]
                        [f; results] in
         let o = o#restore_envs envs in
         (o, e, body_type)

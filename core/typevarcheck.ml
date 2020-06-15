@@ -124,7 +124,7 @@ and is_guarded_row_var : bool -> TypeVarSet.t -> StringSet.t -> int -> row_var -
       | row ->
          is_guarded_row check_fields bound_vars expanded_apps var row
 and is_guarded_type_arg : TypeVarSet.t -> StringSet.t -> int -> type_arg -> bool =
-  fun bounded_vars expanded_apss var t ->
+  fun bounded_vars expanded_apss var (_pk, t) ->
   is_guarded bounded_vars expanded_apss var t
 
 (* return true if a variable occurs negatively in a type *)
@@ -209,8 +209,8 @@ and is_negative_row_var : TypeVarSet.t -> StringSet.t -> int -> row_var -> bool 
       | row ->
           is_negative_row bound_vars expanded_apps var row
 and is_negative_type_arg : TypeVarSet.t -> StringSet.t -> int -> type_arg -> bool =
-  fun bound_vars expanded_apps var type_arg->
-  is_negative bound_vars expanded_apps var type_arg
+  fun bound_vars expanded_apps var (_pk, t)->
+  is_negative bound_vars expanded_apps var t
 and is_negative_lens_type = (*: TypeVarSet.t -> StringSet.t -> int -> Lens.Type.t -> bool =*)
   fun _bound_vars _expanded_apps _var _typ ->
     false
@@ -296,8 +296,8 @@ and is_positive_row_var : TypeVarSet.t -> StringSet.t -> int -> row_var -> bool 
       | row ->
           is_positive_row bound_vars expanded_apps var row
 and is_positive_type_arg : TypeVarSet.t -> StringSet.t -> int -> type_arg -> bool =
-  fun bound_vars expanded_apps var type_arg->
-  is_positive bound_vars expanded_apps var type_arg
+  fun bound_vars expanded_apps var (_pk, t) ->
+  is_positive bound_vars expanded_apps var t
 and is_positive_lens_type = (*: TypeVarSet.t -> StringSet.t -> int -> Lens.Type.t -> bool =*)
   fun _bound_vars _expanded_apps _var _typ ->
     false

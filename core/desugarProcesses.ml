@@ -15,6 +15,7 @@ open SugarConstructors.DummyPositions
 
 
 class desugar_processes env =
+let open PrimaryKind in
 object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
@@ -30,14 +31,14 @@ object (o : 'self_type)
         let o = o#with_effects outer_eff in
 
         let e : phrasenode =
-          fn_appl_node "spawnWait" [inner_eff; body_type; outer_eff]
+          fn_appl_node "spawnWait" [(Row, inner_eff); (Type, body_type); (Row, outer_eff)]
             [fun_lit ~args:[(Types.make_tuple_type [], inner_eff)] dl_unl [[]] body]
         in
           (o, e, body_type)
     | Spawn (k, spawn_loc, body, Some inner_eff) ->
         (* bring the inner effects into scope, then restore the
            outer effects afterwards *)
-        let process_type = Types.Application (Types.process, [inner_eff]) in
+        let process_type = Types.Application (Types.process, [(PrimaryKind.Row, inner_eff)]) in
         let fun_effects = Types.row_with ("wild", Types.Present Types.unit_type) inner_eff in
         let fun_effects =
           if Settings.get Basicsettings.Sessions.exceptions_enabled then
@@ -55,8 +56,8 @@ object (o : 'self_type)
         let spawn_loc_phr =
           match spawn_loc with
             | ExplicitSpawnLocation phr -> phr
-            | SpawnClient -> fn_appl "there" [outer_eff] []
-            | NoSpawnLocation -> fn_appl "here" [outer_eff] [] in
+            | SpawnClient -> fn_appl "there" [(Row, outer_eff)] []
+            | NoSpawnLocation -> fn_appl "here" [(Row, outer_eff)] [] in
 
         let spawn_fun =
           match k with
@@ -69,7 +70,7 @@ object (o : 'self_type)
          * corresponded to the spawn type. *)
 
         let e : phrasenode =
-          fn_appl_node spawn_fun [inner_eff; body_type; outer_eff]
+          fn_appl_node spawn_fun [(Row, inner_eff); (Type, body_type); (Row, outer_eff)]
              [spawn_loc_phr;
               fun_lit ~args:[(Types.make_tuple_type [], fun_effects)] dl_lin [[]] body]
         in
@@ -81,7 +82,7 @@ object (o : 'self_type)
             match StringMap.find "hear" fields with
               | (Types.Present mbt) ->
                   o#phrasenode
-                    (Switch (fn_appl "recv" [mbt; other_effects] [],
+                    (Switch (fn_appl "recv" [(Type, mbt); (Row, other_effects)] [],
                              cases,
                              Some t))
               | _ -> assert false

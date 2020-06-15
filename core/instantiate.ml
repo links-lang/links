@@ -24,7 +24,7 @@ let show_instantiation
 type inst_env = meta_type_var IntMap.t
 
 (* The type of maps given to the actual instantiation functions *)
-type instantiation_maps = Types.datatype IntMap.t
+type instantiation_maps = Types.type_arg IntMap.t
 
 (* TODO: rationalise instantiation
      - do we need all of instantiate_datatype, instantiate_typ, etc?
@@ -38,6 +38,7 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
   let rec inst_typ : instantiation_maps -> inst_env -> datatype -> datatype = fun inst_map rec_env datatype ->
     let inst = inst_typ inst_map rec_env in
     let instr = inst_row inst_map rec_env in
+    let instta = inst_type_arg inst_map rec_env in
     (* let () = TypeUtils.check_type_wellformedness datatype in *)
     match datatype with
         | Not_typed -> raise (internal_error "Not_typed' passed to `instantiate'")
@@ -50,7 +51,7 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
                   | Var (var, _, _) ->
                      (* TODO: kinding check here? *)
                       if IntMap.mem var inst_map then
-                        IntMap.find var inst_map
+                        snd (IntMap.find var inst_map)
                       else
                         datatype
                   | Recursive (var, kind, t) ->
@@ -86,12 +87,12 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
            in
             ForAll (qs, inst_typ updated_inst_map rec_env t)
         | Alias ((name, qs, ts), d) ->
-            Alias ((name, qs, List.map inst ts), inst d)
+            Alias ((name, qs, List.map instta ts), inst d)
         | Application (n, elem_type) ->
-            Application (n, List.map inst elem_type)
+            Application (n, List.map instta elem_type)
         | RecursiveApplication app ->
             RecursiveApplication { app with r_args =
-              List.map inst app.r_args }
+              List.map instta app.r_args }
         | Input (t, s) -> Input (inst t, inst s)
         | Output (t, s) -> Output (inst t, inst s)
         | Select fields -> Select (instr fields)
@@ -140,7 +141,7 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
                    | Var (var, _, _) ->
                        let f =
                          if IntMap.mem var inst_map then
-                           IntMap.find var inst_map
+                           snd (IntMap.find var inst_map)
                          else
                            Meta point
                        in
@@ -148,8 +149,9 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
                    | f ->
                       add f
                 end
-             | _ ->
-                (* Debug.print ("t: "^string_of_datatype t); *)
+             | Var _ -> Debug.print "oops!"; unexpected_tag ()
+             | _t ->
+                (* Debug.print ("t: "^Types.string_of_datatype t); *)
                 unexpected_tag ()
          in
            add f)
@@ -164,7 +166,7 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
     let rowify t =
       match t with
       | Row _ -> t
-      | Meta row_var -> Row (StringMap.empty, row_var, false)
+      (* | Meta row_var -> Row (StringMap.empty, row_var, false) *)
       | _ -> assert false in
     let instr = inst_row inst_map rec_env in
     let dual_if = if dual then dual_row else fun x -> x in
@@ -172,7 +174,7 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
     | Closed -> Row (StringMap.empty, row_var, dual)
     | Var (var, _, _) ->
         if IntMap.mem var inst_map then
-          dual_if (rowify (IntMap.find var inst_map))
+          dual_if (rowify (snd (IntMap.find var inst_map)))
         else
           Row (StringMap.empty, row_var, dual)
     | Recursive (var, kind, rec_row) ->
@@ -189,12 +191,17 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
     | row ->
        dual_if (instr row)
 
-  (* and inst_type_arg : instantiation_map -> inst_env -> type_arg -> type_arg = fun inst_map rec_env ->
-   *   function
-   *     | `Type t -> `Type (inst_typ inst_map rec_env t)
-   *     | `Row r -> `Row (inst_row inst_map rec_env r)
-   *     | `Presence f -> `Presence (inst_presence inst_map rec_env f) *)
-  in
+  and inst_presence : instantiation_maps -> inst_env -> datatype -> datatype =
+    fun inst_map rec_env p -> inst_typ inst_map rec_env p
+
+  and inst_type_arg : instantiation_maps -> inst_env -> type_arg -> type_arg = fun inst_map rec_env ->
+    let open PrimaryKind in
+    fun (pk, t) ->
+    match pk with
+    | Type     -> Type, inst_typ inst_map rec_env t
+    | Row      -> Row, inst_row inst_map rec_env t
+    | Presence -> Presence, inst_presence inst_map rec_env t in
+
   let rec_env = IntMap.empty in
   fun inst_map ->
     inst_typ inst_map rec_env,
@@ -219,20 +226,25 @@ let instantiate_typ : bool -> datatype -> (type_arg list * datatype) = fun rigid
           let rigidity = if rigid then `Rigid else `Flexible in
           let new_var = Var (var', kind, rigidity) in
           let point = Unionfind.fresh new_var in
-          let t = Meta point in
-            IntMap.add var t inst_env,  t :: tys in
+          let ty =
+            let open PrimaryKind in
+            match Kind.primary_kind kind with
+            | (Type | Presence) as pk -> pk, Meta point
+            | Row -> Row, Row (StringMap.empty, point, false) in
+          (* let ty = Kind.primary_kind kind, Meta point in *)
+          IntMap.add var ty inst_env, ty :: tys in
 
         let inst_map, tys =
           List.fold_left
             (fun envs (var, kind) -> typ (var, kind) envs)
             (IntMap.empty, [])
-            quantifiers
-        in
+            quantifiers in
 
         let tys = List.rev tys in
         (* let qs = List.rev qs in *)
         let body = instantiate_datatype inst_map t in
-        Debug.if_set (show_instantiation) (fun () -> "...instantiated datatype with "^mapstrcat ", " (fun t -> Types.string_of_type_arg t) tys);
+        Debug.if_set (show_instantiation)
+          (fun () -> "...instantiated datatype with "^mapstrcat ", " (fun t -> Types.string_of_type_arg t) tys);
         tys, body
     | t -> [], t
 
@@ -316,14 +328,14 @@ module SEnv = Env.String
 
 let populate_instantiation_map ~name qs tyargs =
   List.fold_right2
-    (fun q tyarg inst_map ->
+    (fun q ((pk, _) as tyarg) inst_map ->
       (* TypeUtils.check_type_wellformedness None tyarg; *)
       (* Debug.print ("tyarg: " ^ string_of_datatype tyarg); *)
-      let arg_kind = TypeUtils.primary_kind_of_type tyarg in
+      (* let arg_kind = TypeUtils.primary_kind_of_type tyarg in *)
       (* match tyarg with
        * | Closed -> assert false
        * | _ -> (); *)
-      if arg_kind <> Quantifier.to_primary_kind q then
+      if pk <> Quantifier.to_primary_kind q then
         raise
           (internal_error
              ("Kind mismatch in type application: " ^

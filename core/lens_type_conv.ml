@@ -91,7 +91,7 @@ let sort_cols_of_table t ~table =
   (* get the underlying record type of either a table, a record or an application *)
   let extract_record_type t =
     match TypeUtils.concrete_type t with
-    | T.Application (_, (* args *) [ r ]) ->
+    | T.Application (_, (* args *) [ (_pk, r) ]) ->
         r (* get the first argument of a type application *)
     | T.Table (read, _, _) -> read (* use the read type of a table *)
     | T.Record r -> r (* Use the row of a record type. *)

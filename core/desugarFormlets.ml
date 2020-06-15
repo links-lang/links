@@ -50,7 +50,7 @@ object (o : 'self_type)
             let t = Types.fresh_type_variable (lin_any, res_any) in
             let () =
               Unify.datatypes
-                (ft, Instantiate.alias "Formlet" [t] tycon_env) in
+                (ft, Instantiate.alias "Formlet" [(PrimaryKind.Type, t)] tycon_env) in
             let name = Utility.gensym ~prefix:"_formlet_" () in
             let (xb, x) = (binder name ~ty:t, var name) in
               [with_dummy_pos (Pattern.As (xb, p))], [x], [t]
@@ -76,7 +76,7 @@ object (o : 'self_type)
         let ppos = WithPos.pos e in
         match WithPos.node e with
           | _ when is_raw e ->
-             let e = fn_appl ~ppos xml_str [o#lookup_effects] [e]
+             let e = fn_appl ~ppos xml_str [(PrimaryKind.Row, o#lookup_effects)] [e]
              in (o, e, Types.xml_type)
           | FormBinding (f, _) ->
               let (o, f, ft) = o#phrase f
@@ -107,14 +107,14 @@ object (o : 'self_type)
               let ft =
                 List.fold_right
                   (fun t ft -> Types.Function (Types.make_tuple_type [t], closed_wild, ft))
-                  ts' (tt ts)
-              in
-                begin
+                  ts' (tt ts) in
+              let open PrimaryKind in
+              begin
                   match vs with
                     | [] ->
                         let (o, e, _) = super#phrasenode (Xml ("#", [], None, contents)) in
                         (o,
-                         fn_appl ~ppos xml_str [o#lookup_effects] [with_dummy_pos e],
+                         fn_appl ~ppos xml_str [Row, o#lookup_effects] [with_dummy_pos e],
                          Types.unit_type)
                     | _ ->
                         let args = List.map (fun t -> (Types.make_tuple_type [t], closed_wild)) ts' in
@@ -122,7 +122,7 @@ object (o : 'self_type)
                         let eff = o#lookup_effects in
                         let base : phrase =
                           fn_appl pure_str
-                            [ft; eff]
+                            [(Type, ft); (Row, eff)]
                             [fun_lit ~ppos ~args:args dl_unl pss' (tuple vs)]
                         in
                         let p, et =
@@ -132,7 +132,7 @@ object (o : 'self_type)
                                let ft = TypeUtils.return_type ft in
                                let base : phrase =
                                  fn_appl ~ppos atatat_str
-                                   [arg_type; ft; o#lookup_effects]
+                                   [(Type, arg_type); (Type, ft); (Row, o#lookup_effects)]
                                    [arg; base]
                                in base, ft)
                             es (base, ft)
@@ -150,8 +150,9 @@ object (o : 'self_type)
                         dl_unl
                         [[variable_pat ~ty:(Types.xml_type) name]]
                         (xml tag attrs attrexp [block ([], var name)]) in
+              let open PrimaryKind in
               let (o, e, t) = o#formlet_body (xml "#" [] None contents) in
-              (o, fn_appl ~ppos plug_str [t; eff] [context; e], t)
+              (o, fn_appl ~ppos plug_str [(Type, t); (Row, eff)] [context; e], t)
           | _ -> assert false
 
   method! phrasenode  : phrasenode -> ('self_type * phrasenode * Types.datatype) = function
@@ -173,15 +174,15 @@ object (o : 'self_type)
             | _ -> [[tuple_pat ps]] in
 
         let arg_type = tt ts in
-
+        let open PrimaryKind in
         let e =
           fn_appl_node atatat_str
-             [arg_type; yields_type; eff]
+             [(Type, arg_type); (Type, yields_type); (Row, eff)]
              [body; fn_appl pure_str
-                    [Types.Function (Types.make_tuple_type [arg_type], closed_wild, yields_type); eff]
-                    [fun_lit ~args:[Types.make_tuple_type [arg_type], closed_wild] dl_unl pss yields]]
-        in
-          (o, e, Instantiate.alias "Formlet" [yields_type] tycon_env)
+                      [(Type, Types.Function (Types.make_tuple_type [arg_type], closed_wild, yields_type));
+                       (Row, eff)]
+                    [fun_lit ~args:[Types.make_tuple_type [arg_type], closed_wild] dl_unl pss yields]] in
+        (o, e, Instantiate.alias "Formlet" [(Type, yields_type)] tycon_env)
     | e -> super#phrasenode e
 end
 

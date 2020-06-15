@@ -93,7 +93,8 @@ struct
           (function
              | Present t -> nested_type_of_type t
              | _ -> assert false) fields)
-    | Types.Application (l, [t]) when l = Types.list ->
+    | Types.Application (l, [(primary_kind, t)]) when l = Types.list ->
+       assert (primary_kind = PrimaryKind.Type);
        `List (nested_type_of_type t)
     | t ->
        Debug.print ("Can't convert to nested_type: " ^ Types.string_of_datatype t);

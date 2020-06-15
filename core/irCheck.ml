@@ -433,9 +433,9 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       | Recursive _, _
       | _, Recursive _ -> Debug.print "IR typechecker encountered recursive type"; true
       | _ ->  false
-    and eq_type_args  (context, l, r)  =
-      let lpk = TypeUtils.primary_kind_of_type l in
-      let rpk = TypeUtils.primary_kind_of_type r in
+    and eq_type_args  (context, (lpk, l), (rpk, r))  =
+      (* let lpk = TypeUtils.primary_kind_of_type l in
+       * let rpk = TypeUtils.primary_kind_of_type r in *)
       let open CommonTypes.PrimaryKind in
       match lpk, rpk with
       | Type,     Type     -> eqt (context, l, r)
@@ -589,7 +589,7 @@ struct
               TAbs (tyvars, v), t, o
 
         | TApp (v, ts)  ->
-           List.iter (TypeUtils.check_type_wellformedness None) ts;
+           (* List.iter (TypeUtils.check_type_wellformedness None) ts; *)
            (* Debug.print ("ts: " ^ (String.concat "," (List.map (fun t -> Types.string_of_type_arg t) ts))); *)
            let v, t, o = o#value v in
            let t = Instantiate.apply_type t ts in

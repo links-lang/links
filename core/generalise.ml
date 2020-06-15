@@ -40,9 +40,9 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
             begin
               match Unionfind.find point with
               | Var (var, _, _) when TypeVarSet.mem var bound_vars -> []
-              | Var (_, _, `Flexible) when kind=`All -> [Meta point]
+              | Var (_, k, `Flexible) when kind=`All -> [Kind.primary_kind k, Meta point]
               | Var (_, _, `Flexible) -> []
-              | Var (_, _, `Rigid) -> [Meta point]
+              | Var (_, k, `Rigid) -> [Kind.primary_kind k, Meta point]
               | Recursive (var, _kind, body) ->
                  Debug.if_set (show_recursion) (fun () -> "rec (get_type_args): " ^(string_of_int var));
                  if TypeVarSet.mem var bound_vars then
@@ -137,11 +137,12 @@ and get_row_type_args : gen_kind -> TypeVarSet.t -> row -> type_arg list =
  *       field_vars @ row_vars *)
 
 and get_type_arg_type_args : gen_kind -> TypeVarSet.t -> type_arg -> type_arg list =
-  fun kind bound_vars -> get_type_args kind bound_vars
-    (* function
-     *   | `Type t -> get_type_args kind bound_vars t
-     *   | `Row r -> get_row_type_args kind bound_vars r
-     *   | `Presence f -> get_presence_type_args kind bound_vars f *)
+  fun kind bound_vars (pk, t) ->
+  let open PrimaryKind in
+  match pk with
+  | Type     -> get_type_args kind bound_vars t
+  | Row      -> get_row_type_args kind bound_vars t
+  | Presence -> get_presence_type_args kind bound_vars t
 
 (** Determine if two points have the same quantifier.
 
@@ -153,13 +154,16 @@ let equivalent_tyarg l r =
   | _ -> assert false
 
 let remove_duplicates =
-  unduplicate (fun l r ->
-                 match l, r with
-                   | Meta l, Meta r -> equivalent_tyarg l r
-                   (* | `Type (`MetaTypeVar l), `Type (`MetaTypeVar r) -> equivalent_tyarg l r
-                    * | `Row (_, l, ld), `Row (_, r, rd) -> ld=rd && equivalent_tyarg l r
-                    * | `Presence (`Var l), `Presence (`Var r) -> equivalent_tyarg l r *)
-                   | _ -> false)
+  unduplicate
+    (fun (lk, lt) (rk, rt) ->
+      match lt, rt with
+      | Meta l, Meta r -> let b = equivalent_tyarg l r in
+                          assert (not (lk <> rk && b));
+                          b
+      | _ -> false)
+(* | `Type (`MetaTypeVar l), `Type (`MetaTypeVar r) -> equivalent_tyarg l r
+ * | `Row (_, l, ld), `Row (_, r, rd) -> ld=rd && equivalent_tyarg l r
+ * | `Presence (`Var l), `Presence (`Var r) -> equivalent_tyarg l r *)
 
 let get_type_args kind bound_vars t =
   remove_duplicates (get_type_args kind bound_vars t)
@@ -172,14 +176,16 @@ let rigidify_type_arg : type_arg -> unit =
     match Unionfind.find point with
     | Var (var, kind, `Flexible) -> Unionfind.change point (Var (var, kind, `Rigid))
     | Var _ -> ()
-    | _ -> assert false
-  in
-    function
-    | Meta point -> rigidify_point point
-    (* | `Type (`MetaTypeVar point) -> rigidify_point point
-     * | `Row (_, point, _)         -> rigidify_point point
-     * | `Presence (`Var point)    -> rigidify_point point *)
-    | _ -> raise (internal_error "Not a type-variable argument.")
+    | _ -> assert false in
+  fun (_pk, t) ->
+  match t with
+  | Meta point -> rigidify_point point
+  | _ -> raise (internal_error "Not a type-variable argument.")
+  (* let open PrimaryKind in
+   * match pk with
+   * | Type     -> rigidify_point point
+   * | Row      -> rigidify_point point
+   * | Presence -> rigidify_point point *)
 
 (** Only flexible type variables should have the mono restriction. When we
    quantify over such variables (and so rigidify them), we need to convert any
@@ -189,14 +195,14 @@ let mono_type_args : type_arg -> unit =
     match Unionfind.find point with
     | Var (var, (primary_kind, (lin, Restriction.Mono)), `Flexible) ->
        Unionfind.change point (Var (var, (primary_kind, (lin, Restriction.Any)), `Flexible))
-    | _ -> ()
-  in
-  function
+    | _ -> () in
+  fun (_pk, t) ->
+  match t with
   | Meta point -> check_sk point
+  | _ -> ()
   (* | `Type (`MetaTypeVar point) -> check_sk point
    * | `Row (_, point, _) -> check_sk point
    * | `Presence (`Var point) -> check_sk point *)
-  | _ -> ()
 
 (** generalise:
     Universally quantify any free type variables in the expression.

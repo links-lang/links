@@ -758,6 +758,8 @@ end
 
 module Eval(I : INTERPRETATION) =
 struct
+  open PrimaryKind
+
   let extend xs vs (nenv, tenv, eff) =
     List.fold_left2
       (fun (nenv, tenv, eff) x (v, t) ->
@@ -794,7 +796,7 @@ struct
 
       let eff = lookup_effects env in
 
-      let instantiate_mb name = instantiate name [eff] in
+      let instantiate_mb name = instantiate name [(Row, eff)] in
       let cofv = I.comp_of_value in
       let ec = eval env in
       let ev = evalv env in
@@ -807,9 +809,9 @@ struct
           | RangeLit (low, high) ->
               I.apply (instantiate_mb "intRange", [ev low; ev high])
           | ListLit ([], Some t) ->
-              cofv (instantiate "Nil" [t])
+              cofv (instantiate "Nil" [(Type, t)])
           | ListLit (e::es, Some t) ->
-              cofv (I.apply_pure(instantiate "Cons" [t; eff],
+              cofv (I.apply_pure(instantiate "Cons" [(Type, t); (Row, eff)],
                                  [ev e; ev (WithPos.make ~pos (ListLit (es, Some t)))]))
           | Escape (bndr, body) when Binder.has_type bndr ->
              let k  = Binder.to_name bndr in
@@ -865,6 +867,7 @@ struct
               let qs = List.map SugarQuantifier.get_resolved_exn tyvars in
                 cofv (I.tabstr (qs, v))
           | TAppl (e, tyargs) ->
+Debug.print ("TAppl...: "^ Sugartypes.show_phrasenode (TAppl (e, tyargs)));
               let v = ev e in
               let vt = I.sem_type v in
                 begin
@@ -1006,15 +1009,15 @@ struct
           | Xml (tag, attrs, attrexp, children) ->
                if tag = "#" then
                  cofv (I.concat (instantiate "Nil"
-                                   [Types.Primitive Primitive.XmlItem],
+                                   [(Type, Types.Primitive Primitive.XmlItem)],
                                  instantiate "Concat"
-                                   [Types.Primitive Primitive.XmlItem
-                                   ; eff],
+                                   [ (Type, Types.Primitive Primitive.XmlItem)
+                                   ; (Row, eff)],
                                  List.map ev children))
                 else
                   let attrs    = alistmap (List.map ev) attrs in
                   let children = List.map ev children in
-                  let body     = I.xml (instantiate "^^" [eff], tag, attrs,
+                  let body     = I.xml (instantiate "^^" [(Row, eff)], tag, attrs,
                                         children) in
                   begin match attrexp with
                   | None   -> cofv body

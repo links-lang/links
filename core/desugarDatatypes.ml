@@ -72,12 +72,28 @@ module Desugar = struct
     match t' with
     | { node = t; pos } ->
       let open Datatype in
+      (* let z = *)
       match t with
         | TypeVar stv ->
            let point = SugarTypeVar.get_resolved_type_exn stv in
            Meta point
         | QualifiedTypeApplication _ -> assert false (* will have been erased *)
-        | Function (f, e, t) ->
+        | Function (f, e, t) as _fn ->
+           (* Debug.print ("fn: "^Sugartypes.Datatype.show _fn);
+            * let f' = (List.map datatype f) in
+            * Debug.print "A";
+            * let f'' = Types.make_tuple_type f' in
+            * Debug.print ("f'': "^string_of_datatype f'');
+            * Debug.print "B";
+            * let e' = row alias_env e t' in
+            * Debug.print ("e': "^Types.show_datatype e');
+            * Debug.print "C";
+            * let t' = datatype t in
+            * Debug.print ("t' (Fun): "^string_of_datatype t');
+            * Debug.print "D";
+            * Debug.print ("Fun: "^string_of_datatype (Types.Function (f'', e', t')));
+            * Debug.print "E";
+            * Types.Function (f'', e', t') *)
             Types.Function ( Types.make_tuple_type (List.map datatype f)
                            , row alias_env e t'
                            , datatype t )
@@ -108,7 +124,7 @@ module Desugar = struct
         | Variant r -> Types.Variant (row alias_env r t')
         | Effect r -> Types.Effect (row alias_env r t')
         | Table (r, w, n) -> Types.Table (datatype r, datatype w, datatype n)
-        | List k -> Types.Application (Types.list, [datatype k])
+        | List k -> Types.Application (Types.list, [(PrimaryKind.Type, datatype k)])
         | TypeApplication (tycon, ts) ->
             (* Matches kinds of the quantifiers against the type arguments.
              * Returns Types.type_args based on the given frontend type arguments. *)
@@ -177,6 +193,9 @@ module Desugar = struct
         | DB -> Types.Primitive Primitive.DB
         | (Input _ | Output _ | Select _ | Choice _ | Dual _ | End) as s ->
             session_type alias_env s t'
+      (* in *)
+      (* Debug.print ("t': "^Datatype.show (t'.node));
+       * Debug.print ("z: "^Types.string_of_datatype z); z *)
 
   and session_type alias_env st (node : 'a WithPos.t) =
     (* let lookup_type t = StringMap.find t var_env.tenv in -- used only in commented code *)
@@ -200,6 +219,7 @@ module Desugar = struct
      *    `Var (make_anon_point var_env pos sk freedom) *)
     | Datatype.Var spv ->
        let resolved_pv = SugarTypeVar.get_resolved_presence_exn spv in
+       (* Debug.print ("presence var: " ^ Types.string_of_presence (Types.Meta resolved_pv)); *)
        Types.Meta resolved_pv
 
   and row alias_env (fields, rv) (node : 'a WithPos.t) =
@@ -227,10 +247,11 @@ module Desugar = struct
 
   and type_arg alias_env ta node =
     let open Datatype in
+    let open PrimaryKind in
     match ta with
-    | Type t     -> datatype alias_env t
-    | Row r      -> row alias_env r node
-    | Presence f -> fieldspec alias_env f node
+    | Type t     -> Type, datatype alias_env t
+    | Row r      -> Row, row alias_env r node
+    | Presence f -> Presence, fieldspec alias_env f node
 
 
 
@@ -252,8 +273,7 @@ module Desugar = struct
     let read_type =
       match datatype' alias_env (dt, None) with
       | _, Some read_type -> read_type
-      | _ -> assert false
-    in
+      | _ -> assert false in
     let write_row, needed_row =
       match TypeUtils.concrete_type read_type with
       | Record (Row (fields, _, _)) ->
@@ -270,8 +290,7 @@ module Desugar = struct
                   (add write, add needed) )
             fields
             (Types.make_empty_closed_row (), Types.make_empty_closed_row ())
-      | _ -> raise (internal_error "Table types must be record types")
-    in
+      | _ -> raise (internal_error "Table types must be record types") in
     (* We deliberately don't concretise the returned read_type in the hope of improving error
        messages during type inference. *)
     (read_type, Record write_row, Record needed_row)
@@ -481,8 +500,10 @@ module Untyped = struct
   let name = "datatypes"
 
   let program state program' =
+    (* Debug.print ("program': " ^ Sugartypes.show_program program'); *)
     let tyenv = Context.typing_environment (context state) in
     let program'' = program tyenv program' in
+    (* Debug.print ("program'': " ^ Sugartypes.show_program program''); *)
     return state program''
 
   let sentence state sentence' =

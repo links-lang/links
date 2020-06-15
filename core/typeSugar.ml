@@ -1756,7 +1756,9 @@ let type_section pos context s =
        let rho = Types.fresh_row_variable (lin_unl, res_any) in
        let effects = Types.make_empty_open_row default_effect_subkind in (* projection is pure! *)
        let r = Record (Row (StringMap.add label (Present a) StringMap.empty, rho, false)) in
-         ([ a; Row (StringMap.empty, rho, false); effects], Function (Types.make_tuple_type [r], effects, a)), Usage.empty
+         ([(PrimaryKind.Type, a); (PrimaryKind.Row, Row (StringMap.empty, rho, false)); (PrimaryKind.Row, effects)],
+          Function (Types.make_tuple_type [r], effects, a)),
+         Usage.empty
     | Name var      ->
        try Utils.instantiate env var, Usage.singleton var
        with Errors.UndefinedVariable _msg ->
@@ -1778,7 +1780,9 @@ let type_frozen_section context s =
        let effects = StringMap.empty, Types.fresh_rigid_row_variable default_effect_subkind, false in
        let r = Record (Row (StringMap.add label (Present a) StringMap.empty, rho, false)) in
        Types.for_all
-         (Types.quantifiers_of_type_args [a; Row (StringMap.empty, rho, false); Row effects],
+         (Types.quantifiers_of_type_args [(PrimaryKind.Type, a);
+                                          (PrimaryKind.Row, Row (StringMap.empty, rho, false));
+                                          (PrimaryKind.Row, Row effects)],
           Function (Types.make_tuple_type [r], Row effects, a)),
        Usage.empty
     | Name var      -> Env.find var env, Usage.singleton var in
@@ -1830,7 +1834,7 @@ let type_binary_op pos ctxt =
   | Name "<>"    ->
       let a = Types.fresh_type_variable (lin_any, res_any) in
       let eff = Types.make_empty_open_row default_effect_subkind in
-        ([a; eff],
+        ([(PrimaryKind.Type, a); (PrimaryKind.Row, eff)],
          Function (Types.make_tuple_type [a; a], eff, Primitive Primitive.Bool),
          Usage.empty)
   | Name "!"     -> add_empty_usages (Utils.instantiate ctxt.var_env "Send")
@@ -2035,7 +2039,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
               | As (_, p) | HasType (p, _) -> unwrap p
               | Variant _ | Negative _ | Record _ | Tuple _ | Effect _ -> assert false in
           let pats = concat_map unwrap pats in
-            Application (Types.list, [cpt pats t])
+            Application (Types.list, [cpta pats t])
       | ForAll (qs, t) -> ForAll (qs, cpt pats t)
       | Meta point ->
           begin
@@ -2071,7 +2075,8 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
       | Row _
       | Absent
       | Present _ -> raise Types.tag_expectation_mismatch
-  in
+  and cpta : Pattern.with_pos list -> Types.type_arg -> Types.type_arg =
+    fun pats (pk, t) -> (pk, cpt pats t) in
   cpt pats t
 
 type unify_result = UnifySuccess | UnifyFailure of (Unify.error * Position.t)
@@ -2680,10 +2685,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             begin match List.map tc es with
               | [] ->
                   let t = Types.fresh_type_variable (lin_any, res_any) in
-                    ListLit ([], Some t), T.Application (Types.list, [t]), Usage.empty
+                    ListLit ([], Some t), T.Application (Types.list, [PrimaryKind.Type, t]), Usage.empty
               | e :: es ->
                   List.iter (fun e' -> unify ~handle:Gripers.list_lit (pos_and_typ e, pos_and_typ e')) es;
-                  ListLit (List.map erase (e::es), Some (typ e)), T.Application (Types.list, [(typ e)]), Usage.combine_many (List.map usages (e::es))
+                  ListLit (List.map erase (e::es), Some (typ e)), T.Application (Types.list, [PrimaryKind.Type, typ e]), Usage.combine_many (List.map usages (e::es))
             end
         | FunLit (argss_prev, lin, (pats, body), location) ->
             let vs = check_for_duplicate_names pos (List.flatten pats) in
@@ -3163,7 +3168,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                 Types.row_with (Value.session_exception_operation, T.Present ty) inner_effects
               else
                 inner_effects in
-            let pid_type = T.Application (Types.process, [pid_effects]) in
+            let pid_type = T.Application (Types.process, [PrimaryKind.Row, pid_effects]) in
             let () =
               let outer_effects =
                 Types.make_singleton_open_row ("wild", T.Present Types.unit_type) default_effect_subkind
@@ -3363,9 +3368,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
              | (_, (Type, _)) :: qs, Type :: vs
              | (_, (Row, _)) :: qs, Row :: vs
              | (_, (Presence, _)) :: qs, Presence :: vs -> quants_ok (qs, vs)
-             | _ -> Gripers.type_apply pos (uexp_pos e) t args
-           in
-           quants_ok (vars, List.map TypeUtils.primary_kind_of_type args);
+             | _ -> Gripers.type_apply pos (uexp_pos e) t args in
+           quants_ok (vars, List.map fst args);
 
            let t' = Instantiate.apply_type t args in
            TAppl (e, tyargs), t', u
@@ -3421,7 +3425,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            let yields = type_check context' yields in
            unify ~handle:Gripers.formlet_body (pos_and_typ body, no_pos Types.xml_type);
            (Formlet (erase body, erase yields),
-            Instantiate.alias "Formlet" [typ yields] context.tycon_env,
+            Instantiate.alias "Formlet" [PrimaryKind.Type, typ yields] context.tycon_env,
             Usage.combine (usages body) (Usage.restrict (usages yields) vs))
         | Page e ->
             let e = tc e in
@@ -3434,10 +3438,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             and h = tc h
             and attributes = tc attributes in
             let () = unify ~handle:Gripers.render_formlet
-              (pos_and_typ f, no_pos (Instantiate.alias "Formlet" [t] context.tycon_env)) in
+              (pos_and_typ f, no_pos (Instantiate.alias "Formlet" [PrimaryKind.Type, t] context.tycon_env)) in
             let () = unify ~handle:Gripers.render_handler
               (pos_and_typ h, (exp_pos f,
-                               Instantiate.alias "Handler" [t] context.tycon_env)) in
+                               Instantiate.alias "Handler" [PrimaryKind.Type, t] context.tycon_env)) in
             let () = unify ~handle:Gripers.render_attributes
               (pos_and_typ attributes, no_pos (Instantiate.alias "Attributes" [] context.tycon_env))
             in
@@ -3451,7 +3455,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             let e = tc e
             and pattern = tpc pattern in
             let a = Types.fresh_type_variable (lin_unl, res_any) in
-            let ft = Instantiate.alias "Formlet" [a] context.tycon_env in
+            let ft = Instantiate.alias "Formlet" [PrimaryKind.Type, a] context.tycon_env in
               unify ~handle:Gripers.form_binding_body (pos_and_typ e, no_pos ft);
               unify ~handle:Gripers.form_binding_pattern (ppos_and_typ pattern, (exp_pos e, a));
               FormBinding (erase e, erase_pat pattern), Types.xml_type, usages e
@@ -3492,8 +3496,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                          let tt = Types.make_table_type (a, b, c) in
                          let pattern = tpc pattern in
                          let e = tc e in
+                         (* Debug.print ("e type (1): "^Types.string_of_datatype (typ e)); *)
                          let () = unify ~handle:Gripers.iteration_table_body (pos_and_typ e, no_pos tt) in
                          let () = unify ~handle:Gripers.iteration_table_pattern (ppos_and_typ pattern, (exp_pos e, a)) in
+                         (* Debug.print ("pattern type: "^Types.string_of_datatype (thd3 pattern));
+                          * Debug.print ("e type (2): "^Types.string_of_datatype (typ e)); *)
                            (Table (erase_pat pattern, erase e) :: generators,
                             usages e :: generator_usages,
                             pattern_env pattern:: environments))
@@ -3521,6 +3528,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                 unify ~handle:Gripers.iteration_base_body
                   (pos_and_typ body, no_pos (Types.make_list_type (T.Record (Types.make_empty_open_row (lin_unl, res_base))))) in
             let e = Iteration (generators, erase body, opt_map erase where, opt_map erase orderby) in
+            (* Debug.print ("iteration: "^show_phrasenode e); *)
             let vs = List.fold_left StringSet.union StringSet.empty (List.map Env.domain environments) in
             let us = Usage.combine_many
                        (List.append generator_usages

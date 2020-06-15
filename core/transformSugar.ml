@@ -142,6 +142,7 @@ let check_type_application (e, t) k =
   end
 
 class transform (env : Types.typing_environment) =
+  let open PrimaryKind in
   object (o : 'self_type)
     val var_env = env.Types.var_env
     val tycon_env = env.Types.tycon_env
@@ -290,7 +291,7 @@ class transform (env : Types.typing_environment) =
           let (o, spawn_loc) = o#given_spawn_location spawn_loc in
           let envs = o#backup_envs in
           let (o, inner_effects) = o#row inner_effects in
-          let process_type = Application (Types.process, [inner_effects]) in
+          let process_type = Application (Types.process, [(Row, inner_effects)]) in
           let o = o#with_effects inner_effects in
           let (o, body, _) = o#phrase body in
           let o = o#restore_envs envs in
@@ -642,7 +643,7 @@ class transform (env : Types.typing_environment) =
          let o = o#with_var_env (TyEnv.extend (o#get_var_env ()) (o#get_formlet_env ())) in
          let (o, yields, t) = o#phrase yields in
          let o = o#restore_envs envs in
-         (o, Formlet (body, yields), Instantiate.alias "Formlet" [t] tycon_env)
+         (o, Formlet (body, yields), Instantiate.alias "Formlet" [(Type, t)] tycon_env)
       | Page e -> let (o, e, _) = o#phrase e in (o, Page e, Instantiate.alias "Page" [] tycon_env)
       | FormletPlacement (f, h, attributes) ->
           let (o, f, _) = o#phrase f in

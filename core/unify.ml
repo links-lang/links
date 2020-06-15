@@ -244,7 +244,15 @@ and eq_row_vars (lpoint, rpoint) =
     | Var (var, _, _), Var (var', _, _)
     | Recursive (var, _, _), Recursive (var', _, _) -> var=var'
     | _, _ -> Unionfind.equivalent lpoint rpoint
-and eq_type_args = fun (l, r) -> eq_types (l, r)
+and eq_type_args =
+  let open PrimaryKind in
+  fun ((lpk, lt), (rpk, rt)) ->
+  match lpk, rpk with
+  | Type, Type         -> eq_types (lt, rt)
+  | Row, Row           -> eq_types (lt, rt)
+  | Presence, Presence -> eq_presence (lt, rt)
+  | _, _               -> false
+ (* eq_types (l, r) *)
   (* function
    *   | `Type lt, `Type rt -> eq_types (lt, rt)
    *   | `Row lr, `Row rr -> eq_rows (lr, rr)
@@ -955,9 +963,15 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
                match Types.get_restriction_constraint rest with
                | None -> ()
                | Some const ->
+                  Debug.print "C";
+                  if rest = Restriction.Base then
+                    Debug.print "Base!";
                   let module M = (val const) in
                   if M.can_row_be (Row extension_row) then
-                    M.make_row (Row extension_row)
+                    begin
+                      M.make_row (Row extension_row);
+                      Debug.print ("row: "^ string_of_row (Row extension_row))
+                    end
                   else
                     let message = Printf.sprintf "Cannot unify the %s row variable %d with the non-%s row %s."
                                     (Restriction.to_string rest) var (Restriction.to_string rest) (string_of_row (Row extension_row))
@@ -1139,10 +1153,13 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
     let (rfield_env', rrow_var', rdual') as rrow' = TypeUtils.extract_row_parts rrow' in
     (* let (lfield_env', lrow_var', ldual') as lrow', lrec_row = unwrap_row lrow in
      * let (rfield_env', rrow_var', rdual') as rrow', rrec_row = unwrap_row rrow in *)
+Debug.print "A";
+Debug.print ("lrow': " ^ string_of_row (Row lrow'));
+Debug.print ("rrow': " ^ string_of_row (Row rrow'));
     let rec_env' =
       (register_rec_rows
-         (lfield_env, lfield_env', lrec_row, rrow')
-         (rfield_env, rfield_env', rrec_row, lrow')
+         (lfield_env, lfield_env', lrec_row, lrow')
+         (rfield_env, rfield_env', rrec_row, rrow')
          rec_env) in
     match rec_env' with
     | None -> ()
@@ -1159,7 +1176,8 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
 
            (* each row can contain fields missing from the other *)
            let rextension = StringMap.filter (fun label _ -> not (StringMap.mem label rfield_env')) lfield_env' in
-           unify_row_var_with_row rec_env (rrow_var', rdual', (rextension, fresh_row_var ,false));
+Debug.print ("rext: "^string_of_row (Row (rextension, fresh_row_var, false)));
+           unify_row_var_with_row rec_env (rrow_var', rdual', (rextension, fresh_row_var, false));
 
            let lextension = StringMap.filter (fun label _ -> not (StringMap.mem label lfield_env')) rfield_env' in
            unify_row_var_with_row rec_env (lrow_var', ldual', (lextension, fresh_row_var, false))
@@ -1194,14 +1212,14 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
     (fun () -> "Unified rows: " ^ (string_of_row (Row lrow)) ^ " and: " ^ (string_of_row (Row rrow)))
 
 and unify_type_args' : unify_env -> (type_arg * type_arg) -> unit =
-  fun rec_env (l, r) ->
+  fun rec_env ((lpk, lt), (rpk, rt)) ->
   let open PrimaryKind in
-  match TypeUtils.primary_kind_of_type l, TypeUtils.primary_kind_of_type r with
-  | Type, Type -> unify' rec_env (l, r)
-  | PrimaryKind.Row, PrimaryKind.Row -> unify' rec_env (l, r)
-  | Presence, Presence -> unify_presence' rec_env (l, r)
+  match lpk, rpk with
+  | Type, Type         -> unify' rec_env (lt, rt)
+  | Row, Row           -> unify' rec_env (lt, rt)
+  | Presence, Presence -> unify_presence' rec_env (lt, rt)
   | _, _ ->
-     raise (Failure (`Msg ("Couldn't match "^ string_of_type_arg l ^" against "^ string_of_type_arg r)))
+     raise (Failure (`Msg ("Couldn't match "^ string_of_type_arg (lpk, lt) ^" against "^ string_of_type_arg (rpk, rt))))
   (* deferring to unify' means that unify' must handle kinds Row and
      Presence as well as Type (which it does) *)
 (*  fun rec_env -> unify' rec_env*)
