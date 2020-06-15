@@ -2995,8 +2995,10 @@ let pp : Format.formatter -> t -> unit = fun fmt t ->
     Format.pp_print_string fmt (string_of_datatype t)
   else
     pp fmt (DecycleTypes.datatype t)
+
 let pp_row = pp
 let pp_datatype = pp
+let pp_field_spec = pp
 
 let pp_type_arg : Format.formatter -> type_arg -> unit = fun fmt t ->
   if Settings.get print_types_pretty then

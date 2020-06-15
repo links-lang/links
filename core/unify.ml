@@ -421,31 +421,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
        raise (Errors.internal_error ~filename:"unify.ml" ~message:"`Not_typed' passed to `unify'")
     | (Var _ | Recursive _), _ | _, (Var _ | Recursive _) ->
        failwith ("freestanding Var / Recursive not implemented yet (must be inside Meta)")
-    | Alias (_, t1), t2 | t1, Alias (_, t2) -> ut (t1, t2)
-    | Application (l, _), Application (r, _) when l <> r ->
-       raise (Failure
-                (`Msg ("Cannot unify abstract type '"^string_of_datatype t1^
-                         "' with abstract type '"^string_of_datatype t2^"'")))
-    | Application (_, ls), Application (_, rs) ->
-       List.iter2 (fun lt rt -> unify_type_args' rec_env (lt, rt)) ls rs
-    | Primitive t, RecursiveApplication a
-      | RecursiveApplication a, Primitive t ->
-       raise (Failure
-                (`Msg ("Cannot unify primitive type '"^string_of_datatype (Primitive t) ^
-                         "' with recursive type '"^ a.r_name ^"'")))
-    | RecursiveApplication a1, RecursiveApplication a2 ->
-       let (n1, args1) = (a1.r_unique_name, a1.r_args) in
-       let (n2, args2) = (a2.r_unique_name, a2.r_args) in
-       if n1 = n2 && a1.r_dual = a2.r_dual then
-         (* Note that cannot eagerly reject incompatible duality flags
-          * due to the possibility of self-dual types such as `End`. *)
-         List.iter2 (fun lt rt -> unify_type_args' rec_env (lt, rt)) args1 args2
-       else
-         unify_rec2 (RecAppl a1) (RecAppl a2)
-    | RecursiveApplication appl, t2 ->
-       unify_rec (RecAppl appl) t2
-    |  t1, RecursiveApplication appl->
-        unify_rec (RecAppl appl) t1
+    (* it's important that Meta is dealt with before Alias *)
     | Meta lpoint, Meta rpoint ->
        if Unionfind.equivalent lpoint rpoint then
          ()
@@ -629,6 +605,31 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
             Unionfind.change point t; *)
          | t' -> ut (t, t')
        end
+    | Alias (_, t1), t2 | t1, Alias (_, t2) -> ut (t1, t2)
+    | Application (l, _), Application (r, _) when l <> r ->
+       raise (Failure
+                (`Msg ("Cannot unify abstract type '"^string_of_datatype t1^
+                         "' with abstract type '"^string_of_datatype t2^"'")))
+    | Application (_, ls), Application (_, rs) ->
+       List.iter2 (fun lt rt -> unify_type_args' rec_env (lt, rt)) ls rs
+    | Primitive t, RecursiveApplication a
+    | RecursiveApplication a, Primitive t ->
+       raise (Failure
+                (`Msg ("Cannot unify primitive type '"^string_of_datatype (Primitive t) ^
+                         "' with recursive type '"^ a.r_name ^"'")))
+    | RecursiveApplication a1, RecursiveApplication a2 ->
+       let (n1, args1) = (a1.r_unique_name, a1.r_args) in
+       let (n2, args2) = (a2.r_unique_name, a2.r_args) in
+       if n1 = n2 && a1.r_dual = a2.r_dual then
+         (* Note that cannot eagerly reject incompatible duality flags
+          * due to the possibility of self-dual types such as `End`. *)
+         List.iter2 (fun lt rt -> unify_type_args' rec_env (lt, rt)) args1 args2
+       else
+         unify_rec2 (RecAppl a1) (RecAppl a2)
+    | RecursiveApplication appl, t2 ->
+       unify_rec (RecAppl appl) t2
+    |  t1, RecursiveApplication appl->
+        unify_rec (RecAppl appl) t1
     (* Type *)
     | Primitive x, Primitive y when x = y -> ()
     | Function (lfrom, Row lm, lto), Function (rfrom, Row rm, rto) ->
