@@ -174,12 +174,12 @@ object (o : 'self_type)
           match sort, sort_type with
             | None, None -> results
             | Some sort, Some sort_type ->
-               let sort_by, sort_type_arg =
+               let sort_by, sort_row =
                  "sortByBase", TypeUtils.extract_row sort_type in
                let g : phrase =
                  fun_lit ~args:[Types.make_tuple_type [arg_type], eff]
                    dl_unl [arg] sort in
-               fn_appl sort_by [(Type, arg_type); (Row, eff); (Type, sort_type_arg)]
+               fn_appl sort_by [(Type, arg_type); (Row, eff); (Row, sort_row)]
                  [g; results]
             | _, _ -> assert false in
 
