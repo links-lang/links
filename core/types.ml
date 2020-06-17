@@ -801,7 +801,7 @@ module Base : Constraint = struct
         | Row _ as t -> super#type_satisfies vars t
         (* Presence *)
         | Absent -> true
-        | Present t -> super#type_satisfies vars t
+        | Present _ as t -> super#type_satisfies vars t
         (* Session *)
         | Input _ | Output _ | Select _ | Choice _ | Dual _ | End -> false
     end
@@ -845,12 +845,7 @@ module Unl : Constraint = struct
       (* Effect *)
       | Effect _  -> true
       (* Row *)
-      | Row (fields, row_var, _dual) ->
-         StringMap.fold
-           (fun _ t acc ->
-             o#type_satisfies vars t || acc)
-           fields false
-         || o#point_satisfies o#type_satisfies vars row_var
+      | Row _ as t -> super#type_satisfies vars t
       (* Presence *)
       | Absent -> false
       | Present t -> o#type_satisfies vars t
@@ -862,16 +857,15 @@ module Unl : Constraint = struct
     (object
       inherit unl_predicate
       method! var_satisfies = function
-        | (_, kind, _) ->
-           Subkind.linearity (Kind.subkind kind) = Linearity.Unl
-        (* | _ -> false *)
+        | (_, (_, (Linearity.Unl, _)), _) -> true
+        | _ -> false
     end)#predicates
 
   let can_type_be, can_row_be =
     (object
       inherit unl_predicate
       method! var_satisfies = function
-        | (_, kind, _) when Subkind.linearity (Kind.subkind kind) = Linearity.Unl -> true
+        | (_, (_, (Linearity.Unl, _)), _) -> true
         | (_, _, `Flexible) -> true
         | (_, _, `Rigid) -> false
     end)#predicates
@@ -909,9 +903,8 @@ module Unl : Constraint = struct
        | (Input _ | Output _ | Select _ | Choice _ | End) -> assert false
 
      method! visit_var point = function
-       | (_, kind, _) when Subkind.linearity (Kind.subkind kind) = Linearity.Unl-> ()
-       | (v, kind, `Flexible) ->
-          Unionfind.change point (Var (v, Kind.as_unl kind, `Flexible))
+       | (_, (_, (Linearity.Unl, _)), _) -> ()
+       | (v, (pk, (_, sk)), `Flexible) -> Unionfind.change point (Var (v, (pk, (lin_unl, sk)), `Flexible))
        | (_, _, `Rigid) -> assert false
    end)#visitors
 end
@@ -930,9 +923,10 @@ module Session : Constraint = struct
         | Input _ | Output _ | Dual _ | Choice _ | Select _ | End -> true
         | (Alias _ | Meta _) as t -> super#type_satisfies vars t
         | (RecursiveApplication { r_unique_name; _ }) as t ->
-           if StringSet.mem r_unique_name rec_appls
-           then false
-           else super#type_satisfies vars t
+           if StringSet.mem r_unique_name rec_appls then
+             false
+           else
+             super#type_satisfies vars t
         | _ -> false
     end
   end
@@ -944,12 +938,11 @@ module Session : Constraint = struct
        inherit type_iter as super
 
        method! visit_var point = function
-         | (_, kind, _) when Kind.restriction kind = Session -> ()
-         | (v, kind, `Flexible) ->
+         | (_, (_, (_, Session)), _) -> ()
+         | (v, (pk, (l, sk)), `Flexible) ->
             begin
-              let res = Kind.restriction kind in
-              match Restriction.min res Session with
-              | Some Session -> Unionfind.change point (Var (v, Kind.as_session kind, `Flexible))
+              match Restriction.min sk Session with
+              | Some Session -> Unionfind.change point (Var (v, (pk, (l, Session)), `Flexible))
               | _ -> assert false
             end
          | (_, _, `Rigid) -> assert false
@@ -980,15 +973,13 @@ module Mono : Constraint = struct
        inherit MonoPredicate.klass
 
        method! var_satisfies = function
-         | (_, kind, _) when Kind.restriction kind = Mono -> true
+         | (_, (_, (_, Mono)), _) -> true
          | (_, _, `Rigid) -> true
-         | (_, kind, `Flexible) ->
-            (* Mono is substantially more lax - we just require that
-               we can unify with any subkind *)
-            let res = Kind.restriction kind in
-            match Restriction.min res Mono with
-            | Some _ -> true
-            | None -> false
+         | (_, (_, (_, sk)), `Flexible) ->
+              (* Mono is substantially more lax - we just require that we can unify with any subkind *)
+              match Restriction.min sk Mono with
+              | Some _ -> true
+              | None -> false
      end)#predicates
 
   let make_type, make_row = make_restriction_transform ~ensure:true Mono
