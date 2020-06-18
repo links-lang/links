@@ -422,7 +422,7 @@ end
       error:Unify.error ->
       unit
 
-    let wm () = Settings.get  Basicsettings.web_mode
+    let wm () = Settings.get  Webserver_types.webs_running
 
     let code s =
       if wm () then
