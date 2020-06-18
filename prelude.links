@@ -1193,27 +1193,15 @@ fun reproduce(ap, f) {
   reproduce(ap, f)
 }
 
-# Here we use an additional access point to synchronise on termination
-# of communicating threads. This synchronisation can be useful because
-# we do not have an explicit close function and by default the
-# top-level process does not wait for running threads to terminate.
-#
-# (In fact, this gymnastics is no longer necessary now that we have
-# spawnAngel which allows us to spawn a process that will continue to
-# run even if the main process terminates.)
 
 #sig connect : forall s::Session,e::Row,a.((s) ~e~> (), (~s) ~e~> a) ~e~> a
 sig connect : forall s::Session,e::Row,a.((s) {SessionFail:[||]}~> (), (~s) ~e~> a) ~e~> a
 fun connect(f, g) {
   var ap = new();
-  var done = new();
   var _ = spawn {
     f(accept(ap));
-    ignore(send((), accept(done)))
   };
-  var result = g(request(ap));
-  ignore(receive(request(done)));
-  result
+  g(request(ap))
 }
 
 ### sessions with split ends ###

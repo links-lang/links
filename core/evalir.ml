@@ -128,7 +128,7 @@ struct
      result =
 
        fun req_data name cont args ->
-         if not(Settings.get Basicsettings.web_mode) then
+         if not(Settings.get webs_running) then
            raise (Errors.client_call_outside_webmode name);
          (*if not(Proc.singlethreaded()) then
            raise (internal_error "Remaining procs on server at client call!"); *)
