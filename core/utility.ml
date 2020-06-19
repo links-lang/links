@@ -1461,11 +1461,11 @@ end
 
 (** remote client->server call *)
 let is_remote_call params =
-  mem_assoc "__name" params && mem_assoc "__args" params
+  List.mem_assoc "__name" params && List.mem_assoc "__args" params
 
 (** return __result from server->client call with server continuation __continuation *)
 let is_client_return params =
-  mem_assoc "__continuation" params && mem_assoc "__result" params
+  List.mem_assoc "__continuation" params && List.mem_assoc "__result" params
 
 let is_ajax_call cgi_args =
   (is_remote_call cgi_args) || (is_client_return cgi_args)
