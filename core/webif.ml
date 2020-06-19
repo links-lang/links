@@ -80,7 +80,6 @@ struct
       body ^
       "\n  </body></html>\n"
 
-  (* jcheney: lifted from serve_request, to de-clutter *)
   let parse_request env cgi_args  =
     if      (RequestData.is_remote_call cgi_args)
     then parse_remote_call env cgi_args

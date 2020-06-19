@@ -129,7 +129,7 @@ struct
 
        fun req_data name cont args ->
          if not(RequestData.is_ajax_call (RequestData.get_cgi_parameters req_data)) then
-           raise (Errors.runtime_error "Tried to make a client call on the server.");
+           raise (Errors.client_call_before_server_start name);
          if not(Settings.get Basicsettings.web_mode) then
            raise (Errors.client_call_outside_webmode name);
          (*if not(Proc.singlethreaded()) then
