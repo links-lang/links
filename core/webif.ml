@@ -44,14 +44,6 @@ struct
 
   (** Boolean tests for cgi parameters *)
 
-  (** remote client->server call *)
-  let is_remote_call params =
-    mem_assoc "__name" params && mem_assoc "__args" params
-
-  (** return __result from server->client call with server continuation __continuation *)
-  let is_client_return params =
-    mem_assoc "__continuation" params && mem_assoc "__result" params
-
   (** invoke server continuation _k
       (e.g. from a hypertext link or a formlet post)
    *)
@@ -88,14 +80,11 @@ struct
       body ^
       "\n  </body></html>\n"
 
-  let is_ajax_call cgi_args =
-    (is_remote_call cgi_args) || (is_client_return cgi_args)
-
   (* jcheney: lifted from serve_request, to de-clutter *)
   let parse_request env cgi_args  =
-    if      (is_remote_call cgi_args)
+    if      (RequestData.is_remote_call cgi_args)
     then parse_remote_call env cgi_args
-    else if (is_client_return cgi_args)
+    else if (RequestData.is_client_return cgi_args)
     then parse_client_return env cgi_args
     else if (is_server_cont cgi_args)
     then parse_server_cont env cgi_args
@@ -188,7 +177,7 @@ struct
            Lwt.return (mime_type, error_page (Errors.format_exception_html exc)) in
 
     let handle_error e =
-      if (is_ajax_call cgi_args) then
+      if (RequestData.is_ajax_call cgi_args) then
         handle_ajax_error e
       else
         handle_html_error e in
