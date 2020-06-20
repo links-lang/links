@@ -79,7 +79,6 @@ List concatenation
 stdout : [1, 2, 3, 4, 5] : [Int]
 
 Fixity tests
-./fixity.links
+tests/fixity.links
 filemode : true
 stdout : () : ()
-args : --path=tests/

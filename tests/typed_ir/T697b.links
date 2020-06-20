@@ -1,0 +1,14 @@
+sig concatMap : ((a) -b-> [c], [a]) -b-> [c]
+fun concatMap(f, l) {
+  #dummy to avoid problems with unsafe signatures currently
+  #not being supported by IR type-checker
+  []
+}
+
+fun swap(xs, x1, x2) {
+ for (x <- xs) {
+  if (x == x1) [x2]
+  else if (x == x2) [x1]
+  else [x]
+ }
+}

@@ -2,25 +2,21 @@ var db = database "links";
 
 var agencies =
   table "agencies"
-  with (oid: Int,
-        id: Int,
+  with (id: Int,
         name: String,
         based_in: String,
         phone: String)
-  where oid readonly
-  tablekeys [["oid"], ["id"]]
+  tablekeys [["id"]]
   from db;
 
 var externalTours =
   table "externaltours"
-  with (oid: Int,
-        id: Int,
+  with (id: Int,
         name: String,
         destination: String,
         type: String,
         price: Int)
-  where oid readonly
-  tablekeys [["oid"], ["id"]]
+  tablekeys [["id"]]
   from db;
 
 fun q() {
