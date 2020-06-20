@@ -128,10 +128,10 @@ struct
      result =
 
        fun req_data name cont args ->
+         if not(Settings.get webs_running) then
+           raise (Errors.forbidden_client_call name "outside of web mode");
          if not(RequestData.is_ajax_call (RequestData.get_cgi_parameters req_data)) then
            raise (Errors.forbidden_client_call name "before server page is ready");
-         if not(Settings.get Basicsettings.web_mode) then
-           raise (Errors.forbidden_client_call name "outside of web mode");
          (*if not(Proc.singlethreaded()) then
            raise (internal_error "Remaining procs on server at client call!"); *)
          Debug.print("Making client call to " ^ name);

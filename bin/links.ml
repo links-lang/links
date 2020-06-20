@@ -108,11 +108,4 @@ let main () =
   | [], [] -> Repl.interact context''
   | _, _ -> ()
 
-let _ =
-  (* Determine whether web mode should be enabled. *)
-  begin match Utility.getenv "REQUEST_METHOD" with
-    | Some _ -> Settings.set BS.web_mode true
-    | None -> ()
-  end;
-  main()
-
+let _ = main()

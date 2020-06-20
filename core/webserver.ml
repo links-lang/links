@@ -352,7 +352,6 @@ struct
     Debug.print ("Starting server?\n");
     Lwt.async_exception_hook :=
       (fun exn -> Debug.print ("Caught asynchronous exception: " ^ (Printexc.to_string exn)));
-    Settings.set Basicsettings.web_mode true;
     Settings.set webs_running true;
     start_server (val_of (Settings.get hostname)) (val_of (Settings.get port)) rt
 end
