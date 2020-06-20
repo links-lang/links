@@ -184,7 +184,7 @@ let format_exception =
      pos_prefix (Printf.sprintf "Error: Cannot load plugin dependency '%s' (link error: %s)\n" file (Dynlink.error_message err))
   | LoadFailure (file, err) ->
      pos_prefix (Printf.sprintf "Error: Cannot load plugin '%s' (link error: %s)\n" file (Dynlink.error_message err))
-  | ForbiddenClientCall (fn, reason) -> 
+  | ForbiddenClientCall (fn, reason) ->
      pos_prefix (Printf.sprintf "Error: Cannot call client side function '%s' because of %s\n" fn reason)
   | MissingBuiltinType alias -> Printf.sprintf "Error: Missing builtin type with alias '%s'. Is it defined in the prelude?" alias
   | Sys.Break -> "Caught interrupt"
