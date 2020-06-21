@@ -847,7 +847,7 @@ module Unl : Constraint = struct
       (* Row *)
       | Row _ as t -> super#type_satisfies vars t
       (* Presence *)
-      | Absent -> false
+      | Absent -> true
       | Present t -> o#type_satisfies vars t
       (* Session *)
       | Input _ | Output _ | Select _ | Choice _ | Dual _ | End -> false
