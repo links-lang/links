@@ -514,7 +514,7 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
                let point =
                  lazy
                    (let var = Types.fresh_raw_variable () in
-                    Unionfind.fresh (Types.Var (var, (PrimaryKind.Row, default_subkind), `Rigid)))
+                    Unionfind.fresh (Types.Var (var, (PrimaryKind.Presence, default_subkind), `Rigid)))
                in
                StringMap.add op point m)
              v StringMap.empty)
@@ -791,22 +791,18 @@ class main_traversal simple_tycon_env =
                 let ops_to_add =
                   List.fold_left
                     (fun ops (op, _) -> StringMap.remove op ops)
-                    ops fields
-                in
+                    ops fields in
                 let add_op op pres_var fields =
                   if not allow_implictly_bound_vars then
                     (* Alternatively, we could just decide not to touch the row and let the type checker
                        complain about the incompatible rows? *)
                     raise (cannot_insert_presence_var dpos op);
                   let rpv =
-                    SugarTypeVar.mk_resolved_presence (Lazy.force pres_var)
-                  in
-                  (op, Datatype.Var rpv) :: fields
-                in
+                    SugarTypeVar.mk_resolved_presence (Lazy.force pres_var) in
+                  (op, Datatype.Var rpv) :: fields in
                 StringMap.fold add_op ops_to_add fields
             | None -> fields )
-        | _ -> fields
-      in
+        | _ -> fields in
       (* We need to perform the actions above prior to calling o#row.
          Otherwise, we resolve $eff already, and the lookup in row_operations
          yields no info *)
@@ -1027,8 +1023,11 @@ module Untyped = struct
 
   let program state program' =
     let open Types in
+    (* Debug.print "desugarEffects";
+     * Debug.print ("program': " ^ Sugartypes.show_program program'); *)
     let tyenv = Context.typing_environment (context state) in
     let program' = program tyenv.tycon_env program' in
+    (* Debug.print ("program'': " ^ Sugartypes.show_program program'); *)
     return state program'
 
   let sentence state sentence' =
