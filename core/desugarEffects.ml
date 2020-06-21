@@ -531,7 +531,7 @@ let preprocess_type (dt : Datatype.with_pos) tycon_env allow_fresh shared_effect
           lazy
             (let var = Types.fresh_raw_variable () in
              Unionfind.fresh
-               (Types.Var (var, (PrimaryKind.Type, (lin_unl, res_any)), `Rigid)))
+               (Types.Var (var, (PrimaryKind.Row, (lin_unl, res_any)), `Rigid)))
         in
         Some point
     | _ ->
