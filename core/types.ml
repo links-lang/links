@@ -2991,6 +2991,12 @@ let pp_row = pp
 let pp_datatype = pp
 let pp_field_spec = pp
 
+let pp_row' : Format.formatter -> row' -> unit = fun fmt t ->
+  if Settings.get print_types_pretty then
+    Format.pp_print_string fmt (string_of_row (Row t))
+  else
+    pp_row fmt (DecycleTypes.row (Row t))
+
 let pp_type_arg : Format.formatter -> type_arg -> unit = fun fmt t ->
   if Settings.get print_types_pretty then
     Format.pp_print_string fmt (string_of_type_arg t)

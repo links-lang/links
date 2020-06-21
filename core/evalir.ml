@@ -681,7 +681,7 @@ struct
         value env name >>= fun name ->
         value env keys >>= fun keys ->
         match db, name, keys, (TypeUtils.concrete_type readtype) with
-          | `Database (db, params), name, keys, Types.Record row ->
+          | `Database (db, params), name, keys, Types.Record (Types.Row row) ->
             let unboxed_keys =
               List.map
                 (fun key ->
@@ -712,11 +712,9 @@ struct
            | None -> computation env cont e
            | Some (db, q, t) ->
               let q = db#string_of_query ~range q in
-              let fieldMap =
-                Types.unwrap_row t
-                  |> fst
-                  |> TypeUtils.extract_row_parts
-                  |> fst3 in
+              let (fieldMap, _, _) =
+                let r, _ = Types.unwrap_row (TypeUtils.extract_row t) in
+                TypeUtils.extract_row_parts r in
               let fields =
                 StringMap.fold
                   (fun name t fields ->
@@ -811,8 +809,11 @@ struct
       begin
         value env source >>= fun source ->
         match source with
-          | `Table ((db, _), table, _, row) ->
-              Lwt.return (db, table, TypeUtils.row_present_types row)
+          | `Table ((db, _), table, _, (fields, _, _)) ->
+              Lwt.return
+            (db, table, (StringMap.map (function
+                                        | Types.Present t -> t
+                                        | _ -> assert false) fields))
           | _ -> assert false
       end >>= fun (db, table, field_types) ->
       let update_query =
@@ -823,8 +824,13 @@ struct
         value env source >>= fun source ->
         begin
         match source with
-          | `Table ((db, _), table, _, row) ->
-              Lwt.return (db, table, TypeUtils.row_present_types row)
+          | `Table ((db, _), table, _, (fields, _, _)) ->
+             Lwt.return
+               (db, table, (StringMap.map (function
+                                | Types.Present t -> t
+                                | _ -> assert false) fields))
+             (* Debug.print ("row: "^Types.string_of_row row);
+              *  Lwt.return (db, table, TypeUtils.row_present_types (Types.Record row)) *)
           | _ -> assert false
         end >>= fun (db, table, field_types) ->
       let delete_query =

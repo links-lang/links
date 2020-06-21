@@ -125,7 +125,7 @@ struct
         | Singleton t -> Types.make_list_type (te t)
         | Record fields -> record fields
         | If (_, t, _) -> te t
-        | Table (_, _, _, row) -> Types.Record row
+        | Table (_, _, _, row) -> Types.Record (Types.Row row)
         | Constant (Constant.Bool   _) -> Types.bool_type
         | Constant (Constant.Int    _) -> Types.int_type
         | Constant (Constant.Char   _) -> Types.char_type
@@ -222,8 +222,7 @@ struct
           end
         | Constant c -> Constant c
 
-  let table_field_types (_, _, _, row) =
-    let (fields, _, _) = TypeUtils.extract_row_parts row in
+  let table_field_types (_, _, _, (fields, _, _)) =
     StringMap.map (function
                     | Types.Present t -> t
                     | _ -> assert false) fields
@@ -781,13 +780,13 @@ struct
        (* Copied almost verbatim from evalir.ml, which seems wrong, we should probably call into that. *)
        begin
          match xlate env db, xlate env name, xlate env keys, (TypeUtils.concrete_type readtype) with
-         | Q.Database (db, params), name, keys, Types.Record row ->
-        let unboxed_keys =
-          List.map
-        (fun key ->
-         List.map Q.unbox_string (Q.unbox_list key))
-        (Q.unbox_list keys)
-        in
+         | Q.Database (db, params), name, keys, Types.Record (Types.Row row) ->
+            let unboxed_keys =
+              List.map
+                (fun key ->
+                  List.map Q.unbox_string (Q.unbox_list key))
+                (Q.unbox_list keys)
+            in
             Q.Table ((db, params), Q.unbox_string name, unboxed_keys, row)
          | _ -> query_error "Error evaluating table handle"
        end
@@ -1054,8 +1053,7 @@ let rec select_clause : Sql.index -> bool -> Q.t -> Sql.select_clause =
       let (fields, tables, c', os) = select_clause index unit_query body in
       let c = Sql.smart_and c c' in
       (fields, tables, c, os)
-    | Table (_db, table, _keys, row) ->
-      let (fields, _, _) = TypeUtils.extract_row_parts row in
+    | Table (_db, table, _keys, (fields, _, _)) ->
       (* eta expand tables. We might want to do this earlier on.  *)
       (* In fact this should never be necessary as it is impossible
          to produce non-eta expanded tables. *)

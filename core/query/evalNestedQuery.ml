@@ -450,7 +450,7 @@ struct
            (fun (_, source) ->
              match source with
                | QL.Table (_, _, _, row) ->
-                 Types.Record row
+                 Types.Record (Types.Row row)
                | _ -> assert false)
            gs_out) in
 

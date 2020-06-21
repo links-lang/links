@@ -55,7 +55,7 @@ type xmlitem =   Text of string
 and xml = xmlitem list
   [@@deriving show,yojson]
 
-type table = (database * string) * string * string list list * Types.row
+type table = (database * string) * string * string list list * Types.row'
   [@@deriving show]
 
 type primitive_value_basis =  [
