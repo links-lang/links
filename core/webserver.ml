@@ -162,7 +162,7 @@ struct
 
 
   let get_or_make_client_id cgi_args =
-    if (Webif.is_ajax_call cgi_args) then
+    if (RequestData.is_ajax_call cgi_args) then
       get_client_id_or_die cgi_args
     else
       ClientID.create ()
