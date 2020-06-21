@@ -375,6 +375,7 @@ val make_thunk_type : row -> datatype -> datatype
   in types.ml for details *)
 val pp : Format.formatter -> t -> unit
 val pp_datatype : Format.formatter -> t -> unit
+val pp_meta_type_var : Format.formatter -> meta_type_var -> unit
 val pp_row : Format.formatter -> row -> unit
 val pp_row' : Format.formatter -> row' -> unit
 val pp_type_arg : Format.formatter -> type_arg -> unit

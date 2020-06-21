@@ -80,14 +80,13 @@ struct
 
 (* Note that an unresolved type variable does not contain information
    about its primary kind. This is filled in when resolving the variable *)
+(* FIXME: the above comment may well be false now - check *)
 type t =
   | TUnresolved       of Name.t * Subkind.t option * Freedom.t
-  (* This is why we can't have nice things ... *)
-  | TResolvedType     of Types.meta_type_var     [@printer fun fmt _ -> Format.pp_print_string fmt "TResolvedType"]
-  | TResolvedRow      of Types.meta_row_var      [@printer fun fmt _ -> Format.pp_print_string fmt "TResolvedRow"]
-  | TResolvedPresence of Types.meta_presence_var [@printer fun fmt _ -> Format.pp_print_string fmt "TResolvedPresence"]
+  | TResolvedType     of Types.meta_type_var
+  | TResolvedRow      of Types.meta_type_var
+  | TResolvedPresence of Types.meta_type_var
   [@@deriving show]
-
 
 let is_resolved = function
   | TUnresolved _ -> false
