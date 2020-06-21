@@ -3873,7 +3873,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                                (Types.fresh_type_variable (lin_unl, res_any)) :: handler_params
                              in
                              let effects = Types.make_empty_open_row default_effect_subkind in
-                             let codomain =  Types.fresh_type_variable (lin_unl, res_any) in
+                             let codomain = Types.fresh_type_variable (lin_unl, res_any) in
                              Types.make_function_type domain effects codomain
                            in
                            (pat, env, effrow), (kpat, Env.empty, kt)
@@ -3881,7 +3881,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                         | Variable bndr ->
                            let kname = Binder.to_name bndr in
                            let kt =
-                             let (fields,_,_) = TypeUtils.extract_row_parts effrow in
+                             let (fields,_,_) = TypeUtils.extract_row_parts (TypeUtils.extract_row effrow) in
                              let kt = find_effect_type effname (StringMap.to_alist fields) in
                              let op_param = TypeUtils.return_type kt in
                              let typ = Env.find kname env in
