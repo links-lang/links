@@ -6,10 +6,11 @@ fun go() {
       var t = accept(ap);
       raise;
       var clos = linfun() { send(5, t) };
-      ignore(send(clos, s))
+      close(send(clos, s))
     });
     var t = request(ap);
-    var (res, _) = receive(t);
+    var (res, t) = receive(t);
+    close(t);
     cancel(s);
     res
   } as (x) in {
