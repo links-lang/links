@@ -42,8 +42,25 @@ fun u () {
   }
 }
 
+sig v : () -> [(name:String)]
+fun v () {
+  query nested {
+    for (x <-- marketers_names)
+    where (x.name =~ /a/)
+    [x]
+  }
+}
+
+sig marketers2 : () -> [(name:String, clients:[Int])]
+fun marketers2 () {
+  for (m <-- marketers_names)
+  [(name=m.name, clients = for (x <-- mc) where (x.m == m.name && x.m =~ /a/) [x.c])]
+}
+
 fun test() {
   assertEq(u(), [((id=1), ["a", "c"]), ((id=2), ["c"]), ((id=3), ["c"]), ((id=42), [])]);
+  assertEq(v(), [(name = "a")]);
+  assertEq(marketers2(), [(clients = [1], name = "a"), (clients = [], name = "b"), (clients = [], name = "c")]);
 }
 
 test()

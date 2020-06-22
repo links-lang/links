@@ -383,6 +383,9 @@ struct
         end
       | Apply (Primitive "Empty", [e]) -> Apply (Primitive "Empty", [lins_inner_query (z, z_fields) ys e])
       | Apply (Primitive "length", [e]) -> Apply (Primitive "length", [lins_inner_query (z, z_fields) ys e])
+      | Apply (Primitive "tilde", [s; r]) as e ->
+          Debug.print ("Applying lins_inner to tilde expression: " ^ QL.show e);
+          Apply (Primitive "tilde", [lins_inner (z, z_fields) ys s; r])
       | Apply (Primitive f, es) ->
         Apply (Primitive f, List.map (lins_inner (z, z_fields) ys) es)
       | Record fields ->
@@ -489,6 +492,9 @@ struct
       | Primitive p   -> Primitive p
       | Apply (Primitive "Empty", [e]) -> Apply (Primitive "Empty", [flatten_inner_query e])
       | Apply (Primitive "length", [e]) -> Apply (Primitive "length", [flatten_inner_query e])
+      | Apply (Primitive "tilde", [s; r]) as e ->
+          Debug.print ("Applying flatten_inner to tilde expression: " ^ QL.show e);
+          Apply (Primitive "tilde", [flatten_inner s; r])
       | Apply (Primitive f, es) -> Apply (Primitive f, List.map flatten_inner es)
       | If (c, t, e)  ->
         If (flatten_inner c, flatten_inner t, flatten_inner e)
