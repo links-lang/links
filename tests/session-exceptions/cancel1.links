@@ -1,7 +1,8 @@
 fun goAlright() {
   try {
-    var s = fork (fun (s) { ignore(send(5, s)) });
-    var (res, _) = receive(s);
+    var s = fork (fun (s) { close(send(5, s)) });
+    var (res, s) = receive(s);
+    close(s);
     res
   } as (x) in {
     "result: " ^^ intToString(x)
@@ -13,7 +14,8 @@ fun goAlright() {
 fun go() {
   try {
     var s = fork (fun (s) { cancel(s) });
-    var (res, _) = receive(s);
+    var (res, s) = receive(s);
+    close(s);
     res
   } as (x) in {
     "result: " ^^ intToString(x)

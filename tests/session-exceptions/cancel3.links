@@ -5,13 +5,14 @@ fun go() {
     var t = fork(fun(t) {
       var carried = request(ap);
       # Ensure the send takes place before cancellation
-      var _ = send(carried, t);
-      ignore(request(syncAP))
+      close(send(carried, t));
+      close(request(syncAP))
       });
     var carried = accept(ap);
-    ignore(accept(syncAP));
+    close(accept(syncAP));
     cancel(t);
-    var (res, _) = receive(carried);
+    var (res, s) = receive(carried);
+    close(s);
     res
   } as (x) in {
     "received from carried: " ^^ intToString(x)

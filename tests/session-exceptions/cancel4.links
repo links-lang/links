@@ -1,12 +1,13 @@
 
 fun go() {
   var ap = new();
-  var s = fork(fun(s) { cancel(s); ignore(request(ap)) });
+  var s = fork(fun(s) { cancel(s); close(request(ap)) });
   try {
     var x =
       try {
-        var _ = accept(ap);
-        var (res, _) = receive(s);
+        close(accept(ap));
+        var (res, s) = receive(s);
+        close(s);
         res
       } as (x) in {
         x

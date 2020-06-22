@@ -736,7 +736,7 @@ module Unl : Constraint = struct
       | `Not_typed -> assert false
       | `Effect _ | `Primitive _ | `Function _ -> true
       | `Lolli _ -> false
-      | (`Record _ | `Variant _ | `Alias _ | `MetaTypeVar _ | `ForAll _ | `Dual _) as t
+      | (`Record _ | `Variant _ | `Alias _ | `MetaTypeVar _ | `ForAll _) as t
         -> super#type_satisfies vars t
       | `Table _ -> true
       | `Lens _sort -> true
@@ -752,7 +752,7 @@ module Unl : Constraint = struct
              * block is unrestricted. With this in hand, we can calculate
              * linearity information, meaning that (r_linear ()) will return (Some lin). *)
             OptionUtils.opt_app not true (r_linear ())
-      | `End -> false
+      | `End | `Dual _ -> false
       | #session_type -> false
   end
 
