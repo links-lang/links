@@ -1,12 +1,14 @@
 fun go() {
-  var s = fork(fun(s) { ignore(send(5, s)) });
+  var s = fork(fun(s) { close(send(5, s)) });
   try {
     raise; 10
   } as (x) in {
-    var (res, _) = receive(s);
+    var (res, s) = receive(s);
+    close(s);
     x + res
   } otherwise {
-    var (res, _) = receive(s);
+    var (res, s) = receive(s);
+    close(s);
     res
   }
 }

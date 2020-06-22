@@ -927,7 +927,17 @@ module Session : Constraint = struct
              false
            else
              super#type_satisfies vars t
-        | _ -> false
+        (* Row *)
+        | Row _ as t -> super#type_satisfies vars t
+        (* Present *)
+        | Absent -> true
+        | Present _ as t -> super#type_satisfies vars t
+        (* Unspecified kind *)
+        | Application _ -> false (* FIXME: we assume that abstract types cannot have session kind *)
+        (* Type but not Session *)
+        | Primitive _ | Function _ | Lolli _ | Record _ | Variant _ | Table _ | Lens _ | ForAll _ -> false
+        (* Effect *)
+        | Effect _  -> false
     end
   end
 
