@@ -555,6 +555,7 @@ args : --config=tests/examples_default.config
 Typecheck example file examples/sessions/draggable.links
 examples/sessions/draggable.links
 filemode : true
+ignore : broken example
 args : --config=tests/examples_default.config
 
 Typecheck example file examples/sessions/Elvina/Bookshop_1.links
@@ -816,6 +817,7 @@ args : --config=tests/examples_default.config
 Typecheck example file examples/webserver/draggable-sessions.links
 examples/webserver/draggable-sessions.links
 filemode : true
+ignore : broken example
 args : --config=tests/examples_default.config
 
 Typecheck example file examples/webserver/draggable.links

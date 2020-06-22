@@ -69,17 +69,17 @@ fun draggableList(loc, id, items)
 
   fun mouseUp() {
     var c = request(ap);
-    <|MouseUp c.{()}|>
+    <|MouseUp c.{close(c)}|>
   }
 
   fun mouseDown(elem) {
     var c = request(ap);
-    <|MouseDown c.c[elem].{()}|>
+    <|MouseDown c.c[elem].{close(c)}|>
   }
 
   fun mouseOut(toElem) {
     var c = request(ap);
-    <|MouseOut c.c[toElem].{()}|>
+    <|MouseOut c.c[toElem].{close(c)}|>
   }
 
   <ul id="{id}"
