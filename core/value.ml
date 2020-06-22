@@ -45,7 +45,7 @@ class virtual dbvalue = object (self)
       do_map (n+1) (f (self#getvalue n)::acc)
      )
     else acc
-      in do_map 0 []
+      in List.rev (do_map 0 [])
   method map_array : 'a. (string array -> 'a) -> 'a list = fun f ->
       let max = self#ntuples in
       let rec do_map n acc =
@@ -54,7 +54,7 @@ class virtual dbvalue = object (self)
       do_map (n+1) (f (self#gettuple n)::acc)
      )
     else acc
-      in do_map 0 []
+      in List.rev (do_map 0 [])
   method fold_array : 'a. (string array -> 'a -> 'a) -> 'a -> 'a = fun f x ->
       let max = self#ntuples in
       let rec do_fold n acc =
@@ -1106,5 +1106,3 @@ let row_columns_values v =
     | v -> raise (type_error ~action:"form query row from" "list" v)
   in
   (row_columns v, row_values v)
-
-

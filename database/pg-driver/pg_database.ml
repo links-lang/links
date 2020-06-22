@@ -92,7 +92,10 @@ class pg_dbresult (pgresult:Postgresql.result) = object
   method ntuples : int = original#ntuples
   method fname : int -> string = original#fname
   method get_all_lst : string list list = pgresult#get_all_lst
-  method getvalue : int -> int -> string = pgresult#getvalue
+  method getvalue : int -> int -> string =
+    fun n i ->
+      let str = pgresult#getvalue n i in
+      print_string(str); str
   method gettuple : int -> string array = pgresult#get_tuple
   method error : string = original#error
 end
@@ -188,4 +191,3 @@ let get_pg_database_by_string args =
         failwith "Insufficient arguments when establishing postgresql connection"
 
 let _ = Value.register_driver (driver_name, get_pg_database_by_string)
-
