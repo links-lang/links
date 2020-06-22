@@ -69,15 +69,9 @@ fun test() {
   assertEq(insertReturningOne(), 1);
   assertEq(lookupFactorials(10), [(f=1,i=1)]);
   assertEq(insertReturningTwo(), 2);
-<<<<<<< HEAD
   assertEq(lookupFactorials(10), [(f=1,i=1),(f=2,i=2)]);
   updateTwoThree();
   assertEq(lookupFactorials(10), [(f=1,i=1),(f=3,i=2)]);
-=======
-  assertEq(lookupFactorials(10), [(f=2,i=2),(f=1,i=1)]);
-  updateTwoThree();
-  assertEq(lookupFactorials(10), [(f=3,i=2),(f=1,i=1)]);
->>>>>>> reorganize factorials example to workaroune mysql-dependent behavior
   deleteAll();
   insertOne();
   deleteAll();
