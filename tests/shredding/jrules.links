@@ -42,8 +42,18 @@ fun u () {
   }
 }
 
+sig v : () -> [(name:String)]
+fun v () {
+  query nested {
+    for (x <-- marketers_names)
+    where (x.name =~ /a/)
+    [x]
+  }
+}
+
 fun test() {
   assertEq(u(), [((id=1), ["a", "c"]), ((id=2), ["c"]), ((id=3), ["c"]), ((id=42), [])]);
+  assertEq(v(), [(name = "a")]);
 }
 
 test()
