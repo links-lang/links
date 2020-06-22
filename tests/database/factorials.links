@@ -84,8 +84,8 @@ fun test() {
   insertTwoThree();
   ## The order is wrong.
   assertEq(lookupFactorials(3), [(i=1, f=1), (i=2, f=2), (f=6,i=3)]);
-  assertEq(trivialNested1(),[(a=0),(a=0)]);
-  assertEq(trivialNested2(),[(a=0),(a=0)]);
+  assertEq(trivialNested1(),[(a=0),(a=0),(a=0)]);
+  assertEq(trivialNested2(),[(a=0),(a=0),(a=0)]);
 }
 
 test()
