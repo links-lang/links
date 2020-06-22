@@ -28,8 +28,10 @@ var mc =
 
 sig marketers : () -> [(name:String, clients:[Int])]
 fun marketers () {
-  for (m <-- marketers_names)
+  query {
+    for (m <-- marketers_names)
     [(name=m.name, clients = for (x <-- mc) where (x.m == m.name) [x.c])]
+  }
 }
 
 sig u : () -> [((id:Int), [String])]

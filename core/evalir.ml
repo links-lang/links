@@ -701,13 +701,6 @@ struct
               value env offset >>= fun offset ->
               Lwt.return (Some (Value.unbox_int limit, Value.unbox_int offset))
        end >>= fun range ->
-       let evaluator =
-         let open QueryPolicy in
-         match policy with
-           | Flat -> `Flat
-           | Nested -> `Nested
-           | Default ->
-               if Settings.get Database.shredding then `Nested else `Flat in
 
        let evaluate_standard () =
          match EvalQuery.compile env (range, e) with
@@ -757,11 +750,15 @@ struct
                 in
                 raise (Errors.runtime_error error_msg) in
 
-       begin
-         match evaluator with
-           | `Flat -> evaluate_standard ()
-           | `Nested -> evaluate_nested ()
-       end
+       let evaluator =
+         let open QueryPolicy in
+         match policy with
+           | Flat -> evaluate_standard
+           | Nested -> evaluate_nested
+           | Default ->
+               if Settings.get Database.shredding then evaluate_nested else evaluate_standard in
+       evaluator()
+
     | InsertRows (source, rows) ->
         begin
           value env source >>= fun source ->
