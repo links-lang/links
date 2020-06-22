@@ -61,9 +61,9 @@ fun test() {
   assertEq(insertReturningOne(), 1);
   assertEq(lookupFactorials(10), [(f=1,i=1)]);
   assertEq(insertReturningTwo(), 2);
-  assertEq(lookupFactorials(10), [(f=2,i=2),(f=1,i=1)]);
+  assertEq(lookupFactorials(10), [(f=1,i=1),(f=2,i=2)]);
   updateTwoThree();
-  assertEq(lookupFactorials(10), [(f=3,i=2),(f=1,i=1)]);
+  assertEq(lookupFactorials(10), [(f=1,i=1),(f=3,i=2)]);
   deleteAll();
   insertOne();
   deleteAll();
@@ -75,7 +75,7 @@ fun test() {
   assertEq(unwrappedLookup(1), [(f=1,i=1)]);
   insertTwoThree();
   ## The order is wrong.
-  assertEq(lookupFactorials(3), [(i=3, f=6), (i=2, f=2), (f=1,i=1)]);
+  assertEq(lookupFactorials(3), [(i=1, f=1), (i=2, f=2), (f=6,i=3)]);
 }
 
 test()

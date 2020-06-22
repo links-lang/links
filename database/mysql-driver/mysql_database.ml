@@ -236,8 +236,7 @@ class mysql_result (result : result) db = object
       | Some r -> r
   method getvalue : int -> int -> string = fun n f ->
     to_row result (Int64.of_int n);
-    let str = Utility.val_of ((Utility.val_of (fetch result)).(f)) in
-    print_string(str); str
+    Utility.val_of ((Utility.val_of (fetch result)).(f))
   method gettuple : int -> string array = fun n ->
     to_row result (Int64.of_int n);
     Array.map Utility.val_of (Utility.val_of(fetch result))

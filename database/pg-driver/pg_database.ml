@@ -93,9 +93,7 @@ class pg_dbresult (pgresult:Postgresql.result) = object
   method fname : int -> string = original#fname
   method get_all_lst : string list list = pgresult#get_all_lst
   method getvalue : int -> int -> string =
-    fun n i ->
-      let str = pgresult#getvalue n i in
-      print_string(str); str
+    pgresult#getvalue
   method gettuple : int -> string array = pgresult#get_tuple
   method error : string = original#error
 end
