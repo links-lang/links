@@ -42,7 +42,7 @@ fun axis(ax) {
   }
 }
 
-sig path : (Path) ~> (Node, Node) -> Bool
+sig path : (Path) ~> (Node, Node) {}-> Bool
 fun path(p: Path) {
   switch (p) {
     case Seq(p, q) ->

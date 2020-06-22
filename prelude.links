@@ -481,6 +481,7 @@ fun isInt (x) { x =~ /-?[0-9]+$/ }
 sig isFloat : (String) -> Bool
 fun isFloat (x) { x =~ /-?[0-9]+(\.[0-9]+)?$/ }
 
+sig asList : (TableHandle((|a::Base),(|_::Base),(|_::Base))) {}-> [(|a::Base)]
 fun asList(t) server {
   for (x <-- t) [x]
 }
