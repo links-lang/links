@@ -40,22 +40,24 @@ fun draggableList(id, items)
       fun wait(c) {
         var s = accept(ap);
         <|offer s {
-          case MouseUp -> {wait(c)}
+          case MouseUp -> {close(s); wait(c)}
           case MouseDown -> s(elem).{
+            close(s);
             if (isElementNode(elem) && (parentNode(elem) == getNodeById(id))) {
               <|MouseDown c.c[elem].{drag(c)}|>
             } else {
               wait(c)
             }}
-          case MouseOut -> s(elem).{wait(c)}
+          case MouseOut -> s(elem).{close(s); wait(c)}
         }|>
       }
 
       fun drag(c) {
         offer(accept(ap)) {
-          case MouseUp(s)   -> <|MouseUp c.{wait(c)}|>
-          case MouseDown(s) -> <|s(elem).{drag(c)}|>
+          case MouseUp(s)   -> <|MouseUp c.{close(s); wait(c)}|>
+          case MouseDown(s) -> <|s(elem).{close(s); drag(c)}|>
           case MouseOut(s)  -> <|s(toElem).{
+            close(s);
             if (isElementNode(toElem) && (parentNode(toElem) == getNodeById(id))) {
               <| MouseOut c.c[toElem].{drag(c)} |>
             } else {
