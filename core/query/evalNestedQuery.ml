@@ -386,7 +386,6 @@ struct
       | Apply (Primitive "tilde", [s; r]) as e ->
           Debug.print ("Applying lins_inner to tilde expression: " ^ QL.show e);
           Apply (Primitive "tilde", [lins_inner (z, z_fields) ys s; r])
-
       | Apply (Primitive f, es) ->
         Apply (Primitive f, List.map (lins_inner (z, z_fields) ys) es)
       | Record fields ->
