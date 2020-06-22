@@ -1208,10 +1208,11 @@ fun connect(f, g) {
   var done = new();
   var _ = spawn {
     f(accept(ap));
-    ignore(send((), accept(done)))
+    close(send((), accept(done)))
   };
   var result = g(request(ap));
-  ignore(receive(request(done)));
+  var (_, s) = receive(request(done));
+  close(s);
   result
 }
 
