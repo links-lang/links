@@ -30,7 +30,7 @@ fun insertReturningOne() {
 
 fun insertReturningTwo() {
   insert factorials
-  values (f,i) [(f=2, i=2)] returning i
+  values (f,i) [(f=2, i=2)] returning f
 }
 
 fun updateTwoThree() {
