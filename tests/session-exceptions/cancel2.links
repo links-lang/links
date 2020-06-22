@@ -4,12 +4,12 @@ fun goAlright() {
   var ap = new(); # Yay synchronisation!
   try {
     var s = fork (fun (s) {
-  #    cancel(s);
-      ignore(request(ap));
-      ignore(receive(s));
+      close(request(ap));
+      var (_, s) = receive(s);
+      close(s)
     });
-    ignore(accept(ap));
-    ignore(send(5, s))
+    close(accept(ap));
+    close(send(5, s))
   } as (_) in {
     "send successful"
   } otherwise {
@@ -23,10 +23,10 @@ fun go() {
   try {
     var s = fork (fun (s) {
       cancel(s);
-      ignore(request(ap))
+      close(request(ap))
     });
-    ignore(accept(ap));
-    ignore(send(5, s))
+    close(accept(ap));
+    close(send(5, s))
   } as (_) in {
     "send successful"
   } otherwise {
