@@ -259,9 +259,12 @@ class mysql_database spec = object(self)
     "`" ^ Str.global_replace (Str.regexp "`") "``" f ^ "`"
 
   method! make_insert_returning_query : string -> Sql.query -> string list =
-    fun _returning q ->
-      assert (match q with | Sql.Insert _ -> true | _ -> false);
-      [self#string_of_query q; "select last_insert_id()"]
+    fun returning q ->
+      match q with
+        Sql.Insert ins ->
+          [self#string_of_query q;
+           Printf.sprintf "select %s from %s where _rowid = last_insert_id()" returning ins.ins_table]
+      | _ -> assert false
 
   method supports_shredding () = false
 end

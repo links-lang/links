@@ -59,7 +59,7 @@ class lite3_result (stmt: stmt) = object
           | Rc.DONE ->
             results,`QueryOk
           | e -> results, `QueryError (error_as_string e)
-         )
+        )
       | _ -> (results,status)
     in
     let results,status = get_results ([],`QueryOk) in
@@ -116,6 +116,14 @@ class lite3_database file = object(self)
           | _ -> _supports_shredding <- Some false; false
           end
        | _ -> false
+  method! make_insert_returning_query : string -> Sql.query -> string list =
+    fun returning q ->
+      match q with
+        Sql.Insert ins ->
+          [self#string_of_query q;
+           Printf.sprintf "select %s from %s where rowid = last_insert_rowid()" returning ins.ins_table]
+      | _ -> assert false
+
 end
 
 let driver_name = "sqlite3"
