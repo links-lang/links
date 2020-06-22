@@ -55,8 +55,10 @@ fun v () {
 
 sig marketers2 : () -> [(name:String, clients:[Int])]
 fun marketers2 () {
-  for (m <-- marketers_names)
-  [(name=m.name, clients = for (x <-- mc) where (x.m == m.name && x.m =~ /a/) [x.c])]
+  query {
+    for (m <-- marketers_names)
+      [(name=m.name, clients = for (x <-- mc) where (x.m == m.name && x.m =~ /a/) [x.c])]
+  }
 }
 
 fun test() {
