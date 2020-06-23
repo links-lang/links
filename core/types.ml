@@ -217,17 +217,17 @@ sig
   end
 end
 
-(* HACK: to check that this type could plausibly be a row *)
-let maybe_row = function
-  | (Not_typed | Var _ | Recursive _ | Alias _ | Application _ | RecursiveApplication _ | Meta _
-     | Row _ | Closed) -> true
-  | _ -> false
-
-(* HACK: to check that this type could plausibly be a field_spec *)
-let maybe_field_spec = function
-  | (Not_typed | Var _ | Recursive _ | Alias _ | Application _ | RecursiveApplication _ | Meta _
-     | Present _ | Absent) -> true
-  | _ -> false
+(* (\* HACK: to check that this type could plausibly be a row *\)
+ * let maybe_row = function
+ *   | (Not_typed | Var _ | Recursive _ | Alias _ | Application _ | RecursiveApplication _ | Meta _
+ *      | Row _ | Closed) -> true
+ *   | _ -> false
+ *
+ * (\* HACK: to check that this type could plausibly be a field_spec *\)
+ * let maybe_field_spec = function
+ *   | (Not_typed | Var _ | Recursive _ | Alias _ | Application _ | RecursiveApplication _ | Meta _
+ *      | Present _ | Absent) -> true
+ *   | _ -> false *)
 
 (* FIXME: we may need to distinguish the case of checking the body of
    a type we expect to be an ordinary data type and the case of
@@ -264,11 +264,7 @@ struct
 
     method primitive : Primitive.t -> (Primitive.t * 'self_type) = fun p -> (p,o)
     method row : row -> (row * 'self_type) =
-      fun row ->
-      if maybe_row row then
-        o#typ row
-      else
-        raise tag_expectation_mismatch
+      fun row -> o#typ row
 
     method meta_type_var : meta_type_var -> (meta_type_var * 'self_type) =
       fun point ->
@@ -307,11 +303,7 @@ struct
     method meta_presence_var :  meta_presence_var -> (meta_presence_var * 'self_type) =
       o#meta_type_var
     method field_spec :  field_spec -> (field_spec * 'self_type) =
-      fun field_spec ->
-      if maybe_field_spec field_spec then
-        o#typ field_spec
-      else
-        raise tag_expectation_mismatch
+      fun field_spec -> o#typ field_spec
 
     method field_spec_map :  field_spec_map -> (field_spec_map * 'self_type) =
       fun fsmap ->
@@ -630,11 +622,7 @@ class virtual type_predicate = object(self)
     | End -> true
 
   method field_satisfies : visit_context -> field_spec -> bool =
-    fun vars field_spec ->
-    if maybe_field_spec field_spec then
-      self#type_satisfies vars field_spec
-    else
-      raise tag_expectation_mismatch
+    fun vars field_spec -> self#type_satisfies vars field_spec
 
   method row_satisfies : visit_context -> row -> bool =
     fun vars row -> self#type_satisfies vars row
@@ -707,16 +695,10 @@ class virtual type_iter = object(self)
     | End -> ()
 
   method visit_field : visit_context -> field_spec -> unit =
-    fun vars field_spec ->
-    if maybe_field_spec field_spec
-    then self#visit_type vars field_spec
-    else raise tag_expectation_mismatch
+    fun vars field_spec -> self#visit_type vars field_spec
 
   method visit_row : visit_context -> row -> unit =
-    fun vars row ->
-    if maybe_row row
-    then self#visit_type vars row
-    else raise tag_expectation_mismatch
+    fun vars row -> self#visit_type vars row
 
   method visit_type_arg : visit_context -> type_arg -> unit =
     fun vars (_pk, t) ->
@@ -1667,10 +1649,8 @@ and normalise_datatype rec_names t =
   | Dual s               -> dual_type TypeVarMap.empty (nt s)
   | End                  -> End
 
-and normalise_row rec_names row =
-  if maybe_row row
-  then normalise_datatype rec_names row
-  else raise tag_expectation_mismatch
+and normalise_row rec_names row = normalise_datatype rec_names row
+
 and normalise_type_arg rec_names (pk, t) =
 let open PrimaryKind in
 match pk with
@@ -1681,10 +1661,7 @@ match pk with
 (*
   get rid of any `Body constructors inside a presence flag
  *)
-and normalise_field_spec rec_names f =
-  if maybe_field_spec f
-  then normalise_datatype rec_names f
-  else raise tag_expectation_mismatch
+and normalise_field_spec rec_names f = normalise_datatype rec_names f
 (* match f with
  *   | `Var point ->
  *       begin
