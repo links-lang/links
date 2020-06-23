@@ -520,8 +520,10 @@ struct
       ensure_effect_present_in_row (o#extract_type_equality_context ()) allowed_effects effect_name effect_typ occurrence
 
     method add_typevar_to_context id kind = {< type_var_env = Env.bind id kind type_var_env  >}
-    method remove_typevar_to_context id  = {< type_var_env = Env.unbind id type_var_env >}
+    (* dangerous, unnecessary, and ungrammatical *)
+    (* method remove_typevar_to_context id  = {< type_var_env = Env.unbind id type_var_env >} *)
     method get_type_var_env = type_var_env
+    method set_type_var_env env = {< type_var_env = env >}
 
     method add_function_closure_binder f binder = {< closure_def_env = Env.bind f binder closure_def_env >}
     method remove_function_closure_binder f = {< closure_def_env = Env.unbind f closure_def_env  >}
@@ -565,7 +567,6 @@ struct
             let (v, vt, o) = o#value v in
             let t = erase_type ~overstep_quantifiers:false names vt in
               Erase (names, v), t, o
-
         | Inject (name, v, t) ->
             let v, vt, o = o#value v in
             let _ = match t with
@@ -573,21 +574,24 @@ struct
                  o#check_eq_types  (variant_at ~overstep_quantifiers:false name t) vt (SVal orig)
               | _ -> raise_ir_type_error "trying to inject into non-variant type" (SVal orig) in
             Inject (name, v, t), t, o
-
         | TAbs (tyvars, v) ->
-            let o = List.fold_left
-              (fun o quant ->
-                let var  = Quantifier.to_var  quant in
-                let kind = Quantifier.to_kind quant in
-                o#add_typevar_to_context var kind) o tyvars in
-            let v, t, o = o#value v in
-            let o = List.fold_left
-              (fun o quant ->
-                let var = Quantifier.to_var quant in
-                o#remove_typevar_to_context var) o tyvars in
-            let t = Types.for_all (tyvars, t) in
-              TAbs (tyvars, v), t, o
-
+           let previous_tyenv = o#get_type_var_env in
+           let o = List.fold_left
+                     (fun o quant ->
+                       let var  = Quantifier.to_var  quant in
+                       let kind = Quantifier.to_kind quant in
+                       o#add_typevar_to_context var kind) o tyvars in
+           let v, t, o = o#value v in
+           let o = o#set_type_var_env previous_tyenv in
+           (* COMMENTED OUT CODE IS BROKEN: add then remove =/= id
+               because type variabl es are not guaranteed to be unique
+            *)
+           (* let o = List.fold_left
+            *   (fun o quant ->
+            *     let var = Quantifier.to_var quant in
+            *     o#remove_typevar_to_context var) o tyvars in *)
+           let t = Types.for_all (tyvars, t) in
+           TAbs (tyvars, v), t, o
         | TApp (v, ts)  ->
            (* List.iter (TypeUtils.check_type_wellformedness None) ts; *)
            (* Debug.print ("ts: " ^ (String.concat "," (List.map (fun t -> Types.string_of_type_arg t) ts))); *)
@@ -1138,6 +1142,8 @@ struct
         let exp_effects_substed = TypeUtils.effect_row exp_t_substed in
 
         (if is_recursive then o#impose_presence_of_effect "wild" Types.unit_type occurrence);
+
+        let previous_tyenv = o#get_type_var_env in
         let o = List.fold_left
               (fun o quant ->
                 let var  = Quantifier.to_var  quant in
@@ -1148,10 +1154,13 @@ struct
         let o, previously_allowed_effects = o#set_allowed_effects exp_effects_substed in
         let body, body_type, o = o#computation body in
 
-        let o = List.fold_left
-              (fun o quant ->
-                let var = Quantifier.to_var quant in
-                o#remove_typevar_to_context var) o tyvars in
+        let o = o#set_type_var_env previous_tyenv in
+        (* COMMENTED OUT CODE IS BROKEN: add then remove =/= id
+           because type variables are not guaranteed to be unique *)
+        (* let o = List.fold_left
+         *       (fun o quant ->
+         *         let var = Quantifier.to_var quant in
+         *         o#remove_typevar_to_context var) o tyvars in *)
         let o, _ = o#set_allowed_effects previously_allowed_effects in
 
 
@@ -1175,22 +1184,28 @@ struct
       let binding_inner = function
         | (Let (x, (tyvars, tc))) as orig ->
             let lazy_check =
-            lazy (
-              let o = List.fold_left
-                (fun o quant ->
-                  let var  = Quantifier.to_var  quant in
-                  let kind = Quantifier.to_kind quant in
-                  o#add_typevar_to_context var kind) o tyvars in
-              let tc, act, o = o#tail_computation tc in
-              let o = List.fold_left
-                (fun o quant ->
-                  let var = Quantifier.to_var quant in
-                  o#remove_typevar_to_context var) o tyvars in
-              let exp = Var.type_of_binder x in
-              let act_foralled = Types.for_all (tyvars, act) in
-              o#check_eq_types exp act_foralled (SBind orig);
-              tc, o
-            ) in
+            lazy
+              begin
+                let previous_tyenv = o#get_type_var_env in
+                let o = List.fold_left
+                          (fun o quant ->
+                            let var  = Quantifier.to_var  quant in
+                            let kind = Quantifier.to_kind quant in
+                            o#add_typevar_to_context var kind) o tyvars in
+                let tc, act, o = o#tail_computation tc in
+                let o = o#set_type_var_env previous_tyenv in
+                (* COMMENTED OUT CODE IS BROKEN: add then remove =/=
+                   id because type variables are not guaranteed to be
+                   unique *)
+                (* let o = List.fold_left
+                 *           (fun o quant ->
+                 *             let var = Quantifier.to_var quant in
+                 *             o#remove_typevar_to_context var) o tyvars in *)
+                let exp = Var.type_of_binder x in
+                let act_foralled = Types.for_all (tyvars, act) in
+                o#check_eq_types exp act_foralled (SBind orig);
+                tc, o
+              end in
             let (tc, o) = handle_ir_type_error lazy_check (tc, o) (SBind orig) in
             let x, o = o#binder x in
             Let (x, (tyvars, tc)), o
@@ -1306,6 +1321,10 @@ struct
         let tyenv = Env.bind var (info_type info) tyenv in
           (var, info), {< tyenv=tyenv >}
 
+    (* WARNING: use of remove_binder / remove_binding is only sound
+       because we guarantee uniqueness of the names of bound term
+       variables; a more robust approach is to remember the
+       environment before extensions and then restore as necessary *)
     method remove_binder : binder -> 'self_type = fun binder ->
       let tyenv = Env.unbind (Var.var_of_binder binder) tyenv in
       {< tyenv=tyenv >}
