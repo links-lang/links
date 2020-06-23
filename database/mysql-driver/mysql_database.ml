@@ -240,49 +240,6 @@ class mysql_result (result : result) db = object
     Utility.val_of (errmsg db)
 end
 
-(* XXX
-
-let slurp (fn : 'a -> 'b option) (source : 'a) : 'b list =
-  let rec obtain output =
-    match fn source with
-      | None -> output
-      | Some value -> obtain (value :: output)
-  in
-    List.rev (obtain [])
-
-class mysql_result (result : result) db = object
-  inherit Value.dbvalue
-  val rows = ref None
-  method status : Value.db_status =
-    match status db with
-      | StatusOK | StatusEmpty -> `QueryOk
-      | StatusError c          -> `QueryError (string_of_error_code c)
-  method nfields : int =
-    fields result
-  method ntuples : int =
-    Int64.to_int(size result)
-  method fname  n : string =
-    (Utility.val_of (fetch_field_dir result n)).name
-  (* XXX method get_all_lst : string list list =
-    match !rows with
-      | None ->
-          let toList row =
-            List.map (Utility.from_option "!!NULL!!") (Array.to_list row) in
-          let r = List.map toList (slurp fetch result)
-          in
-            rows := Some r;
-            r
-      | Some r -> r*)
-  method getvalue : int -> int -> string = fun n f ->
-    to_row result (Int64.of_int n);
-    Utility.val_of ((Utility.val_of (fetch result)).(f))
-  method gettuple : int -> string array = fun n ->
-    to_row result (Int64.of_int n);
-    Array.map Utility.val_of (Utility.val_of(fetch result))
-  method error : string =
-    Utility.val_of (errmsg db)
-end *)
-
 class mysql_database spec = object(self)
   inherit Value.database
   val connection = connect spec

@@ -1,4 +1,3 @@
-(* XXX open List*)
 open CommonTypes
 open Utility
 
@@ -91,9 +90,9 @@ let execute_insert_returning returning q db =
             begin
               match result#status with
                | `QueryOk ->
-                  if result#nfields == 1 && result#ntuples == 1 
+                  if result#nfields == 1 && result#ntuples == 1
                   then (* returning field has to be of type int *)
-                    Value.box_int (int_of_string (result#getvalue 0 0)) 
+                    Value.box_int (int_of_string (result#getvalue 0 0))
                   else raise (runtime_error ("Returned the wrong number of results executing " ^ q))
                | `QueryError msg ->
                    raise (runtime_error ("An error occurred executing the query " ^ q ^ ": " ^ msg))
@@ -169,14 +168,3 @@ let execute_select
     : Value.t =
   let result,rs = execute_select_result field_types query db in
   build_result (result,rs)
-
-
-(* XXX
-let execute_untyped_select (query:string) (db: database) : Value.t =
-  let result = (db#exec query) in
-    (match result#status with
-       | `QueryOk ->
-           `List (map (fun row -> `List (map Value.box_string row)) result#get_all_lst)
-       | `QueryError msg ->
-           raise (runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)))
-*)

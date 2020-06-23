@@ -1463,7 +1463,7 @@ end
 (* efficient polymorphic buffers *)
 (* builds an array of n pages of size m, with some initial dummy value *)
 (* allows random access reading/writing and appending at the end *)
-module PolyBuffer : sig 
+module PolyBuffer : sig
   type 'a buf
   val init : int -> int -> 'a -> 'a buf
   val length : 'a buf -> int
@@ -1471,14 +1471,14 @@ module PolyBuffer : sig
   val set : 'a buf -> int -> 'a -> unit
   val append : 'a buf -> 'a -> unit
   val to_list : 'a buf -> 'a list
-end = 
+end =
 struct
   type 'a buf = {mutable numpages: int;
                 pagesize: int;
                 default: 'a;
-                mutable currpage: int; 
-                mutable nextitem: int; 
-                mutable pages:'a 
+                mutable currpage: int;
+                mutable nextitem: int;
+                mutable pages:'a
                 array array}
 
   let init n m x = {numpages = n;
@@ -1494,23 +1494,23 @@ struct
   if 0 <= i && i < buf.currpage*buf.pagesize + buf.nextitem
     then Array.set (Array.get buf.pages (i/buf.pagesize)) (i mod buf.pagesize) x
     else raise Not_found
-  
-  let get buf i = 
+
+  let get buf i =
     if 0 <= i && i < buf.currpage*buf.pagesize + buf.nextitem
     then Array.get (Array.get buf.pages (i/buf.pagesize)) (i mod buf.pagesize)
     else raise Not_found
 
-  let append buf x = 
+  let append buf x =
     (* first, check if there is enough space or allocation is needed *)
     if (buf.nextitem == buf.pagesize)
-    then begin 
+    then begin
       buf.nextitem <- 0;
       buf.currpage <- buf.currpage+1;
-      if (buf.currpage == buf.numpages) 
+      if (buf.currpage == buf.numpages)
       then begin (* need to allocate a new page and copy over *)
         buf.numpages <- buf.numpages+1;
         let newpages = Array.init buf.numpages (fun i ->
-                          if i < Array.length(buf.pages) 
+                          if i < Array.length(buf.pages)
                           then Array.get buf.pages i
                           else Array.init buf.pagesize (fun _ -> buf.default)) in
         buf.pages <- newpages

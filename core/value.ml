@@ -66,8 +66,8 @@ class virtual dbvalue = object (self)
           do_fold (n+1) (f (self#gettuple n) acc)
         )
         else acc
-      in do_fold 0 x        
-  method virtual map : 'a. ((int -> string) -> 'a) -> 'a list
+      in do_fold 0 x
+(*  method virtual map : 'a. ((int -> string) -> 'a) -> 'a list*)
   method virtual getvalue : int -> int -> string
   method virtual gettuple : int -> string array
   method virtual error : string
