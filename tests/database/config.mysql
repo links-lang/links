@@ -1,3 +1,2 @@
 database_driver=mysql
 database_args=localhost:3306:links:12345
-

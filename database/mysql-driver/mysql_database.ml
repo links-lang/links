@@ -203,6 +203,45 @@ object
   method show = pretty_type thing
 end
 
+let iterUntilNone (fn : unit -> 'b option) (g : 'b -> unit) : unit =
+  let rec iterate () =
+    match fn () with
+      | None -> ()
+      | Some value -> g value; iterate()
+  in
+    iterate ()
+
+
+class mysql_result (result : result) db = object
+  inherit Value.dbvalue
+  val result_buf = 
+    if size result > Int64.of_int(0)
+    then let buf = PolyBuffer.init 1 1024 (Array.init 0 (fun _ -> None)) in
+         iterUntilNone (fun () -> fetch result) (PolyBuffer.append buf);
+         buf
+    else  PolyBuffer.init 0 1 (Array.init 0 (fun _ -> None))
+  method status : Value.db_status = 
+      match status db with
+        | StatusOK | StatusEmpty -> `QueryOk
+        | StatusError c          -> `QueryError (string_of_error_code c)
+  method nfields : int =
+    fields result
+  method ntuples : int =
+    Int64.to_int(size result)
+  method fname  n : string =
+    (Utility.val_of (fetch_field_dir result n)).name
+  method getvalue : int -> int -> string = fun n f ->
+    let row = PolyBuffer.get result_buf n in
+    Utility.val_of (row.(f))
+  method gettuple : int -> string array = fun n ->
+    let row = PolyBuffer.get result_buf n in
+    Array.map Utility.val_of row
+  method error : string =
+    Utility.val_of (errmsg db)
+end
+
+(* XXX
+
 let slurp (fn : 'a -> 'b option) (source : 'a) : 'b list =
   let rec obtain output =
     match fn source with
@@ -224,7 +263,7 @@ class mysql_result (result : result) db = object
     Int64.to_int(size result)
   method fname  n : string =
     (Utility.val_of (fetch_field_dir result n)).name
-  method get_all_lst : string list list =
+  (* XXX method get_all_lst : string list list =
     match !rows with
       | None ->
           let toList row =
@@ -233,7 +272,7 @@ class mysql_result (result : result) db = object
           in
             rows := Some r;
             r
-      | Some r -> r
+      | Some r -> r*)
   method getvalue : int -> int -> string = fun n f ->
     to_row result (Int64.of_int n);
     Utility.val_of ((Utility.val_of (fetch result)).(f))
@@ -242,7 +281,7 @@ class mysql_result (result : result) db = object
     Array.map Utility.val_of (Utility.val_of(fetch result))
   method error : string =
     Utility.val_of (errmsg db)
-end
+end *)
 
 class mysql_database spec = object(self)
   inherit Value.database

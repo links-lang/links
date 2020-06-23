@@ -1,4 +1,4 @@
-open List
+(* XXX open List*)
 open CommonTypes
 open Utility
 
@@ -91,13 +91,10 @@ let execute_insert_returning returning q db =
             begin
               match result#status with
                | `QueryOk ->
-                   let rows = result#get_all_lst in
-                     begin
-                       match rows with
-                         | [[id]] -> Value.box_int (int_of_string id)
-                         | _ ->
-                             raise (runtime_error ("Returned the wrong number of results executing " ^ q))
-                     end
+                  if result#nfields == 1 && result#ntuples == 1 
+                  then (* returning field has to be of type int *)
+                    Value.box_int (int_of_string (result#getvalue 0 0)) 
+                  else raise (runtime_error ("Returned the wrong number of results executing " ^ q))
                | `QueryError msg ->
                    raise (runtime_error ("An error occurred executing the query " ^ q ^ ": " ^ msg))
             end
@@ -149,8 +146,6 @@ let result_signature field_types result =
     in build rs []
 
 
-(* BUG: Lists can be too big for List.map; need to be careful about recursion *)
-
 let execute_select_result
     (field_types:(string * Types.datatype) list) (query:string) (db: database)  =
   let _ = Debug.print ("Running query: \n" ^ query) in
@@ -176,6 +171,7 @@ let execute_select
   build_result (result,rs)
 
 
+(* XXX
 let execute_untyped_select (query:string) (db: database) : Value.t =
   let result = (db#exec query) in
     (match result#status with
@@ -183,3 +179,4 @@ let execute_untyped_select (query:string) (db: database) : Value.t =
            `List (map (fun row -> `List (map Value.box_string row)) result#get_all_lst)
        | `QueryError msg ->
            raise (runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)))
+*)
