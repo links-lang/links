@@ -91,6 +91,7 @@ class pg_dbresult (pgresult:Postgresql.result) = object
   method nfields : int = original#nfields
   method ntuples : int = original#ntuples
   method fname : int -> string = original#fname
+  (*TODO: better handling of NULLs *)
   method getvalue : int -> int -> string = pgresult#getvalue
   method gettuple : int -> string array = pgresult#get_tuple
   method error : string = original#error
