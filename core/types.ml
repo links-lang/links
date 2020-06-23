@@ -616,7 +616,7 @@ class virtual type_predicate = object(self)
     | Function (a, e, r) | Lolli (a, e, r) -> self#type_satisfies vars a && self#row_satisfies vars e && self#type_satisfies vars r
     | Record r | Effect r | Variant r -> self#row_satisfies vars r
     | Table _ -> true
-    | Lens _ -> failwith "Not yet implemented" (* true *)
+    | Lens _ -> true
     | ForAll (qs, t) -> self#type_satisfies (rec_appl, rec_vars, TypeVarSet.add_quantifiers qs quant_vars) t
     | Row (fields, row_var, _) ->
        let row_var = self#point_satisfies self#row_satisfies vars row_var in
@@ -687,7 +687,7 @@ class virtual type_iter = object(self)
        self#visit_type vars a; self#visit_row vars e; self#visit_type vars r
     | Record r | Variant r -> self#visit_row vars r
     | Table _ -> ()
-    | Lens _ -> failwith "Not yet implemented"
+    | Lens _ -> ()
     | ForAll (qs, t) ->
        self#visit_type (rec_appl, rec_vars, TypeVarSet.add_quantifiers qs quant_vars) t
     (* Effect *)
@@ -1204,7 +1204,7 @@ let free_type_vars, free_row_type_vars, free_tyarg_vars =
     | Table (r, w, n)         ->
        S.union_all
          [free_type_vars' rec_vars r; free_type_vars' rec_vars w; free_type_vars' rec_vars n]
-    | Lens _          -> failwith "Not yet implemented" (* S.empty *)
+    | Lens _          -> S.empty
     | Alias ((_, _, ts), datatype) ->
        S.union (S.union_all (List.map (free_tyarg_vars' rec_vars) ts)) (free_type_vars' rec_vars datatype)
     | Application (_, tyargs) -> S.union_all (List.map (free_tyarg_vars' rec_vars) tyargs)
@@ -1405,7 +1405,7 @@ and subst_dual_type : var_map -> datatype -> datatype =
   | Variant row -> Variant (sdr row)
   | Effect row -> Effect (sdr row)
   | Table (r, w, n) -> Table (sdt r, sdt w, sdt n)
-  | Lens _sort -> failwith "Not yet implemented" (* t *)
+  | Lens _sort -> t
   (* TODO: we could do a check to see if we can preserve aliases here *)
   | Alias (_, t) -> sdt t
   | Application (abs, ts) -> Application (abs, List.map (subst_dual_type_arg rec_points) ts)
@@ -1609,8 +1609,7 @@ and normalise_datatype rec_names t =
   | Effect row              -> Effect (nr row)
   | Table (r, w, n)         ->
      Table (nt r, nt w, nt n)
-  | Lens _sort                -> failwith "Not yet implemented"
-  (* `Lens _sort *)
+  | Lens sort               -> Lens sort
   | Alias ((name, qs, ts), datatype) ->
      Alias ((name, qs, ts), nt datatype)
   | Application (abs, tyargs) ->
@@ -2378,36 +2377,33 @@ struct
                 sd w ^ "," ^
                   sd n ^ ")"
          | Lens _typ ->
-            "Lens (Not yet implemented lens pretty-printing)"
-
-         (* let open Lens in
-          * let sort = Type.sort _typ in
-          * let cols = Sort.present_colset sort |> Column.Set.elements in
-          * let fds = Sort.fds sort in
-          * let predicate =
-          *   Sort.predicate sort
-          *   |> OptionUtils.from_option (Phrase.Constant.bool true) in
-          * let pp_col f col =
-          *   Format.fprintf f "%s : %a"
-          *     (Lens.Column.alias col)
-          *     Lens.Phrase.Type.pp_pretty (Lens.Column.typ col) in
-          * if Lens.Type.is_abstract _typ
-          * then
-          *   if Lens.Type.is_checked _typ
-          *   then
-          *     Format.asprintf "LensChecked((%a), { %a })"
-          *       (Lens.Utility.Format.pp_comma_list pp_col) cols
-          *       Lens.Fun_dep.Set.pp_pretty fds
-          *   else
-          *     Format.asprintf "LensUnchecked((%a), { %a })"
-          *       (Lens.Utility.Format.pp_comma_list pp_col) cols
-          *       Lens.Fun_dep.Set.pp_pretty fds
-          * else
-          *   Format.asprintf "Lens((%a), %a, { %a })"
-          *     (Lens.Utility.Format.pp_comma_list pp_col) cols
-          *     Lens.Database.fmt_phrase_dummy predicate
-          *     Lens.Fun_dep.Set.pp_pretty fds *)
-
+            let open Lens in
+            let sort = Type.sort _typ in
+            let cols = Sort.present_colset sort |> Column.Set.elements in
+            let fds = Sort.fds sort in
+            let predicate =
+              Sort.predicate sort
+           |> OptionUtils.from_option (Phrase.Constant.bool true) in
+            let pp_col f col =
+              Format.fprintf f "%s : %a"
+                (Lens.Column.alias col)
+                Lens.Phrase.Type.pp_pretty (Lens.Column.typ col) in
+            if Lens.Type.is_abstract _typ
+            then
+              if Lens.Type.is_checked _typ
+              then
+                Format.asprintf "LensChecked((%a), { %a })"
+                  (Lens.Utility.Format.pp_comma_list pp_col) cols
+                  Lens.Fun_dep.Set.pp_pretty fds
+              else
+                Format.asprintf "LensUnchecked((%a), { %a })"
+                  (Lens.Utility.Format.pp_comma_list pp_col) cols
+                  Lens.Fun_dep.Set.pp_pretty fds
+            else
+              Format.asprintf "Lens((%a), %a, { %a })"
+                (Lens.Utility.Format.pp_comma_list pp_col) cols
+                Lens.Database.fmt_phrase_dummy predicate
+                Lens.Fun_dep.Set.pp_pretty fds
          | ForAll (tyvars, body) ->
             let bound_vars =
               List.fold_left
@@ -2685,7 +2681,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
     | Lolli (f, m, t)         -> union [make_env boundvars f; make_env boundvars m; make_env boundvars t]
     | Effect row | Record row | Variant row -> make_env boundvars row
     | Table (r, w, n)         -> union [make_env boundvars r; make_env boundvars w; make_env boundvars n]
-    | Lens _                  -> failwith "Not yet implemented" (* empties *)
+    | Lens _                  -> empties
     | Alias ((_, _, ts), d)   -> union (List.map (make_env_ta boundvars) ts @ [make_env boundvars d])
     | Application (_, ds)     -> union (List.map (make_env_ta boundvars) ds)
     | RecursiveApplication { r_args ; _ } -> union (List.map (make_env_ta boundvars) r_args)
