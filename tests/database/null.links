@@ -1,0 +1,4 @@
+var db = database "links";
+var nulltable = table "nulltable" with (i : Int, f : Int) from db;
+
+assertEq(query {for (x <-- nulltable) [x]},[(i=1,f= -1)])

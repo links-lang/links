@@ -188,3 +188,4 @@ let get_pg_database_by_string args =
         failwith "Insufficient arguments when establishing postgresql connection"
 
 let _ = Value.register_driver (driver_name, get_pg_database_by_string)
+
