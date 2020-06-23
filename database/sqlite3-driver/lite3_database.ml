@@ -36,6 +36,8 @@ let error_as_string = function
 | Rc.DONE -> "done"
 | Rc.UNKNOWN e -> "unknown: "^ string_of_int (Rc.int_of_unknown e)
 
+
+(* TODO: Better NULL handling *)
 let data_to_string data =
   match data with
     Data.NONE -> ""

@@ -211,7 +211,6 @@ let iterUntilNone (fn : unit -> 'b option) (g : 'b -> unit) : unit =
   in
     iterate ()
 
-
 class mysql_result (result : result) db = object
   inherit Value.dbvalue
   val result_buf = 
@@ -221,9 +220,9 @@ class mysql_result (result : result) db = object
          buf
     else  PolyBuffer.init 0 1 (Array.init 0 (fun _ -> None))
   method status : Value.db_status = 
-      match status db with
-        | StatusOK | StatusEmpty -> `QueryOk
-        | StatusError c          -> `QueryError (string_of_error_code c)
+    match status db with
+      | StatusOK | StatusEmpty -> `QueryOk
+      | StatusError c          -> `QueryError (string_of_error_code c)
   method nfields : int =
     fields result
   method ntuples : int =
@@ -232,10 +231,11 @@ class mysql_result (result : result) db = object
     (Utility.val_of (fetch_field_dir result n)).name
   method getvalue : int -> int -> string = fun n f ->
     let row = PolyBuffer.get result_buf n in
-    Utility.val_of (row.(f))
+(* TODO: Handle nulls better *)
+    Utility.from_option "" (row.(f))
   method gettuple : int -> string array = fun n ->
     let row = PolyBuffer.get result_buf n in
-    Array.map Utility.val_of row
+    Array.map (Utility.from_option "") row
   method error : string =
     Utility.val_of (errmsg db)
 end

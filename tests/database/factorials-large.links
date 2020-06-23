@@ -1,0 +1,30 @@
+var db = database "links";
+var factorials = table "factorials" with (i : Int, f : Int) from db;
+
+fun fact (n) {
+  if (n == 0) {1}
+  else {if (n == 1) {1}
+    else {n*fact(n-1)}
+  }
+}
+
+fun insertL(l) {
+  delete (x <-- factorials);
+  for (i <- l) {
+    insert factorials
+      values (f, i)
+         [(i=i,f=fact(i))];
+    []
+  }
+}
+
+var asdf = insertL([0..511]);
+
+fun double (l) {
+  for (x <- l, y <- l)
+  [(a=1)]
+}
+# build a result larger than ocaml stack bound
+assertEq(
+  length(query { double(asList(factorials))}),
+    262144)
