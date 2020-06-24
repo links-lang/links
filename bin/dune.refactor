@@ -1,8 +1,0 @@
-;; TODO remove
-(executable
-  (name links)
-  (public_name linx)
-  (package links)
-  (modes native)
-  (modules links)
-  (libraries threads.posix dynlink ANSITerminal linenoise links.core))

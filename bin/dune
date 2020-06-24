@@ -3,5 +3,4 @@
   (public_name linx)
   (package links)
   (modes native)
-  (modules (:standard \ links_refactor))
   (libraries threads.posix dynlink ANSITerminal linenoise links.core))
