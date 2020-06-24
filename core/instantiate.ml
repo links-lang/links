@@ -343,7 +343,6 @@ let populate_instantiation_map ~name qs tyargs =
 let instantiation_maps_of_type_arguments :
       bool -> Types.datatype -> Types.type_arg list -> (datatype * instantiation_maps) =
   fun must_instantiate_all_quantifiers pt tyargs ->
-    (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
     let vars, t = TypeUtils.split_quantified_type pt in
     let tyargs_length = List.length tyargs in
     let vars_length   = List.length vars   in

@@ -591,8 +591,6 @@ struct
            let t = Types.for_all (tyvars, t) in
            TAbs (tyvars, v), t, o
         | TApp (v, ts)  ->
-           (* List.iter (TypeUtils.check_type_wellformedness None) ts; *)
-           (* Debug.print ("ts: " ^ (String.concat "," (List.map (fun t -> Types.string_of_type_arg t) ts))); *)
            let v, t, o = o#value v in
            let t = Instantiate.apply_type t ts in
            TApp (v, ts), t, o
