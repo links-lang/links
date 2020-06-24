@@ -128,8 +128,10 @@ struct
      result =
 
        fun req_data name cont args ->
-         if not(Settings.get Basicsettings.web_mode) then
-           raise (Errors.client_call_outside_webmode name);
+         if not(Settings.get webs_running) then
+           raise (Errors.forbidden_client_call name "outside of web mode");
+         if not(RequestData.is_ajax_call (RequestData.get_cgi_parameters req_data)) then
+           raise (Errors.forbidden_client_call name "before server page is ready");
          (*if not(Proc.singlethreaded()) then
            raise (internal_error "Remaining procs on server at client call!"); *)
          Debug.print("Making client call to " ^ name);
@@ -699,13 +701,6 @@ struct
               value env offset >>= fun offset ->
               Lwt.return (Some (Value.unbox_int limit, Value.unbox_int offset))
        end >>= fun range ->
-       let evaluator =
-         let open QueryPolicy in
-         match policy with
-           | Flat -> `Flat
-           | Nested -> `Nested
-           | Default ->
-               if Settings.get Database.shredding then `Nested else `Flat in
 
        let evaluate_standard () =
          match EvalQuery.compile env (range, e) with
@@ -756,11 +751,15 @@ struct
                 in
                 raise (Errors.runtime_error error_msg) in
 
-       begin
-         match evaluator with
-           | `Flat -> evaluate_standard ()
-           | `Nested -> evaluate_nested ()
-       end
+       let evaluator =
+         let open QueryPolicy in
+         match policy with
+           | Flat -> evaluate_standard
+           | Nested -> evaluate_nested
+           | Default ->
+               if Settings.get Database.shredding then evaluate_nested else evaluate_standard in
+       evaluator()
+
     | InsertRows (source, rows) ->
         begin
           value env source >>= fun source ->

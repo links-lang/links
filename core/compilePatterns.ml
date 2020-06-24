@@ -184,23 +184,18 @@ end
 =
 struct
   open PrimaryKind
-  (* let lookup_type var (_nenv, tenv, _eff) = *)
-  (*   TEnv.lookup tenv var *)
-
-  let lookup_name name (nenv, _tenv, _eff) =
-    NEnv.find name nenv
 
   let lookup_effects (_nenv, _tenv, eff) = eff
 
   let nil env t : value =
-    TApp (Variable (lookup_name "Nil" env),
+    TApp (Variable (NEnv.find "Nil" Lib.nenv),
            [(Type, t)])
 
   let list_head env t : value -> tail_computation = fun v ->
     let eff = lookup_effects env in
       Apply
         (TApp
-           (Variable (lookup_name "hd" env),
+           (Variable (NEnv.find "hd" Lib.nenv),
             [(Type, t); (Row, eff)]),
          [v])
 
@@ -208,7 +203,7 @@ struct
     let eff = lookup_effects env in
       Apply
         (TApp
-           (Variable (lookup_name "tl" env),
+           (Variable (NEnv.find "tl" Lib.nenv),
             [(Type, t); (Row, eff)]),
          [v])
 end
@@ -221,11 +216,6 @@ end
   =
 struct
   open PrimaryKind
-  (* let lookup_type var (_nenv, tenv, _eff) = *)
-  (*   TEnv.lookup tenv var *)
-
-  let lookup_name name (nenv, _tenv, _eff) =
-    NEnv.find name nenv
 
   let lookup_effects (_nenv, _tenv, eff) = eff
 
@@ -233,7 +223,7 @@ struct
     let eff = lookup_effects env in
     ApplyPure
       (TApp
-         (Variable (lookup_name "==" env),
+         (Variable (NEnv.find "==" Lib.nenv),
           [(Type, t); (Row, eff)]),
        [v1; v2])
 end
