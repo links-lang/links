@@ -187,7 +187,7 @@ struct
 
   let lookup_effects (_nenv, _tenv, eff) = eff
 
-  let nil env t : value =
+  let nil _env t : value =
     TApp (Variable (NEnv.find "Nil" Lib.nenv),
            [(Type, t)])
 
