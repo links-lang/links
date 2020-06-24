@@ -79,21 +79,6 @@ module Desugar = struct
            Meta point
         | QualifiedTypeApplication _ -> assert false (* will have been erased *)
         | Function (f, e, t) as _fn ->
-           (* Debug.print ("fn: "^Sugartypes.Datatype.show _fn);
-            * let f' = (List.map datatype f) in
-            * Debug.print "A";
-            * let f'' = Types.make_tuple_type f' in
-            * Debug.print ("f'': "^string_of_datatype f'');
-            * Debug.print "B";
-            * let e' = row alias_env e t' in
-            * Debug.print ("e': "^Types.show_datatype e');
-            * Debug.print "C";
-            * let t' = datatype t in
-            * Debug.print ("t' (Fun): "^string_of_datatype t');
-            * Debug.print "D";
-            * Debug.print ("Fun: "^string_of_datatype (Types.Function (f'', e', t')));
-            * Debug.print "E";
-            * Types.Function (f'', e', t') *)
             Types.Function ( Types.make_tuple_type (List.map datatype f)
                            , row alias_env e t'
                            , datatype t )
@@ -193,9 +178,6 @@ module Desugar = struct
         | DB -> Types.Primitive Primitive.DB
         | (Input _ | Output _ | Select _ | Choice _ | Dual _ | End) as s ->
             session_type alias_env s t'
-      (* in *)
-      (* Debug.print ("t': "^Datatype.show (t'.node));
-       * Debug.print ("z: "^Types.string_of_datatype z); z *)
 
   and session_type alias_env st (node : 'a WithPos.t) =
     (* let lookup_type t = StringMap.find t var_env.tenv in -- used only in commented code *)

@@ -95,46 +95,12 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
 
 and get_row_var_type_args : gen_kind -> TypeVarSet.t -> row_var -> type_arg list =
   fun kind bound_vars row_var -> get_type_args kind bound_vars (Meta row_var)
-    (* match Unionfind.find row_var with
-     *   | `Closed -> []
-     *   | `Var (var, _, _) when TypeVarSet.mem var bound_vars -> []
-     *   | `Var (_, _, `Flexible) when kind=`All -> [`Row (StringMap.empty, row_var, false)]
-     *   | `Var (_, _, `Flexible) -> []
-     *   | `Var (_, _, `Rigid) -> [`Row (StringMap.empty, row_var, false)]
-     *   | `Recursive (var, rec_row) ->
-     *       Debug.if_set (show_recursion) (fun () -> "rec (get_row_var_type_args): " ^(string_of_int var));
-     *       (if TypeVarSet.mem var bound_vars then
-     *          []
-     *        else
-     *          get_row_type_args kind (TypeVarSet.add var bound_vars) rec_row)
-     *   | `Body row -> get_row_type_args kind bound_vars row *)
 
 and get_presence_type_args : gen_kind -> TypeVarSet.t -> field_spec -> type_arg list =
   fun kind bound_vars -> get_type_args kind bound_vars
-    (* function
-     *   | `Present t -> get_type_args kind bound_vars t
-     *   | `Absent -> []
-     *   | `Var point ->
-     *       begin
-     *         match Unionfind.find point with
-     *           | `Var (var, _, _) when TypeVarSet.mem var bound_vars -> []
-     *           | `Var (_, _, `Flexible) when kind=`All -> [`Presence (`Var point)]
-     *           | `Var (_, _, `Flexible) -> []
-     *           | `Var (_, _,`Rigid) -> [`Presence (`Var point)]
-     *           | `Body f -> get_presence_type_args kind bound_vars f
-     *       end *)
 
 and get_row_type_args : gen_kind -> TypeVarSet.t -> row -> type_arg list =
   fun kind bound_vars row -> get_type_args kind bound_vars row
-(* (field_env, row_var, _) ->
- *     let field_vars =
- *       StringMap.fold
- *         (fun _ field_spec vars ->
- *            vars @ get_presence_type_args kind bound_vars field_spec
- *         ) field_env [] in
- *     let row_vars = get_row_var_type_args kind bound_vars (row_var:row_var)
- *     in
- *       field_vars @ row_vars *)
 
 and get_type_arg_type_args : gen_kind -> TypeVarSet.t -> type_arg -> type_arg list =
   fun kind bound_vars (pk, t) ->
@@ -161,9 +127,6 @@ let remove_duplicates =
                           assert (not (lk <> rk && b));
                           b
       | _ -> false)
-(* | `Type (`MetaTypeVar l), `Type (`MetaTypeVar r) -> equivalent_tyarg l r
- * | `Row (_, l, ld), `Row (_, r, rd) -> ld=rd && equivalent_tyarg l r
- * | `Presence (`Var l), `Presence (`Var r) -> equivalent_tyarg l r *)
 
 let get_type_args kind bound_vars t =
   remove_duplicates (get_type_args kind bound_vars t)
@@ -207,20 +170,13 @@ let mono_type_args : type_arg -> unit =
   (* HACK: probably shouldn't happen *)
   | Row, Meta point -> check_sk point
   | _ -> raise (internal_error "Not a type-variable argument (mono_type_args)")
-  (* fun (_pk, t) ->
-   * match t with
-   * | Meta point -> check_sk point
-   * | _ -> () *)
-  (* | `Type (`MetaTypeVar point) -> check_sk point
-   * | `Row (_, point, _) -> check_sk point
-   * | `Presence (`Var point) -> check_sk point *)
 
 (** generalise:
     Universally quantify any free type variables in the expression.
 *)
 let generalise : gen_kind -> ?unwrap:bool -> environment -> datatype -> ((Quantifier.t list * type_arg list) * datatype) =
   fun kind ?(unwrap=true) env t ->
-    (* throw away any existing top-level quantifiers *)
+  (* throw away any existing top-level quantifiers *)
     Debug.if_set show_generalisation (fun () -> "Generalising : " ^ string_of_datatype t);
     let t = match Types.concrete_type t with
       | ForAll (_, t) when unwrap -> t

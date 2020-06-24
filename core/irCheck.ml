@@ -196,7 +196,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
     let handle_variable  (lid, (lpk, lsk), lfd) (rid, (rpk, rsk), rfd) ctx =
       let subst_map, kind_env = ctx.typevar_subst, ctx.tyenv in
       let rvar' = lookupVar lid subst_map in
-      let is_equal = rid = rvar' && lpk = rpk &&lsk = rsk && lfd = rfd in
+      let is_equal = rid = rvar' && lpk = rpk && lsk = rsk && lfd = rfd in
       match is_equal, lfd with
         | true, `Flexible -> true
         | true, `Rigid ->
@@ -434,8 +434,6 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       | _, Recursive _ -> Debug.print "IR typechecker encountered recursive type"; true
       | _ ->  false
     and eq_type_args  (context, (lpk, l), (rpk, r))  =
-      (* let lpk = TypeUtils.primary_kind_of_type l in
-       * let rpk = TypeUtils.primary_kind_of_type r in *)
       let open CommonTypes.PrimaryKind in
       match lpk, rpk with
       | Type,     Type     -> eqt (context, l, r)

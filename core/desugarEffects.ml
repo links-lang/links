@@ -1023,11 +1023,8 @@ module Untyped = struct
 
   let program state program' =
     let open Types in
-    (* Debug.print "desugarEffects";
-     * Debug.print ("program': " ^ Sugartypes.show_program program'); *)
     let tyenv = Context.typing_environment (context state) in
     let program' = program tyenv.tycon_env program' in
-    (* Debug.print ("program'': " ^ Sugartypes.show_program program'); *)
     return state program'
 
   let sentence state sentence' =

@@ -828,8 +828,6 @@ struct
                (db, table, (StringMap.map (function
                                 | Types.Present t -> t
                                 | _ -> assert false) fields))
-             (* Debug.print ("row: "^Types.string_of_row row);
-              *  Lwt.return (db, table, TypeUtils.row_present_types (Types.Record row)) *)
           | _ -> assert false
         end >>= fun (db, table, field_types) ->
       let delete_query =

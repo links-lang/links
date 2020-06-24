@@ -233,7 +233,6 @@ let instantiate_typ : bool -> datatype -> (type_arg list * datatype) = fun rigid
             match Kind.primary_kind kind with
             | (Type | Presence) as pk -> pk, Meta point
             | Row -> Row, Row (StringMap.empty, point, false) in
-          (* let ty = Kind.primary_kind kind, Meta point in *)
           IntMap.add var ty inst_env, ty :: tys in
 
         let inst_map, tys =
@@ -331,12 +330,6 @@ module SEnv = Env.String
 let populate_instantiation_map ~name qs tyargs =
   List.fold_right2
     (fun q ((pk, _) as tyarg) inst_map ->
-      (* TypeUtils.check_type_wellformedness None tyarg; *)
-      (* Debug.print ("tyarg: " ^ string_of_datatype tyarg); *)
-      (* let arg_kind = TypeUtils.primary_kind_of_type tyarg in *)
-      (* match tyarg with
-       * | Closed -> assert false
-       * | _ -> (); *)
       if pk <> Quantifier.to_primary_kind q then
         raise
           (internal_error
