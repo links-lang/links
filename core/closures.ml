@@ -145,13 +145,8 @@ struct
         (*Debug.print ("free type vars:" ^ (IntSet.show free_type_vars));*)
         Types.TypeVarSet.fold (fun tvar o ->  o#register_type_var tvar) free_type_vars o
 
-
       method type_arg (_pk, t) =
         o#typ t
-        (* let free_type_vars = Types.free_type_vars t in
-         * (\*Debug.print ("free type vars:" ^ (IntSet.show free_type_vars));*\)
-         * Types.TypeVarSet.fold (fun tvar o ->  o#register_type_var tvar) free_type_vars o *)
-
 
       method quantifier q =
         let var = Quantifier.to_var q in
@@ -622,9 +617,6 @@ struct
               (IntMap.add typevar (Row, r) type_map)
             | Presence ->
               let new_type_variable = make_new_type_variable () in
-              (* SJF: This might be incorrect -- old code was:
-              let p = `Var new_type_variable in
-              *)
               let p = Types.Meta new_type_variable in
               (IntMap.add typevar (Presence, p) type_map) in
           let new_quantifier = (newvar, (primary_kind, subkind)) in

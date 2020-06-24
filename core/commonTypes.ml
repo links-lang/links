@@ -137,7 +137,7 @@ let pk_presence = PrimaryKind.Presence
 
 module Kind = struct
   type t = PrimaryKind.t * Subkind.t
-  [@@deriving eq,show]
+    [@@deriving eq,show]
 
   let subkind (_, sk) = sk
   let restriction kind =
