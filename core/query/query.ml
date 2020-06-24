@@ -492,7 +492,7 @@ let labels_of_field_types field_types =
     StringSet.empty
 
 let record_field_types (t : Types.datatype) : Types.datatype StringMap.t =
-  let (field_spec_map, _, _) = TypeUtils.extract_row_parts t in
+  let (field_spec_map, _, _) = TypeUtils.extract_row_parts (TypeUtils.extract_row t) in
   StringMap.map (function
                   | Types.Present t -> t
                   | _ -> assert false) field_spec_map
