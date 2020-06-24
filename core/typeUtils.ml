@@ -252,13 +252,8 @@ let record_without t names =
   match concrete_type t with
     | Record (Row (fields, row_var, dual) as row) ->
         if is_closed_row row then
-          let fieldm = StringSet.fold (fun name fields -> StringMap.remove name fields) names fields
-          in
-          Record
-            (Row
-               (fieldm,
-                row_var,
-                dual))
+          let fieldm = StringSet.fold (fun name fields -> StringMap.remove name fields) names fields in
+          Record (Row (fieldm, row_var, dual))
         else
           let fieldm =
             StringMap.mapi
@@ -267,13 +262,8 @@ let record_without t names =
                   Absent
                 else
                   f)
-              fields
-          in
-          Record
-            (Row
-               (fieldm,
-                row_var,
-                dual))
+              fields in
+          Record (Row (fieldm, row_var, dual))
     | _ -> assert false
 
 

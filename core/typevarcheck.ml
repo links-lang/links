@@ -219,7 +219,7 @@ and is_positive : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
   fun bound_vars expanded_apps var t ->
     let isp = is_positive bound_vars expanded_apps var in
     let isn = is_negative bound_vars expanded_apps var in
-    let ispr = is_negative_row bound_vars expanded_apps var in
+    let ispr = is_positive_row bound_vars expanded_apps var in
       match t with
         (* Unspecified kind *)
         | Not_typed -> false

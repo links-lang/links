@@ -211,23 +211,10 @@ let rec eq_types : (datatype * datatype) -> bool =
          | _ -> false
          end
 
-(*       | #session_type as l ->
- *         begin match unalias t2 with
- *         | #session_type as r -> eq_sessions (l, r)
- *         | _          -> false
- *         end
- *
- * and eq_sessions : (datatype * datatype) -> bool =
- *   function *)
 and eq_rows : (row * row) -> bool = fun (l, r) -> eq_types (l, r)
-  (* fun ((lfield_env, lrow_var, ldual), (rfield_env, rrow_var, rdual)) ->
-   *   eq_field_envs (lfield_env, rfield_env) && eq_row_vars (lrow_var, rrow_var) && ldual=rdual *)
+
 and eq_presence = fun (l, r) -> eq_types (l, r)
-  (* function
-   *   | `Absent, `Absent -> true
-   *   | `Present lt, `Present rt -> eq_types (lt, rt)
-   *   | `Var lpoint, `Var rpoint -> Unionfind.equivalent lpoint rpoint
-   *   | _, _ -> assert false *)
+
 and eq_field_envs (lfield_env, rfield_env) =
   let eq_specs lf rf = eq_presence (lf, rf) in
     StringMap.equal eq_specs lfield_env rfield_env
@@ -248,12 +235,6 @@ and eq_type_args =
   | Row, Row           -> eq_types (lt, rt)
   | Presence, Presence -> eq_presence (lt, rt)
   | _, _               -> false
- (* eq_types (l, r) *)
-  (* function
-   *   | `Type lt, `Type rt -> eq_types (lt, rt)
-   *   | `Row lr, `Row rr -> eq_rows (lr, rr)
-   *   | `Presence lf, `Presence rf -> eq_presence (lf, rf)
-   *   | _, _ -> false *)
 
 (*
   unification environment:
@@ -1210,15 +1191,6 @@ and unify_type_args' : unify_env -> (type_arg * type_arg) -> unit =
   | Presence, Presence -> unify_presence' rec_env (lt, rt)
   | _, _ ->
      raise (Failure (`Msg ("Couldn't match "^ string_of_type_arg (lpk, lt) ^" against "^ string_of_type_arg (rpk, rt))))
-  (* deferring to unify' means that unify' must handle kinds Row and
-     Presence as well as Type (which it does) *)
-(*  fun rec_env -> unify' rec_env*)
-  (* function
-   * | `Type lt, `Type rt -> unify' rec_env (lt, rt)
-   * | `Row lr, `Row rr -> unify_rows' rec_env (lr, rr)
-   * | `Presence lf, `Presence rf -> unify_presence' rec_env (lf, rf)
-   * | l, r ->
-   *    raise (Failure (`Msg ("Couldn't match "^ string_of_type_arg l ^" against "^ string_of_type_arg r))) *)
 
 let unify (t1, t2) =
   unify'

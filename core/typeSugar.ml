@@ -3496,11 +3496,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                          let tt = Types.make_table_type (a, b, c) in
                          let pattern = tpc pattern in
                          let e = tc e in
-                         (* Debug.print ("e type (1): "^Types.string_of_datatype (typ e)); *)
                          let () = unify ~handle:Gripers.iteration_table_body (pos_and_typ e, no_pos tt) in
                          let () = unify ~handle:Gripers.iteration_table_pattern (ppos_and_typ pattern, (exp_pos e, a)) in
-                         (* Debug.print ("pattern type: "^Types.string_of_datatype (thd3 pattern));
-                          * Debug.print ("e type (2): "^Types.string_of_datatype (typ e)); *)
                            (Table (erase_pat pattern, erase e) :: generators,
                             usages e :: generator_usages,
                             pattern_env pattern:: environments))
@@ -3524,7 +3521,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                    unify ~handle:Gripers.iteration_base_order
                      (pos_and_typ order, no_pos (T.Record (Types.make_empty_open_row (lin_unl, res_base))))) orderby in
             let e = Iteration (generators, erase body, opt_map erase where, opt_map erase orderby) in
-            (* Debug.print ("iteration: "^show_phrasenode e); *)
             let vs = List.fold_left StringSet.union StringSet.empty (List.map Env.domain environments) in
             let us = Usage.combine_many
                        (List.append generator_usages
@@ -3643,15 +3639,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
 
                           let fieldtype = Types.for_all (pqs, t) in
 
-                          (* really we just need to unify the presence
-                             variable with Presence, but our griper
-                             interface doesn't currently support
-                             that *)
-                          let rt = T.Record (T.Row (StringMap.singleton l (T.Present fieldtype), Types.closed_row_var, false)) in
-                          unify ~handle:Gripers.projection
-                            ((exp_pos r, rt),
-                             no_pos (T.Record (Types.make_singleton_closed_row
-                                                (l, T.Present (Types.fresh_type_variable (lin_any, res_any))))));
                           let r' = erase r in
                           let sugar_pqs = List.map SugarQuantifier.mk_resolved pqs in
                           let e = tabstr (sugar_pqs, Projection (with_dummy_pos (tappl (r'.node, tyargs)), l)) in
