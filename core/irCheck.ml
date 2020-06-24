@@ -552,7 +552,7 @@ struct
                 | None -> make_record_type field_types
                 | Some t ->
                     begin
-                      match t with
+                      match TypeUtils.concrete_type t with
                         | Record row ->
                             handle_extended_record (extend_row_safe field_types row)
                         | _ -> raise_ir_type_error "Trying to extend non-record type" (SVal orig)
@@ -569,7 +569,7 @@ struct
               Erase (names, v), t, o
         | Inject (name, v, t) ->
             let v, vt, o = o#value v in
-            let _ = match t with
+            let _ = match TypeUtils.concrete_type t with
               | Variant _ ->
                  o#check_eq_types  (variant_at ~overstep_quantifiers:false name t) vt (SVal orig)
               | _ -> raise_ir_type_error "trying to inject into non-variant type" (SVal orig) in
@@ -713,7 +713,7 @@ struct
 
         | Ir.Case (v, cases, default) ->
             let v, vt, o = o#value v in
-            begin match vt with
+            begin match TypeUtils.concrete_type vt with
             | Variant row as variant ->
                let unwrapped_row = fst (unwrap_row row) |> TypeUtils.extract_row_parts in
                let present_fields, has_presence_polymorphism  =

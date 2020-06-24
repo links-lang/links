@@ -1273,7 +1273,6 @@ struct
 
   let compile env (bindings, body) =
     Debug.print ("compiling to IR");
-(*     Debug.print (Sugartypes.show_program (bindings, body)); *)
     let body =
       match body with
         | None -> WithPos.dummy (Sugartypes.RecordLit ([], None))

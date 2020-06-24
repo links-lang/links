@@ -1,7 +1,3 @@
-(* FIXME: need to properly account for unifying type arguments - use
-   the primary kind inference function.
-*)
-
 open CommonTypes
 open Utility
 open Types

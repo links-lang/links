@@ -3537,9 +3537,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                              ; from_option Usage.empty (opt_map usages where)
                              ; from_option Usage.empty (opt_map usages orderby) ]))
             in
-            if is_query
-            then Query (None, QueryPolicy.Default, with_pos pos e, Some (typ body)), typ body, us
-            else e, typ body, us
+            e, typ body, us
         | Escape (bndr, e) ->
             (* There's a question here whether to generalise the
                return type of continuations.  With `escape'

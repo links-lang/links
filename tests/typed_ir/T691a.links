@@ -1,0 +1,7 @@
+unsafe sig map : ((a) -b-> c, [a]) -b-> [c]
+fun map(f, l) {
+  switch (l) {
+    case []     -> []
+    case hd::tl -> f(hd) :: map(f,tl)
+  }
+}

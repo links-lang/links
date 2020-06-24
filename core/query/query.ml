@@ -627,19 +627,14 @@ struct
 
   let check_policies_compatible env_policy block_policy =
     let open QueryPolicy in
-    let resolve = function
-      | Flat -> `Flat
-      | Nested -> `Nested
-      | Default ->
-          if (Settings.get Database.shredding) then `Nested else `Flat in
-    let show = function | `Nested -> "nested" | `Flat -> "flat" in
-    let expected = resolve env_policy in
-    let actual = resolve block_policy in
-    if expected = actual then () else
-      let error = Printf.sprintf
-        "Incompatible query evaluation annotations. Expected %s, got %s."
-        (show expected) (show actual) in
-      raise (Errors.runtime_error error)
+    match (env_policy, block_policy) with
+      | (x, y) when x = y -> ()
+      | (_, Default) -> ()
+      | _ ->
+        let error = Printf.sprintf
+          "Incompatible query evaluation annotations. Expected %s, got %s."
+          (QueryPolicy.show env_policy) (QueryPolicy.show block_policy) in
+        raise (Errors.runtime_error error)
 
   let rec xlate env : Ir.value -> Q.t = let open Ir in function
     | Constant c -> Q.Constant c
