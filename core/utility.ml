@@ -1498,15 +1498,15 @@ struct
   let get buf i =
     if 0 <= i && i < buf.currpage*buf.pagesize + buf.nextitem
     then Array.get (Array.get buf.pages (i/buf.pagesize)) (i mod buf.pagesize)
-    else raise Not_found
+    else raise (Invalid_argument "index out of bounds")
 
   let append buf x =
     (* first, check if there is enough space or allocation is needed *)
-    if (buf.nextitem == buf.pagesize)
+    if (buf.nextitem = buf.pagesize)
     then begin
       buf.nextitem <- 0;
       buf.currpage <- buf.currpage+1;
-      if (buf.currpage == buf.numpages)
+      if (buf.currpage = buf.numpages)
       then begin (* need to allocate a new page and copy over *)
         buf.numpages <- buf.numpages+1;
         let newpages = Array.init buf.numpages (fun i ->

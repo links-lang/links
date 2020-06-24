@@ -90,7 +90,7 @@ let execute_insert_returning returning q db =
             begin
               match result#status with
                | `QueryOk ->
-                  if result#nfields == 1 && result#ntuples == 1
+                  if result#nfields = 1 && result#ntuples = 1
                   then (* returning field has to be of type int *)
                     Value.box_int (int_of_string (result#getvalue 0 0))
                   else raise (runtime_error ("Returned the wrong number of results executing " ^ q))
