@@ -235,7 +235,7 @@ struct
   and apply (cont : continuation) env : Value.t * Value.t list -> result =
     let invoke_session_exception () =
       special env cont (DoOperation (Value.session_exception_operation,
-        [], `Not_typed)) in
+        [], Types.Not_typed)) in
     function
     | `FunctionPtr (f, fvs), ps ->
       let (_finfo, (xs, body), z, _location) = find_fun f in
@@ -582,7 +582,7 @@ struct
     let get_lens l = match l with | `Lens l -> l | _ -> raise (internal_error "Expected a lens.") in
     let invoke_session_exception () =
       special env cont (DoOperation (Value.session_exception_operation,
-        [], `Not_typed)) in
+        [], Types.Not_typed)) in
     function
     | Wrong _                    -> raise Exceptions.Wrong
     | Database v                 ->
@@ -683,7 +683,7 @@ struct
         value env name >>= fun name ->
         value env keys >>= fun keys ->
         match db, name, keys, (TypeUtils.concrete_type readtype) with
-          | `Database (db, params), name, keys, `Record row ->
+          | `Database (db, params), name, keys, Types.Record (Types.Row row) ->
             let unboxed_keys =
               List.map
                 (fun key ->
@@ -706,20 +706,21 @@ struct
          match EvalQuery.compile env (range, e) with
            | None -> computation env cont e
            | Some (db, q, t) ->
-               let q = db#string_of_query ~range q in
-               let (fieldMap, _, _), _ =
-               Types.unwrap_row(TypeUtils.extract_row t) in
-               let fields =
-               StringMap.fold
-                   (fun name t fields ->
-                     match t with
-                     | `Present t -> (name, t)::fields
-                     | `Absent -> assert false
-                     | `Var _ -> assert false)
-                   fieldMap
-                   []
-               in
-               apply_cont cont env (Database.execute_select fields q db) in
+              let q = db#string_of_query ~range q in
+              let (fieldMap, _, _) =
+                let r, _ = Types.unwrap_row (TypeUtils.extract_row t) in
+                TypeUtils.extract_row_parts r in
+              let fields =
+                StringMap.fold
+                  (fun name t fields ->
+                    let open Types in
+                    match t with
+                    | Present t -> (name, t)::fields
+                    | _ -> assert false)
+                  fieldMap
+                  []
+              in
+              apply_cont cont env (Database.execute_select fields q db) in
 
        let evaluate_nested () =
          if range != None then eval_error "Range is not supported for nested queries";
@@ -730,7 +731,7 @@ struct
                 let get_fields t =
                   match t with
                   | `Record fields ->
-                     StringMap.to_list (fun name p -> (name, `Primitive p)) fields
+                     StringMap.to_list (fun name p -> (name, Types.Primitive p)) fields
                   | _ -> assert false
                 in
                 let execute_shredded_raw (q, t) =
@@ -810,7 +811,7 @@ struct
           | `Table ((db, _), table, _, (fields, _, _)) ->
               Lwt.return
             (db, table, (StringMap.map (function
-                                        | `Present t -> t
+                                        | Types.Present t -> t
                                         | _ -> assert false) fields))
           | _ -> assert false
       end >>= fun (db, table, field_types) ->
@@ -823,10 +824,10 @@ struct
         begin
         match source with
           | `Table ((db, _), table, _, (fields, _, _)) ->
-              Lwt.return
-            (db, table, (StringMap.map (function
-                                        | `Present t -> t
-                                        | _ -> assert false) fields))
+             Lwt.return
+               (db, table, (StringMap.map (function
+                                | Types.Present t -> t
+                                | _ -> assert false) fields))
           | _ -> assert false
         end >>= fun (db, table, field_types) ->
       let delete_query =

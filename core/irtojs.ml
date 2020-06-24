@@ -1006,7 +1006,7 @@ end = functor (K : CONTINUATION) -> struct
               let is_parameterised = List.length params > 0 in
               let param_ptr_binder =
                 Var.fresh_binder
-                  (Var.make_local_info (`Not_typed, "_param_ptr"))
+                  (Var.make_local_info (Types.Not_typed, "_param_ptr"))
               in
               let env =
                 let (x, n) = name_binder param_ptr_binder in
@@ -1195,7 +1195,7 @@ end = functor (K : CONTINUATION) -> struct
     let raiseOp =
       generate_special env (DoOperation (
         Value.session_exception_operation,
-        [Variable fresh_var], `Not_typed)) in
+        [Variable fresh_var], Types.Not_typed)) in
     let fresh_kappa = gensym ~prefix:"kappa" () in
     let cancellation_thunk = Fn ([fresh_kappa], raiseOp (K.reflect (Var fresh_kappa))) in
 
