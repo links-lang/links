@@ -2,3 +2,11 @@ Test that DOS newlines are handled
 ./tests/dos-newlines.links
 filemode : true
 stdout : 43 : Int
+
+Test precedence parsing (float plus times)
+42.0 +. 1.0 *. 42.0 == 42.0 +. (1.0 *. 42.0)
+stdout : true : Bool
+
+Test precedence parsing (float minus times)
+42.0 -. 1.0 *. 42.0 == 42.0 -. (1.0 *. 42.0)
+stdout : true : Bool
