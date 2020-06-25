@@ -173,7 +173,7 @@ let split_html : xml -> xml * xml =
   | [Node ("body", xs)] -> [], xs
   | xs -> [], xs
 
-type table = (database * string) * string * string list list * Types.row
+type table = (database * string) * string * string list list * Types.row'
   [@@deriving show]
 
 type primitive_value_basis =  [

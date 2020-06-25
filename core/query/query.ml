@@ -125,7 +125,7 @@ struct
         | Singleton t -> Types.make_list_type (te t)
         | Record fields -> record fields
         | If (_, t, _) -> te t
-        | Table (_, _, _, row) -> `Record row
+        | Table (_, _, _, row) -> Types.Record (Types.Row row)
         | Constant (Constant.Bool   _) -> Types.bool_type
         | Constant (Constant.Int    _) -> Types.int_type
         | Constant (Constant.Char   _) -> Types.char_type
@@ -224,7 +224,7 @@ struct
 
   let table_field_types (_, _, _, (fields, _, _)) =
     StringMap.map (function
-                    | `Present t -> t
+                    | Types.Present t -> t
                     | _ -> assert false) fields
 
   let unbox_xml =
@@ -492,9 +492,9 @@ let labels_of_field_types field_types =
     StringSet.empty
 
 let record_field_types (t : Types.datatype) : Types.datatype StringMap.t =
-  let (field_spec_map, _, _) = TypeUtils.extract_row t in
+  let (field_spec_map, _, _) = TypeUtils.extract_row_parts (TypeUtils.extract_row t) in
   StringMap.map (function
-                  | `Present t -> t
+                  | Types.Present t -> t
                   | _ -> assert false) field_spec_map
 
 module Eval =
@@ -775,13 +775,13 @@ struct
        (* Copied almost verbatim from evalir.ml, which seems wrong, we should probably call into that. *)
        begin
          match xlate env db, xlate env name, xlate env keys, (TypeUtils.concrete_type readtype) with
-         | Q.Database (db, params), name, keys, `Record row ->
-        let unboxed_keys =
-          List.map
-        (fun key ->
-         List.map Q.unbox_string (Q.unbox_list key))
-        (Q.unbox_list keys)
-        in
+         | Q.Database (db, params), name, keys, Types.Record (Types.Row row) ->
+            let unboxed_keys =
+              List.map
+                (fun key ->
+                  List.map Q.unbox_string (Q.unbox_list key))
+                (Q.unbox_list keys)
+            in
             Q.Table ((db, params), Q.unbox_string name, unboxed_keys, row)
          | _ -> query_error "Error evaluating table handle"
        end

@@ -17,7 +17,7 @@ let lens_db_of_db (db : Value.database) =
           let context = Env.String.empty in
           let typ =
             match v with
-            | Lens.Phrase.Type.Serial -> `Primitive CommonTypes.Primitive.Int
+            | Lens.Phrase.Type.Serial -> Types.int_type
             | _ -> Lens_type_conv.type_of_lens_phrase_type ~context v
           in
           (n, typ))
