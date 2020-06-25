@@ -30,7 +30,7 @@ fun insertReturningOne() {
 
 fun insertReturningTwo() {
   insert factorials
-  values (f,i) [(f=2, i=2)] returning i
+  values (f,i) [(f=2, i=2)] returning f
 }
 
 fun updateTwoThree() {
@@ -64,6 +64,15 @@ fun trivialNested2() server {
 }
 
 fun test() {
+  deleteAll();
+  assertEq(lookupFactorials(10), []);
+  assertEq(insertReturningOne(), 1);
+  assertEq(lookupFactorials(10), [(f=1,i=1)]);
+  assertEq(insertReturningTwo(), 2);
+  assertEq(lookupFactorials(10), [(f=1,i=1),(f=2,i=2)]);
+  updateTwoThree();
+  assertEq(lookupFactorials(10), [(f=1,i=1),(f=3,i=2)]);
+  deleteAll();
   insertOne();
   deleteAll();
   assertEq(lookupFactorials(10), []);
@@ -73,18 +82,9 @@ fun test() {
   assertEq(lookupFactorials(1), [(f=1,i=1)]);
   assertEq(query{unwrappedLookup(1)}, [(f=1,i=1)]);
   insertTwoThree();
-  ## The order is wrong.
-  assertEq(lookupFactorials(3), [(i=3, f=6), (i=2, f=2), (f=1,i=1)]);
-  deleteAll();
-  assertEq(lookupFactorials(10), []);
-  assertEq(insertReturningOne(), 1);
-  assertEq(lookupFactorials(10), [(f=1,i=1)]);
-  assertEq(insertReturningTwo(), 2);
-  assertEq(lookupFactorials(10), [(f=2,i=2),(f=1,i=1)]);
-  updateTwoThree();
-  assertEq(lookupFactorials(10), [(f=3,i=2),(f=1,i=1)]);
-  assertEq(trivialNested1(),[(a=0),(a=0)]);
-  assertEq(trivialNested2(),[(a=0),(a=0)]);
+  assertEq(lookupFactorials(3), [(i=1, f=1), (i=2, f=2), (f=6,i=3)]);
+  assertEq(trivialNested1(),[(a=0),(a=0),(a=0)]);
+  assertEq(trivialNested2(),[(a=0),(a=0),(a=0)]);
 }
 
 test()

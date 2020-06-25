@@ -91,12 +91,13 @@ fun xpath(p) {
     for (root <-- xml,
          s <-- xml)
     where (root.parent == -1 && p(root, s))
+    orderby (s.name)
       [(name=s.name)]
   }
 }
 
 fun test() {
-  assertEq(xpath(xp0), [(name="d"), (name="b")]);
+  assertEq(xpath(xp0), [(name="b"), (name="d")]);
 }
 
 test()

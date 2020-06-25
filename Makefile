@@ -45,7 +45,7 @@ BUILD_DIR:=$(ROOT)/_build
 # The build command and some standard build system flags
 BUILD=dune build
 SOURCES=links
-DB_SOURCES=links-postgresql,links-sqlite3
+DB_SOURCES=links-postgresql,links-sqlite3,links-mysql
 # Note: this relies on lazy expansion of `SOURCES'.
 COMMON_FLAGS=--only-packages $(SOURCES) --build-dir=$(BUILD_DIR)
 DEV_FLAGS=$(COMMON_FLAGS) --profile=dev
