@@ -1213,7 +1213,7 @@ struct
             let x, o = o#binder x in
             Let (x, (tyvars, tc)), o
 
-        | Fun (f, (tyvars, xs, body), z, location) as binding ->
+        | Fun (f, (tyvars, xs, body), z, location, unsafe) as binding ->
            (* It is important that the type annotations of the parameters are
               expressed in terms of the type variables from tyvars (also for rec
               functions) *)
@@ -1248,7 +1248,7 @@ struct
                handle_ir_type_error lazy_check (f, tyvars, xs, body, z, location, o) (SBind binding) in
               let f, o = o#binder f in
               let o = o#add_function_closure_binder (Var.var_of_binder f) (tyvars, z) in
-              Fun (f, (tyvars, xs, body), z, location), o
+              Fun (f, (tyvars, xs, body), z, location, unsafe), o
 
         | Rec defs  as binding ->
             (* it's important to traverse the function binders first in
@@ -1256,10 +1256,10 @@ struct
                function bodies *)
             let defs, o =
               List.fold_right
-                (fun (f, (tyvars, xs, body), z, location) (fs, o) ->
+                (fun (f, (tyvars, xs, body), z, location, unsafe) (fs, o) ->
                    let o = o#add_function_closure_binder (Var.var_of_binder f) (tyvars, z) in
                    let f, o = o#binder f in
-                     ((f, (tyvars, xs, body), z, location)::fs, o))
+                     ((f, (tyvars, xs, body), z, location, unsafe)::fs, o))
                 defs
                 ([], o) in
 
@@ -1267,7 +1267,7 @@ struct
             lazy (
               let defs, o =
               List.fold_left
-                (fun (defs, (o : 'self_type)) ((f, (tyvars, xs, body), z, location)) ->
+                (fun (defs, (o : 'self_type)) ((f, (tyvars, xs, body), z, location, unsafe)) ->
                    let (z, o) = o#optionu (fun o -> o#binder) z in
                    let xs, o =
                      List.fold_right
@@ -1284,14 +1284,14 @@ struct
                                 tyvars
                                 actual_parameter_types
                                 body
-                                true
+                                (not unsafe) (* Treat recursive bindings with nusafe sig as nonrecursive *)
                                 (SBind binding) in
                   let o = o#add_function_closure_binder (Var.var_of_binder f) (tyvars, z) in
                   (* Debug.print ("added " ^ string_of_int (Var.var_of_binder f) ^ " to closure env"); *)
 
                   let o = OptionUtils.opt_app o#remove_binder o z in
                   let o = List.fold_right (fun b o -> o#remove_binder b) xs o in
-                    (f, (tyvars, xs, body), z, location)::defs, o)
+                    (f, (tyvars, xs, body), z, location, unsafe)::defs, o)
                 ([], o)
                 defs in
               let defs = List.rev defs in

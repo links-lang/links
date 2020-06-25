@@ -103,8 +103,8 @@ and lens_predicate = Static of Lens.Phrase.t | Dynamic of value
 let binding_scope : binding -> scope =
   function
   | Let (b, _)
-  | Fun (b, _, _, _)
-  | Rec ((b, _, _, _)::_)
+  | Fun (b, _, _, _, _)
+  | Rec ((b, _, _, _, _)::_)
   | Alien { binder = b; _ } -> Var.scope_of_binder b
   | Rec []
   | Module _ -> assert false

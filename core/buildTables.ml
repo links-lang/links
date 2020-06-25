@@ -7,7 +7,7 @@ struct
   type t = (Var.var, Ir.eval_fun_def) Hashtbl.t
 
   let make_eval_def : Ir.fun_def -> Ir.eval_fun_def =
-    fun ((_f, info), (_tyvars, xs, body), z, location) ->
+    fun ((_f, info), (_tyvars, xs, body), z, location, _) ->
       info, (List.map Var.var_of_binder xs, body), opt_map Var.var_of_binder z, location
 
   let add fs def =
@@ -196,7 +196,7 @@ struct
             (* we record the relevant free variables of the body *)
             o#close x fvs;
             o#close_cont (IntSet.union fvs fvs') bs
-        | Fun (f, (_tyvars, xs, body), z, _)::bs ->
+        | Fun (f, (_tyvars, xs, body), z, _, _)::bs ->
             let fvs = IntSet.remove (Var.var_of_binder f) fvs in
             let xs = match z with None -> xs | Some z -> z :: xs in
             let bound_vars =
@@ -210,7 +210,7 @@ struct
         | Rec defs::bs ->
             let fvs, bound_vars =
               List.fold_right
-                (fun (f, (_tyvars, xs, _body), z, _) (fvs, bound_vars) ->
+                (fun (f, (_tyvars, xs, _body), z, _, _unsafe) (fvs, bound_vars) ->
                    let f = Var.var_of_binder f in
                    let fvs = IntSet.remove f fvs in
                    let xs = match z with None -> xs | Some z -> z :: xs in
@@ -226,7 +226,7 @@ struct
 
             let fvs' =
               List.fold_left
-                (fun fvs' (_f, (_tyvars, _xs, body), _zs, _location) ->
+                (fun fvs' (_f, (_tyvars, _xs, body), _zs, _location, _unsafe) ->
                    IntSet.union fvs' (FreeVars.computation o#get_type_environment bound_vars body))
                 (IntSet.empty)
                 defs in
