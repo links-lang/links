@@ -8,6 +8,7 @@
           -warn-error -a      ;; Do not treat warnings as errors.
           -w A-4-42-44-45-48-60-67  ;; Ignores warnings 4, 42, 44, 45, 48, 60, and 67.
           -g                  ;; Adds debugging information to the resulting executable / library.
+          -linkall
  )))
  (release
   (flags (:standard

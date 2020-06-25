@@ -23,7 +23,5 @@ val build_result : Value.dbvalue * (string * (Types.datatype * int)) list -> Val
     fieldname -> fieldtype. *)
 val execute_select : (string * Types.datatype) list -> string -> Value.database -> Value.t
 
-val execute_untyped_select : string -> Value.database -> Value.t
-
 val execute_insert_returning : string -> Sql.query ->  Value.database -> Value.t
 
