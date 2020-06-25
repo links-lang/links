@@ -1283,7 +1283,7 @@ end
                "but its previously inferred type is"        ^ nli () ^
                 code ppr_rt)
 
-    let bind_unsafe_fun_annotation ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
+(* XXX    let bind_unsafe_fun_annotation ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
       build_tyvar_names [lt; rt];
       let ppr_lt = show_type lt in
       let ppr_rt = show_type rt in
@@ -1291,7 +1291,7 @@ end
                 code ppr_rt                                       ^ nl  () ^
                "but this is incompatible with the actual type of" ^ nli () ^
                 code ppr_lt)
-
+*)
     let bind_exp ~pos ~t1:l ~t2:(_,t) ~error:_ =
       build_tyvar_names [snd l; t];
       fixed_type pos "Side-effect expressions" t l
@@ -2183,7 +2183,7 @@ let map_effects fn =
   transform#typ ->- fst
 
 (** Adds the wild effect to the right-most arrow on a type. *)
-let make_unsafe_signature =
+(* XXX let make_unsafe_signature =
   let open Types in
   map_effects (StringMap.add "wild" (Present Types.unit_type))
 
@@ -2204,6 +2204,7 @@ let check_unsafe_signature context unify inner = function
      unify ~handle:Gripers.bind_unsafe_fun_annotation (inner, unsafe);
      unsafe
   | Some (_, None) -> raise (internal_error "Sugartypes.datatype' without a Types.typ instance")
+*)
 
 let rec pattern_env : Pattern.with_pos -> Types.datatype Env.t =
   fun { node = p; _} -> let open Pattern in
@@ -2564,6 +2565,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
 
     let check_recursive_usage e v context =
       (* register wildness if this is a recursive variable instance *)
+      Debug.print ("check_recursive_usage: " ^ v ^ " " ^ (if StringSet.mem v context.rec_vars then "true" else "false"));
       if StringSet.mem v context.rec_vars then
         begin
           let wild_open = Types.make_singleton_open_row ("wild", Types.Present Types.unit_type) default_effect_subkind in
@@ -4248,7 +4250,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                   (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
                   (* make sure the annotation has the right shape *)
                   let shape = make_ft lin pats effects return_type in
-                  let ft = if unsafe then make_unsafe_signature t else t in
+                  let ft = (* XXX if unsafe then make_unsafe_signature t else*) t in
                   let quantifiers, ft_mono = TypeUtils.split_quantified_type ft in
 
                   (* Debug.print ("ft_mono: " ^ Types.string_of_datatype ft_mono); *)
@@ -4323,7 +4325,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
             if not (quantifiers = []) then
               check_escaped_quantifiers quantifiers context.var_env in
 
-          let ft = if unsafe then check_unsafe_signature context unify_nopos ft t_ann' else ft in
+(* XXX          let ft = if unsafe then check_unsafe_signature context unify_nopos ft t_ann' else ft in *)
           let (tyvars, _), ft =
             if fun_frozen then (TypeUtils.quantifiers ft, []), ft
             else Utils.generalise context.var_env ft
@@ -4428,7 +4430,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                      | Some t ->
                          (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
                          let shape = make_ft lin pats (fresh_tame ()) (Types.fresh_type_variable (lin_any, res_any)) in
-                         let t = if unsafe then make_unsafe_signature t else t in
+(* XXX                         let t = if unsafe then make_unsafe_signature t else t in *)
                          let ft = match t with
                            | T.ForAll _ -> t
                            | _ when frozen -> t
@@ -4442,8 +4444,13 @@ and type_binding : context -> binding -> binding * context * Usage.t =
 
                  (* We make the patterns monomorphic after unifying with the signature. *)
                  make_mono pats;
-
-                 StringSet.add name inner_rec_vars, Env.bind name inner inner_env, pats::patss)
+                 Debug.print (Format.sprintf "unsafe: %s %s" name (if unsafe then "true" else "false")); (* XXX *)
+                 let inner_rec_vars =
+                   if unsafe
+                   then inner_rec_vars
+                   else StringSet.add name inner_rec_vars
+                 in
+                 inner_rec_vars, Env.bind name inner inner_env, pats::patss)
               (StringSet.empty, Env.empty, []) defs in
           let patss = List.rev patss in
 
@@ -4454,6 +4461,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
           *)
           let (defs, used) =
             let body_env = Env.extend context.var_env inner_env in
+            StringSet.pp Format.err_formatter inner_rec_vars; (* XXX *)
             let context = {context with rec_vars = StringSet.union context.rec_vars inner_rec_vars} in
             (* let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in *)
             List.split
@@ -4523,9 +4531,9 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                    let inner = Env.find name inner_env in
                    let t_ann = resolve_type_annotation bndr fn.rec_signature in
 
-                   let inner = if fn.rec_unsafe_signature
+(* XXX                   let inner = if fn.rec_unsafe_signature
                                then check_unsafe_signature context unify_nopos inner fn.rec_signature
-                               else inner in
+                               else inner in *)
                    let inner, outer, tyvars =
                      match inner with
                        | T.ForAll (inner_tyvars, inner_body) ->
