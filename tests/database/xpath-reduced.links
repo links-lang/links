@@ -21,6 +21,7 @@ fun xpath1() {
     where ( empty(for (t <-- xml)
                   where (x.id == t.parent)
                    [()]))
+    orderby (x.name)
       [(name=x.name)]
   }
 }
@@ -34,12 +35,13 @@ fun xpath2() {
   query {
     for (x <-- xml)
     where ( p(x))
+    orderby (x.name)
       [(name=x.name)]
   }
 }
 
 fun test() {
-  assertEq(xpath1(), [(name="f"), (name="e"), (name="c")]);
+  assertEq(xpath1(), [(name="c"), (name="e"), (name="f")]);
   assertEq(xpath1(), xpath2());
 }
 

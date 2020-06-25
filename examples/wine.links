@@ -110,9 +110,11 @@ fun assocd(x, l, d) {
 sig firstField : (TableHandle ((|r::Base), (|w::Base), (|n::Base)), ((|r)) {}-> Bool, ((|r)) {}-> a) ~e~> (a::Base)
 fun firstField(t, p, body) {
   var matches =
-    for (r <-- t)
-     where (p(r))
-      [(v=body(r))];
+    query {
+      for (r <-- t)
+       where (p(r))
+        [(v=body(r))]
+    };
   hd(matches).v
 }
 
@@ -126,17 +128,21 @@ fun wineTypeName(wine_type_id) {
 
 fun wine_name(wine_id) {
   var matches =
-    for (wine <-- wineTable)
-     where (wine.wine_id == wine_id)
-      [(name=wine.wine_name)];
+    query {
+      for (wine <-- wineTable)
+      where (wine.wine_id == wine_id)
+      [(name=wine.wine_name)]
+    };
   hd(matches).name
 }
 
 fun get_region_name(region_id) {
   var matches =
-    for (region <-- regionTable)
-     where (region_id == region.region_id)
-      [(region=region.region_name)];
+    query {
+      for (region <-- regionTable)
+      where (region_id == region.region_id)
+      [(region=region.region_name)]
+    };
   hd(matches).region
 }
 
@@ -150,8 +156,8 @@ fun get_wine_price(wine_id) {
 fun cust_id_next() {  # WARNING: race condition here
   var ids =
     map((.1),
-      for (u <-- usersTable)
-        [(1=u.cust_id)]);
+      query { for (u <-- usersTable)
+        [(1=u.cust_id)]});
   maximum(0, ids) + 1
 }
 
@@ -212,10 +218,12 @@ mutual {
 
   fun sign_in(order_id, username, password) {
     var cust_id =
-      for (u <-- usersTable)
-       where (u.user_name == username &&
-              u.password == password)
-        [(1=u.cust_id)];
+      query {
+        for (u <-- usersTable)
+        where (u.user_name == username &&
+               u.password == password)
+        [(1=u.cust_id)]
+      };
 
     if (cust_id == [])
       errorPage("Incorrect username/password combination")
@@ -318,10 +326,12 @@ mutual {
          </tr>
          {
            var items =
-             for (item <-- cartItemsTable)
+             query {
+               for (item <-- cartItemsTable)
                for (wine <-- wineTable)
-                 where (item.wine_id == wine.wine_id && item.order_id == order_id)
-                   [(name=wine.wine_name, qty=item.qty, price=item.price)];
+               where (item.wine_id == wine.wine_id && item.order_id == order_id)
+               [(name=wine.wine_name, qty=item.qty, price=item.price)]
+             };
            for (item <- items)
              <tr>
                <td class="quantity-col"> {intToXml(item.qty)} </td>
@@ -348,16 +358,19 @@ mutual {
   fun order_total(cust_id, order_id) {
     sum_float(
       map ((.1),
-          for (item <-- cartItemsTable)
-          where (item.cust_id == cust_id && item.order_id == order_id)
-            [(1=item.price *. intToFloat(item.qty))]))
+          query {
+            for (item <-- cartItemsTable)
+            where (item.cust_id == cust_id && item.order_id == order_id)
+            [(1=item.price *. intToFloat(item.qty))]}))
   }
 
   fun getOrder(cust_id, order_id) {
     var the_orders =
-      for (x <-- orderTable )
+      query {
+        for (x <-- orderTable )
         where (cust_id == x.cust_id && order_id == x.order_id)
-          [x];
+        [x]
+      };
     switch (the_orders) {
       case [] -> None
       case (order::_) -> Some(order)
@@ -459,18 +472,20 @@ mutual {
     debug("starting cart_itemlist");
 
     var cart_items =
-      for (cart_item <-- cartItemsTable)
-      where (cart_item.order_id == order_id &&
-             cart_item.cust_id == cust_id)
-      {
-        for (wine <-- wineTable)
-          where (wine.wine_id == cart_item.wine_id)
-          {
+      query {
+        for (cart_item <-- cartItemsTable)
+        where (cart_item.order_id == order_id &&
+               cart_item.cust_id == cust_id)
+        {
+         for (wine <-- wineTable)
+         where (wine.wine_id == cart_item.wine_id)
+         {
             for (cost_rec <-- inventoryTable)
               where (cost_rec.wine_id == wine.wine_id)
                 [(id=cart_item.item_id, qty=cart_item.qty,
                   name=wine.wine_name, cost=cost_rec.cost)]
           }
+        }
       };
 
     debug("got results in cart_items");
@@ -559,15 +574,17 @@ mutual {
   sig cartStats : (Int, Int) ~> (Float, Int)
   fun cartStats(cust_id, order_id) {
     var cart_items =
-      for (cart_item <-- cartItemsTable)
-      where (cart_item.order_id == order_id &&
-             cart_item.cust_id == cust_id)
-      {
-          for (wine <-- wineTable)
-          where (wine.wine_id == cart_item.wine_id)
-            for (cost_rec <-- inventoryTable)
-            where (wine.wine_id == cost_rec.wine_id)
-              [(cart_item.qty, cost_rec.cost)]
+      query {
+        for (cart_item <-- cartItemsTable)
+        where (cart_item.order_id == order_id &&
+              cart_item.cust_id == cust_id)
+        {
+            for (wine <-- wineTable)
+            where (wine.wine_id == cart_item.wine_id)
+              for (cost_rec <-- inventoryTable)
+              where (wine.wine_id == cost_rec.wine_id)
+                [(cart_item.qty, cost_rec.cost)]
+        }
       };
     var total_cost = sum_float(map(fun ((q, c)) {intToFloat(q) *. c}, cart_items));
     var total_items = sum_int(map(fst, cart_items));
@@ -579,10 +596,12 @@ mutual {
     var price = get_wine_price(wine_id);
     var max_item_id = maximum(0,
           map ((.1),
-            for (cart_item <-- cartItemsTable)
-            where (cart_item.order_id == order_id
-                   && cart_item.cust_id == cust_id)
-              [(1=cart_item.item_id)])
+            query {
+              for (cart_item <-- cartItemsTable)
+              where (cart_item.order_id == order_id
+                    && cart_item.cust_id == cust_id)
+                [(1=cart_item.item_id)]
+            })
           );
     var new_item_id = max_item_id + 1;
 
@@ -607,8 +626,10 @@ mutual {
   # create_cart: make a new cart
   fun create_cart(cust_id) {
     var orders =
-      for (cart <-- shortOrderTable)
-        [(1=cart.order_id)];
+      query {
+        for (cart <-- shortOrderTable)
+        [(1=cart.order_id)]
+      };
     var order_id = 1 + maximum(0, map ((.1), orders));
     insert (shortOrderTable) values
            [(cust_id = cust_id, order_id = order_id)];
@@ -659,18 +680,20 @@ mutual {
 
   fun wine_count(region_id, wine_type) {
     var result =
-      for (wine <-- wineTable)
-      where (wine_type == 1 || wine.wine_type == wine_type)
-      {
-        for (winery <-- wineryTable)
-           where (winery.winery_id == wine.winery_id
-                  && (region_id == 1 || winery.region_id == region_id))
-           {
-               for (cost_rec <-- inventoryTable)
-               where (wine.wine_id == cost_rec.wine_id)
-                 [(wine.wine_id, wine.wine_name, cost_rec.cost,
-                   wine.year, winery.winery_name)]
-           }
+      query {
+        for (wine <-- wineTable)
+        where (wine_type == 1 || wine.wine_type == wine_type)
+        {
+          for (winery <-- wineryTable)
+            where (winery.winery_id == wine.winery_id
+                    && (region_id == 1 || winery.region_id == region_id))
+            {
+                for (cost_rec <-- inventoryTable)
+                where (wine.wine_id == cost_rec.wine_id)
+                  [(wine.wine_id, wine.wine_name, cost_rec.cost,
+                    wine.year, winery.winery_name)]
+            }
+        }
       };
     length(result)
   }
@@ -705,15 +728,15 @@ mutual {
              <table>
               <tr><td class="label">Region:</td>
                <td>
-                {choiceDefault(for (region <-- regionTable)
-                                 [(region.region_id, region.region_name)],
+                {choiceDefault(query { for (region <-- regionTable)
+                                       [(region.region_id, region.region_name)] },
                                region_id) -> search_region_id}
                </td></tr>
                <tr>
                 <td class="label">Wine type:</td>
                 <td>
-                 {choiceDefault(for (type <-- wineTypeTable)
-                                  [(type.wine_type_id, type.wine_type)],
+                 {choiceDefault(query { for (type <-- wineTypeTable)
+                                        [(type.wine_type_id, type.wine_type)] },
                                 wine_type) -> search_wine_type}
                 </td>
                </tr>

@@ -16,6 +16,7 @@ let wait_str      = "wait"
 let wild_str      = "wild"
 
 class desugar_cp env =
+  let open CommonTypes.PrimaryKind in
 object (o : 'self_type)
   inherit (TransformSugar.transform env) as super
 
@@ -34,7 +35,7 @@ object (o : 'self_type)
             o, block_node
                 ([val_binding (any_pat dp) (fn_appl_var wait_str c)],
                  with_dummy_pos e), t
-         | CPGrab ((c, Some (`Input (_a, s), grab_tyargs)), Some bndr, p) -> (* FYI: a = u *)
+         | CPGrab ((c, Some (Types.Input (_a, s), grab_tyargs)), Some bndr, p) -> (* FYI: a = u *)
             let x = Binder.to_name bndr in
             let u = Binder.to_type bndr in
             let envs = o#backup_envs in
@@ -56,7 +57,7 @@ object (o : 'self_type)
             o, block_node
                 ([val_binding (any_pat dp) (fn_appl_var close_str c)],
                  with_dummy_pos e), t
-         | CPGive ((c, Some (`Output (_t, s), give_tyargs)), Some e, p) ->
+         | CPGive ((c, Some (Types.Output (_t, s), give_tyargs)), Some e, p) ->
             let envs = o#backup_envs in
             let o = {< var_env = TyEnv.bind c s (o#get_var_env ()) >} in
             let (o, e, _typ) = o#phrase e in
@@ -100,7 +101,7 @@ object (o : 'self_type)
             let c = Binder.to_name bndr in
             let ct = Binder.to_type bndr in
             let d = Binder.to_name bndr' in
-            o, fn_appl_node link_sync_str [`Type ct; `Row o#lookup_effects]
+            o, fn_appl_node link_sync_str [(Type, ct); (Row, o#lookup_effects)]
                             [var c; var d],
             Types.make_endbang_type
          | CPComp (bndr, left, right) ->
@@ -111,14 +112,15 @@ object (o : 'self_type)
             let (o, right, t) = desugar_cp {< var_env = TyEnv.bind c (Types.dual_type s) (o#get_var_env ()) >} right in
             let o = o#restore_envs envs in
 
-            let eff_fields, eff_row, eff_closed = Types.flatten_row o#lookup_effects in
+            let (eff_fields, eff_row, eff_closed) =
+              Types.flatten_row o#lookup_effects
+              |> TypeUtils.extract_row_parts in
             let eff_fields = StringMap.remove wild_str eff_fields in
             let eff_fields =
               if Settings.get Basicsettings.Sessions.exceptions_enabled then
                 StringMap.remove Value.session_exception_operation eff_fields
               else
-                eff_fields
-            in
+                eff_fields in
 
             let left_block =
                 spawn Angel NoSpawnLocation (block (
@@ -126,10 +128,10 @@ object (o : 'self_type)
                       val_binding (variable_pat ~ty:Types.make_endbang_type c)
                                   (with_dummy_pos left)],
                     fn_appl_var close_str c))
-                      ~row:(eff_fields, eff_row, eff_closed) in
+                      ~row:(Types.Row (eff_fields, eff_row, eff_closed)) in
             let o = o#restore_envs envs in
             o, block_node
-                  ([val_binding (variable_pat ~ty:(`Application (Types.access_point, [`Type s])) c)
+                  ([val_binding (variable_pat ~ty:(Types.Application (Types.access_point, [(Type, s)])) c)
                                 (fn_appl new_str [] []);
                     val_binding (any_pat dp) left_block;
                     val_binding (variable_pat ~ty:(Types.dual_type s) c)

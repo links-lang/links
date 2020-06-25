@@ -74,8 +74,8 @@ and rec_appl = {
   r_dual: bool;
   r_unique_name: string;
   r_quantifiers : Kind.t list;
-  r_args: type_arg list;
-  r_unwind: type_arg list -> bool -> typ;
+  r_args: typ list;
+  r_unwind: typ list -> bool -> typ;
   r_linear: unit -> bool option
   }
 and tid = int
@@ -115,7 +115,7 @@ and typ =
 and t = typ
 and session_type = typ
 and datatype = typ
-and type_arg = PrimaryKind.t * typ
+and type_arg = typ
 and field_spec = typ
 and field_spec_map = field_spec Utility.StringMap.t
 and meta_type_var = typ point
@@ -333,7 +333,7 @@ val make_fresh_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMap
 val make_rigid_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMap.t * field_spec Utility.IntMap.t
 val make_wobbly_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMap.t * field_spec Utility.IntMap.t
 
-val combine_per_kind_envs : datatype Utility.IntMap.t * row Utility.IntMap.t * field_spec Utility.IntMap.t -> type_arg Utility.IntMap.t
+val combine_per_kind_envs : datatype Utility.IntMap.t * row Utility.IntMap.t * field_spec Utility.IntMap.t -> datatype Utility.IntMap.t
 
 val effect_sugar : bool Settings.setting
 
@@ -375,9 +375,7 @@ val make_thunk_type : row -> datatype -> datatype
   in types.ml for details *)
 val pp : Format.formatter -> t -> unit
 val pp_datatype : Format.formatter -> t -> unit
-val pp_meta_type_var : Format.formatter -> meta_type_var -> unit
 val pp_row : Format.formatter -> row -> unit
-val pp_row' : Format.formatter -> row' -> unit
 val pp_type_arg : Format.formatter -> type_arg -> unit
 val pp_tycon_spec: Format.formatter -> tycon_spec -> unit
 
@@ -394,7 +392,7 @@ sig
 
     method primitive : Primitive.t -> (Primitive.t * 'self_type)
     method list : ('self_type -> 'a -> 'b * 'self_type) -> 'a list -> ('b list * 'self_type)
-    method type_args : type_arg list -> (type_arg list * 'self_type)
+    method types : typ list -> (typ list * 'self_type)
     method typ : typ -> (typ * 'self_type)
     method row : row -> (row * 'self_type)
     method row_var : row_var -> (row_var * 'self_type)

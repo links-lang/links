@@ -1458,3 +1458,66 @@ struct
         (sequence xs) >>= fun xs ->
         Lwt.return (x :: xs)
 end
+
+
+(* efficient polymorphic buffers *)
+(* builds an array of n pages of size m, with some initial dummy value *)
+(* allows random access reading/writing and appending at the end *)
+module PolyBuffer : sig
+  type 'a buf
+  val init : int -> int -> 'a -> 'a buf
+  val length : 'a buf -> int
+  val get : 'a buf -> int -> 'a
+  val set : 'a buf -> int -> 'a -> unit
+  val append : 'a buf -> 'a -> unit
+  val to_list : 'a buf -> 'a list
+end =
+struct
+  type 'a buf = {mutable numpages: int;
+                pagesize: int;
+                default: 'a;
+                mutable currpage: int;
+                mutable nextitem: int;
+                mutable pages:'a
+                array array}
+
+  let init n m x = {numpages = n;
+                    pagesize = m;
+                    default = x;
+                    currpage = 0;
+                    nextitem = 0;
+                    pages = Array.init n (fun _ -> Array.init m (fun _ -> x)) }
+
+  let length buf = buf.currpage*buf.pagesize + buf.nextitem
+
+  let set buf i x =
+  if 0 <= i && i < buf.currpage*buf.pagesize + buf.nextitem
+    then Array.set (Array.get buf.pages (i/buf.pagesize)) (i mod buf.pagesize) x
+    else raise Not_found
+
+  let get buf i =
+    if 0 <= i && i < buf.currpage*buf.pagesize + buf.nextitem
+    then Array.get (Array.get buf.pages (i/buf.pagesize)) (i mod buf.pagesize)
+    else raise (Invalid_argument "index out of bounds")
+
+  let append buf x =
+    (* first, check if there is enough space or allocation is needed *)
+    if (buf.nextitem = buf.pagesize)
+    then begin
+      buf.nextitem <- 0;
+      buf.currpage <- buf.currpage+1;
+      if (buf.currpage = buf.numpages)
+      then begin (* need to allocate a new page and copy over *)
+        buf.numpages <- buf.numpages+1;
+        let newpages = Array.init buf.numpages (fun i ->
+                          if i < Array.length(buf.pages)
+                          then Array.get buf.pages i
+                          else Array.init buf.pagesize (fun _ -> buf.default)) in
+        buf.pages <- newpages
+      end
+    end;
+    Array.set (Array.get buf.pages buf.currpage) buf.nextitem x;
+    buf.nextitem <- buf.nextitem + 1
+
+  let to_list buf = List.init (length buf) (get buf)
+end

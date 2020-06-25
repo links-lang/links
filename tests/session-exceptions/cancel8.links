@@ -6,13 +6,14 @@ fun go() {
     var s = fork (fun(s) {
       var t = accept(ap);
       var clos = linfun() { send(5, t) };
-      ignore(send(clos, s));
-      ignore(request(syncAP))
+      close(send(clos, s));
+      close(request(syncAP))
     });
     var t = request(ap);
-    ignore(accept(syncAP));
+    close(accept(syncAP));
     cancel(s);
-    var (res, _) = receive(t);
+    var (res, t) = receive(t);
+    close(t);
     res
   } as (x) in {
     "success: " ^^ intToString(x)
