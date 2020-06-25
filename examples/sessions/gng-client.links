@@ -1,14 +1,16 @@
 fun main() client {
   fun giver(x,y,a) {
-    (receive(send(y,send(x,request(a))))).1
+    var (res, a) = receive(send(y,send(x,request(a))));
+    close(a);
+    res
   }
 
   fun grabber(a) {
     var s = accept(a);
     var (x,s) = receive(s);
     var (y,s) = receive(s);
-    var _ = send(x+y,s);
-    ()
+    var s = send(x+y,s);
+    close(s)
   }
 
   var a = new();

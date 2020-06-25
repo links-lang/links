@@ -48,7 +48,7 @@ let ps1 = "links> "
 
 (** Print a value (including its type if `printing_types' is [true]). *)
 let print_value rtype value =
-  if Settings.get BS.web_mode || not (Settings.get print_pretty)
+  if Settings.get Webserver_types.webs_running || not (Settings.get print_pretty)
   then begin
       print_string (Value.string_of_value value);
       print_endline (if Settings.get printing_types then
@@ -228,7 +228,7 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
                      try begin
                          let t' = Env.String.find id tenv in
                          let ttype = Types.string_of_datatype t' in
-                         let fresh_envs = Types.make_fresh_envs t' in
+                         let fresh_envs = Types.make_fresh_envs t' |> Types.combine_per_kind_envs in
                          let t' = Instantiate.datatype fresh_envs t' in
                          Unify.datatypes (t,t');
                          Printf.fprintf stderr " %s : %s\n" id ttype

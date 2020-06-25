@@ -162,7 +162,7 @@ struct
 
 
   let get_or_make_client_id cgi_args =
-    if (Webif.is_ajax_call cgi_args) then
+    if (RequestData.is_ajax_call cgi_args) then
       get_client_id_or_die cgi_args
     else
       ClientID.create ()
@@ -352,7 +352,6 @@ struct
     Debug.print ("Starting server?\n");
     Lwt.async_exception_hook :=
       (fun exn -> Debug.print ("Caught asynchronous exception: " ^ (Printexc.to_string exn)));
-    Settings.set Basicsettings.web_mode true;
     Settings.set webs_running true;
     start_server (val_of (Settings.get hostname)) (val_of (Settings.get port)) rt
 end

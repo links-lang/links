@@ -3,12 +3,14 @@ fun go() {
   try {
     var s = fork(fun(s) {
       var t = request(ap);
-      ignore(receive(s));
-      ignore(send(5, t))
+      var (_, s) = receive(s);
+      close(s);
+      close(send(5, t))
     });
     cancel(s);
     var t = accept(ap);
-    var (x, _) = receive(t);
+    var (x, t) = receive(t);
+    close(t);
     x
   } as (x) in {
     intToString(x)

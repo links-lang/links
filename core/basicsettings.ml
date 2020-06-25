@@ -1,12 +1,3 @@
-(** [true] if we're in web mode *)
-let web_mode =
-  Settings.(flag "web_mode"
-            |> synopsis "Start Links in web mode"
-            |> privilege `System
-            |> convert parse_bool
-            |> CLI.(add (short 'w' <&> long "web-mode"))
-            |> sync)
-
 (** [true] if we're in interactive mode *)
 let interactive_mode =
   Settings.(flag "interactive_mode"
@@ -26,7 +17,14 @@ let version = Settings.(option ~default:(Some version) ~readonly:true "version"
                         |> CLI.(add (fun arg -> short 'v' (long "version" arg)))
                         |> sync)
 
-(* Handlers stuff *)
+module Types = struct
+  let show_recursion
+    = Settings.(flag "show_recursion"
+                |> depends Debug.enabled
+                |> convert parse_bool
+                |> sync)
+end
+
 module Handlers = struct
   let enabled
     = Settings.(flag "enable_handlers"

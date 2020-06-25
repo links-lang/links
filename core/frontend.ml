@@ -147,7 +147,7 @@ module Untyped = struct
       Array.fold_left apply TU.(return context' program) transformers
     in
     { context = state; program;
-      datatype = `Not_typed (* Slight abuse! *) }
+      datatype = Types.Not_typed (* Slight abuse! *) }
 
   let run_sentence : Context.t ->
                      Sugartypes.sentence ->
@@ -204,7 +204,6 @@ module Typeability_preserving = struct
            Basicsettings.Sessions.exceptions_enabled
            (module DesugarSessionExceptions)
        ; (module DesugarProcesses)
-       ; (module WrapTableIterators)
        ; (module DesugarFors)
        ; (module DesugarRegexes)
        ; (module DesugarFormlets)

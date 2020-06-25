@@ -481,6 +481,7 @@ fun isInt (x) { x =~ /-?[0-9]+$/ }
 sig isFloat : (String) -> Bool
 fun isFloat (x) { x =~ /-?[0-9]+(\.[0-9]+)?$/ }
 
+sig asList : (TableHandle((|a::Base),(|_::Base),(|_::Base))) {}-> [(|a::Base)]
 fun asList(t) server {
   for (x <-- t) [x]
 }
@@ -1208,10 +1209,11 @@ fun connect(f, g) {
   var done = new();
   var _ = spawn {
     f(accept(ap));
-    ignore(send((), accept(done)))
+    close(send((), accept(done)))
   };
   var result = g(request(ap));
-  ignore(receive(request(done)));
+  var (_, s) = receive(request(done));
+  close(s);
   result
 }
 
