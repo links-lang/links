@@ -1673,7 +1673,7 @@ let char_type     = Primitive Primitive.Char
 let bool_type     = Primitive Primitive.Bool
 let int_type      = Primitive Primitive.Int
 let float_type    = Primitive Primitive.Float
-let xml_type      = Alias (("Xml", [], [], true), Application (list, [(PrimaryKind.Type, Primitive Primitive.XmlItem)]))
+let xml_type      = Alias (("Xml", [], [], false), Application (list, [(PrimaryKind.Type, Primitive Primitive.XmlItem)]))
 let database_type = Primitive Primitive.DB
 (* Empty type, used for exceptions *)
 let empty_type    = Variant (make_empty_closed_row ())
