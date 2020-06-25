@@ -1629,7 +1629,6 @@ match pk with
   | Presence -> (Presence, normalise_field_spec rec_names t)
 
 and normalise_field_spec rec_names f = normalise_datatype rec_names f
->>>>>>> master
 
 and normalise_fields rec_names =
   FieldEnv.map (normalise_field_spec rec_names)
@@ -2199,7 +2198,7 @@ struct
          | Not_typed       -> "not typed"
          | Var _ | Recursive _ | Closed ->
             failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
-         | Alias ((s, _, ts, is_dual), _) | RecursiveApplication { r_name = s; r_args = ts; ; r_dual = is_dual; _ } ->
+         | Alias ((s, _, ts, is_dual), _) | RecursiveApplication { r_name = s; r_args = ts; r_dual = is_dual; _ } ->
             let ts =
               match ListUtils.unsnoc_opt ts, context.shared_effect with
               | Some (ts, (PrimaryKind.Row, (Row r as r'))), Some v when maybe_shared_effect t && is_row_var v r ->

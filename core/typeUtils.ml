@@ -364,7 +364,7 @@ let check_type_wellformedness primary_kind t : unit =
     | (Var _ | Recursive _ | Closed) ->
        (* freestanding Var / Recursive / Closed not implemented yet (must be inside Meta) *)
        raise tag_expectation_mismatch
-    | Alias ((_name, qs, ts), d) ->
+    | Alias ((_name, qs, ts, _), d) ->
        List.iter2 (compare_kinds rec_env) qs ts;
        typ rec_env d
     | Application (abs_type, args) ->
