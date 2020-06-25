@@ -362,7 +362,7 @@ sig
   val bind_rec_annotation : griper
   val bind_rec_rec : griper
 
-  val bind_unsafe_fun_annotation : griper
+(*XXX  val bind_unsafe_fun_annotation : griper *)
 
   val bind_exp : griper
 
@@ -2166,7 +2166,7 @@ let check_for_duplicate_names : Position.t -> Pattern.with_pos list -> string li
     else
       List.map fst (StringMap.bindings binderss)
 
-let map_effects fn =
+(* XXX let map_effects fn =
   let transform = object(o)
     inherit Types.Transform.visitor as super
 
@@ -2181,7 +2181,7 @@ let map_effects fn =
   end
   in
   transform#typ ->- fst
-
+*)
 (** Adds the wild effect to the right-most arrow on a type. *)
 (* XXX let make_unsafe_signature =
   let open Types in
@@ -2565,7 +2565,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
 
     let check_recursive_usage e v context =
       (* register wildness if this is a recursive variable instance *)
-      Debug.print ("check_recursive_usage: " ^ v ^ " " ^ (if StringSet.mem v context.rec_vars then "true" else "false"));
+(* XXX      Debug.print ("check_recursive_usage: " ^ v ^ " " ^ (if StringSet.mem v context.rec_vars then "true" else "false")); *)
       if StringSet.mem v context.rec_vars then
         begin
           let wild_open = Types.make_singleton_open_row ("wild", Types.Present Types.unit_type) default_effect_subkind in
@@ -4166,8 +4166,8 @@ and type_binding : context -> binding -> binding * context * Usage.t =
     let no_pos t = (_UNKNOWN_POS_, t) in
     let type_check = type_check in
     let unify pos (l, r) = unify_or_raise ~pos (l, r) in
-    let unify_nopos ~handle (l, r) = unify_or_raise ~pos ~handle (no_pos l, no_pos r)
-    and typ (_,t,_) = t
+(* XXX   let unify_nopos ~handle (l, r) = unify_or_raise ~pos ~handle (no_pos l, no_pos r) *)
+    let typ (_,t,_) = t
     and erase (e, _, _) = e
     and usages (_,_,u) = u
     and erase_pat (e, _, _) = e
@@ -4444,7 +4444,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
 
                  (* We make the patterns monomorphic after unifying with the signature. *)
                  make_mono pats;
-                 Debug.print (Format.sprintf "unsafe: %s %s" name (if unsafe then "true" else "false")); (* XXX *)
+(* XXX                 Debug.print (Format.sprintf "unsafe: %s %s" name (if unsafe then "true" else "false"));  *)
                  let inner_rec_vars =
                    if unsafe
                    then inner_rec_vars
@@ -4461,7 +4461,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
           *)
           let (defs, used) =
             let body_env = Env.extend context.var_env inner_env in
-            StringSet.pp Format.err_formatter inner_rec_vars; (* XXX *)
+(* XXX             StringSet.pp Format.err_formatter inner_rec_vars; *)
             let context = {context with rec_vars = StringSet.union context.rec_vars inner_rec_vars} in
             (* let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in *)
             List.split

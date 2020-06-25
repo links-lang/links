@@ -39,7 +39,8 @@ stdout : 42 : Int
 
 Unsafe type annotations on non-recursive functions
 unsafe sig f : (String) -> () fun f(x) { print(x) } f
-stdout : fun : (String) -> ()
+stderr : @.+
+exit : 1
 
 Unsafe type annotations on recursive functions
 unsafe sig f : (String) -> () fun f(x) { f(x) } f
