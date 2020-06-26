@@ -84,7 +84,7 @@ and typ =
   | Not_typed
   | Var of (tid * Kind.t * Freedom.t)
   | Recursive of (tid * Kind.t * typ)
-  | Alias of ((string * Kind.t list * type_arg list) * typ)
+  | Alias of ((string * Kind.t list * type_arg list * bool) * typ)
   | Application of (Abstype.t * type_arg list)
   | RecursiveApplication of rec_appl
   | Meta of typ point
