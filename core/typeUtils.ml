@@ -38,7 +38,7 @@ let concrete_type t =
                       | _ -> ForAll (qs, t)
                   end
           end
-      | Dual s -> dual_type s
+      | Dual s -> dual_type (ct rec_names s)
       | RecursiveApplication ({ r_unique_name; r_dual; r_args; r_unwind ; _ } as appl) ->
           if (RecIdSet.mem (NominalId r_unique_name) rec_names) then
             RecursiveApplication appl
@@ -110,7 +110,7 @@ let rec select_type name t = match concrete_type t with
   | Select row ->
     let t, _ = split_row name row in t
   | t ->
-    error ("Attempt to select from non-selection type "^string_of_datatype (concrete_type t))
+    error ("Attempt to select from non-selection type "^string_of_datatype t)
 
 let rec split_choice_type name t = match concrete_type t with
   | ForAll (_, t) -> split_choice_type name t
@@ -364,7 +364,7 @@ let check_type_wellformedness primary_kind t : unit =
     | (Var _ | Recursive _ | Closed) ->
        (* freestanding Var / Recursive / Closed not implemented yet (must be inside Meta) *)
        raise tag_expectation_mismatch
-    | Alias ((_name, qs, ts), d) ->
+    | Alias ((_name, qs, ts, _), d) ->
        List.iter2 (compare_kinds rec_env) qs ts;
        typ rec_env d
     | Application (abs_type, args) ->

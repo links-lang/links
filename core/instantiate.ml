@@ -86,8 +86,8 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
              List.fold_left remove_shadowed_quantifier inst_map qs
            in
             ForAll (qs, inst_typ updated_inst_map rec_env t)
-        | Alias ((name, qs, ts), d) ->
-            Alias ((name, qs, List.map instta ts), inst d)
+        | Alias ((name, qs, ts, is_dual), d) ->
+            Alias ((name, qs, List.map instta ts, is_dual), inst d)
         | Application (n, elem_type) ->
             Application (n, List.map instta elem_type)
         | RecursiveApplication app ->
@@ -448,4 +448,4 @@ let alias name tyargs env : Types.typ =
            definition with the type arguments *and* instantiate any
            top-level quantifiers *)
         let (_, body) = typ (instantiate_datatype inst_map body) in
-          Alias ((name, List.map snd vars, tyargs), body)
+          Alias ((name, List.map snd vars, tyargs, false), body)

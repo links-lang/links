@@ -14,7 +14,7 @@ let to_links_map m =
 let lookup_alias context ~alias =
   match Env.String.find_opt alias context with
   | Some (`Alias (_, body)) ->
-      let tycon = (alias, [], []) in
+      let tycon = (alias, [], [], false) in
       T.Alias (tycon, body)
   | _ -> Errors.MissingBuiltinType alias |> raise
 

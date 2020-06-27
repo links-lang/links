@@ -126,7 +126,7 @@ and typ =
   | Not_typed
   | Var of (tid * Kind.t * Freedom.t)
   | Recursive of (tid * Kind.t * typ)
-  | Alias of ((string * Kind.t list * type_arg list) * typ)
+  | Alias of ((string * Kind.t list * type_arg list * bool) * typ)
   | Application of (Abstype.t * type_arg list)
   | RecursiveApplication of rec_appl
   | Meta of typ point
@@ -332,10 +332,10 @@ struct
          (Not_typed, o)
       | (Var _ | Recursive _ | Closed) ->
          failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
-      | Alias ((name, params, args), t) ->
+      | Alias ((name, params, args, is_dual), t) ->
          let (args', o) = o#type_args args in
          let (t', o) = o#typ t in
-         (Alias ((name, params, args'), t'), o)
+         (Alias ((name, params, args', is_dual), t'), o)
       | Application (con, args) ->
          let (args', o) = o#type_args args in
          (Application (con, args'), o)
@@ -1163,7 +1163,7 @@ let free_type_vars, free_row_type_vars, free_tyarg_vars =
        S.union_all
          [free_type_vars' rec_vars r; free_type_vars' rec_vars w; free_type_vars' rec_vars n]
     | Lens _          -> S.empty
-    | Alias ((_, _, ts), datatype) ->
+    | Alias ((_, _, ts, _), datatype) ->
        S.union (S.union_all (List.map (free_tyarg_vars' rec_vars) ts)) (free_type_vars' rec_vars datatype)
     | Application (_, tyargs) -> S.union_all (List.map (free_tyarg_vars' rec_vars) tyargs)
     | RecursiveApplication { r_args; _ } ->
@@ -1324,13 +1324,7 @@ let rec dual_type : var_map -> datatype -> datatype =
   | RecursiveApplication appl ->
      RecursiveApplication { appl with r_dual = (not appl.r_dual) }
   | End -> End
-  (* it sometimes seems tempting to preserve aliases here, but it
-         won't always work - e.g. when we use dual_type to expose a
-         concrete type *)
-  (* | `Alias _ as t         -> `Dual t *)
-  (* Still, we might hope to find a way of preserving 'dual
-         aliases' in order to simplify the pretty-printing of types... *)
-  | Alias (_, t) -> dt t
+  | Alias ((f,ks,args,isdual),t)         -> Alias ((f,ks,args,not(isdual)),dt t)
   | t -> raise (Invalid_argument ("Attempt to dualise non-session type: " ^ show_datatype t))
 and dual_row : var_map -> row -> row =
   fun rec_points row ->
@@ -1568,8 +1562,8 @@ and normalise_datatype rec_names t =
   | Table (r, w, n)         ->
      Table (nt r, nt w, nt n)
   | Lens sort               -> Lens sort
-  | Alias ((name, qs, ts), datatype) ->
-     Alias ((name, qs, ts), nt datatype)
+  | Alias ((name, qs, ts, is_dual), datatype) ->
+     Alias ((name, qs, ts, is_dual), nt datatype)
   | Application (abs, tyargs) ->
      Application (abs, List.map (normalise_type_arg rec_names) tyargs)
   | RecursiveApplication app ->
@@ -1679,7 +1673,7 @@ let char_type     = Primitive Primitive.Char
 let bool_type     = Primitive Primitive.Bool
 let int_type      = Primitive Primitive.Int
 let float_type    = Primitive Primitive.Float
-let xml_type      = Alias (("Xml", [], []), Application (list, [(PrimaryKind.Type, Primitive Primitive.XmlItem)]))
+let xml_type      = Alias (("Xml", [], [], false), Application (list, [(PrimaryKind.Type, Primitive Primitive.XmlItem)]))
 let database_type = Primitive Primitive.DB
 (* Empty type, used for exceptions *)
 let empty_type    = Variant (make_empty_closed_row ())
@@ -1759,7 +1753,7 @@ struct
     | Not_typed -> []
     | Var _ | Recursive _ | Closed ->
        failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
-    | Alias ((_, _, ts), _) ->
+    | Alias ((_, _, ts, _), _) ->
        concat_map (free_bound_tyarg_vars bound_vars) ts
     | Application (_, tyargs) ->
        List.concat (List.map (free_bound_tyarg_vars bound_vars) tyargs)
@@ -1974,7 +1968,7 @@ struct
   (** If this type may contain a shared effect. *)
   let maybe_shared_effect = function
     | Function _ | Lolli _ -> true
-    | Alias ((_, qs, _), _) | RecursiveApplication { r_quantifiers = qs; _ } ->
+    | Alias ((_, qs, _, _), _) | RecursiveApplication { r_quantifiers = qs; _ } ->
        begin match ListUtils.last_opt qs with
        | Some (PrimaryKind.Row, (_, Restriction.Effect)) -> true
        | _ -> false
@@ -1998,7 +1992,7 @@ struct
       match t with
       | Function (_, _, r) | Lolli (_, _, r) when maybe_shared_effect r -> find_shared_var r
       | Function (_, e, _) | Lolli (_, e, _) -> find_row_var e
-      | Alias ((_, _, ts), _) | RecursiveApplication { r_args = ts; _ } when maybe_shared_effect t ->
+      | Alias ((_, _, ts, _), _) | RecursiveApplication { r_args = ts; _ } when maybe_shared_effect t ->
          begin match ListUtils.last ts with
          | (PrimaryKind.Row, (Row _ as r)) -> find_row_var r
          | _ -> None
@@ -2204,7 +2198,7 @@ struct
          | Not_typed       -> "not typed"
          | Var _ | Recursive _ | Closed ->
             failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
-         | Alias ((s, _, ts), _) | RecursiveApplication { r_name = s; r_args = ts; _ } ->
+         | Alias ((s, _, ts, is_dual), _) | RecursiveApplication { r_name = s; r_args = ts; r_dual = is_dual; _ } ->
             let ts =
               match ListUtils.unsnoc_opt ts, context.shared_effect with
               | Some (ts, (PrimaryKind.Row, (Row r as r'))), Some v when maybe_shared_effect t && is_row_var v r ->
@@ -2224,7 +2218,8 @@ struct
             begin match ts with
             | [] -> Module_hacks.Name.prettify s
             | _ ->
-               Printf.sprintf "%s (%s)"
+               Printf.sprintf "%s%s (%s)"
+                 (if is_dual then "~" else "")
                  (Module_hacks.Name.prettify s)
                  (String.concat "," ts)
             end
@@ -2585,7 +2580,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
     | Effect row | Record row | Variant row -> make_env boundvars row
     | Table (r, w, n)         -> union [make_env boundvars r; make_env boundvars w; make_env boundvars n]
     | Lens _                  -> empties
-    | Alias ((_, _, ts), d)   -> union (List.map (make_env_ta boundvars) ts @ [make_env boundvars d])
+    | Alias ((_, _, ts, _), d) -> union (List.map (make_env_ta boundvars) ts @ [make_env boundvars d])
     | Application (_, ds)     -> union (List.map (make_env_ta boundvars) ds)
     | RecursiveApplication { r_args ; _ } -> union (List.map (make_env_ta boundvars) r_args)
     | ForAll (qs, t)          ->
@@ -2716,7 +2711,8 @@ let is_sub_type, is_sub_row =
               | Recursive _ -> false
               | t' -> is_sub_type rec_vars (t, t')
           end
-      | Alias ((name, [], []), _), Alias ((name', [], []), _) when name=name' -> true
+      | Alias ((name, [], [], is_dual), _), Alias ((name', [], [], is_dual'), _)
+        when name=name' && is_dual=is_dual' -> true
       | (Alias (_, t)), t'
       | t, (Alias (_, t')) -> is_sub_type rec_vars (t, t')
       | ForAll _, ForAll _ ->
@@ -2839,7 +2835,7 @@ let make_record_type ts = Record (make_closed_row ts)
 let make_variant_type ts = Variant (make_closed_row ts)
 
 let make_table_type (r, w, n) = Table (r, w, n)
-let make_endbang_type : datatype = Alias (("EndBang", [], []), Output (unit_type, End))
+let make_endbang_type : datatype = Alias (("EndBang", [], [], false), Output (unit_type, End))
 
 let make_function_type : ?linear:bool -> datatype list -> row -> datatype -> datatype
   = fun ?(linear=false) args effs range ->
