@@ -184,14 +184,12 @@ sig
   val wrong : datatype -> tail_computation sem
 
   val letfun :
-    env ->
-    (var_info * (Quantifier.t list * (CompilePatterns.Pattern.t list * tail_computation sem)) * location * bool) ->
+    (var_info * (Quantifier.t list * (env * CompilePatterns.Pattern.t list * tail_computation sem)) * location * bool) ->
     (var -> tail_computation sem) ->
     tail_computation sem
 
   val letrec :
-    env ->
-    (var_info * (Quantifier.t list * (CompilePatterns.Pattern.t list * (var list -> tail_computation sem))) * location * bool) list ->
+    (var_info * (Quantifier.t list * (env * CompilePatterns.Pattern.t list * (var list -> tail_computation sem))) * location * bool) list ->
     (var list -> tail_computation sem) ->
     tail_computation sem
 
@@ -650,7 +648,7 @@ struct
                                               body_type) in
       M.bind (fun_binding (f_info, ([], [kb], body), loc_unknown, false)) rest
 
-  let letfun env ((ft, _, _) as f_info, (tyvars, (ps, body)), location, unsafe) rest =
+  let letfun ((ft, _, _) as f_info, (tyvars, (body_env, ps, body)), location, unsafe) rest =
     let xsb : binder list =
       (* It is important to rename the quantifiers in the type to be
          those used in the body of the function. *)
@@ -670,17 +668,17 @@ struct
         (fun body p (xb : binder) ->
            let x  = Var.var_of_binder  xb in
            let xt = Var.type_of_binder xb in
-             CompilePatterns.let_pattern env p (Variable x, xt) (body, body_type))
+             CompilePatterns.let_pattern body_env p (Variable x, xt) (body, body_type))
         (reify body)
         ps
         xsb
     in
       M.bind (fun_binding (f_info, (tyvars, xsb, body), location, unsafe)) rest
 
-  let letrec env defs rest =
+  let letrec defs rest =
     let defs =
       List.map
-        (fun ((ft, _, _) as f_info, (tyvars, (ps, body)), location, unsafe) ->
+        (fun ((ft, _, _) as f_info, (tyvars, (body_env, ps, body)), location, unsafe) ->
            let xsb : binder list =
              (* It is important to rename the quantifiers in the type to be those used in
                 the body of the function. *)
@@ -700,7 +698,7 @@ struct
                  (fun body p xb ->
                     let x  = Var.var_of_binder  xb in
                     let xt = Var.type_of_binder xb in
-                      CompilePatterns.let_pattern env p (Variable x, xt) (body, body_type))
+                      CompilePatterns.let_pattern body_env p (Variable x, xt) (body, body_type))
                  (reify body)
                  ps
                  xsb
@@ -1159,8 +1157,7 @@ struct
                     let body = eval body_env body in
                     let qs = List.map SugarQuantifier.get_resolved_exn tyvars in
                       I.letfun
-                        env
-                        ((ft, f, scope), (qs, (ps, body)), location, unsafe)
+                        ((ft, f, scope), (qs, (body_env, ps, body)), location, unsafe)
                         (fun v -> eval_bindings scope (extend [f] [(v, ft)] env) bs e)
                 | Exp e' ->
                     I.comp env (CompilePatterns.Pattern.Any, ev e', eval_bindings scope env bs e)
@@ -1197,10 +1194,10 @@ struct
                                ps
                                ([], env) in
                            let body = fun vs -> eval (extend fs (List.combine vs inner_fts) body_env) body in
-                             ((ft, f, scope), (qs, (ps, body)), location, unsafe))
+                             ((ft, f, scope), (qs, (body_env, ps, body)), location, unsafe))
                         (nodes_of_list defs)
                     in
-                      I.letrec env defs (fun vs -> eval_bindings scope (extend fs (List.combine vs outer_fts) env) bs e)
+                    I.letrec defs (fun vs -> eval_bindings scope (extend fs (List.combine vs outer_fts) env) bs e)
                 | Foreign alien ->
                    let binder =
                      fst (Alien.declaration alien)

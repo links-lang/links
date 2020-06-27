@@ -77,3 +77,7 @@ stdout : () : ()
 isInt (#575)
 sig isInt : (String) -> Bool fun isInt (x) { x =~ /-?[0-9]+$/ }
 stdout : () : ()
+
+function pattern matching has right effects (#691)
+sig f : ([a]) {}-> a fun f ([x]) { x }
+stdout : () : ()
