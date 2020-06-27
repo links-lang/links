@@ -1284,7 +1284,7 @@ struct
                                 tyvars
                                 actual_parameter_types
                                 body
-                                (not unsafe) (* Treat recursive bindings with nusafe sig as nonrecursive *)
+                                (not unsafe) (* Treat recursive bindings with unsafe sig as nonrecursive *)
                                 (SBind binding) in
                   let o = o#add_function_closure_binder (Var.var_of_binder f) (tyvars, z) in
                   (* Debug.print ("added " ^ string_of_int (Var.var_of_binder f) ^ " to closure env"); *)
