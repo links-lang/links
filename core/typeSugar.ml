@@ -4860,6 +4860,7 @@ module Check =
 struct
   let program tyenv (bindings, body) =
     try
+      Debug.if_set Basicsettings.show_stages (fun () -> "Type checking...");
       Debug.if_set show_pre_sugar_typing
         (fun () ->
            "before type checking: \n"^ show_program (bindings, body));
@@ -4882,6 +4883,7 @@ struct
         Unify.Failure (`Msg msg) -> failwith msg
 
   let sentence tyenv sentence =
+    Debug.if_set Basicsettings.show_stages (fun () -> "Type checking...");
     Debug.if_set show_pre_sugar_typing
       (fun () ->
          "before type checking: \n"^ show_sentence sentence);

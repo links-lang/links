@@ -1271,16 +1271,16 @@ struct
 
 
   let compile env (bindings, body) =
-    Debug.print ("compiling to IR");
+    Debug.if_set Basicsettings.show_stages (fun () -> "Compiling to IR...");
     let body =
       match body with
-        | None -> WithPos.dummy (Sugartypes.RecordLit ([], None))
-        | Some body -> body in
-      let s = eval_bindings Scope.Global env bindings body in
-        let r = (I.reify s) in
-          Debug.print ("compiled IR");
-          Debug.if_set show_compiled_ir (fun () -> Ir.string_of_program r);
-          r, I.sem_type s
+      | None -> WithPos.dummy (Sugartypes.RecordLit ([], None))
+      | Some body -> body in
+    let s = eval_bindings Scope.Global env bindings body in
+    let r = (I.reify s) in
+    Debug.if_set Basicsettings.show_stages (fun () -> "...compiled IR");
+    Debug.if_set show_compiled_ir (fun () -> Ir.string_of_program r);
+    r, I.sem_type s
 end
 
 module C = Eval(Interpretation(BindingListMonad))
