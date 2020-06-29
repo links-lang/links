@@ -362,8 +362,6 @@ sig
   val bind_rec_annotation : griper
   val bind_rec_rec : griper
 
-(*XXX  val bind_unsafe_fun_annotation : griper *)
-
   val bind_exp : griper
 
   val list_pattern : griper
@@ -2444,6 +2442,28 @@ let resolve_type_annotation : Binder.with_pos -> Sugartypes.datatype' option -> 
       | Some (_, t) -> t
     end
   | t -> Some t
+
+(* NOTE: Unsafe signatures hack
+
+   The syntax "unsafe sig f : ty" asserts that f has type t, *provided* that recursive
+   calls to f are not treated as wild.  This is used to allow recursive definitions for
+   specific operations such as map, concatMap, filter, sortByBase which previously required
+   an even more awkward workaround.  "unsafe" should not be used outside of the prelude since it would
+   enable constructing queries that typecheck but cannot be translated to SQL and
+   perhaps we should check for this.
+
+   The initial implementation of "unsafe" ran type inference as normal, and then performed
+   surgery on the type.  Unfortunately this meant that other occurrences of the wild effect
+   arising because of the recursive occurrence were left as is, and doing more surgery to fix
+   these up seemed nontrivial.  See #691 and #864.
+
+   The unsafe flag is currently propagated to the IR and has the same meaning there -
+   calls involving function names are given the wild effect only if they are recursive
+   and not declared with the unsafe flag.  It is desirable to move to a design where "unsafe"
+   is not needed in the IR (because the staging distinction between queries and normal code
+   has already been made explicit) or at all (because query syntax is desugared to an interface
+   with sufficiently effect-polymorphic operations).
+ *)
 
 let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
   fun context {node=expr; pos} ->
