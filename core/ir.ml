@@ -57,7 +57,7 @@ and tail_computation =
 
   | Case       of value * (binder * computation) name_map * (binder * computation) option
   | If         of value * computation * computation
-and fun_def = binder * (tyvar list * binder list * computation) * binder option * location
+and fun_def = binder * (tyvar list * binder list * computation) * binder option * location * bool
 and binding =
   | Let        of binder * (tyvar list * tail_computation)
   | Fun        of fun_def
@@ -103,13 +103,13 @@ and lens_predicate = Static of Lens.Phrase.t | Dynamic of value
 let binding_scope : binding -> scope =
   function
   | Let (b, _)
-  | Fun (b, _, _, _)
-  | Rec ((b, _, _, _)::_)
+  | Fun (b, _, _, _, _)
+  | Rec ((b, _, _, _, _)::_)
   | Alien { binder = b; _ } -> Var.scope_of_binder b
   | Rec []
   | Module _ -> assert false
 
-let binder_of_fun_def (fb, _, _, _) = fb
+let binder_of_fun_def (fb, _, _, _,_) = fb
 
 let tapp (v, tyargs) =
   match tyargs with

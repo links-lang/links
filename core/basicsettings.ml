@@ -17,31 +17,36 @@ let version = Settings.(option ~default:(Some version) ~readonly:true "version"
                         |> CLI.(add (fun arg -> short 'v' (long "version" arg)))
                         |> sync)
 
+let show_stages =
+  Settings.(flag "show_stages"
+            |> convert parse_bool
+            |> sync)
+
 module Types = struct
-  let show_recursion
-    = Settings.(flag "show_recursion"
-                |> depends Debug.enabled
-                |> convert parse_bool
-                |> sync)
+  let show_recursion =
+    Settings.(flag "show_recursion"
+              |> depends Debug.enabled
+              |> convert parse_bool
+              |> sync)
 end
 
 module Handlers = struct
-  let enabled
-    = Settings.(flag "enable_handlers"
-                |> privilege `System
-                |> synopsis "Enables the effect handlers extension"
-                |> convert parse_bool
-                |> CLI.(add (long "enable-handlers"))
-                |> sync)
+  let enabled =
+    Settings.(flag "enable_handlers"
+              |> privilege `System
+              |> synopsis "Enables the effect handlers extension"
+              |> convert parse_bool
+              |> CLI.(add (long "enable-handlers"))
+              |> sync)
 end
 
 module Sessions = struct
-  let exceptions_enabled
-    = Settings.(flag "session_exceptions"
-                |> synopsis "Enables the session exceptions extension"
-                |> depends Handlers.enabled
-                |> privilege `System
-                |> convert parse_bool
-                |> CLI.(add (long "session-exceptions"))
-                |> sync)
+  let exceptions_enabled =
+    Settings.(flag "session_exceptions"
+              |> synopsis "Enables the session exceptions extension"
+              |> depends Handlers.enabled
+              |> privilege `System
+              |> convert parse_bool
+              |> CLI.(add (long "session-exceptions"))
+              |> sync)
 end

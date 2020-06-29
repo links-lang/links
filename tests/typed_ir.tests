@@ -50,14 +50,14 @@ stdout : () : ()
 Unsafe type signatures #1 (#691)
 tests/typed_ir/T691a.links
 filemode : true
-exit : 1
-stderr : @..*
+exit : 0
+stdout : () : ()
 
 Unsafe type signatures #2 (#691)
 tests/typed_ir/T691b.links
 filemode : true
-exit : 1
-stderr : @..*
+exit : 0
+stdout : () : ()
 
 Wild effect compatibility #1 (#697)
 tests/typed_ir/T697a.links
@@ -76,4 +76,8 @@ stdout : () : ()
 
 isInt (#575)
 sig isInt : (String) -> Bool fun isInt (x) { x =~ /-?[0-9]+$/ }
+stdout : () : ()
+
+function pattern matching has right effects (#691)
+sig f : ([a]) {}-> a fun f ([x]) { x }
 stdout : () : ()
