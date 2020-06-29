@@ -211,7 +211,7 @@ struct
           let (b, o) = o#super_binding b in
           let o = List.fold_left (fun o q -> o#quantifier_remove q) o quantifiers in
           (b, o)
-        | (Fun (f, (tyvars, xs, body), None, location)) as b
+        | (Fun (f, (tyvars, xs, body), None, location, unsafe)) as b
              when Scope.isLocal (Ir.binding_scope b) ->
           (* reset free and bound variables to be empty *)
           let o = o#reset in
@@ -251,9 +251,9 @@ struct
           let f, o = o#binder f in
           let o = o#register_fun (Var.var_of_binder f) fenv_entry in
           (*Debug.print ("fenv: " ^ show_fenv o#get_fenv);*)
-          Fun (f, (tyvars, xs, body), None, location), o
+          Fun (f, (tyvars, xs, body), None, location, unsafe), o
 
-        | (Fun (_, (tyvars, _, _),_,_)) as b (* global *) ->
+        | (Fun (_, (tyvars, _, _),_,_,_)) as b (* global *) ->
           let o = List.fold_left (fun o q -> o#quantifier q) o tyvars in
           let (b, o) = o#super_binding b in
           let o = List.fold_left (fun o q -> o#quantifier_remove q) o tyvars in
@@ -272,7 +272,7 @@ struct
              in the function type itself) *)
           let _, o =
             List.fold_right
-              (fun (f, _, _, _) (fs, o) ->
+              (fun (f, _, _, _, _) (fs, o) ->
                  let f, o = o#binder f in
                  (f::fs, o))
               defs
@@ -284,7 +284,7 @@ struct
              subsequent ones *)
           let defs, o =
             List.fold_left
-              (fun (defs, (o : 'self)) (f, (tyvars, xs, body), none, location) ->
+              (fun (defs, (o : 'self)) (f, (tyvars, xs, body), none, location, unsafe) ->
                  assert (none = None);
                  let o = List.fold_left (fun o q -> o#quantifier q) o tyvars in
                  let xs, o =
@@ -297,7 +297,7 @@ struct
                  let body, _, o = o#computation body in
                  let o = List.fold_left (fun o q -> o#quantifier_remove q) o tyvars in
 
-                 (f, (tyvars, xs, body), None, location)::defs, o)
+                 (f, (tyvars, xs, body), None, location, unsafe)::defs, o)
               ([], o)
               defs in
 
@@ -308,14 +308,14 @@ struct
           (* ensure functions are in scope for the continuation *)
           let _, o =
             List.fold_right
-              (fun (f, _, _, _) (fs, o) ->
+              (fun (f, _, _, _, _) (fs, o) ->
                  let f, o = o#binder f in
                  (f::fs, o))
               defs
               ([], o) in
 
           let o = List.fold_left
-              (fun o (f, _, _, _) ->
+              (fun o (f, _, _, _, _) ->
                  o#register_fun (Var.var_of_binder f) fenv_entry) o defs in
           let defs = List.rev defs in
           Rec defs, o
@@ -329,7 +329,7 @@ struct
              this global mutually recursive definition. *)
           let _, o =
             List.fold_right
-              (fun (f, _, _, _) (fs, o) ->
+              (fun (f, _, _, _, _) (fs, o) ->
                  let f, o = o#super_binder f in
                  (f::fs, o))
               defs
@@ -337,7 +337,7 @@ struct
 
           let defs, o =
               List.fold_left
-                (fun (defs, (o : 'self_type)) (f, (tyvars, xs, body), none, location) ->
+                (fun (defs, (o : 'self_type)) (f, (tyvars, xs, body), none, location, unsafe) ->
                    assert (none = None);
                    let o = List.fold_left (fun o q -> o#quantifier q) o tyvars in
                    let xs, o =
@@ -349,7 +349,7 @@ struct
                        ([], o) in
                    let body, _, o = o#computation body in
                    let o = List.fold_left (fun o q -> o#quantifier_remove q) o tyvars in
-                   (f, (tyvars, xs, body), None, location)::defs, o)
+                   (f, (tyvars, xs, body), None, location, unsafe)::defs, o)
                 ([], o)
                 defs
           in
@@ -358,7 +358,7 @@ struct
                treat them as globals *)
           let _, o =
             List.fold_right
-              (fun (f, _, _, _) (fs, o) ->
+              (fun (f, _, _, _, _) (fs, o) ->
                  let f, o = o#binder f in
                  (f::fs, o))
               defs
@@ -388,7 +388,7 @@ end
 module Globalise =
 struct
   let binder (x, (t, name, _)) = (x, (t, name, Scope.Global))
-  let fun_def (f, lam, z, location) = (binder f, lam, z, location)
+  let fun_def (f, lam, z, location, unsafe) = (binder f, lam, z, location, unsafe)
   let binding = function
     | Let (x, body) -> Let (binder x, body)
     | Fun def -> Fun (fun_def def)
@@ -479,7 +479,7 @@ struct
           let bs', o = o#pop_hoisted_bindings in
           let bs, o = o#bindings bs in
           bs' @ (b :: bs), o
-        | Fun ((f, _) as fb, (tyvars, xs, body), None, location) :: bs ->
+        | Fun ((f, _) as fb, (tyvars, xs, body), None, location, unsafe) :: bs ->
           assert (Scope.isLocal (Var.scope_of_binder fb));
           let fb = Globalise.binder fb in
           let (xs, o) =
@@ -524,7 +524,7 @@ struct
           let body, _, o = o#computation body in
           let o = o#set_context parents' parent_env' cvars' in
           let fb, o = o#binder (o# generalise_function_type_for_hoisting fb) in
-          let fundef = o#generalise_function_body_for_hoisting (fb, (tyvars, xs, body), zb, location) in
+          let fundef = o#generalise_function_body_for_hoisting (fb, (tyvars, xs, body), zb, location, unsafe) in
           let o = o#push_binding (Fun  fundef) in
           let bs, o = o#bindings bs in
           bs, o
@@ -534,17 +534,17 @@ struct
                function bodies *)
             let fbs, defs, o =
               List.fold_right
-                (fun (f, (tyvars, xs, body), zb, location) (fs, defs,  o) ->
+                (fun (f, (tyvars, xs, body), zb, location, unsafe) (fs, defs,  o) ->
                    (* We have generalise the function's type here, but its body will only be generalised later on *)
                    let f, o = o#binder (o#generalise_function_type_for_hoisting f) in
-                   let def = (f, (tyvars, xs, body), zb, location) in
+                   let def = (f, (tyvars, xs, body), zb, location, unsafe) in
                      (f::fs, def::defs, o))
                 defs
                 ([], [], o) in
 
             let defs, o =
               List.fold_left
-                (fun (defs, (o : 'self)) ((f, _) as fb, (tyvars, xs, body), none, location) ->
+                (fun (defs, (o : 'self)) ((f, _) as fb, (tyvars, xs, body), none, location, unsafe) ->
                    assert (none = None);
                    assert (Scope.isLocal (Var.scope_of_binder fb));
                    let fb = Globalise.binder fb in
@@ -581,7 +581,7 @@ struct
                        Some zb, o#set_context fbs z cvars in
                    let body, _, o = o#computation body in
                    let o = o#set_context parents' parent_env' cvars' in
-                   let fundef = o#generalise_function_body_for_hoisting (fb, (tyvars, xs, body), zb, location) in
+                   let fundef = o#generalise_function_body_for_hoisting (fb, (tyvars, xs, body), zb, location, unsafe) in
                    fundef::defs, o)
                 ([], o)
                 defs in
@@ -648,7 +648,7 @@ struct
 
 
       method generalise_function_body_for_hoisting : Ir.fun_def ->  Ir.fun_def = fun fundef ->
-        let (f, (tyvars, xs, body), z, location) = fundef in
+        let (f, (tyvars, xs, body), z, location, unsafe) = fundef in
         let f_var = Var.var_of_binder f in
         let free_type_vars = (IntMap.find f_var fenv).typevars in
 
@@ -669,9 +669,9 @@ struct
                 let newtype = Instantiate.datatype inner_maps (Var.type_of_binder x) in
                 (Var.update_type newtype x)::xs
               ) xs [] in
-            (* Debug.print ("function currently being hoisted, before instantiation:\n" ^ Ir.string_of_binding (Fun (f, (tyvars, xs, body), z, location))); *)
+            (* Debug.print ("function currently being hoisted, before instantiation:\n" ^ Ir.string_of_binding (Fun (f, (tyvars, xs, body), z, location, unsafe))); *)
             let body = IrTraversals.InstantiateTypes.computation (o#get_type_environment) inner_maps body in
-            (f, (tyvars, xs, body), z, location)
+            (f, (tyvars, xs, body), z, location, unsafe)
           end
 
 

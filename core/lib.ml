@@ -523,6 +523,25 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "([a]) ~> [a]",
   IMPURE);
 
+  (* HACK: tame versions of head and tail for use in pattern matching *)
+  "##hd",
+  (p1 (fun lst ->
+        match (Value.unbox_list lst) with
+          | [] -> runtime_error "hd() of empty list"
+          | x :: _ -> x
+      ),
+   datatype "([a]) -> a",
+  IMPURE);
+
+  "##tl",
+  (p1 (fun lst ->
+         match (Value.unbox_list lst) with
+            | [] -> runtime_error "tl() of empty list"
+            | _x :: xs -> Value.box_list xs
+      ),
+   datatype "([a]) -> [a]",
+  IMPURE);
+
   "length",
   (p1 (Value.unbox_list ->- List.length ->- Value.box_int),
    datatype "([a]) -> Int",

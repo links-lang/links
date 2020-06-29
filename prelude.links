@@ -51,10 +51,17 @@ fun sortBy (f, l) {
   }
 }
 
-# need to be careful to make sure this doesn't get
-# optimised away - it does if we eta reduce it
 unsafe sig sortByBase : ((a) -b-> (| _::Base), [a]) -b-> [a]
-fun sortByBase(f, l) {sortBy(f, l)}
+fun sortByBase(f, l) {
+  switch (l) {
+    case [] -> []
+    case x::xs -> {
+      var lt = filter (fun (y) {f(y) < f(x)}, xs);
+      var ge = filter (fun (y) {f(y) >= f(x)}, xs);
+      sortByBase(f, lt) ++ [x] ++ sortByBase(f, ge)
+    }
+  }
+}
 
 fun all(p, l) {
    switch (l) {
