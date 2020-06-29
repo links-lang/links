@@ -866,8 +866,8 @@ let string_of_pretty pretty_fun arg : string =
   pp_set_max_indent f 990000;
   (* Redefine the meaning of the pretty printing functions. The idea
      is to ignore newlines introduced by pretty printing as well as
-     indentation. 
-     Newlines can arise as a result of space hints so we need to generate 
+     indentation.
+     Newlines can arise as a result of space hints so we need to generate
      at least one space for a newline. *)
   let existing_functions = pp_get_formatter_out_functions f () in
   let out_functions =
@@ -876,7 +876,7 @@ let string_of_pretty pretty_fun arg : string =
       | _ -> out_string " " 0 1
     in
     { existing_functions with
-        out_newline = (fun () -> Debug.print "newline"; one_space 1);  (* to ensure that there is whitespace here even if not \n*)
+        out_newline = (fun () -> one_space 1);
         out_spaces  = one_space;
         out_indent  = one_space }
   in
