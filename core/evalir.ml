@@ -643,7 +643,7 @@ struct
     | LensJoin { left; right; on; del_left; del_right; _ } ->
         let open Lens in
         value env left >|= unpack_lens >>= fun (db1, lens1) ->
-        value env right >|= unpack_lens >>= fun (_db2, lens2) ->
+        value env right >|= unpack_lens >>= fun (db2, lens2) ->
         let left, right=
           if Lens.Sort.join_lens_should_swap
                (Lens.Value.sort lens1)
@@ -657,6 +657,7 @@ struct
             (Lens.Value.sort lens1)
             (Lens.Value.sort lens2) ~on
           |> Lens_errors.unpack_sort_join_result ~die:(eval_error "%s") in
+        if db1 <> db2 then eval_error "Lenses require the same database connection.";
         apply_cont cont env (`Lens (db1, Value.LensJoin {left; right; on; del_left; del_right; sort}))
     | LensCheck (lens, _typ) ->
         value env lens >>= apply_cont cont env
