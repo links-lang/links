@@ -85,13 +85,13 @@ let initlist n fn =
   let rec f i = fn i :: (if i + 1 < n then f (i + 1) else []) in
   f 0
 
-let test_put test_ctx lens res =
+let test_put test_ctx ~db lens res =
   let classic_opt = UnitTestsLensCommon.classic_opt test_ctx in
   let benchmark_opt = UnitTestsLensCommon.benchmark_opt test_ctx in
   let step cb =
-    if classic_opt then Lens.Eval.Classic.lens_put_step lens res cb
+    if classic_opt then Lens.Eval.Classic.lens_put_step ~db lens res cb
     else
-      let data = Lens.Eval.Incremental.lens_get_delta lens res in
+      let data = Lens.Eval.Incremental.lens_get_delta ~db lens res in
       H.print_verbose test_ctx
         ("Delta Size: " ^ string_of_int (Lens.Sorted_records.total_size data));
       let env = Int.Map.empty in
@@ -99,7 +99,7 @@ let test_put test_ctx lens res =
         cb lens data;
         env
       in
-      Lens.Eval.Incremental.lens_put_set_step ~env lens data cb |> ignore
+      Lens.Eval.Incremental.lens_put_set_step ~db ~env lens data cb |> ignore
   in
   let run () =
     step (fun _ res ->
@@ -126,9 +126,9 @@ let test_put test_ctx lens res =
     let behaviour =
       if classic_opt then Lens.Eval.Classic else Lens.Eval.Incremental
     in
-    Lens.Eval.put ~behaviour lens res |> Result.ok_exn;
+    Lens.Eval.put ~behaviour ~db lens res |> Result.ok_exn;
     (* double check results *)
-    let upd = Lens.Value.lens_get lens in
+    let upd = Lens.Value.lens_get ~db lens in
     H.print_verbose test_ctx (Phrase.Value.show_values upd);
     H.print_verbose test_ctx (Phrase.Value.show_values res);
     H.assert_rec_list_eq upd res;
@@ -149,14 +149,14 @@ let test_select_lens_1 n test_ctx =
   let l2 =
     H.select_lens l1 (Phrase.equal (Phrase.var "b") (Phrase.Constant.int 5))
   in
-  let res = Lens.Value.lens_get l2 in
+  let res = Lens.Value.lens_get ~db l2 in
   let _res =
     Query.map_records
       (Query.set "c"
          (Query.ifcol "a" (Query.band (Query.gt 60) (Query.lt 80)) (box_int 5)))
-      (Lens.Value.lens_get l2)
+      (Lens.Value.lens_get ~db l2)
   in
-  test_put test_ctx l2 res;
+  test_put ~db test_ctx l2 res;
   H.drop_if_cleanup test_ctx db "t1"
 
 let test_drop_lens_1 n test_ctx =
@@ -173,9 +173,9 @@ let test_drop_lens_1 n test_ctx =
     Query.map_records
       (Query.set "b"
          (Query.ifcol "a" (Query.band (Query.gt 60) (Query.lt 80)) (box_int 5)))
-      (Lens.Value.lens_get l2)
+      (Lens.Value.lens_get ~db l2)
   in
-  test_put test_ctx l2 res;
+  test_put ~db test_ctx l2 res;
   H.drop_if_cleanup test_ctx db "t1"
 
 let test_select_lens_2 n test_ctx =
@@ -199,9 +199,9 @@ let test_select_lens_2 n test_ctx =
     Query.map_records
       (Query.set "d"
          (Query.ifcol "b" (Query.band (Query.gt 0) (Query.lt 100)) (box_int 5)))
-      (Lens.Value.lens_get l4)
+      (Lens.Value.lens_get ~db l4)
   in
-  test_put test_ctx l4 res;
+  test_put ~db test_ctx l4 res;
   H.drop_if_cleanup test_ctx db "t1";
   H.drop_if_cleanup test_ctx db "t2";
   ()
@@ -223,10 +223,10 @@ let test_select_lens_3 n test_ctx =
   let l4 =
     H.select_lens l3 (Phrase.equal (Phrase.var "c") (Phrase.Constant.int 3))
   in
-  let res = ref (Lens.Value.lens_get l4) in
+  let res = ref (Lens.Value.lens_get ~db l4) in
   let n = ref 0 in
   let changed () =
-    let del = Lens.Eval.Incremental.lens_get_delta l4 !res in
+    let del = Lens.Eval.Incremental.lens_get_delta ~db l4 !res in
     Sorted.total_size del
   in
   while changed () < UnitTestsLensCommon.set_upto_opt test_ctx && !n < upto do
@@ -237,7 +237,7 @@ let test_select_lens_3 n test_ctx =
            (Query.ifcol "b" (Query.band (Query.gt 0) (Query.lt !n)) (box_int 5)))
         !res
   done;
-  test_put test_ctx l4 !res;
+  test_put test_ctx ~db l4 !res;
   H.drop_if_cleanup test_ctx db "t1";
   H.drop_if_cleanup test_ctx db "t2";
   ()
@@ -260,10 +260,10 @@ let test_get_delta test_ctx =
     Query.map_records
       (Query.set "d"
          (Query.ifcol "b" (Query.band (Query.gt 0) (Query.lt 10)) (box_int 5)))
-      (Lens.Value.lens_get l3)
+      (Lens.Value.lens_get ~db l3)
   in
   let run () =
-    let _data = Lens.Eval.Incremental.lens_get_delta l3 res in
+    let _data = Lens.Eval.Incremental.lens_get_delta ~db l3 res in
     ()
   in
   let runs = initlist 20 (fun _i -> H.time_op run) in
@@ -288,7 +288,7 @@ let test_put_delta test_ctx =
       [ `Seq; `RandTo (n / 10); `RandTo 100 ]
       n
   in
-  let res = Lens.Value.lens_get l1 in
+  let res = Lens.Value.lens_get ~db l1 in
   (* updates count twice, deletes once, inserts once *)
   let upto = upto / 4 in
   (* remove first columns *)
@@ -320,24 +320,20 @@ let test_put_delta test_ctx =
     if classic_opt then
       let cols = Lens.Value.cols_present_aliases l1 in
       let data = Sorted.construct_cols ~columns:cols ~records:res in
-      let run () =
-        Lens.Eval.Classic.apply_table_data ~table ~database:db data
-      in
+      let run () = Lens.Eval.Classic.apply_table_data ~table ~db data in
       (run, fun () -> ())
     else
-      let delta = Lens.Eval.Incremental.lens_get_delta l1 res in
+      let delta = Lens.Eval.Incremental.lens_get_delta ~db l1 res in
       let neg = Lens.Sorted_records.negate delta in
       H.print_verbose test_ctx
         ("Delta Size: " ^ string_of_int (Sorted.total_size delta));
       let sort = Lens.Value.sort l1 in
       let env = Int.Map.empty in
       let run () =
-        Lens.Eval.Incremental.apply_delta ~table ~database:db ~sort ~env delta
-        |> ignore
+        Lens.Eval.Incremental.apply_delta ~db ~table ~sort ~env delta |> ignore
       in
       let revert () =
-        Lens.Eval.Incremental.apply_delta ~table ~database:db ~sort ~env neg
-        |> ignore
+        Lens.Eval.Incremental.apply_delta ~db ~table ~sort ~env neg |> ignore
       in
       (run, revert)
   in
@@ -374,9 +370,9 @@ let test_join_lens_1 n test_ctx =
     Query.map_records
       (Query.set "c"
          (Query.ifcol "b" (Query.band (Query.gt 40) (Query.lt 50)) (box_int 5)))
-      (Lens.Value.lens_get l3)
+      (Lens.Value.lens_get ~db l3)
   in
-  test_put test_ctx l3 res;
+  test_put test_ctx ~db l3 res;
   H.drop_if_cleanup test_ctx db "t1";
   H.drop_if_cleanup test_ctx db "t2";
   ()
@@ -405,17 +401,18 @@ let test_join_lens_2 n test_ctx =
   in
   let l3 = H.join_lens_dl l1 l2 [ ("b", "b", "b") ] in
   let res =
-    Query.filter (Query.lt 40 << Query.col "b") (Lens.Value.lens_get l3)
+    Query.filter (Query.lt 40 << Query.col "b") (Lens.Value.lens_get ~db l3)
   in
-  H.print_verbose test_ctx (Phrase.Value.show_values (Lens.Value.lens_get l3));
+  H.print_verbose test_ctx
+    (Phrase.Value.show_values (Lens.Value.lens_get ~db l3));
   H.print_verbose test_ctx (Phrase.Value.show_values res);
   let env = Int.Map.empty in
   Lens.Eval.Incremental.lens_put_step l3 res ~env (fun ~env _ res ->
       H.print_verbose test_ctx (Format.asprintf "%a" Sorted.pp_tabular res);
       env)
   |> ignore;
-  Lens.Eval.Incremental.lens_put l3 res;
-  let upd = Lens.Value.lens_get l3 in
+  Lens.Eval.Incremental.lens_put ~db l3 res;
+  let upd = Lens.Value.lens_get ~db l3 in
   H.print_verbose test_ctx (Phrase.Value.show_values upd);
   H.print_verbose test_ctx (Phrase.Value.show_values res);
   H.assert_rec_list_eq upd res;
@@ -436,17 +433,18 @@ let test_join_lens_dr_2 n test_ctx =
   in
   let l3 = H.join_lens_dr l1 l2 [ ("b", "b", "b") ] in
   let res =
-    Query.filter (Query.lt 20 << Query.col "c") (Lens.Value.lens_get l3)
+    Query.filter (Query.lt 20 << Query.col "c") (Lens.Value.lens_get ~db l3)
   in
-  H.print_verbose test_ctx (Phrase.Value.show_values (Lens.Value.lens_get l3));
+  H.print_verbose test_ctx
+    (Phrase.Value.show_values (Lens.Value.lens_get ~db l3));
   H.print_verbose test_ctx (Phrase.Value.show_values res);
   let env = Int.Map.empty in
   Lens.Eval.Incremental.lens_put_step l3 res ~env (fun ~env _ res ->
       H.print_verbose test_ctx (Format.asprintf "%a" Sorted.pp_tabular res);
       env)
   |> ignore;
-  Lens.Eval.Incremental.lens_put l3 res;
-  let upd = Lens.Value.lens_get l3 in
+  Lens.Eval.Incremental.lens_put ~db l3 res;
+  let upd = Lens.Value.lens_get ~db l3 in
   H.print_verbose test_ctx (Phrase.Value.show_values upd);
   H.print_verbose test_ctx (Phrase.Value.show_values res);
   H.assert_rec_list_eq upd res;

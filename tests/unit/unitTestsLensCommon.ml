@@ -36,8 +36,8 @@ let set_upto_opt = Conf.make_int "set_upto" 10 "Override upto."
 module LensTestHelpers = struct
   let get_db test_ctx =
     (* host port dbname user pw *)
-    let conn, _ = get_pg_database_by_string (database_args_opt test_ctx) in
-    Links_core.Lens_database_conv.lens_db_of_db conn
+    let conn, cstr = get_pg_database_by_string (database_args_opt test_ctx) in
+    Links_core.Lens_database_conv.lens_db_of_db cstr conn
 
   (** Only print when **)
   let fmt_std_v test_ctx (fn : Format.formatter -> unit) =
@@ -191,7 +191,7 @@ module LensTestHelpers = struct
     let returning = [] in
     let open Database.Insert in
     let insert =
-      Format.asprintf "%a" fmt { table; db; columns; values; returning }
+      Format.asprintf "%a" (fmt ~db) { table; columns; values; returning }
     in
     let open Database in
     db.execute insert
@@ -233,8 +233,7 @@ module LensTestHelpers = struct
         Links_core.Unionfind.fresh `Closed,
         false )
 
-  let create_lens_db database tablename fd (key : string list)
-      (cols : string list) =
+  let create_lens_db tablename fd (key : string list) (cols : string list) =
     let colFn table name =
       Column.make ~alias:name ~name ~table ~typ:Phrase.Type.Int ~present:true
     in
@@ -243,7 +242,7 @@ module LensTestHelpers = struct
     let fds = Lens.Fun_dep.Set.singleton fd in
     let cols = List.map ~f:(colFn tablename) cols in
     let sort = Lens.Sort.make ~fds cols in
-    let l1 = Value.Lens { database; table; sort } in
+    let l1 = Value.Lens { table; sort } in
     l1
 
   let drop_create_populate_table test_ctx (db : Database.t) table str str2
@@ -259,7 +258,7 @@ module LensTestHelpers = struct
       let _ = insert_rows db table data in
       ()
     else ();
-    let lens = create_lens_db db table fd (Lens.Alias.Set.elements left) cols in
+    let lens = create_lens_db table fd (Lens.Alias.Set.elements left) cols in
     lens
 
   let print_query_time () =
