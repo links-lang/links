@@ -54,10 +54,20 @@ let renaming_type_visitor instantiation_map =
 
     method! typ : datatype -> (datatype * 'self_type) = function
       | ForAll (qs, t) ->
-         let inst_map = shadow_vars inst_map qs in
-         let t', _ = {< inst_map >}#typ t in
-         ForAll (qs, t'), o
+         let qs', _ = List.split (List.map {< inst_map >}#quantifier qs) in
+         let t' , _ = {< inst_map >}#typ t in
+         ForAll (qs', t'), o
       | t -> super#typ t
+
+    method! quantifier : Quantifier.t -> (Quantifier.t * 'self_type) =
+      fun (var, kind) ->
+      begin match IntMap.lookup var inst_map with
+      | Some t -> begin match Unionfind.find (unwrap_meta t) with
+                  | Var (var', _, _) -> (var', kind), o
+                  | _ -> assert false
+                  end
+      | None -> (var, kind), o
+      end
 
     method! meta_type_var : meta_type_var -> (meta_type_var * 'self_type) =
       fun point ->
