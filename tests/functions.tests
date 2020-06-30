@@ -146,3 +146,10 @@ Linearity (9) - linear recursive functions should be disallowed
 linfun f(x) {f(x)} f
 stderr : @.*cannot be linear.*
 exit : 1
+
+Type variable freshening in type signatures (#865)
+./tests/functions/T865.links
+filemode : true
+exit : 0
+args : --config=tests/functions/T865.config
+stdout : () : ()
