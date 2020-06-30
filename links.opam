@@ -36,4 +36,5 @@ depends: [
   "result"
   "ocamlfind"
   "menhir"
+  "ppx_sexp_conv"
 ]
