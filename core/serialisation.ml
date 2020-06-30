@@ -438,7 +438,7 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
       | `Assoc ["_lens", `Assoc assoc] ->
          let cstr = assoc_string "db" assoc in
          let driver, params = parse_db_string cstr in
-         let db,_ = db_connect driver params in
+         let db, _ = db_connect driver params in
          let lens = assoc_string "lens" assoc in
          let lens = Lens.Value.deserialize lens in
          let db = Lens_database_conv.lens_db_of_db cstr db in
