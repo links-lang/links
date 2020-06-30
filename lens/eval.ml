@@ -56,11 +56,11 @@ let satisfies_fds sort records =
   try Fun_dep.Set.iter check_fd fds |> Result.return
   with Error.E e -> Result.error e
 
-let put ?(behaviour = Incremental) lens data =
+let put ?(behaviour = Incremental) ~db lens data =
   let open Result.O in
   let sort = Value.sort lens in
   satisfies_predicate sort data >>= fun () ->
   satisfies_fds sort data >>| fun () ->
   match behaviour with
-  | Incremental -> Eval_incremental.lens_put lens data
-  | Classic -> Eval_classic.lens_put lens data
+  | Incremental -> Eval_incremental.lens_put ~db lens data
+  | Classic -> Eval_classic.lens_put ~db lens data

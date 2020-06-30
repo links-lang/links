@@ -1,6 +1,6 @@
 open Lens_utility
 
-type t = string [@@deriving show, eq]
+type t = string [@@deriving show, eq, sexp]
 
 module Map = struct
   include String.Map
@@ -11,6 +11,12 @@ end
 module Set = struct
   module Base = String.Set
   include Base
+
+  let sexp_of_t v = elements v |> sexp_of_list sexp_of_t
+
+  let t_of_sexp v =
+    let l = list_of_sexp t_of_sexp v in
+    of_list l
 
   let pp_pretty fmt cs =
     Format.fprintf fmt "%a"
@@ -40,7 +46,6 @@ module Set = struct
 
   module Set = struct
     include Set.Make (String.Set)
-
     let is_disjoint s = elements s |> List.is_disjoint
   end
 end

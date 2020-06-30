@@ -7,7 +7,7 @@ type t =
   | Char of char
   | Tuple of t list
   | Record of (string * t) list
-[@@deriving show]
+[@@deriving show, sexp]
 
 module Unbox_error : sig
   exception E of { value : t; expected : string }

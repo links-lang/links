@@ -8,7 +8,7 @@ type t = {
   query : Phrase.t option;
   cols : Column.t list;
 }
-[@@deriving show]
+[@@deriving show, sexp]
 
 let fds t = t.fds
 

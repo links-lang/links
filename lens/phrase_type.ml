@@ -9,7 +9,7 @@ type t =
   | Char
   | Tuple of t list
   | Record of t String.Map.t
-[@@deriving show]
+[@@deriving show, sexp]
 
 let rec pp_pretty f v =
   let const s = Format.pp_constant s f () in

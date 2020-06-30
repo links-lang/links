@@ -3,6 +3,7 @@ open Lens_utility
 module LPV = Phrase_value
 
 type t = {
+  serialize : unit -> string;
   driver_name : unit -> string;
   escape_string : string -> string;
   quote_field : string -> string;
@@ -11,8 +12,11 @@ type t = {
     string -> field_types:(string * Phrase_type.t) list -> Phrase_value.t list;
 }
 
+let show _ = "<db_driver>"
+let pp f v = Format.fprintf f "%s" (show v)
+
 module Table = struct
-  type t = { name : string; keys : string list list }
+  type t = { name : string; keys : string list list } [@@deriving sexp]
 
   let name t = t.name
 end
@@ -27,7 +31,15 @@ let dummy_database =
   let execute_select _ ~field_types:_ =
     failwith "Dummy database exec not supported."
   in
-  { driver_name; escape_string; quote_field; execute; execute_select }
+  let serialize _ = "<dummy driver>" in
+  {
+    serialize;
+    driver_name;
+    escape_string;
+    quote_field;
+    execute;
+    execute_select;
+  }
 
 let fmt_comma_seperated v =
   let pp_sep f () = Format.fprintf f ", " in
@@ -167,14 +179,13 @@ module Select = struct
     tables : (string * string) list;
     cols : Column.t list;
     predicate : Phrase.t option;
-    db : db;
   }
 
   let select t ~predicate =
     let predicate = Phrase.Option.combine_and t.predicate predicate in
     { t with predicate }
 
-  let of_sort t ~sort =
+  let of_sort ~sort =
     let predicate = Sort.query sort in
     let cols = Sort.cols sort in
     let tables =
@@ -182,10 +193,9 @@ module Select = struct
       |> List.sort_uniq String.compare
       |> List.map ~f:(fun c -> (c, c))
     in
-    { predicate; cols; tables; db = t }
+    { predicate; cols; tables }
 
-  let fmt f v =
-    let db = v.db in
+  let fmt ~db f v =
     let map a =
       let col = List.find_exn ~f:(fun c -> Column.alias c = a) v.cols in
       Format.sprintf "%s.%s"
@@ -201,14 +211,14 @@ module Select = struct
         Format.fprintf f "SELECT %a FROM %a WHERE %a" (fmt_cols ~db) cols
           (fmt_tables ~db) v.tables (fmt_phrase ~db ~map) pred
 
-  let execute query ~database ~field_types =
-    let query = Format.asprintf "%a" fmt query in
-    database.execute_select query ~field_types
+  let execute query ~db ~field_types =
+    let query = Format.asprintf "%a" (fmt ~db) query in
+    db.execute_select query ~field_types
 
-  let query_exists query ~database =
-    let sql = Format.asprintf "SELECT EXISTS (%a) AS t" fmt query in
+  let query_exists query ~db =
+    let sql = Format.asprintf "SELECT EXISTS (%a) AS t" (fmt ~db) query in
     let field_types = [ ("t", Phrase_type.Bool) ] in
-    let res = database.execute_select sql ~field_types in
+    let res = db.execute_select sql ~field_types in
     match res with
     | [ Phrase_value.Record [ (_, Phrase_value.Bool b) ] ] -> b
     | _ -> failwith "Expected singleton value."
@@ -217,12 +227,11 @@ end
 module Delete = struct
   type db = t
 
-  type t = { table : string; predicate : Phrase.t option; db : db }
+  type t = { table : string; predicate : Phrase.t option }
 
   let fmt_table ~(db : db) f v = Format.fprintf f "%s" @@ db.quote_field v
 
-  let fmt f v =
-    let db = v.db in
+  let fmt ~db f v =
     let map col = Format.sprintf "%s" (db.quote_field col) in
     match v.predicate with
     | None -> Format.fprintf f "DELETE FROM %a" (fmt_table ~db) v.table
@@ -238,7 +247,6 @@ module Update = struct
     table : string;
     predicate : Phrase.t option;
     set : (string * Phrase_value.t) list;
-    db : db;
   }
 
   let fmt_set_value ~db f (key, value) =
@@ -248,8 +256,7 @@ module Update = struct
 
   let fmt_table ~db f v = Format.fprintf f "%s" @@ db.quote_field v
 
-  let fmt f v =
-    let db = v.db in
+  let fmt ~db f v =
     let map col = Format.sprintf "%s" (db.quote_field col) in
     match v.predicate with
     | None ->
@@ -268,15 +275,13 @@ module Insert = struct
     columns : string list;
     values : Phrase_value.t list list;
     returning : string list;
-    db : db;
   }
 
   let fmt_table ~db f v = Format.fprintf f "%s" @@ db.quote_field v
 
   let fmt_col ~db f v = Format.pp_print_string f (db.quote_field v)
 
-  let fmt f v =
-    let db = v.db in
+  let fmt ~db f v =
     let fmt_vals f v =
       Format.fprintf f "(%a)" (fmt_phrase_value ~db |> Format.pp_comma_list) v
     in
