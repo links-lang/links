@@ -783,7 +783,7 @@ let rec p_value (ppf : formatter) : t -> 'a = function
      fprintf ppf "Spawn location: client %s" (ClientID.to_string cid)
   | `SpawnLocation `ServerSpawnLoc ->
      fprintf ppf "Spawn location: server"
-  | `XML xml -> p_xmlitem ~close_tags:false ppf xml
+  | `XML xml -> fprintf ppf "@[<hv>%a@]" (p_xmlitem ~close_tags:false) xml
   | `Continuation cont -> fprintf ppf "Continuation%s" (Continuation.to_string cont)
   | `Resumption _res -> fprintf ppf "Resumption"
   | `AccessPointID (`ClientAccessPoint (cid, apid)) ->
@@ -860,9 +860,15 @@ let string_of_pretty pretty_fun arg : string =
   let b = Buffer.create 200 in
   let f = Format.formatter_of_buffer b in
   let (out_string, _out_flush) = pp_get_formatter_output_functions f () in
+  (* We set margin/max indent to absurdly large values to avoid the need
+     for newlines. *)
+  pp_set_margin f 1000000;
+  pp_set_max_indent f 990000;
   (* Redefine the meaning of the pretty printing functions. The idea
      is to ignore newlines introduced by pretty printing as well as
-     indentation. *)
+     indentation.
+     Newlines can arise as a result of space hints so we need to generate
+     at least one space for a newline. *)
   let existing_functions = pp_get_formatter_out_functions f () in
   let out_functions =
     let one_space = function
@@ -870,9 +876,9 @@ let string_of_pretty pretty_fun arg : string =
       | _ -> out_string " " 0 1
     in
     { existing_functions with
-        out_newline = ignore;
-        out_spaces = one_space;
-        out_indent = one_space }
+        out_newline = (fun () -> one_space 1);
+        out_spaces  = one_space;
+        out_indent  = one_space }
   in
   pp_set_formatter_out_functions f out_functions;
   pretty_fun f arg;

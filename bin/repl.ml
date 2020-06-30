@@ -12,7 +12,7 @@ let printing_types =
 
 (* Pretty print values (outside web mode) *)
 let print_pretty
-  = Settings.(flag "print_pretty"
+  = Settings.(flag ~default:true "print_pretty"
               |> synopsis "Pretty print values (outside web mode)"
               |> convert parse_bool
               |> sync)
