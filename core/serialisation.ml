@@ -105,7 +105,7 @@ module Compressible = struct
 
     type compressed_t = [
       | compressed_primitive_value
-      | `Lens of string * string 
+      | `Lens of string * string
       | `List of compressed_t list
       | `Record of (string * compressed_t) list
       | `Variant of string * compressed_t
@@ -435,6 +435,17 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
                     "process / AP ID payload should be a string. Got: " ^ (Yojson.Basic.to_string nonsense)))
       | `Assoc [("_serverSpawnLoc", _)] ->
          `SpawnLocation (`ServerSpawnLoc)
+      | `Assoc ["_lens", `Assoc assoc] ->
+         let cstr = assoc_string "db" assoc in
+         let driver, params = parse_db_string cstr in
+         let db,_ = db_connect driver params in
+         let lens = assoc_string "lens" assoc in
+         let lens = Lens.Value.deserialize lens in
+         let db = Lens_database_conv.lens_db_of_db cstr db in
+         `Lens (db, lens)
+      | `Assoc ["_lens", nonsense] ->
+        raise (error (
+            "lens should be an assoc list. Got: " ^ (Yojson.Basic.to_string nonsense)))
       | `Assoc ["_db", `Assoc assoc] ->
          let driver = assoc_string "driver" assoc in
          let params =
