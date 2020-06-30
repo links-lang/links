@@ -9,7 +9,7 @@ module Operator_not_found_exception : sig
 end
 
 module Unary : sig
-  type t = Minus | Not [@@deriving show]
+  type t = Minus | Not [@@deriving show, sexp]
 
   val to_string : t -> string
 
@@ -34,7 +34,7 @@ module Binary : sig
     | Equal
     | LogicalAnd
     | LogicalOr
-  [@@deriving show]
+  [@@deriving show, sexp]
 
   val to_string : t -> string
 

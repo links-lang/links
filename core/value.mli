@@ -217,7 +217,7 @@ type t = [
 | primitive_value
 | `List of t list
 | `Record of (string * t) list
-| `Lens of Lens.Value.t
+| `Lens of Lens.Database.t * Lens.Value.t
 | `Variant of string * t
 | `FunctionPtr of (Ir.var * t option)
 | `PrimitiveFunction of string * Var.var option

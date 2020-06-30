@@ -1,6 +1,6 @@
 open Lens_utility
 
-type t = string [@@deriving show, eq]
+type t = string [@@deriving show, eq, sexp]
 
 module Map : sig
   include Lens_map.S with type key = t
@@ -8,6 +8,10 @@ end
 
 module Set : sig
   include Lens_set.S with type elt = t
+
+  val t_of_sexp : Sexp.t -> t
+
+  val sexp_of_t : t -> Sexp.t
 
   module Set : sig
     include Lens_set.S with type elt = t

@@ -1,7 +1,8 @@
 open Lens.Utility
 
-let lens_db_of_db (db : Value.database) =
+let lens_db_of_db cstr (db : Value.database) =
   let driver_name = db#driver_name in
+  let serialize () = cstr in
   let escape_string s = "'" ^ db#escape_string s ^ "'" in
   let quote_field s = db#quote_field s in
   let execute query =
@@ -56,6 +57,7 @@ let lens_db_of_db (db : Value.database) =
     quote_field;
     execute;
     execute_select;
+    serialize;
   }
 
 let lens_table_of_table (table : Value.table) =

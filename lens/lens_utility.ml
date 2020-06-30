@@ -14,3 +14,6 @@ module O = struct
 end
 
 include Common
+include Sexplib0.Sexp_conv
+
+module Sexp = Sexplib.Sexp

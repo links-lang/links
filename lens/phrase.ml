@@ -12,7 +12,7 @@ type t =
   | In of string list * Value.t list list
   | Case of t option * (t * t) list * t
   | TupleLit of t list
-[@@deriving show]
+[@@deriving show, sexp]
 
 let var n = Var n
 

@@ -579,7 +579,7 @@ struct
              | `Bool false    -> e
              | _              -> eval_error "Conditional was not a boolean")
   and special env (cont : continuation) : Ir.special -> result =
-    let get_lens l = match l with | `Lens l -> l | _ -> raise (internal_error "Expected a lens.") in
+    let unpack_lens l = match l with | `Lens l -> l | _ -> raise (internal_error "Expected a lens.") in
     let invoke_session_exception () =
       special env cont (DoOperation (Value.session_exception_operation,
         [], Types.Not_typed)) in
@@ -594,24 +594,25 @@ struct
           let sort = Type.sort t in
           value env table >>= fun table ->
           match table with
-            | `Table (((db,_), table, _, _) as tinfo) ->
-              let database = Lens_database_conv.lens_db_of_db db in
+            | `Table (((db,cstr), table, _, _) as tinfo) ->
+              let database = Lens_database_conv.lens_db_of_db cstr db in
               let sort = Sort.update_table_name sort ~table in
               let table = Lens_database_conv.lens_table_of_table tinfo in
-                 apply_cont cont env (`Lens (Value.Lens { sort; database; table; }))
+                 apply_cont cont env (`Lens (database, Value.Lens { sort; table; }))
             | `List records ->
               let records = List.map Lens_value_conv.lens_phrase_value_of_value records in
-              apply_cont cont env (`Lens (Value.LensMem { records; sort; }))
+              apply_cont cont env (`Lens (Lens.Database.dummy_database, Value.LensMem { records; sort; }))
             | _ -> raise (internal_error ("Unsupported underlying lens value."))
       end
     | LensSerial { lens; columns; _ } ->
       let open Lens in
       value env lens >>= fun lens ->
-      let lens = get_lens lens |> Value.set_serial ~columns in
-      apply_cont cont env (`Lens lens)
+      let db, lens = unpack_lens lens in
+      let lens = Value.set_serial ~columns lens in
+      apply_cont cont env (`Lens (db, lens))
     | LensDrop {lens; drop; key; default; _} ->
         let open Lens in
-        value env lens >|= get_lens >>= fun lens ->
+        value env lens >|= unpack_lens >>= fun (db, lens) ->
         value env default >|= Lens_value_conv.lens_phrase_value_of_value >>= fun default ->
         let sort =
           Lens.Sort.drop_lens_sort
@@ -621,10 +622,10 @@ struct
             ~key:(Alias.Set.singleton key)
           |> Lens_errors.unpack_type_drop_lens_result ~die:(eval_error "%s")
         in
-        apply_cont cont env (`Lens (Value.LensDrop { lens; drop; key; default; sort }))
+        apply_cont cont env (`Lens (db, Value.LensDrop { lens; drop; key; default; sort }))
     | LensSelect { lens; predicate; _ } ->
         let open Lens in
-        value env lens >|= get_lens >>= fun lens ->
+        value env lens >|= unpack_lens >>= fun (db, lens) ->
         let predicate =
           match predicate with
           | Static predicate -> predicate
@@ -638,11 +639,11 @@ struct
             ~predicate
           |> Lens_errors.unpack_sort_select_result ~die:(eval_error "%s")
         in
-        apply_cont cont env (`Lens (Value.LensSelect {lens; predicate; sort}))
+        apply_cont cont env (`Lens (db, Value.LensSelect {lens; predicate; sort}))
     | LensJoin { left; right; on; del_left; del_right; _ } ->
         let open Lens in
-        value env left >|= get_lens >>= fun lens1 ->
-        value env right >|= get_lens >>= fun lens2 ->
+        value env left >|= unpack_lens >>= fun (db1, lens1) ->
+        value env right >|= unpack_lens >>= fun (db2, lens2) ->
         let left, right=
           if Lens.Sort.join_lens_should_swap
                (Lens.Value.sort lens1)
@@ -656,24 +657,29 @@ struct
             (Lens.Value.sort lens1)
             (Lens.Value.sort lens2) ~on
           |> Lens_errors.unpack_sort_join_result ~die:(eval_error "%s") in
-        apply_cont cont env (`Lens (Value.LensJoin {left; right; on; del_left; del_right; sort}))
+        let open Lens.Database in
+        if db1.serialize () <> db2.serialize ()
+        then eval_error "Lenses require the same database connection.";
+        apply_cont cont env (`Lens (db1, Value.LensJoin {left; right; on; del_left; del_right; sort}))
     | LensCheck (lens, _typ) ->
+        (* TODO: defer dynamic lens check failures to
+           the lens check evaluation *)
         value env lens >>= apply_cont cont env
     | LensGet (lens, _rtype) ->
-        value env lens >|= get_lens >>= fun lens ->
+        value env lens >|= unpack_lens >>= fun (db, lens) ->
         (* let callfn = fun fnptr -> fnptr in *)
-        let res = Lens.Value.lens_get lens in
+        let res = Lens.Value.lens_get ~db lens in
         let res = List.map Lens_value_conv.value_of_lens_phrase_value res |> Value.box_list in
           apply_cont cont env res
     | LensPut (lens, data, _rtype) ->
-        value env lens >|= get_lens >>= fun lens ->
+        value env lens >|= unpack_lens >>= fun (db, lens) ->
         value env data >|= Value.unbox_list >>= fun data ->
         let data = List.map Lens_value_conv.lens_phrase_value_of_value data in
         let behaviour =
           if Settings.get Lens.classic_lenses
           then Lens.Eval.Classic
           else Lens.Eval.Incremental in
-        Lens.Eval.put ~behaviour lens data |> Lens_errors.unpack_eval_error ~die:(eval_error "%s");
+        Lens.Eval.put ~behaviour ~db lens data |> Lens_errors.unpack_eval_error ~die:(eval_error "%s");
         Value.box_unit () |> apply_cont cont env
     | Table (db, name, keys, (readtype, _, _)) ->
       begin

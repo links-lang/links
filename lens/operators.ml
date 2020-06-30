@@ -18,7 +18,7 @@ module Operator_not_found_exception = struct
 end
 
 module Unary = struct
-  type t = Minus | Not [@@deriving show]
+  type t = Minus | Not [@@deriving show, sexp]
 
   let to_string = function
     | Minus -> "-"
@@ -49,7 +49,7 @@ module Binary = struct
     | Equal
     | LogicalAnd
     | LogicalOr
-  [@@deriving show]
+  [@@deriving show, sexp]
 
   let to_string = function
     | Plus -> "+"

@@ -105,6 +105,7 @@ module Compressible = struct
 
     type compressed_t = [
       | compressed_primitive_value
+      | `Lens of string * string
       | `List of compressed_t list
       | `Record of (string * compressed_t) list
       | `Variant of string * compressed_t
@@ -131,7 +132,9 @@ module Compressible = struct
 
     let rec compress : t -> compressed_t = function
       | #primitive_value as v -> compress_primitive_value v
-      | `Lens _ -> raise (raise (internal_error "Lens compression for serialization not supported."))
+      | `Lens (d,l) ->
+          let open Lens.Database in
+          `Lens (d.serialize (), Lens.Value.serialize l)
       | `List vs -> `List (List.map compress vs)
       | `Record fields -> `Record (List.map (fun (name, v) -> (name, compress v)) fields)
       | `Variant (name, v) -> `Variant (name, compress v)
@@ -178,6 +181,14 @@ module Compressible = struct
       | `Continuation cont -> `Continuation (K.decompress ~globals cont)
       | `Resumption res -> `Resumption (K.decompress_r ~globals res)
       | `Alien -> `Alien
+      | `Lens (cstr, l) ->
+        let db = decompress (`Database cstr) in
+        let db =
+            (match db with
+            | `Database (db, cstr) -> Lens_database_conv.lens_db_of_db cstr db
+            | _ -> assert false) in
+        let l = Lens.Value.deserialize l in
+        `Lens (db, l)
   end
 
   module Continuation(F : COMPRESSIBLE_FRAME)(E : COMPRESSIBLE_ENVIRONMENT) : COMPRESSIBLE_CONTINUATION = struct
@@ -424,6 +435,17 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
                     "process / AP ID payload should be a string. Got: " ^ (Yojson.Basic.to_string nonsense)))
       | `Assoc [("_serverSpawnLoc", _)] ->
          `SpawnLocation (`ServerSpawnLoc)
+      | `Assoc ["_lens", `Assoc assoc] ->
+         let cstr = assoc_string "db" assoc in
+         let driver, params = parse_db_string cstr in
+         let db, _ = db_connect driver params in
+         let lens = assoc_string "lens" assoc in
+         let lens = Lens.Value.deserialize lens in
+         let db = Lens_database_conv.lens_db_of_db cstr db in
+         `Lens (db, lens)
+      | `Assoc ["_lens", nonsense] ->
+        raise (error (
+            "lens should be an assoc list. Got: " ^ (Yojson.Basic.to_string nonsense)))
       | `Assoc ["_db", `Assoc assoc] ->
          let driver = assoc_string "driver" assoc in
          let params =

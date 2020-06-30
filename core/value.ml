@@ -707,7 +707,7 @@ module Continuation
 
 type t = [
 | primitive_value
-| `Lens of Lens.Value.t
+| `Lens of Lens.Database.t * Lens.Value.t
 | `List of t list
 | `Record of (string * t) list
 | `Variant of string * t
@@ -772,7 +772,7 @@ let rec p_value (ppf : formatter) : t -> 'a = function
                              else
                                fprintf ppf "fun"
   | `Socket _ -> fprintf ppf "<socket>"
-  | `Lens l -> fprintf ppf "(%a)" Lens.Value.pp l
+  | `Lens (_,l) -> fprintf ppf "(%a)" Lens.Value.pp l
   | `Table (_, name, _, _) -> fprintf ppf "(table %s)" name
   | `Database (_, params) -> fprintf ppf "(database %s" params
   | `SessionChannel (ep1, ep2) ->

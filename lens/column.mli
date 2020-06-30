@@ -1,4 +1,4 @@
-type t [@@deriving show]
+type t [@@deriving show, sexp]
 
 val make :
   table:string ->
