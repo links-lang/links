@@ -662,6 +662,8 @@ struct
         then eval_error "Lenses require the same database connection.";
         apply_cont cont env (`Lens (db1, Value.LensJoin {left; right; on; del_left; del_right; sort}))
     | LensCheck (lens, _typ) ->
+        (* TODO: defer dynamic lens check failures to
+           the lens check evaluation *)
         value env lens >>= apply_cont cont env
     | LensGet (lens, _rtype) ->
         value env lens >|= unpack_lens >>= fun (db, lens) ->
