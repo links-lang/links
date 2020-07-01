@@ -3,3 +3,11 @@ var foo = spawn { () }; ()
 stderr : @.*Because of the value restriction.*
 exit : 1
 args : --config=tests/recheck_frontend_transformations.config
+
+Type variable freshening in type signatures (#865)
+./tests/recheck_frontend_transformations/T865.links
+filemode : true
+exit : 0
+args : --config=tests/recheck_frontend_transformations.config
+stdout : @\(\) : \(Types\.Record \(Types\.Row .*\)\)
+stderr : @.*
