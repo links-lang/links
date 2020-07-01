@@ -99,3 +99,9 @@ tests/typed_ir/T875.links
 filemode : true
 exit : 1
 stderr : @.*IR Type Error: Type mismatch.*
+
+lf (#876)
+tests/typed_ir/T876.links
+filemode : true
+exit : 1
+stderr : @.*IR Type Error: Type mismatch.*
