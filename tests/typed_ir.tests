@@ -69,6 +69,12 @@ tests/typed_ir/T697b.links
 filemode : true
 stdout : () : ()
 
+Wild effect compatibility #3 (#873)
+tests/typed_ir/T873.links
+filemode : true
+exit : 1
+stderr : @.*IR Type Error: Incompatible effects.*
+
 asList (#698)
 tests/typed_ir/T698.links
 filemode : true

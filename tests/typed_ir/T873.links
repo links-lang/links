@@ -1,0 +1,6 @@
+sig freshResource : () ~> ()
+fun freshResource() {
+  escape esc in {
+    redirect("?_k=" ^^ unsafePickleCont(fun () {esc(())})); exit([])
+  }
+}
