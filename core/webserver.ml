@@ -315,6 +315,12 @@ struct
              end
           | Some s -> s
         in
+        if Sys.file_exists linkslib |> not
+         then raise (
+             Errors.SettingsError (
+               Format.asprintf
+                 "The javascript library path '%s' does not exist."
+                 linkslib));
         serve_static linkslib uri_path []
       (* Handle websocket connections *)
       else if (is_websocket_request path) then
