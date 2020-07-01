@@ -87,3 +87,9 @@ stdout : () : ()
 function pattern matching has right effects (#691)
 sig f : ([a]) {}-> a fun f ([x]) { x }
 stdout : () : ()
+
+fork (#874)
+tests/typed_ir/T874.links
+filemode : true
+exit : 1
+stderr : @.*IR Type Error: Type mismatch.*
