@@ -1,0 +1,5 @@
+Generalisation obeys value restriction (#871)
+var foo = spawn { () }; ()
+stderr : @.*Because of the value restriction.*
+exit : 1
+args : --config=tests/recheck_frontend_transformations.config
