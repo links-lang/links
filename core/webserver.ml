@@ -311,7 +311,7 @@ struct
              begin
                (match Utility.getenv "LINKS_LIB" with
                 | None -> Filename.dirname Sys.executable_name
-                | Some path -> path) / "lib" / "js"
+                | Some path -> path) / "js"
              end
           | Some s -> s
         in
