@@ -93,3 +93,9 @@ tests/typed_ir/T874.links
 filemode : true
 exit : 1
 stderr : @.*IR Type Error: Type mismatch.*
+
+linFork (#875)
+tests/typed_ir/T875.links
+filemode : true
+exit : 1
+stderr : @.*IR Type Error: Type mismatch.*
