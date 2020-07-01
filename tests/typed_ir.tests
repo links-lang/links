@@ -105,3 +105,9 @@ tests/typed_ir/T876.links
 filemode : true
 exit : 1
 stderr : @.*IR Type Error: Type mismatch.*
+
+elemIndex (#877)
+tests/typed_ir/T877.links
+filemode : true
+exit : 1
+stderr : @.*IR Type Error: cases not identical to present fields in closed row, no default case.*
