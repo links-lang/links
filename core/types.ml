@@ -163,7 +163,6 @@ and field_spec_map = field_spec Utility.StringMap.t
 and meta_type_var = typ point
 and meta_row_var = row point
 and meta_presence_var = typ point
-and meta_var = typ point
 and row = typ
 and row' = field_spec_map * row_var * bool
 and row_var = meta_row_var
@@ -172,8 +171,8 @@ and row_var = meta_row_var
 let dummy_type = Not_typed
 
 let is_present = function
-  | Present _          -> true
-  | Absent | Meta _ -> false
+  | Present _         -> true
+  | (Absent | Meta _) -> false
   | _ ->
      failwith "Expected presence constructor."
 
@@ -196,9 +195,7 @@ module type TYPE_VISITOR =
 sig
   class visitor :
   object ('self_type)
-
-    method remove_rec_row_binding : int -> 'self_type
-    method remove_rec_type_binding : int ->'self_type
+    method set_rec_vars : (meta_type_var) Utility.IntMap.t -> 'self_type
 
     method primitive : Primitive.t -> (Primitive.t * 'self_type)
     method list : ('self_type -> 'a -> 'b * 'self_type) -> 'a list -> ('b list * 'self_type)
@@ -208,7 +205,6 @@ sig
     method row_var : row_var -> (row_var * 'self_type)
     method meta_type_var : meta_type_var -> (meta_type_var * 'self_type)
     method meta_row_var : meta_row_var -> (meta_row_var * 'self_type)
-    method meta_var : meta_var -> (meta_var * 'self_type)
     method meta_presence_var : meta_presence_var -> (meta_presence_var * 'self_type)
     method field_spec : field_spec -> (field_spec * 'self_type)
     method field_spec_map : field_spec_map -> (field_spec_map * 'self_type)
@@ -232,14 +228,9 @@ module Transform : TYPE_VISITOR =
 struct
   class visitor =
   object ((o : 'self_type))
-    val rec_vars : (meta_type_var) IntMap.t * (meta_row_var) IntMap.t = (IntMap.empty, IntMap.empty)
-    method remove_rec_type_binding id =
-      let (rec_types, rec_rows) = rec_vars in
-      {< rec_vars = (IntMap.remove id rec_types, rec_rows) >}
+    val rec_vars : (meta_type_var) IntMap.t = IntMap.empty
 
-    method remove_rec_row_binding id =
-      let (rec_types, rec_rows) = rec_vars in
-      {< rec_vars = (rec_types, IntMap.remove id rec_rows) >}
+    method set_rec_vars rec_vars = {< rec_vars = rec_vars >}
 
     method primitive : Primitive.t -> (Primitive.t * 'self_type) = fun p -> (p,o)
     method row : row -> (row * 'self_type) =
@@ -249,19 +240,18 @@ struct
       fun point ->
       match Unionfind.find point with
         | Recursive (var, kind, t) ->
-          let (rec_types, rec_rows) = rec_vars in
-          if IntMap.mem var rec_types then
-            (IntMap.find var rec_types), o
+          if IntMap.mem var rec_vars then
+            (IntMap.find var rec_vars), o
           else
+            (* FIXME: seems unnecessary to freshen type variables here! *)
             let var' = fresh_raw_variable () in
-            let point' : meta_type_var =
-              Unionfind.fresh (Var (var', kind, `Flexible)) in
-            let rec_types' : (meta_type_var) IntMap.t = IntMap.add var point' rec_types in
-            let o_extended_rec_env = {< rec_vars = (rec_types', rec_rows) >} in
-            let (t', o') = o_extended_rec_env#typ t in
-            let o'_reduced_rec_env = o'#remove_rec_type_binding var in
+            let point' = Unionfind.fresh (Var (var', kind, `Flexible)) in
+            let rec_vars' = IntMap.add var point' rec_vars in
+            let o = {< rec_vars = rec_vars' >} in
+            let (t', o) = o#typ t in
+            let o = o#set_rec_vars rec_vars in
             Unionfind.change point' (Recursive (var', kind, t'));
-            (point', o'_reduced_rec_env)
+            (point', o)
         | Var _  -> point, o
         | Closed -> point, o
         | t ->
@@ -272,12 +262,6 @@ struct
       o#meta_type_var
 
     method row_var : row_var -> (row_var * 'self_type) = o#meta_row_var
-
-    method meta_var : meta_var -> (meta_var * 'self_type) =
-      fun _point ->
-      assert false
-      (* let t, o = o#typ (Unionfind.find point) in
-       * (Unionfind.fresh t, o) *)
 
     method meta_presence_var :  meta_presence_var -> (meta_presence_var * 'self_type) =
       o#meta_type_var
@@ -305,15 +289,6 @@ struct
          let (r', o) = o#row t in ((Row, r'), o)
       | Presence ->
          let (p', o) = o#field_spec t in ((Presence, p'), o)
-    (* TODO: delete this once we've convinced ourselves we really
-       don't need to know the kinds of type arguments *)
-    (* function
-      * | `Type t ->
-      *    let (t', o) = o#typ t in (`Type t', o)
-      * | `Row r ->
-      *    let (r', o) = o#row r in (`Row r', o)
-      * | `Presence p ->
-      *    let (p', o) = o#field_spec p in (`Presence p', o) *)
 
     method list : 'a 'b. ('self_type -> 'a -> 'b * 'self_type) -> 'a list -> ('b list * 'self_type)
       = fun f xs ->

@@ -121,7 +121,6 @@ and field_spec_map = field_spec Utility.StringMap.t
 and meta_type_var = typ point
 and meta_row_var = row point
 and meta_presence_var = typ point
-and meta_var = typ point
 and row = typ
 and row' = field_spec_map * row_var * bool
 and row_var = meta_row_var
@@ -389,8 +388,7 @@ module type TYPE_VISITOR =
 sig
   class visitor :
   object ('self_type)
-    method remove_rec_row_binding : int -> 'self_type
-    method remove_rec_type_binding : int ->'self_type
+    method set_rec_vars : (meta_type_var) Utility.IntMap.t -> 'self_type
 
     method primitive : Primitive.t -> (Primitive.t * 'self_type)
     method list : ('self_type -> 'a -> 'b * 'self_type) -> 'a list -> ('b list * 'self_type)
@@ -400,7 +398,6 @@ sig
     method row_var : row_var -> (row_var * 'self_type)
     method meta_type_var : meta_type_var -> (meta_type_var * 'self_type)
     method meta_row_var : meta_row_var -> (meta_row_var * 'self_type)
-    method meta_var : meta_var -> (meta_var * 'self_type)
     method meta_presence_var : meta_presence_var -> (meta_presence_var * 'self_type)
     method field_spec : field_spec -> (field_spec * 'self_type)
     method field_spec_map : field_spec_map -> (field_spec_map * 'self_type)
