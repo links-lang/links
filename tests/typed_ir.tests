@@ -91,20 +91,20 @@ stdout : () : ()
 fork (#874)
 tests/typed_ir/T874.links
 filemode : true
-exit : 1
-stderr : @.*IR Type Error: Type mismatch.*
+exit : 0
+stdout : () : ()
 
 linFork (#875)
 tests/typed_ir/T875.links
 filemode : true
-exit : 1
-stderr : @.*IR Type Error: Type mismatch.*
+exit : 0
+stdout : () : ()
 
 lf (#876)
 tests/typed_ir/T876.links
 filemode : true
-exit : 1
-stderr : @.*IR Type Error: Type mismatch.*
+exit : 0
+stdout : () : ()
 
 elemIndex (#877)
 tests/typed_ir/T877.links

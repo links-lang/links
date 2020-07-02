@@ -294,7 +294,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
           end
       | Lolli (lfrom, lm, lto) ->
           begin match t2 with
-            | Function (rfrom, rm, rto) ->
+            | Lolli (rfrom, rm, rto) ->
               eqt     (context, lfrom, rfrom) &&
               eqt     (context, lto  , rto  ) &&
               eq_rows (context, lm   , rm   )
