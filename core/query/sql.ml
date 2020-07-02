@@ -150,102 +150,123 @@ let order_by_clause n =
    returned. This allows these operators to take lists that have any
    element type at all. *)
 
-let rec string_of_query buf quote ignore_fields q =
+let rec pr_query ppf buf quote ignore_fields q =
   let buf_add = Buffer.add_string buf in
-  let sq = string_of_query buf quote ignore_fields in
-  let sb = string_of_base buf quote false in
-  let sbt = string_of_base buf quote true in
-  let string_of_fields fields =
+  let pp_constant ppf s = Format.fprintf ppf "%s" s in
+  let pp_comma ppf () = Format.fprintf ppf "," in
+  let pp_quote ppf q = Format.fprintf ppf "%s" (quote q) in
+
+  let pr_q ppf q = pr_query ppf buf quote ignore_fields q in
+  let pr_b ppf q = pr_base ppf buf quote false q in
+  let pr_b_ignore_fields ppf q = pr_base ppf buf quote true q in
+
+  (*TODO: maybe add a template pair/option/list printer func? *)
+  (*TODO: or single term with/without bracket template printer func *)
+  let pr_fields ppf fields =
+    let pp_field ppf (b, l) = Format.fprintf ppf "(%a) as %a" pr_b b pp_quote l in (*MARK: can be template-pair *)
     if ignore_fields then
-      buf_add "0 as \"@unit@\"" (* SQL doesn't support empty records! *)
+      Format.fprintf ppf "%a" pp_constant "0 as \"@unit@\"" (* SQL doesn't support empty records! *)
     else
       match fields with
-        | [] -> buf_add "0 as \"@unit@\"" (* SQL doesn't support empty records! *)
-        | fields -> buf_mapstrcat buf fields
-                      (fun (b, l) ->
-                        buf_add "("; sb b; buf_add ") as "; buf_add (quote l))
-                      ","
+        | [] -> Format.fprintf ppf "%a" pp_constant "0 as \"@unit@\"" (* SQL doesn't support empty records! *)
+        | fields -> Format.fprintf ppf "%a" (Format.pp_print_list ~pp_sep:pp_comma pp_field) fields
   in
-  let string_of_select fields tables condition os =
-    let tables = String.concat "," tables in
-    let orderby = fun () -> (* thunking:  delay the side effect*)
+
+  let pr_select ppf fields tables condition os =
+    let pp_tables ppf tables = Format.fprintf ppf "%a" (Format.pp_print_list ~pp_sep:pp_comma Format.pp_print_string) tables in (*MARK: can be template-list *)
+    let pp_os_condition ppf a = Format.fprintf ppf "%a" pr_b a in
+    let pp_orderby ppf os = 
       match os with
         | [] -> ()
-        | _ ->  buf_add " order by "; buf_mapstrcat buf os (fun os -> sb os) "," in
-    let where = fun () -> (* thunking:  delay the side effect*)
+        | _ -> Format.fprintf ppf " order by %a" (Format.pp_print_list ~pp_sep:pp_comma pp_os_condition) os in
+    let pp_where ppf condition = 
       match condition with
         | Constant (Constant.Bool true) -> ()
-        | _ ->  buf_add " where "; sb condition
-    in
-       buf_add "select "; string_of_fields fields; buf_add " from "; buf_add tables; where (); orderby ()
-  in
-  let string_of_delete table where =
-      buf_add "delete from ";
-      buf_add table;
-      OptionUtils.opt_app
-        (fun x ->  buf_add "where ("; sbt x; buf_add ")")
-        ()
-        where
-  in
-  let string_of_update table fields where =
-    buf_add "update ";
-    buf_add table;
-    buf_add " set ";
-    buf_mapstrcat buf fields (fun (k, v) -> buf_add (quote k); buf_add " = "; sbt v) ",";
-    buf_add " ";
-    OptionUtils.opt_app
-      (fun x -> buf_add "where ("; sbt x; buf_add ")")
-      ()
-      where
-  in
-  let string_of_insert table fields values =
-    buf_add "insert into ";
-    buf_add table;
-    buf_add " (";
-    buf_mapstrcat buf fields (fun x -> buf_add x) ",";
-    buf_add ") values ";
-    buf_mapstrcat buf values
-      (fun list ->
-        buf_mapstrcat buf list (fun x -> buf_add "("; sbt x; buf_add ")") ",")
-      ",";
-  in
-    match q with
-      | UnionAll ([], _) -> buf_add "select 42 as \"@unit@\" where false"
-      | UnionAll ([q], n) -> sq q; buf_add (order_by_clause n)
-      | UnionAll (qs, n) ->
-        buf_mapstrcat buf qs (fun x -> buf_add "("; sq x; buf_add ")") " union all ";
-        buf_add (order_by_clause n)
-      | Select (fields, [], Constant (Constant.Bool true), _os) ->
-          buf_add "select "; string_of_fields fields
-      | Select (fields, [], condition, _os) ->
-          buf_add "select * from (select ";
-          string_of_fields fields;
-          buf_add ") as ";
-          buf_add (fresh_dummy_var ());
-          buf_add " where ";
-          sb condition;
-      | Select (fields, tables, condition, os) ->
-          (* using quote_field assumes tables contains table names (not nested queries) *)
-          let tables = List.map (fun (t, x) -> buffer_concat [quote t; " as "; (string_of_table_var x)]) tables
-          in string_of_select fields tables condition os
-      | Delete { del_table; del_where } ->
-          string_of_delete del_table del_where
-      | Update { upd_table; upd_fields; upd_where } ->
-          string_of_update upd_table upd_fields upd_where
-      | Insert { ins_table; ins_fields; ins_records } ->
-          string_of_insert ins_table ins_fields ins_records
-      | With (_, q, z, q') ->
-          match q' with
-          | Select (fields, tables, condition, os) ->
-              (* Inline the query *)
-              let tables = List.map (fun (t, x) -> buffer_concat [quote t; " as "; (string_of_table_var x)]) tables in
-              let buf2 = Buffer.create 0 in
-              let q2 = string_of_query buf2 quote ignore_fields q; Buffer.contents buf2 in
-              let q = buffer_concat ["("; q2; ") as "; string_of_table_var z] in
-              string_of_select fields (q::tables) condition os
-          | _ -> assert false
+        | _ -> Format.fprintf ppf " where %a" pp_os_condition condition in
 
-and string_of_base buf quote one_table b =
+    Format.fprintf ppf "select %a from %a%a%a" 
+      pr_fields fields
+      pp_tables tables
+      pp_where condition
+      pp_orderby os
+  in
+
+  let pr_delete ppf table where =
+    let pp_where ppf where = 
+      match where with
+        | None -> ()
+        | Some x -> Format.fprintf ppf "where (%a)" pr_b_ignore_fields x in (*MARK: can be template-option *)
+
+    Format.fprintf ppf "delete from %a%a"
+      pp_constant table
+      pp_where where
+  in
+  let pr_update ppf table fields where =
+    let pp_field ppf (k, v) = Format.fprintf ppf "%a = %a" pp_quote k pr_b_ignore_fields v in (*MARK: can be template-pair *)
+    let pp_fields ppf fields = Format.fprintf ppf "%a" (Format.pp_print_list ~pp_sep:pp_comma pp_field) fields in (*MARK: can be template-list *)
+    let pp_where ppf where = 
+      match where with
+        | None -> ()
+        | Some x -> Format.fprintf ppf "where (%a)" pr_b_ignore_fields x in (*MARK: can be template-option *)
+    
+    Format.fprintf ppf "update %a set %a %a"
+      pp_constant table
+      pp_fields fields
+      pp_where where
+  in
+  let pr_insert ppf table fields values =
+    let pp_fields ppf fields = Format.fprintf ppf "%a" (Format.pp_print_list ~pp_sep:pp_comma Format.pp_print_string) fields in (*MARK: can be template-list *)
+    let pp_value ppf x = Format.fprintf ppf "(%a)" (Format.pp_print_list ~pp_sep:pp_comma pr_b_ignore_fields) x in
+    let pp_values ppf values = Format.fprintf ppf "%a" (Format.pp_print_list ~pp_sep:pp_comma pp_value) values in (*MARK: can be template-list *)
+    
+    Format.fprintf ppf "insert into %a (%a) values %a"
+      pp_constant table
+      pp_fields fields
+      pp_values values
+  in
+  match q with
+    | UnionAll ([], _) -> Format.fprintf ppf "%a" pp_constant "select 42 as \"@unit@\" where false"
+    | UnionAll ([q], n) -> Format.fprintf ppf "%a%a" pr_q q pp_constant (order_by_clause n)
+    | UnionAll (qs, n) ->
+      let pp_sep_union ppf () = Format.fprintf ppf " union all " in
+      let pp_value ppf x = Format.fprintf ppf "(%a)" pr_q x in
+      let pp_values ppf values = Format.fprintf ppf "%a" (Format.pp_print_list ~pp_sep:pp_sep_union pp_value) values in (*MARK: can be template-list *)
+      Format.fprintf ppf "%a%a" 
+        pp_values qs 
+        pp_constant (order_by_clause n)
+    | Select (fields, [], Constant (Constant.Bool true), _os) ->
+      Format.fprintf ppf "select %a" pr_fields fields
+    | Select (fields, [], condition, _os) ->
+      Format.fprintf ppf "select * from (select %a) as %a where %a"
+        pr_fields fields
+        pp_constant (fresh_dummy_var ())
+        pr_b condition
+    | Select (fields, tables, condition, os) ->
+        (* using quote_field assumes tables contains table names (not nested queries) *)
+        let tables = List.map (fun (t, x) -> buffer_concat [quote t; " as "; (string_of_table_var x)]) tables in 
+        pr_select ppf fields tables condition os
+    | Delete { del_table; del_where } ->
+        pr_delete ppf del_table del_where
+    | Update { upd_table; upd_fields; upd_where } ->
+        pr_update ppf upd_table upd_fields upd_where
+    | Insert { ins_table; ins_fields; ins_records } ->
+        pr_insert ppf ins_table ins_fields ins_records
+    | With (_, q, z, q') ->
+        match q' with
+        | Select (fields, tables, condition, os) ->
+            (* Inline the query *)
+            let tables = List.map (fun (t, x) -> buffer_concat [quote t; " as "; (string_of_table_var x)]) tables in
+            let buf2 = Buffer.create 0 in
+            let ppf2 = Format.formatter_of_buffer buf2 in
+            let q2 = pr_query ppf2 buf2 quote ignore_fields q; Format.pp_print_flush ppf2 (); Buffer.contents buf2 in
+            let q = buffer_concat ["("; q2; ") as "; string_of_table_var z] in
+            pr_select ppf fields (q::tables) condition os
+        | _ -> assert false
+
+and pr_base ppf buf quote one_table b =
+  let pp_constant ppf s = Format.fprintf ppf "%s" s in
+  let pp_comma ppf () = Format.fprintf ppf "," in
+  let pp_quote ppf q = Format.fprintf ppf "%s" (quote q) in
   let string_of_projection quote one_table (var, label) =
   if one_table then
     quote label
@@ -253,54 +274,72 @@ and string_of_base buf quote one_table b =
     buffer_concat [string_of_table_var var; "."; (quote label)]
   in
   let buf_add = Buffer.add_string buf in
-  let sb = string_of_base buf quote one_table in
+  let pr_b ppf b = pr_base ppf buf quote one_table b in
+  let pr_q ppf q = pr_query ppf buf quote true q in
     match b with
       | Case (c, t, e) ->
-          buf_add "case when "; sb c; buf_add " then "; sb t; buf_add " else "; sb e; buf_add " end"
-      | Constant c -> buf_add (Constant.to_string c)
-      | Project (var, label) -> buf_add (string_of_projection quote one_table (var, label))
+        Format.fprintf ppf "case when %a then %a else %a end"
+          pr_b c
+          pr_b t
+          pr_b e
+      | Constant c -> Format.fprintf ppf "%a" pp_constant (Constant.to_string c)
+      | Project (var, label) -> Format.fprintf ppf "%a" pp_constant (string_of_projection quote one_table (var, label))
       | Apply (op, [l; r]) when Arithmetic.is op ->
         let buf2 = Buffer.create 0 in
+        let ppf2 = Format.formatter_of_buffer buf2 in
         let buf3 = Buffer.create 0 in
-        let l2 = string_of_base buf2 quote one_table l; Buffer.contents buf2 in
-        let r2 = string_of_base buf3 quote one_table r; Buffer.contents buf3 in
-        buf_add (Arithmetic.gen (l2, op, r2))
+        let ppf3 = Format.formatter_of_buffer buf3 in
+        let l2 = pr_base ppf2 buf2 quote one_table l; Format.pp_print_flush ppf2 (); Buffer.contents buf2 in
+        let r2 = pr_base ppf3 buf3 quote one_table r; Format.pp_print_flush ppf3 (); Buffer.contents buf3 in
+        Format.fprintf ppf "%a" pp_constant (Arithmetic.gen (l2, op, r2))
       | Apply (("intToString" | "stringToInt" | "intToFloat" | "floatToString"
-                | "stringToFloat"), [v]) -> sb v
-      | Apply ("floatToInt", [v]) -> buf_add "floor("; sb v; buf_add ")"
+                | "stringToFloat"), [v]) -> Format.fprintf ppf "%a" pr_b v
+      | Apply ("floatToInt", [v]) -> Format.fprintf ppf "floor(%a)" pr_b v
 
       (* optimisation *)
-      | Apply ("not", [Empty q]) -> buf_add "exists ("; string_of_query buf quote true q; buf_add ")"
-      | Apply ("not", [v]) -> buf_add "not ("; sb v; buf_add ")"
-      | Apply (("negate" | "negatef"), [v]) -> buf_add "-("; sb v; buf_add ")"
-      | Apply ("&&", [v; w]) -> buf_add "("; sb v; buf_add ")"; buf_add " and "; buf_add "("; sb w; buf_add ")"
-      | Apply ("||", [v; w]) -> buf_add "("; sb v; buf_add ")"; buf_add " or "; buf_add "("; sb w; buf_add ")"
-      | Apply ("==", [v; w]) -> buf_add "("; sb v; buf_add ")"; buf_add " = "; buf_add "("; sb w; buf_add ")"
-      | Apply ("<>", [v; w]) -> buf_add "("; sb v; buf_add ")"; buf_add " <> "; buf_add "("; sb w; buf_add ")"
-      | Apply ("<", [v; w]) -> buf_add "("; sb v; buf_add ")"; buf_add " < "; buf_add "("; sb w; buf_add ")"
-      | Apply (">", [v; w]) -> buf_add "("; sb v; buf_add ")"; buf_add " > "; buf_add "("; sb w; buf_add ")"
-      | Apply ("<=", [v; w]) -> buf_add "("; sb v; buf_add ")"; buf_add " <= "; buf_add "("; sb w; buf_add ")"
-      | Apply (">=", [v; w]) -> buf_add "("; sb v; buf_add ")"; buf_add " >= "; buf_add "("; sb w; buf_add ")"
-      | Apply ("RLIKE", [v; w]) -> buf_add "("; sb v; buf_add ")"; buf_add " RLIKE "; buf_add "("; sb w; buf_add ")"
-      | Apply ("LIKE", [v; w]) -> buf_add "("; sb v; buf_add ")"; buf_add " LIKE "; buf_add "("; sb w; buf_add ")"
-      | Apply (f, args) when SqlFuns.is f -> buf_add (SqlFuns.name f); buf_add "("; buf_mapstrcat buf args (fun x -> sb x) ","; buf_add ")"
-      | Apply (f, args) -> buf_add f; buf_add "("; buf_mapstrcat buf args (fun x -> sb x) ","; buf_add ")"
-      | Empty q -> buf_add "not exists ("; string_of_query buf quote true q; buf_add ")"
-      | Length q -> buf_add "select count(*) from ("; string_of_query buf quote true q; buf_add ") as "; buf_add (fresh_dummy_var ())
-      | RowNumber [] -> buf_add "1"
-      | RowNumber ps ->
-        buf_add "row_number() over (order by "; buf_add (String.concat "," (List.map (string_of_projection quote one_table) ps)); buf_add ")"
+      | Apply ("not", [Empty q]) -> Format.fprintf ppf "exists (%a)" pr_q q
+      | Apply ("not", [v]) -> Format.fprintf ppf "not (%a)" pr_b v
+      | Apply (("negate" | "negatef"), [v]) -> Format.fprintf ppf "-(%a)" pr_b v
+      | Apply ("&&", [v; w]) -> Format.fprintf ppf "(%a) and (%a)" pr_b v pr_b w
+      | Apply ("||", [v; w]) -> Format.fprintf ppf "(%a) or (%a)" pr_b v pr_b w
+      | Apply ("==", [v; w]) -> Format.fprintf ppf "(%a) = (%a)" pr_b v pr_b w
+      | Apply ("<>", [v; w]) -> Format.fprintf ppf "(%a) <> (%a)" pr_b v pr_b w
+      | Apply ("<", [v; w]) -> Format.fprintf ppf "(%a) < (%a)" pr_b v pr_b w
+      | Apply (">", [v; w]) -> Format.fprintf ppf "(%a) > (%a)" pr_b v pr_b w
+      | Apply ("<=", [v; w]) -> Format.fprintf ppf "(%a) <= (%a)" pr_b v pr_b w
+      | Apply (">=", [v; w]) -> Format.fprintf ppf "(%a) >= (%a)" pr_b v pr_b w
+      | Apply ("RLIKE", [v; w]) -> Format.fprintf ppf "(%a) RLIKE (%a)" pr_b v pr_b w
+      | Apply ("LIKE", [v; w]) -> Format.fprintf ppf "(%a) LIKE (%a)" pr_b v pr_b w
+      | Apply (f, args) when SqlFuns.is f -> 
+        let pp_value ppf x = Format.fprintf ppf "%a" pr_b x in
+        let pp_values ppf values = Format.fprintf ppf "%a" (Format.pp_print_list ~pp_sep:pp_comma pp_value) values in
+        Format.fprintf ppf "%a(%a)" pp_constant (SqlFuns.name f) pp_values args
+      | Apply (f, args) -> 
+        let pp_value ppf x = Format.fprintf ppf "%a" pr_b x in
+        let pp_values ppf values = Format.fprintf ppf "%a" (Format.pp_print_list ~pp_sep:pp_comma pp_value) values in
+        Format.fprintf ppf "%a(%a)" pp_constant f pp_values args
+      | Empty q -> Format.fprintf ppf "not exists (%a)" pr_q q
+      | Length q -> Format.fprintf ppf "select count(*) from (%a) as %a" pr_q q pp_constant (fresh_dummy_var ())
+      | RowNumber [] -> Format.fprintf ppf "%a" pp_constant "1"
+      | RowNumber ps -> Format.fprintf ppf "row_number() over (order by %a)" pp_constant (String.concat "," (List.map (string_of_projection quote one_table) ps))
 
 let string_of_base quote one_table b =
   let buf = Buffer.create 0 in
-  string_of_base buf quote one_table b; Buffer.contents buf
+  let ppf = Format.formatter_of_buffer buf in
+  pr_base ppf buf quote one_table b; Format.pp_print_flush ppf (); Buffer.contents buf
 
 let string_of_query ?(range=None) quote q =
+  let pp_constant ppf s = Format.fprintf ppf "%s" s in
   let buf = Buffer.create 0 in
+  let ppf = Format.formatter_of_buffer buf in
   let buf_add = Buffer.add_string buf in
   let range =
     match range with
       | None -> ""
       | Some (limit, offset) -> buffer_concat [" limit "; string_of_int limit; " offset "; string_of_int offset]
   in
-    string_of_query buf quote false q; buf_add range; Buffer.contents buf
+  let print_query ppf q = pr_query ppf buf quote false q in
+    Format.fprintf ppf "%a%a" print_query q pp_constant range;
+    Format.pp_print_flush ppf ();
+    Buffer.contents buf
+    (* pr_query buf quote false q; buf_add range; Buffer.contents buf *)
