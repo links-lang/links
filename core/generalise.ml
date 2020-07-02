@@ -12,7 +12,7 @@ let show_recursion = Basicsettings.Types.show_recursion
 
 let internal_error message = Errors.internal_error ~filename:"generalise" ~message
 
-type gen_kind = [`Rigid|`All]
+type gen_kind = Rigid | All
 
 (** [get_type_args kind bound_vars t] gets the free type variables of
     the datatype [t] as type args. The [kind] parameter specifies
@@ -40,7 +40,7 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
             begin
               match Unionfind.find point with
               | Var (var, _, _) when TypeVarSet.mem var bound_vars -> []
-              | Var (_, k, `Flexible) when kind=`All -> [Kind.primary_kind k, Meta point]
+              | Var (_, k, `Flexible) when kind=All -> [Kind.primary_kind k, Meta point]
               | Var (_, _, `Flexible) -> []
               | Var (_, k, `Rigid) -> [Kind.primary_kind k, Meta point]
               | Recursive (var, _kind, body) ->
@@ -225,10 +225,10 @@ let generalise : gen_kind -> ?unwrap:bool -> environment -> datatype -> ((Quanti
       ((quantifiers, type_args), quantified)
 
 (** only generalise rigid type variables *)
-let generalise_rigid = generalise `Rigid
+let generalise_rigid = generalise Rigid
 
 (** generalise both rigid and flexible type variables *)
-let generalise = generalise `All
+let generalise = generalise All
 
 let get_quantifiers_rigid (env : environment) (t : datatype) : Quantifier.t list =
-  get_type_args `Rigid (env_type_vars env) t |> Types.quantifiers_of_type_args
+  get_type_args Rigid (env_type_vars env) t |> Types.quantifiers_of_type_args
