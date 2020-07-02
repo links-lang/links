@@ -680,7 +680,7 @@ and match_variant
                         let default_env = bind_type default_variable default_type env in
                         let default_env =
                           bind_context
-                            var
+                            default_variable
                             (Pattern.CNVariant cs, Variable default_variable)
                             default_env
                         in
