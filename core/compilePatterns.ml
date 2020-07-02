@@ -15,7 +15,7 @@ open Ir
 open Var
 
 let show_pattern_compilation
-  = Settings.(flag "show_pattern_compilation2" (* There does not seem to be a "show_pattern_compilation1"... *)
+  = Settings.(flag "show_pattern_compilation"
               |> convert parse_bool
               |> sync)
 
