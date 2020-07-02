@@ -1,0 +1,9 @@
+mutual {
+  fun foo(x) client {
+   receive { case Foo -> bar(x) }
+  }
+
+  fun bar(x) client {
+   receive { case Foo -> foo(x) }
+  }
+}
