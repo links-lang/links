@@ -43,28 +43,31 @@ let%expect_test "Listify handler (4)" =
 let%expect_test "Top level operation invocation" =
   run_expr ~args:["--enable-handlers"] {|{ do Foo }|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: Invocation of the operation
         `Foo'
     requires an effect context
         `{Foo:() {}-> a|b::Eff}'
     but, the currently allowed effects are
         `{wild}'
-    In expression: do Foo. |}]
+    In expression: do Foo.
+
+    exit: 1 |}]
 
 let%expect_test "Return invocation (1)" =
   run_expr ~args:["--enable-handlers"] {|fun() { do Return }|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The implicit effect Return is not invocable
-    In expression: do Return. |}]
+    In expression: do Return.
+
+    exit: 1 |}]
 
 let%expect_test "Return invocation (2)" =
   run_expr ~args:["--enable-handlers"] {|{ fun() { do Return } }|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The implicit effect Return is not invocable
-    In expression: do Return. |}]
+    In expression: do Return.
+
+    exit: 1 |}]
 
 let%expect_test "Operation invocation sugar (1)" =
   run_expr ~args:["--enable-handlers"] {|{ fun() { do Foo } }|};
@@ -117,14 +120,15 @@ let%expect_test "Exception handling (2)" =
 let%expect_test "Exception handling (3)" =
   run_expr ~args:["--enable-handlers"] {|{ handle({var _ = do Fail : Zero; 42}) {case Fail(k) -> k(42) : Either(String,Int) case Return(x) -> Right(x) : Either(String, Int)} }|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The effect type of an input to a handle should match the type of its computation patterns, but the expression
         `{var _ = do Fail : Zero; 42}'
     has effect type
         `{|Fail:() {}-> Zero|a}'
     while the handler handles effects
         `{Fail:() {}-> Int,wild|b}'
-    In expression: handle({var _ = do Fail : Zero; 42}) {case Fail(k) -> k(42) : Either(String,Int) case Return(x) -> Right(x) : Either(String, Int)}. |}]
+    In expression: handle({var _ = do Fail : Zero; 42}) {case Fail(k) -> k(42) : Either(String,Int) case Return(x) -> Right(x) : Either(String, Int)}.
+
+    exit: 1 |}]
 
 let%expect_test "Exception handling (4)" =
   run_expr ~args:["--enable-handlers"] {|handle({do Fail; 42}) {case Fail(_) -> Nothing : Maybe(Int) case Return(x) -> Just(x) : Maybe(Int)}|};
@@ -141,14 +145,15 @@ let%expect_test "Exception handling (5)" =
 let%expect_test "Exception handling (6)" =
   run_expr ~args:["--enable-handlers"] {|handle({var _ = do Fail : Zero; 42}) {case Fail(k) -> k(42) : Either(String,Int) case Return(x) -> Right(x) : Either(String, Int)}|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The effect type of an input to a handle should match the type of its computation patterns, but the expression
         `{var _ = do Fail : Zero; 42}'
     has effect type
         `{|Fail:() {}-> Zero|a}'
     while the handler handles effects
         `{Fail:() {}-> Int,wild|b}'
-    In expression: handle({var _ = do Fail : Zero; 42}) {case Fail(k) -> k(42) : Either(String,Int) case Return(x) -> Right(x) : Either(String, Int)}. |}]
+    In expression: handle({var _ = do Fail : Zero; 42}) {case Fail(k) -> k(42) : Either(String,Int) case Return(x) -> Right(x) : Either(String, Int)}.
+
+    exit: 1 |}]
 
 let%expect_test "Binary choice handling (1)" =
   run_expr ~args:["--enable-handlers"] {|{ handle({ var x = if (do Choose) 40 else 20; var y = if (do Choose) 2 else -20; x + y }) {case Choose(k) -> k(true) ++ k(false) case Return(x) -> [x]} }|};
@@ -219,11 +224,11 @@ let%expect_test "Type inference for deep handler" =
 let%expect_test "Soundness" =
   run_expr ~args:["--enable-handlers"] {|{fun mapk(m) { handle(m()) {case Map(p,k) -> map(k,p) case Return(x) -> [x]} } }|};
   [%expect {|
-    exit: 1
     ***: Parse error: <string>:1
 
       {fun mapk(m) { handle(m()) {case Map(p,k) -> map(k,p) case Return(x) -> [x]} } }
-                                                                                      ^ |}]
+                                                                                      ^
+    exit: 1 |}]
 
 let%expect_test "Deep state handling (1)" =
   run_expr ~args:["--enable-handlers"] {|{fun state(m) { handle(m()) { case Get(k) -> fun(s) { k(s)(s) } case Put(p,k) -> fun(s) { k(())(p) } case Return(x) -> fun(s) { x } } } fun runState(s0, c) { var f = state(c); f(s0) } runState(2, fun() { var s = do Get; do Put(s + 1); var s = do Get; do Put(s + s); do Get }) }|};
@@ -342,9 +347,10 @@ let%expect_test "Pattern-matching on continuation parameter (2)" =
 let%expect_test "Pattern-matching on continuation parameter (3)" =
   run_expr ~args:["--enable-handlers"] {|ignore(fun(m) { handle(m()) { case Op(2) -> f(1) case Return(x) -> x } })|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: Improper pattern matching on resumption
-    In expression: 2. |}]
+    In expression: 2.
+
+    exit: 1 |}]
 
 let%expect_test "Value parameter pattern-matching (1)" =
   run_expr ~args:["--enable-handlers"] {|ignore(fun(m) { handle(m()) { case Op1(k) -> 1 case Return(_) -> 0 } })|};
@@ -397,8 +403,8 @@ let%expect_test "Pattern-matching on handler parameter (2)" =
 let%expect_test "Pattern-matching on handler parameter (2)" =
   run_expr ~args:["--enable-handlers"] {|handle(true)(99 <- 100) { case Return(x) -> x}|};
   [%expect {|
-    exit: 1
-    ***: Error: Links_core.Evalir.Exceptions.Wrong |}]
+    ***: Error: Links_core.Evalir.Exceptions.Wrong
+    exit: 1 |}]
 
 let%expect_test "Pattern-matching on handler parameter (3)" =
   run_expr ~args:["--enable-handlers"] {|handle(true)(Foo(s) <- Foo(42)) { case Return(_) -> s}|};
@@ -409,7 +415,6 @@ let%expect_test "Pattern-matching on handler parameter (3)" =
 let%expect_test "Pattern-matching on handler parameter (4)" =
   run_expr ~args:["--enable-handlers"] {|handle(true)(Foo(s) <- Bar(42)) { case Return(_) -> s}|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The parameter pattern must match the expression in a handle parameter binding, but the pattern
         `Foo(s)'
     has type
@@ -418,7 +423,9 @@ let%expect_test "Pattern-matching on handler parameter (4)" =
         `Bar(42)'
     has type
         `[|Bar:Int|b::Any|]'
-    In expression: handle(true)(Foo(s) <- Bar(42)) { case Return(_) -> s}. |}]
+    In expression: handle(true)(Foo(s) <- Bar(42)) { case Return(_) -> s}.
+
+    exit: 1 |}]
 
 let%expect_test "Pattern-matching on handler parameter (5)" =
   run_expr ~args:["--enable-handlers"] {|handle(true)((x,y) <- (2,1)) { case Return(_) -> x + y}|};

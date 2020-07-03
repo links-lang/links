@@ -19,7 +19,6 @@ let%expect_test "Let polymorphism [2]" =
 let%expect_test "Monomorphic lambda bindings" =
   run_expr {|(fun (p) { (p('a'), p(13))})(fun (x) { (x,x) })|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The function
         `p'
     has type
@@ -28,12 +27,13 @@ let%expect_test "Monomorphic lambda bindings" =
         `Int'
     and the currently allowed effects are
         `|a::(Unl,Mono)'
-    In expression: p(13). |}]
+    In expression: p(13).
+
+    exit: 1 |}]
 
 let%expect_test "No polymorphic recursion without signatures" =
   run_expr {|fun f(x) { ignore(f("a")); ignore(f(1)); 1}|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The function
         `f'
     has type
@@ -42,7 +42,9 @@ let%expect_test "No polymorphic recursion without signatures" =
         `Int'
     and the currently allowed effects are
         `|wild|a'
-    In expression: f(1). |}]
+    In expression: f(1).
+
+    exit: 1 |}]
 
 let%expect_test "Polymorphic recursion with signatures" =
   run_expr {|sig f : (_) ~> Int fun f(x) { ignore(f("a")); ignore(f(1)); 1 } f|};
@@ -53,7 +55,6 @@ let%expect_test "Polymorphic recursion with signatures" =
 let%expect_test "Invalid \"polymorphic recursion\"" =
   run_expr {|sig f : (_) ~> Int fun f(x) { x == 1; f("a"); f(1); 1 }|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The infix operator
         `=='
     has type
@@ -64,7 +65,9 @@ let%expect_test "Invalid \"polymorphic recursion\"" =
         `Int'
     and the currently allowed effects are
         `|c'
-    In expression: x == 1. |}]
+    In expression: x == 1.
+
+    exit: 1 |}]
 
 let%expect_test "Polymorphic mutual recursion [1]" =
   run_expr {|mutual { sig f : (_) ~> Int fun f(x) { ignore(g("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(f("a")); ignore(f(1)); 1 } } f|};
@@ -87,7 +90,6 @@ let%expect_test "Polymorphic mutual recursion [3]" =
 let%expect_test "Polymorphic mutual recursion [4]" =
   run_expr {|mutual { sig f : (_) ~> Int fun f(x) { ignore(g("a")); ignore(g(1)); 1 } sig g : (a) ~> Int fun g(x) { ignore(x == 1); ignore(f("a")); ignore(f(1)); 1 } } f|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The infix operator
         `=='
     has type
@@ -98,7 +100,9 @@ let%expect_test "Polymorphic mutual recursion [4]" =
         `Int'
     and the currently allowed effects are
         `|c'
-    In expression: x == 1. |}]
+    In expression: x == 1.
+
+    exit: 1 |}]
 
 let%expect_test "Polymorphic row recursion" =
   run_expr {|sig h : ((| _)) ~> Int fun h(x) {h((x,x))} h|};
@@ -127,11 +131,12 @@ let%expect_test "Signatures on top-level variables" =
 let%expect_test "Value restriction [1]" =
   run_expr {|sig f : (a) -> a var f = id(id); f|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: Because of the value restriction there can be no
     free rigid type variables at an ungeneralisable binding site,
     but the type `(a) -b-> a' has free rigid type variables.
-    In expression: var f = id(id). |}]
+    In expression: var f = id(id).
+
+    exit: 1 |}]
 
 let%expect_test "Value restriction [2]" =
   run_expr {|sig foo : () {:a|r}~> a fun foo() {var x = recv(); x} foo|};
@@ -142,12 +147,13 @@ let%expect_test "Value restriction [2]" =
 let%expect_test "Overly general signatures" =
   run_expr {|sig id : (a) -> b fun id(x) {x}|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The non-recursive function definition has return type
         `a'
     but its annotation has return type
         `b'
-    In expression: fun id(x) {x}. |}]
+    In expression: fun id(x) {x}.
+
+    exit: 1 |}]
 
 let%expect_test "Polymorphic effects for curried recursive functions" =
   run_expr {|fun zipwith(f)(xs)(ys) {switch ((xs, ys)) {case ((x::xs),(y::ys)) -> (f(x)(y))::(zipwith(f)(xs)(ys)) case _ -> []}} zipwith|};
@@ -158,7 +164,6 @@ let%expect_test "Polymorphic effects for curried recursive functions" =
 let%expect_test "Polymorphic function parameters (unannotated)" =
   run_expr {|fun (f) {(f(42), f(true))}|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The function
         `f'
     has type
@@ -167,7 +172,9 @@ let%expect_test "Polymorphic function parameters (unannotated)" =
         `Bool'
     and the currently allowed effects are
         `|a::(Unl,Mono)'
-    In expression: f(true). |}]
+    In expression: f(true).
+
+    exit: 1 |}]
 
 let%expect_test "Polymorphic function parameters (annotated)" =
   run_expr {|fun (f : (forall a,e::Row.(a) -e-> a)) {(f(42), f(true))}|};
@@ -196,12 +203,13 @@ let%expect_test "Polymorphic function arguments and freeze" =
 let%expect_test "Top-level ill-typed polymorphism" =
   run_expr {|sig foo : forall a.((a) {}~> a) {}~> (Int) {}~> Int fun foo(f){f}|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The non-recursive function definition has return type
         `(a) {}~> a'
     but its annotation has return type
         `(Int) {}~> Int'
-    In expression: fun foo(f){f}. |}]
+    In expression: fun foo(f){f}.
+
+    exit: 1 |}]
 
 let%expect_test "Polymorphic type aliases (Church numerals)" =
   run_expr {|typename Nat = forall a.(a) {}~> ((a) {}~> a) {}~> a; sig zero : Nat var zero = fun (z)(s) {z}; sig succ : (Nat) {}~> Nat fun succ(n) {fun (z)(s){s(n(z)(s))}} succ(succ(zero))(0)(fun (x) {x+1})|};
@@ -224,34 +232,38 @@ let%expect_test "Extra quantifier with mixed kinds" =
 let%expect_test "Missing quantifier with mixed kinds (1)" =
   run_expr {|sig f : forall a.(a) ~e~> a fun f(x) {f(x)} f|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: Unbound type variable `e' in position where
             no free type variables are allowed
-    In expression: (a) ~e~> a. |}]
+    In expression: (a) ~e~> a.
+
+    exit: 1 |}]
 
 let%expect_test "Missing quantifier with mixed kinds (2)" =
   run_expr {|sig f : forall e::Eff.(a) ~e~> a fun f(x) {f(x)} f|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: Unbound type variable `a' in position where
             no free type variables are allowed
-    In expression: a. |}]
+    In expression: a.
+
+    exit: 1 |}]
 
 let%expect_test "Missing quantifier with mixed kinds (3)" =
   run_expr {|sig f : forall a.(a) ~e~> a fun f(x) {x} f|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: Unbound type variable `e' in position where
             no free type variables are allowed
-    In expression: (a) ~e~> a. |}]
+    In expression: (a) ~e~> a.
+
+    exit: 1 |}]
 
 let%expect_test "Missing quantifier with mixed kinds (4)" =
   run_expr {|sig f : forall e::Eff.(a) ~e~> a fun f(x) {x} f|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: Unbound type variable `a' in position where
             no free type variables are allowed
-    In expression: a. |}]
+    In expression: a.
+
+    exit: 1 |}]
 
 let%expect_test "Inner quantifier with free variable" =
   run_expr {|sig f : (a) -e-> (a, a) fun f(x) {sig g : forall b.(a, b) -e-> (a, b) fun g(x, y) {(x, y)} g(x, x)} f|};
@@ -286,14 +298,15 @@ let%expect_test "Varying arities of foralls (1)" =
 let%expect_test "Varying arities of foralls (2)" =
   run_expr {|(~id) : forall a::Any. forall e::Row. forall b. (a) -e-> a|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The inferred type of the expression
         `(~id)'
     is
         `(a::Any) -b-> a::Any'
     but it is annotated with type
         `forall d::Row.forall e.(c::Any) -d-> c::Any'
-    In expression: (~id) : forall a::Any. forall e::Row. forall b. (a) -e-> a. |}]
+    In expression: (~id) : forall a::Any. forall e::Row. forall b. (a) -e-> a.
+
+    exit: 1 |}]
 
 let%expect_test "Signatures (fun): free variable on parameter without sig (1)" =
   run_expr {|fun f(x : a) {x} f|};
@@ -316,18 +329,20 @@ let%expect_test "Signatures (fun): free variable on parameeter with unquantified
 let%expect_test "Signatures (fun): free variable on parameter with quantified sig (4)" =
   run_expr {|sig f : forall a. (a) -> a fun f(x : a) {x} f|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: Unbound type variable `a' in position where
             no free type variables are allowed
-    In expression: a. |}]
+    In expression: a.
+
+    exit: 1 |}]
 
 let%expect_test "Signatures (fun): free variable on body with quantified sig (5)" =
   run_expr {|sig f : forall a. (a) -> a fun f(x) {x : a} f|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: Unbound type variable `a' in position where
             no free type variables are allowed
-    In expression: a. |}]
+    In expression: a.
+
+    exit: 1 |}]
 
 let%expect_test "Signatures (var): free variable in body, no sig (6)" =
   run_expr {|fun f(x) {x}     var x = f : ((a) -> a); x|};

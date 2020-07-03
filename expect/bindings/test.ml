@@ -19,18 +19,19 @@ let%expect_test "Nested scopes" =
 let%expect_test "Non-recursive top-level functions:" =
   run_expr {|var f = fun(x) { f(x) }|};
   [%expect {|
-    exit: 1
     ***: Parse error: <string>:1
 
       var f = fun(x) { f(x) }
-                             ^ |}]
+                             ^
+    exit: 1 |}]
 
 let%expect_test "Non-recursive block-scope functions:" =
   run_expr {|{ var f = fun(x) { f(x) }; () }|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: Unknown variable f.
-    In expression: f. |}]
+    In expression: f.
+
+    exit: 1 |}]
 
 let%expect_test "Mutually recursive top-level functions" =
   run_expr {|mutual { fun evn(n) { n == 0 || od(n - 1) } fun od(n) { evn(n) == false } } evn(20)|};
@@ -71,9 +72,10 @@ let%expect_test "Closures where the environment contains a closure from a differ
 let%expect_test "No value recursion" =
   run_expr {|fun f() { g() } var x = f(); fun g() { x }|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: Unknown variable g.
-    In expression: g. |}]
+    In expression: g.
+
+    exit: 1 |}]
 
 let%expect_test "as patterns" =
   run_expr {|{var x::xs as y = [1,2,3]; y}|};
@@ -84,23 +86,26 @@ let%expect_test "as patterns" =
 let%expect_test "Reject multiple occurrences of a name in a pattern [1]" =
   run_expr {|fun (x,x) { x }|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: Duplicate names are not allowed in patterns.
-    In expression: fun (x,x) { x }. |}]
+    In expression: fun (x,x) { x }.
+
+    exit: 1 |}]
 
 let%expect_test "Reject multiple occurrences of a name in a pattern [2]" =
   run_expr {|fun () { var (x,x) = (1,2); x }|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: Duplicate names are not allowed in patterns.
-    In expression: (x,x). |}]
+    In expression: (x,x).
+
+    exit: 1 |}]
 
 let%expect_test "Reject multiple occurrences of a name in a pattern [3]" =
   run_expr {|fun () { var (a=x,b=x) = (a=1,b=2); x }|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: Duplicate names are not allowed in patterns.
-    In expression: (a=x,b=x). |}]
+    In expression: (a=x,b=x).
+
+    exit: 1 |}]
 
 let%expect_test "Check that recursive bindings don't destroy the local environments of values in the local environment (see bug report from Thierry, 2006-09-17 on links-users)" =
   run_expr {|fun (z) { fun s() {} z()}(fun (aa)() { aa(()) }(fun (x){x}))|};
@@ -129,11 +134,11 @@ let%expect_test "Variable names may contain primes (2)" =
 let%expect_test "Variable names may contain primes (3)" =
   run_expr {|var 'x = 42;|};
   [%expect {|
-    exit: 1
     ***: Parse error: <string>:1
     Unexpected character : '
       var 'x = 42;
-           ^ |}]
+           ^
+    exit: 1 |}]
 
 let%expect_test "Function names may contain primes (1)" =
   run_expr {|fun f'() { 42 } f'()|};
@@ -150,11 +155,11 @@ let%expect_test "Function names may contain primes (2)" =
 let%expect_test "Function names may contain primes (3)" =
   run_expr {|fun 'f() { () }|};
   [%expect {|
-    exit: 1
     ***: Parse error: <string>:1
     Unexpected character : '
       fun 'f() { () }
-           ^ |}]
+           ^
+    exit: 1 |}]
 
 let%expect_test "Function names may contain primes (4)" =
   run_expr {|fun f'(x) { x } f'("f'")|};

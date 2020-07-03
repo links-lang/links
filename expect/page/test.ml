@@ -13,7 +13,6 @@ let%expect_test "Empty page" =
 let%expect_test "Unhandled operation" =
   run_expr ~args:["--enable-handlers"] {|addRoute("/", fun(_) {do Fail})|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The function
         `addRoute'
     has type
@@ -24,5 +23,7 @@ let%expect_test "Unhandled operation" =
         `(String) {|Fail:() {}-> c|d}-> c'
     and the currently allowed effects are
         `wild'
-    In expression: addRoute("/", fun(_) {do Fail}). |}]
+    In expression: addRoute("/", fun(_) {do Fail}).
+
+    exit: 1 |}]
 

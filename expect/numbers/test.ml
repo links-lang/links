@@ -13,7 +13,6 @@ let%expect_test "Truncating integer division" =
 let%expect_test "Incompatibility of float and int types" =
   run_expr {|1 + 2.0|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The infix operator
         `+'
     has type
@@ -24,12 +23,13 @@ let%expect_test "Incompatibility of float and int types" =
         `Float'
     and the currently allowed effects are
         `wild'
-    In expression: 1 + 2.0. |}]
+    In expression: 1 + 2.0.
+
+    exit: 1 |}]
 
 let%expect_test "Incompatibility with everything else" =
   run_expr {|1 == "two"|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The infix operator
         `=='
     has type
@@ -40,7 +40,9 @@ let%expect_test "Incompatibility with everything else" =
         `String'
     and the currently allowed effects are
         `wild'
-    In expression: 1 == "two". |}]
+    In expression: 1 == "two".
+
+    exit: 1 |}]
 
 let%expect_test "Conversions between float and int types" =
   run_expr {|intToFloat(3)|};
@@ -87,8 +89,8 @@ let%expect_test "Operator precedence [1]" =
 let%expect_test "Error on division by zero" =
   run_expr {|{var x = 10; x / (x - 10)}|};
   [%expect {|
-    exit: 1
-    ***: Error: Division_by_zero |}]
+    ***: Error: Division_by_zero
+    exit: 1 |}]
 
 let%expect_test "Equality and comparisons [integer comparison]" =
   run_expr {|({var x = 100000230 * 102300000; x < x + 1}) && ({var x = 1032452430 * 102300234234; x > x - 1})|};

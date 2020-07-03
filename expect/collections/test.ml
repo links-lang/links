@@ -61,32 +61,32 @@ let%expect_test "Let-patterns [3]" =
 let%expect_test "Let-patterns [4]" =
   run_expr {|{var (x,y) :: [] = [(1,2),(3,4),(4,5)] ; (x,y)}|};
   [%expect {|
-    exit: 1
-    ***: Error: Links_core.Evalir.Exceptions.Wrong |}]
+    ***: Error: Links_core.Evalir.Exceptions.Wrong
+    exit: 1 |}]
 
 let%expect_test "Let-patterns [5]" =
   run_expr {|{var [(x,y)] = [(1,2),(3,4),(4,5)] ; (x,y)}|};
   [%expect {|
-    exit: 1
-    ***: Error: Links_core.Evalir.Exceptions.Wrong |}]
+    ***: Error: Links_core.Evalir.Exceptions.Wrong
+    exit: 1 |}]
 
 let%expect_test "Let-patterns [6]" =
   run_expr {|{var [] = [1,2,3] ; ()}|};
   [%expect {|
-    exit: 1
-    ***: Error: Links_core.Evalir.Exceptions.Wrong |}]
+    ***: Error: Links_core.Evalir.Exceptions.Wrong
+    exit: 1 |}]
 
 let%expect_test "Let-patterns [7]" =
   run_expr {|{var [x] = [] ; ()}|};
   [%expect {|
-    exit: 1
-    ***: Runtime error: hd() of empty list |}]
+    ***: Runtime error: hd() of empty list
+    exit: 1 |}]
 
 let%expect_test "Let-patterns [8]" =
   run_expr {|{var x::y = [] ; ()}|};
   [%expect {|
-    exit: 1
-    ***: Runtime error: hd() of empty list |}]
+    ***: Runtime error: hd() of empty list
+    exit: 1 |}]
 
 let%expect_test "Case-patterns [1]" =
   run_expr {|switch ([]) { case [] -> 1 }|};
@@ -97,8 +97,8 @@ let%expect_test "Case-patterns [1]" =
 let%expect_test "Case-patterns [2]" =
   run_expr {|switch ([]) { case x::xs -> 1 }|};
   [%expect {|
-    exit: 1
-    ***: Error: Links_core.Evalir.Exceptions.Wrong |}]
+    ***: Error: Links_core.Evalir.Exceptions.Wrong
+    exit: 1 |}]
 
 let%expect_test "Case-patterns [3]" =
   run_expr {|switch ([]) { case [] -> 2 case x -> 1 }|};

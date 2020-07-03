@@ -1,7 +1,7 @@
 (library
  (name links_expect_polymorphism)
- (libraries base core core_kernel ppx_expect.payload
-   links_expect
+ (libraries
+   base unix links_expect ppx_expect.payload
    ppx_expect.config ppx_expect.config_types
    ppx_expect.common ppx_expect.evaluator
    ppx_expect.matcher ppx_inline_test

@@ -13,14 +13,15 @@ let%expect_test "Lists (Correct)" =
 let%expect_test "Lists (Type argument mismatch)" =
   run_file {|./tests/mutual/listWrong.links|};
   [%expect {|
-    exit: 1
     ./tests/mutual/listWrong.links:4: Type error: The non-recursive function definition has return type
         `[|Cons:(Int, [|Cons:(Int, [|Cons:(Int, [|Nil|a::Any|])|b::Any|])|c::Any|])|d::Any|]'
     but its annotation has return type
         `List (String)'
     In expression: fun example() {
         Cons(1, Cons(2, Cons(3, Nil)))
-    }. |}]
+    }.
+
+    exit: 1 |}]
 
 let%expect_test "Lists (Map)" =
   run_file {|./tests/mutual/listMap.links|};
@@ -43,44 +44,46 @@ let%expect_test "Odd and even numbers (2)" =
 let%expect_test "Only functions and typenames in mutual blocks" =
   run_file {|./tests/mutual/badMutualBinding.links|};
   [%expect {|
-    exit: 1
     ***: Parse error: ./tests/mutual/badMutualBinding.links:4
     Only `fun` and `typename` bindings are allowed in a `mutual` block.
         var bobsleigh = 5;
-                          ^ |}]
+                          ^
+    exit: 1 |}]
 
 let%expect_test "Unguarded recursive applications disallowed (1)" =
   run_file {|./tests/mutual/unguarded1.links|};
   [%expect {|
-    exit: 1
     ./tests/mutual/unguarded1.links:4: Type error: The value has type
         `Int'
     but it is annotated with type
         `Unguarded'
-    In expression: var bar = 5. |}]
+    In expression: var bar = 5.
+
+    exit: 1 |}]
 
 let%expect_test "Unguarded recursive applications disallowed (2)" =
   run_file {|./tests/mutual/unguarded2.links|};
   [%expect {|
-    exit: 1
     ./tests/mutual/unguarded2.links:9: Type error: The value has type
         `Int'
     but it is annotated with type
         `Unguarded'
-    In expression: var bar = 5. |}]
+    In expression: var bar = 5.
+
+    exit: 1 |}]
 
 let%expect_test "Type variables not shared in a mutual block" =
   run_file {|./tests/mutual/tyvarSharingDisallowed.links|};
   [%expect {|
-    exit: 1
     ./tests/mutual/tyvarSharingDisallowed.links:3: Type error: Unbound type variable `a' in position where
             no free type variables are allowed
-    In expression: a. |}]
+    In expression: a.
+
+    exit: 1 |}]
 
 let%expect_test "Linearity (1)" =
   run_file {|./tests/mutual/linearity1.links|};
   [%expect {|
-    exit: 1
     ./tests/mutual/linearity1.links:9: Type error: The function
         `ignore'
     has type
@@ -89,7 +92,9 @@ let%expect_test "Linearity (1)" =
         `Bar'
     and the currently allowed effects are
         `wild'
-    In expression: ignore(bobsleigh). |}]
+    In expression: ignore(bobsleigh).
+
+    exit: 1 |}]
 
 let%expect_test "Linearity (2)" =
   run_file {|./tests/mutual/linearity2.links|};
@@ -106,20 +111,20 @@ let%expect_test "Linearity (3)" =
 let%expect_test "Duplicate type bindings disallowed" =
   run_file {|./tests/mutual/duplicateType.links|};
   [%expect {|
-    exit: 1
     ***: Error: Duplicate mutually-defined bindings
      Foo:
       File ./tests/mutual/duplicateType.links, line 3, columns 33 to 54
-      File ./tests/mutual/duplicateType.links, line 2, columns 11 to 29 |}]
+      File ./tests/mutual/duplicateType.links, line 2, columns 11 to 29
+    exit: 1 |}]
 
 let%expect_test "Duplicate function bindings disallowed" =
   run_file {|./tests/mutual/duplicateFun.links|};
   [%expect {|
-    exit: 1
     ***: Error: Duplicate mutually-defined bindings
      foo:
       File ./tests/mutual/duplicateFun.links, line 3, columns 30 to 46
-      File ./tests/mutual/duplicateFun.links, line 2, columns 11 to 27 |}]
+      File ./tests/mutual/duplicateFun.links, line 2, columns 11 to 27
+    exit: 1 |}]
 
 let%expect_test "Use structural unification if nominal unification fails" =
   run_file {|./tests/mutual/structural.links|};
@@ -130,7 +135,6 @@ let%expect_test "Use structural unification if nominal unification fails" =
 let%expect_test "Use structural unification if nominal unification fails (type error)" =
   run_file {|./tests/mutual/structural2.links|};
   [%expect {|
-    exit: 1
     ./tests/mutual/structural2.links:16: Type error: The function
         `test'
     has type
@@ -139,5 +143,7 @@ let%expect_test "Use structural unification if nominal unification fails (type e
         `T1 (Int)'
     and the currently allowed effects are
         `wild'
-    In expression: test(nil). |}]
+    In expression: test(nil).
+
+    exit: 1 |}]
 

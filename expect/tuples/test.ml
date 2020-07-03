@@ -43,7 +43,6 @@ let%expect_test "Tuple patterns [match]" =
 let%expect_test "Tuple patterns [no match]" =
   run_expr {|{var ((x,y,(z,a,b)), c) = (("string",3.21,(15,(3,2,1))), ());  z}|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The binder must match the type of the body in a value binding, but the pattern
         `((x,y,(z,a,b)), c)'
     has type
@@ -52,7 +51,9 @@ let%expect_test "Tuple patterns [no match]" =
         `(("string",3.21,(15,(3,2,1))), ())'
     has type
         `((String, Float, (Int, (Int, Int, Int))), ())'
-    In expression: var ((x,y,(z,a,b)), c) = (("string",3.21,(15,(3,2,1))), ());. |}]
+    In expression: var ((x,y,(z,a,b)), c) = (("string",3.21,(15,(3,2,1))), ());.
+
+    exit: 1 |}]
 
 let%expect_test "Tuple/record interchangeability" =
   run_expr {|(1,"two",3) == (2="two", 3=3,1=1)|};

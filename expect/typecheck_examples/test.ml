@@ -19,46 +19,50 @@ let%expect_test "Typecheck example file examples/AIPL14/LectureExamples/two-fact
 let%expect_test "Typecheck example file examples/AIPL14/SMTP/Problem1.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/AIPL14/SMTP/Problem1.links|};
   [%expect {|
-    exit: 1
     examples/AIPL14/SMTP/Problem1.links:58: Type error: Variable c has linear type
         `~SMTPServer'
     but is used 0 times.
     In expression: fun mailClient(c) {
       # To implement!
-    }. |}]
+    }.
+
+    exit: 1 |}]
 
 let%expect_test "Typecheck example file examples/AIPL14/SMTP/Problem2.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/AIPL14/SMTP/Problem2.links|};
   [%expect {|
-    exit: 1
     examples/AIPL14/SMTP/Problem2.links:61: Type error: Variable c has linear type
         `~SMTPServer'
     but is used 0 times.
     In expression: fun mailClient(c) {
       # To implement!
-    }. |}]
+    }.
+
+    exit: 1 |}]
 
 let%expect_test "Typecheck example file examples/AIPL14/SMTP/Problem3.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/AIPL14/SMTP/Problem3.links|};
   [%expect {|
-    exit: 1
     examples/AIPL14/SMTP/Problem3.links:71: Type error: Variable c has linear type
         `~SMTPServer'
     but is used 0 times.
     In expression: fun mailClient(c) {
       # To implement.
-    }. |}]
+    }.
+
+    exit: 1 |}]
 
 let%expect_test "Typecheck example file examples/AIPL14/SMTP/Problem4.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/AIPL14/SMTP/Problem4.links|};
   [%expect {|
-    exit: 1
     examples/AIPL14/SMTP/Problem4.links:94: Type error: Variable c has linear type
         `~SMTPServer'
     but is used 0 times.
     In expression: fun mailClient(c) {
       # To implement!
-    }. |}]
+    }.
+
+    exit: 1 |}]
 
 let%expect_test "Typecheck example file examples/AIPL14/Solutions/Problem1.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/AIPL14/Solutions/Problem1.links|};
@@ -87,7 +91,6 @@ let%expect_test "Typecheck example file examples/channels.links" =
 let%expect_test "Typecheck example file examples/church.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/church.links|};
   [%expect {|
-    exit: 1
     examples/church.links:13: Type error: The function
         `succ'
     has type
@@ -96,7 +99,9 @@ let%expect_test "Typecheck example file examples/church.links" =
         `Nat'
     and the currently allowed effects are
         `wild'
-    In expression: succ(zero). |}]
+    In expression: succ(zero).
+
+    exit: 1 |}]
 
 let%expect_test "Typecheck example file examples/citations.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/citations.links|};
@@ -233,11 +238,11 @@ let%expect_test "Typecheck example file examples/handlers/coins_web.links" =
 let%expect_test "Typecheck example file examples/handlers/choose.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/handlers/choose.links|};
   [%expect {|
-    exit: 1
     ***: Parse error: examples/handlers/choose.links:18
 
       var positive = handler(m) {
-                                  ^ |}]
+                                  ^
+    exit: 1 |}]
 
 let%expect_test "Typecheck example file examples/handlers/coins.links" =
   run_file ~args:["--config=tests/examples_effect_sugar.config"] {|examples/handlers/coins.links|};
@@ -246,19 +251,20 @@ let%expect_test "Typecheck example file examples/handlers/coins.links" =
 let%expect_test "Typecheck example file examples/handlers/concurrency.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/handlers/concurrency.links|};
   [%expect {|
-    exit: 1
     ***: Parse error: examples/handlers/concurrency.links:75
 
       handler scheduleBreadthFirst {
-              ^ |}]
+              ^
+    exit: 1 |}]
 
 let%expect_test "Typecheck example file examples/handlers/count_web.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/handlers/count_web.links|};
   [%expect {|
-    exit: 1
     :0: Kind mismatch: Type argument 1 for type constructor Comp has kind Row, but an argument of kind Type was expected.
     In:
-    <dummy> |}]
+    <dummy>
+
+    exit: 1 |}]
 
 let%expect_test "Typecheck example file examples/handlers/deep_state.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/handlers/deep_state.links|};
@@ -291,11 +297,11 @@ let%expect_test "Typecheck example file examples/handlers/monadic_reflection.lin
 let%expect_test "Typecheck example file examples/handlers/nim.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/handlers/nim.links|};
   [%expect {|
-    exit: 1
     ***: Parse error: examples/handlers/nim.links:76
 
       handler naive(m) {
-              ^ |}]
+              ^
+    exit: 1 |}]
 
 let%expect_test "Typecheck example file examples/handlers/nim-webversion.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/handlers/nim-webversion.links|};
@@ -340,26 +346,26 @@ let%expect_test "Typecheck example file examples/handlers/sudoku.links" =
 let%expect_test "Typecheck example file examples/handlers/tests.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/handlers/tests.links|};
   [%expect {|
-    exit: 1
-    ***: Module Error: Could not find file deep_state.links |}]
+    ***: Module Error: Could not find file deep_state.links
+    exit: 1 |}]
 
 let%expect_test "Typecheck example file examples/handlers/toggle.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/handlers/toggle.links|};
   [%expect {|
-    exit: 1
     ***: Parse error: examples/handlers/toggle.links:44
 
           case otherwise -> error("Input '" ^^ s ^^ "' was not recognised as a boolean value.")
-                         ^ |}]
+                         ^
+    exit: 1 |}]
 
 let%expect_test "Typecheck example file examples/handlers/toggle_web.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/handlers/toggle_web.links|};
   [%expect {|
-    exit: 1
     ***: Parse error: examples/handlers/toggle_web.links:44
 
           case otherwise -> error("Input '" ^^ s ^^ "' was not recognised as a boolean value.")
-                         ^ |}]
+                         ^
+    exit: 1 |}]
 
 let%expect_test "Typecheck example file examples/handlers/transaction.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/handlers/transaction.links|};
@@ -504,11 +510,11 @@ let%expect_test "Typecheck example file examples/sessions/counter.links" =
 let%expect_test "Typecheck example file examples/sessions/draggable-boring.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/sessions/draggable-boring.links|};
   [%expect {|
-    exit: 1
     ***: Parse error: examples/sessions/draggable-boring.links:51
 
             manage(<|case s {
-                          ^ |}]
+                          ^
+    exit: 1 |}]
 
 let%expect_test "Typecheck example file examples/sessions/draggable.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/sessions/draggable.links|};
@@ -649,7 +655,6 @@ let%expect_test "Typecheck example file examples/sessions/state.links" =
 let%expect_test "Typecheck example file examples/sessions/two-factor-cp.links" =
   run_file ~args:["--config=tests/examples_session_exceptions.config"] {|examples/sessions/two-factor-cp.links|};
   [%expect {|
-    exit: 1
     examples/sessions/two-factor-cp.links:103: Type error: The function
         `runSync'
     has type
@@ -658,7 +663,9 @@ let%expect_test "Typecheck example file examples/sessions/two-factor-cp.links" =
         `(!(Data).EndBang) ~b~> EndBang'
     and the currently allowed effects are
         `|wild|b'
-    In expression: runSync (fun (return) {<| nu x.({serve(x, "secret data")} | {user(x, return)}) |>}). |}]
+    In expression: runSync (fun (return) {<| nu x.({serve(x, "secret data")} | {user(x, return)}) |>}).
+
+    exit: 1 |}]
 
 let%expect_test "Typecheck example file examples/sessions/two-factor.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/sessions/two-factor.links|};
@@ -671,7 +678,6 @@ let%expect_test "Typecheck example file  examples/Shopping-Cart.links" =
 let%expect_test "Typecheck example file examples/shredding.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/shredding.links|};
   [%expect {|
-    exit: 1
     examples/shredding.links:26: Type error: Iterations over tables are only allowed in tame contexts.
         This iteration has ambient effect
         `{}'
@@ -689,12 +695,13 @@ let%expect_test "Typecheck example file examples/shredding.links" =
                 salary=y.salary)],
           contacts=
            for (y <-- contacts) where (x.dept == y.dept)
-             [(name=y.contact, "client"=y."client")])]. |}]
+             [(name=y.contact, "client"=y."client")])].
+
+    exit: 1 |}]
 
 let%expect_test "Typecheck example file examples/shredding2.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/shredding2.links|};
   [%expect {|
-    exit: 1
     examples/shredding2.links:26: Type error: Iterations over tables are only allowed in tame contexts.
         This iteration has ambient effect
         `{}'
@@ -712,12 +719,13 @@ let%expect_test "Typecheck example file examples/shredding2.links" =
                 salary=y.salary)],
           contacts=
            for (y <-- contacts) where (x.dept == y.dept)
-             [(name=y.contact, "client"=y."client")])]. |}]
+             [(name=y.contact, "client"=y."client")])].
+
+    exit: 1 |}]
 
 let%expect_test "Typecheck example file examples/shredding3.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/shredding3.links|};
   [%expect {|
-    exit: 1
     examples/shredding3.links:20: Type error: Iterations over tables are only allowed in tame contexts.
         This iteration has ambient effect
         `{}'
@@ -735,12 +743,13 @@ let%expect_test "Typecheck example file examples/shredding3.links" =
                 salary=y.salary)],
           contacts=
            for (y <-- contacts) where (x.dept == y.dept)
-             [(name=y.contact, "client"=y."client")])]. |}]
+             [(name=y.contact, "client"=y."client")])].
+
+    exit: 1 |}]
 
 let%expect_test "Typecheck example file examples/shredding4.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/shredding4.links|};
   [%expect {|
-    exit: 1
     examples/shredding4.links:20: Type error: Iterations over tables are only allowed in tame contexts.
         This iteration has ambient effect
         `{}'
@@ -758,7 +767,9 @@ let%expect_test "Typecheck example file examples/shredding4.links" =
                 salary=y.salary)],
           contacts=
            for (y <-- contacts) where (x.dept == y.dept)
-             [(name=y.contact, "client"=y."client")])]. |}]
+             [(name=y.contact, "client"=y."client")])].
+
+    exit: 1 |}]
 
 let%expect_test "Typecheck example file examples/silly-progress.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/silly-progress.links|};
@@ -787,11 +798,11 @@ let%expect_test "Typecheck example file examples/ToDo-List-Styles.links" =
 let%expect_test "Typecheck example file examples/toggle.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/toggle.links|};
   [%expect {|
-    exit: 1
     ***: Parse error: examples/toggle.links:21
 
           case otherwise -> error("Input '" ^^ s ^^ "' was not recognised as a boolean value.")
-                         ^ |}]
+                         ^
+    exit: 1 |}]
 
 let%expect_test "Typecheck example file examples/validate.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/validate.links|};
@@ -816,14 +827,14 @@ let%expect_test "Typecheck example file examples/webserver/draggable.links" =
 let%expect_test "Typecheck example file examples/webserver/examples-nodb.links" =
   run_file ~args:["--config=tests/examples_default.config"; "--path=examples"] {|examples/webserver/examples-nodb.links|};
   [%expect {|
-    exit: 1
-    ***: Module Error: Could not find file breakout.links |}]
+    ***: Module Error: Could not find file breakout.links
+    exit: 1 |}]
 
 let%expect_test "Typecheck example file examples/webserver/examples.links" =
   run_file ~args:["--config=tests/examples_default.config"; "--path=examples"] {|examples/webserver/examples.links|};
   [%expect {|
-    exit: 1
-    ***: Module Error: Could not find file breakout.links |}]
+    ***: Module Error: Could not find file breakout.links
+    exit: 1 |}]
 
 let%expect_test "Typecheck example file examples/webserver/progress.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/webserver/progress.links|};

@@ -19,14 +19,15 @@ let%expect_test "More-specific type annotation with typevars" =
 let%expect_test "Too-general type annotation" =
   run_expr {|fun (x) {x+1} : (a) -> a|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The inferred type of the expression
         `fun (x) {x+1}'
     is
         `(Int) -a-> Int'
     but it is annotated with type
         `(b) -c-> b'
-    In expression: fun (x) {x+1} : (a) -> a. |}]
+    In expression: fun (x) {x+1} : (a) -> a.
+
+    exit: 1 |}]
 
 let%expect_test "Annotations inside functions [1]" =
   run_expr {|fun (x:a) { x:a } : (a) -> a|};
@@ -49,19 +50,20 @@ let%expect_test "Inferred kind" =
 let%expect_test "Kind mismatch [1]" =
   run_expr {|sig f(x) : (a) ~a~> a fun f(x) {f(x)}|};
   [%expect {|
-    exit: 1
     ***: Parse error: <string>:1
 
       sig f(x) : (a) ~a~> a fun f(x) {f(x)}
-            ^ |}]
+            ^
+    exit: 1 |}]
 
 let%expect_test "Kind mismatch [2]" =
   run_expr {|fun (x : a :: Any) {x : a :: Base}|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: Mismatch in kind for type variable `a'.
       Declared as `a::Type(Unl,Base)' and `a::Type(Any,Any)'.
-    In expression: a :: Base. |}]
+    In expression: a :: Base.
+
+    exit: 1 |}]
 
 let%expect_test "Close recursive patterns (issue #360)" =
   run_expr {|switch (Var(0)) { case (_ : (mu a . [|Lam:(Int, a)|Var:Int|])) -> 42 }|};
@@ -72,7 +74,6 @@ let%expect_test "Close recursive patterns (issue #360)" =
 let%expect_test "Unsafe type annotations on non-recursive functions" =
   run_expr {|unsafe sig f : (String) -> () fun f(x) { print(x) } f|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The function
         `print'
     has type
@@ -81,7 +82,9 @@ let%expect_test "Unsafe type annotations on non-recursive functions" =
         `String'
     and the currently allowed effects are
         `|b'
-    In expression: print(x). |}]
+    In expression: print(x).
+
+    exit: 1 |}]
 
 let%expect_test "Unsafe type annotations on recursive functions" =
   run_expr {|unsafe sig f : (String) -> () fun f(x) { f(x) } f|};
@@ -98,7 +101,6 @@ let%expect_test "Unsafe type annotations on mutually recursive functions" =
 let%expect_test "Invalid unsafe type annotations on non-recursive functions" =
   run_expr {|unsafe sig f : (Int) -> () fun f(x) { print(x) } f|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The function
         `print'
     has type
@@ -107,12 +109,13 @@ let%expect_test "Invalid unsafe type annotations on non-recursive functions" =
         `Int'
     and the currently allowed effects are
         `|b'
-    In expression: print(x). |}]
+    In expression: print(x).
+
+    exit: 1 |}]
 
 let%expect_test "Invalid unsafe type annotations on recursive functions" =
   run_expr {|unsafe sig f : (String) -> () fun f(x) { f(x + 1) } f|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The infix operator
         `+'
     has type
@@ -123,12 +126,13 @@ let%expect_test "Invalid unsafe type annotations on recursive functions" =
         `Int'
     and the currently allowed effects are
         `|b'
-    In expression: x + 1. |}]
+    In expression: x + 1.
+
+    exit: 1 |}]
 
 let%expect_test "Invalid unsafe type annotations on mutually recursive functions" =
   run_expr {|mutual { unsafe sig even : (String) -> Bool fun even(x) { x == 0 || odd(x -1) } unsafe sig odd : (Int) -> Bool fun odd(x) { x <> 0 && even(x - 1) } } even|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The infix operator
         `=='
     has type
@@ -139,5 +143,7 @@ let%expect_test "Invalid unsafe type annotations on mutually recursive functions
         `Int'
     and the currently allowed effects are
         `|b'
-    In expression: x == 0. |}]
+    In expression: x == 0.
+
+    exit: 1 |}]
 

@@ -67,14 +67,15 @@ let%expect_test "HasType pattern [1]" =
 let%expect_test "HasType pattern [2]" =
   run_expr {|switch (1) {case (1:Int) -> 1 case (x:String) -> 0}|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: All the cases of a switch should have compatible patterns, but the pattern
         `1:Int'
     has type
         `Int'
     while the subsequent patterns have type
         `String'
-    In expression: switch (1) {case (1:Int) -> 1 case (x:String) -> 0}. |}]
+    In expression: switch (1) {case (1:Int) -> 1 case (x:String) -> 0}.
+
+    exit: 1 |}]
 
 let%expect_test "HasType pattern [3]" =
   run_expr {|switch (A) {case A -> 0 case -A:[|B:[|C:String|]|] -> 1}|};
@@ -109,14 +110,15 @@ let%expect_test "Redundant pattern [1]" =
 let%expect_test "Redundant pattern [2]" =
   run_expr {|fun (x) { switch (x) { case x -> A(1) case A -> A('2') } }|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: All the cases of a switch should have the same type, but the expression
         `A(1)'
     has type
         `[|A:Int|a::Any|]'
     while the subsequent expressions have type
         `[|A:Char|b::Any|]'
-    In expression: switch (x) { case x -> A(1) case A -> A('2') }. |}]
+    In expression: switch (x) { case x -> A(1) case A -> A('2') }.
+
+    exit: 1 |}]
 
 let%expect_test "Redundant pattern [3]" =
   run_expr {|fun (x) {switch (x) { case(A(B(C(1,2,3)))) -> 0 case(A(B(C(1,2,3)))) -> 1}}|};
@@ -151,8 +153,8 @@ let%expect_test "Negative pattern [2]" =
 let%expect_test "Negative pattern [3]" =
   run_expr {|(fun (-Foo) { () })(Foo)|};
   [%expect {|
-    exit: 1
-    ***: Error: Links_core.Evalir.Exceptions.Wrong |}]
+    ***: Error: Links_core.Evalir.Exceptions.Wrong
+    exit: 1 |}]
 
 let%expect_test "Negative pattern [4]" =
   run_expr {|fun (-(Foo,Bar,Baz)) { () }|};
@@ -163,20 +165,20 @@ let%expect_test "Negative pattern [4]" =
 let%expect_test "Negative pattern [5]" =
   run_expr {|(fun (-(Foo,Bar,Baz)) { () })(Bar)|};
   [%expect {|
-    exit: 1
-    ***: Error: Links_core.Evalir.Exceptions.Wrong |}]
+    ***: Error: Links_core.Evalir.Exceptions.Wrong
+    exit: 1 |}]
 
 let%expect_test "Negative pattern [6]" =
   run_expr {|(fun (-(Foo,Bar,Baz)) { () })(Baz)|};
   [%expect {|
-    exit: 1
-    ***: Error: Links_core.Evalir.Exceptions.Wrong |}]
+    ***: Error: Links_core.Evalir.Exceptions.Wrong
+    exit: 1 |}]
 
 let%expect_test "Negative pattern [5]" =
   run_expr {|(fun (-(Foo,Bar,Baz)) { () })(Foo)|};
   [%expect {|
-    exit: 1
-    ***: Error: Links_core.Evalir.Exceptions.Wrong |}]
+    ***: Error: Links_core.Evalir.Exceptions.Wrong
+    exit: 1 |}]
 
 let%expect_test "Negative pattern [6]" =
   run_expr {|(fun (-(Foo,Bar,Baz)) { 42 })(Quux)|};
@@ -187,14 +189,14 @@ let%expect_test "Negative pattern [6]" =
 let%expect_test "Negative pattern [7]" =
   run_expr {|(fun() { var -Foo = Foo; () })()|};
   [%expect {|
-    exit: 1
-    ***: Error: Links_core.Evalir.Exceptions.Wrong |}]
+    ***: Error: Links_core.Evalir.Exceptions.Wrong
+    exit: 1 |}]
 
 let%expect_test "Negative pattern [8]" =
   run_expr {|(fun() { var -(Foo,Bar,Baz) = Bar; () })()|};
   [%expect {|
-    exit: 1
-    ***: Error: Links_core.Evalir.Exceptions.Wrong |}]
+    ***: Error: Links_core.Evalir.Exceptions.Wrong
+    exit: 1 |}]
 
 let%expect_test "Negative pattern [9]" =
   run_expr {|(fun() { var -(Foo,Bar,Baz) = Quux; 42 })()|};

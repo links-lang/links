@@ -67,14 +67,15 @@ let%expect_test "Variant matching - Closed case in function [3]" =
 let%expect_test "Variant matching : Closed case type error" =
   run_expr {|fun () { switch (C (3)) { case A (a) -> a case B (b) -> b } }|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The type of an input to a switch should match the type of its patterns, but the expression
         `C (3)'
     has type
         `[|C:Int|a::Any|]'
     while the patterns have type
         `[|A:b::Any|B:b::Any|]'
-    In expression: switch (C (3)) { case A (a) -> a case B (b) -> b }. |}]
+    In expression: switch (C (3)) { case A (a) -> a case B (b) -> b }.
+
+    exit: 1 |}]
 
 let%expect_test "Variant matching - Open case \"immediate value\" [1]" =
   run_expr {|switch (A(true)) { case A(a) -> a case B(b) -> b case c -> false }|};

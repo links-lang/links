@@ -7,9 +7,10 @@ open Expect_test_common.File.Location
 let%expect_test "Modules hide inner definitions" =
   run_file {|./tests/modules/basic-hide.links|};
   [%expect {|
-    exit: 1
     ./tests/modules/basic-hide.links:7: Type error: Unknown variable foo.
-    In expression: foo. |}]
+    In expression: foo.
+
+    exit: 1 |}]
 
 let%expect_test "Basic qualified binding resolution" =
   run_file {|./tests/modules/basic-qual-resolution.links|};
@@ -62,8 +63,8 @@ let%expect_test "Opened module shadows previous bindings after opening" =
 let%expect_test "Cyclic dependencies outlawed" =
   run_file {|./tests/modules/runmulti cyclicA.links|};
   [%expect {|
-    exit: 1
-    ***: Module Error: Could not find file ./tests/modules/runmulti cyclicA.links |}]
+    ***: Module Error: Could not find file ./tests/modules/runmulti cyclicA.links
+    exit: 1 |}]
 
 let%expect_test "Module chasing" =
   run_file ~args:["--path=tests/modules"] {|./tests/modules/moduleA.links|};
@@ -134,8 +135,9 @@ let%expect_test "Constructor in module" =
 let%expect_test "Constructor out of scope" =
   run_file ~args:["--path=tests/modules"] {|./tests/modules/constructor-test-bad.links|};
   [%expect {|
-    exit: 1
-    ./tests/modules/constructor-test-bad.links:5: Unbound type constructor DT |}]
+    ./tests/modules/constructor-test-bad.links:5: Unbound type constructor DT
+
+    exit: 1 |}]
 
 let%expect_test "Qualified names allowed without parentheses" =
   run_file ~args:["--path=tests/modules"] {|./tests/modules/qualified-type-names.links|};
@@ -182,8 +184,9 @@ let%expect_test "Scoping/Shadowing of type names (6)" =
 let%expect_test "Broken scoping of type names (1)" =
   run_file ~args:["--path=tests/modules"] {|./tests/modules/type-scoping-bad1.links|};
   [%expect {|
-    exit: 1
-    ./tests/modules/type-scoping-bad1.links:6: Unbound type constructor Foo |}]
+    ./tests/modules/type-scoping-bad1.links:6: Unbound type constructor Foo
+
+    exit: 1 |}]
 
 let%expect_test "Import alien functions" =
   run_file ~args:["--path=tests/modules"] {|./tests/modules/alien_blocks_importer.links|};
@@ -200,7 +203,6 @@ let%expect_test "Structural labels (1)" =
 let%expect_test "Structural labels (2)" =
   run_file {|./tests/modules/labels1.links|};
   [%expect {|
-    exit: 1
     ./tests/modules/labels1.links:8: Type error: The non-recursive function definition has return type
         `Int'
     but its annotation has return type
@@ -209,7 +211,9 @@ let%expect_test "Structural labels (2)" =
       switch(x) {
         case Bar(y) -> y
       }
-    }. |}]
+    }.
+
+    exit: 1 |}]
 
 let%expect_test "Boundary peek" =
   run_file {|./tests/modules/boundary_peek.links|};
@@ -226,15 +230,16 @@ let%expect_test "Import (1)" =
 let%expect_test "Import (2)" =
   run_file ~args:["--path=tests/modules"] {|./tests/modules/import2.links|};
   [%expect {|
-    exit: 1
     ./tests/modules/import2.links:2: Type error: Unknown variable x.
-    In expression: x. |}]
+    In expression: x.
+
+    exit: 1 |}]
 
 let%expect_test "Import via open" =
   run_file ~args:["--path=tests/modules"] {|./tests/modules/import_via_open0.links|};
   [%expect {|
-    exit: 1
-    ./tests/modules/import_via_open0.links:2: Module Error: Unbound module Import_via_open1 |}]
+    ./tests/modules/import_via_open0.links:2: Module Error: Unbound module Import_via_open1
+    exit: 1 |}]
 
 let%expect_test "Open is not include" =
   run_file ~args:["--path=tests/modules"] {|./tests/modules/open_is_not_include2.links|};

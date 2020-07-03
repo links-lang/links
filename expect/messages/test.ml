@@ -13,7 +13,6 @@ let%expect_test "Correct message type sent to a process" =
 let%expect_test "Incorrect message type sent to a process is a type error" =
   run_expr {|spawn { { recv() + 1} } ! "two"|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The infix operator
         `!'
     has type
@@ -24,7 +23,9 @@ let%expect_test "Incorrect message type sent to a process is a type error" =
         `String'
     and the currently allowed effects are
         `wild'
-    In expression: spawn { { recv() + 1} } ! "two". |}]
+    In expression: spawn { { recv() + 1} } ! "two".
+
+    exit: 1 |}]
 
 let%expect_test "Receive types must unify (correct, closed rows)" =
   run_expr {|fun f() { receive { case Bar -> () }} fun g() { receive { case Bar -> () }} fun () { f(); g() }|};
@@ -35,7 +36,6 @@ let%expect_test "Receive types must unify (correct, closed rows)" =
 let%expect_test "Receive types must unify (incorrect, closed rows)" =
   run_expr {|fun f() { receive { case Bar -> () }} fun g() { receive { case Foo -> () }} fun () { f(); g() }|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The function
         `g'
     has type
@@ -44,7 +44,9 @@ let%expect_test "Receive types must unify (incorrect, closed rows)" =
 
     and the currently allowed effects are
         `|hear:[|Bar|],wild|b'
-    In expression: g(). |}]
+    In expression: g().
+
+    exit: 1 |}]
 
 let%expect_test "Receive types must unify (correct, open rows)" =
   run_expr {|fun f() { receive { case Bar -> () case x -> () }} fun g() { receive { case Foo -> () case x -> () }} fun () { f(); g() }|};
@@ -55,12 +57,13 @@ let%expect_test "Receive types must unify (correct, open rows)" =
 let%expect_test "Receive types must unify (incorrect, open rows)" =
   run_expr {|fun f() { receive { case Bar (x) -> x+1 case x -> 0 }} fun g() { receive { case Bar (s) -> s+.1.0 case x -> 0.0 }} fun () { f(); g() }|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: Side-effect expressions must have type `()', but the expression
         `f()'
     has type
         `Int'
-    In expression: f();. |}]
+    In expression: f();.
+
+    exit: 1 |}]
 
 let%expect_test "Basic send/receive test." =
   run_expr {|fun main() { spawnWait { var p = spawn { recv() ! "The end" } ! self(); recv() } } main()|};
@@ -77,7 +80,6 @@ let%expect_test "Mailboxes are not polymorphic [1]" =
 let%expect_test "Mailboxes are not polymorphic [2]" =
   run_expr {|var pid = spawn { recv() ++ [] }; { pid ! "one"; pid ! [2] }|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The infix operator
         `!'
     has type
@@ -88,7 +90,9 @@ let%expect_test "Mailboxes are not polymorphic [2]" =
         `String'
     and the currently allowed effects are
         `wild'
-    In expression: pid ! "one". |}]
+    In expression: pid ! "one".
+
+    exit: 1 |}]
 
 let%expect_test "Built-in functions are polymorphic in their mailbox types" =
   run_expr {|fun f() {var x = recv(); intToString(x)} fun g(x) {var () = recv(); intToString(x)} (f, g)|};

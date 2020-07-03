@@ -61,12 +61,13 @@ let%expect_test "Explicit query evaluator annotation (1)" =
 let%expect_test "Explicit query evaluator annotation (2)" =
   run_expr ~args:["--config=tests/shredding/config.sample"] {|query flat { for (x <- [1,2,3]) [(x = x, y = (for (y <- [4,5,6]) [y]))] }|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: Flat query blocks must return a list of records of base type, but the expression
         `{ for (x <- [1,2,3]) [(x = x, y = (for (y <- [4,5,6]) [y]))] }'
     has type
         `[(x:Int,y:[Int])]'
-    In expression: query flat { for (x <- [1,2,3]) [(x = x, y = (for (y <- [4,5,6]) [y]))] }. |}]
+    In expression: query flat { for (x <- [1,2,3]) [(x = x, y = (for (y <- [4,5,6]) [y]))] }.
+
+    exit: 1 |}]
 
 let%expect_test "Explicit query evaluator annotation (3)" =
   run_expr ~args:["--config=tests/shredding/config.sample"] {|query [4] flat { for (x <- [1, 2, 3, 4, 5, 6]) [(x = x)] }|};
@@ -89,8 +90,8 @@ let%expect_test "Nested query annotations (2)" =
 let%expect_test "Nested query annotations (3)" =
   run_expr {|query { query nested { for (i <- [1,2,3]) [(x = i)] } }|};
   [%expect {|
-    exit: 1
-    ***: Runtime error: Incompatible query evaluation annotations. Expected CommonTypes.QueryPolicy.Flat, got CommonTypes.QueryPolicy.Nested. |}]
+    ***: Runtime error: Incompatible query evaluation annotations. Expected CommonTypes.QueryPolicy.Flat, got CommonTypes.QueryPolicy.Nested.
+    exit: 1 |}]
 
 let%expect_test "Nested query annotations (4)" =
   run_expr {|query flat { query flat { for (i <- [1,2,3]) [(x = i)] } }|};
@@ -101,22 +102,23 @@ let%expect_test "Nested query annotations (4)" =
 let%expect_test "Nested query annotations (5)" =
   run_expr {|query nested { query flat { for (i <- [1,2,3]) [(x = i)] } }|};
   [%expect {|
-    exit: 1
-    ***: Runtime error: Incompatible query evaluation annotations. Expected CommonTypes.QueryPolicy.Nested, got CommonTypes.QueryPolicy.Flat. |}]
+    ***: Runtime error: Incompatible query evaluation annotations. Expected CommonTypes.QueryPolicy.Nested, got CommonTypes.QueryPolicy.Flat.
+    exit: 1 |}]
 
 let%expect_test "Nested query annotations (5)" =
   run_expr {|query flat { query nested { for (i <- [1,2,3]) [(x = i)] } }|};
   [%expect {|
-    exit: 1
-    ***: Runtime error: Incompatible query evaluation annotations. Expected CommonTypes.QueryPolicy.Flat, got CommonTypes.QueryPolicy.Nested. |}]
+    ***: Runtime error: Incompatible query evaluation annotations. Expected CommonTypes.QueryPolicy.Flat, got CommonTypes.QueryPolicy.Nested.
+    exit: 1 |}]
 
 let%expect_test "Ranges are wild (1)" =
   run_expr {|query {for (x <- [1..3] ) [(num=x)]}|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: Ranges are wild
         `(wild|a)'
     but the currently allowed effects are
         `()'
-    In expression: [1..3]. |}]
+    In expression: [1..3].
+
+    exit: 1 |}]
 

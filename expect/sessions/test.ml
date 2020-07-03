@@ -19,11 +19,12 @@ let%expect_test "Linear function annotation" =
 let%expect_test "Non-linear use of linear function" =
   run_expr {|sig h : ((a::Any) -e-@ a::Any, a::Any) -e-> a::Any fun h(f, x) {f(f(x))}|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: Variable f has linear type
         `(a::Any) -b-@ a::Any'
     but is used 2 times.
-    In expression: fun h(f, x) {f(f(x))}. |}]
+    In expression: fun h(f, x) {f(f(x))}.
+
+    exit: 1 |}]
 
 let%expect_test "Linear identity" =
   run_expr {|fun (x) {x}|};
@@ -58,7 +59,6 @@ let%expect_test "Ignore send" =
 let%expect_test "Linear end" =
   run_expr {|ignore(request((new(): AP(End))))|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: The function
         `ignore'
     has type
@@ -67,7 +67,9 @@ let%expect_test "Linear end" =
         `~End'
     and the currently allowed effects are
         `wild'
-    In expression: ignore(request((new(): AP(End)))). |}]
+    In expression: ignore(request((new(): AP(End)))).
+
+    exit: 1 |}]
 
 let%expect_test "Non-linear generalisation (1)" =
   run_expr {|{var x = A; ()}|};

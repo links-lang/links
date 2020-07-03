@@ -19,11 +19,11 @@ let%expect_test "Escaped braces" =
 let%expect_test "Escaped braces (not doubled)" =
   run_expr {|<p>A left: {{ and a right: }</p>|};
   [%expect {|
-    exit: 1
     ***: Parse error: <string>:1
     Unexpected character : }
       <p>A left: {{ and a right: }</p>
-                                  ^ |}]
+                                  ^
+    exit: 1 |}]
 
 let%expect_test "Backslashes" =
   run_expr {|<p>A backslash \ </p>|};
@@ -76,26 +76,26 @@ let%expect_test "Attribute splicing [2]" =
 let%expect_test "Rejection of incorrectly nested elements" =
   run_expr {|<a><b></a></b>|};
   [%expect {|
-    exit: 1
     ***: Parse error: <string>:1
     Closing tag 'a' does not match start tag 'b'.
       <a><b></a></b>
-                ^ |}]
+                ^
+    exit: 1 |}]
 
 let%expect_test "Rejection of incorrectly typed attributes" =
   run_expr {|{var x = 3; <a b="{x}"><c/></a>}|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: XML attributes must have type `String', but the expression
         `{x}'
     has type
         `Int'
-    In expression: <a b="{x}"><c/></a>. |}]
+    In expression: <a b="{x}"><c/></a>.
+
+    exit: 1 |}]
 
 let%expect_test "Rejection of incorrectly typed l:attributes" =
   run_expr {|{var x = 3; <a l:href="{x}"><c/></a>}|};
   [%expect {|
-    exit: 1
     :0: Type error: The function
         `<dummy>'
     has type
@@ -104,14 +104,17 @@ let%expect_test "Rejection of incorrectly typed l:attributes" =
         `() -a-> Int'
     and the currently allowed effects are
         `wild'
-    In expression: <dummy>. |}]
+    In expression: <dummy>.
+
+    exit: 1 |}]
 
 let%expect_test "Reject nonsense l:name attributes" =
   run_expr {|<form><input l:name="{1+1}" /></form>|};
   [%expect {|
-    exit: 1
     <string>:1: Error compiling attributes: Illegal l: attribute in XML node
-    In expression: <input l:name="{1+1}" />. |}]
+    In expression: <input l:name="{1+1}" />.
+
+    exit: 1 |}]
 
 let%expect_test "Accept okay l:name attributes" =
   run_expr {|<form l:action="{page <html><body>{stringToXml(foo)}</body></html>}"><input l:name="foo"/></form>|};
@@ -134,11 +137,11 @@ let%expect_test "Amp-encoding (OK)" =
 let%expect_test "Amp-encoding (ill-formed XML)" =
   run_expr {|<xml>this & that</xml>|};
   [%expect {|
-    exit: 1
     ***: Parse error: <string>:1
     Unexpected character : &
       <xml>this & that</xml>
-                 ^ |}]
+                 ^
+    exit: 1 |}]
 
 let%expect_test "Amp-encoding (converting from string)" =
   run_expr {|var x = "this & that"; <xml>{stringToXml(x)}</xml>|};
@@ -209,20 +212,20 @@ let%expect_test "XML-Variant-Conversion (namespaced)" =
 let%expect_test "Ill-formed namespace" =
   run_expr {|variantToXmlItem(NsNode("ill:formed", "div", [ ]))|};
   [%expect {|
-    exit: 1
-    ***: Runtime error: Illegal character in namespace |}]
+    ***: Runtime error: Illegal character in namespace
+    exit: 1 |}]
 
 let%expect_test "Ill-formed tag-name [1]" =
   run_expr {|variantToXmlItem(Node("tag:name", [ ]))|};
   [%expect {|
-    exit: 1
-    ***: Runtime error: Illegal character in tagname |}]
+    ***: Runtime error: Illegal character in tagname
+    exit: 1 |}]
 
 let%expect_test "Ill-formed tag-name [2]" =
   run_expr {|variantToXmlItem(NsNode("ns", "tag:name", [ ]))|};
   [%expect {|
-    exit: 1
-    ***: Runtime error: Illegal character in tagname |}]
+    ***: Runtime error: Illegal character in tagname
+    exit: 1 |}]
 
 let%expect_test "Appending a children (single)" =
   run_expr {|appendChild(makeXml("foo", [ ], <div/>), <span/>)|};
@@ -269,14 +272,14 @@ let%expect_test "Setting new Attributes NS" =
 let%expect_test "Setting illformed Attributes [1]" =
   run_expr {|setAttributeNS(makeXml("foo", [ ], <#/>), "attr", "ill:formed", "baz")|};
   [%expect {|
-    exit: 1
-    ***: Runtime error: Attribute names cannot contain colons. |}]
+    ***: Runtime error: Attribute names cannot contain colons.
+    exit: 1 |}]
 
 let%expect_test "Setting illformed Attributes [2]" =
   run_expr {|setAttribute(makeXml("foo", [ ], <#/>), "ill:formed", "baz")|};
   [%expect {|
-    exit: 1
-    ***: Runtime error: Attribute names cannot contain colons. Use setAttributeNS instead. |}]
+    ***: Runtime error: Attribute names cannot contain colons. Use setAttributeNS instead.
+    exit: 1 |}]
 
 let%expect_test "Setting existing Attributes" =
   run_expr {|setAttribute(makeXml("foo", [ ("bar", "baz") ], <#/>), "bar", "oof")|};
@@ -335,101 +338,101 @@ let%expect_test "Body comment" =
 let%expect_test "Unterminated top level comment (1)" =
   run_expr {|<!-- this comment never ends -> ()|};
   [%expect {|
-    exit: 1
     ***: Parse error: <string>:1
     Unexpected character :
       <!-- this comment never ends -> ()
-                                        ^ |}]
+                                        ^
+    exit: 1 |}]
 
 let%expect_test "Unterminated top level comment (2)" =
   run_expr {|<!-- this comment never ends > ()|};
   [%expect {|
-    exit: 1
     ***: Parse error: <string>:1
     Unexpected character :
       <!-- this comment never ends > ()
-                                       ^ |}]
+                                       ^
+    exit: 1 |}]
 
 let%expect_test "Unterminated top level comment (3)" =
   run_expr {|<!-- this comment never ends ()|};
   [%expect {|
-    exit: 1
     ***: Parse error: <string>:1
     Unexpected character :
       <!-- this comment never ends ()
-                                     ^ |}]
+                                     ^
+    exit: 1 |}]
 
 let%expect_test "Unterminated body comment (1)" =
   run_expr {|<b>ab<!-- this comment never ends -></b>|};
   [%expect {|
-    exit: 1
     ***: Parse error: <string>:1
     Unexpected character :
       <b>ab<!-- this comment never ends -></b>
-                                              ^ |}]
+                                              ^
+    exit: 1 |}]
 
 let%expect_test "Unterminated body comment (2)" =
   run_expr {|<b>ab<!-- this comment never ends ></b>|};
   [%expect {|
-    exit: 1
     ***: Parse error: <string>:1
     Unexpected character :
       <b>ab<!-- this comment never ends ></b>
-                                             ^ |}]
+                                             ^
+    exit: 1 |}]
 
 let%expect_test "Unterminated body comment (3)" =
   run_expr {|<b>ab<!-- this comment never ends -></b>|};
   [%expect {|
-    exit: 1
     ***: Parse error: <string>:1
     Unexpected character :
       <b>ab<!-- this comment never ends -></b>
-                                              ^ |}]
+                                              ^
+    exit: 1 |}]
 
 let%expect_test "Unterminated body comment (4)" =
   run_expr {|<b>ab<!-- this comment never ends</b>|};
   [%expect {|
-    exit: 1
     ***: Parse error: <string>:1
     Unexpected character :
       <b>ab<!-- this comment never ends</b>
-                                           ^ |}]
+                                           ^
+    exit: 1 |}]
 
 let%expect_test "Nested comments" =
   run_expr {|<b><!-- First <!-- Second --> --></b>|};
   [%expect {|
-    exit: 1
     ***: Parse error: <string>:1
     Unexpected character : --
       <b><!-- First <!-- Second --> --></b>
-                        ^ |}]
+                        ^
+    exit: 1 |}]
 
 let%expect_test "Double dash in comment (1)" =
   run_expr {|<b><!-- -- --></b>|};
   [%expect {|
-    exit: 1
     ***: Parse error: <string>:1
     Unexpected character : --
       <b><!-- -- --></b>
-                ^ |}]
+                ^
+    exit: 1 |}]
 
 let%expect_test "Double dash in comment (2)" =
   run_expr {|<b><!-- ---></b>|};
   [%expect {|
-    exit: 1
     ***: Parse error: <string>:1
     Unexpected character : --
       <b><!-- ---></b>
-                ^ |}]
+                ^
+    exit: 1 |}]
 
 let%expect_test "Triple dash in comment" =
   run_expr {|<b><!-- --- --></b>|};
   [%expect {|
-    exit: 1
     ***: Parse error: <string>:1
     Unexpected character : --
       <b><!-- --- --></b>
-                ^ |}]
+                ^
+    exit: 1 |}]
 
 let%expect_test "XML comment embodied inside a string literal" =
   run_expr {|"<!-- This is an XML comment -->"|};
@@ -446,18 +449,19 @@ let%expect_test "Valid XML embodied inside an XML comment" =
 let%expect_test "Ill-bracketed tag (closing tag hidden in a comment)" =
   run_expr {|<b><!-- </b> -->|};
   [%expect {|
-    exit: 1
     ***: Parse error: <string>:1
 
       <b><!-- </b> -->
-                      ^ |}]
+                      ^
+    exit: 1 |}]
 
 let%expect_test "Ill-bracketed tag (opening tag hidden in a comment)" =
   run_expr {|<!-- <b> --></b>|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: Unknown variable </.
-    In expression: </b. |}]
+    In expression: </b.
+
+    exit: 1 |}]
 
 let%expect_test "Newlines in comment" =
   run_file {|./tests/xml_comment_newlines.links|};
@@ -468,11 +472,11 @@ let%expect_test "Newlines in comment" =
 let%expect_test "Mismatched tags" =
   run_expr {|<a></b>|};
   [%expect {|
-    exit: 1
     ***: Parse error: <string>:1
     Closing tag 'b' does not match start tag 'a'.
       <a></b>
-             ^ |}]
+             ^
+    exit: 1 |}]
 
 let%expect_test "Attributes with hyphens are OK" =
   run_expr {|<button class="navbar-toggler" type="button" data-toggle="collapse"></button>|};
@@ -483,9 +487,9 @@ let%expect_test "Attributes with hyphens are OK" =
 let%expect_test "Tags with hyphens are not OK" =
   run_expr {|<button-monstrosity type="button"></button-monstrosity>|};
   [%expect {|
-    exit: 1
     ***: Parse error: <string>:1
     Unexpected character : -
       <button-monstrosity type="button"></button-monstrosity>
-              ^ |}]
+              ^
+    exit: 1 |}]
 

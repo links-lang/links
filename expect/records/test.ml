@@ -43,11 +43,11 @@ let%expect_test "Lambda pattern matching" =
 let%expect_test "Projection of absent field" =
   run_expr {|(x="1").y;;|};
   [%expect {|
-    exit: 1
     ***: Parse error: <string>:1
 
       (x="1").y;;
-                ^ |}]
+                ^
+    exit: 1 |}]
 
 let%expect_test "Projections" =
   run_expr {|(y=(z=3),x="four").y.z|};
@@ -106,14 +106,15 @@ let%expect_test "With syntax: multiple labels (b)" =
 let%expect_test "With syntax (missing label)" =
   run_expr {|((x = 3) with y=4)|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: A record can only be updated with compatible fields, but the expression
         `(x = 3)'
     has type
         `(x:Int)'
     while the update fields have type
         `(y:a|b::Any)'
-    In expression: ((x = 3) with y=4). |}]
+    In expression: ((x = 3) with y=4).
+
+    exit: 1 |}]
 
 let%expect_test "Tables must have table type." =
   run_expr {|fun (t) { for (x <-- t) [(a=x.y)] }|};
@@ -124,36 +125,38 @@ let%expect_test "Tables must have table type." =
 let%expect_test "Duplicate fields" =
   run_expr {|(x=3,x=3)|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: Duplicate labels (x) in record.
-    In expression: (x=3,x=3). |}]
+    In expression: (x=3,x=3).
+
+    exit: 1 |}]
 
 let%expect_test "Uninhabited recursive rows (questionable)" =
   run_expr {|(fun (x : (|(mu b . b))) {x})(())|};
   [%expect {|
-    exit: 1
-    ***: Error: "Assert_failure core/unify.ml:1046:11" |}]
+    ***: Error: "Assert_failure core/unify.ml:1046:11"
+    exit: 1 |}]
 
 let%expect_test "Missing absent label (1)" =
   run_expr {|fun (r : (|a)) {(l=42|r)}|};
   [%expect {|
-    exit: 1
     <string>:1: Type error: Only a record can be extended, and it must be extended with different fields, but the expression
         `<dummy>'
     has type
         `(|a)'
     while the extension fields have type
         `(l-|b::Any)'
-    In expression: (l=42|r). |}]
+    In expression: (l=42|r).
+
+    exit: 1 |}]
 
 let%expect_test "Missing absent label (2)" =
   run_expr {|fun (r : (|a)) {(l=42|(r : (l-|a)))}|};
   [%expect {|
-    exit: 1
     ***: Parse error: <string>:1
 
       fun (r : (|a)) {(l=42|(r : (l-|a)))}
-                                     ^ |}]
+                                     ^
+    exit: 1 |}]
 
 let%expect_test "Possibly absent label in a closed row" =
   run_expr {|fun (x : (a{%b}|%c)) {x : ()}|};
