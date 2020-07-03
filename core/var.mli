@@ -13,7 +13,7 @@ type var = int
   [@@deriving show,eq,yojson]
 type var_info
   [@@deriving show]
-type binder = var * var_info
+type binder
   [@@deriving show]
 
 val dummy_var : int
@@ -38,6 +38,7 @@ val make_info : Types.datatype -> string -> Scope.t -> var_info
 val make_local_info : (Types.datatype * string) -> var_info
 val make_global_info : (Types.datatype * string) -> var_info
 
+val make_binder : var -> var_info -> binder
 val update_type : Types.datatype -> binder -> binder
 
 val fresh_binder_of_type : Types.datatype -> binder

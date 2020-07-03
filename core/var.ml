@@ -57,6 +57,7 @@ let make_info t name scope = (t, name, scope)
 let make_local_info  (t, name) = make_info t name Scope.Local
 let make_global_info (t, name) = make_info t name Scope.Global
 
+let make_binder var info = (var, info)
 let update_type newtype (var, (_, name, scope)) = (var, (newtype, name, scope))
 
 let fresh_binder_of_type = info_of_type ->- fresh_binder

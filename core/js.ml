@@ -88,4 +88,4 @@ let var_name_var x = "_" ^ string_of_int x
 
 (** Generate a JavaScript name from a binder based on the unique
     integer for that binder. *)
-let var_name_binder (x, _) = var_name_var x
+let var_name_binder b = var_name_var (Var.var_of_binder b)

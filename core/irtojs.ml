@@ -729,7 +729,7 @@ end = functor (K : CONTINUATION) -> struct
   struct
     let rec fun_def : Ir.fun_def -> code -> code =
       fun ((fb, (_, xsb, _), zb, location, _unsafe) : Ir.fun_def) code ->
-        let f_var, _ = fb in
+        let f_var = Var.var_of_binder fb in
         let bs = List.map name_binder xsb in
         let _, xs_names = List.split bs in
 

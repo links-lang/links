@@ -635,10 +635,12 @@ module ElimDeadDefs = struct
     method with_envs (env, rec_env, mutrec_env) =
       {< env = env; rec_env = rec_env; mutrec_env = mutrec_env >}
 
-    method init (x, _) =
+    method init b =
+      let x = Var.var_of_binder b in
       o#with_env (IntMap.add x 0 env)
 
-    method initrec (x, _) =
+    method initrec b =
+      let x = Var.var_of_binder b in
       o#with_envs (IntMap.add x 0 env, IntMap.add x (0, false) rec_env, IntMap.add x (0, true) mutrec_env)
 
     method set_rec_status f (r,m) =

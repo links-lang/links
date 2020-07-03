@@ -1117,7 +1117,7 @@ let match_choices : var -> clause list -> bound_computation =
                               List.fold_left
                                 (fun cases -> function
                                   | ([(annotation, pattern)], body) ->
-                                    let (name, ((x, _) as b)) =
+                                    let (name, b) =
                                       match pattern with
                                       | Pattern.Variant (name, Pattern.Variable b) -> (name, b)
                                       | Pattern.Variant (name, Pattern.Any)        ->
@@ -1127,7 +1127,8 @@ let match_choices : var -> clause list -> bound_computation =
                                       | _ ->
                                         (* TODO: give a more useful error message - including the position
                                            (it may be necessary to detect the error earlier on) *)
-                                        failwith ("Only choice patterns are supported in choice compilation") in
+                                         failwith ("Only choice patterns are supported in choice compilation") in
+                                    let x = Var.var_of_binder b in
                                     let body = apply_annotation (Variable x) (annotation, body) in
                                     StringMap.add name (b, body env) cases
                                   | _ -> assert false)

@@ -535,8 +535,10 @@ struct
     match Tables.lookup Tables.fun_defs f with
     | Some (finfo, (xs, body), z, location) ->
       Some
-      begin
-        match Var.name_of_binder (f, finfo) with
+        begin
+          (* TODO(dhil): This is a bit of an around-about way to
+             obtain the binder name. *)
+        match Var.(name_of_binder (make_binder f finfo)) with
         | "concatMap" ->
           Q.Primitive "ConcatMap"
         | "map" ->
@@ -557,7 +559,7 @@ struct
                 Closure ((xs, body), env_of_value_env env.policy env')
             | Location.Client ->
               raise (Errors.runtime_error ("Attempt to use client function: " ^
-                Js.var_name_binder (f, finfo) ^ " in query"))
+                Js.var_name_binder (Var.make_binder f finfo) ^ " in query"))
           end
       end
     | None -> None
@@ -764,11 +766,12 @@ struct
                     computation (bind env (x, tail_computation env tc)) (bs, tailcomp)
               | Fun (_, _, _, Location.Client, _) ->
                   query_error "Client function"
-              | Fun ((f, _), _, _, _, _) ->
-                (* This should never happen now that we have closure conversion*)
-                raise (internal_error
-                  ("Function definition in query: " ^ string_of_int f ^
-                   ". This should have been closure-converted."))
+              | Fun (b, _, _, _, _) ->
+                 let f = Var.var_of_binder b in
+                 (* This should never happen now that we have closure conversion*)
+                 raise (internal_error
+                          ("Function definition in query: " ^ string_of_int f ^
+                             ". This should have been closure-converted."))
               | Rec _ ->
                   query_error "Recursive function"
               | Alien _ -> (* just skip it *)
@@ -867,23 +870,25 @@ struct
     | Q.Case (v, cases, default) ->
       let rec reduce_case (v, cases, default) =
         match v with
-          | Q.Variant (label, v) as w ->
-            begin
-              match StringMap.lookup label cases, default with
-                | Some ((x, _), c), _ ->
-                  norm (bind env (x, v)) c
-                | None, Some ((z, _), c) ->
-                  norm (bind env (z, w)) c
-                | None, None -> query_error "Pattern matching failed"
-            end
-          | Q.If (c, t, e) ->
-            Q.If
-              (c,
-               reduce_case (t, cases, default),
-               reduce_case (e, cases, default))
-          |  _ -> assert false
+        | Q.Variant (label, v) as w ->
+           begin
+             match StringMap.lookup label cases, default with
+             | Some (b, c), _ ->
+                let x = Var.var_of_binder b in
+                norm (bind env (x, v)) c
+             | None, Some (b, c) ->
+                let z = Var.var_of_binder b in
+                norm (bind env (z, w)) c
+             | None, None -> query_error "Pattern matching failed"
+           end
+        | Q.If (c, t, e) ->
+           Q.If
+             (c,
+              reduce_case (t, cases, default),
+              reduce_case (e, cases, default))
+        |  _ -> assert false
       in
-        reduce_case (norm env v, cases, default)
+      reduce_case (norm env v, cases, default)
     | v -> v
 
   and apply env : Q.t * Q.t list -> Q.t = function
