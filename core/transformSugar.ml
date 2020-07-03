@@ -4,10 +4,11 @@ open Sugartypes
 open SourceCode
 open SourceCode.WithPos
 open Utility
+open Types
 
 module TyEnv = Env.String
 
-type program_transformer = Types.typing_environment -> Sugartypes.program -> Sugartypes.program
+type program_transformer  = Types.typing_environment -> Sugartypes.program  -> Sugartypes.program
 type sentence_transformer = Types.typing_environment -> Sugartypes.sentence -> Sugartypes.sentence
 
 let internal_error message =
@@ -19,12 +20,13 @@ let type_section env =
   | FloatMinus -> TyEnv.find "-."env
   | Project label ->
       let ab, a = Types.fresh_type_quantifier (lin_any, res_any) in
-      let rhob, (fields, rho, _) = Types.fresh_row_quantifier (lin_any, res_any) in
+      let rhob, row  = fresh_row_quantifier (lin_any, res_any) in
+      let (fields, rho, _) = TypeUtils.extract_row_parts row in
       let eb, e = Types.fresh_row_quantifier default_effect_subkind in
 
-      let r = `Record (StringMap.add label (`Present a) fields, rho, false) in
-        `ForAll ([ab; rhob; eb],
-                 `Function (Types.make_tuple_type [r], e, a))
+      let r = Record (Row (StringMap.add label (Present a) fields, rho, false)) in
+        ForAll ([ab; rhob; eb],
+                Function (Types.make_tuple_type [r], e, a))
   | Name var -> TyEnv.find var env
 
 let type_unary_op env tycon_env =
@@ -60,23 +62,23 @@ let type_binary_op env tycon_env =
   | Name "<>" ->
       let ab, a = Types.fresh_type_quantifier (lin_any, res_any) in
       let eb, e = Types.fresh_row_quantifier (lin_any, res_any) in
-        `ForAll ([ab; eb],
-                 `Function (Types.make_tuple_type [a; a], e,
-                            `Primitive Primitive.Bool))
+        ForAll ([ab; eb],
+                Function (Types.make_tuple_type [a; a], e,
+                          Primitive Primitive.Bool ))
   | Name "!"     -> TyEnv.find "Send" env
   | Name n       -> TyEnv.find n env
 
 let fun_effects t pss =
   let rec get_eff =
     function
-      | `Function (_, effects, _), [_] -> effects
-      | `Function (_, _, t), _::pss -> get_eff (TypeUtils.concrete_type t, pss)
-      | `Lolli (_, effects, _), [_] -> effects
-      | `Lolli (_, _, t), _::pss -> get_eff (TypeUtils.concrete_type t, pss)
+      | Function (_, effects, _), [_]
+      | Lolli    (_, effects, _), [_] -> effects
+      | Function (_, _, t), _::pss
+      | Lolli    (_, _, t), _::pss -> get_eff (TypeUtils.concrete_type t, pss)
       | _ -> assert false in
   let t =
     match TypeUtils.concrete_type t with
-      | `ForAll (_, t) -> TypeUtils.concrete_type t
+      | ForAll (_, body) -> TypeUtils.concrete_type body
       | t -> t
   in
     get_eff (t, pss)
@@ -140,6 +142,7 @@ let check_type_application (e, t) k =
   end
 
 class transform (env : Types.typing_environment) =
+  let open PrimaryKind in
   object (o : 'self_type)
     val var_env = env.Types.var_env
     val tycon_env = env.Types.tycon_env
@@ -257,7 +260,7 @@ class transform (env : Types.typing_environment) =
     method phrasenode : phrasenode -> ('self_type * phrasenode * Types.datatype) =
       function
       | Constant c -> let (o, c, t) = o#constant c in (o, Constant c, t)
-      | Var var -> (o, Var var, o#lookup_type var)
+      | Sugartypes.Var var -> (o, Sugartypes.Var var, o#lookup_type var)
       | FreezeVar var -> (o, FreezeVar var, o#lookup_type var)
       | FunLit (Some argss, lin, lam, location) ->
           let inner_e = snd (last argss) in
@@ -266,8 +269,8 @@ class transform (env : Types.typing_environment) =
             List.fold_right
               (fun (args, effects) (o, rt) ->
                  let (o, args) = o#datatype args in
-                 let (o, effects) = o#row effects in
-                   (o, `Function (args, effects, rt)))
+                 let (o, row) = o#row effects in
+                   (o, Function (args, row, rt)))
               argss
               (o, rt)
           in
@@ -288,14 +291,14 @@ class transform (env : Types.typing_environment) =
           let (o, spawn_loc) = o#given_spawn_location spawn_loc in
           let envs = o#backup_envs in
           let (o, inner_effects) = o#row inner_effects in
-          let process_type = `Application (Types.process, [`Row inner_effects]) in
+          let process_type = Application (Types.process, [(Row, inner_effects)]) in
           let o = o#with_effects inner_effects in
           let (o, body, _) = o#phrase body in
           let o = o#restore_envs envs in
             (o, Spawn (k, spawn_loc, body, Some inner_effects), process_type)
-      | Select (l, e) ->
+      | Sugartypes.Select (l, e) ->
          let (o, e, t) = o#phrase e in
-         (o, Select (l, e), TypeUtils.select_type l t)
+         (o, Sugartypes.Select (l, e), TypeUtils.select_type l t)
       | Offer (e, bs, Some t) ->
           let (o, e, _) = o#phrase e in
           let (o, bs) =
@@ -425,8 +428,8 @@ class transform (env : Types.typing_environment) =
               | Some t ->
                   begin
                     match TypeUtils.concrete_type t with
-                      | `Record row ->
-                          `Record (Types.extend_row field_types row)
+                      | Record row ->
+                          Record (Types.extend_row field_types row)
                       | t ->
                           Debug.print ("bad t: " ^ Types.string_of_datatype t);
                           assert false
@@ -444,10 +447,12 @@ class transform (env : Types.typing_environment) =
               fields
           in
           let t = match Types.concrete_type t with
-            | `Record row ->
-               let fs, rv, closed = Types.flatten_row row in
-               let fs = List.fold_left2 (fun fs (name, _) t -> StringMap.add name (`Present t) fs) fs fields ts in
-               `Record (fs, rv, closed)
+            | Record row ->
+               let  ( fs, rv, closed ) =
+                 Types.flatten_row row |> TypeUtils.extract_row_parts
+               in
+               let fs = List.fold_left2 (fun fs (name, _) t -> StringMap.add name (Present t) fs) fs fields ts in
+               Record (Row (fs, rv, closed))
             | _ -> t
           in
           (o, With (e, fields), t)
@@ -545,35 +550,35 @@ class transform (env : Types.typing_environment) =
           let (o, name, _) = o#phrase name in
           let (o, driver, _) = option o (fun o -> o#phrase) driver in
           let (o, args, _) = option o (fun o -> o#phrase) args in
-            (o, DatabaseLit (name, (driver, args)), `Primitive Primitive.DB)
+            (o, DatabaseLit (name, (driver, args)), Primitive Primitive.DB)
       | LensLit (table, Some t) ->
          let (o, table, _) = o#phrase table in
          let (o, t) = o#lens_type t in
-            (o, LensLit (table, Some t), `Lens (t))
+            (o, LensLit (table, Some t), Lens t)
       | LensSerialLit (lens,columns,Some t) ->
          let (o, lens, _) = o#phrase lens in
          let (o, t) = o#lens_type t in
-            (o, LensSerialLit (lens, columns, Some t), `Lens t)
+            (o, LensSerialLit (lens, columns, Some t), Lens t)
       | LensDropLit (lens, drop, key, default, Some t) ->
           let (o, lens, _) = o#phrase lens in
           let (o, t) = o#lens_type t in
           let (o, default, _) = o#phrase default in
-            (o, LensDropLit (lens, drop, key, default, Some t), `Lens t)
+            (o, LensDropLit (lens, drop, key, default, Some t), Lens t)
       | LensSelectLit (lens, predicate, Some t) ->
           let (o, lens, _) = o#phrase lens in
           let (o, predicate, _) = o#phrase predicate in
           let (o, t) = o#lens_type t in
-            (o, LensSelectLit (lens, predicate, Some t), `Lens t)
+            (o, LensSelectLit (lens, predicate, Some t), Lens t)
       | LensJoinLit (lens1, lens2, on, left, right, Some t) ->
           let (o, lens1, _) = o#phrase lens1 in
           let (o, lens2, _) = o#phrase lens2 in
           let (o, t) = o#lens_type t in
-            (o, LensJoinLit (lens1, lens2, on, left, right, Some t), `Lens t)
+            (o, LensJoinLit (lens1, lens2, on, left, right, Some t), Lens t)
 
       | LensCheckLit (lens, Some t) ->
           let (o, lens, _) = o#phrase lens in
           let (o, t) = o#lens_type t in
-            (o, LensCheckLit (lens, Some t), `Lens t)
+            (o, LensCheckLit (lens, Some t), Lens t)
       | LensGetLit (lens, Some t) ->
           let (o, lens, _) = o#phrase lens in
           let (o, t) = o#datatype t in
@@ -590,7 +595,7 @@ class transform (env : Types.typing_environment) =
           let (o, read_row) = o#datatype read_row in
           let (o, write_row) = o#datatype write_row in
           let (o, needed_row) = o#datatype needed_row in
-            (o, TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db), `Table (read_row, write_row, needed_row))
+            (o, TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db), Table (read_row, write_row, needed_row))
       | DBDelete (p, from, where) ->
           let (o, from, _) = o#phrase from in
           let (o, p) = o#pattern p in
@@ -638,7 +643,7 @@ class transform (env : Types.typing_environment) =
          let o = o#with_var_env (TyEnv.extend (o#get_var_env ()) (o#get_formlet_env ())) in
          let (o, yields, t) = o#phrase yields in
          let o = o#restore_envs envs in
-         (o, Formlet (body, yields), Instantiate.alias "Formlet" [`Type t] tycon_env)
+         (o, Formlet (body, yields), Instantiate.alias "Formlet" [(Type, t)] tycon_env)
       | Page e -> let (o, e, _) = o#phrase e in (o, Page e, Instantiate.alias "Page" [] tycon_env)
       | FormletPlacement (f, h, attributes) ->
           let (o, f, _) = o#phrase f in
@@ -713,10 +718,10 @@ class transform (env : Types.typing_environment) =
           let (o, e, _) = o#phrase e in
           let (o, p) = o#pattern p in
           (o, List (p, e))
-      | Table (p, e) ->
+      | Sugartypes.Table (p, e) ->
           let (o, e, _) = o#phrase e in
           let (o, p) = o#pattern p in
-          (o, Table (p, e))
+          (o, Sugartypes.Table (p, e))
 
     method funlit : Types.row -> funlit -> ('self_type * funlit * Types.datatype) =
       fun inner_eff (pss, e) ->
@@ -870,7 +875,7 @@ class transform (env : Types.typing_environment) =
       | CPGrab (cbind, None, p) ->
          let (o, p, t) = o#cp_phrase p in
          o, CPGrab (cbind, None, p), t
-      | CPGrab ((c, Some (`Input (_a, s), _grab_tyargs) as cbind), Some b, p) -> (* FYI: a = u *)
+      | CPGrab ((c, Some (Input (_a, s), _grab_tyargs) as cbind), Some b, p) -> (* FYI: a = u *)
          let envs = o#backup_envs in
          let (o, b) = o#binder b in
          let venv = TyEnv.bind c s (o#get_var_env ()) in
@@ -878,7 +883,7 @@ class transform (env : Types.typing_environment) =
          let (o, p, t) = o#cp_phrase p in
          let o = o#restore_envs envs in
          o, CPGrab (cbind, Some b, p), t
-      | CPGive ((c, Some (`Output (_t, s), _tyargs) as cbind), e, p) ->
+      | CPGive ((c, Some (Output (_t, s), _tyargs) as cbind), e, p) ->
          let envs = o#backup_envs in
          let o = {< var_env = TyEnv.bind c s (o#get_var_env ()) >} in
          let (o, e, _typ) = option o (fun o -> o#phrase) e in

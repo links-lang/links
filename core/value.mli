@@ -11,7 +11,6 @@ class virtual dbvalue :
   object
     method virtual error : string
     method virtual fname : int -> string
-    method virtual get_all_lst : string list list
     method virtual nfields : int
     method virtual ntuples : int
     method map : 'a. ((int -> string) -> 'a) -> 'a list
@@ -55,7 +54,7 @@ type xmlitem =   Text of string
 and xml = xmlitem list
   [@@deriving show,yojson]
 
-type table = (database * string) * string * string list list * Types.row
+type table = (database * string) * string * string list list * Types.row'
   [@@deriving show]
 
 type primitive_value_basis =  [
@@ -218,7 +217,7 @@ type t = [
 | primitive_value
 | `List of t list
 | `Record of (string * t) list
-| `Lens of Lens.Value.t
+| `Lens of Lens.Database.t * Lens.Value.t
 | `Variant of string * t
 | `FunctionPtr of (Ir.var * t option)
 | `PrimitiveFunction of string * Var.var option

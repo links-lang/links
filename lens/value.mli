@@ -1,5 +1,5 @@
 type t =
-  | Lens of { table : Database.Table.t; database : Database.t; sort : Sort.t }
+  | Lens of { table : Database.Table.t; sort : Sort.t }
   | LensMem of { records : Phrase_value.t list; sort : Sort.t }
   | LensSelect of { lens : t; predicate : Phrase.t; sort : Sort.t }
   | LensJoin of {
@@ -17,7 +17,13 @@ type t =
       default : Phrase_value.t;
       sort : Sort.t;
     }
-[@@deriving show]
+[@@deriving show, sexp]
+
+(** Serialization using s-expression. *)
+val serialize : t -> string
+
+(** Deserialization using s-expression. *)
+val deserialize : string -> t
 
 val string_of_value : t -> string
 
@@ -41,7 +47,7 @@ val get_primary_key : t -> Alias.Set.t
 val generate_query : t -> Database.Select.t
 
 (** Fetch the records of a lens from the database. *)
-val lens_get : t -> Phrase_value.t list
+val lens_get : db:Database.t -> t -> Phrase_value.t list
 
 (** Construct a select lens using the specified underlying lens and select
    predicate. This should not be used to construct lenses in general, as it may
@@ -49,9 +55,10 @@ val lens_get : t -> Phrase_value.t list
 val lens_select_internal : t -> predicate:Phrase.t -> t
 
 (** Generate a select lens from the specified lens and query its results. *)
-val lens_get_select_opt : t -> predicate:Phrase.t option -> Phrase_value.t list
+val lens_get_select_opt :
+  db:Database.t -> t -> predicate:Phrase.t option -> Phrase_value.t list
 
-val query_exists : t -> Phrase.t -> bool
+val query_exists : db:Database.t -> t -> Phrase.t -> bool
 
 (** Change the type of the specified columns to be of serial type. Only
    primitive lenses supported. *)

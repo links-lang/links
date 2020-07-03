@@ -36,6 +36,8 @@ let error_as_string = function
 | Rc.DONE -> "done"
 | Rc.UNKNOWN e -> "unknown: "^ string_of_int (Rc.int_of_unknown e)
 
+
+(* TODO: Better NULL handling *)
 let data_to_string data =
   match data with
     Data.NONE -> ""
@@ -45,36 +47,41 @@ let data_to_string data =
   | Data.TEXT s | Data.BLOB s -> s
 ;;
 
+
+
 class lite3_result (stmt: stmt) = object
   inherit Value.dbvalue
-  val result_list_and_status =
-    let rec get_results (results,status) =
+  
+  val result_buf_and_status =
+    let result_buf = PolyBuffer.init 1 1024 [] in
+    let rec get_results (status) =
       match status with
         `QueryOk -> (
           match step stmt with
             Rc.OK|Rc.ROW ->
             let data = Array.to_list (row_data stmt) in
             let row = List.map data_to_string data in
-            get_results (row::results,`QueryOk )
+            PolyBuffer.append result_buf row; 
+            get_results `QueryOk
           | Rc.DONE ->
-            results,`QueryOk
-          | e -> results, `QueryError (error_as_string e)
+            `QueryOk
+          | e -> `QueryError (error_as_string e)
         )
-      | _ -> (results,status)
+      | _ -> (status)
     in
-    get_results ([],`QueryOk)
+    (result_buf,get_results (`QueryOk))
 
-  method status : Value.db_status = snd(result_list_and_status)
-  method nfields : int =  column_count stmt
-  method ntuples : int = List.length (fst result_list_and_status)
+  method status : Value.db_status = snd(result_buf_and_status)
+  method nfields : int = column_count stmt
+  method ntuples : int = PolyBuffer.length (fst result_buf_and_status)
   method fname n : string = column_name stmt n
-  method get_all_lst : string list list = fst(result_list_and_status)
+  (*method get_all_lst : string list list = PolyBuffer.to_list (fst result_buf_and_status)*)
   method getvalue : int -> int -> string = fun n i ->
-    List.nth(List.nth (fst(result_list_and_status)) n) i
+    List.nth(PolyBuffer.get (fst result_buf_and_status) n) i
   method gettuple : int -> string array = fun n ->
-    Array.of_list(List.nth (fst(result_list_and_status)) n)
+    Array.of_list(PolyBuffer.get (fst result_buf_and_status) n)
   method error : string =
-    match snd(result_list_and_status) with
+    match (snd result_buf_and_status) with
       `QueryError(msg) -> msg
     | `QueryOk -> "OK"
 end
@@ -115,6 +122,14 @@ class lite3_database file = object(self)
           | _ -> _supports_shredding <- Some false; false
           end
        | _ -> false
+  method! make_insert_returning_query : string -> Sql.query -> string list =
+    fun returning q ->
+      match q with
+        Sql.Insert ins ->
+          [self#string_of_query q;
+           Printf.sprintf "select %s from %s where rowid = last_insert_rowid()" returning ins.ins_table]
+      | _ -> assert false
+
 end
 
 let driver_name = "sqlite3"

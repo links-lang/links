@@ -40,7 +40,7 @@ type value =
   | Extend     of value name_map * value option   (* record extension: (l1=v1, ..., lk=vk|r) or (l1=v1, ..., lk=vk) *)
   | Project    of Name.t * value                    (* record projection: r.l *)
   | Erase      of name_set * value                (* erase fields from a record: r\{ls} *)
-  | Inject     of Name.t * value * Types.datatype   (* variant injection: L(v) *)
+  | Inject     of Name.t * value * Types.t   (* variant injection: L(v) *)
 
   | TAbs       of tyvar list * value       (* type abstraction: /\xs.v *)
   | TApp       of value * tyarg list       (* type application: v ts *)
@@ -51,7 +51,7 @@ type value =
 
   | Closure    of var * tyarg list * value           (* closure creation: f env *)
 
-  | Coerce     of value * Types.datatype             (* type coercion: v:A *)
+  | Coerce     of value * Types.t             (* type coercion: v:A *)
 
 and tail_computation =
   | Return     of value
@@ -59,7 +59,7 @@ and tail_computation =
   | Special    of special
   | Case       of value * (binder * computation) name_map * (binder * computation) option
   | If         of value * computation * computation
-and fun_def = binder * (tyvar list * binder list * computation) * binder option * location
+and fun_def = binder * (tyvar list * binder list * computation) * binder option * location * bool
 and binding =
   | Let        of binder * (tyvar list * tail_computation)
   | Fun        of fun_def
@@ -69,7 +69,7 @@ and binding =
                     object_name: string }
   | Module     of string * binding list option
 and special =
-  | Wrong      of Types.datatype
+  | Wrong      of Types.t
   | Database   of value
   | Lens of value * Lens.Type.t
   | LensSerial of { lens: value; columns : Lens.Alias.Set.t; typ : Lens.Type.t }
@@ -77,10 +77,10 @@ and special =
   | LensSelect of { lens : value; predicate : lens_predicate; typ : Lens.Type.t }
   | LensJoin   of { left : value; right : value; on : string list; del_left : Lens.Phrase.t; del_right : Lens.Phrase.t; typ : Lens.Type.t }
   | LensCheck  of value * Lens.Type.t
-  | LensGet    of value * Types.datatype
-  | LensPut    of value * value * Types.datatype
-  | Table      of value * value * value * (Types.datatype * Types.datatype * Types.datatype)
-  | Query      of (value * value) option * QueryPolicy.t * computation * Types.datatype
+  | LensGet    of value * Types.t
+  | LensPut    of value * value * Types.t
+  | Table      of value * value * value * (Types.t * Types.t * Types.t)
+  | Query      of (value * value) option * QueryPolicy.t * computation * Types.t
   | InsertRows of value * value
   | InsertReturning of value * value * value
   | Update     of (binder * value) * computation option * computation
@@ -89,7 +89,7 @@ and special =
   | Select     of Name.t * value
   | Choice     of value * (binder * computation) name_map
   | Handle     of handler
-  | DoOperation of Name.t * value list * Types.datatype
+  | DoOperation of Name.t * value list * Types.t
 and computation = binding list * tail_computation
 and effect_case = binder * binder * computation
 and handler = {

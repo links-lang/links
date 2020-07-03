@@ -141,13 +141,14 @@ module Untyped = struct
     let module TU = Transform.Untyped in
     let apply : 'a TU.result -> transformer -> 'a TU.result
       = fun (TU.Result { program; state }) (module T) ->
-      select (module T) state program
+        Debug.if_set Basicsettings.show_stages (fun () -> T.Untyped.name ^"...");
+        select (module T) state program
     in
     let (TU.Result { state; program }) =
       Array.fold_left apply TU.(return context' program) transformers
     in
     { context = state; program;
-      datatype = `Not_typed (* Slight abuse! *) }
+      datatype = Types.Not_typed (* Slight abuse! *) }
 
   let run_sentence : Context.t ->
                      Sugartypes.sentence ->
@@ -204,7 +205,6 @@ module Typeability_preserving = struct
            Basicsettings.Sessions.exceptions_enabled
            (module DesugarSessionExceptions)
        ; (module DesugarProcesses)
-       ; (module WrapTableIterators)
        ; (module DesugarFors)
        ; (module DesugarRegexes)
        ; (module DesugarFormlets)
@@ -220,6 +220,7 @@ module Typeability_preserving = struct
     let apply : Sugartypes.program Transform.Typeable.result -> transformer -> Sugartypes.program Transform.Typeable.result
       = fun (Transform.Typeable.Result { state; program }) (module T) ->
       let (Transform.Typeable.Result payload) as result =
+        Debug.if_set Basicsettings.show_stages (fun () -> T.Typeable.name ^"...");
         T.Typeable.program state program
       in
       (if verify_transformation T.Typeable.name then

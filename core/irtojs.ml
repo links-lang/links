@@ -728,7 +728,7 @@ end = functor (K : CONTINUATION) -> struct
   module GenStubs =
   struct
     let rec fun_def : Ir.fun_def -> code -> code =
-      fun ((fb, (_, xsb, _), zb, location) : Ir.fun_def) code ->
+      fun ((fb, (_, xsb, _), zb, location, _unsafe) : Ir.fun_def) code ->
         let f_var, _ = fb in
         let bs = List.map name_binder xsb in
         let _, xs_names = List.split bs in
@@ -1006,7 +1006,7 @@ end = functor (K : CONTINUATION) -> struct
               let is_parameterised = List.length params > 0 in
               let param_ptr_binder =
                 Var.fresh_binder
-                  (Var.make_local_info (`Not_typed, "_param_ptr"))
+                  (Var.make_local_info (Types.Not_typed, "_param_ptr"))
               in
               let env =
                 let (x, n) = name_binder param_ptr_binder in
@@ -1134,13 +1134,13 @@ end = functor (K : CONTINUATION) -> struct
                    env', Fn ([x_name], body))
              in
              env', bind (generate_tail_computation env tc K.(skappa' <> skappas))
-          | Fun ((fb, _, _zs, _location) as def) :: bs ->
+          | Fun ((fb, _, _zs, _location, _unsafe) as def) :: bs ->
              let (f, f_name) = name_binder fb in
              let def_header = generate_function env [] def in
              let env', rest = gbs (VEnv.bind f f_name env) kappa bs in
              (env', LetFun (def_header, rest))
           | Rec defs :: bs ->
-             let fs = List.map (fun (fb, _, _, _) -> name_binder fb) defs in
+             let fs = List.map (fun (fb, _, _, _, _) -> name_binder fb) defs in
              let env', rest = gbs (List.fold_left (fun env (x, n) -> VEnv.bind x n env) env fs) kappa bs in
              (env', LetRec (List.map (generate_function env fs) defs, rest))
           | Module _ :: bs
@@ -1152,7 +1152,7 @@ end = functor (K : CONTINUATION) -> struct
   and generate_function env fs :
       Ir.fun_def ->
     (string * string list * code * Ir.location) =
-    fun (fb, (_, xsb, body), zb, location) ->
+    fun (fb, (_, xsb, body), zb, location, _unsafe) ->
       let (f, f_name) = name_binder fb in
       assert (f_name <> "");
       (* prerr_endline ("f_name: "^f_name); *)
@@ -1195,7 +1195,7 @@ end = functor (K : CONTINUATION) -> struct
     let raiseOp =
       generate_special env (DoOperation (
         Value.session_exception_operation,
-        [Variable fresh_var], `Not_typed)) in
+        [Variable fresh_var], Types.Not_typed)) in
     let fresh_kappa = gensym ~prefix:"kappa" () in
     let cancellation_thunk = Fn ([fresh_kappa], raiseOp (K.reflect (Var fresh_kappa))) in
 
@@ -1225,7 +1225,7 @@ end = functor (K : CONTINUATION) -> struct
           varenv,
           Some x_name,
           fun code -> Bind (x_name, Lit jsonized_val, code))
-      | Fun ((fb, _, _zs, _location) as def) ->
+      | Fun ((fb, _, _zs, _location, _unsafe) as def) ->
          let (f, f_name) = name_binder fb in
          let varenv = VEnv.bind f f_name varenv in
          let def_header = generate_function varenv [] def in
@@ -1234,7 +1234,7 @@ end = functor (K : CONTINUATION) -> struct
           None,
           fun code -> LetFun (def_header, code))
       | Rec defs ->
-         let fs = List.map (fun (fb, _, _, _) -> name_binder fb) defs in
+         let fs = List.map (fun (fb, _, _, _, _) -> name_binder fb) defs in
          let varenv =
            List.fold_left
              (fun env (n, x) -> VEnv.bind n x env)

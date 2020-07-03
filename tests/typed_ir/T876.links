@@ -1,0 +1,7 @@
+# from Prelude
+sig lf : ((a) -e-> b) -> (a) -e-@ b
+fun lf(f) {
+  linfun (x) {
+    f(x)
+  }
+}

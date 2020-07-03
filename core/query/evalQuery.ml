@@ -113,7 +113,7 @@ struct
 
   let base_type_of_expression t =
     match Q.type_of_expression t with
-      | `Primitive p -> p
+      | Types.Primitive p -> p
       | _ -> assert false
 
   let default_of_base_value = Q.default_of_base_type -<- base_type_of_expression

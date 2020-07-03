@@ -101,24 +101,25 @@ struct
       method! var =
         fun var ->
           let var, t, o = super#var var in
-          let o = o#typ (`Type t) in
+          let o = o#typ t in
           var, t, o#register_term_var var
 
       method! value = fun v -> match v with
         (* We need to find all types occuring in the given IR fragment *)
         | TApp (_, args) ->
-          let o = List.fold_left (fun o arg -> o#typ arg) o args in
+           (* Debug.print ("args: " ^ (String.concat "," (List.map (fun t -> Types.string_of_type_arg t) args))); *)
+          let o = List.fold_left (fun o arg -> o#type_arg arg) o args in
           o#super_value v
         | Closure (_, tyargs, _) ->
-          let o = List.fold_left (fun o arg -> o#typ arg) o tyargs in
+          let o = List.fold_left (fun o arg -> o#type_arg arg) o tyargs in
           o#super_value v
         | Inject (_, _, t) ->
-          let o = o#typ (`Type t) in
+          let o = o#typ t in
           o#super_value v
         | TAbs (quantifiers, v) ->
           let o = List.fold_left (fun o q -> o#quantifier q) o quantifiers in
           let (_, ti, o) = o#value v in
-          let t = `ForAll (quantifiers, ti) in
+          let t = Types.ForAll (quantifiers, ti) in
           let o = List.fold_left (fun o q -> o#quantifier_remove q) o quantifiers in
           (v, t, o)
         | _ -> o#super_value v
@@ -129,22 +130,23 @@ struct
         (* We need to find all types occuring in the given IR fragment *)
         let o = match s with
           | Table (_, _, _, (t1, t2, t3)) ->
-            let o1 = o#typ (`Type t1) in
-            let o2 = o1#typ (`Type t2) in
-            o2#typ (`Type t3)
+            let o1 = o#typ t1 in
+            let o2 = o1#typ t2 in
+            o2#typ t3
           | Query (_, _, _, t)
           | DoOperation (_, _, t) ->
-            o#typ (`Type t)
+            o#typ t
           | _ -> o in
         o#super_special s
 
 
-      (* t is a type_arg, which ranges over ordinary types, rows and presence specs *)
-      method typ (t : Types.type_arg) =
-        let free_type_vars = Types.free_tyarg_vars t in
+      method typ t =
+        let free_type_vars = Types.free_type_vars t in
         (*Debug.print ("free type vars:" ^ (IntSet.show free_type_vars));*)
         Types.TypeVarSet.fold (fun tvar o ->  o#register_type_var tvar) free_type_vars o
 
+      method type_arg (_pk, t) =
+        o#typ t
 
       method quantifier q =
         let var = Quantifier.to_var q in
@@ -159,7 +161,7 @@ struct
       method! binder ((_, (_, _, scope)) as b) =
         let b, o = super#binder b in
         let t = Var.type_of_binder b in
-        let o = o#typ (`Type t) in
+        let o = o#typ t in
         match scope with
         | Scope.Global -> b, o#global (Var.var_of_binder b)
         | Scope.Local  -> b, o#bound_termvar (Var.var_of_binder b)
@@ -209,7 +211,7 @@ struct
           let (b, o) = o#super_binding b in
           let o = List.fold_left (fun o q -> o#quantifier_remove q) o quantifiers in
           (b, o)
-        | (Fun (f, (tyvars, xs, body), None, location)) as b
+        | (Fun (f, (tyvars, xs, body), None, location, unsafe)) as b
              when Scope.isLocal (Ir.binding_scope b) ->
           (* reset free and bound variables to be empty *)
           let o = o#reset in
@@ -249,9 +251,9 @@ struct
           let f, o = o#binder f in
           let o = o#register_fun (Var.var_of_binder f) fenv_entry in
           (*Debug.print ("fenv: " ^ show_fenv o#get_fenv);*)
-          Fun (f, (tyvars, xs, body), None, location), o
+          Fun (f, (tyvars, xs, body), None, location, unsafe), o
 
-        | (Fun (_, (tyvars, _, _),_,_)) as b (* global *) ->
+        | (Fun (_, (tyvars, _, _),_,_,_)) as b (* global *) ->
           let o = List.fold_left (fun o q -> o#quantifier q) o tyvars in
           let (b, o) = o#super_binding b in
           let o = List.fold_left (fun o q -> o#quantifier_remove q) o tyvars in
@@ -270,7 +272,7 @@ struct
              in the function type itself) *)
           let _, o =
             List.fold_right
-              (fun (f, _, _, _) (fs, o) ->
+              (fun (f, _, _, _, _) (fs, o) ->
                  let f, o = o#binder f in
                  (f::fs, o))
               defs
@@ -282,7 +284,7 @@ struct
              subsequent ones *)
           let defs, o =
             List.fold_left
-              (fun (defs, (o : 'self)) (f, (tyvars, xs, body), none, location) ->
+              (fun (defs, (o : 'self)) (f, (tyvars, xs, body), none, location, unsafe) ->
                  assert (none = None);
                  let o = List.fold_left (fun o q -> o#quantifier q) o tyvars in
                  let xs, o =
@@ -295,7 +297,7 @@ struct
                  let body, _, o = o#computation body in
                  let o = List.fold_left (fun o q -> o#quantifier_remove q) o tyvars in
 
-                 (f, (tyvars, xs, body), None, location)::defs, o)
+                 (f, (tyvars, xs, body), None, location, unsafe)::defs, o)
               ([], o)
               defs in
 
@@ -306,14 +308,14 @@ struct
           (* ensure functions are in scope for the continuation *)
           let _, o =
             List.fold_right
-              (fun (f, _, _, _) (fs, o) ->
+              (fun (f, _, _, _, _) (fs, o) ->
                  let f, o = o#binder f in
                  (f::fs, o))
               defs
               ([], o) in
 
           let o = List.fold_left
-              (fun o (f, _, _, _) ->
+              (fun o (f, _, _, _, _) ->
                  o#register_fun (Var.var_of_binder f) fenv_entry) o defs in
           let defs = List.rev defs in
           Rec defs, o
@@ -327,7 +329,7 @@ struct
              this global mutually recursive definition. *)
           let _, o =
             List.fold_right
-              (fun (f, _, _, _) (fs, o) ->
+              (fun (f, _, _, _, _) (fs, o) ->
                  let f, o = o#super_binder f in
                  (f::fs, o))
               defs
@@ -335,7 +337,7 @@ struct
 
           let defs, o =
               List.fold_left
-                (fun (defs, (o : 'self_type)) (f, (tyvars, xs, body), none, location) ->
+                (fun (defs, (o : 'self_type)) (f, (tyvars, xs, body), none, location, unsafe) ->
                    assert (none = None);
                    let o = List.fold_left (fun o q -> o#quantifier q) o tyvars in
                    let xs, o =
@@ -347,7 +349,7 @@ struct
                        ([], o) in
                    let body, _, o = o#computation body in
                    let o = List.fold_left (fun o q -> o#quantifier_remove q) o tyvars in
-                   (f, (tyvars, xs, body), None, location)::defs, o)
+                   (f, (tyvars, xs, body), None, location, unsafe)::defs, o)
                 ([], o)
                 defs
           in
@@ -356,7 +358,7 @@ struct
                treat them as globals *)
           let _, o =
             List.fold_right
-              (fun (f, _, _, _) (fs, o) ->
+              (fun (f, _, _, _, _) (fs, o) ->
                  let f, o = o#binder f in
                  (f::fs, o))
               defs
@@ -386,7 +388,7 @@ end
 module Globalise =
 struct
   let binder (x, (t, name, _)) = (x, (t, name, Scope.Global))
-  let fun_def (f, lam, z, location) = (binder f, lam, z, location)
+  let fun_def (f, lam, z, location, unsafe) = (binder f, lam, z, location, unsafe)
   let binding = function
     | Let (x, body) -> Let (binder x, body)
     | Fun def -> Fun (fun_def def)
@@ -433,7 +435,7 @@ struct
           let rec var_val x : (Ir.value * Types.datatype ) =
             let x_type = o#lookup_type x in
             if IntSet.mem x cvars then
-              (* We cannot return t as the type of the result here. If x refers to a hoisted function that was generalized, then
+              (* We cannot return t as the type of the result here. If x refers to a hoisted function that was generalised, then
                  t has additional quantifiers that are not present in the corresponding type of projecting x from parent_env *)
               let projected_t = TypeUtils.project_type (string_of_int x) (snd3 (o#var parent_env)) in
               Project (string_of_int x, Variable parent_env), projected_t
@@ -477,7 +479,7 @@ struct
           let bs', o = o#pop_hoisted_bindings in
           let bs, o = o#bindings bs in
           bs' @ (b :: bs), o
-        | Fun ((f, _) as fb, (tyvars, xs, body), None, location) :: bs ->
+        | Fun ((f, _) as fb, (tyvars, xs, body), None, location, unsafe) :: bs ->
           assert (Scope.isLocal (Var.scope_of_binder fb));
           let fb = Globalise.binder fb in
           let (xs, o) =
@@ -521,8 +523,8 @@ struct
               Some zb, o in
           let body, _, o = o#computation body in
           let o = o#set_context parents' parent_env' cvars' in
-          let fb, o = o#binder (o# generalize_function_type_for_hoisting fb) in
-          let fundef = o#generalize_function_body_for_hoisting (fb, (tyvars, xs, body), zb, location) in
+          let fb, o = o#binder (o# generalise_function_type_for_hoisting fb) in
+          let fundef = o#generalise_function_body_for_hoisting (fb, (tyvars, xs, body), zb, location, unsafe) in
           let o = o#push_binding (Fun  fundef) in
           let bs, o = o#bindings bs in
           bs, o
@@ -532,17 +534,17 @@ struct
                function bodies *)
             let fbs, defs, o =
               List.fold_right
-                (fun (f, (tyvars, xs, body), zb, location) (fs, defs,  o) ->
-                   (* We have generalize the function's type here, but its body will only be generalized later on *)
-                   let f, o = o#binder (o#generalize_function_type_for_hoisting f) in
-                   let def = (f, (tyvars, xs, body), zb, location) in
+                (fun (f, (tyvars, xs, body), zb, location, unsafe) (fs, defs,  o) ->
+                   (* We have generalise the function's type here, but its body will only be generalised later on *)
+                   let f, o = o#binder (o#generalise_function_type_for_hoisting f) in
+                   let def = (f, (tyvars, xs, body), zb, location, unsafe) in
                      (f::fs, def::defs, o))
                 defs
                 ([], [], o) in
 
             let defs, o =
               List.fold_left
-                (fun (defs, (o : 'self)) ((f, _) as fb, (tyvars, xs, body), none, location) ->
+                (fun (defs, (o : 'self)) ((f, _) as fb, (tyvars, xs, body), none, location, unsafe) ->
                    assert (none = None);
                    assert (Scope.isLocal (Var.scope_of_binder fb));
                    let fb = Globalise.binder fb in
@@ -579,7 +581,7 @@ struct
                        Some zb, o#set_context fbs z cvars in
                    let body, _, o = o#computation body in
                    let o = o#set_context parents' parent_env' cvars' in
-                   let fundef = o#generalize_function_body_for_hoisting (fb, (tyvars, xs, body), zb, location) in
+                   let fundef = o#generalise_function_body_for_hoisting (fb, (tyvars, xs, body), zb, location, unsafe) in
                    fundef::defs, o)
                 ([], o)
                 defs in
@@ -595,33 +597,34 @@ struct
 
       (** Given a list of free variables, return a tuple containing the following:
         - a list of fresh quantifiers, each corresponding to one free variable
-        - Three maps mapping the old free variables to fresh ones (to be used with Instantiate)  **)
+        - A map mapping the old free variables to fresh ones (to be used with Instantiate)  **)
       method create_substitutions_replacing_free_variables (free_type_vars : Quantifier.t list) =
-        List.fold_right (fun oldq (qs, (type_map, row_map, presence_map) ) ->
+        let open PrimaryKind in
+        List.fold_right (fun oldq (qs, type_map) ->
           let typevar = Quantifier.to_var oldq in
           let primary_kind = Quantifier.to_primary_kind oldq in
           let subkind = Quantifier.to_subkind oldq in
           let newvar = Types.fresh_raw_variable () in
-          let make_new_type_variable () = Unionfind.fresh (`Var (newvar, subkind, `Rigid)) in
+          let make_new_type_variable () = Unionfind.fresh (Types.Var (newvar, (primary_kind, subkind), `Rigid)) in
           let updated_maps = match primary_kind with
-            | PrimaryKind.Type ->
+            | Type ->
               let new_type_variable = make_new_type_variable () in
-              let t = `MetaTypeVar new_type_variable in
-              (IntMap.add typevar t type_map, row_map, presence_map)
-            | PrimaryKind.Row ->
+              let t = Types.Meta new_type_variable in
+              (IntMap.add typevar (Type, t) type_map)
+            | Row ->
               let new_type_variable = make_new_type_variable () in
-              let r = (Types.empty_field_env, new_type_variable, false) in
-              (type_map, IntMap.add typevar r row_map, presence_map)
-            | PrimaryKind.Presence ->
+              let r = Types.Row (Types.empty_field_env, new_type_variable, false) in
+              (IntMap.add typevar (Row, r) type_map)
+            | Presence ->
               let new_type_variable = make_new_type_variable () in
-              let p = `Var new_type_variable in
-              (type_map, row_map, IntMap.add typevar p presence_map) in
+              let p = Types.Meta new_type_variable in
+              (IntMap.add typevar (Presence, p) type_map) in
           let new_quantifier = (newvar, (primary_kind, subkind)) in
           (new_quantifier :: qs, updated_maps)
-        ) free_type_vars ([], (IntMap.empty, IntMap.empty, IntMap.empty))
+        ) free_type_vars ([], IntMap.empty)
 
 
-      method generalize_function_type_for_hoisting f_binder =
+      method generalise_function_type_for_hoisting f_binder =
         let f_var = Var.var_of_binder f_binder in
 
         let free_type_vars = (IntMap.find f_var fenv).typevars in
@@ -631,25 +634,25 @@ struct
         else
           begin
             let outer_quantifiers, outer_maps = o#create_substitutions_replacing_free_variables free_type_vars in
-            let f_type_generalized =
+            let f_type_generalised =
               let f_type = Var.type_of_binder f_binder in
               match TypeUtils.split_quantified_type f_type with
                 | [], t  ->
                   let t' = Instantiate.datatype outer_maps t in
-                  `ForAll (outer_quantifiers, t')
+                  Types.ForAll (outer_quantifiers, t')
                 | (f_quantifiers, t) ->
                   let t' = Instantiate.datatype outer_maps t in
-                  `ForAll ((outer_quantifiers @ f_quantifiers), t') in
-              Var.update_type f_type_generalized f_binder
+                  Types.ForAll ((outer_quantifiers @ f_quantifiers), t') in
+              Var.update_type f_type_generalised f_binder
             end
 
 
-      method generalize_function_body_for_hoisting : Ir.fun_def ->  Ir.fun_def = fun fundef ->
-        let (f, (tyvars, xs, body), z, location) = fundef in
+      method generalise_function_body_for_hoisting : Ir.fun_def ->  Ir.fun_def = fun fundef ->
+        let (f, (tyvars, xs, body), z, location, unsafe) = fundef in
         let f_var = Var.var_of_binder f in
         let free_type_vars = (IntMap.find f_var fenv).typevars in
 
-        (* We must have used generalize_function_type_for_hoisting on this function before and generalized the type in f (i.e., the binder)  already *)
+        (* We must have used generalise_function_type_for_hoisting on this function before and generalised the type in f (i.e., the binder)  already *)
 
         if free_type_vars = [] then
           fundef
@@ -666,9 +669,9 @@ struct
                 let newtype = Instantiate.datatype inner_maps (Var.type_of_binder x) in
                 (Var.update_type newtype x)::xs
               ) xs [] in
-            (*Debug.print ("function currently being hoisted, before instantiation:\n" ^ Ir.string_of_binding (`Fun (f, (tyvars, xs, body), z, location)));*)
+            (* Debug.print ("function currently being hoisted, before instantiation:\n" ^ Ir.string_of_binding (Fun (f, (tyvars, xs, body), z, location, unsafe))); *)
             let body = IrTraversals.InstantiateTypes.computation (o#get_type_environment) inner_maps body in
-            (f, (tyvars, xs, body), z, location)
+            (f, (tyvars, xs, body), z, location, unsafe)
           end
 
 

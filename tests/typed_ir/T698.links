@@ -1,9 +1,11 @@
-sig concatMap : ((a) -b-> [c], [a]) -b-> [c]
+unsafe sig concatMap : ((a) -b-> [c], [a]) -b-> [c]
 fun concatMap(f, l) {
-  #dummy to avoid problems with unsafe signatures currently
-  #not being supported by IR type-checker
-  []
+  switch (l) {
+    case [] -> []
+    case hd::tl -> f(hd) ++ concatMap(f, tl)
+  }
 }
+
 
 #The function we are actually interested in
 fun asList(t) server {

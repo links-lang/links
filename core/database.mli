@@ -1,7 +1,6 @@
 (** A generic interface for SQL-style databases. Vendor-specific implementations are elsewhere *)
 
 val connection_info : string option Settings.setting
-val relax_query_type_constraint : bool Settings.setting
 val shredding : bool Settings.setting
 
 class virtual db_args : string -> object
@@ -23,8 +22,6 @@ val build_result : Value.dbvalue * (string * (Types.datatype * int)) list -> Val
     field types of the [row]i. This should really take an alist of
     fieldname -> fieldtype. *)
 val execute_select : (string * Types.datatype) list -> string -> Value.database -> Value.t
-
-val execute_untyped_select : string -> Value.database -> Value.t
 
 val execute_insert_returning : string -> Sql.query ->  Value.database -> Value.t
 

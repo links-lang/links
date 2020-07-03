@@ -1,0 +1,7 @@
+sig reproduce_nonrec : forall a.(a) {}~> ()
+fun reproduce_nonrec(f) { () }
+
+sig reproduce_rec : forall a.(a) {}~> ()
+fun reproduce_rec(f) {
+  reproduce_rec(f)
+}

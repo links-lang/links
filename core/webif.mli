@@ -5,7 +5,6 @@ open Webserver_types
 module WebIf : functor (Webs : WEBSERVER) ->
 sig
 
-
   val do_request :
     (Value.env * Ir.var Env.String.t * Types.typing_environment) ->
     (string * string) list ->

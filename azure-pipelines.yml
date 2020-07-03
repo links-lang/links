@@ -26,6 +26,10 @@ steps:
     displayName: Environment
 
   - bash: |
+      git diff-index --quiet HEAD --
+    displayName: 'Check clean working tree after checkout'
+
+  - bash: |
       case $AGENT_OS in
         "Linux") sudo apt-get update ;;
         "Darwin") brew update ;;
@@ -87,7 +91,7 @@ steps:
       case $AGENT_OS in
         "Linux") sudo apt-get install postgresql libpq-dev sqlite3 libsqlite3-dev &&
                  sudo LINKS_CI=1 tools/configure-postgresql &&
-                 sudo systemctl reload postgresql &&
+                 sudo systemctl start postgresql &&
                  sudo -u postgres createuser -s $(whoami) &&
                  sudo -u postgres createdb -O $(whoami) links;;
         "Darwin") brew install postgresql@9.5 libpq sqlite3 &&

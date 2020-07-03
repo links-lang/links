@@ -1,5 +1,5 @@
 opam-version: "2.0"
-maintainer: "Jan Stolarek <jan.stolarek@ed.ac.uk>"
+maintainer: "James Cheney <jcheney@inf.ed.ac.uk>"
 authors: "The Links Team <links-dev@inf.ed.ac.uk>"
 synopsis: "MySQL database driver for the Links Programming Language"
 description: "MySQL database driver for the Links Programming Language"

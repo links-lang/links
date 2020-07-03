@@ -2,7 +2,7 @@ open Lens_utility
 open Lens_utility.O
 open Result.O
 
-type t = Alias.Set.t * Alias.Set.t [@@deriving show]
+type t = Alias.Set.t * Alias.Set.t [@@deriving show, sexp]
 
 let left (l, _) = l
 
@@ -56,6 +56,14 @@ end
 
 module Set = struct
   include Set.Make (Compare)
+
+  let sexp_of_t v =
+    let l = elements v in
+    sexp_of_list sexp_of_t l
+
+  let t_of_sexp v =
+    let l = list_of_sexp t_of_sexp v in
+    of_list l
 
   let pp_pretty f v =
     elements v

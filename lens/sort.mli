@@ -1,4 +1,4 @@
-type t [@@deriving show]
+type t [@@deriving show, sexp]
 
 (** Get the functional dependencies *)
 val fds : t -> Fun_dep.Set.t

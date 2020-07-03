@@ -37,7 +37,7 @@ let optimise
 
 (* Transformation infrastructure. *)
 type result = { program: Ir.program;
-                datatype: Types.datatype;
+                datatype: Types.t;
                 context: Context.t }
 
 type transformer = (module IrTransform.S)
@@ -144,6 +144,7 @@ let simplify_type_structure : transforms
 (* A collection of the above pipelines. *)
 let pipeline : transformer array
   = [| only_if optimise (measure (collapse "optimisations" optimisations))
+     ; only_if IrCheck.typecheck (collapse "typechecking" typechecking)
      ; (module Closures)
      ; (module PerformEffect(struct
                    let name = "build_tables"
@@ -156,7 +157,8 @@ let program context' datatype program =
   let apply : IrTransform.result -> transformer -> IrTransform.result
     = fun (IrTransform.Result { program; state }) (module T) ->
     (* TODO run verification logic? *)
-    T.program state program
+      Debug.if_set Basicsettings.show_stages (fun () -> T.name ^"...");
+      T.program state program
   in
   let initial_state =
     IrTransform.{ datatype; context = context'; primitive_vars = Lib.primitive_vars }

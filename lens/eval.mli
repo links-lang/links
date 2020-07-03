@@ -9,6 +9,7 @@ end
 
 val put :
   ?behaviour:behaviour ->
+  db:Database.t ->
   Value.t ->
   Phrase_value.t list ->
   (unit, Error.t) result

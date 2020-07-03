@@ -79,7 +79,7 @@ fun insertItems(itemsTable, itemsList) {
     itemsList));
   delete (itemEntry <-- itemsTable)
     where (itemEntry.i < 0 || n < itemEntry.i);
-  var indexes = for (itemEntry <- asList(itemsTable)) [itemEntry.i];
+  var indexes = query { for (itemEntry <- asList(itemsTable)) [itemEntry.i] };
   insert itemsTable values (i, name)
     for (i <- upto(0,n-1) `diff` indexes)
       [(i=i, name=sel(itemsList, i))];

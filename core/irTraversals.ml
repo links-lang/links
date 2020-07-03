@@ -178,8 +178,8 @@ struct
                 | Some t ->
                     begin
                       match TypeUtils.concrete_type t with
-                        | `Record row ->
-                            `Record (extend_row field_types row)
+                        | Types.Record row ->
+                            Types.Record (extend_row field_types row)
                         | _ -> assert false
                     end
             in
@@ -292,26 +292,27 @@ struct
               If (v, left, right), t, o
 
     method special : special -> (special * datatype * 'self_type) =
+      let open Ir in
       function
         | Wrong t -> Wrong t, t, o
         | Database v ->
             let v, _, o = o#value v in
-              Database v, `Primitive Primitive.DB, o
+              Database v, Types.Primitive Primitive.DB, o
         | Table (db, table_name, keys, tt) ->
             let db, _, o = o#value db in
             let keys, _, o = o#value keys in
             let table_name, _, o = o#value table_name in
-              Table (db, table_name, keys, tt), `Table tt, o
+              Table (db, table_name, keys, tt), Types.Table tt, o
         | Lens (table, rtype) ->
             let table, _, o = o#value table in
-              Lens (table, rtype), `Lens rtype, o
+              Lens (table, rtype), Types.Lens rtype, o
         | LensSerial {lens; columns; typ} ->
             let lens, _, o = o#value lens in
-              LensSerial {lens; columns; typ}, `Lens typ, o
+              LensSerial {lens; columns; typ}, Types.Lens typ, o
         | LensDrop {lens; drop; key; default; typ} ->
             let lens, _, o = o#value lens in
             let default, _, o = o#value default in
-              LensDrop {lens; drop; key; default; typ}, `Lens typ, o
+              LensDrop {lens; drop; key; default; typ}, Types.Lens typ, o
         | LensSelect {lens; predicate; typ} ->
             let lens, _, o = o#value lens in
             let predicate, o =
@@ -320,14 +321,14 @@ struct
                  let predicate, _, o = o#value predicate in
                  Dynamic predicate, o
               | Static predicate -> Static predicate, o) in
-              LensSelect {lens; predicate; typ}, `Lens typ, o
+              LensSelect {lens; predicate; typ}, Types.Lens typ, o
         | LensJoin {left; right; on; del_left; del_right; typ} ->
             let left, _, o = o#value left in
             let right, _, o = o#value right in
-              LensJoin {left; right; on; del_left; del_right; typ}, `Lens typ, o
+              LensJoin {left; right; on; del_left; del_right; typ}, Types.Lens typ, o
         | LensCheck (lens, t) ->
             let lens, _, o = o#value lens in
-              LensCheck (lens, t), `Lens t, o
+              LensCheck (lens, t), Types.Lens t, o
         | LensGet (lens, rtype) ->
             let lens, _, o = o#value lens in
               LensGet (lens, rtype), Types.make_list_type rtype, o
@@ -440,7 +441,7 @@ struct
             let x, o = o#binder x in
             let tc, _, o = o#tail_computation tc in
               Let (x, (tyvars, tc)), o
-        | Fun (f, (tyvars, xs, body), z, location) ->
+        | Fun (f, (tyvars, xs, body), z, location, unsafe) ->
             let xs, body, z, o =
               let (z, o) = o#optionu (fun o -> o#binder) z in
               let (xs, o) =
@@ -454,22 +455,22 @@ struct
                 xs, body, z, o in
             let f, o = o#binder f in
               (* TODO: check that xs and body match up with f *)
-              Fun (f, (tyvars, xs, body), z, location), o
+              Fun (f, (tyvars, xs, body), z, location, unsafe), o
         | Rec defs ->
             (* it's important to traverse the function binders first in
                order to make sure they're in scope for all of the
                function bodies *)
             let defs, o =
               List.fold_right
-                (fun (f, (tyvars, xs, body), z, location) (fs, o) ->
+                (fun (f, (tyvars, xs, body), z, location, unsafe) (fs, o) ->
                    let f, o = o#binder f in
-                     ((f, (tyvars, xs, body), z, location)::fs, o))
+                     ((f, (tyvars, xs, body), z, location, unsafe)::fs, o))
                 defs
                 ([], o) in
 
             let defs, o =
               List.fold_left
-                (fun (defs, (o : 'self_type)) (f, (tyvars, xs, body), z, location) ->
+                (fun (defs, (o : 'self_type)) (f, (tyvars, xs, body), z, location, unsafe) ->
                    let (z, o) = o#optionu (fun o -> o#binder) z in
                    let xs, o =
                      List.fold_right
@@ -479,7 +480,7 @@ struct
                        xs
                        ([], o) in
                   let body, _, o = o#computation body in
-                    (f, (tyvars, xs, body), z, location)::defs, o)
+                    (f, (tyvars, xs, body), z, location, unsafe)::defs, o)
                 ([], o)
                 defs in
             let defs = List.rev defs in
@@ -688,13 +689,13 @@ module ElimDeadDefs = struct
         | Let (x, (_, Return _)) ->
             let b, o = super#binding b in
               b, o#init x
-        | Fun (f, _, _, _) ->
+        | Fun (f, _, _, _, _) ->
             let b, o = super#binding b in
               b, o#init f
         | Rec defs ->
             let fs, o =
               List.fold_right
-                (fun (f, _, _, _) (fs, o) ->
+                (fun (f, _, _, _, _) (fs, o) ->
                    let f, o = o#binder f in
                      (IntSet.add (Var.var_of_binder f) fs, o#initrec f))
                 defs
@@ -702,7 +703,7 @@ module ElimDeadDefs = struct
 
             let defs, o =
               List.fold_left
-                (fun (defs, (o : 'self_type)) (f, (tyvars, xs, body), z, location) ->
+                (fun (defs, (o : 'self_type)) (f, (tyvars, xs, body), z, location, unsafe) ->
                    let z, o = o#optionu (fun o -> o#binder) z in
                    let xs, o =
                      List.fold_right
@@ -714,7 +715,7 @@ module ElimDeadDefs = struct
                    let o = o#set_rec (Var.var_of_binder f) in
                    let body, _, o = o#computation body in
                    let o = o#set_mutrec (Var.var_of_binder f) in
-                     (f, (tyvars, xs, body), z, location)::defs, o)
+                     (f, (tyvars, xs, body), z, location, unsafe)::defs, o)
                 ([], o)
                 defs in
             let o = o#set_nonrecs fs in
@@ -749,13 +750,13 @@ module ElimDeadDefs = struct
                 match b with
                   | Let ((x, _), (_tyvars, _)) when o#is_dead x ->
                       o#bindings bs
-                  | Fun ((f, _), _, _, _) when o#is_dead f ->
+                  | Fun ((f, _), _, _, _, _) when o#is_dead f ->
                       o#bindings bs
                   | Rec defs ->
                       Debug.if_set show_rec_uses (fun () -> "Rec block:");
                       let fs, defs =
                         List.fold_left
-                          (fun (fs, defs) (((f, (_, name, _)), _, _, _) as def) ->
+                          (fun (fs, defs) (((f, (_, name, _)), _, _, _, _) as def) ->
                              Debug.if_set show_rec_uses
                                (fun () ->
                                   "  (" ^ name ^ ") non-rec uses: "^string_of_int (IntMap.find f env)^
@@ -908,13 +909,13 @@ module ElimBodiesFromMetaTypeVars = struct
         inherit Types.Transform.visitor as super
 
         method! typ = function
-          | `MetaTypeVar point ->
-          begin
-            match Unionfind.find point with
-              | `Body t ->
-                  o#typ t
-              | _ -> `MetaTypeVar point, o
-          end
+          | Types.Meta point ->
+            begin
+              match Unionfind.find point with
+                | Types.Recursive _
+                | Types.Var _ -> Types.Meta point, o
+                | t -> o#typ t
+            end
           | other -> super#typ other
       end
 
@@ -934,7 +935,7 @@ module ElimTypeAliases = struct
         inherit Types.Transform.visitor as super
 
         method! typ = function
-          | `Alias (_, typ) -> o#typ typ
+          | Types.Alias (_, typ) -> o#typ typ
           | other -> super#typ other
       end
 
@@ -957,7 +958,7 @@ module InstantiateTypes = struct
 
         method! typ t =
           match t with
-            | `Not_typed -> (t, o) (* instantiate.ml dies on `Not_typed *)
+            | Types.Not_typed -> (t, o) (* instantiate.ml dies on `Not_typed *)
             | _ -> (Instantiate.datatype instantiation_maps t, o)
 
         method! row r = Instantiate.row instantiation_maps r, o

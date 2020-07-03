@@ -7,145 +7,99 @@ open Sugartypes
 let internal_error message =
   Errors.internal_error ~filename:"renamer.ml" ~message
 
-type instantiation_maps =
-  (Types.meta_type_var     IntMap.t *
-   Types.meta_row_var      IntMap.t *
-   Types.meta_presence_var IntMap.t)
+type instantiation_map = Types.datatype IntMap.t
 
-let fresh_instantiation_maps : instantiation_maps =
-  (IntMap.empty, IntMap.empty, IntMap.empty)
-
-let add_type_var var t (ty_map, r_map, p_map) =
-  (IntMap.add var t ty_map), r_map, p_map
-
-let add_row_var var r (ty_map, r_map, p_map) =
-  ty_map, (IntMap.add var r r_map), p_map
-
-let add_presence_var var p (ty_map, r_map, p_map) =
-  ty_map, r_map, (IntMap.add var p p_map)
-
-
-let remove_type_var var (ty_map, r_map, p_map) =
-  (IntMap.remove var ty_map), r_map, p_map
-
-let remove_row_var var (ty_map, r_map, p_map) =
-  ty_map, (IntMap.remove var r_map), p_map
-
-let remove_presence_var var (ty_map, r_map, p_map) =
-  ty_map, r_map, (IntMap.remove var p_map)
-
-
-let unwrap_type_point = function
-    | `MetaTypeVar point -> point
-    | _ -> assert false
-
-let unwrap_presence_point = function
-    | `Var point -> point
-    | _ -> assert false
+let fresh_instantiation_map : instantiation_map = IntMap.empty
 
 
 (** Build instantiation maps between two lists of quantifiers *)
-let build_instantiation_maps
-     ?(instantiation_maps=fresh_instantiation_maps)
+let build_instantiation_map
+     ?(instantiation_map=fresh_instantiation_map)
       (qs_old : Quantifier.t list)
-      (qs_new : Quantifier.t list) : instantiation_maps =
+      (qs_new : Quantifier.t list) : instantiation_map =
   assert (List.length qs_old == List.length qs_new);
   List.fold_right2
-    (fun q_old q_new imaps ->
+    (fun q_old q_new imap ->
       let (var_old, (pk_old, sk_old)) = q_old in
       let (var_new, (pk_new, sk_new)) = q_new in
       (if pk_old <> pk_new || sk_old <> sk_new then
-        raise (internal_error "build_instantiation_maps: Kind missmatch"));
-      let open CommonTypes.PrimaryKind in
-      match pk_old with
-      | Type ->
-         let t = Types.make_rigid_type_variable var_new sk_new in
-         add_type_var var_old (unwrap_type_point t) imaps
-      | Row ->
-         let r = Types.make_rigid_row_variable var_new sk_new in
-         add_row_var var_old r imaps
-      | Presence ->
-         let f = Types.make_rigid_presence_variable var_new sk_new in
-         add_presence_var var_old (unwrap_presence_point f) imaps)
-    qs_old qs_new instantiation_maps
+        raise (internal_error "build_instantiation_map: Kind missmatch"));
+     let meta_var = Types.make_rigid_variable var_new (pk_old, sk_new) in
+     IntMap.add var_old meta_var imap)
+    qs_old qs_new instantiation_map
 
-(** Remove quantifiers from instantiation_maps.  Required to handle variable
+(** Remove quantifiers from instantiation_map.  Required to handle variable
     shadowing. *)
 let shadow_vars
-      (maps : instantiation_maps)
-      (qs : Quantifier.t list) : instantiation_maps =
+      (maps : instantiation_map)
+      (qs : Quantifier.t list) : instantiation_map =
   List.fold_right
-    (fun (var, (pk, _)) imaps ->
-      let open CommonTypes.PrimaryKind in
-      match pk with
-      | Type     -> remove_type_var     var imaps
-      | Row      -> remove_row_var      var imaps
-      | Presence -> remove_presence_var var imaps)
+    (fun (var, _) imap -> IntMap.remove var imap)
     qs maps
+
+let unwrap_meta = function
+    | Types.Meta t -> t
+    | _ -> raise (internal_error "expected Meta")
+
 
 let renaming_type_visitor instantiation_map =
   let open Types in
   object ((o : 'self_type))
     inherit Transform.visitor as super
 
-    val inst_maps : instantiation_maps = instantiation_map
+    val inst_map : instantiation_map = instantiation_map
 
-    method set_maps new_inst_maps =
-      {< inst_maps = new_inst_maps >}
+    method set_maps new_inst_map =
+      {< inst_map = new_inst_map >}
 
     method! typ : datatype -> (datatype * 'self_type) = function
-      | `ForAll (qs, t) ->
-         let inst_maps = shadow_vars inst_maps qs in
-         let t', _ = {< inst_maps >}#typ t in
-         `ForAll (qs, t'), o
+      | ForAll (qs, t) ->
+         let qs', _ = List.split (List.map {< inst_map >}#quantifier qs) in
+         let t' , _ = {< inst_map >}#typ t in
+         ForAll (qs', t'), o
       | t -> super#typ t
+
+    method! quantifier : Quantifier.t -> (Quantifier.t * 'self_type) =
+      fun (var, kind) ->
+      begin match IntMap.lookup var inst_map with
+      | Some t -> begin match Unionfind.find (unwrap_meta t) with
+                  | Var (var', _, _) -> (var', kind), o
+                  | _ -> assert false
+                  end
+      | None -> (var, kind), o
+      end
 
     method! meta_type_var : meta_type_var -> (meta_type_var * 'self_type) =
       fun point ->
       match Unionfind.find point with
-        | `Var (var, _, _) ->
-           begin match IntMap.lookup var (fst3 inst_maps) with
-             | Some subst_p -> subst_p, o
+        | Var (var, _, _) ->
+           begin match IntMap.lookup var inst_map with
+             | Some t -> unwrap_meta t, o
              | None -> point, o
            end
         | _ -> super#meta_type_var point
 
-    method! meta_row_var : meta_row_var -> (meta_row_var * 'self_type) =
-      fun point ->
-      match Unionfind.find point with
-        | `Var (var, _, _) ->
-           begin match IntMap.lookup var (snd3 inst_maps) with
-             | Some subst_p -> subst_p, o
-             | None -> point, o
-           end
-        | _ -> super#meta_row_var point
+    method! meta_row_var : meta_row_var -> (meta_row_var * 'self_type) = o#meta_type_var
 
     method! meta_presence_var :
-            meta_presence_var -> (meta_presence_var * 'self_type) =
-      fun point ->
-      match Unionfind.find point with
-      | `Var (id, _, _) ->
-         begin match IntMap.lookup id (thd3 inst_maps) with
-         | Some subst_p -> subst_p, o
-         | None -> point, o
-         end
-      | _ -> super#meta_presence_var point
+            meta_presence_var -> (meta_presence_var * 'self_type) = o#meta_type_var
 
   end
 
 
 let renamer qs_from qs_to =
+  let open Types in
   object(o : 'self_type)
     inherit SugarTraversals.fold_map as super
 
-    val maps : instantiation_maps =
-      build_instantiation_maps qs_from qs_to
+    val maps : instantiation_map =
+      build_instantiation_map qs_from qs_to
 
-    method set_maps new_inst_maps =
-      {< maps = new_inst_maps >}
+    method set_maps new_inst_map =
+      {< maps = new_inst_map >}
 
-    method with_maps new_inst_maps =
-      {< maps = new_inst_maps >}, maps
+    method with_maps new_inst_map =
+      {< maps = new_inst_map >}, maps
 
     method! typ = fun t ->
       o, fst ((renaming_type_visitor maps)#typ t)
@@ -244,10 +198,10 @@ let renamer qs_from qs_to =
       o, (param_pats', tyvars, typ', ty', signature', phrase')
 
      method forall = function
-       | `ForAll (qs_from', t) ->
+       | ForAll (qs_from', t) ->
           assert (List.length qs_from' = List.length qs_to);
           let _, t' = o#typ t in
-          `ForAll (qs_to, t')
+          ForAll (qs_to, t')
        | t -> snd (o#typ t)
 
 

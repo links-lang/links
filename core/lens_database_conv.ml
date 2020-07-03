@@ -1,7 +1,8 @@
 open Lens.Utility
 
-let lens_db_of_db (db : Value.database) =
+let lens_db_of_db cstr (db : Value.database) =
   let driver_name = db#driver_name in
+  let serialize () = cstr in
   let escape_string s = "'" ^ db#escape_string s ^ "'" in
   let quote_field s = db#quote_field s in
   let execute query =
@@ -17,7 +18,7 @@ let lens_db_of_db (db : Value.database) =
           let context = Env.String.empty in
           let typ =
             match v with
-            | Lens.Phrase.Type.Serial -> `Primitive CommonTypes.Primitive.Int
+            | Lens.Phrase.Type.Serial -> Types.int_type
             | _ -> Lens_type_conv.type_of_lens_phrase_type ~context v
           in
           (n, typ))
@@ -56,6 +57,7 @@ let lens_db_of_db (db : Value.database) =
     quote_field;
     execute;
     execute_select;
+    serialize;
   }
 
 let lens_table_of_table (table : Value.table) =
