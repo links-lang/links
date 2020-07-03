@@ -170,7 +170,7 @@ let rec pr_query ppf quote ignore_fields q =
   in
 
   let pr_fields ppf fields =
-    let pp_field ppf (b, l) = gen_pp_pair ppf "(%a) as %a" pr_b pp_constant (b, l) in
+    let pp_field ppf (b, l) = gen_pp_pair ppf "(%a) as %a" pr_b pp_quote (b, l) in
     if ignore_fields then
       Format.fprintf ppf "%a" pp_constant "0 as \"@unit@\"" (* SQL doesn't support empty records! *)
     else
@@ -231,7 +231,7 @@ let rec pr_query ppf quote ignore_fields q =
         pr_b condition
     | Select (fields, tables, condition, os) ->
         (* using quote_field assumes tables contains table names (not nested queries) *)
-        let tables = List.map (fun (t, x) -> buffer_concat [quote t; " as "; (string_of_table_var x)]) tables in
+        let tables = List.map (fun (t, x) -> Format.asprintf "%a as %s" pp_quote t (string_of_table_var x)) tables in
         pr_select ppf fields tables condition os
     | Delete { del_table; del_where } ->
         pr_delete ppf del_table del_where
@@ -245,8 +245,7 @@ let rec pr_query ppf quote ignore_fields q =
             (* Inline the query *)
             let tables = List.map (fun (t, x) -> Format.asprintf "%a as %s" pp_quote t (string_of_table_var x)) tables in
             let pr_q ppf q = pr_query ppf quote ignore_fields q in
-            let q2 = Format.asprintf "%a" pr_q q in
-            let q = buffer_concat ["("; q2; ") as "; string_of_table_var z] in
+            let q = Format.asprintf "(%s) as %s" (Format.asprintf "%a" pr_q q) (string_of_table_var z) in
             pr_select ppf fields (q::tables) condition os
         | _ -> assert false
 
