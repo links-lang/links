@@ -57,6 +57,8 @@ function Fix-File($file) {
 
     New-Item $outfile -Force
     Set-Content $outfile "open Test_common
+open Expect_test_common.Expectation
+open Expect_test_common.Expectation.Body
 open Expect_test_common.File.Location
 
 "
@@ -141,7 +143,7 @@ function Make-Fast() {
    ppx_expect.config ppx_expect.config_types
    ppx_expect.common ppx_expect.evaluator
    ppx_expect.matcher ppx_inline_test
-   ppx_inline_test.config async_unix)
+   ppx_inline_test.config)
  (inline_tests)
  (preprocess (pps ppx_expect)))"
     }
