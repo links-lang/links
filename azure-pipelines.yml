@@ -120,6 +120,7 @@ steps:
 
   - script: |
       eval `./opam2_local env`
+      dune external-lib-deps --missing @runtest
       dune runtest -j 64
     displayName: 'Expect tests'
 
