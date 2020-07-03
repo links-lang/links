@@ -195,7 +195,7 @@ struct
     let eff = lookup_effects env in
       Apply
         (TApp
-           (Variable (NEnv.find "##hd" Lib.nenv),
+           (Variable (NEnv.find "$$hd" Lib.nenv),
             [(Type, t); (Row, eff)]),
          [v])
 
@@ -203,7 +203,7 @@ struct
     let eff = lookup_effects env in
       Apply
         (TApp
-           (Variable (NEnv.find "##tl" Lib.nenv),
+           (Variable (NEnv.find "$$tl" Lib.nenv),
             [(Type, t); (Row, eff)]),
          [v])
 end
