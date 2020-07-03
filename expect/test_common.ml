@@ -22,13 +22,6 @@ let run_expr ?(config=None) ?(args=[]) ?(pargs=[]) code =
   let proc = Core.Unix.create_process ~prog:"../../../../links" ~args in
   process_result proc
 
-let run_expr_here ?(config=None) ?(args=[]) ?(pargs=[]) code =
-  let pargs = if List.is_empty pargs then [] else "--" :: pargs in
-  let config = Option.map ~f:(fun v -> "--config=" ^ v) config |> Option.to_list in
-  let args = List.concat [config; args; ["-e"; code]; pargs] in
-  let proc = Core.Unix.create_process ~prog:"../../../links" ~args in
-  process_result proc
-
 let run_file ?(config=None) ?(args=[]) ?(pargs=[]) code =
   let pargs = if List.is_empty pargs then [] else "--" :: pargs in
   let config = Option.map ~f:(fun v -> "--config=" ^ v) config |> Option.to_list in
