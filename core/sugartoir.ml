@@ -637,18 +637,20 @@ struct
            let (bs, tc) = CompilePatterns.let_pattern env p (v, vt) (reify body, body_type) in
              reflect (bs, (tc, body_type)))
 
-  let escape ((kt, _, _) as k_info, eff, body) =
+  let escape (k_info, eff, body) =
+    let kt = Var.info_type k_info in
     let kb, k = Var.fresh_var k_info in
     let body = body k in
     let body_type = sem_type body in
     let body = reify body in
     let ft = Types.Function (Types.make_tuple_type [kt], eff, body_type) in
-    let f_info = (ft, "", Scope.Local) in
+    let f_info = Var.make_local_info (ft, "") in
     let rest f : tail_computation sem = lift (Special (CallCC (Variable f)),
                                               body_type) in
       M.bind (fun_binding (f_info, ([], [kb], body), loc_unknown, false)) rest
 
-  let letfun ((ft, _, _) as f_info, (tyvars, (body_env, ps, body)), location, unsafe) rest =
+  let letfun (f_info, (tyvars, (body_env, ps, body)), location, unsafe) rest =
+    let ft = Var.info_type f_info in
     let xsb : binder list =
       (* It is important to rename the quantifiers in the type to be
          those used in the body of the function. *)
@@ -678,7 +680,8 @@ struct
   let letrec defs rest =
     let defs =
       List.map
-        (fun ((ft, _, _) as f_info, (tyvars, (body_env, ps, body)), location, unsafe) ->
+        (fun (f_info, (tyvars, (body_env, ps, body)), location, unsafe) ->
+           let ft = Var.info_type f_info in
            let xsb : binder list =
              (* It is important to rename the quantifiers in the type to be those used in
                 the body of the function. *)
@@ -814,7 +817,7 @@ struct
           | Escape (bndr, body) when Binder.has_type bndr ->
              let k  = Binder.to_name bndr in
              let kt = Binder.to_type bndr in
-             I.escape ((kt, k, Scope.Local), eff, fun v -> eval (extend [k] [(v, kt)] env) body)
+             I.escape (Var.make_local_info (kt, k), eff, fun v -> eval (extend [k] [(v, kt)] env) body)
           | Section Section.Minus | FreezeSection Section.Minus -> cofv (lookup_var "-")
           | Section Section.FloatMinus | FreezeSection Section.FloatMinus -> cofv (lookup_var "-.")
           | Section (Section.Name name) | FreezeSection (Section.Name name) -> cofv (lookup_var name)
@@ -1125,7 +1128,7 @@ struct
                      when Binder.has_type bndr ->
                     let x  = Binder.to_name bndr in
                     let xt = Binder.to_type bndr in
-                    let x_info = (xt, x, scope) in
+                    let x_info = Var.make_info xt x scope in
                     let qs = List.map SugarQuantifier.get_resolved_exn tyvars in
                       I.letvar
                         (x_info,
@@ -1157,7 +1160,7 @@ struct
                     let body = eval body_env body in
                     let qs = List.map SugarQuantifier.get_resolved_exn tyvars in
                       I.letfun
-                        ((ft, f, scope), (qs, (body_env, ps, body)), location, unsafe)
+                        (Var.make_info ft f scope, (qs, (body_env, ps, body)), location, unsafe)
                         (fun v -> eval_bindings scope (extend [f] [(v, ft)] env) bs e)
                 | Exp e' ->
                     I.comp env (CompilePatterns.Pattern.Any, ev e', eval_bindings scope env bs e)
@@ -1194,7 +1197,7 @@ struct
                                ps
                                ([], env) in
                            let body = fun vs -> eval (extend fs (List.combine vs inner_fts) body_env) body in
-                             ((ft, f, scope), (qs, (body_env, ps, body)), location, unsafe))
+                           (Var.make_info ft f scope, (qs, (body_env, ps, body)), location, unsafe))
                         (nodes_of_list defs)
                     in
                     I.letrec defs (fun vs -> eval_bindings scope (extend fs (List.combine vs outer_fts) env) bs e)
@@ -1205,7 +1208,7 @@ struct
                    assert (Binder.has_type binder);
                    let x  = Binder.to_name binder in
                    let xt = Binder.to_type binder in
-                   I.alien ((xt, x, scope), Alien.object_name alien, Alien.language alien,
+                   I.alien (Var.make_info xt x scope, Alien.object_name alien, Alien.language alien,
                             fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
                 | Typenames _
                 | Infix _ ->
@@ -1240,37 +1243,45 @@ struct
         | b::bs ->
             begin
               match b with
-                | Let ((x, (_xt, x_name, Scope.Global)), _) ->
-                    partition (b::locals @ globals, [], Env.String.bind x_name x nenv) bs
-                | Fun ((f, (_ft, f_name, Scope.Global)), _, _, _, _) ->
-                    partition (b::locals @ globals, [], Env.String.bind f_name f nenv) bs
-                | Rec defs ->
-                  (* we depend on the invariant that mutually
+              | Let (b', _) when Var.(Scope.isGlobal (scope_of_binder b')) ->
+                 let x = Var.var_of_binder b' in
+                 let x_name = Var.name_of_binder b' in
+                 partition (b::locals @ globals, [], Env.String.bind x_name x nenv) bs
+              | Fun (b', _, _, _, _) when Var.(Scope.isGlobal (scope_of_binder b')) ->
+                 let f = Var.var_of_binder b' in
+                 let f_name = Var.name_of_binder b' in
+                 partition (b::locals @ globals, [], Env.String.bind f_name f nenv) bs
+              | Rec defs ->
+                 (* we depend on the invariant that mutually
                      recursive definitions all have the same scope *)
-                    let scope, nenv =
-                      List.fold_left
-                        (fun (scope, nenv) ((f, (_ft, f_name, f_scope)), _, _, _, _) ->
-                           match f_scope with
-                             | Scope.Global -> Scope.Global, Env.String.bind f_name f nenv
-                             | Scope.Local -> scope, nenv)
-                        (Scope.Local, nenv) defs
-                    in
-                      begin
-                        match scope with
-                          | Scope.Global ->
-                              partition (b::locals @ globals, [], nenv) bs
-                          | Scope.Local ->
-                              partition (globals, b::locals, nenv) bs
-                      end
-                | Alien { binder; _ }
-                     when Var.Scope.isGlobal (Var.scope_of_binder binder) ->
-                   let f = Var.var_of_binder binder in
-                   let f_name = Var.name_of_binder binder in
-                    partition (b::locals @ globals, [], Env.String.bind f_name f nenv) bs
-                | _ -> partition (globals, b::locals, nenv) bs
+                 let scope, nenv =
+                   List.fold_left
+                     (fun (scope, nenv) (b', _, _, _, _) ->
+                       match Var.scope_of_binder b' with
+                       | Scope.Global ->
+                          let nenv' =
+                            Env.String.bind (Var.name_of_binder b') (Var.var_of_binder b') nenv
+                          in
+                          Scope.Global, nenv'
+                       | Scope.Local -> scope, nenv)
+                     (Scope.Local, nenv) defs
+                 in
+                 begin
+                   match scope with
+                   | Scope.Global ->
+                      partition (b::locals @ globals, [], nenv) bs
+                   | Scope.Local ->
+                      partition (globals, b::locals, nenv) bs
+                 end
+              | Alien { binder; _ }
+                   when Var.Scope.isGlobal (Var.scope_of_binder binder) ->
+                 let f = Var.var_of_binder binder in
+                 let f_name = Var.name_of_binder binder in
+                 partition (b::locals @ globals, [], Env.String.bind f_name f nenv) bs
+              | _ -> partition (globals, b::locals, nenv) bs
             end in
     let globals, locals, nenv = partition ([], [], Env.String.empty) bs in
-      globals, (locals, main), nenv
+    globals, (locals, main), nenv
 
 
   let compile env (bindings, body) =

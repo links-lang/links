@@ -343,14 +343,14 @@ end
 let cps_prims = ["recv"; "sleep"; "spawnWait"; "receive"; "request"; "accept"]
 
 (** Generate a JavaScript name from a binder, wordifying symbolic names *)
-let name_binder (x, info) =
-  let name = Js.name_binder (x, info) in
-  if (name = "") then
-    prerr_endline (Ir.show_binder (x, info))
-  else
-    ();
+let name_binder b =
+  let name = Js.name_binder b in
+  (* TODO(dhil): The below check is unnecessary as `Js.name_binder`
+     never returns the empty string. *)
+  (if (name = "") then
+     prerr_endline (Ir.show_binder b));
   assert (name <> "");
-  (x, Js.name_binder (x,info))
+  (Var.var_of_binder b, name)
 
 (** Continuation structures *)
 module type CONTINUATION = sig

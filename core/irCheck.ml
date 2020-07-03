@@ -492,9 +492,6 @@ struct
 
   type environment = datatype Env.t
 
-  let info_type (t, _, _) = t
-
-
   let checker tyenv =
   object (o)
     inherit IrTraversals.Transform.visitor(tyenv) as super
@@ -1320,9 +1317,11 @@ struct
 
 
     method! binder : binder -> (binder * 'self_type) =
-      fun (var, info) ->
-        let tyenv = Env.bind var (info_type info) tyenv in
-          (var, info), {< tyenv=tyenv >}
+      fun b ->
+      let var = Var.var_of_binder b in
+      let t = Var.type_of_binder b in
+      let tyenv = Env.bind var t tyenv in
+      b, {< tyenv=tyenv >}
 
     (* WARNING: use of remove_binder / remove_binding is only sound
        because we guarantee uniqueness of the names of bound term

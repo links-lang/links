@@ -108,7 +108,7 @@ let rec desugar_pattern : Types.row -> Sugartypes.Pattern.with_pos -> Pattern.t 
       assert (Sugartypes.Binder.has_type bndr);
       let name = Sugartypes.Binder.to_name bndr in
       let t = Sugartypes.Binder.to_type bndr in
-      let xb, x = Var.fresh_var (t, name, Scope.Local) in
+      let xb, x = Var.(fresh_var (make_local_info (t, name))) in
       xb, (NEnv.bind name x nenv, TEnv.bind x t tenv, eff)
     in
       let open Sugartypes.Pattern in
@@ -1121,8 +1121,9 @@ let match_choices : var -> clause list -> bound_computation =
                                       match pattern with
                                       | Pattern.Variant (name, Pattern.Variable b) -> (name, b)
                                       | Pattern.Variant (name, Pattern.Any)        ->
-                                        let bt = TypeUtils.choice_at name t in
-                                        (name, Var.fresh_binder (bt, "_", Scope.Local))
+                                         let bt = TypeUtils.choice_at name t in
+                                         let info = Var.make_local_info (bt, "_") in
+                                         (name, Var.fresh_binder info)
                                       | _ ->
                                         (* TODO: give a more useful error message - including the position
                                            (it may be necessary to detect the error earlier on) *)
