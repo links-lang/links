@@ -71,19 +71,6 @@ let string_of_label label =
   else
     label
 
-(* concatenation implement with Buffer module*)
-let buffer_concat xs =
-  let buf = Buffer.create 0 in (* maybe a better heuristic init size? *)
-  List.iter (Buffer.add_string buf) xs;
-  Buffer.contents buf
-
-let rec buf_mapstrcat buf list f sep =
-  match list with
-    | [] -> ()
-    | [x] -> f x
-    | x :: xs ->
-      f x; Buffer.add_string buf sep; buf_mapstrcat buf xs f sep
-
 module Arithmetic :
 sig
   val is : string -> bool
@@ -163,11 +150,7 @@ let rec pr_query ppf quote ignore_fields q =
   let pr_b_ignore_fields ppf q = pr_base ppf quote true q in
 
   let gen_pp_pair ppf fmt_str fl fr (l, r) = Format.fprintf ppf fmt_str fl l fr r in
-  let gen_pp_option ppf fmt_str f option =
-    match option with
-      | None -> ()
-      | Some x -> Format.fprintf ppf fmt_str f x
-  in
+  let gen_pp_option ppf fmt_str f option = OptionUtils.opt_iter (Format.fprintf ppf fmt_str f) option in
 
   let pr_fields ppf fields =
     let pp_field ppf (b, l) = gen_pp_pair ppf "(%a) as %a" pr_b pp_quote (b, l) in
@@ -254,7 +237,7 @@ and pr_base ppf quote one_table b =
   if one_table then
     quote label
   else
-    buffer_concat [string_of_table_var var; "."; (quote label)]
+    Format.asprintf "%s.%s" (string_of_table_var var) (quote label)
   in
   let pr_b ppf b = pr_base ppf quote one_table b in
   let pr_q ppf q = pr_query ppf quote true q in
