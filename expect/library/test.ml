@@ -1,0 +1,23 @@
+open Links_expect.Test_common
+open Expect_test_common.File.Location
+
+
+let%expect_test "Test that prelude is loaded" =
+  run_expr {|map|};
+  [%expect {|
+    fun : ((a) -b-> c, [a]) -b-> [c]
+
+    exit: 0 |}]
+
+let%expect_test "Test sysexit [0]" =
+  run_expr {|fun () {print("before"); sysexit(0); print("after")}()|};
+  [%expect {|
+    before
+    exit: 0 |}]
+
+let%expect_test "Test sysexit [1]" =
+  run_expr {|fun() {print("before"); sysexit(1); print("after")}()|};
+  [%expect {|
+    before
+    exit: 1 |}]
+
