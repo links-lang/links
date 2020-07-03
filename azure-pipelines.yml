@@ -120,7 +120,7 @@ steps:
 
   - script: |
       eval `./opam2_local env`
-      ./opam2_local install core core_kernel ppx_expect ppx_inline_test -y
+      ./opam2_local install ppx_expect ppx_inline_test -y
       dune runtest -j 64
     displayName: 'Expect tests'
 
