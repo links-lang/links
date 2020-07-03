@@ -243,7 +243,7 @@ let rec pr_query ppf quote ignore_fields q =
         match q' with
         | Select (fields, tables, condition, os) ->
             (* Inline the query *)
-            let tables = List.map (fun (t, x) -> buffer_concat [quote t; " as "; (string_of_table_var x)]) tables in
+            let tables = List.map (fun (t, x) -> Format.asprintf "%a as %s" pp_quote t (string_of_table_var x)) tables in
             let pr_q ppf q = pr_query ppf quote ignore_fields q in
             let q2 = Format.asprintf "%a" pr_q q in
             let q = buffer_concat ["("; q2; ") as "; string_of_table_var z] in
