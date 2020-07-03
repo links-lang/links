@@ -1,5 +1,8 @@
 (* Rename for type variables in terms *)
 
+(* At the moment no renaming for mutually recursive functions definitions - see
+   #882 *)
+
 open Utility
 open CommonTypes
 open Sugartypes
@@ -226,37 +229,10 @@ let rename_function_definition : function_definition -> function_definition =
   let _, pats'      = List.split (List.map (o#pattern_list o) pats) in
   let _, body'      = o#phrase body in
   let _, signature' = o#option (fun o -> o#datatype') fun_signature in
-  { fun_binder =  Binder.set_type fun_binder typ'
+  { fun_binder = Binder.set_type fun_binder typ'
   ; fun_linearity
   ; fun_definition = (tyvars_to, (pats', body'))
   ; fun_location
   ; fun_signature = signature'
   ; fun_frozen
   ; fun_unsafe_signature }
-
-
-let rename_recursive_functionnode :
-      recursive_functionnode -> recursive_functionnode =
-  fun { rec_binder
-      ; rec_linearity
-      ; rec_definition = ((tyvars_from, ty), (pats, body))
-      ; rec_location
-      ; rec_signature
-      ; rec_frozen
-      ; rec_unsafe_signature } ->
-  let qs_from = List.map SugarQuantifier.get_resolved_exn tyvars_from in
-  let qs_to, _      = Instantiate.build_fresh_quantifiers qs_from in
-  let tyvars_to     = List.map SugarQuantifier.mk_resolved qs_to in
-  let o             = renamer qs_from qs_to in
-  let typ'          = o#forall (Binder.to_type rec_binder) in
-  let _, pats'      = List.split (List.map (o#pattern_list o) pats) in
-  let _, ty'        = o#option (fun o (ty, x) -> o, (o#forall ty, x)) ty in
-  let _, body'      = o#phrase body in
-  let _, signature' = o#option (fun o -> o#datatype') rec_signature in
-  { rec_binder =  Binder.set_type rec_binder typ'
-  ; rec_linearity
-  ; rec_definition = ((tyvars_to, ty'), (pats', body'))
-  ; rec_location
-  ; rec_signature = signature'
-  ; rec_frozen
-  ; rec_unsafe_signature }

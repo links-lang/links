@@ -4352,8 +4352,6 @@ and type_binding : context -> binding -> binding * context * Usage.t =
             manifests on encountering a recursive reference to a
             recursive function (which we track using the rec_vars
             component of context) *)
-          let defs =
-            List.map (WithPos.map ~f:Renamer.rename_recursive_functionnode) defs in
 
           let fresh_tame () = Types.make_empty_open_row default_effect_subkind in
           (* let fresh_wild () = Types.make_singleton_open_row ("wild", (Present Types.unit_type)) (lin_any, res_any) in *)

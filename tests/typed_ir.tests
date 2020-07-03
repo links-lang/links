@@ -111,3 +111,9 @@ tests/typed_ir/T877.links
 filemode : true
 exit : 0
 stdout : () : ()
+
+Mutual recursion (#882)
+tests/typed_ir/T882.links
+filemode : true
+exit : 0
+stdout : () : ()
