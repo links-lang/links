@@ -1,4 +1,6 @@
 open Links_expect.Test_common
+open Expect_test_common.Expectation
+open Expect_test_common.Expectation.Body
 open Expect_test_common.File.Location
 
 
@@ -131,50 +133,61 @@ let%expect_test "Typename [3]" =
 let%expect_test "Nested closures" =
   run_file {|./tests/functions/nested-closures.links|};
   [%expect {|
-    exit: 1
-    ***: Module Error: Could not find file ./tests/functions/nested-closures.links |}]
+    true : Bool
+    exit: 0 |}]
 
 let%expect_test "Quantification of alien functions (#280)" =
   run_file {|./tests/functions/alien-quantification.links|};
   [%expect {|
     exit: 1
-    ***: Module Error: Could not find file ./tests/functions/alien-quantification.links |}]
+    ***: Error: Links_core.Evalir.Exceptions.EvaluationError("Cannot make alien call on the server.") |}]
 
 let%expect_test "Type annotation on inner function (correct, basic)" =
   run_file {|./tests/functions/innerfun1.links|};
   [%expect {|
-    exit: 1
-    ***: Module Error: Could not find file ./tests/functions/innerfun1.links |}]
+    "Hello!" : String
+    exit: 0 |}]
 
 let%expect_test "Type annotation on inner function (incorrect, basic)" =
   run_file {|./tests/functions/innerfun2.links|};
   [%expect {|
     exit: 1
-    ***: Module Error: Could not find file ./tests/functions/innerfun2.links |}]
+    ./tests/functions/innerfun2.links:2: Type error: The non-recursive function definition has return type
+        `String'
+    but its annotation has return type
+        `Int'
+    In expression: sig bar : () -> Int
+      fun bar() {
+        "Hello!"
+      }. |}]
 
 let%expect_test "Type annotation on inner function (correct, recursive)" =
   run_file {|./tests/functions/innerfun3.links|};
   [%expect {|
-    exit: 1
-    ***: Module Error: Could not find file ./tests/functions/innerfun3.links |}]
+    "Hello!" : String
+    exit: 0 |}]
 
 let%expect_test "Closure conversion: Test generalization of free type variables during hoisting" =
   run_file {|./tests/functions/nested-functions-polymorphic.links|};
   [%expect {|
-    exit: 1
-    ***: Module Error: Could not find file ./tests/functions/nested-functions-polymorphic.links |}]
+    123 : Int
+    exit: 0 |}]
 
 let%expect_test "Closure conversion: Test function with free type variables, but no free term variables" =
   run_file {|./tests/functions/closure-conv-type-abstr-only.links|};
   [%expect {|
-    exit: 1
-    ***: Module Error: Could not find file ./tests/functions/closure-conv-type-abstr-only.links |}]
+    42 : Int
+    exit: 0 |}]
 
 let%expect_test "Quantifiers should not escape their scopes (#687)" =
   run_file {|./tests/functions/escaped-quantifier.links|};
   [%expect {|
     exit: 1
-    ***: Module Error: Could not find file ./tests/functions/escaped-quantifier.links |}]
+    ./tests/functions/escaped-quantifier.links:4: Type error: The quantifiers in the type of function
+        g: forall a.(a) {}-> a
+    escape their scope, as they are present in the types:
+        f: (a) {}-> a
+    In expression: fun g(x) { f(x) }. |}]
 
 let%expect_test "Linearity (1)" =
   run_expr {|fun (x, y) {(x, y)}|};

@@ -1,4 +1,6 @@
 open Links_expect.Test_common
+open Expect_test_common.Expectation
+open Expect_test_common.Expectation.Body
 open Expect_test_common.File.Location
 
 
@@ -59,14 +61,18 @@ let%expect_test "Explicit query evaluator annotation (1)" =
 let%expect_test "Explicit query evaluator annotation (2)" =
   run_expr ~args:["--config=tests/shredding/config.sample"] {|query flat { for (x <- [1,2,3]) [(x = x, y = (for (y <- [4,5,6]) [y]))] }|};
   [%expect {|
-    exit: 2
-    Fatal error: exception (Sys_error "tests/shredding/config.sample: No such file or directory") |}]
+    exit: 1
+    <string>:1: Type error: Flat query blocks must return a list of records of base type, but the expression
+        `{ for (x <- [1,2,3]) [(x = x, y = (for (y <- [4,5,6]) [y]))] }'
+    has type
+        `[(x:Int,y:[Int])]'
+    In expression: query flat { for (x <- [1,2,3]) [(x = x, y = (for (y <- [4,5,6]) [y]))] }. |}]
 
 let%expect_test "Explicit query evaluator annotation (3)" =
   run_expr ~args:["--config=tests/shredding/config.sample"] {|query [4] flat { for (x <- [1, 2, 3, 4, 5, 6]) [(x = x)] }|};
   [%expect {|
-    exit: 2
-    Fatal error: exception (Sys_error "tests/shredding/config.sample: No such file or directory") |}]
+    [(x = 1), (x = 2), (x = 3), (x = 4), (x = 5), (x = 6)] : [(x:Int)]
+    exit: 0 |}]
 
 let%expect_test "Nested query annotations (1)" =
   run_expr {|query nested { query nested { for (i <- [1,2,3]) [(x = i)] } }|};

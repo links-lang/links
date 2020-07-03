@@ -1,4 +1,6 @@
 open Links_expect.Test_common
+open Expect_test_common.Expectation
+open Expect_test_common.Expectation.Body
 open Expect_test_common.File.Location
 
 
@@ -460,8 +462,8 @@ let%expect_test "Ill-bracketed tag (opening tag hidden in a comment)" =
 let%expect_test "Newlines in comment" =
   run_file {|./tests/xml_comment_newlines.links|};
   [%expect {|
-    exit: 1
-    ***: Module Error: Could not find file ./tests/xml_comment_newlines.links |}]
+    <b/> : Xml
+    exit: 0 |}]
 
 let%expect_test "Mismatched tags" =
   run_expr {|<a></b>|};
