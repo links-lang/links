@@ -120,13 +120,13 @@ steps:
 
   - script: |
       eval `./opam2_local env`
-      make tests
-    displayName: 'Server-side tests'
+      dune runtest -j 64
+    displayName: 'Expect tests'
 
   - script: |
       eval `./opam2_local env`
-      dune runtest
-    displayName: 'Expect tests'
+      make tests
+    displayName: 'Server-side tests'
 
   - script: |
       eval `./opam2_local env`
