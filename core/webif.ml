@@ -80,18 +80,10 @@ struct
       body ^
       "\n  </body></html>\n"
 
-<<<<<<< HEAD
-  (* jcheney: lifted from serve_request, to de-clutter *)
-  let parse_request env cgi_args  =
-    if      (Utility.is_remote_call cgi_args)
-    then parse_remote_call env cgi_args
-    else if (Utility.is_client_return cgi_args)
-=======
   let parse_request env cgi_args  =
     if      (RequestData.is_remote_call cgi_args)
     then parse_remote_call env cgi_args
     else if (RequestData.is_client_return cgi_args)
->>>>>>> upstream/master
     then parse_client_return env cgi_args
     else if (is_server_cont cgi_args)
     then parse_server_cont env cgi_args
