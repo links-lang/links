@@ -125,6 +125,11 @@ steps:
 
   - script: |
       eval `./opam2_local env`
+      dune runtest
+    displayName: 'Expect tests'
+
+  - script: |
+      eval `./opam2_local env`
       ./run-tests db-only shredding
     displayName: 'Database shredding tests'
 
