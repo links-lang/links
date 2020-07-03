@@ -82,7 +82,10 @@ open Expect_test_common.File.Location
             $args.Add($parts[0].Trim(), $parts[1].Trim())
         }
 
-        if ($args.args -ne $null) {
+        if ($args.args -eq "--") {
+            $pargs = ""
+            $largs = ""
+        } elseif ($args.args -ne $null) {
             $argparts = $args.args.Split("-- ")
             if ($argparts.Count -gt 1) {
                 $largs = Format-Args ($argparts[0].Trim())
@@ -138,8 +141,8 @@ function Make-Fast() {
 
         Set-Content "expect/$base/dune" "(library
  (name links_expect_$base)
- (libraries base core core_kernel ppx_expect.payload
-   links_expect
+ (libraries
+   base unix links_expect ppx_expect.payload
    ppx_expect.config ppx_expect.config_types
    ppx_expect.common ppx_expect.evaluator
    ppx_expect.matcher ppx_inline_test
