@@ -8,7 +8,7 @@
 
 (library
   (name links_core)
-  (public_name links.core)
+  (public_name links.corelib)
   (synopsis "Links compiler library")
   (modes native)
   (libraries str linenoise base64 safepass unix result
