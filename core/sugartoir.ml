@@ -1243,11 +1243,11 @@ struct
         | b::bs ->
             begin
               match b with
-              | Let (b', _) when Var.(Scope.isGlobal (scope_of_binder b')) ->
+              | Let (b', _) when Var.(Scope.is_global (scope_of_binder b')) ->
                  let x = Var.var_of_binder b' in
                  let x_name = Var.name_of_binder b' in
                  partition (b::locals @ globals, [], Env.String.bind x_name x nenv) bs
-              | Fun (b', _, _, _, _) when Var.(Scope.isGlobal (scope_of_binder b')) ->
+              | Fun (b', _, _, _, _) when Var.(Scope.is_global (scope_of_binder b')) ->
                  let f = Var.var_of_binder b' in
                  let f_name = Var.name_of_binder b' in
                  partition (b::locals @ globals, [], Env.String.bind f_name f nenv) bs
@@ -1274,7 +1274,7 @@ struct
                       partition (globals, b::locals, nenv) bs
                  end
               | Alien { binder; _ }
-                   when Var.Scope.isGlobal (Var.scope_of_binder binder) ->
+                   when Var.Scope.is_global (Var.scope_of_binder binder) ->
                  let f = Var.var_of_binder binder in
                  let f_name = Var.name_of_binder binder in
                  partition (b::locals @ globals, [], Env.String.bind f_name f nenv) bs

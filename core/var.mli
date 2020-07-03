@@ -4,8 +4,8 @@ module Scope: sig
   type t = Local | Global
   [@@deriving show]
 
-  val isGlobal : t -> bool
-  val isLocal : t -> bool
+  val is_global : t -> bool
+  val is_local : t -> bool
 end
 
 (** Term variables *)

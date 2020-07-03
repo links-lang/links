@@ -6,11 +6,11 @@ module Scope = struct
   type t = Local | Global
   [@@deriving show]
 
-  let isGlobal = function
+  let is_global = function
     | Global -> true
     | _      -> false
 
-  let isLocal = function
+  let is_local = function
     | Local -> true
     | _     -> false
 end

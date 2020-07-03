@@ -214,7 +214,7 @@ struct
           let o = List.fold_left (fun o q -> o#quantifier_remove q) o quantifiers in
           (b, o)
         | (Fun (f, (tyvars, xs, body), None, location, unsafe)) as b
-             when Scope.isLocal (Ir.binding_scope b) ->
+             when Scope.is_local (Ir.binding_scope b) ->
           (* reset free and bound variables to be empty *)
           let o = o#reset in
 
@@ -261,7 +261,7 @@ struct
           let o = List.fold_left (fun o q -> o#quantifier_remove q) o tyvars in
           (b, o)
 
-        | (Rec defs) as b when Scope.isLocal (Ir.binding_scope b) ->
+        | (Rec defs) as b when Scope.is_local (Ir.binding_scope b) ->
           (* reset free and bound variables to be empty *)
           let o = o#reset in
 
@@ -477,13 +477,13 @@ struct
       method! bindings =
         function
         | [] -> [], o
-        | b :: bs when Scope.isGlobal (Ir.binding_scope b) ->
+        | b :: bs when Scope.is_global (Ir.binding_scope b) ->
           let b, o = o#binding b in
           let bs', o = o#pop_hoisted_bindings in
           let bs, o = o#bindings bs in
           bs' @ (b :: bs), o
         | Fun ((f, _) as fb, (tyvars, xs, body), None, location, unsafe) :: bs ->
-          assert (Scope.isLocal (Var.scope_of_binder fb));
+          assert (Scope.is_local (Var.scope_of_binder fb));
           let fb = Globalise.binder fb in
           let (xs, o) =
             List.fold_right
@@ -551,7 +551,7 @@ struct
               List.fold_left
                 (fun (defs, (o : 'self)) ((f, _) as fb, (tyvars, xs, body), none, location, unsafe) ->
                    assert (none = None);
-                   assert (Scope.isLocal (Var.scope_of_binder fb));
+                   assert (Scope.is_local (Var.scope_of_binder fb));
                    let fb = Globalise.binder fb in
                    let xs, o =
                      List.fold_right

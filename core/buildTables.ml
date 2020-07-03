@@ -173,7 +173,7 @@ struct
 
     method! binder b =
       let b, o = super#binder b in
-        if Scope.isGlobal (Var.scope_of_binder b) then
+        if Scope.is_global (Var.scope_of_binder b) then
           b, o#global (Var.var_of_binder b)
         else
           b, o

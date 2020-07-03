@@ -544,7 +544,7 @@ module Inline = struct
             let b, o = o#binding b in
               begin
                 match b with
-                | Let (b, (tyvars, Return v)) when Var.(Scope.isLocal (scope_of_binder b)) && is_inlineable_value v ->
+                | Let (b, (tyvars, Return v)) when Var.(Scope.is_local (scope_of_binder b)) && is_inlineable_value v ->
                    let x = Var.var_of_binder b in
                    let v =
                      match tyvars with
