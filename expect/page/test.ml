@@ -6,13 +6,13 @@ let%expect_test "Empty page" =
   run_expr {|addRoute("/", fun(_) { page <#></#> })|};
   [%expect {|
     () : ()
-
     exit: 0 |}]
 
 let%expect_test "Unhandled operation" =
   run_expr ~args:["--enable-handlers"] {|addRoute("/", fun(_) {do Fail})|};
   [%expect {|
-    exit: 1<string>:1: Type error: The function
+    exit: 1
+    <string>:1: Type error: The function
         `addRoute'
     has type
         `(String, (String) {hear{a}}~> Page) ~b~> ()'

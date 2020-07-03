@@ -13,7 +13,7 @@ let process_result proc =
     | Result.Error (`Signal _) -> -1 in
   Core.Unix.in_channel_of_descr proc.stdout |> Stdio.In_channel.input_all |> Format.printf "%s";
   Core.Unix.in_channel_of_descr proc.stderr |> Stdio.In_channel.input_all |> Format.eprintf "%s";
-  Format.printf "\nexit: %d" res
+  Format.printf "exit: %d\n" res
 
 let run_expr ?(config=None) ?(args=[]) ?(pargs=[]) code =
   let pargs = if List.is_empty pargs then [] else "--" :: pargs in
