@@ -1,5 +1,7 @@
 open OUnit2
 
+open Links_lens_unit_tests
+
 let suites =
   "all"
   >::: [
