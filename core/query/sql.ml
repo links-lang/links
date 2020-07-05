@@ -144,6 +144,7 @@ let pp_comma_separated pp_item = Format.pp_print_list ~pp_sep:pp_comma pp_item
 
 let rec pr_query quote ignore_fields ppf q =
   let pp_quote ppf q = Format.pp_print_string ppf (quote q) in
+  let tables_to_string = List.map (fun (t, x) -> Format.asprintf "%a as %s" pp_quote t (string_of_table_var x)) in
 
   let pr_q = pr_query quote ignore_fields in
   let pr_b = pr_base quote false in
@@ -214,8 +215,7 @@ let rec pr_query quote ignore_fields ppf q =
     | Select (fields, tables, condition, os) ->
         (* using quote_field assumes tables contains table names (not nested queries) *)
         (* FIXME: type Select forces tables to be list((table name, var)), but it can have subqueries instead of plain table names in general cases *)
-        let tables = List.map (fun (t, x) -> Format.asprintf "%a as %s" pp_quote t (string_of_table_var x)) tables in
-        pr_select ppf fields tables condition os
+        pr_select ppf fields (tables_to_string tables) condition os
     | Delete { del_table; del_where } ->
         pr_delete ppf del_table del_where
     | Update { upd_table; upd_fields; upd_where } ->
@@ -227,10 +227,8 @@ let rec pr_query quote ignore_fields ppf q =
         | Select (fields, tables, condition, os) ->
             (* Inline the query *)
             (* FIXME: should emitting standard SQL WITH expressions here, move inline to a separate preprocessing step *)
-            let tables = List.map (fun (t, x) -> Format.asprintf "%a as %s" pp_quote t (string_of_table_var x)) tables in
-            let pr_q = pr_query quote ignore_fields in
             let q = Format.asprintf "(%s) as %s" (Format.asprintf "%a" pr_q q) (string_of_table_var z) in
-            pr_select ppf fields (q::tables) condition os
+            pr_select ppf fields (q::(tables_to_string tables)) condition os
         | _ -> assert false
 
 and pr_base quote one_table ppf b =
