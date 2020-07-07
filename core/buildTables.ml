@@ -7,8 +7,9 @@ struct
   type t = (Var.var, Ir.eval_fun_def) Hashtbl.t
 
   let make_eval_def : Ir.fun_def -> Ir.eval_fun_def =
-    fun ((_f, info), (_tyvars, xs, body), z, location, _) ->
-      info, (List.map Var.var_of_binder xs, body), opt_map Var.var_of_binder z, location
+    fun (b, (_tyvars, xs, body), z, location, _) ->
+    let info = Var.info_of_binder b in
+    info, (List.map Var.var_of_binder xs, body), opt_map Var.var_of_binder z, location
 
   let add fs def =
       let f = Var.var_of_binder (Ir.binder_of_fun_def def) in
@@ -173,7 +174,7 @@ struct
 
     method! binder b =
       let b, o = super#binder b in
-        if Scope.isGlobal (Var.scope_of_binder b) then
+        if Scope.is_global (Var.scope_of_binder b) then
           b, o#global (Var.var_of_binder b)
         else
           b, o

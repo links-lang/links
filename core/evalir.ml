@@ -75,7 +75,7 @@ struct
   let lookup_fun_def f =
     match lookup_fun f with
     | None -> None
-    | Some (finfo, _, None, location) ->
+    | Some (_finfo, _, None, location) ->
       begin
         match location with
         | Location.Server | Location.Unknown ->
@@ -84,7 +84,7 @@ struct
              small *)
           Some (`FunctionPtr (f, None))
         | Location.Client ->
-          Some (`ClientFunction (Js.var_name_binder (f, finfo)))
+          Some (`ClientFunction (Js.var_name_var f))
       end
     | _ -> assert false
 
@@ -531,7 +531,8 @@ struct
       | [] -> tail_computation env cont tailcomp
       | b::bs ->
          match b with
-         | Let ((var, _) as b, (_, tc)) ->
+         | Let (b, (_, tc)) ->
+            let var = Var.var_of_binder b in
             let locals = Value.Env.localise env var in
             let cont' =
               K.(let frame = Frame.make (Var.scope_of_binder b) var locals (bs, tailcomp) in
@@ -563,9 +564,10 @@ struct
         | `Variant (label, _) as v ->
           begin
             match StringMap.lookup label cases, default, v with
-            | Some ((var,_), c), _, `Variant (_, v)
-            | _, Some ((var,_), c), v ->
-              computation (Value.Env.bind var (v, Scope.Local) env) cont c
+            | Some (b, c), _, `Variant (_, v)
+            | _, Some (b, c), v ->
+               let var = Var.var_of_binder b in
+               computation (Value.Env.bind var (v, Scope.Local) env) cont c
             | None, _, #Value.t -> eval_error "Pattern matching failed on %s" label
             | _ -> assert false (* v not a variant *)
           end
@@ -911,8 +913,9 @@ struct
 
               begin
                 match StringMap.lookup label cases with
-                | Some ((var,_), body) ->
-                  computation (Value.Env.bind var (chan, Scope.Local) env) cont body
+                | Some (b, body) ->
+                   let var = Var.var_of_binder b in
+                   computation (Value.Env.bind var (chan, Scope.Local) env) cont body
                 | None -> eval_error "Choice pattern matching failed"
               end
           | ReceiveBlocked -> block ()

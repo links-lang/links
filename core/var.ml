@@ -6,11 +6,11 @@ module Scope = struct
   type t = Local | Global
   [@@deriving show]
 
-  let isGlobal = function
+  let is_global = function
     | Global -> true
     | _      -> false
 
-  let isLocal = function
+  let is_local = function
     | Local -> true
     | _     -> false
 end
@@ -53,9 +53,11 @@ let fresh_var : var_info -> binder * var =
 let info_type (t, _, _) = t
 let info_of_type t = (t, "", Scope.Local)
 
-let make_local_info  (t, name) = (t, name, Scope.Local)
-let make_global_info (t, name) = (t, name, Scope.Global)
+let make_info t name scope = (t, name, scope)
+let make_local_info  (t, name) = make_info t name Scope.Local
+let make_global_info (t, name) = make_info t name Scope.Global
 
+let make_binder var info = (var, info)
 let update_type newtype (var, (_, name, scope)) = (var, (newtype, name, scope))
 
 let fresh_binder_of_type = info_of_type ->- fresh_binder
@@ -67,6 +69,9 @@ let info_of_binder (_, info : binder) = info
 let type_of_binder (_, (t, _, _) : binder) = t
 let name_of_binder (_, (_, name, _) : binder) = name
 let scope_of_binder (_, (_, _, scope) : binder) = scope
+
+let globalise_binder (var, (t, name, _)) =
+  (var, (t, name, Scope.Global))
 
 (** Create a copy of a type environment mapping vars (= ints) to types
     instead of strings to types
