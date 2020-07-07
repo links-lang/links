@@ -147,3 +147,18 @@ let%expect_test "Invalid unsafe type annotations on mutually recursive functions
 
     exit: 1 |}]
 
+let%expect_test "Invalid unsafe type annotations on polymorphic types" =
+  run_expr {|unsafe sig f : (a) -> () fun f(x) { print(x) } f|};
+  [%expect {|
+    <string>:1: Type error: The function
+        `print'
+    has type
+        `(String) ~a~> ()'
+    while the arguments passed to it have types
+        `b'
+    and the currently allowed effects are
+        `|c'
+    In expression: print(x).
+
+    exit: 1 |}]
+

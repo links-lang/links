@@ -124,3 +124,9 @@ let%expect_test "List concatenation" =
     [1, 2, 3, 4, 5] : [Int]
     exit: 0 |}]
 
+let%expect_test "Fixity tests" =
+  run_file {|tests/fixity.links|};
+  [%expect {|
+    () : ()
+    exit: 0 |}]
+

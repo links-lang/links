@@ -188,3 +188,10 @@ let%expect_test "Sugar for implicit effect variables in typenames (propagates th
     A(fun) : Either (())
     exit: 0 |}]
 
+let%expect_test "Type names with effect arrows are not considered" =
+  run_expr ~args:["--config=tests/effect_sugar.config"] {|typename X = Comp((), {Var:() -> ()}); fun() { } : X({ |_})|};
+  [%expect {|
+    :0: Arity mismatch: Type X expects 0 type arguments, but 1 arguments were provided. In: <dummy>
+
+    exit: 1 |}]
+

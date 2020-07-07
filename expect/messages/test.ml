@@ -100,3 +100,9 @@ let%expect_test "Built-in functions are polymorphic in their mailbox types" =
     (fun, fun) : (() {:Int|_}~> String, (Int) {:()|_}~> String)
     exit: 0 |}]
 
+let%expect_test "SpawnWait works on the server" =
+  run_expr {|fun go() { var p1 = spawn { receive { case Hi(pid) -> pid ! 100 } }; spawnWait { p1 ! Hi(self()) ; receive { case n -> n } } } go()|};
+  [%expect {|
+    100 : Int
+    exit: 0 |}]
+

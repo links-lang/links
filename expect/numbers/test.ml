@@ -104,3 +104,9 @@ let%expect_test "Equality and comparisons [integer equality with 64-bit overflow
     true : Bool
     exit: 0 |}]
 
+let%expect_test "Equality and comparisons [floating comparison]" =
+  run_expr {|(-.10.0 < -.9.5 && 10.0 > 9.5 && 10.0 > -.9.5 && -.10.0 < 9.5)|};
+  [%expect {|
+    true : Bool
+    exit: 0 |}]
+

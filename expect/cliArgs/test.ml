@@ -40,3 +40,9 @@ let%expect_test "Multiple arguments [2]" =
     [""foo", "bar"", "42", ""quux", "quasi""] : [String]
     exit: 0 |}]
 
+let%expect_test "Multiple arguments [3]" =
+  run_expr {|getArgs()|} ~pargs:["-1"; "-42"; "\"-5"; "foobars\""; "\"+6"; "quuxes\""];
+  [%expect {|
+    ["-1", "-42", ""-5", "foobars"", ""+6", "quuxes""] : [String]
+    exit: 0 |}]
+

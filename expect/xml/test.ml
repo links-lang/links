@@ -493,3 +493,12 @@ let%expect_test "Tags with hyphens are not OK" =
               ^
     exit: 1 |}]
 
+let%expect_test "Variables with hyphens are not OK" =
+  run_expr {|var hello-world = "hello"|};
+  [%expect {|
+    ***: Parse error: <string>:1
+
+      var hello-world = "hello"
+                ^
+    exit: 1 |}]
+

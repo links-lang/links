@@ -200,3 +200,9 @@ let%expect_test "Record field punning (6)" =
     (x = 1, y = 2, z = 3) : (x:Int,y:Int,z:Int)
     exit: 0 |}]
 
+let%expect_test "Record field punning (7)" =
+  run_expr {|var x = 1; var y = 2; var z = 3; (=x, =y, =z)|};
+  [%expect {|
+    (x = 1, y = 2, z = 3) : (x:Int,y:Int,z:Int)
+    exit: 0 |}]
+

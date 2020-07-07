@@ -173,3 +173,12 @@ let%expect_test "Constructor names with primes (2)" =
     Foo'''''bar : [|Foo'''''bar|_::Any|]
     exit: 0 |}]
 
+let%expect_test "Constructor names with primes (3)" =
+  run_expr {|'Foo|};
+  [%expect {|
+    ***: Parse error: <string>:1
+    Unexpected character : '
+      'Foo
+       ^
+    exit: 1 |}]
+

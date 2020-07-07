@@ -28,3 +28,9 @@ let%expect_test "Deletion (1 node)" =
     Node(Node(Leaf, 1, Leaf), 3, Node(Leaf, 4, Leaf)) : BinaryTree.BinaryTree (Int)
     exit: 0 |}]
 
+let%expect_test "Deletion (2 nodes)" =
+  run_file {|./tests/stdlibtests/binaryTree/remove2.links|};
+  [%expect {|
+    Node(Node(Node(Leaf, 1, Leaf), 2, Leaf), 4, Node(Node(Leaf, 1, Leaf), 2, Leaf)) : BinaryTree.BinaryTree (Int)
+    exit: 0 |}]
+

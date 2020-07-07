@@ -58,3 +58,9 @@ let%expect_test "Effect sugar: Type aliases (2)" =
     fun : () -> Comp (())
     exit: 0 |}]
 
+let%expect_test "Effect sugar: Type aliases (3)" =
+  run_expr ~args:["--config=tests/effect_sugar.config"] {|fun(x) {x} : (Comp(a, { | e })) -f-> Comp(a, { | e })|};
+  [%expect {|
+    fun : (Comp (a)) -> Comp (a)
+    exit: 0 |}]
+

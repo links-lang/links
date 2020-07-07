@@ -70,3 +70,9 @@ let%expect_test "Non-empty continuation environments" =
     5 : Int
     exit: 0 |}]
 
+let%expect_test "Offering where peer endpoint is cancelled" =
+  run_file ~args:["--session-exceptions"; "--enable-handlers"] {|./tests/session-exceptions/cancel11.links|};
+  [%expect {|
+    "exception" : String
+    exit: 0 |}]
+

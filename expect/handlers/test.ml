@@ -589,3 +589,9 @@ let%expect_test "Omission of resumption for nullary operations (3)" =
     fun : (() {Foo:() {}-> _::Any|b}~> Int) {Foo{_}|b}~> Int
     exit: 0 |}]
 
+let%expect_test "Examples" =
+  run_file ~args:["--enable-handlers"; "--path=examples/handlers"; "--config=tests/effect_sugar.config"] {|./examples/handlers/tests.links|};
+  [%expect {|
+    () : ()
+    exit: 0 |}]
+

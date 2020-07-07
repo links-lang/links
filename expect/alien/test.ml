@@ -47,3 +47,9 @@ let%expect_test "Alien binders cannot contain primes" =
     In expression: alien javascript "" f' : () -> ();.
     exit: 1 |}]
 
+let%expect_test "Alien type variables can contain primes" =
+  run_expr {|alien javascript "" f : (a', b') -> c';|};
+  [%expect {|
+    () : ()
+    exit: 0 |}]
+

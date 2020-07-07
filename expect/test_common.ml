@@ -1,7 +1,3 @@
-include Expect_test_common.File.Location
-include Expect_test_common.Expectation
-include Expect_test_common.Expectation.Body
-
 let () = Unix.chdir "../../../../"
 
 let create_process ~prog ~args =

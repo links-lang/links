@@ -47,6 +47,9 @@ function Fix-File($file) {
             $current.Add($line)
         }
     }
+    if ($current.Count -gt 0) {
+        $tests.Add($current)
+    }
 
     $gargs = @{}
     foreach ($arg in $globalconf) {
@@ -142,11 +145,7 @@ function Make-Fast() {
         Set-Content "expect/$base/dune" "(library
  (name links_expect_$base)
  (libraries
-   base unix links_expect ppx_expect.payload
-   ppx_expect.config ppx_expect.config_types
-   ppx_expect.common ppx_expect.evaluator
-   ppx_expect.matcher ppx_inline_test
-   ppx_inline_test.config)
+   base unix links_expect)
  (inline_tests)
  (preprocess (pps ppx_expect)))"
     }

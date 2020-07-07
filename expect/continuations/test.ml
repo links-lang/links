@@ -62,3 +62,14 @@ let%expect_test "continuation typing [3]" =
 
     exit: 1 |}]
 
+let%expect_test "continuation mailbox typing (see r321)" =
+  run_expr {|fun () {(escape e in {spawn { e(self()) }}) ! ""; 1 + recv(); }|};
+  [%expect {|
+    <string>:1: Type error: Side-effect expressions must have type `()', but the expression
+        `1 + recv()'
+    has type
+        `Int'
+    In expression: 1 + recv().
+
+    exit: 1 |}]
+

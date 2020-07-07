@@ -28,3 +28,9 @@ let%expect_test "concatenation" =
     "abcdef" : String
     exit: 0 |}]
 
+let%expect_test "comparision" =
+  run_expr {|"a" < "z"|};
+  [%expect {|
+    true : Bool
+    exit: 0 |}]
+

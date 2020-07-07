@@ -48,3 +48,9 @@ let%expect_test "Logical operators" =
     true : Bool
     exit: 0 |}]
 
+let%expect_test "Logical operator short-circuiting" =
+  run_expr {|(true || (1 / 0) == 0, false && (1 / 0) == 0)|};
+  [%expect {|
+    (true, false) : (Bool, Bool)
+    exit: 0 |}]
+

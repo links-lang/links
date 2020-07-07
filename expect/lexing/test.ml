@@ -46,3 +46,12 @@ let%expect_test "Incomplete regexp (1)" =
                   ^
     exit: 1 |}]
 
+let%expect_test "Incomplete regexp (2)" =
+  run_expr {|"abc" =~ s/ab/de|};
+  [%expect {|
+    ***: Parse error: <string>:1
+
+      "abc" =~ s/ab/de
+                      ^
+    exit: 1 |}]
+

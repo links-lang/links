@@ -16,3 +16,9 @@ let%expect_test "Test precedence parsing (float plus times)" =
     true : Bool
     exit: 0 |}]
 
+let%expect_test "Test precedence parsing (float minus times)" =
+  run_expr {|42.0 -. 1.0 *. 42.0 == 42.0 -. (1.0 *. 42.0)|};
+  [%expect {|
+    true : Bool
+    exit: 0 |}]
+

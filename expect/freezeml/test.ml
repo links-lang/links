@@ -374,3 +374,18 @@ let%expect_test "Do not infer polymorphic values (1)" =
 
     exit: 1 |}]
 
+let%expect_test "Do not infer polymorphic values (2)" =
+  run_expr ~config {|fun(bot: (forall a. a)) { var f = bot(bot); (f(42) + 1, poly(~f)) }|};
+  [%expect {|
+    <string>:1: Type error: The function
+        `poly'
+    has type
+        `(forall a,b::Row.(a) -b-> a) -c-> (Int, Bool)'
+    while the arguments passed to it have types
+        `(Int) -d-> Int'
+    and the currently allowed effects are
+        `|d::(Unl,Mono)'
+    In expression: poly(~f).
+
+    exit: 1 |}]
+

@@ -122,3 +122,9 @@ let%expect_test "Ranges are wild (1)" =
 
     exit: 1 |}]
 
+let%expect_test "Ranges are wild, but can appear outside of query blocks (2)" =
+  run_expr {|for (x <- [1..3] ) [(num=x)]|};
+  [%expect {|
+    [(num = 1), (num = 2), (num = 3)] : [(num:Int)]
+    exit: 0 |}]
+

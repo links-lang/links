@@ -259,3 +259,9 @@ let%expect_test "Switch expression" =
     "hello!" : String
     exit: 0 |}]
 
+let%expect_test "Qualified module reference" =
+  run_file ~args:["--path=tests/modules"] {|./tests/modules/varRefA.links|};
+  [%expect {|
+    "hello from b!" : String
+    exit: 0 |}]
+

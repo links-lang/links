@@ -196,3 +196,9 @@ let%expect_test "toLower [5]" =
     '{' : Char
     exit: 0 |}]
 
+let%expect_test "toLower [6]" =
+  run_expr {|toLower('5')|};
+  [%expect {|
+    '5' : Char
+    exit: 0 |}]
+

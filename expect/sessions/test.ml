@@ -77,3 +77,9 @@ let%expect_test "Non-linear generalisation (1)" =
     () : ()
     exit: 0 |}]
 
+let%expect_test "Non-linear generalisation (2)" =
+  run_expr {|fun (r) {var (x=42|q) = r; ()}|};
+  [%expect {|
+    fun : ((x:Int|_)) -> ()
+    exit: 0 |}]
+

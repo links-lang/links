@@ -147,3 +147,9 @@ let%expect_test "Use structural unification if nominal unification fails (type e
 
     exit: 1 |}]
 
+let%expect_test "Top level functions within a mutal do not share type variables" =
+  run_file {|./tests/mutual/sharedTyvar.links|};
+  [%expect {|
+    () : ()
+    exit: 0 |}]
+

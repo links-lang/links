@@ -27,3 +27,9 @@ let%expect_test "Unhandled operation" =
 
     exit: 1 |}]
 
+let%expect_test "Handled operation" =
+  run_expr ~args:["--enable-handlers"] {|addRoute("/", fun(_) { handle({do Fail}) { case Fail -> page <#>{stringToXml("Caught")}</#> case Return(_) -> page <#>{stringToXml("Success")}</#> } })|};
+  [%expect {|
+    () : ()
+    exit: 0 |}]
+

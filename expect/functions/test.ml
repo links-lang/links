@@ -244,3 +244,11 @@ let%expect_test "Linearity (8) (#797)" =
     fun : (a::Any) -@ (c::Any) -@ (a::Any, c::Any)
     exit: 0 |}]
 
+let%expect_test "Linearity (9) - linear recursive functions should be disallowed" =
+  run_expr {|linfun f(x) {f(x)} f|};
+  [%expect {|
+    <string>:1: Type error: Recursive function f cannot be linear.
+    In expression: linfun f(x) {f(x)}.
+
+    exit: 1 |}]
+

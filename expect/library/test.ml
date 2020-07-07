@@ -18,3 +18,7 @@ let%expect_test "Test sysexit [1]" =
   run_expr {|fun() {print("before"); sysexit(1); print("after")}()|};
   [%expect {| beforeexit: 1 |}]
 
+let%expect_test "Test sysexit [2]" =
+  run_expr {|fun() {print("before"); sysexit(2); print("after")}()|};
+  [%expect {| beforeexit: 2 |}]
+

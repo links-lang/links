@@ -16,3 +16,9 @@ let%expect_test "Boolean not(false)" =
     true : Bool
     exit: 0 |}]
 
+let%expect_test "Predefined \"javascript\" value" =
+  run_expr {|javascript|};
+  [%expect {|
+    false : Bool
+    exit: 0 |}]
+

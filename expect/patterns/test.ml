@@ -216,3 +216,9 @@ let%expect_test "Negative pattern [11]" =
     Quux : [|Bar-|Baz-|Foo-|Quux|_|]
     exit: 0 |}]
 
+let%expect_test "Negative pattern [12]" =
+  run_expr {|(fun(x) { switch(x) { case (-(Foo, Bar, Baz) as x) -> x case _ -> Quux }})(FooBar)|};
+  [%expect {|
+    FooBar : [|Bar-|Baz-|Foo-|FooBar|Quux|_|]
+    exit: 0 |}]
+

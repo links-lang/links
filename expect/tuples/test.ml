@@ -79,3 +79,9 @@ let%expect_test "1-tuples" =
     (1 = "one") : (1:String)
     exit: 0 |}]
 
+let%expect_test "Quasituples" =
+  run_expr {|(1="foo", 3="bar")|};
+  [%expect {|
+    (1 = "foo", 3 = "bar") : (String, String)
+    exit: 0 |}]
+

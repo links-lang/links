@@ -167,3 +167,9 @@ let%expect_test "Function names may contain primes (4)" =
     "f'" : String
     exit: 0 |}]
 
+let%expect_test "A character not a variable name." =
+  run_expr {|var a' = 42; 'a'|};
+  [%expect {|
+    'a' : Char
+    exit: 0 |}]
+

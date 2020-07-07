@@ -888,3 +888,7 @@ let%expect_test "Typecheck example file examples/examplesPage.links" =
   run_file ~args:["--config=tests/examples_default.config"] {|examples/examplesPage.links|};
   [%expect {| exit: 0 |}]
 
+let%expect_test "Typecheck example file examples/mvu/commands.links" =
+  run_file ~args:["--config=tests/examples_default.config"] {|examples/mvu/commands.links|};
+  [%expect {| exit: 0 |}]
+

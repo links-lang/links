@@ -350,3 +350,12 @@ let%expect_test "Signatures (var): free variable in body, no sig (6)" =
     fun : (a) -> a
     exit: 0 |}]
 
+let%expect_test "Signatures (var): free variable in body, quantified sig (7)" =
+  run_expr {|fun f(x) {x}     sig x : forall a. (a) -> a var x = f : ((a) -> a); x|};
+  [%expect {|
+    <string>:1: Type error: Unbound type variable `a' in position where
+            no free type variables are allowed
+    In expression: a.
+
+    exit: 1 |}]
+

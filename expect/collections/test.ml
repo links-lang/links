@@ -220,3 +220,9 @@ let%expect_test "Nullary for comprehensions" =
     [1] : [Int]
     exit: 0 |}]
 
+let%expect_test "For comprehensions with multiple generators" =
+  run_expr {|for (x <- [1,2], y <- [true, false], z <- ["foo", "bar"]) [(x,y,z)]|};
+  [%expect {|
+    [(1, true, "foo"), (1, true, "bar"), (1, false, "foo"), (1, false, "bar"), (2, true, "foo"), (2, true, "bar"), (2, false, "foo"), (2, false, "bar")] : [(Int, Bool, String)]
+    exit: 0 |}]
+

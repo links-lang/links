@@ -166,3 +166,9 @@ let%expect_test "Interpolation [2]" =
     true : Bool
     exit: 0 |}]
 
+let%expect_test "WikiParser [1]" =
+  run_file {|./tests/wikiparser.links|};
+  [%expect {|
+    true : Bool
+    exit: 0 |}]
+

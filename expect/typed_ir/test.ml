@@ -102,3 +102,9 @@ let%expect_test "isInt (#575)" =
     () : ()
     exit: 0 |}]
 
+let%expect_test "function pattern matching has right effects (#691)" =
+  run_expr ~config {|sig f : ([a]) {}-> a fun f ([x]) { x }|};
+  [%expect {|
+    () : ()
+    exit: 0 |}]
+
