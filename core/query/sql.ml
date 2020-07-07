@@ -75,6 +75,7 @@ module Arithmetic :
 sig
   val is : string -> bool
   val gen : (string * string * string) -> string
+  val sql_name : string -> string
 end =
 struct
   let builtin_ops =
@@ -197,7 +198,7 @@ let rec pr_query quote ignore_fields ppf q =
       (pp_comma_separated pp_value) values
   in
   match q with
-    | UnionAll ([], _) -> Format.fprintf ppf "%a" Format.pp_print_string "select 42 as \"@unit@\" where false"
+    | UnionAll ([], _) -> Format.pp_print_string ppf "select 42 as \"@unit@\" where false"
     | UnionAll ([q], n) -> Format.fprintf ppf "%a%a" pr_q q Format.pp_print_string (order_by_clause n)
     | UnionAll (qs, n) ->
       let pp_sep_union ppf () = Format.fprintf ppf " union all " in
@@ -232,11 +233,11 @@ let rec pr_query quote ignore_fields ppf q =
         | _ -> assert false
 
 and pr_base quote one_table ppf b =
-  let string_of_projection quote one_table (var, label) =
+  let pp_projection quote one_table ppf (var, label) =
   if one_table then
-    quote label
+    Format.pp_print_string ppf (quote label)
   else
-    Format.asprintf "%s.%s" (string_of_table_var var) (quote label)
+    Format.fprintf ppf "%s.%s" (string_of_table_var var) (quote label)
   in
   let pr_b_one_table = pr_base quote one_table in
   let pr_q_true = pr_query quote true in
@@ -257,14 +258,19 @@ and pr_base quote one_table ppf b =
       | "intToString" | "stringToInt" | "intToFloat" | "floatToString" | "stringToFloat" -> ""
       | _ -> assert false
   in
+  let pp_sql_arithmetic ppf (l, op, r) =
+    match op with
+      | "/" -> Format.fprintf ppf "floor(%a/%a)" pr_b_one_table l pr_b_one_table r
+      | "^" -> Format.fprintf ppf "floor(pow(%a,%a))" pr_b_one_table l pr_b_one_table r
+      | "^." -> Format.fprintf ppf "pow(%a,%a)" pr_b_one_table l pr_b_one_table r
+      | _ -> Format.fprintf ppf "(%a%s%a)" pr_b_one_table l (Arithmetic.sql_name op) pr_b_one_table r
+  in
     match b with
       | Case (c, t, e) -> Format.fprintf ppf "case when %a then %a else %a end" pr_b_one_table c pr_b_one_table t pr_b_one_table e
       | Constant c -> Format.pp_print_string ppf (Constant.to_string c)
-      | Project (var, label) -> Format.pp_print_string ppf (string_of_projection quote one_table (var, label))
-      | Apply (op, [l; r]) when Arithmetic.is op ->
-        let l = Format.asprintf "%a" pr_b_one_table l in
-        let r = Format.asprintf "%a" pr_b_one_table r in
-        Format.fprintf ppf "%a" Format.pp_print_string (Arithmetic.gen (l, op, r))
+      | Project (var, label) -> pp_projection quote one_table ppf (var, label)
+      | Apply (op, [l; r]) when Arithmetic.is op -> pp_sql_arithmetic ppf (l, op, r)
+      (* special case: not empty is translated to exists *)
       | Apply ("not", [Empty q]) -> Format.fprintf ppf "exists (%a)" pr_q_true q
       | Apply (uop, [v]) when StringSet.mem uop unary_ops -> Format.fprintf ppf "%s(%a)" (unary_map uop) pr_b_one_table v
 
@@ -277,7 +283,7 @@ and pr_base quote one_table ppf b =
       | Empty q -> Format.fprintf ppf "not exists (%a)" pr_q_true q
       | Length q -> Format.fprintf ppf "select count(*) from (%a) as %a" pr_q_true q Format.pp_print_string (fresh_dummy_var ())
       | RowNumber [] -> Format.fprintf ppf "%a" Format.pp_print_string "1"
-      | RowNumber ps -> Format.fprintf ppf "row_number() over (order by %a)" Format.pp_print_string (String.concat "," (List.map (string_of_projection quote one_table) ps))
+      | RowNumber ps -> Format.fprintf ppf "row_number() over (order by %a)" (pp_comma_separated (pp_projection quote one_table)) ps
 
 let string_of_base quote one_table b =
   Format.asprintf "%a" (pr_base quote one_table) b
