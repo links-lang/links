@@ -315,7 +315,7 @@ struct
              end
           | Some s -> s
         in
-        if Sys.file_exists linkslib |> not
+        if not (Sys.file_exists linkslib)
          then raise (
              Errors.SettingsError (
                Format.asprintf
