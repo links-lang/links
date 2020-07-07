@@ -5,6 +5,11 @@ fun deleteAll() {
   delete (x <-- factorials);
 }
 
+fun deleteWhere() {
+  delete (x <-- factorials)
+  where (x.i == 2);
+}
+
 fun insertNone() {
   insert factorials
   values (i, f)
@@ -71,6 +76,7 @@ fun tableLength() server {
 
 fun test() {
   deleteAll();
+  deleteWhere();
   assertEq(lookupFactorials(10), []);
   assertEq(insertReturningOne(), 1);
   assertEq(lookupFactorials(10), [(f=1,i=1)]);
