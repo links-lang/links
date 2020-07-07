@@ -72,24 +72,20 @@ struct
 end
 
 (** Generate a JavaScript name from a binder *)
-let name_binder (x, info) =
-  let (_, name, _) = info in
-  if String.length name = 0 then
-    "_" ^ string_of_int x
-  else
+let name_binder b =
+  let x = Var.var_of_binder b in
+  match Var.name_of_binder b with
+  | ""   -> "_" ^ string_of_int x
+  | name ->
     (* Closure conversion means we can no longer rely on top-level
        functions having unique names *)
-    (* match scope with *)
-    (* | `Local -> *)
-      if (Str.string_match (Str.regexp "^_g[0-9]") name 0) then
-        "_" ^ string_of_int x (* make the generated names slightly less ridiculous in some cases *)
-      else
-        Symbols.wordify name ^ "_" ^ string_of_int x
-    (* | `Global -> Symbols.wordify name *)
+     if (Str.string_match (Str.regexp "^_g[0-9]") name 0)
+     then "_" ^ string_of_int x (* make the generated names slightly less ridiculous in some cases *)
+     else Symbols.wordify name ^ "_" ^ string_of_int x
 
 (** Generate a JavaScript name from a variable number. *)
 let var_name_var x = "_" ^ string_of_int x
 
 (** Generate a JavaScript name from a binder based on the unique
     integer for that binder. *)
-let var_name_binder (x, _) = var_name_var x
+let var_name_binder b = var_name_var (Var.var_of_binder b)

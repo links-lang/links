@@ -72,7 +72,7 @@ module Compressible = struct
       List.rev
         (E.fold
            (fun name (v, scope) compressed ->
-             if Scope.isGlobal scope
+             if Scope.is_global scope
              then compressed
              else (name, V.compress v) :: compressed)
            env [])

@@ -587,7 +587,8 @@ module Eff_Handler_Continuation = struct
       type trap_result = (v, result) Trap.result
 
       let return k h v =
-        let ((var,_), comp) = h.return in
+        let (b, comp) = h.return in
+        let var = Var.var_of_binder b in
         E.computation (Env.bind var (v, Scope.Local) h.env) k comp
 
       let rec apply ~env k v =
@@ -642,8 +643,9 @@ module Eff_Handler_Continuation = struct
         let rec handle k' = function
           | ((User_defined h, pk) :: k) ->
              begin match StringMap.lookup opname h.cases with
-             | Some ((var, _), _, comp)
+             | Some (b, _, comp)
                   when session_exn_enabled && opname = session_exception_operation ->
+                let var = Var.var_of_binder b in
                 let continuation_thunk =
                   fun () -> E.computation (Env.bind var (arg, Scope.Local) h.env) k comp
                 in
@@ -653,7 +655,8 @@ module Eff_Handler_Continuation = struct
                       frames = comps;
                       continuation_thunk = continuation_thunk
                   })
-             | Some ((var, _), resumeb, comp) ->
+             | Some (b, resumeb, comp) ->
+                let var = Var.var_of_binder b in
                 let env =
                   let resume =
                     match h.depth with

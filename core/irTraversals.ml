@@ -67,8 +67,6 @@ struct
 
   type environment = datatype Env.Int.t
 
-  let info_type (t, _, _) = t
-
   let deconstruct f t = f t
 
   module Env = Env.Int
@@ -500,9 +498,11 @@ struct
               Module (name, defs), o
 
     method binder : binder -> (binder * 'self_type) =
-      fun (var, info) ->
-        let tyenv = Env.bind var (info_type info) tyenv in
-          (var, info), {< tyenv=tyenv >}
+      fun b ->
+      let var = Var.var_of_binder b in
+      let t   = Var.type_of_binder b in
+      let tyenv = Env.bind var t tyenv in
+      b, {< tyenv=tyenv >}
 
     method program : program -> (program * datatype * 'self_type) = o#computation
 
@@ -544,16 +544,17 @@ module Inline = struct
             let b, o = o#binding b in
               begin
                 match b with
-                  | Let ((x, (_, _, Scope.Local)), (tyvars, Return v)) when is_inlineable_value v ->
-                      let v =
-                        match tyvars with
-                          | [] -> v
-                          | tyvars -> TAbs (tyvars, v)
-                      in
-                        (o#with_env (IntMap.add x (fst3 (o#value v)) env))#bindings bs
-                  | _ ->
-                      let bs, o = o#bindings bs in
-                        b :: bs, o
+                | Let (b, (tyvars, Return v)) when Var.(Scope.is_local (scope_of_binder b)) && is_inlineable_value v ->
+                   let x = Var.var_of_binder b in
+                   let v =
+                     match tyvars with
+                     | [] -> v
+                     | tyvars -> TAbs (tyvars, v)
+                   in
+                   (o#with_env (IntMap.add x (fst3 (o#value v)) env))#bindings bs
+                | _ ->
+                   let bs, o = o#bindings bs in
+                   b :: bs, o
               end
         | [] -> [], o
   end
@@ -634,10 +635,12 @@ module ElimDeadDefs = struct
     method with_envs (env, rec_env, mutrec_env) =
       {< env = env; rec_env = rec_env; mutrec_env = mutrec_env >}
 
-    method init (x, _) =
+    method init b =
+      let x = Var.var_of_binder b in
       o#with_env (IntMap.add x 0 env)
 
-    method initrec (x, _) =
+    method initrec b =
+      let x = Var.var_of_binder b in
       o#with_envs (IntMap.add x 0 env, IntMap.add x (0, false) rec_env, IntMap.add x (0, true) mutrec_env)
 
     method set_rec_status f (r,m) =
@@ -748,25 +751,27 @@ module ElimDeadDefs = struct
             begin
               let b, o = o#binding b in
                 match b with
-                  | Let ((x, _), (_tyvars, _)) when o#is_dead x ->
+                  | Let (b, (_tyvars, _)) when o#is_dead (Var.var_of_binder b) ->
                       o#bindings bs
-                  | Fun ((f, _), _, _, _, _) when o#is_dead f ->
+                  | Fun (b, _, _, _, _) when o#is_dead (Var.var_of_binder b) ->
                       o#bindings bs
                   | Rec defs ->
                       Debug.if_set show_rec_uses (fun () -> "Rec block:");
                       let fs, defs =
                         List.fold_left
-                          (fun (fs, defs) (((f, (_, name, _)), _, _, _, _) as def) ->
+                          (fun (fs, defs) ((b, _, _, _, _) as def) ->
+                            let f = Var.var_of_binder b in
+                            let name = Var.name_of_binder b in
                              Debug.if_set show_rec_uses
                                (fun () ->
                                   "  (" ^ name ^ ") non-rec uses: "^string_of_int (IntMap.find f env)^
                                     ", rec uses: "^string_of_int (fst (IntMap.find f rec_env))^
                                     ", mut-rec uses: "^string_of_int (fst (IntMap.find f mutrec_env)));
                              if o#is_dead_rec f then fs, defs
-                             else
-                               IntSet.add f fs, def :: defs)
+                             else IntSet.add f fs, def :: defs)
                           (IntSet.empty, [])
-                          defs in
+                          defs
+                      in
 
                       (*
                          If none of the mutually recursive bindings appear elsewhere
