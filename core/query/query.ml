@@ -536,8 +536,8 @@ struct
     | Some (finfo, (xs, body), z, location) ->
       Some
         begin
-          (* TODO(dhil): This is a bit of an around-about way to
-             obtain the binder name. *)
+          (* TODO(dhil): This is a bit of a round-about way to obtain
+             the binder name. *)
         match Var.(name_of_binder (make_binder f finfo)) with
         | "concatMap" ->
           Q.Primitive "ConcatMap"
