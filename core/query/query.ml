@@ -1057,7 +1057,7 @@ let rec select_clause : Sql.index -> bool -> Q.t -> Sql.select_clause =
           begin
             match body with
               | (fields, tables, condition, []) ->
-                  (fields, (table, x)::tables, condition, os)
+                  (fields, Sql.TableRef(table, x)::tables, condition, os)
               | _ -> assert false
           end
     | If (c, body, Concat []) ->
@@ -1080,7 +1080,7 @@ let rec select_clause : Sql.index -> bool -> Q.t -> Sql.select_clause =
              fields
              [])
       in
-        (fields, [(table, var)], Sql.Constant (Constant.Bool true), [])
+        (fields, [Sql.TableRef(table, var)], Sql.Constant (Constant.Bool true), [])
     | Singleton _ when unit_query ->
       (* If we're inside an Sql.Empty or a Sql.Length it's safe to ignore
          any fields here. *)
@@ -1197,13 +1197,14 @@ let extract_gens =
     | _ -> assert false
 
 let let_clause : let_clause -> Sql.query =
-  fun (q, outer, z, inner) ->
+  fun (q, outer, t, inner) ->
     let gs_out = extract_gens outer in
     let gs_in = extract_gens inner in
-      Sql.With (q,
-             clause (outer_index gs_out) false outer,
-             z,
-             clause (inner_index z gs_in) false inner)
+    let q_outer = clause (outer_index gs_out) false outer in
+    let (result,tables,where,os) = select_clause (inner_index t gs_in) false inner in
+    let tablename = Sql.string_of_subquery_var q in
+    let q_inner = Sql.Select(result,Sql.TableRef(tablename,t)::tables,where,os) in
+    Sql.With (tablename, q_outer, q_inner)
 
 let sql_of_let_query : let_query -> Sql.query =
   fun cs ->

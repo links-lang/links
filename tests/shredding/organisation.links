@@ -118,7 +118,7 @@ fun employeesOfDept (d) {
 }
 
 fun q_org () {
-  query {
+  query nested {
     for (d <-- departments)
       [(name = d.name,
         employees = employeesOfDept(d),
