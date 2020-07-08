@@ -21,6 +21,7 @@ stderr : @.*
 Session exceptions desugaring (#882)
 ./tests/recheck_frontend_transformations/T882.links
 filemode : true
-exit : 1
+exit : 0
 args : --config=tests/recheck_frontend_transformations.config
+stdout : @\(\) : \(Types\.Record \(Types\.Row .*\)\)
 stderr : @.*
