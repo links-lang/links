@@ -4,13 +4,6 @@ exit : 1
 stderr : @.*Type error: Because of the value restriction.*
 args : --set=recheck_frontend_transformations=true
 
-Generalisation obeys value restriction (#871)
-var foo = spawn { () }; ()
-stderr : @.*Because of the value restriction.*
-exit : 1
-ignore : reproducibility broken by #891
-args : --config=tests/recheck_frontend_transformations.config
-
 Type variable freshening in type signatures (#865)
 ./tests/recheck_frontend_transformations/T865.links
 filemode : true
