@@ -92,6 +92,7 @@ Generalisation obeys value restriction (#871)
 var foo = spawn { () }; ()
 exit : 1
 stderr : @.*IR Type Error: Type variable.*is unbound.*
+args : --set=recheck_frontend_transformations=false
 
 fork (#874)
 tests/typed_ir/T874.links
