@@ -754,7 +754,7 @@ struct
               else
                 let error_msg =
                   Printf.sprintf
-                    "The database driver '%s' does not support shredding."
+                    "The database driver '%s' does not support nested query results."
                     (db#driver_name ())
                 in
                 raise (Errors.runtime_error error_msg) in
@@ -764,8 +764,7 @@ struct
          match policy with
            | Flat -> evaluate_standard
            | Nested -> evaluate_nested
-           | Default ->
-               if Settings.get Database.shredding then evaluate_nested else evaluate_standard in
+       in
        evaluator()
 
     | InsertRows (source, rows) ->

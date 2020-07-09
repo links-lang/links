@@ -17,12 +17,6 @@ let query_error fmt =
   let error msg = raise (DbEvaluationError msg) in
     Printf.kprintf error fmt
 
-let use_keys_in_shredding
-  = Settings.(flag ~default:true "use_keys_in_shredding"
-              |> synopsis "Use keys in query shredding"
-              |> convert parse_bool
-              |> sync)
-
 module Lang =
 struct
 
@@ -642,10 +636,8 @@ struct
   | u -> u
 
   let check_policies_compatible env_policy block_policy =
-    let open QueryPolicy in
     match (env_policy, block_policy) with
       | (x, y) when x = y -> ()
-      | (_, Default) -> ()
       | _ ->
         let error = Printf.sprintf
           "Incompatible query evaluation annotations. Expected %s, got %s."
@@ -1180,11 +1172,7 @@ let gens_index (gs : (Var.var * Q.t) list)   =
            (fun name ps -> (x, name) :: ps)
            labels
            [])
-  in
-  let get_fields = if Settings.get use_keys_in_shredding
-                   then key_fields
-                   else all_fields
-  in concat_map (table_index get_fields) gs
+  in concat_map (table_index key_fields) gs
 
 let outer_index gs_out = gens_index gs_out
 let inner_index z gs_in =
@@ -1230,7 +1218,7 @@ let delete : ((Ir.var * string) * Q.t option) -> Sql.query =
 let compile_update : Value.database -> Value.env ->
   ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> Sql.query =
   fun db env ((x, table, field_types), where, body) ->
-    let env = Eval.bind (Eval.env_of_value_env QueryPolicy.Default env) (x, Q.Var (x, field_types)) in
+    let env = Eval.bind (Eval.env_of_value_env QueryPolicy.Flat env) (x, Q.Var (x, field_types)) in
 (*      let () = opt_iter (fun where ->  Debug.print ("where: "^Ir.show_computation where)) where in*)
     let where = opt_map (Eval.norm_comp env) where in
 (*       Debug.print ("body: "^Ir.show_computation body); *)
@@ -1242,7 +1230,7 @@ let compile_update : Value.database -> Value.env ->
 let compile_delete : Value.database -> Value.env ->
   ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> Sql.query =
   fun db env ((x, table, field_types), where) ->
-    let env = Eval.bind (Eval.env_of_value_env QueryPolicy.Default env) (x, Q.Var (x, field_types)) in
+    let env = Eval.bind (Eval.env_of_value_env QueryPolicy.Flat env) (x, Q.Var (x, field_types)) in
     let where = opt_map (Eval.norm_comp env) where in
     let q = delete ((x, table), where) in
       Debug.print ("Generated update query: " ^ (db#string_of_query q));

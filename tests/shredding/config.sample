@@ -1,4 +1,3 @@
 database_driver=postgresql
 database_args=localhost:5432::links
 show_pre_sugar_typing=off
-shredding=on
