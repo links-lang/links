@@ -743,6 +743,7 @@ struct
                   | _ -> assert false
                 in
                 let execute_shredded_raw (q, t) =
+                  let q = Sql.inline_outer_with q in
                   let q = db#string_of_query ~range q in
                   Database.execute_select_result (get_fields t) q db, t in
                 let raw_results =

@@ -339,7 +339,7 @@ and pr_base quote one_table ppf b =
 
 
 (* NOTE: Inlines a WITH common table expression if it is the toplevel
- * constructor of a union of queries and is used immediately in a SELECT query. 
+ * constructor of a union of queries and is used immediately in a SELECT query.
  * This handles the common case where WITH is generated solely as an
  * abbreviation by shredding.  This is a very limited case of inlining WITH bindings. *)
 
@@ -359,7 +359,6 @@ let string_of_base quote one_table b =
   Format.asprintf "%a" (pr_base quote one_table) b
 
 let string_of_query ?(range=None) quote q =
-  let q = inline_outer_with q in 
   let pr_range ppf range =
     match range with
       | None -> ()
