@@ -233,12 +233,15 @@ module Typeability_preserving = struct
             check *against* the datatype in transformation state
             [payload]. *)
          try
-           let (program, datatype, _) =
+           let (program, datatype, tyenv') =
              TypeSugar.Check.program
                      { tyenv with Types.desugared = true }
                      payload.program in
                   (* TODO(dhil): Verify post-transformation invariants. *)
-           let state = { payload.state with Typeable.datatype = datatype }
+           let context = { payload.state.Transform.Typeable.context with
+                           Context.typing_environment = Types.extend_typing_environment tyenv tyenv' } in
+           let state   = { Typeable.datatype = datatype
+                         ; Typeable.context  = context }
            in (Transform.Typeable.Result { state; program })
          with exn ->
            let stacktrace = Printexc.get_raw_backtrace () in
@@ -274,12 +277,15 @@ module Typeability_preserving = struct
             check *against* the datatype in transformation state
             [payload]. *)
          try
-           let (program, datatype, _) =
+           let (program, datatype, tyenv') =
              TypeSugar.Check.sentence
                      { tyenv with Types.desugared = true }
                      payload.program in
                   (* TODO(dhil): Verify post-transformation invariants. *)
-           let state = { payload.state with Typeable.datatype = datatype }
+           let context = { payload.state.Transform.Typeable.context with
+                           Context.typing_environment = Types.extend_typing_environment tyenv tyenv' } in
+           let state   = { Typeable.datatype = datatype
+                         ; Typeable.context  = context }
            in (Transform.Typeable.Result { state; program })
          with exn ->
            let stacktrace = Printexc.get_raw_backtrace () in
