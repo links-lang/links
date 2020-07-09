@@ -6,10 +6,10 @@ args : --set=recheck_frontend_transformations=true
 
 Generalisation obeys value restriction (#871)
 var foo = spawn { () }; ()
-exit : 0
+stderr : @.*Because of the value restriction.*
+exit : 1
+ignore : reproducibility broken by #891
 args : --config=tests/recheck_frontend_transformations.config
-stdout : @\(\) : \(Types\.Record \(Types\.Row .*\)\)
-stderr : @.*
 
 Type variable freshening in type signatures (#865)
 ./tests/recheck_frontend_transformations/T865.links
