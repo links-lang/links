@@ -294,50 +294,50 @@ and pr_base quote one_table ppf b =
             pr_b_one_table r
   in
     match b with
-    | Case (c, t, e) ->
-        Format.fprintf ppf "case when %a then %a else %a end"
-          pr_b_one_table c
-          pr_b_one_table t
-          pr_b_one_table e
-    | Constant c ->
-        Format.pp_print_string ppf (Constant.to_string c)
-    | Project (var, label) ->
-        pp_projection quote one_table ppf (var, label)
-    | Apply (op, [l; r]) when Arithmetic.is op ->
-        pp_sql_arithmetic ppf (l, op, r)
-          (* special case: not empty is translated to exists *)
-    | Apply ("not", [Empty q]) ->
-        Format.fprintf ppf "exists (%a)"
-          pr_q_true q
-    | Apply (uop, [v]) when StringSet.mem uop unary_ops ->
-        Format.fprintf ppf "%s(%a)"
-          (unary_map uop)
-          pr_b_one_table v
-    | Apply (op, [v; w]) when StringSet.mem op binary_ops ->
-        Format.fprintf ppf "(%a) %s (%a)"
-          pr_b_one_table v
-          (binary_map op)
-          pr_b_one_table w
-    | Apply (f, args) when SqlFuns.is f ->
-        Format.fprintf ppf "%a(%a)"
-          Format.pp_print_string (SqlFuns.name f)
-          (pp_comma_separated pr_b_one_table) args
-    | Apply (f, args) ->
-        Format.fprintf ppf "%a(%a)"
-          Format.pp_print_string f
-          (pp_comma_separated pr_b_one_table) args
-    | Empty q ->
-        Format.fprintf ppf "not exists (%a)"
-          pr_q_true q
-    | Length q ->
-        Format.fprintf ppf "select count(*) from (%a) as %a"
-          pr_q_true q
-          Format.pp_print_string (fresh_dummy_var ())
-    | RowNumber [] ->
-        Format.fprintf ppf "%a" Format.pp_print_string "1"
-    | RowNumber ps ->
+      | Case (c, t, e) ->
+          Format.fprintf ppf "case when %a then %a else %a end"
+            pr_b_one_table c
+            pr_b_one_table t
+            pr_b_one_table e
+      | Constant c ->
+          Format.pp_print_string ppf (Constant.to_string c)
+      | Project (var, label) ->
+          pp_projection quote one_table ppf (var, label)
+      | Apply (op, [l; r]) when Arithmetic.is op ->
+          pp_sql_arithmetic ppf (l, op, r)
+            (* special case: not empty is translated to exists *)
+      | Apply ("not", [Empty q]) ->
+          Format.fprintf ppf "exists (%a)"
+            pr_q_true q
+      | Apply (uop, [v]) when StringSet.mem uop unary_ops ->
+          Format.fprintf ppf "%s(%a)"
+            (unary_map uop)
+            pr_b_one_table v
+      | Apply (op, [v; w]) when StringSet.mem op binary_ops ->
+          Format.fprintf ppf "(%a) %s (%a)"
+            pr_b_one_table v
+            (binary_map op)
+            pr_b_one_table w
+      | Apply (f, args) when SqlFuns.is f ->
+          Format.fprintf ppf "%a(%a)"
+            Format.pp_print_string (SqlFuns.name f)
+            (pp_comma_separated pr_b_one_table) args
+      | Apply (f, args) ->
+          Format.fprintf ppf "%a(%a)"
+            Format.pp_print_string f
+            (pp_comma_separated pr_b_one_table) args
+      | Empty q ->
+          Format.fprintf ppf "not exists (%a)"
+            pr_q_true q
+      | Length q ->
+          Format.fprintf ppf "select count(*) from (%a) as %a"
+            pr_q_true q
+            Format.pp_print_string (fresh_dummy_var ())
+      | RowNumber [] ->
+          Format.fprintf ppf "%a" Format.pp_print_string "1"
+      | RowNumber ps ->
         Format.fprintf ppf "row_number() over (order by %a)"
-          (pp_comma_separated (pp_projection quote one_table)) ps
+            (pp_comma_separated (pp_projection quote one_table)) ps
 
 
 (* NOTE: Inlines a WITH common table expression if it is the toplevel
@@ -351,10 +351,10 @@ let rec inline_outer_with q =
     | fromclause -> fromclause
   in
   match q with
-  | With (z, q, Select (fields, tables, condition, os)) ->
-      Select(fields, List.map (replace_subquery z q) tables, condition, os)
-  | UnionAll(qs,n) -> UnionAll(List.map inline_outer_with qs,n)
-  | q -> q
+    | With (z, q, Select (fields, tables, condition, os)) ->
+        Select(fields, List.map (replace_subquery z q) tables, condition, os)
+    | UnionAll(qs,n) -> UnionAll(List.map inline_outer_with qs,n)
+    | q -> q
 
 
 let string_of_base quote one_table b =
