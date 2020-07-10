@@ -89,7 +89,7 @@ steps:
 
   - bash: |
       case $AGENT_OS in
-        "Linux") sudo apt-get install postgresql libpq-dev sqlite3 libsqlite3-dev &&
+        "Linux") sudo apt-get install postgresql libpq-dev sqlite3 libsqlite3-dev mysql-client mysql-server libmysqlclient-dev &&
                  sudo LINKS_CI=1 tools/configure-postgresql &&
                  sudo systemctl start postgresql &&
                  sudo -u postgres createuser -s $(whoami) &&
@@ -107,6 +107,7 @@ steps:
       ./opam2_local pin add links . -y
       ./opam2_local pin add links-postgresql . -y
       ./opam2_local pin add links-sqlite3 . -y
+      ./opam2_local pin add links-mysql . -y
     displayName: 'Links dependencies'
 
   - script: |

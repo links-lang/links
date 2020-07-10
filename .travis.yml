@@ -3,6 +3,7 @@ dist: xenial
 language: c
 services:
   - postgresql
+  - mysql
 before_install:
   - git diff-index --quiet HEAD --
   - sudo add-apt-repository -y ppa:avsm/ppa
@@ -13,7 +14,7 @@ before_install:
   - ./opam2_local switch create ocaml-base-compiler.4.06.0
   - eval `./opam2_local config env`
   - ./opam2_local install conf-libev
-  - ./opam2_local install -y postgresql ounit2
+  - ./opam2_local install -y postgresql mysql ounit2
   - ./tools/install_ocamlformat
   - make rule-check
   - psql -c 'create database links;' -U postgres
@@ -21,6 +22,7 @@ script:
   - ./opam2_local pin add links . -y
   - ./opam2_local pin add links-postgresql . -y
   - ./opam2_local pin add links-sqlite3 . -y
+  - ./opam2_local pin add links-mysql . -y
   - make doc
   - make all-ci
   - make tests
