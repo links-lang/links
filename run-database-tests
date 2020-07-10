@@ -58,17 +58,17 @@ def main():
 		debug("setting up %s with %s" % (db,sqlfile))
 		if db == 'pgsql':
 			cmnd = "PGPASSWORD=%s psql -h %s -p %s %s -v ON_ERROR_STOP=1 -q -d links -f %s" % (passwd, host, port, user, sqlfile)
-			debug(cmnd)
-			returncode = os.system(cmnd)
-			if returncode != 0:
-				print(returncode)
-				raise SystemExit("Database setup failed: %s for database %s" % (sqlfile,db))
 		elif db == 'mysql':
-			print("setting up %s %s" % (db,setup))
+			cmnd = "mysql links -h %s -P %s -u %s -p%s  < %s" % (host, port, user,passwd,sqlfile)
 		elif db == 'sqlite3':
-			print("setting up %s %s" % (db,setup))
+			cmnd = "sqlite3 links < %s" % sqlfile
 		else:
 			raise SystemExit("Unsupported database %s" % db)
+		debug(cmnd)
+		returncode = os.system(cmnd)
+		if returncode != 0:
+			print(returncode)
+			raise SystemExit("Database setup failed: %s for database %s" % (sqlfile,db))
 
 	def run(db,test):
 		debug("running %s %s" % (db,test))

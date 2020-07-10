@@ -125,19 +125,29 @@ run_database_testsuite () {
     done < "$1/testsuite.config"
 }
 
+run_database_tests () {
+    cmnd="./run-database-tests $1"
+    echo cmnd=$cmnd
+    eval $cmnd
+    ret_code=$?
+    if [[ ($ret_code -ne 0 && expect_broken -eq 0) || ($ret_code -eq 0 && expect_broken -ne 0) ]]; then
+          echo -e "$STARTCOLOR\rFAILED TEST $t$ENDCOLOR"
+          ret=1
+    fi
+}
 # Don't run database tests if user passed in "no-db" flag
 if [[ "$1" != "no-db" ]]; then
-    run_database_testsuite $DATABASE_TEST_DIR
+    run_database_tests $DATABASE_TEST_DIR
 fi
 
 # Run shredding tests only if user called for them explicitly
 if [ "$1" == "shredding" -o "$2" == "shredding" ]; then
-    run_database_testsuite $SHREDDING_TEST_DIR
+    run_database_tests $SHREDDING_TEST_DIR
 fi
 
 # Run relational lenses tests only if user called for them explicitly
 if [ "$1" == "relational-lenses" -o "$2" == "relational-lenses" ]; then
-    run_database_testsuite $RELATIONAL_LENSES_TEST_DIR
+    run_database_tests $RELATIONAL_LENSES_TEST_DIR
 fi
 
 #look for custom test scripts in the tests folder and execute them

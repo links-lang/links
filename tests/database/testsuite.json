@@ -1,6 +1,5 @@
 {"databases" :
  [ "pgsql",
-   "mysql",
    "sqlite3" ],
  "setups" :
  [ "factorials",
