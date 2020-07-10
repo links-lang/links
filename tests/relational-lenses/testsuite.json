@@ -1,0 +1,9 @@
+{"databases" :
+ [ "pgsql" ],
+ "setups" :
+ [ "music_example" ],
+ "tests" :
+ [ "01_cds",
+   "02_cds",
+   "03_cds" ]
+}
