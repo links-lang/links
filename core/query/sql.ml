@@ -5,6 +5,7 @@ type index = (Var.var * string) list
 type range = int * int
 
 type table_name = string (* FIXME: allow variables? *)
+    [@@deriving show]
 
 type query =
   | UnionAll  of query list * int
