@@ -33,7 +33,6 @@ and base =
   | RowNumber of (Var.var * string) list
     [@@deriving show]
 
-
 (* optimizing smart constructor for && *)
 let smart_and c c' =
   let open Constant in
