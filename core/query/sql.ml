@@ -210,7 +210,7 @@ let rec pr_query quote ignore_fields ppf q =
       (pp_comma_separated pp_value) values
   in
   match q with
-    | UnionAll ([], _) -> Format.pp_print_string ppf "select 42 as \"@unit@\" from (select 42) x where false"
+    | UnionAll ([], _) -> Format.pp_print_string ppf "select 42 as \"@unit@\" from (select 42) x where 1=0"
     | UnionAll ([q], n) ->
         Format.fprintf ppf "%a%a"
           pr_q q
