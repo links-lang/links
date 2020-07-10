@@ -812,9 +812,7 @@ struct
             (* The type of the body must match the type the query is annotated with *)
             o#check_eq_types original_t t (SSpec special);
 
-            let check_flat_result = (policy = QueryPolicy.Flat) in
-
-            (if not(check_flat_result) then
+            (if not (policy = QueryPolicy.Flat) then
               () (* Discussion pending about how to type-check here. Currently same as frontend *)
             else
               let list_content_type = TypeUtils.element_type ~overstep_quantifiers:false t in
