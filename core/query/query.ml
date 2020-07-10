@@ -636,13 +636,12 @@ struct
   | u -> u
 
   let check_policies_compatible env_policy block_policy =
-    match (env_policy, block_policy) with
-      | (x, y) when x = y -> ()
-      | _ ->
-        let error = Printf.sprintf
+    if env_policy != block_policy
+    then
+      let error = Printf.sprintf
           "Incompatible query evaluation annotations. Expected %s, got %s."
           (QueryPolicy.show env_policy) (QueryPolicy.show block_policy) in
-        raise (Errors.runtime_error error)
+      raise (Errors.runtime_error error)
 
   let rec xlate env : Ir.value -> Q.t = let open Ir in function
     | Constant c -> Q.Constant c

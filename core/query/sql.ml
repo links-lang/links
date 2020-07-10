@@ -4,24 +4,26 @@ open CommonTypes
 type index = (Var.var * string) list
 type range = int * int
 
+type table_name = string (* FIXME: allow variables? *)
+
 type query =
   | UnionAll  of query list * int
   | Select    of select_clause
   | Insert    of {
-      ins_table: string;
+      ins_table: table_name;
       ins_fields: string list;
       ins_records: base list list
     }
   | Update    of {
-      upd_table: string;
+      upd_table: table_name;
       upd_fields: (string * base) list;
       upd_where: base option
     }
-  | Delete    of { del_table: string; del_where: base option }
-  | With      of string * query * query
+  | Delete    of { del_table: table_name; del_where: base option }
+  | With      of table_name * query * query
 and select_clause = (base * string) list * from_clause list * base * base list
 and from_clause =
-  | TableRef of string * Var.var
+  | TableRef of table_name * Var.var
   | Subquery of query * Var.var
 and base =
   | Case      of base * base * base
@@ -276,19 +278,19 @@ and pr_base quote one_table ppf b =
   in
   let pp_sql_arithmetic ppf (l, op, r) =
     match op with
-    | "/" -> Format.fprintf ppf "floor(%a/%a)"
-          pr_b_one_table l
-          pr_b_one_table r
-    | "^" -> Format.fprintf ppf "floor(pow(%a,%a))"
-          pr_b_one_table l
-          pr_b_one_table r
-    | "^." -> Format.fprintf ppf "pow(%a,%a)"
-          pr_b_one_table l
-          pr_b_one_table r
-    | _ -> Format.fprintf ppf "(%a%s%a)"
-          pr_b_one_table l
-          (Arithmetic.sql_name op)
-          pr_b_one_table r
+      | "/" -> Format.fprintf ppf "floor(%a/%a)"
+            pr_b_one_table l
+            pr_b_one_table r
+      | "^" -> Format.fprintf ppf "floor(pow(%a,%a))"
+            pr_b_one_table l
+            pr_b_one_table r
+      | "^." -> Format.fprintf ppf "pow(%a,%a)"
+            pr_b_one_table l
+            pr_b_one_table r
+      | _ -> Format.fprintf ppf "(%a%s%a)"
+            pr_b_one_table l
+            (Arithmetic.sql_name op)
+            pr_b_one_table r
   in
     match b with
     | Case (c, t, e) ->

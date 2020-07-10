@@ -709,64 +709,59 @@ struct
               value env offset >>= fun offset ->
               Lwt.return (Some (Value.unbox_int limit, Value.unbox_int offset))
        end >>= fun range ->
-
-       let evaluate_standard () =
-         match EvalQuery.compile env (range, e) with
-           | None -> computation env cont e
-           | Some (db, q, t) ->
-              let q = db#string_of_query ~range q in
-              let (fieldMap, _, _) =
-                let r, _ = Types.unwrap_row (TypeUtils.extract_row t) in
-                TypeUtils.extract_row_parts r in
-              let fields =
-                StringMap.fold
-                  (fun name t fields ->
-                    let open Types in
-                    match t with
-                    | Present t -> (name, t)::fields
-                    | _ -> assert false)
-                  fieldMap
-                  []
-              in
-              apply_cont cont env (Database.execute_select fields q db) in
-
-       let evaluate_nested () =
-         if range != None then eval_error "Range is not supported for nested queries";
-           match EvalNestedQuery.compile_shredded env e with
-           | None -> computation env cont e
-           | Some (db, p) ->
-              if db#supports_shredding () then
-                let get_fields t =
-                  match t with
-                  | `Record fields ->
-                     StringMap.to_list (fun name p -> (name, Types.Primitive p)) fields
-                  | _ -> assert false
-                in
-                let execute_shredded_raw (q, t) =
-                  let q = Sql.inline_outer_with q in
-                  let q = db#string_of_query ~range q in
-                  Database.execute_select_result (get_fields t) q db, t in
-                let raw_results =
-                  EvalNestedQuery.Shred.pmap execute_shredded_raw p in
-                let mapped_results =
-                  EvalNestedQuery.Shred.pmap EvalNestedQuery.Stitch.build_stitch_map raw_results in
-                apply_cont cont env
-                  (EvalNestedQuery.Stitch.stitch_mapped_query mapped_results)
-              else
-                let error_msg =
-                  Printf.sprintf
-                    "The database driver '%s' does not support nested query results."
-                    (db#driver_name ())
-                in
-                raise (Errors.runtime_error error_msg) in
-
-       let evaluator =
-         let open QueryPolicy in
-         match policy with
-           | Flat -> evaluate_standard
-           | Nested -> evaluate_nested
-       in
-       evaluator()
+         begin match policy with
+           | QueryPolicy.Flat ->
+               begin
+                 match EvalQuery.compile env (range, e) with
+                   | None -> computation env cont e
+                   | Some (db, q, t) ->
+                       let q = db#string_of_query ~range q in
+                       let (fieldMap, _, _) =
+                         let r, _ = Types.unwrap_row (TypeUtils.extract_row t) in
+                         TypeUtils.extract_row_parts r in
+                       let fields =
+                         StringMap.fold
+                           (fun name t fields ->
+                             let open Types in
+                             match t with
+                               | Present t -> (name, t)::fields
+                               | _ -> assert false)
+                           fieldMap
+                           []
+                       in
+                       apply_cont cont env (Database.execute_select fields q db)
+               end
+           | QueryPolicy.Nested ->
+               begin
+                 if range != None then eval_error "Range is not supported for nested queries";
+                 match EvalNestedQuery.compile_shredded env e with
+                   | None -> computation env cont e
+                   | Some (db, p) when db#supports_shredding () ->
+                       let get_fields t =
+                         match t with
+                           | `Record fields ->
+                               StringMap.to_list (fun name p -> (name, Types.Primitive p)) fields
+                           | _ -> assert false
+                       in
+                       let execute_shredded_raw (q, t) =
+                         let q = Sql.inline_outer_with q in
+                         let q = db#string_of_query ~range q in
+                         Database.execute_select_result (get_fields t) q db, t in
+                       let raw_results =
+                         EvalNestedQuery.Shred.pmap execute_shredded_raw p in
+                       let mapped_results =
+                         EvalNestedQuery.Shred.pmap EvalNestedQuery.Stitch.build_stitch_map raw_results in
+                       apply_cont cont env
+                         (EvalNestedQuery.Stitch.stitch_mapped_query mapped_results)
+                   | Some(db,_) ->
+                       let error_msg =
+                         Printf.sprintf
+                           "The database driver '%s' does not support nested query results."
+                           (db#driver_name ())
+                       in
+                       raise (Errors.runtime_error error_msg)
+               end
+         end
 
     | InsertRows (source, rows) ->
         begin
