@@ -1,7 +1,6 @@
 (** A generic interface for SQL-style databases. Vendor-specific implementations are elsewhere *)
 
 val connection_info : string option Settings.setting
-val shredding : bool Settings.setting
 
 class virtual db_args : string -> object
   val strval : string

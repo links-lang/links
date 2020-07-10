@@ -28,7 +28,7 @@ var mc =
 
 sig marketers : () -> [(name:String, clients:[Int])]
 fun marketers () {
-  query {
+  query nested {
     for (m <-- marketers_names)
     [(name=m.name, clients = for (x <-- mc) where (x.m == m.name) [x.c])]
   }
@@ -36,7 +36,7 @@ fun marketers () {
 
 sig u : () -> [((id:Int), [String])]
 fun u () {
-  query {
+  query nested {
     for (c <-- clients)
        [(c, for (m <- marketers())
             where (not(empty(for (mc <- m.clients) where (mc == c.id) [()])))
@@ -55,7 +55,7 @@ fun v () {
 
 sig marketers2 : () -> [(name:String, clients:[Int])]
 fun marketers2 () {
-  query {
+  query nested {
     for (m <-- marketers_names)
       [(name=m.name, clients = for (x <-- mc) where (x.m == m.name && x.m =~ /a/) [x.c])]
   }

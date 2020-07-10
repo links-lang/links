@@ -8,12 +8,6 @@ let connection_info
               |> convert Utility.some
               |> sync)
 
-let shredding =
-  Settings.(flag "shredding"
-            |> synopsis "Enables database query shredding"
-            |> convert parse_bool
-            |> sync)
-
 (* Hacky database query result manipulation settings. *)
 let coerce_null_integers
   = Settings.(flag "coerce_null_integers"
