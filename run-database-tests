@@ -24,7 +24,7 @@ def main():
 	linksdir = os.getcwd()
 	linksexec = os.path.join(linksdir,"links")
 
-	verbose = False
+	verbose = True
 
 	def debug(s):
 		if verbose:
@@ -32,8 +32,11 @@ def main():
 
 	def linkscmd(config,file):
 		debug("%s --config=%s %s" % (linksexec,config,file))
-		completed_process = subprocess.run([linksexec, "--config=%s" % config, file],
-										   stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+		if verbose:
+			completed_process = subprocess.run([linksexec, "--config=%s" % config, file])
+		else:
+			completed_process = subprocess.run([linksexec, "--config=%s" % config, file],
+											   stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 		return completed_process.returncode
 
 	matcher = re.compile("database_args=([^:]*):([^:]*):([^:]*):([^\n:]*)")
