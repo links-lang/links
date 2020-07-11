@@ -10,143 +10,143 @@ import sys
 
 parser = argparse.ArgumentParser()
 parser.add_argument("working_dir", type=str,
-					help="Working directory of tests")
+                    help="Working directory of tests")
 parser.add_argument("-c","--config_file", type=str,
-					help="Test configuration file (default: testsuite.json)",
-					default="testsuite.json")
+                    help="Test configuration file (default: testsuite.json)",
+                    default="testsuite.json")
 parser.add_argument("-d", "--database", type=str,choices=["all","mysql","pgsql","sqlite3","local"],
-					help="Run tests for specific database (all, mysql, pgsql, sqlite3).  \"all\" selects all database listed in the testsuite configuration file. Default: \"pgsql\"",
-					default="pgsql")
+                    help="Run tests for specific database (all, mysql, pgsql, sqlite3).  \"all\" selects all database listed in the testsuite configuration file. Default: \"pgsql\"",
+                    default="pgsql")
 parser.add_argument("-l", "--local", action="store_true",
-					help="Test local database configuration (<working_dir>/config) if present; otherwise, the database(s) specified by the --database parameter are tested.",
-					default="pgsql")
+                    help="Test local database configuration (<working_dir>/config) if present; otherwise, the database(s) specified by the --database parameter are tested.",
+                    default="pgsql")
 parser.add_argument("-v", "--verbose", action="store_true",
-					help="Print verbose debugging messages",
-					default=False)
+                    help="Print verbose debugging messages",
+                    default=False)
 args = parser.parse_args()
 
 def main():
-	working_dir = args.working_dir
-	config_file = args.config_file
-	verbose = args.verbose
+    working_dir = args.working_dir
+    config_file = args.config_file
+    verbose = args.verbose
 
-	linksdir = os.getcwd()
-	linksexec = os.path.join(linksdir,"links")
+    linksdir = os.getcwd()
+    linksexec = os.path.join(linksdir,"links")
 
-	def debug(s):
-		if verbose:
-			print(s)
+    def debug(s):
+        if verbose:
+            print(s)
 
-	def linkscmd(config,file):
-		setdebug = "--set=debug=true" if verbose else ""
-		debug("%s --config=%s %s %s" % (linksexec,config,setdebug,file))
-		if verbose:
-			completed_process = subprocess.run([linksexec, "--config=%s" % config, setdebug, file])
-		else:
-			completed_process = subprocess.run([linksexec, "--config=%s" % config, setdebug, file],
-											   stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-		return completed_process.returncode
+    def linkscmd(config,file):
+        setdebug = "--set=debug=true" if verbose else ""
+        debug("%s --config=%s %s %s" % (linksexec,config,setdebug,file))
+        if verbose:
+            completed_process = subprocess.run([linksexec, "--config=%s" % config, setdebug, file])
+        else:
+            completed_process = subprocess.run([linksexec, "--config=%s" % config, setdebug, file],
+                                               stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        return completed_process.returncode
 
-	matcher = re.compile("database_args=([^:]*):([^:]*):([^:]*):([^\n:]*)")
-	def parsedbconfig(config):
-		debug("Parsing %s" % config)
-		with open(config) as fp:
-			for line in fp:
-				m = matcher.match(line)
-				if m != None:
-					return (m.group(1),m.group(2),m.group(3),m.group(4))
-		return (None,None,None,None)
+    matcher = re.compile("database_args=([^:]*):([^:]*):([^:]*):([^\n:]*)")
+    def parsedbconfig(config):
+        debug("Parsing %s" % config)
+        with open(config) as fp:
+            for line in fp:
+                m = matcher.match(line)
+                if m != None:
+                    return (m.group(1),m.group(2),m.group(3),m.group(4))
+        return (None,None,None,None)
 
-	drivermatcher = re.compile("database_driver=([^\n]*)")
-	def parsedbdriver(config):
-		debug("Parsing %s" % config)
-		with open(config) as fp:
-			for line in fp:
-				m = drivermatcher.match(line)
-				if m != None:
-					if m.group(1) == "postgresql":
-						return ("pgsql")
-					else:
-						return (m.group(1))
-		return None
+    drivermatcher = re.compile("database_driver=([^\n]*)")
+    def parsedbdriver(config):
+        debug("Parsing %s" % config)
+        with open(config) as fp:
+            for line in fp:
+                m = drivermatcher.match(line)
+                if m != None:
+                    if m.group(1) == "postgresql":
+                        return ("pgsql")
+                    else:
+                        return (m.group(1))
+        return None
 
-	def prepare(db,dbconfig,setup):
-		(host, port, user, passwd) = dbconfig
+    def prepare(db,dbconfig,setup):
+        (host, port, user, passwd) = dbconfig
 
-		# if a specialized setup file exists for this database, use it
-		sqlfile = "%s.%s" % (setup,db)
-		# otherwise, use the plain sql one
-		if not(os.path.exists("%s.%s" % (setup,db))):
-			sqlfile = "%s.sql" % setup
+        # if a specialized setup file exists for this database, use it
+        sqlfile = "%s.%s" % (setup,db)
+        # otherwise, use the plain sql one
+        if not(os.path.exists("%s.%s" % (setup,db))):
+            sqlfile = "%s.sql" % setup
 
-		debug("setting up %s with %s" % (db,sqlfile))
-		if db == 'pgsql':
-			cmnd = "PGPASSWORD=%s psql -h %s -p %s %s -v ON_ERROR_STOP=1 -q -d links -f %s" % (passwd, host, port, user, sqlfile)
-		elif db == 'mysql':
-			cmnd = "mysql links -h %s -P %s -u %s -p%s  < %s" % (host, port, user,passwd,sqlfile)
-		elif db == 'sqlite3':
-			cmnd = "sqlite3 links < %s" % sqlfile
-		else:
-			raise SystemExit("Unsupported database %s" % db)
-		debug(cmnd)
-		returncode = os.system(cmnd)
-		if returncode != 0:
-			raise SystemExit("Database setup failed: %s for database %s" % (sqlfile,db))
+        debug("setting up %s with %s" % (db,sqlfile))
+        if db == 'pgsql':
+            cmnd = "PGPASSWORD=%s psql -h %s -p %s %s -v ON_ERROR_STOP=1 -q -d links -f %s" % (passwd, host, port, user, sqlfile)
+        elif db == 'mysql':
+            cmnd = "mysql links -h %s -P %s -u %s -p%s  < %s" % (host, port, user,passwd,sqlfile)
+        elif db == 'sqlite3':
+            cmnd = "sqlite3 links < %s" % sqlfile
+        else:
+            raise SystemExit("Unsupported database %s" % db)
+        debug(cmnd)
+        returncode = os.system(cmnd)
+        if returncode != 0:
+            raise SystemExit("Database setup failed: %s for database %s" % (sqlfile,db))
 
-	def run(db,test):
-		debug("running %s %s" % (db,test))
-		dbconfig = "config." + db
-		testfile = test + ".links"
-		returncode = linkscmd(dbconfig,testfile)
-		if returncode != 0:
-			print("!FAILURE: Test %s on database %s" % (test, db))
-			return 1
-		else:
-			print(" SUCCESS: Test %s on database %s" % (test, db))
-			return 0
-
-
-	def runtests(db,params):
-		failures = 0
-		print("%s: Setting up %s" % (working_dir,db))
-		for setup in config['setups']:
-			prepare(db,params,setup)
-		print("%s: Testing %s" % (working_dir,db))
-		for test in config['tests']:
-			if run(db,test) > 0:
-				failures = failures + 1
-		print("%s: %d failures for %s" % (working_dir, failures, db))
-		return failures > 0
-
-	os.chdir(working_dir)
-
-	with open(config_file) as fp:
-		config = json.load(fp)
-
-	debug(config)
-
-	if args.database == "all":
-		dbconfigs = [(db, parsedbconfig("config.%s" % db)) for db in config['databases']]
-	else:
-		dbconfigs = [(args.database, parsedbconfig("config.%s" % args.database))]
-
-	# but override and use local configuration if present
-	if args.local and os.path.exists("config"):
-		print("Local configuration file found; ignoring --database parameter")
-		# parse the config file to work out what database we are using
-		dbconfigs = [(parsedbdriver("config"), parsedbconfig("config"))]
-	else:
-		print("Local configuration file not found; testing databases specified by --database parameter")
+    def run(db,test):
+        debug("running %s %s" % (db,test))
+        dbconfig = "config." + db
+        testfile = test + ".links"
+        returncode = linkscmd(dbconfig,testfile)
+        if returncode != 0:
+            print("!FAILURE: Test %s on database %s" % (test, db))
+            return 1
+        else:
+            print(" SUCCESS: Test %s on database %s" % (test, db))
+            return 0
 
 
-	failed = False
-	for (db, params) in dbconfigs:
-		failed = failed or runtests(db, params)
+    def runtests(db,params):
+        failures = 0
+        print("%s: Setting up %s" % (working_dir,db))
+        for setup in config['setups']:
+            prepare(db,params,setup)
+        print("%s: Testing %s" % (working_dir,db))
+        for test in config['tests']:
+            if run(db,test) > 0:
+                failures = failures + 1
+        print("%s: %d failures for %s" % (working_dir, failures, db))
+        return failures > 0
 
-	if failed:
-		exit(1)
-	else:
-		exit(0)
+    os.chdir(working_dir)
+
+    with open(config_file) as fp:
+        config = json.load(fp)
+
+    debug(config)
+
+    if args.database == "all":
+        dbconfigs = [(db, parsedbconfig("config.%s" % db)) for db in config['databases']]
+    else:
+        dbconfigs = [(args.database, parsedbconfig("config.%s" % args.database))]
+
+    # but override and use local configuration if present
+    if args.local and os.path.exists("config"):
+        print("Local configuration file found; ignoring --database parameter")
+        # parse the config file to work out what database we are using
+        dbconfigs = [(parsedbdriver("config"), parsedbconfig("config"))]
+    else:
+        print("Local configuration file not found; testing databases specified by --database parameter")
+
+
+    failed = False
+    for (db, params) in dbconfigs:
+        failed = failed or runtests(db, params)
+
+    if failed:
+        exit(1)
+    else:
+        exit(0)
 
 if __name__ == '__main__':
-	main()
+    main()

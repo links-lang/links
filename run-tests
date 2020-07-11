@@ -18,28 +18,6 @@ control_c() {
 }
 trap control_c SIGINT
 
-#prepare_database_config () {
-#    # Check if database configuration exists. If not the creating from
-#    # a default config.sample file
-#    if [[ ! -e $1/config ]]; then
-#      echo -en "$STARTCOLOR"
-#      echo -e  "Creating default database test configuration $1/config"
-#      echo -e  "from $1/config.sample"
-#      echo -e  "Please customize to match your local database setup."
-#      echo -en "$ENDCOLOR"
-#      cp $1/config.sample $1/config
-#    fi
-#}
-
-#if [[ "$1" == "unit" ]]; then
-#    prepare_database_config "$DATABASE_TEST_DIR"
-#    export LINKS_CONFIG="$DATABASE_TEST_DIR"
-#    dune exec --profile=development tests/unit/unitTests.exe -- -runner sequential ${@:2}
-#    if [ $? != 0 ]; then
-#        ret=1
-#    fi
-#    exit $ret
-#fi
 
 if [ "$1" == "db-only" -o "$1" == "no-db" ]; then
     echo "The db-only and no-db flags are no longer available."
@@ -54,7 +32,7 @@ if [ "$1" == "db-only" -o "$1" == "no-db" ]; then
     exit 1
 fi
 
-# Don't run normal tests if user passed in "db-only" flag
+# Don't run normal tests if user passed in a database testsuite flag
 if [[ "$1" != "database" && "$1" != "shredding" && "$1" != "relational-lenses" ]]; then
     for i in tests/*.tests; do
         cmnd="./test-harness $i"
@@ -67,76 +45,6 @@ if [[ "$1" != "database" && "$1" != "shredding" && "$1" != "relational-lenses" ]
     done
 fi
 
-# Run database tests stored in a directory passed in as argument.
-# Assumes that the directory contains:
-#  1. either `config` containing actual database configuration or
-#     `config.sample` containing a default database configuration.
-#  2. `testsuite.config` containing a list of tests to run
-#run_database_testsuite () {
-#    prepare_database_config "$1"
-#
-#    # Check whether the config file specifies a user name and/or port
-#    # to access the database.  If so, use it with psql.
-#    user_string=""
-#    user=`grep database_args $1/config \
-#          | sed 's/database_args=[^:]*:[^:]*:\([^:]*\):.*/\1/'`
-#    if [ "$user" != "" ]; then
-#        user_string="-U $user"
-#    fi
-#    port_string=""
-#    port=`grep database_args $1/config \
-#          | sed 's/database_args=[^:]*:\([^:]*\):[^:]*:.*/\1/'`
-#    if [ "$port" != "" ]; then
-#        port_string="-p $port"
-#    fi
-#    host_string=""
-#    host=`grep database_args $1/config \
-#	  | sed 's/database_args=\([^:]*\):[^:]*:[^:]*:.*/\1/'`
-#    if [ "$host" != "" ]; then
-#        host_string="-h $host"
-#    fi
-#    pass_string=""
-#    pass=`grep database_args $1/config \
-#	  | sed 's/database_args=[^:]*:[^:]*:[^:]*:\(.*\)/\1/'`
-#    if [ "$pass" != "" ]; then
-#        pass_string="PGPASSWORD=$pass "
-#    fi
-#
-#    # Prepare the database by running all the *.sql files
-#    for s in $1/*.sql; do
-#        cmnd="psql $host_string $user_string $port_string -v ON_ERROR_STOP=1 -q -d links -f $s"
-#        echo cmnd=$cmnd
-#        cmnd="$pass_string$cmnd"
-#        eval $cmnd
-#        ret_code=$?
-#        if [ $ret_code != 0 ]; then
-#            echo -e "$STARTCOLOR\rFAILED DATABASE PREPARATION $s$ENDCOLOR"
-#            ret=1
-#        fi
-#    done
-#
-#    # Run tests specified in testsuite.config
-#    while read t; do
-#        expect_broken=0
-#        line=($t)
-#        # Check if a test is specified as broken.  This doesn't check that the
-#        # word preceeding test name is actually "BROKEN". So putting any word
-#        # before the test name will turn that test into "expected broken".
-#        if (( ${#line[@]} > 1 )); then
-#          t=${line[1]}
-#          expect_broken=1
-#        fi
-#        cmnd="./links --config=$1/config $1/$t.links"
-#        echo cmnd=$cmnd
-#        eval $cmnd
-#        ret_code=$?
-#        # Fail if a test should pass but didn't or shouldn't pass but did
-#        if [[ ($ret_code -ne 0 && expect_broken -eq 0) || ($ret_code -eq 0 && expect_broken -ne 0) ]]; then
-#            echo -e "$STARTCOLOR\rFAILED TEST $t$ENDCOLOR"
-#            ret=1
-#        fi
-#    done < "$1/testsuite.config"
-#}
 
 run_database_tests () {
     cmnd="./run-database-tests $1 --local"
