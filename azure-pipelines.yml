@@ -107,6 +107,7 @@ steps:
       ./opam2_local pin add links . -y
       ./opam2_local pin add links-postgresql . -y
       ./opam2_local pin add links-sqlite3 . -y
+      ./opam2_local pin add conf-mysql . -y
       ./opam2_local pin add links-mysql . -y
     displayName: 'Links dependencies'
 
