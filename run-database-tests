@@ -19,7 +19,7 @@ parser.add_argument("-d", "--database", type=str,choices=["all","mysql","pgsql",
                     default="pgsql")
 parser.add_argument("-l", "--local", action="store_true",
                     help="Test local database configuration (<working_dir>/config) if present; otherwise, the database(s) specified by the --database parameter are tested.",
-                    default="pgsql")
+                    default=False)
 parser.add_argument("-v", "--verbose", action="store_true",
                     help="Print verbose debugging messages",
                     default=False)
