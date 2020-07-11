@@ -1,5 +1,5 @@
 ---
-config: tests/typed_ir.tests.config
+config: tests/typed_ir.config
 ---
 
 Anonymous constant function (#693)
