@@ -1,6 +1,7 @@
 {"databases" :
  [ "pgsql",
-   "sqlite3" ],
+   "sqlite3",
+   "mysql" ],
  "setups" :
  [ "factorials",
    "null",
