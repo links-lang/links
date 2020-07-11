@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import glob, os, re, sys
+import glob, json, os, re, sys
 
 TEST_DIR="tests"
 
@@ -88,11 +88,12 @@ for test_file in glob.glob(os.path.join(TEST_DIR, "**", "*.tests"), recursive=Tr
 
 
 #Iterate testsuite.config files, containing paths (relative from their location) to database tests
-for testsuite_file in glob.glob(os.path.join(TEST_DIR, "**", "testsuite.config"), recursive=True):
+for testsuite_file in glob.glob(os.path.join(TEST_DIR, "**", "testsuite.json"), recursive=True):
     path_dir = os.path.dirname(testsuite_file)
 
     with open(testsuite_file, "r") as f:
-        for line in f:
+        config = json.load(f)
+        for line in config['tests']:
             path_file = line.strip() + ".links"
 
             combined_path = os.path.join(path_dir,path_file)
@@ -105,6 +106,6 @@ for testsuite_file in glob.glob(os.path.join(TEST_DIR, "**", "testsuite.config")
 #Those .links files remaining in test_files are the ones we haven't found a .tests file for
 if links_files:
     print("Error: The following .links files in the %s subfolder are neither mentioned in a .tests files nor are they part of the blacklist in this script" % TEST_DIR)
-    for f in links_files:
+    for f in sorted(links_files):
         print(f)
     sys.exit(1)
