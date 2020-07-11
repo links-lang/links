@@ -93,7 +93,11 @@ steps:
                  sudo LINKS_CI=1 tools/configure-postgresql &&
                  sudo systemctl start postgresql &&
                  sudo -u postgres createuser -s $(whoami) &&
-                 sudo -u postgres createdb -O $(whoami) links;;
+                 sudo -u postgres createdb -O $(whoami) links &&
+                 sudo systemctl start mysql.service &&
+                 mysql --user=root --password=root -e 'CREATE DATABASE links;' &&
+                 mysql --user=root --password=root -e "CREATE USER links IDENTIFIED BY '12345';"
+                 mysql --user=root --password=root -e 'GRANT ALL ON  links.* TO links;';;
         "Darwin") brew install postgresql@9.5 libpq sqlite3 &&
                   pg_ctl -D /usr/local/var/postgres start &&
                   sleep 5 &&

@@ -18,6 +18,9 @@ before_install:
   - ./tools/install_ocamlformat
   - make rule-check
   - psql -c 'create database links;' -U postgres
+  - mysql -e 'CREATE DATABASE links;'
+  - mysql -e "CREATE USER links IDENTIFIED BY '12345';"
+  - mysql -e 'GRANT ALL ON  links.* TO links;'
 script:
   - ./opam2_local pin add links . -y
   - ./opam2_local pin add links-postgresql . -y
