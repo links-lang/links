@@ -130,12 +130,17 @@ steps:
 
   - script: |
       eval `./opam2_local env`
-      ./run-tests db-only shredding
+      ./run-database-tests tests/database -d all
+    displayName: 'Database tests'
+
+  - script: |
+      eval `./opam2_local env`
+      ./run-database-tests tests/shredding -d all
     displayName: 'Database shredding tests'
 
   - script: |
       eval `./opam2_local env`
-      ./run-tests db-only relational-lenses
+      ./run-database-tests tests/relational-lenses -d all
     displayName: 'Relational lenses tests'
 
   - script: |

@@ -29,6 +29,7 @@ script:
   - make doc
   - make all-ci
   - make tests
-  - ./run-tests db-only shredding
-  - ./run-tests db-only relational-lenses
+  - ./run-database-tests tests/database -d all
+  - ./run-database-tests tests/shredding -d all
+  - ./run-database-tests tests/relational-lenses -d all
   - ./run-tests unit

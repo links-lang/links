@@ -127,6 +127,15 @@ tests: links
 	$(eval CAMLRUNPARAM="")
 	./run-tests
 
+# Runs the database test suite. This calls run-database-tests
+# with the --local flag ensuring that a local config file is used
+# if available.
+.PHONY: tests
+database-tests: links
+	./run-tests database
+	./run-tests shredding
+	./run-tests relational-lenses
+
 # Cleans the project directory.
 .PHONY: clean
 clean:
