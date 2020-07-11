@@ -17,6 +17,11 @@ var tracksLens = lens tracksTable with { track -> date rating };
 
 var joinedLens = lensjoin albumsLens with tracksLens on album delete_left;
 
+sig assertEqSorted : ([a],[a]) ~> ()
+fun assertEqSorted(l1,l2) {
+  assertEq(sortBy(id,l1),sortBy(id,l2))
+}
+
 fun test() {
   var old = lensget joinedLens;
 
@@ -31,8 +36,8 @@ fun test() {
 
   lensput joinedLens with newTracks;
 
-  assertEq(lensget joinedLens, newTracks);
-  assertEq(lensget albumsLens, [
+  assertEqSorted(lensget joinedLens, newTracks);
+  assertEqSorted(lensget albumsLens, [
     (album = "Show", quantity = 3),
     (album = "Galore", quantity = 1),
     (album = "Paris", quantity = 4),
@@ -40,7 +45,7 @@ fun test() {
     (album = "Disintegration", quantity = 7),
     (album = "Eponymous", quantity = 42)
   ]);
-  assertEq(lensget tracksLens, [
+  assertEqSorted(lensget tracksLens, [
     (album = "Galore", date = 1989, rating = 5, track = "Lovesong"),
     (album = "Paris", date = 1989, rating = 5, track = "Lovesong"),
     (album = "Galore", date = 1989, rating = 3, track = "Lullaby"),
