@@ -112,7 +112,7 @@ sig
   val constant : Constant.t -> value sem
   val var : (var * datatype) -> value sem
 
-  val escape : (var_info * Types.row * (var -> tail_computation sem)) -> tail_computation sem
+  val escape : (var_info * (var -> tail_computation sem)) -> tail_computation sem
 
   val tabstr : (Quantifier.t list * value sem) -> value sem
   val tappl : (value sem * Types.type_arg list) -> value sem
@@ -637,8 +637,11 @@ struct
            let (bs, tc) = CompilePatterns.let_pattern env p (v, vt) (reify body, body_type) in
              reflect (bs, (tc, body_type)))
 
-  let escape (k_info, eff, body) =
+  let escape (k_info, body) =
     let kt = Var.info_type k_info in
+    let eff = match kt with
+                | Types.Function(_,eff,_) -> eff
+                | _ -> assert(false) in
     let kb, k = Var.fresh_var k_info in
     let body = body k in
     let body_type = sem_type body in
@@ -817,7 +820,7 @@ struct
           | Escape (bndr, body) when Binder.has_type bndr ->
              let k  = Binder.to_name bndr in
              let kt = Binder.to_type bndr in
-             I.escape (Var.make_local_info (kt, k), eff, fun v -> eval (extend [k] [(v, kt)] env) body)
+             I.escape (Var.make_local_info (kt, k), fun v -> eval (extend [k] [(v, kt)] env) body)
           | Section Section.Minus | FreezeSection Section.Minus -> cofv (lookup_var "-")
           | Section Section.FloatMinus | FreezeSection Section.FloatMinus -> cofv (lookup_var "-.")
           | Section (Section.Name name) | FreezeSection (Section.Name name) -> cofv (lookup_var name)
