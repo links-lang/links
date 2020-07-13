@@ -1,5 +1,5 @@
 {"databases" :
- [ "pgsql" ],
+ [ "pgsql", "sqlite3" ],
  "setups" :
  [ "music_example" ],
  "tests" :
