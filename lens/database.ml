@@ -63,7 +63,10 @@ let fmt_cols ~db f cols =
 let fmt_phrase_value ~db f v =
   Format.fprintf f "%s"
     ( match v with
-    | LPV.Bool b -> string_of_bool b
+    | LPV.Bool b -> (
+        match b with
+        | true -> "(1=1)"
+        | false -> "(0=1)" )
     | LPV.Int v -> string_of_int v
     | LPV.String v -> db.escape_string v
     | LPV.Char c -> db.escape_string (String.make 1 c)
