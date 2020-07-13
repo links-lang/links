@@ -140,7 +140,7 @@ steps:
 
   - script: |
       eval `./opam2_local env`
-      ./run-database-tests tests/relational-lenses -d all -v
+      ./run-database-tests tests/relational-lenses -d all
     displayName: 'Relational lenses tests'
 
   - script: |
