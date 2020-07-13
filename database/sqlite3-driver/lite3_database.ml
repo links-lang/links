@@ -51,7 +51,7 @@ let data_to_string data =
 
 class lite3_result (stmt: stmt) = object
   inherit Value.dbvalue
-  
+
   val result_buf_and_status =
     let result_buf = PolyBuffer.init 1 1024 [] in
     let rec get_results (status) =
@@ -94,6 +94,13 @@ class lite3_database file = object(self)
   method exec query : Value.dbvalue =
     Debug.print query;
     let stmt = prepare connection query in
+    let rec last_res r =
+      match prepare_tail r with
+      | None -> r
+      | Some rnew ->
+        let _ = new lite3_result r in
+        last_res rnew in
+    let stmt = last_res stmt in
       new lite3_result stmt
   (* See http://www.sqlite.org/lang_expr.html *)
   method escape_string = Str.global_replace (Str.regexp_string "'") "''"
