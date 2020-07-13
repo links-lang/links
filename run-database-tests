@@ -14,7 +14,7 @@ parser.add_argument("working_dir", type=str,
 parser.add_argument("-c","--config_file", type=str,
                     help="Test configuration file (default: testsuite.json)",
                     default="testsuite.json")
-parser.add_argument("-d", "--database", type=str,choices=["all","mysql","pgsql","sqlite3","local"],
+parser.add_argument("-d", "--database", type=str,choices=["all","mysql","pgsql","sqlite3"],
                     help="Run tests for specific database (all, mysql, pgsql, sqlite3).  \"all\" selects all database listed in the testsuite configuration file. Default: \"pgsql\"",
                     default="pgsql")
 parser.add_argument("-l", "--local", action="store_true",
