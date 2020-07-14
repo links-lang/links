@@ -18,6 +18,28 @@ control_c() {
 }
 trap control_c SIGINT
 
+prepare_database_config () {
+    # Check if database configuration exists. If not the creating from
+    # a default config.sample file
+    if [[ ! -e $1/config ]]; then
+      echo -en "$STARTCOLOR"
+      echo -e  "Creating default database test configuration $1/config"
+      echo -e  "from $1/config.sample"
+      echo -e  "Please customize to match your local database setup."
+      echo -en "$ENDCOLOR"
+      cp $1/config.sample $1/config
+    fi
+}
+
+if [[ "$1" == "unit" ]]; then
+    prepare_database_config "$DATABASE_TEST_DIR"
+    export LINKS_CONFIG="$DATABASE_TEST_DIR"
+    dune exec --profile=development tests/unit/unitTests.exe -- -runner sequential ${@:2}
+    if [ $? != 0 ]; then
+        ret=1
+    fi
+    exit $ret
+fi
 
 if [ "$1" == "db-only" -o "$1" == "no-db" ]; then
     echo "The db-only and no-db flags are no longer available."
@@ -33,7 +55,7 @@ if [ "$1" == "db-only" -o "$1" == "no-db" ]; then
 fi
 
 # Don't run normal tests if user passed in a database testsuite flag
-if [[ "$1" != "database" && "$1" != "shredding" && "$1" != "relational-lenses" ]]; then
+if [[ "$1" != "database" && "$1" != "shredding" && "$1" != "relational-lenses"  && "$1" != "unit" ]]; then
     for i in tests/*.tests; do
         cmnd="./test-harness $i"
         echo cmnd=$cmnd
