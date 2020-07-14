@@ -132,9 +132,9 @@ module SugarConstructors (Position : Pos)
 
   (** Various phrases *)
 
-  (* Create a FunLit. *)
+  (* Create a Normal FunLit. *)
   let fun_lit ?(ppos=dp) ?args ?(location=loc_unknown) linearity pats blk =
-    with_pos ppos (FunLit (args, linearity, (pats, blk), location))
+    with_pos ppos (FunLit (args, linearity, NormalFunlit (pats, blk), location))
 
   (* Create a Spawn. *)
   let spawn ?(ppos=dp) ?row spawn_kind location blk =
@@ -156,7 +156,7 @@ module SugarConstructors (Position : Pos)
     let fun_signature = datatype_opt_of_sig_opt sig_opt bndr in
     with_pos ppos (Fun { fun_binder = binder bndr;
                          fun_linearity = linearity;
-                         fun_definition = ([], (args, blk));
+                         fun_definition = ([], NormalFunlit (args, blk));
                          fun_location = location;
                          fun_signature;
                          fun_frozen = frozen;

@@ -59,17 +59,15 @@ let unwrap_def (bndr, linearity, (tyvars, lam), location) =
   let ft = Binder.to_type bndr in
   let rt = TypeUtils.return_type ft in
   let lam =
-    let rec make_lam t : funlit -> funlit =
-      function
-        | ([_ps], _body) as lam -> lam
-        | (ps::pss, body) ->
-            let g = gensym ~prefix:"_fun_" () in
-            let rt = TypeUtils.return_type t in
-              ([ps], block
-                  ([fun_binding' ~linearity ~location (binder ~ty:t g)
-                                 (make_lam rt (pss, body))],
-                   freeze_var g))
-        | _, _ -> assert false
+    let rec make_lam t funlit =
+      match funlit with
+        | NormalFunlit ([_ps], _body) -> NormalFunlit ([_ps], _body)
+        | NormalFunlit (ps::pss, body) -> 
+          let g = gensym ~prefix:"_fun_" () in
+          let rt = TypeUtils.return_type t in
+            NormalFunlit ([ps], block ([fun_binding' ~linearity ~location (binder ~ty:t g) (make_lam rt (NormalFunlit (pss, body)))], freeze_var g))
+        | NormalFunlit (_,_) -> assert false (*TODO: matchfunlit *)
+        | MatchFunlit (_, _) -> assert false (*TODO: matchfunlit *)
     in make_lam rt lam
   in (binder ~ty:ft f, linearity, (tyvars, lam), location)
 
@@ -141,7 +139,7 @@ object (o : 'self_type)
         let tyvars = List.map SugarQuantifier.mk_resolved [ab; rhob; effb] in
         let e : phrasenode =
           block_node
-            ([fun_binding' ~tyvars:tyvars (binder ~ty:ft f) (pss, body)],
+            ([fun_binding' ~tyvars:tyvars (binder ~ty:ft f) (NormalFunlit (pss, body))],
              freeze_var f)
         in (o, e, ft)
     | e -> super#phrasenode e
@@ -186,13 +184,13 @@ object
     | e -> super#phrasenode e
 
   method! bindingnode = function
-    | Fun { fun_definition = (_, ([_], _)); _ } as b -> super#bindingnode b
+    | Fun { fun_definition = (_, (NormalFunlit ([_], _))); _ } as b -> super#bindingnode b
     | Fun _ -> {< has_no_funs = false >}
     | Funs defs as b ->
         if
           List.exists
             (function
-               | {WithPos.node={ rec_definition = (_, ([_], _)); _ }; _ } -> false
+               | {WithPos.node={ rec_definition = (_, (NormalFunlit ([_], _))); _ }; _ } -> false
                | _ -> true) defs
         then
           {< has_no_funs = false >}

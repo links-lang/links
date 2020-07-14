@@ -559,9 +559,12 @@ class map =
           let _x_i1 = o#phrase _x_i1 in Table ((_x, _x_i1))
 
     method funlit : funlit -> funlit =
-      fun (_x, _x_i1) ->
-        let _x = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
-        let _x_i1 = o#phrase _x_i1 in (_x, _x_i1)
+      fun f ->
+        match f with 
+          | NormalFunlit (_x, _x_i1) -> 
+            let _x = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
+            let _x_i1 = o#phrase _x_i1 in NormalFunlit (_x, _x_i1) (*TODO: matchfunlit *)
+          | MatchFunlit (_,_) -> assert false
 
     method handle_params : handler_parameterisation -> handler_parameterisation =
       fun { shp_bindings; shp_types }->
@@ -1287,9 +1290,13 @@ class fold =
           let o = o#pattern _x in let o = o#phrase _x_i1 in o
 
     method funlit : funlit -> 'self_type =
-      fun (_x, _x_i1) ->
-        let o = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
-        let o = o#phrase _x_i1 in o
+      fun f ->
+        match f with 
+          | NormalFunlit (_x, _x_i1) -> 
+            let o = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
+            let o = o#phrase _x_i1 in o
+          | MatchFunlit (_,_) -> assert false (*TODO: matchfunlit *)
+
 
     method handle_params : handler_parameterisation -> 'self_type =
       fun params ->
@@ -2115,9 +2122,12 @@ class fold_map =
           let (o, _x_i1) = o#phrase _x_i1 in (o, (Table ((_x, _x_i1))))
 
     method funlit : funlit -> ('self_type * funlit) =
-      fun (_x, _x_i1) ->
-        let (o, _x) = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
-        let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1))
+      fun f ->
+        match f with 
+          | NormalFunlit (_x, _x_i1) -> 
+            let (o, _x) = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
+            let (o, _x_i1) = o#phrase _x_i1 in (o, NormalFunlit (_x, _x_i1))
+          | MatchFunlit (_,_) -> assert false (*TODO: matchfunlit *)
 
     method handle_params : handler_parameterisation -> ('self_type * handler_parameterisation) =
       fun { shp_bindings; shp_types } ->
