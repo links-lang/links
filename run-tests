@@ -6,8 +6,9 @@
 # https://github.com/links-lang/links/wiki/Running-the-test-suite
 
 DATABASE_TEST_DIR=tests/database   # Location of database tests
-SHREDDING_TEST_DIR=tests/shredding # Location of database tests
-RELATIONAL_LENSES_TEST_DIR=tests/relational-lenses # Location of database tests
+SHREDDING_TEST_DIR=tests/shredding # Location of shredding tests
+RELATIONAL_LENSES_TEST_DIR=tests/relational-lenses # Location of relational lens tests
+UNIT_TEST_DIR=tests/unit # Location of unit tests
 ret=0                              # Return code. If <> 0 then some tests failed
 STARTCOLOR="\e[31m"                # Control sequence to enable red text
 ENDCOLOR="\e[0m"                   # Control sequence to enable normal text
@@ -32,8 +33,8 @@ prepare_database_config () {
 }
 
 if [[ "$1" == "unit" ]]; then
-    prepare_database_config "$DATABASE_TEST_DIR"
-    export LINKS_CONFIG="$DATABASE_TEST_DIR"
+    prepare_database_config "$UNIT_TEST_DIR"
+    export LINKS_CONFIG="$UNIT_TEST_DIR"
     dune exec --profile=development tests/unit/unitTests.exe -- -runner sequential ${@:2}
     if [ $? != 0 ]; then
         ret=1
