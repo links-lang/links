@@ -1,0 +1,16 @@
+{"databases" :
+ [ "pgsql" ],
+ "setups" :
+ [ "factorials",
+   "jrules",
+   "organisation",
+   "travel_portal" ],
+ "tests" :
+ [ "empty",
+   "emptyfun",
+   "factorials",
+   "unit",
+   "jrules",
+   "organisation",
+   "travel_portal" ]
+}

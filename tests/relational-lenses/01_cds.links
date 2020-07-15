@@ -19,12 +19,15 @@ var joinedLens = lensjoin albumsLens with tracksLens on album delete_left;
 var droppedLens = lensdrop date determined by track default 2018 from joinedLens;
 var filteredLens = lensselect from droppedLens by fun (x) { x.quantity > 2 };
 
-
+sig assertEqSorted : ([a],[a]) ~> ()
+fun assertEqSorted(l1,l2) {
+  assertEq(sortBy(id,l1),sortBy(id,l2))
+}
 
 fun test() {
   var filtered = lensget filteredLens;
 
-  assertEq(filtered, [
+  assertEqSorted(filtered, [
     (album = "Show", quantity = 3, rating = 3, track = "Lullaby"),
     (album = "Paris", quantity = 4, rating = 5, track = "Lovesong"),
     (album = "Wish", quantity = 5, rating = 4, track = "Trust")
@@ -39,14 +42,14 @@ fun test() {
   lensput filteredLens with newTracks;
 
   var new = lensget filteredLens;
-  assertEq(new, newTracks);
+  assertEqSorted(new, newTracks);
 
-  assertEq(lensget tracksLens, [(album = "Galore", date = 1989, rating = 5, track = "Lovesong"),
+  assertEqSorted(lensget tracksLens, [(album = "Galore", date = 1989, rating = 5, track = "Lovesong"),
     (album = "Disintegration", date = 1989, rating = 5, track = "Lovesong"),
     (album = "Galore", date = 1989, rating = 4, track = "Lullaby"),
     (album = "Show", date = 1989, rating = 4, track = "Lullaby")
   ]);
-  assertEq(lensget albumsLens, [
+  assertEqSorted(lensget albumsLens, [
     (album = "Show", quantity = 3),
     (album = "Galore", quantity = 1),
     (album = "Paris", quantity = 4),

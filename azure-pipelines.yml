@@ -89,11 +89,15 @@ steps:
 
   - bash: |
       case $AGENT_OS in
-        "Linux") sudo apt-get install postgresql libpq-dev sqlite3 libsqlite3-dev &&
+        "Linux") sudo apt-get install postgresql libpq-dev sqlite3 libsqlite3-dev mysql-client mysql-server libmysqlclient-dev &&
                  sudo LINKS_CI=1 tools/configure-postgresql &&
                  sudo systemctl start postgresql &&
                  sudo -u postgres createuser -s $(whoami) &&
-                 sudo -u postgres createdb -O $(whoami) links;;
+                 sudo -u postgres createdb -O $(whoami) links &&
+                 sudo systemctl start mysql.service &&
+                 mysql --user=root --password=root -e 'CREATE DATABASE links;' &&
+                 mysql --user=root --password=root -e "CREATE USER links IDENTIFIED BY '12345';"
+                 mysql --user=root --password=root -e 'GRANT ALL ON  links.* TO links;';;
         "Darwin") brew install postgresql@9.5 libpq sqlite3 &&
                   pg_ctl -D /usr/local/var/postgres start &&
                   sleep 5 &&
@@ -107,6 +111,7 @@ steps:
       ./opam2_local pin add links . -y
       ./opam2_local pin add links-postgresql . -y
       ./opam2_local pin add links-sqlite3 . -y
+      ./opam2_local pin add links-mysql . -y
     displayName: 'Links dependencies'
 
   - script: |
@@ -125,12 +130,17 @@ steps:
 
   - script: |
       eval `./opam2_local env`
-      ./run-tests db-only shredding
+      ./run-database-tests tests/database -d all
+    displayName: 'Database tests'
+
+  - script: |
+      eval `./opam2_local env`
+      ./run-database-tests tests/shredding -d all
     displayName: 'Database shredding tests'
 
   - script: |
       eval `./opam2_local env`
-      ./run-tests db-only relational-lenses
+      ./run-database-tests tests/relational-lenses -d all
     displayName: 'Relational lenses tests'
 
   - script: |
