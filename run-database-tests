@@ -30,25 +30,25 @@ def main():
     config_file = args.config_file
     verbose = args.verbose
 
-    linksdir = os.getcwd()
-    linksexec = os.path.join(linksdir,"links")
+    links_dir = os.getcwd()
+    links_exec = os.path.join(links_dir,"links")
 
     def debug(s):
         if verbose:
             print(s)
 
-    def linkscmd(config,file):
+    def links_cmd(config,file):
         setdebug = "--set=debug=true" if verbose else ""
-        debug("%s --config=%s %s %s" % (linksexec,config,setdebug,file))
+        debug("%s --config=%s %s %s" % (links_exec,config,setdebug,file))
         if verbose:
-            completed_process = subprocess.run([linksexec, "--config=%s" % config, setdebug, file])
+            completed_process = subprocess.run([links_exec, "--config=%s" % config, setdebug, file])
         else:
-            completed_process = subprocess.run([linksexec, "--config=%s" % config, setdebug, file],
+            completed_process = subprocess.run([links_exec, "--config=%s" % config, setdebug, file],
                                                stdout=subprocess.PIPE,stderr=subprocess.PIPE)
         return completed_process.returncode
 
     matcher = re.compile("database_args=([^:]*):([^:]*):([^:]*):([^\n:]*)")
-    def parsedbconfig(config):
+    def parse_db_config(config):
         debug("Parsing %s" % config)
         with open(config) as fp:
             for line in fp:
@@ -57,12 +57,12 @@ def main():
                     return (m.group(1),m.group(2),m.group(3),m.group(4))
         return (None,None,None,None)
 
-    drivermatcher = re.compile("database_driver=([^\n]*)")
-    def parsedbdriver(config):
+    driver_matcher = re.compile("database_driver=([^\n]*)")
+    def parse_db_driver(config):
         debug("Parsing %s" % config)
         with open(config) as fp:
             for line in fp:
-                m = drivermatcher.match(line)
+                m = driver_matcher.match(line)
                 if m != None:
                     if m.group(1) == "postgresql":
                         return ("pgsql")
@@ -70,20 +70,20 @@ def main():
                         return (m.group(1))
         return None
 
-    def prepare(db,dbconfig,setup):
-        (host, port, user, passwd) = dbconfig
+    def prepare(db,db_config,setup):
+        (host, port, user, passwd) = db_config
 
         # if a specialized setup file exists for this database, use it
-        sqlfile = "%s.%s" % (setup,db)
+        sql_file = "%s.%s" % (setup,db)
         # otherwise, use the plain sql one
         if not(os.path.exists("%s.%s" % (setup,db))):
-            sqlfile = "%s.sql" % setup
+            sql_file = "%s.sql" % setup
 
-        debug("setting up %s with %s" % (db,sqlfile))
+        debug("setting up %s with %s" % (db,sql_file))
         if db == 'pgsql':
-            cmnd = "PGPASSWORD=%s psql -h %s -p %s %s -v ON_ERROR_STOP=1 -q -d links -f %s" % (passwd, host, port, user, sqlfile)
+            cmnd = "PGPASSWORD=%s psql -h %s -p %s %s -v ON_ERROR_STOP=1 -q -d links -f %s" % (passwd, host, port, user, sql_file)
         elif db == 'mysql':
-            cmnd = "mysql links -h %s -P %s -u %s -p%s  < %s" % (host, port, user,passwd,sqlfile)
+            cmnd = "mysql links -h %s -P %s -u %s -p%s  < %s" % (host, port, user, passwd, sql_file)
         elif db == 'sqlite3':
             cmnd = "sqlite3 links < %s" % sqlfile
         else:
@@ -95,10 +95,10 @@ def main():
 
     def run(db,test):
         debug("running %s %s" % (db,test))
-        dbconfig = "config." + db
-        testfile = test + ".links"
-        returncode = linkscmd(dbconfig,testfile)
-        if returncode != 0:
+        db_config = "config." + db
+        test_file = test + ".links"
+        return_code = links_cmd(db_config,test_file)
+        if return_code != 0:
             print("!FAILURE: Test %s on database %s" % (test, db))
             return 1
         else:
@@ -106,7 +106,7 @@ def main():
             return 0
 
 
-    def runtests(db,params):
+    def run_tests(db,params):
         failures = 0
         print("%s: Setting up %s" % (working_dir,db))
         for setup in config['setups']:
@@ -126,22 +126,22 @@ def main():
     debug(config)
 
     if args.database == "all":
-        dbconfigs = [(db, parsedbconfig("config.%s" % db)) for db in config['databases']]
+        db_configs = [(db, parse_db_config("config.%s" % db)) for db in config['databases']]
     else:
-        dbconfigs = [(args.database, parsedbconfig("config.%s" % args.database))]
+        db_configs = [(args.database, parse_db_config("config.%s" % args.database))]
 
     # but override and use local configuration if present
     if args.local and os.path.exists("config"):
         print("Local configuration file found; ignoring --database parameter")
         # parse the config file to work out what database we are using
-        dbconfigs = [(parsedbdriver("config"), parsedbconfig("config"))]
+        db_configs = [(parse_db_driver("config"), parse_db_config("config"))]
     else:
         print("Local configuration file not found; testing databases specified by --database parameter")
 
 
     failed = False
-    for (db, params) in dbconfigs:
-        failed = failed or runtests(db, params)
+    for (db, params) in db_configs:
+        failed = failed or run_tests(db, params)
 
     if failed:
         exit(1)

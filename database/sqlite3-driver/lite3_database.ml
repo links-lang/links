@@ -1,6 +1,8 @@
 open Links_core
 open Utility
-open Sqlite3
+module S3 = Sqlite3
+module Rc = Sqlite3.Rc
+module Data = Sqlite3.Data
 
 (* TODO: Better type/error handling *)
 
@@ -49,7 +51,7 @@ let data_to_string data =
 
 
 
-class lite3_result (stmt: stmt) = object
+class lite3_result (stmt: S3.stmt) = object
   inherit Value.dbvalue
 
   val result_buf_and_status =
@@ -57,9 +59,9 @@ class lite3_result (stmt: stmt) = object
     let rec get_results (status) =
       match status with
         `QueryOk -> (
-          match step stmt with
+          match S3.step stmt with
             Rc.OK|Rc.ROW ->
-            let data = Array.to_list (row_data stmt) in
+            let data = Array.to_list (S3.row_data stmt) in
             let row = List.map data_to_string data in
             PolyBuffer.append result_buf row; 
             get_results `QueryOk
@@ -72,10 +74,9 @@ class lite3_result (stmt: stmt) = object
     (result_buf,get_results (`QueryOk))
 
   method status : Value.db_status = snd(result_buf_and_status)
-  method nfields : int = column_count stmt
+  method nfields : int = S3.column_count stmt
   method ntuples : int = PolyBuffer.length (fst result_buf_and_status)
-  method fname n : string = column_name stmt n
-  (*method get_all_lst : string list list = PolyBuffer.to_list (fst result_buf_and_status)*)
+  method fname n : string = S3.column_name stmt n
   method getvalue : int -> int -> string = fun n i ->
     List.nth(PolyBuffer.get (fst result_buf_and_status) n) i
   method gettuple : int -> string array = fun n ->
@@ -90,12 +91,13 @@ end
 class lite3_database file = object(self)
   inherit Value.database
   val mutable _supports_shredding : bool option = None
-  val connection = db_open file
+  val connection = S3.db_open file
   method exec query : Value.dbvalue =
     Debug.print query;
-    let stmt = prepare connection query in
+    let stmt = S3.prepare connection query in
+    (* Fully prepare statement to deal correctly with multi-statement execution *)
     let rec last_res r =
-      match prepare_tail r with
+      match S3.prepare_tail r with
       | None -> r
       | Some rnew ->
         let _ = new lite3_result r in
@@ -110,7 +112,7 @@ class lite3_database file = object(self)
     match _supports_shredding with
     | Some result -> result
     | None ->
-       let stmt = prepare connection "SELECT sqlite_version()" in
+       let stmt = S3.prepare connection "SELECT sqlite_version()" in
        let result = new lite3_result stmt in
        match result#status with
        | `QueryOk ->
