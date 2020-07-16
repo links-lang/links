@@ -96,4 +96,20 @@ module Insert : sig
   }
 
   val fmt : db:db -> Format.formatter -> t -> unit
+
+  val exec_insert_returning :
+    db:db ->
+    field_types:(string * Phrase_type.t) list ->
+    t ->
+    Phrase_value.t list
+end
+
+module Crud : sig
+  type db = t
+
+  type t = Insert of Insert.t | Update of Update.t | Delete of Delete.t
+
+  val fmt : db:db -> Format.formatter -> t -> unit
+
+  val exec_multi : db:db -> t list -> unit
 end

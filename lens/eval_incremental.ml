@@ -166,16 +166,6 @@ module MapBoolList = Lens_map.Make (OrderedBoolList)
 
 let apply_delta ~table ~db ~sort ~env data =
   let { Database.Table.name = table; keys } = table in
-  let exec cmd =
-    let open Database in
-    Debug.print cmd;
-    Statistics.time_query (fun () -> db.execute cmd)
-  in
-  let exec_select cmd ~field_types =
-    let open Database in
-    Debug.print cmd;
-    Statistics.time_query (fun () -> db.execute_select cmd ~field_types)
-  in
   (* get the first key, otherwise return an empty key *)
   let key =
     match keys with
@@ -256,34 +246,30 @@ let apply_delta ~table ~db ~sort ~env data =
            Phrase.equal (Phrase.var k) (Phrase.Constant.of_value v))
     |> Phrase.List.fold_and
   in
-  let fmt_cmd_sep f () = Format.pp_print_string f ";\n" in
-  let fmt_delete f row =
-    let predicate = prepare_where row in
-    let delete = { Database.Delete.table; predicate } in
-    Database.Delete.fmt ~db f delete
-  in
-  let fmt_update f row =
-    let predicate = prepare_where row in
-    let set = List.zip_exn columns row |> List.drop ~n:(List.length key) in
-    let update = { Database.Update.table; predicate; set } in
-    Database.Update.fmt ~db f update
-  in
-  let fmt_insert f values =
+  (* Format and execute commands that don't require returning output. *)
+  let insert_cmd values =
     let values = [ values ] in
     let returning = [] in
-    let insert = { Database.Insert.table; columns; values; returning } in
-    Database.Insert.fmt ~db f insert
+    Database.Crud.Insert { Database.Insert.table; columns; values; returning }
   in
-  let fmt_insert_cmds = List.map ~f:(fun v -> (fmt_insert, v)) insert_vals in
-  let fmt_delete_cmds = List.map ~f:(fun v -> (fmt_delete, v)) delete_vals in
-  let fmt_update_cmds = List.map ~f:(fun v -> (fmt_update, v)) update_vals in
-  let fmt_fmt f (fmt, v) = fmt f v in
-  let fmt_all f () =
-    Format.pp_print_list ~pp_sep:fmt_cmd_sep fmt_fmt f
-    @@ List.flatten [ fmt_insert_cmds; fmt_delete_cmds; fmt_update_cmds ]
+  let delete_cmd row =
+    let predicate = prepare_where row in
+    Database.Crud.Delete { Database.Delete.table; predicate }
   in
-  let cmds = Format.asprintf "%a%!" fmt_all () in
-  if String.equal "" cmds |> not then exec cmds;
+  let update_cmd row =
+    let predicate = prepare_where row in
+    let set = List.zip_exn columns row |> List.drop ~n:(List.length key) in
+    Database.Crud.Update { Database.Update.table; predicate; set }
+  in
+  let cmds =
+    List.concat
+      [
+        List.map ~f:insert_cmd insert_vals;
+        List.map ~f:delete_cmd delete_vals;
+        List.map ~f:update_cmd update_vals;
+      ]
+  in
+  Database.Crud.exec_multi ~db cmds;
   (* generate commands where we need  the returning id *)
   List.fold_right
     (fun (k, values_all) env ->
@@ -302,16 +288,13 @@ let apply_delta ~table ~db ~sort ~env data =
       let columns =
         columns |> List.filter (fun v -> String.Set.mem v returnings |> not)
       in
-      let insert =
-        { Database.Insert.table; columns; values; returning }
-        |> Format.asprintf "%a" (Database.Insert.fmt ~db)
-      in
+      let insert = { Database.Insert.table; columns; values; returning } in
       let field_types =
         returning_cols
         |> List.map ~f:(fun (_, c) -> (Column.name c, Column.typ c))
       in
       let res =
-        exec_select insert ~field_types
+        Database.Insert.exec_insert_returning ~db ~field_types insert
         |> List.map ~f:(fun v ->
                Phrase_value.unbox_record v |> List.map ~f:(fun (_, v) -> v))
       in
