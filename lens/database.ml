@@ -35,7 +35,7 @@ module E = struct
 
   let raise v = raise (E v)
 
-  let _ =
+  let () =
     let print v =
       match v with
       | E e -> Some (show e)
