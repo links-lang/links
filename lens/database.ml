@@ -13,7 +13,9 @@ type t = {
 }
 
 module E = struct
-  type t = Unsupported_for_driver of { driver : string; fn : string }
+  type t =
+    | Unsupported_for_driver of { driver : string; fn : string }
+    | Unsupported_phrase_value of { value : Phrase_value.t }
 
   let pp f v =
     match v with
@@ -22,6 +24,10 @@ module E = struct
           "The function '%s' is not supported for the lens database driver \
            '%s'."
           driver fn
+    | Unsupported_phrase_value { value } ->
+        Format.fprintf f
+          "The value '%a' is not supported by the lens database driver."
+          Phrase_value.pp value
 
   let show v = Format.asprintf "%a" pp v
 
@@ -101,7 +107,9 @@ let fmt_phrase_value ~db f v =
         if s.[String.length s - 1] = '.' then s ^ "0" else s
     | LPV.Serial (`Key k) ->
         string_of_int k (* only support converting known keys. *)
-    | _ -> Format.asprintf "Unexpected phrase value %a." LPV.pp v |> failwith )
+    | LPV.Serial (`NewKeyMapped k) ->
+        string_of_int k (* only support converting known keys. *)
+    | _ -> E.Unsupported_phrase_value { value = v } |> E.raise )
 
 module Precedence = struct
   type t = Or | And | Not | Add | Sub | Mult | Divide | Cmp

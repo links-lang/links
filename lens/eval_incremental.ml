@@ -307,7 +307,7 @@ let apply_delta ~table ~db ~sort ~env data =
                 let c1 = Phrase_value.unbox_serial_newkeymapped c1 in
                 let c2 = Phrase_value.unbox_serial_key c2 in
                 Int.Map.add c1 c2 acc)
-              scolumns r2 acc)
+              returning_cols r2 acc)
           values_all res env
       in
       env)
