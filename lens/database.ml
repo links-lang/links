@@ -356,14 +356,14 @@ module Insert = struct
           let fn = "exec_insert_returning_hack" in
           E.Unsupported_for_driver { driver; fn } |> E.raise
     in
-    let getid = Format.asprintf "SELECT id = %s as id" last_id_fun in
+    let getid = Format.asprintf "SELECT %s as id" last_id_fun in
     let exec_insert v =
       let ins = Format.asprintf "%a" (fmt ~db) v in
       Debug.print ins;
       Statistics.time_query (fun () -> db.execute ins);
       Debug.print getid;
       Statistics.time_query (fun () ->
-          db.execute_select getid ~field_types:[ ("id", Phrase_type.Int) ])
+          db.execute_select getid ~field_types:[ ("id", Phrase_type.Serial) ])
     in
     no_returning data |> split |> List.map ~f:exec_insert |> List.concat
 
