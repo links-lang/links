@@ -27,8 +27,3 @@ chmod u+x "$OPAM_EXEC"
 
 # Initialise OPAM.
 eval "./$OPAM_EXEC init --disable-sandboxing -n"
-
-# use OCaml 4.08.0
-eval "./$OPAM_EXEC switch create 4.08.0"
-eval "./$OPAM_EXEC switch 4.08.0"
-eval $(./$OPAM_EXEC env)
