@@ -5,6 +5,8 @@ open CommonTypes
 type 'a stringmap = 'a Utility.StringMap.t [@@deriving show]
 type 'a field_env = 'a stringmap [@@deriving show]
 
+val print_types_pretty : bool Settings.setting
+
 (* type var sets *)
 module TypeVarSet : sig
   include Utility.INTSET
