@@ -1,12 +1,12 @@
 open OUnit2
 
-open Links_lens_unit_tests
 
 let suites =
   "all"
   >::: [
          "lenses"
-         >::: [
+         >::: (let open Links_lens_unit_tests in
+              [
                 UnitTestsLensLang.suite;
                 UnitTestsLensCommon.suite;
                 UnitTestsLensFDHelpers.suite;
@@ -17,7 +17,15 @@ let suites =
                 UnitTestsLensLang.suite;
                 UnitTestsLensSort.suite;
                 UnitTestsLensAlias.suite;
-              ];
+              ]);
+         "ir"
+         >::: (let open Links_ir_unit_tests in
+              [
+                Binding.suite;
+                Functions.suite;
+                Effects.suite;
+                Quantifiers.suite;
+              ]);
        ]
 
 let () = run_test_tt_main suites
