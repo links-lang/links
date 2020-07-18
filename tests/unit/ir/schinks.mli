@@ -161,7 +161,6 @@ val computation : Ir.binding t list -> Ir.tail_computation t -> Ir.computation t
  *
  *)
 
-
 (** Creates a group of recursive functions *)
 val rec_ : Ir.fun_def t list -> Ir.binding t
 

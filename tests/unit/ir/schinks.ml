@@ -281,9 +281,9 @@ let binder ?(scope = Var.Scope.Local) name ty =
   let* ty = ty in
   singleton_name
     (fun maps ->
-      let var_info = Var.make_info (ty maps)  name scope in
+      let var_info = Var.make_info (ty maps) name scope in
       let id = StringMap.find name maps.varname_to_id in
-      Var.make_binder id  var_info)
+      Var.make_binder id var_info)
     name
 
 let wi_binder ?(scope = Var.Scope.Local) var_id ty : Ir.binder t =
