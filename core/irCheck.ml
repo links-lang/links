@@ -525,6 +525,13 @@ struct
 
     method check_eq_types t1 t2 occurrence = check_eq_types (o#extract_type_equality_context ()) t1 t2 occurrence
 
+    method! lookup_type : var -> datatype = fun var ->
+     match Env.find_opt var tyenv with
+     | None -> raise_ir_type_error
+                 (Printf.sprintf "Variable %d is unbound" var)
+                 SNone
+     | Some t -> t
+
     method! var : var -> ('self_type * var * datatype) =
       fun var -> (o, var, o#lookup_type var)
 
