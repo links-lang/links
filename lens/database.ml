@@ -380,7 +380,7 @@ module Insert = struct
   (* optionally add a returning statement if required *)
 end
 
-module Crud = struct
+module Change = struct
   type db = t
 
   type t = Insert of Insert.t | Update of Update.t | Delete of Delete.t

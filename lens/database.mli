@@ -104,7 +104,7 @@ module Insert : sig
     Phrase_value.t list
 end
 
-module Crud : sig
+module Change : sig
   type db = t
 
   type t = Insert of Insert.t | Update of Update.t | Delete of Delete.t

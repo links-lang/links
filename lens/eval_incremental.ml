@@ -250,16 +250,16 @@ let apply_delta ~table ~db ~sort ~env data =
   let insert_cmd values =
     let values = [ values ] in
     let returning = [] in
-    Database.Crud.Insert { Database.Insert.table; columns; values; returning }
+    Database.Change.Insert { Database.Insert.table; columns; values; returning }
   in
   let delete_cmd row =
     let predicate = prepare_where row in
-    Database.Crud.Delete { Database.Delete.table; predicate }
+    Database.Change.Delete { Database.Delete.table; predicate }
   in
   let update_cmd row =
     let predicate = prepare_where row in
     let set = List.zip_exn columns row |> List.drop ~n:(List.length key) in
-    Database.Crud.Update { Database.Update.table; predicate; set }
+    Database.Change.Update { Database.Update.table; predicate; set }
   in
   let cmds =
     List.concat
@@ -269,7 +269,7 @@ let apply_delta ~table ~db ~sort ~env data =
         List.map ~f:update_cmd update_vals;
       ]
   in
-  Database.Crud.exec_multi ~db cmds;
+  Database.Change.exec_multi ~db cmds;
   (* generate commands where we need  the returning id *)
   List.fold_right
     (fun (k, values_all) env ->
