@@ -319,8 +319,16 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
           in
           let body' = visitor#phrase body in
           NormalFunlit (paramss', body')
-        | MatchFunlit (_,_) -> assert false (*TODO: matchfunlit *)
-
+        | MatchFunlit (paramss, body) -> 
+          let visitor = self#clone in
+          let paramss' =
+            List.map
+              (fun params ->
+                List.map (fun param -> visitor#pattern param) params)
+              paramss
+          in
+          let body' = list.map (fun (pat, blk) -> visitor#pattern pat; visitor#phrase blk) body in
+          MatchFunlit (paramss', body')
 
     method cases : (Pattern.with_pos * phrase) list -> (Pattern.with_pos * phrase) list
       = fun cases ->

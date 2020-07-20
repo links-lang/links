@@ -134,7 +134,9 @@ module SugarConstructors (Position : Pos)
 
   (* Create a Normal FunLit. *)
   let fun_lit ?(ppos=dp) ?args ?(location=loc_unknown) linearity pats blk =
-    with_pos ppos (FunLit (args, linearity, NormalFunlit (pats, blk), location))
+    match blk with 
+      | MatchBody mb -> with_pos ppos (FunLit (args, linearity, MatchFunlit (pats, mb), location))
+      | _ -> with_pos ppos (FunLit (args, linearity, NormalFunlit (pats, blk), location))
 
   (* Create a Spawn. *)
   let spawn ?(ppos=dp) ?row spawn_kind location blk =
@@ -154,13 +156,14 @@ module SugarConstructors (Position : Pos)
   (* Create a function binding. *)
   let fun_binding ?(ppos=dp) sig_opt ?(unsafe_sig=false) ((linearity, frozen), bndr, args, location, blk) =
     let fun_signature = datatype_opt_of_sig_opt sig_opt bndr in
-    with_pos ppos (Fun { fun_binder = binder bndr;
-                         fun_linearity = linearity;
-                         fun_definition = ([], NormalFunlit (args, blk));
-                         fun_location = location;
-                         fun_signature;
-                         fun_frozen = frozen;
-                         fun_unsafe_signature = unsafe_sig })
+    let fun_def = match blk with | MatchBody mb -> ([], MatchFunlit (args, mb)) | _ -> ([], NormalFunlit (args, blk)) in
+      with_pos ppos (Fun { fun_binder = binder bndr;
+                           fun_linearity = linearity;
+                           fun_definition = fun_def;
+                           fun_location = location;
+                           fun_signature;
+                           fun_frozen = frozen;
+                           fun_unsafe_signature = unsafe_sig })
 
   let fun_binding' ?(ppos=dp) ?(linearity=dl_unl) ?(tyvars=[])
         ?(location=loc_unknown) ?annotation bndr fnlit =

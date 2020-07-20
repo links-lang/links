@@ -66,7 +66,7 @@ let unwrap_def (bndr, linearity, (tyvars, lam), location) =
           let g = gensym ~prefix:"_fun_" () in
           let rt = TypeUtils.return_type t in
             NormalFunlit ([ps], block ([fun_binding' ~linearity ~location (binder ~ty:t g) (make_lam rt (NormalFunlit (pss, body)))], freeze_var g))
-        | NormalFunlit (_,_) -> assert false (*TODO: matchfunlit *)
+        | NormalFunlit (_,_) -> assert false
         | MatchFunlit (_, _) -> assert false (*TODO: matchfunlit *)
     in make_lam rt lam
   in (binder ~ty:ft f, linearity, (tyvars, lam), location)
