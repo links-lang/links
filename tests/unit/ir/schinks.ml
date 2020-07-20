@@ -353,6 +353,12 @@ let let_ name ty ?(tparams = []) ?scope body =
   let bin = binder ?scope name ty in
   wi_let_ bin ~tparams body
 
+let var' name ty =
+  let bin = binder name ty in
+  bin
+
+let ( let** ) (vs, maps) f = Ir.Let (maps, f vs)
+
 let wi_def bin ?(tparams = []) params ?closure_var
     ?(location = CT.Location.Server) ?(unsafe_sig = false) body : Ir.fun_def t =
   let* bin = bin in
@@ -386,6 +392,22 @@ let def name ty ?(tparams = []) params ?scope ?closure_var
       closure_var
   in
   wi_def bin ~tparams params ?closure_var ~location ~unsafe_sig body
+
+type adef = { params : (string * Types.typ t) list }
+let param name typ = (var name, { params = [ (name, typ) ] })
+
+let ( let+ ) (b, _p) f = (f b, _p.params)
+
+let ( and+ ) (b1, p1) (b2, p2) =
+  ((b1, b2), { params = List.append p1.params p2.params })
+
+let def' _name _ty _par = ()
+
+let _foo =
+  def' "f"
+    ([ int ] |~~> int)
+    (let+ x = param "x" int and+ _y = param "y" string in
+     x)
 
 let rec_ fun_defs =
   let* fun_defs = lift_list fun_defs in
