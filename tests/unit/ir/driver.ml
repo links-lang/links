@@ -1,6 +1,8 @@
 open OUnit2
 open Links_core
 
+module Schinks = Schinks_st
+
 let with_setting bool_setting value body =
   let prev = Settings.get bool_setting in
   Settings.set bool_setting value;

@@ -1,4 +1,4 @@
-open Schinks
+open Schinks_st
 open Driver
 
 (* Links insists that the toplevel is wild *)

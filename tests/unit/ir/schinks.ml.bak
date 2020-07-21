@@ -5,100 +5,7 @@ open Utility
 
 module CT = CommonTypes
 
-module Repr = struct
-  type name_maps = {
-    tname_to_id : int StringMap.t;
-    varname_to_id : int StringMap.t;
-  }
-
-  (* [@@deriving show] *)
-
-  type 'a maker = {
-    mk_ir_form : name_maps -> 'a;
-    (* [@printer fun fmt _ -> ()] *)
-    reserved_tids : IntSet.t;
-    reserved_ids : IntSet.t;
-    used_names : string list;
-    used_tnames : string list;
-  }
-
-  (* [@@deriving show] *)
-
-  type 'a t = ('a maker, string) Result.t
-
-  let make (maker : 'a maker) : 'a =
-    let rec add_binding reserved next_id used map =
-      match (used, IntSet.mem next_id reserved) with
-      | [], _ -> map
-      | _, true -> add_binding reserved (next_id + 1) used map
-      | name :: rem_names, false ->
-          add_binding reserved (next_id + 1) rem_names
-            (StringMap.add name next_id map)
-    in
-    let varname_to_id =
-      add_binding maker.reserved_ids 0 maker.used_names StringMap.empty
-    in
-    let tname_to_id =
-      add_binding maker.reserved_tids 0 maker.used_tnames StringMap.empty
-    in
-    maker.mk_ir_form { varname_to_id; tname_to_id }
-
-  (* Note that this isn' quite monadic bind due to the param type of the passed function *)
-  let bind (type a b) : a t -> ((name_maps -> a) -> b t) -> b t =
-   fun t1 func ->
-    let merge_info (prev_maker : a maker) (new_maker : b maker) : b t =
-      (* Printf.printf "Prev Maker %s\n%!" (show_maker (fun fmt m -> ()) prev_maker);
-       * Printf.printf "New Maker %s\n%!" (show_maker (fun fmt m -> ()) new_maker); *)
-      let do_merge prev_res prev_used new_res new_used =
-        let reserved_ids = IntSet.union prev_res new_res in
-        let prev_used_names = StringSet.from_list prev_used in
-        let used_names =
-          List.append prev_used
-            (List.filter
-               (fun x -> not (StringSet.mem x prev_used_names))
-               new_used)
-        in
-        (reserved_ids, used_names)
-      in
-      let reserved_ids, used_names =
-        do_merge prev_maker.reserved_ids prev_maker.used_names
-          new_maker.reserved_ids new_maker.used_names
-      in
-      let reserved_tids, used_tnames =
-        do_merge prev_maker.reserved_tids prev_maker.used_tnames
-          new_maker.reserved_tids new_maker.used_tnames
-      in
-      let result_maker =
-        { new_maker with reserved_ids; used_names; reserved_tids; used_tnames }
-      in
-      (* Printf.printf "Result Maker %s\n%!" (show_maker (fun fmt m -> ()) result_maker); *)
-      result_maker |> Result.ok
-    in
-    match (t1 : a t) with
-    | Result.Error m -> Result.error m
-    | Result.Ok prev_maker ->
-        Result.bind (func prev_maker.mk_ir_form : b t) (merge_info prev_maker)
-
-  let pure (ir_form : 'a) : 'a t =
-    Result.ok
-      {
-        mk_ir_form = (fun _ -> ir_form);
-        reserved_tids = IntSet.empty;
-        reserved_ids = IntSet.empty;
-        used_tnames = [];
-        used_names = [];
-      }
-
-  let with_maps (mk_ir_form : name_maps -> 'a) : 'a t =
-    Result.ok
-      {
-        mk_ir_form;
-        reserved_tids = IntSet.empty;
-        reserved_ids = IntSet.empty;
-        used_tnames = [];
-        used_names = [];
-      }
-end
+module Repr = Schinks_repr
 
 open Repr
 
@@ -357,7 +264,9 @@ let var' name ty =
   let bin = binder name ty in
   bin
 
-let ( let** ) (vs, maps) f = Ir.Let (maps, f vs)
+let ( and** ) b1 b2 = Repr.bind b1 b2
+
+let ( let** ) (vs, maps) f = with_maps
 
 let wi_def bin ?(tparams = []) params ?closure_var
     ?(location = CT.Location.Server) ?(unsafe_sig = false) body : Ir.fun_def t =

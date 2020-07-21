@@ -1,4 +1,4 @@
-open Schinks
+open Schinks_st
 open Driver
 
 
@@ -43,15 +43,13 @@ let prog_rec_is_recursive =
     [
       def "f" ([int] |~~> int)
         [("x", int)]
-        (computation
-           [let_ "z" string (apply (var "g") [s "bla"])]
-           ((return (i 3))));
+        (let++ _z = param "z" string (apply (var "g") [s "bla"]) in
+         return (i 3));
 
       def "g" ([string] |~~> string)
         [("y", string)]
-        (computation
-           [let_ "z" int (apply (var "f") [i 3])]
-           ((return (s "bla"))));
+        (let++ _z = param "z" int (apply (var "f") [i 3]) in
+        return (s "bla"));
     ]
 
 
