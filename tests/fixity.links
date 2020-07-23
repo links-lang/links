@@ -78,7 +78,7 @@ fun main() {
   assertion(test10() == 15, "test10");
   assertion(test11() == 3, "test11");
   assertion(test12() == 1, "test12");
-  assertion(test13() == 2, "test13");
+  assertion(test13() == 2, "test13")
 }
 
 main()

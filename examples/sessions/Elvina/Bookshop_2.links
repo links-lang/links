@@ -29,7 +29,7 @@ sig waitForSon : (SonSelect) ~> ()
 fun waitForSon(c) client
 {
     offer(c) {
-        case Choice(c) -> close(send("Children's Book", c));
+        case Choice(c) -> close(send("Children's Book", c))
     }
 }
 

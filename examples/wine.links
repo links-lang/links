@@ -171,7 +171,7 @@ fun claimCart(order_id, to_cust_id) {
   update (x <-- shortCartItemsTable)
    where (x.order_id == order_id && x.cust_id == -1)
     set (cust_id = to_cust_id,
-         order_id = x.order_id);
+         order_id = x.order_id)
 }
 
 fun htmlHead() {
@@ -465,7 +465,7 @@ mutual {
               wine_id = item.wine_id);
       []
     });
-    freshResource();
+    freshResource()
   }
 
   fun cart_itemlist(cust_id, order_id) {

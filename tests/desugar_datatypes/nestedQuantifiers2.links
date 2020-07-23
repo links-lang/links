@@ -5,5 +5,5 @@ fun nested_quantified (x) {
   fun f (x) { }
 
   f(0);
-  f(x : a);
+  f(x : a)
 }

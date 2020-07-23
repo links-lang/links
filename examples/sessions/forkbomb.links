@@ -16,7 +16,7 @@ fun f(c) {
   var ap = new();
   ignore(spawn {
     var c = accept(ap);
-    f(c);
+    f(c)
   });
   f(send(request(ap), c))
 }
@@ -27,7 +27,7 @@ sig g : (Forkee) ~> ()
 fun g(c) {
   var (d,c) = receive(c);
   ignore(spawn {
-    g(d);
+    g(d)
   });
   g(c)
 }

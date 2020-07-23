@@ -839,11 +839,17 @@ mutual_bindings:
 | binding                                                      { MutualBindings.(add (empty (pos $loc)) $1) }
 | mutual_bindings binding                                      { MutualBindings.add $1 $2 }
 
-bindings:
+binding_or_mutual:
 | binding                                                      { [$1]      }
 | mutual_binding_block                                         { $1        }
+
+bindings:
+/* XXX | binding                                                      { [$1]      }
+| mutual_binding_block                                         { $1        }
 | bindings mutual_binding_block                                { $1 @ $2   }
-| bindings binding                                             { $1 @ [$2] }
+| bindings binding                                             { $1 @ [$2] }*/
+| binding_or_mutual                                            { $1 }
+| bindings binding_or_mutual                                   { $1 @ $2 }
 
 moduleblock:
 | LBRACE declarations RBRACE                                   { $2 }
@@ -852,13 +858,14 @@ block:
 | LBRACE block_contents RBRACE                                 { block ~ppos:$loc $2 }
 
 block_contents:
-| bindings exp SEMICOLON                                       { ($1 @ [with_pos $loc($2) (Exp $2)],
-                                                                  record ~ppos:$loc []) }
+/* XXX | bindings exp SEMICOLON                                       { ($1 @ [with_pos $loc($2) (Exp $2)],
+                                                                  record ~ppos:$loc []) }*/
 | bindings exp                                                 { ($1, $2) }
-| exp SEMICOLON                                                { ([with_pos $loc($1) (Exp $1)],
-                                                                  record ~ppos:$loc []) }
+/* XXX | exp SEMICOLON                                                { ([with_pos $loc($1) (Exp $1)],
+                                                                  record ~ppos:$loc []) }*/
 | exp                                                          { ([], $1) }
-| SEMICOLON | /* empty */                                      { ([], with_pos $loc (TupleLit [])) }
+/* XXX | SEMICOLON */
+| /* empty */                                                  { ([], with_pos $loc (TupleLit [])) }
 
 labeled_exp:
 | preceded(EQ, VARIABLE)                                       { ($1, with_pos $loc (Var $1)) }

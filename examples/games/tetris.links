@@ -744,11 +744,11 @@ fun main() {
 
 
     fun onKeyDown(e) {
-        updateProcId ! (KeyDown(getCharCode(e)): Input);
+        updateProcId ! (KeyDown(getCharCode(e)): Input)
     }
 
     fun onKeyUp(e) {
-        updateProcId ! (KeyUp(getCharCode(e)): Input);
+        updateProcId ! (KeyUp(getCharCode(e)): Input)
     }
 
     fun initialize() {
@@ -818,7 +818,7 @@ fun main() {
                     <h1>Tetris in Links</h1>
 
                     <div id="{containerId}" tabindex="1"
-                        l:onfocus="{initializeProcId ! 0; }">
+                        l:onfocus="{initializeProcId ! 0 }">
                         <canvas id="{canvas2Id}" width="{floatToString(canvasWidth)}" height="{floatToString(canvasHeight)}"></canvas>
                         <canvas id="{canvasId}" width="{floatToString(canvasWidth)}" height="{floatToString(canvasHeight)}"></canvas>
                         <div id="info">Click this canvas to start.</div>
