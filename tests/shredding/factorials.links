@@ -3,7 +3,7 @@ var factorials = table "factorials" with (i : Int, f : Int) from db;
 
 fun insertOne() {
   insert factorials
-  values [(f=1, i=1)];
+  values [(f=1, i=1)]
 }
 
 fun main() {

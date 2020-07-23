@@ -64,7 +64,7 @@ fun marketers2 () {
 fun test() {
   assertEq(u(), [((id=1), ["a", "c"]), ((id=2), ["c"]), ((id=3), ["c"]), ((id=42), [])]);
   assertEq(v(), [(name = "a")]);
-  assertEq(marketers2(), [(clients = [1], name = "a"), (clients = [], name = "b"), (clients = [], name = "c")]);
+  assertEq(marketers2(), [(clients = [1], name = "a"), (clients = [], name = "b"), (clients = [], name = "c")])
 }
 
 test()

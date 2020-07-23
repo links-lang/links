@@ -54,7 +54,7 @@ fun test() {
     (album = "Wish", date = 1992, rating = 4, track = "Trust")
   ]);
 
-  lensput joinedLens with old;
+  lensput joinedLens with old
 }
 
 test()

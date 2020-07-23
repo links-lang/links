@@ -42,7 +42,7 @@ fun xpath2() {
 
 fun test() {
   assertEq(xpath1(), [(name="c"), (name="e"), (name="f")]);
-  assertEq(xpath1(), xpath2());
+  assertEq(xpath1(), xpath2())
 }
 
 test()
