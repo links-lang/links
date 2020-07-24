@@ -371,7 +371,7 @@ and regex =
 and clause = Pattern.with_pos * phrase
 and funlit = NormalFunlit of normal_funlit | MatchFunlit of match_funlit
 and match_funlit = Pattern.with_pos list list * match_body
-and match_body = MatchBody of (Pattern.with_pos * phrase) list
+and match_body = (Pattern.with_pos * phrase) list
 and normal_funlit = Pattern.with_pos list list * phrase
 and handler =
   { sh_expr         : phrase

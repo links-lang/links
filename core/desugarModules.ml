@@ -327,7 +327,7 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
                 List.map (fun param -> visitor#pattern param) params)
               paramss
           in
-          let body' = list.map (fun (pat, blk) -> visitor#pattern pat; visitor#phrase blk) body in
+          let body' = visitor#cases body in
           MatchFunlit (paramss', body')
 
     method cases : (Pattern.with_pos * phrase) list -> (Pattern.with_pos * phrase) list

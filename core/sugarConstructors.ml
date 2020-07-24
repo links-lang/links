@@ -135,8 +135,8 @@ module SugarConstructors (Position : Pos)
   (* Create a Normal FunLit. *)
   let fun_lit ?(ppos=dp) ?args ?(location=loc_unknown) linearity pats blk =
     match blk with 
-      | MatchBody mb -> with_pos ppos (FunLit (args, linearity, MatchFunlit (pats, mb), location))
-      | _ -> with_pos ppos (FunLit (args, linearity, NormalFunlit (pats, blk), location))
+      | branch::branches as mb -> with_pos ppos (FunLit (args, linearity, MatchFunlit (pats, mb), location))
+      | blk -> with_pos ppos (FunLit (args, linearity, NormalFunlit (pats, blk), location)) (* blk can be either phrase or match_body *)
 
   (* Create a Spawn. *)
   let spawn ?(ppos=dp) ?row spawn_kind location blk =
