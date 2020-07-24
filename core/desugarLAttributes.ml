@@ -154,8 +154,9 @@ let replace_lattrs : phrase -> phrase =
   (fun (xml) ->
      if (has_lattrs xml) then
        match xml with
-         | { node=Xml (_tag, _attributes, _, _); pos } ->
-            raise (desugaring_error pos "Illegal l: attribute in XML node")
+         | { node=Xml (_tag, attributes, _, _); pos } ->
+           let attr,_ = List.find (fst ->- start_of ~is:"l:") attributes in
+            raise (desugaring_error pos (attr ^  " attributes must appear lexically within form tags.  (Consider using formlets or MVU instead for more compositional form behavior.)"))
          | _ -> assert false
      else
        xml)

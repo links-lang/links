@@ -12,6 +12,38 @@ type t = {
     string -> field_types:(string * Phrase_type.t) list -> Phrase_value.t list;
 }
 
+module E = struct
+  type t =
+    | Unsupported_for_driver of { driver : string; fn : string }
+    | Unsupported_phrase_value of { value : Phrase_value.t }
+
+  let pp f v =
+    match v with
+    | Unsupported_for_driver { driver; fn } ->
+        Format.fprintf f
+          "The function '%s' is not supported for the lens database driver \
+           '%s'."
+          driver fn
+    | Unsupported_phrase_value { value } ->
+        Format.fprintf f
+          "The value '%a' is not supported by the lens database driver."
+          Phrase_value.pp value
+
+  let show v = Format.asprintf "%a" pp v
+
+  exception E of t
+
+  let raise v = raise (E v)
+
+  let () =
+    let print v =
+      match v with
+      | E e -> Some (show e)
+      | _ -> None
+    in
+    Printexc.register_printer print
+end
+
 let show _ = "<db_driver>"
 let pp f v = Format.fprintf f "%s" (show v)
 
@@ -75,7 +107,9 @@ let fmt_phrase_value ~db f v =
         if s.[String.length s - 1] = '.' then s ^ "0" else s
     | LPV.Serial (`Key k) ->
         string_of_int k (* only support converting known keys. *)
-    | _ -> Format.asprintf "Unexpected phrase value %a." LPV.pp v |> failwith )
+    | LPV.Serial (`NewKeyMapped k) ->
+        string_of_int k (* only support converting known keys. *)
+    | _ -> E.Unsupported_phrase_value { value = v } |> E.raise )
 
 module Precedence = struct
   type t = Or | And | Not | Add | Sub | Mult | Divide | Cmp
@@ -302,5 +336,78 @@ module Insert = struct
       (fmt_vals |> Format.pp_comma_list)
       v.values fmt_returning ()
 
+  let split v =
+    let { table; columns; values; returning } = v in
+    let f v =
+      let values = [ v ] in
+      { table; columns; values; returning }
+    in
+    List.map ~f values
+
+  let no_returning v = { v with returning = [] }
+
+  let exec_insert_returning_hack ~db data =
+    let last_id_fun =
+      let driver = db.driver_name () in
+      match driver with
+      | "mysql" -> "last_insert_id()"
+      | "sqlite3" -> "last_insert_rowid()"
+      | _ ->
+          let fn = "exec_insert_returning_hack" in
+          E.Unsupported_for_driver { driver; fn } |> E.raise
+    in
+    let getid = Format.asprintf "SELECT %s as id" last_id_fun in
+    let exec_insert v =
+      let ins = Format.asprintf "%a" (fmt ~db) v in
+      Debug.print ins;
+      Statistics.time_query (fun () -> db.execute ins);
+      Debug.print getid;
+      Statistics.time_query (fun () ->
+          db.execute_select getid ~field_types:[ ("id", Phrase_type.Serial) ])
+    in
+    no_returning data |> split |> List.map ~f:exec_insert |> List.concat
+
+  let exec_insert_returning ~db ~field_types data =
+    match db.driver_name () with
+    | "sqlite3"
+     |"mysql" ->
+        exec_insert_returning_hack ~db data
+    | _ ->
+        let cmd = Format.asprintf "%a" (fmt ~db) data in
+        Debug.print cmd;
+        Statistics.time_query (fun () -> db.execute_select ~field_types cmd)
+
   (* optionally add a returning statement if required *)
+end
+
+module Change = struct
+  type db = t
+
+  type t = Insert of Insert.t | Update of Update.t | Delete of Delete.t
+
+  let fmt ~db f v =
+    match v with
+    | Insert v -> Insert.fmt ~db f v
+    | Update v -> Update.fmt ~db f v
+    | Delete v -> Delete.fmt ~db f v
+
+  let exec ~db cmd =
+    Debug.print cmd;
+    Statistics.time_query (fun () -> db.execute cmd)
+
+  let exec_multi_slow ~db data =
+    let exec_cmd cmd =
+      let cmd = Format.asprintf "%a" (fmt ~db) cmd in
+      exec ~db cmd
+    in
+    List.iter ~f:exec_cmd data
+
+  let exec_multi ~db data =
+    match db.driver_name () with
+    | "mysql" -> exec_multi_slow ~db data
+    | _ ->
+        let fmt_cmd_sep f () = Format.pp_print_string f ";\n" in
+        let fmt_cmd_list = Format.pp_print_list ~pp_sep:fmt_cmd_sep (fmt ~db) in
+        let cmds = Format.asprintf "%a" fmt_cmd_list data in
+        if String.equal "" cmds |> not then exec ~db cmds
 end
