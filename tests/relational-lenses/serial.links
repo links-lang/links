@@ -1,0 +1,34 @@
+var db = database "links";
+
+var t1 =
+  table "t1"
+  with (id1 : Int, id2 : Int)
+  tablekeys [["id1"]]
+  from db;
+
+var t2 =
+  table "t2"
+  with (id2 : Int, val : String)
+  tablekeys [["id2"]]
+  from db;
+
+var t1lens = lens t1 with { id1 -> id2 };
+var t1lenss = lensserial t1lens with id1;
+var t1lenss = lensserial t1lenss with id2;
+var t2lens = lens t2 with { id2 -> val };
+var t2lenss = lensserial t2lens with id2;
+
+var joined = lensjoin t1lenss with t2lenss on id2 delete_left;
+
+fun test() {
+  lensput joined with [(id1 = NewKey, id2 = NewKey, val = "hello")];
+
+  var [r] = lensget joined;
+  assertEq(isNew(r.id1), false);
+  assertEq(isNew(r.id2), false);
+  assertEq(r.id1, r.id2);
+  assertEq(r.val, "hello");
+  r
+}
+
+test()
