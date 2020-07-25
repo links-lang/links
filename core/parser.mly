@@ -451,7 +451,7 @@ match_tlfunbinding:
 | fun_kind VARIABLE arg_lists perhaps_location match_body      { ($1, $2, $3, $4, $5)                }
 
 match_body:
-| MATCH LPAREN PIPE separated_list(PIPE, match_cases) RPAREN   { $4 }
+| MATCH LBRACE PIPE separated_list(PIPE, match_cases) RBRACE   { $4 }
 
 match_cases:
 | pattern RARROW block_contents                                { ($1, block ~ppos:$loc $3) }
