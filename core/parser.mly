@@ -451,10 +451,10 @@ match_tlfunbinding:
 | fun_kind VARIABLE arg_lists perhaps_location match_body      { ($1, $2, $3, $4, $5)                }
 
 match_body:
-| MATCH LBRACE PIPE separated_list(PIPE, match_cases) RBRACE   { $4 }
+| MATCH LBRACE match_cases* RBRACE                             { $3 }
 
 match_cases:
-| pattern RARROW block_contents                                { ($1, block ~ppos:$loc $3) }
+| PIPE pattern RARROW block_contents                           { ($2, block ~ppos:$loc $4) }
 
 tlvarbinding:
 | VAR VARIABLE perhaps_location EQ exp                         { (PatName $2, $5, $3) }
@@ -560,6 +560,7 @@ primary_expression:
 | LBRACKET exp DOTDOT exp RBRACKET                             { with_pos $loc (RangeLit($2, $4))   }
 | xml                                                          { $1 }
 | linearity arg_lists block                                    { fun_lit ~ppos:$loc $1 $2 $3 }
+| linearity arg_lists match_body                               { match_fun_lit ~ppos:$loc $1 $2 $3 }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { with_pos $loc (CP $2) }
 | DOLLAR primary_expression                                    { with_pos $loc (Generalise $2) }
 
