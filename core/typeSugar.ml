@@ -2667,7 +2667,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                   List.iter (fun e' -> unify ~handle:Gripers.list_lit (pos_and_typ e, pos_and_typ e')) es;
                   ListLit (List.map erase (e::es), Some (typ e)), T.Application (Types.list, [PrimaryKind.Type, typ e]), Usage.combine_many (List.map usages (e::es))
             end
-        | FunLit (argss_prev, lin, (pats, body), location) ->
+        | FunLit (argss_prev, lin, fnlit, location) ->
+            let (pats, body) = match fnlit with | NormalFunlit (pat, body) -> (pat, body) | MatchFunlit (_,_) -> assert false in
             let vs = check_for_duplicate_names pos (List.flatten pats) in
             let (pats_init, pats_tail) = from_option ([], []) (unsnoc_opt pats) in
             let tpc' = if DeclaredLinearity.is_linear lin then tpc else tpcu in
@@ -2740,7 +2741,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               in
                 arg_types (ftype, curried_argument_count) in
 
-            let e = FunLit (Some argss, lin, (List.map (List.map erase_pat) pats, erase body), location) in
+            let e = FunLit (Some argss, lin, NormalFunlit (List.map (List.map erase_pat) pats, erase body), location) in
             let vs' = List.fold_right Ident.Set.add vs Ident.Set.empty in
             e, ftype, Usage.restrict (usages body) vs'
 
@@ -4193,13 +4194,13 @@ and type_binding : context -> binding -> binding * context * Usage.t =
       | Fun def ->
          let { fun_binder = bndr;
                fun_linearity = lin;
-               fun_definition = (_, (pats, body));
+               fun_definition = (_, fnlit);
                fun_location;
                fun_signature = t_ann';
                fun_frozen;
                fun_unsafe_signature = unsafe } =
            Renamer.rename_function_definition def in
-
+          let (pats, body) = match fnlit with | NormalFunlit (pats, body) -> (pats, body) | MatchFunlit (_,_) -> assert false in
           let name = Binder.to_name bndr in
           let vs = name :: check_for_duplicate_names pos (List.flatten pats) in
           let (pats_init, pats_tail) = from_option ([], []) (unsnoc_opt pats) in
@@ -4328,7 +4329,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
           let sugar_tyvars = List.map SugarQuantifier.mk_resolved tyvars in
           (Fun { fun_binder = Binder.set_type bndr ft;
                  fun_linearity = lin;
-                 fun_definition = (sugar_tyvars, (List.map (List.map erase_pat) pats, erase body));
+                 fun_definition = (sugar_tyvars, NormalFunlit (List.map (List.map erase_pat) pats, erase body));
                  fun_frozen = true;
                  fun_location; fun_signature = t_ann'; fun_unsafe_signature = unsafe },
              {empty_context with
@@ -4362,12 +4363,13 @@ and type_binding : context -> binding -> binding * context * Usage.t =
             List.fold_left
               (fun (inner_rec_vars, inner_env, patss)
                    {node= { rec_binder = bndr; rec_linearity = lin;
-                            rec_definition = ((_, def), (pats, _));
+                            rec_definition = ((_, def), fnlit);
                             rec_signature = t_ann';
                             rec_unsafe_signature = unsafe;
                             rec_frozen = frozen;
                             _ }; _ } ->
                  let name = Binder.to_name bndr in
+                 let pats = match fnlit with NormalFunlit (pats, _) -> pats | MatchFunlit (_,_) -> assert false in
                  (* recursive functions can't be linear! *)
                  if DeclaredLinearity.is_linear lin then
                    Gripers.linear_recursive_function pos name;
@@ -4434,8 +4436,9 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                 (List.fold_left2
                    (fun defs_and_uses
                         {node={ rec_binder = bndr; rec_linearity = lin;
-                                rec_definition = (_, (_, body)); _ } as fn; pos }
+                                rec_definition = (_, fnlit); _ } as fn; pos }
                         pats ->
+                      let body = match fnlit with NormalFunlit (_, body) -> body | MatchFunlit (_,_) -> assert false in
                       let name = Binder.to_name bndr in
                       let pat_env = List.fold_left (fun env pat -> Env.extend env (pattern_env pat)) Env.empty (List.flatten pats) in
                       let self_env =
@@ -4566,7 +4569,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                    let sugar_tyvars = List.map SugarQuantifier.mk_resolved tyvars in
                    (make ~pos { fn with
                       rec_binder = Binder.set_type bndr outer;
-                      rec_definition = ((sugar_tyvars, Some inner), (pats, body)) }::defs,
+                      rec_definition = ((sugar_tyvars, Some inner), NormalFunlit (pats, body)) }::defs,
                       Env.bind name outer outer_env))
                 ([], Env.empty) defs patss
             in

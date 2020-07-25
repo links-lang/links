@@ -286,6 +286,8 @@ let parse_foreign_language pos lang =
 %token LENS LENSDROP LENSSELECT LENSJOIN DETERMINED BY ON DELETE_LEFT
 %token LENSPUT LENSGET LENSCHECK LENSSERIAL
 %token READONLY DEFAULT
+%token MATCH
+%token PIPE
 %token ESCAPE
 %token CLIENT SERVER
 %token SEMICOLON
@@ -426,6 +428,8 @@ fun_declarations:
 fun_declaration:
 | tlfunbinding                                                 { fun_binding ~ppos:$loc($1) None $1 }
 | signatures tlfunbinding                                      { fun_binding ~ppos:$loc($2) (fst $1) ~unsafe_sig:(snd $1) $2 }
+| match_tlfunbinding                                           { match_fun_binding ~ppos:$loc($1) None $1 }
+| signatures match_tlfunbinding                                { match_fun_binding ~ppos:$loc($2) (fst $1) ~unsafe_sig:(snd $1) $2 }
 
 linearity:
 | FUN                                                          { dl_unl }
@@ -442,6 +446,15 @@ tlfunbinding:
 | OP pattern sigop pattern perhaps_location block              { ((dl_unl, false), WithPos.node $3, [[$2; $4]], $5, $6) }
 | OP OPERATOR pattern perhaps_location block                   { ((dl_unl, false), $2, [[$3]], $4, $5)          }
 | OP pattern OPERATOR perhaps_location block                   { ((dl_unl, false), $3, [[$2]], $4, $5)          }
+
+match_tlfunbinding:
+| fun_kind VARIABLE arg_lists perhaps_location match_body      { ($1, $2, $3, $4, $5)                }
+
+match_body:
+| MATCH LPAREN PIPE separated_list(PIPE, match_cases) RPAREN   { $4 }
+
+match_cases:
+| pattern RARROW block_contents                                { ($1, block ~ppos:$loc $3) }
 
 tlvarbinding:
 | VAR VARIABLE perhaps_location EQ exp                         { (PatName $2, $5, $3) }

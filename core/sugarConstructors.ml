@@ -134,9 +134,10 @@ module SugarConstructors (Position : Pos)
 
   (* Create a Normal FunLit. *)
   let fun_lit ?(ppos=dp) ?args ?(location=loc_unknown) linearity pats blk =
-    match blk with 
-      | branch::branches as mb -> with_pos ppos (FunLit (args, linearity, MatchFunlit (pats, mb), location))
-      | blk -> with_pos ppos (FunLit (args, linearity, NormalFunlit (pats, blk), location)) (* blk can be either phrase or match_body *)
+    with_pos ppos (FunLit (args, linearity, NormalFunlit (pats, blk), location))
+
+  let match_fun_lit ?(ppos=dp) ?args ?(location=loc_unknown) linearity pats match_body =
+    with_pos ppos (FunLit (args, linearity, MatchFunlit (pats, match_body), location))
 
   (* Create a Spawn. *)
   let spawn ?(ppos=dp) ?row spawn_kind location blk =
@@ -156,10 +157,9 @@ module SugarConstructors (Position : Pos)
   (* Create a function binding. *)
   let fun_binding ?(ppos=dp) sig_opt ?(unsafe_sig=false) ((linearity, frozen), bndr, args, location, blk) =
     let fun_signature = datatype_opt_of_sig_opt sig_opt bndr in
-    let fun_def = match blk with | MatchBody mb -> ([], MatchFunlit (args, mb)) | _ -> ([], NormalFunlit (args, blk)) in
       with_pos ppos (Fun { fun_binder = binder bndr;
                            fun_linearity = linearity;
-                           fun_definition = fun_def;
+                           fun_definition = ([], NormalFunlit (args, blk));
                            fun_location = location;
                            fun_signature;
                            fun_frozen = frozen;
@@ -175,6 +175,15 @@ module SugarConstructors (Position : Pos)
                          fun_frozen = false;
                          fun_unsafe_signature = false })
 
+  let match_fun_binding ?(ppos=dp) sig_opt ?(unsafe_sig=false) ((linearity, frozen), bndr, args, location, blk) =
+    let fun_signature = datatype_opt_of_sig_opt sig_opt bndr in
+      with_pos ppos (Fun { fun_binder = binder bndr;
+                           fun_linearity = linearity;
+                           fun_definition = ([], MatchFunlit (args, blk));
+                           fun_location = location;
+                           fun_signature;
+                           fun_frozen = frozen;
+                           fun_unsafe_signature = unsafe_sig })
 
   (* Create a Val binding.  This function takes either a name for a variable
      pattern or an already constructed pattern.  In the latter case no signature

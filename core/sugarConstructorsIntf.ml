@@ -93,6 +93,11 @@ module type SugarConstructorsSig = sig
      -> ?location:Location.t -> DeclaredLinearity.t
      -> Pattern.with_pos list list -> phrase
      -> phrase
+  val match_fun_lit
+      : ?ppos:t -> ?args:((Types.datatype * Types.row) list)
+     -> ?location:Location.t -> DeclaredLinearity.t
+     -> Pattern.with_pos list list -> match_body
+     -> phrase
   val spawn
       : ?ppos:t
      -> ?row:Types.row -> spawn_kind -> given_spawn_location -> phrase
@@ -113,6 +118,10 @@ module type SugarConstructorsSig = sig
       : ?ppos:t -> ?linearity:DeclaredLinearity.t -> ?tyvars:SugarQuantifier.t list
      -> ?location:Location.t -> ?annotation:datatype'
      -> Binder.with_pos -> funlit
+     -> binding
+  val match_fun_binding
+      : ?ppos:t -> signature -> ?unsafe_sig:bool
+     -> ((DeclaredLinearity.t * bool) * Name.t * Pattern.with_pos list list * Location.t * match_body)
      -> binding
   val val_binding'
       : ?ppos:t -> signature -> (name_or_pat * phrase * Location.t)
