@@ -25,7 +25,7 @@ let has_lattrs : phrase -> bool = function
 let apply name args : phrase = fn_appl name [] args
 
 let server_use name =
-  apply "assoc" [constant_str name; apply "environment" []]
+  apply "assocDefault" [constant_str name; apply "environment" []; constant_str ""]
 
 let client_use id =
   apply "getInputValue" [constant_str id]
