@@ -30,6 +30,9 @@ let server_use name =
 let client_use id =
   apply "getInputValue" [constant_str id]
 
+let client_radiogroup_use ids =
+  apply "getRadioGroupValue" [list (List.map constant_str ids)]
+
 let fresh_names () =
   let id = gensym ~prefix:"_lnameid_" () in
   let name = gensym ~prefix:"lname_" () in
@@ -96,29 +99,66 @@ let desugar_lonevent : phrase -> phrase =
           WithPos.make ~pos (Xml (tag, idattr::others, attrexp, children))
     | e -> e
 
-let desugar_lnames (p : phrase) : phrase * (string * string) StringMap.t =
+type input_ids =
+  | Single of string
+  | RadioGroup of string list
+
+let is_radio : (string * phrase list) list -> bool = function
+  attrs ->
+  let is_type_radio = function
+  | "type", [{node=Constant (Constant.String "radio"); _}] -> true
+  | _ -> false in
+  exists is_type_radio attrs
+;;
+let desugar_lnames (p : phrase list) : phrase list * (input_ids * string) StringMap.t =
   let lnames = ref StringMap.empty in
-  let add lname (id,name) = lnames := StringMap.add lname (id,name) !lnames in
-  let attr : Position.t -> string * phrase list -> (string * phrase list) list =
+  let attr_single : Position.t -> string * phrase list -> (string * phrase list) list =
     fun pos attribute ->
     match attribute with
-      | "l:name", [{node=Constant (Constant.String v); _}] ->
+      | "l:name", [{node=Constant (Constant.String lname); _}] ->
           let id, name = fresh_names () in
-            add v (id,name);
-            [("name", [constant_str name]);
-             ("id"  , [constant_str id  ])]
+          if StringMap.mem lname !lnames
+          then raise (desugaring_error pos "l:name attributes can only be reused for radio button groups");
+          lnames := StringMap.add lname (Single id, name) !lnames;
+          [("name", [constant_str name]);
+           ("id"  , [constant_str id  ])]
+      | "l:name", _ ->
+          raise (desugaring_error pos "The value of an l:name attribute must be a string constant")
+      | a -> [a] in
+  let attr_radio : Position.t -> string * phrase list -> (string * phrase list) list =
+    fun pos attribute ->
+    match attribute with
+      | "l:name", [{node=Constant (Constant.String lname); _}] ->
+          begin
+          Debug.print lname;
+          match StringMap.find_opt lname !lnames with
+            | Some (RadioGroup ids,name) ->
+                let id, _ = fresh_names () in
+                lnames := StringMap.remove lname !lnames;
+                lnames := StringMap.add lname (RadioGroup(id::ids), name) !lnames;
+                [("name", [constant_str name]);
+                 ("id"  , [constant_str id  ])]
+            | Some (Single _, _) ->
+                raise (desugaring_error pos "l:name attributes can only be reused for radio button groups")
+            | None ->
+                let id, name = fresh_names () in
+                lnames := StringMap.add lname (RadioGroup([id]), name) !lnames;
+                [("name", [constant_str name]);
+                 ("id"  , [constant_str id  ])]
+          end
       | "l:name", _ ->
           raise (desugaring_error pos "The value of an l:name attribute must be a string constant")
       | a -> [a] in
   let rec aux : phrase -> phrase  = function
     | { node=Xml (tag, attrs, attrexp, children); pos } ->
+        let attr = if is_radio attrs then attr_radio else attr_single in
         let attrs = concat_map (attr pos) attrs in
         let children =
           List.map aux children in
           WithPos.make ~pos (Xml (tag, attrs, attrexp, children))
     | p -> p
   in
-  let p' = aux p in
+  let p' = List.map aux p in
     p', !lnames
 
 let let_in name rhs body : phrase =
@@ -132,18 +172,18 @@ let bind_lname_vars lnames = function
                es)
   | attr, es when start_of attr ~is:"l:on" ->
     attr, (List.map (StringMap.fold
-                       (fun var (id,_) -> let_in var (client_use id))
+                       (fun var binding ->
+                         match binding with
+                           | (Single id,_) -> let_in var (client_use id)
+                           | (RadioGroup ids,_) -> let_in var (client_radiogroup_use ids)
+                       )
                        lnames)
              es)
   | attr -> attr
 
 let desugar_form : phrase -> phrase = function
   | { node=Xml (("form"|"FORM") as form, attrs, attrexp, children); pos } ->
-      let children, lnames = List.split (List.map desugar_lnames    children) in
-      let lnames =
-        try List.fold_left StringMap.union_disjoint StringMap.empty lnames
-        with StringMap.Not_disjoint (item, _) ->
-          raise (desugaring_error pos ("Duplicate l:name binding: " ^ item)) in
+      let children, lnames = desugar_lnames children in
       let attrs = List.map (bind_lname_vars lnames) attrs in
         WithPos.make ~pos
           (Xml (form, attrs, attrexp, children))
