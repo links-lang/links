@@ -64,7 +64,7 @@ steps:
     displayName: 'OPAM 2'
 
   - script: |
-      ./opam2_local switch create ocaml-base-compiler.4.06.0
+      ./opam2_local switch create ocaml-base-compiler.4.08.0
       eval `./opam2_local config env`
     displayName: 'OCaml compiler'
 
