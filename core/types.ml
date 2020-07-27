@@ -423,7 +423,7 @@ struct
                let new_mu_vars = Utility.IntSet.add id mu_vars in
                let o' =  {< mu_vars=new_mu_vars >} in
                (* Debug.print (Printf.sprintf "Added rec  var %d" id); *)
-               let (o, t') = o'#row t in (o, Unionfind.fresh (Recursive (id, kind, t')))
+               let (_, t') = o'#row t in (o, Unionfind.fresh (Recursive (id, kind, t')))
           | _ -> super#meta_row_var point
 
 
@@ -1991,7 +1991,7 @@ struct
       end
     in
     if policy.effect_sugar then
-      let (_, obj) = visit obj in
+      let (obj, _) = visit obj in
       { empty_context with shared_effect = obj#var }
     else
       empty_context
@@ -2448,8 +2448,6 @@ let print_types_pretty
               |> convert parse_bool
               |> sync)
 
-let swap (a,b) = (b,a)
-
 (* string conversions *)
 let string_of_datatype ?(policy=Print.default_policy) ?(refresh_tyvar_names=true)
                        (t : datatype) =
@@ -2458,7 +2456,7 @@ let string_of_datatype ?(policy=Print.default_policy) ?(refresh_tyvar_names=true
     let t = if policy.Print.quantifiers then t
             else Print.strip_quantifiers t in
     build_tyvar_names ~refresh_tyvar_names free_bound_type_vars [t];
-    let context = Print.context_with_shared_effect policy (fun o -> swap(o#typ t)) in
+    let context = Print.context_with_shared_effect policy (fun o -> o#typ t) in
     Print.datatype context (policy, Vars.tyvar_name_map) t
   else
     show_datatype (DecycleTypes.datatype t)
@@ -2467,7 +2465,7 @@ let string_of_row ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) row
   if Settings.get print_types_pretty then
     let policy = policy () in
     build_tyvar_names ~refresh_tyvar_names free_bound_row_type_vars [row];
-    let context = Print.context_with_shared_effect policy (fun o -> swap(o#row row)) in
+    let context = Print.context_with_shared_effect policy (fun o -> o#row row) in
     Print.row "," context (policy, Vars.tyvar_name_map) row
   else
     show_row (DecycleTypes.row row)
@@ -2481,7 +2479,7 @@ let string_of_type_arg ?(policy=Print.default_policy) ?(refresh_tyvar_names=true
                        (arg : type_arg) =
   let policy = policy () in
   build_tyvar_names ~refresh_tyvar_names free_bound_type_arg_type_vars [arg];
-  let context = Print.context_with_shared_effect policy (fun o -> swap(o#type_arg arg)) in
+  let context = Print.context_with_shared_effect policy (fun o -> o#type_arg arg) in
   Print.type_arg context (policy, Vars.tyvar_name_map) arg
 
 let string_of_row_var ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) row_var =
