@@ -8,14 +8,12 @@
           -warn-error -a      ;; Do not treat warnings as errors.
           -w A-4-42-44-45-48-60-67  ;; Ignores warnings 4, 42, 44, 45, 48, 60, and 67.
           -g                  ;; Adds debugging information to the resulting executable / library.
-          -linkall            ;; Needed for dynamic linking in OCaml 4.06
  )))
  (release
   (flags (:standard
           ;; The following flags are the same as for the "dev" profile.
           -strict-formats -strict-sequence -safe-string -annot
           -w A-4-42-44-45-48-60-67  ;; Ignores warnings 4, 42, 44, 45, 48, 60, and 67.
-          -linkall                  ;; Needed for dynamic linking in OCaml 4.06
   ))
   (ocamlopt_flags (:standard
                    -O3 ;; Applies (aggressive) optimisations to the resulting executable.
@@ -25,7 +23,6 @@
           -strict-formats -strict-sequence -safe-string -annot
           -warn-error @A      ;; Treat warnings as errors...
           -w A-4-42-44-45-48-60-67  ;; ... except for warnings 4, 42, 44, 45, 48, 60, and 67 which are ignored.
-          -linkall            ;; Needed for dynamic linking in OCaml 4.06
   ))
   (ocamlopt_flags (:standard -O3))
 ))
