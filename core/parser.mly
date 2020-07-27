@@ -693,7 +693,8 @@ conditional_expression:
 | IF LPAREN exp RPAREN exp ELSE exp                            { with_pos $loc (Conditional ($3, $5, $7)) }
 
 case:
-| CASE pattern RARROW block_contents                           { $2, block ~ppos:$loc($4) $4 }
+/* XXX | CASE pattern RARROW block_contents                           { $2, block ~ppos:$loc($4) $4 }*/
+| CASE pattern RARROW case_contents                           { $2, block ~ppos:$loc($4) $4 }
 
 case_expression:
 | SWITCH LPAREN exp RPAREN LBRACE case* RBRACE                 { with_pos $loc (Switch ($3, $6, None)) }
@@ -857,13 +858,18 @@ moduleblock:
 block:
 | LBRACE block_contents RBRACE                                 { block ~ppos:$loc $2 }
 
+case_contents:
+| bindings exp                                                 { ($1, $2) }
+| exp                                                          { ([], $1) }
+
 block_contents:
+case_contents                                                  { $1 }
 /* XXX | bindings exp SEMICOLON                                       { ($1 @ [with_pos $loc($2) (Exp $2)],
                                                                   record ~ppos:$loc []) }*/
-| bindings exp                                                 { ($1, $2) }
+/* XXX | bindings exp                                                 { ($1, $2) }*/
 /* XXX | exp SEMICOLON                                                { ([with_pos $loc($1) (Exp $1)],
                                                                   record ~ppos:$loc []) }*/
-| exp                                                          { ([], $1) }
+/* XXX | exp                                                          { ([], $1) }*/
 /* XXX | SEMICOLON */
 | /* empty */                                                  { ([], with_pos $loc (TupleLit [])) }
 
