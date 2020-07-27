@@ -815,41 +815,41 @@ let ir_type_mod_visitor tyenv type_visitor =
     inherit Transform.visitor(tyenv) as super
           method! value = function
             | Inject (name, value, datatype) ->
-               let (datatype, _) = type_visitor#typ datatype in
+               let (_, datatype) = type_visitor#typ datatype in
                super#value (Inject (name, value, datatype))
             | TAbs (tyvars, value) ->
-               let tyvars = List.map (fun arg -> fst (type_visitor#quantifier arg)) tyvars in
+               let tyvars = List.map (fun arg -> snd (type_visitor#quantifier arg)) tyvars in
                super#value (TAbs (tyvars, value))
             | TApp (value, tyargs) ->
-               let tyargs = List.map (fun arg -> fst (type_visitor#type_arg arg)) tyargs in
+               let tyargs = List.map (fun arg -> snd (type_visitor#type_arg arg)) tyargs in
                super#value (TApp (value, tyargs))
             | Coerce (var, datatype) ->
-               let (datatype, _) = type_visitor#typ datatype in
+               let (_, datatype) = type_visitor#typ datatype in
                super#value (Coerce (var, datatype))
             | Closure (var, tyargs, env) ->
-              let tyargs = List.map (fun targ -> fst (type_visitor#type_arg targ)) tyargs in
+              let tyargs = List.map (fun targ -> snd (type_visitor#type_arg targ)) tyargs in
               super#value (Closure (var, tyargs, env))
             | other -> super#value other
 
           method! special = function
             | Wrong datatype ->
-               let (datatype, _) = type_visitor#typ datatype in
+               let (_, datatype) = type_visitor#typ datatype in
                super#special (Wrong datatype)
             | Table (v1, v2, v3, (t1, t2, t3)) ->
-               let (t1, _) = type_visitor#typ t1 in
-               let (t2, _) = type_visitor#typ t2 in
-               let (t3, _) = type_visitor#typ t3 in
+               let (_, t1) = type_visitor#typ t1 in
+               let (_, t2) = type_visitor#typ t2 in
+               let (_, t3) = type_visitor#typ t3 in
                super#special (Table (v1, v2, v3, (t1, t2, t3)))
             | Query (opt, policy, computation, datatype) ->
-               let (datatype, _) = type_visitor#typ datatype in
+               let (_, datatype) = type_visitor#typ datatype in
                super#special (Query (opt, policy, computation, datatype))
             | DoOperation (name, vallist, datatype) ->
-               let (datatype, _) = type_visitor#typ datatype in
+               let (_, datatype) = type_visitor#typ datatype in
                super#special (DoOperation (name, vallist, datatype))
             | other -> super#special other
 
           method! binder b =
-            let (newtype, _) = type_visitor#typ (Var.type_of_binder b) in
+            let (_, newtype) = type_visitor#typ (Var.type_of_binder b) in
             let b = Var.update_type newtype b in
             super#binder b
 
@@ -881,8 +881,8 @@ module CheckForCycles = struct
                   ~message:"descending into type cycle")
            | None ->
               let o' = {<seen_types =  (t,()) :: seen_types>} in
-              let (t, _) = o'#typ_super t in
-              (t, o)
+              let (_, t) = o'#typ_super t in
+              (o, t)
 
          method! row r =
            match List.assoc_opt r seen_rows with
@@ -892,8 +892,8 @@ module CheckForCycles = struct
                  ~message:"descending into row cycle")
            | None ->
               let o' = {<seen_rows =  (r,()) :: seen_rows>} in
-              let (r,_) = o'#row_super r in
-              (r, o)
+              let (_, r) = o'#row_super r in
+              (o, r)
 
       end
 
@@ -918,7 +918,7 @@ module ElimBodiesFromMetaTypeVars = struct
             begin
               match Unionfind.find point with
                 | Types.Recursive _
-                | Types.Var _ -> Types.Meta point, o
+                | Types.Var _ -> o, Types.Meta point
                 | t -> o#typ t
             end
           | other -> super#typ other
@@ -963,12 +963,12 @@ module InstantiateTypes = struct
 
         method! typ t =
           match t with
-            | Types.Not_typed -> (t, o) (* instantiate.ml dies on `Not_typed *)
-            | _ -> (Instantiate.datatype instantiation_maps t, o)
+            | Types.Not_typed -> (o, t) (* instantiate.ml dies on `Not_typed *)
+            | _ -> (o, Instantiate.datatype instantiation_maps t)
 
-        method! row r = Instantiate.row instantiation_maps r, o
+        method! row r = o, Instantiate.row instantiation_maps r
 
-        method! field_spec p = Instantiate.presence instantiation_maps p, o
+        method! field_spec p = o, Instantiate.presence instantiation_maps p
 
       end
 

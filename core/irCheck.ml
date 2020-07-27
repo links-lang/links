@@ -148,11 +148,11 @@ struct
 
 
         method! meta_type_var point = match Unionfind.find point with
-          | T.Recursive _ -> (point, {< found_recursion = true >})
+          | T.Recursive _ -> ({< found_recursion = true >}, point)
           | _ -> super#meta_type_var point
 
         method! meta_row_var point = match Unionfind.find point with
-          | T.Recursive _ -> (point, {< found_recursion = true >})
+          | T.Recursive _ -> ({< found_recursion = true >}, point)
           | _ -> super#meta_row_var point
 
 
@@ -160,7 +160,7 @@ struct
 
   let is_recursive t =
     let o = new visitor in
-    let o' = snd (o#typ t) in
+    let o' = fst (o#typ t) in
     o'#get_result ()
 
 end
