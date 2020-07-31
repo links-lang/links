@@ -729,7 +729,7 @@ typename Page = (Int, MultiXmlContext, (Gen) {}~> ([CheckedFormBuilder], Gen));
 typename Handler (a) = (a) {}~> Page;
 
 sig pickleCont : (() { |e}-> Page) ~> String
-fun pickleCont(cont) {unsafePickleCont(fun () {cont()})}
+fun pickleCont(cont) server {unsafePickleCont(fun () {cont()})}
 
 sig unitP : Page
 var unitP = (0, fun ([]) {<#/>}, fun (gen) {([], gen)});
