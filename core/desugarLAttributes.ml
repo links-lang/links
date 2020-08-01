@@ -109,7 +109,7 @@ let is_radio : (string * phrase list) list -> bool = function
   | "type", [{node=Constant (Constant.String "radio"); _}] -> true
   | _ -> false in
   exists is_type_radio attrs
-;;
+
 let desugar_lnames (p : phrase list) : phrase list * (input_ids * string) StringMap.t =
   let lnames = ref StringMap.empty in
   let attr_single : Position.t -> string * phrase list -> (string * phrase list) list =
