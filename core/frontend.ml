@@ -123,7 +123,8 @@ module Untyped = struct
 
   (* Collection of transformers. *)
   let transformers : transformer array
-    = [| (module ResolvePositions)
+    = [| (module DesugarMatching)
+       ; (module ResolvePositions)
        ; (module CheckXmlQuasiquotes)
        ; (module DesugarModules)
        ; (module Shunting)

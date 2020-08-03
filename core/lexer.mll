@@ -134,6 +134,7 @@ let keywords = [
  "var"      , VAR;
  "where"    , WHERE;
  "with"     , WITH;
+ "match"    , MATCH;
 (* SAND *)
  "tablekeys"     , TABLEKEYS;
 ]
@@ -225,7 +226,6 @@ rule lex ctxt nl = parse
   | '@'                                 { AT }
   | "%" def_id as var                   { PERCENTVAR var }
   | '%'                                 { PERCENT }
-  | '|'                                 { PIPE }
   | initopchar opchar * as op           { OPERATOR op }
   | '`' (def_id as var) '`'             { if List.mem_assoc var keywords || Char.isUpper var.[0] then
                                               raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf))
@@ -243,7 +243,6 @@ rule lex ctxt nl = parse
   | "postfix"                           { FIXITY Associativity.Left }
   | "~fun"                              { FROZEN_FUN }
   | "~linfun"                           { FROZEN_LINFUN }
-  | "match"                             { MATCH }
   | def_id as var                       { try List.assoc var keywords
                                           with Not_found | NotFound _ ->
                                             if Char.isUpper var.[0] then CONSTRUCTOR var

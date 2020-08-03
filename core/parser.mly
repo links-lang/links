@@ -287,7 +287,6 @@ let parse_foreign_language pos lang =
 %token LENSPUT LENSGET LENSCHECK LENSSERIAL
 %token READONLY DEFAULT
 %token MATCH
-%token PIPE
 %token ESCAPE
 %token CLIENT SERVER
 %token SEMICOLON
@@ -454,7 +453,7 @@ match_body:
 | MATCH LBRACE match_cases* RBRACE                             { $3 }
 
 match_cases:
-| PIPE pattern RARROW block_contents                           { ($2, block ~ppos:$loc $4) }
+| VBAR pattern RARROW block_contents                           { ($2, block ~ppos:$loc $4) }
 
 tlvarbinding:
 | VAR VARIABLE perhaps_location EQ exp                         { (PatName $2, $5, $3) }
