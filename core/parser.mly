@@ -596,7 +596,7 @@ spawn_expression:
 
 query_policy:
 | VARIABLE                                                     { query_policy_of_string $loc $1 }
-| /* empty */                                                  { QueryPolicy.Default }
+| /* empty */                                                  { QueryPolicy.Flat }
 
 postfix_expression:
 | primary_expression | spawn_expression                        { $1 }

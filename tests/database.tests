@@ -45,13 +45,11 @@ exit : 0
 
 Explicit query evaluator annotation (2)
 query flat { for (x <- [1,2,3]) [(x = x, y = (for (y <- [4,5,6]) [y]))] }
-args : --config=tests/shredding/config.sample
 stderr : @..*
 exit : 1
 
 Explicit query evaluator annotation (3)
 query [4] flat { for (x <- [1, 2, 3, 4, 5, 6]) [(x = x)] }
-args : --config=tests/shredding/config.sample
 stdout : [(x = 1), (x = 2), (x = 3), (x = 4)] : [(x : Int)]
 ignore : pending #756
 exit : 0
@@ -62,7 +60,7 @@ stdout : [(x = 1), (x = 2), (x = 3)] : [(x:Int)]
 exit : 0
 
 Nested query annotations (2)
-query nested { query { for (i <- [1,2,3]) [(x = i)] } }
+query flat { query { for (i <- [1,2,3]) [(x = i)] } }
 stdout : [(x = 1), (x = 2), (x = 3)] : [(x:Int)]
 exit : 0
 

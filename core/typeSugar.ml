@@ -3079,13 +3079,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             let () = unify ~handle:Gripers.query_outer
               (no_pos (T.Record context.effect_row), no_pos (T.Record outer_effects)) in
             let p = type_check (bind_effects context inner_effects) p in
-            let evaluator =
-              match policy with
-                | Nested -> Nested
-                | Flat -> Flat
-                | Default -> if (Settings.get Database.shredding) then Nested else Flat in
             let () =
-              match evaluator with
+              match policy with
                 | Nested -> ()
                 | Flat  ->
                      let shape =
@@ -3093,7 +3088,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                          (T.Record (T.Row (StringMap.empty,
                             Types.fresh_row_variable (lin_any, res_base), false))) in
                      unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape)
-                | Default -> assert false
             in
             Query (range, policy, erase p, Some (typ p)), typ p, Usage.combine (range_usages) (usages p)
         (* mailbox-based concurrency *)

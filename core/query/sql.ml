@@ -4,22 +4,28 @@ open CommonTypes
 type index = (Var.var * string) list
 type range = int * int
 
+type table_name = string (* FIXME: allow variables? *)
+    [@@deriving show]
+
 type query =
   | UnionAll  of query list * int
   | Select    of select_clause
   | Insert    of {
-      ins_table: string;
+      ins_table: table_name;
       ins_fields: string list;
       ins_records: base list list
     }
   | Update    of {
-      upd_table: string;
+      upd_table: table_name;
       upd_fields: (string * base) list;
       upd_where: base option
     }
-  | Delete    of { del_table: string; del_where: base option }
-  | With      of Var.var * query * Var.var * query
-and select_clause = (base * string) list * (string * Var.var) list * base * base list
+  | Delete    of { del_table: table_name; del_where: base option }
+  | With      of table_name * query * query
+and select_clause = (base * string) list * from_clause list * base * base list
+and from_clause =
+  | TableRef of table_name * Var.var
+  | Subquery of query * Var.var
 and base =
   | Case      of base * base * base
   | Constant  of Constant.t
@@ -143,7 +149,6 @@ let pp_comma_separated pp_item = Format.pp_print_list ~pp_sep:pp_comma pp_item
 
 let rec pr_query quote ignore_fields ppf q =
   let pp_quote ppf q = Format.pp_print_string ppf (quote q) in
-  let tables_to_string = List.map (fun (t, x) -> Format.asprintf "%a as %s" pp_quote t (string_of_table_var x)) in
 
   let pr_q = pr_query quote ignore_fields in
   let pr_b = pr_base quote false in
@@ -167,39 +172,51 @@ let rec pr_query quote ignore_fields ppf q =
     let pp_orderby ppf os =
       match os with
         | [] -> ()
-        | _ -> Format.fprintf ppf " order by %a" (pp_comma_separated pp_os_condition) os in
+        | _ -> Format.fprintf ppf "\norder by %a" (pp_comma_separated pp_os_condition) os in
+    let pp_from_clause ppf fc =
+      match fc with
+        | TableRef (t, x) -> Format.fprintf ppf "%a as %s" pp_quote t (string_of_table_var x)
+        | Subquery (q, x) -> Format.fprintf ppf "(%a) as %s" pr_q q (string_of_table_var x) in
     let pp_where ppf condition =
       match condition with
         | Constant (Constant.Bool true) -> ()
-        | _ -> Format.fprintf ppf " where %a" pp_os_condition condition in
-
-    Format.fprintf ppf "select %a from %a%a%a"
+        | _ -> Format.fprintf ppf "\nwhere %a" pp_os_condition condition in
+    Format.fprintf ppf "select %a\nfrom %a%a%a"
       pr_fields fields
-      (pp_comma_separated Format.pp_print_string) tables
+      (pp_comma_separated pp_from_clause) tables
       pp_where condition
       pp_orderby os
   in
-
-  let pp_where_d_u ppf where = gen_pp_option ppf "where (%a)" pr_b_ignore_fields where in
+  let pp_opt_where ppf where = gen_pp_option ppf "where (%a)" pr_b_ignore_fields where in
   let pr_delete ppf table where =
-    Format.fprintf ppf "delete from %a %a" Format.pp_print_string table pp_where_d_u where
+    Format.fprintf ppf "delete from %a %a"
+      Format.pp_print_string table
+      pp_opt_where where
   in
   let pr_update ppf table fields where =
     let pp_field ppf (k, v) = gen_pp_pair ppf "%a = %a" pp_quote pr_b_ignore_fields (k, v) in
-    Format.fprintf ppf "update %a set %a %a" Format.pp_print_string table (pp_comma_separated pp_field) fields pp_where_d_u where
+    Format.fprintf ppf "update %a\nset %a %a"
+      Format.pp_print_string table
+      (pp_comma_separated pp_field) fields
+      pp_opt_where where
   in
   let pr_insert ppf table fields values =
-    let pp_value ppf x = Format.fprintf ppf "(%a)" (pp_comma_separated pr_b_ignore_fields) x in
-    Format.fprintf ppf "insert into %a (%a) values %a"
+    let pp_value ppf x =
+      Format.fprintf ppf "(%a)"
+        (pp_comma_separated pr_b_ignore_fields) x in
+    Format.fprintf ppf "insert into %a (%a)\nvalues %a"
       Format.pp_print_string table
       (pp_comma_separated Format.pp_print_string) fields
       (pp_comma_separated pp_value) values
   in
   match q with
-    | UnionAll ([], _) -> Format.pp_print_string ppf "select 42 as \"@unit@\" where false"
-    | UnionAll ([q], n) -> Format.fprintf ppf "%a%a" pr_q q Format.pp_print_string (order_by_clause n)
+    | UnionAll ([], _) -> Format.pp_print_string ppf "select 42 as \"@unit@\" from (select 42) x where 1=0"
+    | UnionAll ([q], n) ->
+        Format.fprintf ppf "%a%a"
+          pr_q q
+          Format.pp_print_string (order_by_clause n)
     | UnionAll (qs, n) ->
-      let pp_sep_union ppf () = Format.fprintf ppf " union all " in
+      let pp_sep_union ppf () = Format.fprintf ppf "\nunion all\n" in
       let pp_value ppf x = Format.fprintf ppf "(%a)" pr_q x in
       Format.fprintf ppf "%a%a"
         (Format.pp_print_list ~pp_sep:pp_sep_union pp_value) qs
@@ -212,23 +229,18 @@ let rec pr_query quote ignore_fields ppf q =
         Format.pp_print_string (fresh_dummy_var ())
         pr_b condition
     | Select (fields, tables, condition, os) ->
-        (* using quote_field assumes tables contains table names (not nested queries) *)
-        (* FIXME: type Select forces tables to be list((table name, var)), but it can have subqueries instead of plain table names in general cases *)
-        pr_select ppf fields (tables_to_string tables) condition os
+        pr_select ppf fields tables condition os
     | Delete { del_table; del_where } ->
         pr_delete ppf del_table del_where
     | Update { upd_table; upd_fields; upd_where } ->
         pr_update ppf upd_table upd_fields upd_where
     | Insert { ins_table; ins_fields; ins_records } ->
         pr_insert ppf ins_table ins_fields ins_records
-    | With (_, q, z, q') ->
-        match q' with
-        | Select (fields, tables, condition, os) ->
-            (* Inline the query *)
-            (* FIXME: should emitting standard SQL WITH expressions here, move inline to a separate preprocessing step *)
-            let q = Format.asprintf "(%s) as %s" (Format.asprintf "%a" pr_q q) (string_of_table_var z) in
-            pr_select ppf fields (q::(tables_to_string tables)) condition os
-        | _ -> assert false
+    | With (z, q, q') ->
+        Format.fprintf ppf "with %s as (@[<v>%a@])\n%a"
+          z
+          pr_q q
+          pr_q q'
 
 and pr_base quote one_table ppf b =
   let pp_projection quote one_table ppf (var, label) =
@@ -239,49 +251,111 @@ and pr_base quote one_table ppf b =
   in
   let pr_b_one_table = pr_base quote one_table in
   let pr_q_true = pr_query quote true in
-  let unary_ops = StringSet.of_list ["intToString"; "stringToInt"; "intToFloat"; "floatToString"; "stringToFloat"; "floatToInt"; "not"; "negate"; "negatef"] in
-  let binary_ops = StringSet.of_list ["&&"; "||"; "=="; "<>"; "<"; ">"; "<="; ">="; "RLIKE"; "LIKE"] in
+  let unary_ops =
+    StringSet.of_list ["intToString"; "stringToInt"; "intToFloat";
+                       "floatToString"; "stringToFloat"; "floatToInt";
+                       "not"; "negate"; "negatef"] in
+  let binary_ops =
+    StringSet.of_list ["&&"; "||"; "=="; "<>"; "<"; ">"; "<="; ">="; "RLIKE"; "LIKE"] in
   let binary_map op =
     match op with
       | "&&" -> "and"
       | "||" -> "or"
       | "==" -> "="
-      | _ -> op
+      | _    -> op
   in
   let unary_map op =
     match op with
-      | "floatToInt" -> "floor"
-      | "not" -> "not "
-      | "negate" | "negatef" -> "-"
-      | "intToString" | "stringToInt" | "intToFloat" | "floatToString" | "stringToFloat" -> ""
-      | _ -> assert false
+      | "floatToInt"    -> "floor"
+      | "not"           -> "not "
+      | "negate"
+      | "negatef"       -> "-"
+      | "intToString"
+      | "stringToInt"
+      | "intToFloat"
+      | "floatToString"
+      | "stringToFloat" -> ""
+      | _               -> assert false
   in
   let pp_sql_arithmetic ppf (l, op, r) =
     match op with
-      | "/" -> Format.fprintf ppf "floor(%a/%a)" pr_b_one_table l pr_b_one_table r
-      | "^" -> Format.fprintf ppf "floor(pow(%a,%a))" pr_b_one_table l pr_b_one_table r
-      | "^." -> Format.fprintf ppf "pow(%a,%a)" pr_b_one_table l pr_b_one_table r
-      | _ -> Format.fprintf ppf "(%a%s%a)" pr_b_one_table l (Arithmetic.sql_name op) pr_b_one_table r
+      | "/" -> Format.fprintf ppf "floor(%a/%a)"
+            pr_b_one_table l
+            pr_b_one_table r
+      | "^" -> Format.fprintf ppf "floor(pow(%a,%a))"
+            pr_b_one_table l
+            pr_b_one_table r
+      | "^." -> Format.fprintf ppf "pow(%a,%a)"
+            pr_b_one_table l
+            pr_b_one_table r
+      | _ -> Format.fprintf ppf "(%a%s%a)"
+            pr_b_one_table l
+            (Arithmetic.sql_name op)
+            pr_b_one_table r
   in
     match b with
-      | Case (c, t, e) -> Format.fprintf ppf "case when %a then %a else %a end" pr_b_one_table c pr_b_one_table t pr_b_one_table e
-      | Constant c -> Format.pp_print_string ppf (Constant.to_string c)
-      | Project (var, label) -> pp_projection quote one_table ppf (var, label)
-      | Apply (op, [l; r]) when Arithmetic.is op -> pp_sql_arithmetic ppf (l, op, r)
-      (* special case: not empty is translated to exists *)
-      | Apply ("not", [Empty q]) -> Format.fprintf ppf "exists (%a)" pr_q_true q
-      | Apply (uop, [v]) when StringSet.mem uop unary_ops -> Format.fprintf ppf "%s(%a)" (unary_map uop) pr_b_one_table v
-
-      (* optimisation *)
-      | Apply (op, [v; w]) when StringSet.mem op binary_ops -> Format.fprintf ppf "(%a) %s (%a)" pr_b_one_table v (binary_map op) pr_b_one_table w
+      | Case (c, t, e) ->
+          Format.fprintf ppf "case when %a then %a else %a end"
+            pr_b_one_table c
+            pr_b_one_table t
+            pr_b_one_table e
+      | Constant c ->
+          Format.pp_print_string ppf (Constant.to_string c)
+      | Project (var, label) ->
+          pp_projection quote one_table ppf (var, label)
+      | Apply (op, [l; r]) when Arithmetic.is op ->
+          pp_sql_arithmetic ppf (l, op, r)
+            (* special case: not empty is translated to exists *)
+      | Apply ("not", [Empty q]) ->
+          Format.fprintf ppf "exists (%a)"
+            pr_q_true q
+      | Apply (uop, [v]) when StringSet.mem uop unary_ops ->
+          Format.fprintf ppf "%s(%a)"
+            (unary_map uop)
+            pr_b_one_table v
+      | Apply (op, [v; w]) when StringSet.mem op binary_ops ->
+          Format.fprintf ppf "(%a) %s (%a)"
+            pr_b_one_table v
+            (binary_map op)
+            pr_b_one_table w
       | Apply (f, args) when SqlFuns.is f ->
-        Format.fprintf ppf "%a(%a)" Format.pp_print_string (SqlFuns.name f) (pp_comma_separated pr_b_one_table) args
+          Format.fprintf ppf "%a(%a)"
+            Format.pp_print_string (SqlFuns.name f)
+            (pp_comma_separated pr_b_one_table) args
       | Apply (f, args) ->
-        Format.fprintf ppf "%a(%a)" Format.pp_print_string f (pp_comma_separated pr_b_one_table) args
-      | Empty q -> Format.fprintf ppf "not exists (%a)" pr_q_true q
-      | Length q -> Format.fprintf ppf "select count(*) from (%a) as %a" pr_q_true q Format.pp_print_string (fresh_dummy_var ())
-      | RowNumber [] -> Format.fprintf ppf "%a" Format.pp_print_string "1"
-      | RowNumber ps -> Format.fprintf ppf "row_number() over (order by %a)" (pp_comma_separated (pp_projection quote one_table)) ps
+          Format.fprintf ppf "%a(%a)"
+            Format.pp_print_string f
+            (pp_comma_separated pr_b_one_table) args
+      | Empty q ->
+          Format.fprintf ppf "not exists (%a)"
+            pr_q_true q
+      | Length q ->
+          Format.fprintf ppf "select count(*) from (%a) as %a"
+            pr_q_true q
+            Format.pp_print_string (fresh_dummy_var ())
+      | RowNumber [] ->
+          Format.fprintf ppf "%a" Format.pp_print_string "1"
+      | RowNumber ps ->
+        Format.fprintf ppf "row_number() over (order by %a)"
+            (pp_comma_separated (pp_projection quote one_table)) ps
+
+
+(* NOTE: Inlines a WITH common table expression if it is the toplevel
+ * constructor of a union of queries and is used immediately in a SELECT query.
+ * This handles the common case where WITH is generated solely as an
+ * abbreviation by shredding.  This is a very limited case of inlining WITH bindings. *)
+
+let rec inline_outer_with q =
+  let replace_subquery z q = function
+    | TableRef(y,x) when y = z -> Subquery(q,x)
+    | fromclause -> fromclause
+  in
+  match q with
+    | With (z, q, Select (fields, tables, condition, os)) ->
+        Select(fields, List.map (replace_subquery z q) tables, condition, os)
+    | UnionAll(qs,n) -> UnionAll(List.map inline_outer_with qs,n)
+    | q -> q
+
 
 let string_of_base quote one_table b =
   Format.asprintf "%a" (pr_base quote one_table) b

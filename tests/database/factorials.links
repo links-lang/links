@@ -68,6 +68,12 @@ fun trivialNested2() server {
   query { for (y <- for (x <- asList( factorials)) [(b=[])]) [(a=0)]}
 }
 
+fun tableLength() server {
+  hd(query {
+    [(len = length(for (x <-- factorials) [x]))]
+  }).len
+}
+
 fun test() {
   deleteAll();
   deleteWhere();
@@ -88,6 +94,7 @@ fun test() {
   assertEq(lookupFactorials(1), [(f=1,i=1)]);
   assertEq(query{unwrappedLookup(1)}, [(f=1,i=1)]);
   insertTwoThree();
+  assertEq(tableLength(), 3);
   assertEq(lookupFactorials(3), [(i=1, f=1), (i=2, f=2), (f=6,i=3)]);
   assertEq(trivialNested1(),[(a=0),(a=0),(a=0)]);
   assertEq(trivialNested2(),[(a=0),(a=0),(a=0)]);

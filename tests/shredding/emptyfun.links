@@ -15,4 +15,4 @@ fun contains(xs) {
   containsInner(xs, fun(_) { false })
 }
 var containsEmpty = contains([]);
-query {for (y <-- factorials) [for (x <-- factorials) where (containsEmpty(x)) [x]]}
+query nested {for (y <-- factorials) [for (x <-- factorials) where (containsEmpty(x)) [x]]}

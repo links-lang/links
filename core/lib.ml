@@ -524,7 +524,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   IMPURE);
 
   (* HACK: tame versions of head and tail for use in pattern matching *)
-  "##hd",
+  "$$hd",
   (p1 (fun lst ->
         match (Value.unbox_list lst) with
           | [] -> runtime_error "hd() of empty list"
@@ -533,7 +533,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "([a]) -> a",
   IMPURE);
 
-  "##tl",
+  "$$tl",
   (p1 (fun lst ->
          match (Value.unbox_list lst) with
             | [] -> runtime_error "tl() of empty list"
@@ -962,6 +962,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "getInputValue",
   (`Client, datatype "(String) ~> String",
+  PURE);
+
+  "getRadioGroupValue",
+  (`Client, datatype "([String]) ~> String",
   PURE);
 
   "event",

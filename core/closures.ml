@@ -49,15 +49,18 @@ struct
             let freevars = IntMap.find x fenv in
             let zs = freevars.termvars in
             let typevars = freevars.typevars in
-            let o = List.fold_left
-              (fun o (z, _) -> o#close_term z)
-              o
-              zs in
+            let o =
+              List.fold_left
+                (fun o b ->
+                  let z = Var.var_of_binder b in
+                  o#close_term z)
+                o
+                zs
+            in
             List.fold_left
               (fun o q ->
                 let tv = Quantifier.to_var q in
-                o#register_type_var tv
-              )
+                o#register_type_var tv)
               o
               typevars
           else
@@ -158,11 +161,11 @@ struct
 
 
 
-      method! binder ((_, (_, _, scope)) as b) =
+      method! binder b =
         let b, o = super#binder b in
         let t = Var.type_of_binder b in
         let o = o#typ t in
-        match scope with
+        match Var.scope_of_binder b with
         | Scope.Global -> b, o#global (Var.var_of_binder b)
         | Scope.Local  -> b, o#bound_termvar (Var.var_of_binder b)
 
@@ -187,10 +190,12 @@ struct
         let free_binders =
           List.rev
             (IntSet.fold
-                (fun x zs ->
-                  (x, (o#lookup_type x, "fv_" ^ string_of_int x, Scope.Local))::zs)
-                (o#get_free_term_vars)
-                []) in
+               (fun x zs ->
+                 let info = Var.make_local_info (o#lookup_type x, "fv_" ^ string_of_int x) in
+                 (Var.make_binder x info) :: zs)
+               (o#get_free_term_vars)
+               [])
+        in
         (* We are only interested in free variables of the function that actually have a binder "above".
            This prevents breaking the value restriction. Since the currently bound type variables may be hidden
            begind multiple calls of o#reset, we access the stack collecting bound variable environments shadowed by a call of o#reset *)
@@ -212,7 +217,7 @@ struct
           let o = List.fold_left (fun o q -> o#quantifier_remove q) o quantifiers in
           (b, o)
         | (Fun (f, (tyvars, xs, body), None, location, unsafe)) as b
-             when Scope.isLocal (Ir.binding_scope b) ->
+             when Scope.is_local (Ir.binding_scope b) ->
           (* reset free and bound variables to be empty *)
           let o = o#reset in
 
@@ -259,7 +264,7 @@ struct
           let o = List.fold_left (fun o q -> o#quantifier_remove q) o tyvars in
           (b, o)
 
-        | (Rec defs) as b when Scope.isLocal (Ir.binding_scope b) ->
+        | (Rec defs) as b when Scope.is_local (Ir.binding_scope b) ->
           (* reset free and bound variables to be empty *)
           let o = o#reset in
 
@@ -387,7 +392,7 @@ end
 (* mark top-level bindings as global *)
 module Globalise =
 struct
-  let binder (x, (t, name, _)) = (x, (t, name, Scope.Global))
+  let binder b = Var.globalise_binder b
   let fun_def (f, lam, z, location, unsafe) = (binder f, lam, z, location, unsafe)
   let binding = function
     | Let (x, body) -> Let (binder x, body)
@@ -396,8 +401,9 @@ struct
     | Alien { binder = x; object_name; language } ->
        Alien { binder = binder x; object_name; language }
     | Module _ ->
-        raise (Errors.internal_error ~filename:"closures.ml"
-          ~message:"Globalisation of modules unimplemented")
+       raise (Errors.internal_error
+                ~filename:"closures.ml"
+                ~message:"Globalisation of modules unimplemented")
   let bindings = List.map binding
   let computation (bs, tc) = (bindings bs, tc)
   let program : Ir.program -> Ir.program = computation
@@ -416,7 +422,7 @@ struct
   class visitor tenv fenv =
     object (o : 'self) inherit IrTraversals.Transform.visitor(tenv) as super
       (* currently active mutually recursive functions*)
-      val parents : Ir.binder list = []
+      val parents : (Ir.var * Ir.binder) list = []
       (* currently active closure environment *)
       val parent_env = 0
       (* currently active closure variables *)
@@ -454,9 +460,10 @@ struct
                 else
                   let zs =
                     List.map
-                      (fun (z, _) ->
-                         let v = fst (var_val z) in
-                         (string_of_int z, v))
+                      (fun b ->
+                        let z = Var.var_of_binder b in
+                        let v = fst (var_val z) in
+                        (string_of_int z, v))
                       zs
                   in
                   close x zs tyargs, overall_type
@@ -474,13 +481,14 @@ struct
       method! bindings =
         function
         | [] -> [], o
-        | b :: bs when Scope.isGlobal (Ir.binding_scope b) ->
+        | b :: bs when Scope.is_global (Ir.binding_scope b) ->
           let b, o = o#binding b in
           let bs', o = o#pop_hoisted_bindings in
           let bs, o = o#bindings bs in
           bs' @ (b :: bs), o
-        | Fun ((f, _) as fb, (tyvars, xs, body), None, location, unsafe) :: bs ->
-          assert (Scope.isLocal (Var.scope_of_binder fb));
+        | Fun (fb, (tyvars, xs, body), None, location, unsafe) :: bs ->
+          assert (Scope.is_local (Var.scope_of_binder fb));
+          let f = Var.var_of_binder fb in
           let fb = Globalise.binder fb in
           let (xs, o) =
             List.fold_right
@@ -494,7 +502,13 @@ struct
           let fenv_entry = IntMap.find f fenv in
           let zs = fenv_entry.termvars in
           let type_zs = fenv_entry.typevars in
-          let cvars = List.fold_left (fun cvars (z, _) -> IntSet.add z cvars) IntSet.empty zs in
+          let cvars =
+            List.fold_left
+              (fun cvars b ->
+                let z = Var.var_of_binder b in
+                IntSet.add z cvars)
+              IntSet.empty zs
+          in
 
           (* HACK: this function and the type annotation (o : 'self)
              work around an as yet undiagnosed bug in OCaml 4.07.0 *)
@@ -506,20 +520,22 @@ struct
               let zt =
                 Types.make_record_type
                   (List.fold_left
-                     (fun fields (x, (xt, _, _)) ->
-                        StringMap.add (string_of_int x) xt fields)
+                     (fun fields b ->
+                       let x = Var.var_of_binder b in
+                       let xt = Var.type_of_binder b in
+                       StringMap.add (string_of_int x) xt fields)
                      StringMap.empty
                      zs)
               in
               (* fresh variable for the closure environment *)
-              let zb = Var.fresh_binder (zt, "env_" ^ string_of_int f, Scope.Local) in
+              let zb = Var.(fresh_binder (make_local_info (zt, "env_" ^ string_of_int f))) in
               let z = Var.var_of_binder zb in
               (* HACK: the following line leads to a compiler error in
                  OCaml 4.07.0: Fatal error: exception Ctype.Unify(_)
                  *)
               (* let _, o = o#binder zb in *)
               let _, o = binder_hack zb in
-              let o = o#set_context [fb] z cvars in
+              let o = o#set_context [(Var.var_of_binder fb, fb)] z cvars in
               Some zb, o in
           let body, _, o = o#computation body in
           let o = o#set_context parents' parent_env' cvars' in
@@ -544,9 +560,10 @@ struct
 
             let defs, o =
               List.fold_left
-                (fun (defs, (o : 'self)) ((f, _) as fb, (tyvars, xs, body), none, location, unsafe) ->
+                (fun (defs, (o : 'self)) (fb, (tyvars, xs, body), none, location, unsafe) ->
                    assert (none = None);
-                   assert (Scope.isLocal (Var.scope_of_binder fb));
+                   assert (Scope.is_local (Var.scope_of_binder fb));
+                   let f = Var.var_of_binder fb in
                    let fb = Globalise.binder fb in
                    let xs, o =
                      List.fold_right
@@ -561,7 +578,12 @@ struct
                    let fenv_entry = IntMap.find f fenv in
                    let zs = fenv_entry.termvars in
                    let type_zs = fenv_entry.typevars in
-                   let cvars = List.fold_left (fun cvars (z, _) -> IntSet.add z cvars) IntSet.empty zs in
+                   let cvars =
+                     List.fold_left
+                       (fun cvars b ->
+                         IntSet.add (Var.var_of_binder b) cvars)
+                       IntSet.empty zs
+                   in
                    let zb, o =
                      match zs, type_zs with
                      | [], [] -> None, o
@@ -569,16 +591,18 @@ struct
                        let zt =
                          Types.make_record_type
                            (List.fold_left
-                              (fun fields (x, (xt, _, _)) ->
-                                 StringMap.add (string_of_int x) xt fields)
+                              (fun fields b ->
+                                let x = Var.var_of_binder b in
+                                let xt = Var.type_of_binder b in
+                                StringMap.add (string_of_int x) xt fields)
                               StringMap.empty
                               zs)
                        in
                        (* fresh variable for the closure environment *)
-                       let zb = Var.fresh_binder (zt, "env_" ^ string_of_int f, Scope.Local) in
+                       let zb = Var.(fresh_binder (make_local_info (zt, "env_" ^ string_of_int f))) in
                        let _, o = o#binder zb in
                        let z = Var.var_of_binder zb in
-                       Some zb, o#set_context fbs z cvars in
+                       Some zb, o#set_context (List.map (fun fb -> Var.var_of_binder fb, fb) fbs) z cvars in
                    let body, _, o = o#computation body in
                    let o = o#set_context parents' parent_env' cvars' in
                    let fundef = o#generalise_function_body_for_hoisting (fb, (tyvars, xs, body), zb, location, unsafe) in

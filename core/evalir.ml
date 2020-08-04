@@ -75,7 +75,7 @@ struct
   let lookup_fun_def f =
     match lookup_fun f with
     | None -> None
-    | Some (finfo, _, None, location) ->
+    | Some (_finfo, _, None, location) ->
       begin
         match location with
         | Location.Server | Location.Unknown ->
@@ -84,7 +84,7 @@ struct
              small *)
           Some (`FunctionPtr (f, None))
         | Location.Client ->
-          Some (`ClientFunction (Js.var_name_binder (f, finfo)))
+          Some (`ClientFunction (Js.var_name_var f))
       end
     | _ -> assert false
 
@@ -531,7 +531,8 @@ struct
       | [] -> tail_computation env cont tailcomp
       | b::bs ->
          match b with
-         | Let ((var, _) as b, (_, tc)) ->
+         | Let (b, (_, tc)) ->
+            let var = Var.var_of_binder b in
             let locals = Value.Env.localise env var in
             let cont' =
               K.(let frame = Frame.make (Var.scope_of_binder b) var locals (bs, tailcomp) in
@@ -563,9 +564,10 @@ struct
         | `Variant (label, _) as v ->
           begin
             match StringMap.lookup label cases, default, v with
-            | Some ((var,_), c), _, `Variant (_, v)
-            | _, Some ((var,_), c), v ->
-              computation (Value.Env.bind var (v, Scope.Local) env) cont c
+            | Some (b, c), _, `Variant (_, v)
+            | _, Some (b, c), v ->
+               let var = Var.var_of_binder b in
+               computation (Value.Env.bind var (v, Scope.Local) env) cont c
             | None, _, #Value.t -> eval_error "Pattern matching failed on %s" label
             | _ -> assert false (* v not a variant *)
           end
@@ -707,64 +709,59 @@ struct
               value env offset >>= fun offset ->
               Lwt.return (Some (Value.unbox_int limit, Value.unbox_int offset))
        end >>= fun range ->
-
-       let evaluate_standard () =
-         match EvalQuery.compile env (range, e) with
-           | None -> computation env cont e
-           | Some (db, q, t) ->
-              let q = db#string_of_query ~range q in
-              let (fieldMap, _, _) =
-                let r, _ = Types.unwrap_row (TypeUtils.extract_row t) in
-                TypeUtils.extract_row_parts r in
-              let fields =
-                StringMap.fold
-                  (fun name t fields ->
-                    let open Types in
-                    match t with
-                    | Present t -> (name, t)::fields
-                    | _ -> assert false)
-                  fieldMap
-                  []
-              in
-              apply_cont cont env (Database.execute_select fields q db) in
-
-       let evaluate_nested () =
-         if range != None then eval_error "Range is not supported for nested queries";
-           match EvalNestedQuery.compile_shredded env e with
-           | None -> computation env cont e
-           | Some (db, p) ->
-              if db#supports_shredding () then
-                let get_fields t =
-                  match t with
-                  | `Record fields ->
-                     StringMap.to_list (fun name p -> (name, Types.Primitive p)) fields
-                  | _ -> assert false
-                in
-                let execute_shredded_raw (q, t) =
-                  let q = db#string_of_query ~range q in
-                  Database.execute_select_result (get_fields t) q db, t in
-                let raw_results =
-                  EvalNestedQuery.Shred.pmap execute_shredded_raw p in
-                let mapped_results =
-                  EvalNestedQuery.Shred.pmap EvalNestedQuery.Stitch.build_stitch_map raw_results in
-                apply_cont cont env
-                  (EvalNestedQuery.Stitch.stitch_mapped_query mapped_results)
-              else
-                let error_msg =
-                  Printf.sprintf
-                    "The database driver '%s' does not support shredding."
-                    (db#driver_name ())
-                in
-                raise (Errors.runtime_error error_msg) in
-
-       let evaluator =
-         let open QueryPolicy in
-         match policy with
-           | Flat -> evaluate_standard
-           | Nested -> evaluate_nested
-           | Default ->
-               if Settings.get Database.shredding then evaluate_nested else evaluate_standard in
-       evaluator()
+         begin match policy with
+           | QueryPolicy.Flat ->
+               begin
+                 match EvalQuery.compile env (range, e) with
+                   | None -> computation env cont e
+                   | Some (db, q, t) ->
+                       let q = db#string_of_query ~range q in
+                       let (fieldMap, _, _) =
+                         let r, _ = Types.unwrap_row (TypeUtils.extract_row t) in
+                         TypeUtils.extract_row_parts r in
+                       let fields =
+                         StringMap.fold
+                           (fun name t fields ->
+                             let open Types in
+                             match t with
+                               | Present t -> (name, t)::fields
+                               | _ -> assert false)
+                           fieldMap
+                           []
+                       in
+                       apply_cont cont env (Database.execute_select fields q db)
+               end
+           | QueryPolicy.Nested ->
+               begin
+                 if range != None then eval_error "Range is not supported for nested queries";
+                 match EvalNestedQuery.compile_shredded env e with
+                   | None -> computation env cont e
+                   | Some (db, p) when db#supports_shredding () ->
+                       let get_fields t =
+                         match t with
+                           | `Record fields ->
+                               StringMap.to_list (fun name p -> (name, Types.Primitive p)) fields
+                           | _ -> assert false
+                       in
+                       let execute_shredded_raw (q, t) =
+                         let q = Sql.inline_outer_with q in
+                         let q = db#string_of_query ~range q in
+                         Database.execute_select_result (get_fields t) q db, t in
+                       let raw_results =
+                         EvalNestedQuery.Shred.pmap execute_shredded_raw p in
+                       let mapped_results =
+                         EvalNestedQuery.Shred.pmap EvalNestedQuery.Stitch.build_stitch_map raw_results in
+                       apply_cont cont env
+                         (EvalNestedQuery.Stitch.stitch_mapped_query mapped_results)
+                   | Some(db,_) ->
+                       let error_msg =
+                         Printf.sprintf
+                           "The database driver '%s' does not support nested query results."
+                           (db#driver_name ())
+                       in
+                       raise (Errors.runtime_error error_msg)
+               end
+         end
 
     | InsertRows (source, rows) ->
         begin
@@ -911,8 +908,9 @@ struct
 
               begin
                 match StringMap.lookup label cases with
-                | Some ((var,_), body) ->
-                  computation (Value.Env.bind var (chan, Scope.Local) env) cont body
+                | Some (b, body) ->
+                   let var = Var.var_of_binder b in
+                   computation (Value.Env.bind var (chan, Scope.Local) env) cont body
                 | None -> eval_error "Choice pattern matching failed"
               end
           | ReceiveBlocked -> block ()

@@ -1,5 +1,5 @@
 ---
-config: tests/freezeml.tests.config
+config: tests/freezeml.config
 ---
 
 Polymorphic Instantiation (1)

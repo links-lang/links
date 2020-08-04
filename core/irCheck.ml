@@ -492,9 +492,6 @@ struct
 
   type environment = datatype Env.t
 
-  let info_type (t, _, _) = t
-
-
   let checker tyenv =
   object (o)
     inherit IrTraversals.Transform.visitor(tyenv) as super
@@ -815,14 +812,7 @@ struct
             (* The type of the body must match the type the query is annotated with *)
             o#check_eq_types original_t t (SSpec special);
 
-            let check_flat_result =
-              let open QueryPolicy in
-              match policy with
-              | Flat -> true
-              | Nested -> false
-              | Default -> not(Settings.get Database.shredding) in
-
-            (if not(check_flat_result) then
+            (if not (policy = QueryPolicy.Flat) then
               () (* Discussion pending about how to type-check here. Currently same as frontend *)
             else
               let list_content_type = TypeUtils.element_type ~overstep_quantifiers:false t in
@@ -1320,9 +1310,11 @@ struct
 
 
     method! binder : binder -> (binder * 'self_type) =
-      fun (var, info) ->
-        let tyenv = Env.bind var (info_type info) tyenv in
-          (var, info), {< tyenv=tyenv >}
+      fun b ->
+      let var = Var.var_of_binder b in
+      let t = Var.type_of_binder b in
+      let tyenv = Env.bind var t tyenv in
+      b, {< tyenv=tyenv >}
 
     (* WARNING: use of remove_binder / remove_binding is only sound
        because we guarantee uniqueness of the names of bound term
