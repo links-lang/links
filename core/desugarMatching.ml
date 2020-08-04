@@ -6,7 +6,7 @@ open SourceCode
 
   This transformation convert function like that:
 
-  fun foo(a1, ..., an) match { 
+  fun foo(a1, ..., an) match {
     | case (p1_1, ..., p1_n) -> b_1
     | ...
     | case (pm_1, pm_n) -> b_m
