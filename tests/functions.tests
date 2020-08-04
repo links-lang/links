@@ -146,3 +146,19 @@ Linearity (9) - linear recursive functions should be disallowed
 linfun f(x) {f(x)} f
 stderr : @.*cannot be linear.*
 exit : 1
+
+Pattern Matching (1):
+fun foo(_) match {| x -> x} foo
+stdout : fun : (Int) ~> Int
+
+Pattern Matching (2):
+fun ack(_,_) match {| (0, n) -> n + 1 | (m, 0) -> ack(m - 1, 1) | (m, n) -> ack(m - 1, ack(m, n - 1))} ack
+stdout : fun : (Int, Int) ~> Int
+
+Pattern Matching (3):
+fun foo(_)(_) match {| (x, y) -> x + y} foo
+stdout : fun : (Int) -> (Int) ~> Int
+
+Pattern Matching (4) - runtime non-exhaustive error:
+fun foo(_) match {| 1 -> 1} foo(0)
+stdout : ***: Runtime error: non-exhaustive pattern matching at File pm.links, line 1, column 3, to line 0, column 31
