@@ -14,16 +14,16 @@ object ((self : 'self_type))
           let name_list = List.map (fun pats -> List.map (fun pat -> (pat, Utility.gensym())) pats) patterns in
           let switch_tuple = List.map (fun (_, name) -> with_pos (Var name)) (List.flatten name_list) in
           let exhaustive_patterns = List.map (fun _ -> with_pos (Pattern.Any)) switch_tuple in
-          let exhaustive_patterns = 
-            match exhaustive_patterns with 
+          let exhaustive_patterns =
+            match exhaustive_patterns with
               | [] -> with_pos (Pattern.Any)
-              | [single] -> single 
+              | [single] -> single
               | _ -> with_pos (Pattern.Tuple exhaustive_patterns) in
           let exhaustive_position = Format.sprintf "non-exhaustive pattern matching at %s" (SourceCode.Position.show pos) in
           let exhaustive_case = FnAppl (with_pos (Var "error"), [with_pos (Constant (CommonTypes.Constant.String exhaustive_position))]) in
-          let normal_args = 
-            List.map (fun pats -> List.map (fun (pat, name) -> 
-                                              with_pos (Pattern.As (with_pos (Binder.make ~name ()), pat))) 
+          let normal_args =
+            List.map (fun pats -> List.map (fun (pat, name) ->
+                                              with_pos (Pattern.As (with_pos (Binder.make ~name ()), pat)))
                                             pats) name_list in
           let cases = cases@[(exhaustive_patterns, with_pos exhaustive_case)] in
           let switch_body = Switch (with_pos (TupleLit switch_tuple), cases, None) in
