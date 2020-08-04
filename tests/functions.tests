@@ -147,23 +147,23 @@ linfun f(x) {f(x)} f
 stderr : @.*cannot be linear.*
 exit : 1
 
-Pattern Matching (1):
-fun foo(_) match {| x -> x} foo
-stdout : fun : (Int) ~> Int
+Pattern Matching (1)
+fun foo(_) match { | x -> x } foo
+stdout : fun : (a) ~> a
 
-Pattern Matching (2):
-fun ack(_,_) match {| (0, n) -> n + 1 | (m, 0) -> ack(m - 1, 1) | (m, n) -> ack(m - 1, ack(m, n - 1))} ack
+Pattern Matching (2)
+fun ack(_,_) match { | (0, n) -> n + 1 | (m, 0) -> ack(m - 1, 1) | (m, n) -> ack(m - 1, ack(m, n - 1)) } ack
 stdout : fun : (Int, Int) ~> Int
 
-Pattern Matching (3):
-fun ack(_,_) match {| (0, n) -> n + 1 | (m, 0) -> ack(m - 1, 1) | (m, n) -> ack(m - 1, ack(m, n - 1))} fun test() { println(intToString(ack(0,1))); println(intToString(ack(1,0))); println(intToString(ack(1,1))); } test()
-stdout : 2\n2\n3\n() : ()
+Pattern Matching (3)
+fun ack(_,_) match { | (0, n) -> n + 1 | (m, 0) -> ack(m - 1, 1) | (m, n) -> ack(m - 1, ack(m, n - 1)) } fun test() { print(intToString(ack(0,1))); print(intToString(ack(1,0))); print(intToString(ack(1,1))); } test()
+stdout : 223() : ()
 
-Pattern Matching (4):
-fun foo(_)(_) match {| (x, y) -> x + y} foo
+Pattern Matching (4)
+fun foo(_)(_) match { | (x, y) -> x + y } foo
 stdout : fun : (Int) -> (Int) ~> Int
 
-Pattern Matching (5) - runtime non-exhaustive error:
-fun foo(_) match {| 1 -> 1} foo(0)
+Pattern Matching (5) - runtime non-exhaustive error
+fun foo(_) match { | 1 -> 1 } foo(0)
 stderr : @.*Runtime error: non-exhaustive pattern matching.*
 exit : 1
