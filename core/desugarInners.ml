@@ -172,7 +172,7 @@ object (o : 'self_type)
                let o = o#with_visiting (StringSet.add (Binder.to_name rec_binder) visiting_funs) in
                let (o, tyvars) = o#quantifiers tyvars in
                let (o, inner) = o#datatype inner in
-               let lam_in = match lam with | NormalFunlit x -> x | MatchFunlit _ -> assert false in (*TODO: matchfunlit *)
+               let lam_in = match lam with | NormalFunlit x -> x | MatchFunlit _ -> assert false in
                let inner_effects = TransformSugar.fun_effects inner (fst lam_in) in
                let (o, lam, _) = o#funlit inner_effects lam in
                let o = o#restore_quantifiers outer_tyvars in

@@ -130,6 +130,9 @@ let on_effects o (eff : Types.row) fn x =
   let (o, x, y) = fn o x in
   (o#with_effects effect_row, x, y)
 
+let get_normal_funlit fnlit =
+  match fnlit with | NormalFunlit x -> x | MatchFunlit _ -> assert false
+
 let check_type_application (e, t) k =
   begin
     try
@@ -725,7 +728,7 @@ class transform (env : Types.typing_environment) =
 
     method funlit : Types.row -> funlit -> ('self_type * funlit * Types.datatype) =
       fun inner_eff f ->
-        match f with 
+        match f with
           | NormalFunlit (pss, e) ->
             let envs = o#backup_envs in
             let (o, pss) = listu o (fun o -> listu o (fun o -> o#pattern)) pss in
@@ -733,7 +736,13 @@ class transform (env : Types.typing_environment) =
             let (o, e, t) = o#phrase e in
             let o = o#restore_envs envs in
             (o, NormalFunlit (pss, e), t)
-          | MatchFunlit (_,_) -> assert false (*TODO: matchfunlit *)
+          | MatchFunlit (pss, body) ->
+            let envs = o#backup_envs in
+            let (o, pss) = listu o (fun o -> listu o (fun o -> o#pattern)) pss in
+            let o = o#with_effects inner_eff in
+            let (o, body, t) = o#list (fun (p, c) -> o#pattern p; o#phrase c) body in
+            let o = o#restore_envs envs in
+            (o, MatchFunlit (pss, body), t)
 
     method constant : Constant.t -> ('self_type * Constant.t * Types.datatype) =
       function
@@ -756,7 +765,7 @@ class transform (env : Types.typing_environment) =
           | {node={ rec_definition = ((tyvars, Some (inner, extras)), lam); _ } as fn; pos} :: defs ->
               let (o, tyvars) = o#quantifiers tyvars in
               let (o, inner) = o#datatype inner in
-              let lam_in = match lam with | NormalFunlit x -> x | MatchFunlit _ -> assert false in (*TODO: matchfunlit *)
+              let lam_in = get_normal_funlit lam in
               let inner_effects = fun_effects inner (fst lam_in) in
               let (o, lam, _) = o#funlit inner_effects lam in
               let o = o#restore_quantifiers outer_tyvars in
@@ -804,7 +813,7 @@ class transform (env : Types.typing_environment) =
            when Binder.has_type fun_binder ->
          let outer_tyvars = o#backup_quantifiers in
          let (o, tyvars) = o#quantifiers tyvars in
-         let lam_in = match lam with | NormalFunlit x -> x | MatchFunlit _ -> assert false in (*TODO: matchfunlit *)
+         let lam_in = get_normal_funlit lam in
          let inner_effects = fun_effects (Binder.to_type fun_binder) (fst lam_in) in
          let (o, lam, _) = o#funlit inner_effects lam in
          let o = o#restore_quantifiers outer_tyvars in

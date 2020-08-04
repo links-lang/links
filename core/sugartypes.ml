@@ -779,8 +779,6 @@ struct
     diff (match_body body) (union_map (union_map pattern) args)
   and match_body (body : (Pattern.with_pos * phrase) list) : StringSet.t =
     union_map (fun (pat, phr) -> union (pattern pat) (phrase phr)) body
-  (* and funlit (args, body : funlit) : StringSet.t =
-    diff (phrase body) (union_map (union_map pattern) args) *)
   and block (binds, expr : binding list * phrase) : StringSet.t =
     ListLabels.fold_right binds ~init:(phrase expr)
       ~f:(fun bind bodyfree ->

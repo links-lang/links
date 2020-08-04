@@ -141,13 +141,13 @@ let renamer qs_from qs_to =
            ; fun_frozen
            ; fun_unsafe_signature } ->
      let o, (pats', tyvars', typ', _, signature', body') =
-       match f with 
-        | NormalFunlit (pats, body) -> o#handle_function pats tyvars (Binder.to_type fun_binder) None fun_signature body 
-        | MatchFunlit (_,_) -> assert false in (*TODO: matchfunlit *)
+       match f with
+        | NormalFunlit (pats, body) -> o#handle_function pats tyvars (Binder.to_type fun_binder) None fun_signature body
+        | MatchFunlit (_,_) -> assert false in
      let function_definition' =
        { fun_binder = Binder.set_type fun_binder typ'
        ; fun_linearity
-       ; fun_definition = (tyvars', NormalFunlit (pats', body')) (*TODO: matchfunlit *)
+       ; fun_definition = (tyvars', NormalFunlit (pats', body'))
        ; fun_location
        ; fun_signature = signature'
        ; fun_frozen
@@ -166,12 +166,12 @@ let renamer qs_from qs_to =
              ; rec_frozen } ->
        let o, (pats', tyvars', typ', ty', signature', body') =
          match f with
-          | NormalFunlit (pats, body) -> o#handle_function pats tyvars (Binder.to_type rec_binder) ty rec_signature body 
-          | MatchFunlit (_,_) -> assert false in (*TODO: matchfunlit *)
+          | NormalFunlit (pats, body) -> o#handle_function pats tyvars (Binder.to_type rec_binder) ty rec_signature body
+          | MatchFunlit (_,_) -> assert false in
        let recursive_definition' =
          { rec_binder = Binder.set_type rec_binder typ'
          ; rec_linearity
-         ; rec_definition = ((tyvars', ty'), NormalFunlit (pats', body')) (*TODO: matchfunlit *)
+         ; rec_definition = ((tyvars', ty'), NormalFunlit (pats', body'))
          ; rec_location
          ; rec_signature = signature'
          ; rec_unsafe_signature
@@ -220,7 +220,7 @@ let rename_function_definition : function_definition -> function_definition =
       ; fun_signature
       ; fun_frozen
       ; fun_unsafe_signature } ->
-  let (pats, body) = match f with | NormalFunlit (ps, bd) -> (ps, bd) | MatchFunlit (_,_) -> assert false in (*TODO: matchfunlit *)
+  let (pats, body) = match f with | NormalFunlit (ps, bd) -> (ps, bd) | MatchFunlit (_,_) -> assert false in
   let qs_from = List.map SugarQuantifier.get_resolved_exn tyvars_from in
   let qs_to, _      = Instantiate.build_fresh_quantifiers qs_from in
   let tyvars_to     = List.map SugarQuantifier.mk_resolved qs_to in
@@ -231,7 +231,7 @@ let rename_function_definition : function_definition -> function_definition =
   let _, signature' = o#option (fun o -> o#datatype') fun_signature in
   { fun_binder =  Binder.set_type fun_binder typ'
   ; fun_linearity
-  ; fun_definition = (tyvars_to, NormalFunlit (pats', body')) (*TODO: matchfunlit *)
+  ; fun_definition = (tyvars_to, NormalFunlit (pats', body'))
   ; fun_location
   ; fun_signature = signature'
   ; fun_frozen
@@ -247,7 +247,7 @@ let rename_recursive_functionnode :
       ; rec_signature
       ; rec_frozen
       ; rec_unsafe_signature } ->
-  let (pats, body) = match f with | NormalFunlit (ps, bd) -> (ps, bd) | MatchFunlit (_,_) -> assert false in (*TODO: matchfunlit *)
+  let (pats, body) = match f with | NormalFunlit (ps, bd) -> (ps, bd) | MatchFunlit (_,_) -> assert false in
   let qs_from = List.map SugarQuantifier.get_resolved_exn tyvars_from in
   let qs_to, _      = Instantiate.build_fresh_quantifiers qs_from in
   let tyvars_to     = List.map SugarQuantifier.mk_resolved qs_to in
@@ -259,7 +259,7 @@ let rename_recursive_functionnode :
   let _, signature' = o#option (fun o -> o#datatype') rec_signature in
   { rec_binder =  Binder.set_type rec_binder typ'
   ; rec_linearity
-  ; rec_definition = ((tyvars_to, ty'), NormalFunlit (pats', body')) (*TODO: matchfunlit *)
+  ; rec_definition = ((tyvars_to, ty'), NormalFunlit (pats', body'))
   ; rec_location
   ; rec_signature = signature'
   ; rec_frozen

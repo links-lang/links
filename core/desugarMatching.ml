@@ -2,6 +2,30 @@ open Sugartypes
 open Utility
 open SourceCode
 
+(* This module desugars pattern-matching functions
+
+  This transformation convert function like that:
+
+  fun foo(a1, ..., an) match { 
+    | case (p1_1, ..., p1_n) -> b_1
+    | ...
+    | case (pm_1, pm_n) -> b_m
+  }
+
+  to function with switch body like that:
+
+  fun foo(a1 as x1, ..., an as xn) {
+    switch ((x1, ..., xn)) {
+      case (p1_1, ..., p1_n) -> b_1
+      ...
+      case (pm_1, ..., pm_n) -> b_m
+      case (_, ..., _) -> error("non-exhaustive")
+  }
+
+  The last non-exhaustive case with wild card pattern is always attached to the end of switch body.
+
+*)
+
 let with_pos = SourceCode.WithPos.make
 
 let desugar_matching =
@@ -11,14 +35,11 @@ object ((self : 'self_type))
       let pos = WithPos.pos b in
       match WithPos.node b with
       |  Fun ({ fun_definition = (tvs, MatchFunlit (patterns, cases)); _ } as fn) ->
+          (* bind the arguments with unique var name *)
           let name_list = List.map (fun pats -> List.map (fun pat -> (pat, Utility.gensym())) pats) patterns in
           let switch_tuple = List.map (fun (_, name) -> with_pos (Var name)) (List.flatten name_list) in
-          let exhaustive_patterns = List.map (fun _ -> with_pos (Pattern.Any)) switch_tuple in
-          let exhaustive_patterns =
-            match exhaustive_patterns with
-              | [] -> with_pos (Pattern.Any)
-              | [single] -> single
-              | _ -> with_pos (Pattern.Tuple exhaustive_patterns) in
+          (* assemble exhaustive handler *)
+          let exhaustive_patterns = with_pos (Pattern.Any) in
           let exhaustive_position = Format.sprintf "non-exhaustive pattern matching at %s" (SourceCode.Position.show pos) in
           let exhaustive_case = FnAppl (with_pos (Var "error"), [with_pos (Constant (CommonTypes.Constant.String exhaustive_position))]) in
           let normal_args =
@@ -43,6 +64,6 @@ end
 
 module Untyped
   = Transform.Untyped.Make.Transformer(struct
-        let name = "desugar_pattern_matching"
+        let name = "desugar_match_functions"
         let obj = desugar_matching
       end)

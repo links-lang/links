@@ -450,9 +450,9 @@ match_tlfunbinding:
 | fun_kind VARIABLE arg_lists perhaps_location match_body      { ($1, $2, $3, $4, $5)                }
 
 match_body:
-| MATCH LBRACE match_cases* RBRACE                             { $3 }
+| MATCH LBRACE match_case* RBRACE                             { $3 }
 
-match_cases:
+match_case:
 | VBAR pattern RARROW block_contents                           { ($2, block ~ppos:$loc $4) }
 
 tlvarbinding:

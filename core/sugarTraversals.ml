@@ -560,11 +560,13 @@ class map =
 
     method funlit : funlit -> funlit =
       fun f ->
-        match f with 
-          | NormalFunlit (_x, _x_i1) -> 
+        match f with
+          | NormalFunlit (_x, _x_i1) ->
             let _x = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
-            let _x_i1 = o#phrase _x_i1 in NormalFunlit (_x, _x_i1) (*TODO: matchfunlit *)
-          | MatchFunlit (_,_) -> assert false
+            let _x_i1 = o#phrase _x_i1 in NormalFunlit (_x, _x_i1)
+          | MatchFunlit (pat, body) ->
+            let pat = o#list (fun o -> o#list (fun o -> o#pattern)) pat in
+            let body = o#list (fun (p, c) -> o#pattern p; o#phrase c) body in MatchFunlit (pat, body)
 
     method handle_params : handler_parameterisation -> handler_parameterisation =
       fun { shp_bindings; shp_types }->
@@ -1291,11 +1293,13 @@ class fold =
 
     method funlit : funlit -> 'self_type =
       fun f ->
-        match f with 
-          | NormalFunlit (_x, _x_i1) -> 
+        match f with
+          | NormalFunlit (_x, _x_i1) ->
             let o = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
             let o = o#phrase _x_i1 in o
-          | MatchFunlit (_,_) -> assert false (*TODO: matchfunlit *)
+          | MatchFunlit (pat, body) ->
+            let o = o#list (fun o -> o#list (fun o -> o#pattern)) pat in
+            let o = o#list (fun (p, c) -> o#pattern p; o#phrase c) body in o
 
 
     method handle_params : handler_parameterisation -> 'self_type =
@@ -2123,11 +2127,13 @@ class fold_map =
 
     method funlit : funlit -> ('self_type * funlit) =
       fun f ->
-        match f with 
-          | NormalFunlit (_x, _x_i1) -> 
+        match f with
+          | NormalFunlit (_x, _x_i1) ->
             let (o, _x) = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
             let (o, _x_i1) = o#phrase _x_i1 in (o, NormalFunlit (_x, _x_i1))
-          | MatchFunlit (_,_) -> assert false (*TODO: matchfunlit *)
+          | MatchFunlit (pat, body) ->
+            let (o, pat) = o#list (fun o -> o#list (fun o -> o#pattern)) pat in
+            let (o, body) = o#list (fun (p, c) -> o#pattern p; o#phrase c) body in (o, MatchFunlit (pat, body))
 
     method handle_params : handler_parameterisation -> ('self_type * handler_parameterisation) =
       fun { shp_bindings; shp_types } ->
