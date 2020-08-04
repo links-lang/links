@@ -773,11 +773,11 @@ struct
     match fn with
     | NormalFunlit n_fn -> normal_funlit n_fn
     | MatchFunlit m_fn -> match_funlit m_fn
-  and normal_funlit (args, body : normal_funlit) : StringSet.t = 
+  and normal_funlit (args, body : normal_funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
-  and match_funlit (args, body : match_funlit) : StringSet.t = 
+  and match_funlit (args, body : match_funlit) : StringSet.t =
     diff (match_body body) (union_map (union_map pattern) args)
-  and match_body (body : (Pattern.with_pos * phrase) list) : StringSet.t = 
+  and match_body (body : (Pattern.with_pos * phrase) list) : StringSet.t =
     union_map (fun (pat, phr) -> union (pattern pat) (phrase phr)) body
   (* and funlit (args, body : funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args) *)
