@@ -740,9 +740,9 @@ class transform (env : Types.typing_environment) =
             let envs = o#backup_envs in
             let (o, pss) = listu o (fun o -> listu o (fun o -> o#pattern)) pss in
             let o = o#with_effects inner_eff in
-            let (o, body, t) = o#list (fun (p, c) -> o#pattern p; o#phrase c) body in
+            let (o, body) = listu o (fun o (p, c) -> let (o, p) = o#pattern p in let (o, c, _) = o#phrase c in (o, (p, c))) body in
             let o = o#restore_envs envs in
-            (o, MatchFunlit (pss, body), t)
+            (o, MatchFunlit (pss, body), Types.unit_type)
 
     method constant : Constant.t -> ('self_type * Constant.t * Types.datatype) =
       function
