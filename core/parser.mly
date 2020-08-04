@@ -849,7 +849,7 @@ bindings:
 | mutual_binding_block                                         { $1        }
 | bindings mutual_binding_block                                { $1 @ $2   }
 | bindings binding                                             { $1 @ [$2] }*/
-| binding_or_mutual                                            { $1 }
+| binding_or_mutual                                            { $1 } /* See #441 and #900 */
 | bindings binding_or_mutual                                   { $1 @ $2 }
 
 moduleblock:
