@@ -554,8 +554,8 @@ primary_expression:
 | LBRACKET perhaps_exps RBRACKET                               { list ~ppos:$loc $2 }
 | LBRACKET exp DOTDOT exp RBRACKET                             { with_pos $loc (RangeLit($2, $4))   }
 | xml                                                          { $1 }
-| linearity arg_lists block                                    { fun_lit ~ppos:$loc $1 $2 $3 }
-| linearity arg_lists switch_funlit_body                       { switch_fun_lit ~ppos:$loc $1 $2 $3 }
+| linearity arg_lists perhaps_location block                   { fun_lit ~ppos:$loc ~location:$3 $1 $2 $4 }
+| linearity arg_lists perhaps_location switch_funlit_body      { switch_fun_lit ~ppos:$loc ~location:$3 $1 $2 $4 }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { with_pos $loc (CP $2) }
 | DOLLAR primary_expression                                    { with_pos $loc (Generalise $2) }
 
@@ -836,10 +836,10 @@ links_open:
 binding:
 | VAR pattern EQ exp SEMICOLON                                 { val_binding ~ppos:$loc $2 $4 }
 | exp SEMICOLON                                                { with_pos $loc (Exp $1) }
-| signatures fun_kind VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, loc_unknown, $5) }
-| fun_kind VARIABLE arg_lists block                            { fun_binding ~ppos:$loc None ($1, $2, $3, loc_unknown, $4) }
-| signatures fun_kind VARIABLE arg_lists switch_funlit_body    { switch_fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, loc_unknown, $5) }
-| fun_kind VARIABLE arg_lists switch_funlit_body               { switch_fun_binding ~ppos:$loc None ($1, $2, $3, loc_unknown, $4) }
+| signatures fun_kind VARIABLE arg_lists perhaps_location block { fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, $5, $6) }
+| fun_kind VARIABLE arg_lists perhaps_location block           { fun_binding ~ppos:$loc None ($1, $2, $3, $4, $5) }
+| signatures fun_kind VARIABLE arg_lists perhaps_location switch_funlit_body    { switch_fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, $5, $6) }
+| fun_kind VARIABLE arg_lists perhaps_location switch_funlit_body               { switch_fun_binding ~ppos:$loc None ($1, $2, $3, $4, $5) }
 | typedecl SEMICOLON | links_module
 | links_open SEMICOLON                                         { $1 }
 
