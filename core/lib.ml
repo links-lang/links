@@ -964,6 +964,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (`Client, datatype "(String) ~> String",
   PURE);
 
+  "getRadioGroupValue",
+  (`Client, datatype "([String]) ~> String",
+  PURE);
+
   "event",
   (`Client, datatype "Event",
   PURE);
