@@ -20,41 +20,41 @@ module type IR_VISITOR = sig
     val tyenv : environment
 
     method lookup_type : var -> Types.datatype
-    method constant : Constant.t -> (Constant.t * Types.datatype * 'self_type)
+    method constant : Constant.t -> ('self_type * Constant.t * Types.datatype)
     method optionu :
       'a.
-      ('self_type -> 'a -> ('a * 'self_type)) ->
-      'a option -> 'a option * 'self_type
+      ('self_type -> 'a -> ('self_type * 'a)) ->
+      'a option -> 'self_type * 'a option
     method option :
       'a.
-      ('self_type -> 'a -> ('a * Types.datatype * 'self_type)) ->
-      'a option -> 'a option * Types.datatype option * 'self_type
+      ('self_type -> 'a -> ('self_type * 'a * Types.datatype)) ->
+      'a option -> 'self_type * 'a option * Types.datatype option
     method list :
       'a.
-      ('self_type -> 'a -> ('a * Types.datatype * 'self_type)) ->
-      'a list -> 'a list * Types.datatype list * 'self_type
+      ('self_type -> 'a -> ('self_type * 'a * Types.datatype)) ->
+      'a list -> 'self_type * 'a list * Types.datatype list
     method name_map :
       'a.
-      ('self_type -> 'a -> ('a * Types.datatype * 'self_type)) ->
-      'a name_map -> 'a name_map * Types.datatype name_map * 'self_type
+      ('self_type -> 'a -> ('self_type * 'a * Types.datatype)) ->
+      'a name_map -> 'self_type * 'a name_map * Types.datatype name_map
     method var_map :
       'a.
-      ('self_type -> 'a -> ('a * Types.datatype * 'self_type)) ->
-      'a var_map -> 'a var_map * Types.datatype var_map * 'self_type
-    method var : var -> (var * Types.datatype * 'self_type)
-    (* method closure_var : var -> (var * Types.datatype * 'self_type) *)
-    method value : value -> (value * Types.datatype * 'self_type)
+      ('self_type -> 'a -> ('self_type * 'a * Types.datatype)) ->
+      'a var_map -> 'self_type * 'a var_map * Types.datatype var_map
+    method var : var -> ('self_type * var * Types.datatype)
+    (* method closure_var : var -> ('self_type * var * Types.datatype) *)
+    method value : value -> ('self_type * value * Types.datatype)
 
     method tail_computation :
-      tail_computation -> (tail_computation * Types.datatype * 'self_type)
-    method special : special -> (special * Types.datatype * 'self_type)
-    method bindings : binding list -> (binding list * 'self_type)
-    method computation : computation -> (computation * Types.datatype * 'self_type)
-    method binding : binding -> (binding * 'self_type)
-    method binder : binder -> (binder * 'self_type)
-    (* method closure_binder : binder -> (binder * 'self_type) *)
+      tail_computation -> ('self_type * tail_computation * Types.datatype)
+    method special : special -> ('self_type * special * Types.datatype)
+    method bindings : binding list -> ('self_type * binding list)
+    method computation : computation -> ('self_type * computation * Types.datatype)
+    method binding : binding -> ('self_type * binding)
+    method binder : binder -> ('self_type * binder)
+    (* method closure_binder : binder -> ('self_type * binder) *)
 
-    method program : program -> (program * Types.datatype * 'self_type)
+    method program : program -> ('self_type * program * Types.datatype)
 
     method get_type_environment : environment
   end
@@ -82,93 +82,91 @@ struct
     (* method private lookup_closure_type : var -> datatype = fun var -> *)
     (*   Env.lookup cenv var *)
 
-    method constant : Constant.t -> (Constant.t * datatype * 'self_type) = fun c ->
+    method constant : Constant.t -> ('self_type * Constant.t * datatype) = fun c ->
       match c with
-        | Constant.Bool   _ -> c, bool_type  , o
-        | Constant.Int    _ -> c, int_type   , o
-        | Constant.Char   _ -> c, char_type  , o
-        | Constant.String _ -> c, string_type, o
-        | Constant.Float  _ -> c, float_type , o
+        | Constant.Bool   _ -> o, c, bool_type
+        | Constant.Int    _ -> o, c, int_type
+        | Constant.Char   _ -> o, c, char_type
+        | Constant.String _ -> o, c, string_type
+        | Constant.Float  _ -> o, c, float_type
 
     method optionu :
       'a.
-      ('self_type -> 'a -> ('a * 'self_type)) ->
-      'a option -> 'a option * 'self_type =
+      ('self_type -> 'a -> ('self_type * 'a)) ->
+      'a option -> 'self_type * 'a option =
       fun f v ->
         match v with
-          | None -> None, o
+          | None -> o, None
           | Some v ->
-              let v, o = f o v in
-                Some v, o
+              let o, v = f o v in
+                o, Some v
 
     method option :
       'a.
-      ('self_type -> 'a -> ('a * datatype * 'self_type)) ->
-      'a option -> 'a option * datatype option * 'self_type =
+      ('self_type -> 'a -> ('self_type * 'a * datatype)) ->
+      'a option -> 'self_type * 'a option * datatype option =
       fun f v ->
         match v with
-          | None -> None, None, o
+          | None -> o, None, None
           | Some v ->
-              let v, t, o = f o v in
-                Some v, Some t, o
+              let o, v, t = f o v in
+                o, Some v, Some t
 
     method list :
       'a.
-      ('self_type -> 'a -> ('a * datatype * 'self_type)) ->
-      'a list -> 'a list * datatype list * 'self_type =
+      ('self_type -> 'a -> ('self_type * 'a * datatype)) ->
+      'a list -> 'self_type * 'a list * datatype list =
       fun f v ->
-        let vs, ts, o =
+        let o, vs, ts =
           List.fold_left
-            (fun (vs, ts, o) v ->
-               let (v, t, o) = f o v in
-                 v::vs, t::ts, o)
-            ([], [], o)
+            (fun (o, vs, ts) v ->
+               let (o, v, t) = f o v in
+                 o, v::vs, t::ts)
+            (o, [], [])
             v
         in
-          List.rev vs, List.rev ts, o
+          o, List.rev vs, List.rev ts
 
     method name_map :
       'a.
-      ('self_type -> 'a -> ('a * datatype * 'self_type)) ->
-      'a name_map -> 'a name_map * datatype name_map * 'self_type =
+      ('self_type -> 'a -> ('self_type * 'a * datatype)) ->
+      'a name_map -> 'self_type * 'a name_map * datatype name_map =
       fun f vmap ->
         StringMap.fold
-          (fun name v (vmap, tmap, o) ->
-             let (v, t, o) = f o v in
-               (StringMap.add name v vmap,
-                StringMap.add name t tmap,
-                o))
+          (fun name v (o, vmap, tmap) ->
+             let (o, v, t) = f o v in
+               (o, StringMap.add name v vmap,
+                   StringMap.add name t tmap))
           vmap
-          (StringMap.empty, StringMap.empty, o)
+          (o, StringMap.empty, StringMap.empty)
 
     method var_map :
       'a.
-      ('self_type -> 'a -> ('a * datatype * 'self_type)) ->
-      'a var_map -> 'a var_map * datatype var_map * 'self_type =
+      ('self_type -> 'a -> ('self_type * 'a * datatype)) ->
+      'a var_map -> 'self_type * 'a var_map * datatype var_map =
       fun f vmap ->
         IntMap.fold
-          (fun name v (vmap, tmap, o) ->
-             let (v, t, o) = f o v in
-               (IntMap.add name v vmap,
-                IntMap.add name t tmap,
-                o))
+          (fun name v (o, vmap, tmap) ->
+             let (o, v, t) = f o v in
+               (o, IntMap.add name v vmap,
+                   IntMap.add name t tmap))
           vmap
-          (IntMap.empty, IntMap.empty, o)
+          (o, IntMap.empty, IntMap.empty)
 
-    method var : var -> (var * datatype * 'self_type) =
-      fun var -> (var, o#lookup_type var, o)
+    method var : var -> ('self_type * var * datatype) =
+      fun var -> (o, var, o#lookup_type var)
 
-    (* method closure_var : var -> (var * datatype * 'self_type) = *)
-    (*   fun var -> (var, o#lookup_closure_type var, o) *)
+    (* method closure_var : var -> ('self_type * var * datatype) = *)
+    (*   fun var -> (o, var, o#lookup_closure_type var) *)
 
-    method value : value -> (value * datatype * 'self_type) =
+    method value : value -> ('self_type * value * datatype) =
       function
-        | Ir.Constant c -> let (c, t, o) = o#constant c in Ir.Constant c, t, o
-        | Variable x -> let (x, t, o) = o#var x in Ir.Variable x, t, o
-        (* | ClosureVar x -> let (x, t, o) = o#closure_var x in ClosureVar x, t, o *)
+        | Ir.Constant c -> let (o, c, t) = o#constant c in o, Ir.Constant c, t
+        | Variable x -> let (o, x, t) = o#var x in o, Ir.Variable x, t
+        (* | ClosureVar x -> let (o, x, t) = o#closure_var x in o, ClosureVar x, t*)
         | Extend (fields, base) ->
-            let (fields, field_types, o) = o#name_map (fun o -> o#value) fields in
-            let (base, base_type, o) = o#option (fun o -> o#value) base in
+            let (o, fields, field_types) = o#name_map (fun o -> o#value) fields in
+            let (o, base, base_type) = o#option (fun o -> o#value) base in
 
             let t =
               match base_type with
@@ -181,26 +179,26 @@ struct
                         | _ -> assert false
                     end
             in
-              Extend (fields, base), t, o
+              o, Extend (fields, base), t
         | Project (name, v) ->
-            let (v, vt, o) = o#value v in
-              Project (name, v), deconstruct (project_type name) vt, o
+            let (o, v, vt) = o#value v in
+              o, Project (name, v), deconstruct (project_type name) vt
         | Erase (names, v) ->
-            let (v, vt, o) = o#value v in
+            let (o, v, vt) = o#value v in
             let t = deconstruct (erase_type names) vt in
-              Erase (names, v), t, o
+              o, Erase (names, v), t
         | Inject (name, v, t) ->
-            let v, _vt, o = o#value v in
-              Inject (name, v, t), t, o
+            let o, v, _vt = o#value v in
+              o, Inject (name, v, t), t
         | TAbs (tyvars, v) ->
-            let v, t, o = o#value v in
+            let o, v, t = o#value v in
             let t = Types.for_all (tyvars, t) in
-              TAbs (tyvars, v), t, o
+              o, TAbs (tyvars, v), t
         | TApp (v, ts) ->
-            let v, t, o = o#value v in
+            let o, v, t = o#value v in
               begin try
                 let t = Instantiate.apply_type t ts in
-                  TApp (v, ts), t, o
+                  o, TApp (v, ts), t
               with
                   Instantiate.ArityMismatch _ ->
                   raise (internal_error
@@ -211,300 +209,300 @@ struct
                        (String.concat "," (List.map (fun t -> Types.string_of_type_arg t) ts))))
               end
         | XmlNode (tag, attributes, children) ->
-            let (attributes, _, o) = o#name_map (fun o -> o#value) attributes in
-            let (children  , _, o) = o#list (fun o -> o#value) children in
+            let (o, attributes, _) = o#name_map (fun o -> o#value) attributes in
+            let (o, children  , _) = o#list (fun o -> o#value) children in
 
               (*
                 let _ = assert (StringMap.for_all (fun t -> t=string_type) attribute_types) in
                 let _ = assert (List.for_all (fun t -> t=xml_type) children_types) in
               *)
-              XmlNode (tag, attributes, children), xml_type, o
+              o, XmlNode (tag, attributes, children), xml_type
         | ApplyPure (f, args) ->
-            let (f, ft, o) = o#value f in
-            let (args, _, o) = o#list (fun o -> o#value) args in
+            let (o, f, ft) = o#value f in
+            let (o, args, _) = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
-              ApplyPure (f, args), deconstruct (return_type ~overstep_quantifiers:true) ft, o
+              o, ApplyPure (f, args), deconstruct (return_type ~overstep_quantifiers:true) ft
 
         | Closure (f, tyargs, z) ->
-            let (f, t, o) = o#var f in
+            let (o, f, t) = o#var f in
             let t =
               match tyargs with
                 | [] -> t
                 | _ ->
                   let (remaining_type, instantiation_maps) = Instantiate.instantiation_maps_of_type_arguments false t tyargs in
                   Instantiate.datatype instantiation_maps remaining_type in
-            let (z, _, o) = o#value z in
+            let (o, z, _) = o#value z in
               (* TODO: check that closure environment types match expectations for f *)
-              Closure (f, tyargs, z), t, o
+              o, Closure (f, tyargs, z), t
         | Coerce (v, t) ->
-            let v, _, o = o#value v in
+            let o, v, _ = o#value v in
             (* TODO: check that vt <: t *)
-              Coerce (v, t), t, o
+              o, Coerce (v, t), t
 
     method tail_computation :
-      tail_computation -> (tail_computation * datatype * 'self_type) =
+      tail_computation -> ('self_type * tail_computation * datatype) =
       function
           (* TODO: type checking *)
         | Return v ->
-            let v, t, o = o#value v in
-              Return v, t, o
+            let o, v, t = o#value v in
+              o, Return v, t
         | Apply (f, args) ->
-            let f, ft, o = o#value f in
-            let args, _, o = o#list (fun o -> o#value) args in
+            let o, f, ft = o#value f in
+            let o, args, _ = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
-              Apply (f, args), deconstruct (return_type ~overstep_quantifiers:true) ft, o
+              o, Apply (f, args), deconstruct (return_type ~overstep_quantifiers:true) ft
         (* | ApplyClosure (f, args) -> *)
-        (*     let f, ft, o = o#value f in *)
-        (*     let args, arg_types, o = o#list (fun o -> o#value) args in *)
+        (*     let o, f, ft = o#value f in *)
+        (*     let o, args, arg_types = o#list (fun o -> o#value) args in *)
         (*     (\* TODO: check arg types match *\) *)
         (*     (\* TOOD: add closure type *\) *)
-        (*       ApplyClosure (f, args), deconstruct return_type ft, o *)
+        (*       o, ApplyClosure (f, args), deconstruct return_type ft *)
         | Special special ->
-            let special, t, o = o#special special in
-              Special special, t, o
+            let o, special, t = o#special special in
+              o, Special special, t
 
         | Ir.Case (v, cases, default) ->
-            let v, _, o = o#value v in
-            let cases, case_types, o =
+            let o, v, _ = o#value v in
+            let o, cases, case_types =
               o#name_map
                 (fun o (b, c) ->
-                   let b, o = o#binder b in
-                   let c, t, o = o#computation c in
-                     (b, c), t, o) cases in
-            let default, default_type, o =
+                   let o, b = o#binder b in
+                   let o, c, t = o#computation c in
+                     o, (b, c), t) cases in
+            let o, default, default_type =
               o#option (fun o (b, c) ->
-                          let b, o = o#binder b in
-                          let c, t, o = o#computation c in
-                            (b, c), t, o) default in
+                          let o, b = o#binder b in
+                          let o, c, t = o#computation c in
+                            o, (b, c), t) default in
             let t =
               if not (StringMap.is_empty case_types) then
                 (StringMap.to_alist ->- List.hd ->- snd) case_types
               else
                 val_of default_type
             in
-              Ir.Case (v, cases, default), t, o
+              o, Ir.Case (v, cases, default), t
         | If (v, left, right) ->
-            let v, _, o = o#value v in
-            let left, t, o = o#computation left in
-            let right, _, o = o#computation right in
-              If (v, left, right), t, o
+            let o, v, _ = o#value v in
+            let o, left, t = o#computation left in
+            let o, right, _ = o#computation right in
+              o, If (v, left, right), t
 
-    method special : special -> (special * datatype * 'self_type) =
+    method special : special -> ('self_type * special * datatype) =
       let open Ir in
       function
-        | Wrong t -> Wrong t, t, o
+        | Wrong t -> o, Wrong t, t
         | Database v ->
-            let v, _, o = o#value v in
-              Database v, Types.Primitive Primitive.DB, o
+            let o, v, _ = o#value v in
+              o, Database v, Types.Primitive Primitive.DB
         | Table (db, table_name, keys, tt) ->
-            let db, _, o = o#value db in
-            let keys, _, o = o#value keys in
-            let table_name, _, o = o#value table_name in
-              Table (db, table_name, keys, tt), Types.Table tt, o
+            let o, db, _ = o#value db in
+            let o, keys, _ = o#value keys in
+            let o, table_name, _ = o#value table_name in
+              o, Table (db, table_name, keys, tt), Types.Table tt
         | Lens (table, rtype) ->
-            let table, _, o = o#value table in
-              Lens (table, rtype), Types.Lens rtype, o
+            let o, table, _ = o#value table in
+              o, Lens (table, rtype), Types.Lens rtype
         | LensSerial {lens; columns; typ} ->
-            let lens, _, o = o#value lens in
-              LensSerial {lens; columns; typ}, Types.Lens typ, o
+            let o, lens, _ = o#value lens in
+              o, LensSerial {lens; columns; typ}, Types.Lens typ
         | LensDrop {lens; drop; key; default; typ} ->
-            let lens, _, o = o#value lens in
-            let default, _, o = o#value default in
-              LensDrop {lens; drop; key; default; typ}, Types.Lens typ, o
+            let o, lens, _ = o#value lens in
+            let o, default, _ = o#value default in
+              o, LensDrop {lens; drop; key; default; typ}, Types.Lens typ
         | LensSelect {lens; predicate; typ} ->
-            let lens, _, o = o#value lens in
-            let predicate, o =
+            let o, lens, _ = o#value lens in
+            let o, predicate =
               (match predicate with
                | Dynamic predicate ->
-                 let predicate, _, o = o#value predicate in
-                 Dynamic predicate, o
-              | Static predicate -> Static predicate, o) in
-              LensSelect {lens; predicate; typ}, Types.Lens typ, o
+                 let o, predicate, _ = o#value predicate in
+                 o, Dynamic predicate
+              | Static predicate -> o, Static predicate) in
+              o, LensSelect {lens; predicate; typ}, Types.Lens typ
         | LensJoin {left; right; on; del_left; del_right; typ} ->
-            let left, _, o = o#value left in
-            let right, _, o = o#value right in
-              LensJoin {left; right; on; del_left; del_right; typ}, Types.Lens typ, o
+            let o, left, _ = o#value left in
+            let o, right, _ = o#value right in
+              o, LensJoin {left; right; on; del_left; del_right; typ}, Types.Lens typ
         | LensCheck (lens, t) ->
-            let lens, _, o = o#value lens in
-              LensCheck (lens, t), Types.Lens t, o
+            let o, lens, _ = o#value lens in
+              o, LensCheck (lens, t), Types.Lens t
         | LensGet (lens, rtype) ->
-            let lens, _, o = o#value lens in
-              LensGet (lens, rtype), Types.make_list_type rtype, o
+            let o, lens, _ = o#value lens in
+              o, LensGet (lens, rtype), Types.make_list_type rtype
         | LensPut (lens, data, rtype) ->
-            let lens, _, o = o#value lens in
-            let data, _, o = o#value data in
-            LensPut (lens, data, rtype), Types.make_tuple_type [], o
+            let o, lens, _ = o#value lens in
+            let o, data, _ = o#value data in
+            o, LensPut (lens, data, rtype), Types.make_tuple_type []
         | Query (range, policy, e, _) ->
-            let range, o =
+            let o, range =
               o#optionu
                 (fun o (limit, offset) ->
-                   let limit, _, o = o#value limit in
-                   let offset, _, o = o#value offset in
-                     (limit, offset), o)
+                   let o, limit, _ = o#value limit in
+                   let o, offset, _ = o#value offset in
+                     o, (limit, offset))
                 range in
-            let e, t, o = o#computation e in
-              Query (range, policy, e, t), t, o
+            let o, e, t = o#computation e in
+              o, Query (range, policy, e, t), t
         | InsertRows (source, rows) ->
-            let source, _, o = o#value source in
-            let rows, _, o = o#value rows in
-              InsertRows(source, rows), Types.unit_type, o
+            let o, source, _ = o#value source in
+            let o, rows, _ = o#value rows in
+              o, InsertRows(source, rows), Types.unit_type
         | InsertReturning (source, rows, returning) ->
-            let source, _, o = o#value source in
-            let rows, _, o = o#value rows in
-            let returning, _, o = o#value returning in
-              InsertReturning(source, rows, returning), Types.unit_type, o
+            let o, source, _ = o#value source in
+            let o, rows, _ = o#value rows in
+            let o, returning, _ = o#value returning in
+              o, InsertReturning(source, rows, returning), Types.unit_type
         | Update ((x, source), where, body) ->
-            let source, _, o = o#value source in
-            let x, o = o#binder x in
-            let where, _, o = o#option (fun o -> o#computation) where in
-            let body, _, o = o#computation body in
-              Update ((x, source), where, body), Types.unit_type, o
+            let o, source, _ = o#value source in
+            let o, x = o#binder x in
+            let o, where, _ = o#option (fun o -> o#computation) where in
+            let o, body, _ = o#computation body in
+              o, Update ((x, source), where, body), Types.unit_type
         | Delete ((x, source), where) ->
-            let source, _, o = o#value source in
-            let x, o = o#binder x in
-            let where, _, o = o#option (fun o -> o#computation) where in
-              Delete ((x, source), where), Types.unit_type, o
+            let o, source, _ = o#value source in
+            let o, x = o#binder x in
+            let o, where, _ = o#option (fun o -> o#computation) where in
+              o, Delete ((x, source), where), Types.unit_type
         | CallCC v ->
-            let v, t, o = o#value v in
-              CallCC v, deconstruct (return_type ~overstep_quantifiers:true) t, o
+            let o, v, t = o#value v in
+              o, CallCC v, deconstruct (return_type ~overstep_quantifiers:true) t
         | Select (l, v) ->
-           let v, t, o = o#value v in
-           Select (l, v), t, o
+           let o, v, t = o#value v in
+           o, Select (l, v), t
         | Choice (v, bs) ->
-           let v, _, o = o#value v in
-           let bs, branch_types, o =
+           let o, v, _ = o#value v in
+           let o, bs, branch_types =
              o#name_map (fun o (b, c) ->
-                         let b, o = o#binder b in
-                         let c, t, o = o#computation c in
-                         (b, c), t, o) bs in
+                         let o, b = o#binder b in
+                         let o, c, t = o#computation c in
+                         o, (b, c), t) bs in
            let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
-           Choice (v, bs), t, o
+           o, Choice (v, bs), t
     | Handle ({ ih_comp; ih_cases; ih_return; ih_depth }) ->
-       let (comp, _, o) = o#computation ih_comp in
+       let (o, comp, _) = o#computation ih_comp in
            (* TODO FIXME traverse parameters *)
-           let (depth, o) =
+           let (o, depth) =
              match ih_depth with
              | Deep params ->
                 let (o, bindings) =
                   List.fold_left
                     (fun (o, bvs) (b,v) ->
-                      let (b, o) = o#binder b in
-                      let (v, _, o) = o#value v in
+                      let (o, b) = o#binder b in
+                      let (o, v, _) = o#value v in
                       (o, (b,v) :: bvs))
                     (o, []) params
                 in
-                Deep (List.rev bindings), o
-             | Shallow -> Shallow, o
+                o, Deep (List.rev bindings)
+             | Shallow -> o, Shallow
            in
-       let (cases, _branch_types, o) =
+       let (o, cases, _branch_types) =
          o#name_map
                (fun o (x, resume, c) ->
-                 let (x, o) = o#binder x in
-         let (resume, o) = o#binder resume in
-         let (c, t, o) = o#computation c in
-         (x, resume, c), t, o)
+                 let (o, x) = o#binder x in
+         let (o, resume) = o#binder resume in
+         let (o, c, t) = o#computation c in
+         o, (x, resume, c), t)
            ih_cases
        in
-           let (return, t, o) =
-             let (b, o) = o#binder (fst ih_return) in
-             let (comp, t, o) = o#computation (snd ih_return) in
-             (b, comp), t, o
+           let (o, return, t) =
+             let (o, b) = o#binder (fst ih_return) in
+             let (o, comp, t) = o#computation (snd ih_return) in
+             o, (b, comp), t
            in
-       Handle { ih_comp = comp; ih_cases = cases; ih_return = return; ih_depth = depth}, t, o
+       o, Handle { ih_comp = comp; ih_cases = cases; ih_return = return; ih_depth = depth}, t
     | DoOperation (name, vs, t) ->
-       let (vs, _, o) = o#list (fun o -> o#value) vs in
-       (DoOperation (name, vs, t), t, o)
+       let (o, vs, _) = o#list (fun o -> o#value) vs in
+       (o, DoOperation (name, vs, t), t)
 
-   method bindings : binding list -> (binding list * 'self_type) =
+   method bindings : binding list -> ('self_type * binding list) =
       fun bs ->
-        let bs, o =
+        let o, bs =
           List.fold_left
-            (fun (bs, o) b ->
-               let (b, o) = o#binding b in
-                 (b::bs, o))
-            ([], o)
+            (fun (o, bs) b ->
+               let (o, b) = o#binding b in
+                 (o, b::bs))
+            (o, [])
             bs
         in
-          List.rev bs, o
+          o, List.rev bs
 
-    method computation : computation -> (computation * datatype * 'self_type) =
+    method computation : computation -> ('self_type * computation * datatype) =
       fun (bs, tc) ->
-        let bs, o = o#bindings bs in
-        let tc, t, o = o#tail_computation tc in
-          (bs, tc), t, o
+        let o, bs = o#bindings bs in
+        let o, tc, t = o#tail_computation tc in
+          o, (bs, tc), t
 
-    method binding : binding -> (binding * 'self_type) =
+    method binding : binding -> ('self_type * binding) =
       function
         | Let (x, (tyvars, tc)) ->
-            let x, o = o#binder x in
-            let tc, _, o = o#tail_computation tc in
-              Let (x, (tyvars, tc)), o
+            let o, x = o#binder x in
+            let o, tc, _ = o#tail_computation tc in
+              o, Let (x, (tyvars, tc))
         | Fun (f, (tyvars, xs, body), z, location, unsafe) ->
-            let xs, body, z, o =
-              let (z, o) = o#optionu (fun o -> o#binder) z in
-              let (xs, o) =
+            let o, xs, body, z =
+              let (o, z) = o#optionu (fun o -> o#binder) z in
+              let (o, xs) =
                 List.fold_right
-                  (fun x (xs, o) ->
-                     let x, o = o#binder x in
-                       (x::xs, o))
+                  (fun x (o, xs) ->
+                     let o, x = o#binder x in
+                       (o, x::xs))
                   xs
-                  ([], o) in
-              let body, _, o = o#computation body in
-                xs, body, z, o in
-            let f, o = o#binder f in
+                  (o, []) in
+              let o, body, _ = o#computation body in
+                o, xs, body, z in
+            let o, f = o#binder f in
               (* TODO: check that xs and body match up with f *)
-              Fun (f, (tyvars, xs, body), z, location, unsafe), o
+              o, Fun (f, (tyvars, xs, body), z, location, unsafe)
         | Rec defs ->
             (* it's important to traverse the function binders first in
                order to make sure they're in scope for all of the
                function bodies *)
-            let defs, o =
+            let o, defs =
               List.fold_right
-                (fun (f, (tyvars, xs, body), z, location, unsafe) (fs, o) ->
-                   let f, o = o#binder f in
-                     ((f, (tyvars, xs, body), z, location, unsafe)::fs, o))
+                (fun (f, (tyvars, xs, body), z, location, unsafe) (o, fs) ->
+                   let o, f = o#binder f in
+                     (o, (f, (tyvars, xs, body), z, location, unsafe)::fs))
                 defs
-                ([], o) in
+                (o, []) in
 
-            let defs, o =
+            let o, defs =
               List.fold_left
-                (fun (defs, (o : 'self_type)) (f, (tyvars, xs, body), z, location, unsafe) ->
-                   let (z, o) = o#optionu (fun o -> o#binder) z in
-                   let xs, o =
+                (fun ((o : 'self_type), defs) (f, (tyvars, xs, body), z, location, unsafe) ->
+                   let (o, z) = o#optionu (fun o -> o#binder) z in
+                   let o, xs =
                      List.fold_right
-                       (fun x (xs, o) ->
-                          let (x, o) = o#binder x in
-                            (x::xs, o))
+                       (fun x (o, xs) ->
+                          let (o, x) = o#binder x in
+                            (o, x::xs))
                        xs
-                       ([], o) in
-                  let body, _, o = o#computation body in
-                    (f, (tyvars, xs, body), z, location, unsafe)::defs, o)
-                ([], o)
+                       (o, []) in
+                  let o, body, _ = o#computation body in
+                    o,(f, (tyvars, xs, body), z, location, unsafe)::defs)
+                (o, [])
                 defs in
             let defs = List.rev defs in
-              Rec defs, o
+              o, Rec defs
         | Alien ({ binder; _ } as payload) ->
-            let binder, o = o#binder binder in
-            Alien { payload with binder}, o
+            let o, binder = o#binder binder in
+            o, Alien { payload with binder}
         | Module (name, defs) ->
-            let defs, o =
+            let o, defs =
               match defs with
-                | None -> None, o
+                | None -> o, None
                 | Some defs ->
-                    let defs, o = o#bindings defs
+                    let o, defs = o#bindings defs
                     in
-                      Some defs, o
+                      o, Some defs
             in
-              Module (name, defs), o
+              o, Module (name, defs)
 
-    method binder : binder -> (binder * 'self_type) =
+    method binder : binder -> ('self_type * binder) =
       fun b ->
       let var = Var.var_of_binder b in
       let t   = Var.type_of_binder b in
       let tyenv = Env.bind var t tyenv in
-      b, {< tyenv=tyenv >}
+      {< tyenv=tyenv >}, b
 
-    method program : program -> (program * datatype * 'self_type) = o#computation
+    method program : program -> ('self_type * program * datatype) = o#computation
 
     method get_type_environment : environment = tyenv
   end
@@ -535,13 +533,13 @@ module Inline = struct
 
     method! value =
       function
-        | Variable var when IntMap.mem var env -> IntMap.find var env, o#lookup_type var, o
+        | Variable var when IntMap.mem var env -> o, IntMap.find var env, o#lookup_type var
         | v -> super#value v
 
     method! bindings =
       function
         | b :: bs ->
-            let b, o = o#binding b in
+            let o, b = o#binding b in
               begin
                 match b with
                 | Let (b, (tyvars, Return v)) when Var.(Scope.is_local (scope_of_binder b)) && is_inlineable_value v ->
@@ -551,12 +549,12 @@ module Inline = struct
                      | [] -> v
                      | tyvars -> TAbs (tyvars, v)
                    in
-                   (o#with_env (IntMap.add x (fst3 (o#value v)) env))#bindings bs
+                   (o#with_env (IntMap.add x (snd3 (o#value v)) env))#bindings bs
                 | _ ->
-                   let bs, o = o#bindings bs in
-                   b :: bs, o
+                   let o, bs = o#bindings bs in
+                   o, b :: bs
               end
-        | [] -> [], o
+        | [] -> o, []
   end
 
   let name = "inline"
@@ -564,7 +562,7 @@ module Inline = struct
   let program state program =
     let open IrTransform in
     let tenv = Context.variable_environment (context state) in
-    let program', _, _ = (inliner tenv IntMap.empty)#program program in
+    let _, program', _ = (inliner tenv IntMap.empty)#program program in
     return state program'
 end
 
@@ -683,47 +681,47 @@ module ElimDeadDefs = struct
     method! var =
       fun x ->
         if IntMap.mem x env then
-          x, o#lookup_type x, o#inc x
+          o#inc x, x, o#lookup_type x
         else
           super#var x
 
     method! binding b =
       match b with
         | Let (x, (_, Return _)) ->
-            let b, o = super#binding b in
-              b, o#init x
+            let o, b = super#binding b in
+              o#init x, b
         | Fun (f, _, _, _, _) ->
-            let b, o = super#binding b in
-              b, o#init f
+            let o, b = super#binding b in
+              o#init f, b
         | Rec defs ->
-            let fs, o =
+            let o, fs =
               List.fold_right
-                (fun (f, _, _, _, _) (fs, o) ->
-                   let f, o = o#binder f in
-                     (IntSet.add (Var.var_of_binder f) fs, o#initrec f))
+                (fun (f, _, _, _, _) (o, fs) ->
+                   let o, f = o#binder f in
+                     (o#initrec f, IntSet.add (Var.var_of_binder f) fs))
                 defs
-                (IntSet.empty, o) in
+                (o, IntSet.empty) in
 
-            let defs, o =
+            let o, defs =
               List.fold_left
-                (fun (defs, (o : 'self_type)) (f, (tyvars, xs, body), z, location, unsafe) ->
-                   let z, o = o#optionu (fun o -> o#binder) z in
-                   let xs, o =
+                (fun ((o : 'self_type), defs) (f, (tyvars, xs, body), z, location, unsafe) ->
+                   let o, z = o#optionu (fun o -> o#binder) z in
+                   let o, xs =
                      List.fold_right
-                       (fun x (xs, o) ->
-                          let (x, o) = o#binder x in
-                            (x::xs, o))
+                       (fun x (o, xs) ->
+                          let (o, x) = o#binder x in
+                            (o, x::xs))
                        xs
-                       ([], o) in
+                       (o, []) in
                    let o = o#set_rec (Var.var_of_binder f) in
-                   let body, _, o = o#computation body in
+                   let o, body, _ = o#computation body in
                    let o = o#set_mutrec (Var.var_of_binder f) in
-                     (f, (tyvars, xs, body), z, location, unsafe)::defs, o)
-                ([], o)
+                     o, (f, (tyvars, xs, body), z, location, unsafe)::defs)
+                (o, [])
                 defs in
             let o = o#set_nonrecs fs in
             let defs = List.rev defs in
-              Rec defs, o
+              o, Rec defs
         | _ ->
             super#binding b
 
@@ -749,7 +747,7 @@ module ElimDeadDefs = struct
       function
         | b :: bs ->
             begin
-              let b, o = o#binding b in
+              let o, b = o#binding b in
                 match b with
                   | Let (b, (_tyvars, _)) when o#is_dead (Var.var_of_binder b) ->
                       o#bindings bs
@@ -786,14 +784,14 @@ module ElimDeadDefs = struct
                           match defs with
                             | [] -> o#bindings bs
                             | defs ->
-                                let bs, o = o#bindings bs in
-                                  Rec defs :: bs, o
+                                let o, bs = o#bindings bs in
+                                  o, Rec defs :: bs
                         end
                   | _ ->
-                      let bs, o = o#bindings bs in
-                        b :: bs, o
+                      let o, bs = o#bindings bs in
+                        o, b :: bs
             end
-        | [] -> [], o
+        | [] -> o, []
   end
 
   let name = "elim_dead_defs"
@@ -801,9 +799,9 @@ module ElimDeadDefs = struct
   let program state program =
     let open IrTransform in
     let tenv = Context.variable_environment (context state) in
-    let _, _, o = (counter tenv)#program program in
+    let o, _, _ = (counter tenv)#program program in
     let envs = o#get_envs () in
-    let program', _, _ = (eliminator tenv envs)#program program in
+    let _, program', _ = (eliminator tenv envs)#program program in
     return state program'
 end
 
@@ -901,7 +899,7 @@ module CheckForCycles = struct
     let program state program =
       let open IrTransform in
       let tenv = Context.variable_environment (context state) in
-      let program', _, _ = (ir_type_mod_visitor tenv check_cycles)#program program in
+      let _,program', _ = (ir_type_mod_visitor tenv check_cycles)#program program in
       return state program'
 
   end
@@ -930,7 +928,7 @@ module ElimBodiesFromMetaTypeVars = struct
     let program state program =
       let open IrTransform in
       let tenv = Context.variable_environment (context state) in
-      let program', _, _ = (ir_type_mod_visitor tenv elim_bodies)#program program in
+      let _, program', _ = (ir_type_mod_visitor tenv elim_bodies)#program program in
       return state program'
 end
 
@@ -948,7 +946,7 @@ module ElimTypeAliases = struct
     let program state program =
       let open IrTransform in
       let tenv = Context.variable_environment (context state) in
-      let program', _, _ = (ir_type_mod_visitor tenv elim_type_aliases)#program program in
+      let _, program', _ = (ir_type_mod_visitor tenv elim_type_aliases)#program program in
       return state program'
 
 end
@@ -973,6 +971,6 @@ module InstantiateTypes = struct
       end
 
     let computation tyenv instantiation_maps c  =
-      let p, _, _ = (ir_type_mod_visitor tyenv (instantiate instantiation_maps))#computation c in
+      let _, p, _ = (ir_type_mod_visitor tyenv (instantiate instantiation_maps))#computation c in
       p
 end
