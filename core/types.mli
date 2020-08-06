@@ -390,19 +390,19 @@ sig
   object ('self_type)
     method set_rec_vars : (meta_type_var) Utility.IntMap.t -> 'self_type
 
-    method primitive : Primitive.t -> (Primitive.t * 'self_type)
-    method list : ('self_type -> 'a -> 'b * 'self_type) -> 'a list -> ('b list * 'self_type)
-    method type_args : type_arg list -> (type_arg list * 'self_type)
-    method typ : typ -> (typ * 'self_type)
-    method row : row -> (row * 'self_type)
-    method row_var : row_var -> (row_var * 'self_type)
-    method meta_type_var : meta_type_var -> (meta_type_var * 'self_type)
-    method meta_row_var : meta_row_var -> (meta_row_var * 'self_type)
-    method meta_presence_var : meta_presence_var -> (meta_presence_var * 'self_type)
-    method field_spec : field_spec -> (field_spec * 'self_type)
-    method field_spec_map : field_spec_map -> (field_spec_map * 'self_type)
-    method quantifier : Quantifier.t -> (Quantifier.t * 'self_type)
-    method type_arg : type_arg -> (type_arg * 'self_type)
+    method primitive : Primitive.t -> ('self_type * Primitive.t)
+    method list : ('self_type -> 'a -> 'self_type * 'b ) -> 'a list -> ('self_type * 'b list)
+    method type_args : type_arg list -> ('self_type * type_arg list)
+    method typ : typ -> ('self_type * typ)
+    method row : row -> ('self_type * row)
+    method row_var : row_var -> ('self_type * row_var)
+    method meta_type_var : meta_type_var -> ('self_type * meta_type_var)
+    method meta_row_var : meta_row_var -> ('self_type * meta_row_var)
+    method meta_presence_var : meta_presence_var -> ('self_type * meta_presence_var)
+    method field_spec : field_spec -> ('self_type * field_spec)
+    method field_spec_map : field_spec_map -> ('self_type * field_spec_map)
+    method quantifier : Quantifier.t -> ('self_type * Quantifier.t)
+    method type_arg : type_arg -> ('self_type * type_arg)
   end
 end
 
