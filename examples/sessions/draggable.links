@@ -66,7 +66,7 @@ fun draggableList(loc, id, items)
       }
     }
 
-    wait(fork (fun (s) {waiting(id, s)}));
+    wait(fork (fun (s) {waiting(id, s)}))
   });
 
   fun mouseUp() {

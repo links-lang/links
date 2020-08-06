@@ -135,7 +135,7 @@ fun main() {
         appendChildren(stringToXml(order!!0), getNodeById("items"));
         appendChildren(stringToXml(order!!1), getNodeById("removed"));
         appendChildren(stringToXml(order!!2), getNodeById("cardNo"));
-        appendChildren(stringToXml(order!!3), getNodeById("address"));
+        appendChildren(stringToXml(order!!3), getNodeById("address"))
 }
 
 

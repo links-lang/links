@@ -341,7 +341,7 @@ fun removeWinnerGif(){
     domRemoveAttributeFromRef(body, "style");
     domSetStyleAttrFromRef(background, "background-color", "#f4f4f4");
     domRemoveStyleClassFromRef(getNodeById("setUp"), "background-setup");
-    domRemoveStyleClassFromRef(getNodeById("setUp"), "background-base");
+    domRemoveStyleClassFromRef(getNodeById("setUp"), "background-base")
 }
 
 sig sendInput: (Process({ hear:Cmd |e})) {hear:Cmd |f}~> ()
@@ -410,7 +410,7 @@ fun renderView(view, pId){
 sig restart: (Process({hear:Cmd |e})) ~> ()
 fun restart(pId){
     resetField(Alice,You,Easy,false, 8);
-    renderView(RestartSetUp, pId);
+    renderView(RestartSetUp, pId)
 }
 
 sig updateView: (Int, Int, Player) ~> ()

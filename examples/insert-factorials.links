@@ -27,7 +27,7 @@ fun insertFactorials(n) {
     var indexes = map ((.1), query {for (r <-- factorials) [(1=r.i)]});
     insert factorials values (i,f)
       for (i <- [0..n] `diff` indexes)
-        [(i=i, f=factorial(i))];
+        [(i=i, f=factorial(i))]
 #  }
 }
 

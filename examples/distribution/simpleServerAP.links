@@ -7,17 +7,16 @@ typename PingPong = ?(Ping) . !(Pong) . PingPong;
 module Client {
   fun disableButton() {
     var buttonRef = getNodeById("pingButton");
-    var _ = domSetAttributeFromRef(buttonRef, "disabled", "disabled");
-    ()
+    domSetAttributeFromRef(buttonRef, "disabled", "disabled")
   }
 
   fun enableButton() {
     var buttonRef = getNodeById("pingButton");
-    domRemoveAttributeFromRef(buttonRef, "disabled");
+    domRemoveAttributeFromRef(buttonRef, "disabled")
   }
 
   fun logMessage(msg) {
-    appendChildren(<#>{stringToXml(msg)}</#>, getNodeById("msgs"));
+    appendChildren(<#>{stringToXml(msg)}</#>, getNodeById("msgs"))
   }
 
   ## Why does this need this annotation?
@@ -99,7 +98,7 @@ fun main() {
   var srvAP = new();
   addLocatedRouteHandler("/", fun(_, clientLoc) { Setup.mainPage(clientLoc, srvAP) });
   serveWebsockets();
-  servePages();
+  servePages()
 }
 
 main()

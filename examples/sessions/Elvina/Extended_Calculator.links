@@ -7,11 +7,11 @@ fun calc(s) client {
     case Add(s) ->
       var (x,s) = receive(s);
       var (y,s) = receive(s);
-      close(send(x+y,s));
+      close(send(x+y,s))
     case Mul(s) ->
       var (x,s) = receive(s);
       var (y,s) = receive(s);
-      close(send(x*y,s));
+      close(send(x*y,s))
 
     case Sub(s) ->
       var (x,s) = receive(s);

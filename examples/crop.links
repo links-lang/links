@@ -62,7 +62,7 @@ mutual{
         resizing(offsetLeft, offsetTop, l, t, w, h, corner)
       }
       case MouseUp(x, y) -> {
-        frameMgr(offsetLeft, offsetTop, left, top, width, height);
+        frameMgr(offsetLeft, offsetTop, left, top, width, height)
       }
       case _ -> {
         resizing(offsetLeft, offsetTop, left, top, width, height, corner)
@@ -133,7 +133,7 @@ fun main() {
     var offsetTop = stringToInt(domGetAttributeFromRef(pictureFrame, "offsetTop"));
 
     setStyle(preview, "marginTop", intToString(-(top - offsetTop)));
-    setStyle(preview, "marginLeft", intToString(-(left - offsetLeft)));
+    setStyle(preview, "marginLeft", intToString(-(left - offsetLeft)))
   };
 
   page
