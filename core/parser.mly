@@ -858,7 +858,7 @@ case_contents:
 | exp                                                          { ([], $1) }
 
 block_contents:
-case_contents                                                  { $1 }
+| case_contents                                                { $1 }
 | /* empty */                                                  { ([], with_pos $loc (TupleLit [])) }
 
 labeled_exp:
