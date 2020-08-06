@@ -2,18 +2,51 @@ open Lens_utility
 open Lens_utility.O
 module Value = Phrase_value
 
+module E = struct
+  type t = Unsupported_phrase_value_cmp of { v1 : Value.t; v2 : Value.t }
+
+  let pp f v =
+    match v with
+    | Unsupported_phrase_value_cmp { v1; v2 } ->
+        Format.fprintf f
+          "Unsupported phrase value comparison between '%a' and '%a' by lens \
+           sorted records module."
+          Value.pp v1 Value.pp v2
+
+  let show v = Format.asprintf "%a" pp v
+
+  exception E of t
+
+  let raise v = raise (E v)
+
+  let () =
+    let f v =
+      match v with
+      | E v -> Some (show v)
+      | _ -> None
+    in
+    Printexc.register_printer f
+end
+
 module Simple_record = struct
   (** simplified record type drops column names for efficiency *)
   type t = Value.t list
 
-  let compare_val a b =
-    match (a, b) with
+  let compare_val v1 v2 =
+    match (v1, v2) with
     | Value.Bool b1, Value.Bool b2 -> compare b1 b2
     | Value.Char c1, Value.Char c2 -> compare c1 c2
     | Value.Float f1, Value.Float f2 -> compare f1 f2
     | Value.Int i1, Value.Int i2 -> compare i1 i2
     | Value.String i1, Value.String i2 -> compare i1 i2
-    | _, _ -> failwith "Unsupported comparison types."
+    | Value.Serial s1, Value.Serial s2 -> (
+        match (s1, s2) with
+        | `NewKeyMapped _, `Key _ -> 1
+        | `Key _, `NewKeyMapped _ -> -1
+        | `NewKeyMapped v1, `NewKeyMapped v2 -> compare v1 v2
+        | `Key v1, `Key v2 -> compare v1 v2
+        | _ -> E.Unsupported_phrase_value_cmp { v1; v2 } |> E.raise )
+    | _, _ -> E.Unsupported_phrase_value_cmp { v1; v2 } |> E.raise
 
   let equal_val a b = compare_val a b = 0
 

@@ -4,28 +4,25 @@
           -strict-formats     ;; Disallows legacy formats.
           -strict-sequence    ;; Enforces the lhs of a sequence to have type `unit'.
           -safe-string        ;; Immutable strings.
-          -annot              ;; Dumps information per (file) module about types, bindings, tail-calls, etc. Used by some tools.
+          -bin-annot          ;; Dumps information per (file) module about types, bindings, tail-calls, etc. Used by some tools.
           -warn-error -a      ;; Do not treat warnings as errors.
           -w A-4-42-44-45-48-60-67  ;; Ignores warnings 4, 42, 44, 45, 48, 60, and 67.
           -g                  ;; Adds debugging information to the resulting executable / library.
-          -linkall            ;; Needed for dynamic linking in OCaml 4.06
  )))
  (release
   (flags (:standard
           ;; The following flags are the same as for the "dev" profile.
-          -strict-formats -strict-sequence -safe-string -annot
+          -strict-formats -strict-sequence -safe-string -bin-annot
           -w A-4-42-44-45-48-60-67  ;; Ignores warnings 4, 42, 44, 45, 48, 60, and 67.
-          -linkall                  ;; Needed for dynamic linking in OCaml 4.06
   ))
   (ocamlopt_flags (:standard
                    -O3 ;; Applies (aggressive) optimisations to the resulting executable.
  )))
  (ci      ;; Same as release, except warnings are treated as errors.
   (flags (:standard
-          -strict-formats -strict-sequence -safe-string -annot
+          -strict-formats -strict-sequence -safe-string -bin-annot
           -warn-error @A      ;; Treat warnings as errors...
           -w A-4-42-44-45-48-60-67  ;; ... except for warnings 4, 42, 44, 45, 48, 60, and 67 which are ignored.
-          -linkall            ;; Needed for dynamic linking in OCaml 4.06
   ))
   (ocamlopt_flags (:standard -O3))
 ))
