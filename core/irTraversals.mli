@@ -33,7 +33,6 @@ sig
       ('self_type -> 'a -> ('self_type * 'a * Types.datatype)) ->
       'a var_map -> 'self_type * 'a var_map * Types.datatype var_map
     method var : var -> ('self_type * var * Types.datatype)
-    (* method closure_var : var -> ('self_type * var * Types.datatype) *)
     method value : value -> ('self_type * value * Types.datatype)
 
     method tail_computation :
@@ -43,7 +42,6 @@ sig
     method computation : computation -> ('self_type * computation * Types.datatype)
     method binding : binding -> ('self_type * binding)
     method binder : binder -> ('self_type * binder)
-    (* method closure_binder : binder -> ('self_type * binder) *)
 
     method program : program -> ('self_type * program * Types.datatype)
 

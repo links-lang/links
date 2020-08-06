@@ -42,7 +42,6 @@ module type IR_VISITOR = sig
       ('self_type -> 'a -> ('self_type * 'a * Types.datatype)) ->
       'a var_map -> 'self_type * 'a var_map * Types.datatype var_map
     method var : var -> ('self_type * var * Types.datatype)
-    (* method closure_var : var -> ('self_type * var * Types.datatype) *)
     method value : value -> ('self_type * value * Types.datatype)
 
     method tail_computation :
@@ -52,7 +51,6 @@ module type IR_VISITOR = sig
     method computation : computation -> ('self_type * computation * Types.datatype)
     method binding : binding -> ('self_type * binding)
     method binder : binder -> ('self_type * binder)
-    (* method closure_binder : binder -> ('self_type * binder) *)
 
     method program : program -> ('self_type * program * Types.datatype)
 
@@ -74,13 +72,9 @@ struct
   class visitor (tyenv : environment) =
   object ((o : 'self_type))
     val tyenv = tyenv
-    (* val cenv = Env.empty *)
 
     method lookup_type : var -> datatype = fun var ->
       Env.find var tyenv
-
-    (* method private lookup_closure_type : var -> datatype = fun var -> *)
-    (*   Env.lookup cenv var *)
 
     method constant : Constant.t -> ('self_type * Constant.t * datatype) = fun c ->
       match c with
@@ -156,14 +150,10 @@ struct
     method var : var -> ('self_type * var * datatype) =
       fun var -> (o, var, o#lookup_type var)
 
-    (* method closure_var : var -> ('self_type * var * datatype) = *)
-    (*   fun var -> (o, var, o#lookup_closure_type var) *)
-
     method value : value -> ('self_type * value * datatype) =
       function
         | Ir.Constant c -> let (o, c, t) = o#constant c in o, Ir.Constant c, t
         | Variable x -> let (o, x, t) = o#var x in o, Ir.Variable x, t
-        (* | ClosureVar x -> let (o, x, t) = o#closure_var x in o, ClosureVar x, t*)
         | Extend (fields, base) ->
             let (o, fields, field_types) = o#name_map (fun o -> o#value) fields in
             let (o, base, base_type) = o#option (fun o -> o#value) base in
@@ -251,12 +241,7 @@ struct
             let o, args, _ = o#list (fun o -> o#value) args in
               (* TODO: check arg types match *)
               o, Apply (f, args), deconstruct (return_type ~overstep_quantifiers:true) ft
-        (* | ApplyClosure (f, args) -> *)
-        (*     let o, f, ft = o#value f in *)
-        (*     let o, args, arg_types = o#list (fun o -> o#value) args in *)
-        (*     (\* TODO: check arg types match *\) *)
-        (*     (\* TOOD: add closure type *\) *)
-        (*       o, ApplyClosure (f, args), deconstruct return_type ft *)
+
         | Special special ->
             let o, special, t = o#special special in
               o, Special special, t
