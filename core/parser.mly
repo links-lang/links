@@ -693,7 +693,6 @@ conditional_expression:
 | IF LPAREN exp RPAREN exp ELSE exp                            { with_pos $loc (Conditional ($3, $5, $7)) }
 
 case:
-/* XXX | CASE pattern RARROW block_contents                           { $2, block ~ppos:$loc($4) $4 }*/
 | CASE pattern RARROW case_contents                           { $2, block ~ppos:$loc($4) $4 }
 
 case_expression:
@@ -845,10 +844,6 @@ binding_or_mutual:
 | mutual_binding_block                                         { $1        }
 
 bindings:
-/* XXX | binding                                                      { [$1]      }
-| mutual_binding_block                                         { $1        }
-| bindings mutual_binding_block                                { $1 @ $2   }
-| bindings binding                                             { $1 @ [$2] }*/
 | binding_or_mutual                                            { $1 } /* See #441 and #900 */
 | bindings binding_or_mutual                                   { $1 @ $2 }
 
@@ -864,13 +859,6 @@ case_contents:
 
 block_contents:
 case_contents                                                  { $1 }
-/* XXX | bindings exp SEMICOLON                                       { ($1 @ [with_pos $loc($2) (Exp $2)],
-                                                                  record ~ppos:$loc []) }*/
-/* XXX | bindings exp                                                 { ($1, $2) }*/
-/* XXX | exp SEMICOLON                                                { ([with_pos $loc($1) (Exp $1)],
-                                                                  record ~ppos:$loc []) }*/
-/* XXX | exp                                                          { ([], $1) }*/
-/* XXX | SEMICOLON */
 | /* empty */                                                  { ([], with_pos $loc (TupleLit [])) }
 
 labeled_exp:
