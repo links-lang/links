@@ -134,7 +134,6 @@ let keywords = [
  "var"      , VAR;
  "where"    , WHERE;
  "with"     , WITH;
- "match"    , MATCH;
 (* SAND *)
  "tablekeys"     , TABLEKEYS;
 ]
