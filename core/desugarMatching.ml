@@ -28,6 +28,21 @@ open SourceCode
 
 let with_pos = SourceCode.WithPos.make
 
+let pattern_matching_sugar =
+  Settings.(
+    flag "pattern_matching_sugar"
+    |> synopsis
+         "Toggles whether to enable the switch pattern matching syntax sugar"
+    |> convert parse_bool
+    |> sync)
+
+let pattern_matching_sugar_guard pos =
+  let pattern_matching_sugar_disabled pos =
+    Errors.disabled_extension ~pos ~setting:("pattern_matching_sugar", true) "Pattern Matching Sugar"
+  in
+  if not (Settings.get pattern_matching_sugar)
+  then raise (pattern_matching_sugar_disabled pos)
+
 let desugar_matching =
 object ((self : 'self_type))
     inherit SugarTraversals.map as super
@@ -35,6 +50,7 @@ object ((self : 'self_type))
       let pos = WithPos.pos b in
       match WithPos.node b with
       |  Fun ({ fun_definition = (tvs, MatchFunlit (patterns, cases)); _ } as fn) ->
+          pattern_matching_sugar_guard pos;
           (* bind the arguments with unique var name *)
           let name_list = List.map (fun pats -> List.map (fun pat -> (pat, Utility.gensym())) pats) patterns in
           let switch_tuple = List.map (fun (_, name) -> with_pos (Var name)) (List.flatten name_list) in

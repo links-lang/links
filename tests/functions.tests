@@ -1,3 +1,7 @@
+---
+config: tests/functions.config
+---
+
 Function typing bug (see jdy's blog, 2005-10-24)
 (fun (x,y) { [x] ++ [y] }) ([1],"a")
 stderr : @..*
@@ -148,22 +152,22 @@ stderr : @.*cannot be linear.*
 exit : 1
 
 Pattern Matching (1)
-fun foo(_) match { | x -> x } foo
+fun foo(_) switch { case x -> x } foo
 stdout : fun : (a) ~> a
 
 Pattern Matching (2)
-fun ack(_,_) match { | (0, n) -> n + 1 | (m, 0) -> ack(m - 1, 1) | (m, n) -> ack(m - 1, ack(m, n - 1)) } ack
+fun ack(_,_) switch { case (0, n) -> n + 1 case (m, 0) -> ack(m - 1, 1) case (m, n) -> ack(m - 1, ack(m, n - 1)) } ack
 stdout : fun : (Int, Int) ~> Int
 
 Pattern Matching (3)
-fun ack(_,_) match { | (0, n) -> n + 1 | (m, 0) -> ack(m - 1, 1) | (m, n) -> ack(m - 1, ack(m, n - 1)) } fun test() { print(intToString(ack(0,1))); print(intToString(ack(1,0))); print(intToString(ack(1,1))); } test()
+fun ack(_,_) switch { case (0, n) -> n + 1 case (m, 0) -> ack(m - 1, 1) case (m, n) -> ack(m - 1, ack(m, n - 1)) } fun test() { print(intToString(ack(0,1))); print(intToString(ack(1,0))); print(intToString(ack(1,1))); } test()
 stdout : 223() : ()
 
 Pattern Matching (4)
-fun foo(_)(_) match { | (x, y) -> x + y } foo
+fun foo(_)(_) switch { case (x, y) -> x + y } foo
 stdout : fun : (Int) -> (Int) ~> Int
 
 Pattern Matching (5) - runtime non-exhaustive error
-fun foo(_) match { | 1 -> 1 } foo(0)
+fun foo(_) switch { case 1 -> 1 } foo(0)
 stderr : @.*Runtime error: non-exhaustive pattern matching.*
 exit : 1
