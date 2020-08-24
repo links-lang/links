@@ -82,7 +82,7 @@ fun insertItems(itemsTable, itemsList) {
   var indexes = query nested { for (itemEntry <- asList(itemsTable)) [itemEntry.i] };
   insert itemsTable values (i, name)
     for (i <- upto(0,n-1) `diff` indexes)
-      [(i=i, name=sel(itemsList, i))];
+      [(i=i, name=sel(itemsList, i))]
 }
 
 # `diff` is list difference

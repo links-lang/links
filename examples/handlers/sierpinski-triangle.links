@@ -350,7 +350,7 @@ fun start(){
         case None -> ()
         case Some(triangle) ->
             fork(makeFiber(Low, forever));
-            gensymHandler(fun(){drawTriangle(triangle, startTime)});
+            gensymHandler(fun(){drawTriangle(triangle, startTime)})
     }
 }
 

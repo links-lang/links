@@ -705,7 +705,7 @@ conditional_expression:
 | IF LPAREN exp RPAREN exp ELSE exp                            { with_pos $loc (Conditional ($3, $5, $7)) }
 
 case:
-| CASE pattern RARROW block_contents                           { $2, block ~ppos:$loc($4) $4 }
+| CASE pattern RARROW case_contents                           { $2, block ~ppos:$loc($4) $4 }
 
 case_expression:
 | SWITCH LPAREN exp RPAREN LBRACE case* RBRACE                 { with_pos $loc (Switch ($3, $6, None)) }
@@ -853,11 +853,13 @@ mutual_bindings:
 | binding                                                      { MutualBindings.(add (empty (pos $loc)) $1) }
 | mutual_bindings binding                                      { MutualBindings.add $1 $2 }
 
-bindings:
+binding_or_mutual:
 | binding                                                      { [$1]      }
 | mutual_binding_block                                         { $1        }
-| bindings mutual_binding_block                                { $1 @ $2   }
-| bindings binding                                             { $1 @ [$2] }
+
+bindings:
+| binding_or_mutual                                            { $1 } /* See #441 and #900 */
+| bindings binding_or_mutual                                   { $1 @ $2 }
 
 moduleblock:
 | LBRACE declarations RBRACE                                   { $2 }
@@ -865,14 +867,13 @@ moduleblock:
 block:
 | LBRACE block_contents RBRACE                                 { block ~ppos:$loc $2 }
 
-block_contents:
-| bindings exp SEMICOLON                                       { ($1 @ [with_pos $loc($2) (Exp $2)],
-                                                                  record ~ppos:$loc []) }
+case_contents:
 | bindings exp                                                 { ($1, $2) }
-| exp SEMICOLON                                                { ([with_pos $loc($1) (Exp $1)],
-                                                                  record ~ppos:$loc []) }
 | exp                                                          { ([], $1) }
-| SEMICOLON | /* empty */                                      { ([], with_pos $loc (TupleLit [])) }
+
+block_contents:
+| case_contents                                                { $1 }
+| /* empty */                                                  { ([], with_pos $loc (TupleLit [])) }
 
 labeled_exp:
 | preceded(EQ, VARIABLE)                                       { ($1, with_pos $loc (Var $1)) }

@@ -574,7 +574,7 @@ fun main() {
                     jsLineTo(ctx, x +. 4.0, y -. 4.0);
 
                     jsClosePath(ctx);
-                    jsStroke(ctx);
+                    jsStroke(ctx)
                 } else { # draw the animations for eating or being eaten
                     var (timeout, totalTimeout, piFraction) =
                     if (gameState.state == Eaten) (gameState.timeout, gameState.timeouts.eaten + 1, 1.0)
@@ -619,7 +619,7 @@ fun main() {
                         jsSetFillColor(ctx, eyeColor);
                         jsFillCircle(ctx, pillman.planet.x +. (pillmanRR -. 2.0) *. sin(pillman.angle -. pillman.dir *. tailLength),
                                           pillman.planet.y +. (pillmanRR -. 2.0) *. cos(pillman.angle -. pillman.dir *. tailLength),
-                                          1.0);
+                                          1.0)
                     }
                 }
             }
@@ -629,7 +629,7 @@ fun main() {
                 jsFillCircle(ctx, ghost.planet.x +. (rr +. 4.0) *. sin(angle),
                                 ghost.planet.y +. (rr +. 4.0) *. cos(angle), ghostR /. 3.0);
                 jsFillCircle(ctx, ghost.planet.x +. (rr -. 4.0) *. sin(angle),
-                                ghost.planet.y +. (rr -. 4.0) *. cos(angle), ghostR /. 3.0);
+                                ghost.planet.y +. (rr -. 4.0) *. cos(angle), ghostR /. 3.0)
             }
 
             fun drawGhostPupils(ghost, angle, rr, color) {
@@ -637,7 +637,7 @@ fun main() {
                 jsFillCircle(ctx, ghost.planet.x +. (rr +. 4.0) *. sin(angle),
                                 ghost.planet.y +. (rr +. 4.0) *. cos(angle), ghostR /. 5.0);
                 jsFillCircle(ctx, ghost.planet.x +. (rr -. 4.0) *. sin(angle),
-                                ghost.planet.y +. (rr -. 4.0) *. cos(angle), ghostR /. 5.0);
+                                ghost.planet.y +. (rr -. 4.0) *. cos(angle), ghostR /. 5.0)
             }
 
           fun drawFps(ctx, fpsInfo, dFps) {
@@ -737,7 +737,7 @@ fun main() {
                         jsLineTo(ctx, ghost.planet.x +. ghostRR2 *. sin(mouthAngle),
                                     ghost.planet.y +. ghostRR2 *. cos(mouthAngle));
                         jsClosePath(ctx);
-                        jsStroke(ctx);
+                        jsStroke(ctx)
                     }
                 } else ()
             }
@@ -779,7 +779,7 @@ fun main() {
             lsMapIgnore(fun (x) {
                 jsMoveTo(ctx, x.1.x +. random(), x.1.y +. random());
                 jsLineTo(ctx, x.2.x +. random(), x.2.y +. random());
-                jsStroke(ctx);
+                jsStroke(ctx)
             }, connections);
             jsClosePath(ctx);
 
@@ -792,7 +792,7 @@ fun main() {
                 jsMoveTo(ctx, gameState.pillman.planet.x +. random(), gameState.pillman.planet.y +. random());
                 jsLineTo(ctx, gameState.pillman.nextPlanet.x +. random(), gameState.pillman.nextPlanet.y +. random());
                 jsStroke(ctx);
-                jsClosePath(ctx);
+                jsClosePath(ctx)
             } else ();
 
             # draw ghost planet bottom layer
@@ -804,7 +804,7 @@ fun main() {
                 jsSetFillColor(ctx, blinkColor)
             else jsSetFillColor(ctx, planetColor);
             lsMapIgnore(fun (x) {
-                jsFillCircle(ctx, x.x +. random(), x.y +. random(), x.r +. random());
+                jsFillCircle(ctx, x.x +. random(), x.y +. random(), x.r +. random())
             }, planets);
 
             # draw ghost planet top layer
@@ -825,13 +825,13 @@ fun main() {
 
             if (gameState.state == Over) { # don't draw the rest if game over
                 jsSetFillColor(ctx, gameOverColor);
-                jsFillText(ctx, "GAME     OVER", ghostPlanet.x -. 37.0, ghostPlanet.y +. 48.0);
+                jsFillText(ctx, "GAME     OVER", ghostPlanet.x -. 37.0, ghostPlanet.y +. 48.0)
             }
             else {
                 # highlight the current planet
                 if (gameState.state == On) {
                     jsSetFillColor(ctx, highlightColor);
-                    jsFillCircle(ctx, gameState.pillman.planet.x +. random(), gameState.pillman.planet.y +. random(), gameState.pillman.planet.r *. 0.8 +. random());
+                    jsFillCircle(ctx, gameState.pillman.planet.x +. random(), gameState.pillman.planet.y +. random(), gameState.pillman.planet.r *. 0.8 +. random())
                 } else ();
 
                 # draw Pillman
@@ -850,7 +850,7 @@ fun main() {
                 # draw portals
                 jsSetFillColor(ctx, "#eec");
                 jsFillCircle(ctx, leftPortal.x, leftPortal.y, leftPortal.r *. 1.2);
-                jsFillCircle(ctx, rightPortal.x, rightPortal.y, rightPortal.r *. 1.2);
+                jsFillCircle(ctx, rightPortal.x, rightPortal.y, rightPortal.r *. 1.2)
             };
 
             jsRestore(ctx);
@@ -1416,11 +1416,11 @@ fun main() {
 
 
         fun onKeyDown(e) {
-            updateProcId ! (KeyDown(getCharCode(e)): Input);
+            updateProcId ! (KeyDown(getCharCode(e)): Input)
         }
 
         fun onKeyUp(e) {
-            updateProcId ! (KeyUp(getCharCode(e)): Input);
+            updateProcId ! (KeyUp(getCharCode(e)): Input)
         }
 
         fun initialize() {
@@ -1491,7 +1491,7 @@ fun main() {
                     <h1>Pillman</h1>
 
                     <div id="{containerId}" tabindex="1"
-                        l:onfocus="{initializeProcId ! 0; }">
+                        l:onfocus="{initializeProcId ! 0 }">
                         <canvas id="{canvas2Id}" width="{floatToString(canvasWidth)}" height="{floatToString(canvasHeight)}"></canvas>
                         <canvas id="{canvasId}" width="{floatToString(canvasWidth)}" height="{floatToString(canvasHeight)}"></canvas>
                         <div id="info">Click this canvas to start.</div>

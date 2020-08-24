@@ -52,37 +52,37 @@ let renaming_type_visitor instantiation_map =
     method set_maps new_inst_map =
       {< inst_map = new_inst_map >}
 
-    method! typ : datatype -> (datatype * 'self_type) = function
+    method! typ : datatype -> ('self_type * datatype) = function
       | ForAll (qs, t) ->
-         let qs', _ = List.split (List.map {< inst_map >}#quantifier qs) in
-         let t' , _ = {< inst_map >}#typ t in
-         ForAll (qs', t'), o
+         let _ , qs' = List.split (List.map {< inst_map >}#quantifier qs) in
+         let _ , t' = {< inst_map >}#typ t in
+         o, ForAll (qs', t')
       | t -> super#typ t
 
-    method! quantifier : Quantifier.t -> (Quantifier.t * 'self_type) =
+    method! quantifier : Quantifier.t -> ('self_type * Quantifier.t) =
       fun (var, kind) ->
       begin match IntMap.lookup var inst_map with
       | Some t -> begin match Unionfind.find (unwrap_meta t) with
-                  | Var (var', _, _) -> (var', kind), o
+                  | Var (var', _, _) -> o, (var', kind)
                   | _ -> assert false
                   end
-      | None -> (var, kind), o
+      | None -> o, (var, kind)
       end
 
-    method! meta_type_var : meta_type_var -> (meta_type_var * 'self_type) =
+    method! meta_type_var : meta_type_var -> ('self_type * meta_type_var) =
       fun point ->
       match Unionfind.find point with
         | Var (var, _, _) ->
            begin match IntMap.lookup var inst_map with
-             | Some t -> unwrap_meta t, o
-             | None -> point, o
+             | Some t -> o, unwrap_meta t
+             | None -> o, point
            end
         | _ -> super#meta_type_var point
 
-    method! meta_row_var : meta_row_var -> (meta_row_var * 'self_type) = o#meta_type_var
+    method! meta_row_var : meta_row_var -> ('self_type * meta_row_var) = o#meta_type_var
 
     method! meta_presence_var :
-            meta_presence_var -> (meta_presence_var * 'self_type) = o#meta_type_var
+            meta_presence_var -> ('self_type * meta_presence_var) = o#meta_type_var
 
   end
 
@@ -102,13 +102,13 @@ let renamer qs_from qs_to =
       {< maps = new_inst_map >}, maps
 
     method! typ = fun t ->
-      o, fst ((renaming_type_visitor maps)#typ t)
+      o, snd ((renaming_type_visitor maps)#typ t)
 
     method! type_row = fun r ->
-      o, fst ((renaming_type_visitor maps)#row r)
+      o, snd ((renaming_type_visitor maps)#row r)
 
     method! type_field_spec = fun fs ->
-      o, fst ((renaming_type_visitor maps)#field_spec fs)
+      o, snd ((renaming_type_visitor maps)#field_spec fs)
 
     method! quantifier = fun q -> (o,q)
 
@@ -192,7 +192,7 @@ let renamer qs_from qs_to =
       let maps = shadow_vars maps quantifiers in
       let o, old_maps    = o#with_maps maps in
       let _, param_pats' = o#list o#pattern_list param_pats in
-      let typ', _        = (renaming_type_visitor maps)#typ typ in
+      let _, typ'        = (renaming_type_visitor maps)#typ typ in
       let o, ty'         = o#option (fun o (ty, x) -> o, (snd (o#typ ty), x)) ty in
       let o, phrase'     = o#phrase phrase in
       let o, signature'  = o#option (fun o -> o#datatype') signature in

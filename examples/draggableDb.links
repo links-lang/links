@@ -45,7 +45,7 @@ fun draggableList(id, items)
     {for (item <- items) <li class="draggable_element">{stringToXml(item)}</li>}
    </ul>,
    fun () {spawnWait { dragger ! GetList(self()); receive { case v -> v} }},
-   fun (items) {dragger ! SetList(items);}
+   fun (items) {dragger ! SetList(items)}
    )
 }
 

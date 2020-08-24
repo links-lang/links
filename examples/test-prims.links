@@ -67,7 +67,7 @@ ignore(intToXml(77));
 # send             : (Mailbox (b), b) -{a}-> ()
 # recv             : () -{a}-> a
 
-var pid = spawn { ignore(recv()); };
+var pid = spawn { ignore(recv()) };
 ignore(pid ! 1);
 
 # self             : () -{a}-> Mailbox (a)
@@ -315,7 +315,7 @@ ignore(sqrt(49.0));
 
 # error            : (String) -> a
 
-ignore(error("All tests completed!"));
+ignore(error("All tests completed!"))
 }
 
 {

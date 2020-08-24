@@ -48,13 +48,13 @@ struct
 
     method! binder =
       fun b ->
-        let b, o = super#binder b in
+        let o, b = super#binder b in
         o#bind_scope b;
-        b, o
+        o, b
 
     method! computation =
       fun e ->
-        let (bs, main), t, o = super#computation e in
+        let o, (bs, main), t = super#computation e in
         let rec bind o =
           function
             | [] -> o
@@ -63,7 +63,7 @@ struct
               bind o bs
             | _::bs -> bind o bs
         in
-          (bs, main), t, bind o bs
+          bind o bs, (bs, main), t
   end
 
   let primitives scopes =
@@ -95,35 +95,35 @@ struct
 
     method! binder =
       fun b ->
-        let b, o = super#binder b in
-          b, o#bound (Var.var_of_binder b)
+        let o, b = super#binder b in
+          o#bound (Var.var_of_binder b), b
 
     method! var =
       fun x ->
-        let x, t, o = super#var x in
-          x, t, o#free x
+        let o, x, t = super#var x in
+          o#free x, x, t
 
     method get_free_vars = free_vars
   end
 
   let value tyenv bound_vars v =
-    let _, _, o = (new visitor tyenv bound_vars)#value v in
+    let o, _, _ = (new visitor tyenv bound_vars)#value v in
       o#get_free_vars
 
   let tail_computation tyenv bound_vars e =
-    let _, _, o = (new visitor tyenv bound_vars)#tail_computation e in
+    let o, _, _ = (new visitor tyenv bound_vars)#tail_computation e in
       o#get_free_vars
 
   let binding tyenv bound_vars bs =
-    let _, o = (new visitor tyenv bound_vars)#binding bs in
+    let o, _ = (new visitor tyenv bound_vars)#binding bs in
       o#get_free_vars
 
   let bindings tyenv bound_vars bs =
-    let _, o = (new visitor tyenv bound_vars)#bindings bs in
+    let o, _ = (new visitor tyenv bound_vars)#bindings bs in
       o#get_free_vars
 
   let computation tyenv bound_vars e =
-    let _, _, o = (new visitor tyenv bound_vars)#computation e in
+    let o, _, _ = (new visitor tyenv bound_vars)#computation e in
       o#get_free_vars
 
   let program = computation
@@ -173,11 +173,11 @@ struct
       {< globals = IntSet.add x globals >}
 
     method! binder b =
-      let b, o = super#binder b in
+      let o, b = super#binder b in
         if Scope.is_global (Var.scope_of_binder b) then
-          b, o#global (Var.var_of_binder b)
+          o#global (Var.var_of_binder b), b
         else
-          b, o
+          o, b
 
     (** Incrementally compute the free variables for every possible
        continuation arising from a computation.
@@ -240,14 +240,14 @@ struct
         | Module _::_ ->
             assert false
 
-    method! computation : Ir.computation -> (Ir.computation * Types.datatype * 'self_type) =
+    method! computation : Ir.computation -> ('self_type * Ir.computation * Types.datatype) =
       fun (bs, tc) ->
-        let bs, o = o#bindings bs in
-        let tc, t, o = o#tail_computation tc in
+        let o, bs = o#bindings bs in
+        let o, tc, t = o#tail_computation tc in
 
         let free_vars = FreeVars.tail_computation o#get_type_environment globals tc in
         let o = o#close_cont free_vars (List.rev bs) in
-          (bs, tc), t, o
+          o, (bs, tc), t
   end
 
   let bindings tyenv bound_vars cont_vars bs =

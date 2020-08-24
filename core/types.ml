@@ -197,19 +197,19 @@ sig
   object ('self_type)
     method set_rec_vars : (meta_type_var) Utility.IntMap.t -> 'self_type
 
-    method primitive : Primitive.t -> (Primitive.t * 'self_type)
-    method list : ('self_type -> 'a -> 'b * 'self_type) -> 'a list -> ('b list * 'self_type)
-    method type_args : type_arg list -> (type_arg list * 'self_type)
-    method typ : typ -> (typ * 'self_type)
-    method row : row -> (row * 'self_type)
-    method row_var : row_var -> (row_var * 'self_type)
-    method meta_type_var : meta_type_var -> (meta_type_var * 'self_type)
-    method meta_row_var : meta_row_var -> (meta_row_var * 'self_type)
-    method meta_presence_var : meta_presence_var -> (meta_presence_var * 'self_type)
-    method field_spec : field_spec -> (field_spec * 'self_type)
-    method field_spec_map : field_spec_map -> (field_spec_map * 'self_type)
-    method quantifier : Quantifier.t -> (Quantifier.t * 'self_type)
-    method type_arg : type_arg -> (type_arg * 'self_type)
+    method primitive : Primitive.t -> ('self_type * Primitive.t)
+    method list : ('self_type -> 'a -> 'self_type * 'b ) -> 'a list -> ('self_type * 'b list)
+    method type_args : type_arg list -> ('self_type * type_arg list)
+    method typ : typ -> ('self_type * typ)
+    method row : row -> ('self_type * row)
+    method row_var : row_var -> ('self_type * row_var)
+    method meta_type_var : meta_type_var -> ('self_type * meta_type_var)
+    method meta_row_var : meta_row_var -> ('self_type * meta_row_var)
+    method meta_presence_var : meta_presence_var -> ('self_type * meta_presence_var)
+    method field_spec : field_spec -> ('self_type * field_spec)
+    method field_spec_map : field_spec_map -> ('self_type * field_spec_map)
+    method quantifier : Quantifier.t -> ('self_type * Quantifier.t)
+    method type_arg : type_arg -> ('self_type * type_arg)
   end
 end
 
@@ -226,166 +226,165 @@ let is_field_spec_body = is_type_body
 
 module Transform : TYPE_VISITOR =
 struct
-  class visitor =
-  object ((o : 'self_type))
+  class visitor = object ((o : 'self_type))
     val rec_vars : (meta_type_var) IntMap.t = IntMap.empty
 
     method set_rec_vars rec_vars = {< rec_vars = rec_vars >}
 
-    method primitive : Primitive.t -> (Primitive.t * 'self_type) = fun p -> (p,o)
-    method row : row -> (row * 'self_type) =
+    method primitive : Primitive.t -> ('self_type * Primitive.t) = fun p -> (o,p)
+    method row : row -> ('self_type * row) =
       fun row -> o#typ row
 
-    method meta_type_var : meta_type_var -> (meta_type_var * 'self_type) =
+    method meta_type_var : meta_type_var -> ('self_type * meta_type_var) =
       fun point ->
       match Unionfind.find point with
         | Recursive (var, kind, t) ->
           if IntMap.mem var rec_vars then
-            (IntMap.find var rec_vars), o
+            o, (IntMap.find var rec_vars)
           else
             (* FIXME: seems unnecessary to freshen type variables here! *)
             let var' = fresh_raw_variable () in
             let point' = Unionfind.fresh (Var (var', kind, `Flexible)) in
             let rec_vars' = IntMap.add var point' rec_vars in
             let o = {< rec_vars = rec_vars' >} in
-            let (t', o) = o#typ t in
+            let (o, t') = o#typ t in
             let o = o#set_rec_vars rec_vars in
             Unionfind.change point' (Recursive (var', kind, t'));
-            (point', o)
-        | Var _  -> point, o
-        | Closed -> point, o
+            (o, point')
+        | Var _  -> o, point
+        | Closed -> o, point
         | t ->
-            let (t', o) = o#typ t in
-            Unionfind.fresh t', o
+            let (o, t') = o#typ t in
+            o, Unionfind.fresh t'
 
-    method meta_row_var : meta_row_var -> (meta_row_var * 'self_type) =
+    method meta_row_var : meta_row_var -> ('self_type * meta_row_var) =
       o#meta_type_var
 
-    method row_var : row_var -> (row_var * 'self_type) = o#meta_row_var
+    method row_var : row_var -> ('self_type * row_var) = o#meta_row_var
 
-    method meta_presence_var :  meta_presence_var -> (meta_presence_var * 'self_type) =
+    method meta_presence_var :  meta_presence_var -> ('self_type * meta_presence_var) =
       o#meta_type_var
-    method field_spec :  field_spec -> (field_spec * 'self_type) =
+    method field_spec :  field_spec -> ('self_type * field_spec) =
       fun field_spec -> o#typ field_spec
 
-    method field_spec_map :  field_spec_map -> (field_spec_map * 'self_type) =
+    method field_spec_map :  field_spec_map -> ('self_type * field_spec_map) =
       fun fsmap ->
       StringMap.fold
-        (fun lbl fs (fsmap', o) ->
-          let (fs, o) = o#field_spec fs in
-          (StringMap.add lbl fs fsmap', o))
-        fsmap (StringMap.empty, o)
+        (fun lbl fs (o, fsmap') ->
+          let (o, fs) = o#field_spec fs in
+          (o, StringMap.add lbl fs fsmap'))
+        fsmap (o, StringMap.empty)
 
-    method quantifier : Quantifier.t -> (Quantifier.t * 'self_type) =
-      fun q -> (q, o)
+    method quantifier : Quantifier.t -> ('self_type * Quantifier.t) =
+      fun q -> (o, q)
 
-    method type_arg : type_arg -> (type_arg * 'self_type) =
+    method type_arg : type_arg -> ('self_type * type_arg) =
       fun (pk, t) ->
       let open PrimaryKind in
       match pk with
       | Type ->
-         let (t', o) = o#typ t in ((Type,  t'), o)
+         let (o, t') = o#typ t in (o, (Type,  t'))
       | Row ->
-         let (r', o) = o#row t in ((Row, r'), o)
+         let (o, r') = o#row t in (o, (Row, r'))
       | Presence ->
-         let (p', o) = o#field_spec t in ((Presence, p'), o)
+         let (o, p') = o#field_spec t in (o, (Presence, p'))
 
-    method list : 'a 'b. ('self_type -> 'a -> 'b * 'self_type) -> 'a list -> ('b list * 'self_type)
+    method list : 'a 'b. ('self_type -> 'a -> 'self_type * 'b) -> 'a list -> ('self_type * 'b list)
       = fun f xs ->
       List.fold_right
-        (fun x (xs', o) ->
-          let (x', o) = f o x in
-          (x' :: xs', o))
-        xs ([], o)
+        (fun x (o, xs') ->
+          let (o, x') = f o x in
+          (o, x' :: xs'))
+        xs (o, [])
 
-    method type_args : type_arg list -> (type_arg list * 'self_type) =
+    method type_args : type_arg list -> ('self_type * type_arg list) =
       fun ts -> o#list (fun o -> o#type_arg) ts
 
-    method typ : typ -> (typ * 'self_type) = function
+    method typ : typ -> ('self_type * typ) = function
       (* Unspecified kind *)
       | Not_typed ->
-         (Not_typed, o)
+         (o, Not_typed)
       | (Var _ | Recursive _ | Closed) ->
          failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
       | Alias ((name, params, args, is_dual), t) ->
-         let (args', o) = o#type_args args in
-         let (t', o) = o#typ t in
-         (Alias ((name, params, args', is_dual), t'), o)
+         let (o, args') = o#type_args args in
+         let (o, t') = o#typ t in
+         (o, Alias ((name, params, args', is_dual), t'))
       | Application (con, args) ->
-         let (args', o) = o#type_args args in
-         (Application (con, args'), o)
+         let (o, args') = o#type_args args in
+         (o, Application (con, args'))
       | RecursiveApplication payload ->
-         let (r_args, o) = o#type_args payload.r_args in
-         (RecursiveApplication { payload with r_args }, o)
+         let (o, r_args) = o#type_args payload.r_args in
+         (o, RecursiveApplication { payload with r_args })
       | Meta point ->
          (* FIXME: Currently the meta_type_var method handles Var,
             Recursive, and closed. Ulimately these constructors should
             be handled in this method. *)
-         let (point', o) = o#meta_type_var point in
-         (Meta point', o)
+         let (o, point') = o#meta_type_var point in
+         (o, Meta point')
       (* Type *)
       | Primitive prim ->
-         let (prim', o) = o#primitive prim in
-         (Primitive prim', o)
+         let (o, prim') = o#primitive prim in
+         (o, Primitive prim')
       | Function (dom, eff, cod) ->
-         let (dom', o) = o#typ dom in
-         let (eff', o) = o#row eff in
-         let (cod', o) = o#typ cod in
-         (Function (dom', eff', cod'), o)
+         let (o, dom') = o#typ dom in
+         let (o, eff') = o#row eff in
+         let (o, cod') = o#typ cod in
+         (o, Function (dom', eff', cod'))
       | Lolli (dom, eff, cod) ->
-         let (dom', o) = o#typ dom in
-         let (eff', o) = o#row eff in
-         let (cod', o) = o#typ cod in
-         (Lolli (dom', eff', cod'), o)
+         let (o, dom') = o#typ dom in
+         let (o, eff') = o#row eff in
+         let (o, cod') = o#typ cod in
+         (o, Lolli (dom', eff', cod'))
       | Record row ->
-         let (row', o) = o#row row in
-         (Record row', o)
+         let (o, row') = o#row row in
+         (o, Record row')
       | Variant row ->
-         let (row', o) = o#row row in
-         (Variant row', o)
+         let (o, row') = o#row row in
+         (o, Variant row')
       | Table (read, write, needed) ->
-         let (read', o) = o#typ read in
-         let (write', o) = o#typ write in
-         let (needed', o) = o#typ needed in
-         (Table (read', write', needed'), o)
+         let (o, read') = o#typ read in
+         let (o, write') = o#typ write in
+         let (o, needed') = o#typ needed in
+         (o, Table (read', write', needed'))
       | Lens _ -> assert false (* TODO FIXME *)
       | ForAll (names, body) ->
-         let (names', o) = o#list (fun o -> o#quantifier) names in
-         let (body', o) = o#typ body in
-         (ForAll (names', body'), o)
+         let (o, names') = o#list (fun o -> o#quantifier) names in
+         let (o, body') = o#typ body in
+         (o, ForAll (names', body'))
       (* Effect *)
       | Effect row ->
-         let (row', o) = o#row row in
-         (Effect row', o)
+         let (o, row') = o#row row in
+         (o, Effect row')
       (* Row *)
       | Row (fsp, rv, d) ->
-         let (fsp', o) = o#field_spec_map fsp in
-         let (rv', o) = o#row_var rv in
-         (Row (fsp', rv', d), o)
+         let (o, fsp') = o#field_spec_map fsp in
+         let (o, rv') = o#row_var rv in
+         (o, Row (fsp', rv', d))
       (* Presence *)
       | Present t ->
-         let (t',o) = o#typ t in
-         (Present t', o)
-      | Absent -> (Absent, o)
+         let (o, t') = o#typ t in
+         (o, Present t')
+      | Absent -> (o, Absent)
       (* FIXME: change some typs to session_types *)
       | Input (t, s) ->
-         let (t', o) = o#typ t in
-         let (s', o) = o#typ s in
-         (Input (t', s'), o)
+         let (o, t') = o#typ t in
+         let (o, s') = o#typ s in
+         (o, Input (t', s'))
       | Output (t, s) ->
-         let (t', o) = o#typ t in
-         let (s', o) = o#typ s in
-         (Output (t', s'), o)
+         let (o, t') = o#typ t in
+         let (o, s') = o#typ s in
+         (o, Output (t', s'))
       | Dual s ->
-         let (s', o) = o#typ s in
-         (Dual s', o)
+         let (o, s') = o#typ s in
+         (o, Dual s')
       | Select r ->
-         let (r', o) = o#row r in
-         (Select r', o)
+         let (o, r') = o#row r in
+         (o, Select r')
       | Choice r ->
-         let (r', o) = o#row r in
-         (Choice r', o)
-      | End -> (End, o)
+         let (o, r') = o#row r in
+         (o, Choice r')
+      | End -> (o, End)
   end
 end
 
@@ -405,12 +404,12 @@ struct
              if Utility.IntSet.mem id mu_vars then
                let newvar = Var (id, kind, `Rigid) in
                (* Debug.print (Printf.sprintf "Saw rec  var %d" id); *)
-               (Unionfind.fresh newvar, o)
+               (o, Unionfind.fresh newvar)
              else
                let new_mu_vars = Utility.IntSet.add id mu_vars in
                let o' =  {< mu_vars=new_mu_vars >} in
                (* Debug.print (Printf.sprintf "Added rec  var %d" id); *)
-               let (t', _) = o'#typ t in (Unionfind.fresh (Recursive (id, kind, t')), o)
+               let (_, t') = o'#typ t in (o, Unionfind.fresh (Recursive (id, kind, t')))
           | _ -> super#meta_type_var point
 
         method! meta_row_var point =
@@ -419,12 +418,12 @@ struct
              if Utility.IntSet.mem id mu_vars then
                let newvar = Var (id, kind, `Rigid) in
                (* Debug.print (Printf.sprintf "Saw rec  var %d" id); *)
-               (Unionfind.fresh newvar, o)
+               (o, Unionfind.fresh newvar)
              else
                let new_mu_vars = Utility.IntSet.add id mu_vars in
                let o' =  {< mu_vars=new_mu_vars >} in
                (* Debug.print (Printf.sprintf "Added rec  var %d" id); *)
-               let (t', _) = o'#row t in (Unionfind.fresh (Recursive (id, kind, t')), o)
+               let (_, t') = o'#row t in (o, Unionfind.fresh (Recursive (id, kind, t')))
           | _ -> super#meta_row_var point
 
 
@@ -445,15 +444,15 @@ struct
         | Alias _ as a ->
             (* Don't expand aliases -- RecursiveApplications to previous type
              * groups are not of interest in this pass *)
-            (a, o)
+            (o, a)
         | RecursiveApplication { r_name; r_args; _ } as ra ->
             let apps =
               List.fold_left (fun acc x ->
-                let (_, o) = o#type_arg x in
+                let (o, _) = o#type_arg x in
                 let apps = o#get_applications in
                 StringSet.union acc apps) StringSet.empty r_args in
             let apps = StringSet.(union apps (singleton r_name)) in
-            (ra, {< rec_appls = apps >})
+            ({< rec_appls = apps >}, ra)
         | x -> super#typ x
     end
 end
@@ -463,12 +462,12 @@ module DecycleTypes  =
 struct
   let elim_recursive_type_cycles_visitor = new ElimRecursiveTypeCyclesTransform.visitor
 
-  let datatype t = fst (elim_recursive_type_cycles_visitor#typ t)
-  let row r = fst (elim_recursive_type_cycles_visitor#row r)
-  let field_spec p = fst (elim_recursive_type_cycles_visitor#field_spec p)
-  let type_arg ta = fst (elim_recursive_type_cycles_visitor#type_arg ta)
-  let row_var rv = fst (elim_recursive_type_cycles_visitor#row_var rv)
-  let quantifier q = fst (elim_recursive_type_cycles_visitor#quantifier q)
+  let datatype t = snd (elim_recursive_type_cycles_visitor#typ t)
+  let row r = snd (elim_recursive_type_cycles_visitor#row r)
+  let field_spec p = snd (elim_recursive_type_cycles_visitor#field_spec p)
+  let type_arg ta = snd (elim_recursive_type_cycles_visitor#type_arg ta)
+  let row_var rv = snd (elim_recursive_type_cycles_visitor#row_var rv)
+  let quantifier q = snd (elim_recursive_type_cycles_visitor#quantifier q)
 
 end
 
@@ -1985,14 +1984,14 @@ struct
           match self#var with
           | None ->
              begin match find_shared_var typ with
-             | Some v -> typ, {<var = Some v>}
+             | Some v -> {<var = Some v>}, typ
              | None -> super#typ typ
              end
-          | Some _ -> typ, self
+          | Some _ -> self, typ
       end
     in
     if policy.effect_sugar then
-      let (_, obj) = visit obj in
+      let (obj, _) = visit obj in
       { empty_context with shared_effect = obj#var }
     else
       empty_context
@@ -2828,7 +2827,7 @@ let make_thunk_type : row -> datatype -> datatype
 
 let recursive_applications t =
   let o = new GetRecursiveApplications.visitor in
-  let (_, o) = o#typ t in
+  let (o, _) = o#typ t in
   o#get_applications |> StringSet.elements
 
 

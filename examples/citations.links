@@ -282,7 +282,7 @@ fun main () {
               suggester(a, p, t)
             }
             case Suggest(b, q) ->
-              error("Didn't ask for a suggestion!");
+              error("Didn't ask for a suggestion!")
           }
         }
         var t = clientTimeMilliseconds();

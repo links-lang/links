@@ -224,7 +224,7 @@ module Typeability_preserving = struct
         Debug.if_set Basicsettings.show_stages (fun () -> T.Typeable.name ^"...");
         T.Typeable.program state program
       in
-      (if verify_transformation T.Typeable.name then
+      if verify_transformation T.Typeable.name then
          let tyenv =
            Context.typing_environment payload.state.Transform.Typeable.context
          in
@@ -234,14 +234,20 @@ module Typeability_preserving = struct
             check *against* the datatype in transformation state
             [payload]. *)
          try
-           ignore (TypeSugar.Check.program
+           let (program, datatype, tyenv') =
+             TypeSugar.Check.program
                      { tyenv with Types.desugared = true }
-                     payload.program)
+                     payload.program in
                   (* TODO(dhil): Verify post-transformation invariants. *)
+           let context = { payload.state.Transform.Typeable.context with
+                           Context.typing_environment = Types.extend_typing_environment tyenv tyenv' } in
+           let state   = { Typeable.datatype = datatype
+                         ; Typeable.context  = context }
+           in (Transform.Typeable.Result { state; program })
          with exn ->
            let stacktrace = Printexc.get_raw_backtrace () in
-           trace_type_error T.Typeable.name Sugartypes.pp_program program payload.program stacktrace exn);
-      result
+           trace_type_error T.Typeable.name Sugartypes.pp_program program payload.program stacktrace exn
+      else result
     in
     let (Transform.Typeable.Result { state; program }) =
       let initial_state = Transform.Typeable.{ datatype; context = context' } in
@@ -262,7 +268,7 @@ module Typeability_preserving = struct
       let (Transform.Typeable.Result payload) as result =
         T.Typeable.sentence state program
       in
-      (if verify_transformation T.Typeable.name then
+      if verify_transformation T.Typeable.name then
          let tyenv =
            Context.typing_environment payload.state.Transform.Typeable.context
          in
@@ -272,14 +278,20 @@ module Typeability_preserving = struct
             check *against* the datatype in transformation state
             [payload]. *)
          try
-           ignore (TypeSugar.Check.sentence
+           let (program, datatype, tyenv') =
+             TypeSugar.Check.sentence
                      { tyenv with Types.desugared = true }
-                     payload.program)
+                     payload.program in
                   (* TODO(dhil): Verify post-transformation invariants. *)
+           let context = { payload.state.Transform.Typeable.context with
+                           Context.typing_environment = Types.extend_typing_environment tyenv tyenv' } in
+           let state   = { Typeable.datatype = datatype
+                         ; Typeable.context  = context }
+           in (Transform.Typeable.Result { state; program })
          with exn ->
            let stacktrace = Printexc.get_raw_backtrace () in
-           trace_type_error T.Typeable.name Sugartypes.pp_sentence program payload.program stacktrace exn);
-      result
+           trace_type_error T.Typeable.name Sugartypes.pp_sentence program payload.program stacktrace exn
+      else result
     in
     let (Transform.Typeable.Result { state; program }) =
       let initial_state = Transform.Typeable.{ datatype; context = context' } in

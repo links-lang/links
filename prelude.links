@@ -1,5 +1,5 @@
 fun assert(ok, msg) {
-  if (not(ok)) debug("assertion failed: " ^^ msg) else ();
+  if (not(ok)) debug("assertion failed: " ^^ msg) else ()
 }
 
 sig ignore : (a) -> ()
@@ -1399,7 +1399,7 @@ fun assertEq (actual, expected) server {
       print(show(expected));
       print("but got:");
       print(show(actual));
-      sysexit(2);
+      sysexit(2)
   }
 }
 

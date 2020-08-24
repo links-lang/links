@@ -132,7 +132,7 @@ fun example() {
           transfer(true, 50, "Bob", "Alice")
        });
        println("Transaction [50, Bob -> Alice]: " ^^ result)
-     });
+     })
   }
   runState(fun() { schedule(main) }, accounts)
 }
