@@ -131,7 +131,9 @@ let on_effects o (eff : Types.row) fn x =
   (o#with_effects effect_row, x, y)
 
 let get_normal_funlit fnlit =
-  match fnlit with | NormalFunlit x -> x | MatchFunlit _ -> assert false
+  match fnlit with
+  | NormalFunlit x -> x
+  | _-> assert false
 
 let check_type_application (e, t) k =
   begin

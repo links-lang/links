@@ -171,3 +171,8 @@ Pattern Matching (5) - runtime non-exhaustive error
 fun foo(_) switch { case 1 -> 1 } foo(0)
 stderr : @.*Runtime error: non-exhaustive pattern matching.*
 exit : 1
+
+Pattern Matching (6) - matching over nullary function
+fun f() switch { case n -> 1 }
+stderr : @.*Error desugaring matching: Can't match over nullary function.*
+exit : 1

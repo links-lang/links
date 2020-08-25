@@ -449,10 +449,7 @@ match_tlfunbinding:
 | fun_kind VARIABLE arg_lists perhaps_location match_body      { ($1, $2, $3, $4, $5)   }
 
 match_body:
-| SWITCH LBRACE match_case* RBRACE                             { $3 }
-
-match_case:
-| CASE pattern RARROW block_contents                           { ($2, block ~ppos:$loc $4) }
+| SWITCH LBRACE case+ RBRACE                                   { $3 }
 
 tlvarbinding:
 | VAR VARIABLE perhaps_location EQ exp                         { (PatName $2, $5, $3) }

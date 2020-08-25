@@ -2668,7 +2668,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                   ListLit (List.map erase (e::es), Some (typ e)), T.Application (Types.list, [PrimaryKind.Type, typ e]), Usage.combine_many (List.map usages (e::es))
             end
         | FunLit (argss_prev, lin, fnlit, location) ->
-            let (pats, body) = match fnlit with | NormalFunlit (pat, body) -> (pat, body) | MatchFunlit (_,_) -> assert false in
+            let (pats, body) =
+              match fnlit with
+              | NormalFunlit (pat, body) -> (pat, body)
+              | _ -> assert false
+            in
             let vs = check_for_duplicate_names pos (List.flatten pats) in
             let (pats_init, pats_tail) = from_option ([], []) (unsnoc_opt pats) in
             let tpc' = if DeclaredLinearity.is_linear lin then tpc else tpcu in
@@ -4194,7 +4198,11 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                fun_frozen;
                fun_unsafe_signature = unsafe } =
            Renamer.rename_function_definition def in
-          let (pats, body) = match fnlit with | NormalFunlit (pats, body) -> (pats, body) | MatchFunlit (_,_) -> assert false in
+          let (pats, body) =
+            match fnlit with
+            | NormalFunlit (pats, body) -> (pats, body)
+            | _ -> assert false
+          in
           let name = Binder.to_name bndr in
           let vs = name :: check_for_duplicate_names pos (List.flatten pats) in
           let (pats_init, pats_tail) = from_option ([], []) (unsnoc_opt pats) in
@@ -4363,7 +4371,11 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                             rec_frozen = frozen;
                             _ }; _ } ->
                  let name = Binder.to_name bndr in
-                 let pats = match fnlit with NormalFunlit (pats, _) -> pats | MatchFunlit (_,_) -> assert false in
+                 let pats =
+                  match fnlit with
+                  | NormalFunlit (pats, _) -> pats
+                  | _ -> assert false
+                 in
                  (* recursive functions can't be linear! *)
                  if DeclaredLinearity.is_linear lin then
                    Gripers.linear_recursive_function pos name;
@@ -4432,7 +4444,11 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                         {node={ rec_binder = bndr; rec_linearity = lin;
                                 rec_definition = (_, fnlit); _ } as fn; pos }
                         pats ->
-                      let body = match fnlit with NormalFunlit (_, body) -> body | MatchFunlit (_,_) -> assert false in
+                      let body =
+                        match fnlit with
+                        | NormalFunlit (_, body) -> body
+                        | _ -> assert false
+                      in
                       let name = Binder.to_name bndr in
                       let pat_env = List.fold_left (fun env pat -> Env.extend env (pattern_env pat)) Env.empty (List.flatten pats) in
                       let self_env =

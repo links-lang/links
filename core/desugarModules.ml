@@ -319,7 +319,7 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
           in
           let body' = visitor#phrase body in
           NormalFunlit (paramss', body')
-        | MatchFunlit (_, _) -> assert false
+        | _ -> assert false
 
     method cases : (Pattern.with_pos * phrase) list -> (Pattern.with_pos * phrase) list
       = fun cases ->

@@ -143,7 +143,7 @@ let renamer qs_from qs_to =
      let o, (pats', tyvars', typ', _, signature', body') =
        match f with
         | NormalFunlit (pats, body) -> o#handle_function pats tyvars (Binder.to_type fun_binder) None fun_signature body
-        | MatchFunlit (_,_) -> assert false in
+        | _ -> assert false in
      let function_definition' =
        { fun_binder = Binder.set_type fun_binder typ'
        ; fun_linearity
@@ -167,7 +167,7 @@ let renamer qs_from qs_to =
        let o, (pats', tyvars', typ', ty', signature', body') =
          match f with
           | NormalFunlit (pats, body) -> o#handle_function pats tyvars (Binder.to_type rec_binder) ty rec_signature body
-          | MatchFunlit (_,_) -> assert false in
+          | _ -> assert false in
        let recursive_definition' =
          { rec_binder = Binder.set_type rec_binder typ'
          ; rec_linearity
@@ -220,7 +220,11 @@ let rename_function_definition : function_definition -> function_definition =
       ; fun_signature
       ; fun_frozen
       ; fun_unsafe_signature } ->
-  let (pats, body) = match f with | NormalFunlit (ps, bd) -> (ps, bd) | MatchFunlit (_,_) -> assert false in
+  let (pats, body) =
+    match f with
+    | NormalFunlit (ps, bd) -> (ps, bd)
+    | _ -> assert false
+  in
   let qs_from = List.map SugarQuantifier.get_resolved_exn tyvars_from in
   let qs_to, _      = Instantiate.build_fresh_quantifiers qs_from in
   let tyvars_to     = List.map SugarQuantifier.mk_resolved qs_to in
@@ -247,7 +251,11 @@ let rename_recursive_functionnode :
       ; rec_signature
       ; rec_frozen
       ; rec_unsafe_signature } ->
-  let (pats, body) = match f with | NormalFunlit (ps, bd) -> (ps, bd) | MatchFunlit (_,_) -> assert false in
+  let (pats, body) =
+    match f with
+    | NormalFunlit (ps, bd) -> (ps, bd)
+    | _ -> assert false
+  in
   let qs_from = List.map SugarQuantifier.get_resolved_exn tyvars_from in
   let qs_to, _      = Instantiate.build_fresh_quantifiers qs_from in
   let tyvars_to     = List.map SugarQuantifier.mk_resolved qs_to in

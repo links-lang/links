@@ -43,6 +43,14 @@ let pattern_matching_sugar_guard pos =
   if not (Settings.get pattern_matching_sugar)
   then raise (pattern_matching_sugar_disabled pos)
 
+let nullary_guard tuple pos =
+  let nullary_error pos =
+    Errors.desugaring_error ~pos:pos ~stage:Errors.DesugarMatching ~message:"Can't match over nullary function"
+  in
+  match tuple with
+    | [] -> raise (nullary_error pos)
+    | _ -> ()
+
 let desugar_matching =
 object ((self : 'self_type))
     inherit SugarTraversals.map as super
@@ -54,6 +62,7 @@ object ((self : 'self_type))
           (* bind the arguments with unique var name *)
           let name_list = List.map (fun pats -> List.map (fun pat -> (pat, Utility.gensym())) pats) patterns in
           let switch_tuple = List.map (fun (_, name) -> with_pos (Var name)) (List.flatten name_list) in
+          nullary_guard switch_tuple pos;
           (* assemble exhaustive handler *)
           let exhaustive_patterns = with_pos (Pattern.Any) in
           let exhaustive_position = Format.sprintf "non-exhaustive pattern matching at %s" (SourceCode.Position.show pos) in
