@@ -426,8 +426,8 @@ fun_declarations:
 fun_declaration:
 | tlfunbinding                                                 { fun_binding ~ppos:$loc($1) None $1 }
 | signatures tlfunbinding                                      { fun_binding ~ppos:$loc($2) (fst $1) ~unsafe_sig:(snd $1) $2 }
-| match_tlfunbinding                                           { match_fun_binding ~ppos:$loc($1) None $1 }
-| signatures match_tlfunbinding                                { match_fun_binding ~ppos:$loc($2) (fst $1) ~unsafe_sig:(snd $1) $2 }
+| switch_tlfunbinding                                          { switch_fun_binding ~ppos:$loc($1) None $1 }
+| signatures switch_tlfunbinding                               { switch_fun_binding ~ppos:$loc($2) (fst $1) ~unsafe_sig:(snd $1) $2 }
 
 linearity:
 | FUN                                                          { dl_unl }
@@ -445,10 +445,10 @@ tlfunbinding:
 | OP OPERATOR pattern perhaps_location block                   { ((dl_unl, false), $2, [[$3]], $4, $5)          }
 | OP pattern OPERATOR perhaps_location block                   { ((dl_unl, false), $3, [[$2]], $4, $5)          }
 
-match_tlfunbinding:
-| fun_kind VARIABLE arg_lists perhaps_location match_body      { ($1, $2, $3, $4, $5)   }
+switch_tlfunbinding:
+| fun_kind VARIABLE arg_lists perhaps_location switch_body     { ($1, $2, $3, $4, $5)   }
 
-match_body:
+switch_body:
 | SWITCH LBRACE case+ RBRACE                                   { $3 }
 
 tlvarbinding:
@@ -555,7 +555,7 @@ primary_expression:
 | LBRACKET exp DOTDOT exp RBRACKET                             { with_pos $loc (RangeLit($2, $4))   }
 | xml                                                          { $1 }
 | linearity arg_lists block                                    { fun_lit ~ppos:$loc $1 $2 $3 }
-| linearity arg_lists match_body                               { match_fun_lit ~ppos:$loc $1 $2 $3 }
+| linearity arg_lists switch_body                              { switch_fun_lit ~ppos:$loc $1 $2 $3 }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { with_pos $loc (CP $2) }
 | DOLLAR primary_expression                                    { with_pos $loc (Generalise $2) }
 
@@ -838,8 +838,8 @@ binding:
 | exp SEMICOLON                                                { with_pos $loc (Exp $1) }
 | signatures fun_kind VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, loc_unknown, $5) }
 | fun_kind VARIABLE arg_lists block                            { fun_binding ~ppos:$loc None ($1, $2, $3, loc_unknown, $4) }
-| signatures fun_kind VARIABLE arg_lists match_body            { match_fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, loc_unknown, $5) }
-| fun_kind VARIABLE arg_lists match_body                       { match_fun_binding ~ppos:$loc None ($1, $2, $3, loc_unknown, $4) }
+| signatures fun_kind VARIABLE arg_lists switch_body           { switch_fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, loc_unknown, $5) }
+| fun_kind VARIABLE arg_lists switch_body                      { switch_fun_binding ~ppos:$loc None ($1, $2, $3, loc_unknown, $4) }
 | typedecl SEMICOLON | links_module
 | links_open SEMICOLON                                         { $1 }
 

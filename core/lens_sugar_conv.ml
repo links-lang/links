@@ -113,6 +113,6 @@ let lens_sugar_phrase_of_sugar p =
       | _ ->
           Format.asprintf "Unsupported binder: %a" S.pp_phrase p
           |> Error.internal_error_res )
-  | S.FunLit (_, _, Sugartypes.MatchFunlit (_, _), _) -> assert false
+  | S.FunLit (_, _, Sugartypes.SwitchFunlit (_, _), _) -> assert false
   | _ -> lens_sugar_phrase_of_body "" p )
   |> Result.ok_exn

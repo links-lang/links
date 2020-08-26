@@ -6,10 +6,10 @@ open SourceCode
 
   This transformation convert function like that:
 
-  fun foo(a1, ..., an) match {
-    | case (p1_1, ..., p1_n) -> b_1
-    | ...
-    | case (pm_1, pm_n) -> b_m
+  fun foo(a1, ..., an) switch {
+    case (p1_1, ..., p1_n) -> b_1
+    ...
+    case (pm_1, pm_n) -> b_m
   }
 
   to function with switch body like that:
@@ -43,12 +43,12 @@ let pattern_matching_sugar_guard pos =
   if not (Settings.get pattern_matching_sugar)
   then raise (pattern_matching_sugar_disabled pos)
 
-let nullary_guard tuple pos =
+let nullary_guard pss pos =
   let nullary_error pos =
     Errors.desugaring_error ~pos:pos ~stage:Errors.DesugarMatching ~message:"Can't match over nullary function"
   in
-  match tuple with
-    | [] -> raise (nullary_error pos)
+  match pss with
+    | [[]] -> raise (nullary_error pos)
     | _ -> ()
 
 let desugar_matching =
@@ -57,12 +57,12 @@ object ((self : 'self_type))
     method! binding = fun b ->
       let pos = WithPos.pos b in
       match WithPos.node b with
-      |  Fun ({ fun_definition = (tvs, MatchFunlit (patterns, cases)); _ } as fn) ->
+      |  Fun ({ fun_definition = (tvs, SwitchFunlit (patterns, cases)); _ } as fn) ->
           pattern_matching_sugar_guard pos;
+          nullary_guard patterns pos;
           (* bind the arguments with unique var name *)
           let name_list = List.map (fun pats -> List.map (fun pat -> (pat, Utility.gensym())) pats) patterns in
           let switch_tuple = List.map (fun (_, name) -> with_pos (Var name)) (List.flatten name_list) in
-          nullary_guard switch_tuple pos;
           (* assemble exhaustive handler *)
           let exhaustive_patterns = with_pos (Pattern.Any) in
           let exhaustive_position = Format.sprintf "non-exhaustive pattern matching at %s" (SourceCode.Position.show pos) in

@@ -564,9 +564,9 @@ class map =
           | NormalFunlit (_x, _x_i1) ->
             let _x = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
             let _x_i1 = o#phrase _x_i1 in NormalFunlit (_x, _x_i1)
-          | MatchFunlit (pat, body) ->
+          | SwitchFunlit (pat, body) ->
             let pat = o#list (fun o -> o#list (fun o -> o#pattern)) pat in
-            let body = o#list (fun o (p, c) -> let p = o#pattern p in let c = o#phrase c in (p, c)) body in MatchFunlit (pat, body)
+            let body = o#list (fun o (p, c) -> let p = o#pattern p in let c = o#phrase c in (p, c)) body in SwitchFunlit (pat, body)
 
     method handle_params : handler_parameterisation -> handler_parameterisation =
       fun { shp_bindings; shp_types }->
@@ -1297,7 +1297,7 @@ class fold =
           | NormalFunlit (_x, _x_i1) ->
             let o = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
             let o = o#phrase _x_i1 in o
-          | MatchFunlit (pat, body) ->
+          | SwitchFunlit (pat, body) ->
             let o = o#list (fun o -> o#list (fun o -> o#pattern)) pat in
             let o = o#list (fun o (p, c) -> let o = o#pattern p in let o = o#phrase c in o) body in o
 
@@ -2131,9 +2131,9 @@ class fold_map =
           | NormalFunlit (_x, _x_i1) ->
             let (o, _x) = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
             let (o, _x_i1) = o#phrase _x_i1 in (o, NormalFunlit (_x, _x_i1))
-          | MatchFunlit (pat, body) ->
+          | SwitchFunlit (pat, body) ->
             let (o, pat) = o#list (fun o -> o#list (fun o -> o#pattern)) pat in
-            let (o, body) = o#list (fun o (p, c) -> let (o, p) = o#pattern p in let (o, c) = o#phrase c in (o, (p, c))) body in (o, MatchFunlit (pat, body))
+            let (o, body) = o#list (fun o (p, c) -> let (o, p) = o#pattern p in let (o, c) = o#phrase c in (o, (p, c))) body in (o, SwitchFunlit (pat, body))
 
     method handle_params : handler_parameterisation -> ('self_type * handler_parameterisation) =
       fun { shp_bindings; shp_types } ->
