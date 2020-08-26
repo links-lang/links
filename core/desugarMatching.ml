@@ -48,7 +48,7 @@ let nullary_guard pss pos =
     Errors.desugaring_error ~pos:pos ~stage:Errors.DesugarMatching ~message:"Can't match over nullary function"
   in
   match pss with
-    | [[]] -> raise (nullary_error pos)
+    | [] -> raise (nullary_error pos)
     | _ -> ()
 
 let desugar_matching =
@@ -61,19 +61,20 @@ object ((self : 'self_type))
           pattern_matching_sugar_guard pos;
           nullary_guard patterns pos;
           (* bind the arguments with unique var name *)
-          let name_list = List.map (fun pats -> List.map (fun pat -> (pat, Utility.gensym())) pats) patterns in
-          let switch_tuple = List.map (fun (_, name) -> with_pos (Var name)) (List.flatten name_list) in
+          let name_list = List.map (fun pat -> (pat, Utility.gensym())) patterns in
+          let switch_tuple = List.map (fun (_, name) -> with_pos (Var name)) name_list in
           (* assemble exhaustive handler *)
           let exhaustive_patterns = with_pos (Pattern.Any) in
           let exhaustive_position = Format.sprintf "non-exhaustive pattern matching at %s" (SourceCode.Position.show pos) in
           let exhaustive_case = FnAppl (with_pos (Var "error"), [with_pos (Constant (CommonTypes.Constant.String exhaustive_position))]) in
           let normal_args =
-            List.map (fun pats -> List.map (fun (pat, name) ->
-                                              with_pos (Pattern.As (with_pos (Binder.make ~name ()), pat)))
-                                            pats) name_list in
+            List.map
+              (fun (pat, name) -> with_pos (Pattern.As (with_pos (Binder.make ~name ()), pat)))
+              name_list
+          in
           let cases = cases@[(exhaustive_patterns, with_pos exhaustive_case)] in
           let switch_body = Switch (with_pos (TupleLit switch_tuple), cases, None) in
-          let normal_fnlit = NormalFunlit (normal_args, with_pos switch_body) in
+          let normal_fnlit = NormalFunlit ([normal_args], with_pos switch_body) in
           let normal_fnlit = self#funlit normal_fnlit in
           let node = Fun { fun_binder = fn.fun_binder;
                            fun_linearity = fn.fun_linearity;

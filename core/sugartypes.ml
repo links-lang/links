@@ -370,7 +370,7 @@ and regex =
   | Replace   of regex * replace_rhs
 and clause = Pattern.with_pos * phrase
 and funlit = NormalFunlit of normal_funlit | SwitchFunlit of switch_funlit
-and switch_funlit = Pattern.with_pos list list * switch_funlit_body
+and switch_funlit = Pattern.with_pos list * switch_funlit_body
 and switch_funlit_body = (Pattern.with_pos * phrase) list
 and normal_funlit = Pattern.with_pos list list * phrase
 and handler =
@@ -776,7 +776,7 @@ struct
   and normal_funlit (args, body : normal_funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
   and switch_funlit (args, body : switch_funlit) : StringSet.t =
-    diff (switch_funlit_body body) (union_map (union_map pattern) args)
+    diff (switch_funlit_body body) (union_map pattern args)
   and switch_funlit_body (body : (Pattern.with_pos * phrase) list) : StringSet.t =
     union_map (fun (pat, phr) -> union (pattern pat) (phrase phr)) body
   and block (binds, expr : binding list * phrase) : StringSet.t =

@@ -163,9 +163,10 @@ Pattern Matching (3)
 fun ack(_,_) switch { case (0, n) -> n + 1 case (m, 0) -> ack(m - 1, 1) case (m, n) -> ack(m - 1, ack(m, n - 1)) } fun test() { print(intToString(ack(0,1))); print(intToString(ack(1,0))); print(intToString(ack(1,1))) } test()
 stdout : 223() : ()
 
-Pattern Matching (4)
+Pattern Matching (4) - multiple arg list function
 fun foo(_)(_) switch { case (x, y) -> x + y } foo
-stdout : fun : (Int) -> (Int) ~> Int
+stderr : @.*Not support pattern matching function with multiple parameter lists yet.*
+exit : 1
 
 Pattern Matching (5) - runtime non-exhaustive error
 fun foo(_) switch { case 1 -> 1 } foo(0)

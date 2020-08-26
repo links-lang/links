@@ -96,7 +96,7 @@ module type SugarConstructorsSig = sig
   val switch_fun_lit
       : ?ppos:t -> ?args:((Types.datatype * Types.row) list)
      -> ?location:Location.t -> DeclaredLinearity.t
-     -> Pattern.with_pos list list -> switch_funlit_body
+     -> Pattern.with_pos list -> switch_funlit_body
      -> phrase
   val spawn
       : ?ppos:t
@@ -121,7 +121,7 @@ module type SugarConstructorsSig = sig
      -> binding
   val switch_fun_binding
       : ?ppos:t -> signature -> ?unsafe_sig:bool
-     -> ((DeclaredLinearity.t * bool) * Name.t * Pattern.with_pos list list * Location.t * switch_funlit_body)
+     -> ((DeclaredLinearity.t * bool) * Name.t * Pattern.with_pos list * Location.t * switch_funlit_body)
      -> binding
   val val_binding'
       : ?ppos:t -> signature -> (name_or_pat * phrase * Location.t)
