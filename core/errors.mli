@@ -14,7 +14,7 @@ type sugar_error_stage =
   | CheckXML
   | DesugarInners
   | DesugarModules
-  | DesugarMatching
+  | DesugarSwitchFuns
 
 
 exception RuntimeError of string

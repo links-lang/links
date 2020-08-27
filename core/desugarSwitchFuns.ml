@@ -45,13 +45,13 @@ let pattern_matching_sugar_guard pos =
 
 let nullary_guard pss pos =
   let nullary_error pos =
-    Errors.desugaring_error ~pos:pos ~stage:Errors.DesugarMatching ~message:"Can't match over nullary function"
+    Errors.desugaring_error ~pos:pos ~stage:Errors.DesugarSwitchFuns ~message:"Can't match over nullary function"
   in
   match pss with
     | [] -> raise (nullary_error pos)
     | _ -> ()
 
-let desugar_matching =
+let desugar_switching =
 object ((self : 'self_type))
     inherit SugarTraversals.map as super
     method! binding = fun b ->
@@ -90,6 +90,6 @@ end
 
 module Untyped
   = Transform.Untyped.Make.Transformer(struct
-        let name = "desugar_match_functions"
-        let obj = desugar_matching
+        let name = "desugar_switch_functions"
+        let obj = desugar_switching
       end)

@@ -165,15 +165,15 @@ stdout : 223() : ()
 
 Pattern Matching (4) - multiple arg list function
 fun foo(_)(_) switch { case (x, y) -> x + y } foo
-stderr : @.*Not support pattern matching function with multiple parameter lists yet.*
+stderr : @.*Curried switch functions are not yet supported.*
 exit : 1
 
 Pattern Matching (5) - runtime non-exhaustive error
 fun foo(_) switch { case 1 -> 1 } foo(0)
-stderr : @.*Runtime error: non-exhaustive pattern matching.*
+stderr : @.*non-exhaustive pattern matching.*
 exit : 1
 
 Pattern Matching (6) - matching over nullary function
 fun f() switch { case n -> 1 }
-stderr : @.*Error desugaring matching: Can't match over nullary function.*
+stderr : @.*Can't match over nullary function.*
 exit : 1

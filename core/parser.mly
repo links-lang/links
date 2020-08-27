@@ -172,7 +172,7 @@ let parseRegexFlags f =
 let switch_fun_currying_guard p args =
   match args with
   | [arg] -> arg
-  | _ -> raise (Errors.Type_error (pos p, "Not support pattern matching function with multiple parameter lists yet"))
+  | _ -> raise (Errors.Type_error (pos p, "Curried switch functions are not yet supported."))
 
 let named_typevar name freedom : SugarTypeVar.t =
   SugarTypeVar.mk_unresolved name None freedom
