@@ -51,6 +51,11 @@ let nullary_guard pss pos =
     | [] -> raise (nullary_error pos)
     | _ -> ()
 
+let switch_fun_currying_guard pos args =
+  match args with
+  | [arg] -> arg
+  | _ -> raise (Errors.Type_error (pos, "Curried switch functions are not yet supported."))
+
 let desugar_switching =
 object ((self : 'self_type))
     inherit SugarTraversals.map as super
@@ -59,6 +64,7 @@ object ((self : 'self_type))
       match WithPos.node b with
       |  Fun ({ fun_definition = (tvs, SwitchFunlit (patterns, cases)); _ } as fn) ->
           pattern_matching_sugar_guard pos;
+          let patterns = switch_fun_currying_guard pos patterns in
           nullary_guard patterns pos;
           (* bind the arguments with unique var name *)
           let name_list = List.map (fun pat -> (pat, Utility.gensym())) patterns in
