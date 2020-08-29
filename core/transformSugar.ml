@@ -130,11 +130,6 @@ let on_effects o (eff : Types.row) fn x =
   let (o, x, y) = fn o x in
   (o#with_effects effect_row, x, y)
 
-let get_normal_funlit fnlit =
-  match fnlit with
-  | NormalFunlit x -> x
-  | _-> assert false
-
 let check_type_application (e, t) k =
   begin
     try
@@ -767,7 +762,7 @@ class transform (env : Types.typing_environment) =
           | {node={ rec_definition = ((tyvars, Some (inner, extras)), lam); _ } as fn; pos} :: defs ->
               let (o, tyvars) = o#quantifiers tyvars in
               let (o, inner) = o#datatype inner in
-              let lam_in = get_normal_funlit lam in
+              let lam_in = Sugartypes.get_normal_funlit lam in
               let inner_effects = fun_effects inner (fst lam_in) in
               let (o, lam, _) = o#funlit inner_effects lam in
               let o = o#restore_quantifiers outer_tyvars in
@@ -815,7 +810,7 @@ class transform (env : Types.typing_environment) =
            when Binder.has_type fun_binder ->
          let outer_tyvars = o#backup_quantifiers in
          let (o, tyvars) = o#quantifiers tyvars in
-         let lam_in = get_normal_funlit lam in
+         let lam_in = Sugartypes.get_normal_funlit lam in
          let inner_effects = fun_effects (Binder.to_type fun_binder) (fst lam_in) in
          let (o, lam, _) = o#funlit inner_effects lam in
          let o = o#restore_quantifiers outer_tyvars in

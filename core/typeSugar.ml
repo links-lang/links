@@ -2668,11 +2668,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                   ListLit (List.map erase (e::es), Some (typ e)), T.Application (Types.list, [PrimaryKind.Type, typ e]), Usage.combine_many (List.map usages (e::es))
             end
         | FunLit (argss_prev, lin, fnlit, location) ->
-            let (pats, body) =
-              match fnlit with
-              | NormalFunlit (pat, body) -> (pat, body)
-              | _ -> assert false
-            in
+            let (pats, body) = Sugartypes.get_normal_funlit fnlit in
             let vs = check_for_duplicate_names pos (List.flatten pats) in
             let (pats_init, pats_tail) = from_option ([], []) (unsnoc_opt pats) in
             let tpc' = if DeclaredLinearity.is_linear lin then tpc else tpcu in
@@ -4198,11 +4194,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                fun_frozen;
                fun_unsafe_signature = unsafe } =
            Renamer.rename_function_definition def in
-          let (pats, body) =
-            match fnlit with
-            | NormalFunlit (pats, body) -> (pats, body)
-            | _ -> assert false
-          in
+          let (pats, body) = Sugartypes.get_normal_funlit fnlit in
           let name = Binder.to_name bndr in
           let vs = name :: check_for_duplicate_names pos (List.flatten pats) in
           let (pats_init, pats_tail) = from_option ([], []) (unsnoc_opt pats) in

@@ -569,6 +569,11 @@ let tappl' : phrase * tyarg list -> phrasenode = fun (e, tys) ->
        in
        TAppl (e, List.map make_arg tys)
 
+let get_normal_funlit fnlit =
+  match fnlit with
+  | NormalFunlit x -> x
+  | _-> assert false
+
 module Freevars =
 struct
   open Utility
