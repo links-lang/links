@@ -247,11 +247,7 @@ let rename_recursive_functionnode :
       ; rec_signature
       ; rec_frozen
       ; rec_unsafe_signature } ->
-  let (pats, body) =
-    match f with
-    | NormalFunlit (ps, bd) -> (ps, bd)
-    | _ -> assert false
-  in
+  let (pats, body) = Sugartypes.get_normal_funlit f in
   let qs_from = List.map SugarQuantifier.get_resolved_exn tyvars_from in
   let qs_to, _      = Instantiate.build_fresh_quantifiers qs_from in
   let tyvars_to     = List.map SugarQuantifier.mk_resolved qs_to in
