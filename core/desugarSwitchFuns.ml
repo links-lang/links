@@ -4,7 +4,7 @@ open SourceCode
 
 (* This module desugars pattern-matching functions
 
-  This transformation convert function like that:
+  This transformation convert `switch` functions of the form:
 
   fun foo(a1, ..., an) switch {
     case (p1_1, ..., p1_n) -> b_1
@@ -12,7 +12,7 @@ open SourceCode
     case (pm_1, pm_n) -> b_m
   }
 
-  to function with switch body like that:
+  to standard functions of the form:
 
   fun foo(a1 as x1, ..., an as xn) {
     switch ((x1, ..., xn)) {

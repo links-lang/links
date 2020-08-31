@@ -4363,11 +4363,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                             rec_frozen = frozen;
                             _ }; _ } ->
                  let name = Binder.to_name bndr in
-                 let pats =
-                  match fnlit with
-                  | NormalFunlit (pats, _) -> pats
-                  | _ -> assert false
-                 in
+                 let (pats, _) = Sugartypes.get_normal_funlit fnlit in
                  (* recursive functions can't be linear! *)
                  if DeclaredLinearity.is_linear lin then
                    Gripers.linear_recursive_function pos name;
@@ -4436,11 +4432,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                         {node={ rec_binder = bndr; rec_linearity = lin;
                                 rec_definition = (_, fnlit); _ } as fn; pos }
                         pats ->
-                      let body =
-                        match fnlit with
-                        | NormalFunlit (_, body) -> body
-                        | _ -> assert false
-                      in
+                      let (_, body) = Sugartypes.get_normal_funlit fnlit in
                       let name = Binder.to_name bndr in
                       let pat_env = List.fold_left (fun env pat -> Env.extend env (pattern_env pat)) Env.empty (List.flatten pats) in
                       let self_env =

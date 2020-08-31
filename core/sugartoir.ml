@@ -1183,11 +1183,7 @@ struct
                                rec_definition       = ((tyvars, _), fnlit);
                                rec_location         = location;
                                rec_unsafe_signature = unsafe; _ } ->
-                          let (pss, body) =
-                            match fnlit with
-                            | NormalFunlit (pss, body) -> (pss, body)
-                            | _ -> assert false
-                          in
+                          let (pss, body) = Sugartypes.get_normal_funlit fnlit in
                           assert (List.length pss = 1);
                           let f  = Binder.to_name bndr in
                           let ft = Binder.to_type bndr in
