@@ -96,7 +96,7 @@ object ((self : 'self_type))
                           } in
         WithPos.make ~pos node
       | _ -> super#binding b
-    
+
     method! phrase = fun p ->
       let pos = WithPos.pos p in
       match WithPos.node p with
