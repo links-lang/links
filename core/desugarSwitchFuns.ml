@@ -56,25 +56,26 @@ let switch_fun_currying_guard pos args =
   | [arg] -> arg
   | _ -> raise (Errors.Type_error (pos, "Curried switch functions are not yet supported."))
 
-let construct_normal_funlit pos patterns cases =
-  pattern_matching_sugar_guard pos;
-  let patterns = switch_fun_currying_guard pos patterns in
-  nullary_guard patterns pos;
+let construct_normal_funlit funlit_pos patterns cases =
+  pattern_matching_sugar_guard funlit_pos;
+  let patterns = switch_fun_currying_guard funlit_pos patterns in
+  nullary_guard patterns funlit_pos;
   (* bind the arguments with unique var name *)
+  let pat_first_pos = WithPos.pos (List.nth patterns 0) in
   let name_list = List.map (fun pat -> (pat, Utility.gensym())) patterns in
   let switch_tuple = List.map (fun (_, name) -> with_pos (Var name)) name_list in
   (* assemble exhaustive handler *)
   let exhaustive_patterns = with_pos (Pattern.Any) in
-  let exhaustive_position = Format.sprintf "non-exhaustive pattern matching at %s" (SourceCode.Position.show pos) in
+  let exhaustive_position = Format.sprintf "non-exhaustive pattern matching at %s" (SourceCode.Position.show funlit_pos) in
   let exhaustive_case = FnAppl (with_pos (Var "error"), [with_pos (Constant (CommonTypes.Constant.String exhaustive_position))]) in
   let normal_args =
     List.map
-      (fun (pat, name) -> with_pos (Pattern.As (with_pos (Binder.make ~name ()), pat)))
+      (fun (pat, name) -> with_pos (Pattern.As (with_pos ~pos:funlit_pos (Binder.make ~name ()), pat)))
       name_list
   in
   let cases = cases@[(exhaustive_patterns, with_pos exhaustive_case)] in
-  let switch_body = Switch (with_pos (TupleLit switch_tuple), cases, None) in
-  let normal_fnlit = NormalFunlit ([normal_args], with_pos switch_body) in
+  let switch_body = Switch (with_pos ~pos:pat_first_pos (TupleLit switch_tuple), cases, None) in
+  let normal_fnlit = NormalFunlit ([normal_args], with_pos ~pos:funlit_pos switch_body) in
   normal_fnlit
 
 let desugar_switching =
