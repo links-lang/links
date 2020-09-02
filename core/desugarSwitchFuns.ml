@@ -56,42 +56,56 @@ let switch_fun_currying_guard pos args =
   | [arg] -> arg
   | _ -> raise (Errors.Type_error (pos, "Curried switch functions are not yet supported."))
 
+let construct_normal_funlit pos patterns cases =
+  pattern_matching_sugar_guard pos;
+  let patterns = switch_fun_currying_guard pos patterns in
+  nullary_guard patterns pos;
+  (* bind the arguments with unique var name *)
+  let name_list = List.map (fun pat -> (pat, Utility.gensym())) patterns in
+  let switch_tuple = List.map (fun (_, name) -> with_pos (Var name)) name_list in
+  (* assemble exhaustive handler *)
+  let exhaustive_patterns = with_pos (Pattern.Any) in
+  let exhaustive_position = Format.sprintf "non-exhaustive pattern matching at %s" (SourceCode.Position.show pos) in
+  let exhaustive_case = FnAppl (with_pos (Var "error"), [with_pos (Constant (CommonTypes.Constant.String exhaustive_position))]) in
+  let normal_args =
+    List.map
+      (fun (pat, name) -> with_pos (Pattern.As (with_pos (Binder.make ~name ()), pat)))
+      name_list
+  in
+  let cases = cases@[(exhaustive_patterns, with_pos exhaustive_case)] in
+  let switch_body = Switch (with_pos (TupleLit switch_tuple), cases, None) in
+  let normal_fnlit = NormalFunlit ([normal_args], with_pos switch_body) in
+  normal_fnlit
+
 let desugar_switching =
 object ((self : 'self_type))
     inherit SugarTraversals.map as super
     method! binding = fun b ->
       let pos = WithPos.pos b in
       match WithPos.node b with
-      |  Fun ({ fun_definition = (tvs, SwitchFunlit (patterns, cases)); _ } as fn) ->
-          pattern_matching_sugar_guard pos;
-          let patterns = switch_fun_currying_guard pos patterns in
-          nullary_guard patterns pos;
-          (* bind the arguments with unique var name *)
-          let name_list = List.map (fun pat -> (pat, Utility.gensym())) patterns in
-          let switch_tuple = List.map (fun (_, name) -> with_pos (Var name)) name_list in
-          (* assemble exhaustive handler *)
-          let exhaustive_patterns = with_pos (Pattern.Any) in
-          let exhaustive_position = Format.sprintf "non-exhaustive pattern matching at %s" (SourceCode.Position.show pos) in
-          let exhaustive_case = FnAppl (with_pos (Var "error"), [with_pos (Constant (CommonTypes.Constant.String exhaustive_position))]) in
-          let normal_args =
-            List.map
-              (fun (pat, name) -> with_pos (Pattern.As (with_pos (Binder.make ~name ()), pat)))
-              name_list
-          in
-          let cases = cases@[(exhaustive_patterns, with_pos exhaustive_case)] in
-          let switch_body = Switch (with_pos (TupleLit switch_tuple), cases, None) in
-          let normal_fnlit = NormalFunlit ([normal_args], with_pos switch_body) in
-          let normal_fnlit = self#funlit normal_fnlit in
-          let node = Fun { fun_binder = fn.fun_binder;
-                           fun_linearity = fn.fun_linearity;
-                           fun_definition = (tvs, normal_fnlit);
-                           fun_location = fn.fun_location;
-                           fun_signature = fn.fun_signature;
-                           fun_unsafe_signature = fn.fun_unsafe_signature;
-                           fun_frozen = fn.fun_frozen;
-                           } in
-          WithPos.make ~pos node
+      | Fun ({ fun_definition = (tvs, SwitchFunlit (patterns, cases)); _ } as fn) ->
+        let normal_fnlit = construct_normal_funlit pos patterns cases in
+        let normal_fnlit = self#funlit normal_fnlit in
+        let node = Fun { fun_binder = fn.fun_binder;
+                          fun_linearity = fn.fun_linearity;
+                          fun_definition = (tvs, normal_fnlit);
+                          fun_location = fn.fun_location;
+                          fun_signature = fn.fun_signature;
+                          fun_unsafe_signature = fn.fun_unsafe_signature;
+                          fun_frozen = fn.fun_frozen;
+                          } in
+        WithPos.make ~pos node
       | _ -> super#binding b
+    
+    method! phrase = fun p ->
+      let pos = WithPos.pos p in
+      match WithPos.node p with
+      | FunLit (typing, linearity, SwitchFunlit (patterns, cases), loc) ->
+        let normal_fnlit = construct_normal_funlit pos patterns cases in
+        let normal_fnlit = self#funlit normal_fnlit in
+        let node = FunLit (typing, linearity, normal_fnlit, loc) in
+        WithPos.make ~pos node
+      | _ -> super#phrase p
 end
 
 module Untyped

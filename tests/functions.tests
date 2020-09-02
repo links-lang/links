@@ -177,3 +177,7 @@ Pattern Matching (6) - matching over nullary function
 fun f() switch { case n -> 1 }
 stderr : @.*Can't match over nullary function.*
 exit : 1
+
+Pattern Matching (7) - anonymous switch function
+fun(s) switch { case x -> x }
+stdout : fun : (a) ~> a
