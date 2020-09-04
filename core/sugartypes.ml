@@ -369,7 +369,10 @@ and regex =
   | Splice    of phrase
   | Replace   of regex * replace_rhs
 and clause = Pattern.with_pos * phrase
-and funlit = Pattern.with_pos list list * phrase
+and funlit = NormalFunlit of normal_funlit | SwitchFunlit of switch_funlit
+and switch_funlit = Pattern.with_pos list list * switch_funlit_body
+and switch_funlit_body = (Pattern.with_pos * phrase) list
+and normal_funlit = Pattern.with_pos list list * phrase
 and handler =
   { sh_expr         : phrase
   ; sh_effect_cases : clause list
@@ -565,6 +568,11 @@ let tappl' : phrase * tyarg list -> phrasenode = fun (e, tys) ->
          Datatype.Type (WithPos.make (Datatype.TypeVar tv)), Some ty
        in
        TAppl (e, List.map make_arg tys)
+
+let get_normal_funlit fnlit =
+  match fnlit with
+  | NormalFunlit x -> x
+  | _-> assert false
 
 module Freevars =
 struct
@@ -766,8 +774,16 @@ struct
            let fvs'' = diff fvs' bnd in
            union bnd bnd', union fvs fvs'')
          (empty, empty) members
-  and funlit (args, body : funlit) : StringSet.t =
+  and funlit (fn : funlit) : StringSet.t =
+    match fn with
+    | NormalFunlit n_fn -> normal_funlit n_fn
+    | SwitchFunlit m_fn -> switch_funlit m_fn
+  and normal_funlit (args, body : normal_funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
+  and switch_funlit (args, body : switch_funlit) : StringSet.t =
+    diff (switch_funlit_body body) (union_map (union_map pattern) args)
+  and switch_funlit_body (body : (Pattern.with_pos * phrase) list) : StringSet.t =
+    union_map (fun (pat, phr) -> union (pattern pat) (phrase phr)) body
   and block (binds, expr : binding list * phrase) : StringSet.t =
     ListLabels.fold_right binds ~init:(phrase expr)
       ~f:(fun bind bodyfree ->

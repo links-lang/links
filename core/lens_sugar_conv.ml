@@ -61,7 +61,7 @@ let is_static _typ p =
        if body contains any external references. If it does, then it is dynamic,
        otherwise it is static. *)
   match WithPos.node p with
-  | S.FunLit (_, _, ([ [ var ] ], body), _) -> (
+  | S.FunLit (_, _, Sugartypes.NormalFunlit ([ [ var ] ], body), _) -> (
       let var = WithPos.node var in
       match var with
       | S.Pattern.Variable x -> no_ext_deps x body
@@ -105,7 +105,7 @@ let rec lens_sugar_phrase_of_body v p =
 
 let lens_sugar_phrase_of_sugar p =
   ( match WithPos.node p with
-  | S.FunLit (_, _, ([ [ var ] ], body), _) -> (
+  | S.FunLit (_, _, Sugartypes.NormalFunlit ([ [ var ] ], body), _) -> (
       let var = WithPos.node var in
       match var with
       | S.Pattern.Variable x ->
@@ -113,5 +113,6 @@ let lens_sugar_phrase_of_sugar p =
       | _ ->
           Format.asprintf "Unsupported binder: %a" S.pp_phrase p
           |> Error.internal_error_res )
+  | S.FunLit (_, _, Sugartypes.SwitchFunlit (_, _), _) -> assert false
   | _ -> lens_sugar_phrase_of_body "" p )
   |> Result.ok_exn

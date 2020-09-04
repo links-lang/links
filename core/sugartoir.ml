@@ -1143,7 +1143,7 @@ struct
                     let ss = eval_bindings scope env' bs e in
                       I.comp env (p, s, ss)
                 | Fun { fun_binder           = bndr;
-                        fun_definition       = (tyvars, ([ps], body));
+                        fun_definition       = (tyvars, NormalFunlit ([ps], body));
                         fun_location         = location;
                         fun_unsafe_signature = unsafe; _ }
                      when Binder.has_type bndr ->
@@ -1180,9 +1180,10 @@ struct
                     let defs =
                       List.map
                         (fun { rec_binder           = bndr;
-                               rec_definition       = ((tyvars, _), (pss, body));
+                               rec_definition       = ((tyvars, _), fnlit);
                                rec_location         = location;
                                rec_unsafe_signature = unsafe; _ } ->
+                          let (pss, body) = Sugartypes.get_normal_funlit fnlit in
                           assert (List.length pss = 1);
                           let f  = Binder.to_name bndr in
                           let ft = Binder.to_type bndr in
