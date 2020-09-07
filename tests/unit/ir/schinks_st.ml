@@ -107,6 +107,7 @@ let wi_q ?(pk = CT.PrimaryKind.Type) ?(sk = default_subkind) tid =
 
 let q ?(pk = CT.PrimaryKind.Type) ?(sk = default_subkind) tname =
   let kind = (pk, sk) in
+  let* () = Repr.add_tname ~tname in
   let stage2 =
     let+ id = Repr.lookup_tname ~tname in
     (id, kind)
@@ -126,6 +127,7 @@ let string_const s = mk_const (CT.Constant.String s)
 let s = string_const
 
 let var name =
+  let* () = Repr.add_name ~name in
   let stage2 =
     let+ id = Repr.lookup_name ~name in
     Ir.Variable id
