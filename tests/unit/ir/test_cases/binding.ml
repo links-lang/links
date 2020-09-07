@@ -43,13 +43,15 @@ let prog_rec_is_recursive =
     [
       def "f" ([int] |~~> int)
         [("x", int)]
-        (let++ _z = param "z" string (apply (var "g") [s "bla"]) in
-         return (i 3));
+        (computation
+           [let_ "z" string (apply (var "g") [s "bla"])]
+           ((return (i 3))));
 
       def "g" ([string] |~~> string)
         [("y", string)]
-        (let++ _z = param "z" int (apply (var "f") [i 3]) in
-        return (s "bla"));
+        (computation
+           [let_ "z" int (apply (var "f") [i 3])]
+           ((return (s "bla"))));
     ]
 
 

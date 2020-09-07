@@ -226,8 +226,6 @@ val wi_fun_ :
 
 type 'a comp_param
 
-val param :
-  string -> Types.datatype t -> Ir.tail_computation t -> Ir.value t comp_param
 
 val ( let++ ) :
   'a t comp_param -> ('a t -> Ir.tail_computation t) -> Ir.computation t

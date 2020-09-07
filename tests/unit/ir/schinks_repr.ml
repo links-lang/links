@@ -38,9 +38,6 @@ end
 module Stage2 = struct
   type t = { tname_to_id : int StringMap.t; varname_to_id : int StringMap.t }
 
-  let initial =
-    { tname_to_id = StringMap.empty; varname_to_id = StringMap.empty }
-
   let of_stage_1 vs =
     let rec add_binding reserved next_id used map =
       match (used, IntSet.mem next_id reserved) with
@@ -65,7 +62,7 @@ module Stage2 = struct
 end
 
 module E = struct
-  type t = Unexpected_error of string
+  type t = unit
 end
 
 type 'a lookup = ('a, Stage2.t) State.t

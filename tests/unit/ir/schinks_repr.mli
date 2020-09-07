@@ -1,6 +1,3 @@
-open Links_core
-open Utility
-
 module ReprState : sig
   type t
 

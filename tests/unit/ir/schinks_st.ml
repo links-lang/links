@@ -258,10 +258,6 @@ let let_ name ty ?(tparams = []) ?scope body =
   let bin = binder ?scope name ty in
   wi_let_ bin ~tparams body
 
-let var' name ty =
-  let bin = binder name ty in
-  bin
-
 let wi_def bin ?(tparams = []) params ?closure_var
     ?(location = CT.Location.Server) ?(unsafe_sig = false) body =
   let* bin = bin in
@@ -337,22 +333,7 @@ let fun_ name ty ?tparams params ?closure_var ?location ?unsafe_sig body =
 type comp_bindings = { bindings : Ir.binding maker list }
 type 'a comp_param = 'a * comp_bindings
 
-let param name typ tl =
-  let lt = let_ name typ tl in
-  (var name, { bindings = [ lt ] })
-
 let ( let++ ) (b, { bindings }) f = computation bindings (f b)
 
 let ( and++ ) (b1, p1) (b2, p2) =
   ((b1, b2), { bindings = List.append p1.bindings p2.bindings })
-
-let def' _name _ty _par = def _name _ty _par
-
-(* example *)
-let _foo =
-  def "f"
-    ([ int ] |~~> int)
-    [ ("x", int) ]
-    (let++ x = param "x" string (apply (var "g") [ s "bla" ])
-     and++ _y = param "y" string (apply (var "f") [ i 3 ]) in
-     return x)
