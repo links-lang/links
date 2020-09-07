@@ -61,7 +61,7 @@ To run the examples using the Links application server issue the
 following command:
 
 ```
-$ linx -m --path=$OPAM_SWITCH_PREFIX/share/links/examples --path=$OPAM_SWITCH_PREFIX/share/links/examples/games --path=$OPAM_SWITCH_PREFIX/share/links/examples/dictionary $OPAM_SWITCH_PREFIX/share/links/examples/webserver/examples.links
+$ linx --path=$OPAM_SWITCH_PREFIX/share/links/examples --path=$OPAM_SWITCH_PREFIX/share/links/examples/games --path=$OPAM_SWITCH_PREFIX/share/links/examples/dictionary $OPAM_SWITCH_PREFIX/share/links/examples/webserver/examples.links
 ```
 
 * The `--path` option tells Links to look for source files in the following
