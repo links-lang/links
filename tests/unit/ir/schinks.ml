@@ -330,12 +330,3 @@ let fun_ name ty ?tparams params ?closure_var ?location ?unsafe_sig body =
     Ir.Fun fun_def
   in
   stage2
-
-(* computation let syntax *)
-type comp_bindings = { bindings : Ir.binding maker list }
-type 'a comp_param = 'a * comp_bindings
-
-let ( let++ ) (b, { bindings }) f = computation bindings (f b)
-
-let ( and++ ) (b1, p1) (b2, p2) =
-  ((b1, b2), { bindings = List.append p1.bindings p2.bindings })
