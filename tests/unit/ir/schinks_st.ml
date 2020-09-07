@@ -50,7 +50,7 @@ let tvar ?(pk = CT.PrimaryKind.Type) ?(sk = default_subkind) tname =
   let kind = (pk, sk) in
   let+ () = Repr.add_tname ~tname in
   let+ id = Repr.lookup_tname ~tname in
-  Types.Var (id, kind, `Rigid)
+  Types.Meta (Unionfind.fresh (Types.Var (id, kind, `Rigid)))
 
 let tvar_row ?(sk = default_subkind) name = tvar ~pk:CT.PrimaryKind.Row ~sk name
 
