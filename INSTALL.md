@@ -2,12 +2,12 @@
 
 We recommend installing Links using the OPAM tool, available from [opam.ocaml.org](https://opam.ocaml.org/).
 
-Links requires at least OCaml 4.06.0 to build and install. Therefore
+Links requires at least OCaml 4.08.0 to build and install. Therefore
 you should first install the minimum (or greater) required version of
 OCaml:
 
 ```
-$ opam switch install 4.06.0
+$ opam switch install 4.08.0
 ```
 
 If you wish to use Links' database functionality, you should first
@@ -79,7 +79,7 @@ But first you need to do a few things.
 
   2) The default config file should contain paths to JavaScript libraries:
 
-         jsliburl=/lib/
+         jsliburl=/lib/js
          jslibdir=$OPAM_SWITCH_PREFIX/lib/links/js
 
      To use database examples you need to add a database configuration
