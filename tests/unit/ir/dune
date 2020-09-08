@@ -1,6 +1,5 @@
 (library
   (name links_ir_unit_tests)
-  (public_name links.unit_tests.ir)
   (modes native)
   (flags :standard -safe-string -dtypes -w Ae-44-45-60 -g)
   (libraries ounit2.advanced ounit2 dynlink links.core result)
