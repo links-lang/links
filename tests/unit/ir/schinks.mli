@@ -53,6 +53,8 @@ val forall : CommonTypes.Quantifier.t t list -> Types.t t -> Types.t t
 (** Creates a type variable to be used in a type, primary kind defauls to Type *)
 val tvar : ?pk:CT.PrimaryKind.t -> ?sk:CT.Subkind.t -> string -> Types.typ t
 
+val wi_tvar : ?pk:CT.PrimaryKind.t -> ?sk:CT.Subkind.t -> int -> Types.typ t
+
 (** shorthand for tvar ~pk set to Type *)
 val tvar_row : ?sk:CT.Subkind.t -> string -> Types.typ t
 

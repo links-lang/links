@@ -52,6 +52,11 @@ let tvar ?(pk = CT.PrimaryKind.Type) ?(sk = default_subkind) tname =
   let+ id = Repr.lookup_tname ~tname in
   Types.Meta (Unionfind.fresh (Types.Var (id, kind, `Rigid)))
 
+let wi_tvar ?(pk = CT.PrimaryKind.Type) ?(sk = default_subkind) tid : Types.t t =
+  let kind = (pk, sk) in
+  let+ () = Repr.add_tid ~tid in
+  Types.Meta (Unionfind.fresh (Types.Var (tid, kind, `Rigid))) |> State.return
+
 let tvar_row ?(sk = default_subkind) name = tvar ~pk:CT.PrimaryKind.Row ~sk name
 
 let fun_t ?effects parameters codomain =

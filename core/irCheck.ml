@@ -585,13 +585,6 @@ struct
                        o#add_typevar_to_context var kind) o tyvars in
            let o, v, t = o#value v in
            let o = o#set_type_var_env previous_tyenv in
-           (* COMMENTED OUT CODE IS BROKEN: add then remove =/= id
-               because type variabl es are not guaranteed to be unique
-            *)
-           (* let o = List.fold_left
-            *   (fun o quant ->
-            *     let var = Quantifier.to_var quant in
-            *     o#remove_typevar_to_context var) o tyvars in *)
            let t = Types.for_all (tyvars, t) in
            o, TAbs (tyvars, v), t
         | TApp (v, ts)  ->
@@ -1155,12 +1148,6 @@ struct
         let o, body, body_type = o#computation body in
 
         let o = o#set_type_var_env previous_tyenv in
-        (* COMMENTED OUT CODE IS BROKEN: add then remove =/= id
-           because type variables are not guaranteed to be unique *)
-        (* let o = List.fold_left
-         *       (fun o quant ->
-         *         let var = Quantifier.to_var quant in
-         *         o#remove_typevar_to_context var) o tyvars in *)
         let o, _ = o#set_allowed_effects previously_allowed_effects in
 
 
@@ -1194,13 +1181,6 @@ struct
                             o#add_typevar_to_context var kind) o tyvars in
                 let o, tc, act = o#tail_computation tc in
                 let o = o#set_type_var_env previous_tyenv in
-                (* COMMENTED OUT CODE IS BROKEN: add then remove =/=
-                   id because type variables are not guaranteed to be
-                   unique *)
-                (* let o = List.fold_left
-                 *           (fun o quant ->
-                 *             let var = Quantifier.to_var quant in
-                 *             o#remove_typevar_to_context var) o tyvars in *)
                 let exp = Var.type_of_binder x in
                 let act_foralled = Types.for_all (tyvars, act) in
                 o#check_eq_types exp act_foralled (SBind orig);
