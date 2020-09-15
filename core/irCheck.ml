@@ -119,6 +119,11 @@ let translate_helper_exns (f : 'a -> 'b) (x : 'a) occurrence : 'b =
         Printf.sprintf "Arity mismatch during type application/instantiation. \
                         Providing %d type arguments to function that takes %d." given takes in
       raise_ir_type_error msg occurrence
+    | Errors.InternalError { message ; _ } when
+        (Str.string_match (Str.regexp "Kind mismatch in type application" ) message 0) ->
+      (* FIXME: The fact that this raises an internal error is horrible.
+        Get rid of this once we kind-check all type applications within IrCheck. *)
+      raise_ir_type_error message occurrence
 
 let ensure condition msg occurrence =
   if condition then () else raise_ir_type_error msg occurrence
@@ -480,6 +485,19 @@ let ensure_effect_rows_compatible ctx allowed_effects imposed_effects_row occurr
     occurrence
 
 
+(** Compares lists of quantifiers for equal kinds.
+  In particular, does not allow any kind of subkinding, the kinds must be idential.
+  Assumes that you have checked that lengths are idential beforehand *)
+let compare_quantifiers qs1 qs2 msg occurrence =
+  List.iter2
+  (fun q1 q2 ->
+    ensure
+      (Kind.equal (Quantifier.to_kind q1) (Quantifier.to_kind q2))
+      msg
+      occurrence)
+  qs1
+  qs2
+
 
 (* TYPE CHECKING *)
 
@@ -538,7 +556,9 @@ struct
 
 
     method! value : value -> ('self_type * value * datatype) =
-      let value_inner orig = match orig with
+      let value_inner orig =
+        let occurence = (SVal orig) in
+        match orig with
         | Ir.Constant c -> let (o, c, t) = o#constant c in o, Ir.Constant c, t
         | Variable x -> let (o, x, t) = o#var x in o, Variable x, t
         | Extend (fields, base) as orig ->
@@ -620,42 +640,35 @@ struct
           let ft = o#lookup_type f in
           let (o, z, zt) = o#value z in
 
-          let ft_instantiated, instantiation_maps = if tyargs = []
+          let ft_instantiated = if tyargs = []
             then
-              (ft, IntMap.empty)
+              ft
             else
               let (remaining_type, instantiation_maps) = Instantiate.instantiation_maps_of_type_arguments false ft tyargs in
-              Instantiate.datatype instantiation_maps remaining_type, instantiation_maps  in
+              Instantiate.datatype instantiation_maps remaining_type  in
 
           ensure (is_function_type (snd (TypeUtils.split_quantified_type ft_instantiated))) "Passing closure to non-function" (SVal orig);
           begin match o#lookup_closure_def_for_fun f with
           | Some optbinder ->
             begin match optbinder with
-              | inner_quantifiers, Some  binder ->
-                let outer_quantifiers = TypeUtils.quantifiers ft in
+              | Some  binder ->
 
-                let outer_to_inner_type_var_map  =
-                  List.fold_left2 (fun map iq oq  ->
-                      let iv = Quantifier.to_var iq in
-                      let ov = Quantifier.to_var oq in
-                      IntMap.add ov iv map
-                    )  IntMap.empty inner_quantifiers outer_quantifiers  in
+                let uninstantiated_closure_type_exp = (Var.type_of_binder binder) in
+                let closure_quantifiers = TypeUtils.quantifiers uninstantiated_closure_type_exp in
 
-                (* Right now, the instantiation_maps map outer type variables to their substitutions. However,
-                  the types in the closure record are expressed in terms of the function's inner type variables *)
-                let tranform_outer_instantiation_map_to_inner map =
-                  IntMap.fold (fun outer_var oldvalue resultmap ->
-                      let inner_var = IntMap.find outer_var outer_to_inner_type_var_map in
-                      IntMap.add inner_var oldvalue resultmap
-                    ) map IntMap.empty in
+                ensure
+                  (List.length closure_quantifiers = List.length tyargs)
+                  "Providing wrong number of closure type arguments"
+                  occurence;
 
-                let inner_instantiation_maps = tranform_outer_instantiation_map_to_inner instantiation_maps in
-
-                let uninstantiated_type_of_environment = (Var.type_of_binder binder) in
-                (* Debug.print (IntMap.show Types.pp_datatype (fst3 inner_instantiation_maps)); *)
-                let type_of_environment = Instantiate.datatype inner_instantiation_maps uninstantiated_type_of_environment in
-                o#check_eq_types type_of_environment zt (SVal orig)
-              | _, None -> raise_ir_type_error "Providing closure to a function that does not need one" (SVal orig)
+                let instantiated_closure_type_exp =
+                  let (closure_remaining_type, closure_instantiation_maps) =
+                    Instantiate.instantiation_maps_of_type_arguments true uninstantiated_closure_type_exp tyargs
+                  in
+                  Instantiate.datatype closure_instantiation_maps closure_remaining_type
+                in
+                o#check_eq_types instantiated_closure_type_exp zt (SVal orig)
+              | None -> raise_ir_type_error "Providing closure to a function that does not need one" (SVal orig)
             end
           | None -> raise_ir_type_error "Providing closure to untracked function" (SVal orig)
           end;
@@ -1106,20 +1119,23 @@ struct
           o, (bs, tc), t
 
 
-   (* The function parameters (and potentially other recursive functions), as well as the closure binder
-      (if it exists), must be added to the environment before calling *)
+   (* The function parameters (and potentially other recursive functions), must
+      be added to the environment before calling.
+      The closure variable is handled here and must not be added to the environment beforehand
+      (if it exists) *)
     method handle_funbinding
              (expected_overall_funtype : datatype)
              (tyvars : Quantifier.t list)
              (parameter_types : datatype list)
              (body : computation)
+             (closure_var: binder option)
              (is_recursive : bool)
              (occurrence : ir_snippet)
            : ('self_type * computation) =
 
         (* Get all toplevel quantifiers, even if nested as in
            forall a. forall b. t1 -> t2. Additionally, get type with quantifiers stripped away *)
-        let _, exp_unquant_t =
+        let exp_quant, exp_unquant_t =
           TypeUtils.split_quantified_type expected_overall_funtype in
 
         ensure
@@ -1127,12 +1143,51 @@ struct
           "Function annotated with non-function type"
           occurrence;
 
+        if List.length tyvars <> List.length exp_quant then
+          raise_ir_type_error
+            "Mismatch in number of function's quantifiers in tyvar list vs type annotation"
+            occurrence
+        else
+          compare_quantifiers tyvars exp_quant "Mismatch in quantifier kinds in tyvar list vs type annotation" occurrence;
+
         (* In order to obtain the effects to type-check the body with,
            we take the expected effects and substitute the quantifiers from the type
            annotation with those in the tyvar list *)
         let quantifiers_as_type_args = List.map Types.type_arg_of_quantifier tyvars in
         let exp_t_substed = Instantiate.apply_type expected_overall_funtype quantifiers_as_type_args in
         let exp_effects_substed = TypeUtils.effect_row exp_t_substed in
+
+        (* The binder for the closure variable has its own quantifiers.
+           We instantiate those quantifiers with the corresponding quantifiers in the tyvar list
+           of the function (i.e., the "inner" type parameters)
+           This is so that the closure variable uses the same type names as, say, the parameters. *)
+        let o =
+          match closure_var with
+            | Some closure_binder ->
+               let closure_type = Var.type_of_binder closure_binder in
+               let closure_var_quants, _ = TypeUtils.split_quantified_type closure_type in
+
+               if List.length closure_var_quants > List.length tyvars then
+                 raise_ir_type_error
+                   "Too many quantifiers on closure binder type!"
+                   occurrence
+               else
+                 compare_quantifiers
+                   closure_var_quants
+                   (ListUtils.take (List.length closure_var_quants) tyvars)
+                   "Mismatch in quantifier kinds in tyvar list vs closure variable quantifiers"
+                   occurrence;
+
+               let (closure_var_rem_type, instantiation_maps) =
+                 Instantiate.instantiation_maps_of_type_arguments
+                   true (* This means we fail if |tyvars| < |closure_type_quants| *)
+                   closure_type
+                   (ListUtils.take (List.length closure_var_quants) quantifiers_as_type_args) in
+               let substed_closure_var_type = Instantiate.datatype instantiation_maps closure_var_rem_type in
+               let updated_closure_binder = Var.update_type substed_closure_var_type closure_binder in
+               fst (o#binder updated_closure_binder)
+            | None -> o
+        in
 
         (if is_recursive then o#impose_presence_of_effect "wild" Types.unit_type occurrence);
 
@@ -1164,6 +1219,11 @@ struct
            We already checked them when checking the body. However, removing them
            from the overall types would be confusing *)
         o#check_eq_types expected_overall_funtype actual_overall_funtype occurrence;
+
+        let o = match closure_var with
+          | Some closure_binder -> o#remove_binder closure_binder
+          | None -> o
+        in
 
         o, body
 
@@ -1199,7 +1259,6 @@ struct
               in
               let lazy_check =
               lazy(
-                let (o, z) = o#optionu (fun o -> o#binder) z in
                 let (o, xs) =
                   List.fold_right
                     (fun x (o, xs) ->
@@ -1215,9 +1274,10 @@ struct
                                 tyvars
                                 actual_parameter_types
                                 fn_body
+                                z
                                 false
                                 (SBind binding) in
-                let o = o#add_function_closure_binder (Var.var_of_binder f) (tyvars, z) in
+                let o = o#add_function_closure_binder (Var.var_of_binder f) z in
                 (* Debug.print ("added " ^ string_of_int (Var.var_of_binder f) ^ " to closure env"); *)
 
                 let o = OptionUtils.opt_app o#remove_binder o z in
@@ -1227,7 +1287,7 @@ struct
               let o, f, tyvars, xs, body, z, location =
                handle_ir_type_error lazy_check (o, f, tyvars, xs, fn_body, z, fn_location) (SBind binding) in
               let o, f = o#binder f in
-              let o = o#add_function_closure_binder (Var.var_of_binder f) (tyvars, z) in
+              let o = o#add_function_closure_binder (Var.var_of_binder f) z in
               let fundef = {fn_binder = f; fn_tyvars = tyvars; fn_params = xs; fn_body = body; fn_closure = z;
                             fn_location = location; fn_unsafe}
               in
@@ -1241,7 +1301,7 @@ struct
               List.fold_right
                 (fun  fundef (o, fs) ->
                    let {fn_binder = f; fn_tyvars; fn_closure = z; _} = fundef in
-                   let o = o#add_function_closure_binder (Var.var_of_binder f) (fn_tyvars, z) in
+                   let o = o#add_function_closure_binder (Var.var_of_binder f) z in
                    let o, f = o#binder f in
                      (o, {fundef with fn_binder = f}::fs))
                 defs
@@ -1255,7 +1315,6 @@ struct
                    let {fn_binder = f; fn_tyvars; fn_params = xs; fn_body; fn_closure = z;
                         fn_location; fn_unsafe} = fundef
                    in
-                   let (o, z) = o#optionu (fun o -> o#binder) z in
                    let o, xs =
                      List.fold_right
                        (fun x (o, xs) ->
@@ -1271,9 +1330,10 @@ struct
                                 fn_tyvars
                                 actual_parameter_types
                                 fn_body
-                                (not fn_unsafe) (* Treat recursive bindings with unsafe sig as nonrecursive *)
+                                z
+                                (not unsafe) (* Treat recursive bindings with unsafe sig as nonrecursive *)
                                 (SBind binding) in
-                  let o = o#add_function_closure_binder (Var.var_of_binder f) (fn_tyvars, z) in
+                  let o = o#add_function_closure_binder (Var.var_of_binder f) z in
                   (* Debug.print ("added " ^ string_of_int (Var.var_of_binder f) ^ " to closure env"); *)
 
                   let o = OptionUtils.opt_app o#remove_binder o z in
