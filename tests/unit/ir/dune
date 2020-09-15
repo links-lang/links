@@ -1,0 +1,11 @@
+(library
+  (name links_ir_unit_tests)
+  (modes native)
+  (flags :standard -safe-string -dtypes -w Ae-44-45-60 -g)
+  (libraries ounit2.advanced ounit2 dynlink links.core result)
+  (preprocess (pps ppx_deriving.std)))
+
+
+;; test cases part of this library directly
+(copy_files# test_cases/*.ml)
+(copy_files# test_cases/*.mli)

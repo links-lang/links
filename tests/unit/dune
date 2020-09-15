@@ -2,5 +2,5 @@
   (name unitTests)
   (modes native)
   (flags :standard -safe-string -dtypes -w Ae-44-45-60 -g)
-  (libraries ounit2.advanced ounit2 dynlink links.core links.lens links-postgresql result)
+  (libraries ounit2.advanced ounit2 links_ir_unit_tests links_lens_unit_tests)
   (preprocess (pps ppx_deriving.std)))
