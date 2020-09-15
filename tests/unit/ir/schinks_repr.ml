@@ -61,7 +61,6 @@ module Stage2 = struct
   let lookup_name ~name st = StringMap.find name st.varname_to_id
 end
 
-
 exception SchinksError of string
 
 type 'a lookup = ('a, Stage2.t) State.t
@@ -74,7 +73,6 @@ let make ?(state = ReprState.initial) mk =
   let lkp, state = State.run_state ~init:state mk in
   let state = Stage2.of_stage_1 state in
   State.run_state ~init:state lkp |> fst
-
 
 let lookup_tname ~tname =
   let+ st = State.get in
