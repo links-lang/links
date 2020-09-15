@@ -21,7 +21,7 @@ let suites =
          ( "ir"
          >:::
          let open Links_ir_unit_tests in
-         [ Binding.suite; Functions.suite; Effects.suite; Quantifiers.suite ] );
+         [ Binding.suite; Functions.suite; Effects.suite; Quantifiers.suite; Closures.suite ] );
        ]
 
 let () = run_test_tt_main suites
