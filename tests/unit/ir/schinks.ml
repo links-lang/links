@@ -12,7 +12,7 @@ module Repr = Schinks_repr
 
 open Repr
 
-type 'a t = 'a maker
+type 'a t = 'a Repr.t
 
 let reify x = make x
 
@@ -20,7 +20,7 @@ let reify x = make x
 
 let mk_const c = State.return (Ir.Constant c) |> State.return
 
-let mk_primitive p : Types.datatype maker =
+let mk_primitive p : Types.datatype t =
   State.return (Types.Primitive p) |> State.return
 
 let default_subkind = Sugartypes.default_subkind
@@ -31,7 +31,7 @@ let default_subkind = Sugartypes.default_subkind
  *
  *)
 
-let unit : Types.datatype maker = State.return Types.unit_type |> State.return
+let unit_t : Types.datatype t = State.return Types.unit_type |> State.return
 
 let int = mk_primitive CT.Primitive.Int
 let string = mk_primitive CT.Primitive.String
@@ -52,12 +52,18 @@ let tvar ?(pk = CT.PrimaryKind.Type) ?(sk = default_subkind) tname =
   let+ id = Repr.lookup_tname ~tname in
   Types.Meta (Unionfind.fresh (Types.Var (id, kind, `Rigid)))
 
-let wi_tvar ?(pk = CT.PrimaryKind.Type) ?(sk = default_subkind) tid : Types.t t =
+let wi_tvar ?(pk = CT.PrimaryKind.Type) ?(sk = default_subkind) tid : Types.t t
+    =
   let kind = (pk, sk) in
   let+ () = Repr.add_tid ~tid in
   Types.Meta (Unionfind.fresh (Types.Var (tid, kind, `Rigid))) |> State.return
 
 let tvar_row ?(sk = default_subkind) name = tvar ~pk:CT.PrimaryKind.Row ~sk name
+
+let targ ?(pk = CT.PrimaryKind.Type) t =
+  let+ t = t in
+  let+ t = t in
+  (pk, t)
 
 let fun_t ?effects parameters codomain =
   let* p = State.List.map ~f:id parameters in
@@ -103,6 +109,33 @@ let wild_fun_ct parameters codomain =
 
 let ( |~~> ) = wild_fun_ct
 
+let record_t assoc =
+  let+ assoc =
+    State.List.map
+      ~f:(fun (x, y) ->
+        let+ y = y in
+        (x, y))
+      assoc
+  in
+  let stage2 =
+    let+ assoc =
+      State.List.map
+        ~f:(fun (x, y) ->
+          let+ y = y in
+          (x, y))
+        assoc
+    in
+    let map = StringMap.from_alist assoc in
+    let var = Unionfind.fresh Types.Closed in
+    Types.Row (map, var, false)
+  in
+  stage2
+
+let lift_type t =
+  let tids = Types.free_bound_type_vars t |> List.map fst in
+  let+ () = Repr.add_tids ~tids in
+  State.return t
+
 (* Quantifiers *)
 
 let wi_q ?(pk = CT.PrimaryKind.Type) ?(sk = default_subkind) tid =
@@ -143,6 +176,18 @@ let wi_var id =
   let+ () = Repr.add_id ~id in
   Ir.Variable id |> State.return
 
+let closure function_name tyargs value =
+  let* tyargs = State.List.map ~f:id tyargs in
+  let* value = value in
+  let+ () = Repr.add_name ~name:function_name in
+  let stage2 =
+    let* tyargs = State.List.map ~f:id tyargs in
+    let* value = value in
+    let+ id = Repr.lookup_name ~name:function_name in
+    Ir.Closure (id, tyargs, value)
+  in
+  stage2
+
 let binder ?(scope = Var.Scope.Local) name ty =
   let* ty = ty in
   let+ () = Repr.add_name ~name in
@@ -165,8 +210,54 @@ let wi_binder ?(scope = Var.Scope.Local) id ty =
   in
   stage2
 
-let unit_value : Ir.value maker =
-  Ir.Extend (StringMap.empty, None) |> State.return |> State.return
+let build_record (extendee : Ir.value t option)
+    (assoc : (string * Ir.value t) list) : Ir.value t =
+  let _, has_duplicates =
+    List.fold_left
+      (fun (seen, dupls) (key, _) ->
+        (StringSet.add key seen, dupls && StringSet.mem key seen))
+      (StringSet.empty, [] <> assoc)
+      assoc
+  in
+  let stage2 (extendee : Ir.value lookup option)
+      (assoc : (string * Ir.value Repr.lookup) list) : Ir.value lookup =
+    let* assoc =
+      State.List.map
+        ~f:(fun (x, y) ->
+          let+ y = y in
+          (x, y))
+        assoc
+    in
+    let map = StringMap.from_alist assoc in
+    let finalize e =
+      if has_duplicates then raise (SchinksError "Duplicate fields in record!")
+      else Ir.Extend (map, e)
+    in
+    match extendee with
+    | None -> State.return (finalize None)
+    | Some e ->
+        let+ e = e in
+        finalize (Some e)
+  in
+  let assoc : (string * Ir.value lookup) list stage1 =
+    State.List.map
+      ~f:(fun (x, y) ->
+        let+ y = y in
+        (x, y))
+      assoc
+  in
+  let* (assoc : (string * Ir.value lookup) list) = assoc in
+  match extendee with
+  | Some (e : Ir.value t) ->
+      let+ (e : Ir.value lookup) = e in
+      stage2 (Some e) assoc
+  | None -> State.return (stage2 None assoc)
+
+let record assoc = build_record None assoc
+
+let extend_record extendee assoc = build_record (Some extendee) assoc
+
+let unit : Ir.value t = record []
 
 let return value =
   let+ v = value in
@@ -214,7 +305,7 @@ let tc_to_comp tail_computation =
 
 let binding_to_comp binding =
   let* binding = binding in
-  let+ unit = return unit_value in
+  let+ unit = return unit in
   let stage2 =
     let* binding = binding in
     let bs = [ binding ] in
@@ -225,7 +316,7 @@ let binding_to_comp binding =
 
 let bindings_to_comp bindings =
   let* bs = State.List.map ~f:id bindings in
-  let+ unit = return unit_value in
+  let+ unit = return unit in
   let stage2 =
     let* bs = State.List.map ~f:id bs in
     let+ unit = unit in

@@ -66,7 +66,7 @@ let error_quantifier_out_of_scope2 = "Type variable 1 is unbound"
 
 
 let prog_quantifier_shadowing =
-  fun_ "f" (forall [q "T1"] ([tvar "T1"] |--> unit))
+  fun_ "f" (forall [q "T1"] ([tvar "T1"] |--> unit_t))
       ~tparams:[q "Q1"]
       ["x", tvar "Q1"]
       (bindings_to_comp

@@ -18,20 +18,20 @@ module ReprState = struct
       used_tnames = [];
     }
 
-  let add_tname ~tname st =
-    let used_tnames = tname :: st.used_tnames in
+  let add_tnames ~tnames st =
+    let used_tnames = tnames @ st.used_tnames in
     { st with used_tnames }
 
-  let add_name ~name st =
-    let used_names = name :: st.used_names in
+  let add_names ~names st =
+    let used_names = names @ st.used_names in
     { st with used_names }
 
-  let add_tid ~tid st =
-    let reserved_tids = IntSet.add tid st.reserved_tids in
+  let add_tids ~tids st =
+    let reserved_tids = IntSet.union (IntSet.from_list tids) st.reserved_tids in
     { st with reserved_tids }
 
-  let add_id ~id st =
-    let reserved_ids = IntSet.add id st.reserved_ids in
+  let add_ids ~ids st =
+    let reserved_ids = IntSet.union (IntSet.from_list ids) st.reserved_ids in
     { st with reserved_ids }
 end
 
@@ -61,23 +61,20 @@ module Stage2 = struct
   let lookup_name ~name st = StringMap.find name st.varname_to_id
 end
 
-module E = struct
-  type t = unit
-end
+
+exception SchinksError of string
 
 type 'a lookup = ('a, Stage2.t) State.t
 
 type 'a stage1 = ('a, ReprState.t) State.t
 
-type 'a maker = 'a lookup stage1
-
-type 'a t = ('a, E.t) Result.t maker
+type 'a t = 'a lookup stage1
 
 let make ?(state = ReprState.initial) mk =
   let lkp, state = State.run_state ~init:state mk in
   let state = Stage2.of_stage_1 state in
-  let res = State.run_state ~init:state lkp |> fst in
-  Result.Ok res
+  State.run_state ~init:state lkp |> fst
+
 
 let lookup_tname ~tname =
   let+ st = State.get in
@@ -87,10 +84,18 @@ let lookup_name ~name =
   let+ st = State.get in
   Stage2.lookup_name ~name st
 
-let add_tname ~tname = State.map_state (ReprState.add_tname ~tname)
+let add_tnames ~tnames = State.map_state (ReprState.add_tnames ~tnames)
 
-let add_name ~name = State.map_state (ReprState.add_name ~name)
+let add_names ~names = State.map_state (ReprState.add_names ~names)
 
-let add_tid ~tid = State.map_state (ReprState.add_tid ~tid)
+let add_tids ~tids = State.map_state (ReprState.add_tids ~tids)
 
-let add_id ~id = State.map_state (ReprState.add_id ~id)
+let add_ids ~ids = State.map_state (ReprState.add_ids ~ids)
+
+let add_tname ~tname = add_tnames ~tnames:[ tname ]
+
+let add_name ~name = add_names ~names:[ name ]
+
+let add_tid ~tid = add_tids ~tids:[ tid ]
+
+let add_id ~id = add_ids ~ids:[ id ]
