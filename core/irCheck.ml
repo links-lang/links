@@ -1210,10 +1210,13 @@ struct
             let o, x = o#binder x in
             o, Let (x, (tyvars, tc))
 
-        | Fun (f, (tyvars, xs, body), z, location, unsafe) as binding ->
+        | Fun fundef as binding ->
            (* It is important that the type annotations of the parameters are
               expressed in terms of the type variables from tyvars (also for rec
               functions) *)
+              let {binder = f; tyvars; params = xs; body; closure = z;
+                        location; unsafe} = fundef
+              in
               let lazy_check =
               lazy(
                 let (o, z) = o#optionu (fun o -> o#binder) z in
@@ -1245,7 +1248,10 @@ struct
                handle_ir_type_error lazy_check (o, f, tyvars, xs, body, z, location) (SBind binding) in
               let o, f = o#binder f in
               let o = o#add_function_closure_binder (Var.var_of_binder f) (tyvars, z) in
-              o, Fun (f, (tyvars, xs, body), z, location, unsafe)
+              let fundef = {binder = f; tyvars; params = xs; body; closure = z;
+                            location; unsafe}
+              in
+              o, Fun fundef
 
         | Rec defs  as binding ->
             (* it's important to traverse the function binders first in
@@ -1253,10 +1259,11 @@ struct
                function bodies *)
             let o, defs =
               List.fold_right
-                (fun (f, (tyvars, xs, body), z, location, unsafe) (o, fs) ->
+                (fun  fundef (o, fs) ->
+                   let {binder = f; tyvars; closure = z; _} = fundef in
                    let o = o#add_function_closure_binder (Var.var_of_binder f) (tyvars, z) in
                    let o, f = o#binder f in
-                     (o, (f, (tyvars, xs, body), z, location, unsafe)::fs))
+                     (o, {fundef with binder = f}::fs))
                 defs
                 (o, []) in
 
@@ -1264,7 +1271,10 @@ struct
             lazy (
               let o, defs =
               List.fold_left
-                (fun ((o : 'self_type), defs) ((f, (tyvars, xs, body), z, location, unsafe)) ->
+                (fun ((o : 'self_type), defs) fundef ->
+                   let {binder = f; tyvars; params = xs; body; closure = z;
+                        location; unsafe} = fundef
+                   in
                    let (o, z) = o#optionu (fun o -> o#binder) z in
                    let o, xs =
                      List.fold_right
@@ -1288,7 +1298,10 @@ struct
 
                   let o = OptionUtils.opt_app o#remove_binder o z in
                   let o = List.fold_right (fun b o -> o#remove_binder b) xs o in
-                    o, (f, (tyvars, xs, body), z, location, unsafe)::defs)
+                  let fundef = {binder = f; tyvars; params = xs; body; closure = z;
+                                location; unsafe}
+                  in
+                    o, fundef::defs)
                 (o, [])
                 defs in
               let defs = List.rev defs in

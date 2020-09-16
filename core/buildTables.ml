@@ -7,9 +7,10 @@ struct
   type t = (Var.var, Ir.eval_fun_def) Hashtbl.t
 
   let make_eval_def : Ir.fun_def -> Ir.eval_fun_def =
-    fun (b, (_tyvars, xs, body), z, location, _) ->
-    let info = Var.info_of_binder b in
-    info, (List.map Var.var_of_binder xs, body), opt_map Var.var_of_binder z, location
+    fun fdef ->
+    let {binder; tyvars = _; params; body; closure; location; unsafe = _} = fdef in
+    let info = Var.info_of_binder binder in
+    info, (List.map Var.var_of_binder params, body), opt_map Var.var_of_binder closure, location
 
   let add fs def =
       let f = Var.var_of_binder (Ir.binder_of_fun_def def) in
@@ -197,7 +198,8 @@ struct
             (* we record the relevant free variables of the body *)
             o#close x fvs;
             o#close_cont (IntSet.union fvs fvs') bs
-        | Fun (f, (_tyvars, xs, body), z, _, _)::bs ->
+        | Fun fundef::bs ->
+            let {binder = f ; params = xs; body; closure = z; _} = fundef in
             let fvs = IntSet.remove (Var.var_of_binder f) fvs in
             let xs = match z with None -> xs | Some z -> z :: xs in
             let bound_vars =
@@ -211,7 +213,8 @@ struct
         | Rec defs::bs ->
             let fvs, bound_vars =
               List.fold_right
-                (fun (f, (_tyvars, xs, _body), z, _, _unsafe) (fvs, bound_vars) ->
+                (fun fundef (fvs, bound_vars) ->
+                   let {binder = f; params = xs; closure = z; _} = fundef in
                    let f = Var.var_of_binder f in
                    let fvs = IntSet.remove f fvs in
                    let xs = match z with None -> xs | Some z -> z :: xs in
@@ -227,8 +230,8 @@ struct
 
             let fvs' =
               List.fold_left
-                (fun fvs' (_f, (_tyvars, _xs, body), _zs, _location, _unsafe) ->
-                   IntSet.union fvs' (FreeVars.computation o#get_type_environment bound_vars body))
+                (fun fvs' fundef ->
+                   IntSet.union fvs' (FreeVars.computation o#get_type_environment bound_vars fundef.body))
                 (IntSet.empty)
                 defs in
 

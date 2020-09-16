@@ -59,7 +59,16 @@ and tail_computation =
   | Special    of special
   | Case       of value * (binder * computation) name_map * (binder * computation) option
   | If         of value * computation * computation
-and fun_def = binder * (tyvar list * binder list * computation) * binder option * location * bool
+and fun_def =
+  {
+    binder   : binder;
+    tyvars   : tyvar list;
+    params   : binder list;
+    body     : computation;
+    closure  : binder option;
+    location : location;
+    unsafe   : bool
+  }
 and binding =
   | Let        of binder * (tyvar list * tail_computation)
   | Fun        of fun_def

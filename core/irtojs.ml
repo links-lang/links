@@ -728,7 +728,10 @@ end = functor (K : CONTINUATION) -> struct
   module GenStubs =
   struct
     let rec fun_def : Ir.fun_def -> code -> code =
-      fun ((fb, (_, xsb, _), zb, location, _unsafe) : Ir.fun_def) code ->
+      fun fundef code ->
+        let {binder = fb; tyvars = _; params = xsb; body = _; closure = zb;
+                        location; unsafe = _} = fundef
+        in
         let f_var = Var.var_of_binder fb in
         let bs = List.map name_binder xsb in
         let _, xs_names = List.split bs in
@@ -1134,13 +1137,13 @@ end = functor (K : CONTINUATION) -> struct
                    env', Fn ([x_name], body))
              in
              env', bind (generate_tail_computation env tc K.(skappa' <> skappas))
-          | Fun ((fb, _, _zs, _location, _unsafe) as def) :: bs ->
+          | Fun ({binder = fb; _} as def) :: bs ->
              let (f, f_name) = name_binder fb in
              let def_header = generate_function env [] def in
              let env', rest = gbs (VEnv.bind f f_name env) kappa bs in
              (env', LetFun (def_header, rest))
           | Rec defs :: bs ->
-             let fs = List.map (fun (fb, _, _, _, _) -> name_binder fb) defs in
+             let fs = List.map (fun {binder = fb; _} -> name_binder fb) defs in
              let env', rest = gbs (List.fold_left (fun env (x, n) -> VEnv.bind x n env) env fs) kappa bs in
              (env', LetRec (List.map (generate_function env fs) defs, rest))
           | Module _ :: bs
@@ -1152,7 +1155,10 @@ end = functor (K : CONTINUATION) -> struct
   and generate_function env fs :
       Ir.fun_def ->
     (string * string list * code * Ir.location) =
-    fun (fb, (_, xsb, body), zb, location, _unsafe) ->
+    fun fundef ->
+      let {binder = fb; tyvars = _; params = xsb; body; closure = zb;
+                        location; unsafe = _} = fundef
+      in
       let (f, f_name) = name_binder fb in
       assert (f_name <> "");
       (* prerr_endline ("f_name: "^f_name); *)
@@ -1225,7 +1231,9 @@ end = functor (K : CONTINUATION) -> struct
           varenv,
           Some x_name,
           fun code -> Bind (x_name, Lit jsonized_val, code))
-      | Fun ((fb, _, _zs, _location, _unsafe) as def) ->
+      | Fun def ->
+         let {binder = fb; _} = def
+         in
          let (f, f_name) = name_binder fb in
          let varenv = VEnv.bind f f_name varenv in
          let def_header = generate_function varenv [] def in
@@ -1234,7 +1242,7 @@ end = functor (K : CONTINUATION) -> struct
           None,
           fun code -> LetFun (def_header, code))
       | Rec defs ->
-         let fs = List.map (fun (fb, _, _, _, _) -> name_binder fb) defs in
+         let fs = List.map (fun {binder = fb; _} -> name_binder fb) defs in
          let varenv =
            List.fold_left
              (fun env (n, x) -> VEnv.bind n x env)

@@ -312,7 +312,10 @@ struct
 
     let fun_binding (f_info, (tyvars, xsb, body), location, unsafe) =
       let fb, f = Var.fresh_var f_info in
-        lift_binding (Fun (fb, (tyvars, xsb, body), None, location, unsafe)) f
+        let fundef = {binder = fb; tyvars; params = xsb; body; closure = None;
+                       location; unsafe}
+        in
+        lift_binding (Fun fundef) f
 
     let rec_binding defs =
       let defs, fs =
@@ -327,7 +330,10 @@ struct
              (List.map
                 (fun (fb, (tyvars, xsb, body), none, location, unsafe) ->
                   assert (none = None);
-                   (fb, (tyvars, xsb, body fs), none, location, unsafe))
+                  let fundef = {binder = fb; tyvars; params = xsb;
+                                body = body fs; closure = none; location; unsafe}
+                  in
+                  fundef)
                 defs))
           fs
 
@@ -1248,7 +1254,7 @@ struct
                  let x = Var.var_of_binder b' in
                  let x_name = Var.name_of_binder b' in
                  partition (b::locals @ globals, [], Env.String.bind x_name x nenv) bs
-              | Fun (b', _, _, _, _) when Var.(Scope.is_global (scope_of_binder b')) ->
+              | Fun {binder = b'; _} when Var.(Scope.is_global (scope_of_binder b')) ->
                  let f = Var.var_of_binder b' in
                  let f_name = Var.name_of_binder b' in
                  partition (b::locals @ globals, [], Env.String.bind f_name f nenv) bs
@@ -1257,7 +1263,7 @@ struct
                      recursive definitions all have the same scope *)
                  let scope, nenv =
                    List.fold_left
-                     (fun (scope, nenv) (b', _, _, _, _) ->
+                     (fun (scope, nenv) {binder = b'; _} ->
                        match Var.scope_of_binder b' with
                        | Scope.Global ->
                           let nenv' =
