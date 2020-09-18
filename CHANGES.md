@@ -1,3 +1,61 @@
+# 0.9.2
+
+This minor release contains various bug fixes and improvements.
+
+## TODO: Bug breaking web examples
+
+## SML-style function definitions
+
+Links now supports "switch functions", a new syntax for defining functions in terms of match clauses
+directly, similar to SML. This allows writing the following function
+```
+fun ack(_,_) switch {
+  case (0, n) ->  n + 1
+  case (m, 0) -> ack(m - 1, 1)
+  case (m,n) ->  ack(m - 1, ack(m, n - 1))
+}
+```
+instead of the following, more verbose version:
+
+```
+fun ack(a, b) {
+  switch(a, b) {
+    case (0, n) ->  n + 1
+    case (m, 0) -> ack(m - 1, 1)
+    case (m,n) ->  ack(m - 1, ack(m, n - 1))
+  }
+}
+```
+
+Switch functions can also be anonymous, allowing the following:
+```
+fun(_, _) switch {
+  case (0, n) -> 0
+  case (m, n) -> m + n
+}
+```
+
+
+# Require OCaml 4.08
+
+The minimum required OCaml version has been raised to 4.08
+
+
+## Minor changes:
+
+- The last expression in a block may no longer be followed by a semicolon (#900)
+- Checkboxes and radio groups in form elements are now handled correctly (#903)
+- Relational lenses can now be used with MySQL and Sqlite3  datbases, too (#897)
+- Remove setting `use_keys_in_shredding`, behaving as if it was always true (#892)
+- Remove setting `query`, behaving as if it was off
+  (i.e., `query` behaves like `query flat`) (#892)
+- Links supports MySQL databases again! (#858)
+- Fixed a bug where regular expressions in nested queries did not work correctly (#852)
+- Implemented support for negative patterns in let bindings (#811)
+
+
+
+
 # 0.9.1
 
 This minor release contains various bug fixes and improvements.
