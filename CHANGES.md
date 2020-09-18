@@ -36,12 +36,12 @@ fun(_, _) switch {
 ```
 
 
-# Require OCaml 4.08
+## Require OCaml 4.08
 
 The minimum required OCaml version has been raised to 4.08.
 
 
-## Minor changes:
+## Miscellaneous:
 
 - The last expression in a block may no longer be followed by a semicolon (#900)
 - Checkboxes and radio groups in form elements are now handled correctly (#903)
