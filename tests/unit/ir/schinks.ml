@@ -25,26 +25,77 @@ let mk_primitive p : Types.datatype t =
 
 let default_subkind = Sugartypes.default_subkind
 
+let check_assoc_list_for_duplicates assoc description =
+  let has_duplicates =
+    List.fold_left
+      (fun (seen, dupls) (key, _) ->
+        (StringSet.add key seen, dupls && StringSet.mem key seen))
+      (StringSet.empty, [] <> assoc)
+      assoc
+    |> snd
+  in
+  if has_duplicates then
+    raise (SchinksError (Printf.sprintf "Duplicate fields in %s!" description))
+
+(* Got a list of tuples (with the second arg being a t) and another arg *)
+let helper_tuple1 (tuples : ('a * 'b t) list) (arg1 : 'c t)
+    (builder : ('a * 'b) list -> 'c -> 'r) : 'r t =
+  let* arg1 = arg1 in
+  let+ tuples =
+    State.List.map
+      ~f:(fun (x, y) ->
+        let+ y = y in
+        (x, y))
+      tuples
+  in
+  let stage2 =
+    let* arg1 = arg1 in
+    let+ tuples =
+      State.List.map
+        ~f:(fun (x, y) ->
+          let+ y = y in
+          (x, y))
+        tuples
+    in
+    builder tuples arg1
+  in
+  stage2
+
+(* Got a list and one argument *)
+let helper_list1 (builder : 'a list -> 'b -> 'r) (arg1 : 'a t list)
+    (arg2 : 'b t) : 'r t =
+  let* arg1 = State.List.lift arg1 in
+  let+ arg2 = arg2 in
+  let stage2 =
+    let* arg1 = State.List.lift arg1 in
+    let+ arg2 = arg2 in
+    builder arg1 arg2
+  in
+  stage2
+
+(* Got Just one argument *)
+let _helper1 (builder : 'a -> 'r) (arg : 'a t) : 'r t =
+  let+ arg = arg in
+  let+ arg = arg in
+  builder arg
+
 (*
  *
  * Links types
  *
  *)
 
+let lift_type t =
+  let tids = Types.free_bound_type_vars t |> List.map fst in
+  let+ () = Repr.add_tids ~tids in
+  State.return t
+
 let unit_t : Types.datatype t = State.return Types.unit_type |> State.return
 
 let int = mk_primitive CT.Primitive.Int
 let string = mk_primitive CT.Primitive.String
 
-let forall qs t =
-  let* qs = State.List.map ~f:id qs in
-  let+ t = t in
-  let stage2 =
-    let* qs = State.List.lift qs in
-    let+ t = t in
-    Types.ForAll (qs, t)
-  in
-  stage2
+let forall = helper_list1 (fun qs t -> Types.ForAll (qs, t))
 
 let tvar ?(pk = CT.PrimaryKind.Type) ?(sk = default_subkind) tname =
   let kind = (pk, sk) in
@@ -110,31 +161,39 @@ let wild_fun_ct parameters codomain =
 let ( |~~> ) = wild_fun_ct
 
 let record_t assoc =
-  let+ assoc =
-    State.List.map
-      ~f:(fun (x, y) ->
-        let+ y = y in
-        (x, y))
-      assoc
-  in
-  let stage2 =
-    let+ assoc =
-      State.List.map
-        ~f:(fun (x, y) ->
-          let+ y = y in
-          (x, y))
-        assoc
-    in
-    let map = StringMap.from_alist assoc in
-    let var = Unionfind.fresh Types.Closed in
-    Types.Row (map, var, false)
-  in
-  stage2
+  check_assoc_list_for_duplicates assoc "record type";
+  helper_tuple1 assoc
+    (() |> State.return |> State.return)
+    (fun assoc _ ->
+      let map = StringMap.from_alist assoc in
+      let var = Unionfind.fresh Types.Closed in
+      Types.Record (Types.Row (map, var, false)))
 
-let lift_type t =
-  let tids = Types.free_bound_type_vars t |> List.map fst in
-  let+ () = Repr.add_tids ~tids in
-  State.return t
+(* Rows *)
+let closed = Unionfind.fresh Types.Closed |> State.return |> State.return
+
+let row_var rv =
+  let sk = default_subkind in
+  let+ () = Repr.add_tname ~tname:rv in
+  let+ id = Repr.lookup_tname ~tname:rv in
+  Unionfind.fresh (Types.Var (id, (CT.PrimaryKind.Row, sk), `Rigid))
+
+let row assoc rv =
+  let mk_row assoc rv =
+    let map = StringMap.from_alist assoc in
+    Types.Row (map, rv, false)
+  in
+  check_assoc_list_for_duplicates assoc "row";
+  helper_tuple1 assoc rv mk_row
+
+(* Presence information *)
+
+let present t =
+  let+ t = t in
+  let+ t = t in
+  Types.Present t
+
+let absent = Types.Absent |> State.return |> State.return
 
 (* Quantifiers *)
 
@@ -187,6 +246,10 @@ let closure function_name tyargs value =
     Ir.Closure (id, tyargs, value)
   in
   stage2
+
+let tapp v targs = helper_tuple1 targs v (fun targs v -> Ir.TApp (v, targs))
+
+let tabs = helper_list1 (fun quants v -> Ir.TAbs (quants, v))
 
 let binder ?(scope = Var.Scope.Local) name ty =
   let* ty = ty in

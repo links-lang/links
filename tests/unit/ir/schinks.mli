@@ -89,6 +89,20 @@ val wild_fun_ct : Types.typ t list -> Types.typ t -> Types.typ t
 (** alias for wild_fun_ct *)
 val ( |~~> ) : Types.typ t list -> Types.typ t -> Types.typ t
 
+(* Rows *)
+
+val closed : Types.row_var t
+
+val row_var : string -> Types.row_var t
+
+val row : (string * Types.field_spec t) list -> Types.row_var t -> Types.row t
+
+(* Presence info *)
+
+val present : Types.typ t -> Types.field_spec t
+
+val absent : Types.field_spec t
+
 (* Quantifiers *)
 
 (** Creates quantifier, to be used in let/fun/forall  *)
@@ -142,6 +156,10 @@ val record : (string * Ir.value t) list -> Ir.value t
 val extend_record : Ir.value t -> (string * Ir.value t) list -> Ir.value t
 
 val unit : Ir.value t
+
+val tapp : Ir.value t -> (CT.PrimaryKind.t * Types.t t) list -> Ir.value t
+
+val tabs : CT.Quantifier.t t list -> Ir.value t -> Ir.value t
 
 (*
  *
