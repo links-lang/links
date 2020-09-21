@@ -28,7 +28,7 @@ open SourceCode
 
 let with_pos = SourceCode.WithPos.make
 
-let enabled =
+let switch_functions =
   Settings.(
     flag ~default:false "switch_functions"
     |> synopsis "Toggles whether to enable the switch function syntax"
@@ -39,7 +39,7 @@ let pattern_matching_sugar_guard pos =
   let pattern_matching_sugar_disabled pos =
     Errors.disabled_extension ~pos ~setting:("switch_functions", true) "Switch functions"
   in
-  if not (Settings.get enabled)
+  if not (Settings.get switch_functions)
   then raise (pattern_matching_sugar_disabled pos)
 
 let nullary_guard pss pos =
