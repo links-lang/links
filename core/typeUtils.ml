@@ -80,7 +80,13 @@ let split_row name row =
     else
       error ("Attempt to split row "^string_of_row row ^" on absent field " ^ name)
   in
-    t, Row (StringMap.remove name field_env, row_var, dual)
+  let new_field_env =
+    if is_closed_row row then
+      StringMap.remove name field_env
+    else
+      StringMap.add name Absent field_env
+   in
+    t, Row (new_field_env, row_var, dual)
 
 let rec variant_at ?(overstep_quantifiers=true) name t = match (concrete_type t, overstep_quantifiers) with
   | (ForAll (_, t), true) -> variant_at name t
