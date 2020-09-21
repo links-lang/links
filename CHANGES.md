@@ -1,6 +1,7 @@
 # 0.9.2
 
-This minor release contains various bug fixes, improvements, and a **breaking** change.
+This minor release contains various bug fixes, improvements, and a **breaking**
+change.
 
 ## Breaking change: Trailing semicolons are no longer permitted
 The surface syntax of Links has been changed.  Up until now it was possible to
@@ -41,13 +42,13 @@ fun foo(x) {
 A third option is to simply drop the trailing semicolon, though, this only works
 as intended if the type of the last expression is `()`.
 
-## TODO: Bug breaking web examples
 
 ## SML-style function definitions
 
-Links now supports "switch functions", a new syntax for defining functions in terms of match clauses
-directly, similar to SML. This allows writing the following function
-```
+Links now supports "switch functions", a new syntax for defining functions in
+terms of match clauses directly, similar to SML. This allows writing the
+following function
+```links
 fun ack(_,_) switch {
   case (0, n) -> n + 1
   case (m, 0) -> ack(m - 1, 1)
@@ -56,7 +57,7 @@ fun ack(_,_) switch {
 ```
 instead of the following, more verbose version:
 
-```
+```links
 fun ack(a, b) {
   switch(a, b) {
     case (0, n) -> n + 1
@@ -67,7 +68,7 @@ fun ack(a, b) {
 ```
 
 Switch functions can also be anonymous, allowing function like the following:
-```
+```links
 fun(_, _) switch {
   case (0, n) -> 0
   case (m, n) -> m + n
@@ -80,17 +81,19 @@ fun(_, _) switch {
 The minimum required OCaml version has been raised to 4.08.
 
 
-## Miscellaneous:
+## Miscellaneous
 
+- Fixed a bug breaking the TODO list example (#812)
 - Checkboxes and radio groups in form elements are now handled correctly (#903)
 - Links supports MySQL databases again! (#858)
 - Fixed a bug where the effect of `orderby` was inconsistent between database
   drivers w.r.t. reversing the order of results (#858)
-- Relational lenses can now be used with MySQL and Sqlite3  databases, too (#897)
+- Relational lenses can now be used with MySQL and Sqlite3 databases, too (#897)
 - Remove setting `use_keys_in_shredding`, behaving as if it was always true (#892)
 - Remove setting `query`, behaving as if it was off
   (i.e., `query` behaves like `query flat`) (#892)
-- Fixed a bug where regular expressions in nested queries did not work correctly (#852)
+- Fixed a bug where regular expressions in nested queries did not work correctly
+  (#852)
 - Implemented support for negative patterns in let bindings (#811)
 
 
