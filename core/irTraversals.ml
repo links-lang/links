@@ -423,7 +423,7 @@ struct
             let o, tc, _ = o#tail_computation tc in
               o, Let (x, (tyvars, tc))
         | Fun fundef ->
-            let {binder = f; tyvars; params = xs; body; closure = z; location; unsafe} = fundef in
+            let {fn_binder = f; fn_tyvars; fn_params = xs; fn_body; fn_closure = z; fn_location; fn_unsafe} = fundef in
             let o, xs, body, z =
               let (o, z) = o#optionu (fun o -> o#binder) z in
               let (o, xs) =
@@ -433,12 +433,12 @@ struct
                        (o, x::xs))
                   xs
                   (o, []) in
-              let o, body, _ = o#computation body in
+              let o, body, _ = o#computation fn_body in
                 o, xs, body, z in
             let o, f = o#binder f in
               (* TODO: check that xs and body match up with f *)
-              let fundef = {binder = f; tyvars; params = xs; body; closure = z;
-                            location; unsafe}
+              let fundef = {fn_binder = f; fn_tyvars; fn_params = xs; fn_body = body; fn_closure = z;
+                            fn_location; fn_unsafe}
               in
               o, Fun fundef
         | Rec defs ->
@@ -448,16 +448,16 @@ struct
             let o, defs =
               List.fold_right
                 (fun fundef (o, fs) ->
-                   let o, f = o#binder fundef.binder in
-                     (o, {fundef with binder = f}::fs))
+                   let o, f = o#binder fundef.fn_binder in
+                     (o, {fundef with fn_binder = f}::fs))
                 defs
                 (o, []) in
 
             let o, defs =
               List.fold_left
                 (fun ((o : 'self_type), defs) fundef ->
-                   let {binder = f; tyvars; params = xs; body; closure = z;
-                        location; unsafe} = fundef
+                   let {fn_binder = f; fn_tyvars; fn_params = xs; fn_body; fn_closure = z;
+                        fn_location; fn_unsafe} = fundef
                    in
                    let (o, z) = o#optionu (fun o -> o#binder) z in
                    let o, xs =
@@ -467,9 +467,9 @@ struct
                             (o, x::xs))
                        xs
                        (o, []) in
-                  let o, body, _ = o#computation body in
-                  let fundef = {binder = f; tyvars; params = xs; body; closure = z;
-                        location; unsafe}
+                  let o, body, _ = o#computation fn_body in
+                  let fundef = {fn_binder = f; fn_tyvars; fn_params = xs; fn_body = body; fn_closure = z;
+                        fn_location; fn_unsafe}
                   in
                     o, fundef::defs)
                 (o, [])
@@ -685,13 +685,13 @@ module ElimDeadDefs = struct
         | Let (x, (_, Return _)) ->
             let o, b = super#binding b in
               o#init x, b
-        | Fun {binder = f; _} ->
+        | Fun {fn_binder = f; _} ->
             let o, b = super#binding b in
               o#init f, b
         | Rec defs ->
             let o, fs =
               List.fold_right
-                (fun {binder = f; _} (o, fs) ->
+                (fun {fn_binder = f; _} (o, fs) ->
                    let o, f = o#binder f in
                      (o#initrec f, IntSet.add (Var.var_of_binder f) fs))
                 defs
@@ -700,8 +700,8 @@ module ElimDeadDefs = struct
             let o, defs =
               List.fold_left
                 (fun ((o : 'self_type), defs) fundef ->
-                  let {binder = f; tyvars; params = xs; body; closure = z;
-                        location; unsafe} = fundef
+                  let {fn_binder = f; fn_tyvars; fn_params = xs; fn_body; fn_closure = z;
+                        fn_location; fn_unsafe} = fundef
                    in
                    let o, z = o#optionu (fun o -> o#binder) z in
                    let o, xs =
@@ -712,10 +712,10 @@ module ElimDeadDefs = struct
                        xs
                        (o, []) in
                    let o = o#set_rec (Var.var_of_binder f) in
-                   let o, body, _ = o#computation body in
+                   let o, body, _ = o#computation fn_body in
                    let o = o#set_mutrec (Var.var_of_binder f) in
-                   let fundef = {binder = f; tyvars; params = xs; body; closure = z;
-                        location; unsafe}
+                   let fundef = {fn_binder = f; fn_tyvars; fn_params = xs; fn_body = body; fn_closure = z;
+                        fn_location; fn_unsafe}
                    in
                      o, fundef::defs)
                 (o, [])
@@ -752,13 +752,13 @@ module ElimDeadDefs = struct
                 match b with
                   | Let (b, (_tyvars, _)) when o#is_dead (Var.var_of_binder b) ->
                       o#bindings bs
-                  | Fun {binder = b; _} when o#is_dead (Var.var_of_binder b) ->
+                  | Fun {fn_binder = b; _} when o#is_dead (Var.var_of_binder b) ->
                       o#bindings bs
                   | Rec defs ->
                       Debug.if_set show_rec_uses (fun () -> "Rec block:");
                       let fs, defs =
                         List.fold_left
-                          (fun (fs, defs) ({binder = b; _} as def) ->
+                          (fun (fs, defs) ({fn_binder = b; _} as def) ->
                             let f = Var.var_of_binder b in
                             let name = Var.name_of_binder b in
                              Debug.if_set show_rec_uses

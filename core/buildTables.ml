@@ -8,9 +8,9 @@ struct
 
   let make_eval_def : Ir.fun_def -> Ir.eval_fun_def =
     fun fdef ->
-    let {binder; tyvars = _; params; body; closure; location; unsafe = _} = fdef in
-    let info = Var.info_of_binder binder in
-    info, (List.map Var.var_of_binder params, body), opt_map Var.var_of_binder closure, location
+    let {fn_binder; fn_tyvars = _; fn_params; fn_body; fn_closure; fn_location; fn_unsafe = _} = fdef in
+    let info = Var.info_of_binder fn_binder in
+    info, (List.map Var.var_of_binder fn_params, fn_body), opt_map Var.var_of_binder fn_closure, fn_location
 
   let add fs def =
       let f = Var.var_of_binder (Ir.binder_of_fun_def def) in
@@ -199,7 +199,7 @@ struct
             o#close x fvs;
             o#close_cont (IntSet.union fvs fvs') bs
         | Fun fundef::bs ->
-            let {binder = f ; params = xs; body; closure = z; _} = fundef in
+            let {fn_binder = f ; fn_params = xs; fn_body; fn_closure = z; _} = fundef in
             let fvs = IntSet.remove (Var.var_of_binder f) fvs in
             let xs = match z with None -> xs | Some z -> z :: xs in
             let bound_vars =
@@ -208,13 +208,13 @@ struct
                    IntSet.add (Var.var_of_binder x) bound_vars)
                 xs
                 globals in
-            let fvs' = FreeVars.computation o#get_type_environment bound_vars body in
+            let fvs' = FreeVars.computation o#get_type_environment bound_vars fn_body in
             o#close_cont (IntSet.union fvs fvs') bs
         | Rec defs::bs ->
             let fvs, bound_vars =
               List.fold_right
                 (fun fundef (fvs, bound_vars) ->
-                   let {binder = f; params = xs; closure = z; _} = fundef in
+                   let {fn_binder = f; fn_params = xs; fn_closure = z; _} = fundef in
                    let f = Var.var_of_binder f in
                    let fvs = IntSet.remove f fvs in
                    let xs = match z with None -> xs | Some z -> z :: xs in
@@ -230,8 +230,8 @@ struct
 
             let fvs' =
               List.fold_left
-                (fun fvs' fundef ->
-                   IntSet.union fvs' (FreeVars.computation o#get_type_environment bound_vars fundef.body))
+                (fun fvs' {fn_body; _} ->
+                   IntSet.union fvs' (FreeVars.computation o#get_type_environment bound_vars fn_body))
                 (IntSet.empty)
                 defs in
 

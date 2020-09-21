@@ -61,13 +61,13 @@ and tail_computation =
   | If         of value * computation * computation
 and fun_def =
   {
-    binder   : binder;
-    tyvars   : tyvar list;
-    params   : binder list;
-    body     : computation;
-    closure  : binder option;
-    location : location;
-    unsafe   : bool
+    fn_binder   : binder;
+    fn_tyvars   : tyvar list;
+    fn_params   : binder list;
+    fn_body     : computation;
+    fn_closure  : binder option;
+    fn_location : location;
+    fn_unsafe   : bool
   }
 and binding =
   | Let        of binder * (tyvar list * tail_computation)
