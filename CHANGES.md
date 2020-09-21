@@ -74,8 +74,8 @@ fun(_, _) switch {
   case (m, n) -> m + n
 }
 ```
-
-
+Note: currently switch function syntax is only supported for uncurried functions.
+As switch functions have experimental status they are disabled by default. To enable them you must set the option `pattern_matching_sugar=true` in a configuration file. 
 ## Require OCaml 4.08
 
 The minimum required OCaml version has been raised to 4.08.
