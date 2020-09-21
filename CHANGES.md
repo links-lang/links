@@ -84,6 +84,8 @@ The minimum required OCaml version has been raised to 4.08.
 
 - Checkboxes and radio groups in form elements are now handled correctly (#903)
 - Links supports MySQL databases again! (#858)
+- Fixed a bug where the effect of `orderby` was inconsistent between database
+  drivers w.r.t. reversing the order of results (#858)
 - Relational lenses can now be used with MySQL and Sqlite3  databases, too (#897)
 - Remove setting `use_keys_in_shredding`, behaving as if it was always true (#892)
 - Remove setting `query`, behaving as if it was off
