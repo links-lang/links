@@ -75,7 +75,9 @@ fun(_, _) switch {
 }
 ```
 Note: currently switch function syntax is only supported for uncurried functions.
-As switch functions have experimental status they are disabled by default. To enable them you must set the option `pattern_matching_sugar=true` in a configuration file. 
+As switch functions have experimental status they are disabled by default. To
+enable them you must set the option `switch_functions=true` in a
+configuration file.
 ## Require OCaml 4.08
 
 The minimum required OCaml version has been raised to 4.08.
