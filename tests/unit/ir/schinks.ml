@@ -271,16 +271,16 @@ let wi_def bin ?(tparams = []) params ?closure_var
       let stage2 =
         let* bin = bin in
         let* tparams = State.List.lift tparams in
-        let* params = State.List.lift params in
-        let+ body = body in
+        let* fn_params = State.List.lift params in
+        let+ fn_body = body in
         {
-          Ir.binder = bin;
-          tyvars = tparams;
-          params;
-          body;
-          closure = None;
-          location;
-          unsafe = unsafe_sig;
+          Ir.fn_binder = bin;
+          fn_tyvars = tparams;
+          fn_params;
+          fn_body;
+          fn_closure = None;
+          fn_location = location;
+          fn_unsafe = unsafe_sig;
         }
       in
       stage2 |> State.return
@@ -289,17 +289,17 @@ let wi_def bin ?(tparams = []) params ?closure_var
       let stage2 =
         let* bin = bin in
         let* tparams = State.List.lift tparams in
-        let* params = State.List.lift params in
-        let* body = body in
+        let* fn_params = State.List.lift params in
+        let* fn_body = body in
         let+ cv_binder = cv_binder in
         {
-          Ir.binder = bin;
-          tyvars = tparams;
-          params;
-          body;
-          closure = Some cv_binder;
-          location;
-          unsafe = unsafe_sig;
+          Ir.fn_binder = bin;
+          fn_tyvars = tparams;
+          fn_params;
+          fn_body;
+          fn_closure = Some cv_binder;
+          fn_location = location;
+          fn_unsafe = unsafe_sig;
         }
       in
       stage2
