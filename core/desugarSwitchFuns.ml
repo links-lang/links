@@ -28,19 +28,18 @@ open SourceCode
 
 let with_pos = SourceCode.WithPos.make
 
-let pattern_matching_sugar =
+let enabled =
   Settings.(
-    flag "pattern_matching_sugar"
-    |> synopsis
-         "Toggles whether to enable the switch pattern matching syntax sugar"
+    flag ~default:false "switch_functions"
+    |> synopsis "Toggles whether to enable the switch function syntax"
     |> convert parse_bool
     |> sync)
 
 let pattern_matching_sugar_guard pos =
   let pattern_matching_sugar_disabled pos =
-    Errors.disabled_extension ~pos ~setting:("pattern_matching_sugar", true) "Pattern Matching Sugar"
+    Errors.disabled_extension ~pos ~setting:("switch_functions", true) "Switch functions"
   in
-  if not (Settings.get pattern_matching_sugar)
+  if not (Settings.get enabled)
   then raise (pattern_matching_sugar_disabled pos)
 
 let nullary_guard pss pos =

@@ -1,7 +1,3 @@
----
-config: tests/functions.config
----
-
 Function typing bug (see jdy's blog, 2005-10-24)
 (fun (x,y) { [x] ++ [y] }) ([1],"a")
 stderr : @..*
@@ -150,34 +146,3 @@ Linearity (9) - linear recursive functions should be disallowed
 linfun f(x) {f(x)} f
 stderr : @.*cannot be linear.*
 exit : 1
-
-Pattern Matching (1)
-fun foo(_) switch { case x -> x } foo
-stdout : fun : (a) ~> a
-
-Pattern Matching (2)
-fun ack(_,_) switch { case (0, n) -> n + 1 case (m, 0) -> ack(m - 1, 1) case (m, n) -> ack(m - 1, ack(m, n - 1)) } ack
-stdout : fun : (Int, Int) ~> Int
-
-Pattern Matching (3)
-fun ack(_,_) switch { case (0, n) -> n + 1 case (m, 0) -> ack(m - 1, 1) case (m, n) -> ack(m - 1, ack(m, n - 1)) } fun test() { print(intToString(ack(0,1))); print(intToString(ack(1,0))); print(intToString(ack(1,1))) } test()
-stdout : 223() : ()
-
-Pattern Matching (4) - multiple arg list function
-fun foo(_)(_) switch { case (x, y) -> x + y } foo
-stderr : @.*Curried switch functions are not yet supported.*
-exit : 1
-
-Pattern Matching (5) - runtime non-exhaustive error
-fun foo(_) switch { case 1 -> 1 } foo(0)
-stderr : @.*non-exhaustive pattern matching.*
-exit : 1
-
-Pattern Matching (6) - matching over nullary function
-fun f() switch { case n -> 1 }
-stderr : @.*Can't match over nullary function.*
-exit : 1
-
-Pattern Matching (7) - anonymous switch function
-fun(s) switch { case x -> x }
-stdout : fun : (a) ~> a
