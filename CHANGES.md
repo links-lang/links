@@ -1,6 +1,45 @@
 # 0.9.2
 
-This minor release contains various bug fixes and improvements.
+This minor release contains various bug fixes, improvements, and a **breaking** change.
+
+## Breaking change: Trailing semicolons are no longer permitted
+The surface syntax of Links has been changed.  Up until now it was possible to
+end a block with a semicolon.  A trailing semicolon was interpreted as
+implicitly ending the block with a `()` expression.  The rationale for this
+change is to make the Links syntax more consistent, i.e. now all blocks must end
+with an explicit expression.  To sum up, previously both of the following were
+allowed
+
+```links
+fun foo(x) {
+  bar(y);
+  baz(x);
+}
+fun foo'(x) {
+  bar(y);
+  baz(x)
+}
+```
+
+Now the first form is no longer accepted. Instead you have to drop the semicolon
+and either end the block with an explicit `()` or wrap the last expression in an
+`ignore` application.
+
+```links
+fun foo(x) {
+  bar(y);
+  baz(x);
+  ()
+}
+
+fun foo(x) {
+  bar(y);
+  ignore(baz(x))
+}
+```
+
+A third option is to simply drop the trailing semicolon, though, this only works
+as intended if the type of the last expression is `()`.
 
 ## TODO: Bug breaking web examples
 
@@ -43,7 +82,6 @@ The minimum required OCaml version has been raised to 4.08.
 
 ## Miscellaneous:
 
-- The last expression in a block may no longer be followed by a semicolon (#900)
 - Checkboxes and radio groups in form elements are now handled correctly (#903)
 - Links supports MySQL databases again! (#858)
 - Relational lenses can now be used with MySQL and Sqlite3  databases, too (#897)
