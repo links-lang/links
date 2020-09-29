@@ -226,3 +226,7 @@ Do not infer polymorphic values (2)
 fun(bot: (forall a. a)) { var f = bot(bot); (f(42) + 1, poly(~f)) }
 exit : 1
 stderr : @.*Type error:.*
+
+Nested forall
+var x = auto(~id); x(42)
+stdout : 42 : Int
