@@ -1300,7 +1300,7 @@ struct
             let o, defs =
               List.fold_right
                 (fun  fundef (o, fs) ->
-                   let {fn_binder = f; fn_tyvars; fn_closure = z; _} = fundef in
+                   let {fn_binder = f; fn_closure = z; _} = fundef in
                    let o = o#add_function_closure_binder (Var.var_of_binder f) z in
                    let o, f = o#binder f in
                      (o, {fundef with fn_binder = f}::fs))
@@ -1331,7 +1331,7 @@ struct
                                 actual_parameter_types
                                 fn_body
                                 z
-                                (not unsafe) (* Treat recursive bindings with unsafe sig as nonrecursive *)
+                                (not fn_unsafe) (* Treat recursive bindings with unsafe sig as nonrecursive *)
                                 (SBind binding) in
                   let o = o#add_function_closure_binder (Var.var_of_binder f) z in
                   (* Debug.print ("added " ^ string_of_int (Var.var_of_binder f) ^ " to closure env"); *)
