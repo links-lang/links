@@ -761,6 +761,14 @@ struct
                let o, default, default_type =
                  o#option (fun o (b, c) ->
                      let o, b = o#binder b in
+                     let actual_default_type = Var.type_of_binder b in
+                     let expected_default_t =
+                       StringMap.fold
+                         (fun case _ v -> TypeUtils.split_variant_type case v |> snd)
+                         cases
+                         variant
+                     in
+                     o#check_eq_types expected_default_t actual_default_type (STC orig);
                      let o, c, t = o#computation c in
                      let o = o#remove_binder b in
                      o, (b, c), t) default in
