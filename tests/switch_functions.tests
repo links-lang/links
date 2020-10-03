@@ -1,0 +1,34 @@
+---
+config: tests/switch_functions.config
+---
+
+Switch fun (syntax check)
+fun foo(_) switch { case x -> x } foo
+stdout : fun : (a) ~> a
+
+Ackermann switch fun (1)
+fun ack(_,_) switch { case (0, n) -> n + 1 case (m, 0) -> ack(m - 1, 1) case (m, n) -> ack(m - 1, ack(m, n - 1)) } ack
+stdout : fun : (Int, Int) ~> Int
+
+Ackermann switch fun (2)
+fun ack(_,_) switch { case (0, n) -> n + 1 case (m, 0) -> ack(m - 1, 1) case (m, n) -> ack(m - 1, ack(m, n - 1)) } fun test() { print(intToString(ack(0,1))); print(intToString(ack(1,0))); print(intToString(ack(1,1))) } test()
+stdout : 223() : ()
+
+Curried switch fun
+fun foo(_)(_) switch { case (x, y) -> x + y } foo
+stderr : @.*Curried switch functions are not yet supported.*
+exit : 1
+
+Switch fun: runtime non-exhaustive error
+fun foo(_) switch { case 1 -> 1 } foo(0)
+stderr : @.*non-exhaustive pattern matching.*
+exit : 1
+
+Switch fun: matching over nullary function
+fun f() switch { case n -> 1 }
+stderr : @.*Can't match over nullary function.*
+exit : 1
+
+Anonymous switch fun
+fun(s) switch { case x -> x }
+stdout : fun : (a) ~> a
