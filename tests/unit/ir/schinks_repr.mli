@@ -8,23 +8,27 @@ module Stage2 : sig
   type t
 end
 
-module E : sig
-  type t
-end
+exception SchinksError of string
 
 type 'a lookup = ('a, Stage2.t) State.t
 
 type 'a stage1 = ('a, ReprState.t) State.t
 
-type 'a maker = 'a lookup stage1
+type 'a t = 'a lookup stage1
 
-type 'a t = ('a, E.t) Result.t maker
-
-val make : ?state:ReprState.t -> 'a maker -> ('a, 'b) result
+val make : ?state:ReprState.t -> 'a t -> 'a
 
 val lookup_tname : tname:string -> int lookup
 
 val lookup_name : name:string -> int lookup
+
+val add_tnames : tnames:string list -> unit stage1
+
+val add_names : names:string list -> unit stage1
+
+val add_tids : tids:int list -> unit stage1
+
+val add_ids : ids:int list -> unit stage1
 
 val add_tname : tname:string -> unit stage1
 

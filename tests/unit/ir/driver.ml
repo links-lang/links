@@ -46,10 +46,13 @@ let assert_bool msg ir_program bool =
          bool) )
 
 let assemble_ir_program schinks_prog =
-  match Schinks.reify schinks_prog with
-  | Result.Ok ir_prog -> ir_prog
-  | Result.Error m ->
+  try Schinks.reify schinks_prog with
+  | Schinks_repr.SchinksError m ->
       OUnit2.assert_failure ("Assembling IR program failed with message:\n" ^ m)
+  | e ->
+      OUnit2.assert_failure
+        ( "Unhandled expection while assembing IR program :\n"
+        ^ Printexc.to_string e )
 
 let extract_ir_error_message exn_opt ir_program =
   match exn_opt with
@@ -77,12 +80,19 @@ let expect_error ~name ~(error_regex : string) prog : OUnit2.test =
           ir_prog
     | Some msg ->
         let regexp = Str.regexp error_regex in
+        (* Unlike any other regex library in the world, OCaml doesn't offer a
+           flag to make . match newlines, too. This would make stating the
+           expected error regexes very cumbersome. Instead, we replace all \r and
+           \n by spaces before matching. *)
+        let non_newline_msg =
+          Str.global_replace (Str.regexp "[\n\r]") " " msg
+        in
         assert_bool
           ( "Got the following IR error message, which did not match the \
              expected one:\n"
           ^ msg )
           ir_prog
-          (Str.string_match regexp msg 0)
+          (Str.string_match regexp non_newline_msg 0)
   in
   name >:: the_test
 

@@ -22,6 +22,15 @@ let prog_type_annot_vs_param_type =
 let error_type_annot_vs_param_type = "Type mismatch"
 
 
+(* There is a difference between a function of type
+  [unit] -> int    and
+  [] -> int
+*)
+let prog_unit_vs_no_params =
+  fun_ "f" ([] |~~> int)
+    [("x", unit_t)]
+    (tc_to_comp (return (i 3)))
+let error_unit_vs_no_params = "Type mismatch"
 
 
 let suite =
@@ -34,4 +43,8 @@ let suite =
       expect_error ~name:"Divergence between overall type and parameter types"
         ~error_regex:error_type_annot_vs_param_type
         (binding_to_comp prog_type_annot_vs_param_type);
+
+      expect_error ~name:"unit_vs_no_params"
+        ~error_regex:error_unit_vs_no_params
+        (binding_to_comp prog_unit_vs_no_params);
     ]

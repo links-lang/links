@@ -710,7 +710,8 @@ struct
             let tyvars = inner_quantifiers @ fn_tyvars in
             let (o, z) = match z with
               | Some zbinder ->
-                let zbinder = Var.update_type (Instantiate.datatype inner_maps (Var.type_of_binder zbinder)) zbinder in
+                let ztype = Types.for_all (inner_quantifiers, Instantiate.datatype inner_maps (Var.type_of_binder zbinder)) in
+                let zbinder = Var.update_type ztype zbinder in
                 (fst (o#binder zbinder), Some zbinder)
               | None -> o, None in
             let xs = List.fold_right (fun x xs ->

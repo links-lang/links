@@ -37,7 +37,7 @@ module CT = CommonTypes
 (** Representation of IR fragments and Links types *)
 type 'a t
 
-val reify : 'a t -> ('a, string) Result.t
+val reify : 'a t -> 'a
 
 (*
  *
@@ -53,10 +53,15 @@ val forall : CommonTypes.Quantifier.t t list -> Types.t t -> Types.t t
 (** Creates a type variable to be used in a type, primary kind defauls to Type *)
 val tvar : ?pk:CT.PrimaryKind.t -> ?sk:CT.Subkind.t -> string -> Types.typ t
 
+val wi_tvar : ?pk:CT.PrimaryKind.t -> ?sk:CT.Subkind.t -> int -> Types.typ t
+
 (** shorthand for tvar ~pk set to Type *)
 val tvar_row : ?sk:CT.Subkind.t -> string -> Types.typ t
 
-val unit : Types.typ t
+(** Creates a type variable to be used in a type, primary kind defauls to Type *)
+val targ : ?pk:CT.PrimaryKind.t -> Types.t t -> Types.type_arg t
+
+val unit_t : Types.typ t
 
 (* Function types *)
 
@@ -95,6 +100,12 @@ val q_row : ?sk:CT.Subkind.t -> string -> CT.Quantifier.t t
 (** Version of q allowing you to specify the integer id of the quantifier *)
 val wi_q : ?pk:CT.PrimaryKind.t -> ?sk:CT.Subkind.t -> int -> CT.Quantifier.t t
 
+val record_t : (string * Types.t t) list -> Types.typ t
+
+(** Lifts a type into t, marking all quantifiers and type variable ids therein
+  as reserved. *)
+val lift_type : Types.t -> Types.t t
+
 (*
  *
  * IR BINDERS
@@ -123,6 +134,14 @@ val s : string -> Ir.value t
 val var : string -> Ir.value t
 
 val wi_var : int -> Ir.value t
+
+val closure : string -> Ir.tyarg t list -> Ir.value t -> Ir.value t
+
+val record : (string * Ir.value t) list -> Ir.value t
+
+val extend_record : Ir.value t -> (string * Ir.value t) list -> Ir.value t
+
+val unit : Ir.value t
 
 (*
  *
