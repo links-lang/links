@@ -310,9 +310,12 @@ struct
       let xb, x = Var.fresh_var x_info in
         lift_binding (letm ~tyvars (xb, e)) x
 
-    let fun_binding (f_info, (tyvars, xsb, body), location, unsafe) =
+    let fun_binding (f_info, (fn_tyvars, xsb, fn_body), fn_location, fn_unsafe) =
       let fb, f = Var.fresh_var f_info in
-        lift_binding (Fun (fb, (tyvars, xsb, body), None, location, unsafe)) f
+        let fundef = {fn_binder = fb; fn_tyvars; fn_params = xsb; fn_body; fn_closure = None;
+                       fn_location; fn_unsafe}
+        in
+        lift_binding (Fun fundef) f
 
     let rec_binding defs =
       let defs, fs =
@@ -325,9 +328,12 @@ struct
         lift_binding
           (Rec
              (List.map
-                (fun (fb, (tyvars, xsb, body), none, location, unsafe) ->
+                (fun (fb, (fn_tyvars, xsb, body), none, fn_location, fn_unsafe) ->
                   assert (none = None);
-                   (fb, (tyvars, xsb, body fs), none, location, unsafe))
+                  let fundef = {fn_binder = fb; fn_tyvars; fn_params = xsb;
+                                fn_body = body fs; fn_closure = none; fn_location; fn_unsafe}
+                  in
+                  fundef)
                 defs))
           fs
 
@@ -1248,7 +1254,7 @@ struct
                  let x = Var.var_of_binder b' in
                  let x_name = Var.name_of_binder b' in
                  partition (b::locals @ globals, [], Env.String.bind x_name x nenv) bs
-              | Fun (b', _, _, _, _) when Var.(Scope.is_global (scope_of_binder b')) ->
+              | Fun {fn_binder = b'; _} when Var.(Scope.is_global (scope_of_binder b')) ->
                  let f = Var.var_of_binder b' in
                  let f_name = Var.name_of_binder b' in
                  partition (b::locals @ globals, [], Env.String.bind f_name f nenv) bs
@@ -1257,7 +1263,7 @@ struct
                      recursive definitions all have the same scope *)
                  let scope, nenv =
                    List.fold_left
-                     (fun (scope, nenv) (b', _, _, _, _) ->
+                     (fun (scope, nenv) {fn_binder = b'; _} ->
                        match Var.scope_of_binder b' with
                        | Scope.Global ->
                           let nenv' =

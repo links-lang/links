@@ -251,7 +251,7 @@ let lens_sugar_phrase_of_ir p env =
             Result.bind
               ~f:(fun v -> computation (Env.bind env (x, v)) (bs, tailcomp))
               v
-        | I.Fun (_, _, _, Location.Client, _) ->
+        | I.Fun { Ir.fn_location = Location.Client; _ } ->
             Result.error Of_ir_error.Client_function
         | I.Fun _ ->
             Result.error @@ Of_ir_error.Internal_error "Unexpected function."

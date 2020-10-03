@@ -755,9 +755,9 @@ struct
               | Let (xb, (_, tc)) ->
                   let x = Var.var_of_binder xb in
                     computation (bind env (x, tail_computation env tc)) (bs, tailcomp)
-              | Fun (_, _, _, Location.Client, _) ->
+              | Fun {fn_location = Location.Client; _} ->
                   query_error "Client function"
-              | Fun (b, _, _, _, _) ->
+              | Fun {fn_binder = b; _} ->
                  let f = Var.var_of_binder b in
                  (* This should never happen now that we have closure conversion*)
                  raise (internal_error
