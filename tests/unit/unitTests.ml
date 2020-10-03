@@ -27,6 +27,7 @@ let suites =
            Effects.suite;
            Quantifiers.suite;
            Closures.suite;
+           Variants.suite;
          ] );
        ]
 
