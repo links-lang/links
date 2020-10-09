@@ -1124,7 +1124,7 @@ and base : Sql.index -> Q.t -> Sql.base = fun index ->
       begin
         match likeify r with
           | Some r ->
-            Sql.Apply ("ILIKE", [base index s; Sql.Like r])
+            Sql.Apply ("LIKE", [base index s; Sql.Like r])
           | None ->
               begin
                 let r =
