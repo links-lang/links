@@ -972,17 +972,35 @@ struct
 end
 
 (* convert a regexp to a like if possible *)
+(* TODO: Returning a string is too restrictive, since SQL doesn't allow
+ * splicing. Realistically we need another datatype of the form:
+ *
+ * type sql_like =
+ *   | LikeString of string
+ *   | LikeProject of (var, field)
+ *   | LikeConcat of sql_like list
+ *
+ * Then, we'd have an extra thing in the SQL DSL:
+ * type sql = ... | SqlLike of sql_like
+ *
+ * And then we'd implement the printing logic.
+ * But I should do the stuff I'm paid to do for a bit!
+ * *)
 let rec likeify v =
   let open Q in
+  (* let () = Printf.printf "LIKEIFY: %s\n%!"  (show v) in *)
   let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
     match v with
       | Variant ("Repeat", pair) ->
           begin
             match unbox_pair pair with
-              | Variant ("Star", _), Variant ("Any", _) -> Some ("%")
+              | Variant ("Star", _), Variant ("Any", _) ->
+                  Some (Sql.LikeString "%")
               | _ -> None
           end
-      | Variant ("Simply", Constant (Constant.String s)) -> Some (quote s)
+      | Variant ("Simply", Constant (Constant.String s)) -> Some (Sql.LikeString (quote s))
+      | Variant ("Simply", Project (Var (v, _), field)) ->
+          Some (Sql.LikeProject (v, field))
       | Variant ("Quote", Variant ("Simply", v)) ->
           (* TODO:
 
@@ -991,12 +1009,17 @@ let rec likeify v =
           *)
          let rec string =
             function
-              | Constant (Constant.String s) -> Some s
-              | Singleton (Constant (Constant.Char c)) -> Some (string_of_char c)
+              | Constant (Constant.String s) -> Some (Sql.LikeString (quote s))
+              | Singleton (Constant (Constant.Char c)) ->
+                  Some (Sql.LikeString (string_of_char c))
+              | Project (Var (v, _), field) ->
+                  Some (Sql.LikeProject (v, field))
+              | Apply (Primitive "intToString", [Constant (Constant.Int x)]) ->
+                  Some (Sql.LikeString (string_of_int x))
               | Concat vs ->
                   let rec concat =
                     function
-                      | [] -> Some ""
+                      | [] -> Some (Sql.LikeString "")
                       | v::vs ->
                           begin
                             match string v with
@@ -1005,18 +1028,19 @@ let rec likeify v =
                                   begin
                                     match concat vs with
                                       | None -> None
-                                      | Some s' -> Some (s ^ s')
+                                      | Some s' -> Some (Sql.LikeAppend (s, s'))
                                   end
                           end
                   in
                     concat vs
               | _ -> None
           in
-            opt_map quote (string v)
+            string v
+            (* opt_map quote (string v) *)
       | Variant ("Seq", rs) ->
           let rec seq =
             function
-              | [] -> Some ""
+              | [] -> Some (Sql.LikeString "")
               | r::rs ->
                   begin
                     match likeify r with
@@ -1025,13 +1049,13 @@ let rec likeify v =
                           begin
                             match seq rs with
                               | None -> None
-                              | Some s' -> Some (s^s')
+                              | Some s' -> Some (Sql.LikeAppend (s, s'))
                           end
                   end
           in
             seq (unbox_list rs)
-      | Variant ("StartAnchor", _) -> Some ""
-      | Variant ("EndAnchor", _) -> Some ""
+      | Variant ("StartAnchor", _) -> Some (Sql.LikeString "")
+      | Variant ("EndAnchor", _) -> Some (Sql.LikeString "")
       | _ -> assert false
 
 let rec select_clause : Sql.index -> bool -> Q.t -> Sql.select_clause =
@@ -1100,16 +1124,17 @@ and base : Sql.index -> Q.t -> Sql.base = fun index ->
       begin
         match likeify r with
           | Some r ->
-            Sql.Apply ("LIKE", [base index s; Sql.Constant (Constant.String r)])
+            Sql.Apply ("ILIKE", [base index s; Sql.Like r])
           | None ->
-            let r =
+              begin
+                let r =
                   (* HACK:
-
                      this only works if the regexp doesn't include any variables bound by the query
                   *)
                   Sql.Constant (Constant.String (Regex.string_of_regex (Linksregex.Regex.ofLinks (value_of_expression r))))
                 in
                   Sql.Apply ("RLIKE", [base index s; r])
+              end
         end
     | Apply (Primitive "Empty", [v]) ->
         Sql.Empty (unit_query v)

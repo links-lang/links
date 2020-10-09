@@ -26,9 +26,14 @@ and select_clause = (base * string) list * from_clause list * base * base list
 and from_clause =
   | TableRef of table_name * Var.var
   | Subquery of query * Var.var
+and sql_like = (* Used to implement 'LIKE' in SQL. Monoidal. *)
+  | LikeString of string
+  | LikeProject of Var.var * string
+  | LikeAppend of (sql_like * sql_like)
 and base =
   | Case      of base * base * base
   | Constant  of Constant.t
+  | Like      of sql_like
   | Project   of Var.var * string
   | Apply     of string * base list
   | Empty     of query
@@ -293,12 +298,32 @@ and pr_base quote one_table ppf b =
             (Arithmetic.sql_name op)
             pr_b_one_table r
   in
+  let rec pp_sql_like ppf = function
+    | LikeString s ->
+        Format.pp_print_string ppf
+          ("'" ^ CommonTypes.Constant.escape_string s ^ "'")
+    | LikeProject (v, f) ->
+        Format.fprintf ppf "%a.%a"
+          Format.pp_print_string (string_of_table_var v)
+          Format.pp_print_string f
+    (* Special case appends with the empty string *)
+    | LikeAppend (LikeString "", l) ->
+        pp_sql_like ppf l
+    | LikeAppend (l, LikeString "") ->
+        pp_sql_like ppf l
+    | LikeAppend (l1, l2) ->
+        Format.fprintf ppf "%a || %a"
+          pp_sql_like l1
+          pp_sql_like l2
+  in
     match b with
       | Case (c, t, e) ->
           Format.fprintf ppf "case when %a then %a else %a end"
             pr_b_one_table c
             pr_b_one_table t
             pr_b_one_table e
+      | Like sl ->
+          pp_sql_like ppf sl
       | Constant c ->
           Format.pp_print_string ppf (Constant.to_string c)
       | Project (var, label) ->
