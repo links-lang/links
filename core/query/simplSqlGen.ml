@@ -14,7 +14,7 @@ module S = Sql
 let mapstrcat sep f l = l |> List.map f |> String.concat sep
 
 let dummy_sql_empty_query = 
-    ([(S.Constant (Constant.Int 42), "@unit@")], [], S.Constant (Constant.Bool false), [])
+    (false,[(S.Constant (Constant.Int 42), "@unit@")], [], S.Constant (Constant.Bool false), [])
 
 (* convert an NRC-style query into an SQL-style query *)
 let rec sql_of_query is_set = function
@@ -23,16 +23,17 @@ let rec sql_of_query is_set = function
 
 and disjunct is_set = function
 | Q.Prom p -> sql_of_query true p
-| Q.For (_, gs, os, j) -> S.Select (is_set, body gs os j)
+| Q.For (_, gs, os, j) -> S.Select (body is_set gs os j)
 | _ -> failwith "disjunct"
 
 and generator locvars = function
-| (v, Q.Prom p) -> (S.FromQuery (Q.contains_free locvars p, sql_of_query true p), v)
-| (v, Q.Table (_, tname, _, _)) -> (S.FromTable tname, v)
-| (v, Q.Dedup (Q.Table (_, tname, _, _))) -> (S.FromDedupTable tname, v)
+| (v, Q.Prom p) -> (S.Subquery (Q.contains_free locvars p, sql_of_query true p, v))
+| (v, Q.Table (_, tname, _, _)) -> (S.TableRef (tname, v))
+(* FIXME: 
+| (v, Q.Dedup (Q.Table (_, tname, _, _))) -> (S.FromDedupTable tname, v) *)
 | _ -> failwith "generator"
 
-and body gs os j = 
+and body is_set gs os j = 
     let selquery body where =
         let froms =
             gs
@@ -41,7 +42,7 @@ and body gs os j =
             |> List.rev
         in
         let os = List.map base_exp os in
-        (body, froms, where, os)
+        (is_set, body, froms, where, os)
     in
     match j with
     | Q.Concat [] -> dummy_sql_empty_query
@@ -92,7 +93,8 @@ let compile_mixing : Value.env -> Ir.computation -> (Value.database * Sql.query 
     Debug.print ("e: "^Ir.show_computation e); *)
     (* XXX: I don't see how the evaluation here is different depending on the policy *)
     let evaluator =
-        if Settings.get Database.delateralize
+        (* FIXME *)
+        if (* Settings.get Database.delateralize *) false
             then Delateralize.eval QueryPolicy.Flat
             else Query.Eval.eval QueryPolicy.Flat
     in
