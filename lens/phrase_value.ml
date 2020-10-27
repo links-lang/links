@@ -9,7 +9,7 @@ type t =
   | Char of char
   | Tuple of t list
   | Record of (string * t) list
-[@@deriving show]
+[@@deriving show, sexp]
 
 type values = t list [@@deriving show]
 

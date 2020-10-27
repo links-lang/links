@@ -1,0 +1,9 @@
+fun mapi(f, xs) {
+  fun mi(i, xs) {
+    switch (xs) {
+      case []    -> []
+      case x::xs -> f(x, i) :: mi(i+1, xs)
+    }
+  }
+  mi(0, xs)
+}

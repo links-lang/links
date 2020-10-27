@@ -91,14 +91,14 @@ class pg_dbresult (pgresult:Postgresql.result) = object
   method nfields : int = original#nfields
   method ntuples : int = original#ntuples
   method fname : int -> string = original#fname
-  method get_all_lst : string list list = pgresult#get_all_lst
+  (*TODO: better handling of NULLs *)
   method getvalue : int -> int -> string = pgresult#getvalue
   method gettuple : int -> string array = pgresult#get_tuple
   method error : string = original#error
 end
 
 class pg_database host port dbname user password = object(self)
-  inherit Value.database
+  inherit Value.database as super
 
   val connection =
     try
@@ -123,41 +123,50 @@ class pg_database host port dbname user password = object(self)
     "\"" ^ Str.global_replace (Str.regexp "\"") "\"\"" f ^ "\""
 
 
-(* jcheney: Added quoting to avoid problems with mysql keywords. *)
-  method! make_insert_query (table_name, field_names, vss) =
-    let insert_table = "insert into " ^ table_name in
-    let quoted_field_names = (List.map self#quote_field field_names) in
-    let body =
-      match field_names, vss with
-        | _, [] -> failwith("We should not even generate code for empty inserts.")
-        | [],    [_] ->
-            (* HACK:
-
-               PostgreSQL doesn't allow an empty tuple of columns to
-               be specified for an insert. *)
-            " default values"
-        | [],    _::_::_ ->
-            (* In order to handle this case we need support for the
-               standard mult-row insert syntax (Postgres version 8.2
-               and later), and we will need access to the type of the
-               table. In fact, we only really need the name of one of
-               the columns, c. Then we can do:
-
-               insert into table(c) values (c),...,(c)
-            *)
-            failwith("Unable to translate a multi-row insert with empty rows to PostgreSQL")
-        | _::_,  _ ->
-           let values =
-             String.concat "), (" (List.map (String.concat ",") vss)
-           in "(" ^ String.concat "," quoted_field_names ^") VALUES (" ^ values ^ ")"
-    in insert_table ^ body
-
   method! make_insert_returning_query
-      : (string * string list * string list list * string) -> string list =
-    fun (table_name, field_names, vss, returning) ->
-      [self#make_insert_query(table_name,
-                              field_names,
-                              vss) ^ " returning " ^ self#quote_field returning]
+      : string -> Sql.query -> string list =
+    fun returning q ->
+      assert (match q with | Sql.Insert _ -> true | _ -> false);
+      [Printf.sprintf "%s returning %s" (self#string_of_query q) returning]
+
+  method! string_of_query ?(range=None) =
+    let string_of_insert table_name field_names vss =
+      let insert_table = "insert into " ^ table_name in
+      let quoted_field_names = (List.map self#quote_field field_names) in
+      let body =
+        match field_names, vss with
+          | _, [] -> failwith("We should not even generate code for empty inserts.")
+          | [],    [_] ->
+              (* HACK:
+
+                 PostgreSQL doesn't allow an empty tuple of columns to
+                 be specified for an insert. *)
+              " default values"
+          | [],    _::_::_ ->
+              (* In order to handle this case we need support for the
+                 standard mult-row insert syntax (Postgres version 8.2
+                 and later), and we will need access to the type of the
+                 table. In fact, we only really need the name of one of
+                 the columns, c. Then we can do:
+
+                 insert into table(c) values (c),...,(c)
+              *)
+              failwith("Unable to translate a multi-row insert with empty rows to PostgreSQL")
+          | _::_,  _ ->
+             let values =
+               String.concat "), (" (List.map (String.concat ",") vss)
+             in "(" ^ String.concat "," quoted_field_names ^") VALUES (" ^ values ^ ")"
+      in insert_table ^ body
+    in
+    let open Sql in
+    function
+      | Insert { ins_table; ins_fields; ins_records } ->
+          let vss =
+            List.map
+              (List.map (Sql.string_of_base self#quote_field true))
+              ins_records in
+          string_of_insert ins_table ins_fields vss
+      | q -> super#string_of_query ~range q
 
   method supports_shredding () = true
 end

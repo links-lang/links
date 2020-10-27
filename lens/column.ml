@@ -8,7 +8,7 @@ type t = {
   typ : Type.t;
   present : bool;
 }
-[@@deriving show]
+[@@deriving show, sexp]
 
 let make ~table ~name ~alias ~typ ~present =
   { table; name; alias; typ; present }

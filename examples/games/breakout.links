@@ -460,11 +460,11 @@ fun main() {
 
 
     fun onKeyDown(e) {
-        inputProcId ! (KeyDown(getCharCode(e)): Input);
+        inputProcId ! (KeyDown(getCharCode(e)): Input)
     }
 
     fun onKeyUp(e) {
-        inputProcId ! (KeyUp(getCharCode(e)): Input);
+        inputProcId ! (KeyUp(getCharCode(e)): Input)
     }
 
     # initialize masterProc
@@ -526,7 +526,7 @@ fun main() {
                     <h1>Breakout in Links</h1>
 
                     <div id="{containerId}" tabindex="1"
-                        l:onfocus="{initializeProcId ! 0; }">
+                        l:onfocus="{initializeProcId ! 0 }">
                         <canvas id="{canvas2Id}" width="600" height="500"></canvas>
                         <canvas id="{canvasId}" width="600" height="500"></canvas>
                         <div id="info">Click this rectangle to start the game.</div>

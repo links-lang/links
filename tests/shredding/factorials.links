@@ -1,0 +1,17 @@
+var db = database "links";
+var factorials = table "factorials" with (i : Int, f : Int) from db;
+
+fun insertOne() {
+  insert factorials
+  values [(f=1, i=1)]
+}
+
+fun main() {
+  insertOne();
+  var res1 = query flat { for (x <-- factorials) [(a=x.i,b=x.f)] };
+  assertEq(res1, [(a=1, b=1)]);
+  var res2 = query flat { for (x <- asList(factorials)) [(a=x.i,b=x.f)] };
+  assertEq(res2, [(a=1, b=1)])
+}
+
+main()

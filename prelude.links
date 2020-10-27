@@ -1,5 +1,5 @@
 fun assert(ok, msg) {
-  if (not(ok)) debug("assertion failed: " ^^ msg) else ();
+  if (not(ok)) debug("assertion failed: " ^^ msg) else ()
 }
 
 sig ignore : (a) -> ()
@@ -51,10 +51,17 @@ fun sortBy (f, l) {
   }
 }
 
-# need to be careful to make sure this doesn't get
-# optimised away - it does if we eta reduce it
 unsafe sig sortByBase : ((a) -b-> (| _::Base), [a]) -b-> [a]
-fun sortByBase(f, l) {sortBy(f, l)}
+fun sortByBase(f, l) {
+  switch (l) {
+    case [] -> []
+    case x::xs -> {
+      var lt = filter (fun (y) {f(y) < f(x)}, xs);
+      var ge = filter (fun (y) {f(y) >= f(x)}, xs);
+      sortByBase(f, lt) ++ [x] ++ sortByBase(f, ge)
+    }
+  }
+}
 
 fun all(p, l) {
    switch (l) {
@@ -455,6 +462,15 @@ fun assoc(x,l) {
   }
 }
 
+sig assocDefault : (String,[(String,b)],b) ~> b
+fun assocDefault(x,l,d) {
+  switch (l) {
+    case []    -> d
+    case (k,v)::xs -> if (k == x) v
+                      else assocDefault(x, xs, d)
+  }
+}
+
 sig removeAssoc : (a,[(a,b)]) ~> [(a,b)]
 fun removeAssoc(x,l) {
   switch (l) {
@@ -481,6 +497,7 @@ fun isInt (x) { x =~ /-?[0-9]+$/ }
 sig isFloat : (String) -> Bool
 fun isFloat (x) { x =~ /-?[0-9]+(\.[0-9]+)?$/ }
 
+sig asList : (TableHandle((|a::Base),(|_::Base),(|_::Base))) {}-> [(|a::Base)]
 fun asList(t) server {
   for (x <-- t) [x]
 }
@@ -1228,10 +1245,11 @@ fun connect(f, g) {
   var done = new();
   var _ = spawn {
     f(accept(ap));
-    ignore(send((), accept(done)))
+    close(send((), accept(done)))
   };
   var result = g(request(ap));
-  ignore(receive(request(done)));
+  var (_, s) = receive(request(done));
+  close(s);
   result
 }
 
@@ -1401,7 +1419,7 @@ fun assertEq (actual, expected) server {
       print(show(expected));
       print("but got:");
       print(show(actual));
-      sysexit(2);
+      sysexit(2)
   }
 }
 

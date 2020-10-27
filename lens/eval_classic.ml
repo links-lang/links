@@ -2,9 +2,9 @@ open Value
 open Phrase_value
 module Sorted = Sorted_records
 
-let lens_put_set_step lens data (fn : Value.t -> Sorted.t -> unit) =
+let lens_put_set_step ~db lens data (fn : Value.t -> Sorted.t -> unit) =
   let get l =
-    let dat = Value.lens_get l in
+    let dat = Value.lens_get ~db l in
     Sorted.construct_cols ~columns:(Value.cols_present_aliases l) ~records:dat
   in
   match lens with
@@ -73,14 +73,13 @@ let lens_put_set_step lens data (fn : Value.t -> Sorted.t -> unit) =
       fn l r
   | _ -> ()
 
-let apply_table_data ~table ~database data =
+let apply_table_data ~table ~db data =
   let open Database in
   let open Database.Table in
   let table = table.name in
-  let db = database in
   let show_query = false in
-  let exec cmd = Statistics.time_query (fun () -> database.execute cmd) in
-  let cmd = "delete from " ^ database.quote_field table ^ " where TRUE" in
+  let exec cmd = Statistics.time_query (fun () -> db.execute cmd) in
+  let cmd = "delete from " ^ db.quote_field table ^ " where TRUE" in
   let _ = exec cmd in
   if show_query then print_endline cmd else ();
   let columns = Sorted.columns data in
@@ -88,8 +87,8 @@ let apply_table_data ~table ~database data =
   let fmt_insert f values =
     let values = [ values ] in
     let returning = [] in
-    let insert = { Database.Insert.table; columns; values; db; returning } in
-    Database.Insert.fmt f insert
+    let insert = { Database.Insert.table; columns; values; returning } in
+    Database.Insert.fmt ~db f insert
   in
   let fmt_cmd_sep f () = Format.pp_print_string f ";\n" in
   let fmt_all f () =
@@ -108,11 +107,11 @@ let lens_put_step lens data (fn : Value.t -> Sorted.t -> unit) =
   in
   lens_put_set_step lens data fn
 
-let lens_put (lens : Value.t) (data : Phrase_value.t list) =
+let lens_put ~db (lens : Value.t) (data : Phrase_value.t list) =
   let rec do_step_rec lens data =
     match lens with
-    | Lens { table; database; _ } -> apply_table_data ~table ~database data
-    | _ -> lens_put_set_step lens data do_step_rec
+    | Lens { table; _ } -> apply_table_data ~table ~db data
+    | _ -> lens_put_set_step ~db lens data do_step_rec
   in
   do_step_rec lens
     (Sorted.construct_cols

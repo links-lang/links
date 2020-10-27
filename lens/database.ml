@@ -3,6 +3,7 @@ open Lens_utility
 module LPV = Phrase_value
 
 type t = {
+  serialize : unit -> string;
   driver_name : unit -> string;
   escape_string : string -> string;
   quote_field : string -> string;
@@ -11,8 +12,43 @@ type t = {
     string -> field_types:(string * Phrase_type.t) list -> Phrase_value.t list;
 }
 
+module E = struct
+  type t =
+    | Unsupported_for_driver of { driver : string; fn : string }
+    | Unsupported_phrase_value of { value : Phrase_value.t }
+
+  let pp f v =
+    match v with
+    | Unsupported_for_driver { driver; fn } ->
+        Format.fprintf f
+          "The function '%s' is not supported for the lens database driver \
+           '%s'."
+          driver fn
+    | Unsupported_phrase_value { value } ->
+        Format.fprintf f
+          "The value '%a' is not supported by the lens database driver."
+          Phrase_value.pp value
+
+  let show v = Format.asprintf "%a" pp v
+
+  exception E of t
+
+  let raise v = raise (E v)
+
+  let () =
+    let print v =
+      match v with
+      | E e -> Some (show e)
+      | _ -> None
+    in
+    Printexc.register_printer print
+end
+
+let show _ = "<db_driver>"
+let pp f v = Format.fprintf f "%s" (show v)
+
 module Table = struct
-  type t = { name : string; keys : string list list }
+  type t = { name : string; keys : string list list } [@@deriving sexp]
 
   let name t = t.name
 end
@@ -27,7 +63,15 @@ let dummy_database =
   let execute_select _ ~field_types:_ =
     failwith "Dummy database exec not supported."
   in
-  { driver_name; escape_string; quote_field; execute; execute_select }
+  let serialize _ = "<dummy driver>" in
+  {
+    serialize;
+    driver_name;
+    escape_string;
+    quote_field;
+    execute;
+    execute_select;
+  }
 
 let fmt_comma_seperated v =
   let pp_sep f () = Format.fprintf f ", " in
@@ -51,7 +95,10 @@ let fmt_cols ~db f cols =
 let fmt_phrase_value ~db f v =
   Format.fprintf f "%s"
     ( match v with
-    | LPV.Bool b -> string_of_bool b
+    | LPV.Bool b -> (
+        match b with
+        | true -> "(1=1)"
+        | false -> "(0=1)" )
     | LPV.Int v -> string_of_int v
     | LPV.String v -> db.escape_string v
     | LPV.Char c -> db.escape_string (String.make 1 c)
@@ -60,7 +107,9 @@ let fmt_phrase_value ~db f v =
         if s.[String.length s - 1] = '.' then s ^ "0" else s
     | LPV.Serial (`Key k) ->
         string_of_int k (* only support converting known keys. *)
-    | _ -> Format.asprintf "Unexpected phrase value %a." LPV.pp v |> failwith )
+    | LPV.Serial (`NewKeyMapped k) ->
+        string_of_int k (* only support converting known keys. *)
+    | _ -> E.Unsupported_phrase_value { value = v } |> E.raise )
 
 module Precedence = struct
   type t = Or | And | Not | Add | Sub | Mult | Divide | Cmp
@@ -167,14 +216,13 @@ module Select = struct
     tables : (string * string) list;
     cols : Column.t list;
     predicate : Phrase.t option;
-    db : db;
   }
 
   let select t ~predicate =
     let predicate = Phrase.Option.combine_and t.predicate predicate in
     { t with predicate }
 
-  let of_sort t ~sort =
+  let of_sort ~sort =
     let predicate = Sort.query sort in
     let cols = Sort.cols sort in
     let tables =
@@ -182,10 +230,9 @@ module Select = struct
       |> List.sort_uniq String.compare
       |> List.map ~f:(fun c -> (c, c))
     in
-    { predicate; cols; tables; db = t }
+    { predicate; cols; tables }
 
-  let fmt f v =
-    let db = v.db in
+  let fmt ~db f v =
     let map a =
       let col = List.find_exn ~f:(fun c -> Column.alias c = a) v.cols in
       Format.sprintf "%s.%s"
@@ -201,14 +248,14 @@ module Select = struct
         Format.fprintf f "SELECT %a FROM %a WHERE %a" (fmt_cols ~db) cols
           (fmt_tables ~db) v.tables (fmt_phrase ~db ~map) pred
 
-  let execute query ~database ~field_types =
-    let query = Format.asprintf "%a" fmt query in
-    database.execute_select query ~field_types
+  let execute query ~db ~field_types =
+    let query = Format.asprintf "%a" (fmt ~db) query in
+    db.execute_select query ~field_types
 
-  let query_exists query ~database =
-    let sql = Format.asprintf "SELECT EXISTS (%a) AS t" fmt query in
+  let query_exists query ~db =
+    let sql = Format.asprintf "SELECT EXISTS (%a) AS t" (fmt ~db) query in
     let field_types = [ ("t", Phrase_type.Bool) ] in
-    let res = database.execute_select sql ~field_types in
+    let res = db.execute_select sql ~field_types in
     match res with
     | [ Phrase_value.Record [ (_, Phrase_value.Bool b) ] ] -> b
     | _ -> failwith "Expected singleton value."
@@ -217,12 +264,11 @@ end
 module Delete = struct
   type db = t
 
-  type t = { table : string; predicate : Phrase.t option; db : db }
+  type t = { table : string; predicate : Phrase.t option }
 
   let fmt_table ~(db : db) f v = Format.fprintf f "%s" @@ db.quote_field v
 
-  let fmt f v =
-    let db = v.db in
+  let fmt ~db f v =
     let map col = Format.sprintf "%s" (db.quote_field col) in
     match v.predicate with
     | None -> Format.fprintf f "DELETE FROM %a" (fmt_table ~db) v.table
@@ -238,7 +284,6 @@ module Update = struct
     table : string;
     predicate : Phrase.t option;
     set : (string * Phrase_value.t) list;
-    db : db;
   }
 
   let fmt_set_value ~db f (key, value) =
@@ -248,8 +293,7 @@ module Update = struct
 
   let fmt_table ~db f v = Format.fprintf f "%s" @@ db.quote_field v
 
-  let fmt f v =
-    let db = v.db in
+  let fmt ~db f v =
     let map col = Format.sprintf "%s" (db.quote_field col) in
     match v.predicate with
     | None ->
@@ -268,15 +312,13 @@ module Insert = struct
     columns : string list;
     values : Phrase_value.t list list;
     returning : string list;
-    db : db;
   }
 
   let fmt_table ~db f v = Format.fprintf f "%s" @@ db.quote_field v
 
   let fmt_col ~db f v = Format.pp_print_string f (db.quote_field v)
 
-  let fmt f v =
-    let db = v.db in
+  let fmt ~db f v =
     let fmt_vals f v =
       Format.fprintf f "(%a)" (fmt_phrase_value ~db |> Format.pp_comma_list) v
     in
@@ -294,5 +336,78 @@ module Insert = struct
       (fmt_vals |> Format.pp_comma_list)
       v.values fmt_returning ()
 
+  let split v =
+    let { table; columns; values; returning } = v in
+    let f v =
+      let values = [ v ] in
+      { table; columns; values; returning }
+    in
+    List.map ~f values
+
+  let no_returning v = { v with returning = [] }
+
+  let exec_insert_returning_hack ~db data =
+    let last_id_fun =
+      let driver = db.driver_name () in
+      match driver with
+      | "mysql" -> "last_insert_id()"
+      | "sqlite3" -> "last_insert_rowid()"
+      | _ ->
+          let fn = "exec_insert_returning_hack" in
+          E.Unsupported_for_driver { driver; fn } |> E.raise
+    in
+    let getid = Format.asprintf "SELECT %s as id" last_id_fun in
+    let exec_insert v =
+      let ins = Format.asprintf "%a" (fmt ~db) v in
+      Debug.print ins;
+      Statistics.time_query (fun () -> db.execute ins);
+      Debug.print getid;
+      Statistics.time_query (fun () ->
+          db.execute_select getid ~field_types:[ ("id", Phrase_type.Serial) ])
+    in
+    no_returning data |> split |> List.map ~f:exec_insert |> List.concat
+
+  let exec_insert_returning ~db ~field_types data =
+    match db.driver_name () with
+    | "sqlite3"
+     |"mysql" ->
+        exec_insert_returning_hack ~db data
+    | _ ->
+        let cmd = Format.asprintf "%a" (fmt ~db) data in
+        Debug.print cmd;
+        Statistics.time_query (fun () -> db.execute_select ~field_types cmd)
+
   (* optionally add a returning statement if required *)
+end
+
+module Change = struct
+  type db = t
+
+  type t = Insert of Insert.t | Update of Update.t | Delete of Delete.t
+
+  let fmt ~db f v =
+    match v with
+    | Insert v -> Insert.fmt ~db f v
+    | Update v -> Update.fmt ~db f v
+    | Delete v -> Delete.fmt ~db f v
+
+  let exec ~db cmd =
+    Debug.print cmd;
+    Statistics.time_query (fun () -> db.execute cmd)
+
+  let exec_multi_slow ~db data =
+    let exec_cmd cmd =
+      let cmd = Format.asprintf "%a" (fmt ~db) cmd in
+      exec ~db cmd
+    in
+    List.iter ~f:exec_cmd data
+
+  let exec_multi ~db data =
+    match db.driver_name () with
+    | "mysql" -> exec_multi_slow ~db data
+    | _ ->
+        let fmt_cmd_sep f () = Format.pp_print_string f ";\n" in
+        let fmt_cmd_list = Format.pp_print_list ~pp_sep:fmt_cmd_sep (fmt ~db) in
+        let cmds = Format.asprintf "%a" fmt_cmd_list data in
+        if String.equal "" cmds |> not then exec ~db cmds
 end

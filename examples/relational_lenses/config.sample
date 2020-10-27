@@ -1,5 +1,3 @@
 database_args=localhost:5432::links
 database_driver=postgresql
-relax_query_type_constraint=on
-shredding=on
 relational_lenses=on

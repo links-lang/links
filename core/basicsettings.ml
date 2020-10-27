@@ -1,12 +1,3 @@
-(** [true] if we're in web mode *)
-let web_mode =
-  Settings.(flag "web_mode"
-            |> synopsis "Start Links in web mode"
-            |> privilege `System
-            |> convert parse_bool
-            |> CLI.(add (short 'w' <&> long "web-mode"))
-            |> sync)
-
 (** [true] if we're in interactive mode *)
 let interactive_mode =
   Settings.(flag "interactive_mode"
@@ -16,7 +7,7 @@ let interactive_mode =
             |> sync)
 
 (** The banner *)
-let version = "0.9.2 (Burghmuirhead)"
+let version = "0.9.3 (Burghmuirhead)"
 let version = Settings.(option ~default:(Some version) ~readonly:true "version"
                         |> privilege `System
                         |> synopsis "Print version and exit"
@@ -26,24 +17,36 @@ let version = Settings.(option ~default:(Some version) ~readonly:true "version"
                         |> CLI.(add (fun arg -> short 'v' (long "version" arg)))
                         |> sync)
 
-(* Handlers stuff *)
+let show_stages =
+  Settings.(flag "show_stages"
+            |> convert parse_bool
+            |> sync)
+
+module Types = struct
+  let show_recursion =
+    Settings.(flag "show_recursion"
+              |> depends Debug.enabled
+              |> convert parse_bool
+              |> sync)
+end
+
 module Handlers = struct
-  let enabled
-    = Settings.(flag "enable_handlers"
-                |> privilege `System
-                |> synopsis "Enables the effect handlers extension"
-                |> convert parse_bool
-                |> CLI.(add (long "enable-handlers"))
-                |> sync)
+  let enabled =
+    Settings.(flag "enable_handlers"
+              |> privilege `System
+              |> synopsis "Enables the effect handlers extension"
+              |> convert parse_bool
+              |> CLI.(add (long "enable-handlers"))
+              |> sync)
 end
 
 module Sessions = struct
-  let exceptions_enabled
-    = Settings.(flag "session_exceptions"
-                |> synopsis "Enables the session exceptions extension"
-                |> depends Handlers.enabled
-                |> privilege `System
-                |> convert parse_bool
-                |> CLI.(add (long "session-exceptions"))
-                |> sync)
+  let exceptions_enabled =
+    Settings.(flag "session_exceptions"
+              |> synopsis "Enables the session exceptions extension"
+              |> depends Handlers.enabled
+              |> privilege `System
+              |> convert parse_bool
+              |> CLI.(add (long "session-exceptions"))
+              |> sync)
 end

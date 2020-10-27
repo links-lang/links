@@ -37,7 +37,7 @@ fun dropTables() {
   delete (x <-- departments);
   delete (x <-- employees);
   delete (x <-- tasks);
-  delete (x <-- contacts);
+  delete (x <-- contacts)
 }
 
 fun createTables () {
@@ -84,7 +84,7 @@ fun createTables () {
 
 fun setup() {
   dropTables();
-  createTables();
+  createTables()
 }
 
 fun tasksOfEmp(e) {
@@ -118,7 +118,7 @@ fun employeesOfDept (d) {
 }
 
 fun q_org () {
-  query {
+  query nested {
     for (d <-- departments)
       [(name = d.name,
         employees = employeesOfDept(d),

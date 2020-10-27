@@ -107,7 +107,16 @@ stdout : <foo id="bar" class="baz"><div/></foo> : Xml
 XML Construction 3
 makeXml("foo", [ ("id", "bar"), ("class", "baz") ], <div/>)
 stdout : <foo id="bar" class="baz"><div/></foo> : XmlItem
-ignore : Xml/XmlItem pretty-print bug
+
+Unpretty-printing attributes of XmlItem
+<foo id="bar" class="baz"><div/></foo>
+stdout : <foo id="bar" class="baz"><div/></foo> : Xml
+args : --set=print_pretty=false
+
+Unpretty-printing long snippets (#256)
+<a><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/></a>
+stdout : <a><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/></a> : Xml
+args : --set=print_pretty=false
 
 XML-Variant-Conversion
 variantToXml(xmlToVariant(<div class="i-am-a-div"><ul><li/><li></li><li>A</li></ul></div>))

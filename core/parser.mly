@@ -426,6 +426,8 @@ fun_declarations:
 fun_declaration:
 | tlfunbinding                                                 { fun_binding ~ppos:$loc($1) None $1 }
 | signatures tlfunbinding                                      { fun_binding ~ppos:$loc($2) (fst $1) ~unsafe_sig:(snd $1) $2 }
+| switch_tlfunbinding                                          { switch_fun_binding ~ppos:$loc($1) None $1 }
+| signatures switch_tlfunbinding                               { switch_fun_binding ~ppos:$loc($2) (fst $1) ~unsafe_sig:(snd $1) $2 }
 
 linearity:
 | FUN                                                          { dl_unl }
@@ -442,6 +444,12 @@ tlfunbinding:
 | OP pattern sigop pattern perhaps_location block              { ((dl_unl, false), WithPos.node $3, [[$2; $4]], $5, $6) }
 | OP OPERATOR pattern perhaps_location block                   { ((dl_unl, false), $2, [[$3]], $4, $5)          }
 | OP pattern OPERATOR perhaps_location block                   { ((dl_unl, false), $3, [[$2]], $4, $5)          }
+
+switch_tlfunbinding:
+| fun_kind VARIABLE arg_lists perhaps_location switch_funlit_body     { ($1, $2, $3, $4, $5)   }
+
+switch_funlit_body:
+| SWITCH LBRACE case+ RBRACE                                   { $3 }
 
 tlvarbinding:
 | VAR VARIABLE perhaps_location EQ exp                         { (PatName $2, $5, $3) }
@@ -547,6 +555,7 @@ primary_expression:
 | LBRACKET exp DOTDOT exp RBRACKET                             { with_pos $loc (RangeLit($2, $4))   }
 | xml                                                          { $1 }
 | linearity arg_lists block                                    { fun_lit ~ppos:$loc $1 $2 $3 }
+| linearity arg_lists switch_funlit_body                       { switch_fun_lit ~ppos:$loc $1 $2 $3 }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { with_pos $loc (CP $2) }
 | DOLLAR primary_expression                                    { with_pos $loc (Generalise $2) }
 
@@ -583,7 +592,7 @@ spawn_expression:
 
 query_policy:
 | VARIABLE                                                     { query_policy_of_string $loc $1 }
-| /* empty */                                                  { QueryPolicy.Default }
+| /* empty */                                                  { QueryPolicy.Flat }
 
 postfix_expression:
 | primary_expression | spawn_expression                        { $1 }
@@ -693,7 +702,7 @@ conditional_expression:
 | IF LPAREN exp RPAREN exp ELSE exp                            { with_pos $loc (Conditional ($3, $5, $7)) }
 
 case:
-| CASE pattern RARROW block_contents                           { $2, block ~ppos:$loc($4) $4 }
+| CASE pattern RARROW case_contents                           { $2, block ~ppos:$loc($4) $4 }
 
 case_expression:
 | SWITCH LPAREN exp RPAREN LBRACE case* RBRACE                 { with_pos $loc (Switch ($3, $6, None)) }
@@ -829,6 +838,8 @@ binding:
 | exp SEMICOLON                                                { with_pos $loc (Exp $1) }
 | signatures fun_kind VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, loc_unknown, $5) }
 | fun_kind VARIABLE arg_lists block                            { fun_binding ~ppos:$loc None ($1, $2, $3, loc_unknown, $4) }
+| signatures fun_kind VARIABLE arg_lists switch_funlit_body    { switch_fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, loc_unknown, $5) }
+| fun_kind VARIABLE arg_lists switch_funlit_body               { switch_fun_binding ~ppos:$loc None ($1, $2, $3, loc_unknown, $4) }
 | typedecl SEMICOLON | links_module
 | links_open SEMICOLON                                         { $1 }
 
@@ -839,11 +850,13 @@ mutual_bindings:
 | binding                                                      { MutualBindings.(add (empty (pos $loc)) $1) }
 | mutual_bindings binding                                      { MutualBindings.add $1 $2 }
 
-bindings:
+binding_or_mutual:
 | binding                                                      { [$1]      }
 | mutual_binding_block                                         { $1        }
-| bindings mutual_binding_block                                { $1 @ $2   }
-| bindings binding                                             { $1 @ [$2] }
+
+bindings:
+| binding_or_mutual                                            { $1 } /* See #441 and #900 */
+| bindings binding_or_mutual                                   { $1 @ $2 }
 
 moduleblock:
 | LBRACE declarations RBRACE                                   { $2 }
@@ -851,14 +864,13 @@ moduleblock:
 block:
 | LBRACE block_contents RBRACE                                 { block ~ppos:$loc $2 }
 
-block_contents:
-| bindings exp SEMICOLON                                       { ($1 @ [with_pos $loc($2) (Exp $2)],
-                                                                  record ~ppos:$loc []) }
+case_contents:
 | bindings exp                                                 { ($1, $2) }
-| exp SEMICOLON                                                { ([with_pos $loc($1) (Exp $1)],
-                                                                  record ~ppos:$loc []) }
 | exp                                                          { ([], $1) }
-| SEMICOLON | /* empty */                                      { ([], with_pos $loc (TupleLit [])) }
+
+block_contents:
+| case_contents                                                { $1 }
+| /* empty */                                                  { ([], with_pos $loc (TupleLit [])) }
 
 labeled_exp:
 | preceded(EQ, VARIABLE)                                       { ($1, with_pos $loc (Var $1)) }

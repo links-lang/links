@@ -1,0 +1,13 @@
+(library
+  (name links_mysql)
+  (public_name links-mysql)
+  (synopsis "MySQL database backend for Links")
+  (optional)
+  (flags (:standard -safe-string -dtypes -w Ae-44-45-60 -g -cclib -lunix -thread))
+  (libraries mysql links.core))
+
+
+(install
+  (section share)
+  (files   links_mysql_dependencies.json)
+  (package links-mysql))

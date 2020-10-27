@@ -1,6 +1,6 @@
 open Lens_utility
 
-type t [@@deriving show]
+type t [@@deriving show, sexp]
 
 (** Print functional dependencies in a human readable form, e.g. 'Col1 Col2 -> Col 3' *)
 val pp_pretty : t Format.fmt_fn
@@ -52,6 +52,9 @@ end
 
 module Set : sig
   include Set.S with type elt = t
+
+  val sexp_of_t : t -> Sexp.t
+  val t_of_sexp : Sexp.t -> t
 
   val pp_pretty : t Format.fmt_fn
 

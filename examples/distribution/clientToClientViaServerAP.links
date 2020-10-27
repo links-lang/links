@@ -13,11 +13,11 @@ module ClientCommon {
 
   fun enableButton() {
     var buttonRef = getNodeById("pingButton");
-    domRemoveAttributeFromRef(buttonRef, "disabled");
+    domRemoveAttributeFromRef(buttonRef, "disabled")
   }
 
   fun logMessage(msg) {
-    appendChildren(<#>{stringToXml(msg)}</#>, getNodeById("msgs"));
+    appendChildren(<#>{stringToXml(msg)}</#>, getNodeById("msgs"))
   }
 
   fun makePage(clPid, isPinger) {
@@ -111,7 +111,7 @@ fun main() {
   addRoute("/pinger", fun(_) { Pinger.setup(srvAP) });
   addRoute("/ponger", fun(_) { Ponger.setup(srvAP) });
   serveWebsockets();
-  servePages();
+  servePages()
 }
 
 main()

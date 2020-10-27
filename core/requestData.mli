@@ -30,3 +30,7 @@ module DecodeRequestHeaders :
 sig
   val decode : string -> string
 end
+
+val is_remote_call : (string * string) list -> bool
+val is_client_return : (string * string) list -> bool
+val is_ajax_call : (string * string) list -> bool

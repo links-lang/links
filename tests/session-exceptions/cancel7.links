@@ -4,13 +4,13 @@ fun go() {
   try {
     var s = fork (fun(s) {
       var t = accept(ap);
-      var clos = linfun() { send(5, t) };
+      var clos = linfun() { close(send(5, t)) };
       raise;
-      ignore(send(clos, s))
+      close(send(clos, s))
     });
     var t = request(ap);
-    var (res, _) = receive(t);
-    #cancel(t);
+    var (res, t) = receive(t);
+    close(t);
     cancel(s);
     1
   } as (x) in {

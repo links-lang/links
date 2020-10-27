@@ -132,9 +132,12 @@ module SugarConstructors (Position : Pos)
 
   (** Various phrases *)
 
-  (* Create a FunLit. *)
+  (* Create a Normal FunLit. *)
   let fun_lit ?(ppos=dp) ?args ?(location=loc_unknown) linearity pats blk =
-    with_pos ppos (FunLit (args, linearity, (pats, blk), location))
+    with_pos ppos (FunLit (args, linearity, NormalFunlit (pats, blk), location))
+
+  let switch_fun_lit ?(ppos=dp) ?args ?(location=loc_unknown) linearity pats switch_funlit_body =
+    with_pos ppos (FunLit (args, linearity, SwitchFunlit (pats, switch_funlit_body), location))
 
   (* Create a Spawn. *)
   let spawn ?(ppos=dp) ?row spawn_kind location blk =
@@ -154,13 +157,13 @@ module SugarConstructors (Position : Pos)
   (* Create a function binding. *)
   let fun_binding ?(ppos=dp) sig_opt ?(unsafe_sig=false) ((linearity, frozen), bndr, args, location, blk) =
     let fun_signature = datatype_opt_of_sig_opt sig_opt bndr in
-    with_pos ppos (Fun { fun_binder = binder bndr;
-                         fun_linearity = linearity;
-                         fun_definition = ([], (args, blk));
-                         fun_location = location;
-                         fun_signature;
-                         fun_frozen = frozen;
-                         fun_unsafe_signature = unsafe_sig })
+      with_pos ppos (Fun { fun_binder = binder bndr;
+                           fun_linearity = linearity;
+                           fun_definition = ([], NormalFunlit (args, blk));
+                           fun_location = location;
+                           fun_signature;
+                           fun_frozen = frozen;
+                           fun_unsafe_signature = unsafe_sig })
 
   let fun_binding' ?(ppos=dp) ?(linearity=dl_unl) ?(tyvars=[])
         ?(location=loc_unknown) ?annotation bndr fnlit =
@@ -172,6 +175,15 @@ module SugarConstructors (Position : Pos)
                          fun_frozen = false;
                          fun_unsafe_signature = false })
 
+  let switch_fun_binding ?(ppos=dp) sig_opt ?(unsafe_sig=false) ((linearity, frozen), bndr, args, location, blk) =
+    let fun_signature = datatype_opt_of_sig_opt sig_opt bndr in
+      with_pos ppos (Fun { fun_binder = binder bndr;
+                           fun_linearity = linearity;
+                           fun_definition = ([], SwitchFunlit (args, blk));
+                           fun_location = location;
+                           fun_signature;
+                           fun_frozen = frozen;
+                           fun_unsafe_signature = unsafe_sig })
 
   (* Create a Val binding.  This function takes either a name for a variable
      pattern or an already constructed pattern.  In the latter case no signature
@@ -277,8 +289,8 @@ module SugarConstructors (Position : Pos)
       sh_value_cases  = val_cases;
       sh_descr = {
           shd_depth = depth;
-          shd_types = ( Types.make_empty_closed_row (), `Not_typed
-                      , Types.make_empty_closed_row (), `Not_typed);
+          shd_types = ( Types.make_empty_closed_row (), Types.Not_typed
+                      , Types.make_empty_closed_row (), Types.Not_typed);
           shd_raw_row = Types.make_empty_closed_row ();
           shd_params = opt_map (fun pps -> {shp_bindings = pps; shp_types = []})
                                parameters

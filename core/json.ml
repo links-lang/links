@@ -45,8 +45,20 @@ let json_of_table ((db, params), name, keys, row) : Yojson.Basic.t =
   `Assoc [
     ("_table",
       `Assoc [("db", json_of_db (db, params)); ("name", `String name);
-        ("row", `String (Types.string_of_datatype (`Record row)));
+        ("row", `String (Types.(string_of_datatype (Record (Row row)))));
         ("keys", json_of_keylist keys)])]
+
+let json_of_lens (db, lens) : Yojson.Basic.t =
+  let db =
+    let open Lens.Database in
+    db.serialize () in
+  let l = Lens.Value.serialize lens in
+  `Assoc [
+    ("_lens",
+     `Assoc [
+       ("db", `String db);
+       ("lens", `String l)
+     ])]
 
 let jsonize_location loc = `String (Location.to_string loc)
 
@@ -57,7 +69,7 @@ let rec cons_listify : Yojson.Basic.t list -> Yojson.Basic.t = function
 
 let rec jsonize_value' : Value.t -> Yojson.Basic.t =
   function
-  | `Lens _ -> raise (Errors.runtime_error "relational lens serialization not supported")
+  | `Lens dl -> json_of_lens dl
   | `PrimitiveFunction _
   | `Resumption _
   | `Continuation _

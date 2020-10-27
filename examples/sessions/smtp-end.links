@@ -103,7 +103,7 @@ mutual {
       case []    ->
         var c = send(message.subject, select DATA c);
         var c = send(message.body, c);
-        close(select QUIT c);
+        close(select QUIT c)
       case x::xs ->
         var c = send(x, select RCPT c);
         println("C: RCPT TO:<" ^^ x ^^ ">");

@@ -2,29 +2,25 @@ var db = database "links";
 
 var agencies =
   table "agencies"
-  with (oid: Int,
-        id: Int,
+  with (id: Int,
         name: String,
         based_in: String,
         phone: String)
-  where oid readonly
-  tablekeys [["oid"], ["id"]]
+  tablekeys [["id"]]
   from db;
 
 var externalTours =
   table "externaltours"
-  with (oid: Int,
-        id: Int,
+  with (id: Int,
         name: String,
         destination: String,
         type: String,
         price: Int)
-  where oid readonly
-  tablekeys [["oid"], ["id"]]
+  tablekeys [["id"]]
   from db;
 
 fun q() {
-  query {
+  query nested {
     for (a <-- agencies)
       for (e <-- externalTours)
       where (a.name == e.name && e.type == "boat")
@@ -45,7 +41,7 @@ fun lin_e() {
 
 # Query q manually rewritten to calculate lineage
 fun q_lineage() {
-  query {
+  query nested {
     for (y_a <- lin_a())
       for (z_a <- for (y_e <- lin_e())
                     for (z_e <- if (y_a.data.name == y_e.data.name && y_e.data.type == "boat")
@@ -60,7 +56,7 @@ fun q_lineage() {
 }
 
 fun issue27() {
-  query {
+  query nested {
     for (a <-- agencies)
       [(name = a.name,
         based_in = a.based_in)]

@@ -1,7 +1,7 @@
 open Lens_utility
 
 type t =
-  | Lens of { table : Database.Table.t; database : Database.t; sort : Sort.t }
+  | Lens of { table : Database.Table.t; sort : Sort.t }
   | LensMem of { records : Phrase_value.t list; sort : Sort.t }
   | LensSelect of { lens : t; predicate : Phrase.t; sort : Sort.t }
   | LensJoin of {
@@ -19,6 +19,15 @@ type t =
       default : Phrase_value.t;
       sort : Sort.t;
     }
+[@@deriving sexp]
+
+let serialize v =
+  let sexp = sexp_of_t v in
+  Sexp.to_string sexp
+
+let deserialize v =
+  let sexp = Sexp.of_string v in
+  t_of_sexp sexp
 
 let show v =
   match v with
@@ -95,14 +104,6 @@ let rec get_primary_key lens =
   | LensJoin { left; _ } ->
       (* right table has to be defined by left table *) get_primary_key left
 
-let rec database lens =
-  match lens with
-  | Lens { database; _ } -> database
-  | LensMem _ -> failwith "Memory lens does not have a database."
-  | LensDrop { lens; _ } -> database lens
-  | LensSelect { lens; _ } -> database lens
-  | LensJoin { left; _ } -> database left
-
 let rec compute_memory_sorted lens =
   match lens with
   | Lens _ -> failwith "Non memory lenses not implemented."
@@ -126,11 +127,11 @@ let get_memory lens = compute_memory_sorted lens |> Sorted_records.to_value
 let rec generate_query lens =
   let open Database.Select in
   match lens with
-  | Lens { database = db; table; sort } ->
+  | Lens { table; sort } ->
       let cols = Sort.cols sort in
       let open Database.Table in
       let table = table.name in
-      { tables = [ (table, table) ]; cols; predicate = None; db }
+      { tables = [ (table, table) ]; cols; predicate = None }
   | LensSelect { lens; predicate; _ } ->
       let query = generate_query lens in
       { query with predicate = Some predicate }
@@ -153,30 +154,27 @@ let rec generate_query lens =
       in
       let tables = List.append q1.tables q2.tables in
       let cols = Sort.cols sort in
-      if q1.db <> q2.db then
-        failwith "Only single database expressions supported."
-      else { tables; cols; predicate = Sort.predicate sort; db = q1.db }
+      { tables; cols; predicate = Sort.predicate sort }
   | LensMem _ -> failwith "Memory lens unsupported for database query."
 
-let get_query lens =
+let get_query ~db lens =
   let _ = Debug.print "getting tables" in
   let sort = sort lens in
-  let database = database lens in
   let cols = Sort.cols sort |> Column.List.present in
-  let query = Database.Select.of_sort database ~sort in
-  let sql = Format.asprintf "%a" Database.Select.fmt query in
+  let query = Database.Select.of_sort ~sort in
+  let sql = Format.asprintf "%a" (Database.Select.fmt ~db) query in
   let field_types =
     List.map ~f:(fun c -> (Column.alias c, Column.typ c)) cols
   in
   let _ = Debug.print sql in
   let res =
     Statistics.time_query (fun () ->
-        Database.Select.execute query ~field_types ~database)
+        Database.Select.execute query ~field_types ~db)
   in
   res
 
-let lens_get lens =
-  if is_memory_lens lens then get_memory lens else get_query lens
+let lens_get ~db lens =
+  if is_memory_lens lens then get_memory lens else get_query ~db lens
 
 (* HACK: This constructs a select lens bypassing sort checks. This is fine for the
    forward direction, but would produce an invalid lens for the put direction. *)
@@ -193,32 +191,30 @@ let lens_select_internal lens ~predicate =
   in
   LensSelect { lens; predicate; sort }
 
-let lens_get_select lens ~predicate =
-  lens_get (lens_select_internal lens ~predicate)
+let lens_get_select ~db lens ~predicate =
+  lens_get ~db (lens_select_internal lens ~predicate)
 
-let lens_get_select_opt lens ~predicate =
+let lens_get_select_opt ~db lens ~predicate =
   match predicate with
-  | None -> lens_get lens
-  | Some predicate -> lens_get_select lens ~predicate
+  | None -> lens_get ~db lens
+  | Some predicate -> lens_get_select lens ~db ~predicate
 
-let query_exists lens predicate =
+let query_exists ~db lens predicate =
   let sort = sort lens in
   let sort = Sort.select_lens_sort sort ~predicate |> Result.ok_exn in
   if is_memory_lens lens then
-    let res = lens_get (LensSelect { lens; predicate; sort }) in
+    let res = lens_get ~db (LensSelect { lens; predicate; sort }) in
     res <> []
   else
-    let database = database lens in
-    let query = Database.Select.of_sort database ~sort in
+    let query = Database.Select.of_sort ~sort in
     let res =
-      Statistics.time_query (fun () ->
-          Database.Select.query_exists query ~database)
+      Statistics.time_query (fun () -> Database.Select.query_exists query ~db)
     in
     res
 
 let set_serial lens ~columns =
   match lens with
-  | Lens { sort; database; table } ->
+  | Lens { sort; table } ->
       let sort = Sort.set_serial ~columns sort in
-      Lens { sort; database; table }
+      Lens { sort; table }
   | _ -> lens

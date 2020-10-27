@@ -34,7 +34,7 @@ end = struct
   and with_pos = t WithPos.t
   [@@deriving show]
 
-  let make ?(name="") ?(ty=`Not_typed) () = (name, ty)
+  let make ?(name="") ?(ty=Types.Not_typed) () = (name, ty)
 
   let to_name b = let (n, _ ) = WithPos.node b in n
   let to_type b = let (_, ty) = WithPos.node b in ty
@@ -42,8 +42,8 @@ end = struct
   let set_name b name = WithPos.map ~f:(fun (_   , ty) -> name, ty ) b
   let set_type b typ  = WithPos.map ~f:(fun (name, _ ) -> name, typ) b
 
-  let erase_type b = WithPos.map ~f:(fun (name, _) -> name, `Not_typed) b
-  let has_type   b = match to_type b with `Not_typed -> false | _ -> true
+  let erase_type b = WithPos.map ~f:(fun (name, _) -> name, Types.Not_typed) b
+  let has_type   b = match to_type b with Types.Not_typed -> false | _ -> true
 
   let traverse_map : with_pos -> o:'o
             -> f_pos:('o -> Position.t -> 'a * Position.t)
@@ -80,14 +80,13 @@ struct
 
 (* Note that an unresolved type variable does not contain information
    about its primary kind. This is filled in when resolving the variable *)
+(* FIXME: the above comment may well be false now - check *)
 type t =
   | TUnresolved       of Name.t * Subkind.t option * Freedom.t
-  (* This is why we can't have nice things ... *)
   | TResolvedType     of Types.meta_type_var
-  | TResolvedRow      of Types.meta_row_var
-  | TResolvedPresence of Types.meta_presence_var
-     [@@deriving show]
-
+  | TResolvedRow      of Types.meta_type_var
+  | TResolvedPresence of Types.meta_type_var
+  [@@deriving show]
 
 let is_resolved = function
   | TUnresolved _ -> false
@@ -370,7 +369,10 @@ and regex =
   | Splice    of phrase
   | Replace   of regex * replace_rhs
 and clause = Pattern.with_pos * phrase
-and funlit = Pattern.with_pos list list * phrase
+and funlit = NormalFunlit of normal_funlit | SwitchFunlit of switch_funlit
+and switch_funlit = Pattern.with_pos list list * switch_funlit_body
+and switch_funlit_body = (Pattern.with_pos * phrase) list
+and normal_funlit = Pattern.with_pos list list * phrase
 and handler =
   { sh_expr         : phrase
   ; sh_effect_cases : clause list
@@ -566,6 +568,11 @@ let tappl' : phrase * tyarg list -> phrasenode = fun (e, tys) ->
          Datatype.Type (WithPos.make (Datatype.TypeVar tv)), Some ty
        in
        TAppl (e, List.map make_arg tys)
+
+let get_normal_funlit fnlit =
+  match fnlit with
+  | NormalFunlit x -> x
+  | _-> assert false
 
 module Freevars =
 struct
@@ -767,8 +774,16 @@ struct
            let fvs'' = diff fvs' bnd in
            union bnd bnd', union fvs fvs'')
          (empty, empty) members
-  and funlit (args, body : funlit) : StringSet.t =
+  and funlit (fn : funlit) : StringSet.t =
+    match fn with
+    | NormalFunlit n_fn -> normal_funlit n_fn
+    | SwitchFunlit m_fn -> switch_funlit m_fn
+  and normal_funlit (args, body : normal_funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
+  and switch_funlit (args, body : switch_funlit) : StringSet.t =
+    diff (switch_funlit_body body) (union_map (union_map pattern) args)
+  and switch_funlit_body (body : (Pattern.with_pos * phrase) list) : StringSet.t =
+    union_map (fun (pat, phr) -> union (pattern pat) (phrase phr)) body
   and block (binds, expr : binding list * phrase) : StringSet.t =
     ListLabels.fold_right binds ~init:(phrase expr)
       ~f:(fun bind bodyfree ->

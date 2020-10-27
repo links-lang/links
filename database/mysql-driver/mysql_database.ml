@@ -1,4 +1,6 @@
 open Mysql
+open Links_core
+open Utility
 
 let string_of_error_code = function
 | Aborting_connection              -> "Aborting connection"
@@ -201,18 +203,23 @@ object
   method show = pretty_type thing
 end
 
-let slurp (fn : 'a -> 'b option) (source : 'a) : 'b list =
-  let rec obtain output =
-    match fn source with
-      | None -> output
-      | Some value -> obtain (value :: output)
+let iterUntilNone (fn : unit -> 'b option) (g : 'b -> unit) : unit =
+  let rec iterate () =
+    match fn () with
+      | None -> ()
+      | Some value -> g value; iterate()
   in
-    List.rev (obtain [])
+    iterate ()
 
 class mysql_result (result : result) db = object
   inherit Value.dbvalue
-  val rows = ref None
-  method status : Value.db_status =
+  val result_buf = 
+    if size result > Int64.of_int(0)
+    then let buf = PolyBuffer.init 1 1024 (Array.init 0 (fun _ -> None)) in
+         iterUntilNone (fun () -> fetch result) (PolyBuffer.append buf);
+         buf
+    else  PolyBuffer.init 0 1 (Array.init 0 (fun _ -> None))
+  method status : Value.db_status = 
     match status db with
       | StatusOK | StatusEmpty -> `QueryOk
       | StatusError c          -> `QueryError (string_of_error_code c)
@@ -222,22 +229,13 @@ class mysql_result (result : result) db = object
     Int64.to_int(size result)
   method fname  n : string =
     (Utility.val_of (fetch_field_dir result n)).name
-  method get_all_lst : string list list =
-    match !rows with
-      | None ->
-          let toList row =
-            List.map (Utility.from_option "!!NULL!!") (Array.to_list row) in
-          let r = List.map toList (slurp fetch result)
-          in
-            rows := Some r;
-            r
-      | Some r -> r
   method getvalue : int -> int -> string = fun n f ->
-    to_row result (Int64.of_int n);
-    Utility.val_of ((Utility.val_of (fetch result)).(f))
+    let row = PolyBuffer.get result_buf n in
+(* TODO: Handle nulls better *)
+    Utility.from_option "" (row.(f))
   method gettuple : int -> string array = fun n ->
-    to_row result (Int64.of_int n);
-    Array.map Utility.val_of (Utility.val_of(fetch result))
+    let row = PolyBuffer.get result_buf n in
+    Array.map (Utility.from_option "") row
   method error : string =
     Utility.val_of (errmsg db)
 end
@@ -255,10 +253,15 @@ class mysql_database spec = object(self)
   method escape_string = Mysql.escape
   method quote_field f =
     "`" ^ Str.global_replace (Str.regexp "`") "``" f ^ "`"
-  method! make_insert_returning_query : (string * string list * string list list * string) -> string list =
-    fun (table_name, field_names, vss, _returning) ->
-      [self#make_insert_query(table_name, field_names, vss);
-       "select last_insert_id()"]
+
+  method! make_insert_returning_query : string -> Sql.query -> string list =
+    fun returning q ->
+      match q with
+        Sql.Insert ins ->
+          [self#string_of_query q;
+           Printf.sprintf "select %s from %s where _rowid = last_insert_id()" returning ins.ins_table]
+      | _ -> assert false
+
   method supports_shredding () = false
 end
 

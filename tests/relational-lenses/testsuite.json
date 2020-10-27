@@ -1,0 +1,10 @@
+{"databases" :
+ [ "pgsql", "sqlite3", "mysql" ],
+ "setups" :
+ [ "music_example", "serial" ],
+ "tests" :
+ [ "01_cds",
+   "02_cds",
+   "03_cds",
+   "serial" ]
+}

@@ -86,7 +86,9 @@ end
 val likeify : Lang.t -> string option
 
 val compile_update : Value.database -> Value.env ->
-  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> string
+  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> Sql.query
 
 val compile_delete : Value.database -> Value.env ->
-  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> string
+  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> Sql.query
+
+val insert : string -> string list -> Value.t list list -> Sql.query

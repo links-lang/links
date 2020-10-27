@@ -1,15 +1,16 @@
 fun grabber(ap) client {
   var s = accept(ap);
   var t = accept(ap);
-  <| s(x).t(y).s(z).t(w).s[x+y].t[z+w].{()} |>;
-  grabber(ap);
+  <| s(x).t(y).s(z).t(w).s[x+y].t[z+w].{close(s); close(t)} |>;
+  grabber(ap)
 }
 
 fun giver(x, y, a, b) client {
   var s = request(a);
-  var z = receive(send(y,send(x,s))).1;
+  var (z, s) = receive(send(y,send(x,s)));
+  close(s);
   var t = accept(b);
-  close(send(z, t));
+  close(send(z, t))
 }
 
 fun main() client {

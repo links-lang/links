@@ -138,7 +138,7 @@ fun mandelMadness(x, y, r, i, pixSize,
     } else {
       mandelMadness(minx, y+.pixSize, minr, i+.regionSize, pixSize,
                     minx, miny, maxx, maxy,
-                    mini, minr, maxi, maxr);
+                    mini, minr, maxi, maxr)
     }
   } else {
     if (y >= maxy) {
@@ -151,7 +151,7 @@ fun mandelMadness(x, y, r, i, pixSize,
                                      regionSize, r, i), docElt);
       mandelMadness(x+.pixSize, y, r+.regionSize, i, pixSize,
                     minx, miny, maxx, maxy,
-                    mini, minr, maxi, maxr);
+                    mini, minr, maxi, maxr)
     }
   }
 }

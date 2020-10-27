@@ -1,4 +1,5 @@
 type t = {
+  serialize : unit -> string;
   driver_name : unit -> string;
   escape_string : string -> string;
   quote_field : string -> string;
@@ -6,9 +7,13 @@ type t = {
   execute_select :
     string -> field_types:(string * Phrase_type.t) list -> Phrase_value.t list;
 }
+[@@deriving show]
+
+(** Dummy database driver that does not support execution. *)
+val dummy_database : t
 
 module Table : sig
-  type t = { name : string; keys : string list list }
+  type t = { name : string; keys : string list list } [@@deriving sexp]
 
   val name : t -> string
 end
@@ -41,32 +46,31 @@ module Select : sig
     tables : (string * string) list;
     cols : Column.t list;
     predicate : Phrase.Option.t;
-    db : db;
   }
 
   (** Add a further selection criterion to an existing predicate. *)
   val select : t -> predicate:Phrase.Option.t -> t
 
   (** Construct a select query from a lens sort. *)
-  val of_sort : db -> sort:Sort.t -> t
+  val of_sort : sort:Sort.t -> t
 
-  val fmt : Format.formatter -> t -> unit
+  val fmt : db:db -> Format.formatter -> t -> unit
 
   val execute :
     t ->
-    database:db ->
+    db:db ->
     field_types:(string * Phrase_type.t) list ->
     Phrase_value.t list
 
-  val query_exists : t -> database:db -> bool
+  val query_exists : t -> db:db -> bool
 end
 
 module Delete : sig
   type db = t
 
-  type t = { table : string; predicate : Phrase.Option.t; db : db }
+  type t = { table : string; predicate : Phrase.Option.t }
 
-  val fmt : Format.formatter -> t -> unit
+  val fmt : db:db -> Format.formatter -> t -> unit
 end
 
 module Update : sig
@@ -76,10 +80,9 @@ module Update : sig
     table : string;
     predicate : Phrase.Option.t;
     set : (string * Phrase_value.t) list;
-    db : db;
   }
 
-  val fmt : Format.formatter -> t -> unit
+  val fmt : db:db -> Format.formatter -> t -> unit
 end
 
 module Insert : sig
@@ -90,8 +93,23 @@ module Insert : sig
     columns : string list;
     values : Phrase_value.t list list;
     returning : string list;
-    db : db;
   }
 
-  val fmt : Format.formatter -> t -> unit
+  val fmt : db:db -> Format.formatter -> t -> unit
+
+  val exec_insert_returning :
+    db:db ->
+    field_types:(string * Phrase_type.t) list ->
+    t ->
+    Phrase_value.t list
+end
+
+module Change : sig
+  type db = t
+
+  type t = Insert of Insert.t | Update of Update.t | Delete of Delete.t
+
+  val fmt : db:db -> Format.formatter -> t -> unit
+
+  val exec_multi : db:db -> t list -> unit
 end

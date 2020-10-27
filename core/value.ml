@@ -36,34 +36,19 @@ class virtual dbvalue = object (self)
   method virtual nfields : int
   method virtual ntuples : int
   method virtual fname : int -> string
-  method virtual get_all_lst : string list list
   method map : 'a. ((int -> string) -> 'a) -> 'a list = fun f ->
-      let max = self#ntuples in
-      let rec do_map n acc =
-    if n < max
-    then (
-      do_map (n+1) (f (self#getvalue n)::acc)
-     )
-    else acc
-      in do_map 0 []
+      List.init (self#ntuples) (fun i -> f (self#getvalue i))
   method map_array : 'a. (string array -> 'a) -> 'a list = fun f ->
-      let max = self#ntuples in
-      let rec do_map n acc =
-    if n < max
-    then (
-      do_map (n+1) (f (self#gettuple n)::acc)
-     )
-    else acc
-      in do_map 0 []
+      List.init (self#ntuples) (fun i -> f (self#gettuple i))
   method fold_array : 'a. (string array -> 'a -> 'a) -> 'a -> 'a = fun f x ->
       let max = self#ntuples in
       let rec do_fold n acc =
-    if n < max
-    then (
-      do_fold (n+1) (f (self#gettuple n) acc)
-     )
-    else acc
-      in do_fold 0 x        method virtual map : 'a. ((int -> string) -> 'a) -> 'a list
+        if n < max
+        then (
+          do_fold (n+1) (f (self#gettuple n) acc)
+        )
+        else acc
+      in do_fold 0 x
   method virtual getvalue : int -> int -> string
   method virtual gettuple : int -> string array
   method virtual error : string
@@ -74,16 +59,13 @@ class virtual database = object(self)
   method virtual escape_string : string -> string
   method virtual quote_field : string -> string
   method virtual exec : string -> dbvalue
-  method make_insert_query : (string * string list * string list list) -> string =
-    fun (table_name, field_names, vss) ->
-      "insert into " ^ table_name ^
-        "("^String.concat "," field_names ^") values "^
-        String.concat "," (List.map (fun vs -> "(" ^ String.concat "," vs ^")") vss)
-  method make_insert_returning_query : (string * string list * string list list * string) -> string list =
-    fun _ ->
+  method make_insert_returning_query : string -> Sql.query -> string list =
+    fun _ _ ->
     raise (raise (internal_error ("insert ... returning is not yet implemented for the database driver: "^self#driver_name())))
   method virtual supports_shredding : unit -> bool
 
+  method string_of_query ?(range=None) =
+    Sql.string_of_query ~range self#quote_field
 end
 
 let equal_database db1 db2 = db1 == db2
@@ -191,7 +173,7 @@ let split_html : xml -> xml * xml =
   | [Node ("body", xs)] -> [], xs
   | xs -> [], xs
 
-type table = (database * string) * string * string list list * Types.row
+type table = (database * string) * string * string list list * Types.row'
   [@@deriving show]
 
 type primitive_value_basis =  [
@@ -605,7 +587,8 @@ module Eff_Handler_Continuation = struct
       type trap_result = (v, result) Trap.result
 
       let return k h v =
-        let ((var,_), comp) = h.return in
+        let (b, comp) = h.return in
+        let var = Var.var_of_binder b in
         E.computation (Env.bind var (v, Scope.Local) h.env) k comp
 
       let rec apply ~env k v =
@@ -660,8 +643,9 @@ module Eff_Handler_Continuation = struct
         let rec handle k' = function
           | ((User_defined h, pk) :: k) ->
              begin match StringMap.lookup opname h.cases with
-             | Some ((var, _), _, comp)
+             | Some (b, _, comp)
                   when session_exn_enabled && opname = session_exception_operation ->
+                let var = Var.var_of_binder b in
                 let continuation_thunk =
                   fun () -> E.computation (Env.bind var (arg, Scope.Local) h.env) k comp
                 in
@@ -671,7 +655,8 @@ module Eff_Handler_Continuation = struct
                       frames = comps;
                       continuation_thunk = continuation_thunk
                   })
-             | Some ((var, _), resumeb, comp) ->
+             | Some (b, resumeb, comp) ->
+                let var = Var.var_of_binder b in
                 let env =
                   let resume =
                     match h.depth with
@@ -725,7 +710,7 @@ module Continuation
 
 type t = [
 | primitive_value
-| `Lens of Lens.Value.t
+| `Lens of Lens.Database.t * Lens.Value.t
 | `List of t list
 | `Record of (string * t) list
 | `Variant of string * t
@@ -790,7 +775,7 @@ let rec p_value (ppf : formatter) : t -> 'a = function
                              else
                                fprintf ppf "fun"
   | `Socket _ -> fprintf ppf "<socket>"
-  | `Lens l -> fprintf ppf "(%a)" Lens.Value.pp l
+  | `Lens (_,l) -> fprintf ppf "(%a)" Lens.Value.pp l
   | `Table (_, name, _, _) -> fprintf ppf "(table %s)" name
   | `Database (_, params) -> fprintf ppf "(database %s" params
   | `SessionChannel (ep1, ep2) ->
@@ -801,7 +786,7 @@ let rec p_value (ppf : formatter) : t -> 'a = function
      fprintf ppf "Spawn location: client %s" (ClientID.to_string cid)
   | `SpawnLocation `ServerSpawnLoc ->
      fprintf ppf "Spawn location: server"
-  | `XML xml -> p_xmlitem ~close_tags:false ppf xml
+  | `XML xml -> fprintf ppf "@[<hv>%a@]" (p_xmlitem ~close_tags:false) xml
   | `Continuation cont -> fprintf ppf "Continuation%s" (Continuation.to_string cont)
   | `Resumption _res -> fprintf ppf "Resumption"
   | `AccessPointID (`ClientAccessPoint (cid, apid)) ->
@@ -878,9 +863,15 @@ let string_of_pretty pretty_fun arg : string =
   let b = Buffer.create 200 in
   let f = Format.formatter_of_buffer b in
   let (out_string, _out_flush) = pp_get_formatter_output_functions f () in
+  (* We set margin/max indent to absurdly large values to avoid the need
+     for newlines. *)
+  pp_set_margin f 1000000;
+  pp_set_max_indent f 990000;
   (* Redefine the meaning of the pretty printing functions. The idea
      is to ignore newlines introduced by pretty printing as well as
-     indentation. *)
+     indentation.
+     Newlines can arise as a result of space hints so we need to generate
+     at least one space for a newline. *)
   let existing_functions = pp_get_formatter_out_functions f () in
   let out_functions =
     let one_space = function
@@ -888,9 +879,9 @@ let string_of_pretty pretty_fun arg : string =
       | _ -> out_string " " 0 1
     in
     { existing_functions with
-        out_newline = ignore;
-        out_spaces = one_space;
-        out_indent = one_space }
+        out_newline = (fun () -> one_space 1);
+        out_spaces  = one_space;
+        out_indent  = one_space }
   in
   pp_set_formatter_out_functions f out_functions;
   pretty_fun f arg;
@@ -1096,23 +1087,18 @@ and xmlitem_of_variant =
 
 (* Some utility functions for databases used by insertion *)
 
-let row_columns_values db v =
-  let escaped_string_of_value db =
-    function
-      | `String s -> "\'" ^ db # escape_string s ^ "\'"
-      | v -> string_of_value v
-  in
+let row_columns_values v =
   let row_columns : t -> string list = function
     | `List ((`Record fields)::_) -> List.map fst fields
     | v -> raise (type_error ~action:"form query columns from" "a list of records" v)
   in
-  let row_values db = function
+  let row_values = function
     | `List records ->
     (List.map (function
-          | `Record fields -> List.map (escaped_string_of_value db -<- snd) fields
+          | `Record fields -> List.map snd fields
           | v -> raise (type_error ~action:"form query field from" "record" v)) records)
     | v -> raise (type_error ~action:"form query row from" "list" v)
   in
-  (row_columns v, row_values db v)
+  (row_columns v, row_values v)
 
 

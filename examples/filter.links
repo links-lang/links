@@ -133,13 +133,15 @@ fun fetchResults(pred) server {
                      region_id : Int)
                     from db;
 
-  for (w <-- wineTable, i <-- inventoryTable, t <-- wineTypeTable, r <-- regionTable, y <-- wineryTable)
-   where (w.wine_id == i.wine_id &&
-          w.wine_type == t.wine_type_id &&
-          w.winery_id == y.winery_id &&
-          y.region_id == r.region_id &&
-            pred((price=i.cost, year=w.year, wine_type=t.wine_type_id, region=r.region_id)))
+  query {
+    for (w <-- wineTable, i <-- inventoryTable, t <-- wineTypeTable, r <-- regionTable, y <-- wineryTable)
+    where (w.wine_id == i.wine_id &&
+           w.wine_type == t.wine_type_id &&
+           w.winery_id == y.winery_id &&
+           y.region_id == r.region_id &&
+             pred((price=i.cost, year=w.year, wine_type=t.wine_type_id, region=r.region_id)))
     [(name=w.wine_name, wine_type=t.wine_type, region=r.region_name, year=w.year, price=i.cost)]
+  }
 }
 
 
@@ -317,14 +319,18 @@ fun fetchTypesAndRegions() server {
                     from db;
 
   var wineTypes =
-    for (t <-- wineTypeTable)
-     where (t.wine_type <> "All")
-      [(id=t.wine_type_id, name=t.wine_type)];
+    query {
+      for (t <-- wineTypeTable)
+      where (t.wine_type <> "All")
+      [(id=t.wine_type_id, name=t.wine_type)]
+    };
 
   var regions =
-    for (r <-- regionTable)
-     where (r.region_name <> "All")
-      [(id=r.region_id, name=r.region_name)];
+    query {
+      for (r <-- regionTable)
+      where (r.region_name <> "All")
+      [(id=r.region_id, name=r.region_name)]
+    };
 
   (wineTypes, regions)
 }

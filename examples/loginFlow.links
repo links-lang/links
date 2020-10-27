@@ -48,7 +48,7 @@ mutual {
 
   sig logout : () ~> ()
   fun logout() {
-    setCookie("loginname", "");
+    setCookie("loginname", "")
   }
 
   sig logoutLink : (() ~> Page) ~> Xml

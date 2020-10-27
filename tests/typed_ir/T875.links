@@ -1,0 +1,9 @@
+# #sig linFork : forall s::Session,e::Row.((s) ~e~@ ()) ~e~> ~s
+sig linFork : forall s::Session,e::Row.((s) {SessionFail:[||]}~@ ()) ~e~> ~s
+fun linFork(f) {
+  var ap = new();
+  var _ = spawnAngel {
+    f(accept(ap))
+  };
+  request(ap)
+}

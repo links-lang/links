@@ -14,6 +14,7 @@ type sugar_error_stage =
   | CheckXML
   | DesugarInners
   | DesugarModules
+  | DesugarSwitchFuns
 
 
 exception RuntimeError of string
@@ -55,5 +56,5 @@ val driver_locate_failure : string -> exn
 val illformed_plugin_description : string -> exn
 val dependency_load_failure : string -> Dynlink.error -> exn
 val load_failure : string -> Dynlink.error -> exn
-val client_call_outside_webmode : string -> exn
+val forbidden_client_call : string -> string -> exn
 val rethrow_errors_if_better_position : Position.t -> ('a -> 'b) -> 'a -> 'b

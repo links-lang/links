@@ -59,17 +59,14 @@ let unwrap_def (bndr, linearity, (tyvars, lam), location) =
   let ft = Binder.to_type bndr in
   let rt = TypeUtils.return_type ft in
   let lam =
-    let rec make_lam t : funlit -> funlit =
-      function
-        | ([_ps], _body) as lam -> lam
-        | (ps::pss, body) ->
-            let g = gensym ~prefix:"_fun_" () in
-            let rt = TypeUtils.return_type t in
-              ([ps], block
-                  ([fun_binding' ~linearity ~location (binder ~ty:t g)
-                                 (make_lam rt (pss, body))],
-                   freeze_var g))
-        | _, _ -> assert false
+    let rec make_lam t funlit =
+      match funlit with
+        | NormalFunlit ([ps], body) -> NormalFunlit ([ps], body)
+        | NormalFunlit (ps::pss, body) ->
+          let g = gensym ~prefix:"_fun_" () in
+          let rt = TypeUtils.return_type t in
+            NormalFunlit ([ps], block ([fun_binding' ~linearity ~location (binder ~ty:t g) (make_lam rt (NormalFunlit (pss, body)))], freeze_var g))
+        | _ -> assert false
     in make_lam rt lam
   in (binder ~ty:ft f, linearity, (tyvars, lam), location)
 
@@ -94,9 +91,10 @@ object (o : 'self_type)
     let inner_mb     = snd (last argss) in
     let (o, lam, rt) = o#funlit inner_mb lam in
     let ft = List.fold_right (fun (args, mb) rt ->
+                 let open Types in
                  if DeclaredLinearity.is_linear lin
-                 then `Lolli (args, mb, rt)
-                 else `Function (args, mb, rt))
+                 then Lolli    (args, mb, rt)
+                 else Function (args, mb, rt))
                argss rt in
 
     let f = gensym ~prefix:"_fun_" () in
@@ -122,23 +120,25 @@ object (o : 'self_type)
     | FunLit (Some argss, lin, lam, location) ->
        o#desugarFunLit argss lin lam location
     | Section (Section.Project name) | FreezeSection (Section.Project name) ->
+        let open Types in
         let ab, a = Types.fresh_type_quantifier (lin_unl, res_any) in
-        let rhob, (fields, rho, _) = Types.fresh_row_quantifier (lin_unl, res_any) in
-        let effb, eff = Types.fresh_row_quantifier default_effect_subkind in
+        let rhob, row = fresh_row_quantifier (lin_unl, res_any) in
+        let (fields, rho, _) = TypeUtils.extract_row_parts row in
+        let effb, row = fresh_row_quantifier default_effect_subkind in
 
-        let r = `Record (StringMap.add name (`Present a) fields, rho, false) in
+        let r = Record (Row (StringMap.add name (Present a) fields, rho, false)) in
 
         let f = gensym ~prefix:"_fun_" () in
         let x = gensym ~prefix:"_fun_" () in
-        let ft : Types.datatype = `ForAll ([ab; rhob;  effb],
-                                           `Function (Types.make_tuple_type [r], eff, a)) in
+        let ft : datatype = ForAll ( [ab; rhob;  effb]
+                                   , Function (Types.make_tuple_type [r], row, a)) in
 
         let pss = [[variable_pat ~ty:r x]] in
         let body = with_dummy_pos (Projection (var x, name)) in
         let tyvars = List.map SugarQuantifier.mk_resolved [ab; rhob; effb] in
         let e : phrasenode =
           block_node
-            ([fun_binding' ~tyvars:tyvars (binder ~ty:ft f) (pss, body)],
+            ([fun_binding' ~tyvars:tyvars (binder ~ty:ft f) (NormalFunlit (pss, body))],
              freeze_var f)
         in (o, e, ft)
     | e -> super#phrasenode e
@@ -183,13 +183,13 @@ object
     | e -> super#phrasenode e
 
   method! bindingnode = function
-    | Fun { fun_definition = (_, ([_], _)); _ } as b -> super#bindingnode b
+    | Fun { fun_definition = (_, (NormalFunlit ([_], _))); _ } as b -> super#bindingnode b
     | Fun _ -> {< has_no_funs = false >}
     | Funs defs as b ->
         if
           List.exists
             (function
-               | {WithPos.node={ rec_definition = (_, ([_], _)); _ }; _ } -> false
+               | {WithPos.node={ rec_definition = (_, (NormalFunlit ([_], _))); _ }; _ } -> false
                | _ -> true) defs
         then
           {< has_no_funs = false >}

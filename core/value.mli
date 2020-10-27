@@ -11,7 +11,6 @@ class virtual dbvalue :
   object
     method virtual error : string
     method virtual fname : int -> string
-    method virtual get_all_lst : string list list
     method virtual nfields : int
     method virtual ntuples : int
     method map : 'a. ((int -> string) -> 'a) -> 'a list
@@ -28,9 +27,12 @@ class virtual database :
     method virtual escape_string : string -> string
     method virtual quote_field : string -> string
     method virtual exec : string -> dbvalue
-    method make_insert_query : (string * string list * string list list) -> string
-    method make_insert_returning_query : (string * string list * string list list * string) -> string list
+    method make_insert_returning_query :
+      string (* "returning" field *) ->
+      Sql.query ->
+      string list
     method virtual supports_shredding : unit -> bool
+    method string_of_query : ?range:(Sql.range option) -> Sql.query -> string
   end
 
 
@@ -52,7 +54,7 @@ type xmlitem =   Text of string
 and xml = xmlitem list
   [@@deriving show,yojson]
 
-type table = (database * string) * string * string list list * Types.row
+type table = (database * string) * string * string list list * Types.row'
   [@@deriving show]
 
 type primitive_value_basis =  [
@@ -215,7 +217,7 @@ type t = [
 | primitive_value
 | `List of t list
 | `Record of (string * t) list
-| `Lens of Lens.Value.t
+| `Lens of Lens.Database.t * Lens.Value.t
 | `Variant of string * t
 | `FunctionPtr of (Ir.var * t option)
 | `PrimitiveFunction of string * Var.var option
@@ -295,4 +297,4 @@ val is_channel : t -> bool
 
 val session_exception_operation : string
 
-val row_columns_values : database -> t -> string list * string list list
+val row_columns_values : t -> string list * t list list

@@ -12,13 +12,13 @@ let matches_change changes =
   in
   List.map ~f:is_changed changes |> Phrase.List.fold_or_opt
 
-let delta_merge_affected lens data =
+let delta_merge_affected ~db lens data =
   let sort = Value.sort lens in
   let fun_deps = Sort.fds sort in
   let changelist = Sorted.calculate_fd_changelist data ~fun_deps in
   (* query relevant rows in database *)
   let predicate = matches_change changelist in
-  let res = Value.lens_get_select_opt lens ~predicate in
+  let res = Value.lens_get_select_opt ~db lens ~predicate in
   let res =
     Sorted.construct_cols
       ~columns:(Value.cols_present_aliases lens)
@@ -30,30 +30,30 @@ let delta_merge_affected lens data =
   in
   Sorted.merge rel_merge (Sorted.negate res)
 
-let query_join_records lens set on =
+let query_join_records ~db lens set on =
   let proj = Sorted.project_onto set ~columns:on in
   let recs = Sorted.all_values proj in
   let predicate = Phrase.Option.in_expr on recs in
-  let records = Value.lens_get_select_opt lens ~predicate in
+  let records = Value.lens_get_select_opt ~db lens ~predicate in
   Sorted.construct_cols ~columns:(Value.cols_present_aliases lens) ~records
 
-let query_project_records lens set key drop =
+let query_project_records ~db lens set key drop =
   let set = Sorted.force_positive set in
   let proj = Sorted.project_onto set ~columns:key in
   let recs = Sorted.all_values proj in
   let predicate = Phrase.Option.in_expr key recs in
-  let records = Value.lens_get_select_opt lens ~predicate in
+  let records = Value.lens_get_select_opt ~db lens ~predicate in
   let records =
     Sorted.construct_cols ~columns:(Value.cols_present_aliases lens) ~records
   in
   Sorted.project_onto records ~columns:(List.append key drop)
 
-let lens_put_set_step ~env lens delt
+let lens_put_set_step ~db ~env lens delt
     (fn : env:env -> Value.t -> Sorted.t -> env) =
   match lens with
   | Lens _ -> fn ~env lens delt
   | LensDrop { lens = l; drop; key; default; _ } ->
-      let relevant = query_project_records l delt [ key ] [ drop ] in
+      let relevant = query_project_records ~db l delt [ key ] [ drop ] in
       let delt =
         Sorted.relational_extend_exn delt ~key ~by:drop ~default ~data:relevant
       in
@@ -68,8 +68,8 @@ let lens_put_set_step ~env lens delt
       let proj2 =
         Sorted.project_onto delt ~columns:(Sort.cols_present_aliases sort2)
       in
-      let delta_m0 = delta_merge_affected left proj1 in
-      let delta_n0 = delta_merge_affected right proj2 in
+      let delta_m0 = delta_merge_affected ~db left proj1 in
+      let delta_n0 = delta_merge_affected ~db right proj2 in
       let on' = List.map ~f:(fun a -> (a, a, a)) cols_simp in
       let delta_l =
         Sorted.merge
@@ -77,16 +77,16 @@ let lens_put_set_step ~env lens delt
              (Sorted.join_exn delta_m0 delta_n0 ~on:on')
              (Sorted.merge
                 (Sorted.join_exn delta_m0
-                   (query_join_records right delta_m0 cols_simp)
+                   (query_join_records ~db right delta_m0 cols_simp)
                    ~on:on')
                 (Sorted.join_exn delta_n0
-                   (query_join_records left delta_n0 cols_simp)
+                   (query_join_records ~db left delta_n0 cols_simp)
                    ~on:on')))
           (Sorted.negate delt)
       in
       let j =
         Sorted.project_onto
-          (Sorted.merge (query_join_records lens delta_l cols_simp) delt)
+          (Sorted.merge (query_join_records ~db lens delta_l cols_simp) delt)
           ~columns:cols_simp
       in
       let delta_l_l = Sorted.join_exn delta_l j ~on:on' in
@@ -112,7 +112,7 @@ let lens_put_set_step ~env lens delt
   | LensSelect { lens; predicate; _ } ->
       let delta_m1 =
         Sorted.merge
-          (delta_merge_affected
+          (delta_merge_affected ~db
              (Value.lens_select_internal lens
                 ~predicate:(Phrase.not' predicate))
              delt)
@@ -124,9 +124,11 @@ let lens_put_set_step ~env lens delt
       fn ~env lens new_delta
   | _ -> failwith "Unsupport lens."
 
-let lens_get_delta lens data =
+let lens_get_delta ~db lens data =
   let columns = Value.cols_present_aliases lens in
-  let orig = Sorted.construct_cols ~columns ~records:(Value.lens_get lens) in
+  let orig =
+    Sorted.construct_cols ~columns ~records:(Value.lens_get ~db lens)
+  in
   let data =
     Sorted.merge
       (Sorted.construct_cols ~columns ~records:data)
@@ -134,9 +136,9 @@ let lens_get_delta lens data =
   in
   data
 
-let lens_put_step lens data (fn : env:env -> Value.t -> Sorted.t -> env) =
-  let data = lens_get_delta lens data in
-  lens_put_set_step lens data fn
+let lens_put_step ~db lens data (fn : env:env -> Value.t -> Sorted.t -> env) =
+  let data = lens_get_delta ~db lens data in
+  lens_put_set_step ~db lens data fn
 
 let rec take (l : 'a list) (n : int) =
   match n with
@@ -162,18 +164,8 @@ end
 
 module MapBoolList = Lens_map.Make (OrderedBoolList)
 
-let apply_delta ~table ~database:db ~sort ~env data =
+let apply_delta ~table ~db ~sort ~env data =
   let { Database.Table.name = table; keys } = table in
-  let exec cmd =
-    let open Database in
-    Debug.print cmd;
-    Statistics.time_query (fun () -> db.execute cmd)
-  in
-  let exec_select cmd ~field_types =
-    let open Database in
-    Debug.print cmd;
-    Statistics.time_query (fun () -> db.execute_select cmd ~field_types)
-  in
   (* get the first key, otherwise return an empty key *)
   let key =
     match keys with
@@ -254,34 +246,30 @@ let apply_delta ~table ~database:db ~sort ~env data =
            Phrase.equal (Phrase.var k) (Phrase.Constant.of_value v))
     |> Phrase.List.fold_and
   in
-  let fmt_cmd_sep f () = Format.pp_print_string f ";\n" in
-  let fmt_delete f row =
-    let predicate = prepare_where row in
-    let delete = { Database.Delete.table; predicate; db } in
-    Database.Delete.fmt f delete
-  in
-  let fmt_update f row =
-    let predicate = prepare_where row in
-    let set = List.zip_exn columns row |> List.drop ~n:(List.length key) in
-    let update = { Database.Update.table; predicate; db; set } in
-    Database.Update.fmt f update
-  in
-  let fmt_insert f values =
+  (* Format and execute commands that don't require returning output. *)
+  let insert_cmd values =
     let values = [ values ] in
     let returning = [] in
-    let insert = { Database.Insert.table; columns; values; db; returning } in
-    Database.Insert.fmt f insert
+    Database.Change.Insert { Database.Insert.table; columns; values; returning }
   in
-  let fmt_insert_cmds = List.map ~f:(fun v -> (fmt_insert, v)) insert_vals in
-  let fmt_delete_cmds = List.map ~f:(fun v -> (fmt_delete, v)) delete_vals in
-  let fmt_update_cmds = List.map ~f:(fun v -> (fmt_update, v)) update_vals in
-  let fmt_fmt f (fmt, v) = fmt f v in
-  let fmt_all f () =
-    Format.pp_print_list ~pp_sep:fmt_cmd_sep fmt_fmt f
-    @@ List.flatten [ fmt_insert_cmds; fmt_delete_cmds; fmt_update_cmds ]
+  let delete_cmd row =
+    let predicate = prepare_where row in
+    Database.Change.Delete { Database.Delete.table; predicate }
   in
-  let cmds = Format.asprintf "%a%!" fmt_all () in
-  if String.equal "" cmds |> not then exec cmds;
+  let update_cmd row =
+    let predicate = prepare_where row in
+    let set = List.zip_exn columns row |> List.drop ~n:(List.length key) in
+    Database.Change.Update { Database.Update.table; predicate; set }
+  in
+  let cmds =
+    List.concat
+      [
+        List.map ~f:insert_cmd insert_vals;
+        List.map ~f:delete_cmd delete_vals;
+        List.map ~f:update_cmd update_vals;
+      ]
+  in
+  Database.Change.exec_multi ~db cmds;
   (* generate commands where we need  the returning id *)
   List.fold_right
     (fun (k, values_all) env ->
@@ -300,16 +288,13 @@ let apply_delta ~table ~database:db ~sort ~env data =
       let columns =
         columns |> List.filter (fun v -> String.Set.mem v returnings |> not)
       in
-      let insert =
-        { Database.Insert.table; columns; values; db; returning }
-        |> Format.asprintf "%a" Database.Insert.fmt
-      in
+      let insert = { Database.Insert.table; columns; values; returning } in
       let field_types =
         returning_cols
         |> List.map ~f:(fun (_, c) -> (Column.name c, Column.typ c))
       in
       let res =
-        exec_select insert ~field_types
+        Database.Insert.exec_insert_returning ~db ~field_types insert
         |> List.map ~f:(fun v ->
                Phrase_value.unbox_record v |> List.map ~f:(fun (_, v) -> v))
       in
@@ -322,7 +307,7 @@ let apply_delta ~table ~database:db ~sort ~env data =
                 let c1 = Phrase_value.unbox_serial_newkeymapped c1 in
                 let c2 = Phrase_value.unbox_serial_key c2 in
                 Int.Map.add c1 c2 acc)
-              scolumns r2 acc)
+              returning_cols r2 acc)
           values_all res env
       in
       env)
@@ -371,13 +356,12 @@ let map_keys (delta : Sorted.t) =
       | _ -> v)
     delta
 
-let lens_put (lens : Value.t) (data : Phrase_value.t list) =
+let lens_put ~db (lens : Value.t) (data : Phrase_value.t list) =
   let env = Int.Map.empty in
   let rec do_step_rec ~env lens delt =
     match lens with
-    | Lens { table; database; sort } ->
-        apply_delta ~table ~database ~sort ~env delt
-    | _ -> lens_put_set_step lens delt ~env do_step_rec
+    | Lens { table; sort } -> apply_delta ~table ~db ~sort ~env delt
+    | _ -> lens_put_set_step ~db lens delt ~env do_step_rec
   in
-  let delta = lens_get_delta lens data |> map_keys in
+  let delta = lens_get_delta ~db lens data |> map_keys in
   do_step_rec ~env lens delta |> ignore

@@ -45,7 +45,7 @@ BUILD_DIR:=$(ROOT)/_build
 # The build command and some standard build system flags
 BUILD=dune build
 SOURCES=links
-DB_SOURCES=links-postgresql,links-sqlite3
+DB_SOURCES=links-postgresql,links-sqlite3,links-mysql
 # Note: this relies on lazy expansion of `SOURCES'.
 COMMON_FLAGS=--only-packages $(SOURCES) --build-dir=$(BUILD_DIR)
 DEV_FLAGS=$(COMMON_FLAGS) --profile=dev
@@ -126,6 +126,15 @@ tests: links
 	$(eval OCAMLRUNPARAM="")
 	$(eval CAMLRUNPARAM="")
 	./run-tests
+
+# Runs the database test suite. This calls run-database-tests
+# with the --local flag ensuring that a local config file is used
+# if available.
+.PHONY: tests
+database-tests: links
+	./run-tests database
+	./run-tests shredding
+	./run-tests relational-lenses
 
 # Cleans the project directory.
 .PHONY: clean

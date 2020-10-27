@@ -15,7 +15,7 @@ open Ir
 open Var
 
 let show_pattern_compilation
-  = Settings.(flag "show_pattern_compilation2" (* There does not seem to be a "show_pattern_compilation1"... *)
+  = Settings.(flag "show_pattern_compilation"
               |> convert parse_bool
               |> sync)
 
@@ -108,7 +108,7 @@ let rec desugar_pattern : Types.row -> Sugartypes.Pattern.with_pos -> Pattern.t 
       assert (Sugartypes.Binder.has_type bndr);
       let name = Sugartypes.Binder.to_name bndr in
       let t = Sugartypes.Binder.to_type bndr in
-      let xb, x = Var.fresh_var (t, name, Scope.Local) in
+      let xb, x = Var.(fresh_var (make_local_info (t, name))) in
       xb, (NEnv.bind name x nenv, TEnv.bind x t tenv, eff)
     in
       let open Sugartypes.Pattern in
@@ -183,32 +183,28 @@ sig
 end
   =
 struct
-  (* let lookup_type var (_nenv, tenv, _eff) = *)
-  (*   TEnv.lookup tenv var *)
-
-  let lookup_name name (nenv, _tenv, _eff) =
-    NEnv.find name nenv
+  open PrimaryKind
 
   let lookup_effects (_nenv, _tenv, eff) = eff
 
-  let nil env t : value =
-    TApp (Variable (lookup_name "Nil" env),
-           [`Type t])
+  let nil _env t : value =
+    TApp (Variable (NEnv.find "Nil" Lib.nenv),
+           [(Type, t)])
 
   let list_head env t : value -> tail_computation = fun v ->
     let eff = lookup_effects env in
       Apply
         (TApp
-           (Variable (lookup_name "hd" env),
-            [`Type t; `Row eff]),
+           (Variable (NEnv.find "$$hd" Lib.nenv),
+            [(Type, t); (Row, eff)]),
          [v])
 
   let list_tail env t : value -> tail_computation = fun v ->
     let eff = lookup_effects env in
       Apply
         (TApp
-           (Variable (lookup_name "tl" env),
-            [`Type t; `Row eff]),
+           (Variable (NEnv.find "$$tl" Lib.nenv),
+            [(Type, t); (Row, eff)]),
          [v])
 end
 open CompileLists
@@ -219,21 +215,17 @@ sig
 end
   =
 struct
-  (* let lookup_type var (_nenv, tenv, _eff) = *)
-  (*   TEnv.lookup tenv var *)
-
-  let lookup_name name (nenv, _tenv, _eff) =
-    NEnv.find name nenv
+  open PrimaryKind
 
   let lookup_effects (_nenv, _tenv, eff) = eff
 
-  let eq env t : value -> value -> value = fun v1 v2 ->
+  let eq env t v1 v2 =
     let eff = lookup_effects env in
-      ApplyPure
-        (TApp
-           (Variable (lookup_name "==" env),
-            [`Type t; `Row eff]),
-         [v1; v2])
+    ApplyPure
+      (TApp
+         (Variable (NEnv.find "==" Lib.nenv),
+          [(Type, t); (Row, eff)]),
+       [v1; v2])
 end
 open CompileEq
 
@@ -289,7 +281,7 @@ let let_pattern : raw_env -> Pattern.t -> value * Types.datatype -> computation 
                   let cases' = StringMap.add label (case_binder, body) cases in
                   let t' =
                     let row = TypeUtils.extract_row t in
-                    `Variant (Types.row_with (label, `Absent) row)
+                    Types.Variant (Types.row_with (label, Types.Absent) row)
                   in
                   (cases', t'))
                 names (StringMap.empty, t)
@@ -679,8 +671,8 @@ and match_variant
                    let _, t = TypeUtils.split_variant_type name t in t) cs t in
               begin
                 match default_type with
-                  | `Variant row
-                  | `Choice row ->
+                  | Types.Variant row
+                  | Types.Choice row ->
                       if Types.is_empty_row row && Types.is_closed_row row then
                         ([], Case (Variable var, cases, None))
                       else
@@ -688,7 +680,7 @@ and match_variant
                         let default_env = bind_type default_variable default_type env in
                         let default_env =
                           bind_context
-                            var
+                            default_variable
                             (Pattern.CNVariant cs, Variable default_variable)
                             default_env
                         in
@@ -898,7 +890,7 @@ and match_record
         let bindings =
           let qs =
             match restt with
-              | `ForAll (qs, _) -> qs
+              | Types.ForAll (qs, _) -> qs
               | _ -> [] in
           let tyargs = List.map Types.type_arg_of_quantifier qs in
             Let (restb, (qs, Return (tapp (Erase (names, Variable var), tyargs)))) :: bindings in
@@ -936,7 +928,7 @@ let handle_parameter_pattern : raw_env -> (Pattern.t * Types.datatype) -> Ir.com
       bs @ [letm (pb', tc)]
     in
     let inner_bindings =
-         fun cont -> let_pattern env pat (Variable p, t) (cont, `Not_typed)
+         fun cont -> let_pattern env pat (Variable p, t) (cont, Types.Not_typed)
     in
     (pb, Variable p'), (inner_bindings, outer_bindings)
 
@@ -980,26 +972,26 @@ let compile_handle_cases
     else begin
         let (comp_eff, comp_ty, _, _) = Sugartypes.(desc.shd_types) in
         let variant_type =
-          let (fields,_,_) = comp_eff in
+          let (fields,_,_) = comp_eff |> TypeUtils.extract_row_parts in
           let fields' =
             StringMap.filter
               (fun _ ->
                 function
-                | `Present _ -> true
+                | Types.Present _ -> true
                 | _ -> false)
               fields
           in
           let fields'' =
             StringMap.map
               (function
-              | `Present t ->
+              | Types.Present t ->
                  begin match TypeUtils.concrete_type t with
-                 | `Function (domain, _, _) ->
-                    let (fields, _, _) = TypeUtils.extract_row domain in
+                 | Types.Function (domain, _, _) ->
+                    let (fields, _, _) = TypeUtils.extract_row domain |> TypeUtils.extract_row_parts in
                     let arity = StringMap.size fields in
                     if arity = 1 then
                       match StringMap.find "1" fields with
-                      | `Present t -> t
+                      | Types.Present t -> t
                       | _ -> assert false
                     else
                       domain (* n-ary operation *)
@@ -1070,7 +1062,7 @@ let compile_handle_cases
             match StringMap.find effname continuation_binders with
             | [] ->
                let resume =
-                 Var.(make_local_info ->- fresh_binder) (`Not_typed, "_resume")
+                 Var.(make_local_info ->- fresh_binder) (Types.Not_typed, "_resume")
                in
                (x, resume, body)
             | [resume] -> (* micro-optimisation: if there is only one
@@ -1125,16 +1117,18 @@ let match_choices : var -> clause list -> bound_computation =
                               List.fold_left
                                 (fun cases -> function
                                   | ([(annotation, pattern)], body) ->
-                                    let (name, ((x, _) as b)) =
+                                    let (name, b) =
                                       match pattern with
                                       | Pattern.Variant (name, Pattern.Variable b) -> (name, b)
                                       | Pattern.Variant (name, Pattern.Any)        ->
-                                        let bt = TypeUtils.choice_at name t in
-                                        (name, Var.fresh_binder (bt, "_", Scope.Local))
+                                         let bt = TypeUtils.choice_at name t in
+                                         let info = Var.make_local_info (bt, "_") in
+                                         (name, Var.fresh_binder info)
                                       | _ ->
                                         (* TODO: give a more useful error message - including the position
                                            (it may be necessary to detect the error earlier on) *)
-                                        failwith ("Only choice patterns are supported in choice compilation") in
+                                         failwith ("Only choice patterns are supported in choice compilation") in
+                                    let x = Var.var_of_binder b in
                                     let body = apply_annotation (Variable x) (annotation, body) in
                                     StringMap.add name (b, body env) cases
                                   | _ -> assert false)
@@ -1152,4 +1146,3 @@ let compile_choices
       Debug.if_set (show_pattern_compilation)
         (fun () -> "Compiled choices: "^(string_of_computation result));
       result
-

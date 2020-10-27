@@ -1,29 +1,29 @@
-DROP TABLE IF EXISTS Albums;
+DROP TABLE IF EXISTS albums;
 
-CREATE TABLE Albums (
-    Album VARCHAR(50) NOT NULL,
-    Quantity INT NOT NULL,
-    PRIMARY KEY (Album)
+CREATE TABLE albums (
+    album VARCHAR(50) NOT NULL,
+    quantity INT NOT NULL,
+    PRIMARY KEY (album)
 );
 
-DROP TABLE IF EXISTS Tracks;
+DROP TABLE IF EXISTS tracks;
 
-CREATE TABLE Tracks (
-    Track VARCHAR(50) NOT NULL,
-    Date INT NOT NULL,
-    Rating INT NOT NULL,
-    Album VARCHAR(50) NOT NULL,
-    PRIMARY KEY (Track, Album)
+CREATE TABLE tracks (
+    track VARCHAR(50) NOT NULL,
+    date INT NOT NULL,
+    rating INT NOT NULL,
+    album VARCHAR(50) NOT NULL,
+    PRIMARY KEY (track, album)
 );
 
-INSERT INTO Albums (Album, Quantity) VALUES
+INSERT INTO albums (album, quantity) VALUES
     ('Disintegration', 6),
     ('Show', 3),
     ('Galore', 1),
     ('Paris', 4),
     ('Wish', 5);
 
-INSERT INTO Tracks (Track, Date, Rating, Album) VALUES
+INSERT INTO tracks (track, date, rating, album) VALUES
     ('Lullaby', 1989, 3, 'Galore'),
     ('Lullaby', 1989, 3, 'Show'),
     ('Lovesong', 1989, 5, 'Galore'),

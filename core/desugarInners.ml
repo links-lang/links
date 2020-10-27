@@ -41,9 +41,9 @@ let rec add_extras in_fun tyvars extras tyargs =
              else
                let open CommonTypes.PrimaryKind in
                match SugarQuantifier.get_resolved_exn sq with
-               | _, (Type, sk) -> `Type (Types.fresh_type_variable sk)
-               | _, (Row, sk) -> `Row (Types.make_empty_open_row sk)
-               | _, (Presence, sk) -> `Presence (Types.fresh_presence_variable sk)
+               | _, (Type, sk)     -> Type, Types.fresh_type_variable sk
+               | _, (Row, sk)      -> Row, Types.make_empty_open_row sk
+               | _, (Presence, sk) -> Presence, Types.fresh_presence_variable sk
      in q :: add_extras in_fun sqs extras tyargs
   | _::qs, Some i::extras -> List.nth tyargs i :: add_extras in_fun qs extras tyargs
   | _, _ -> raise (internal_error "Mismatch in number of quantifiers and type arguments")
@@ -172,7 +172,8 @@ object (o : 'self_type)
                let o = o#with_visiting (StringSet.add (Binder.to_name rec_binder) visiting_funs) in
                let (o, tyvars) = o#quantifiers tyvars in
                let (o, inner) = o#datatype inner in
-               let inner_effects = TransformSugar.fun_effects inner (fst lam) in
+               let lam_in = Sugartypes.get_normal_funlit lam in
+               let inner_effects = TransformSugar.fun_effects inner (fst lam_in) in
                let (o, lam, _) = o#funlit inner_effects lam in
                let o = o#restore_quantifiers outer_tyvars in
                let o = o#with_visiting visiting_funs in

@@ -243,7 +243,7 @@ fun updatePoints(startx, starty, endx, endy){
     setValue(startx, "start-x", intToString);
     setValue(starty, "start-y", intToString);
     setValue(endx, "end-x", intToString);
-    setValue(endy, "end-y", intToString);
+    setValue(endy, "end-y", intToString)
 }
 
 sig getPoints: () ~> Option((Point, Point))
@@ -270,7 +270,7 @@ fun drawHorizontalLine(start, end, color){
         if (n > 0) aux(n -1, (x = start.x + (diff.x / absolute(diff.x)), y = start.y))
         else ()
     }
-    aux(absolute(diff.x), start);
+    aux(absolute(diff.x), start)
 }
 
 sig drawVerticalLine: (Point, Point, String) {Yield |e}~> ()
@@ -285,7 +285,7 @@ fun drawVerticalLine(start, end, color){
         if (n > 0) aux(n -1, (x = start.x, y = start.y + (diff.y / absolute(diff.y))))
         else ()
     }
-    aux(absolute(diff.y), start);
+    aux(absolute(diff.y), start)
 }
 
 sig drawLineInColor: (Point, Point, String) {Yield |e}~> ()

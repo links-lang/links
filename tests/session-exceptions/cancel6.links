@@ -5,10 +5,11 @@ fun go() {
     var s = fork (fun(s) {
       var t = accept(ap);
       raise;
-      ignore(send(linfun() { send(5, t) }, s))
+      close(send(linfun() { send(5, t) }, s))
     });
     var t = request(ap);
-    var (res, _) = receive(t);
+    var (res, t) = receive(t);
+    close(t);
     cancel(s);
     res
   } as (x) in {

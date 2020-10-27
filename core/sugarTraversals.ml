@@ -559,9 +559,18 @@ class map =
           let _x_i1 = o#phrase _x_i1 in Table ((_x, _x_i1))
 
     method funlit : funlit -> funlit =
-      fun (_x, _x_i1) ->
-        let _x = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
-        let _x_i1 = o#phrase _x_i1 in (_x, _x_i1)
+      fun f ->
+        match f with
+          | NormalFunlit (_x, _x_i1) ->
+            let _x = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
+            let _x_i1 = o#phrase _x_i1 in NormalFunlit (_x, _x_i1)
+          | SwitchFunlit (pat, body) ->
+            let pat = o#list (fun o -> o#list (fun o -> o#pattern)) pat in
+            let body =
+              o#list (fun o (p, c) ->
+                let p = o#pattern p in
+                let c = o#phrase c in (p, c)) body in
+            SwitchFunlit (pat, body)
 
     method handle_params : handler_parameterisation -> handler_parameterisation =
       fun { shp_bindings; shp_types }->
@@ -803,10 +812,12 @@ class map =
     method typ : Types.datatype -> Types.datatype = o#unknown
     method type_row : Types.row -> Types.row = o#unknown
     method type_field_spec : Types.field_spec -> Types.field_spec = o#unknown
-    method tyarg : tyarg -> tyarg = function
-      | `Type t -> `Type (o#typ t)
-      | `Row r -> `Row (o#type_row r)
-      | `Presence p -> `Presence (o#type_field_spec p)
+    method tyarg : tyarg -> tyarg =
+      let open PrimaryKind in
+      function
+      | Type, t     -> Type, o#typ t
+      | Row, r      -> Row, o#type_row r
+      | Presence, p -> Presence, o#type_field_spec p
 
     method unknown : 'a. 'a -> 'a = fun x -> x
   end
@@ -1285,9 +1296,18 @@ class fold =
           let o = o#pattern _x in let o = o#phrase _x_i1 in o
 
     method funlit : funlit -> 'self_type =
-      fun (_x, _x_i1) ->
-        let o = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
-        let o = o#phrase _x_i1 in o
+      fun f ->
+        match f with
+          | NormalFunlit (_x, _x_i1) ->
+            let o = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
+            let o = o#phrase _x_i1 in o
+          | SwitchFunlit (pat, body) ->
+            let o = o#list (fun o -> o#list (fun o -> o#pattern)) pat in
+            let o = o#list (fun o (p, c) ->
+              let o = o#pattern p in
+              let o = o#phrase c in o) body in
+            o
+
 
     method handle_params : handler_parameterisation -> 'self_type =
       fun params ->
@@ -2113,9 +2133,19 @@ class fold_map =
           let (o, _x_i1) = o#phrase _x_i1 in (o, (Table ((_x, _x_i1))))
 
     method funlit : funlit -> ('self_type * funlit) =
-      fun (_x, _x_i1) ->
-        let (o, _x) = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
-        let (o, _x_i1) = o#phrase _x_i1 in (o, (_x, _x_i1))
+      fun f ->
+        match f with
+          | NormalFunlit (_x, _x_i1) ->
+            let (o, _x) = o#list (fun o -> o#list (fun o -> o#pattern)) _x in
+            let (o, _x_i1) = o#phrase _x_i1 in (o, NormalFunlit (_x, _x_i1))
+          | SwitchFunlit (pat, body) ->
+            let (o, pat) = o#list (fun o -> o#list (fun o -> o#pattern)) pat in
+            let (o, body) =
+              o#list (fun o (p, c) ->
+                let (o, p) = o#pattern p in
+                let (o, c) = o#phrase c in
+                (o, (p, c))) body in
+            (o, SwitchFunlit (pat, body))
 
     method handle_params : handler_parameterisation -> ('self_type * handler_parameterisation) =
       fun { shp_bindings; shp_types } ->
@@ -2395,10 +2425,11 @@ class fold_map =
       o#unknown
 
     method tyarg : Types.type_arg -> ('self_type * Types.type_arg) =
+      let open PrimaryKind in
       function
-      | `Type t -> let o,t = o#typ t in o, `Type t
-      | `Row r -> let o, r = o#type_row r in o, `Row r
-      | `Presence p -> let o, p =o#type_field_spec p in o, `Presence p
+      | Type, t     -> let o, t = o#typ t in o, (Type, t)
+      | Row, r      -> let o, r = o#type_row r in o, (Row, r)
+      | Presence, p -> let o, p = o#type_field_spec p in o, (Presence, p)
 
     method type_field_spec : Types.field_spec -> ('self_type * Types.field_spec) =
       o#unknown

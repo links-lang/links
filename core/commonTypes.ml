@@ -107,8 +107,14 @@ module Subkind = struct
     [@@deriving eq,show]
 
   let to_string (lin, res) =
-    Printf.sprintf "(%s,%s)" (Linearity.to_string   lin)
-                             (Restriction.to_string res)
+    Printf.sprintf "(%s,%s)"
+      (Linearity.to_string   lin)
+      (Restriction.to_string res)
+
+  let restriction (_, res) = res
+  let linearity (lin, _) = lin
+  let as_unl (_, res) = (lin_unl, res)
+  let as_session (lin, _) = (lin, res_session)
 end
 
 module PrimaryKind = struct
@@ -132,6 +138,16 @@ let pk_presence = PrimaryKind.Presence
 module Kind = struct
   type t = PrimaryKind.t * Subkind.t
     [@@deriving eq,show]
+
+  let subkind (_, sk) = sk
+  let restriction kind =
+    Subkind.restriction (subkind kind)
+  let as_unl (pk, sk) =
+    (pk, Subkind.as_unl sk)
+  let as_session (pk, sk) =
+    (pk, Subkind.as_session sk)
+
+  let primary_kind (pk, _) = pk
 end
 
 module Quantifier = struct

@@ -5,6 +5,8 @@ open CommonTypes
 type 'a stringmap = 'a Utility.StringMap.t [@@deriving show]
 type 'a field_env = 'a stringmap [@@deriving show]
 
+val print_types_pretty : bool Settings.setting
+
 (* type var sets *)
 module TypeVarSet : sig
   include Utility.INTSET
@@ -14,31 +16,10 @@ end
 
 module TypeVarMap : Utility.INTMAP
 
+val tag_expectation_mismatch : exn
+
 (* points *)
 type 'a point = 'a Unionfind.point
-
-(* A "type" variable in the broadest sense,
-   meaning that it is used for type, row, and presence variables *)
-type type_var =
- [ `Var of (int * Subkind.t * Freedom.t)]
-
-
-type 't meta_type_var_non_rec_basis =
-    [ `Var of (int * Subkind.t * Freedom.t)
-    | `Body of 't ]
-
-
-type 't meta_type_var_basis =
-    [ 't meta_type_var_non_rec_basis
-    | `Recursive of (int * 't) ]
-
-
-type 't meta_row_var_basis =
-     [ 't meta_type_var_basis | `Closed ]
-
-type 't meta_presence_var_basis = 't meta_type_var_non_rec_basis
-
-type 't meta_max_basis = 't meta_row_var_basis
 
 module Abstype :
 sig
@@ -70,16 +51,6 @@ val access_point : Abstype.t
 val socket       : Abstype.t
 val spawn_location : Abstype.t
 
-type ('t, 'r) session_type_basis =
-    [ `Input of 't * 't
-    | `Output of 't * 't
-    | `Select of 'r
-    | `Choice of 'r
-    | `Dual of 't
-    | `End ]
-
-(* End Lenses *)
-
 (* Type groups *)
 
 type rec_id =
@@ -98,6 +69,8 @@ type tygroup = {
 }
 
 (* Types *)
+(* Do NOT add [@@deriving show] to this group!
+   See comment on pp_functions in types.ml for details *)
 and rec_appl = {
   r_name: string;
   r_dual: bool;
@@ -106,38 +79,58 @@ and rec_appl = {
   r_args: type_arg list;
   r_unwind: type_arg list -> bool -> typ;
   r_linear: unit -> bool option
-}
+  }
+and tid = int
 and typ =
-    [ `Not_typed
-    | `Primitive of Primitive.t
-    | `Function of (typ * row * typ)
-    | `Lolli of (typ * row * typ)
-    | `Record of row
-    | `Variant of row
-    | `Effect of row
-    | `Table of typ * typ * typ
-    | `Lens of Lens.Type.t
-    | `Alias of ((string * Kind.t list * type_arg list) * typ)
-    | `Application of (Abstype.t * type_arg list)
-    | `RecursiveApplication of rec_appl
-    | `MetaTypeVar of meta_type_var
-    | `ForAll of (Quantifier.t list * typ)
-    | (typ, row) session_type_basis ]
-and field_spec = [ `Present of typ | `Absent | `Var of meta_presence_var ]
-and field_spec_map = field_spec field_env
+  (* Unspecified kind *)
+  | Not_typed
+  | Var of (tid * Kind.t * Freedom.t)
+  | Recursive of (tid * Kind.t * typ)
+  | Alias of ((string * Kind.t list * type_arg list * bool) * typ)
+  | Application of (Abstype.t * type_arg list)
+  | RecursiveApplication of rec_appl
+  | Meta of typ point
+  (* Type *)
+  | Primitive of Primitive.t
+  | Function of (typ * row * typ)
+  | Lolli of (typ * row * typ)
+  | Record of row
+  | Variant of row
+  | Table of (typ * typ * typ)
+  | Lens of Lens.Type.t
+  | ForAll of (Quantifier.t list * typ)
+  (* Effect *)
+  | Effect of row
+  (* Row *)
+  | Row of (field_spec_map * row_var * bool)
+  | Closed
+  (* Presence *)
+  | Absent
+  | Present of typ
+  (* Session *)
+  | Input of (typ * session_type)
+  | Output of (typ * session_type)
+  | Select of row
+  | Choice of row
+  | Dual of typ
+  | End
+and t = typ
+and session_type = typ
+and datatype = typ
+and type_arg = PrimaryKind.t * typ
+and field_spec = typ
+and field_spec_map = field_spec Utility.StringMap.t
+and meta_type_var = typ point
+and meta_row_var = row point
+and meta_presence_var = typ point
+and row = typ
+and row' = field_spec_map * row_var * bool
 and row_var = meta_row_var
-and row = field_spec_map * row_var * bool
-and meta_type_var = (typ meta_type_var_basis) point
-and meta_row_var = (row meta_row_var_basis) point
-and meta_presence_var = (field_spec meta_presence_var_basis) point
-and meta_var = [ `Type of meta_type_var | `Row of meta_row_var | `Presence of meta_presence_var ]
-and type_arg =
-    [ `Type of typ | `Row of row | `Presence of field_spec ]
-    [@@deriving show]
 
-type session_type = (typ, row) session_type_basis
 
-type datatype = typ
+val is_type_body : typ -> bool
+val is_row_body : row -> bool
+val is_field_spec_body : field_spec -> bool
 
 (** A constraint that a subkind imposes on types. *)
 module type Constraint = sig
@@ -233,6 +226,7 @@ val make_rigid_type_variable : int -> Subkind.t -> datatype
 val make_row_variable : int -> Subkind.t -> row_var
 val make_rigid_row_variable : int -> Subkind.t -> row_var
 val make_rigid_presence_variable : int -> Subkind.t -> field_spec
+val make_rigid_variable : int -> Kind.t -> datatype
 
 (** fresh type variable generation *)
 val fresh_type_variable : Subkind.t -> datatype
@@ -340,6 +334,8 @@ val make_fresh_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMap
 val make_rigid_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMap.t * field_spec Utility.IntMap.t
 val make_wobbly_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMap.t * field_spec Utility.IntMap.t
 
+val combine_per_kind_envs : datatype Utility.IntMap.t * row Utility.IntMap.t * field_spec Utility.IntMap.t -> type_arg Utility.IntMap.t
+
 val effect_sugar : bool Settings.setting
 
 (** pretty printing *)
@@ -371,7 +367,19 @@ val make_pure_function_type : datatype list -> datatype -> datatype
 val make_function_type      : ?linear:bool -> datatype list -> row -> datatype -> datatype
 val make_thunk_type : row -> datatype -> datatype
 
-val pp_datatype : Format.formatter -> datatype -> unit
+
+
+(* Do not add pp_ functions for types here that need
+  decycling without implementing a version that does
+  the decycling!
+  See the (hand-written) defintions of the pp_* functions
+  in types.ml for details *)
+val pp : Format.formatter -> t -> unit
+val pp_datatype : Format.formatter -> t -> unit
+val pp_meta_type_var : Format.formatter -> meta_type_var -> unit
+val pp_row : Format.formatter -> row -> unit
+val pp_row' : Format.formatter -> row' -> unit
+val pp_type_arg : Format.formatter -> type_arg -> unit
 val pp_tycon_spec: Format.formatter -> tycon_spec -> unit
 
 (* Recursive type applications *)
@@ -382,34 +390,30 @@ module type TYPE_VISITOR =
 sig
   class visitor :
   object ('self_type)
-    method remove_rec_row_binding : int -> 'self_type
-    method remove_rec_type_binding : int ->'self_type
+    method set_rec_vars : (meta_type_var) Utility.IntMap.t -> 'self_type
 
-    method primitive : Primitive.t -> (Primitive.t * 'self_type)
-    method typ : typ -> (typ * 'self_type)
-    method row : row -> (row * 'self_type)
-    method row_var : row_var -> (row_var * 'self_type)
-    method meta_type_var : meta_type_var -> (meta_type_var * 'self_type)
-    method meta_row_var : meta_row_var -> (meta_row_var * 'self_type)
-    method meta_var : meta_var -> (meta_var * 'self_type)
-    method meta_presence_var : meta_presence_var -> (meta_presence_var * 'self_type)
-    method field_spec : field_spec -> (field_spec * 'self_type)
-    method field_spec_map : field_spec_map -> (field_spec_map * 'self_type)
-    method quantifier : Quantifier.t -> (Quantifier.t * 'self_type)
-    method type_arg : type_arg -> (type_arg * 'self_type)
+    method primitive : Primitive.t -> ('self_type * Primitive.t)
+    method list : ('self_type -> 'a -> 'self_type * 'b ) -> 'a list -> ('self_type * 'b list)
+    method type_args : type_arg list -> ('self_type * type_arg list)
+    method typ : typ -> ('self_type * typ)
+    method row : row -> ('self_type * row)
+    method row_var : row_var -> ('self_type * row_var)
+    method meta_type_var : meta_type_var -> ('self_type * meta_type_var)
+    method meta_row_var : meta_row_var -> ('self_type * meta_row_var)
+    method meta_presence_var : meta_presence_var -> ('self_type * meta_presence_var)
+    method field_spec : field_spec -> ('self_type * field_spec)
+    method field_spec_map : field_spec_map -> ('self_type * field_spec_map)
+    method quantifier : Quantifier.t -> ('self_type * Quantifier.t)
+    method type_arg : type_arg -> ('self_type * type_arg)
   end
 end
 
 type visit_context = Utility.StringSet.t * TypeVarSet.t * TypeVarSet.t
 class virtual type_predicate :
   object('self_type)
-    method var_satisfies : (int * Subkind.t * Freedom.t) -> bool
+    method var_satisfies : (int * Kind.t * Freedom.t) -> bool
     method type_satisfies : visit_context -> typ -> bool
-    method point_satisfies :
-      'a 'c . (visit_context -> 'a -> bool) ->
-        visit_context ->
-        ([< 'a meta_max_basis] as 'c) point ->
-        bool
+    method point_satisfies : (visit_context -> typ -> bool) -> visit_context -> typ point -> bool
     method field_satisfies : visit_context -> field_spec -> bool
     method row_satisfies : visit_context -> row -> bool
     method type_satisfies_arg : visit_context -> type_arg -> bool

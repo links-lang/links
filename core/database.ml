@@ -1,4 +1,3 @@
-open List
 open CommonTypes
 open Utility
 
@@ -8,29 +7,6 @@ let connection_info
               |> to_string from_string_option
               |> convert Utility.some
               |> sync)
-
-let relax_query_type_constraint =
-  Settings.(flag "relax_query_type_constraint"
-            |> convert parse_bool
-            |> sync)
-
-let heterogeneous =
-  Settings.(flag "heterogeneous"
-            |> synopsis "Enables experimental support for heterogeneous queries"
-            |> convert parse_bool
-            |> sync)
-
-let delateralize =
-  Settings.(flag "delateralize"
-            |> synopsis "Enables experimental support for delateralization of queries"
-            |> convert parse_bool
-            |> sync)
-
-let shredding =
-  Settings.(flag "shredding"
-            |> synopsis "Enables database query shredding"
-            |> convert parse_bool
-            |> sync)
 
 (* Hacky database query result manipulation settings. *)
 let coerce_null_integers
@@ -54,7 +30,7 @@ end
 
 let value_of_db_string (value:string) t =
   match TypeUtils.concrete_type t with
-    | `Primitive Primitive.Bool ->
+    | Types.Primitive Primitive.Bool ->
         (* HACK:
 
            This should probably be part of the database driver as
@@ -64,9 +40,9 @@ let value_of_db_string (value:string) t =
            mysql appears to use 0/1 and postgres f/t
         *)
         Value.box_bool (value = "1" || value = "t" || value = "true")
-    | `Primitive Primitive.Char -> Value.box_char (String.get value 0)
-    | `Primitive Primitive.String -> Value.box_string value
-    | `Primitive Primitive.Int  ->
+    | Types.Primitive Primitive.Char -> Value.box_char (String.get value 0)
+    | Types.Primitive Primitive.String -> Value.box_string value
+    | Types.Primitive Primitive.Int  ->
         (* HACK: Currently Links does not properly handle integers
          * if they are null. This is a temporary workaround (hack) to
          * allow us to at least interface with DBs containing nulls,
@@ -81,7 +57,7 @@ let value_of_db_string (value:string) t =
             raise (Errors.RuntimeError ("Attempted to read null integer from the database"))
         else
           Value.box_int (int_of_string value)
-    | `Primitive Primitive.Float ->
+    | Types.Primitive Primitive.Float ->
        if value = "" then Value.box_float 0.00      (* HACK HACK *)
        else Value.box_float (float_of_string value)
     | t -> raise (runtime_error
@@ -98,11 +74,8 @@ let execute_command  (query:string) (db: database) : Value.t =
               ("An error occurred executing the query " ^ query ^ ": " ^ msg))
     end
 
-let execute_insert (table_name, field_names, vss) db =
-  execute_command (db#make_insert_query (table_name, field_names, vss)) db
-
-let execute_insert_returning (table_name, field_names, vss, returning) db =
-  let qs = db#make_insert_returning_query (table_name, field_names, vss, returning) in
+let execute_insert_returning returning q db =
+  let qs = db#make_insert_returning_query returning q in
   let rec run =
     function
       | [] -> assert false
@@ -111,13 +84,10 @@ let execute_insert_returning (table_name, field_names, vss, returning) db =
             begin
               match result#status with
                | `QueryOk ->
-                   let rows = result#get_all_lst in
-                     begin
-                       match rows with
-                         | [[id]] -> Value.box_int (int_of_string id)
-                         | _ ->
-                             raise (runtime_error ("Returned the wrong number of results executing " ^ q))
-                     end
+                  if result#nfields = 1 && result#ntuples = 1
+                  then (* returning field has to be of type int *)
+                    Value.box_int (int_of_string (result#getvalue 0 0))
+                  else raise (runtime_error ("Returned the wrong number of results executing " ^ q))
                | `QueryError msg ->
                    raise (runtime_error ("An error occurred executing the query " ^ q ^ ": " ^ msg))
             end
@@ -169,8 +139,6 @@ let result_signature field_types result =
     in build rs []
 
 
-(* BUG: Lists can be too big for List.map; need to be careful about recursion *)
-
 let execute_select_result
     (field_types:(string * Types.datatype) list) (query:string) (db: database)  =
   let _ = Debug.print ("Running query: \n" ^ query) in
@@ -194,12 +162,3 @@ let execute_select
     : Value.t =
   let result,rs = execute_select_result field_types query db in
   build_result (result,rs)
-
-
-let execute_untyped_select (query:string) (db: database) : Value.t =
-  let result = (db#exec query) in
-    (match result#status with
-       | `QueryOk ->
-           `List (map (fun row -> `List (map Value.box_string row)) result#get_all_lst)
-       | `QueryError msg ->
-           raise (runtime_error ("An error occurred executing the query " ^ query ^ ": " ^ msg)))

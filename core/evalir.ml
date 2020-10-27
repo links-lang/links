@@ -75,7 +75,7 @@ struct
   let lookup_fun_def f =
     match lookup_fun f with
     | None -> None
-    | Some (finfo, _, None, location) ->
+    | Some (_finfo, _, None, location) ->
       begin
         match location with
         | Location.Server | Location.Unknown ->
@@ -84,7 +84,7 @@ struct
              small *)
           Some (`FunctionPtr (f, None))
         | Location.Client ->
-          Some (`ClientFunction (Js.var_name_binder (f, finfo)))
+          Some (`ClientFunction (Js.var_name_var f))
       end
     | _ -> assert false
 
@@ -128,8 +128,10 @@ struct
      result =
 
        fun req_data name cont args ->
-         if not(Settings.get Basicsettings.web_mode) then
-           raise (Errors.client_call_outside_webmode name);
+         if not(Settings.get webs_running) then
+           raise (Errors.forbidden_client_call name "outside of web mode");
+         if not(RequestData.is_ajax_call (RequestData.get_cgi_parameters req_data)) then
+           raise (Errors.forbidden_client_call name "before server page is ready");
          (*if not(Proc.singlethreaded()) then
            raise (internal_error "Remaining procs on server at client call!"); *)
          Debug.print("Making client call to " ^ name);
@@ -233,7 +235,7 @@ struct
   and apply (cont : continuation) env : Value.t * Value.t list -> result =
     let invoke_session_exception () =
       special env cont (DoOperation (Value.session_exception_operation,
-        [], `Not_typed)) in
+        [], Types.Not_typed)) in
     function
     | `FunctionPtr (f, fvs), ps ->
       let (_finfo, (xs, body), z, _location) = find_fun f in
@@ -529,7 +531,8 @@ struct
       | [] -> tail_computation env cont tailcomp
       | b::bs ->
          match b with
-         | Let ((var, _) as b, (_, tc)) ->
+         | Let (b, (_, tc)) ->
+            let var = Var.var_of_binder b in
             let locals = Value.Env.localise env var in
             let cont' =
               K.(let frame = Frame.make (Var.scope_of_binder b) var locals (bs, tailcomp) in
@@ -561,9 +564,10 @@ struct
         | `Variant (label, _) as v ->
           begin
             match StringMap.lookup label cases, default, v with
-            | Some ((var,_), c), _, `Variant (_, v)
-            | _, Some ((var,_), c), v ->
-              computation (Value.Env.bind var (v, Scope.Local) env) cont c
+            | Some (b, c), _, `Variant (_, v)
+            | _, Some (b, c), v ->
+               let var = Var.var_of_binder b in
+               computation (Value.Env.bind var (v, Scope.Local) env) cont c
             | None, _, #Value.t -> eval_error "Pattern matching failed on %s" label
             | _ -> assert false (* v not a variant *)
           end
@@ -577,10 +581,10 @@ struct
              | `Bool false    -> e
              | _              -> eval_error "Conditional was not a boolean")
   and special env (cont : continuation) : Ir.special -> result =
-    let get_lens l = match l with | `Lens l -> l | _ -> raise (internal_error "Expected a lens.") in
+    let unpack_lens l = match l with | `Lens l -> l | _ -> raise (internal_error "Expected a lens.") in
     let invoke_session_exception () =
       special env cont (DoOperation (Value.session_exception_operation,
-        [], `Not_typed)) in
+        [], Types.Not_typed)) in
     function
     | Wrong _                    -> raise Exceptions.Wrong
     | Database v                 ->
@@ -592,24 +596,25 @@ struct
           let sort = Type.sort t in
           value env table >>= fun table ->
           match table with
-            | `Table (((db,_), table, _, _) as tinfo) ->
-              let database = Lens_database_conv.lens_db_of_db db in
+            | `Table (((db,cstr), table, _, _) as tinfo) ->
+              let database = Lens_database_conv.lens_db_of_db cstr db in
               let sort = Sort.update_table_name sort ~table in
               let table = Lens_database_conv.lens_table_of_table tinfo in
-                 apply_cont cont env (`Lens (Value.Lens { sort; database; table; }))
+                 apply_cont cont env (`Lens (database, Value.Lens { sort; table; }))
             | `List records ->
               let records = List.map Lens_value_conv.lens_phrase_value_of_value records in
-              apply_cont cont env (`Lens (Value.LensMem { records; sort; }))
+              apply_cont cont env (`Lens (Lens.Database.dummy_database, Value.LensMem { records; sort; }))
             | _ -> raise (internal_error ("Unsupported underlying lens value."))
       end
     | LensSerial { lens; columns; _ } ->
       let open Lens in
       value env lens >>= fun lens ->
-      let lens = get_lens lens |> Value.set_serial ~columns in
-      apply_cont cont env (`Lens lens)
+      let db, lens = unpack_lens lens in
+      let lens = Value.set_serial ~columns lens in
+      apply_cont cont env (`Lens (db, lens))
     | LensDrop {lens; drop; key; default; _} ->
         let open Lens in
-        value env lens >|= get_lens >>= fun lens ->
+        value env lens >|= unpack_lens >>= fun (db, lens) ->
         value env default >|= Lens_value_conv.lens_phrase_value_of_value >>= fun default ->
         let sort =
           Lens.Sort.drop_lens_sort
@@ -619,10 +624,10 @@ struct
             ~key:(Alias.Set.singleton key)
           |> Lens_errors.unpack_type_drop_lens_result ~die:(eval_error "%s")
         in
-        apply_cont cont env (`Lens (Value.LensDrop { lens; drop; key; default; sort }))
+        apply_cont cont env (`Lens (db, Value.LensDrop { lens; drop; key; default; sort }))
     | LensSelect { lens; predicate; _ } ->
         let open Lens in
-        value env lens >|= get_lens >>= fun lens ->
+        value env lens >|= unpack_lens >>= fun (db, lens) ->
         let predicate =
           match predicate with
           | Static predicate -> predicate
@@ -636,11 +641,11 @@ struct
             ~predicate
           |> Lens_errors.unpack_sort_select_result ~die:(eval_error "%s")
         in
-        apply_cont cont env (`Lens (Value.LensSelect {lens; predicate; sort}))
+        apply_cont cont env (`Lens (db, Value.LensSelect {lens; predicate; sort}))
     | LensJoin { left; right; on; del_left; del_right; _ } ->
         let open Lens in
-        value env left >|= get_lens >>= fun lens1 ->
-        value env right >|= get_lens >>= fun lens2 ->
+        value env left >|= unpack_lens >>= fun (db1, lens1) ->
+        value env right >|= unpack_lens >>= fun (db2, lens2) ->
         let left, right=
           if Lens.Sort.join_lens_should_swap
                (Lens.Value.sort lens1)
@@ -654,24 +659,29 @@ struct
             (Lens.Value.sort lens1)
             (Lens.Value.sort lens2) ~on
           |> Lens_errors.unpack_sort_join_result ~die:(eval_error "%s") in
-        apply_cont cont env (`Lens (Value.LensJoin {left; right; on; del_left; del_right; sort}))
+        let open Lens.Database in
+        if db1.serialize () <> db2.serialize ()
+        then eval_error "Lenses require the same database connection.";
+        apply_cont cont env (`Lens (db1, Value.LensJoin {left; right; on; del_left; del_right; sort}))
     | LensCheck (lens, _typ) ->
+        (* TODO: defer dynamic lens check failures to
+           the lens check evaluation *)
         value env lens >>= apply_cont cont env
     | LensGet (lens, _rtype) ->
-        value env lens >|= get_lens >>= fun lens ->
+        value env lens >|= unpack_lens >>= fun (db, lens) ->
         (* let callfn = fun fnptr -> fnptr in *)
-        let res = Lens.Value.lens_get lens in
+        let res = Lens.Value.lens_get ~db lens in
         let res = List.map Lens_value_conv.value_of_lens_phrase_value res |> Value.box_list in
           apply_cont cont env res
     | LensPut (lens, data, _rtype) ->
-        value env lens >|= get_lens >>= fun lens ->
+        value env lens >|= unpack_lens >>= fun (db, lens) ->
         value env data >|= Value.unbox_list >>= fun data ->
         let data = List.map Lens_value_conv.lens_phrase_value_of_value data in
         let behaviour =
           if Settings.get Lens.classic_lenses
           then Lens.Eval.Classic
           else Lens.Eval.Incremental in
-        Lens.Eval.put ~behaviour lens data |> Lens_errors.unpack_eval_error ~die:(eval_error "%s");
+        Lens.Eval.put ~behaviour ~db lens data |> Lens_errors.unpack_eval_error ~die:(eval_error "%s");
         Value.box_unit () |> apply_cont cont env
     | Table (db, name, keys, (readtype, _, _)) ->
       begin
@@ -681,7 +691,7 @@ struct
         value env name >>= fun name ->
         value env keys >>= fun keys ->
         match db, name, keys, (TypeUtils.concrete_type readtype) with
-          | `Database (db, params), name, keys, `Record row ->
+          | `Database (db, params), name, keys, Types.Record (Types.Row row) ->
             let unboxed_keys =
               List.map
                 (fun key ->
@@ -698,96 +708,82 @@ struct
               value env limit >>= fun limit ->
               value env offset >>= fun offset ->
               Lwt.return (Some (Value.unbox_int limit, Value.unbox_int offset))
-        end >>= fun range ->
-          let evaluator =
-            let open QueryPolicy in
-            match policy with
-              | Flat -> `Flat
-              | Nested -> `Nested
-              | Mixing -> `Mixing
-              | Default ->
-                  if Settings.get Database.heterogeneous
-                    then `Mixing
-                    else if Settings.get Database.shredding then `Nested else `Flat 
-          in
-
-          let evaluate_standard () =
-            match EvalQuery.compile env (range, e) with
-            | None -> computation env cont e
-            | Some (db, q, t) ->
-                let q = Sql.string_of_query db range q in
-                let (fieldMap, _, _), _ =
-                  Types.unwrap_row(TypeUtils.extract_row t) in
-                let fields =
-                  StringMap.fold
-                    (fun name t fields ->
-                      match t with
-                      | `Present t -> (name, t)::fields
-                      | `Absent -> assert false
-                      | `Var _ -> assert false)
-                    fieldMap
-                    []
-                in
-                apply_cont cont env (Database.execute_select fields q db) 
-          in
-
-          let evaluate_mixing () =
-            if range != None then eval_error "Range is not supported for heterogeneous queries";
-            match SimplSqlGen.compile_mixing env e with
-            | None -> computation env cont e
-            | Some (db, q, t) ->
-                let q = Sql.string_of_query db range q in
-                let (fieldMap, _, _), _ =
-                  Types.unwrap_row(TypeUtils.extract_row t) in
-                let fields =
-                  StringMap.fold
-                    (fun name t fields ->
-                      match t with
-                      | `Present t -> (name, t)::fields
-                      | `Absent -> assert false
-                      | `Var _ -> assert false)
-                    fieldMap
-                    []
-                in
-                apply_cont cont env (Database.execute_select fields q db) 
-          in
-
-          let evaluate_nested () =
-            if range != None then eval_error "Range is not supported for nested queries";
-              match EvalNestedQuery.compile_shredded env e with
-              | None -> computation env cont e
-              | Some (db, p) ->
-                  if db#supports_shredding () then
-                    let get_fields t =
-                      match t with
-                      | `Record fields ->
-                        StringMap.to_list (fun name p -> (name, `Primitive p)) fields
-                      | _ -> assert false
-                    in
-                    let execute_shredded_raw (q, t) =
-                      let q = Sql.string_of_query db range q in
-                      Database.execute_select_result (get_fields t) q db, t in
-                    let raw_results =
-                      EvalNestedQuery.Shred.pmap execute_shredded_raw p in
-                    let mapped_results =
-                      EvalNestedQuery.Shred.pmap EvalNestedQuery.Stitch.build_stitch_map raw_results in
-                    apply_cont cont env
-                      (EvalNestedQuery.Stitch.stitch_mapped_query mapped_results)
-                  else
-                    let error_msg =
-                      Printf.sprintf
-                        "The database driver '%s' does not support shredding."
-                        (db#driver_name ())
-                    in
-                    raise (Errors.runtime_error error_msg)
-          in
-
-          begin
-            match evaluator with
-              | `Flat -> evaluate_standard ()
-              | `Nested -> evaluate_nested ()
-              | `Mixing -> evaluate_mixing ()
-          end
+       end >>= fun range ->
+         begin match policy with
+           | QueryPolicy.Flat ->
+               begin
+                 match EvalQuery.compile env (range, e) with
+                   | None -> computation env cont e
+                   | Some (db, q, t) ->
+                       let q = db#string_of_query ~range q in
+                       let (fieldMap, _, _) =
+                         let r, _ = Types.unwrap_row (TypeUtils.extract_row t) in
+                         TypeUtils.extract_row_parts r in
+                       let fields =
+                         StringMap.fold
+                           (fun name t fields ->
+                             let open Types in
+                             match t with
+                               | Present t -> (name, t)::fields
+                               | _ -> assert false)
+                           fieldMap
+                           []
+                       in
+                       apply_cont cont env (Database.execute_select fields q db)
+               end
+           | QueryPolicy.Nested ->
+               begin
+                 if range != None then eval_error "Range is not supported for nested queries";
+                 match EvalNestedQuery.compile_shredded env e with
+                   | None -> computation env cont e
+                   | Some (db, p) when db#supports_shredding () ->
+                       let get_fields t =
+                         match t with
+                           | `Record fields ->
+                               StringMap.to_list (fun name p -> (name, Types.Primitive p)) fields
+                           | _ -> assert false
+                       in
+                       let execute_shredded_raw (q, t) =
+                         let q = Sql.inline_outer_with q in
+                         let q = db#string_of_query ~range q in
+                         Database.execute_select_result (get_fields t) q db, t in
+                       let raw_results =
+                         EvalNestedQuery.Shred.pmap execute_shredded_raw p in
+                       let mapped_results =
+                         EvalNestedQuery.Shred.pmap EvalNestedQuery.Stitch.build_stitch_map raw_results in
+                       apply_cont cont env
+                         (EvalNestedQuery.Stitch.stitch_mapped_query mapped_results)
+                   | Some(db,_) ->
+                       let error_msg =
+                         Printf.sprintf
+                           "The database driver '%s' does not support nested query results."
+                           (db#driver_name ())
+                       in
+                       raise (Errors.runtime_error error_msg)
+               end
+           | QueryPolicy.Mixing ->
+               begin
+                  if range != None then eval_error "Range is not supported for heterogeneous queries";
+                  match SimplSqlGen.compile_mixing env e with
+                  | None -> computation env cont e
+                  | Some (db, q, t) ->
+                      let q = db#string_of_query ~range q in
+                      let (fieldMap, _, _) =
+                        let r, _ = Types.unwrap_row (TypeUtils.extract_row t) in
+                        TypeUtils.extract_row_parts r in
+                      let fields =
+                        StringMap.fold
+                          (fun name t fields ->
+                            let open Types in
+                            match t with
+                              | Present t -> (name, t)::fields
+                              | _ -> assert false)
+                          fieldMap
+                          []
+                      in
+                      apply_cont cont env (Database.execute_select fields q db) 
+               end
+         end
 
     | InsertRows (source, rows) ->
         begin
@@ -796,9 +792,12 @@ struct
           match source, rows with
           | `Table _, `List [] ->  apply_cont cont env (`Record [])
           | `Table ((db, _params), table_name, _, _), rows ->
-              let (field_names,vss) = Value.row_columns_values db rows in
-              Debug.print ("RUNNING INSERT QUERY:\n" ^ (db#make_insert_query(table_name, field_names, vss)));
-              let () = ignore (Database.execute_insert (table_name, field_names, vss) db) in
+              let (field_names,rows) = Value.row_columns_values rows in
+              let q =
+                Query.insert table_name field_names rows
+                |> db#string_of_query in
+              Debug.print ("RUNNING INSERT QUERY:\n" ^ q);
+              let () = ignore (Database.execute_command q db) in
               apply_cont cont env (`Record [])
           | _ -> raise (internal_error "insert row into non-database")
         end
@@ -821,12 +820,13 @@ struct
           | `Table _, `List [], _ ->
               raise (internal_error "InsertReturning: undefined for empty list of rows")
           | `Table ((db, _params), table_name, _, _), rows, returning ->
-              let (field_names,vss) = Value.row_columns_values db rows in
+              let (field_names,vss) = Value.row_columns_values rows in
               let returning = Value.unbox_string returning in
+              let q = Query.insert table_name field_names vss in
               Debug.print ("RUNNING INSERT ... RETURNING QUERY:\n" ^
                            String.concat "\n"
-                             (db#make_insert_returning_query(table_name, field_names, vss, returning)));
-              apply_cont cont env (Database.execute_insert_returning (table_name, field_names, vss, returning) db)
+                             (db#make_insert_returning_query returning q));
+              apply_cont cont env (Database.execute_insert_returning returning q db)
           | _ -> raise (internal_error "insert row into non-database")
         end
     | Update ((xb, source), where, body) ->
@@ -836,28 +836,28 @@ struct
           | `Table ((db, _), table, _, (fields, _, _)) ->
               Lwt.return
             (db, table, (StringMap.map (function
-                                        | `Present t -> t
+                                        | Types.Present t -> t
                                         | _ -> assert false) fields))
           | _ -> assert false
       end >>= fun (db, table, field_types) ->
       let update_query =
         Query.compile_update db env ((Var.var_of_binder xb, table, field_types), where, body) in
-      let () = ignore (Database.execute_command update_query db) in
+      let () = ignore (Database.execute_command (db#string_of_query update_query) db) in
         apply_cont cont env (`Record [])
     | Delete ((xb, source), where) ->
         value env source >>= fun source ->
         begin
         match source with
           | `Table ((db, _), table, _, (fields, _, _)) ->
-              Lwt.return
-            (db, table, (StringMap.map (function
-                                        | `Present t -> t
-                                        | _ -> assert false) fields))
+             Lwt.return
+               (db, table, (StringMap.map (function
+                                | Types.Present t -> t
+                                | _ -> assert false) fields))
           | _ -> assert false
         end >>= fun (db, table, field_types) ->
       let delete_query =
         Query.compile_delete db env ((Var.var_of_binder xb, table, field_types), where) in
-      let () = ignore (Database.execute_command delete_query db) in
+      let () = ignore (Database.execute_command (db#string_of_query delete_query) db) in
         apply_cont cont env (`Record [])
     | CallCC f ->
        value env f >>= fun f ->
@@ -930,8 +930,9 @@ struct
 
               begin
                 match StringMap.lookup label cases with
-                | Some ((var,_), body) ->
-                  computation (Value.Env.bind var (chan, Scope.Local) env) cont body
+                | Some (b, body) ->
+                   let var = Var.var_of_binder b in
+                   computation (Value.Env.bind var (chan, Scope.Local) env) cont body
                 | None -> eval_error "Choice pattern matching failed"
               end
           | ReceiveBlocked -> block ()
