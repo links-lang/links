@@ -186,15 +186,12 @@ struct
           | Types.Record _ as rty -> StringMap.find name (recdty_field_types rty)
           | ty -> 
               failwith 
-                (Printf.sprintf 
-                  ("term:\n" ^^
+                (Format.asprintf ("term:\n" ^^
                     "%s\n" ^^
                     "has type:\n" ^^
-                    "%s\n" ^^
+                    "%a\n" ^^
                     "but it was expected to have a record type.") 
-                  (* XXX: wR
-                  (string_of_t w) (Types.show_typ ty)) *)
-                  (string_of_t w) "FIXME use Types.pp_datatype")
+                  (string_of_t w) Types.pp_datatype ty)
         end
     | Apply (Primitive "Empty", _) -> Types.bool_type (* HACK *)
     | Apply (Primitive "Distinct", [q]) -> type_of_expression q

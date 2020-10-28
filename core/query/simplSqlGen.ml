@@ -87,14 +87,14 @@ and base_exp = function
     Debug.print ("Not a base expression: " ^ (Q.show e) ^ "\n");
     failwith "base_exp"
 
-let compile_mixing : Value.env -> Ir.computation -> (Value.database * Sql.query * Types.datatype) option =
-  fun env e ->
+let compile_mixing : delateralize:QueryPolicy.t -> Value.env -> Ir.computation -> (Value.database * Sql.query * Types.datatype) option =
+  fun ~delateralize env e ->
     (* Debug.print ("env: "^Value.show_env env);
     Debug.print ("e: "^Ir.show_computation e); *)
     (* XXX: I don't see how the evaluation here is different depending on the policy *)
     let evaluator =
         (* FIXME *)
-        if (* Settings.get Database.delateralize *) false
+        if delateralize = QueryPolicy.Delat
             then Delateralize.eval QueryPolicy.Flat
             else Query.Eval.eval QueryPolicy.Flat
     in
@@ -106,6 +106,6 @@ let compile_mixing : Value.env -> Ir.computation -> (Value.database * Sql.query 
             let t = Types.unwrap_list_type (Query.type_of_expression v) in
             (* Debug.print ("Generated NRC query: " ^ Q.show v ); *)
             let q = sql_of_query false v in
-            let range = None in
-              (* Debug.print ("Generated SQL query: "^(Sql.string_of_query db range q)); *)
+            let _range = None in
+              (* Debug.print ("Generated SQL query: "^(Sql.string_of_query db _range q)); *)
               Some (db, q, t)

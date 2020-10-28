@@ -3083,6 +3083,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               match policy with
                 | Nested -> ()
                 | Mixing
+                | Delat
                 | Flat  ->
                      let shape =
                        Types.make_list_type

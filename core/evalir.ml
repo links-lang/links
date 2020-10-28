@@ -761,10 +761,10 @@ struct
                        in
                        raise (Errors.runtime_error error_msg)
                end
-           | QueryPolicy.Mixing ->
+           | _ ->
                begin
                   if range != None then eval_error "Range is not supported for heterogeneous queries";
-                  match SimplSqlGen.compile_mixing env e with
+                  match SimplSqlGen.compile_mixing ~delateralize:policy env e with
                   | None -> computation env cont e
                   | Some (db, q, t) ->
                       let q = db#string_of_query ~range q in
