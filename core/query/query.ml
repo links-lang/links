@@ -172,7 +172,7 @@ struct
     | Singleton t -> Types.make_list_type (te t)
     | Record fields -> record fields
     | If (_, t, _) -> te t
-    | Table (_, _, _, row) -> Types.Record (Types.Row row)
+    | Table (_, _, _, row) -> Types.make_list_type (Types.Record (Types.Row row))
     | Dedup u
     | Prom u -> te u
     | Constant (Constant.Bool   _) -> Types.bool_type

@@ -97,7 +97,10 @@ fun the(l) {
 }
 
 fun elem(x, l) {
-  not(l==[]) && (x == hd(l) || x `elem` tl(l))
+  switch (l) {
+    case [] -> false
+    case hd::tl -> x == hd || x `elem` tl
+  }
 }
 
 fun odd(i)  { i `mod` 2 == 1 }
@@ -502,9 +505,15 @@ fun asList(t) server {
   for (x <-- t) [x]
 }
 
-
-unsafe sig dedup : ([a]) -> [a]
 fun dedup(l) server {
+  unsafe sig elem : (a,[a]) -b-> Bool
+  fun elem(x, l) {
+    switch (l) {
+      case [] -> false
+      case hd::tl -> x == hd || x `elem` tl
+    }
+  }
+  unsafe sig aux : ([a],[a]) -> [a]
   fun aux(vl, rl) {
     switch (rl) {
       case [] -> []

@@ -23,8 +23,9 @@ let rec sql_of_query is_set = function
 
 and disjunct is_set = function
 | Q.Prom p -> sql_of_query true p
+| Q.Singleton _ as j -> S.Select (body is_set [] [] j)
 | Q.For (_, gs, os, j) -> S.Select (body is_set gs os j)
-| _ -> failwith "disjunct"
+| _arg -> Debug.print ("error in SimpleSqlGen.disjunct: unexpected arg = " ^ Q.show _arg); failwith "disjunct"
 
 and generator locvars = function
 | (v, Q.Prom p) -> (S.Subquery (Q.contains_free locvars p, sql_of_query true p, v))
@@ -99,7 +100,7 @@ let compile_mixing : delateralize:QueryPolicy.t -> Value.env -> Ir.computation -
             else Query.Eval.eval QueryPolicy.Flat
     in
     let v = evaluator env e in
-      (* Debug.print ("v: "^Q.string_of_t v); *)
+      (* Debug.print ("v: "^ Q.show v); *)
       match Query.used_database v with
         | None -> None
         | Some db ->
