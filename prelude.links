@@ -506,6 +506,8 @@ fun asList(t) server {
 }
 
 fun dedup(l) server {
+  # an unsafe local definition of elem, only for use within dedup!
+  # (ensures dedup is tame, while keeping the global def of elem wild)
   unsafe sig elem : (a,[a]) -b-> Bool
   fun elem(x, l) {
     switch (l) {
