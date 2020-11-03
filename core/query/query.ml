@@ -140,10 +140,17 @@ struct
       | _ -> false
       in cfree []
 
-  let table_field_types (_, _, _, (fields, _, _)) =
+  let field_types_of_spec_map =
     StringMap.map (function
       | Types.Present t -> t
-      | _ -> assert false) fields
+      | _ -> assert false)
+  
+  let field_types_of_row r =
+    let (field_spec_map,_,_) = TypeUtils.extract_row_parts r in
+      field_types_of_spec_map field_spec_map
+    
+  let table_field_types (_, _, _, (field_spec_map, _, _)) =
+    field_types_of_spec_map field_spec_map
                   
   let labels_of_field_types field_types =
     StringMap.fold
@@ -153,10 +160,7 @@ struct
       StringSet.empty
 
   let recdty_field_types (t : Types.datatype) : Types.datatype StringMap.t =
-    let (field_spec_map, _, _) = TypeUtils.extract_row_parts (TypeUtils.extract_row t) in
-    StringMap.map (function
-                    | Types.Present t -> t
-                    | _ -> assert false) field_spec_map
+    field_types_of_row (TypeUtils.extract_row t)
 
   (** Return the type associated with an expression *)
   (* Inferring the type of an expression is straightforward because all
@@ -199,33 +203,6 @@ struct
     | Apply (Primitive "Distinct", [q]) -> type_of_expression q
     | Apply (Primitive f, _) -> TypeUtils.return_type (Env.String.find f Lib.type_env)
     | e -> Debug.print("Can't deduce type for: " ^ show e); assert false
-
-  let record_field_types =
-    type_of_expression ->- recdty_field_types
-
-  (* CLEAN ME: this is the new version, I think it's semantically different because it doesn't take an expression  *)
-  let record_field_types' (t : Types.datatype) : Types.datatype StringMap.t =
-      let (field_spec_map, _, _) = TypeUtils.extract_row_parts (TypeUtils.extract_row t) in
-      StringMap.map (function
-                      | Types.Present t -> t
-                      | _ -> assert false) field_spec_map
-
-  let query_field_types (q : t) =
-    let (field_spec_map,_,_) = 
-      type_of_expression q
-      |> TypeUtils.element_type ~overstep_quantifiers:true
-      |> TypeUtils.extract_row
-      |> TypeUtils.extract_row_parts
-    in 
-    StringMap.map (function
-                    | Types.Present t -> t
-                    | _ -> assert false) field_spec_map
-
-
-  let field_types_of_for_var gen = 
-    type_of_expression gen
-    |> Types.unwrap_list_type
-    |> recdty_field_types
 
   let type_of_for_var gen = 
     type_of_expression gen
@@ -327,12 +304,6 @@ struct
       | Constant c -> Constant c
 
   let flatfield f1 f2 = f1 ^ "@" ^ f2
-
-  let field_types_of_row r =
-    let (field_spec_map,_,_) = TypeUtils.extract_row_parts r in
-    StringMap.map (function
-      | Types.Present t -> t
-      | _ -> assert false) field_spec_map
 
   let rec flattened_pair x y = 
     match x, y with
@@ -823,9 +794,9 @@ struct
     | Variable var ->
         begin
           match lookup env var with
-            | Q.Var (x, field_types) ->
+            | Q.Var (x, tyx) ->
                 (* eta-expand record variables *)
-                Q.eta_expand_var (x, field_types)
+                Q.eta_expand_var (x, tyx)
             | Q.Primitive "Nil" -> Q.nil
             (* We could consider detecting and eta-expand tables here.
                The only other possible sources of table values would
@@ -1021,9 +992,9 @@ struct
           try
             match lookup env var with
               (* XXX it should never be in_dedup, should it? *)
-              | Q.Var (x, field_types) when not in_dedup ->
+              | Q.Var (x, tyx) when not in_dedup ->
                   (* eta-expand record variables *)
-                  Q.eta_expand_var (x, field_types)
+                  Q.eta_expand_var (x, tyx)
               (* We could consider detecting and eta-expand tables here.
                 The only other possible sources of table values would
                 be `Special or built-in functions that return table
@@ -1394,7 +1365,7 @@ and base : Sql.index -> Q.t -> Sql.base = fun index ->
         Sql.Length (unit_query v)
     | Apply (Primitive f, vs) ->
         Sql.Apply (f, List.map (base index) vs)
-    | Project (Var (x, _field_types), name) ->
+    | Project (Var (x, _tyx), name) ->
         Sql.Project (x, name)
     | Constant c -> Sql.Constant c
     | Primitive "index" ->
