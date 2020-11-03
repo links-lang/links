@@ -44,7 +44,8 @@ struct
       | Closure   of (Ir.var list * Ir.computation) * env
       | Case      of t * (binder * t) StringMap.t * (binder * t) option
       | Primitive of string
-      | Var       of Var.var * Types.datatype StringMap.t
+      (* | Var       of Var.var * Types.datatype StringMap.t *)
+      | Var       of Var.var * Types.datatype
       | Constant  of Constant.t
   and env = { venv: Value.env; qenv: t Env.Int.t; policy: QueryPolicy.t }
       [@@deriving show]
@@ -71,7 +72,8 @@ struct
       | Lam       of Ir.var list * Ir.computation
       | Case      of pt * (binder * pt) StringMap.t * (binder * pt) option
       | Primitive of string
-      | Var       of (Var.var * Types.datatype StringMap.t)
+      (* | Var       of (Var.var * (Types.datatype StringMap.t) option) *)
+      | Var       of (Var.var * Types.datatype)
       | Constant  of Constant.t
         [@@deriving show]
   end
@@ -165,7 +167,7 @@ struct
       Types.make_record_type (StringMap.map te fields)
     in
     match v with
-    | Var (_,ftys) -> Types.make_record_type ftys
+    | Var (_,ty) -> ty
     | Concat [] -> Types.make_list_type(Types.unit_type)
     | Concat (v::_) -> te v
     | For (_, _, _os, body) -> te body
@@ -225,6 +227,10 @@ struct
     |> Types.unwrap_list_type
     |> recdty_field_types
 
+  let type_of_for_var gen = 
+    type_of_expression gen
+    |> Types.unwrap_list_type
+  
 
   let default_of_base_type =
     function
@@ -322,13 +328,26 @@ struct
 
   let flatfield f1 f2 = f1 ^ "@" ^ f2
 
+  let field_types_of_row r =
+    let (field_spec_map,_,_) = TypeUtils.extract_row_parts r in
+    StringMap.map (function
+      | Types.Present t -> t
+      | _ -> assert false) field_spec_map
+
   let rec flattened_pair x y = 
     match x, y with
-    | Var (_nx, ftx), _ ->
-        let x' = Record (StringMap.fold (fun f _ acc -> StringMap.add f (Project (x,f)) acc) ftx StringMap.empty)
+    | Var (_nx, Types.Record row), _ ->
+        let x' = Record (StringMap.fold (fun f _ acc -> StringMap.add f (Project (x,f)) acc) (field_types_of_row row) StringMap.empty)
         in flattened_pair x' y
-    | _, Var (_ny, fty) ->
-        let y' = Record (StringMap.fold (fun f _ acc -> StringMap.add f (Project (y,f)) acc) fty StringMap.empty)
+    | _, Var (_ny, Types.Record row) ->
+        let y' = Record (StringMap.fold (fun f _ acc -> StringMap.add f (Project (y,f)) acc) (field_types_of_row row) StringMap.empty)
+        in flattened_pair x y'
+    (* XXX: using a field with an empty name to deal with variables of non-record type ... will it work? *)
+    | Var (_nx, _), _ ->
+        let x' = Record (StringMap.from_alist ["",x])
+        in flattened_pair x' y
+    | _, Var (_ny, _) ->
+        let y' = Record (StringMap.from_alist ["",y])
         in flattened_pair x y'
     | Record fty1, Record fty2 ->
         let out1 = 
@@ -338,13 +357,16 @@ struct
         in Record out2
     | _ -> assert false
 
-  let flattened_pair_ft x y = 
+  let rec flattened_pair_ft x y = 
     match x, y with
-    | Var (_nx, ftx), Var (_ny, fty) -> 
+    | Var (_nx, Types.Record rowx), Var (_ny, Types.Record rowy) -> 
         let out1 = 
-            StringMap.fold (fun f t acc -> StringMap.add (flatfield "1" f) t acc) ftx StringMap.empty
+            StringMap.fold (fun f t acc -> StringMap.add (flatfield "1" f) t acc) (field_types_of_row rowx) StringMap.empty
         in 
-        StringMap.fold (fun f t acc -> StringMap.add (flatfield "2" f) t acc) fty out1
+        StringMap.fold (fun f t acc -> StringMap.add (flatfield "2" f) t acc) (field_types_of_row rowy) out1
+    (* XXX: same as above, using a field with an empty name to deal with variables of non-record type ... will it work? *)
+    | Var (nx, tyx), _ -> flattened_pair_ft (Var (nx, Types.make_record_type (StringMap.from_alist ["", tyx]))) y
+    | _, Var (ny, tyy) -> flattened_pair_ft x (Var (ny, Types.make_record_type (StringMap.from_alist ["", tyy])))
     | _ -> assert false
 
   let unbox_xml =
@@ -402,18 +424,22 @@ struct
       | If (_, _, Concat []) -> true
       | _ -> false
 
-  let eta_expand_var (x, field_types) =
-    Record
-      (StringMap.fold
-         (fun name _t fields ->
-            StringMap.add name (Project (Var (x, field_types), name)) fields)
-         field_types
-         StringMap.empty)
+  let eta_expand_var (x, ty) =
+    match ty with
+    | Types.Record row -> 
+        let field_types = field_types_of_row row in
+        Record
+          (StringMap.fold
+            (fun name _t fields ->
+                StringMap.add name (Project (Var (x, ty), name)) fields)
+            field_types
+            StringMap.empty)
+    | _ -> Var (x, ty)
 
   let eta_expand_list xs =
     let x = Var.fresh_raw_var () in
-    let field_types = field_types_of_list xs in
-      ([x, xs], [], Singleton (eta_expand_var (x, field_types)))
+    let ty = TypeUtils.element_type ~overstep_quantifiers:true (type_of_expression xs) in
+      ([x, xs], [], Singleton (eta_expand_var (x, ty)))
 
   (* simple optimisations *)
   let reduce_and (a, b) =
@@ -521,8 +547,7 @@ struct
               | Prom _ as q -> 
                   let z = Var.fresh_raw_var () in
                   let tyq = type_of_expression q in
-                  let ftys = recdty_field_types tyq in 
-                  reduce_for_body ([(z,q)], [], Singleton (eta_expand_var (z, ftys)))
+                  reduce_for_body ([(z,q)], [], Singleton (eta_expand_var (z, tyq)))
               | q -> q
             end
           | Concat vs ->
@@ -545,19 +570,19 @@ struct
             *)
             let tyv = type_of_expression v in
             reduce_for_body (gs, os, rs (v,tyv))
-          | Table table
-          | Dedup (Table table) ->
-              let field_types = table_field_types table in
+          | Table (_, _, _, row)
+          | Dedup (Table (_, _, _, row)) ->
+              let ty_elem = Types.Record (Types.Row row) in
               (* we need to generate a fresh variable in order to
                 correctly handle self joins *)
               let x = Var.fresh_raw_var () in
               (* Debug.print ("fresh variable: " ^ string_of_int x); *)
-              reduce_for_body ([(x, source)], [], body (Var (x, field_types)))
+              reduce_for_body ([(x, source)], [], body (Var (x, ty_elem)))
           (* BUGBUG: what should we do when we have a Prom? *)
           | Prom _ -> 
               let x = Var.fresh_raw_var () in 
-              let field_types = field_types_of_for_var source
-              in reduce_for_body ([(x,source)], [], body (Var (x, field_types)))
+              let ty_elem = type_of_for_var source
+              in reduce_for_body ([(x,source)], [], body (Var (x, ty_elem)))
           | v -> query_error "Bad source in for comprehension: %s" (string_of_t v)
 
   let rec reduce_if_body (c, t, e) =
@@ -975,9 +1000,12 @@ struct
     | _ -> assert false
 
   let mk_for_term env (x,xs) body_f =
-    let ftys = Q.query_field_types xs in
+    let ty_elem = 
+      Q.type_of_expression xs
+      |> TypeUtils.element_type ~overstep_quantifiers:true
+    in
     (* let newx = Var.fresh_raw_var () in *)
-    let vx = Q.Var (x, ftys) in
+    let vx = Q.Var (x, ty_elem) in
     let cenv = bind env (x, vx) in
     (* Debug.print ("mk_for_term: " ^ string_of_int newx ^ " for " ^ string_of_int x); *)
     Q.For (None, [x,xs], [], body_f cenv)
@@ -1037,7 +1065,8 @@ struct
               StringMap.find label fields
             | Q.If (c, t, e) ->
               Q.If (c, project (t, label), project (e, label))
-            | Q.Var (_x, field_types) ->
+            | Q.Var (_x, Types.Record row) ->
+              let field_types =  Q.field_types_of_row row in
               assert (StringMap.mem label field_types);
               Q.Project (r, label)
             | _ -> query_error ("Error projecting label %s from record: %s") label (string_of_t r)
@@ -1060,7 +1089,8 @@ struct
                  StringMap.empty)
           | Q.If (c, t, e) ->
             Q.If (c, erase (t, labels), erase (e, labels))
-          | Q.Var (_x, field_types) ->
+          | Q.Var (_x, Types.Record row) ->
+            let field_types = Q.field_types_of_row row in
             assert (StringSet.subset labels (Q.labels_of_field_types field_types));
             Q.Erase (r, labels)
           | _ -> query_error "Error erasing from record"
@@ -1076,9 +1106,11 @@ struct
             (* this special case allows us to hoist a non-standard For body into a generator *)
             | Q.Prom _ as u' ->
                 let z = Var.fresh_raw_var () in
-                let tyz = Q.type_of_expression u' in
-                let ftz = Q.recdty_field_types (Types.unwrap_list_type tyz) in
-                let vz = Q.Var (z, ftz) in
+                let tyz = 
+                  Q.type_of_expression u'
+                  |> TypeUtils.element_type 
+                in
+                let vz = Q.Var (z, tyz) in
                 Q.reduce_for_source (u', tyz, fun v -> norm in_dedup (bind env (z,v)) (Q.Singleton vz))
             | u' -> u' 
           end
@@ -1307,12 +1339,13 @@ let rec select_clause : Sql.index -> bool -> Q.t -> Sql.select_clause =
          to produce non-eta expanded tables. *)
       let var = Sql.fresh_table_var () in
       let fields =
-        List.rev
-          (StringMap.fold
-             (fun name _ fields ->
-               (Sql.Project (var, name), name)::fields)
-             fields
-             [])
+        Sql.Fields
+          (List.rev
+            (StringMap.fold
+              (fun name _ fields ->
+                (Sql.Project (var, name), name)::fields)
+              fields
+              []))
       in
         (false, fields, [Sql.TableRef(table, var)], Sql.Constant (Constant.Bool true), [])
     | Singleton _ when unit_query ->
@@ -1320,15 +1353,16 @@ let rec select_clause : Sql.index -> bool -> Q.t -> Sql.select_clause =
          any fields here. *)
       (* We currently detect this earlier, so the unit_query stuff here
          is redundant. *)
-      (false, [], [], Sql.Constant (Constant.Bool true), [])
+      (false, Sql.Fields [], [], Sql.Constant (Constant.Bool true), [])
     | Singleton (Record fields) ->
       let fields =
-        List.rev
-          (StringMap.fold
-             (fun name v fields ->
-               (base index v, name)::fields)
-             fields
-             [])
+        Sql.Fields
+          (List.rev
+            (StringMap.fold
+              (fun name v fields ->
+                (base index v, name)::fields)
+              fields
+              []))
       in
         (false, fields, [], Sql.Constant (Constant.Bool true), [])
     | _ -> assert false
@@ -1460,7 +1494,8 @@ let delete : ((Ir.var * string) * Q.t option) -> Sql.query =
 let compile_update : Value.database -> Value.env ->
   ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> Sql.query =
   fun db env ((x, table, field_types), where, body) ->
-    let env = Eval.bind (Eval.env_of_value_env QueryPolicy.Flat env) (x, Q.Var (x, field_types)) in
+    let tyx = Types.make_record_type field_types in
+    let env = Eval.bind (Eval.env_of_value_env QueryPolicy.Flat env) (x, Q.Var (x, tyx)) in
 (*      let () = opt_iter (fun where ->  Debug.print ("where: "^Ir.show_computation where)) where in*)
     let where = opt_map (Eval.norm_comp env) where in
 (*       Debug.print ("body: "^Ir.show_computation body); *)
@@ -1472,7 +1507,8 @@ let compile_update : Value.database -> Value.env ->
 let compile_delete : Value.database -> Value.env ->
   ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> Sql.query =
   fun db env ((x, table, field_types), where) ->
-    let env = Eval.bind (Eval.env_of_value_env QueryPolicy.Flat env) (x, Q.Var (x, field_types)) in
+    let tyx = Types.make_record_type field_types in
+    let env = Eval.bind (Eval.env_of_value_env QueryPolicy.Flat env) (x, Q.Var (x, tyx)) in
     let where = opt_map (Eval.norm_comp env) where in
     let q = delete ((x, table), where) in
       Debug.print ("Generated update query: " ^ (db#string_of_query q));

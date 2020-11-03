@@ -107,7 +107,7 @@ struct
           List.rev
             (StringMap.fold
                (fun name _t es ->
-                 QL.Project (QL.Var (x, field_types), name) :: es
+                 QL.Project (QL.Var (x, Types.make_record_type field_types), name) :: es
                ) field_types [])
       | _ -> assert false
 

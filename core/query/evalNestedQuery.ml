@@ -375,31 +375,31 @@ struct
   (* dynamic index type *)
   let index_type = Types.int_type
 
-  let rec lins_inner (z, z_fields) ys : QL.t -> QL.t =
+  let rec lins_inner (z, tyz) ys : QL.t -> QL.t =
     let open QL in
     function
-      | Project (Var (x, fields), l) ->
+      | Project (Var (x, tyx), l) ->
         begin
           match position_of x ys with
-            | None -> Project (Var (x, fields), l)
+            | None -> Project (Var (x, tyx), l)
             | Some i ->
               (* z.1.i.l *)
               Project
                 (Project
-                    (Project (Var (z, z_fields), "1"), string_of_int i), l)
+                    (Project (Var (z, tyz), "1"), string_of_int i), l)
         end
-      | Apply (Primitive "Empty", [e]) -> Apply (Primitive "Empty", [lins_inner_query (z, z_fields) ys e])
-      | Apply (Primitive "length", [e]) -> Apply (Primitive "length", [lins_inner_query (z, z_fields) ys e])
+      | Apply (Primitive "Empty", [e]) -> Apply (Primitive "Empty", [lins_inner_query (z, tyz) ys e])
+      | Apply (Primitive "length", [e]) -> Apply (Primitive "length", [lins_inner_query (z, tyz) ys e])
       | Apply (Primitive "tilde", [s; r]) as e ->
           Debug.print ("Applying lins_inner to tilde expression: " ^ QL.show e);
-          Apply (Primitive "tilde", [lins_inner (z, z_fields) ys s; r])
+          Apply (Primitive "tilde", [lins_inner (z, tyz) ys s; r])
       | Apply (Primitive f, es) ->
-        Apply (Primitive f, List.map (lins_inner (z, z_fields) ys) es)
+        Apply (Primitive f, List.map (lins_inner (z, tyz) ys) es)
       | Record fields ->
-        Record (StringMap.map (lins_inner (z, z_fields) ys) fields)
+        Record (StringMap.map (lins_inner (z, tyz) ys) fields)
       | Primitive "out" ->
         (* z.2 *)
-        Project (Var (z, z_fields), "2")
+        Project (Var (z, tyz), "2")
       | Primitive "in"  -> Primitive "index"
       | Constant c      -> Constant c
       | e ->
@@ -446,7 +446,7 @@ struct
                (fun (x, source) ->
                  match source with
                    | QL.Table t ->
-                     QL.eta_expand_var (x, QL.table_field_types t)
+                     QL.eta_expand_var (x, Types.make_record_type (QL.table_field_types t))
                    | _ -> assert false)
                gs_out) in
     let r_out_type =
@@ -465,16 +465,20 @@ struct
     let os = List.concat (orders c) in
     let q = Var.fresh_raw_var () in
     let z = Var.fresh_raw_var () in
-    let z_fields =
+    (* let z_fields =
       QL.recdty_field_types
         (Types.make_tuple_type
            [r_out_type; index_type])
+    in *)
+    let tyz =
+      Types.make_tuple_type
+        [r_out_type; index_type]
     in
       (q, QL.For (None, gs_out, [], where x_out (QL.Singleton (pair r_out index))),
        z, QL.For (None, gs_in, os,
                 where
-                  (opt_map (lins_inner (z, z_fields) ys) x_in)
-                  (QL.Singleton (lins_inner (z, z_fields) ys (body c)))))
+                  (opt_map (lins_inner (z, tyz) ys) x_in)
+                  (QL.Singleton (lins_inner (z, tyz) ys (body c)))))
 
   and lins_query : QL.t -> query =
     function

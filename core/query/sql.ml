@@ -23,7 +23,10 @@ type query =
   | Delete    of { del_table: table_name; del_where: base option }
   | With      of table_name * query * query
 and select_clause = 
-    bool * (base * string) list * from_clause list * base * base list  (* bool = DISTINCT? *)
+    bool * select_fields * from_clause list * base * base list  (* bool = DISTINCT? *)
+and select_fields =
+  | Star
+  | Fields    of (base * string) list
 and from_clause =
   | TableRef of table_name * Var.var
   | Subquery of bool * query * Var.var  (* bool = LATERAL? *)
@@ -164,8 +167,9 @@ let rec pr_query quote ignore_fields ppf q =
       Format.pp_print_string ppf "0 as \"@unit@\"" (* SQL doesn't support empty records! *)
     else
       match fields with
-        | [] -> Format.pp_print_string ppf "0 as \"@unit@\"" (* SQL doesn't support empty records! *)
-        | fields -> (pp_comma_separated pp_field) ppf fields
+        | Star -> Format.pp_print_string ppf "*"
+        | Fields [] -> Format.pp_print_string ppf "0 as \"@unit@\"" (* SQL doesn't support empty records! *)
+        | Fields fields -> (pp_comma_separated pp_field) ppf fields
   in
 
   let pr_select ppf fDistinct fields tables condition os =

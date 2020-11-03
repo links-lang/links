@@ -27,7 +27,7 @@ sig
       | Closure   of (Var.var list * Ir.computation) * env
       | Case      of t * (Var.binder * t) StringMap.t * (Var.binder * t) option
       | Primitive of string
-      | Var       of Var.var * Types.datatype StringMap.t
+      | Var       of Var.var * Types.datatype
       | Constant  of Constant.t
   and env = { venv: Value.env; qenv: t Env.Int.t; policy: QueryPolicy.t }
       [@@deriving show]
@@ -44,8 +44,9 @@ sig
   val recdty_field_types : Types.datatype -> Types.datatype StringMap.t
   val table_field_types : Value.table -> Types.typ Utility.StringMap.t
   val query_field_types : t -> Types.datatype StringMap.t
+  val type_of_for_var : t -> Types.datatype
   val labels_of_field_types : 'a Utility.StringMap.t -> Utility.StringSet.t
-  val eta_expand_var : Var.var * Types.datatype StringMap.t -> t
+  val eta_expand_var : Var.var * Types.datatype -> t
 
   val reduce_where_then : t * t -> t
   val reduce_and : t * t -> t

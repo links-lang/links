@@ -100,7 +100,7 @@ let graph_query (q1,ty1) x (q2,ty2) =
 let prom_delateralize gs q1 x (q2,ty2) y (q3,ty3) =
     let p = Var.fresh_raw_var () in
     let graph, ftys = graph_query (Q.Dedup q2,ty2) x (q3,ty3) in
-    let vp = Q.Var (p,ftys) in
+    let vp = Q.Var (p,Types.make_record_type ftys) in
     let vx = Q.Var (x,ty2) in
     let eq_test a b = Q.Apply (Q.Primitive "==", [a;b]) in
     let and_query a b = Q.Apply (Q.Primitive "&&", [a;b]) in
@@ -111,7 +111,7 @@ let prom_delateralize gs q1 x (q2,ty2) y (q3,ty3) =
     let eq_query = 
         StringMap.fold 
             (fun f _ acc -> and_query acc (eq_test (Q.Project (vx, f)) (Q.Project (vp, Q.flatfield "1" f))))
-            ty2
+            (Q.recdty_field_types ty2)
             (Q.Constant (Constant.Bool true))
     in
     (* eta-expanded p.2, with record flattening *)
@@ -119,7 +119,7 @@ let prom_delateralize gs q1 x (q2,ty2) y (q3,ty3) =
         Q.Record
             (StringMap.fold 
                 (fun f _ acc -> StringMap.add f (Q.Project (vp, Q.flatfield "2" f)) acc)
-                ty3
+                (Q.recdty_field_types ty3)
                 StringMap.empty)
     in
     let q1_rp = subst q1 y rp
@@ -189,7 +189,7 @@ let rec delateralize_step q =
             match findgs [] gs with
             | Some (gsx,x,qx,tyx,y,qy,gsy) ->
                 let qf = Q.For (None, gsy, [], q) in
-                let tyy = Q.query_field_types qy in
+                let tyy = Q.type_of_for_var qy in
                 Some (prom_delateralize gsx qf x (qx,tyx) y (qy,tyy))
             | None ->
                 let ogs = gs >>== (fun (z,qz) -> ds qz >>= fun qz' -> Some (z,qz')) in

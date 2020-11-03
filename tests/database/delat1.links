@@ -1,6 +1,6 @@
 var db = database "links";
 var factorials = table "factorials" with (i : Int, f : Int) from db;
-query {
+query delat {
     for (x <- asList(factorials)) 
     for (z <- dedup(for (y <- distinct(factorials)) 
                 where (x.i == y.f) 

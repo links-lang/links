@@ -14,7 +14,7 @@ module S = Sql
 let mapstrcat sep f l = l |> List.map f |> String.concat sep
 
 let dummy_sql_empty_query = 
-    (false,[(S.Constant (Constant.Int 42), "@unit@")], [], S.Constant (Constant.Bool false), [])
+    (false,S.Fields [(S.Constant (Constant.Int 42), "@unit@")], [], S.Constant (Constant.Bool false), [])
 
 (* convert an NRC-style query into an SQL-style query *)
 let rec sql_of_query is_set = function
@@ -30,9 +30,9 @@ and disjunct is_set = function
 and generator locvars = function
 | (v, Q.Prom p) -> (S.Subquery (Q.contains_free locvars p, sql_of_query true p, v))
 | (v, Q.Table (_, tname, _, _)) -> (S.TableRef (tname, v))
-(* FIXME: 
-| (v, Q.Dedup (Q.Table (_, tname, _, _))) -> (S.FromDedupTable tname, v) *)
-| _ -> failwith "generator"
+| (v, Q.Dedup (Q.Table (_, tname, _, _))) ->
+    S.Subquery (false, S.Select (true, S.Star, [S.TableRef (tname, v)], S.Constant (Constant.Bool true), []), v)
+| (_, _arg) -> Debug.print ("error in SimpleSqlGen.disjunct: unexpected arg = " ^ Q.show _arg); failwith "generator"
 
 and body is_set gs os j = 
     let selquery body where =
@@ -43,7 +43,7 @@ and body is_set gs os j =
             |> List.rev
         in
         let os = List.map base_exp os in
-        (is_set, body, froms, where, os)
+        (is_set, S.Fields body, froms, where, os)
     in
     match j with
     | Q.Concat [] -> dummy_sql_empty_query
