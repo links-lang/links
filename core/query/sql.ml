@@ -305,8 +305,8 @@ and pr_base quote one_table ppf b =
         Format.pp_print_string ppf
           ("'" ^ CommonTypes.Constant.escape_string s ^ "'")
     | LikeProject (v, f) ->
-        Format.fprintf ppf "%a.\"%a\""
-          Format.pp_print_string (string_of_table_var v)
+        Format.fprintf ppf "%a.%a"
+          Format.pp_print_string (quote (string_of_table_var v))
           Format.pp_print_string f
     (* Special case appends with the empty string *)
     | LikeAppend (LikeString "", l) ->
