@@ -1016,7 +1016,6 @@ let rec likeify v =
               | _ -> None
           in
             string v
-            (* opt_map quote (string v) *)
       | Variant ("Seq", rs) ->
           let rec seq =
             function
