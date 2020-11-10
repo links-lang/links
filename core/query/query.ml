@@ -972,23 +972,8 @@ struct
 end
 
 (* convert a regexp to a like if possible *)
-(* TODO: Returning a string is too restrictive, since SQL doesn't allow
- * splicing. Realistically we need another datatype of the form:
- *
- * type sql_like =
- *   | LikeString of string
- *   | LikeProject of (var, field)
- *   | LikeConcat of sql_like list
- *
- * Then, we'd have an extra thing in the SQL DSL:
- * type sql = ... | SqlLike of sql_like
- *
- * And then we'd implement the printing logic.
- * But I should do the stuff I'm paid to do for a bit!
- * *)
 let rec likeify v =
   let open Q in
-  (* let () = Printf.printf "LIKEIFY: %s\n%!"  (show v) in *)
   let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
     match v with
       | Variant ("Repeat", pair) ->
@@ -1002,11 +987,6 @@ let rec likeify v =
       | Variant ("Simply", Project (Var (v, _), field)) ->
           Some (Sql.LikeProject (v, field))
       | Variant ("Quote", Variant ("Simply", v)) ->
-          (* TODO:
-
-             detect variables and convert to a concatenation operation
-             (this needs to happen in RLIKE compilation as well)
-          *)
          let rec string =
             function
               | Constant (Constant.String s) -> Some (Sql.LikeString (quote s))
@@ -1056,7 +1036,9 @@ let rec likeify v =
             seq (unbox_list rs)
       | Variant ("StartAnchor", _) -> Some (Sql.LikeString "")
       | Variant ("EndAnchor", _) -> Some (Sql.LikeString "")
-      | _ -> assert false
+      | e ->
+          Debug.print ("Could not likeify: " ^ (string_of_t e));
+          assert false
 
 let rec select_clause : Sql.index -> bool -> Q.t -> Sql.select_clause =
   fun index unit_query v ->

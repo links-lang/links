@@ -26,7 +26,9 @@ and select_clause = (base * string) list * from_clause list * base * base list
 and from_clause =
   | TableRef of table_name * Var.var
   | Subquery of query * Var.var
-and sql_like = (* Used to implement 'LIKE' in SQL. Monoidal. *)
+and sql_like =
+  (* Used to implement 'LIKE' in SQL. Monoidal
+   * (with unit `LikeString ""`) . *)
   | LikeString of string
   | LikeProject of Var.var * string
   | LikeAppend of (sql_like * sql_like)
@@ -303,7 +305,7 @@ and pr_base quote one_table ppf b =
         Format.pp_print_string ppf
           ("'" ^ CommonTypes.Constant.escape_string s ^ "'")
     | LikeProject (v, f) ->
-        Format.fprintf ppf "%a.%a"
+        Format.fprintf ppf "%a.\"%a\""
           Format.pp_print_string (string_of_table_var v)
           Format.pp_print_string f
     (* Special case appends with the empty string *)
