@@ -119,7 +119,7 @@ struct
         | Singleton (Record fields) -> Record fields
         | If (_, t, Concat []) -> tt t
         | For (_, _gs, _os, t) -> tt t
-        | _ -> Debug.print ("v: "^string_of_t v); assert false
+        | _ -> (* Debug.print ("v: "^string_of_t v); *) assert false
 
   let bind env (x, v) =
     { env with qenv = Env.Int.bind x v env.qenv }   
@@ -395,7 +395,7 @@ struct
   let eta_expand_list xs =
     let x = Var.fresh_raw_var () in
     let ty = TypeUtils.element_type ~overstep_quantifiers:true (type_of_expression xs) in
-      Debug.print ("eta_expand_list create: " ^ show (Var (x, ty)));
+      (* Debug.print ("eta_expand_list create: " ^ show (Var (x, ty))); *)
       ([x, xs], [], Singleton (eta_expand_var (x, ty)))
 
   (* gs must ALWAYS be non-empty, both input and output!*)
@@ -520,7 +520,7 @@ struct
               | Prom _ as q -> 
                   let z = Var.fresh_raw_var () in
                   let tyq = type_of_expression q in
-                  Debug.print ("reduce_for_source.Singleton fresh var: " ^ show (Var (z,tyq)));
+                  (* Debug.print ("reduce_for_source.Singleton fresh var: " ^ show (Var (z,tyq))); *)
                   reduce_for_body ([(z,q)], [], Singleton (eta_expand_var (z, tyq)))
               | q -> q
             end
@@ -551,16 +551,16 @@ struct
                 correctly handle self joins *)
               let y = Var.fresh_raw_var () in
               let ty_elem = Types.Record (Types.Row row) in
-              Debug.print ("reduce_for_source.Table fresh var: " ^ string_of_int y ^ " for " ^ string_of_int x);
+              (* Debug.print ("reduce_for_source.Table fresh var: " ^ string_of_int y ^ " for " ^ string_of_int x); *)
               let env' = bind env (x, Var (y, ty_elem)) in
-              Debug.print ("reduce_for_source.Table body before renaming: " ^ show (body env empty_os));
+              (* Debug.print ("reduce_for_source.Table body before renaming: " ^ show (body env empty_os)); *)
               let body' = body env' empty_os in
-              Debug.print ("reduce_for_source.Table body after renaming: " ^ show body');
+              (* Debug.print ("reduce_for_source.Table body after renaming: " ^ show body'); *)
               reduce_for_body ([(y, source)], [], body')
           | Prom _ -> 
               let y = Var.fresh_raw_var () in 
               let ty_elem = type_of_for_var source in 
-              Debug.print ("reduce_for_source.Prom fresh var: " ^ string_of_int y);
+              (* Debug.print ("reduce_for_source.Prom fresh var: " ^ string_of_int y); *)
               let env' = bind env (x, Var (y, ty_elem)) in
               let body' = body env' empty_os in
               reduce_for_body ([(y,source)], [], body')
@@ -1091,11 +1091,13 @@ struct
       apply in_dedup env (norm false env f, List.map (norm false env) xs)
     | Q.For (_, gs, os, u) as _orig -> 
         (* Debug.print ("norm.For: " ^ Q.show _orig); *)
-        let rec reduce_gs env os_f = function
+        let rec reduce_gs env os_f body = function
         | [] -> 
           begin
             let open Q in (* XXX remove *)
-            match norm in_dedup env u with
+            match norm in_dedup env body with
+            | Q.For (_, gs', os', u') ->
+                reduce_gs env (os_f -<- (fun os'' -> os'@os'')) u' gs'
             (* this special case allows us to hoist a non-standard For body into a generator *)
             | Q.Prom _ as u' ->
                 let z = Var.fresh_raw_var () in
@@ -1104,27 +1106,27 @@ struct
                   |> TypeUtils.element_type 
                 in
                 let vz = Q.Var (z, tyz) in
-                Debug.print ("norm.For fresh var: " ^ Q.show vz);
+                (* Debug.print ("norm.For fresh var: " ^ Q.show vz); *)
                 Q.reduce_for_source env (z, u', tyz) (fun env' os_f' -> 
                   Q.For (None, [], List.map (norm false env') (os_f' (os_f [])),
                     norm in_dedup env' (Q.Singleton vz)))
             | u' -> 
               (* Q.For (None, [], List.map (norm false env) (os_f []), u') *)
-              let os = os_f [] in
-              let domenv = Env.Int.fold (fun x _ l -> x::l) env.qenv [] in
+              let os' = os_f [] in
+              (* let domenv = Env.Int.fold (fun x _ l -> x::l) env.qenv [] in
               Debug.print(">>> final env variables: " ^ String.concat ", "  (List.map string_of_int domenv));
               Debug.print(">>> final input os: " ^ String.concat ", " (List.map Q.show os));
-              Debug.print(">>> final u': " ^ Q.show u');
-              let os' = List.map (norm false env) os in
-              Q.For (None, [], os', u')
+              Debug.print(">>> final u': " ^ Q.show u'); *)
+              let os'' = List.map (norm false env) os' in
+              Q.For (None, [], os'', u')
           end
         | (x,g)::gs' -> (* equivalent to xs = For gs' u, body = g, but possibly the arguments aren't normalized *)
             let tyg = Q.type_of_expression g in
-            Q.reduce_for_source env (x, norm in_dedup env g, tyg) (fun env' os_f' -> reduce_gs env' (os_f -<- os_f') gs')
+            Q.reduce_for_source env (x, norm in_dedup env g, tyg) (fun env' os_f' -> reduce_gs env' (os_f -<- os_f') body gs')
         in
-        Debug.print(">>> env variables: " ^ String.concat ", "  (List.map string_of_int (Env.Int.fold (fun x _ l -> x::l) env.qenv [])));
-        Debug.print(">>> os :" ^ String.concat ", " (List.map Q.show os));
-        reduce_gs env (fun os' -> os@os') gs
+        (* Debug.print(">>> env variables: " ^ String.concat ", "  (List.map string_of_int (Env.Int.fold (fun x _ l -> x::l) env.qenv [])));
+        Debug.print(">>> os :" ^ String.concat ", " (List.map Q.show os)); *)
+        reduce_gs env (fun os' -> os@os') u gs
     | Q.If (c, t, e) ->
         Q.reduce_if_condition (norm false env c, norm in_dedup env t, norm in_dedup env e)
     | Q.Case (v, cases, default) ->
@@ -1251,11 +1253,11 @@ struct
 
   let eval policy env e =
     Debug.debug_time "Query.eval" (fun () ->
-      let res =
+      (* let res = *)
       norm_comp (env_of_value_env policy env) e
-      in
+      (* in
       Debug.print ("eval returned: " ^ Q.show res);
-      res
+      res *)
       )
 end
 
