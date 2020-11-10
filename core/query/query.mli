@@ -34,9 +34,9 @@ sig
 
   val nil : t
 
-  val contains_free : Var.var list -> t -> bool
-
   val value_of_expression : t -> Value.t
+
+  val bind : env -> Env.Int.name * t -> env
 
   val flatfield : string -> string -> string
   val flattened_pair : t -> t -> t
@@ -76,8 +76,8 @@ sig
   val empty_env : QueryPolicy.t -> Lang.env
   val env_of_value_env : QueryPolicy.t -> Value.env -> Lang.env
   val query_bindings_of_env : Lang.env -> (Var.var * Lang.t) list
-  val bind : Lang.env -> Env.Int.name * Lang.t -> Lang.env
   val computation : Lang.env -> Ir.computation -> Lang.t
+  val contains_free : Var.var list -> Lang.t -> bool
   val norm : Lang.env -> Lang.t -> Lang.t
   val eval : QueryPolicy.t -> Value.t Value.Env.t -> Ir.computation -> Lang.t
 end

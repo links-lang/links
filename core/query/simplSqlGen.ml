@@ -8,6 +8,7 @@ open Utility
 open CommonTypes
 
 module Q = Query.Lang
+module E = Query.Eval
 module C = Constant
 module S = Sql
 
@@ -28,7 +29,7 @@ and disjunct is_set = function
 | _arg -> Debug.print ("error in SimpleSqlGen.disjunct: unexpected arg = " ^ Q.show _arg); failwith "disjunct"
 
 and generator locvars = function
-| (v, Q.Prom p) -> (S.Subquery (Q.contains_free locvars p, sql_of_query true p, v))
+| (v, Q.Prom p) -> (S.Subquery (E.contains_free locvars p, sql_of_query true p, v))
 | (v, Q.Table (_, tname, _, _)) -> (S.TableRef (tname, v))
 | (v, Q.Dedup (Q.Table (_, tname, _, _))) ->
     S.Subquery (false, S.Select (true, S.Star, [S.TableRef (tname, v)], S.Constant (Constant.Bool true), []), v)

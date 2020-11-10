@@ -82,7 +82,7 @@ let rec subst t x u =
     | Q.Dedup v -> Q.Dedup (srec v)
     | Q.Prom v -> Q.Prom (srec v)
     | Q.Closure (c, closure_env) ->
-        let cenv = Query.Eval.bind closure_env (x,u) in
+        let cenv = Query.Lang.bind closure_env (x,u) in
         Q.Closure (c, cenv)
     | v -> v
 
