@@ -144,43 +144,68 @@ let order_by_clause n =
    returned. This allows these operators to take lists that have any
    element type at all. *)
 
+
+(* TODO: OCaml cannot infer polymorphic record signatures.
+ * For now, hoisting these, but eventually we'd want to put
+ * these into the object so they can be used by overridden methods. *)
+let pp_comma_separated pp_item =
+  let pp_comma ppf () = Format.pp_print_string ppf "," in
+  Format.pp_print_list ~pp_sep:(pp_comma) pp_item
+
+let gen_pp_pair ppf fmt_str fl fr (l, r) =
+  Format.fprintf ppf fmt_str fl l fr r
+
 class printer =
   object (self : 'self_type)
 
-  method private pp_comma ppf () =
-    Format.pp_print_string ppf ","
+  method quote q =
+    "\"" ^ Str.global_replace (Str.regexp "\"") "\"\"" q ^ "\""
 
-  method private pp_comma_separated pp_item =
-    Format.pp_print_list ~pp_sep:pp_comma pp_item
-
-  method pp_quote ppf q =
+  method private pp_quote : Format.formatter -> string -> unit = fun ppf q ->
     (* Copied from the pg_database.ml, which seems to be the default,
      * I guess? *)
-    let quote s =
-      "\"" ^ Str.global_replace (Str.regexp "\"") "\"\"" f ^ "\"" in
-    Format.pp_print_string ppf (quote q)
-
-  method private gen_pp_pair ppf fmt_str fl fr (l, r) =
-    Format.fprintf ppf fmt_str fl l fr r in
+    Format.pp_print_string ppf (self#quote q)
 
   method private gen_pp_option ppf fmt_str f option =
-    OptionUtils.opt_iter (Format.fprintf ppf fmt_str f) option in
+    OptionUtils.opt_iter (Format.fprintf ppf fmt_str f) option
 
-  method pp_fields ppf fields =
-    let pp_field ppf (b, l) = gen_pp_pair ppf "(%a) as %a" pr_b pp_quote (b, l) in
-    if ignore_fields then
-      Format.pp_print_string ppf "0 as \"@unit@\"" (* SQL doesn't support empty records! *)
-    else
-      match fields with
-        | [] -> Format.pp_print_string ppf "0 as \"@unit@\"" (* SQL doesn't support empty records! *)
-        | fields -> (self#pp_comma_separated pp_field) ppf fields
+  method pp_empty_record ppf =
+    (* SQL doesn't support empty records, so this is a hack. *)
+    Format.pp_print_string ppf "0 as \"@unit@\""
 
-  method pp_select ppf fields tables condition os =
+        (*
+  let pr_select ppf fields tables condition os =
     let pp_os_condition ppf a = Format.fprintf ppf "%a" pr_b a in
     let pp_orderby ppf os =
       match os with
         | [] -> ()
-        | _ -> Format.fprintf ppf "\norder by %a" (self#pp_comma_separated pp_os_condition) os in
+        | _ -> Format.fprintf ppf "\norder by %a" (pp_comma_separated pp_os_condition) os in
+    let pp_from_clause ppf fc =
+      match fc with
+        | TableRef (t, x) -> Format.fprintf ppf "%a as %s" pp_quote t (string_of_table_var x)
+        | Subquery (q, x) -> Format.fprintf ppf "(%a) as %s" pr_q q (string_of_table_var x) in
+    let pp_where ppf condition =
+      match condition with
+        | Constant (Constant.Bool true) -> ()
+        | _ -> Format.fprintf ppf "\nwhere %a" pp_os_condition condition in
+    Format.fprintf ppf "select %a\nfrom %a%a%a"
+      pr_fields fields
+      (pp_comma_separated pp_from_clause) tables
+      pp_where condition
+      pp_orderby os
+  in
+  *)
+
+  method pp_select ppf fields tables condition os ignore_fields =
+    let pp_os_condition ppf a =
+      Format.fprintf ppf "%a" (self#pp_base false) a in
+    let pr_q = self#pp_query ignore_fields in
+    let pp_orderby ppf os =
+      match os with
+        | [] -> ()
+        | _ ->
+            Format.fprintf ppf "\norder by %a"
+            (pp_comma_separated pp_os_condition) os in
     let pp_from_clause ppf fc =
       match fc with
         | TableRef (t, x) -> Format.fprintf ppf "%a as %s" self#pp_quote t (string_of_table_var x)
@@ -190,15 +215,15 @@ class printer =
         | Constant (Constant.Bool true) -> ()
         | _ -> Format.fprintf ppf "\nwhere %a" pp_os_condition condition in
     Format.fprintf ppf "select %a\nfrom %a%a%a"
-      pp_fields fields
+      self#pp_fields fields
       (pp_comma_separated pp_from_clause) tables
       pp_where condition
       pp_orderby os
 
-  method pp_opt_where ppf where =
-    self#gen_pp_option ppf "where (%a)" pr_b_ignore_fields where in
-
   method private pr_b_ignore_fields = self#pp_base true
+
+  method pp_opt_where ppf where =
+    self#gen_pp_option ppf "where (%a)" self#pr_b_ignore_fields where
 
   method pp_delete ppf table where =
     Format.fprintf ppf "delete from %a %a"
@@ -206,25 +231,40 @@ class printer =
       self#pp_opt_where where
 
   method pp_update ppf table fields where =
-    let pp_field ppf (k, v) = gen_pp_pair ppf "%a = %a" pp_quote pr_b_ignore_fields (k, v) in
+    let pp_field ppf (k, v) =
+      gen_pp_pair ppf "%a = %a" (self#pp_quote) (self#pr_b_ignore_fields) (k, v) in
     Format.fprintf ppf "update %a\nset %a %a"
       Format.pp_print_string table
-      (self#pp_comma_separated pp_field) fields
+      (pp_comma_separated pp_field) fields
       self#pp_opt_where where
+
+  method pp_fields ppf fields =
+    let pp_field ppf (b, l) =
+      gen_pp_pair ppf
+        "(%a) as %a" (self#pp_base false) self#pp_quote (b, l) in
+      match fields with
+        | [] -> self#pp_empty_record ppf
+        | fields -> (pp_comma_separated pp_field) ppf fields
+
 
   method pp_insert ppf table fields values =
     let pp_value ppf x =
       Format.fprintf ppf "(%a)"
-        (pp_comma_separated pr_b_ignore_fields) x in
+        (pp_comma_separated self#pr_b_ignore_fields) x in
     Format.fprintf ppf "insert into %a (%a)\nvalues %a"
       Format.pp_print_string table
-      (self#pp_comma_separated Format.pp_print_string) fields
-      (self#pp_comma_separated pp_value) values
+      (pp_comma_separated Format.pp_print_string) fields
+      (pp_comma_separated pp_value) values
 
   method pp_query ignore_fields ppf q =
     let pr_q = self#pp_query ignore_fields in
     let pr_b = self#pp_base false in
-    let pr_b_ignore_fields = self#pp_base true in
+
+    let pp_fields ppf fields =
+      if ignore_fields then
+        self#pp_empty_record ppf
+      else
+        self#pp_fields ppf fields in
 
     match q with
       | UnionAll ([], _) ->
@@ -244,11 +284,11 @@ class printer =
         Format.fprintf ppf "select %a" pp_fields fields
       | Select (fields, [], condition, _os) ->
         Format.fprintf ppf "select * from (select %a) as %a where %a"
-          self#pp_fields fields
+          pp_fields fields
           Format.pp_print_string (fresh_dummy_var ())
           pr_b condition
       | Select (fields, tables, condition, os) ->
-          self#pp_select ppf fields tables condition os
+          self#pp_select ppf fields tables condition os ignore_fields
       | Delete { del_table; del_where } ->
           self#pp_delete ppf del_table del_where
       | Update { upd_table; upd_fields; upd_where } ->
@@ -264,12 +304,12 @@ class printer =
   method pp_base one_table ppf b =
     let pp_projection one_table ppf (var, label) =
       if one_table then
-        Format.pp_print_string ppf (quote label)
+        Format.pp_print_string ppf (self#quote label)
       else
         Format.fprintf ppf "%s.%s" (string_of_table_var var) (self#quote label)
     in
     let pr_b_one_table = self#pp_base one_table in
-    let pr_q_true = pp_query true in
+    let pr_q_true = self#pp_query true in
     let unary_ops =
       StringSet.of_list ["intToString"; "stringToInt"; "intToFloat";
                          "floatToString"; "stringToFloat"; "floatToInt";
@@ -314,7 +354,7 @@ class printer =
         | _ -> Format.fprintf ppf "(%a%s%a)"
               pr_b_one_table l
               (Arithmetic.sql_name op)
-              pr_b_one_table r
+              pr_b_one_table r in
       match b with
         | Case (c, t, e) ->
             Format.fprintf ppf "case when %a then %a else %a end"
@@ -324,7 +364,7 @@ class printer =
         | Constant c ->
             Format.pp_print_string ppf (Constant.to_string c)
         | Project (var, label) ->
-            pp_projection quote one_table ppf (var, label)
+            pp_projection one_table ppf (var, label)
         | Apply (op, [l; r]) when Arithmetic.is op ->
             pp_sql_arithmetic ppf (l, op, r)
               (* special case: not empty is translated to exists *)
@@ -359,9 +399,30 @@ class printer =
             Format.fprintf ppf "%a" Format.pp_print_string "1"
         | RowNumber ps ->
           Format.fprintf ppf "row_number() over (order by %a)"
-              (pp_comma_separated (pp_projection quote one_table)) ps
+              (pp_comma_separated (pp_projection one_table)) ps
+
+    method string_of_base one_table b =
+      Format.asprintf "%a" (self#pp_base one_table) b
+
+    (*
+    method string_of_query : ?range:(Sql.range option) -> Sql.query -> string
+    *)
+
+    method string_of_query  : ?range:(range option) -> query -> string =
+      fun ?(range=None) q ->
+      let pr_range ppf range =
+        match range with
+          | None -> ()
+          | Some (limit, offset) ->
+              Format.fprintf ppf " limit %i offset %i" limit offset
+      in
+      Format.asprintf "%a%a" (self#pp_query false) q pr_range range
   end
 
+let default_printer =
+  object(self)
+    inherit printer
+  end
 
 (* NOTE: Inlines a WITH common table expression if it is the toplevel
  * constructor of a union of queries and is used immediately in a SELECT query.
@@ -388,13 +449,3 @@ let rec inline_outer_with q =
  * these two entry methods into the printer class.
  * Finally, we'd call the entrypoints from the appropriate DB driver. *)
 
-let string_of_base quote one_table b =
-  Format.asprintf "%a" (pp_base quote one_table) b
-
-let string_of_query ?(range=None) quote q =
-  let pr_range ppf range =
-    match range with
-      | None -> ()
-      | Some (limit, offset) -> Format.fprintf ppf " limit %i offset %i" limit offset
-  in
-  Format.asprintf "%a%a" (pp_query quote false) q pr_range range
