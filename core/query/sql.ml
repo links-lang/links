@@ -68,13 +68,6 @@ let fresh_dummy_var () =
   incr dummy_counter;
   "dummy" ^ string_of_int (!dummy_counter)
 
-let string_of_label label =
-  if Str.string_match (Str.regexp "[0-9]+") label 0 then
-    "\"" ^ label ^ "\""     (* The SQL-standard way to quote an identifier;
-                               works in MySQL and PostgreSQL *)
-  else
-    label
-
 module Arithmetic :
 sig
   val is : string -> bool
@@ -145,7 +138,7 @@ let order_by_clause n =
    element type at all. *)
 
 
-(* TODO: OCaml cannot infer polymorphic record signatures.
+(* TODO: OCaml cannot infer polymorphic method signatures.
  * For now, hoisting these, but eventually we'd want to put
  * these into the object so they can be used by overridden methods. *)
 let pp_comma_separated pp_item =
@@ -155,16 +148,16 @@ let pp_comma_separated pp_item =
 let gen_pp_pair ppf fmt_str fl fr (l, r) =
   Format.fprintf ppf fmt_str fl l fr r
 
-class printer =
+class printer (quote : string -> string) =
   object (self : 'self_type)
 
-  method quote q =
-    "\"" ^ Str.global_replace (Str.regexp "\"") "\"\"" q ^ "\""
+  (* Defer to class parameters *)
+  method quote_field = quote
 
   method private pp_quote : Format.formatter -> string -> unit = fun ppf q ->
     (* Copied from the pg_database.ml, which seems to be the default,
      * I guess? *)
-    Format.pp_print_string ppf (self#quote q)
+    Format.pp_print_string ppf (self#quote_field q)
 
   method private gen_pp_option ppf fmt_str f option =
     OptionUtils.opt_iter (Format.fprintf ppf fmt_str f) option
@@ -172,29 +165,6 @@ class printer =
   method pp_empty_record ppf =
     (* SQL doesn't support empty records, so this is a hack. *)
     Format.pp_print_string ppf "0 as \"@unit@\""
-
-        (*
-  let pr_select ppf fields tables condition os =
-    let pp_os_condition ppf a = Format.fprintf ppf "%a" pr_b a in
-    let pp_orderby ppf os =
-      match os with
-        | [] -> ()
-        | _ -> Format.fprintf ppf "\norder by %a" (pp_comma_separated pp_os_condition) os in
-    let pp_from_clause ppf fc =
-      match fc with
-        | TableRef (t, x) -> Format.fprintf ppf "%a as %s" pp_quote t (string_of_table_var x)
-        | Subquery (q, x) -> Format.fprintf ppf "(%a) as %s" pr_q q (string_of_table_var x) in
-    let pp_where ppf condition =
-      match condition with
-        | Constant (Constant.Bool true) -> ()
-        | _ -> Format.fprintf ppf "\nwhere %a" pp_os_condition condition in
-    Format.fprintf ppf "select %a\nfrom %a%a%a"
-      pr_fields fields
-      (pp_comma_separated pp_from_clause) tables
-      pp_where condition
-      pp_orderby os
-  in
-  *)
 
   method pp_select ppf fields tables condition os ignore_fields =
     let pp_os_condition ppf a =
@@ -245,7 +215,6 @@ class printer =
       match fields with
         | [] -> self#pp_empty_record ppf
         | fields -> (pp_comma_separated pp_field) ppf fields
-
 
   method pp_insert ppf table fields values =
     let pp_value ppf x =
@@ -304,9 +273,9 @@ class printer =
   method pp_base one_table ppf b =
     let pp_projection one_table ppf (var, label) =
       if one_table then
-        Format.pp_print_string ppf (self#quote label)
+        Format.pp_print_string ppf (self#quote_field label)
       else
-        Format.fprintf ppf "%s.%s" (string_of_table_var var) (self#quote label)
+        Format.fprintf ppf "%s.%s" (string_of_table_var var) (self#quote_field label)
     in
     let pr_b_one_table = self#pp_base one_table in
     let pr_q_true = self#pp_query true in
@@ -404,10 +373,6 @@ class printer =
     method string_of_base one_table b =
       Format.asprintf "%a" (self#pp_base one_table) b
 
-    (*
-    method string_of_query : ?range:(Sql.range option) -> Sql.query -> string
-    *)
-
     method string_of_query  : ?range:(range option) -> query -> string =
       fun ?(range=None) q ->
       let pr_range ppf range =
@@ -419,9 +384,9 @@ class printer =
       Format.asprintf "%a%a" (self#pp_query false) q pr_range range
   end
 
-let default_printer =
-  object(self)
-    inherit printer
+let default_printer quote =
+  object
+    inherit (printer quote)
   end
 
 (* NOTE: Inlines a WITH common table expression if it is the toplevel

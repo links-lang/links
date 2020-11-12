@@ -54,7 +54,7 @@ class virtual dbvalue = object (self)
   method virtual error : string
 end
 
-class virtual database printer = object(self)
+class virtual database (printer : Sql.printer) = object(self)
   method virtual driver_name : unit -> string
   method virtual escape_string : string -> string
   method virtual exec : string -> dbvalue
@@ -68,6 +68,7 @@ class virtual database printer = object(self)
   method string_of_query : ?range:(Sql.range option) -> Sql.query -> string =
     fun ?(range=None) q ->
       printer#string_of_query ~range  q
+  method sql_printer = printer
 end
 
 let equal_database db1 db2 = db1 == db2
@@ -132,12 +133,11 @@ let db_connect driver params =
 
 class null_database =
 object
-  inherit (database Sql.default_printer)
+  inherit database (Sql.default_printer (fun _ -> assert false))
   method driver_name () = "null"
   method exec _query : dbvalue = assert false
-  method escape_string = assert false
-  method quote_field = assert false
   method supports_shredding () = assert false
+  method escape_string _ = assert false
 end
 
 let _ = register_driver ("null", fun args -> new null_database, reconstruct_db_string ("null", args))

@@ -32,6 +32,7 @@ class virtual database : Sql.printer ->
       string list
     method virtual supports_shredding : unit -> bool
     method string_of_query : ?range:(Sql.range option) -> Sql.query -> string
+    method sql_printer : Sql.printer
   end
 
 

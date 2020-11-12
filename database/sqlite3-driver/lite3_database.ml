@@ -63,7 +63,7 @@ class lite3_result (stmt: S3.stmt) = object
             Rc.OK|Rc.ROW ->
             let data = Array.to_list (S3.row_data stmt) in
             let row = List.map data_to_string data in
-            PolyBuffer.append result_buf row; 
+            PolyBuffer.append result_buf row;
             get_results `QueryOk
           | Rc.DONE ->
             `QueryOk
@@ -87,9 +87,11 @@ class lite3_result (stmt: S3.stmt) = object
     | `QueryOk -> "OK"
 end
 
+let lite3_escape_string = Str.global_replace (Str.regexp_string "'") "''"
+let lite3_quote s = "\"" ^ lite3_escape_string s ^ "\""
 
 class lite3_database file = object(self)
-  inherit Value.database
+  inherit Value.database (Sql.default_printer lite3_quote)
   val mutable _supports_shredding : bool option = None
   val connection = S3.db_open file
   method exec query : Value.dbvalue =
@@ -105,8 +107,7 @@ class lite3_database file = object(self)
     let stmt = last_res stmt in
       new lite3_result stmt
   (* See http://www.sqlite.org/lang_expr.html *)
-  method escape_string = Str.global_replace (Str.regexp_string "'") "''"
-  method quote_field s = "\"" ^ self#escape_string s ^ "\""
+  method escape_string = lite3_escape_string
   method driver_name () = "sqlite3"
   method supports_shredding () =
     match _supports_shredding with

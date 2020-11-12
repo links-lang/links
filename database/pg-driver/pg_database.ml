@@ -97,11 +97,14 @@ class pg_dbresult (pgresult:Postgresql.result) = object
   method error : string = original#error
 end
 
+let pg_quote x =
+  "\"" ^ Str.global_replace (Str.regexp "\"") "\"\"" x ^ "\""
+
 let pg_printer = object(self)
-  inherit Sql.printer as super
+  inherit Sql.printer pg_quote as super
 
   method! pp_insert ppf table_name field_names vss =
-    let quoted_field_names = (List.map super#quote field_names) in
+    let quoted_field_names = (List.map super#quote_field field_names) in
     let vss = List.map (List.map (self#string_of_base false)) vss in
     let body =
       match field_names, vss with
@@ -132,7 +135,7 @@ let pg_printer = object(self)
 end
 
 class pg_database host port dbname user password = object(self)
-  inherit Value.database pg_printer as super
+  inherit Value.database pg_printer
 
   val connection =
     try
