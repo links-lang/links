@@ -137,15 +137,15 @@ let order_by_clause n =
    returned. This allows these operators to take lists that have any
    element type at all. *)
 
-class printer (quote : string -> string) =
+class virtual printer =
   object (self : 'self_type)
+
+  method virtual quote_field : string -> string
 
   method private pp_comma_separated : 'a . (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a list -> unit =
     fun pp_item ->
       let pp_comma ppf () = Format.pp_print_string ppf "," in
       Format.pp_print_list ~pp_sep:(pp_comma) pp_item
-
-  method quote_field = quote
 
   method private pp_quote : Format.formatter -> string -> unit = fun ppf q ->
     (* Copied from the pg_database.ml, which seems to be the default,
@@ -379,7 +379,8 @@ class printer (quote : string -> string) =
 
 let default_printer quote =
   object
-    inherit (printer quote)
+    inherit printer
+    method quote_field = quote
   end
 
 (* NOTE: Inlines a WITH common table expression if it is the toplevel
@@ -397,13 +398,3 @@ let rec inline_outer_with q =
         Select(fields, List.map (replace_subquery z q) tables, condition, os)
     | UnionAll(qs,n) -> UnionAll(List.map inline_outer_with qs,n)
     | q -> q
-
-
-(* TODO: Still a lot to do to get this to compile, I'm sure.
- * We also need to think about an entrypoint, and a way to get
- * this customised. I think the best way to do this would be to
- * modify Value.database to have a `printer` field, which is a
- * subtype of the `printer` class defined above. We'd then move
- * these two entry methods into the printer class.
- * Finally, we'd call the entrypoints from the appropriate DB driver. *)
-
