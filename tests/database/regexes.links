@@ -22,12 +22,23 @@ fun queryBudgets() {
   }
 }
 
+# Tests concatenation
+fun concatDepts() {
+  query flat {
+    for (d <-- depts)
+      [(dept = (d.name ^^ "foo"))]
+  }
+}
+
 fun main() {
   setup();
-  print("Results: " ^^ show(queryBudgets()));
   assertEq(sortBy(fun(x) { x.name }, queryBudgets()),
     [(name = "Alice", dept = "mathematics", coffee_budget = 10000),
      (name = "Bob", dept = "computer science", coffee_budget = 20000),
-     (name = "Carol", dept = "dentistry", coffee_budget = 30000)])
+     (name = "Carol", dept = "dentistry", coffee_budget = 30000)]);
+  assertEq(sortBy(fun(x) { x.dept }, concatDepts()),
+    [(dept = "computer sciencefoo"),
+     (dept ="dentistryfoo"),
+     (dept = "mathematicsfoo")])
 }
 main()

@@ -249,7 +249,7 @@ let mysql_printer = object (self)
   method! pp_sql_like ppf x =
     let open Sql in
     (* Flattens monoidal representation into a list of (non-append)
-     * SqlLike nodes *)
+     * SqlLike nodes. *)
     let rec flatten = function
       | LikeString x
       | LikeAppend (LikeString "", LikeString x)
@@ -261,9 +261,18 @@ let mysql_printer = object (self)
     Format.fprintf ppf "concat(%a)"
       (self#pp_comma_separated super#pp_sql_like)
       (flatten x)
+
+  (* Infix concatenation is not supported in MySQL; ensure that Links ^^
+   * is translated to MySQL concat(-, -) *)
+  method! pp_sql_arithmetic ppf one_table (l, op, r) =
+    let pr_b_one_table = self#pp_base one_table in
+    match op with
+      | "^^" ->
+          Format.fprintf ppf "concat(%a, %a)"
+            pr_b_one_table l
+            pr_b_one_table r
+      | x -> super#pp_sql_arithmetic ppf one_table (l, x, r)
 end
-
-
 
 class mysql_database spec = object(self)
   inherit Value.database mysql_printer
