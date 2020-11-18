@@ -7,14 +7,14 @@ open import MvuCommands;
 
 # Needed to ensure that virtual-dom is open
 module VirtualDom {
-  alien javascript "/lib/virtual-dom.js" {
+  alien javascript "/lib/js/virtual-dom.js" {
     dummy : ();
   }
 }
 
 # Loads the "vdom.js" file, exposes runDom and updateDom.
 module VDom {
-  alien javascript "/lib/vdom.js" {
+  alien javascript "/lib/js/vdom.js" {
     runDom : forall a :: Type(Any, Any), e :: Row .
       (String, HTML(a), AP(?a.End), Sub(a)) ~e~> ();
     updateDom : forall a :: Type(Any, Any), e :: Row . (HTML(a), Sub(a)) ~e~> ();
