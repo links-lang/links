@@ -240,11 +240,33 @@ class mysql_result (result : result) db = object
     Utility.val_of (errmsg db)
 end
 
-let mysql_quote x =
-  "`" ^ Str.global_replace (Str.regexp "`") "``" x ^ "`"
+let mysql_printer = object (self)
+  inherit Sql.printer as super
+
+  method quote_field x =
+    "`" ^ Str.global_replace (Str.regexp "`") "``" x ^ "`"
+
+  method! pp_sql_like ppf x =
+    let open Sql in
+    (* Flattens monoidal representation into a list of (non-append)
+     * SqlLike nodes *)
+    let rec flatten = function
+      | LikeString x
+      | LikeAppend (LikeString "", LikeString x)
+      | LikeAppend (LikeString x, LikeString "") -> [LikeString x]
+      | LikeProject (v, f) -> [LikeProject (v, f)]
+      | LikeAppend (LikeString x, LikeString y) -> [LikeString (x ^ y)]
+      | LikeAppend (x, y) -> flatten x @ flatten y
+    in
+    Format.fprintf ppf "concat(%a)"
+      (self#pp_comma_separated super#pp_sql_like)
+      (flatten x)
+end
+
+
 
 class mysql_database spec = object(self)
-  inherit Value.database (Sql.default_printer mysql_quote)
+  inherit Value.database mysql_printer
   val connection = connect spec
   method driver_name () = "mysql"
   method exec query : Value.dbvalue =
