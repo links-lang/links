@@ -246,22 +246,6 @@ let mysql_printer = object (self)
   method quote_field x =
     "`" ^ Str.global_replace (Str.regexp "`") "``" x ^ "`"
 
-  method! pp_sql_like one_table ppf x =
-    let open Sql in
-    (* Flattens monoidal representation into a list of (non-append)
-     * SqlLike nodes. *)
-    let rec flatten = function
-      | LikeString x
-      | LikeAppend (LikeString "", LikeString x)
-      | LikeAppend (LikeString x, LikeString "") -> [LikeString x]
-      | LikeProject (v, f) -> [LikeProject (v, f)]
-      | LikeAppend (LikeString x, LikeString y) -> [LikeString (x ^ y)]
-      | LikeAppend (x, y) -> flatten x @ flatten y
-    in
-    Format.fprintf ppf "concat(%a)"
-      (self#pp_comma_separated (super#pp_sql_like one_table))
-      (flatten x)
-
   (* Infix concatenation is not supported in MySQL; ensure that Links ^^
    * is translated to MySQL concat(-, -) *)
   method! pp_sql_arithmetic ppf one_table (l, op, r) =

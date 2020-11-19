@@ -975,31 +975,34 @@ end
 let rec likeify v =
   let open Q in
   let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
+  let append x y = Apply (Primitive "^^",  [x; y]) in
+  let str x = Q.Constant (Constant.String x) in
     match v with
       | Variant ("Repeat", pair) ->
           begin
             match unbox_pair pair with
               | Variant ("Star", _), Variant ("Any", _) ->
-                  Some (Sql.LikeString "%")
+                  Some (str "%")
               | _ -> None
           end
-      | Variant ("Simply", Constant (Constant.String s)) -> Some (Sql.LikeString (quote s))
-      | Variant ("Simply", Project (Var (v, _), field)) ->
-          Some (Sql.LikeProject (v, field))
+      | Variant ("Simply", Constant (Constant.String s)) ->
+          Some (str (quote s))
+      | Variant ("Simply", Project (v, field)) ->
+          Some (Project (v, field))
       | Variant ("Quote", Variant ("Simply", v)) ->
          let rec string =
             function
-              | Constant (Constant.String s) -> Some (Sql.LikeString (quote s))
+              | Constant (Constant.String s) -> Some (str (quote s))
               | Singleton (Constant (Constant.Char c)) ->
-                  Some (Sql.LikeString (string_of_char c))
-              | Project (Var (v, _), field) ->
-                  Some (Sql.LikeProject (v, field))
+                  Some (str (string_of_char c))
+              | Project (v, field) ->
+                  Some (Project (v, field))
               | Apply (Primitive "intToString", [Constant (Constant.Int x)]) ->
-                  Some (Sql.LikeString (string_of_int x))
+                  Some (str (string_of_int x))
               | Concat vs ->
                   let rec concat =
                     function
-                      | [] -> Some (Sql.LikeString "")
+                      | [] -> Some (str "")
                       | v::vs ->
                           begin
                             match string v with
@@ -1008,7 +1011,8 @@ let rec likeify v =
                                   begin
                                     match concat vs with
                                       | None -> None
-                                      | Some s' -> Some (Sql.LikeAppend (s, s'))
+                                      | Some s' ->
+                                          Some (append s s')
                                   end
                           end
                   in
@@ -1019,7 +1023,7 @@ let rec likeify v =
       | Variant ("Seq", rs) ->
           let rec seq =
             function
-              | [] -> Some (Sql.LikeString "")
+              | [] -> Some (str "")
               | r::rs ->
                   begin
                     match likeify r with
@@ -1028,13 +1032,13 @@ let rec likeify v =
                           begin
                             match seq rs with
                               | None -> None
-                              | Some s' -> Some (Sql.LikeAppend (s, s'))
+                              | Some s' -> Some (append s s')
                           end
                   end
           in
             seq (unbox_list rs)
-      | Variant ("StartAnchor", _) -> Some (Sql.LikeString "")
-      | Variant ("EndAnchor", _) -> Some (Sql.LikeString "")
+      | Variant ("StartAnchor", _) -> Some (str "")
+      | Variant ("EndAnchor", _) -> Some (str "")
       | e ->
           Debug.print ("Could not likeify: " ^ (string_of_t e));
           assert false
@@ -1105,7 +1109,7 @@ and base : Sql.index -> Q.t -> Sql.base = fun index ->
       begin
         match likeify r with
           | Some r ->
-            Sql.Apply ("LIKE", [base index s; Sql.Like r])
+            Sql.Apply ("LIKE", [base index s; base index r])
           | None ->
               begin
                 let r =

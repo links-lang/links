@@ -26,16 +26,9 @@ and select_clause = (base * string) list * from_clause list * base * base list
 and from_clause =
   | TableRef of table_name * Var.var
   | Subquery of query * Var.var
-and sql_like =
-  (* Used to implement 'LIKE' in SQL. Monoidal
-   * (with unit `LikeString ""`) . *)
-  | LikeString of string
-  | LikeProject of Var.var * string
-  | LikeAppend of (sql_like * sql_like)
 and base =
   | Case      of base * base * base
   | Constant  of Constant.t
-  | Like      of sql_like
   | Project   of Var.var * string
   | Apply     of string * base list
   | Empty     of query
@@ -226,22 +219,6 @@ class virtual printer =
       (self#pp_comma_separated Format.pp_print_string) fields
       (self#pp_comma_separated pp_value) values
 
-  method pp_sql_like one_table ppf = function
-    | LikeString s ->
-        Format.pp_print_string ppf
-          ("'" ^ CommonTypes.Constant.escape_string s ^ "'")
-    | LikeProject (v, f) ->
-        self#pp_projection one_table ppf (v, f)
-    (* Special case appends with the empty string *)
-    | LikeAppend (LikeString "", l) ->
-        self#pp_sql_like one_table ppf l
-    | LikeAppend (l, LikeString "") ->
-        self#pp_sql_like one_table ppf l
-    | LikeAppend (l1, l2) ->
-        Format.fprintf ppf "%a || %a"
-          (self#pp_sql_like one_table) l1
-          (self#pp_sql_like one_table) l2
-
   method pp_sql_arithmetic ppf one_table (l, op, r) =
     let pr_b_one_table = self#pp_base one_table in
     match op with
@@ -345,8 +322,6 @@ class virtual printer =
               pr_b_one_table c
               pr_b_one_table t
               pr_b_one_table e
-        | Like sl ->
-            self#pp_sql_like one_table ppf sl
         | Constant c ->
             Format.pp_print_string ppf (Constant.to_string c)
         | Project (var, label) ->
