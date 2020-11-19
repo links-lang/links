@@ -375,7 +375,10 @@ struct
 
   let rec lins_inner (z, z_fields) ys : QL.t -> QL.t =
     let open QL in
+    let li x = lins_inner (z, z_fields) ys x in
+    let liq = lins_inner_query (z, z_fields) ys in
     function
+      (* Need to make sure this happens on the regex, too. *)
       | Project (Var (x, fields), l) ->
         begin
           match position_of x ys with
@@ -386,20 +389,34 @@ struct
                 (Project
                     (Project (Var (z, z_fields), "1"), string_of_int i), l)
         end
-      | Apply (Primitive "Empty", [e]) -> Apply (Primitive "Empty", [lins_inner_query (z, z_fields) ys e])
-      | Apply (Primitive "length", [e]) -> Apply (Primitive "length", [lins_inner_query (z, z_fields) ys e])
+      | Apply (Primitive "Empty", [e]) -> Apply (Primitive "Empty", [liq e])
+      | Apply (Primitive "length", [e]) -> Apply (Primitive "length", [liq e])
       | Apply (Primitive "tilde", [s; r]) as e ->
           Debug.print ("Applying lins_inner to tilde expression: " ^ QL.show e);
-          Apply (Primitive "tilde", [lins_inner (z, z_fields) ys s; r])
+          Apply (Primitive "tilde", [li s; li r])
       | Apply (Primitive f, es) ->
-        Apply (Primitive f, List.map (lins_inner (z, z_fields) ys) es)
+        Apply (Primitive f, List.map li es)
       | Record fields ->
-        Record (StringMap.map (lins_inner (z, z_fields) ys) fields)
+        Record (StringMap.map li fields)
       | Primitive "out" ->
         (* z.2 *)
         Project (Var (z, z_fields), "2")
       | Primitive "in"  -> Primitive "index"
       | Constant c      -> Constant c
+      (* Regex variants. *)
+      | Variant ("Simply", x) ->
+          Variant ("Simply", li x)
+      | Variant ("Seq", Singleton r) ->
+          Variant ("Seq", Singleton (li r))
+      | Variant ("Seq", Concat rs) ->
+          Variant ("Seq",
+            Concat (List.map (
+              function | Singleton x -> Singleton (li x) | _ -> assert false) rs))
+      | Variant ("Quote", Variant ("Simply", v)) ->
+          Variant ("Quote", Variant ("Simply", li v))
+      (* Other regex variants which don't need to be traversed *)
+      | Variant (s, x) when s = "Repeat" || s = "StartAnchor" || s = "EndAnchor" ->
+          Variant (s, x)
       | e ->
         Debug.print ("Can't apply lins_inner to: " ^ QL.show e);
         assert false
@@ -499,7 +516,7 @@ struct
       | Apply (Primitive "length", [e]) -> Apply (Primitive "length", [flatten_inner_query e])
       | Apply (Primitive "tilde", [s; r]) as e ->
           Debug.print ("Applying flatten_inner to tilde expression: " ^ QL.show e);
-          Apply (Primitive "tilde", [flatten_inner s; r])
+          Apply (Primitive "tilde", [flatten_inner s; flatten_inner r])
       | Apply (Primitive f, es) -> Apply (Primitive f, List.map flatten_inner es)
       | If (c, t, e)  ->
         If (flatten_inner c, flatten_inner t, flatten_inner e)
@@ -523,6 +540,19 @@ struct
                    StringMap.add name body fields)
              fields
              StringMap.empty)
+      | Variant ("Simply", x) ->
+          Variant ("Simply", flatten_inner x)
+      | Variant ("Seq", Singleton r) ->
+          Variant ("Seq", Singleton (flatten_inner r))
+      | Variant ("Seq", Concat rs) ->
+          Variant ("Seq",
+            Concat (List.map (
+              function | Singleton x -> Singleton (flatten_inner x) | _ -> assert false) rs))
+      | Variant ("Quote", Variant ("Simply", v)) ->
+          Variant ("Quote", Variant ("Simply", flatten_inner v))
+      (* Other regex variants which don't need to be traversed *)
+      | Variant (s, x) when s = "Repeat" || s = "StartAnchor" || s = "EndAnchor" ->
+          Variant (s, x)
       | e ->
         Debug.print ("Can't apply flatten_inner to: " ^ QL.show e);
         assert false
@@ -810,4 +840,3 @@ let compile_shredded : Value.env -> Ir.computation
           let t = Q.type_of_expression v in
           let p = unordered_query_package t v in
             Some (db, p)
-

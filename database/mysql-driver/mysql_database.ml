@@ -240,11 +240,26 @@ class mysql_result (result : result) db = object
     Utility.val_of (errmsg db)
 end
 
-let mysql_quote x =
-  "`" ^ Str.global_replace (Str.regexp "`") "``" x ^ "`"
+let mysql_printer = object (self)
+  inherit Sql.printer as super
+
+  method quote_field x =
+    "`" ^ Str.global_replace (Str.regexp "`") "``" x ^ "`"
+
+  (* Infix concatenation is not supported in MySQL; ensure that Links ^^
+   * is translated to MySQL concat(-, -) *)
+  method! pp_sql_arithmetic ppf one_table (l, op, r) =
+    let pr_b_one_table = self#pp_base one_table in
+    match op with
+      | "^^" ->
+          Format.fprintf ppf "concat(%a, %a)"
+            pr_b_one_table l
+            pr_b_one_table r
+      | x -> super#pp_sql_arithmetic ppf one_table (l, x, r)
+end
 
 class mysql_database spec = object(self)
-  inherit Value.database (Sql.default_printer mysql_quote)
+  inherit Value.database mysql_printer
   val connection = connect spec
   method driver_name () = "mysql"
   method exec query : Value.dbvalue =

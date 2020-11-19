@@ -88,9 +88,10 @@ struct
         "^.",  None      ;
         "/.",  Some "/"  ;
         "mod", Some "%"  ;
-        (* FIXME: The SQL99 || operator is supported in PostgreSQL and
-           SQLite but not in MySQL, where it denotes the logical or
-           operator *)
+        (* Note that the SQL99 || operator is supported in PostgreSQL and
+           SQLite but not in MySQL, where it denotes the logical or operator.
+           The MySQL SQL serialiser overrides pp_print_arithmetic, so this
+           case will not be triggered for MySQL. *)
         "^^",  Some "||" ]
 
   let is x = StringMap.mem x builtin_ops
@@ -218,6 +219,23 @@ class virtual printer =
       (self#pp_comma_separated Format.pp_print_string) fields
       (self#pp_comma_separated pp_value) values
 
+  method pp_sql_arithmetic ppf one_table (l, op, r) =
+    let pr_b_one_table = self#pp_base one_table in
+    match op with
+      | "/" -> Format.fprintf ppf "floor(%a/%a)"
+            pr_b_one_table l
+            pr_b_one_table r
+      | "^" -> Format.fprintf ppf "floor(pow(%a,%a))"
+            pr_b_one_table l
+            pr_b_one_table r
+      | "^." -> Format.fprintf ppf "pow(%a,%a)"
+            pr_b_one_table l
+            pr_b_one_table r
+      | _ -> Format.fprintf ppf "(%a%s%a)"
+            pr_b_one_table l
+            (Arithmetic.sql_name op)
+            pr_b_one_table r
+
   method pp_query ignore_fields ppf q =
     let pr_q = self#pp_query ignore_fields in
     let pr_b = self#pp_base false in
@@ -263,13 +281,13 @@ class virtual printer =
             pr_q q
             pr_q q'
 
-  method pp_base one_table ppf b =
-    let pp_projection one_table ppf (var, label) =
+  method pp_projection one_table ppf (var, label) =
       if one_table then
         Format.pp_print_string ppf (self#quote_field label)
       else
         Format.fprintf ppf "%s.%s" (string_of_table_var var) (self#quote_field label)
-    in
+
+  method pp_base one_table ppf b =
     let pr_b_one_table = self#pp_base one_table in
     let pr_q_true = self#pp_query true in
     let unary_ops =
@@ -298,26 +316,7 @@ class virtual printer =
         | "stringToFloat" -> ""
         | _               -> assert false
     in
-    (* TODO: It would be very nice to hoist this out as a method,
-     * but I'm not entirely sure how to handle 'one_table' without
-     * making it a parameter (which seems ugly). *)
-    let pp_sql_arithmetic ppf (l, op, r) =
-      let pr_b_one_table = self#pp_base one_table in
-      match op with
-        | "/" -> Format.fprintf ppf "floor(%a/%a)"
-              pr_b_one_table l
-              pr_b_one_table r
-        | "^" -> Format.fprintf ppf "floor(pow(%a,%a))"
-              pr_b_one_table l
-              pr_b_one_table r
-        | "^." -> Format.fprintf ppf "pow(%a,%a)"
-              pr_b_one_table l
-              pr_b_one_table r
-        | _ -> Format.fprintf ppf "(%a%s%a)"
-              pr_b_one_table l
-              (Arithmetic.sql_name op)
-              pr_b_one_table r in
-      match b with
+    match b with
         | Case (c, t, e) ->
             Format.fprintf ppf "case when %a then %a else %a end"
               pr_b_one_table c
@@ -326,9 +325,9 @@ class virtual printer =
         | Constant c ->
             Format.pp_print_string ppf (Constant.to_string c)
         | Project (var, label) ->
-            pp_projection one_table ppf (var, label)
+            self#pp_projection one_table ppf (var, label)
         | Apply (op, [l; r]) when Arithmetic.is op ->
-            pp_sql_arithmetic ppf (l, op, r)
+            self#pp_sql_arithmetic ppf one_table (l, op, r)
               (* special case: not empty is translated to exists *)
         | Apply ("not", [Empty q]) ->
             Format.fprintf ppf "exists (%a)"
@@ -361,7 +360,7 @@ class virtual printer =
             Format.fprintf ppf "%a" Format.pp_print_string "1"
         | RowNumber ps ->
           Format.fprintf ppf "row_number() over (order by %a)"
-              (self#pp_comma_separated (pp_projection one_table)) ps
+              (self#pp_comma_separated (self#pp_projection one_table)) ps
 
     method string_of_base one_table b =
       Format.asprintf "%a" (self#pp_base one_table) b
