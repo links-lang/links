@@ -397,7 +397,7 @@ struct
       | Apply (Primitive f, es) ->
         Apply (Primitive f, List.map li es)
       | Record fields ->
-        Record (StringMap.map (li) fields)
+        Record (StringMap.map li fields)
       | Primitive "out" ->
         (* z.2 *)
         Project (Var (z, z_fields), "2")
