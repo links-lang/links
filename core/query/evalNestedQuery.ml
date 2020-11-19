@@ -395,7 +395,7 @@ struct
           Debug.print ("Applying lins_inner to tilde expression: " ^ QL.show e);
           Apply (Primitive "tilde", [li s; li r])
       | Apply (Primitive f, es) ->
-        Apply (Primitive f, List.map (li) es)
+        Apply (Primitive f, List.map li es)
       | Record fields ->
         Record (StringMap.map (li) fields)
       | Primitive "out" ->
@@ -840,4 +840,3 @@ let compile_shredded : Value.env -> Ir.computation
           let t = Q.type_of_expression v in
           let p = unordered_query_package t v in
             Some (db, p)
-
