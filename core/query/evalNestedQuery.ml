@@ -375,7 +375,7 @@ struct
 
   let rec lins_inner (z, z_fields) ys : QL.t -> QL.t =
     let open QL in
-    let li () = lins_inner (z, z_fields) ys in
+    let li x = lins_inner (z, z_fields) ys x in
     let liq = lins_inner_query (z, z_fields) ys in
     function
       (* Need to make sure this happens on the regex, too. *)
@@ -393,11 +393,11 @@ struct
       | Apply (Primitive "length", [e]) -> Apply (Primitive "length", [liq e])
       | Apply (Primitive "tilde", [s; r]) as e ->
           Debug.print ("Applying lins_inner to tilde expression: " ^ QL.show e);
-          Apply (Primitive "tilde", [li () s; li () r])
+          Apply (Primitive "tilde", [li s; li r])
       | Apply (Primitive f, es) ->
-        Apply (Primitive f, List.map (li ()) es)
+        Apply (Primitive f, List.map (li) es)
       | Record fields ->
-        Record (StringMap.map (li ()) fields)
+        Record (StringMap.map (li) fields)
       | Primitive "out" ->
         (* z.2 *)
         Project (Var (z, z_fields), "2")
@@ -405,15 +405,15 @@ struct
       | Constant c      -> Constant c
       (* Regex variants. *)
       | Variant ("Simply", x) ->
-          Variant ("Simply", li () x)
+          Variant ("Simply", li x)
       | Variant ("Seq", Singleton r) ->
-          Variant ("Seq", Singleton (li () r))
+          Variant ("Seq", Singleton (li r))
       | Variant ("Seq", Concat rs) ->
           Variant ("Seq",
             Concat (List.map (
-              function | Singleton x -> Singleton (li () x) | _ -> assert false) rs))
+              function | Singleton x -> Singleton (li x) | _ -> assert false) rs))
       | Variant ("Quote", Variant ("Simply", v)) ->
-          Variant ("Quote", Variant ("Simply", li () v))
+          Variant ("Quote", Variant ("Simply", li v))
       (* Other regex variants which don't need to be traversed *)
       | Variant (s, x) when s = "Repeat" || s = "StartAnchor" || s = "EndAnchor" ->
           Variant (s, x)
