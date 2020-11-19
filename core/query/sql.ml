@@ -226,23 +226,21 @@ class virtual printer =
       (self#pp_comma_separated Format.pp_print_string) fields
       (self#pp_comma_separated pp_value) values
 
-  method pp_sql_like ppf = function
+  method pp_sql_like one_table ppf = function
     | LikeString s ->
         Format.pp_print_string ppf
           ("'" ^ CommonTypes.Constant.escape_string s ^ "'")
     | LikeProject (v, f) ->
-        Format.fprintf ppf "%a.%a"
-          Format.pp_print_string (self#quote_field (string_of_table_var v))
-          Format.pp_print_string f
+        self#pp_projection one_table ppf (v, f)
     (* Special case appends with the empty string *)
     | LikeAppend (LikeString "", l) ->
-        self#pp_sql_like ppf l
+        self#pp_sql_like one_table ppf l
     | LikeAppend (l, LikeString "") ->
-        self#pp_sql_like ppf l
+        self#pp_sql_like one_table ppf l
     | LikeAppend (l1, l2) ->
         Format.fprintf ppf "%a || %a"
-          self#pp_sql_like l1
-          self#pp_sql_like l2
+          (self#pp_sql_like one_table) l1
+          (self#pp_sql_like one_table) l2
 
   method pp_sql_arithmetic ppf one_table (l, op, r) =
     let pr_b_one_table = self#pp_base one_table in
@@ -306,13 +304,13 @@ class virtual printer =
             pr_q q
             pr_q q'
 
-  method pp_base one_table ppf b =
-    let pp_projection one_table ppf (var, label) =
+  method pp_projection one_table ppf (var, label) =
       if one_table then
         Format.pp_print_string ppf (self#quote_field label)
       else
         Format.fprintf ppf "%s.%s" (string_of_table_var var) (self#quote_field label)
-    in
+
+  method pp_base one_table ppf b =
     let pr_b_one_table = self#pp_base one_table in
     let pr_q_true = self#pp_query true in
     let unary_ops =
@@ -348,11 +346,11 @@ class virtual printer =
               pr_b_one_table t
               pr_b_one_table e
         | Like sl ->
-            self#pp_sql_like ppf sl
+            self#pp_sql_like one_table ppf sl
         | Constant c ->
             Format.pp_print_string ppf (Constant.to_string c)
         | Project (var, label) ->
-            pp_projection one_table ppf (var, label)
+            self#pp_projection one_table ppf (var, label)
         | Apply (op, [l; r]) when Arithmetic.is op ->
             self#pp_sql_arithmetic ppf one_table (l, op, r)
               (* special case: not empty is translated to exists *)
@@ -387,7 +385,7 @@ class virtual printer =
             Format.fprintf ppf "%a" Format.pp_print_string "1"
         | RowNumber ps ->
           Format.fprintf ppf "row_number() over (order by %a)"
-              (self#pp_comma_separated (pp_projection one_table)) ps
+              (self#pp_comma_separated (self#pp_projection one_table)) ps
 
     method string_of_base one_table b =
       Format.asprintf "%a" (self#pp_base one_table) b
