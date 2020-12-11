@@ -4,7 +4,6 @@
 *)
 
 open Utility
-open List
 
 (* Utility function for hashtables *)
 let hashfind_dflt table elem def =
@@ -56,7 +55,7 @@ let hashtbl_as_alist tbl =
     the same type, return a list of all the pairs (u, v) where
     v \in nbhd(u) *)
 let unroll_edges l = concat_map (fun (f, callers) ->
-                                 map (fun caller -> (f, caller))
+                                 List.map (fun caller -> (f, caller))
                                    callers) l
 
 let edge_to_str (u, v) = u ^ "->" ^ v
@@ -97,12 +96,12 @@ let topological_sort' nodes edges =
     List.sort (fun (_,y1) (_,y2) -> - (compare y1 y2)) (hashtbl_as_alist f)
 
 let topological_sort nodes edges =
-  map fst (topological_sort' nodes edges)
+  List.map fst (topological_sort' nodes edges)
 
 
 (* CLR Ex 23.1-3 *)
 let transpose_edges : ('a * 'b) list -> ('b * 'a) list =
-  fun list -> map (fun (x,y) -> (y,x)) list
+  fun list -> List.map (fun (x,y) -> (y,x)) list
 
 let string_of_parent_tree =
   mapstrcat "\n" (function a, None -> a ^ " root"
@@ -142,7 +141,7 @@ let cmp_snd_desc (_,y1) (_,y2) = (- compare y1 y2)
 let strongly_connected_components (nodes : 'a list) (edges : ('a * 'a) list) : 'a list list =
   let f, _, _ = dfs nodes edges in
   let edges_reversed = transpose_edges edges in
-  let nodes_sorted = (map fst (List.sort cmp_snd_desc (hashtbl_as_alist f))) in
+  let nodes_sorted = (List.map fst (List.sort cmp_snd_desc (hashtbl_as_alist f))) in
   let _, _, p = (dfs nodes_sorted edges_reversed) in
     flatten_forest (hashtbl_as_alist p)
 
@@ -159,7 +158,7 @@ let topo_sort_sccs (adj_list : ('a * 'a list) list) : 'a list list =
   (* [scc_of sccs]: lookup (in [sccs]) the scc that [v] belongs to *)
   let scc_of sccs v = List.find (List.mem v) sccs in
 
-  let nodes = map fst adj_list in
+  let nodes = List.map fst adj_list in
     (*  unfold adj_list: let `edges' be the list of all
         (u, v) where (u, v) is an edge in the graph *)
   let edges = unroll_edges adj_list in
@@ -171,7 +170,7 @@ let topo_sort_sccs (adj_list : ('a * 'a list) list) : 'a list list =
     (* Map each such node to its scc, so that we have, for each
        scc, the list of sccs that it points to: *)
   let scc_innodes =
-    alistmap (fun calls -> map (scc_of sccs) calls) scc_innodes in
+    alistmap (fun calls -> List.map (scc_of sccs) calls) scc_innodes in
     (* Now unroll that to get a list of pairs (U, V) where U and V are
        sccs and there is an edge from U to V *)
   let scc_edges = unroll_edges scc_innodes in
