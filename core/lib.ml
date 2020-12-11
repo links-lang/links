@@ -1,5 +1,4 @@
 open CommonTypes
-open List
 
 open Utility
 open Proc
@@ -142,14 +141,14 @@ let rec less l r =
     | `String l, `String r -> l < r
       (* Compare fields in lexicographic order of labels *)
     | `Record lf, `Record rf ->
-        let order = sort (fun x y -> compare (fst x) (fst y)) in
-        let lv, rv = map snd (order lf), map snd (order rf) in
+        let order = List.sort (fun x y -> compare (fst x) (fst y)) in
+        let lv, rv = List.map snd (order lf), List.map snd (order rf) in
         let rec compare_list = function
           | [] -> false
           | (l,r)::_ when less l r -> true
           | (l,r)::_ when less r l -> false
           | _::rest                -> compare_list rest in
-          compare_list (combine lv rv)
+          compare_list (List.combine lv rv)
     | `List (l), `List (r) -> less_lists (l,r)
     | l, r ->  runtime_error ("Cannot yet compare "^ Value.string_of_value l ^" with "^ Value.string_of_value r)
 and less_lists = function
@@ -585,13 +584,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
              | (Value.Node _) -> true
              | (Value.NsNode _) -> true
              | _ -> false) children in
-           `List (map (fun x -> `XML x) children)
+           `List (List.map (fun x -> `XML x) children)
          | `List [ `XML (Value.NsNode (_, _, children)) ] ->
            let children = List.filter (function
              | (Value.Node _) -> true
              | (Value.NsNode _) -> true
              | _ -> false) children in
-           `List (map (fun x -> `XML x) children)
+           `List (List.map (fun x -> `XML x) children)
          | _ -> raise (runtime_type_error "non-XML given to childNodes")),
    datatype "(Xml) -> Xml",
   IMPURE);
@@ -819,8 +818,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
       | Value.NsAttr _ -> true
       | _ -> false
     in match v with
-      | `List [ `XML (Value.Node (_, children)) ]      -> `List (map attr_to_record (filter is_attr children))
-      | `List [ `XML (Value.NsNode (_, _, children)) ] -> `List (map attr_to_record (filter is_attr children))
+      | `List [ `XML (Value.Node (_, children)) ]      -> `List (List.map attr_to_record (List.filter is_attr children))
+      | `List [ `XML (Value.NsNode (_, _, children)) ] -> `List (List.map attr_to_record (List.filter is_attr children))
       | _ -> raise (runtime_type_error "non-element given to getAttributes")),
   datatype "(Xml) ~> [(String,String)]",
   IMPURE);
@@ -838,9 +837,9 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (p1 (fun v ->
          match v with
            | `List [`XML(Value.Node(_, children))] ->
-               `List (map (fun x -> `XML(x)) (filter (function (Value.Node _) -> true | (Value.NsNode _) -> true | _ -> false) children))
+               `List (List.map (fun x -> `XML(x)) (List.filter (function (Value.Node _) -> true | (Value.NsNode _) -> true | _ -> false) children))
            | `List [`XML(Value.NsNode(_, _, children))] ->
-               `List (map (fun x -> `XML(x)) (filter (function (Value.Node _) -> true | (Value.NsNode _) -> true | _ -> false) children))
+               `List (List.map (fun x -> `XML(x)) (List.filter (function (Value.Node _) -> true | (Value.NsNode _) -> true | _ -> false) children))
            | _ -> raise (runtime_type_error "non-element given to getChildNodes")),
    datatype "(Xml) ~> Xml",
   IMPURE);
@@ -1626,7 +1625,7 @@ let rec function_arity =
     | _ -> None
 
 let primitive_arity (name : string) =
-  let _, t, _ = assoc name env in
+  let _, t, _ = List.assoc name env in
     function_arity t
 
 (*let primitive_by_code var = Env.Int.lookup value_env var*)
