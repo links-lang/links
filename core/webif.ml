@@ -176,6 +176,8 @@ struct
            Lwt.return (mime_type, error_page (Errors.format_exception_html exc)) in
 
     let handle_error e =
+      let req_data = Value.Env.request_data valenv in
+      RequestData.set_http_response_code req_data 500;
       if (RequestData.is_ajax_call cgi_args) then
         handle_ajax_error e
       else
