@@ -16,7 +16,7 @@ install PostgreSQL, the supported DBMS.
 You can then install Links simply by issuing the command:
 
 ```
-$ opam install postgresql links
+$ opam install postgresql links-postgresql
 ```
 
 Alternatively, if you don't have PostgreSQL installed then do:
