@@ -53,7 +53,7 @@ database.)
 The default port is 8080, so you should now be able to access the
 examples by pointing your browser at:
 
-  http://localhost:8080/examples/
+  http://localhost:8080/
 
 ## Examples (with a database)
 
