@@ -16,7 +16,7 @@ install PostgreSQL, the supported DBMS.
 You can then install Links simply by issuing the command:
 
 ```
-$ opam install postgresql links
+$ opam install postgresql links-postgresql
 ```
 
 Alternatively, if you don't have PostgreSQL installed then do:
@@ -53,7 +53,7 @@ database.)
 The default port is 8080, so you should now be able to access the
 examples by pointing your browser at:
 
-  http://localhost:8080/examples/
+  http://localhost:8080/
 
 ## Examples (with a database)
 
