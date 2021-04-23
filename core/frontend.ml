@@ -200,8 +200,8 @@ module Typeability_preserving = struct
 
   (* Collection of transformers. *)
   let transformers : transformer array
-    = [| (module DesugarCP)
-       ; (module DesugarInners)
+    = [| (module DesugarInners) (* this must always be done first after type inference *)
+       ; (module DesugarCP)
        ; only_if
            Basicsettings.Sessions.exceptions_enabled
            (module DesugarSessionExceptions)
