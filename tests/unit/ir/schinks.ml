@@ -16,6 +16,8 @@ let reify x = make x
 
 (* helpers *)
 
+let id = Utility.identity
+
 let mk_const c = State.return (Ir.Constant c) |> State.return
 
 let mk_primitive p : Types.datatype t =
