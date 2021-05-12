@@ -22,10 +22,10 @@ before_install:
   - mysql -e "CREATE USER links IDENTIFIED BY '12345';"
   - mysql -e 'GRANT ALL ON  links.* TO links;'
 script:
-  - ./opam2_local pin add links . -y
-  - ./opam2_local pin add links-postgresql . -y
-  - ./opam2_local pin add links-sqlite3 . -y
-  - ./opam2_local pin add links-mysql . -y
+  - opam pin add links . -y
+  - opam pin add links-postgresql . -y
+  - opam pin add links-sqlite3 . -y
+  - opam pin add links-mysql . -y
   - make doc
   - make all-ci
   - make tests
