@@ -33,4 +33,6 @@ script:
   - ./run-tests unit
 addons:
   apt:
+    # This has the same effect as running apt-get update, but avoid problems
+    # with signature verification
     update: true
