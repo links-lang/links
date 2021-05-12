@@ -7,9 +7,7 @@ services:
 before_install:
   - git diff-index --quiet HEAD --
   - sudo apt-get remove -y mysql-server-8.0
-  - sudo bash -c "echo deb http://repo.mysql.com/apt/ubuntu/ bionic mysql-5.7 >> /etc/apt/sources.list"
-  - sudo apt-get update
-  - sudo apt install -f "mysql-client=5.7"* "mysql-server=5.7*" "mysql-community-client=5.7*" "mysql-community-server=5.7*"
+  - sudo apt-get install -y mysql-server-5.7
   - sudo apt-get install -y ocaml-nox ocaml-native-compilers opam python3-setuptools python3-pip libev-dev
   - pip3 install -U Sphinx
   - opam init --disable-sandboxing -n
