@@ -6,16 +6,15 @@ services:
   - mysql
 before_install:
   - git diff-index --quiet HEAD --
-  - sudo add-apt-repository -y ppa:avsm/ppa
   - sudo apt-get -qq update
-  - sudo apt-get install -y ocaml-nox ocaml-native-compilers python3-setuptools python3-pip libev-dev
+  - sudo apt-get install -y ocaml-nox ocaml-native-compilers opam python3-setuptools python3-pip libev-dev
   - pip3 install -U Sphinx
-  - ./install_local_opam2.sh
-  - ./opam2_local switch create ocaml-base-compiler.4.08.0
-  - eval `./opam2_local config env`
-  - ./opam2_local install conf-libev
-  - ./opam2_local install -y postgresql mysql ounit2
-  - ./tools/install_ocamlformat
+  - opam init --disable-sandboxing -n
+  - opam switch create ocaml-base-compiler.4.08.0
+  - eval `opam config env`
+  - opam install conf-libev
+  - opam install -y postgresql mysql ounit2
+  - opam install -y ocamlformat.0.14.2
   - make rule-check
   - psql -c 'create database links;' -U postgres
   - mysql -e 'CREATE DATABASE links;'
