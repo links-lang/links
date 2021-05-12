@@ -6,6 +6,8 @@ services:
   - mysql
 before_install:
   - git diff-index --quiet HEAD --
+  - sudo apt-get remove -y mysql-server-8.0
+  - sudo apt-get install -y mysql-server-5.7
   - sudo apt-get install -y ocaml-nox ocaml-native-compilers opam python3-setuptools python3-pip libev-dev
   - pip3 install -U Sphinx
   - opam init --disable-sandboxing -n
