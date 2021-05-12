@@ -6,7 +6,6 @@ services:
   - mysql
 before_install:
   - git diff-index --quiet HEAD --
-  - sudo apt-get -qq update
   - sudo apt-get install -y ocaml-nox ocaml-native-compilers opam python3-setuptools python3-pip libev-dev
   - pip3 install -U Sphinx
   - opam init --disable-sandboxing -n
@@ -32,3 +31,6 @@ script:
   - ./run-database-tests tests/shredding -d all
   - ./run-database-tests tests/relational-lenses -d all
   - ./run-tests unit
+addons:
+  apt:
+    update: true
