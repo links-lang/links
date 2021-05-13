@@ -1,4 +1,4 @@
-(* Workaround until mysql and mysql packages have converged to one again*)
+(* Workaround until mysql and mysql8 packages have converged to one again*)
 module Mysql = Mysql8
 
 open Mysql
