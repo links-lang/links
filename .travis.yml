@@ -12,7 +12,7 @@ before_install:
   - opam switch create ocaml-base-compiler.4.08.0
   - eval `opam config env`
   - opam install conf-libev
-  - opam install -y postgresql mysql ounit2
+  - opam install -y postgresql mysql8 ounit2
   - opam install -y ocamlformat.0.14.2
   - make rule-check
   - psql -c 'create database links;' -U postgres
