@@ -984,6 +984,7 @@ primary_datatype:
                                                                    | "Float"   -> Primitive Primitive.Float
                                                                    | "XmlItem" -> Primitive Primitive.XmlItem
                                                                    | "String"  -> Primitive Primitive.String
+                                                                   | "DateTime" -> Primitive Primitive.DateTime
                                                                    | "Database"-> DB
                                                                    | "End"     -> Datatype.End
                                                                    | t         -> TypeApplication (t, [])

@@ -20,7 +20,7 @@ let query_error fmt =
 module Lang =
 struct
 
-  type base_type = | Bool | Char | Float | Int | String
+  type base_type = | Bool | Char | Float | Int | String | DateTime
 
   type tag = int
       [@@deriving show]
@@ -125,6 +125,7 @@ struct
         | Constant (Constant.Char   _) -> Types.char_type
         | Constant (Constant.Float  _) -> Types.float_type
         | Constant (Constant.String _) -> Types.string_type
+        | Constant (Constant.DateTime _) -> Types.datetime_type
         | Project (Var (_, field_types), name) -> StringMap.find name field_types
         | Apply (Primitive "Empty", _) -> Types.bool_type (* HACK *)
         | Apply (Primitive f, _) -> TypeUtils.return_type (Env.String.find f Lib.type_env)
@@ -137,6 +138,7 @@ struct
       | Primitive.Char   -> Constant (Constant.Char '?')
       | Primitive.Float  -> Constant (Constant.Float 0.0)
       | Primitive.String -> Constant (Constant.String "")
+      | Primitive.DateTime -> Constant (Constant.DateTime.now())
       | _                -> assert false
 
   let rec value_of_expression = fun v ->
@@ -152,6 +154,7 @@ struct
         | Constant (Constant.Char   c) -> `Char c
         | Constant (Constant.Float  f) -> `Float f
         | Constant (Constant.String s) -> Value.box_string s
+        | Constant (Constant.DateTime dt) -> Value.box_datetime dt
         | Table t -> `Table t
         | Concat vs -> `List (List.map value_of_singleton vs)
         | Variant (name, v) -> `Variant (name, ve v)
@@ -168,6 +171,7 @@ struct
     | `Float f -> Constant (Constant.Float f)
     | `Int i -> Constant (Constant.Int i)
     | `String s -> Constant (Constant.String s)
+    | `DateTime dt -> Constant (Constant.DateTime dt)
     | `Record fields ->
         let fields =
           fields
@@ -573,6 +577,7 @@ struct
       | `Char c   -> Constant (Constant.Char c)
       | `Float f  -> Constant (Constant.Float f)
       | `String s -> Constant (Constant.String s)
+      | `DateTime dt -> Constant (Constant.DateTime dt)
       | `Table t -> Table t
       | `Database db -> Database db
       | `List vs ->

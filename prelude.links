@@ -1395,9 +1395,9 @@ fun assertEq (actual, expected) server {
       ()
   else {
       print("Assertion failed.");
-      print("Expected:");
+      print("Expected:\n");
       print(show(expected));
-      print("but got:");
+      print("\nbut got:\n");
       print(show(actual));
       sysexit(2)
   }
@@ -1508,3 +1508,56 @@ fun isNew(x) {
     case Key (x) -> false
   }
 }
+
+
+### Date / Time functions
+
+# UTC Time Accessors
+
+sig utcYear : (DateTime) -> Int
+fun utcYear(dt) { dateYear(dt, 0) }
+
+sig utcDay : (DateTime) -> Int
+fun utcDay(dt) { dateDay(dt, 0) }
+
+sig utcMonth : (DateTime) -> Int
+fun utcMonth(dt) { dateMonth(dt, 0) }
+
+sig utcHours : (DateTime) -> Int
+fun utcHours(dt) { dateHours(dt, 0) }
+
+sig utcMinutes : (DateTime) -> Int
+fun utcMinutes(dt) { dateMinutes(dt) }
+
+sig utcSeconds : (DateTime) -> Float
+fun utcSeconds(dt) { dateSeconds(dt) }
+
+# Local time accessors (Note that these are impure since we use utcOffset() to
+# get the currently-set UTC offset to convert from UTC to local time)
+
+sig localYear : (DateTime) ~> Int
+fun localYear(dt) { dateYear(dt, utcOffset()) }
+
+sig localDay : (DateTime) ~> Int
+fun localDay(dt) { dateDay(dt, utcOffset()) }
+
+sig localMonth : (DateTime) ~> Int
+fun localMonth(dt) { dateMonth(dt, utcOffset()) }
+
+sig localHours : (DateTime) ~> Int
+fun localHours(dt) { dateHours(dt, utcOffset()) }
+
+sig localMinutes : (DateTime) ~> Int
+fun localMinutes(dt) { dateMinutes(dt) }
+
+sig localSeconds : (DateTime) ~> Float
+fun localSeconds(dt) { dateSeconds(dt) }
+
+# Default serialisation of DTs at the moment is in local time,
+# so `showLocal` is just a specialisation of the default `show`
+# function.
+sig showLocal : (DateTime) ~> String
+fun showLocal(dt) {
+    show(dt)
+}
+

@@ -1521,3 +1521,46 @@ struct
 
   let to_list buf = List.init (length buf) (get buf)
 end
+
+module CalendarShow = struct
+  include CalendarLib.Fcalendar.Precise
+
+  let pp ppf x =
+    Format.fprintf ppf "%04d-%02d-%02d %02d:%02d:%09.6f"
+      (year x) (month x |> CalendarLib.Date.int_of_month)
+      (day_of_month x) (hour x) (minute x) (second x)
+
+  let show x =
+      Format.asprintf "%a" pp x
+end
+
+module UnixTimestamp = struct
+  let of_calendar cal = 
+    let tm = {
+      Unix.tm_sec = CalendarShow.second cal |> int_of_float;
+      Unix.tm_min = CalendarShow.minute cal;
+      Unix.tm_hour = CalendarShow.hour cal;
+      Unix.tm_mday = CalendarShow.day_of_month cal;
+      Unix.tm_mon = (CalendarShow.month cal |> CalendarLib.Date.int_of_month) - 1;
+      Unix.tm_year = (CalendarShow.year cal) - 1900;
+      Unix.tm_wday = 0; (* ignored *)
+      Unix.tm_yday =  0; (* ignored *)
+      Unix.tm_isdst = false (* ignored *)
+    } in
+    Unix.mktime tm |> fst
+
+  let to_calendar tm =
+    (CalendarShow.lmake
+      ~year:(tm.Unix.tm_year + 1900)
+      ~month:(tm.Unix.tm_mon + 1)
+      ~day:tm.Unix.tm_mday
+      ~hour:tm.Unix.tm_hour
+      ~minute:tm.Unix.tm_min
+      ~second:(float_of_int tm.Unix.tm_sec) ())
+
+  let to_local_calendar t = 
+    Unix.localtime t |> to_calendar
+    
+  let to_utc_calendar t =
+    Unix.gmtime t |> to_calendar
+end

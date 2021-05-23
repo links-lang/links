@@ -125,6 +125,18 @@ and jsonize_primitive : Value.primitive_value -> Yojson.Basic.t  = function
   | `Table t -> lit ~tag:"Table" [ ("_value", json_of_table t) ]
   | `XML xmlitem -> lit ~tag:"XML" [ ("_value", json_of_xmlitem xmlitem) ]
   | `String s -> lit ~tag:"String" [ ("_value", `String s) ]
+  | `DateTime (Timestamp.Infinity) ->
+          lit ~tag:"DateTime" [ ("_type", `String "infinity") ]
+  | `DateTime (Timestamp.MinusInfinity) ->
+          lit ~tag:"DateTime" [ ("_type", `String "-infinity") ]
+  (* NOTE: An important invariant that it's only ever the *UTC* timestamp
+     that is transferred between client and server. *)
+  | `DateTime (Timestamp.Timestamp ts) ->
+      let utc_timestamp =
+        UnixTimestamp.of_calendar ts |> int_of_float in
+      lit ~tag:"DateTime"
+        [ ("_type", `String "timestamp");
+          ("_value", `Int utc_timestamp) ]
 and json_of_xmlitem = function
   | Value.Text s -> lit ~tag:"Text" [("type", `String "TEXT"); ("text", `String s)]
   (* TODO: check that we don't run into problems when HTML containing

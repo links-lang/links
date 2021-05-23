@@ -1,6 +1,8 @@
 (* Serialisation of Value.t inhabitants. *)
 module E = Env
 open Value
+open CommonTypes
+open Utility
 
 let internal_error message =
   Errors.internal_error ~filename:"serialisation.ml" ~message
@@ -91,6 +93,13 @@ module Compressible = struct
     (* module V = Value *)
     (* include V *)
 
+    type compressed_timestamp = [
+      |`Infinity
+      | `MinusInfinity
+      | `Timestamp of float (* UTC UNIX timestamp *)
+    ]
+    [@@deriving yojson]
+
     (** {1 Compressed values for more efficient pickling} *)
     type compressed_primitive_value = [
       | `Bool of bool
@@ -100,7 +109,9 @@ module Compressible = struct
       | `XML of xmlitem
       | `String of string
       | `Table of string * string * string list list * string
-      | `Database of string ]
+      | `Database of string
+      | `DateTime of compressed_timestamp
+      ]
       [@@deriving yojson]
 
     type compressed_t = [
@@ -129,6 +140,10 @@ module Compressible = struct
       | `Table ((_database, db), table, keys, row) ->
          `Table (db, table, keys, Types.string_of_datatype (Types.Record (Types.Row row)))
       | `Database (_database, s) -> `Database s
+      | `DateTime Timestamp.Infinity -> `DateTime `Infinity
+      | `DateTime Timestamp.MinusInfinity -> `DateTime `MinusInfinity
+      | `DateTime (Timestamp.Timestamp ts) ->
+          `DateTime (`Timestamp (CalendarShow.to_unixfloat ts))
 
     let rec compress : t -> compressed_t = function
       | #primitive_value as v -> compress_primitive_value v
@@ -166,6 +181,10 @@ module Compressible = struct
          let driver, params = parse_db_string s in
          let database = db_connect driver params in
          `Database database
+      | `DateTime `Infinity -> `DateTime Timestamp.Infinity
+      | `DateTime `MinusInfinity -> `DateTime Timestamp.MinusInfinity
+      | `DateTime (`Timestamp ts) ->
+          `DateTime (Timestamp.timestamp (CalendarShow.from_unixfloat ts))
 
     let rec decompress ?(globals=Env.empty) (compressed : compressed_t) : Value.t =
       let decompress x = decompress ~globals x in
@@ -404,10 +423,27 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
         | _ -> None in
 
       let parse_record xs = `Record (List.map (fun (k, v) -> (k, from_json v)) xs) in
+
+      let parse_date xs () =
+          match (List.assoc_opt "_type" xs, List.assoc_opt "_value" xs) with
+            | (Some (`String "infinity"), _) -> 
+                Some (Timestamp.infinity |> Value.box_datetime)
+            | (Some (`String "-infinity"), _) ->
+                Some (Timestamp.minus_infinity |> Value.box_datetime)
+            | (Some (`String "timestamp"), Some (`Int utc_time)) ->
+                Some 
+                  (utc_time
+                    |> float_of_int
+                    |> UnixTimestamp.to_utc_calendar
+                    |> Timestamp.timestamp
+                    |> Value.box_datetime)
+            | _, _ -> None
+      in
       let (<|>) (o1: unit -> t option) (o2: unit -> t option) : unit -> t option =
         match o1 () with
         | Some x -> (fun () -> Some x)
         | None -> o2 in
+
       match json with
       | `Null -> `List []
       | `Int i -> box_int i
@@ -516,7 +552,7 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
          raise (error (
                     "dom ref key should be an integer. Got: " ^ (Yojson.Basic.to_string nonsense)))
       | `Assoc xs ->
-         (* For non-singleton assoc lists, try each () of these in turn.
+         (* For non-singleton assoc lists, try each of these in turn.
           * If all else fails, parse as a record. *)
          let result =
            (parse_list xs)
@@ -524,7 +560,9 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
            <|> (parse_client_ap xs)
            <|> (parse_client_pid xs)
            <|> (parse_session_channel xs)
-           <|> (parse_server_func xs) in
+           <|> (parse_server_func xs)
+           <|> (parse_date xs)
+         in
          begin
            match result () with
            | Some v -> v

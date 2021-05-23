@@ -193,6 +193,7 @@ type primitive_value = [
 | primitive_value_basis
 | `Database of (database * string)
 | `Table of table
+| `DateTime of Timestamp.t
 ]
   [@@deriving show]
 
@@ -798,6 +799,30 @@ let rec p_value (ppf : formatter) : t -> 'a = function
   | `Pid (`ServerPid i) -> fprintf ppf "Pid Server (%s)" (ProcessID.to_string i)
   | `Pid (`ClientPid (cid, i)) -> fprintf ppf "Pid Client num %s, process %s" (ClientID.to_string cid) (ProcessID.to_string i)
   | `Alien -> fprintf ppf "alien"
+  | `DateTime (Timestamp.Timestamp ts) ->
+      (* Default to showing local time representation *)
+      p_local_datetime ppf ts
+  | `DateTime (Timestamp.Infinity) -> fprintf ppf "infinity"
+  | `DateTime (Timestamp.MinusInfinity) -> fprintf ppf "-infinity"
+and p_local_datetime ppf ts =
+  let open CalendarLib in
+  let offset = Time_Zone.(gap UTC Local) in
+  let offset_str =
+      if offset < 0 then
+          Printf.sprintf "-%d" offset
+      else
+          Printf.sprintf "+%d" offset
+  in
+  (* Internal representation is UTC; print as local time *)
+  let cal =
+      CalendarShow.convert ts (CalendarLib.Time_Zone.UTC)
+        (CalendarLib.Time_Zone.Local)
+      |> CalendarShow.show
+  in
+  fprintf ppf "%s%s" cal offset_str
+and p_utc_datetime ppf ts =
+  fprintf ppf "%s+0"
+  (CalendarShow.show ts)
 and p_record_fields ppf = function
   | [] -> fprintf ppf ""
   | [(l, v)] -> fprintf ppf "@[@{<recordlabel>%a@} = %a@]"
@@ -889,6 +914,9 @@ let string_of_pretty pretty_fun arg : string =
   pretty_fun f arg;
   pp_print_flush f ();
   Buffer.contents b
+
+let string_of_calendar_utc cal =
+    string_of_pretty p_utc_datetime cal
 
 (** Get a string representation of a value
 
@@ -984,6 +1012,10 @@ and box_unit : unit -> t
 and unbox_unit : t -> unit = function
   | `Record [] -> ()
   | v -> raise (type_error "unit" v)
+and box_datetime datetime = `DateTime datetime
+and unbox_datetime = function
+  | `DateTime dt -> dt
+  | v -> raise (type_error "datetime" v)
 
 let box_op : t list -> t -> t =
   fun ps k -> let box = List.fold_left
