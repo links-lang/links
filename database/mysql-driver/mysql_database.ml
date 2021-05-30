@@ -1,6 +1,3 @@
-(* Workaround until mysql and mysql8 packages have converged to one again*)
-module Mysql = Mysql8
-
 open Mysql
 open Links_core
 open Utility
@@ -296,12 +293,12 @@ let parse_args (args : string) : db =
                    else user in
         (try
           {
-            name = Some name;
-            host = Some host;
-            port = Some (int_of_string port);
-            user = Some user;
-            pwd  = Some pass;
-            socket = None;
+            dbname = Some name;
+            dbhost = Some host;
+            dbport = Some (int_of_string port);
+            dbuser = Some user;
+            dbpwd  = Some pass;
+            dbsocket = None;
           }
          with Failure msg ->
            failwith ("[" ^ msg ^ "] Couldn't parse mysql port number : " ^ port))

@@ -12,6 +12,11 @@ before_install:
   - opam switch create ocaml-base-compiler.4.08.0
   - eval `opam config env`
   - opam install conf-libev
+    # BEGIN Hack to install links-mysql
+  - sudo apt install -y libmysqlclient-dev
+  - opam install -y conf-mysql
+  - sudo apt install -y libmariadb-dev
+    # END
   - opam install -y postgresql mysql8 ounit2
   - opam install -y ocamlformat.0.14.2
   - make rule-check
