@@ -1,6 +1,9 @@
 sudo: required
 dist: focal
 language: c
+services:
+  - postgresql
+  - mysql
 addons:
   apt:
     # This has the same effect as running apt-get update, but avoid problems
@@ -12,6 +15,7 @@ addons:
     packages:
       - postgresql-12
       - mysql-client-8.0
+      - mysql-server-8.0
 env:
   global:
     - PGPORT=5433
@@ -33,8 +37,7 @@ before_install:
   # - opam install -y conf-mysql
   # - sudo apt install -y libmariadb-dev
   #   # END
-  - opam install -y postgresql mysql8 ounit2
-  - opam install -y ocamlformat.0.14.2
+  - opam install -y ocamlformat.0.14.2 ounit2
   - make rule-check
   - psql -c 'create database links;'
   - mysql -e 'CREATE DATABASE links;'
