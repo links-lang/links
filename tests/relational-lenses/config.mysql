@@ -1,5 +1,5 @@
 database_driver=mysql
-database_args=localhost:3306:$USER:
+database_args=localhost:3306:$USER:links
 coerce_null_integers=on
 null_integer=-1
 relational_lenses=on
