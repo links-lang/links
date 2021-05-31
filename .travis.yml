@@ -12,13 +12,16 @@ addons:
     packages:
       - postgresql-12
       - mysql-client-8.0
+env:
+  global:
+    - PGPORT=5433
+    - PGUSER=travis
 before_install:
   - git diff-index --quiet HEAD --
   # BEGIN postgresql trust based authentication
   - sudo sed -i -e '/local.*peer/s/postgres/all/' -e 's/peer\|md5/trust/g' /etc/postgresql/*/main/pg_hba.conf
   - sudo systemctl restart postgresql
   # END
-  - sudo -u postgres createuser -p 5433 -s links
   - sudo apt-get install -y ocaml-nox ocaml-native-compilers opam python3-setuptools python3-pip libev-dev
   - pip3 install -U Sphinx
   - opam init --disable-sandboxing -n
@@ -33,7 +36,7 @@ before_install:
   - opam install -y postgresql mysql8 ounit2
   - opam install -y ocamlformat.0.14.2
   - make rule-check
-  - psql -c 'create database links;' -U links -p 5433
+  - psql -c 'create database links;'
   - mysql -e 'CREATE DATABASE links;'
   - mysql -e "CREATE USER links IDENTIFIED BY 'links';"
   - mysql -e 'GRANT ALL ON  links.* TO links;'
