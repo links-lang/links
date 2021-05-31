@@ -4,7 +4,7 @@
   (synopsis "MySQL database backend for Links")
   (optional)
   (flags (:standard -safe-string -dtypes -w Ae-42-44-45-60 -g -cclib -lunix -thread))
-  (libraries mysql links.core))
+  (libraries mysql8 links.core))
 
 
 (install
