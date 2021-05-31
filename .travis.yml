@@ -4,6 +4,15 @@ language: c
 services:
   - postgresql
   - mysql
+addons:
+  apt:
+    # This has the same effect as running apt-get update, but avoid problems
+    # with signature verification
+    update: true
+  postgresql: '12'
+  apt:
+    packages:
+      - postgresql-12
 before_install:
   - git diff-index --quiet HEAD --
   - sudo apt-get install -y ocaml-nox ocaml-native-compilers opam python3-setuptools python3-pip libev-dev
@@ -36,8 +45,3 @@ script:
   - ./run-database-tests tests/shredding -d all
   - ./run-database-tests tests/relational-lenses -d all
   - ./run-tests unit
-addons:
-  apt:
-    # This has the same effect as running apt-get update, but avoid problems
-    # with signature verification
-    update: true
