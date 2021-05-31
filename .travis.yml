@@ -41,8 +41,8 @@ before_install:
   - make rule-check
   - psql -c 'create database links;'
   - mysql -e 'CREATE DATABASE links;'
-  - mysql -e "CREATE USER links IDENTIFIED BY 'links';"
-  - mysql -e 'GRANT ALL ON  links.* TO links;'
+  # - mysql -e "CREATE USER links IDENTIFIED BY 'links';"
+  # - mysql -e 'GRANT ALL ON  links.* TO links;'
 script:
   - opam pin add links . -y
   - opam pin add links-postgresql . -y
