@@ -19,7 +19,7 @@ before_install:
   - sudo sed -i -e '/local.*peer/s/postgres/all/' -e 's/peer\|md5/trust/g' /etc/postgresql/*/main/pg_hba.conf
   - sudo systemctl restart postgresql
   # END
-  - sudo -u postgres createuser -p 5433 -s travis
+  - sudo -u postgres createuser -p 5433 -s links
   - sudo apt-get install -y ocaml-nox ocaml-native-compilers opam python3-setuptools python3-pip libev-dev
   - pip3 install -U Sphinx
   - opam init --disable-sandboxing -n
