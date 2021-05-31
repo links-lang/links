@@ -17,6 +17,6 @@ depends: [
   "ocaml" {>= "4.08.0"}
   "dune" {>= "1.10.0"}
   "conf-mysql"
-  "mysql8"
+  "mysql"
   "links"
 ]
