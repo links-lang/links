@@ -50,7 +50,7 @@ script:
   - make doc
   - make all-ci
   - make tests
-  - ./run-database-tests tests/database -d mysql
+  - ./run-database-tests tests/database -d all
   - ./run-database-tests tests/shredding -d all
   - ./run-database-tests tests/relational-lenses -d all
   - ./run-tests unit
