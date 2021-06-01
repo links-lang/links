@@ -34,11 +34,6 @@ before_install:
   - opam switch create ocaml-base-compiler.4.08.0
   - eval `opam config env`
   - opam install -y conf-libev conf-mysql
-  #   # BEGIN Hack to install links-mysql
-  # - sudo apt install -y libmysqlclient-dev
-  # - opam install -y conf-mysql
-  # - sudo apt install -y libmariadb-dev
-  #   # END
   - opam install -y ocamlformat.0.14.2 ounit2
   - make rule-check
   - psql -c "create database $DBNAME;" -U postgres
@@ -53,7 +48,7 @@ script:
   # - opam pin add links-sqlite3 . -y
   - opam pin add links-mysql . -y
   # - make doc
-  # - make all-ci
+  - make all-ci
   # - make tests
   - ./run-database-tests tests/database -d mysql
   # - ./run-database-tests tests/shredding -d all
