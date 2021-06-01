@@ -44,13 +44,13 @@ before_install:
   - mysql -e "FLUSH PRIVILEGES;"
 script:
   - opam pin add links . -y
-  # - opam pin add links-postgresql . -y
-  # - opam pin add links-sqlite3 . -y
+  - opam pin add links-postgresql . -y
+  - opam pin add links-sqlite3 . -y
   - opam pin add links-mysql . -y
-  # - make doc
+  - make doc
   - make all-ci
-  # - make tests
+  - make tests
   - ./run-database-tests tests/database -d mysql
-  # - ./run-database-tests tests/shredding -d all
-  # - ./run-database-tests tests/relational-lenses -d all
-  # - ./run-tests unit
+  - ./run-database-tests tests/shredding -d all
+  - ./run-database-tests tests/relational-lenses -d all
+  - ./run-tests unit

@@ -89,7 +89,6 @@ def main():
         else:
             raise SystemExit("Unsupported database %s" % db)
         debug(cmnd)
-        print(cmnd)
         returncode = os.system(cmnd)
         if returncode != 0:
             raise SystemExit("Database setup failed: %s for database %s" % (sql_file,db))
