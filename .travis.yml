@@ -46,7 +46,7 @@ script:
   - opam pin add links . -y
   - opam pin add links-postgresql . -y
   - opam pin add links-sqlite3 . -y
-  - opam pin add links-mysql . -y
+  - opam pin add links-mysql8 . -y
   - make doc
   - make all-ci
   - make tests
