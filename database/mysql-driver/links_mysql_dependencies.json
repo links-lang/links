@@ -1,6 +1,6 @@
 [
     {
-	opam_package: "mysql8",
-	files : ["mysql8"]
+	opam_package: "mysql",
+	files : ["mysql"]
     }
 ]
