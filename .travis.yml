@@ -41,7 +41,7 @@ before_install:
   #   # END
   - opam install -y ocamlformat.0.14.2 ounit2
   - make rule-check
-  - psql -c "create database links; $DBNAME" -U postgres
+  - psql -c "create database $DBNAME;" -U postgres
   - psql -c "CREATE ROLE $DBUSER SUPERUSER LOGIN CREATEDB;" -U postgres
   - mysql -e "CREATE DATABASE $DBNAME;"
   - mysql -e "CREATE USER $DBUSER IDENTIFIED BY 'links';"
