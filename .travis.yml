@@ -20,6 +20,8 @@ env:
   global:
     - PGPORT=5433
     - PGUSER=travis
+    - DBUSER=links
+    - DBNAME=links
 before_install:
   - git diff-index --quiet HEAD --
   # BEGIN postgresql trust based authentication
@@ -39,11 +41,12 @@ before_install:
   #   # END
   - opam install -y ocamlformat.0.14.2 ounit2
   - make rule-check
-  - psql -c 'create database links;' -U postgres
-  - psql -c "CREATE ROLE links SUPERUSER LOGIN CREATEDB;" -U postgres
-  - mysql -e 'CREATE DATABASE links;'
-  - mysql -e "CREATE USER links IDENTIFIED BY 'links';"
-  - mysql -e "GRANT ALL ON  links.* TO $PGUSER;"
+  - psql -c "create database links; $DBNAME" -U postgres
+  - psql -c "CREATE ROLE $DBUSER SUPERUSER LOGIN CREATEDB;" -U postgres
+  - mysql -e "CREATE DATABASE $DBNAME;"
+  - mysql -e "CREATE USER $DBUSER IDENTIFIED BY 'links';"
+  - mysql -e "GRANT ALL ON $DBNAME.* TO $DBUSER;"
+  - mysql -e "FLUSH PRIVILEGES;"
 script:
   - opam pin add links . -y
   - opam pin add links-postgresql . -y
