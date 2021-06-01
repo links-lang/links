@@ -305,5 +305,5 @@ let parse_args (args : string) : db =
            failwith ("[" ^ msg ^ "] Couldn't parse mysql port number : " ^ port))
     | _ -> failwith "Insufficient arguments when establishing mysql connection"
 
-let driver_name = "mysql"
+let driver_name = "mysql8"
 let _ = Value.register_driver (driver_name, fun args -> new mysql_database (parse_args args), Value.reconstruct_db_string (driver_name, args))
