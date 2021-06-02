@@ -1,7 +1,63 @@
+# 0.9.3
+
+This minor release fixes a few bugs.
+
+## MVU library is now distributed as part of Links
+
+The JavaScript dependencies of the MVU library are now correctly
+installed alongside Links. As a result the MVU examples now work
+out-of-the-box following a fresh install of Links. For instance, the
+following command will now successfully run the TODO example:
+
+```
+$ linx $OPAM_SWITCH_PREFIX/share/links/examples/mvu/todomvc/todoMVC.links
+```
+
+## Limited support for regular expressions in SQL where clauses
+
+Links now support compilation of regular expressions in SQL where
+clauses, however, only for regular expressions that can be translated
+to SQL `LIKE` clauses. Consider the following example.
+
+```links
+# Suppose we had configured two tables as follows
+#  insert staff values (name, dept)
+#    [(name = "Alice", dept = "math"),
+#     (name = "Bob", dept = "computer science"),
+#     (name = "Carol", dept = "dentistry")];
+#  insert depts values (name, coffee_budget)
+#    [(name = "mathematics", coffee_budget = 10000),
+#     (name = "computer science", coffee_budget = 20000),
+#     (name = "dentistry", coffee_budget = 30000)]
+
+query flat {
+  for (s <-- staff)
+    for (d <-- depts)
+       where (d.name =~ /.*{s.dept}.*/)
+         [(name = s.name, dept = d.name, coffee_budget = d.coffee_budget)]
+}
+```
+
+When `s` is bound to the record `(name = "Alice", dept = "math")` the
+regular expression `.*{s.dept}.*` will match the department record
+with `name = "mathematics"`, and thus the query yields
+
+```
+[ (coffee_budget = 10000, dept = "mathematics", name = "Alice")
+, (coffee_budget = 20000, dept = "computer science", name = "Bob")
+, (coffee_budget = 30000, dept = "dentistry", name = "Carol") ]
+```
+
+## Other fixes
+
+* Compatibility with OCaml 4.12 (thanks to @kit-ly-kate).
+* The webserver now correctly sends HTTP responses with code 500 for errors.
+* Various internal improvements.
+
 # 0.9.2
 
-This minor release contains various bug fixes, improvements, and a **breaking**
-change.
+This minor release contains various bug fixes, improvements, and a
+**breaking** change.
 
 ## Breaking change: Trailing semicolons are no longer permitted
 The surface syntax of Links has been changed.  Up until now it was possible to
