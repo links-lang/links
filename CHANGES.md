@@ -19,7 +19,7 @@ Links now support compilation of regular expressions in SQL where
 clauses, however, only for regular expressions that can be translated
 to SQL `LIKE` clauses. Consider the following example.
 
-```links
+```
 # Suppose we had configured two tables as follows
 #  insert staff values (name, dept)
 #    [(name = "Alice", dept = "math"),
