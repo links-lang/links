@@ -50,7 +50,7 @@ with `name = "mathematics"`, and thus the query yields
 
 ## Other fixes
 
-* Compatibility with OCaml 4.12 (thanks to @kit-ly-kate).
+* Compatibility with OCaml 4.12 (thanks to @kit-ty-kate).
 * The webserver now correctly sends HTTP responses with code 500 for errors.
 * Various internal improvements.
 
