@@ -1,0 +1,49 @@
+# Let's look at Links' web-programming capabilities!
+
+# Links has builtin syntax for defining HTML/XML snippets:
+
+var some_html =
+  page
+    <html>
+      <body>
+      <p>Hello there!</p>
+      </body>
+    </html>;
+
+# Note that this is not a string! After the page keyword, we can just write
+# HTML/XML nodes.
+
+# These are actually "quasi-quotes", meaning that we can use { } to insert Links
+# code generating some parts of the XML/HTML
+
+fun make_html(s : String) {
+  page
+    <html>
+      <body>
+      <p>The string is  {stringToXml(s)}</p>
+      </body>
+    </html>
+}
+
+
+# Of course, the whole point of this is that we can actually serve web pages!
+
+# First, first technical reasons, we need a function that takes a single argument
+# and creates HTML:
+fun mainPage(_) {
+  make_html("hello")
+}
+
+# Now we define a function that actually serves the webserver:
+# No need to name this "main", but this would typically be the main entry
+# function for a web application!
+fun main() {
+
+  # This says that the landing page of the web server is the result of calling mainPage:
+  addRoute("", mainPage);
+
+  # This actually starts the server, it doesn't return.
+  servePages()
+}
+
+main()

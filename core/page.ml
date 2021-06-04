@@ -1,6 +1,20 @@
 (* Page generation *)
 
 open Irtojs
+
+(* module type MAKEREALPAGE = sig
+  val page : ?cgi_env:(string * string) list ->
+    wsconn_url:(Webserver_types.websocket_url option) ->
+    (Var.var Env.String.t * Types.typing_environment) ->
+    Ir.binding list -> (Value.env * Value.t) -> string list -> string
+end *)
+
+module PageLocalModule = struct
+  let withPrint: string -> string = fun s ->
+    Printf.printf "%s" s;
+    s 
+end
+
 module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
   open Utility
 
@@ -166,5 +180,37 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
       ~external_files:deps
       []
 end
+
+(* module MakeRealPageWasm  (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) ：MAKEREALPAGE = struct
+  let scriptTagComment body =
+    "<script type='text/javascript'><!--\n'use strict';\n" ^ body ^ "\n--> </script>\n"
+  let scriptTagNoComment body = 
+    " <script type='text/javascript'>
+    'use strict';
+    _debug(\"Continuation: \" + _cont_kind);
+    _startTimer();" ^ body ^ ";
+    </script>"
+  let in_tag tag str = "<" ^ tag ^ ">\n" ^ str ^ "\n</" ^ tag ^ ">"
+  let custom_ext_script_tag str = "<script type='text/javascript' src='" ^ str ^ "'></script>"
+
+  let page = Make_RealPage_JS.page
+
+end *)
+let clientBackend =
+  (* let selectClientBackend s =
+    let _ = match s with
+    | Some f -> Printf.fprintf stdout "select %s\n" f; ()
+    | None -> () in
+    exit 0
+  in *)
+  let clientBackendOptions = ["js"; "wasm"] in
+  let open Utility in
+  Settings.(option ~default:(Some "wasm") "client_backend"
+    |> synopsis (Printf.sprintf "Choose backend for client (values: %s)" (String.concat ", " clientBackendOptions)) (*should be default js in release*)
+    |> CLI.(add (long "client-backend"))
+    |> to_string from_string_option
+    |> convert (Sys.expand ->- some)
+    |> privilege `System
+    |> sync)
 
 module RealPage = Make_RealPage(Compiler)(Js_CodeGen)

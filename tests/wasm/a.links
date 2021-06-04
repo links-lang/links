@@ -1,0 +1,29 @@
+var a1=2;
+var a2=3;
+fun multiply(a,b) {
+	a*b
+}
+var a3=a1+a2;
+
+fun mainPage(_) {
+page
+	<html>
+	<head/>
+	<body>
+	</body>
+		<div id="container">
+			<p id="p1">fff</p>
+			<p id="p2">{intToXml(a3)}</p>
+		</div>
+		<script>
+			
+			document.getElementById("p1").innerHTML = "fear" 
+		</script>
+		<!--<script type="text/javascript" src="file:///Users/aarons/Aaron/Master/Project/links/tests/wasm/page.js"></script> -->
+	</html>
+}
+fun main(){
+	addRoute("/",mainPage);
+	servePages()
+}
+main()
