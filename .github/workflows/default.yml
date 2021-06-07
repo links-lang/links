@@ -1,0 +1,74 @@
+name: Links main workflow
+
+on:
+  pull_request:
+    branches: master
+  push:
+    branches: master
+  schedule:
+    # Prime the caches every Monday
+    - cron: 0 1 * * MON
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-20.04
+        ocaml-compiler:
+          - 4.08.0
+
+    runs-on: ${{ matrix.os }}
+
+    services:
+      postgres:
+        image: postgres:12
+        env:
+          POSTGRES_USER: links
+          POSTGRES_PASSWORD: links
+        ports:
+          - 5432:5432 5433:5432
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: links
+          MYSQL_DATABASE: links
+          MYSQL_ROOT_HOST: '%'
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - run: git diff-index --quiet HEAD --
+
+      - name: Use OCaml ${{ matrix.ocaml-compiler }}
+        uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: ${{ matrix.ocaml-compiler }}
+
+      - run: sudo apt-get install -y python3-setuptools python3-pip libev-dev
+
+      - run: pip3 install -U Sphinx
+
+      - run: opam install -y conf-libev
+      - run: opam install -y ocamlformat.0.14.2 ounit2
+
+      - run: make rule-check
+
+      - run: opam pin add links . -y --deps-only
+      - run: opam pin add links-postgresql . -y --deps-only
+      - run: opam pin add links-mysql8 . -y --deps-only
+      - run: opam pin add links-sqlite3 . -y --deps-only
+
+      - run: make doc
+      - run: make all-ci
+      - run: make tests
+
+      - run: ./run-database-tests tests/database -d all
+      - run: ./run-database-tests tests/shredding -d all
+      - run: ./run-database-tests tests/relational-lenses -d all
+      - run: ./run-tests unit
