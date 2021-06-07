@@ -59,10 +59,10 @@ jobs:
 
       - run: make rule-check
 
-      - run: opam pin add links . -y --deps-only
-      - run: opam pin add links-postgresql . -y --deps-only
-      - run: opam pin add links-mysql8 . -y --deps-only
-      - run: opam pin add links-sqlite3 . -y --deps-only
+      - run: opam pin add links . -y
+      - run: opam pin add links-postgresql . -y
+      - run: opam pin add links-mysql8 . -y
+      - run: opam pin add links-sqlite3 . -y
 
       - run: make doc
       - run: make all-ci
