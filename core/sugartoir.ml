@@ -71,6 +71,7 @@ let lookup_name_and_type name (nenv, tenv, _eff) =
     var, TEnv.find var tenv
 
 let lookup_effects (_, _, eff) = eff
+let with_effects (x, y, _) eff = (x, y, eff)
 
 (* Hmm... shouldn't we need to use something like this? *)
 
@@ -1156,13 +1157,14 @@ struct
                     let f  = Binder.to_name bndr in
                     let ft = Binder.to_type bndr in
                     let eff = TypeUtils.effect_row ft in
+                    let env' = with_effects env eff in
                     let ps, body_env =
                       List.fold_right
                         (fun p (ps, body_env) ->
                            let p, penv = CompilePatterns.desugar_pattern eff p in
                              p::ps, body_env ++ penv)
                         ps
-                        ([], env) in
+                        ([], env') in
                     let body = eval body_env body in
                     let qs = List.map SugarQuantifier.get_resolved_exn tyvars in
                       I.letfun
@@ -1194,6 +1196,7 @@ struct
                           let f  = Binder.to_name bndr in
                           let ft = Binder.to_type bndr in
                           let eff = TypeUtils.effect_row ft in
+                          let env' = with_effects env eff in
                           let ps = List.hd pss in
                           let qs = List.map SugarQuantifier.get_resolved_exn tyvars in
                           let ps, body_env =
@@ -1202,7 +1205,7 @@ struct
                                   let p, penv = CompilePatterns.desugar_pattern eff p in
                                     p::ps, body_env ++ penv)
                                ps
-                               ([], env) in
+                               ([], env') in
                            let body = fun vs -> eval (extend fs (List.combine vs inner_fts) body_env) body in
                            (Var.make_info ft f scope, (qs, (body_env, ps, body)), location, unsafe))
                         (nodes_of_list defs)
