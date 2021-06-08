@@ -32,6 +32,7 @@ jobs:
       mysql:
         image: mysql:8.0
         env:
+          MYSQL_USER: links
           MYSQL_ROOT_PASSWORD: links
           MYSQL_DATABASE: links
           MYSQL_ROOT_HOST: '%'
@@ -41,7 +42,7 @@ jobs:
 
     steps:
       - name: Start MySQL
-        run: sudo systemctl status mysql
+        run: sudo systemctl start mysql || sudo systemctl status mysql
 
       - name: Checkout code
         uses: actions/checkout@v2
