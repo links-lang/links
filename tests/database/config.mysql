@@ -1,4 +1,4 @@
 database_driver=mysql
-database_args=localhost:3307:links:links
+database_args=127.0.0.1:3307:links:links
 coerce_null_integers=on
 null_integer=-1
