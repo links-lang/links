@@ -62,10 +62,7 @@ jobs:
           eval $(opam config env)
           make rule-check
 
-      - run: opam pin add links . -y
-      - run: opam pin add links-postgresql . -y
-      - run: opam pin add links-mysql8 . -y
-      - run: opam pin add links-sqlite3 . -y
+      - run: opam install ./links.opam ./links-postgresql.opam ./links-mysql8.opam ./links-sqlite3.opam --deps-only
 
       # - run: make doc
       - run: make all-ci
