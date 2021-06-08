@@ -40,12 +40,6 @@ jobs:
         options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
 
     steps:
-      - name: Enable PostgreSQL trust based authentication
-        run: |
-          sudo sed -i -e '/local.*peer/s/postgres/all/' -e 's/peer\|md5/trust/g' /etc/postgresql/*/main/pg_hba.conf
-          sudo systemctl restart postgresql
-        shell: bash
-
       - name: Checkout code
         uses: actions/checkout@v2
 
