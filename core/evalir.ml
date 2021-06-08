@@ -237,8 +237,9 @@ struct
       special env cont (DoOperation (Value.session_exception_operation,
         [], Types.Not_typed)) in
     function
-    | `FunctionPtr (f, fvs), ps ->
-      let (_finfo, (xs, body), z, _location) = find_fun f in
+    | `FunctionPtr (f, fvs), ps -> 
+      let (_finfo, (xs, body), z, _location) = (try find_fun f with NotFound s ->
+           (Debug.print("NotFound in fun_defs: "^string_of_int f); raise (NotFound s)) ) in
       let env =
         match z, fvs with
         | None, None            -> env
