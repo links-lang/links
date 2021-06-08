@@ -61,14 +61,17 @@ jobs:
       - run: |
           eval $(opam config env)
           make rule-check
+        shell: bash
 
       - run: opam install ./links.opam ./links-postgresql.opam ./links-mysql8.opam ./links-sqlite3.opam --deps-only
 
       # - run: make doc
-      - run: make all-ci
-      - run: make tests
-
-      - run: ./run-database-tests tests/database -d all
-      - run: ./run-database-tests tests/shredding -d all
-      - run: ./run-database-tests tests/relational-lenses -d all
-      - run: ./run-tests unit
+      - run: |
+          eval $(opam env)
+          make all-ci
+          make tests
+          ./run-database-tests tests/database -d all
+          ./run-database-tests tests/shredding -d all
+          ./run-database-tests tests/relational-lenses -d all
+          ./run-tests unit
+        shell: bash
