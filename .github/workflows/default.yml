@@ -37,13 +37,15 @@ jobs:
           MYSQL_DATABASE: links
           MYSQL_ROOT_HOST: '%'
         ports:
-          - 3307:3307
+          - 3306:3306
         options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
 
     steps:
       - name: MySQL status
         run: |
           mysql --version
+          sudo systemctl enable mysql
+          sudo systemctl start mysql
           sudo systemctl status mysql
         shell: bash
 
