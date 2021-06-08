@@ -41,7 +41,7 @@ jobs:
 
     steps:
       - name: Start MySQL
-        run: sudo systemctl start mysql
+        run: sudo /etc/init.d/mysql start
 
       - name: Checkout code
         uses: actions/checkout@v2
