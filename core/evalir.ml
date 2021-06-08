@@ -238,8 +238,10 @@ struct
         [], Types.Not_typed)) in
     function
     | `FunctionPtr (f, fvs), ps ->
-      let (_finfo, (xs, body), z, _location) = (try find_fun f with NotFound s ->
-           (Debug.print("NotFound in fun_defs: "^string_of_int f); raise (NotFound s)) ) in
+      let (_finfo, (xs, body), z, _location) =
+           try find_fun f
+           with NotFound s ->
+             raise (NotFound (s^" attempting to look up the function name")) in
       let env =
         match z, fvs with
         | None, None            -> env
