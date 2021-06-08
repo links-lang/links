@@ -46,9 +46,6 @@ jobs:
           mysql --version
           sudo systemctl enable mysql
           sudo systemctl start mysql
-          mysql -h 127.0.0.1 -P 3307 -u root -plinks -e "CREATE DATABASE IF NOT EXISTS links;"
-          mysql -h 127.0.0.1 -P 3307 -u root -plinks -e "GRANT ALL PRIVILEGES ON *.* TO 'links'@'%' IDENTIFIED BY 'links' WITH GRANT OPTION;"
-          mysql -h 127.0.0.1 -P 3307 -u root -plinks -e "FLUSH PRIVILEGES;"
         shell: bash
 
       - name: Checkout code
