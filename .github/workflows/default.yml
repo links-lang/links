@@ -46,9 +46,9 @@ jobs:
           mysql --version
           sudo systemctl enable mysql
           sudo systemctl start mysql
-          mysql -h localhost -P 3307 -u root -plinks -e "CREATE DATABASE links;"
-          mysql -h localhost -P 3307 -u root -plinks -e "GRANT ALL PRIVILEGES ON *.* TO 'links'@'%' IDENTIFIED BY 'links' WITH GRANT OPTION;"
-          mysql -h localhost -P 3307 -u root -plinks -e "FLUSH PRIVILEGES;"
+          mysql -h 127.0.0.1 -P 3307 -u links -plinks -e "CREATE DATABASE links;"
+          mysql -h 127.0.0.1 -P 3307 -u links -plinks -e "GRANT ALL PRIVILEGES ON *.* TO 'links'@'%' IDENTIFIED BY 'links' WITH GRANT OPTION;"
+          mysql -h 127.0.0.1 -P 3307 -u links -plinks -e "FLUSH PRIVILEGES;"
         shell: bash
 
       - name: Checkout code
