@@ -45,8 +45,7 @@ jobs:
         run: |
           mysql --version
           sudo systemctl enable mysql
-          sudo systemctl start mysql
-          sudo systemctl status mysql
+          sudo systemctl start mysql || sudo systemctl status mysql
         shell: bash
 
       - name: Checkout code
