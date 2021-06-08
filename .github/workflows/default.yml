@@ -45,26 +45,29 @@ jobs:
 
       - run: git diff-index --quiet HEAD --
 
+      # - run: sudo apt-get install -y python3-setuptools python3-pip libev-dev
+      - run: sudo apt-get install libev-dev
+
+      # - run: pip3 install -U Sphinx
+
       - name: Use OCaml ${{ matrix.ocaml-compiler }}
         uses: ocaml/setup-ocaml@v2
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
-      - run: sudo apt-get install -y python3-setuptools python3-pip libev-dev
-
-      - run: pip3 install -U Sphinx
-
       - run: opam install -y conf-libev
       - run: opam install -y ocamlformat.0.14.2 ounit2
 
-      - run: make rule-check
+      - run: |
+          eval $(opam config env)
+          make rule-check
 
       - run: opam pin add links . -y
       - run: opam pin add links-postgresql . -y
       - run: opam pin add links-mysql8 . -y
       - run: opam pin add links-sqlite3 . -y
 
-      - run: make doc
+      # - run: make doc
       - run: make all-ci
       - run: make tests
 
