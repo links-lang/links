@@ -40,6 +40,9 @@ jobs:
         options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
 
     steps:
+      - name: Start MySQL
+        run: sudo systemctl start mysql
+
       - name: Checkout code
         uses: actions/checkout@v2
 
