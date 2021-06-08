@@ -40,15 +40,23 @@ jobs:
         options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
 
     steps:
+      - name: Enable PostgreSQL trust based authentication
+        run: |
+          sudo sed -i -e '/local.*peer/s/postgres/all/' -e 's/peer\|md5/trust/g' /etc/postgresql/*/main/pg_hba.conf
+          sudo systemctl restart postgresql
+        shell: bash
+
       - name: Checkout code
         uses: actions/checkout@v2
 
       - run: git diff-index --quiet HEAD --
+        shell: bash
 
-      # - run: sudo apt-get install -y python3-setuptools python3-pip libev-dev
-      - run: sudo apt-get install libev-dev
-
-      # - run: pip3 install -U Sphinx
+      - name: Install system dependencies
+        run: |
+          sudo apt-get install -y python3-setuptools python3-pip libev-dev
+          pip3 install -U Sphinx
+        shell: bash
 
       - name: Use OCaml ${{ matrix.ocaml-compiler }}
         uses: ocaml/setup-ocaml@v2
@@ -58,16 +66,19 @@ jobs:
       - run: opam install -y conf-libev
       - run: opam install -y ocamlformat.0.14.2 ounit2
 
-      - run: |
+      - name: Ad-hoc rule check
+        run: |
           eval $(opam config env)
           make rule-check
         shell: bash
 
-      - run: opam install ./links.opam ./links-postgresql.opam ./links-mysql8.opam ./links-sqlite3.opam --deps-only
+      - name: Install Links dependencies
+        run: opam install ./links.opam ./links-postgresql.opam ./links-mysql8.opam ./links-sqlite3.opam --deps-only
 
-      # - run: make doc
-      - run: |
+      - name: Build Links from source and run testsuites
+        run: |
           eval $(opam env)
+          make doc
           make all-ci
           make tests
           ./run-database-tests tests/database -d all
