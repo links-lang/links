@@ -33,6 +33,7 @@ jobs:
         image: mysql:8.0
         env:
           MYSQL_USER: links
+          MYSQL_USER_PASSWORD: links
           MYSQL_ROOT_PASSWORD: links
           MYSQL_DATABASE: links
           MYSQL_ROOT_HOST: '%'
@@ -106,19 +107,17 @@ jobs:
       - name: Run database testsuite
         run: |
           eval $(opam env)
-          echo $LINKS_POSTGRES_PORT
-          echo $LINKS_MYSQL8_PORT
           ./run-database-tests tests/database -d all
           ./run-database-tests tests/shredding -d all
           ./run-database-tests tests/relational-lenses -d all
           ./run-tests unit
         env:
           LINKS_POSTGRES_HOST: localhost
-          LINKS_POSTGRES_USER: links
-          LINKS_POSTGRES_PASSWORD: links
-          LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5433] }}
+          LINKS_POSTGRES_USER: ${{ job.services.postgres.POSTGRES_USER }}
+          LINKS_POSTGRES_PASSWORD: ${{ job.services.postgres.POSTGRES_PASSWORD }}
+          LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
           LINKS_MYSQL8_HOST: 127.0.0.1
-          LINKS_MYSQL8_USER: links
-          LINKS_MYSQL8_PASSWORD: links
-          LINKS_MYSQL8_PORT: ${{ job.services.mysql.ports[3307] }}
+          LINKS_MYSQL8_USER: ${{ job.services.mysql.MYSQL_USER }}
+          LINKS_MYSQL8_PASSWORD: ${{ job.services.mysql.MYSQL_USER_PASSWORD }}
+          LINKS_MYSQL8_PORT: ${{ job.services.mysql.ports[3306] }}
         shell: bash
