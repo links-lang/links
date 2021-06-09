@@ -64,7 +64,51 @@ jobs:
         run: make doc
         shell: bash
 
-  main:
+  interpreter:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-20.04
+        ocaml-compiler:
+          - 4.08.0
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install system dependencies
+        run: sudo apt-get install -y libev-dev
+        shell: bash
+
+      - name: Use OCaml ${{ matrix.ocaml-compiler }}
+        uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: ${{ matrix.ocaml-compiler }}
+
+      - run: opam install -y conf-libev
+
+      - name: Install Links dependencies
+        run: >-
+          opam install
+          ./links.opam
+          --deps-only
+
+      - name: Build Links from source
+        run: |
+          eval $(opam env)
+          make all-ci
+        shell: bash
+
+      - name: Run interpreter testsuite
+        run: |
+         eval $(opam env)
+         make tests
+        shell: bash
+
+  postgres-mysql8-sqlite3:
     strategy:
       fail-fast: false
       matrix:
@@ -138,12 +182,6 @@ jobs:
         run: |
           eval $(opam env)
           make all-ci
-        shell: bash
-
-      - name: Run interpreter testsuite
-        run: |
-         eval $(opam env)
-          make tests
         shell: bash
 
       - name: Run database testsuite
