@@ -38,7 +38,11 @@ jobs:
           MYSQL_ROOT_HOST: '%'
         ports:
           - 3307:3306
-        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
 
     steps:
       - name: MySQL status
@@ -46,6 +50,7 @@ jobs:
           mysql --version
           sudo systemctl enable mysql
           sudo systemctl start mysql
+          mysql -h 127.0.0.1 -P 3307 -uroot -plinks -e "SHOW DATABASES;"
         shell: bash
 
       - name: Checkout code
@@ -75,7 +80,13 @@ jobs:
         shell: bash
 
       - name: Install Links dependencies
-        run: opam install ./links.opam ./links-postgresql.opam ./links-mysql8.opam ./links-sqlite3.opam --deps-only
+        run: >-
+          opam install
+          ./links.opam
+          ./links-postgresql.opam
+          ./links-mysql8.opam
+          ./links-sqlite3.opam
+          --deps-only
 
       - name: Build Links from source and run testsuites
         run: |
