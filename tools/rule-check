@@ -5,7 +5,7 @@
 #
 
 RULEDIR="tools/rules"
-BLACKLIST=()
+BLACKLIST=("")
 
 function is_blacklisted () {
     local target="$1"
