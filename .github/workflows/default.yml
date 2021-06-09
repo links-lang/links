@@ -90,14 +90,35 @@ jobs:
           ./links-sqlite3.opam
           --deps-only
 
-      - name: Build Links from source and run testsuites
+      - name: Build Links from source
         run: |
           eval $(opam env)
           make doc
           make all-ci
+        shell: bash
+
+      - name: Run interpreter testsuite
+        run: |
+         eval $(opam env)
           make tests
+        shell: bash
+
+      - name: Run database testsuite
+        run: |
+          eval $(opam env)
+          echo $LINKS_POSTGRES_PORT
+          echo $LINKS_MYSQL8_PORT
           ./run-database-tests tests/database -d all
           ./run-database-tests tests/shredding -d all
           ./run-database-tests tests/relational-lenses -d all
           ./run-tests unit
+        env:
+          LINKS_POSTGRES_HOST: localhost
+          LINKS_POSTGRES_USER: links
+          LINKS_POSTGRES_PASSWORD: links
+          LINKS_POSTGRES_PORT: ${{ jobs.build.services.postgres.ports[5433] }}
+          LINKS_MYSQL8_HOST: 127.0.0.1
+          LINKS_MYSQL8_USER: links
+          LINKS_MYSQL8_PASSWORD: links
+          LINKS_MYSQL8_PORT: ${{ jobs.build.services.mysql.ports[3307] }}
         shell: bash
