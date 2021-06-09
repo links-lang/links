@@ -10,7 +10,61 @@ on:
     - cron: 0 1 * * MON
 
 jobs:
-  build:
+  rule-check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-20.04
+        ocaml-compiler:
+          - 4.08.0
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - run: git diff-index --quiet HEAD --
+        shell: bash
+
+      - name: Use OCaml ${{ matrix.ocaml-compiler }}
+        uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: ${{ matrix.ocaml-compiler }}
+
+      - run: opam install -y ocamlformat.0.14.2
+
+      - name: Ad-hoc rule check
+        run: |
+          eval $(opam config env)
+          make rule-check
+        shell: bash
+
+  build-doc:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-20.04
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get install -y python3-setuptools python3-pip
+          pip3 install -U Sphinx
+        shell: bash
+
+      - name: Compile documentation
+        run: make doc
+        shell: bash
+
+  main:
     strategy:
       fail-fast: false
       matrix:
@@ -59,13 +113,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - run: git diff-index --quiet HEAD --
-        shell: bash
-
       - name: Install system dependencies
-        run: |
-          sudo apt-get install -y python3-setuptools python3-pip libev-dev
-          pip3 install -U Sphinx
+        run: sudo apt-get install -y libev-dev
         shell: bash
 
       - name: Use OCaml ${{ matrix.ocaml-compiler }}
@@ -74,13 +123,7 @@ jobs:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
       - run: opam install -y conf-libev
-      - run: opam install -y ocamlformat.0.14.2 ounit2
-
-      - name: Ad-hoc rule check
-        run: |
-          eval $(opam config env)
-          make rule-check
-        shell: bash
+      - run: opam install -y ounit2
 
       - name: Install Links dependencies
         run: >-
@@ -94,7 +137,6 @@ jobs:
       - name: Build Links from source
         run: |
           eval $(opam env)
-          make doc
           make all-ci
         shell: bash
 
