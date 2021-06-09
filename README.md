@@ -1,7 +1,7 @@
 Links: Linking Theory to Practice for the Web
 ---------------------------------------------
 
-![Build status](https://github.com/links-lang/links/actions/workflows/default.yml/badge.svg)
+![Build status](https://github.com/links-lang/links/actions/workflows/default.yml/badge.svg?branch=master)
 
 Links helps to build modern Ajax-style applications: those with
 significant client- and server-side components.
