@@ -51,6 +51,8 @@ jobs:
           sudo systemctl enable mysql
           sudo systemctl start mysql
           mysql -h 127.0.0.1 -P 3307 -uroot -plinks -e "SHOW DATABASES;"
+          mysql -h 127.0.0.1 -P 3307 -uroot -plinks -e "SELECT * FROM mysql.user;"
+          mysql -h 127.0.0.1 -P 3307 -uroot -plinks -e "SELECT * FROM mysql.db;"
         shell: bash
 
       - name: Checkout code
