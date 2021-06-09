@@ -1884,9 +1884,65 @@ let effect_sugar
 
 (** Type printers *)
 
+type pp_policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool}
+
+module type PRETTY_PRINTER = sig
+  val show_quantifiers : bool Settings.setting
+  val show_flavours : bool Settings.setting
+  val show_kinds : string option Settings.setting
+  val hide_fresh_type_vars : bool Settings.setting
+  
+  type policy = pp_policy
+  (* {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool} *)
+  type names  = (int, string * Vars.spec) Hashtbl.t
+  type context = { bound_vars: TypeVarSet.t; shared_effect: int option }
+  val default_policy : unit -> policy
+
+  val name_of_type : context -> policy * names -> tid -> Subkind.t -> string -> (string -> string) -> string
+  val datatype : context -> policy * names -> datatype -> string
+  (* val row : ?name:string -> ?strip_wild:bool -> string -> context -> policy * names -> string *)
+  val row :
+    ?name:(context ->
+           policy * names ->
+           tid -> Subkind.t -> istring -> (istring -> istring) -> istring) ->
+    ?strip_wild:bool ->
+    istring -> context -> policy * names -> row -> istring
+  (* val row_var : string -> string -> context -> policy * names -> row point -> string *)
+  val row_var :
+    (context ->
+     policy * names ->
+     tid -> Subkind.t -> string -> (string -> string) -> string) ->
+    istring -> context -> policy * names -> row_var -> istring option
+  val quantifier : (policy * names) -> Quantifier.t -> string
+  val strip_quantifiers : typ -> typ
+  val empty_context : context
+  val context_with_shared_effect :
+    policy ->
+    (( (* TODO *)
+      < field_spec : row -> 'c * row;
+      field_spec_map : field_spec_map -> 'c * field_spec_map;
+      list : 'a 'b. ('c -> 'a -> 'c * 'b) -> 'a list -> 'c * 'b list;
+      meta_presence_var : meta_presence_var -> 'c * meta_presence_var;
+      meta_row_var : row_var -> 'c * row_var;
+      meta_type_var : meta_type_var -> 'c * meta_type_var;
+      primitive : Primitive.t -> 'c * Primitive.t;
+      quantifier : Quantifier.t -> 'c * Quantifier.t;
+      row : row -> 'c * row; row_var : row_var -> 'c * row_var;
+      set_rec_vars : meta_type_var intmap -> 'c; typ : row -> 'c * row;
+      type_arg : type_arg -> 'c * type_arg;
+      type_args : type_arg list -> 'c * type_arg list; var : tid option >
+                                                             as 'c) ->
+     < var : tid option; .. > * 'd) ->
+    context
+  val presence : context -> policy * names -> typ -> string
+  val type_arg : context -> policy * names -> type_arg -> string
+  (* val tycon_spec : context -> policy * names -> string *)
+  val tycon_spec : context -> policy * names -> tycon_spec -> string
+end
+
 
 (* TODO: check over the pretty-printer in light of the types refactoring *)
-module Print =
+module Print : PRETTY_PRINTER =
 struct
   module BS = Basicsettings
   let show_quantifiers
@@ -1913,11 +1969,12 @@ struct
   (* Set the quantifiers to be true to display any outer quantifiers.
      Set flavours to be true to distinguish flexible type variables
      from rigid type variables. *)
-  type policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool}
+  type policy = pp_policy
+  (* {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool} *)
   type names  = (int, string * Vars.spec) Hashtbl.t
   type context = { bound_vars: TypeVarSet.t; shared_effect: int option }
 
-  let default_policy () =
+  let default_policy : unit -> policy = fun () ->
     {quantifiers=Settings.get show_quantifiers;
      flavours=Settings.get show_flavours;
      hide_fresh=Settings.get hide_fresh_type_vars;
@@ -2046,7 +2103,7 @@ struct
 
   (** If type variable names are hidden return a generic name n1. Otherwise
      pass name of type variable to n2 so that it can construct a name. *)
-  let name_of_type_plain { bound_vars; _ } (policy, vars : policy * names) var n1 n2 =
+  let name_of_type_plain { bound_vars; _ } (policy, vars : policy * names) (var : tid) (* is it really tid? *) (n1 : string) (n2 : string -> string) =
     let name, (flavour, _, count) = Vars.find_spec var vars in
     if policy.hide_fresh && count = 1
        && ((flavour = `Flexible && not (policy.flavours)) || not (IntSet.mem var bound_vars))
@@ -2062,6 +2119,7 @@ struct
     | Row b -> is_row_var known b
     | _ -> false
 
+  (* HERE is the important bit ~S *)
   let rec datatype : context -> policy * names -> datatype -> string =
     fun ({ bound_vars; _ } as context) ((policy, vars) as p) t ->
       let sd = datatype context p in
@@ -2327,6 +2385,7 @@ struct
           end
       | _ -> raise tag_expectation_mismatch
 
+  (* HERE row ~S *)
   and row ?(name=name_of_type) ?(strip_wild=false) sep context p = function
     | Row (field_env, rv, dual) ->
        (* FIXME: should quote labels when necessary, i.e., when they
@@ -2345,7 +2404,16 @@ struct
          begin
            match row_var_string with
            | None -> ""
-           | Some s -> "|"^ (if dual then "~" else "") ^ s
+           | Some s -> row_maybe_print_pipe () ^ (if dual then "~" else "") ^ s
+           (*           ^ removing this pipe fixed the error in Issue 926,
+                          BUT it broke a test in typed_ir:
+                              !FAILURE: Bound quantifiers in a query (#694)
+                                error: Bound quantifiers in a query (#694)
+                                    (Unexpected stdout:
+                              expected `fun : forall a::Row,b::Row(Any,Base).() -a-> [(|b::(Any,Base))]';
+                                   got `fun : forall a::Row,b::Row(Any,Base).() -a-> [(b::(Any,Base))]')
+                          -> sometimes the pipe is supposed to be there
+                             -> if the row is empty *)
          end
     (* FIXME: this shouldn't happen *)
     | Meta rv ->
@@ -2354,6 +2422,11 @@ struct
     | t ->
        failwith ("Illformed row:"^show_datatype t)
        (* raise tag_expectation_mismatch *)
+
+  (* TODO the elusive pipe printing in rows (Samo) *)
+  and row_maybe_print_pipe () =
+    ""
+
   and row_var name_of_type sep ({ bound_vars; _ } as context) ((policy, vars) as p) rv =
     match Unionfind.find rv with
       | Closed -> None
@@ -2396,6 +2469,132 @@ struct
   let strip_quantifiers = function
     | ForAll (_, t) | t -> t
 end
+
+(* New type pretty printer (Samo) *)
+module NewPrint : PRETTY_PRINTER =
+struct
+  module BS = Basicsettings
+  (* open Buffer *)
+
+  (* settings (tied to original Print for the time being) *)
+  let show_quantifiers = Print.show_quantifiers
+    (* = Settings.(flag "show_quantifiers"
+     *             |> convert parse_bool
+     *             |> sync) *)
+
+  let show_flavours = Print.show_flavours
+    (* = Settings.(flag "show_flavours"
+     *             |> convert parse_bool
+     *             |> sync) *)
+  
+  let show_kinds = Print.show_kinds
+    (* = Settings.(option ~default:(Some "default") "show_kinds"
+     *             |> to_string from_string_option
+     *             |> convert Utility.some
+     *             |> sync) *)
+
+  let hide_fresh_type_vars = Print.hide_fresh_type_vars
+    (* = Settings.(flag ~default:true "hide_fresh_type_vars"
+     *             |> convert parse_bool
+     *             |> sync) *)
+
+  (* Set the quantifiers to be true to display any outer quantifiers.
+     Set flavours to be true to distinguish flexible type variables
+     from rigid type variables. *)
+  type policy = pp_policy
+  (* {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool} *)
+  type names  = (int, string * Vars.spec) Hashtbl.t
+  type context = { bound_vars: TypeVarSet.t; shared_effect: int option }
+
+  let default_policy (() : unit) : policy =
+    {quantifiers=Settings.get show_quantifiers;
+     flavours=Settings.get show_flavours;
+     hide_fresh=Settings.get hide_fresh_type_vars;
+     kinds=val_of (Settings.get show_kinds);
+     effect_sugar=Settings.get effect_sugar}
+
+  let empty_context : context = { bound_vars = TypeVarSet.empty;
+                                  shared_effect = None }
+
+  let primitive : Primitive.t -> string = Primitive.to_string
+  
+  let rec datatype : context -> policy * names -> datatype -> string =
+    fun _ _ _ -> "NEW PRINTER IS ALIVE"
+    (* fun ({ bound_vars; _ } as ctx) ((pol, vars) as p) tp ->
+     * let out_buf = Buffer.create 16 (\* buffer size? (using the recommended default *\) in
+     * let write : string -> unit = fun s -> Buffer.add_string out_buf s in
+     * begin
+     *   match tp with
+     *   | Primitive t -> write (primitive t)
+     *   (\* | Record, Variant *\)
+     *   (\* | Function (t_in, t_row, t_out) -> write "Some function" *\)
+     *   | _ -> failwith "Printer for type not implemented"
+     * end;
+     * Buffer.contents out_buf *)
+
+  let name_of_type : context -> policy * names -> tid -> Subkind.t -> string -> (string -> string) -> string =
+    fun _ _ _ _ _ _ -> ""
+  
+  let row :
+        ?name:(context ->
+               policy * names ->
+               tid -> Subkind.t -> istring -> (istring -> istring) -> istring) ->
+        ?strip_wild:bool ->
+        istring -> context -> policy * names -> row -> istring =
+    fun ?(name=(fun _ _ _ _ _ _ -> "")) ?(strip_wild=false) _ _ _ _ -> ""
+  
+  let row_var :
+        (context ->
+         policy * names ->
+         tid -> Subkind.t -> string -> (string -> string) -> string) ->
+        istring -> context -> policy * names -> row_var -> istring option =
+    fun _ _ _ _ _ -> None
+  
+  let quantifier : (policy * names) -> Quantifier.t -> string =
+    fun _ _ -> ""
+  
+  let strip_quantifiers : typ -> typ =
+    fun x -> x
+  
+  let context_with_shared_effect :
+    policy ->
+    (( (* TODO *)
+      < field_spec : row -> 'c * row;
+      field_spec_map : field_spec_map -> 'c * field_spec_map;
+      list : 'a 'b. ('c -> 'a -> 'c * 'b) -> 'a list -> 'c * 'b list;
+      meta_presence_var : meta_presence_var -> 'c * meta_presence_var;
+      meta_row_var : row_var -> 'c * row_var;
+      meta_type_var : meta_type_var -> 'c * meta_type_var;
+      primitive : Primitive.t -> 'c * Primitive.t;
+      quantifier : Quantifier.t -> 'c * Quantifier.t;
+      row : row -> 'c * row; row_var : row_var -> 'c * row_var;
+      set_rec_vars : meta_type_var intmap -> 'c; typ : row -> 'c * row;
+      type_arg : type_arg -> 'c * type_arg;
+      type_args : type_arg list -> 'c * type_arg list; var : tid option >
+                                                             as 'c) ->
+     < var : tid option; .. > * 'd) ->
+    context =
+    fun _ _ -> empty_context
+  
+  let presence : context -> policy * names -> typ -> string =
+    fun _ _ _ -> ""
+  
+  let type_arg : context -> policy * names -> type_arg -> string =
+    fun _ _ _ -> ""
+  
+  let tycon_spec =
+    fun _ _ _ -> ""
+end
+
+let default_pp_policy : unit -> pp_policy =
+  fun () ->
+  {quantifiers=Settings.get Print.show_quantifiers;
+   flavours=Settings.get Print.show_flavours;
+   hide_fresh=Settings.get Print.hide_fresh_type_vars;
+   kinds=val_of (Settings.get Print.show_kinds);
+   effect_sugar=Settings.get effect_sugar}
+
+
 
 let free_bound_type_vars            = Vars.free_bound_type_vars TypeVarSet.empty
 let free_bound_row_type_vars        = Vars.free_bound_row_type_vars TypeVarSet.empty
@@ -2448,12 +2647,28 @@ let print_types_pretty
               |> convert parse_bool
               |> sync)
 
+(* Use new pretty printer for types (Samo) *)
+let use_new_type_pp
+  = Settings.(flag ~default:false "use_new_type_pretty_printer"
+              |> synopsis ("Toggles whether to use the new pretty printer for types"
+                           ^ "(this is a temporary dev option).")
+              |> convert parse_bool
+              |> sync)
+
+let choose_pp () =
+  if Settings.get use_new_type_pp then
+    (module NewPrint : PRETTY_PRINTER)
+  else
+    (module Print : PRETTY_PRINTER)
+
 (* string conversions *)
-let string_of_datatype ?(policy=Print.default_policy) ?(refresh_tyvar_names=true)
+let string_of_datatype ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
                        (t : datatype) =
   if Settings.get print_types_pretty then
+    (* Inject the new pretty printer (TODO) *)
+    let module Print = (val (choose_pp ())) in
     let policy = policy () in
-    let t = if policy.Print.quantifiers then t
+    let t = if policy.quantifiers then t
             else Print.strip_quantifiers t in
     build_tyvar_names ~refresh_tyvar_names free_bound_type_vars [t];
     let context = Print.context_with_shared_effect policy (fun o -> o#typ t) in
@@ -2461,7 +2676,7 @@ let string_of_datatype ?(policy=Print.default_policy) ?(refresh_tyvar_names=true
   else
     show_datatype (DecycleTypes.datatype t)
 
-let string_of_row ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) row =
+let string_of_row ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) row =
   if Settings.get print_types_pretty then
     let policy = policy () in
     build_tyvar_names ~refresh_tyvar_names free_bound_row_type_vars [row];
@@ -2470,29 +2685,29 @@ let string_of_row ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) row
   else
     show_row (DecycleTypes.row row)
 
-let string_of_presence ?(policy=Print.default_policy) ?(refresh_tyvar_names=true)
+let string_of_presence ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
                        (f : field_spec) =
   build_tyvar_names ~refresh_tyvar_names free_bound_field_spec_type_vars [f];
   Print.presence Print.empty_context (policy (), Vars.tyvar_name_map) f
 
-let string_of_type_arg ?(policy=Print.default_policy) ?(refresh_tyvar_names=true)
+let string_of_type_arg ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
                        (arg : type_arg) =
   let policy = policy () in
   build_tyvar_names ~refresh_tyvar_names free_bound_type_arg_type_vars [arg];
   let context = Print.context_with_shared_effect policy (fun o -> o#type_arg arg) in
   Print.type_arg context (policy, Vars.tyvar_name_map) arg
 
-let string_of_row_var ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) row_var =
+let string_of_row_var ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) row_var =
   build_tyvar_names ~refresh_tyvar_names free_bound_row_var_vars [row_var];
   match Print.row_var Print.name_of_type "," Print.empty_context (policy (), Vars.tyvar_name_map) row_var
   with | None -> ""
        | Some s -> s
 
-let string_of_tycon_spec ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) (tycon : tycon_spec) =
+let string_of_tycon_spec ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) (tycon : tycon_spec) =
   build_tyvar_names ~refresh_tyvar_names free_bound_tycon_type_vars [tycon];
   Print.tycon_spec Print.empty_context (policy (), Vars.tyvar_name_map) tycon
 
-let string_of_quantifier ?(policy=Print.default_policy) ?(refresh_tyvar_names=true) (quant : Quantifier.t) =
+let string_of_quantifier ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) (quant : Quantifier.t) =
   build_tyvar_names ~refresh_tyvar_names free_bound_quantifier_vars [quant];
   Print.quantifier (policy (), Vars.tyvar_name_map) quant
 
@@ -2841,6 +3056,7 @@ let recursive_applications t =
    possibly containg cycles escape this module without having one
    a version below that removes the cycles first! *)
 let pp : Format.formatter -> t -> unit = fun fmt t ->
+  Debug.print "pp";
   if Settings.get print_types_pretty then
     Format.pp_print_string fmt (string_of_datatype t)
   else
@@ -2857,6 +3073,7 @@ let pp_meta_type_var : Format.formatter -> meta_type_var -> unit = fun fmt p ->
     pp_typ fmt (DecycleTypes.row (Meta p))
 
 let pp_row' : Format.formatter -> row' -> unit = fun fmt t ->
+  Debug.print "pp_row'";
   if Settings.get print_types_pretty then
     Format.pp_print_string fmt (string_of_row (Row t))
   else

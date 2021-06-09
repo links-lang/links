@@ -37,8 +37,11 @@ module Vars : sig
   type vars_list = (int * (flavour * kind * scope)) list
 end
 
+(* TODO return this to original (~S) *)
+type pp_policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool}
 module Print : sig
-  type policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool}
+  type policy = pp_policy
+    (* {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool} *)
 
   val default_policy : unit -> policy
 end
