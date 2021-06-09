@@ -116,9 +116,9 @@ jobs:
           LINKS_POSTGRES_HOST: localhost
           LINKS_POSTGRES_USER: links
           LINKS_POSTGRES_PASSWORD: links
-          LINKS_POSTGRES_PORT: ${{ jobs.build.services.postgres.ports[5433] }}
+          LINKS_POSTGRES_PORT: ${{ build.services.postgres.ports[5433] }}
           LINKS_MYSQL8_HOST: 127.0.0.1
           LINKS_MYSQL8_USER: links
           LINKS_MYSQL8_PASSWORD: links
-          LINKS_MYSQL8_PORT: ${{ jobs.build.services.mysql.ports[3307] }}
+          LINKS_MYSQL8_PORT: ${{ build.services.mysql.ports[3307] }}
         shell: bash
