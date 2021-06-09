@@ -113,11 +113,11 @@ jobs:
           ./run-tests unit
         env:
           LINKS_POSTGRES_HOST: localhost
-          LINKS_POSTGRES_USER: ${{ job.services.postgres.env[POSTGRES_USER] }}
-          LINKS_POSTGRES_PASSWORD: ${{ job.services.postgres.env[POSTGRES_PASSWORD] }}
+          LINKS_POSTGRES_USER: ${{ job.services.postgres.env['POSTGRES_USER'] }}
+          LINKS_POSTGRES_PASSWORD: ${{ job.services.postgres.env['POSTGRES_PASSWORD'] }}
           LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
           LINKS_MYSQL8_HOST: 127.0.0.1
-          LINKS_MYSQL8_USER: ${{ job.services.mysql.env[MYSQL_USER] }}
-          LINKS_MYSQL8_PASSWORD: ${{ job.services.mysql.env[MYSQL_USER_PASSWORD] }}
+          LINKS_MYSQL8_USER: ${{ job.services.mysql.env['MYSQL_USER'] }}
+          LINKS_MYSQL8_PASSWORD: ${{ job.services.mysql.env['MYSQL_USER_PASSWORD'] }}
           LINKS_MYSQL8_PORT: ${{ job.services.mysql.ports[3306] }}
         shell: bash
