@@ -54,7 +54,10 @@ def main():
             for line in fp:
                 m = matcher.match(line)
                 if m != None:
-                    return (m.group(1),m.group(2),m.group(3),m.group(4))
+                    return ( os.path.expandvars(m.group(1))
+                           , os.path.expandvars(m.group(2))
+                           , os.path.expandvars(m.group(3))
+                           , os.path.expandvars(m.group(4)) )
         return (None,None,None,None)
 
     driver_matcher = re.compile("database_driver=([^\n]*)")
