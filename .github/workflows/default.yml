@@ -239,7 +239,6 @@ jobs:
         run: |
           eval $(opam env)
           ./run-database-tests tests/database -d mysql
-          ./run-database-tests tests/shredding -d mysql
           ./run-database-tests tests/relational-lenses -d mysql
         env:
           # TODO(dhil): I do not how to index into the environments of
