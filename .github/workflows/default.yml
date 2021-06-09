@@ -188,7 +188,7 @@ jobs:
           MYSQL_DATABASE: links
           MYSQL_ROOT_HOST: '%'
         ports:
-          - 3306:3306
+          - 3308:3306
         options: >-
           --health-cmd="mysqladmin ping"
           --health-interval=10s
@@ -201,9 +201,9 @@ jobs:
           mysql --version
           sudo systemctl enable mysql
           sudo systemctl start mysql
-          mysql -h 127.0.0.1 -P 3306 -uroot -plinks -e "CREATE USER links IDENTIFIED BY 'links';"
-          mysql -h 127.0.0.1 -P 3306 -uroot -plinks -e "GRANT ALL ON  links.* TO links;"
-          mysql -h 127.0.0.1 -P 3306 -uroot -plinks -e "FLUSH PRIVILEGES;"
+          mysql -h 127.0.0.1 -P 3308 -uroot -plinks -e "CREATE USER links IDENTIFIED BY 'links';"
+          mysql -h 127.0.0.1 -P 3308 -uroot -plinks -e "GRANT ALL ON  links.* TO links;"
+          mysql -h 127.0.0.1 -P 3308 -uroot -plinks -e "FLUSH PRIVILEGES;"
         shell: bash
 
       - name: Checkout code
