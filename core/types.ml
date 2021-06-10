@@ -2645,7 +2645,20 @@ struct
     | _ -> failwith "Invalid row"
          
   and presence : context -> policy * names -> typ -> string =
-    fun _ _ _ -> " PRESENCE "  
+    fun ctx p tp ->
+    let out_buf = Buffer.create 16 in
+    let write s = Buffer.add_string out_buf s in
+    let rec concat = function
+      | [] -> ()
+      | s :: rest -> write s;
+                     concat rest
+    in
+    (match tp with
+     | Absent -> write "- [ABSENT]"
+     | Present tp -> write (datatype ctx p tp)
+     | Meta _ -> failwith "Meta not yet implemented"
+     | _ -> failwith "Type not implemented");
+    Buffer.contents out_buf
 
   and datatype : context -> policy * names -> datatype -> string =
     (* fun _ _ _ -> "NEW PRINTER IS ALIVE" *)
@@ -2665,6 +2678,7 @@ struct
                                                             also brackets? *)
       | Record r -> concat ["("; (row "," ctx p r); ")"]
       | Variant r -> concat [ "[|"; (row "|" ctx p r); "|]" ]
+      (* | (Function domain = Tuple) *)
       | ForAll (_, t) -> concat [ "ForAll [TBD]. "; datatype ctx p t ]
       (* | Function (t_in, t_row, t_out) -> write "Some function" *)
       | _ -> failwith ("Printer for this type not implemented:\n" ^ show_datatype tp)
@@ -2800,7 +2814,7 @@ let rec string_of_datatype ?(policy=default_pp_policy) ?(refresh_tyvar_names=tru
                        ~refresh_tyvar_names:refresh_tyvar_names t'
            in
            Settings.set use_new_type_pp true;
-           "\nThe original priter would say: " ^ ret
+           "\nThe original printer would say: " ^ ret
          end
        else "")
   else
