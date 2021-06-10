@@ -131,7 +131,7 @@ jobs:
         image: mysql:8.0
         env:
           MYSQL_USER: links
-          MYSQL_USER_PASSWORD: links
+          MYSQL_PASSWORD: links
           MYSQL_ROOT_PASSWORD: links
           MYSQL_DATABASE: links
           MYSQL_ROOT_HOST: '%'
@@ -211,7 +211,7 @@ jobs:
         image: mysql:5.7
         env:
           MYSQL_USER: links
-          MYSQL_USER_PASSWORD: links
+          MYSQL_PASSWORD: links
           MYSQL_ROOT_PASSWORD: links
           MYSQL_DATABASE: links
           MYSQL_ROOT_HOST: '%'
