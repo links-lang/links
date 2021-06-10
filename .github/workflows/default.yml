@@ -144,16 +144,6 @@ jobs:
           --health-retries=3
 
     steps:
-      - name: Configure MySQL
-        run: |
-          mysql --version
-          sudo systemctl enable mysql
-          sudo systemctl start mysql
-          mysql -h 127.0.0.1 -P 3307 -uroot -plinks -e "CREATE USER links IDENTIFIED BY 'links';"
-          mysql -h 127.0.0.1 -P 3307 -uroot -plinks -e "GRANT ALL ON  links.* TO links;"
-          mysql -h 127.0.0.1 -P 3307 -uroot -plinks -e "FLUSH PRIVILEGES;"
-        shell: bash
-
       - name: Checkout code
         uses: actions/checkout@v2
 
@@ -234,17 +224,6 @@ jobs:
           --health-retries=3
 
     steps:
-
-      - name: Configure MySQL
-        run: |
-          mysql --version
-          sudo systemctl enable mysql
-          sudo systemctl start mysql
-          mysql -h 127.0.0.1 -P 3308 -uroot -plinks -e "CREATE USER links IDENTIFIED BY 'links';"
-          mysql -h 127.0.0.1 -P 3308 -uroot -plinks -e "GRANT ALL ON  links.* TO links;"
-          mysql -h 127.0.0.1 -P 3308 -uroot -plinks -e "FLUSH PRIVILEGES;"
-        shell: bash
-
       - name: Checkout code
         uses: actions/checkout@v2
 
