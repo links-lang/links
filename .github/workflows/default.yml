@@ -258,9 +258,9 @@ jobs:
           ./run-database-tests tests/database -d mysql
           ./run-database-tests tests/relational-lenses -d mysql
         env:
-          # TODO(dhil): I do not how to index into the environments of
-          # either service. Until we figure out how to do it, we will
-          # just duplicate information here.
+          # TODO(dhil): I do not know how to index into the
+          # environments of either service. Until we figure out how to
+          # do it, we will just duplicate information here.
           LINKS_MYSQL_HOST: 127.0.0.1
           LINKS_MYSQL_USER: links
           LINKS_MYSQL_PASSWORD: links
