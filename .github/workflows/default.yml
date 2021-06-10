@@ -130,6 +130,8 @@ jobs:
       mysql:
         image: mysql:8.0
         env:
+          MYSQL_USER: links
+          MYSQL_USER_PASSWORD: links
           MYSQL_ROOT_PASSWORD: links
           MYSQL_DATABASE: links
           MYSQL_ROOT_HOST: '%'
@@ -145,6 +147,8 @@ jobs:
       - name: Configure MySQL
         run: |
           mysql --version
+          sudo systemctl enable mysql
+          sudo systemctl start mysql
           mysql -h 127.0.0.1 -P 3307 -uroot -plinks -e "CREATE USER links IDENTIFIED BY 'links';"
           mysql -h 127.0.0.1 -P 3307 -uroot -plinks -e "GRANT ALL ON  links.* TO links;"
           mysql -h 127.0.0.1 -P 3307 -uroot -plinks -e "FLUSH PRIVILEGES;"
@@ -216,6 +220,8 @@ jobs:
       mysql:
         image: mysql:5.7
         env:
+          MYSQL_USER: links
+          MYSQL_USER_PASSWORD: links
           MYSQL_ROOT_PASSWORD: links
           MYSQL_DATABASE: links
           MYSQL_ROOT_HOST: '%'
@@ -232,6 +238,8 @@ jobs:
       - name: Configure MySQL
         run: |
           mysql --version
+          sudo systemctl enable mysql
+          sudo systemctl start mysql
           mysql -h 127.0.0.1 -P 3308 -uroot -plinks -e "CREATE USER links IDENTIFIED BY 'links';"
           mysql -h 127.0.0.1 -P 3308 -uroot -plinks -e "GRANT ALL ON  links.* TO links;"
           mysql -h 127.0.0.1 -P 3308 -uroot -plinks -e "FLUSH PRIVILEGES;"
