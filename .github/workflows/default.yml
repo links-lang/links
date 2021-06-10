@@ -136,7 +136,7 @@ jobs:
           MYSQL_DATABASE: links
           MYSQL_ROOT_HOST: '%'
         ports:
-          - 3307:3306
+          - 3306:3306
         options: >-
           --health-cmd="mysqladmin ping"
           --health-interval=10s
@@ -216,7 +216,7 @@ jobs:
           MYSQL_DATABASE: links
           MYSQL_ROOT_HOST: '%'
         ports:
-          - 3308:3306
+          - 3306:3306
         options: >-
           --health-cmd="mysqladmin ping"
           --health-interval=10s
