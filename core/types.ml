@@ -2361,7 +2361,10 @@ struct
          | Choice bs -> "[&|" ^ row "," context p bs ^ "|&]"
          | Dual s -> "~" ^ sd s
          | End -> "End"
-  and presence ({ bound_vars; _ } as context) ((policy, vars) as p) = function
+  and presence ({ bound_vars; _ } as context) ((policy, vars) as p) =
+    (* function *)
+    fun pr' ->
+    let ret = match pr' with
       | Present t ->
         begin
           match concrete_type t with
@@ -2384,35 +2387,44 @@ struct
                   presence context p f
           end
       | _ -> raise tag_expectation_mismatch
+    in
+    Debug.print ("Original presence: " ^ ret);
+    ret
 
   (* HERE row ~S *)
-  and row ?(name=name_of_type) ?(strip_wild=false) sep context p = function
-    | Row (field_env, rv, dual) ->
-       (* FIXME: should quote labels when necessary, i.e., when they
-          contain non alpha-numeric characters *)
-       let field_strings =
-         FieldEnv.fold
-           (fun label f field_strings ->
-             if strip_wild && label = "wild" then
-               field_strings
-             else
-               (label ^ presence context p f) :: field_strings)
-           field_env []
-       in
-       let row_var_string = row_var name sep context p rv in
-       String.concat sep (List.rev (field_strings)) ^
-         begin
-           match row_var_string with
-           | None -> ""
-           | Some s -> "|" ^ (if dual then "~" else "") ^ s
-         end
-    (* FIXME: this shouldn't happen *)
-    | Meta rv ->
-       Debug.print ("Row variable where row expected:"^show_datatype (Meta rv));
-       row sep context ~name:name ~strip_wild:strip_wild p (Row (StringMap.empty, rv, false))
-    | t ->
-       failwith ("Illformed row:"^show_datatype t)
-       (* raise tag_expectation_mismatch *)
+  and row ?(name=name_of_type) ?(strip_wild=false) sep context p =
+    fun rv' -> (* TODO revert this (I just used it to see if row prints brackets -> it does NOT *)
+    let ret =
+      match rv' with
+      | Row (field_env, rv, dual) ->
+         (* FIXME: should quote labels when necessary, i.e., when they
+            contain non alpha-numeric characters *)
+         let field_strings =
+           FieldEnv.fold
+             (fun label f field_strings ->
+               if strip_wild && label = "wild" then
+                 field_strings
+               else
+                 (label ^ presence context p f) :: field_strings)
+             field_env []
+         in
+         let row_var_string = row_var name sep context p rv in
+         String.concat sep (List.rev (field_strings)) ^
+           begin
+             match row_var_string with
+             | None -> ""
+             | Some s -> "|" ^ (if dual then "~" else "") ^ s
+           end
+      (* FIXME: this shouldn't happen *)
+      | Meta rv ->
+         Debug.print ("Row variable where row expected:"^show_datatype (Meta rv));
+         row sep context ~name:name ~strip_wild:strip_wild p (Row (StringMap.empty, rv, false))
+      | t ->
+         failwith ("Illformed row:"^show_datatype t)
+                  (* raise tag_expectation_mismatch *)
+    in
+    Debug.print ("row returns: " ^ ret);
+    ret
 
   and row_var name_of_type sep ({ bound_vars; _ } as context) ((policy, vars) as p) rv =
     let ret =
@@ -2470,6 +2482,38 @@ module NewPrint : PRETTY_PRINTER =
 struct
   module BS = Basicsettings
   (* open Buffer *)
+
+  type buffer_container = { buffer: Buffer.t;
+                            write: (string -> unit);
+                            concat: (?sep:string -> string list -> unit);
+                            add_buffer: (Buffer.t -> unit);
+                            concat_buffers: (?sep:string -> Buffer.t list -> unit);
+                            read: (unit -> string) }
+  let create_buffer : ?init_size:int -> unit -> buffer_container =
+    fun ?(init_size=16) () -> 
+    let buf = Buffer.create init_size in
+    let write' s = Buffer.add_string buf s in
+    let add_buffer' b = Buffer.add_buffer buf b in
+    let rec concat' ?(sep="") =
+      function
+      | [] -> ()
+      | [last] -> write' last
+      | not_last :: ((_ :: _) as rest) -> begin write' not_last;
+                                                write' sep;
+                                                concat' ~sep:sep rest
+                                          end
+    in
+    let rec concat_buffers' ?(sep="") =
+      function
+      | [] -> ()
+      | [last] -> add_buffer' last
+      | not_last :: ((_ :: _) as rest) -> begin add_buffer' not_last;
+                                                write' sep;
+                                                concat_buffers' ~sep:sep rest
+                                          end
+    in
+    let read' () = Buffer.contents buf in
+    { buffer = buf; write = write'; concat = concat'; add_buffer = add_buffer'; concat_buffers=concat_buffers'; read = read' }
 
   (* settings (tied to original Print for the time being) *)
   let show_quantifiers = Print.show_quantifiers
@@ -2568,7 +2612,40 @@ struct
   
   let primitive : Primitive.t -> string = Primitive.to_string
 
-  let row_var :
+  let rec row_fields : context -> policy * names -> bool -> field_spec_map -> Buffer.t =
+    fun ctx p strip_wild ->
+    fun fs_map ->
+    let { buffer=buf; concat_buffers; _ } = create_buffer () in
+    let is_tuple = FieldEnv.for_all (fun label _ -> true) fs_map in
+    let fold : string -> typ -> Buffer.t list -> Buffer.t list =
+      fun label fld accumulator ->
+      if strip_wild && label = "wild"
+      then accumulator
+      else
+        let { buffer=buf'; write=write'; _ } = create_buffer () in
+        let pres = presence ctx p fld in
+        (if not is_tuple then
+           begin
+             write' label;
+             write' pres;
+           end
+         else (* is a tuple, field names omitted *)
+           begin
+             let len = String.length pres in
+             write' (String.sub pres 1 (len - 1)); (* TODO this is really not a nice way to do it;
+                                                      if possible, rewrite presence so it only returns
+                                                      the type, not the ':'
+                                                      (or I could have a function presence' that does stuff
+                                                      and presence would only wrap it, adding ':') *)
+           end);
+        accumulator @ [buf']
+    in
+    (* TODO this feels like overhead but also a clean way to do it *)
+    let field_buf_list = FieldEnv.fold fold fs_map [] in
+    concat_buffers ~sep:"," field_buf_list;
+    buf
+  
+  and row_var :
         (context ->
          policy * names ->
          tid -> Subkind.t -> string -> (string -> string) -> string) ->
@@ -2588,9 +2665,41 @@ struct
    *     let buf = Buffer.create len in
    *     Buffer.add_string buf dt;
    *     buf *)
+
   
+  (* TODO maybe there is a better place to put this *)
+  and function_arrow : context -> policy * names -> row -> Buffer.t =
+    fun ctx ((policy, _) as p) r ->
+    let { buffer; write; concat; _  } = create_buffer () in
+    match r with
+    | Row (fields, r_var, is_dual) ->
+       let number_of_fields = FieldEnv.size fields in
+       let wild = FieldEnv.mem "wild" fields in
+       let fields = row_fields ctx p true fields in
+       Debug.print ("Number of fields in effect row: " ^ string_of_int number_of_fields);
+       let var = Unionfind.find r_var in
+       let var = (match var with
+                  | Closed -> None
+                  | Var (var_id, knd, `Flexible) when policy.flavours ->
+                     Some (name_of_type ctx p var_id (Kind.subkind knd) "%" (fun n -> "%" ^ n))
+                  | Var (var_id, knd, _) ->
+                     Some (name_of_type ctx p var_id (Kind.subkind knd) "_" (fun n -> n))
+                  | _ -> failwith ("row_var where var =\n" ^ (show_datatype var))
+                  | Recursive _ -> failwith "Recursive not implemented")
+       in
+       (match (number_of_fields, Buffer.contents fields, var) with
+        | (0, _, None) | (0, _, Some "_") -> write "->"
+        | (1, "", None) | (1, "", Some "_") -> write "~>"
+        | _ -> concat [ "-~ {{ " ; Buffer.contents fields; " | " ; (match var with
+                                                                    | Some s -> s
+                                                                    | None -> "NONE") ; " }} -~>" ]
+       );
+       buffer
   
-  let rec row :
+    | _ -> failwith ("Illformed effect:\n" ^ show_datatype r)
+
+  (* TODO restructure this so either datatype is the first or the last one (just for neatness) *)
+  and row :
         ?name:(context ->
                policy * names ->
                tid -> Subkind.t -> istring -> (istring -> istring) -> istring) ->
@@ -2598,33 +2707,8 @@ struct
         istring -> context -> policy * names -> row -> istring =
 
     fun ?(name=name_of_type) ?(strip_wild=false) sep ctx ((policy, _) as p) r ->
-    
-    let fields : field_spec_map -> Buffer.t =
-      fun fs_map ->
-      (* let fs_alst = Utility.StringMap.to_alist fs_map in *)
-      let buf = Buffer.create 16 in
-      let write = fun s -> Buffer.add_string buf s in
-      (* let max_field = List.length fs_alst - 1 in
-       * List.iteri (fun i (k, v) -> (\* this is maybe breaking the map abstraction? *\)
-       *     (match v with
-       *      | Absent -> write k; write "-"
-       *      | Present tp -> write k; write ":"; write (datatype ctx p tp)
-       *      | Meta _ -> failwith "Meta not yet implemented"
-       *      | _ -> failwith "Type not implemented");
-       *     if i < max_field then write sep else ()
-       *   ) fs_alst; *)
-      let iter : string -> typ -> unit =
-        fun label fld ->
-        if strip_wild && label = "wild"
-        then ()
-        else begin write label;
-                   write (presence ctx p fld)
-             end
-      in
-      FieldEnv.iter iter fs_map;
-      buf
-    in
 
+    let fields = row_fields ctx p strip_wild in
     let out_buf = Buffer.create 16 in
     let write s = Buffer.add_string out_buf s in
     match r with
@@ -2646,44 +2730,68 @@ struct
          
   and presence : context -> policy * names -> typ -> string =
     fun ctx p tp ->
-    let out_buf = Buffer.create 16 in
-    let write s = Buffer.add_string out_buf s in
-    let rec concat = function
-      | [] -> ()
-      | s :: rest -> write s;
-                     concat rest
-    in
+    let { write; concat; read; _ } = create_buffer () in
     (match tp with
-     | Absent -> write "- [ABSENT]"
-     | Present tp -> write (datatype ctx p tp)
-     | Meta _ -> failwith "Meta not yet implemented"
+     | Absent -> write "-"
+     | Present tp -> concat [ ":"; datatype ctx p tp ]
+     | Meta _ -> write (datatype ctx p tp) (* failwith "Meta not yet implemented" *)
      | _ -> failwith "Type not implemented");
-    Buffer.contents out_buf
+    read ()
 
   and datatype : context -> policy * names -> datatype -> string =
     (* fun _ _ _ -> "NEW PRINTER IS ALIVE" *)
     fun ({ bound_vars; _ } as ctx) ((pol, vars) as p) tp ->
-    let out_buf = Buffer.create 16 (* buffer size? (using the recommended default *) in
-    let write : string -> unit = fun s -> Buffer.add_string out_buf s in
-    let rec concat : string list -> unit =
-      function
-      | [] -> ()
-      | s :: rest -> write s;
-                     concat rest
-    in
+    (* let out_buf = Buffer.create 16 (\* buffer size? (using the recommended default *\) in
+     * let write : string -> unit = fun s -> Buffer.add_string out_buf s in
+     * let rec concat : string list -> unit =
+     *   function
+     *   | [] -> ()
+     *   | s :: rest -> write s;
+     *                  concat rest
+     * in *)
+    let { write; concat; read; add_buffer; _ } = create_buffer () in
     begin
       match tp with
+      | Not_typed -> failwith "Term not typed - should not happen?" (* TODO *)
+      | Var (id, knd, frdm) -> concat [ "Var(id=" ; string_of_int id ; ")" ]
+      | Recursive _ -> failwith ("Recursive is not implemented:\n" ^ show_datatype tp)
+      | Alias _ -> failwith ("Alias not implemented: " ^ show_datatype tp)
+      | RecursiveApplication _ -> failwith ("RecursiveApplication not implemented: " ^ show_datatype tp)
+      | Meta pt -> let pt = Unionfind.find pt in
+                   concat [ "Meta(" ; datatype ctx p pt ; ")" ]
+
       | Primitive t -> write (primitive t)
-      | Row r -> write (row " SEP(Row)? " ctx p (Row r)) (* TODO separator?
-                                                            also brackets? *)
-      | Record r -> concat ["("; (row "," ctx p r); ")"]
-      | Variant r -> concat [ "[|"; (row "|" ctx p r); "|]" ]
-      (* | (Function domain = Tuple) *)
+      | Function (domain, effects, range) -> write "Some function:";
+                                             write "\n      domain : "; write (datatype ctx p domain);
+                                             write "\n     effects : "; write (datatype ctx p effects);
+                                             write "\n       range : "; write (datatype ctx p range); write "\n";
+                                             concat [ datatype ctx p domain; " " ];
+                                             add_buffer (function_arrow ctx p effects);
+                                             concat [ " "; datatype ctx p  range ]
+      | Lolli l -> write "[Lolli not implemented, but here, have a function:]";
+                   write (datatype ctx p (Function l))
+      | Record r -> concat ["Record("; (row "," ctx p r); ")"] (* TODO need to check if it's a tuple,
+                                                                  then print type without names *)
+      | Variant r -> concat ["Variant[|"; (row "|" ctx p r); "|]" ]
+      | Table _ -> failwith ("Table is not implemented:\n" ^ show_datatype tp)
+      | Lens _ -> failwith ("Lens is not implemented:\n" ^ show_datatype tp)
       | ForAll (_, t) -> concat [ "ForAll [TBD]. "; datatype ctx p t ]
-      (* | Function (t_in, t_row, t_out) -> write "Some function" *)
+
+      | Effect r -> concat [ "{"; row " SEP(Effect)? " ctx p r ; "}" ]
+      | Row r -> concat [ "Row("; (row " SEP(Row)? " ctx p (Row r)) ; ")" ] (* TODO separator?
+                                                                               also brackets? *)
+
+      | Input _ -> failwith ("Input is not implemented:\n" ^ show_datatype tp)
+      | Output _ -> failwith ("Output is not implemented:\n" ^ show_datatype tp)
+      | Select _ -> failwith ("Select is not implemented:\n" ^ show_datatype tp)
+      | Choice _ -> failwith ("Choice is not implemented:\n" ^ show_datatype tp)
+      | Dual _ -> failwith ("Dual is not implemented:\n" ^ show_datatype tp) (* TODO this is maybe
+                                                                                handled elsewhere? *)
+      | End -> failwith ("End is not implemented:\n" ^ show_datatype tp)
+      
       | _ -> failwith ("Printer for this type not implemented:\n" ^ show_datatype tp)
     end;
-    Buffer.contents out_buf
+    read ()
 
   and quantifier : (policy * names) -> Quantifier.t -> string =
     fun _ _ -> ""
@@ -2785,6 +2893,7 @@ let use_new_type_pp
               |> synopsis ("Toggles whether to use the new pretty printer for types"
                            ^ "(this is a temporary dev option).")
               |> convert parse_bool
+              |> CLI.(add (short 'n' <&> long "use_new_type_pretty_printer"))
               |> sync)
 
 let choose_pp () =
