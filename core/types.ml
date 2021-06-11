@@ -2515,6 +2515,9 @@ struct
     let read' () = Buffer.contents buf in
     { buffer = buf; write = write'; concat = concat'; add_buffer = add_buffer'; concat_buffers=concat_buffers'; read = read' }
 
+  (* TODO maybe it can all be done by having "inner" functions that just pass a Buffer around,
+     and wrapping those in "outer" functions that return just a string to match the interface signature? *)
+
   (* settings (tied to original Print for the time being) *)
   let show_quantifiers = Print.show_quantifiers
     (* = Settings.(flag "show_quantifiers"
@@ -2623,21 +2626,7 @@ struct
       then accumulator
       else
         let { buffer=buf'; write=write'; _ } = create_buffer () in
-        let pres = presence ctx p fld in
-        (if not is_tuple then
-           begin
-             write' label;
-             write' pres;
-           end
-         else (* is a tuple, field names omitted *)
-           begin
-             let len = String.length pres in
-             write' (String.sub pres 1 (len - 1)); (* TODO this is really not a nice way to do it;
-                                                      if possible, rewrite presence so it only returns
-                                                      the type, not the ':'
-                                                      (or I could have a function presence' that does stuff
-                                                      and presence would only wrap it, adding ':') *)
-           end);
+        write' (presence_type ~want_colon:(not is_tuple) ctx p fld);
         accumulator @ [buf']
     in
     (* TODO this feels like overhead but also a clean way to do it *)
@@ -2665,38 +2654,6 @@ struct
    *     let buf = Buffer.create len in
    *     Buffer.add_string buf dt;
    *     buf *)
-
-  
-  (* TODO maybe there is a better place to put this *)
-  and function_arrow : context -> policy * names -> row -> Buffer.t =
-    fun ctx ((policy, _) as p) r ->
-    let { buffer; write; concat; _  } = create_buffer () in
-    match r with
-    | Row (fields, r_var, is_dual) ->
-       let number_of_fields = FieldEnv.size fields in
-       let wild = FieldEnv.mem "wild" fields in
-       let fields = row_fields ctx p true fields in
-       Debug.print ("Number of fields in effect row: " ^ string_of_int number_of_fields);
-       let var = Unionfind.find r_var in
-       let var = (match var with
-                  | Closed -> None
-                  | Var (var_id, knd, `Flexible) when policy.flavours ->
-                     Some (name_of_type ctx p var_id (Kind.subkind knd) "%" (fun n -> "%" ^ n))
-                  | Var (var_id, knd, _) ->
-                     Some (name_of_type ctx p var_id (Kind.subkind knd) "_" (fun n -> n))
-                  | _ -> failwith ("row_var where var =\n" ^ (show_datatype var))
-                  | Recursive _ -> failwith "Recursive not implemented")
-       in
-       (match (number_of_fields, Buffer.contents fields, var) with
-        | (0, _, None) | (0, _, Some "_") -> write "->"
-        | (1, "", None) | (1, "", Some "_") -> write "~>"
-        | _ -> concat [ "-~ {{ " ; Buffer.contents fields; " | " ; (match var with
-                                                                    | Some s -> s
-                                                                    | None -> "NONE") ; " }} -~>" ]
-       );
-       buffer
-  
-    | _ -> failwith ("Illformed effect:\n" ^ show_datatype r)
 
   (* TODO restructure this so either datatype is the first or the last one (just for neatness) *)
   and row :
@@ -2727,33 +2684,104 @@ struct
        (* bracket? *)
        Buffer.contents out_buf 
     | _ -> failwith "Invalid row"
-         
-  and presence : context -> policy * names -> typ -> string =
-    fun ctx p tp ->
+
+  (* returns the presence, but possibly without the colon *)
+  and presence_type : want_colon:bool -> context -> policy * names -> typ -> string =
+    fun ~want_colon ctx p tp ->
     let { write; concat; read; _ } = create_buffer () in
     (match tp with
      | Absent -> write "-"
-     | Present tp -> concat [ ":"; datatype ctx p tp ]
-     | Meta _ -> write (datatype ctx p tp) (* failwith "Meta not yet implemented" *)
+     | Present tp -> (if want_colon then write ":" else ());
+                     write (datatype ctx p tp)
+     | Meta _ -> (if want_colon then write ":" else ());
+                 write (datatype ctx p tp)
      | _ -> failwith "Type not implemented");
     read ()
+  
+  and presence : context -> policy * names -> typ -> string =
+    fun ctx p tp -> presence_type ~want_colon:true ctx p tp
 
+  and func : ?is_lolli:bool -> context -> policy * names -> typ -> row -> typ -> Buffer.t =
+    let func_arrow : ?is_lolli:bool -> context -> policy * names -> row -> Buffer.t =
+      fun ?(is_lolli=false) ctx ((policy, _) as p) r ->
+      let { buffer; write; concat; _  } = create_buffer () in
+      match r with
+      | Row (fields, r_var, is_dual) ->
+         let number_of_fields = FieldEnv.size fields in
+         let is_wild = FieldEnv.mem "wild" fields in
+         let fields = row_fields ctx p true fields in
+         Debug.print ("Number of fields in effect row: " ^ string_of_int number_of_fields);
+         let var = Unionfind.find r_var in
+         let var = (match var with
+                    | Closed -> None
+                    | Var (var_id, knd, `Flexible) when policy.flavours ->
+                       Some (name_of_type ctx p var_id (Kind.subkind knd) "%" (fun n -> "%" ^ n))
+                    | Var (var_id, knd, _) ->
+                       Some (name_of_type ctx p var_id (Kind.subkind knd) "_" (fun n -> n))
+                    | _ -> failwith ("row_var where var =\n" ^ (show_datatype var))
+                    | Recursive _ -> failwith "Recursive not implemented")
+         in
+         (match (number_of_fields, Buffer.contents fields, var) with
+          | (0, _, None) | (0, _, Some "_") -> write "-"
+          | (1, "", None) | (1, "", Some "_") -> write "~"
+          | _ -> concat [ "-~ {{ " ; Buffer.contents fields; " | " ; (match var with
+                                                                      | Some s -> s
+                                                                      | None -> "NONE") ; " }} -~" ]
+         );
+         (* add the arrowhead/lollipop *)
+         (match is_lolli with
+          | false -> write ">"
+          | true -> write "@");
+         buffer
+      | _ -> failwith ("Illformed effect:\n" ^ show_datatype r)
+    in
+    fun ?(is_lolli=false) ctx p domain effects range ->
+    let { buffer; concat; add_buffer; _ } = create_buffer () in
+    concat [ datatype ctx p domain ; " " ];
+    add_buffer (func_arrow ~is_lolli:is_lolli ctx p effects);
+    concat [ " " ; datatype ctx p range ];
+    buffer
+
+  and session_io : context -> policy * names -> typ -> Buffer.t =
+    fun ctx p tp ->
+    let { buffer; concat; _ } = create_buffer () in
+    let t_char = match tp with
+      | Input _ -> "?"
+      | Output _ -> "!"
+      | _ -> failwith "Invalid session I/O type" (* this will never happen, because the function session_io
+                                                    will only ever be called for Input | Output *)
+    in
+    (match tp with
+     | Input (tp, session_tp) | Output (tp, session_tp) ->
+        concat [ t_char ; "(" ; datatype ctx p tp ; ")." ; datatype ctx p session_tp ]
+     | _ -> () (* same as above, no error here because it would have already failed before *)
+    );
+    buffer
+
+  and session_select_choice : context -> policy * names -> typ -> Buffer.t =
+    fun ctx p tp ->
+    let { buffer; concat; _ } = create_buffer () in
+    let t_char = match tp with
+      | Select _ -> "+"
+      | Choice _ -> "&"
+      | _ -> failwith "Invalid session type (Select | Choice)" (* this will never happen, because
+                                                                  session_select_choice is only called
+                                                                  from datatype, and only for Select | Choice *)
+    in
+    (match tp with
+     | Select r | Choice r ->
+        concat [ "[" ; t_char ; "|" ; row "," ctx p r ; "|" ; t_char ; "]" ]
+     | _ -> () (* see above, this will never happen (it would have failed above *)
+    );
+    buffer
+  
   and datatype : context -> policy * names -> datatype -> string =
-    (* fun _ _ _ -> "NEW PRINTER IS ALIVE" *)
-    fun ({ bound_vars; _ } as ctx) ((pol, vars) as p) tp ->
-    (* let out_buf = Buffer.create 16 (\* buffer size? (using the recommended default *\) in
-     * let write : string -> unit = fun s -> Buffer.add_string out_buf s in
-     * let rec concat : string list -> unit =
-     *   function
-     *   | [] -> ()
-     *   | s :: rest -> write s;
-     *                  concat rest
-     * in *)
+    fun ctx p tp ->
     let { write; concat; read; add_buffer; _ } = create_buffer () in
     begin
       match tp with
-      | Not_typed -> failwith "Term not typed - should not happen?" (* TODO *)
-      | Var (id, knd, frdm) -> concat [ "Var(id=" ; string_of_int id ; ")" ]
+      | Not_typed -> failwith "Term not typed - should not happen?" (* TODO? *)
+      | Var (id, _, _) -> concat [ "Var(id=" ; string_of_int id ; ")" ]
       | Recursive _ -> failwith ("Recursive is not implemented:\n" ^ show_datatype tp)
       | Alias _ -> failwith ("Alias not implemented: " ^ show_datatype tp)
       | RecursiveApplication _ -> failwith ("RecursiveApplication not implemented: " ^ show_datatype tp)
@@ -2761,17 +2789,11 @@ struct
                    concat [ "Meta(" ; datatype ctx p pt ; ")" ]
 
       | Primitive t -> write (primitive t)
-      | Function (domain, effects, range) -> write "Some function:";
-                                             write "\n      domain : "; write (datatype ctx p domain);
-                                             write "\n     effects : "; write (datatype ctx p effects);
-                                             write "\n       range : "; write (datatype ctx p range); write "\n";
-                                             concat [ datatype ctx p domain; " " ];
-                                             add_buffer (function_arrow ctx p effects);
-                                             concat [ " "; datatype ctx p  range ]
-      | Lolli l -> write "[Lolli not implemented, but here, have a function:]";
-                   write (datatype ctx p (Function l))
-      | Record r -> concat ["Record("; (row "," ctx p r); ")"] (* TODO need to check if it's a tuple,
-                                                                  then print type without names *)
+      
+      | Function (domain, effects, range) -> add_buffer (func ctx p domain effects range)
+      | Lolli (domain, effects, range) -> add_buffer (func ~is_lolli:true ctx p domain effects range)
+      
+      | Record r -> concat ["Record("; (row "," ctx p r); ")"]
       | Variant r -> concat ["Variant[|"; (row "|" ctx p r); "|]" ]
       | Table _ -> failwith ("Table is not implemented:\n" ^ show_datatype tp)
       | Lens _ -> failwith ("Lens is not implemented:\n" ^ show_datatype tp)
@@ -2781,14 +2803,13 @@ struct
       | Row r -> concat [ "Row("; (row " SEP(Row)? " ctx p (Row r)) ; ")" ] (* TODO separator?
                                                                                also brackets? *)
 
-      | Input _ -> failwith ("Input is not implemented:\n" ^ show_datatype tp)
-      | Output _ -> failwith ("Output is not implemented:\n" ^ show_datatype tp)
-      | Select _ -> failwith ("Select is not implemented:\n" ^ show_datatype tp)
-      | Choice _ -> failwith ("Choice is not implemented:\n" ^ show_datatype tp)
-      | Dual _ -> failwith ("Dual is not implemented:\n" ^ show_datatype tp) (* TODO this is maybe
-                                                                                handled elsewhere? *)
-      | End -> failwith ("End is not implemented:\n" ^ show_datatype tp)
-      
+      (* TODO check if these are correct - largely inspired by how original printed handled these *)
+      | Input _ | Output _ -> add_buffer (session_io ctx p tp)
+      | Select _ | Choice _ -> add_buffer (session_select_choice ctx p tp)
+      | Dual tp -> concat [ "~" ; datatype ctx p tp ]  (* TODO this is maybe
+                                                          handled elsewhere? *)
+      | End -> write "End" (* TODO think this is just a contructor-like thingy? *)
+
       | _ -> failwith ("Printer for this type not implemented:\n" ^ show_datatype tp)
     end;
     read ()
