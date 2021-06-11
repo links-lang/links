@@ -117,3 +117,9 @@ tests/typed_ir/T877.links
 filemode : true
 exit : 0
 stdout : () : ()
+
+Freshening of generalized type variables when turning lambda into named fun (#871)
+var foo = spawn { () }; ()
+filemode : true
+exit : 0
+stdout : () : ()
