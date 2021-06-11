@@ -1,8 +1,8 @@
 Build prelude with recheck_frontend_transformations=true
 ()
-exit : 1
-stderr : @.*Type error: Because of the value restriction.*
+exit : 0
 args : --set=recheck_frontend_transformations=true
+stdout : () : ()
 
 Type variable freshening in type signatures (#865)
 ./tests/recheck_frontend_transformations/T865.links

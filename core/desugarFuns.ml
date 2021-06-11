@@ -101,18 +101,24 @@ object (o : 'self_type)
     let (bndr, lin, (_, def), loc) =
       unwrap_def (binder ~ty:ft f, lin, ([], lam), location) in
     let (tvs, tyargs), gen_ft =
-      Generalise.generalise (o#get_var_env ()) (Binder.to_type bndr) in
+      Generalise.generalise_without_mutation (o#get_var_env ()) (Binder.to_type bndr) in
     let s_tvs = List.map SugarQuantifier.mk_resolved tvs in
     let bndr = Binder.set_type bndr gen_ft in
     let o = o#bind_binder bndr in
+    let fun_definition =
+      { fun_binder           = bndr
+      ; fun_linearity        = lin
+      ; fun_definition       = (s_tvs, def)
+      ; fun_location         = loc
+      ; fun_signature        = None
+      ; fun_frozen           = true
+      ; fun_unsafe_signature = false } in
+    (* We replace the generalized quantifiers (instead of mutating the
+       union-find sets) and supply the *original* type variables as
+       arguments *)
+    let fun_definition = Renamer.rename_function_definition fun_definition in
     let e = block_node ([with_dummy_pos
-                           (Fun { fun_binder           = bndr
-                                ; fun_linearity        = lin
-                                ; fun_definition       = (s_tvs, def)
-                                ; fun_location         = loc
-                                ; fun_signature        = None
-                                ; fun_frozen           = true
-                                ; fun_unsafe_signature = false })],
+                           (Fun fun_definition)],
                          with_dummy_pos (tappl (FreezeVar f, tyargs)))
     in (o, e, ft)
 
