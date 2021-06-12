@@ -2515,6 +2515,13 @@ struct
     let read' () = Buffer.contents buf in
     { buffer = buf; write = write'; concat = concat'; add_buffer = add_buffer'; concat_buffers=concat_buffers'; read = read' }
 
+  let wrap_buffer : string -> Buffer.t =
+    fun s ->
+    let len = String.length s in
+    let { buffer; write; _ } = create_buffer ~init_size:len () in
+    write s;
+    buffer
+
   (* TODO maybe it can all be done by having "inner" functions that just pass a Buffer around,
      and wrapping those in "outer" functions that return just a string to match the interface signature? *)
 
@@ -2568,35 +2575,77 @@ struct
     else name_fun var_name
 
   let subkind_name : policy * names -> Subkind.t -> Buffer.t option =
-    fun (policy, _) sk ->
     let full_name = fun (lin, res) ->
-      let buf = Buffer.create 16 (* initial size? *) in
-      let write = fun s -> Buffer.add_string buf s in
+      let { buffer; concat; _ } = create_buffer () in
       begin
-        write "("; write (Linearity.to_string lin); write ",";
-        write (Restriction.to_string res); write ")";
-        buf
+        concat [ "(" ; (Linearity.to_string lin) ; "," ;
+                 (Restriction.to_string res) ; ")" ];
+        buffer
       end
     in
+    fun (policy, _) sk ->
     match policy.kinds with
     | "full" -> Some (full_name sk)
     | "hide" -> None
     | _ ->
-       let wrap = (* maybe this is overhead? -> if so, could return Either or some other variant *)
+       let wrap = (* maybe this is overhead?
+                     -> if so, could return Either or some other variant *)
          fun s ->
-         let len = String.length s in
-         let buf = Buffer.create len in begin
-             Buffer.add_string buf s;
-             Some buf
-           end
+         let buffer = wrap_buffer s in (* TODO also maybe I'll get rid of this definitin *)
+         Some buffer
        in
+       let module Lin = Linearity in
+       let module Res = Restriction in
        match sk with
-       | (Linearity.Unl, Restriction.Any)     -> None
-       | (Linearity.Any, Restriction.Any)     -> wrap "Any"
-       | (Linearity.Unl, Restriction.Base)    -> wrap (Restriction.to_string res_base)
-       | (Linearity.Any, Restriction.Session) -> wrap (Restriction.to_string res_session)
-       | (Linearity.Unl, Restriction.Effect)  -> wrap (Restriction.to_string res_effect)
+       | (Lin.Unl, Res.Any)     -> None
+       | (Lin.Any, Res.Any)     -> wrap "Any"
+       | (Lin.Unl, Res.Base)    -> wrap (Res.to_string res_base)
+       | (Lin.Any, Res.Session) -> wrap (Res.to_string res_session)
+       | (Lin.Unl, Res.Effect)  -> wrap (Res.to_string res_effect)
        | _ -> Some (full_name sk)
+
+  let kind_name : policy * names -> Kind.t -> Buffer.t option =
+    let full_name = fun p (k, sk) ->
+      let { buffer; write; add_buffer; _ } = create_buffer() in
+      write (PrimaryKind.to_string k);
+      (match subkind_name p sk with
+       | None -> ()
+       | Some b -> add_buffer b);
+      buffer
+    in
+    fun ((policy, vars) as p) ((primary, subknd) as knd) ->
+    let wrap s = Some (wrap_buffer s) in
+    match policy.kinds with
+    | "full" -> Some (full_name p knd)
+    | "hide" -> wrap (PrimaryKind.to_string primary)
+    | _ ->
+       let module P = PrimaryKind in
+       let module L = Linearity in
+       let module R = Restriction in
+       (* do simple cases first, match the other stuff later *)
+       match primary with
+       | P.Type -> begin
+           match subknd with
+           | L.Unl, R.Any -> None
+           | L.Unl, R.Base -> wrap (R.to_string res_base)
+           | L.Any, R.Session -> wrap (R.to_string res_session)
+           | subknd -> subkind_name ({ policy with kinds="full" }, vars) subknd
+         end
+       | PrimaryKind.Row -> begin
+           match subknd with
+           | L.Unl, R.Any | L.Unl, R.Effect
+             -> wrap (P.to_string pk_row)
+           | _ -> Some (full_name ({ policy with kinds="full" }, vars)
+                          knd (* TODO do we like that this value came from
+                                 16 lines up? *) )
+         end
+       | PrimaryKind.Presence -> begin
+           match subknd with
+           | L.Unl, R.Any -> wrap (P.to_string pk_presence)
+           | _ -> Some (full_name ({ policy with kinds="full" }, vars) knd)
+           (* TODO as above, also I structured it this way because
+              I liked it more initially, but is it better? *)
+         end
 
   let name_of_type : context -> policy * names -> tid -> Subkind.t -> string -> (string -> string) -> string =
     fun {bound_vars; _} p var subk name name_fun ->
@@ -2611,15 +2660,18 @@ struct
       | None -> ()
     end;
     Buffer.contents out_buf
+
   
-  
+  let strip_quantifiers : typ -> typ =
+    function
+    | ForAll (_, t) | t -> t
+
   let primitive : Primitive.t -> string = Primitive.to_string
 
-  let rec row_fields : context -> policy * names -> bool -> field_spec_map -> Buffer.t =
+  let rec row_fields : context -> policy * names -> bool -> ?is_tuple:bool -> field_spec_map -> Buffer.t =
     fun ctx p strip_wild ->
-    fun fs_map ->
+    fun ?(is_tuple=false) fs_map ->
     let { buffer=buf; concat_buffers; _ } = create_buffer () in
-    let is_tuple = FieldEnv.for_all (fun label _ -> true) fs_map in
     let fold : string -> typ -> Buffer.t list -> Buffer.t list =
       fun label fld accumulator ->
       if strip_wild && label = "wild"
@@ -2639,7 +2691,7 @@ struct
          policy * names ->
          tid -> Subkind.t -> string -> (string -> string) -> string) ->
         istring -> context -> policy * names -> row_var -> istring option =
-    fun name_of_type sep ctx ((policy, _) as p) rv ->
+    fun name_of_type sep (* TODO what is sep for? *) ctx ((policy, _) as p) rv ->
     let var = Unionfind.find rv in
     match var with
     | Closed -> None
@@ -2663,15 +2715,13 @@ struct
         ?strip_wild:bool ->
         istring -> context -> policy * names -> row -> istring =
 
-    fun ?(name=name_of_type) ?(strip_wild=false) sep ctx ((policy, _) as p) r ->
-
+    fun ?(name=name_of_type) ?(strip_wild=false) sep ctx p r ->
+    (* TODO unwrapping? *)
     let fields = row_fields ctx p strip_wild in
-    let out_buf = Buffer.create 16 in
-    let write s = Buffer.add_string out_buf s in
+    let { write; add_buffer; read; _ } = create_buffer () in
     match r with
     | Row (row_fields, r_var, is_dual) ->
-       (* is there a bracket here? *)
-       Buffer.add_buffer out_buf (fields row_fields);
+       add_buffer (fields row_fields);
        let var = row_var name sep (* ?TODO *) ctx p r_var in
        begin
          match var with
@@ -2681,20 +2731,20 @@ struct
                      write s
          | None -> ()
        end;
-       (* bracket? *)
-       Buffer.contents out_buf 
+       read ()
     | _ -> failwith "Invalid row"
 
   (* returns the presence, but possibly without the colon *)
+  (* TODO maybe have this return a Buffer, if that would be more efficient *)
   and presence_type : want_colon:bool -> context -> policy * names -> typ -> string =
     fun ~want_colon ctx p tp ->
-    let { write; concat; read; _ } = create_buffer () in
+    let { write; read; _ } = create_buffer () in
     (match tp with
      | Absent -> write "-"
      | Present tp -> (if want_colon then write ":" else ());
                      write (datatype ctx p tp)
      | Meta _ -> (if want_colon then write ":" else ());
-                 write (datatype ctx p tp)
+                 write (datatype ctx p tp) (* let datatype handle Meta *)
      | _ -> failwith "Type not implemented");
     read ()
   
@@ -2711,6 +2761,7 @@ struct
          let is_wild = FieldEnv.mem "wild" fields in
          let fields = row_fields ctx p true fields in
          Debug.print ("Number of fields in effect row: " ^ string_of_int number_of_fields);
+         (* TODOTODOTODOTODOTODOTODOTODOTODOTODOTODOTODOTODOTODOTODOTODOTODOTODOTODOTODOTODO *)
          let var = Unionfind.find r_var in
          let var = (match var with
                     | Closed -> None
@@ -2718,8 +2769,8 @@ struct
                        Some (name_of_type ctx p var_id (Kind.subkind knd) "%" (fun n -> "%" ^ n))
                     | Var (var_id, knd, _) ->
                        Some (name_of_type ctx p var_id (Kind.subkind knd) "_" (fun n -> n))
-                    | _ -> failwith ("row_var where var =\n" ^ (show_datatype var))
-                    | Recursive _ -> failwith "Recursive not implemented")
+                    | Recursive _ -> failwith "Recursive not implemented"
+                    | _ -> failwith ("row_var where var =\n" ^ (show_datatype var)))
          in
          (match (number_of_fields, Buffer.contents fields, var) with
           | (0, _, None) | (0, _, Some "_") -> write "-"
@@ -2749,7 +2800,7 @@ struct
       | Input _ -> "?"
       | Output _ -> "!"
       | _ -> failwith "Invalid session I/O type" (* this will never happen, because the function session_io
-                                                    will only ever be called for Input | Output *)
+                                                    will only ever be called for Input | Output *) (* TODO? *)
     in
     (match tp with
      | Input (tp, session_tp) | Output (tp, session_tp) ->
@@ -2774,6 +2825,31 @@ struct
      | _ -> () (* see above, this will never happen (it would have failed above *)
     );
     buffer
+
+  and quantifier : (policy * names) -> Quantifier.t -> string =
+    fun ((_, vars) as p) qr ->
+    let var = Quantifier.to_var qr in
+    let var_name = Vars.find var vars in
+    let knd = Quantifier.to_kind qr in
+    let knd_name = kind_name p knd in 
+    let { write; read; add_buffer; _ } = create_buffer () in
+    write var_name;
+    (match knd_name with
+     | None -> ()
+     | Some b -> write "::";
+                 add_buffer b);
+    read ()
+
+  and forall : context -> policy * names -> Quantifier.t list -> typ -> Buffer.t =
+    fun ctx p binding formula ->
+    let { buffer; write; concat; _ } = create_buffer () in
+    let quantifiers = List.map (fun qr -> quantifier p qr) binding in
+    write "forall ";
+    concat ~sep:"," quantifiers;
+    write ". ";
+    write (datatype ctx p formula);
+    Debug.print ("Quantifier: " ^ Buffer.contents buffer);
+    buffer
   
   and datatype : context -> policy * names -> datatype -> string =
     fun ctx p tp ->
@@ -2781,6 +2857,10 @@ struct
     begin
       match tp with
       | Not_typed -> failwith "Term not typed - should not happen?" (* TODO? *)
+      
+      (* In original printer, there would fail, saying Var | Recursive | Closed can be only within Meta,
+         but I think it's not the printer's job to check this, instead only print what was received?
+         (though I don't know how Closed would even print, so not doing that) *)
       | Var (id, _, _) -> concat [ "Var(id=" ; string_of_int id ; ")" ]
       | Recursive _ -> failwith ("Recursive is not implemented:\n" ^ show_datatype tp)
       | Alias _ -> failwith ("Alias not implemented: " ^ show_datatype tp)
@@ -2797,7 +2877,7 @@ struct
       | Variant r -> concat ["Variant[|"; (row "|" ctx p r); "|]" ]
       | Table _ -> failwith ("Table is not implemented:\n" ^ show_datatype tp)
       | Lens _ -> failwith ("Lens is not implemented:\n" ^ show_datatype tp)
-      | ForAll (_, t) -> concat [ "ForAll [TBD]. "; datatype ctx p t ]
+      | ForAll (binding, tp) -> add_buffer (forall ctx p binding tp)
 
       | Effect r -> concat [ "{"; row " SEP(Effect)? " ctx p r ; "}" ]
       | Row r -> concat [ "Row("; (row " SEP(Row)? " ctx p (Row r)) ; ")" ] (* TODO separator?
@@ -2814,12 +2894,6 @@ struct
     end;
     read ()
 
-  and quantifier : (policy * names) -> Quantifier.t -> string =
-    fun _ _ -> ""
-  
-  let strip_quantifiers : typ -> typ =
-    fun x -> x
-  
   let context_with_shared_effect :
     policy ->
     (( (* TODO *)
