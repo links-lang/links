@@ -195,7 +195,7 @@ jobs:
           LINKS_MYSQL8_PORT: ${{ job.services.mysql.ports[3306] }}
         shell: bash
 
-  links-mysql8-mysql5-7:
+  links-mysql8_mysql57:
     strategy:
       fail-fast: false
       matrix:
@@ -243,7 +243,6 @@ jobs:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
       - run: opam install -y conf-libev
-      - run: opam install -y ounit2
 
       - name: Install Links dependencies
         run: >-
@@ -263,7 +262,6 @@ jobs:
           eval $(opam env)
           ./run-database-tests tests/database -d mysql8
           ./run-database-tests tests/relational-lenses -d mysql8
-          ./run-tests unit
         env:
           # TODO(dhil): I do not know how to index into the
           # environments of either service. Until we figure out how to
@@ -274,7 +272,7 @@ jobs:
           LINKS_MYSQL8_PORT: ${{ job.services.mysql.ports[3306] }}
         shell: bash
 
-  mysql5-7:
+  links-mysql_mysql57:
     strategy:
       fail-fast: false
       matrix:
@@ -316,7 +314,6 @@ jobs:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
       - run: opam install -y conf-libev
-      - run: opam install -y ounit2
 
       - name: Install Links dependencies
         run: >-
