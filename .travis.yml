@@ -43,10 +43,7 @@ before_install:
   - mysql -e "GRANT ALL ON $DBNAME.* TO $DBUSER;"
   - mysql -e "FLUSH PRIVILEGES;"
 script:
-  - opam install ./links.opam --deps-only
-  - opam install ./links-postgresql --deps-only
-  - opam install ./links-sqlite3 --deps-only
-  - opam install ./links-mysql8 --deps-only
+  - opam install ./links.opam ./links-postgresql.opam ./links-sqlite3.opam ./links-mysql8.opam --deps-only --ignore-constraints-on=links
   - make doc
   - make all-ci
   - make tests
