@@ -18,5 +18,5 @@ depends: [
   "dune" {>= "1.10.0"}
   "conf-mysql"
   "mysql"
-  "links"
+  "links" {= version}
 ]
