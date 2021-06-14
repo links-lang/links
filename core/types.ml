@@ -1,3 +1,7 @@
+let dpr' : string -> unit  =
+  fun x -> Printf.printf "%s\n" x;
+           flush_all ()
+
 open Utility
 open CommonTypes
 
@@ -2318,6 +2322,7 @@ struct
               Format.fprintf f "%s : %a"
                 (Lens.Column.alias col)
                 Lens.Phrase.Type.pp_pretty (Lens.Column.typ col) in
+            (* TODO *)
             if Lens.Type.is_abstract _typ
             then
               if Lens.Type.is_checked _typ
@@ -2522,6 +2527,13 @@ struct
     write s;
     buffer
 
+  let concat : ?sep:string -> string list -> string =
+    fun ?(sep="") lst ->
+    let { concat; read; _ } = create_buffer () in
+    concat ~sep:sep lst;
+    read ()
+
+
   (* TODO maybe it can all be done by having "inner" functions that just pass a Buffer around,
      and wrapping those in "outer" functions that return just a string to match the interface signature? *)
 
@@ -2668,9 +2680,11 @@ struct
 
   let primitive : Primitive.t -> string = Primitive.to_string
 
-  let rec row_fields : context -> policy * names -> bool -> ?is_tuple:bool -> field_spec_map -> Buffer.t =
+  let rec row_fields : context -> policy * names -> bool -> ?sep:string-> ?is_tuple:bool ->
+                       field_spec_map -> Buffer.t =
     fun ctx p strip_wild ->
-    fun ?(is_tuple=false) fs_map ->
+    fun ?(sep=",") ?(is_tuple=false) fs_map ->
+    dpr' "row_fields";
     let { buffer=buf; concat_buffers; _ } = create_buffer () in
     let fold : string -> typ -> Buffer.t list -> Buffer.t list =
       fun label fld accumulator ->
@@ -2678,12 +2692,14 @@ struct
       then accumulator
       else
         let { buffer=buf'; write=write'; _ } = create_buffer () in
+        (if is_tuple then () else write' label);
         write' (presence_type ~want_colon:(not is_tuple) ctx p fld);
         accumulator @ [buf']
     in
-    (* TODO this feels like overhead but also a clean way to do it *)
     let field_buf_list = FieldEnv.fold fold fs_map [] in
-    concat_buffers ~sep:"," field_buf_list;
+    List.iter (fun x -> dpr' (Buffer.contents x)) field_buf_list;
+    (* TODO there is an extra comma appearing for some reason *)
+    concat_buffers ~sep:sep field_buf_list;
     buf
   
   and row_var :
@@ -2692,6 +2708,7 @@ struct
          tid -> Subkind.t -> string -> (string -> string) -> string) ->
         istring -> context -> policy * names -> row_var -> istring option =
     fun name_of_type sep (* TODO what is sep for? *) ctx ((policy, _) as p) rv ->
+    dpr' "row_var";
     let var = Unionfind.find rv in
     match var with
     | Closed -> None
@@ -2707,7 +2724,6 @@ struct
    *     Buffer.add_string buf dt;
    *     buf *)
 
-  (* TODO restructure this so either datatype is the first or the last one (just for neatness) *)
   and row :
         ?name:(context ->
                policy * names ->
@@ -2716,8 +2732,14 @@ struct
         istring -> context -> policy * names -> row -> istring =
 
     fun ?(name=name_of_type) ?(strip_wild=false) sep ctx p r ->
-    (* TODO unwrapping? *)
-    let fields = row_fields ctx p strip_wild in
+    dpr' "row";
+    let r, r_rec = unwrap_row r in
+    (match r_rec with
+     | Some _ -> dpr' "Some"
+     | None -> dpr' "None");
+    let is_tuple = is_tuple ~allow_onetuples:true r in (* TODO this might need to go into a special case
+                                                          only for Records*)
+    let fields = row_fields ctx p strip_wild ~is_tuple:is_tuple in
     let { write; add_buffer; read; _ } = create_buffer () in
     match r with
     | Row (row_fields, r_var, is_dual) ->
@@ -2738,6 +2760,7 @@ struct
   (* TODO maybe have this return a Buffer, if that would be more efficient *)
   and presence_type : want_colon:bool -> context -> policy * names -> typ -> string =
     fun ~want_colon ctx p tp ->
+    dpr' "presence_type";
     let { write; read; _ } = create_buffer () in
     (match tp with
      | Absent -> write "-"
@@ -2774,7 +2797,7 @@ struct
          in
          (match (number_of_fields, Buffer.contents fields, var) with
           | (0, _, None) | (0, _, Some "_") -> write "-"
-          | (1, "", None) | (1, "", Some "_") -> write "~"
+          (* | (1, "", None) | (1, "", Some "_") -> write "~" *)
           | _ -> concat [ "-~ {{ " ; Buffer.contents fields; " | " ; (match var with
                                                                       | Some s -> s
                                                                       | None -> "NONE") ; " }} -~" ]
@@ -2784,9 +2807,10 @@ struct
           | false -> write ">"
           | true -> write "@");
          buffer
-      | _ -> failwith ("Illformed effect:\n" ^ show_datatype r)
+      | _ -> failwith ("Illformed effect:\n" ^ datatype ctx p r)
     in
     fun ?(is_lolli=false) ctx p domain effects range ->
+    dpr' "func";
     let { buffer; concat; add_buffer; _ } = create_buffer () in
     concat [ datatype ctx p domain ; " " ];
     add_buffer (func_arrow ~is_lolli:is_lolli ctx p effects);
@@ -2828,6 +2852,7 @@ struct
 
   and quantifier : (policy * names) -> Quantifier.t -> string =
     fun ((_, vars) as p) qr ->
+    dpr' "quantifier";
     let var = Quantifier.to_var qr in
     let var_name = Vars.find var vars in
     let knd = Quantifier.to_kind qr in
@@ -2842,6 +2867,7 @@ struct
 
   and forall : context -> policy * names -> Quantifier.t list -> typ -> Buffer.t =
     fun ctx p binding formula ->
+    dpr' "forall";
     let { buffer; write; concat; _ } = create_buffer () in
     let quantifiers = List.map (fun qr -> quantifier p qr) binding in
     write "forall ";
@@ -2850,69 +2876,169 @@ struct
     write (datatype ctx p formula);
     Debug.print ("Quantifier: " ^ Buffer.contents buffer);
     buffer
+
+  (* code for printing relational lenses taken verbatim from the original printer *)
+  and lens : Lens.Type.t -> string =
+    fun _typ ->
+    let open Lens in
+    let sort = Type.sort _typ in
+    let cols = Sort.present_colset sort |> Column.Set.elements in
+    let fds = Sort.fds sort in
+    let predicate =
+      Sort.predicate sort
+      |> OptionUtils.from_option (Phrase.Constant.bool true) in
+    let pp_col f col =
+      Format.fprintf f "%s : %a"
+        (Lens.Column.alias col)
+        Lens.Phrase.Type.pp_pretty (Lens.Column.typ col) in
+    if Lens.Type.is_abstract _typ
+    then
+      if Lens.Type.is_checked _typ
+      then
+        Format.asprintf "LensChecked((%a), { %a })"
+          (Lens.Utility.Format.pp_comma_list pp_col) cols
+          Lens.Fun_dep.Set.pp_pretty fds
+      else
+        Format.asprintf "LensUnchecked((%a), { %a })"
+          (Lens.Utility.Format.pp_comma_list pp_col) cols
+          Lens.Fun_dep.Set.pp_pretty fds
+    else
+      Format.asprintf "Lens((%a), %a, { %a })"
+        (Lens.Utility.Format.pp_comma_list pp_col) cols
+        Lens.Database.fmt_phrase_dummy predicate
+        Lens.Fun_dep.Set.pp_pretty fds
+
+  and table : context -> policy * names -> typ * typ * typ -> Buffer.t =
+    fun ctx p (r, w, n) ->
+    let datatype' = datatype ctx p in
+    let { buffer; write; concat; _ } = create_buffer () in
+    write "TableHandle(";
+    (* concat ~sep:"," @@ List.map datatype' [ r ; w ; n ]; (\* overhead? *\) *)
+    concat ~sep:"," [ datatype' r ; datatype' w ; datatype' n ];
+    write ")";
+    buffer
   
   and datatype : context -> policy * names -> datatype -> string =
     fun ctx p tp ->
+    dpr' "datatype";
+    (* dpr' (show_datatype @@ DecycleTypes.datatype tp); *)
+    let datatype' = datatype ctx p in
     let { write; concat; read; add_buffer; _ } = create_buffer () in
     begin
       match tp with
-      | Not_typed -> failwith "Term not typed - should not happen?" (* TODO? *)
+      | Not_typed -> write "Not typed"
       
       (* In original printer, there would fail, saying Var | Recursive | Closed can be only within Meta,
          but I think it's not the printer's job to check this, instead only print what was received?
          (though I don't know how Closed would even print, so not doing that) *)
       | Var (id, _, _) -> concat [ "Var(id=" ; string_of_int id ; ")" ]
-      | Recursive _ -> failwith ("Recursive is not implemented:\n" ^ show_datatype tp)
+      | Recursive _ -> failwith ("Recursive is not implemented:\n")
       | Alias _ -> failwith ("Alias not implemented: " ^ show_datatype tp)
       | RecursiveApplication _ -> failwith ("RecursiveApplication not implemented: " ^ show_datatype tp)
       | Meta pt -> let pt = Unionfind.find pt in
-                   concat [ "Meta(" ; datatype ctx p pt ; ")" ]
+                   dpr' "Meta";
+                   concat [ "Meta(" ; datatype' pt ; ")" ]
 
       | Primitive t -> write (primitive t)
       
       | Function (domain, effects, range) -> add_buffer (func ctx p domain effects range)
       | Lolli (domain, effects, range) -> add_buffer (func ~is_lolli:true ctx p domain effects range)
       
-      | Record r -> concat ["Record("; (row "," ctx p r); ")"]
-      | Variant r -> concat ["Variant[|"; (row "|" ctx p r); "|]" ]
-      | Table _ -> failwith ("Table is not implemented:\n" ^ show_datatype tp)
-      | Lens _ -> failwith ("Lens is not implemented:\n" ^ show_datatype tp)
+      | Record r -> concat [ "Record(" ; (row "," ctx p r) ; ")" ]
+      | Variant r -> concat [ "Variant[|" ; (row "|" ctx p r) ; "|]" ]
+      | Table tab -> add_buffer (table ctx p tab)
+      | Lens tp -> write (lens tp)
       | ForAll (binding, tp) -> add_buffer (forall ctx p binding tp)
 
       | Effect r -> concat [ "{"; row " SEP(Effect)? " ctx p r ; "}" ]
       | Row r -> concat [ "Row("; (row " SEP(Row)? " ctx p (Row r)) ; ")" ] (* TODO separator?
                                                                                also brackets? *)
 
-      (* TODO check if these are correct - largely inspired by how original printed handled these *)
+      (* TODO check if these are correct - largely inspired by how original printer handled these *)
       | Input _ | Output _ -> add_buffer (session_io ctx p tp)
       | Select _ | Choice _ -> add_buffer (session_select_choice ctx p tp)
-      | Dual tp -> concat [ "~" ; datatype ctx p tp ]  (* TODO this is maybe
-                                                          handled elsewhere? *)
+      | Dual tp -> concat [ "~(" ; datatype ctx p tp ; ")"]  (* TODO this is maybe
+                                                                handled elsewhere? *)
       | End -> write "End" (* TODO think this is just a contructor-like thingy? *)
 
       | _ -> failwith ("Printer for this type not implemented:\n" ^ show_datatype tp)
     end;
     read ()
 
-  let context_with_shared_effect :
-    policy ->
-    (( (* TODO *)
-      < field_spec : row -> 'c * row;
-      field_spec_map : field_spec_map -> 'c * field_spec_map;
-      list : 'a 'b. ('c -> 'a -> 'c * 'b) -> 'a list -> 'c * 'b list;
-      meta_presence_var : meta_presence_var -> 'c * meta_presence_var;
-      meta_row_var : row_var -> 'c * row_var;
-      meta_type_var : meta_type_var -> 'c * meta_type_var;
-      primitive : Primitive.t -> 'c * Primitive.t;
-      quantifier : Quantifier.t -> 'c * Quantifier.t;
-      row : row -> 'c * row; row_var : row_var -> 'c * row_var;
-      set_rec_vars : meta_type_var intmap -> 'c; typ : row -> 'c * row;
-      type_arg : type_arg -> 'c * type_arg;
-      type_args : type_arg list -> 'c * type_arg list; var : tid option >
-                                                             as 'c) ->
-     < var : tid option; .. > * 'd) ->
-    context =
-    fun _ _ -> empty_context
+  (* let context_with_shared_effect :
+   *   policy ->
+   *   (( (\* TODO *\)
+   *     < field_spec : row -> 'c * row;
+   *     field_spec_map : field_spec_map -> 'c * field_spec_map;
+   *     list : 'a 'b. ('c -> 'a -> 'c * 'b) -> 'a list -> 'c * 'b list;
+   *     meta_presence_var : meta_presence_var -> 'c * meta_presence_var;
+   *     meta_row_var : row_var -> 'c * row_var;
+   *     meta_type_var : meta_type_var -> 'c * meta_type_var;
+   *     primitive : Primitive.t -> 'c * Primitive.t;
+   *     quantifier : Quantifier.t -> 'c * Quantifier.t;
+   *     row : row -> 'c * row; row_var : row_var -> 'c * row_var;
+   *     set_rec_vars : meta_type_var intmap -> 'c; typ : row -> 'c * row;
+   *     type_arg : type_arg -> 'c * type_arg;
+   *     type_args : type_arg list -> 'c * type_arg list; var : tid option >
+   *                                                            as 'c) ->
+   *    < var : tid option; .. > * 'd) ->
+   *   context = *)
+  (* TODO copied from original *)
+  let maybe_shared_effect = function
+    | Function _ | Lolli _ -> true
+    | Alias ((_, qs, _, _), _) | RecursiveApplication { r_quantifiers = qs; _ } ->
+       begin match ListUtils.last_opt qs with
+       | Some (PrimaryKind.Row, (_, Restriction.Effect)) -> true
+       | _ -> false
+       end
+    | _ -> false
+  
+  let context_with_shared_effect policy visit =
+    let find_row_var r =
+      let r =
+        match fst (unwrap_row r) with
+        | Row (_, r, _) -> r
+        | _ -> raise tag_expectation_mismatch
+      in
+      begin match Unionfind.find r with
+      | Var (var, _, _) -> Some var
+      | _ -> None
+      end
+    in
+    (* Find a shared effect variable from the right most arrow or type alias. *)
+    let rec find_shared_var t =
+      match t with
+      | Function (_, _, r) | Lolli (_, _, r) when maybe_shared_effect r -> find_shared_var r
+      | Function (_, e, _) | Lolli (_, e, _) -> find_row_var e
+      | Alias ((_, _, ts, _), _) | RecursiveApplication { r_args = ts; _ } when maybe_shared_effect t ->
+         begin match ListUtils.last ts with
+         | (PrimaryKind.Row, (Row _ as r)) -> find_row_var r
+         | _ -> None
+         end
+      | _ -> None
+    in
+    let obj =
+      object (self)
+        inherit Transform.visitor as super
+
+        val var = None
+        method var = var
+
+        method! typ typ =
+          match self#var with
+          | None ->
+             begin match find_shared_var typ with
+             | Some v -> {<var = Some v>}, typ
+             | None -> super#typ typ
+             end
+          | Some _ -> self, typ
+      end
+    in
+    if policy.effect_sugar then
+      let (obj, _) = visit obj in
+      { empty_context with shared_effect = obj#var }
+    else
+      empty_context
   
   let type_arg : context -> policy * names -> type_arg -> string =
     fun _ _ _ -> ""
@@ -2999,7 +3125,8 @@ let choose_pp () =
 
 (* string conversions *)
 let rec string_of_datatype ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
-                       (t : datatype) =
+          (t : datatype) =
+  dpr' "string_of_datatype";
   if Settings.get print_types_pretty then
     (* Inject the new pretty printer (TODO) *)
     let module Print = (val (choose_pp ())) in
@@ -3008,11 +3135,15 @@ let rec string_of_datatype ?(policy=default_pp_policy) ?(refresh_tyvar_names=tru
     let policy = policy () in
     let t = if policy.quantifiers then t
             else Print.strip_quantifiers t in
+    dpr' "HERE 1";
     build_tyvar_names ~refresh_tyvar_names free_bound_type_vars [t];
+    dpr' "HERE 2";
     let context = Print.context_with_shared_effect policy (fun o -> o#typ t) in
+    dpr' "HERE 3";
     (Print.datatype context (policy, Vars.tyvar_name_map) t) ^
       (if Settings.get use_new_type_pp then
          begin (* print with the original printer too *)
+           dpr' "HERE 4";
            Settings.set use_new_type_pp false;
            let ret = string_of_datatype ~policy:policy'
                        ~refresh_tyvar_names:refresh_tyvar_names t'
@@ -3025,6 +3156,8 @@ let rec string_of_datatype ?(policy=default_pp_policy) ?(refresh_tyvar_names=tru
     show_datatype (DecycleTypes.datatype t)
 
 let string_of_row ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) row =
+  Printf.printf "string_of_row\n";
+  flush_all ();
   if Settings.get print_types_pretty then
     let module Print = (val (choose_pp ())) in
     let policy = policy () in
@@ -3036,12 +3169,16 @@ let string_of_row ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) row =
 
 let string_of_presence ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
                        (f : field_spec) =
+  Printf.printf "string_of_presence\n";
+  flush_all ();
   let module Print = (val (choose_pp ())) in
   build_tyvar_names ~refresh_tyvar_names free_bound_field_spec_type_vars [f];
   Print.presence Print.empty_context (policy (), Vars.tyvar_name_map) f
 
 let string_of_type_arg ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
                        (arg : type_arg) =
+  Printf.printf "string_of_type_arg\n";
+  flush_all ();
   let module Print = (val (choose_pp ())) in
   let policy = policy () in
   build_tyvar_names ~refresh_tyvar_names free_bound_type_arg_type_vars [arg];
@@ -3049,6 +3186,8 @@ let string_of_type_arg ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
   Print.type_arg context (policy, Vars.tyvar_name_map) arg
 
 let string_of_row_var ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) row_var =
+  Printf.printf "string_of_row_var\n";
+  flush_all ();
   let module Print = (val (choose_pp ())) in
   build_tyvar_names ~refresh_tyvar_names free_bound_row_var_vars [row_var];
   match Print.row_var Print.name_of_type "," Print.empty_context (policy (), Vars.tyvar_name_map) row_var
@@ -3056,11 +3195,15 @@ let string_of_row_var ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) ro
        | Some s -> s
 
 let string_of_tycon_spec ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) (tycon : tycon_spec) =
+  Printf.printf "string_of_tycon_spec\n";
+  flush_all ();
   let module Print = (val (choose_pp ())) in
   build_tyvar_names ~refresh_tyvar_names free_bound_tycon_type_vars [tycon];
   Print.tycon_spec Print.empty_context (policy (), Vars.tyvar_name_map) tycon
 
 let string_of_quantifier ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) (quant : Quantifier.t) =
+  Printf.printf "string_of_quantifier\n";
+  flush_all ();
   let module Print = (val (choose_pp ())) in
   build_tyvar_names ~refresh_tyvar_names free_bound_quantifier_vars [quant];
   Print.quantifier (policy (), Vars.tyvar_name_map) quant
