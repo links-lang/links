@@ -167,6 +167,7 @@ jobs:
           ./links-mysql8.opam
           ./links-sqlite3.opam
           --deps-only
+          --ignore-constraints-on=links
 
       - name: Build Links from source
         run: |
@@ -250,6 +251,7 @@ jobs:
           ./links.opam
           ./links-mysql8.opam
           --deps-only
+          --ignore-constraints-on=links
 
       - name: Build Links from source
         run: |
@@ -321,6 +323,7 @@ jobs:
           ./links.opam
           ./links-mysql.opam
           --deps-only
+          --ignore-constraints-on=links
 
       - name: Build Links from source
         run: |
