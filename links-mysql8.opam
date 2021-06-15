@@ -1,8 +1,8 @@
 opam-version: "2.0"
 maintainer: "James Cheney <jcheney@inf.ed.ac.uk>"
 authors: "The Links Team <links-dev@inf.ed.ac.uk>"
-synopsis: "MySQL database driver for the Links Programming Language"
-description: "MySQL database driver for the Links Programming Language"
+synopsis: "MySQL8 database driver for the Links Programming Language"
+description: "MySQL8 database driver for the Links Programming Language"
 homepage: "https://github.com/links-lang/links"
 dev-repo: "git+https://github.com/links-lang/links.git"
 bug-reports: "https://github.com/links-lang/links/issues"
@@ -18,5 +18,5 @@ depends: [
   "dune" {>= "1.10.0"}
   "conf-mysql"
   "mysql8"
-  "links"
+  "links" {= version}
 ]
