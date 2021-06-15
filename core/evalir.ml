@@ -240,7 +240,7 @@ struct
     | `FunctionPtr (f, fvs), ps ->
       let (_finfo, (xs, body), z, _location) =
            try find_fun f
-           with NotFound s ->
+           with NotFound _ ->
              raise (internal_error ("Failed to find function name: " ^ (string_of_int f)))
       in
       let env =
