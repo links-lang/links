@@ -242,6 +242,7 @@ struct
            try find_fun f
            with NotFound s ->
              raise (internal_error ("Failed to find function name: " ^ (string_of_int f)))
+      in
       let env =
         match z, fvs with
         | None, None            -> env
