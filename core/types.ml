@@ -1679,7 +1679,11 @@ let is_tuple ?(allow_onetuples=false) row =
                    | Absent    -> false
                    | Meta _    -> false
                    | _ -> raise tag_expectation_mismatch))
-             (fromTo 1 n))
+             (fromTo 1 (n+1))) (* need to go up to n *)
+     (* TODO I think this was a bug: (dis)allowing one-tuples is
+        handled below, but here we need to make sure that the object
+        is a tuple at all; if there was only one field, it wasn't
+        checked for int *)
      in
      (* 0/1-tuples are displayed as records *)
      b && (allow_onetuples || n <> 1)
@@ -1716,6 +1720,7 @@ struct
      variables.  And even if it does we don't care about performance penalty
      because we're printing the error message and thus stopping the compilation
      anyway. *)
+  (* TODO check this - mem leak? *)
   let tyvar_name_map = Hashtbl.create 20
   let tyvar_name_counter = ref 0
 
@@ -1910,6 +1915,7 @@ module type PRETTY_PRINTER = sig
     ?name:(context ->
            policy * names ->
            tid -> Subkind.t -> istring -> (istring -> istring) -> istring) ->
+    ?maybe_tuple:bool option ->
     ?strip_wild:bool ->
     istring -> context -> policy * names -> row -> istring
   (* val row_var : string -> string -> context -> policy * names -> row point -> string *)
@@ -2401,7 +2407,7 @@ struct
     ret
 
   (* HERE row ~S *)
-  and row ?(name=name_of_type) ?(strip_wild=false) sep context p =
+  and row ?(name=name_of_type) ?(maybe_tuple=None) ?(strip_wild=false) sep context p =
     fun rv' -> (* TODO revert this (I just used it to see if row prints brackets -> it does NOT *)
     let ret =
       match rv' with
@@ -2707,12 +2713,19 @@ struct
     let inner_context = { ctx with bound_vars = TypeVarSet.add binder bound_vars } in (* TODO correct?
                                                                                          maybe add_quantifiers *)
     let name = var ~name_of_type:name_of_type inner_context p (binder, knd, `Rigid (* ? TODO *)) in
-    concat [ "mu " ; name ; ". " ; datatype inner_context p tp ]
+    concat ~sep:" " [ "mu" ; name ; "." ; datatype inner_context p tp ]
 
-  and alias : context -> policy * names -> (string * Kind.t list * type_arg list * bool) * typ -> string =
-    fun ctx p ((name, _, arg_types, is_dual), tp) ->
-    (* | Alias ((s, _, ts, is_dual), _) | RecursiveApplication { r_name = s; r_args = ts; r_dual = is_dual; _ } -> *)
-    concat [ "Alias(" ; name ; " => " ; datatype ctx p tp ; ")" ]
+  and alias_recapp : context -> policy * names -> string -> type_arg list -> bool -> string =
+    fun ctx p name arg_types is_dual ->
+    let { write; concat; read; _ } = create_buffer () in
+    (if is_dual
+     then write "~");
+    write (* @@ Module_hacks.Name.prettify *) name; (* TODO are modules supported? *)
+    (match arg_types with
+     | [] -> ()
+     | _ -> concat ("(" :: List.map (type_arg ctx p) arg_types @ [ ")" ]));
+    read ()
+  (* TODO Ignoring shared effects for now *)
 
   and row_fields : context -> policy * names -> bool -> ?sep:string-> ?is_tuple:bool ->
                    field_spec_map -> Buffer.t =
@@ -2753,26 +2766,33 @@ struct
         ?name:(context ->
                policy * names ->
                tid -> Subkind.t -> istring -> (istring -> istring) -> istring) ->
+        ?maybe_tuple:bool option ->
         ?strip_wild:bool ->
         istring -> context -> policy * names -> row -> istring =
 
-    fun ?(name=name_of_type) ?(strip_wild=false) sep ctx p r ->
+    fun ?(name=name_of_type) ?(maybe_tuple=None) ?(strip_wild=false) sep ctx p r ->
     dpr' "row";
-    let r, r_rec = unwrap_row r in
+    let r, r_rec = unwrap_row r in (* TODO probably shoudln't always unroll, only if we suspect a tuple *)
     (match r_rec with
-     | Some _ -> dpr' "Some"
-     | None -> dpr' "None");
-    let is_tuple = is_tuple ~allow_onetuples:true r in (* TODO this might need to go into a special case
-                                                          only for Records*)
+     | Some _ -> dpr' "Unwrapping row => Some"
+     | None -> dpr' "Unwrapping row => None");
+    let is_tuple =
+      match maybe_tuple with
+      | None -> is_tuple ~allow_onetuples:false r (* onetuple still has to print as (1=...) to round trip *)
+      | Some x -> x
+    in
+    dpr' @@ concat ["Is tuple: " ; string_of_bool is_tuple ];
     let fields = row_fields ctx p strip_wild ~is_tuple:is_tuple ~sep:sep in
     let { write; add_buffer; read; _ } = create_buffer () in
     match r with
-    | Row (row_fields, r_var, is_dual) ->
-       add_buffer (fields row_fields);
+    | Row (r_fields, r_var, is_dual) ->
+       add_buffer (fields r_fields);
+       dpr' @@ concat ["Fields (if not tuple):" ; Buffer.contents @@ row_fields ctx p strip_wild ~is_tuple:false ~sep:sep r_fields];
        let var = row_var name sep (* ?TODO *) ctx p r_var in
        begin
          match var with
          | Some s -> write "|";
+                     dpr' "Has row variable";
                      (* TODO I think this only happens if a variable exists? *)
                      (if is_dual then write "~" else ());
                      write s
@@ -2814,22 +2834,15 @@ struct
        dpr' "Closed Meta";
        ""
     | Var ((id, _, _) as v) -> (* no problem here *)
-       dpr' @@ concat [ "Meta var("; string_of_int id; ")" ];
        let s = datatype ctx p (Var v) in
-       (* dpr' s; *)
+       dpr' @@ concat [ "Meta var("; string_of_int id; ") => "; s ];
        s
     | Recursive ((id, _, _) as r) -> (* the complex case *)
        let ret =
-         (* match Hashtbl.lookup seen_metas id with
-          * | None -> (\* unseen => we are on the "outside" *\)
-          *    let varname = (\* get the name of the variable here *\) "\\a" in
-          *    Hashtbl.add seen_metas id varname;
-          *    datatype ctx p (Recursive r)
-          * | Some varname ->
-          *    varname *)
-         (* TODO if this doens't work, use a separate hashtable -> seen_metas *)
+         (* TODO if this is not the best way, can use another hashtable (seen_metas) *)
          match TypeVarSet.mem id bound_vars with
-         | true -> let varname = Vars.find id names in
+         | true -> dpr' @@ concat [ "Finding Nemo:"; string_of_int id ];
+                   let varname = Vars.find id names in
                    dpr' @@ concat [ "Recursive (inside): " ; varname ];
                    varname
          | false -> dpr' "Unseen Recursive; calling recursive";
@@ -2839,33 +2852,6 @@ struct
        ret
     | t -> dpr' (concat [ "Meta - other type:\n" ; show_datatype @@ DecycleTypes.datatype t ]);
            datatype ctx p t
-  (* let pt = Unionfind.find pt in
-   * let key =
-   *   match pt with
-   *   | Closed -> failwith "Closed aaa"
-   *   | Var (id, _, _) | Recursive (id, _, _) -> Some id
-   *   | _ -> failwith ("Meta not containing Closed | Var | Recursive:"
-   *                    ^ (show_datatype @@ DecycleTypes.datatype pt))
-   * in
-   * let key =
-   *   match key with
-   *   | Some key -> key
-   *   | None -> failwith "Aaaaaaaaaa?????"
-   * in
-   * dpr' @@ string_of_int key;
-   * match Hashtbl.lookup seen_metas key with
-   * | Some (Some type_string) -> (\* this Meta was already processed once *\)
-   *    dpr' @@ concat [ "Seen:" ; type_string ];
-   *    type_string
-   * | Some None -> (\* this was seen but didn't get a value *\)
-   *    dpr' "Some None";
-   *    "[META?]"
-   * | None -> (\* this Meta is yet unseen -> handle it and store in hashtable *\)
-   *    dpr' "New";
-   *    Hashtbl.add seen_metas key None;
-   *    let type_string = datatype ctx p (\* ~seen_metas:(Some seen_metas) *\) pt in
-   *    Hashtbl.replace seen_metas key (Some type_string);
-   *    type_string *)
 
   and type_arg : context -> policy * names -> type_arg -> string =
     fun ctx p (pknd, r) ->
@@ -2886,13 +2872,11 @@ struct
        let name = Abstype.name abstp in
        concat ([ name ; "(" ] @ List.map (type_arg ctx p) args @ [")"])
   
-  and recursive_application : context -> policy * names -> rec_appl -> string =
-    fun _ _ _ -> "Recursive Application"
-    
   and func : ?is_lolli:bool -> context -> policy * names -> typ -> row -> typ -> Buffer.t =
     let func_arrow : ?is_lolli:bool -> context -> policy * names -> row -> Buffer.t =
       (* ~e~> = {wild |e}-> = {wild:() |e}-> *)
       (* {:a |e}-> = {hear:a |e}-> *)
+      (* TODO *)
       fun ?(is_lolli=false) ctx ((policy, _) as p) r ->
       let { buffer; write; concat; _  } = create_buffer () in
       match r with
@@ -2900,8 +2884,7 @@ struct
          let number_of_fields = FieldEnv.size fields in
          let is_wild = FieldEnv.mem "wild" fields in
          let fields = row_fields ctx p true fields in
-         Debug.print ("Number of fields in effect row: " ^ string_of_int number_of_fields);
-         (* TODOTODOTODOTODOTODOTODOTODOTODOTODOTODOTODOTODOTODOTODOTODOTODOTODOTODOTODOTODO *)
+         dpr' ("Number of fields in effect row: " ^ string_of_int number_of_fields);
          let var = Unionfind.find r_var in
          let var = (match var with
                     | Closed -> None
@@ -2913,11 +2896,11 @@ struct
                     | _ -> Some (datatype ctx p var))
          in
          (match (number_of_fields, Buffer.contents fields, var) with
-          | (0, _, None) | (0, _, Some "_") -> write "-"
+          | (0, _, None) | (0, _, Some "_") -> write " -"
           (* | (1, "", None) | (1, "", Some "_") -> write "~" *)
-          | _ -> concat [ "-~ {{ " ; Buffer.contents fields; " | " ; (match var with
-                                                                      | Some s -> s
-                                                                      | None -> "NONE") ; " }} -~" ]
+          | _ -> concat [ " -~ {{ " ; Buffer.contents fields; " | " ; (match var with
+                                                                       | Some s -> s
+                                                                       | None -> "NONE") ; " }} -~" ]
          );
          (* add the arrowhead/lollipop *)
          (match is_lolli with
@@ -2926,10 +2909,17 @@ struct
          buffer
       | _ -> failwith ("Illformed effect:\n" ^ datatype ctx p r)
     in
+    (* func starts here *)
     fun ?(is_lolli=false) ctx p domain effects range ->
     dpr' "func";
     let { buffer; concat; add_buffer; _ } = create_buffer () in
-    concat [ datatype ctx p domain ; " " ];
+    (* concat [ datatype ctx p domain ; " " ]; *)
+    let dom_row =
+      match domain with
+      | Record x -> x
+      | _ -> failwith ("Illformed function domain:\n" ^ (show_datatype @@ DecycleTypes.datatype domain))
+    in
+    concat [ "(" ; (row ~maybe_tuple:(Some true) "," ctx p dom_row) ; ")" ]; (* TODO put this call together with the big match in datatype *)
     add_buffer (func_arrow ~is_lolli:is_lolli ctx p effects);
     concat [ " " ; datatype ctx p range ];
     buffer
@@ -2941,7 +2931,8 @@ struct
       | Input _ -> "?"
       | Output _ -> "!"
       | _ -> failwith "Invalid session I/O type" (* this will never happen, because the function session_io
-                                                    will only ever be called for Input | Output *) (* TODO? *)
+                                                    will only ever be called for Input | Output *)
+                      (* TODO better way to handle the impossible cases? *)
     in
     (match tp with
      | Input (tp, session_tp) | Output (tp, session_tp) ->
@@ -3048,10 +3039,11 @@ struct
          (though I don't know how Closed would even print, so not doing that) *)
       | Var v -> write (var ctx p v)
       | Recursive v -> write (recursive ctx p v)
-      | Alias a -> write (alias ctx p a)
       | Application a -> write (application ctx p a)
-      | RecursiveApplication ra -> write (recursive_application ctx p ra)
-      (* | Alias ((s, _, ts, is_dual), _) | RecursiveApplication { r_name = s; r_args = ts; r_dual = is_dual; _ } -> *)
+      | Alias ((name, _, arg_types, is_dual), _)
+        | RecursiveApplication { r_name = name; r_args = arg_types; r_dual = is_dual; _ }
+        -> write (alias_recapp ctx p name arg_types is_dual)
+
       | Meta pt -> write (meta ctx p (* seen_metas *) pt)
       | Primitive t -> write (primitive t)
       
@@ -3064,9 +3056,10 @@ struct
       | Lens tp -> write (lens tp)
       | ForAll (binding, tp) -> add_buffer (forall ctx p binding tp)
 
-      | Effect r -> concat [ "{"; row " SEP(Effect)? " ctx p r ; "}" ]
-      | Row r -> concat [ "Row("; (row " SEP(Row)? " ctx p (Row r)) ; ")" ] (* TODO separator?
-                                                                               also brackets? *)
+      | Effect r -> concat [ "{"; row "," ctx p r ; "}" ]
+      | Row r -> failwith "Row in datatype"
+                 (* concat [ "Row("; (row " SEP(Row)? " ctx p (Row r)) ; ")" ] (\* TODO separator?
+                  *                                                               also brackets? *\) *)
 
       (* TODO check if these are correct - largely inspired by how original printer handled these *)
       | Input _ | Output _ -> add_buffer (session_io ctx p tp)
@@ -3153,9 +3146,24 @@ struct
       { empty_context with shared_effect = obj#var }
     else
       empty_context
-  
-  let tycon_spec =
-    fun _ _ _ -> ""
+
+  (* for now just copied from original to make it work *)
+  let tycon_spec ({ bound_vars; _ } as context) p =
+    let bound_vars tyvars =
+      List.fold_left
+        (fun bound_vars tyvar ->
+          TypeVarSet.add (Quantifier.to_var tyvar) bound_vars)
+        bound_vars tyvars
+    in function
+    | `Alias (tyvars, body) ->
+       let ctx = { context with bound_vars = bound_vars tyvars } in
+       begin
+         match tyvars with
+         | [] -> datatype ctx p body
+         | _ -> mapstrcat "," (quantifier p) tyvars ^"."^ datatype ctx p body
+       end
+    | `Mutual _ -> "mutual"
+    | `Abstract _ -> "abstract"
 end
 
 let default_pp_policy : unit -> pp_policy =
