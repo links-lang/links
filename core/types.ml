@@ -309,7 +309,7 @@ struct
       | Not_typed ->
          (o, Not_typed)
       | (Var _ | Recursive _ | Closed) ->
-         failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
+         failwith ("[0] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
       | Alias ((name, params, args, is_dual), t) ->
          let (o, args') = o#type_args args in
          let (o, t') = o#typ t in
@@ -546,7 +546,7 @@ class virtual type_predicate = object(self)
     match typ with
     | Not_typed -> assert false
     | Var _ | Recursive _ | Closed ->
-       failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
+       failwith ("[1] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
     | Alias (_, t) -> self#type_satisfies vars t
     | Application (_, ts) ->
        (* This does assume that all abstract types satisfy the predicate. *)
@@ -618,7 +618,7 @@ class virtual type_iter = object(self)
     (* Unspecified kind *)
     | Not_typed -> assert false
     | Var _ | Recursive _ | Closed ->
-       failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
+       failwith ("[2] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
     | Alias (_, t) -> self#visit_type vars t
     | Application (_, ts) -> List.iter (self#visit_type_arg vars) ts
     | RecursiveApplication { r_args; _ } -> List.iter (self#visit_type_arg vars) r_args
@@ -722,7 +722,7 @@ module Base : Constraint = struct
         (* Unspecified kind *)
         | Not_typed -> assert false
         | Var _ | Recursive _ | Closed ->
-           failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
+           failwith ("[3] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
         | Alias _  as t  -> super#type_satisfies vars t
         | (Application _ | RecursiveApplication _) -> false
         | Meta _ as t  -> super#type_satisfies vars t
@@ -757,7 +757,7 @@ module Unl : Constraint = struct
       (* Unspecified kind *)
       | Not_typed -> assert false
       | Var _ | Recursive _ | Closed ->
-         failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
+         failwith ("[4] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
       | Alias _ as t -> super#type_satisfies vars t
       (* We might support linear lists like this...
          but we'd need to replace hd and tl with a split operation. *)
@@ -813,7 +813,7 @@ module Unl : Constraint = struct
        (* Unspecified kind *)
        | Not_typed -> assert false
        | Var _ | Recursive _ | Closed ->
-          failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
+          failwith ("[5] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
        | Alias _ as t -> super#visit_type vars t
        | Application _ -> ()
        | RecursiveApplication _ -> ()
@@ -855,7 +855,7 @@ module Session : Constraint = struct
       method! type_satisfies ((rec_appls, _, _) as vars) = function
         | Not_typed -> assert false
         | Var _ | Recursive _ | Closed ->
-           failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
+           failwith ("[6] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
         | Input _ | Output _ | Dual _ | Choice _ | Select _ | End -> true
         | (Alias _ | Meta _) as t -> super#type_satisfies vars t
         | (RecursiveApplication { r_unique_name; _ }) as t ->
@@ -1130,7 +1130,7 @@ let free_type_vars, free_row_type_vars, free_tyarg_vars =
     match t with
     | Not_typed               -> S.empty
     | Var _ | Recursive _ | Closed ->
-       failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
+       failwith ("[7] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
     | Primitive _             -> S.empty
     | Function (f, m, t)      ->
        S.union_all [free_type_vars' rec_vars f; free_row_type_vars' rec_vars m; free_type_vars' rec_vars t]
@@ -1328,7 +1328,7 @@ and subst_dual_type : var_map -> datatype -> datatype =
   match t with
   | Not_typed | Primitive _ -> t
   | Var _ | Recursive _ | Closed ->
-     failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
+     failwith ("[8] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
   | Function (f, m, t) -> Function (sdt f, sdr m, sdt t)
   | Lolli (f, m, t) -> Lolli (sdt f, sdr m, sdt t)
   | Record row -> Record (sdr row)
@@ -1528,7 +1528,7 @@ and normalise_datatype rec_names t =
   match t with
   | Not_typed -> t
   | Var _ | Recursive _ | Closed ->
-     failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
+     failwith ("[9] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
   | Primitive _             -> t
   | Function (f, m, t)      ->
      Function (nt f, nr m, nt t)
@@ -1730,7 +1730,7 @@ struct
     (* Unspecified kind *)
     | Not_typed -> []
     | Var _ | Recursive _ | Closed ->
-       failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
+       failwith ("[10] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
     | Alias ((_, _, ts, _), _) ->
        concat_map (free_bound_tyarg_vars bound_vars) ts
     | Application (_, tyargs) ->
@@ -1903,7 +1903,8 @@ module type PRETTY_PRINTER = sig
   val default_policy : unit -> policy
 
   val name_of_type : context -> policy * names -> tid -> Subkind.t -> string -> (string -> string) -> string
-  val datatype : context -> policy * names -> datatype -> string
+  type meta_table = (tid, string) Hashtbl.t
+  val datatype : context -> policy * names (* -> ?seen_metas:(meta_table option) *) -> datatype -> string
   (* val row : ?name:string -> ?strip_wild:bool -> string -> context -> policy * names -> string *)
   val row :
     ?name:(context ->
@@ -1922,7 +1923,7 @@ module type PRETTY_PRINTER = sig
   val empty_context : context
   val context_with_shared_effect :
     policy ->
-    (( (* TODO *)
+    (( (* TODO prettify this type *)
       < field_spec : row -> 'c * row;
       field_spec_map : field_spec_map -> 'c * field_spec_map;
       list : 'a 'b. ('c -> 'a -> 'c * 'b) -> 'a list -> 'c * 'b list;
@@ -1977,6 +1978,7 @@ struct
   (* {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool} *)
   type names  = (int, string * Vars.spec) Hashtbl.t
   type context = { bound_vars: TypeVarSet.t; shared_effect: int option }
+  type meta_table = (tid, string) Hashtbl.t
 
   let default_policy : unit -> policy = fun () ->
     {quantifiers=Settings.get show_quantifiers;
@@ -2124,8 +2126,9 @@ struct
     | _ -> false
 
   (* HERE is the important bit ~S *)
-  let rec datatype : context -> policy * names -> datatype -> string =
-    fun ({ bound_vars; _ } as context) ((policy, vars) as p) t ->
+  let rec datatype : context -> policy * names (* -> ?seen_metas:(meta_table option) *) -> datatype
+                     -> string =
+    fun ({ bound_vars; _ } as context) ((policy, vars) as p) (* ?(seen_metas=None) *) t ->
       let sd = datatype context p in
 
       let unwrap = fst -<- unwrap_row in
@@ -2233,7 +2236,7 @@ struct
          (* Unspecified kind *)
          | Not_typed       -> "not typed"
          | Var _ | Recursive _ | Closed ->
-            failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
+            failwith ("[11] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
          | Alias ((s, _, ts, is_dual), _) | RecursiveApplication { r_name = s; r_args = ts; r_dual = is_dual; _ } ->
             let ts =
               match ListUtils.unsnoc_opt ts, context.shared_effect with
@@ -2381,6 +2384,7 @@ struct
           begin
             let name_of_type var n1 n2 =
               let name, (_, _, count) = Vars.find_spec var vars in
+              (* decycling ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~vvvvvvvvvvvvvvvvvvvvvvvvv *)
               if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then n1
               else (n2 name) in
             match Unionfind.find point with
@@ -2567,6 +2571,9 @@ struct
   type names  = (int, string * Vars.spec) Hashtbl.t
   type context = { bound_vars: TypeVarSet.t; shared_effect: int option }
 
+  type meta_table = (tid, string) Hashtbl.t
+  let seen_metas : meta_table = Hashtbl.create 10 (* TODO this is potentially very unsafe; temporary thing *)
+
   let default_policy (() : unit) : policy =
     {quantifiers=Settings.get show_quantifiers;
      flavours=Settings.get show_flavours;
@@ -2582,7 +2589,9 @@ struct
   let name_of_type_plain : TypeVarSet.t -> policy * names -> tid -> string -> (string -> string) -> string =
     fun bound_vars (policy, vars) var name name_fun ->
     let var_name, (flavour, _, count) = Vars.find_spec var vars in
-    if policy.hide_fresh && count = 1 && ((flavour = `Flexible && not (policy.flavours)) || not (IntSet.mem var bound_vars))
+    (* TODO *)
+    if policy.hide_fresh && count = 1 && ((flavour = `Flexible && not (policy.flavours))
+                                          || not (IntSet.mem var bound_vars))
     then name
     else name_fun var_name
 
@@ -2655,8 +2664,6 @@ struct
            match subknd with
            | L.Unl, R.Any -> wrap (P.to_string pk_presence)
            | _ -> Some (full_name ({ policy with kinds="full" }, vars) knd)
-           (* TODO as above, also I structured it this way because
-              I liked it more initially, but is it better? *)
          end
 
   let name_of_type : context -> policy * names -> tid -> Subkind.t -> string -> (string -> string) -> string =
@@ -2680,8 +2687,35 @@ struct
 
   let primitive : Primitive.t -> string = Primitive.to_string
 
-  let rec row_fields : context -> policy * names -> bool -> ?sep:string-> ?is_tuple:bool ->
-                       field_spec_map -> Buffer.t =
+  (* string_of_var : context -> policy * names -> VAR -> string *)
+  let rec var : ?name_of_type:'a -> context -> policy * names -> (tid * Kind.t * Freedom.t) -> string =
+    fun ?(name_of_type=name_of_type) ({bound_vars; _} as ctx) ((policy, _) as p) (v, knd, freedom) ->
+    dpr' "var";
+    let inner_context = { ctx with bound_vars = TypeVarSet.add v bound_vars } in (* TODO correct?
+                                                                                    maybe add_quantifiers *)
+    let subknd = Kind.subkind knd in
+    let name_of_type' = name_of_type inner_context p v subknd in
+    let name = match freedom with
+      | `Flexible when policy.flavours -> name_of_type' "%" (fun n -> concat ["%"; n])
+      | _                              -> name_of_type' "_" (fun n -> n)
+    in
+    dpr' @@ concat [ "  var --> " ; name ];
+    name
+
+  and recursive : ?name_of_type:'a -> context -> policy * names -> (tid * Kind.t * typ) -> string =
+    fun ?(name_of_type=name_of_type) ({ bound_vars; _} as ctx) p (binder, knd, tp) ->
+    let inner_context = { ctx with bound_vars = TypeVarSet.add binder bound_vars } in (* TODO correct?
+                                                                                         maybe add_quantifiers *)
+    let name = var ~name_of_type:name_of_type inner_context p (binder, knd, `Rigid (* ? TODO *)) in
+    concat [ "mu " ; name ; ". " ; datatype inner_context p tp ]
+
+  and alias : context -> policy * names -> (string * Kind.t list * type_arg list * bool) * typ -> string =
+    fun ctx p ((name, _, arg_types, is_dual), tp) ->
+    (* | Alias ((s, _, ts, is_dual), _) | RecursiveApplication { r_name = s; r_args = ts; r_dual = is_dual; _ } -> *)
+    concat [ "Alias(" ; name ; " => " ; datatype ctx p tp ; ")" ]
+
+  and row_fields : context -> policy * names -> bool -> ?sep:string-> ?is_tuple:bool ->
+                   field_spec_map -> Buffer.t =
     fun ctx p strip_wild ->
     fun ?(sep=",") ?(is_tuple=false) fs_map ->
     dpr' "row_fields";
@@ -2698,7 +2732,6 @@ struct
     in
     let field_buf_list = FieldEnv.fold fold fs_map [] in
     List.iter (fun x -> dpr' (Buffer.contents x)) field_buf_list;
-    (* TODO there is an extra comma appearing for some reason *)
     concat_buffers ~sep:sep field_buf_list;
     buf
   
@@ -2707,23 +2740,15 @@ struct
          policy * names ->
          tid -> Subkind.t -> string -> (string -> string) -> string) ->
         istring -> context -> policy * names -> row_var -> istring option =
-    fun name_of_type sep (* TODO what is sep for? *) ctx ((policy, _) as p) rv ->
+    fun name_of_type sep (* TODO what is sep for? *) ctx p rv ->
     dpr' "row_var";
-    let var = Unionfind.find rv in
-    match var with
+    let v = Unionfind.find rv in
+    match v with
     | Closed -> None
-    | Var (var_id, knd, `Flexible) when policy.flavours ->
-       Some (name_of_type ctx p var_id (Kind.subkind knd) "%" (fun n -> "%" ^ n))
-    | Var (var_id, knd, _) ->
-       Some (name_of_type ctx p var_id (Kind.subkind knd) "_" (fun n -> n))
-    | _ -> failwith ("row_var where var =\n" ^ (show_datatype var))
-    | Recursive _ -> failwith "Recursive not implemented"
-  (* let dt = datatype ctx p var in
-   *     let len = String.length dt in
-   *     let buf = Buffer.create len in
-   *     Buffer.add_string buf dt;
-   *     buf *)
-
+    | Var v -> Some (var ~name_of_type:name_of_type ctx p v)
+    | Recursive v -> Some (recursive ~name_of_type:name_of_type ctx p v)
+    | _ -> Some (datatype ctx p v)
+  
   and row :
         ?name:(context ->
                policy * names ->
@@ -2739,7 +2764,7 @@ struct
      | None -> dpr' "None");
     let is_tuple = is_tuple ~allow_onetuples:true r in (* TODO this might need to go into a special case
                                                           only for Records*)
-    let fields = row_fields ctx p strip_wild ~is_tuple:is_tuple in
+    let fields = row_fields ctx p strip_wild ~is_tuple:is_tuple ~sep:sep in
     let { write; add_buffer; read; _ } = create_buffer () in
     match r with
     | Row (row_fields, r_var, is_dual) ->
@@ -2755,7 +2780,7 @@ struct
        end;
        read ()
     | _ -> failwith "Invalid row"
-
+  
   (* returns the presence, but possibly without the colon *)
   (* TODO maybe have this return a Buffer, if that would be more efficient *)
   and presence_type : want_colon:bool -> context -> policy * names -> typ -> string =
@@ -2764,9 +2789,16 @@ struct
     let { write; read; _ } = create_buffer () in
     (match tp with
      | Absent -> write "-"
-     | Present tp -> (if want_colon then write ":" else ());
-                     write (datatype ctx p tp)
-     | Meta _ -> (if want_colon then write ":" else ());
+     | Present tp ->
+        begin
+          match concrete_type tp with (* taken from original code,
+                                         might not be needed *)
+          | Record rv when is_empty_row rv -> () (* ^ *)
+          | _ ->
+             (if want_colon then write ":" else ());
+             write (datatype ctx p tp)
+        end
+     | Meta _ -> (if want_colon then write ":" else ()); (* colon shouldn't happen here? *)
                  write (datatype ctx p tp) (* let datatype handle Meta *)
      | _ -> failwith "Type not implemented");
     read ()
@@ -2774,8 +2806,93 @@ struct
   and presence : context -> policy * names -> typ -> string =
     fun ctx p tp -> presence_type ~want_colon:true ctx p tp
 
+  and meta : context -> policy * names (* -> meta_table option *) -> row point -> string =
+    fun ({bound_vars; _} as ctx) ((_, names) as p) (* seen_metas *) pt ->
+    dpr' "META";
+    match Unionfind.find pt with
+    | Closed -> (* nothing happens *)
+       dpr' "Closed Meta";
+       ""
+    | Var ((id, _, _) as v) -> (* no problem here *)
+       dpr' @@ concat [ "Meta var("; string_of_int id; ")" ];
+       let s = datatype ctx p (Var v) in
+       (* dpr' s; *)
+       s
+    | Recursive ((id, _, _) as r) -> (* the complex case *)
+       let ret =
+         (* match Hashtbl.lookup seen_metas id with
+          * | None -> (\* unseen => we are on the "outside" *\)
+          *    let varname = (\* get the name of the variable here *\) "\\a" in
+          *    Hashtbl.add seen_metas id varname;
+          *    datatype ctx p (Recursive r)
+          * | Some varname ->
+          *    varname *)
+         (* TODO if this doens't work, use a separate hashtable -> seen_metas *)
+         match TypeVarSet.mem id bound_vars with
+         | true -> let varname = Vars.find id names in
+                   dpr' @@ concat [ "Recursive (inside): " ; varname ];
+                   varname
+         | false -> dpr' "Unseen Recursive; calling recursive";
+                    recursive ctx p r
+       in
+       dpr' @@ concat [ "Meta rec("; string_of_int id; ") =>"; ret ];
+       ret
+    | t -> dpr' (concat [ "Meta - other type:\n" ; show_datatype @@ DecycleTypes.datatype t ]);
+           datatype ctx p t
+  (* let pt = Unionfind.find pt in
+   * let key =
+   *   match pt with
+   *   | Closed -> failwith "Closed aaa"
+   *   | Var (id, _, _) | Recursive (id, _, _) -> Some id
+   *   | _ -> failwith ("Meta not containing Closed | Var | Recursive:"
+   *                    ^ (show_datatype @@ DecycleTypes.datatype pt))
+   * in
+   * let key =
+   *   match key with
+   *   | Some key -> key
+   *   | None -> failwith "Aaaaaaaaaa?????"
+   * in
+   * dpr' @@ string_of_int key;
+   * match Hashtbl.lookup seen_metas key with
+   * | Some (Some type_string) -> (\* this Meta was already processed once *\)
+   *    dpr' @@ concat [ "Seen:" ; type_string ];
+   *    type_string
+   * | Some None -> (\* this was seen but didn't get a value *\)
+   *    dpr' "Some None";
+   *    "[META?]"
+   * | None -> (\* this Meta is yet unseen -> handle it and store in hashtable *\)
+   *    dpr' "New";
+   *    Hashtbl.add seen_metas key None;
+   *    let type_string = datatype ctx p (\* ~seen_metas:(Some seen_metas) *\) pt in
+   *    Hashtbl.replace seen_metas key (Some type_string);
+   *    type_string *)
+
+  and type_arg : context -> policy * names -> type_arg -> string =
+    fun ctx p (pknd, r) ->
+    let module P = PrimaryKind in
+    match pknd with
+    | P.Type -> datatype ctx p r
+    | P.Row -> concat ["{" ; row "," ctx p r ; "}"]
+    | P.Presence -> failwith "No way to round-trip type variable::Presence"
+
+  and application : context -> policy * names -> (Abstype.t * type_arg list) -> string =
+    fun ctx p ->
+    function
+    | (abstp, [el]) when Abstype.equal abstp list ->
+       concat [ "[" ; type_arg ctx p el ; "]" ]
+    | (abstp, []) ->
+       Abstype.name abstp
+    | (abstp, args) ->
+       let name = Abstype.name abstp in
+       concat ([ name ; "(" ] @ List.map (type_arg ctx p) args @ [")"])
+  
+  and recursive_application : context -> policy * names -> rec_appl -> string =
+    fun _ _ _ -> "Recursive Application"
+    
   and func : ?is_lolli:bool -> context -> policy * names -> typ -> row -> typ -> Buffer.t =
     let func_arrow : ?is_lolli:bool -> context -> policy * names -> row -> Buffer.t =
+      (* ~e~> = {wild |e}-> = {wild:() |e}-> *)
+      (* {:a |e}-> = {hear:a |e}-> *)
       fun ?(is_lolli=false) ctx ((policy, _) as p) r ->
       let { buffer; write; concat; _  } = create_buffer () in
       match r with
@@ -2792,8 +2909,8 @@ struct
                        Some (name_of_type ctx p var_id (Kind.subkind knd) "%" (fun n -> "%" ^ n))
                     | Var (var_id, knd, _) ->
                        Some (name_of_type ctx p var_id (Kind.subkind knd) "_" (fun n -> n))
-                    | Recursive _ -> failwith "Recursive not implemented"
-                    | _ -> failwith ("row_var where var =\n" ^ (show_datatype var)))
+                    | Recursive v -> Some (recursive ctx p v)
+                    | _ -> Some (datatype ctx p var))
          in
          (match (number_of_fields, Buffer.contents fields, var) with
           | (0, _, None) | (0, _, Some "_") -> write "-"
@@ -2913,39 +3030,36 @@ struct
     let datatype' = datatype ctx p in
     let { buffer; write; concat; _ } = create_buffer () in
     write "TableHandle(";
-    (* concat ~sep:"," @@ List.map datatype' [ r ; w ; n ]; (\* overhead? *\) *)
     concat ~sep:"," [ datatype' r ; datatype' w ; datatype' n ];
     write ")";
     buffer
   
-  and datatype : context -> policy * names -> datatype -> string =
-    fun ctx p tp ->
+  and datatype : context -> policy * names (* -> ?seen_metas:(meta_table option) *) -> datatype -> string =
+    fun ctx p (* ?(seen_metas=None) *) tp ->
     dpr' "datatype";
-    (* dpr' (show_datatype @@ DecycleTypes.datatype tp); *)
     let datatype' = datatype ctx p in
     let { write; concat; read; add_buffer; _ } = create_buffer () in
     begin
       match tp with
-      | Not_typed -> write "Not typed"
+      | Not_typed -> write "Not typed" (* keeping this in case we ever need to print some intermediate steps *)
       
       (* In original printer, there would fail, saying Var | Recursive | Closed can be only within Meta,
          but I think it's not the printer's job to check this, instead only print what was received?
          (though I don't know how Closed would even print, so not doing that) *)
-      | Var (id, _, _) -> concat [ "Var(id=" ; string_of_int id ; ")" ]
-      | Recursive _ -> failwith ("Recursive is not implemented:\n")
-      | Alias _ -> failwith ("Alias not implemented: " ^ show_datatype tp)
-      | RecursiveApplication _ -> failwith ("RecursiveApplication not implemented: " ^ show_datatype tp)
-      | Meta pt -> let pt = Unionfind.find pt in
-                   dpr' "Meta";
-                   concat [ "Meta(" ; datatype' pt ; ")" ]
-
+      | Var v -> write (var ctx p v)
+      | Recursive v -> write (recursive ctx p v)
+      | Alias a -> write (alias ctx p a)
+      | Application a -> write (application ctx p a)
+      | RecursiveApplication ra -> write (recursive_application ctx p ra)
+      (* | Alias ((s, _, ts, is_dual), _) | RecursiveApplication { r_name = s; r_args = ts; r_dual = is_dual; _ } -> *)
+      | Meta pt -> write (meta ctx p (* seen_metas *) pt)
       | Primitive t -> write (primitive t)
       
       | Function (domain, effects, range) -> add_buffer (func ctx p domain effects range)
       | Lolli (domain, effects, range) -> add_buffer (func ~is_lolli:true ctx p domain effects range)
       
-      | Record r -> concat [ "Record(" ; (row "," ctx p r) ; ")" ]
-      | Variant r -> concat [ "Variant[|" ; (row "|" ctx p r) ; "|]" ]
+      | Record r -> concat [ "(" ; (row "," ctx p r) ; ")" ]
+      | Variant r -> concat [ "[|" ; (row "|" ctx p r) ; "|]" ]
       | Table tab -> add_buffer (table ctx p tab)
       | Lens tp -> write (lens tp)
       | ForAll (binding, tp) -> add_buffer (forall ctx p binding tp)
@@ -3040,9 +3154,6 @@ struct
     else
       empty_context
   
-  let type_arg : context -> policy * names -> type_arg -> string =
-    fun _ _ _ -> ""
-  
   let tycon_spec =
     fun _ _ _ -> ""
 end
@@ -3126,7 +3237,6 @@ let choose_pp () =
 (* string conversions *)
 let rec string_of_datatype ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
           (t : datatype) =
-  dpr' "string_of_datatype";
   if Settings.get print_types_pretty then
     (* Inject the new pretty printer (TODO) *)
     let module Print = (val (choose_pp ())) in
@@ -3135,15 +3245,11 @@ let rec string_of_datatype ?(policy=default_pp_policy) ?(refresh_tyvar_names=tru
     let policy = policy () in
     let t = if policy.quantifiers then t
             else Print.strip_quantifiers t in
-    dpr' "HERE 1";
     build_tyvar_names ~refresh_tyvar_names free_bound_type_vars [t];
-    dpr' "HERE 2";
     let context = Print.context_with_shared_effect policy (fun o -> o#typ t) in
-    dpr' "HERE 3";
     (Print.datatype context (policy, Vars.tyvar_name_map) t) ^
       (if Settings.get use_new_type_pp then
          begin (* print with the original printer too *)
-           dpr' "HERE 4";
            Settings.set use_new_type_pp false;
            let ret = string_of_datatype ~policy:policy'
                        ~refresh_tyvar_names:refresh_tyvar_names t'
@@ -3259,7 +3365,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
     function
     | Not_typed -> empties
     | Var _ | Recursive _ | Closed ->
-       failwith ("freestanding Var / Recursive not implemented yet (must be inside Meta)")
+       failwith ("[12] freestanding Var / Recursive not implemented yet (must be inside Meta)")
     | Primitive _             -> empties
     | Function (f, m, t)      -> union [make_env boundvars f; make_env boundvars m; make_env boundvars t]
     | Lolli (f, m, t)         -> union [make_env boundvars f; make_env boundvars m; make_env boundvars t]
@@ -3350,7 +3456,7 @@ let is_sub_type, is_sub_row =
       | Not_typed, Not_typed -> true
       | (Var _ | Recursive _ | Closed), _
       | _, (Var _ | Recursive _ | Closed) ->
-         failwith ("freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
+         failwith ("[13] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
       | Primitive p, Primitive q -> p=q
       | Function (f, eff, t), Function (f', eff', t') ->
           is_sub_type rec_vars (f', f)
