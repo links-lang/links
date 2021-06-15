@@ -1,5 +1,5 @@
 database_driver=mysql8
-database_args=localhost:3306:links:links
+database_args=$LINKS_MYSQL8_HOST:$LINKS_MYSQL8_PORT:$LINKS_MYSQL8_USER:$LINKS_MYSQL8_PASSWORD
 coerce_null_integers=on
 null_integer=-1
 relational_lenses=on
