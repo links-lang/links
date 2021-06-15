@@ -106,6 +106,7 @@ jobs:
         run: |
          eval $(opam env)
          make tests
+	 ./run-tests nodb-unit-tests
         shell: bash
 
   postgres-mysql8-sqlite3:
@@ -181,7 +182,7 @@ jobs:
           ./run-database-tests tests/database -d all
           ./run-database-tests tests/shredding -d all
           ./run-database-tests tests/relational-lenses -d all
-          ./run-tests unit
+          ./run-tests db-unit-tests
         env:
           # TODO(dhil): I do not know how to index into the
           # environments of either service. Until we figure out how to
