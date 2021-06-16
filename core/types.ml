@@ -2693,6 +2693,13 @@ struct
 
   let primitive : Primitive.t -> string = Primitive.to_string
 
+  let is_var_anonymous : context -> policy * names -> tid -> bool =
+    fun {bound_vars; _} ({hide_fresh ;_}, names) vid ->
+    let _, (_, _, count) = Vars.find_spec vid names in
+    let is_unique = (count = 1) in
+    let is_bound = IntSet.mem vid bound_vars in
+    is_unique && hide_fresh && not is_bound
+  
   (* string_of_var : context -> policy * names -> VAR -> string *)
   let rec var : ?name_of_type:'a -> context -> policy * names ->
                 ?is_presence:bool -> (tid * Kind.t * Freedom.t) -> string =
@@ -2714,17 +2721,18 @@ struct
      * 5) Within Presence (Meta (Var ...)), gets surrounded by "{ ... }" 
      *    (or "{% ... }" if Flexible, but the % will be contributed by rule (3)) [is_presence]
      *)
-    let is_bound = IntSet.mem vid bound_vars in
-    let is_unique = (count = 1) in
-    let hide_name = is_unique && policy.hide_fresh in
+    (* let is_bound = IntSet.mem vid bound_vars in *)
+    (* let is_unique = (count = 1) in *)
+    (* let hide_name = is_unique && policy.hide_fresh in *)
+    let is_anonymous = is_var_anonymous ctx p vid in
     let show_flexible = policy.flavours && flavour = `Flexible in
     let subknd_name = subkind_name p subknd in
 
     let prt_name = concat ([ (if is_presence then "{" else "") ;
                              (if show_flexible then "%" else "") ;
-                             (match is_bound, hide_name, show_flexible with
-                              | false, true, true -> "" (* simplifies by rule (4) *)
-                              | false, true, false -> "_" (* not doing %, hence an anonymous var has to be explicit *)
+                             (match is_anonymous, show_flexible with
+                              | true, true -> "" (* simplifies by rule (4) *)
+                              | true, false -> "_" (* not doing %, hence an anonymous var has to be explicit *)
                               | _ -> var_name (* named variable *)
                              ) ;
                              (if is_presence then "}" else "") ]
@@ -2820,7 +2828,7 @@ struct
          tid -> Subkind.t -> string -> (string -> string) -> string) ->
         istring -> context -> policy * names -> row_var -> istring option =
     fun _ sep (* TODO what is sep for? *) ctx p rv ->
-    dpr' "row_var";
+    (* dpr' "row_var"; *)
     let v = Unionfind.find rv in
     match v with
     | Closed -> None
@@ -2847,7 +2855,7 @@ struct
       | None -> is_tuple ~allow_onetuples:false r (* onetuple still has to print as (1=...) to round trip *)
       | Some x -> x
     in
-    dpr' @@ concat ["Is tuple: " ; string_of_bool is_tuple ];
+    (* dpr' @@ concat ["Is tuple: " ; string_of_bool is_tuple ]; *)
     let fields = row_fields ctx p ~strip_wild ~concise_hear ~is_tuple ~sep in
     let { write; add_buffer; read; _ } = create_buffer () in
     match r with
@@ -2871,20 +2879,20 @@ struct
   (* TODO maybe have this return a Buffer, if that would be more efficient *)
   and presence_type : want_colon:bool -> context -> policy * names -> typ -> string =
     fun ~want_colon ctx p tp ->
-    dpr' "presence_type";
+    (* dpr' "presence_type"; *)
     let { write; read; _ } = create_buffer () in
     (match tp with
      | Absent -> write "-"
      | Present tp ->
         begin
           match concrete_type tp with (* taken from original code,
-                                         might not be needed *)
+                                         might not be needed TODO *)
           | Record rv when is_empty_row rv -> () (* ^ *)
           | _ ->
              (if want_colon then write ":" else ());
              write (datatype ctx p tp)
         end
-     | Meta pt -> (if want_colon then write ":" else ()); (* colon shouldn't happen here? *)
+     | Meta pt -> (if want_colon then write ":" else ()); (* TODO colon shouldn't happen here? *)
                   write (meta ctx p ~is_presence:true pt) (* let datatype handle Meta *)
      | _ -> failwith "Type not implemented");
     read ()
@@ -2962,6 +2970,7 @@ struct
       | (Row (fields, rv, _)) as row' ->
          let is_wild = is_field_present fields "wild" in
          let number_of_visible_fields = (FieldEnv.size fields) - (if is_wild then 1 else 0) in
+         dpr' @@ "Visible row fields: " ^ string_of_int number_of_visible_fields;
          let maybe_row_var = maybe_row_var rv in
          (* let is_hear = is_field_present fields "hear" in *)
          (match number_of_visible_fields, maybe_row_var with
@@ -2969,17 +2978,39 @@ struct
           | 0, Some v -> (* there is a row variable, but no fields
                             => use the abbreviated notation -a- or ~a~ *)
              (* need to see if the variable is anonymous, then skip as well *)
-             let varname = datatype ctx p v in
-             begin (* TODO this is a temporary solution *)
-               match varname with
-               | "_" | "%" -> dpr' "Skip varname in effect row"; ()
-               | _ -> dpr' "No skip";
-                  (if is_wild
-                   then write "~"
-                   else write "-");
-                  write varname
+             begin
+               match v with
+               | Var ((vid, _, _) as v) -> let is_anonymous = is_var_anonymous ctx p vid in
+                                           if is_anonymous
+                                           then dpr' "SKIP"
+                                           (* () (\* skip printing it entirely *\) *)
+                                           else begin
+                                               dpr' "NO SKIP";
+                                               (if is_wild
+                                                then write "~"
+                                                else write "-");
+                                               write @@ var ctx p v
+                                             end
+               | _ -> failwith "[*1] Shoudln't happen?" (* TODO *)
+                  (* let varname = datatype ctx p v in
+                   * dpr' "HERE";
+                   * dpr' varname;
+                   * (if is_wild
+                   *  then write "~"
+                   *  else write "-");
+                   * write varname *)
              end
-          | _ ->
+             (* let varname = datatype ctx p v in
+              * begin (\* TODO this is a temporary solution *\)
+              *   match varname with
+              *   | "_" | "%" -> dpr' "Skip varname in effect row"; ()
+              *   | _ -> dpr' "No skip";
+              *      (if is_wild
+              *       then write "~"
+              *       else write "-");
+              *      write varname
+              * end *)
+          | _ -> (* need the full effect row *)
              let row_str = row ~maybe_tuple:(Some false) ~strip_wild:true
                              ~concise_hear:true (* TODO maybe there is a policy for this? *)
                              "," ctx p row' in
@@ -3056,7 +3087,7 @@ struct
 
   and quantifier : (policy * names) -> Quantifier.t -> string =
     fun ((_, vars) as p) qr ->
-    dpr' "quantifier";
+    (* dpr' "quantifier"; *)
     let var = Quantifier.to_var qr in
     let var_name = Vars.find var vars in
     let knd = Quantifier.to_kind qr in
@@ -3071,14 +3102,14 @@ struct
 
   and forall : context -> policy * names -> Quantifier.t list -> typ -> Buffer.t =
     fun ctx p binding formula ->
-    dpr' "forall";
+    (* dpr' "forall"; *)
     let { buffer; write; concat; _ } = create_buffer () in
     let quantifiers = List.map (fun qr -> quantifier p qr) binding in
     write "forall ";
     concat ~sep:"," quantifiers;
     write ". ";
     write (datatype ctx p formula);
-    Debug.print ("Quantifier: " ^ Buffer.contents buffer);
+    (* Debug.print ("Quantifier: " ^ Buffer.contents buffer); *)
     buffer
 
   (* code for printing relational lenses taken verbatim from the original printer *)
@@ -3123,7 +3154,7 @@ struct
   
   and datatype : context -> policy * names (* -> ?seen_metas:(meta_table option) *) -> datatype -> string =
     fun ctx p (* ?(seen_metas=None) *) tp ->
-    dpr' "datatype";
+    (* dpr' "datatype"; *)
     let { write; concat; read; add_buffer; _ } = create_buffer () in
     begin
       match tp with
