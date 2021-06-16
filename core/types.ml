@@ -2857,7 +2857,7 @@ struct
        let var = row_var name sep (* ?TODO *) ctx p r_var in
        begin
          match var with
-         | Some s -> write "|";
+         | Some s -> write " |";
                      dpr' "Has row variable";
                      (* TODO I think this only happens if a variable exists? *)
                      (if is_dual then write "~" else ());
@@ -2960,19 +2960,25 @@ struct
       let { buffer; write; concat; _  } = create_buffer () in
       match r with
       | (Row (fields, rv, _)) as row' ->
-         let number_of_fields = FieldEnv.size fields in
          let is_wild = is_field_present fields "wild" in
+         let number_of_visible_fields = (FieldEnv.size fields) - (if is_wild then 1 else 0) in
          let maybe_row_var = maybe_row_var rv in
          (* let is_hear = is_field_present fields "hear" in *)
-         (match number_of_fields, maybe_row_var with
+         (match number_of_visible_fields, maybe_row_var with
           | 0, None -> () (* skip the effect row entirely *)
           | 0, Some v -> (* there is a row variable, but no fields
                             => use the abbreviated notation -a- or ~a~ *)
-             (* but TODO need to see if the variable is anonymous, then skip as well *)
-             (if is_wild
-              then write "~"
-              else write "-");
-             write @@ datatype ctx p v
+             (* need to see if the variable is anonymous, then skip as well *)
+             let varname = datatype ctx p v in
+             begin (* TODO this is a temporary solution *)
+               match varname with
+               | "_" | "%" -> dpr' "Skip varname in effect row"; ()
+               | _ -> dpr' "No skip";
+                  (if is_wild
+                   then write "~"
+                   else write "-");
+                  write varname
+             end
           | _ ->
              let row_str = row ~maybe_tuple:(Some false) ~strip_wild:true
                              ~concise_hear:true (* TODO maybe there is a policy for this? *)
