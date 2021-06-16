@@ -1,3 +1,7 @@
+---
+args : --set=typecheck_ir=true
+---
+
 Nested variant matching [1]
 switch (A (A)) { case A (A) -> 0 case A (B) -> 1 }
 stdout : 0 : Int
@@ -145,3 +149,12 @@ stdout : Quux : [|Bar-|Baz-|Foo-|Quux|_|]
 Negative pattern [12]
 (fun(x) { switch(x) { case (-(Foo, Bar, Baz) as x) -> x case _ -> Quux }})(FooBar)
 stdout : FooBar : [|Bar-|Baz-|Foo-|FooBar|Quux|_|]
+
+Presence polymorphism 1 [13]
+(fun (x : [|Foo| Bar{p}|]) { switch(x) {case Foo -> 1 case _ -> 2  }} )
+stdout : fun : ([|Bar{_}|Foo|]) -> Int
+
+Presence polymorphism 2 [14]
+(fun (x : [|Foo| Bar{p}|]) { switch(x) {case Bar -> 1 case _ -> 2  }} )
+stderr : @.*Type error.*
+exit : 1

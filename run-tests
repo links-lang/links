@@ -33,13 +33,9 @@ prepare_database_config () {
 }
 
 if [[ "$1" == "unit" ]]; then
-    prepare_database_config "$UNIT_TEST_DIR"
-    export LINKS_CONFIG="$UNIT_TEST_DIR"
-    dune exec --profile=development tests/unit/unitTests.exe -- -runner sequential ${@:2}
-    if [ $? != 0 ]; then
-        ret=1
-    fi
-    exit $ret
+    echo "The unit flag is no longer available."
+    echo "Use nodb-unit-tests or db-unit-tests instead."
+    exit 1
 fi
 
 if [ "$1" == "db-only" -o "$1" == "no-db" ]; then
@@ -56,7 +52,8 @@ if [ "$1" == "db-only" -o "$1" == "no-db" ]; then
 fi
 
 # Don't run normal tests if user passed in a database testsuite flag
-if [[ "$1" != "database" && "$1" != "shredding" && "$1" != "relational-lenses"  && "$1" != "unit" ]]; then
+if [[ "$1" != "database" && "$1" != "shredding" && "$1" != "relational-lenses"
+    && "$1" != "db-unit-tests" && "$1" != "nodb-unit-tests" ]]; then
     for i in tests/*.tests; do
         cmnd="./test-harness $i"
         echo cmnd=$cmnd
@@ -80,6 +77,17 @@ run_database_tests () {
     fi
 }
 
+run_unit_tests () {
+    unit_test_file="$1"
+    prepare_database_config "$UNIT_TEST_DIR"
+    export LINKS_CONFIG="$UNIT_TEST_DIR"
+    dune exec --profile=development tests/unit/${unit_test_file}.exe -- -runner sequential ${@:2}
+    if [ $? != 0 ]; then
+        ret=1
+    fi
+    exit $ret
+}
+
 # Only run database tests if user passed in "database" flag
 if [[ "$1" == "database" ]]; then
     run_database_tests $DATABASE_TEST_DIR
@@ -87,12 +95,22 @@ fi
 
 # Run shredding tests only if user called for them explicitly
 if [ "$1" == "shredding" ]; then
-    run_database_tests $SHREDDING_TEST_DIR 
+    run_database_tests $SHREDDING_TEST_DIR
 fi
 
 # Run relational lenses tests only if user called for them explicitly
 if [ "$1" == "relational-lenses" ]; then
-    run_database_tests $RELATIONAL_LENSES_TEST_DIR 
+    run_database_tests $RELATIONAL_LENSES_TEST_DIR
+fi
+
+# Run database-related unit tests if user called for them explicitly
+if [ "$1" == "db-unit-tests" ]; then
+    run_unit_tests "db"
+fi
+
+# Run non-database-related unit tests if user called for them explicitly
+if [ "$1" == "nodb-unit-tests" ]; then
+    run_unit_tests "nodb"
 fi
 
 #look for custom test scripts in the tests folder and execute them
