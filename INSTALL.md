@@ -10,13 +10,24 @@ OCaml:
 $ opam switch install 4.08.0
 ```
 
-If you wish to use Links' database functionality, you should first
-install PostgreSQL, the supported DBMS.
-
-You can then install Links simply by issuing the command:
+Next you should install the install the system dependencies for Links:
 
 ```
-$ opam install postgresql links-postgresql
+$ opam install depext
+$ opam depext links
+```
+
+If you wish to use Links' database functionality, you also have to install one (or all) 
+of database management systems that you wish to use on your system:
+
+```
+$ opam depext links-postgresql links-mysql links-sqlite3
+```
+
+You can then install Links and its database drivers simply by issuing the commands:
+
+```
+$ opam install links links-postgresql links-mysql links-sqlite3
 ```
 
 Alternatively, if you don't have PostgreSQL installed then do:
@@ -55,7 +66,7 @@ examples by pointing your browser at:
 
   http://localhost:8080/
 
-## Examples (with a database)
+## Examples (with a Postgres database)
 
 To run the examples using the Links application server issue the
 following command:
@@ -86,7 +97,7 @@ But first you need to do a few things.
      to the config file:
 
          database_driver=postgresql
-         database_args=:5432:fred:
+         database_args=localhost:5432:fred:
 
      The database user fred should exist. With postgres, perhaps the
      easiest way to do this is to tie fred to your unix username and

@@ -36,9 +36,18 @@ struct
 
     let fvs = U.Value.load (Yojson.Basic.from_string (Utility.base64decode (assoc "__env" cgi_args))) in
 
+    (* There is an artificial distinction between primitive
+       functions (builtin functions) and function pointers (functions
+       defined as part of a Links program). This is the point where we
+       have to do something about it in order for attempts to remotely
+       call primitive functions to work properly. *)
+
     let func =
       match fvs with
-      | `Record [] -> `FunctionPtr (int_of_string fname, None)
+      | `Record [] -> let i_fname = int_of_string fname in
+          if Lib.is_primitive_var i_fname
+          then `PrimitiveFunction (Lib.primitive_name i_fname, Some i_fname)
+          else `FunctionPtr (int_of_string fname, None)
       | _          -> `FunctionPtr (int_of_string fname, Some fvs) in
     RemoteCall(func, valenv, args)
 
