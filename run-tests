@@ -79,6 +79,7 @@ run_database_tests () {
 
 run_unit_tests () {
     unit_test_file="$1"
+    prepare_database_config "$UNIT_TEST_DIR"
     export LINKS_CONFIG="$UNIT_TEST_DIR"
     dune exec --profile=development tests/unit/${unit_test_file}.exe -- -runner sequential ${@:2}
     if [ $? != 0 ]; then
@@ -104,7 +105,6 @@ fi
 
 # Run database-related unit tests if user called for them explicitly
 if [ "$1" == "db-unit-tests" ]; then
-    prepare_database_config "$UNIT_TEST_DIR"
     run_unit_tests "db"
 fi
 

@@ -105,9 +105,9 @@ jobs:
 
       - name: Run interpreter testsuite
         run: |
-         eval $(opam env)
-         make tests
-         ./run-tests nodb-unit-tests
+          eval $(opam env)
+          make tests
+          ./run-tests nodb-unit-tests
         shell: bash
 
   postgres-mysql8-sqlite3:
