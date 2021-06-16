@@ -89,6 +89,7 @@ jobs:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
       - run: opam install -y conf-libev
+      - run: opam install -y ounit2
 
       - name: Install Links dependencies
         run: >-
