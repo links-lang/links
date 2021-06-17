@@ -117,7 +117,7 @@ def evaluate(name, code, config_file, stdout='', stderr='', exit = '0', env = No
 
     #starts shell executing links in new session. This allows us to kill the
     #shell and its sub-processes (i.e., links) in case of a timeout
-    proc = Popen([links] + arg_array + [code] + rest_array, stdout=PIPE, stderr=PIPE, env=env, start_new_session=True)
+    proc = Popen([links, "-n"] + arg_array + [code] + rest_array, stdout=PIPE, stderr=PIPE, env=env, start_new_session=True)
 
     passed = True
     errors = []

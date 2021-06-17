@@ -3378,8 +3378,6 @@ let rec string_of_datatype ?(policy=default_pp_policy) ?(refresh_tyvar_names=tru
     show_datatype (DecycleTypes.datatype t)
 
 let string_of_row ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) row =
-  (* Printf.printf "string_of_row\n"; *)
-  flush_all ();
   if Settings.get print_types_pretty then
     let module Print = (val (choose_pp ())) in
     let policy = policy () in
@@ -3391,16 +3389,12 @@ let string_of_row ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) row =
 
 let string_of_presence ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
                        (f : field_spec) =
-  (* Printf.printf "string_of_presence\n"; *)
-  flush_all ();
   let module Print = (val (choose_pp ())) in
   build_tyvar_names ~refresh_tyvar_names free_bound_field_spec_type_vars [f];
   Print.presence Print.empty_context (policy (), Vars.tyvar_name_map) f
 
 let string_of_type_arg ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
                        (arg : type_arg) =
-  (* Printf.printf "string_of_type_arg\n"; *)
-  flush_all ();
   let module Print = (val (choose_pp ())) in
   let policy = policy () in
   build_tyvar_names ~refresh_tyvar_names free_bound_type_arg_type_vars [arg];
@@ -3408,8 +3402,6 @@ let string_of_type_arg ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
   Print.type_arg context (policy, Vars.tyvar_name_map) arg
 
 let string_of_row_var ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) row_var =
-  (* Printf.printf "string_of_row_var\n"; *)
-  flush_all ();
   let module Print = (val (choose_pp ())) in
   build_tyvar_names ~refresh_tyvar_names free_bound_row_var_vars [row_var];
   match Print.row_var Print.name_of_type "," Print.empty_context (policy (), Vars.tyvar_name_map) row_var
@@ -3417,15 +3409,11 @@ let string_of_row_var ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) ro
        | Some s -> s
 
 let string_of_tycon_spec ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) (tycon : tycon_spec) =
-  (* Printf.printf "string_of_tycon_spec\n"; *)
-  flush_all ();
   let module Print = (val (choose_pp ())) in
   build_tyvar_names ~refresh_tyvar_names free_bound_tycon_type_vars [tycon];
   Print.tycon_spec Print.empty_context (policy (), Vars.tyvar_name_map) tycon
 
 let string_of_quantifier ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) (quant : Quantifier.t) =
-  (* Printf.printf "string_of_quantifier\n"; *)
-  flush_all ();
   let module Print = (val (choose_pp ())) in
   build_tyvar_names ~refresh_tyvar_names free_bound_quantifier_vars [quant];
   Print.quantifier (policy (), Vars.tyvar_name_map) quant
@@ -3775,7 +3763,6 @@ let recursive_applications t =
    possibly containg cycles escape this module without having one
    a version below that removes the cycles first! *)
 let pp : Format.formatter -> t -> unit = fun fmt t ->
-  Debug.print "pp";
   if Settings.get print_types_pretty then
     Format.pp_print_string fmt (string_of_datatype t)
   else
@@ -3792,7 +3779,6 @@ let pp_meta_type_var : Format.formatter -> meta_type_var -> unit = fun fmt p ->
     pp_typ fmt (DecycleTypes.row (Meta p))
 
 let pp_row' : Format.formatter -> row' -> unit = fun fmt t ->
-  Debug.print "pp_row'";
   if Settings.get print_types_pretty then
     Format.pp_print_string fmt (string_of_row (Row t))
   else
