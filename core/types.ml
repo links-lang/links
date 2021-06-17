@@ -2831,9 +2831,10 @@ struct
     dpr' "row";
     let r, is_tuple =
       match maybe_tuple with
-      | None -> let r, _ = unwrap_row r in
-                (r, is_tuple ~allow_onetuples:false r) (* onetuple still has to print as (1=...) to round trip *)
-      | Some x -> r, x
+      | None -> (* need to decide if it's a tuple or not - it could be *)
+         let r, _ = unwrap_row r in
+         (r, is_tuple ~allow_onetuples:false r) (* onetuple still has to print as (1=...) to round trip *)
+      | Some x -> r, x (* definitely it is (not) a tuple *)
     in
     let fields = row_fields ctx p ~strip_wild ~concise_hear ~is_tuple ~hide_units
                    ~sep:(if is_tuple then concat [sep; " "] else sep) (* sugar: tuples have spacing in fields *)
@@ -2844,20 +2845,23 @@ struct
        let fields_string, fields_shown = fields r_fields in
        add_buffer fields_string;
        (* dpr' @@ concat ["Fields (if not tuple):" ; Buffer.contents @@ row_fields ctx p strip_wild ~is_tuple:false ~sep:sep r_fields]; *)
-       let var = row_var name sep (* ?TODO *) ctx p r_var in
+       let var = row_var name sep (* TODO this sep is not necessary (came from old code, to preserve signature) *)
+                   ctx p r_var in
        begin
          match var with
          | Some s -> (if space_row_var && fields_shown = 0
                       then write " |"
                       else write "|");
                      dpr' "Has row variable";
-                     (* TODO I think this only happens if a variable exists? *)
                      (if is_dual then write "~" else ());
                      write s
          | None -> ()
        end;
        read ()
-    | _ -> failwith "Invalid row"
+    | Meta pt -> dpr' "Meta in row!!";
+                 meta ctx p pt (* TODO This happens in tests/typed_ir.tests/Generalisation obeys value restriction (#871)
+                                * not entirely sure where this Meta is coming through, I though it could be via type_arg *)
+    | _ -> failwith ("Invalid row: " ^ show_datatype @@ DecycleTypes.datatype r)
   
   (* returns the presence, but possibly without the colon *)
   (* TODO maybe have this return a Buffer, if that would be more efficient *)
@@ -2903,7 +2907,13 @@ struct
     let module P = PrimaryKind in
     match pknd with
     | P.Type -> datatype ctx p r
-    | P.Row -> concat ["{" ; row "," ctx p r ~space_row_var:true ; "}"]
+    | P.Row -> begin
+        match r with
+        | Row _ -> concat ["{" ; row "," ctx p r ~space_row_var:true ; "}"]
+        | Meta pt -> meta ctx p pt
+        (* TODO can a Var ever be here directly? (without Meta) *)
+        | _ -> failwith ("Non-(row|meta) in type_arg:\n" ^ show_datatype @@ DecycleTypes.datatype r)
+      end
     | P.Presence -> failwith "No way to round-trip type variable::Presence"
 
   and application : context -> policy * names -> (Abstype.t * type_arg list) -> string =
