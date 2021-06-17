@@ -1,7 +1,9 @@
 let dpr' : string -> unit  =
-  fun x -> ()
-           (* Printf.printf "%s\n" x; *)
-           (* flush_all () *)
+  fun x ->
+  begin
+    (* Printf.printf "%s\n" x;
+     * flush_all () *)
+  end
 
 open Utility
 open CommonTypes
@@ -1304,7 +1306,7 @@ let rec dual_type : var_map -> datatype -> datatype =
      RecursiveApplication { appl with r_dual = (not appl.r_dual) }
   | End -> End
   | Alias ((f,ks,args,isdual),t)         -> Alias ((f,ks,args,not(isdual)),dt t)
-  | t -> raise (Invalid_argument ("Attempt to dualise non-session type: " ^ show_datatype t))
+  | t -> raise (Invalid_argument ("Attempt to dualise non-session type: " ^ show_datatype @@ DecycleTypes.datatype t))
 and dual_row : var_map -> row -> row =
   fun rec_points row ->
   match fst (unwrap_row row) with
@@ -2433,10 +2435,10 @@ struct
            end
       (* FIXME: this shouldn't happen *)
       | Meta rv ->
-         Debug.print ("Row variable where row expected:"^show_datatype (Meta rv));
+         Debug.print ("Row variable where row expected:"^show_datatype @@ DecycleTypes.datatype (Meta rv));
          row sep context ~name:name ~strip_wild:strip_wild p (Row (StringMap.empty, rv, false))
       | t ->
-         failwith ("Illformed row:"^show_datatype t)
+         failwith ("Illformed row:"^show_datatype @@ DecycleTypes.datatype t)
                   (* raise tag_expectation_mismatch *)
     in
     Debug.print ("row returns: " ^ ret);
@@ -2462,7 +2464,7 @@ struct
     Debug.print ("Original row_var -> " ^ (match ret with
                                            | Some s -> s
                                            | None -> "EMPTY")
-                 ^ "\n" ^ (show_datatype (Unionfind.find rv)));
+                 ^ "\n" ^ (show_datatype @@ DecycleTypes.datatype (Unionfind.find rv)));
     ret
 
   and type_arg context p (pk, t) =
@@ -2704,7 +2706,6 @@ struct
                 ?is_presence:bool -> (tid * Kind.t * Freedom.t) -> string =
     fun ?(name_of_type=name_of_type (* do not use *)) ({bound_vars; _} as ctx) ((policy, names) as p)
         ?(is_presence=false) (vid, knd, freedom) ->
-    dpr' "var";
     
     let subknd = Kind.subkind knd in
     let var_name, (flavour, _ (* kind alread known *), count) = Vars.find_spec vid names in
@@ -2775,9 +2776,20 @@ struct
 
   and recursive : context -> policy * names -> (tid * Kind.t * typ) -> string =
     fun ({ bound_vars; _} as ctx) p (binder, knd, tp) ->
-    let inner_context = { ctx with bound_vars = TypeVarSet.add binder bound_vars } in
-    let name = var inner_context p (binder, knd, `Rigid (* ? TODO *)) in (* reusing var, Rec doesn't come with a freedom *)
-    concat ~sep:" " [ "mu" ; name ; "." ; datatype inner_context p tp ]
+    dpr' "recursive";
+    if IntSet.mem binder bound_vars
+    then (* this recursive was already seen -> just need the variable name *)
+      begin
+        dpr' "Already seen mu";
+        var ctx p (binder, knd, `Rigid (* TODO see below *))
+      end
+    else (* this the first occurence of this mu -> print the whole type *)
+      begin
+        dpr' "New mu";
+        let inner_context = { ctx with bound_vars = TypeVarSet.add binder bound_vars } in
+        let name = var inner_context p (binder, knd, `Rigid (* ? TODO *)) in (* reusing var, Rec doesn't come with a freedom *)
+        concat ~sep:"" [ "(mu " ; name ; " . " ; datatype inner_context p tp ; ")"]
+      end
 
   and alias_recapp : context -> policy * names -> string -> type_arg list -> bool -> string =
     fun ctx p name arg_types is_dual ->
@@ -2797,7 +2809,7 @@ struct
                    ?is_tuple:bool -> field_spec_map -> (Buffer.t * int) = (* TODO count displayed fields for sugaring purposes *)
     fun ctx p ~strip_wild ~concise_hear ->
     fun ?(sep=",") ?(is_tuple=false) fs_map ->
-    dpr' "row_fields";
+    (* dpr' "row_fields"; *)
     let { buffer=buf; concat_buffers; _ } = create_buffer () in
     let fold : string -> typ -> (Buffer.t list * int) -> (Buffer.t list * int) =
       fun label fld (accumulator, counter) ->
@@ -2814,7 +2826,7 @@ struct
          accumulator @ [buf'], counter + 1
     in
     let field_buf_list, count = FieldEnv.fold fold fs_map ([], 0) in
-    List.iter (fun x -> dpr' (Buffer.contents x)) field_buf_list;
+    (* List.iter (fun x -> dpr' (Buffer.contents x)) field_buf_list; *)
     concat_buffers ~sep:sep field_buf_list;
     buf, count
   
@@ -2838,7 +2850,7 @@ struct
                tid -> Subkind.t -> istring -> (istring -> istring) -> istring) ->
         ?maybe_tuple:bool option ->
         ?strip_wild:bool -> ?concise_hear:bool -> ?space_row_var:bool ->
-        istring -> context -> policy * names -> row -> istring =
+        string -> context -> policy * names -> row -> string =
 
     fun ?(name=name_of_type) ?(maybe_tuple=(Some false)) ?(strip_wild=false) ?(concise_hear=false) ?(space_row_var=false) sep ctx p r ->
     dpr' "row";
@@ -2883,7 +2895,7 @@ struct
         begin
           match concrete_type tp with (* taken from original code,
                                          might not be needed TODO *)
-          | Record rv when is_empty_row rv -> () (* ^ *)
+          | Record rv when is_empty_row rv -> () (* ^ *) (* TODO maybe this line can fix the missing units? *)
           | _ ->
              (if want_colon then write ":" else ());
              write (datatype ctx p tp)
@@ -2894,13 +2906,13 @@ struct
     read ()
   
   and presence : context -> policy * names -> typ -> string =
-    fun ctx p tp -> presence_type ~want_colon:true ctx p tp
+    fun ctx p tp -> presence_type ~want_colon:true (* this may be context sensitive? *) ctx p tp
 
   and meta : context -> policy * names (* -> meta_table option *) -> ?is_presence:bool -> row point -> string =
     fun ({bound_vars; _} as ctx) ((_, names) as p) (* seen_metas *) ?(is_presence=false) pt ->
     dpr' "META";
     match Unionfind.find pt with
-    | Closed -> (* nothing happens *)
+    | Closed -> (* nothing happens; TODO but maybe something should *sometimes* happen *)
        dpr' "Closed Meta";
        ""
     | Var ((id, _, _) as v) -> (* no problem here *)
@@ -2911,14 +2923,14 @@ struct
        let ret =
          (* TODO if this is not the best way, can use another hashtable (seen_metas) *)
          match TypeVarSet.mem id bound_vars with
-         | true -> dpr' @@ concat [ "Finding Nemo:"; string_of_int id ];
+         | true -> dpr' @@ concat [ "Finding Dory:"; string_of_int id ];
                    let varname = Vars.find id names in
                    dpr' @@ concat [ "Recursive (inside): " ; varname ];
                    varname
          | false -> dpr' "Unseen Recursive; calling recursive";
                     recursive ctx p r
        in
-       dpr' @@ concat [ "Meta rec("; string_of_int id; ") =>"; ret ];
+       dpr' @@ concat [ "Meta rec("; string_of_int id; ") => "; ret ];
        ret
     | t -> dpr' (concat [ "Meta - other type:\n" ; show_datatype @@ DecycleTypes.datatype t ]);
            datatype ctx p t
@@ -2967,7 +2979,7 @@ struct
          dpr' @@ "Visible row fields: " ^ string_of_int number_of_visible_fields;
          let maybe_row_var = maybe_row_var rv in
          (match number_of_visible_fields, maybe_row_var with
-          | 0, None -> () (* skip the effect row entirely *)
+          | 0, None -> write "{}" (* no fields but closed row var *)
           | 0, Some v -> (* there is a row variable, but no fields
                             => use the abbreviated notation -a- or ~a~ *)
              (* need to see if the variable is anonymous, then skip as well *)
@@ -3013,7 +3025,7 @@ struct
     
     (* func starts here *)
     fun ?(is_lolli=false) ctx p domain effects range ->
-    dpr' "func";
+    (* dpr' "func"; *)
     let { buffer; concat; add_buffer; _ } = create_buffer () in
     let dom_row =
       match domain with
@@ -3150,8 +3162,8 @@ struct
       | Not_typed -> write "Not typed" (* keeping this in case we ever need to print some intermediate steps *)
       
       (* In original printer, these would fail, saying Var | Recursive | Closed can be only within Meta,
-         but I think it's not the printer's job to check this, instead only print what was received?
-         (though I don't know how Closed would even print, so not doing that) *)
+       * but I think it's not the printer's job to check this, instead only print what was received?
+       * (though I don't know how Closed would even print, so not doing that) *)
       | Var v -> write (var ctx p v)
       | Recursive v -> write (recursive ctx p v)
       | Application a -> write (application ctx p a)
@@ -3159,21 +3171,22 @@ struct
         | RecursiveApplication { r_name = name; r_args = arg_types; r_dual = is_dual; _ }
         -> write (alias_recapp ctx p name arg_types is_dual)
 
-      | Meta pt -> write (meta ctx p (* seen_metas *) pt)
+      | Meta pt -> write (meta ctx p pt)
+      | Present t -> write (presence ctx p t) (* TODO want colon? *)
       | Primitive t -> write (primitive t)
       
       | Function (domain, effects, range) -> add_buffer (func ctx p domain effects range)
       | Lolli (domain, effects, range) -> add_buffer (func ~is_lolli:true ctx p domain effects range)
       
-      | Record r -> concat [ "(" ; (row ~maybe_tuple:None ", " ctx p r) ; ")" ]
-      | Variant r -> concat [ "[|" ; (row "|" ctx p r) ; "|]" ]
+      | Record r -> concat [ "(" ; (row ~maybe_tuple:None ", " (* tuples => space | records => no space *) ctx p r) ; ")" ]
+      | Variant r -> dpr' "Variant";
+                     concat [ "[|" ; (row "|" ctx p r) ; "|]" ]
       | Table tab -> add_buffer (table ctx p tab)
       | Lens tp -> write (lens tp)
       | ForAll (binding, tp) -> add_buffer (forall ctx p binding tp)
 
       | Effect r -> concat [ "{"; row "," ctx p r ; "}" ]
-      | Row r -> concat [ (* "Row("; *) (row " SEP(Row)? " ctx p (Row r)) (* ; ")" *) ] (* TODO separator?
-                                                                                           also brackets? *)
+      | Row r -> concat [ (* "R<<"; *) (row " SEP(Row)? " ctx p (Row r)) (* ; ">>" *) ] (* TODO should this case even exist? *)
 
       (* TODO check if these are correct - largely inspired by how original printer handled these *)
       | Input _ | Output _ -> add_buffer (session_io ctx p tp)
