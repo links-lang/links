@@ -1,8 +1,12 @@
 let dpr' : string -> unit  =
   fun x ->
   begin
+    (* disabling debug printing for tests; to enable, uncomment the print *)
     (* Printf.printf "%s\n" x;
      * flush_all () *)
+    
+    (* it does flushing because at one point I thought my prints weren't actually showing up;
+     * that issue is now resolved but I kept it just in case *)
   end
 
 open Utility
@@ -1898,6 +1902,8 @@ let effect_sugar
 
 type pp_policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool}
 
+(* TODO probably remove;
+*  the signature is not strictly necessary, I have it here so that I can swap the printer being used at runtime *)
 module type PRETTY_PRINTER = sig
   val show_quantifiers : bool Settings.setting
   val show_flavours : bool Settings.setting
@@ -1911,14 +1917,13 @@ module type PRETTY_PRINTER = sig
   val default_policy : unit -> policy
 
   val name_of_type : context -> policy * names -> tid -> Subkind.t -> string -> (string -> string) -> string
-  type meta_table = (tid, string) Hashtbl.t
-  val datatype : context -> policy * names (* -> ?seen_metas:(meta_table option) *) -> datatype -> string
+  val datatype : context -> policy * names -> datatype -> string
   (* val row : ?name:string -> ?strip_wild:bool -> string -> context -> policy * names -> string *)
   val row :
     ?name:(context ->
            policy * names ->
            tid -> Subkind.t -> istring -> (istring -> istring) -> istring) ->
-    ?maybe_tuple:bool option ->
+    ?maybe_tuple:bool option -> ?hide_units:bool ->
     ?strip_wild:bool -> ?concise_hear:bool -> ?space_row_var:bool ->
     istring -> context -> policy * names -> row -> istring
   (* val row_var : string -> string -> context -> policy * names -> row point -> string *)
@@ -1987,7 +1992,6 @@ struct
   (* {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool} *)
   type names  = (int, string * Vars.spec) Hashtbl.t
   type context = { bound_vars: TypeVarSet.t; shared_effect: int option }
-  type meta_table = (tid, string) Hashtbl.t
 
   let default_policy : unit -> policy = fun () ->
     {quantifiers=Settings.get show_quantifiers;
@@ -2135,9 +2139,9 @@ struct
     | _ -> false
 
   (* HERE is the important bit ~S *)
-  let rec datatype : context -> policy * names (* -> ?seen_metas:(meta_table option) *) -> datatype
+  let rec datatype : context -> policy * names -> datatype
                      -> string =
-    fun ({ bound_vars; _ } as context) ((policy, vars) as p) (* ?(seen_metas=None) *) t ->
+    fun ({ bound_vars; _ } as context) ((policy, vars) as p) t ->
       let sd = datatype context p in
 
       let unwrap = fst -<- unwrap_row in
@@ -2410,7 +2414,7 @@ struct
     ret
 
   (* HERE row ~S *)
-  and row ?(name=name_of_type) ?(maybe_tuple=None) ?(strip_wild=false) ?(concise_hear=false) ?(space_row_var=false) sep context p =
+  and row ?(name=name_of_type) ?(maybe_tuple=None) ?(hide_units=false) ?(strip_wild=false) ?(concise_hear=false) ?(space_row_var=false) sep context p =
     fun rv' -> (* TODO revert this (I just used it to see if row prints brackets -> it does NOT *)
     let ret =
       match rv' with
@@ -2580,8 +2584,6 @@ struct
   type names  = (int, string * Vars.spec) Hashtbl.t
   type context = { bound_vars: TypeVarSet.t; shared_effect: int option }
 
-  type meta_table = (tid, string) Hashtbl.t
-  let seen_metas : meta_table = Hashtbl.create 10 (* TODO this is potentially very unsafe; temporary thing *)
 
   let default_policy (() : unit) : policy =
     {quantifiers=Settings.get show_quantifiers;
@@ -2703,12 +2705,12 @@ struct
   
   (* string_of_var : context -> policy * names -> VAR -> string *)
   let rec var : ?name_of_type:'a -> context -> policy * names ->
-                ?is_presence:bool -> (tid * Kind.t * Freedom.t) -> string =
+                ?is_presence:bool -> tid -> Kind.t -> string =
     fun ?(name_of_type=name_of_type (* do not use *)) ({bound_vars; _} as ctx) ((policy, names) as p)
-        ?(is_presence=false) (vid, knd, freedom) ->
+        ?(is_presence=false) vid knd ->
     
     let subknd = Kind.subkind knd in
-    let var_name, (flavour, _ (* kind alread known *), count) = Vars.find_spec vid names in
+    let var_name, (flavour, _ (* kind already known *), count) = Vars.find_spec vid names in
     (* Rules of printing vars:
      * 1) If var only appears once (count = 1) & (policy.hide_fresh = true) => only as don't-care "_" [is_unique]
      * 2) But also if the var is bound (in context.bound_vars) it has to appear (by name -> overrides (1))! [is_bound]
@@ -2723,6 +2725,7 @@ struct
     let is_anonymous = is_var_anonymous ctx p vid in
     let show_flexible = policy.flavours && flavour = `Flexible in
     let subknd_name = subkind_name p subknd in
+    (* TODO inline the above for optimization *)
 
     let prt_name = concat ([ (if is_presence then "{" else "") ;
                              (if show_flexible then "%" else "") ;
@@ -2739,56 +2742,24 @@ struct
     in
     dpr' @@ concat [ "var => " ; prt_name ];
     prt_name
-    
-    (* old code below, to be replaced *)
-    (* let name_of_type : context -> policy * names -> tid -> Subkind.t -> string -> (string -> string) -> string =
-     *   fun {bound_vars; _} p var subk name name_fun ->
-     *   
-     *   let name_of_type_plain : TypeVarSet.t -> policy * names -> tid -> string -> (string -> string) -> string =
-     *     fun bound_vars (policy, vars) var name name_fun ->
-     *     let var_name, (flavour, _, count) = Vars.find_spec var vars in
-     *     if policy.hide_fresh && count = 1 && ((flavour = `Flexible && not (policy.flavours))
-     *                                           || not (IntSet.mem var bound_vars))
-     *     then name
-     *     else name_fun var_name
-     *   in
-     *   
-     *   let plain = name_of_type_plain bound_vars p var name name_fun in
-     *   let sk = subkind_name p subk in
-     *   let out_buf = Buffer.create 10 in
-     *   begin
-     *     Buffer.add_string out_buf plain;
-     *     match sk with
-     *     | Some buf -> Buffer.add_string out_buf "::";
-     *                   Buffer.add_buffer out_buf buf
-     *     | None -> ()
-     *   end;
-     *   Buffer.contents out_buf
-     * in
-     * 
-     * let name_of_type' = name_of_type ctx p vid subknd in
-     * let name = match freedom with
-     *   | `Flexible when policy.flavours -> name_of_type' "%" (fun n -> concat ["%"; n])
-     *   | _                              -> name_of_type' "_" (fun n -> n)
-     * in
-     * dpr' @@ concat [ "  var --> " ; name ];
-     * name *)
 
-  and recursive : context -> policy * names -> (tid * Kind.t * typ) -> string =
-    fun ({ bound_vars; _} as ctx) p (binder, knd, tp) ->
+  and recursive : context -> policy * names -> ?want_parens:bool -> (tid * Kind.t * typ) -> string =
+    fun ({ bound_vars; _} as ctx) p ?(want_parens=false) (binder, knd, tp) ->
     dpr' "recursive";
     if IntSet.mem binder bound_vars
     then (* this recursive was already seen -> just need the variable name *)
       begin
         dpr' "Already seen mu";
-        var ctx p (binder, knd, `Rigid (* TODO see below *))
+        var ctx p binder knd
       end
     else (* this the first occurence of this mu -> print the whole type *)
       begin
         dpr' "New mu";
         let inner_context = { ctx with bound_vars = TypeVarSet.add binder bound_vars } in
-        let name = var inner_context p (binder, knd, `Rigid (* ? TODO *)) in (* reusing var, Rec doesn't come with a freedom *)
-        concat ~sep:"" [ "(mu " ; name ; " . " ; datatype inner_context p tp ; ")"]
+        let name = var inner_context p binder knd in
+        concat [ (if want_parens then "(" else "") ;
+                 "mu " ; name ; " . " ; datatype inner_context p tp ;
+                 (if want_parens then ")" else "") ]
       end
 
   and alias_recapp : context -> policy * names -> string -> type_arg list -> bool -> string =
@@ -2805,9 +2776,9 @@ struct
     read ()
   (* TODO Ignoring shared effects for now *)
 
-  and row_fields : context -> policy * names -> strip_wild:bool -> concise_hear:bool -> ?sep:string->
+  and row_fields : context -> policy * names -> strip_wild:bool -> concise_hear:bool -> ?hide_units:bool -> ?sep:string->
                    ?is_tuple:bool -> field_spec_map -> (Buffer.t * int) = (* TODO count displayed fields for sugaring purposes *)
-    fun ctx p ~strip_wild ~concise_hear ->
+    fun ctx p ~strip_wild ~concise_hear ?(hide_units=false) ->
     fun ?(sep=",") ?(is_tuple=false) fs_map ->
     (* dpr' "row_fields"; *)
     let { buffer=buf; concat_buffers; _ } = create_buffer () in
@@ -2817,12 +2788,13 @@ struct
       | "wild" when strip_wild -> accumulator, counter
       | "hear" when concise_hear ->
          let { buffer=buf'; write=write'; _ } = create_buffer () in
+         dpr' "concise_hear --> presence_type with colon";
          write' (presence_type ~want_colon:true ctx p fld);
          accumulator @ [buf'], counter + 1
       | _ ->
          let { buffer=buf'; write=write'; _ } = create_buffer () in
          (if is_tuple then () else write' label);
-         write' (presence_type ~want_colon:(not is_tuple) ctx p fld);
+         write' (presence_type ~want_colon:(not is_tuple) ~hide_units ctx p fld);
          accumulator @ [buf'], counter + 1
     in
     let field_buf_list, count = FieldEnv.fold fold fs_map ([], 0) in
@@ -2840,19 +2812,22 @@ struct
     let v = Unionfind.find rv in
     match v with
     | Closed -> None
-    | Var v -> Some (var ctx p v)
-    | Recursive v -> Some (recursive ctx p v)
+    | Var (id, knd, _) -> Some (var ctx p id knd)
+    | Recursive v -> Some (recursive ctx p v ~want_parens:true)
     | _ -> Some (datatype ctx p v)
   
   and row :
+        (* ?name not used, it's just to keep the signature compatible for now *)
         ?name:(context ->
                policy * names ->
                tid -> Subkind.t -> istring -> (istring -> istring) -> istring) ->
-        ?maybe_tuple:bool option ->
+        ?maybe_tuple:bool option -> (* ?maybe_tuple is ternary: None => maybe, Some true => yes, Some false => no *)
+        ?hide_units:bool -> (* for variants *)
         ?strip_wild:bool -> ?concise_hear:bool -> ?space_row_var:bool ->
         string -> context -> policy * names -> row -> string =
 
-    fun ?(name=name_of_type) ?(maybe_tuple=(Some false)) ?(strip_wild=false) ?(concise_hear=false) ?(space_row_var=false) sep ctx p r ->
+    fun ?(name=name_of_type) ?(maybe_tuple=(Some false)) ?(hide_units=false) ?(strip_wild=false)
+        ?(concise_hear=false) ?(space_row_var=false) sep ctx p r ->
     dpr' "row";
     let r, is_tuple =
       match maybe_tuple with
@@ -2860,8 +2835,9 @@ struct
                 (r, is_tuple ~allow_onetuples:false r) (* onetuple still has to print as (1=...) to round trip *)
       | Some x -> r, x
     in
-    (* dpr' @@ concat ["Is tuple: " ; string_of_bool is_tuple ]; *)
-    let fields = row_fields ctx p ~strip_wild ~concise_hear ~is_tuple ~sep in
+    let fields = row_fields ctx p ~strip_wild ~concise_hear ~is_tuple ~hide_units
+                   ~sep:(if is_tuple then concat [sep; " "] else sep) (* sugar: tuples have spacing in fields *)
+    in
     let { write; add_buffer; read; _ } = create_buffer () in
     match r with
     | Row (r_fields, r_var, is_dual) ->
@@ -2885,9 +2861,9 @@ struct
   
   (* returns the presence, but possibly without the colon *)
   (* TODO maybe have this return a Buffer, if that would be more efficient *)
-  and presence_type : want_colon:bool -> context -> policy * names -> typ -> string =
-    fun ~want_colon ctx p tp ->
-    (* dpr' "presence_type"; *)
+  and presence_type : want_colon:bool -> ?hide_units:bool -> context -> policy * names -> typ -> string =
+    fun ~want_colon ?(hide_units=false) ctx p tp ->
+    dpr' "presence_type";
     let { write; read; _ } = create_buffer () in
     (match tp with
      | Absent -> write "-"
@@ -2895,7 +2871,9 @@ struct
         begin
           match concrete_type tp with (* taken from original code,
                                          might not be needed TODO *)
-          | Record rv when is_empty_row rv -> () (* ^ *) (* TODO maybe this line can fix the missing units? *)
+          | Record rv when is_empty_row rv && hide_units ->
+             dpr' "empty row and we want to hide units -> SKIP";
+             ()
           | _ ->
              (if want_colon then write ":" else ());
              write (datatype ctx p tp)
@@ -2908,30 +2886,15 @@ struct
   and presence : context -> policy * names -> typ -> string =
     fun ctx p tp -> presence_type ~want_colon:true (* this may be context sensitive? *) ctx p tp
 
-  and meta : context -> policy * names (* -> meta_table option *) -> ?is_presence:bool -> row point -> string =
-    fun ({bound_vars; _} as ctx) ((_, names) as p) (* seen_metas *) ?(is_presence=false) pt ->
+  and meta : context -> policy * names -> ?is_presence:bool -> row point -> string =
+    fun ctx p ?(is_presence=false) pt ->
     dpr' "META";
     match Unionfind.find pt with
     | Closed -> (* nothing happens; TODO but maybe something should *sometimes* happen *)
        dpr' "Closed Meta";
        ""
-    | Var ((id, _, _) as v) -> (* no problem here *)
-       let s = var ctx p ~is_presence v in
-       dpr' @@ concat [ "Meta var("; string_of_int id; ") => "; s ];
-       s
-    | Recursive ((id, _, _) as r) -> (* the complex case *)
-       let ret =
-         (* TODO if this is not the best way, can use another hashtable (seen_metas) *)
-         match TypeVarSet.mem id bound_vars with
-         | true -> dpr' @@ concat [ "Finding Dory:"; string_of_int id ];
-                   let varname = Vars.find id names in
-                   dpr' @@ concat [ "Recursive (inside): " ; varname ];
-                   varname
-         | false -> dpr' "Unseen Recursive; calling recursive";
-                    recursive ctx p r
-       in
-       dpr' @@ concat [ "Meta rec("; string_of_int id; ") => "; ret ];
-       ret
+    | Var (id, knd, _) -> var ctx p ~is_presence id knd
+    | Recursive r -> recursive ctx p r
     | t -> dpr' (concat [ "Meta - other type:\n" ; show_datatype @@ DecycleTypes.datatype t ]);
            datatype ctx p t
 
@@ -2985,17 +2948,18 @@ struct
              (* need to see if the variable is anonymous, then skip as well *)
              begin
                match v with
-               | Var ((vid, _, _) as v) -> let is_anonymous = is_var_anonymous ctx p vid in
-                                           if is_anonymous
-                                           then dpr' "SKIP"
-                                           (* () (\* skip printing it entirely *\) *)
-                                           else begin
-                                               dpr' "NO SKIP";
-                                               (if is_wild
-                                                then write "~"
-                                                else write "-");
-                                               write @@ var ctx p v
-                                             end
+               | Var (vid, knd, _) ->
+                  let is_anonymous = is_var_anonymous ctx p vid in
+                  if is_anonymous
+                  then dpr' "SKIP"
+                            (* () (\* skip printing it entirely *\) *)
+                  else begin
+                      dpr' "NO SKIP";
+                      (if is_wild
+                       then write "~"
+                       else write "-");
+                      write @@ var ctx p vid knd
+                    end
                | _ -> failwith "[*1] Shoudln't happen?" (* TODO *)
                   (* let varname = datatype ctx p v in
                    * dpr' "HERE";
@@ -3033,7 +2997,7 @@ struct
       | _ -> failwith ("Illformed function domain:\n" ^ (show_datatype @@ DecycleTypes.datatype domain))
     in
     let effects, _ = unwrap_row effects in
-    concat [ "(" ; (row ~maybe_tuple:(Some true) ", " ctx p dom_row) ; ") " ]; (* TODO put this call together with the big match in datatype *)
+    concat [ "(" ; (row ~maybe_tuple:(Some true) "," ctx p dom_row) ; ") " ]; (* TODO put this call together with the big match in datatype *)
     add_buffer (func_arrow ~is_lolli:is_lolli ctx p effects);
     concat [ " " ; datatype ctx p range ];
     buffer
@@ -3153,7 +3117,7 @@ struct
     write ")";
     buffer
   
-  and datatype : context -> policy * names (* -> ?seen_metas:(meta_table option) *) -> datatype -> string =
+  and datatype : context -> policy * names -> datatype -> string =
     fun ctx p (* ?(seen_metas=None) *) tp ->
     (* dpr' "datatype"; *)
     let { write; concat; read; add_buffer; _ } = create_buffer () in
@@ -3164,7 +3128,7 @@ struct
       (* In original printer, these would fail, saying Var | Recursive | Closed can be only within Meta,
        * but I think it's not the printer's job to check this, instead only print what was received?
        * (though I don't know how Closed would even print, so not doing that) *)
-      | Var v -> write (var ctx p v)
+      | Var (vid, knd, _) -> write (var ctx p vid knd)
       | Recursive v -> write (recursive ctx p v)
       | Application a -> write (application ctx p a)
       | Alias ((name, _, arg_types, is_dual), _)
@@ -3178,9 +3142,9 @@ struct
       | Function (domain, effects, range) -> add_buffer (func ctx p domain effects range)
       | Lolli (domain, effects, range) -> add_buffer (func ~is_lolli:true ctx p domain effects range)
       
-      | Record r -> concat [ "(" ; (row ~maybe_tuple:None ", " (* tuples => space | records => no space *) ctx p r) ; ")" ]
+      | Record r -> concat [ "(" ; (row ~maybe_tuple:None "," (* tuples => space | records => no space *) ctx p r) ; ")" ]
       | Variant r -> dpr' "Variant";
-                     concat [ "[|" ; (row "|" ctx p r) ; "|]" ]
+                     concat [ "[|" ; (row "|" ctx p r ~hide_units:true) ; "|]" ]
       | Table tab -> add_buffer (table ctx p tab)
       | Lens tp -> write (lens tp)
       | ForAll (binding, tp) -> add_buffer (forall ctx p binding tp)
