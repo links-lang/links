@@ -88,7 +88,7 @@ function pattern matching has right effects (#691)
 sig f : ([a]) {}-> a fun f ([x]) { x }
 stdout : () : ()
 
-Generalisation obeys value restriction / Freshening of generalized type variables when turning lambda into named fun (#871)
+Generalisation obeys value restriction / Freshening of generalised type variables when turning lambda into named fun (#871)
 var foo = spawn { () }; ()
 exit : 0
 stdout : () : ()
