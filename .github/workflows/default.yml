@@ -145,17 +145,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Install system dependencies
-        if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get install -y libev-dev
-        shell: bash
-
       - name: Use OCaml ${{ matrix.ocaml-compiler }}
         uses: ocaml/setup-ocaml@v2
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
-      - run: opam install -y conf-libev
       - run: opam install -y ounit2
 
       - name: Install Links dependencies
