@@ -174,8 +174,14 @@ let mono_type_args : type_arg -> unit =
 (** generalise:
     Universally quantify any free type variables in the expression.
 *)
-let generalise : gen_kind -> ?unwrap:bool -> environment -> datatype -> ((Quantifier.t list * type_arg list) * datatype) =
-  fun kind ?(unwrap=true) env t ->
+let generalise :
+      rigidify_vars:bool ->
+      ?unwrap:bool ->
+      gen_kind ->
+      environment ->
+      datatype ->
+      ((Quantifier.t list * type_arg list) * datatype) =
+  fun ~rigidify_vars ?(unwrap=true) kind env t ->
   (* throw away any existing top-level quantifiers *)
     Debug.if_set show_generalisation (fun () -> "Generalising : " ^ string_of_datatype t);
     let t = match Types.concrete_type t with
@@ -185,7 +191,8 @@ let generalise : gen_kind -> ?unwrap:bool -> environment -> datatype -> ((Quanti
     let type_args = get_type_args kind vars_in_env t in
     List.iter mono_type_args type_args;
     let quantifiers = Types.quantifiers_of_type_args type_args in
-    List.iter rigidify_type_arg type_args;
+    if rigidify_vars then
+      List.iter rigidify_type_arg type_args;
     let quantified = Types.for_all (quantifiers, t) in
 
     (* The following code suffers from the problem that it may reorder
@@ -225,10 +232,12 @@ let generalise : gen_kind -> ?unwrap:bool -> environment -> datatype -> ((Quanti
       ((quantifiers, type_args), quantified)
 
 (** only generalise rigid type variables *)
-let generalise_rigid = generalise Rigid
+let generalise_rigid ?unwrap = generalise ~rigidify_vars:true ?unwrap Rigid
+
+let generalise_without_mutation ?unwrap = generalise ~rigidify_vars:false ?unwrap All
 
 (** generalise both rigid and flexible type variables *)
-let generalise = generalise All
+let generalise ?unwrap = generalise ~rigidify_vars:true ?unwrap All
 
 let get_quantifiers_rigid (env : environment) (t : datatype) : Quantifier.t list =
   get_type_args Rigid (env_type_vars env) t |> Types.quantifiers_of_type_args

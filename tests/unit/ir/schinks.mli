@@ -32,6 +32,9 @@ module CT = CommonTypes
   wi_ function is guaranteed not to be used when assigning integer ids to
   string-based names.
 
+  We allow _ as a binder name, which will be replaced by a fresh variable used
+  nowhere else.
+
 *)
 
 (** Representation of IR fragments and Links types *)
@@ -103,6 +106,8 @@ val present : Types.typ t -> Types.field_spec t
 
 val absent : Types.field_spec t
 
+val presence_var : string -> Types.field_spec t
+
 (* Quantifiers *)
 
 (** Creates quantifier, to be used in let/fun/forall  *)
@@ -114,7 +119,11 @@ val q_row : ?sk:CT.Subkind.t -> string -> CT.Quantifier.t t
 (** Version of q allowing you to specify the integer id of the quantifier *)
 val wi_q : ?pk:CT.PrimaryKind.t -> ?sk:CT.Subkind.t -> int -> CT.Quantifier.t t
 
-val record_t : (string * Types.t t) list -> Types.typ t
+val record_t :
+  ?row_var:Types.row_var t -> (string * Types.field_spec t) list -> Types.typ t
+
+val variant :
+  ?row_var:Types.row_var t -> (string * Types.t t) list -> Types.typ t
 
 (** Lifts a type into t, marking all quantifiers and type variable ids therein
   as reserved. *)
@@ -161,6 +170,8 @@ val tapp : Ir.value t -> (CT.PrimaryKind.t * Types.t t) list -> Ir.value t
 
 val tabs : CT.Quantifier.t t list -> Ir.value t -> Ir.value t
 
+val inject : string -> Ir.value t -> Types.typ t -> Ir.value t
+
 (*
  *
  * IR TAIL COMPUTATIONS
@@ -173,6 +184,12 @@ val if_ :
   Ir.value t -> Ir.computation t -> Ir.computation t -> Ir.tail_computation t
 
 val apply : Ir.value t -> Ir.value t list -> Ir.tail_computation t
+
+val case :
+  Ir.value t ->
+  ?default:Ir.binder t * Ir.computation t ->
+  (string * Ir.binder t * Ir.computation t) list ->
+  Ir.tail_computation t
 
 (*
  *

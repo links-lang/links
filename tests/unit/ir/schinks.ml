@@ -4,8 +4,6 @@ open State.Syntax
 
 (* look at the .mli file if you just want to use this to write test cases *)
 
-let id x = x
-
 module CT = CommonTypes
 
 module Repr = Schinks_repr
@@ -17,6 +15,8 @@ type 'a t = 'a Repr.t
 let reify x = make x
 
 (* helpers *)
+
+let id = Utility.identity
 
 let mk_const c = State.return (Ir.Constant c) |> State.return
 
@@ -38,9 +38,12 @@ let check_assoc_list_for_duplicates assoc description =
     raise (SchinksError (Printf.sprintf "Duplicate fields in %s!" description))
 
 (* Got a list of tuples (with the second arg being a t) and another arg *)
-let helper_tuple1 (tuples : ('a * 'b t) list) (arg1 : 'c t)
-    (builder : ('a * 'b) list -> 'c -> 'r) : 'r t =
-  let* arg1 = arg1 in
+let helper_tuple1_with_transform :
+      'a 'b 'c 'd 'e 'r. ('a * 'b t) list -> 'c ->
+      arg1_transf1:('c -> 'd Repr.stage1) -> arg1_transf2:('d -> 'e lookup) ->
+      (('a * 'b) list -> 'e -> 'r) -> 'r t =
+ fun tuples arg1 ~arg1_transf1 ~arg1_transf2 builder ->
+  let* arg1 = arg1_transf1 arg1 in
   let+ tuples =
     State.List.map
       ~f:(fun (x, y) ->
@@ -49,7 +52,7 @@ let helper_tuple1 (tuples : ('a * 'b t) list) (arg1 : 'c t)
       tuples
   in
   let stage2 =
-    let* arg1 = arg1 in
+    let* arg1 = arg1_transf2 arg1 in
     let+ tuples =
       State.List.map
         ~f:(fun (x, y) ->
@@ -60,6 +63,34 @@ let helper_tuple1 (tuples : ('a * 'b t) list) (arg1 : 'c t)
     builder tuples arg1
   in
   stage2
+
+(* let helper_tuple1_with_transform : 'a 'b 'c 'd 'e 'r.
+ * (('a * 'b t) list) -> ('c) -> arg1_transf1 : ('c -> 'd t) -> arg1_transf2 : ('d lookup -> 'e lookup) ->
+ *     ( ('a * 'b) list -> 'e -> 'r) -> 'r t = fun
+ *     tuples arg1 ~arg1_transf1 ~arg1_transf2 builder ->
+ *   let* arg1 = arg1_transf1 arg1 in
+ *   let+ tuples =
+ *     State.List.map
+ *       ~f:(fun (x, y) ->
+ *         let+ y = y in
+ *         (x, y))
+ *       tuples
+ *   in
+ *   let stage2 =
+ *     let* arg1 = arg1_transf2 arg1 in
+ *     let+ tuples =
+ *       State.List.map
+ *         ~f:(fun (x, y) ->
+ *           let+ y = y in
+ *           (x, y))
+ *         tuples
+ *     in
+ *     builder tuples arg1
+ *   in
+ *   stage2 *)
+
+let helper_tuple1 tuples arg1 =
+  helper_tuple1_with_transform tuples arg1 ~arg1_transf1:id ~arg1_transf2:id
 
 (* Got a list and one argument *)
 let helper_list1 (builder : 'a list -> 'b -> 'r) (arg1 : 'a t list)
@@ -78,6 +109,13 @@ let _helper1 (builder : 'a -> 'r) (arg : 'a t) : 'r t =
   let+ arg = arg in
   let+ arg = arg in
   builder arg
+
+let helper2 (builder : 'a -> 'b -> 'r) (arg1 : 'a t) (arg2 : 'b t) : 'r t =
+  let* arg1 = arg1 in
+  let+ arg2 = arg2 in
+  let* arg1 = arg1 in
+  let+ arg2 = arg2 in
+  builder arg1 arg2
 
 (*
  *
@@ -160,14 +198,27 @@ let wild_fun_ct parameters codomain =
 
 let ( |~~> ) = wild_fun_ct
 
-let record_t assoc =
+let record_t ?row_var assoc =
+  let row_var =
+    match row_var with
+    | Some rv -> rv
+    | None -> Unionfind.fresh Types.Closed |> State.return |> State.return
+  in
   check_assoc_list_for_duplicates assoc "record type";
-  helper_tuple1 assoc
-    (() |> State.return |> State.return)
-    (fun assoc _ ->
+  helper_tuple1 assoc row_var (fun assoc row_var ->
       let map = StringMap.from_alist assoc in
-      let var = Unionfind.fresh Types.Closed in
-      Types.Record (Types.Row (map, var, false)))
+      Types.Record (Types.Row (map, row_var, false)))
+
+let variant ?row_var assoc =
+  check_assoc_list_for_duplicates assoc "variant type";
+  let row_var =
+    match row_var with
+    | Some rv -> rv
+    | None -> Unionfind.fresh Types.Closed |> State.return |> State.return
+  in
+  helper_tuple1 assoc row_var (fun assoc row_var ->
+      let map = StringMap.from_alist assoc in
+      Types.Variant (Types.Row (map, row_var, false)))
 
 (* Rows *)
 let closed = Unionfind.fresh Types.Closed |> State.return |> State.return
@@ -194,6 +245,8 @@ let present t =
   Types.Present t
 
 let absent = Types.Absent |> State.return |> State.return
+
+let presence_var v = tvar ~pk:CT.PrimaryKind.Presence v
 
 (* Quantifiers *)
 
@@ -251,13 +304,25 @@ let tapp v targs = helper_tuple1 targs v (fun targs v -> Ir.TApp (v, targs))
 
 let tabs = helper_list1 (fun quants v -> Ir.TAbs (quants, v))
 
+let inject name = helper2 (fun v ty -> Ir.Inject (name, v, ty))
+
 let binder ?(scope = Var.Scope.Local) name ty =
   let* ty = ty in
-  let+ () = Repr.add_name ~name in
+  let+ id_candidate =
+    match name with
+    | "_" -> Repr.fresh_id
+    | _ ->
+        let+ () = Repr.add_name ~name in
+        -1
+  in
   let stage2 =
     let* ty = ty in
     let var_info = Var.make_info ty name scope in
-    let+ id = Repr.lookup_name ~name in
+    let+ id =
+      match name with
+      | "_" -> State.return id_candidate
+      | _ -> Repr.lookup_name ~name
+    in
     Var.make_binder id var_info
   in
   stage2
@@ -351,6 +416,30 @@ let apply f args =
     Ir.Apply (f, args)
   in
   stage2
+
+let case (v : Ir.value t) ?(default : (Ir.binder t * Ir.computation t) option)
+    (cases : (string * Ir.binder t * Ir.computation t) list) :
+    Ir.tail_computation t =
+  let* v = v in
+  let f (x, y) =
+    let* x = x in
+    let* y = y in
+    State.return (Some (x, y))
+  in
+  let g (variant, x, y) =
+    let* x = x in
+    let+ y = y in
+    (variant, x, y)
+  in
+  let* default = State.Option.bind ~f default in
+  let+ cases = State.List.map ~f:g cases in
+  let* v = v in
+  let* default = State.Option.bind ~f default in
+  let+ cases = State.List.map ~f:g cases in
+  let assoc = List.map (fun (a, b, c) -> (a, (b, c))) cases in
+  check_assoc_list_for_duplicates assoc "variants of case";
+  let case_map = StringMap.from_alist assoc in
+  Ir.Case (v, case_map, default)
 
 (*
  *
