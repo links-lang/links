@@ -113,7 +113,7 @@ object (o : 'self_type)
       ; fun_signature        = None
       ; fun_frozen           = true
       ; fun_unsafe_signature = false } in
-    (* We replace the generalized quantifiers (instead of mutating the
+    (* We replace the generalised quantifiers (instead of mutating the
        union-find sets) and supply the *original* type variables as
        arguments *)
     let fun_definition = Renamer.rename_function_definition fun_definition in
