@@ -441,3 +441,7 @@ let row_present_types t =
         match v with
           | Present t -> Some t
           | _ -> None)
+
+let pack_types : Types.datatype list -> Types.datatype = function
+  | [t] -> t
+  | ts -> Types.make_tuple_type ts
