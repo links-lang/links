@@ -722,10 +722,10 @@ struct
             begin match TypeUtils.concrete_type vt with
             | Variant row as variant ->
                let unwrapped_row = fst (unwrap_row row) |> TypeUtils.extract_row_parts in
-               let present_fields, has_presence_polymorphism  =
+               let present_fields, has_bad_presence_polymorphism  =
                  StringMap.fold (fun field field_spec (fields, poly) -> match field_spec with
                                            | Present _  -> (StringSet.add field fields), poly
-                                           | Meta _ -> fields, true
+                                           | Meta _ -> fields, StringMap.mem field cases
                                            | Absent -> fields, poly
                                            | _ -> raise Types.tag_expectation_mismatch)
                    (fst3 unwrapped_row) (StringSet.empty, false) in
@@ -733,14 +733,16 @@ struct
                let has_default = OptionUtils.is_some default in
                let case_fields = StringMap.fold (fun field _ fields -> StringSet.add field fields) cases StringSet.empty in
 
+               ensure (not has_bad_presence_polymorphism)
+                 "row contains presence-polymorphic labels with corresponding \
+                  match clauses. These can only be handled by a default case."  (STC orig);
                if has_default then
                  ensure (StringSet.subset case_fields present_fields) "superfluous case" (STC orig)
                else
                  begin
                    ensure (not (StringSet.is_empty present_fields)) "Case with neither cases nor default" (STC orig);
                    ensure (is_closed) "case without default over open row"  (STC orig);
-                   ensure (not has_presence_polymorphism)
-                     "case without default over variant with presence polymorphism in some field"  (STC orig);
+
                    ensure (StringSet.equal case_fields present_fields)
                      "cases not identical to present fields in closed row, no default case" (STC orig)
                  end;
@@ -759,6 +761,14 @@ struct
                let o, default, default_type =
                  o#option (fun o (b, c) ->
                      let o, b = o#binder b in
+                     let actual_default_type = Var.type_of_binder b in
+                     let expected_default_t =
+                       StringMap.fold
+                         (fun case _ v -> TypeUtils.split_variant_type case v |> snd)
+                         cases
+                         variant
+                     in
+                     o#check_eq_types expected_default_t actual_default_type (STC orig);
                      let o, c, t = o#computation c in
                      let o = o#remove_binder b in
                      o, (b, c), t) default in

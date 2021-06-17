@@ -238,7 +238,11 @@ struct
         [], Types.Not_typed)) in
     function
     | `FunctionPtr (f, fvs), ps ->
-      let (_finfo, (xs, body), z, _location) = find_fun f in
+      let (_finfo, (xs, body), z, _location) =
+           try find_fun f
+           with NotFound _ ->
+             raise (internal_error ("Failed to find function name: " ^ (string_of_int f)))
+      in
       let env =
         match z, fvs with
         | None, None            -> env
