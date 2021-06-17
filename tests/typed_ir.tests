@@ -88,11 +88,10 @@ function pattern matching has right effects (#691)
 sig f : ([a]) {}-> a fun f ([x]) { x }
 stdout : () : ()
 
-Generalisation obeys value restriction (#871)
+Generalisation obeys value restriction / Freshening of generalised type variables when turning lambda into named fun (#871)
 var foo = spawn { () }; ()
-exit : 1
-stderr : @.*IR Type Error: Type variable.*is unbound.*
-args : --set=recheck_frontend_transformations=false
+exit : 0
+stdout : () : ()
 
 fork (#874)
 tests/typed_ir/T874.links
