@@ -2753,10 +2753,11 @@ struct
     (* let hide_name = is_unique && policy.hide_fresh in *)
     let is_anonymous = is_var_anonymous ctx p vid in
     let show_flexible = policy.flavours && flavour = `Flexible in
+    let is_presence = (PrimaryKind.Presence = Kind.primary_kind knd) in
     let subknd_name = subkind_name p subknd in
     (* TODO inline the above for optimization *)
 
-    let prt_name = concat ([ (if is_presence then "{" else "<:>") ;
+    let prt_name = concat ([ (if is_presence then "{" else "") ;
                              (if show_flexible then "%" else "") ;
                              (match is_anonymous, show_flexible with
                               | true, true -> "" (* simplifies by rule (4) *)
@@ -2892,9 +2893,13 @@ struct
                                 * not entirely sure where this Meta is coming through, I though it could be via type_arg *)
     | _ -> failwith ("Invalid row: " ^ show_datatype @@ DecycleTypes.datatype r)
 
-  and row' : context -> policy * names -> typ -> string =
+  and row' : context -> policy * names -> typ -> string * int * bool =
     fun ctx p r ->
-    let unrolled = unwrap_row r |> fst in
+    let unrolled =
+      (match r with
+       | Row r -> Row r
+       | _ -> extract_row r) |> unwrap_row |> fst in
+    (* let unrolled = extract_row r |> unwrap_row |> fst in *)
     let r', before, after, sep, is_tuple, hide_units =
       match r with
       | Record r ->
@@ -2904,7 +2909,7 @@ struct
       | Effect r -> r, "{", "}", ",", false, false
       | Select r -> r, "[+|", "|+]", ",", false, false
       | Choice r -> r, "[&|", "|&]", ",", false, false
-      (* | Row _ -> "", "", ",", false *) (* This should be invalid *)
+      | Row _ -> r, "", "", ",", false, false (* TODO? *)
       | _ -> failwith ("[*R] Invalid row:\n" ^ show_datatype @@ DecycleTypes.datatype r)
     in
     let rfields, rvar, rdual = extract_row_parts r' in
@@ -2919,25 +2924,37 @@ struct
           match label with
           | "wild" when hide_wild_hear -> accumulator (* skip wild *)
           | "hear" when hide_wild_hear ->
-             (* string_of_fld "" fld :: accumulator *)
-             (presence_type ~want_colon:true (* if hear can be presence-polymorphic then this is not granular enough *) ~hide_units ctx p fld) :: accumulator
+             (presence_type ~want_colon:true (* TODO if hear can be presence-polymorphic then this is not granular enough *) ~hide_units ctx p fld) :: accumulator
           | _ when is_tuple ->
              (* string_of_fld "" fld :: accumulator *)
              (presence_type ~want_colon:false ~hide_units ctx p fld) :: accumulator
           | _ ->
-             concat [label ; presence_type ~want_colon:true ~hide_units ctx p fld]
-             :: accumulator
+             begin
+               match concrete_type fld with
+               | Var (v,knd,_) when Kind.primary_kind knd = PrimaryKind.Presence ->
+                  dpr' "Field -> Var::Presence";
+                  concat [label ; var ctx p v knd]
+               | _ ->
+                  concat [label ; presence_type ~want_colon:true ~hide_units ctx p fld]
+             end :: accumulator
         in
         List.rev (FieldEnv.fold fold rfields [])
       end
     in
-    let var_string = "" in
-    (* make sure we don't print \{\|... but { |... when there are no fields *)
-    let field_strings = (if ((List.length field_strings) = 0) && (before = "{")
-                         then [" "]
-                         else field_strings)
-    in
-    concat [before ; concat ~sep field_strings ; "|" ; var_string ; after ]
+    let var_string = meta ctx p rvar in
+    (* let field_strings = (if ((List.length field_strings) = 0) && (before = "{")
+     *                      then [" "]
+     *                      else field_strings)
+     * in *)
+    let n_fields = List.length field_strings in
+    let var_exists = (String.length var_string > 0) in
+    (concat [before ;
+             (if n_fields = 0 then " " else "") ; (* to make sure we don't print "\{\|..." but "{ |..." when there are no fields *)
+             concat ~sep field_strings ;
+             (if var_exists then "|" else "") ; (* pipe only when a var is there (row not closed) *)
+             var_string ; after ],
+     List.length field_strings, (* return also the number of visible fields - useful in function arrows *)
+     var_exists) (* and whether there is a varialbe - also useful in function arrows *)
   
   (* returns the presence, but possibly without the colon *)
   (* TODO maybe have this return a Buffer, if that would be more efficient *)
@@ -3014,27 +3031,23 @@ struct
         | Some Absent | Some (Meta _) -> false
         | _ -> failwith "Unexpected field presence value."
       in
-      let maybe_row_var pt =
-        let found = Unionfind.find pt in
-        match found with
-        | Closed -> None
-        | _ -> Some found 
-      in
       fun ?(is_lolli=false) ctx p r ->
-      let { buffer; write; concat; _  } = create_buffer () in
+      let { buffer; write; _ } = create_buffer () in
       match r with
-      | (Row (fields, rv, _)) as r' ->
+      | (Row (fields, _, _)) as r' ->
          let is_wild = is_field_present fields "wild" in
-         let number_of_visible_fields = (FieldEnv.size fields) - (if is_wild then 1 else 0) in
+         let eff_row_string, number_of_visible_fields, row_var_exists = row' ctx p (Effect r') in
+         (* let number_of_visible_fields = (FieldEnv.size fields) - (if is_wild then 1 else 0) in *)
+         dpr' @@ "Effect row: " ^ eff_row_string;
          dpr' @@ "Visible row fields: " ^ string_of_int number_of_visible_fields;
-         let maybe_row_var = maybe_row_var rv in
-         (match number_of_visible_fields, maybe_row_var with
-          | 0, None -> write "{}" (* no fields but closed row var *)
-          | 0, Some v -> (* there is a row variable, but no fields
-                            => use the abbreviated notation -a- or ~a~ *)
+         dpr' @@ "And a row var exists: " ^ string_of_bool row_var_exists;
+         (match number_of_visible_fields, row_var_exists with
+          | 0, false -> write "{}" (* no fields but closed row var *)
+          | 0, true -> (* there is a row variable, but no fields
+                          => use the abbreviated notation -a- or ~a~ *)
              (* need to see if the variable is anonymous, then skip as well *)
              begin
-               match v with
+               match Unionfind.find (extract_row_parts r |> snd3) with (* TODO temporary solution *)
                | Var (vid, knd, _) ->
                   let is_anonymous = is_var_anonymous ctx p vid in
                   if is_anonymous
@@ -3057,12 +3070,11 @@ struct
                    * write varname *)
              end
           | _ -> (* need the full effect row *)
-             let row_str = row ~maybe_tuple:(Some false) ~strip_wild:true
-                             ~concise_hear:true (* TODO maybe there is a policy for this? *)
-                             ~space_row_var:true
-                             "," ctx p r' in
-             dpr' ("Effect row str: " ^ row_str);
-             concat [ "{" ; row_str ; "}" ]);
+             (* let row_str = row ~maybe_tuple:(Some false) ~strip_wild:true
+              *                 ~concise_hear:true (\* TODO maybe there is a policy for this? *\)
+              *                 ~space_row_var:true
+              *                 "," ctx p r' in *)
+             write eff_row_string);
          (if is_wild
           then write "~"
           else write "-");
@@ -3078,9 +3090,9 @@ struct
     fun ?(is_lolli=false) ctx p domain effects range ->
     (* dpr' "func"; *)
     let { buffer; concat; add_buffer; _ } = create_buffer () in
-    let domain = extract_row domain in
     let effects, _ = unwrap_row effects in
-    concat [ "(" ; (row ~maybe_tuple:(Some true) "," ctx p domain) ; ") " ];
+    (* concat [ "(" ; (row ~maybe_tuple:(Some true) "," ctx p domain) ; ") " ]; *)
+    concat [ "(" ; (row' ctx p domain |> fst3) ; ") " ];
     add_buffer (func_arrow ~is_lolli:is_lolli ctx p effects);
     concat [ " " ; datatype ctx p range ];
     buffer
@@ -3203,7 +3215,7 @@ struct
   and datatype : context -> policy * names -> datatype -> string =
     fun ctx p (* ?(seen_metas=None) *) tp ->
     (* dpr' "datatype"; *)
-    let { write; concat; read; add_buffer; _ } = create_buffer () in
+    let { write; read; add_buffer; _ } = create_buffer () in
     begin
       match tp with
       | Not_typed -> write "Not typed" (* keeping this in case we ever need to print some intermediate steps *)
@@ -3241,7 +3253,7 @@ struct
       | Dual tp -> add_buffer (session_dual ctx p tp)
       | End -> write "End" (* TODO think this is just a contructor-like thingy? *)
 
-      | (Record _ | Variant _ | Effect _ | Row _ | Select _ | Choice _ ) as r -> write (row' ctx p r)
+      | (Record _ | Variant _ | Effect _ | Row _ | Select _ | Choice _ ) as r -> write (row' ctx p r |> fst3)
 
       | _ -> failwith ("Printer for this type not implemented:\n" ^ show_datatype @@ DecycleTypes.datatype tp)
     end;
