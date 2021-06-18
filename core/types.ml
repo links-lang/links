@@ -2806,13 +2806,15 @@ let extend_row fields row =
   fst (extend_row_check_duplicates fields row)
 
 let open_row subkind = function
-  | Row (fieldenv, _, dual) ->
+  | Row (fieldenv, rho, dual) when rho = closed_row_var ->
      Row (fieldenv, fresh_row_variable subkind, dual)
+  | Row _ -> raise (internal_error "attempt to open an already open row")
   | _ -> raise tag_expectation_mismatch
 
 let close_row = function
-  | Row (fieldenv, _, dual) ->
+  | Row (fieldenv, rho, dual) when rho <> closed_row_var ->
      Row (fieldenv, closed_row_var, dual)
+  | Row _ -> raise (internal_error "attempt to close an already closed row")
   | _ -> raise tag_expectation_mismatch
 
 let closed_wild_row = make_singleton_closed_row wild_present
