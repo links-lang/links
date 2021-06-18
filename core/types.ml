@@ -1651,6 +1651,10 @@ let xml_type      = Alias (("Xml", [], [], false), Application (list, [(PrimaryK
 let database_type = Primitive Primitive.DB
 (* Empty type, used for exceptions *)
 let empty_type    = Variant (make_empty_closed_row ())
+let wild = "wild"
+let hear = "hear"
+let wild_present   = (wild, Present unit_type)
+let hear_present t = (hear, Present t)
 
 
 (* precondition: the row is unwrapped *)
@@ -2135,12 +2139,12 @@ struct
            ppr_eff_var ~args ~allows_shared row_var ("{}-" ^ ah)
                ("-%-" ^ ah, fun name -> "-%" ^ name ^ "-" ^ ah)
                ("-" ^ ah,   fun name -> "-"  ^ name ^ "-" ^ ah)
-         else if fields_present ["wild"]
+         else if fields_present [wild]
          then
            ppr_eff_var ~args ~allows_shared row_var ("{}~" ^ ah)
                ("~%~" ^ ah, fun name -> "~%" ^ name ^ "~" ^ ah)
                ("~" ^ ah,   fun name -> "~"  ^ name ^ "~" ^ ah)
-         else if fields_present ["hear"; "wild"]
+         else if fields_present [hear; wild]
          then
            let ht' = ht fields in
            ppr_eff_var ~args ~allows_shared row_var ("{:" ^ ht' ^ "}~" ^ ah)
@@ -2151,8 +2155,8 @@ struct
                 invoke row on the original wrapped version of
                 the effect row *)
            let row = row ~name:(fun _ _ -> name_of_eff_var ~allows_shared) in
-           if FieldEnv.mem "wild" fields &&
-             is_present (FieldEnv.find "wild" fields) then
+           if FieldEnv.mem wild fields &&
+             is_present (FieldEnv.find wild fields) then
              "{" ^ row ~strip_wild:true "," context p effects ^ "}~" ^ ah
            else
              "{" ^ row "," context p effects ^ "}-" ^ ah
@@ -2222,13 +2226,13 @@ struct
          | Primitive p     -> Primitive.to_string p
          | Function (args, effects, t) ->
             let ht fields =
-              match FieldEnv.find "hear" fields with
+              match FieldEnv.find hear fields with
               | Present t -> sd t
               | _          -> assert false in
             ppr_function_type args effects t ">" ht
          | Lolli    (args, effects, t) ->
             let ht fields =
-              sd (match FieldEnv.find "hear" fields with
+              sd (match FieldEnv.find hear fields with
                   | Present t -> t
                   | _          -> assert false)
             in ppr_function_type args effects t "@" ht
@@ -2334,7 +2338,7 @@ struct
        let field_strings =
          FieldEnv.fold
            (fun label f field_strings ->
-             if strip_wild && label = "wild" then
+             if strip_wild && label = wild then
                field_strings
              else
                (label ^ presence context p f) :: field_strings)
@@ -2800,6 +2804,29 @@ let extend_row_safe fields row =
   | (row', false) -> Some row'
 let extend_row fields row =
   fst (extend_row_check_duplicates fields row)
+
+let open_row subkind = function
+  | Row (fieldenv, _, dual) ->
+     Row (fieldenv, fresh_row_variable subkind, dual)
+  | _ -> raise tag_expectation_mismatch
+
+let close_row = function
+  | Row (fieldenv, _, dual) ->
+     Row (fieldenv, closed_row_var, dual)
+  | _ -> raise tag_expectation_mismatch
+
+let closed_wild_row = make_singleton_closed_row wild_present
+
+let remove_field : ?idempotent:bool -> Label.t -> row -> row
+  = fun ?(idempotent=true) lbl row ->
+  match row with
+  | Row (fieldenv, var, dual) ->
+     if idempotent || StringMap.mem lbl fieldenv
+     then Row (StringMap.remove lbl fieldenv, var, dual)
+     else raise (internal_error "attempt to remove non-existent field")
+  | _ -> raise tag_expectation_mismatch
+
+
 
 let make_closed_row : datatype field_env -> row =
   fun fields ->
