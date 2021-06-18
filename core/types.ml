@@ -1704,6 +1704,35 @@ let extract_tuple = function
          | _ -> raise tag_expectation_mismatch) field_env
   | _ -> raise tag_expectation_mismatch
 
+(* Some helper functions from typeUtils.ml, to prevent cyclical dependencies *)
+exception TypeDestructionError of string
+
+let extract_row t = match concrete_type t with
+  | Effect row
+  | Record row -> row
+  | Variant row -> row
+  | t ->
+      raise @@ TypeDestructionError
+                 ("Internal error: attempt to extract a row from a datatype that is not a record or a variant: "
+                  ^ show_datatype @@ DecycleTypes.datatype t)
+
+let extract_row_parts : t -> row' = function
+    | Row parts -> parts
+    | t -> raise @@ TypeDestructionError
+                      ("Internal error: attempt to extract row parts from a datatype that is not a row "
+                       ^ show_datatype @@ DecycleTypes.datatype t)
+
+let rec effect_row ?(overstep_quantifiers=true) t =
+  match (concrete_type t, overstep_quantifiers)  with
+  | (ForAll (_, t), true) -> effect_row t
+  | (Function (_, effects, _), _) -> effects
+  | (Lolli (_, effects, _), _) -> effects
+  | (t, _) ->
+     raise @@ TypeDestructionError ("Attempt to take effects of non-function: " ^ show_datatype @@ DecycleTypes.datatype t)
+
+
+(* END of the typeUtils.ml stuff *)
+
 let show_raw_type_vars
   = Settings.(flag "show_raw_type_vars"
               |> synopsis "Print type variables as raw numbers rather than letters"
@@ -2727,7 +2756,7 @@ struct
     let subknd_name = subkind_name p subknd in
     (* TODO inline the above for optimization *)
 
-    let prt_name = concat ([ (if is_presence then "{" else "") ;
+    let prt_name = concat ([ (if is_presence then "{" else "<:>") ;
                              (if show_flexible then "%" else "") ;
                              (match is_anonymous, show_flexible with
                               | true, true -> "" (* simplifies by rule (4) *)
@@ -2862,6 +2891,53 @@ struct
                  meta ctx p pt (* TODO This happens in tests/typed_ir.tests/Generalisation obeys value restriction (#871)
                                 * not entirely sure where this Meta is coming through, I though it could be via type_arg *)
     | _ -> failwith ("Invalid row: " ^ show_datatype @@ DecycleTypes.datatype r)
+
+  and row' : context -> policy * names -> typ -> string =
+    fun ctx p r ->
+    let unrolled = unwrap_row r |> fst in
+    let r', before, after, sep, is_tuple, hide_units =
+      match r with
+      | Record r ->
+         let is_tuple = is_tuple unrolled in
+         r, "(", ")", (if is_tuple then ", " else ","), is_tuple, false
+      | Variant r -> r, "[|", "|]", "|", false, true
+      | Effect r -> r, "{", "}", ",", false, false
+      | Select r -> r, "[+|", "|+]", ",", false, false
+      | Choice r -> r, "[&|", "|&]", ",", false, false
+      (* | Row _ -> "", "", ",", false *) (* This should be invalid *)
+      | _ -> failwith ("[*R] Invalid row:\n" ^ show_datatype @@ DecycleTypes.datatype r)
+    in
+    let rfields, rvar, rdual = extract_row_parts r' in
+    let field_strings =
+      begin
+        let hide_wild_hear =
+          match r with
+          | Effect _ -> true
+          | _ -> false
+        in
+        let fold = fun label fld accumulator ->
+          match label with
+          | "wild" when hide_wild_hear -> accumulator (* skip wild *)
+          | "hear" when hide_wild_hear ->
+             (* string_of_fld "" fld :: accumulator *)
+             (presence_type ~want_colon:true (* if hear can be presence-polymorphic then this is not granular enough *) ~hide_units ctx p fld) :: accumulator
+          | _ when is_tuple ->
+             (* string_of_fld "" fld :: accumulator *)
+             (presence_type ~want_colon:false ~hide_units ctx p fld) :: accumulator
+          | _ ->
+             concat [label ; presence_type ~want_colon:true ~hide_units ctx p fld]
+             :: accumulator
+        in
+        List.rev (FieldEnv.fold fold rfields [])
+      end
+    in
+    let var_string = "" in
+    (* make sure we don't print \{\|... but { |... when there are no fields *)
+    let field_strings = (if ((List.length field_strings) = 0) && (before = "{")
+                         then [" "]
+                         else field_strings)
+    in
+    concat [before ; concat ~sep field_strings ; "|" ; var_string ; after ]
   
   (* returns the presence, but possibly without the colon *)
   (* TODO maybe have this return a Buffer, if that would be more efficient *)
@@ -2882,7 +2958,8 @@ struct
              (if want_colon then write ":" else ());
              write (datatype ctx p tp)
         end
-     | Meta pt -> (if want_colon then write ":" else ()); (* TODO colon shouldn't happen here? *)
+     | Meta pt -> ((* if want_colon then write ":" else () *));
+                  (* TODO detect what's inside, see if colon is needed *)
                   write (meta ctx p ~is_presence:true pt) (* let datatype handle Meta *)
      | _ -> failwith "Type not implemented");
     read ()
@@ -2946,7 +3023,7 @@ struct
       fun ?(is_lolli=false) ctx p r ->
       let { buffer; write; concat; _  } = create_buffer () in
       match r with
-      | (Row (fields, rv, _)) as row' ->
+      | (Row (fields, rv, _)) as r' ->
          let is_wild = is_field_present fields "wild" in
          let number_of_visible_fields = (FieldEnv.size fields) - (if is_wild then 1 else 0) in
          dpr' @@ "Visible row fields: " ^ string_of_int number_of_visible_fields;
@@ -2983,7 +3060,7 @@ struct
              let row_str = row ~maybe_tuple:(Some false) ~strip_wild:true
                              ~concise_hear:true (* TODO maybe there is a policy for this? *)
                              ~space_row_var:true
-                             "," ctx p row' in
+                             "," ctx p r' in
              dpr' ("Effect row str: " ^ row_str);
              concat [ "{" ; row_str ; "}" ]);
          (if is_wild
@@ -3001,13 +3078,9 @@ struct
     fun ?(is_lolli=false) ctx p domain effects range ->
     (* dpr' "func"; *)
     let { buffer; concat; add_buffer; _ } = create_buffer () in
-    let dom_row =
-      match domain with
-      | Record x -> x
-      | _ -> failwith ("Illformed function domain:\n" ^ (show_datatype @@ DecycleTypes.datatype domain))
-    in
+    let domain = extract_row domain in
     let effects, _ = unwrap_row effects in
-    concat [ "(" ; (row ~maybe_tuple:(Some true) "," ctx p dom_row) ; ") " ]; (* TODO put this call together with the big match in datatype *)
+    concat [ "(" ; (row ~maybe_tuple:(Some true) "," ctx p domain) ; ") " ];
     add_buffer (func_arrow ~is_lolli:is_lolli ctx p effects);
     concat [ " " ; datatype ctx p range ];
     buffer
@@ -3152,21 +3225,23 @@ struct
       | Function (domain, effects, range) -> add_buffer (func ctx p domain effects range)
       | Lolli (domain, effects, range) -> add_buffer (func ~is_lolli:true ctx p domain effects range)
       
-      | Record r -> concat [ "(" ; (row ~maybe_tuple:None "," (* tuples => space | records => no space *) ctx p r) ; ")" ]
-      | Variant r -> dpr' "Variant";
-                     concat [ "[|" ; (row "|" ctx p r ~hide_units:true) ; "|]" ]
+      (* | Record r -> concat [ "(" ; (row ~maybe_tuple:None "," (\* tuples => space | records => no space *\) ctx p r) ; ")" ]
+       * | Variant r -> dpr' "Variant";
+       *                concat [ "[|" ; (row "|" ctx p r ~hide_units:true) ; "|]" ] *)
       | Table tab -> add_buffer (table ctx p tab)
       | Lens tp -> write (lens tp)
       | ForAll (binding, tp) -> add_buffer (forall ctx p binding tp)
 
-      | Effect r -> concat [ "{"; row "," ctx p r ; "}" ]
-      | Row r -> concat [ (* "R<<"; *) (row " SEP(Row)? " ctx p (Row r)) (* ; ">>" *) ] (* TODO should this case even exist? *)
+      (* | Effect r -> concat [ "{"; row "," ctx p r ; "}" ]
+       * | Row r -> concat [ (\* "R<<"; *\) (row " SEP(Row)? " ctx p (Row r)) (\* ; ">>" *\) ] (\* TODO should this case even exist? *\) *)
 
       (* TODO check if these are correct - largely inspired by how original printer handled these *)
       | Input _ | Output _ -> add_buffer (session_io ctx p tp)
-      | Select _ | Choice _ -> add_buffer (session_select_choice ctx p tp)
+      (* | Select _ | Choice _ -> add_buffer (session_select_choice ctx p tp) *)
       | Dual tp -> add_buffer (session_dual ctx p tp)
       | End -> write "End" (* TODO think this is just a contructor-like thingy? *)
+
+      | (Record _ | Variant _ | Effect _ | Row _ | Select _ | Choice _ ) as r -> write (row' ctx p r)
 
       | _ -> failwith ("Printer for this type not implemented:\n" ^ show_datatype @@ DecycleTypes.datatype tp)
     end;
