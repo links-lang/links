@@ -1,5 +1,5 @@
 let dpr' : string -> unit  =
-  fun x ->
+  fun _ ->
   begin
     (* disabling debug printing for tests; to enable, uncomment the print *)
     (* Printf.printf "%s\n" x;
@@ -2837,11 +2837,7 @@ struct
         List.rev (FieldEnv.fold fold rfields [])
       end
     in
-    let var_string = meta ctx p rvar in
-    (* let field_strings = (if ((List.length field_strings) = 0) && (before = "{")
-     *                      then [" "]
-     *                      else field_strings)
-     * in *)
+    let var_string = concat [ (if rdual then "~" else "") ; meta ctx p rvar ] in
     let n_fields = List.length field_strings in
     let var_exists = (String.length var_string > 0) in
     (concat [before ;
@@ -2885,7 +2881,7 @@ struct
 
   and meta : context -> policy * names -> ?is_presence:bool -> row point -> string =
     fun ctx p ?(is_presence=false) pt ->
-    dpr' "META";
+    dpr' @@ concat ~sep:" " [ "META"; "is_presence =" ; string_of_bool is_presence ];
     match Unionfind.find pt with
     | Closed -> (* nothing happens; TODO but maybe something should *sometimes* happen *)
        dpr' "Closed Meta";
@@ -3353,7 +3349,7 @@ let pp_test_roundtrip
               |> sync)
 
 let test_type_roundtrip : datatype (* -> tycon_environment *) -> string -> bool =
-  fun t (* aliases *) str ->
+  fun _ (* aliases *) _ ->
   (* let open Parse in
    * let dt =
    *   (\* try Some (DesugarDatatypes.read ~aliases str) *\)
