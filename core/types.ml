@@ -2620,21 +2620,6 @@ struct
            | _ -> Some (full_name ({ policy with kinds="full" }, vars) knd)
          end
 
-  let name_of_type : context -> policy * names -> tid -> Subkind.t -> string -> (string -> string) -> string =
-    fun {bound_vars; _} p var subk name name_fun ->
-    let plain = name_of_type_plain bound_vars p var name name_fun in
-    let sk = subkind_name p subk in
-    let out_buf = Buffer.create 10 in
-    begin
-      Buffer.add_string out_buf plain;
-      match sk with
-      | Some buf -> Buffer.add_string out_buf "::";
-                    Buffer.add_buffer out_buf buf
-      | None -> ()
-    end;
-    Buffer.contents out_buf
-
-  
   let strip_quantifiers : typ -> typ =
     function
     | ForAll (_, t) | t -> t
@@ -2649,13 +2634,11 @@ struct
     is_unique && hide_fresh && not is_bound
   
   (* string_of_var : context -> policy * names -> VAR -> string *)
-  let rec var : ?name_of_type:'a -> context -> policy * names ->
-                ?is_presence:bool -> tid -> Kind.t -> string =
-    fun ?(name_of_type=name_of_type (* do not use *)) ({bound_vars; _} as ctx) ((policy, names) as p)
-        ?(is_presence=false) vid knd ->
+  let rec var : context -> policy * names -> tid -> Kind.t -> string =
+    fun ctx ((policy, names) as p) vid knd ->
     
     let subknd = Kind.subkind knd in
-    let var_name, (flavour, _ (* kind already known *), count) = Vars.find_spec vid names in
+    let var_name, (flavour, _ (* kind already known *), _) = Vars.find_spec vid names in
     (* Rules of printing vars:
      * 1) If var only appears once (count = 1) & (policy.hide_fresh = true) => only as don't-care "_" [is_unique]
      * 2) But also if the var is bound (in context.bound_vars) it has to appear (by name -> overrides (1))! [is_bound]
@@ -2748,12 +2731,8 @@ struct
     concat_buffers ~sep:sep field_buf_list;
     buf, count
   
-  and row_var :
-        (context ->
-         policy * names ->
-         tid -> Subkind.t -> string -> (string -> string) -> string) ->
-        istring -> context -> policy * names -> row_var -> istring option =
-    fun _ sep (* TODO what is sep for? *) ctx p rv ->
+  and row_var : context -> policy * names -> row_var -> istring option =
+    fun ctx p rv ->
     (* dpr' "row_var"; *)
     let v = Unionfind.find rv in
     match v with
@@ -2764,15 +2743,12 @@ struct
   
   and row :
         (* ?name not used, it's just to keep the signature compatible for now *)
-        ?name:(context ->
-               policy * names ->
-               tid -> Subkind.t -> istring -> (istring -> istring) -> istring) ->
         ?maybe_tuple:bool option -> (* ?maybe_tuple is ternary: None => maybe, Some true => yes, Some false => no *)
         ?hide_units:bool -> (* for variants *)
         ?strip_wild:bool -> ?concise_hear:bool -> ?space_row_var:bool ->
         string -> context -> policy * names -> row -> string =
 
-    fun ?(name=name_of_type) ?(maybe_tuple=(Some false)) ?(hide_units=false) ?(strip_wild=false)
+    fun ?(maybe_tuple=(Some false)) ?(hide_units=false) ?(strip_wild=false)
         ?(concise_hear=false) ?(space_row_var=false) sep ctx p r ->
     dpr' "row";
     let r, is_tuple =
@@ -2791,8 +2767,7 @@ struct
        let fields_string, fields_shown = fields r_fields in
        add_buffer fields_string;
        (* dpr' @@ concat ["Fields (if not tuple):" ; Buffer.contents @@ row_fields ctx p strip_wild ~is_tuple:false ~sep:sep r_fields]; *)
-       let var = row_var name sep (* TODO this sep is not necessary (came from old code, to preserve signature) *)
-                   ctx p r_var in
+       let var = row_var ctx p r_var in
        begin
          match var with
          | Some s -> (if space_row_var && fields_shown = 0
@@ -2814,7 +2789,8 @@ struct
     let unrolled =
       (match r with
        | Row r -> Row r
-       | _ -> extract_row r) |> unwrap_row |> fst in
+       | _ -> extract_row r)
+      |> unwrap_row |> fst in
     (* let unrolled = extract_row r |> unwrap_row |> fst in *)
     let r', before, after, sep, is_tuple, hide_units =
       match r with
@@ -2907,7 +2883,7 @@ struct
     | Closed -> (* nothing happens; TODO but maybe something should *sometimes* happen *)
        dpr' "Closed Meta";
        ""
-    | Var (id, knd, _) -> var ctx p ~is_presence id knd
+    | Var (id, knd, _) -> var ctx p id knd
     | Recursive r -> recursive ctx p r
     | t -> dpr' (concat [ "Meta - other type:\n" ; show_datatype @@ DecycleTypes.datatype t ]);
            datatype ctx p t
@@ -3482,8 +3458,7 @@ let string_of_row_var ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) ro
   match
     begin
       if Settings.get use_new_type_pp then
-        NewPrint.row_var (fun _ _ _ _ _ _ -> "" (* TODO this will not be here, was just kept to preserve signature for now*))
-          "," NewPrint.empty_context (policy (), Vars.tyvar_name_map) row_var
+        NewPrint.row_var NewPrint.empty_context (policy (), Vars.tyvar_name_map) row_var
       else
         Print.row_var Print.name_of_type "," Print.empty_context (policy (), Vars.tyvar_name_map) row_var
     end
