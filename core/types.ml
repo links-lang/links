@@ -4,7 +4,7 @@ let dpr' : string -> unit  =
     (* disabling debug printing for tests; to enable, uncomment the print *)
     (* Printf.printf "%s\n" x;
      * flush_all () *)
-    
+
     (* it does flushing because at one point I thought my prints weren't actually showing up;
      * that issue is now resolved but I kept it just in case *)
   end
@@ -2509,7 +2509,7 @@ struct
     (* = Settings.(flag "show_flavours"
      *             |> convert parse_bool
      *             |> sync) *)
-  
+
   let show_kinds = Print.show_kinds
     (* = Settings.(option ~default:(Some "default") "show_kinds"
      *             |> to_string from_string_option
@@ -2632,11 +2632,11 @@ struct
     let is_unique = (count = 1) in
     let is_bound = IntSet.mem vid bound_vars in
     is_unique && hide_fresh && not is_bound
-  
+
   (* string_of_var : context -> policy * names -> VAR -> string *)
   let rec var : context -> policy * names -> tid -> Kind.t -> string =
     fun ctx ((policy, names) as p) vid knd ->
-    
+
     let subknd = Kind.subkind knd in
     let var_name, (flavour, _ (* kind already known *), _) = Vars.find_spec vid names in
     (* Rules of printing vars:
@@ -2644,7 +2644,7 @@ struct
      * 2) But also if the var is bound (in context.bound_vars) it has to appear (by name -> overrides (1))! [is_bound]
      * 3) If a var is flexible (and policy.flavours = true), then it gets a prefix "%" [show_flexible]
      * 4) Don't-care simplifies: "%_" => "%"
-     * 5) Within Presence (Meta (Var ...)), gets surrounded by "{ ... }" 
+     * 5) Within Presence (Meta (Var ...)), gets surrounded by "{ ... }"
      *    (or "{% ... }" if Flexible, but the % will be contributed by rule (3)) [is_presence]
      *)
     (* let is_bound = IntSet.mem vid bound_vars in *)
@@ -2733,7 +2733,7 @@ struct
     (* List.iter (fun x -> dpr' (Buffer.contents x)) field_buf_list; *)
     concat_buffers ~sep:sep field_buf_list;
     buf, count
-  
+
   and row_var : context -> policy * names -> row_var -> istring option =
     fun ctx p rv ->
     (* dpr' "row_var"; *)
@@ -2743,7 +2743,7 @@ struct
     | Var (id, knd, _) -> Some (var ctx p id knd)
     | Recursive v -> Some (recursive ctx p v ~want_parens:true)
     | _ -> Some (datatype ctx p v)
-  
+
   and row :
         (* ?name not used, it's just to keep the signature compatible for now *)
         ?maybe_tuple:bool option -> (* ?maybe_tuple is ternary: None => maybe, Some true => yes, Some false => no *)
@@ -2850,7 +2850,7 @@ struct
              var_string ; after ],
      List.length field_strings, (* return also the number of visible fields - useful in function arrows *)
      var_exists) (* and whether there is a varialbe - also useful in function arrows *)
-  
+
   (* returns the presence, but possibly without the colon *)
   (* TODO maybe have this return a Buffer, if that would be more efficient *)
   and presence_type : want_colon:bool -> ?hide_units:bool -> context -> policy * names -> typ -> string =
@@ -2875,7 +2875,7 @@ struct
                   write (meta ctx p ~is_presence:true pt)
      | _ -> failwith "[*p] Type not implemented");
     read ()
-  
+
   and presence : context -> policy * names -> typ -> string =
     fun ctx p tp -> presence_type ~want_colon:true (* this may be context sensitive? *) ctx p tp
 
@@ -2916,9 +2916,9 @@ struct
     | (abstp, args) ->
        let name = Abstype.name abstp in
        concat ([ name ; " (" ] @ List.map (type_arg ctx p) args @ [")"])
-  
+
   and func : ?is_lolli:bool -> context -> policy * names -> typ -> row -> typ -> Buffer.t =
-    
+
     let func_arrow : ?is_lolli:bool -> context -> policy * names -> row -> Buffer.t =
       let is_field_present fields fld =
         match FieldEnv.lookup fld fields with
@@ -2977,7 +2977,7 @@ struct
          buffer
       | _ -> failwith ("Illformed effect:\n" ^ datatype ctx p r)
     in
-    
+
     (* func starts here *)
     fun ?(is_lolli=false) ctx p domain effects range ->
     (* dpr' "func"; *)
@@ -3041,7 +3041,7 @@ struct
     let var = Quantifier.to_var qr in
     let var_name = Vars.find var vars in
     let knd = Quantifier.to_kind qr in
-    let knd_name = kind_name p knd in 
+    let knd_name = kind_name p knd in
     let { write; read; add_buffer; _ } = create_buffer () in
     write var_name;
     (match knd_name with
@@ -3104,7 +3104,7 @@ struct
     concat ~sep:"," [ datatype' r ; datatype' w ; datatype' n ];
     write ")";
     buffer
-  
+
   and datatype : context -> policy * names -> datatype -> string =
     fun ctx p (* ?(seen_metas=None) *) tp ->
     (* dpr' "datatype"; *)
@@ -3112,7 +3112,7 @@ struct
     begin
       match tp with
       | Not_typed -> write "Not typed" (* keeping this in case we ever need to print some intermediate steps *)
-      
+
       (* In original printer, these would fail, saying Var | Recursive | Closed can be only within Meta,
        * but I think it's not the printer's job to check this, instead only print what was received?
        * (though I don't know how Closed would even print, so not doing that) *)
@@ -3126,10 +3126,10 @@ struct
       | Meta pt -> write (meta ctx p pt)
       | Present t -> write (presence ctx p t) (* TODO want colon? *)
       | Primitive t -> write (primitive t)
-      
+
       | Function (domain, effects, range) -> add_buffer (func ctx p domain effects range)
       | Lolli (domain, effects, range) -> add_buffer (func ~is_lolli:true ctx p domain effects range)
-      
+
       (* | Record r -> concat [ "(" ; (row ~maybe_tuple:None "," (\* tuples => space | records => no space *\) ctx p r) ; ")" ]
        * | Variant r -> dpr' "Variant";
        *                concat [ "[|" ; (row "|" ctx p r ~hide_units:true) ; "|]" ] *)
@@ -3170,7 +3170,7 @@ struct
    *                                                            as 'c) ->
    *    < var : tid option; .. > * 'd) ->
    *   context = *)
-  
+
   (* TODO copied from original to satisfy interface *)
   let maybe_shared_effect = function
     | Function _ | Lolli _ -> true
