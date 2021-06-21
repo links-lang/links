@@ -2673,19 +2673,22 @@ struct
     prt_name
 
   and recursive : context -> policy * names -> ?want_parens:bool -> (tid * Kind.t * typ) -> string =
-    fun ({ bound_vars; _} as ctx) p ?(want_parens=false) (binder, knd, tp) ->
+    fun ({ bound_vars; _} as ctx) ((policy, names) as p) ?(want_parens=false) (binder, knd, tp) ->
     dpr' "recursive";
+    (* assumes that the recursive variable itself shouldn't display kind information,
+     * because the definition of the type itself is right there *)
+    let rec_var_p = ({ policy with kinds = "hide" }, names) in
     if IntSet.mem binder bound_vars
     then (* this recursive was already seen -> just need the variable name *)
       begin
         dpr' "Already seen mu";
-        var ctx p binder knd
+        var ctx rec_var_p binder knd
       end
     else (* this the first occurence of this mu -> print the whole type *)
       begin
         dpr' "New mu";
         let inner_context = { ctx with bound_vars = TypeVarSet.add binder bound_vars } in
-        let name = var inner_context p binder knd in
+        let name = var inner_context rec_var_p binder knd in
         concat [ (if want_parens then "(" else "") ;
                  "mu " ; name ; " . " ; datatype inner_context p tp ;
                  (if want_parens then ")" else "") ]
