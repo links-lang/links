@@ -204,6 +204,10 @@ def main():
 
     # Process the body.
     for name, code, opts in stream:
+        # Combines the options set in the header with the ones specific to this
+        # test case. The latter ones overwrite the ones from the header.
+        opts = {**header, **opts}
+
         # enqueues execution of
         # evaluate(name, code, config_file, **opts)
         # in the thread pool
