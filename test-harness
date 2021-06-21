@@ -202,7 +202,7 @@ def main():
     if config_file == None and "config" in header:
         config_file = header["config"]
         # Must remove the "config" key because we combine the header-provided
-        # options with the  per-file ones later on. However, the global config
+        # options with the per-file ones later on. However, the global config
         # file must be provided via the config_file parameter of evaluate only.
         del header["config"]
 
