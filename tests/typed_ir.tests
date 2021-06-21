@@ -87,8 +87,9 @@ stdout : () : ()
 
 Call/cc
 sig callcc : (((a) ~> b) ~e~> a) ~e~> a fun callcc(f) { escape k in f(k) }
-exit : 0 
+exit : 0
 stdout : () : ()
+
 asList (#698)
 tests/typed_ir/T698.links
 filemode : true
