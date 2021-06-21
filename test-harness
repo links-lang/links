@@ -216,18 +216,17 @@ def main():
         # enqueues execution of
         # evaluate(name, code, config_file, **opts)
         # in the thread pool
-        jobs.append(tp.submit(evaluate, name, code, config_file, **opts))
+        jobs.append((name, tp.submit(evaluate, name, code, config_file, **opts)))
 
     # Wait for all jobs to finish
     tp.shutdown(wait=True)
 
     # Check that none of the jobs raised an exception:
-    exceptions = [ j.exception() for j in jobs ]
-    if any(exceptions):
-      raise SystemExit(("Error: One of the test jobs failed to execute, producing"
-                        "the following exception:\n%s")
-                       % next(iter(exceptions)))
-
+    for (job_name, result) in jobs:
+        if result.exception():
+            raise SystemExit(("Error: Test \"%s\" failed to execute, producing "
+                              "the following exception:\n%s")
+                             % (job_name, result.exception()))
 
     print("%d failures (+%d ignored)\n%d successes\n" % (failures, ignored, successes))
     if failures > 0:
