@@ -2492,10 +2492,7 @@ let concat : ?sep:string -> string list -> string =
   read ()
 
 (* New type pretty printer (Samo) *)
-module NewPrint =
-struct
-  module BS = Basicsettings
-
+module NewPrint = struct
   (* TODO maybe it can all be done by having "inner" functions that just pass a Buffer around,
      and wrapping those in "outer" functions that return just a string to match the interface signature? *)
 
@@ -2521,6 +2518,87 @@ struct
      *             |> convert parse_bool
      *             |> sync) *)
 
+
+  (* TODO(dhil): Encapsulate inside a StringBuffer structure. *)
+  type 'a printer = Printer of (context -> 'a -> StringBuffer.t -> unit)
+                  | Empty
+
+  module StringBuffer = struct
+    type t = Buffer.t
+
+
+    let out : t -> string -> unit
+      = Buffer.add_string
+
+    let write : t -> string -> unit
+      = fun buf s -> Buffer.add_string buf s
+
+    let seq : sep:string -> ('a printer * 'b printer) -> ('a * 'b) -> unit printer
+      = fun ~sep (lp,rp) (x,y) ctxt () buf ->
+      match lp, rp with
+      | Printer l, Printer r ->
+         l ctxt x buf;
+         out buf sep;
+         r ctxt y buf
+      | Printer p, Empty ->
+         p ctxt x buf
+      | Empty, Printer p ->
+         p ctxt y buf
+      | Empty, Empty -> ()
+  end
+
+  module Context = struct
+    type policy = pp_policy
+
+    type names  = (int, string * Vars.spec) Hashtbl.t
+
+    type ambient = Toplevel
+                 | Function
+                 | Presence
+
+    type t = { policy: policy
+             ; bound_vars: TypeVarSet.t
+             ; tyvar_names: names
+             ; ambient: ambient
+             ; shared_effect: int option }
+
+    let default_policy : unit -> policy
+      = fun () ->
+      { quantifiers = Settings.get show_quantifiers
+      ; flavours    = Settings.get show_flavours
+      ; hide_fresh  = Settings.get hide_fresh_type_vars
+      ; kinds       = val_of (Settings.get show_kinds)
+      ; effect_sugar= Settings.get effect_sugar }
+
+    let empty () = { policy        = default_policy ()
+                   ; bound_vars    = TypeVarSet.empty
+                   ; tyvar_names   = Hashtbl.create 0
+                   ; ambient       = Toplevel
+                   ; shared_effect = None }
+
+    let bind_tyvar : tid -> t -> t
+      = fun ident ({ bound_vars; _ } as ctxt) ->
+      { ctxt with bound_vars = TypeVarSet.add ident bound_vars }
+
+    let tyvar_names : t -> names
+      = fun { tyvar_names; _ } -> tyvar_names
+
+    let bound_vars : t -> TypeVarSet.t
+      = fun { bound_vars; _ } -> bound_vars
+
+    let policy : t -> policy
+      = fun { policy; _ } -> policy
+    let set_policy : policy -> t -> t
+      = fun ctxt policy -> { ctxt with policy }
+
+    let ambient : t -> ambient
+      = fun { ambient; _ } -> ambient
+    let set_ambient : ambient -> t -> t
+      = fun ambient ctxt -> { ctxt with ambient }
+  end
+
+  module BS = Basicsettings
+
   (* Set the quantifiers to be true to display any outer quantifiers.
      Set flavours to be true to distinguish flexible type variables
      from rigid type variables. *)
@@ -2530,71 +2608,47 @@ struct
   type context = { bound_vars: TypeVarSet.t; shared_effect: int option }
 
 
-  let default_policy (() : unit) : policy =
-    {quantifiers=Settings.get show_quantifiers;
-     flavours=Settings.get show_flavours;
-     hide_fresh=Settings.get hide_fresh_type_vars;
-     kinds=val_of (Settings.get show_kinds);
-     effect_sugar=Settings.get effect_sugar}
-
   let empty_context : context = { bound_vars = TypeVarSet.empty;
                                   shared_effect = None }
 
-  (* Taken from the original printer
-     (but I renamed some stuff for my own sake, can rename it back later if required) *)
-  let name_of_type_plain : TypeVarSet.t -> policy * names -> tid -> string -> (string -> string) -> string =
-    fun bound_vars (policy, vars) var name name_fun ->
-    let var_name, (flavour, _, count) = Vars.find_spec var vars in
-    (* TODO *)
-    if policy.hide_fresh && count = 1 && ((flavour = `Flexible && not (policy.flavours))
-                                          || not (IntSet.mem var bound_vars))
-    then name
-    else name_fun var_name
-
-  let subkind_name : policy * names -> Subkind.t -> Buffer.t option (* TODO infrastrucuture *) =
-    let full_name = fun (lin, res) ->
-      let { buffer; concat; _ } = create_buffer () in
-      begin
-        concat [ "(" ; (Linearity.to_string lin) ; "," ;
-                 (Restriction.to_string res) ; ")" ];
-        buffer
-      end
+  let subkind_name : SubKind.t printer
+    = Printer (fun ctxt sk buf ->
+    let open StringBuffer in
+    let full_name (lin, res) =
+      write buf "(";
+      write buf (Linearity.to_string lin);
+      write buf ",";
+      write buf (Restriction.to_string res);
+      write buf ")"
     in
-    fun (policy, _) sk ->
-    match policy.kinds with
-    | "full" -> Some (full_name sk)
-    | "hide" -> None
+    match (Context.policy ctxt).kinds with
+    | "full" -> write buf (full_name sk)
+    | "hide" -> ()
     | _ ->
-       let wrap = (* maybe this is overhead?
-                     -> if so, could return Either or some other variant *)
-         fun s ->
-         let buffer = wrap_buffer s in (* TODO also maybe I'll get rid of this definitin *)
-         Some buffer
-       in
        let module Lin = Linearity in
        let module Res = Restriction in
-       match sk with
-       | (Lin.Unl, Res.Any)     -> None
-       | (Lin.Any, Res.Any)     -> wrap "Any"
-       | (Lin.Unl, Res.Base)    -> wrap (Res.to_string res_base)
-       | (Lin.Any, Res.Session) -> wrap (Res.to_string res_session)
-       | (Lin.Unl, Res.Effect)  -> wrap (Res.to_string res_effect)
-       | _ -> Some (full_name sk)
+       let sk_str =
+         match sk with
+         | (Lin.Unl, Res.Any)     -> ""
+         | (Lin.Any, Res.Any)     -> "Any"
+         | (Lin.Unl, Res.Base)    -> Res.to_string res_base
+         | (Lin.Any, Res.Session) -> Res.to_string res_session
+         | (Lin.Unl, Res.Effect)  -> Res.to_string res_effect
+         | _ -> full_name sk; ""
+       in
+       write buf sk_str)
 
-  let kind_name : policy * names -> Kind.t -> Buffer.t option =
-    let full_name = fun p (k, sk) ->
-      let { buffer; write; add_buffer; _ } = create_buffer() in
-      write (PrimaryKind.to_string k);
-      (match subkind_name p sk with
-       | None -> ()
-       | Some b -> add_buffer b);
-      buffer
+  let kind_name : Kind.t printer
+    = Printer (fun ctxt ((primary, subknd) as knd) buf ->
+    let open StringBuffer in
+    let full_name ctxt (k, sk) buf =
+      write buf (PrimaryKind.to_string k);
+      subkind_name ctxt sk buf
     in
-    fun ((policy, vars) as p) ((primary, subknd) as knd) ->
-    let wrap s = Some (wrap_buffer s) in
+    let policy = Context.policy ctxt in
     match policy.kinds with
-    | "full" -> Some (full_name p knd)
-    | "hide" -> wrap (PrimaryKind.to_string primary)
+    | "full" -> full_name ctxt knd buf
+    | "hide" -> write buf (PrimaryKind.to_string primary)
     | _ ->
        let module P = PrimaryKind in
        let module L = Linearity in
@@ -2603,42 +2657,47 @@ struct
        match primary with
        | P.Type -> begin
            match subknd with
-           | L.Unl, R.Any -> None
-           | L.Unl, R.Base -> wrap (R.to_string res_base)
-           | L.Any, R.Session -> wrap (R.to_string res_session)
-           | subknd -> subkind_name ({ policy with kinds="full" }, vars) subknd
+           | L.Unl, R.Any -> ()
+           | L.Unl, R.Base -> write buf (R.to_string res_base)
+           | L.Any, R.Session -> write buf (R.to_string res_session)
+           | subknd ->
+              let ctxt' = Context.set_policy { policy with kinds = "full" } ctxt in
+              subkind_name ctxt' subknd buf
          end
        | PrimaryKind.Row -> begin
            match subknd with
-           | L.Unl, R.Any | L.Unl, R.Effect
-             -> wrap (P.to_string pk_row)
-           | _ -> Some (full_name ({ policy with kinds="full" }, vars) knd)
+           | L.Unl, R.Any | L.Unl, R.Effect ->
+              write buf (P.to_string pk_row)
+           | _ ->
+              let ctxt' = Context.set_policy { policy with kinds = "full" } ctxt in
+              full_name ctxt' knd buf
          end
        | PrimaryKind.Presence -> begin
            match subknd with
-           | L.Unl, R.Any -> wrap (P.to_string pk_presence)
-           | _ -> Some (full_name ({ policy with kinds="full" }, vars) knd)
-         end
+           | L.Unl, R.Any -> write buf (P.to_string pk_presence)
+           | _ ->
+              let ctxt' = Context.set_policy { policy with kinds = "full" } ctxt in
+              full_name ctxt' knd buf
+         end)
 
   let strip_quantifiers : typ -> typ =
     function
     | ForAll (_, t) | t -> t
 
-  let primitive : Primitive.t -> string = Primitive.to_string
+  let primitive : Primtive.t printer
+    = fun _ctxt prim buf ->
+    Printer (StringBuffer.write buf (Primitive.to_string prim))
 
-  let is_var_anonymous : context -> policy * names -> tid -> bool =
-    fun {bound_vars; _} ({hide_fresh ;_}, names) vid ->
-    let _, (_, _, count) = Vars.find_spec vid names in
-    let is_unique = (count = 1) in
-    let is_bound = IntSet.mem vid bound_vars in
-    is_unique && hide_fresh && not is_bound
+  let is_var_anonymous : Context.t -> tid -> bool =
+    fun ctxt vid ->
+    let _, (_, _, count) = Vars.find_spec vid (Context.tyvar_names ctxt) in
+    count = 1 && hide_fresh && not (IntSet.mem vid (Context.bound_vars ctxt))
 
   (* string_of_var : context -> policy * names -> VAR -> string *)
-  let rec var : context -> policy * names -> tid -> Kind.t -> string =
-    fun ctx ((policy, names) as p) vid knd ->
-
+  let rec var : (tid * Kind.t) printer
+    = Printer (fun ctx (vid, knd) buf ->
     let subknd = Kind.subkind knd in
-    let var_name, (flavour, _ (* kind already known *), _) = Vars.find_spec vid names in
+    let var_name, (flavour, _ (* kind already known *), _) = Vars.find_spec vid (Context.tyvar_names ctxt) in
     (* Rules of printing vars:
      * 1) If var only appears once (count = 1) & (policy.hide_fresh = true) => only as don't-care "_" [is_unique]
      * 2) But also if the var is bound (in context.bound_vars) it has to appear (by name -> overrides (1))! [is_bound]
@@ -2650,27 +2709,26 @@ struct
     (* let is_bound = IntSet.mem vid bound_vars in *)
     (* let is_unique = (count = 1) in *)
     (* let hide_name = is_unique && policy.hide_fresh in *)
-    let is_anonymous = is_var_anonymous ctx p vid in
-    let show_flexible = policy.flavours && flavour = `Flexible in
+    let is_anonymous = is_var_anonymous ctx vid in
+    let show_flexible = (Context.policy ctxt).flavours && flavour = `Flexible in
     let is_presence = (PrimaryKind.Presence = Kind.primary_kind knd) in
-    let subknd_name = subkind_name p subknd in
     (* TODO inline the above for optimization *)
-
-    let prt_name = concat ([ (if is_presence then "{" else "") ;
-                             (if show_flexible then "%" else "") ;
-                             (match is_anonymous, show_flexible with
-                              | true, true -> "" (* simplifies by rule (4) *)
-                              | true, false -> "_" (* not doing %, hence an anonymous var has to be explicit *)
-                              | _ -> var_name (* named variable *)
-                             ) ;
-                             (if is_presence then "}" else "") ]
-                           @
-                             (match subknd_name with
-                              | Some s -> ["::" ; Buffer.contents s] (* TODO make the infrastructure more sensible *)
-                              | None -> []))
+    let print_var : string printer =
+      Printer (ctxt var_name buf =
+      (if is_presence then write buf "{");
+      (if show_flexible then write buf "%");
+      (match is_anonymous, show_flexible with
+       | true, true  -> ()
+       | true, false -> write buf "_"
+       | _, _        -> write buf var_name);
+      (if is_presence then write buf "}"))
     in
-    dpr' @@ concat [ "var => " ; prt_name ];
-    prt_name
+    let print_subkind : SubKind.t printer
+      = match (Context.policy ctxt).kinds with
+      | "hide" -> Empty
+      | _      -> subkind_name
+    in
+    StringBuffer.seq ~sep:"::" (print_var, print_subkind) (var_name,subknd))
 
   and recursive : context -> policy * names -> ?want_parens:bool -> (tid * Kind.t * typ) -> string =
     fun ({ bound_vars; _} as ctx) ((policy, names) as p) ?(want_parens=false) (binder, knd, tp) ->
