@@ -2093,7 +2093,7 @@ struct
 
   (** If type variable names are hidden return a generic name n1. Otherwise
      pass name of type variable to n2 so that it can construct a name. *)
-  let name_of_type_plain { bound_vars; _ } (policy, vars : policy * names) (var : tid) (* is it really tid? *) (n1 : string) (n2 : string -> string) =
+  let name_of_type_plain { bound_vars; _ } (policy, vars : policy * names) var n1 n2 =
     let name, (flavour, _, count) = Vars.find_spec var vars in
     if policy.hide_fresh && count = 1
        && ((flavour = `Flexible && not (policy.flavours)) || not (IntSet.mem var bound_vars))
@@ -2109,9 +2109,7 @@ struct
     | Row b -> is_row_var known b
     | _ -> false
 
-  (* HERE is the important bit ~S *)
-  let rec datatype : context -> policy * names -> datatype
-                     -> string =
+  let rec datatype : context -> policy * names -> datatype -> string =
     fun ({ bound_vars; _ } as context) ((policy, vars) as p) t ->
       let sd = datatype context p in
 
@@ -2353,10 +2351,7 @@ struct
          | Choice bs -> "[&|" ^ row "," context p bs ^ "|&]"
          | Dual s -> "~" ^ sd s
          | End -> "End"
-  and presence ({ bound_vars; _ } as context) ((policy, vars) as p) =
-    (* function *)
-    fun pr' ->
-    let ret = match pr' with
+  and presence ({ bound_vars; _ } as context) ((policy, vars) as p) = function
       | Present t ->
         begin
           match concrete_type t with
@@ -2380,67 +2375,48 @@ struct
                   presence context p f
           end
       | _ -> raise tag_expectation_mismatch
-    in
-    Debug.print ("Original presence: " ^ ret);
-    ret
 
-  (* HERE row ~S *)
-  and row ?(name=name_of_type) ?(strip_wild=false) sep context p =
-    fun rv' -> (* TODO revert this (I just used it to see if row prints brackets -> it does NOT *)
-    let ret =
-      match rv' with
-      | Row (field_env, rv, dual) ->
-         (* FIXME: should quote labels when necessary, i.e., when they
-            contain non alpha-numeric characters *)
-         let field_strings =
-           FieldEnv.fold
-             (fun label f field_strings ->
-               if strip_wild && label = "wild" then
-                 field_strings
-               else
-                 (label ^ presence context p f) :: field_strings)
-             field_env []
-         in
-         let row_var_string = row_var name sep context p rv in
-         String.concat sep (List.rev (field_strings)) ^
-           begin
-             match row_var_string with
-             | None -> ""
-             | Some s -> "|" ^ (if dual then "~" else "") ^ s
-           end
-      (* FIXME: this shouldn't happen *)
-      | Meta rv ->
-         Debug.print ("Row variable where row expected:"^show_datatype @@ DecycleTypes.datatype (Meta rv));
-         row sep context ~name:name ~strip_wild:strip_wild p (Row (StringMap.empty, rv, false))
-      | t ->
-         failwith ("Illformed row:"^show_datatype @@ DecycleTypes.datatype t)
-                  (* raise tag_expectation_mismatch *)
-    in
-    Debug.print ("row returns: " ^ ret);
-    ret
-
+  and row ?(name=name_of_type) ?(strip_wild=false) sep context p = function
+    | Row (field_env, rv, dual) ->
+       (* FIXME: should quote labels when necessary, i.e., when they
+          contain non alpha-numeric characters *)
+       let field_strings =
+         FieldEnv.fold
+           (fun label f field_strings ->
+             if strip_wild && label = "wild" then
+               field_strings
+             else
+               (label ^ presence context p f) :: field_strings)
+           field_env []
+       in
+       let row_var_string = row_var name sep context p rv in
+       String.concat sep (List.rev (field_strings)) ^
+         begin
+           match row_var_string with
+           | None -> ""
+           | Some s -> "|"^ (if dual then "~" else "") ^ s
+         end
+    (* FIXME: this shouldn't happen *)
+    | Meta rv ->
+       Debug.print ("Row variable where row expected:"^show_datatype (Meta rv));
+       row sep context ~name:name ~strip_wild:strip_wild p (Row (StringMap.empty, rv, false))
+    | t ->
+       failwith ("Illformed row:"^show_datatype t)
+       (* raise tag_expectation_mismatch *)
   and row_var name_of_type sep ({ bound_vars; _ } as context) ((policy, vars) as p) rv =
-    let ret =
-      begin
-        match Unionfind.find rv with
-        | Closed -> None
-        | Var (var, k, `Flexible) when policy.flavours ->
-           Some (name_of_type context (policy, vars) var (Kind.subkind k) "%" (fun name -> "%" ^ name))
-        | Var (var, k, _) ->
-           Some (name_of_type context (policy, vars) var (Kind.subkind k) "_" (fun name -> name))
-        | Recursive (var, _kind, r) ->
-           if TypeVarSet.mem var bound_vars then
-             Some (Vars.find var vars)
-           else
-             Some ("(mu " ^ Vars.find var vars ^ " . " ^
-                     row sep { context with bound_vars = TypeVarSet.add var bound_vars } p r ^ ")")
-        | r -> Some (row sep context p r)
-    end in
-    Debug.print ("Original row_var -> " ^ (match ret with
-                                           | Some s -> s
-                                           | None -> "EMPTY")
-                 ^ "\n" ^ (show_datatype @@ DecycleTypes.datatype (Unionfind.find rv)));
-    ret
+    match Unionfind.find rv with
+      | Closed -> None
+      | Var (var, k, `Flexible) when policy.flavours ->
+         Some (name_of_type context (policy, vars) var (Kind.subkind k) "%" (fun name -> "%" ^ name))
+      | Var (var, k, _) ->
+         Some (name_of_type context (policy, vars) var (Kind.subkind k) "_" (fun name -> name))
+      | Recursive (var, _kind, r) ->
+          if TypeVarSet.mem var bound_vars then
+            Some (Vars.find var vars)
+          else
+            Some ("(mu " ^ Vars.find var vars ^ " . " ^
+                    row sep { context with bound_vars = TypeVarSet.add var bound_vars } p r ^ ")")
+      | r -> Some (row sep context p r)
 
   and type_arg context p (pk, t) =
     let open PrimaryKind in
