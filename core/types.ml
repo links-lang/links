@@ -1931,66 +1931,8 @@ let effect_sugar
 
 type pp_policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool}
 
-(* TODO probably remove;
-*  the signature is not strictly necessary, I have it here so that I can swap the printer being used at runtime *)
-module type PRETTY_PRINTER = sig
-  val show_quantifiers : bool Settings.setting
-  val show_flavours : bool Settings.setting
-  val show_kinds : string option Settings.setting
-  val hide_fresh_type_vars : bool Settings.setting
-  
-  type policy = pp_policy
-  (* {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool} *)
-  type names  = (int, string * Vars.spec) Hashtbl.t
-  type context = { bound_vars: TypeVarSet.t; shared_effect: int option }
-  val default_policy : unit -> policy
-
-  val name_of_type : context -> policy * names -> tid -> Subkind.t -> string -> (string -> string) -> string
-  val datatype : context -> policy * names -> datatype -> string
-  (* val row : ?name:string -> ?strip_wild:bool -> string -> context -> policy * names -> string *)
-  val row :
-    ?name:(context ->
-           policy * names ->
-           tid -> Subkind.t -> istring -> (istring -> istring) -> istring) ->
-    ?maybe_tuple:bool option -> ?hide_units:bool ->
-    ?strip_wild:bool -> ?concise_hear:bool -> ?space_row_var:bool ->
-    istring -> context -> policy * names -> row -> istring
-  (* val row_var : string -> string -> context -> policy * names -> row point -> string *)
-  val row_var :
-    (context ->
-     policy * names ->
-     tid -> Subkind.t -> string -> (string -> string) -> string) ->
-    istring -> context -> policy * names -> row_var -> istring option
-  val quantifier : (policy * names) -> Quantifier.t -> string
-  val strip_quantifiers : typ -> typ
-  val empty_context : context
-  val context_with_shared_effect :
-    policy ->
-    (( (* TODO prettify this type *)
-      < field_spec : row -> 'c * row;
-      field_spec_map : field_spec_map -> 'c * field_spec_map;
-      list : 'a 'b. ('c -> 'a -> 'c * 'b) -> 'a list -> 'c * 'b list;
-      meta_presence_var : meta_presence_var -> 'c * meta_presence_var;
-      meta_row_var : row_var -> 'c * row_var;
-      meta_type_var : meta_type_var -> 'c * meta_type_var;
-      primitive : Primitive.t -> 'c * Primitive.t;
-      quantifier : Quantifier.t -> 'c * Quantifier.t;
-      row : row -> 'c * row; row_var : row_var -> 'c * row_var;
-      set_rec_vars : meta_type_var intmap -> 'c; typ : row -> 'c * row;
-      type_arg : type_arg -> 'c * type_arg;
-      type_args : type_arg list -> 'c * type_arg list; var : tid option >
-                                                             as 'c) ->
-     < var : tid option; .. > * 'd) ->
-    context
-  val presence : context -> policy * names -> typ -> string
-  val type_arg : context -> policy * names -> type_arg -> string
-  (* val tycon_spec : context -> policy * names -> string *)
-  val tycon_spec : context -> policy * names -> tycon_spec -> string
-end
-
-
 (* TODO: check over the pretty-printer in light of the types refactoring *)
-module Print : PRETTY_PRINTER =
+module Print =
 struct
   module BS = Basicsettings
   let show_quantifiers
@@ -2443,7 +2385,7 @@ struct
     ret
 
   (* HERE row ~S *)
-  and row ?(name=name_of_type) ?(maybe_tuple=None) ?(hide_units=false) ?(strip_wild=false) ?(concise_hear=false) ?(space_row_var=false) sep context p =
+  and row ?(name=name_of_type) ?(strip_wild=false) sep context p =
     fun rv' -> (* TODO revert this (I just used it to see if row prints brackets -> it does NOT *)
     let ret =
       match rv' with
@@ -2528,57 +2470,55 @@ struct
     | ForAll (_, t) | t -> t
 end
 
+type buffer_container = { buffer: Buffer.t;
+                          write: (string -> unit);
+                          concat: (?sep:string -> string list -> unit);
+                          add_buffer: (Buffer.t -> unit);
+                          concat_buffers: (?sep:string -> Buffer.t list -> unit);
+                          read: (unit -> string) }
+let create_buffer : ?init_size:int -> unit -> buffer_container =
+  fun ?(init_size=16) () ->
+  let buf = Buffer.create init_size in
+  let write' s = Buffer.add_string buf s in
+  let add_buffer' b = Buffer.add_buffer buf b in
+  let rec concat' ?(sep="") =
+    function
+    | [] -> ()
+    | [last] -> write' last
+    | not_last :: ((_ :: _) as rest) -> begin write' not_last;
+                                              write' sep;
+                                              concat' ~sep:sep rest
+                                        end
+  in
+  let rec concat_buffers' ?(sep="") =
+    function
+    | [] -> ()
+    | [last] -> add_buffer' last
+    | not_last :: ((_ :: _) as rest) -> begin add_buffer' not_last;
+                                              write' sep;
+                                              concat_buffers' ~sep:sep rest
+                                        end
+  in
+  let read' () = Buffer.contents buf in
+  { buffer = buf; write = write'; concat = concat'; add_buffer = add_buffer'; concat_buffers=concat_buffers'; read = read' }
+
+let wrap_buffer : string -> Buffer.t =
+  fun s ->
+  let len = String.length s in
+  let { buffer; write; _ } = create_buffer ~init_size:len () in
+  write s;
+  buffer
+
+let concat : ?sep:string -> string list -> string =
+  fun ?(sep="") lst ->
+  let { concat; read; _ } = create_buffer () in
+  concat ~sep:sep lst;
+  read ()
+
 (* New type pretty printer (Samo) *)
-module NewPrint : PRETTY_PRINTER =
+module NewPrint =
 struct
   module BS = Basicsettings
-  (* open Buffer *)
-
-  type buffer_container = { buffer: Buffer.t;
-                            write: (string -> unit);
-                            concat: (?sep:string -> string list -> unit);
-                            add_buffer: (Buffer.t -> unit);
-                            concat_buffers: (?sep:string -> Buffer.t list -> unit);
-                            read: (unit -> string) }
-  let create_buffer : ?init_size:int -> unit -> buffer_container =
-    fun ?(init_size=16) () -> 
-    let buf = Buffer.create init_size in
-    let write' s = Buffer.add_string buf s in
-    let add_buffer' b = Buffer.add_buffer buf b in
-    let rec concat' ?(sep="") =
-      function
-      | [] -> ()
-      | [last] -> write' last
-      | not_last :: ((_ :: _) as rest) -> begin write' not_last;
-                                                write' sep;
-                                                concat' ~sep:sep rest
-                                          end
-    in
-    let rec concat_buffers' ?(sep="") =
-      function
-      | [] -> ()
-      | [last] -> add_buffer' last
-      | not_last :: ((_ :: _) as rest) -> begin add_buffer' not_last;
-                                                write' sep;
-                                                concat_buffers' ~sep:sep rest
-                                          end
-    in
-    let read' () = Buffer.contents buf in
-    { buffer = buf; write = write'; concat = concat'; add_buffer = add_buffer'; concat_buffers=concat_buffers'; read = read' }
-
-  let wrap_buffer : string -> Buffer.t =
-    fun s ->
-    let len = String.length s in
-    let { buffer; write; _ } = create_buffer ~init_size:len () in
-    write s;
-    buffer
-
-  let concat : ?sep:string -> string list -> string =
-    fun ?(sep="") lst ->
-    let { concat; read; _ } = create_buffer () in
-    concat ~sep:sep lst;
-    read ()
-
 
   (* TODO maybe it can all be done by having "inner" functions that just pass a Buffer around,
      and wrapping those in "outer" functions that return just a string to match the interface signature? *)
@@ -3002,6 +2942,7 @@ struct
     match pknd with
     | P.Type -> datatype ctx p r
     | P.Row -> begin
+        (* TODO maybe call concrete_type here *)
         match r with
         | Row _ -> concat ["{" ; row "," ctx p r ~space_row_var:true ; "}"]
         | Meta pt -> meta ctx p pt
@@ -3045,7 +2986,7 @@ struct
           | 0, false -> write "{}" (* no fields but closed row var *)
           | 0, true -> (* there is a row variable, but no fields
                           => use the abbreviated notation -a- or ~a~ *)
-             (* need to see if the variable is anonymous, then skip as well *)
+             (* need to see if the variable is anonymous, then skip as well - TODO is this correct? *)
              begin
                match Unionfind.find (extract_row_parts r |> snd3) with (* TODO temporary solution *)
                | Var (vid, knd, _) ->
@@ -3431,79 +3372,107 @@ let print_old_new
               |> convert parse_bool
               |> sync)
 
-let choose_pp () =
-  if Settings.get use_new_type_pp then
-    (module NewPrint : PRETTY_PRINTER)
-  else
-    (module Print : PRETTY_PRINTER)
-
 (* string conversions *)
 let rec string_of_datatype ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
           (t : datatype) =
   if Settings.get print_types_pretty then
-    (* Inject the new pretty printer (TODO) *)
-    let module Print = (val (choose_pp ())) in
-    let policy' = policy in (* see below *)
-    let t' = t in
-    let policy = policy () in
-    let t = if policy.quantifiers then t
-            else Print.strip_quantifiers t in
-    build_tyvar_names ~refresh_tyvar_names free_bound_type_vars [t];
-    let context = Print.context_with_shared_effect policy (fun o -> o#typ t) in
-    (Print.datatype context (policy, Vars.tyvar_name_map) t) ^
-      (if Settings.get use_new_type_pp && Settings.get print_old_new then
-         begin (* print with the original printer too *)
-           Settings.set use_new_type_pp false;
-           let ret = string_of_datatype ~policy:policy'
-                       ~refresh_tyvar_names:refresh_tyvar_names t'
-           in
-           Settings.set use_new_type_pp true;
-           "\nThe original printer would say: " ^ ret
-         end
-       else "")
+    begin
+      if Settings.get use_new_type_pp then
+        (* preserve the original arguments so old printer can be invoked as well *)
+        let policy' = policy in
+        let t' = t in
+
+        let policy = policy () in
+        let t = if policy.quantifiers then t
+                else NewPrint.strip_quantifiers t in
+        build_tyvar_names ~refresh_tyvar_names free_bound_type_vars [t];
+        let context = NewPrint.context_with_shared_effect policy (fun o -> o#typ t) in
+        concat ~sep:"\n"
+          (* print datatype using the new printer and... *)
+          ((NewPrint.datatype context (policy, Vars.tyvar_name_map) t) ::
+             (* ... if the setting is on, print using the old printer as well, for comparison *)
+             (if Settings.get print_old_new then
+                ["The old printer would say:" ;
+                 begin
+                   Settings.set use_new_type_pp false;
+                   let s = string_of_datatype ~policy:policy' ~refresh_tyvar_names t' in
+                   Settings.set use_new_type_pp true;
+                   s
+                 end]
+              else
+                (* don't want old printer, just close the list *)
+                []))
+      else
+        let policy = policy () in
+        let t = if policy.quantifiers then t
+                else Print.strip_quantifiers t in
+        build_tyvar_names ~refresh_tyvar_names free_bound_type_vars [t];
+        let context = Print.context_with_shared_effect policy (fun o -> o#typ t) in
+        Print.datatype context (policy, Vars.tyvar_name_map) t
+    end
   else
     show_datatype (DecycleTypes.datatype t)
 
 let string_of_row ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) row =
   if Settings.get print_types_pretty then
-    let module Print = (val (choose_pp ())) in
     let policy = policy () in
     build_tyvar_names ~refresh_tyvar_names free_bound_row_type_vars [row];
-    let context = Print.context_with_shared_effect policy (fun o -> o#row row) in
-    Print.row "," context (policy, Vars.tyvar_name_map) row
+    begin
+      if Settings.get use_new_type_pp then
+        let context = NewPrint.context_with_shared_effect policy (fun o -> o#row row) in
+        NewPrint.row' context (policy, Vars.tyvar_name_map) row |> fst3
+      else
+        let context = Print.context_with_shared_effect policy (fun o -> o#row row) in
+        Print.row "," context (policy, Vars.tyvar_name_map) row
+    end
   else
     show_row (DecycleTypes.row row)
 
 let string_of_presence ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
                        (f : field_spec) =
-  let module Print = (val (choose_pp ())) in
   build_tyvar_names ~refresh_tyvar_names free_bound_field_spec_type_vars [f];
-  Print.presence Print.empty_context (policy (), Vars.tyvar_name_map) f
+  if Settings.get use_new_type_pp then
+    NewPrint.presence NewPrint.empty_context (policy (), Vars.tyvar_name_map) f
+  else
+    Print.presence Print.empty_context (policy (), Vars.tyvar_name_map) f
 
 let string_of_type_arg ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
                        (arg : type_arg) =
-  let module Print = (val (choose_pp ())) in
   let policy = policy () in
   build_tyvar_names ~refresh_tyvar_names free_bound_type_arg_type_vars [arg];
-  let context = Print.context_with_shared_effect policy (fun o -> o#type_arg arg) in
-  Print.type_arg context (policy, Vars.tyvar_name_map) arg
+  if Settings.get use_new_type_pp then
+    let context = NewPrint.context_with_shared_effect policy (fun o -> o#type_arg arg) in
+    NewPrint.type_arg context (policy, Vars.tyvar_name_map) arg
+  else
+    let context = Print.context_with_shared_effect policy (fun o -> o#type_arg arg) in
+    Print.type_arg context (policy, Vars.tyvar_name_map) arg
 
 let string_of_row_var ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) row_var =
-  let module Print = (val (choose_pp ())) in
   build_tyvar_names ~refresh_tyvar_names free_bound_row_var_vars [row_var];
-  match Print.row_var Print.name_of_type "," Print.empty_context (policy (), Vars.tyvar_name_map) row_var
+  match
+    begin
+      if Settings.get use_new_type_pp then
+        NewPrint.row_var (fun _ _ _ _ _ _ -> "" (* TODO this will not be here, was just kept to preserve signature for now*))
+          "," NewPrint.empty_context (policy (), Vars.tyvar_name_map) row_var
+      else
+        Print.row_var Print.name_of_type "," Print.empty_context (policy (), Vars.tyvar_name_map) row_var
+    end
   with | None -> ""
        | Some s -> s
 
 let string_of_tycon_spec ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) (tycon : tycon_spec) =
-  let module Print = (val (choose_pp ())) in
   build_tyvar_names ~refresh_tyvar_names free_bound_tycon_type_vars [tycon];
-  Print.tycon_spec Print.empty_context (policy (), Vars.tyvar_name_map) tycon
+  if Settings.get use_new_type_pp then
+    NewPrint.tycon_spec NewPrint.empty_context (policy (), Vars.tyvar_name_map) tycon
+  else
+    Print.tycon_spec Print.empty_context (policy (), Vars.tyvar_name_map) tycon
 
 let string_of_quantifier ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) (quant : Quantifier.t) =
-  let module Print = (val (choose_pp ())) in
   build_tyvar_names ~refresh_tyvar_names free_bound_quantifier_vars [quant];
-  Print.quantifier (policy (), Vars.tyvar_name_map) quant
+  if Settings.get use_new_type_pp then
+    NewPrint.quantifier (policy (), Vars.tyvar_name_map) quant
+  else
+    Print.quantifier (policy (), Vars.tyvar_name_map) quant
 
 
 type environment        = datatype Env.t
