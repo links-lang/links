@@ -3350,6 +3350,23 @@ See Note [Variable names in error messages].
 
  *)
 
+type environment        = datatype Env.t
+                            [@@deriving show]
+type tycon_environment  = tycon_spec Env.t
+                            [@@deriving show]
+type typing_environment = { var_env    : environment ;
+                            rec_vars   : StringSet.t ;
+                            tycon_env  : tycon_environment ;
+                            effect_row : row;
+                            desugared  : bool }
+                            [@@deriving show]
+
+let empty_typing_environment = { var_env = Env.empty;
+                                 rec_vars = StringSet.empty;
+                                 tycon_env =  Env.empty;
+                                 effect_row = make_empty_closed_row ();
+                                 desugared = false }
+
 (* Pretty print types or use generated printer? *)
 let print_types_pretty
   = Settings.(flag ~default:true "print_types_pretty"
@@ -3372,6 +3389,31 @@ let print_old_new
               |> convert parse_bool
               |> sync)
 
+let pp_test_roundtrip
+  = Settings.(flag ~default:false "type_pp_roundtrip"
+              |> synopsis "Test whether pretty-printed types are round-trippable."
+              |> convert parse_bool
+              |> CLI.(add (short 't' <&> long "pretty-types-roundtrip"))
+              |> sync)
+
+let test_type_roundtrip : datatype (* -> tycon_environment *) -> string -> bool =
+  fun t (* aliases *) str ->
+  (* let open Parse in
+   * let dt =
+   *   (\* try Some (DesugarDatatypes.read ~aliases str) *\)
+   *   (\* TODO do the full read (including aliases), so that types can be compared *\)
+   *   try Some (parse_string ~in_context:(LinksLexer.fresh_context ())
+   *               datatype str)
+   *   with Errors.RichSyntaxError _ -> None
+   * in
+   * match dt with
+   * | None -> false
+   * | Some _ ->
+   *    (\* TODO compare if the parsed type is isomorphic to t *\)
+   *    true *)
+  (* TODO dependency cycle; wanna use DesugarDatatypes.read or parts of it *)
+  true
+
 (* string conversions *)
 let rec string_of_datatype ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
           (t : datatype) =
@@ -3387,28 +3429,40 @@ let rec string_of_datatype ?(policy=default_pp_policy) ?(refresh_tyvar_names=tru
                 else NewPrint.strip_quantifiers t in
         build_tyvar_names ~refresh_tyvar_names free_bound_type_vars [t];
         let context = NewPrint.context_with_shared_effect policy (fun o -> o#typ t) in
-        concat ~sep:"\n"
-          (* print datatype using the new printer and... *)
-          ((NewPrint.datatype context (policy, Vars.tyvar_name_map) t) ::
-             (* ... if the setting is on, print using the old printer as well, for comparison *)
-             (if Settings.get print_old_new then
-                ["The old printer would say:" ;
-                 begin
-                   Settings.set use_new_type_pp false;
-                   let s = string_of_datatype ~policy:policy' ~refresh_tyvar_names t' in
-                   Settings.set use_new_type_pp true;
-                   s
-                 end]
-              else
-                (* don't want old printer, just close the list *)
-                []))
+        let new_type = (NewPrint.datatype context (policy, Vars.tyvar_name_map) t) in
+        let old_type = begin
+            if Settings.get print_old_new then
+              begin
+                Settings.set use_new_type_pp false;
+                let s = string_of_datatype ~policy:policy' ~refresh_tyvar_names t' in
+                Settings.set use_new_type_pp true;
+                ["The old printer would say:" ; s ;
+                 "New and old pretty types agree:" ;
+                 string_of_bool (new_type = s) ]
+              end
+            else
+              []
+          end in
+        let rt = if Settings.get pp_test_roundtrip then
+                   [ "Type roundtrips:" ;
+                     string_of_bool (test_type_roundtrip t new_type) ]
+                 else []
+        in
+        concat ~sep:"\n" (new_type :: old_type @ rt)
+
       else
-        let policy = policy () in
-        let t = if policy.quantifiers then t
-                else Print.strip_quantifiers t in
-        build_tyvar_names ~refresh_tyvar_names free_bound_type_vars [t];
-        let context = Print.context_with_shared_effect policy (fun o -> o#typ t) in
-        Print.datatype context (policy, Vars.tyvar_name_map) t
+        begin
+          let policy = policy () in
+          let t = if policy.quantifiers then t
+                  else Print.strip_quantifiers t in
+          build_tyvar_names ~refresh_tyvar_names free_bound_type_vars [t];
+          let context = Print.context_with_shared_effect policy (fun o -> o#typ t) in
+          let dt = Print.datatype context (policy, Vars.tyvar_name_map) t in
+          (if Settings.get pp_test_roundtrip then
+             Printf.printf "Type roundtrips: %s\n" (string_of_bool @@ test_type_roundtrip t dt)
+           else ());
+          dt
+        end
     end
   else
     show_datatype (DecycleTypes.datatype t)
@@ -3474,23 +3528,6 @@ let string_of_quantifier ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
   else
     Print.quantifier (policy (), Vars.tyvar_name_map) quant
 
-
-type environment        = datatype Env.t
-                            [@@deriving show]
-type tycon_environment  = tycon_spec Env.t
-                            [@@deriving show]
-type typing_environment = { var_env    : environment ;
-                            rec_vars   : StringSet.t ;
-                            tycon_env  : tycon_environment ;
-                            effect_row : row;
-                            desugared  : bool }
-                            [@@deriving show]
-
-let empty_typing_environment = { var_env = Env.empty;
-                                 rec_vars = StringSet.empty;
-                                 tycon_env =  Env.empty;
-                                 effect_row = make_empty_closed_row ();
-                                 desugared = false }
 
 let normalise_typing_environment env =
   { env with
