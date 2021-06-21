@@ -2784,8 +2784,8 @@ struct
                                 * not entirely sure where this Meta is coming through, I though it could be via type_arg *)
     | _ -> failwith ("Invalid row: " ^ show_datatype @@ DecycleTypes.datatype r)
 
-  and row' : context -> policy * names -> typ -> string * int * bool =
-    fun ctx p r ->
+  and row' : ?is_fun_domain:bool -> context -> policy * names -> typ -> string * int * bool =
+    fun ?(is_fun_domain=false) ctx p r ->
     let unrolled =
       (match r with
        | Row r -> Row r
@@ -2841,9 +2841,11 @@ struct
     let n_fields = List.length field_strings in
     let var_exists = (String.length var_string > 0) in
     (concat [before ;
-             (if n_fields = 0 then " " else "") ; (* to make sure we don't print "\{\|..." but "{ |..." when there are no fields *)
              concat ~sep field_strings ;
-             (if var_exists then "|" else "") ; (* pipe only when a var is there (row not closed) *)
+             (if var_exists
+              then (if n_fields = 0 then " |" else "|")
+              else "") ; (* pipe only when a var is there (row not closed);
+                          * also make sure we don't print "\{\|..." but "{ |..." when there are no fields *)
              var_string ; after ],
      List.length field_strings, (* return also the number of visible fields - useful in function arrows *)
      var_exists) (* and whether there is a varialbe - also useful in function arrows *)
@@ -2984,8 +2986,7 @@ struct
     (* dpr' "func"; *)
     let { buffer; concat; add_buffer; _ } = create_buffer () in
     let effects, _ = unwrap_row effects in
-    (* concat [ "(" ; (row ~maybe_tuple:(Some true) "," ctx p domain) ; ") " ]; *)
-    concat [ "(" ; (row' ctx p domain |> fst3) ; ") " ];
+    concat [ row' ~is_fun_domain:true ctx p domain |> fst3 ; " " ];
     add_buffer (func_arrow ~is_lolli:is_lolli ctx p effects);
     concat [ " " ; datatype ctx p range ];
     buffer
