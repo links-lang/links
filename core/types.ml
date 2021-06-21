@@ -2784,8 +2784,8 @@ struct
                                 * not entirely sure where this Meta is coming through, I though it could be via type_arg *)
     | _ -> failwith ("Invalid row: " ^ show_datatype @@ DecycleTypes.datatype r)
 
-  and row' : ?is_fun_domain:bool -> context -> policy * names -> typ -> string * int * bool =
-    fun ?(is_fun_domain=false) ctx p r ->
+  and row' : ?must_omit_labels:bool -> context -> policy * names -> typ -> string * int * bool =
+    fun ?(must_omit_labels=false) ctx p r ->
     let unrolled =
       (match r with
        | Row r -> Row r
@@ -2795,7 +2795,8 @@ struct
     let r', before, after, sep, is_tuple, hide_units =
       match r with
       | Record r ->
-         let is_tuple = is_tuple unrolled in
+         let is_tuple = if must_omit_labels then true
+                        else is_tuple unrolled in (* not allowing onetuples by default *)
          r, "(", ")", (if is_tuple then ", " else ","), is_tuple, false
       | Variant r -> r, "[|", "|]", "|", false, true
       | Effect r -> r, "{", "}", ",", false, false
@@ -2843,7 +2844,8 @@ struct
     (concat [before ;
              concat ~sep field_strings ;
              (if var_exists
-              then (if n_fields = 0 then " |" else "|")
+              then (if (n_fields = 0) && (before = "{")
+                    then " |" else "|")
               else "") ; (* pipe only when a var is there (row not closed);
                           * also make sure we don't print "\{\|..." but "{ |..." when there are no fields *)
              var_string ; after ],
@@ -2856,7 +2858,7 @@ struct
     fun ~want_colon ?(hide_units=false) ctx p tp ->
     dpr' "presence_type";
     let { write; read; _ } = create_buffer () in
-    (match tp with
+    (match concrete_type tp with
      | Absent -> write "-"
      | Present tp ->
         begin
@@ -2871,8 +2873,8 @@ struct
         end
      | Meta pt -> ((* if want_colon then write ":" else () *));
                   (* TODO detect what's inside, see if colon is needed *)
-                  write (meta ctx p ~is_presence:true pt) (* let datatype handle Meta *)
-     | _ -> failwith "Type not implemented");
+                  write (meta ctx p ~is_presence:true pt)
+     | _ -> failwith "[*p] Type not implemented");
     read ()
   
   and presence : context -> policy * names -> typ -> string =
@@ -2965,10 +2967,6 @@ struct
                    * write varname *)
              end
           | _ -> (* need the full effect row *)
-             (* let row_str = row ~maybe_tuple:(Some false) ~strip_wild:true
-              *                 ~concise_hear:true (\* TODO maybe there is a policy for this? *\)
-              *                 ~space_row_var:true
-              *                 "," ctx p r' in *)
              write eff_row_string);
          (if is_wild
           then write "~"
@@ -2986,9 +2984,11 @@ struct
     (* dpr' "func"; *)
     let { buffer; concat; add_buffer; _ } = create_buffer () in
     let effects, _ = unwrap_row effects in
-    concat [ row' ~is_fun_domain:true ctx p domain |> fst3 ; " " ];
+    (* build up the function type string: domain, arrow with effects, range *)
+    concat [ row' ~must_omit_labels:true ctx p domain |> fst3 ; " " ];
     add_buffer (func_arrow ~is_lolli:is_lolli ctx p effects);
     concat [ " " ; datatype ctx p range ];
+
     buffer
 
   and session_io : context -> policy * names -> typ -> Buffer.t =

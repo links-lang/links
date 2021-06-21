@@ -401,12 +401,12 @@ args : --enable-handlers
 
 Generalise (1)
 gen0(fun(m)() { handle(m()) { case Foo(k) -> 42 case Return(x) -> x } }(fun(){42}))
-stdout : fun : Comp (Int,{ |_ })
+stdout : fun : Comp (Int,{ |_})
 args : --enable-handlers
 
 Generalise (2)
 gen0(fun(m)() { handle(m()) { case Foo(k : ((()) {Foo- |_}~> Int)) -> 42 case Return(x) -> x } }(fun(){42}))
-stdout : fun : Comp (Int,{ |_ })
+stdout : fun : Comp (Int,{ |_})
 args : --enable-handlers
 
 Recursive nesting of deep handlers
