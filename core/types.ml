@@ -2517,10 +2517,12 @@ module NewPrint = struct
 
     type ambient = Toplevel
                  | Function
+                 | Linfun
                  | Presence
                  | Tuple
                  | Variant
                  | Effect
+                 | Row
 
     type t = { policy: policy
              ; bound_vars: TypeVarSet.t
@@ -2569,18 +2571,45 @@ module NewPrint = struct
     let set_ambient : ambient -> t -> t
       = fun ambient ctxt -> { ctxt with ambient }
 
+    (* generator for these below *)
+    let is_ambient_toplevel : t -> bool
+      = fun { ambient ; _ } -> ambient = Toplevel
     let is_ambient_function : t -> bool
-      = fun { ambient; _ } -> ambient = Function
-    let is_ambient_tuple : t -> bool
-      = fun { ambient; _ } -> ambient = Tuple
-    let is_ambient_variant : t -> bool
-      = fun { ambient; _ } -> ambient = Variant
+      = fun { ambient ; _ } -> ambient = Function
+    let is_ambient_linfun : t -> bool
+      = fun { ambient ; _ } -> ambient = Linfun
     let is_ambient_presence : t -> bool
-      = fun { ambient; _ } -> ambient = Presence
+      = fun { ambient ; _ } -> ambient = Presence
+    let is_ambient_tuple : t -> bool
+      = fun { ambient ; _ } -> ambient = Tuple
+    let is_ambient_variant : t -> bool
+      = fun { ambient ; _ } -> ambient = Variant
     let is_ambient_effect : t -> bool
-      = fun { ambient; _ } -> ambient = Effect
+      = fun { ambient ; _ } -> ambient = Effect
     let is_ambient_row : t -> bool
-      = fun { ambient; _ } -> ambient = Row
+      = fun { ambient ; _ } -> ambient = Row
+
+    (*
+       (defun insert-ambient-helpers ()
+         (interactive)
+         (let ((original-point (point)))
+           (search-backward "type ambient =")
+           (mark-sexp)
+           (let* ((amb-def
+                   (buffer-substring-no-properties (region-beginning) (region-end)))
+                  (amb-cases
+                   (mapcar #'string-trim (split-string (cadr (split-string amb-def "=")) "|"))))
+             (goto-char original-point)
+             (dolist (amb-name amb-cases)
+               (insert (concat "let is_ambient_" (downcase amb-name) " : t -> bool\n"
+                               "= fun { ambient ; _ } -> ambient = " amb-name "\n")))
+             (set-mark (point))
+             (goto-char original-point)
+             (indent-region (region-beginning) (region-end)))))
+
+       ;; eval the sexp above and use command insert-ambient-helpers above this definition
+       ;; TODO we can throw this away, but it's useful while changing the ambients
+     *)
   end
 
   (* TODO(dhil): Encapsulate inside a StringBuffer structure. *)
@@ -2588,9 +2617,6 @@ module NewPrint = struct
     type t = Buffer.t
     type 'a printer = Printer of (Context.t -> 'a -> t -> unit)
                     | Empty
-
-    (* let out : t -> string -> unit
-     *   = Buffer.add_string *)
 
     let write : t -> string -> unit
       = fun buf s -> Buffer.add_string buf s
@@ -2653,14 +2679,12 @@ module NewPrint = struct
 
   type 'a printer = 'a StringBuffer.printer
 
-
-  module BS = Basicsettings
+  module BS = Basicsettings (* TODO is this ever used? *)
 
   (* Set the quantifiers to be true to display any outer quantifiers.
      Set flavours to be true to distinguish flexible type variables
      from rigid type variables. *)
   type policy = pp_policy
-  (* {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool} *)
   type names  = (int, string * Vars.spec) Hashtbl.t
   type context = { bound_vars: TypeVarSet.t; shared_effect: int option }
 
@@ -2669,7 +2693,7 @@ module NewPrint = struct
                                   shared_effect = None }
 
   (* For correct printing of subkinds, need to know the subkind in advance:
-   * see line (1), that has to be Empty so that the :: is not printed *)
+   * see line (1): that has to be Empty so that the :: is not printed *)
   let subkind_name : Context.policy -> Subkind.t -> unit printer
     = fun pol (lin, res) ->
     let open StringBuffer in
@@ -2822,96 +2846,96 @@ module NewPrint = struct
             end)
 
   and alias_recapp : (string * type_arg list * bool) printer
-  = let open StringBuffer in
-    Printer (fun ctx (name, arg_types, is_dual) buf ->
-        (if is_dual then write buf "~");
-        write buf (Module_hacks.Name.prettify name);
-        (match arg_types with
-         | [] -> ()
-         | _ -> write buf " (";
-                concat ~sep:"," type_arg arg_types ctx buf;
-                write buf ")"))
+    = let open StringBuffer in
+      Printer (fun ctx (name, arg_types, is_dual) buf ->
+          (if is_dual then write buf "~");
+          write buf (Module_hacks.Name.prettify name);
+          (match arg_types with
+           | [] -> ()
+           | _ -> write buf " (";
+                  concat ~sep:"," type_arg arg_types ctx buf;
+                  write buf ")"))
 
   (* TODO Ignoring shared effects for now *)
 
-  and row_fields : context -> policy * names -> strip_wild:bool -> concise_hear:bool -> ?hide_units:bool -> ?sep:string->
-                   ?is_tuple:bool -> field_spec_map -> (Buffer.t * int) = (* TODO count displayed fields for sugaring purposes *)
-    fun ctx p ~strip_wild ~concise_hear ?(hide_units=false) ->
-    fun ?(sep=",") ?(is_tuple=false) fs_map ->
-    (* dpr' "row_fields"; *)
-    let { buffer=buf; concat_buffers; _ } = create_buffer () in
-    let fold : string -> typ -> (Buffer.t list * int) -> (Buffer.t list * int) =
-      fun label fld (accumulator, counter) ->
-      match label with
-      | "wild" when strip_wild -> accumulator, counter
-      | "hear" when concise_hear ->
-         let { buffer=buf'; write=write'; _ } = create_buffer () in
-         dpr' "concise_hear --> presence_type with colon";
-         write' (presence_type ~want_colon:true ctx p fld);
-         accumulator @ [buf'], counter + 1
-      | _ ->
-         let { buffer=buf'; write=write'; _ } = create_buffer () in
-         (if is_tuple then () else write' label);
-         write' (presence_type ~want_colon:(not is_tuple) ~hide_units ctx p fld);
-         accumulator @ [buf'], counter + 1
-    in
-    let field_buf_list, count = FieldEnv.fold fold fs_map ([], 0) in
-    (* List.iter (fun x -> dpr' (Buffer.contents x)) field_buf_list; *)
-    concat_buffers ~sep:sep field_buf_list;
-    buf, count
-
-  and row_var : context -> policy * names -> row_var -> istring option =
-    fun ctx p rv ->
-    (* dpr' "row_var"; *)
-    let v = Unionfind.find rv in
-    match v with
-    | Closed -> None
-    | Var (id, knd, _) -> Some (var ctx p id knd)
-    | Recursive v -> Some (recursive ctx p v ~want_parens:true)
-    | _ -> Some (datatype ctx p v)
-
-  and row :
-        (* ?name not used, it's just to keep the signature compatible for now *)
-        ?maybe_tuple:bool option -> (* ?maybe_tuple is ternary: None => maybe, Some true => yes, Some false => no *)
-        ?hide_units:bool -> (* for variants *)
-        ?strip_wild:bool -> ?concise_hear:bool -> ?space_row_var:bool ->
-        string -> context -> policy * names -> row -> string =
-
-    fun ?(maybe_tuple=(Some false)) ?(hide_units=false) ?(strip_wild=false)
-        ?(concise_hear=false) ?(space_row_var=false) sep ctx p r ->
-    dpr' "row";
-    let r, is_tuple =
-      match maybe_tuple with
-      | None -> (* need to decide if it's a tuple or not - it could be *)
-         let r, _ = unwrap_row r in
-         (r, is_tuple ~allow_onetuples:false r) (* onetuple still has to print as (1=...) to round trip *)
-      | Some x -> r, x (* definitely it is (not) a tuple *)
-    in
-    let fields = row_fields ctx p ~strip_wild ~concise_hear ~is_tuple ~hide_units
-                   ~sep:(if is_tuple then concat [sep; " "] else sep) (* sugar: tuples have spacing in fields *)
-    in
-    let { write; add_buffer; read; _ } = create_buffer () in
-    match r with
-    | Row (r_fields, r_var, is_dual) ->
-       let fields_string, fields_shown = fields r_fields in
-       add_buffer fields_string;
-       (* dpr' @@ concat ["Fields (if not tuple):" ; Buffer.contents @@ row_fields ctx p strip_wild ~is_tuple:false ~sep:sep r_fields]; *)
-       let var = row_var ctx p r_var in
-       begin
-         match var with
-         | Some s -> (if space_row_var && fields_shown = 0
-                      then write " |"
-                      else write "|");
-                     dpr' "Has row variable";
-                     (if is_dual then write "~" else ());
-                     write s
-         | None -> ()
-       end;
-       read ()
-    | Meta pt -> dpr' "Meta in row!!";
-                 meta ctx p pt (* TODO This happens in tests/typed_ir.tests/Generalisation obeys value restriction (#871)
-                                * not entirely sure where this Meta is coming through, I though it could be via type_arg *)
-    | _ -> failwith ("Invalid row: " ^ show_datatype @@ DecycleTypes.datatype r)
+  (* and row_fields : context -> policy * names -> strip_wild:bool -> concise_hear:bool -> ?hide_units:bool -> ?sep:string->
+   *                  ?is_tuple:bool -> field_spec_map -> (Buffer.t * int) = (\* TODO count displayed fields for sugaring purposes *\)
+   *   fun ctx p ~strip_wild ~concise_hear ?(hide_units=false) ->
+   *   fun ?(sep=",") ?(is_tuple=false) fs_map ->
+   *   (\* dpr' "row_fields"; *\)
+   *   let { buffer=buf; concat_buffers; _ } = create_buffer () in
+   *   let fold : string -> typ -> (Buffer.t list * int) -> (Buffer.t list * int) =
+   *     fun label fld (accumulator, counter) ->
+   *     match label with
+   *     | "wild" when strip_wild -> accumulator, counter
+   *     | "hear" when concise_hear ->
+   *        let { buffer=buf'; write=write'; _ } = create_buffer () in
+   *        dpr' "concise_hear --> presence_type with colon";
+   *        write' (presence_type ~want_colon:true ctx p fld);
+   *        accumulator @ [buf'], counter + 1
+   *     | _ ->
+   *        let { buffer=buf'; write=write'; _ } = create_buffer () in
+   *        (if is_tuple then () else write' label);
+   *        write' (presence_type ~want_colon:(not is_tuple) ~hide_units ctx p fld);
+   *        accumulator @ [buf'], counter + 1
+   *   in
+   *   let field_buf_list, count = FieldEnv.fold fold fs_map ([], 0) in
+   *   (\* List.iter (fun x -> dpr' (Buffer.contents x)) field_buf_list; *\)
+   *   concat_buffers ~sep:sep field_buf_list;
+   *   buf, count
+   *
+   * and row_var : context -> policy * names -> row_var -> istring option =
+   *   fun ctx p rv ->
+   *   (\* dpr' "row_var"; *\)
+   *   let v = Unionfind.find rv in
+   *   match v with
+   *   | Closed -> None
+   *   | Var (id, knd, _) -> Some (var ctx p id knd)
+   *   | Recursive v -> Some (recursive ctx p v ~want_parens:true)
+   *   | _ -> Some (datatype ctx p v)
+   *
+   * and row :
+   *       (\* ?name not used, it's just to keep the signature compatible for now *\)
+   *       ?maybe_tuple:bool option -> (\* ?maybe_tuple is ternary: None => maybe, Some true => yes, Some false => no *\)
+   *       ?hide_units:bool -> (\* for variants *\)
+   *       ?strip_wild:bool -> ?concise_hear:bool -> ?space_row_var:bool ->
+   *       string -> context -> policy * names -> row -> string =
+   *
+   *   fun ?(maybe_tuple=(Some false)) ?(hide_units=false) ?(strip_wild=false)
+   *       ?(concise_hear=false) ?(space_row_var=false) sep ctx p r ->
+   *   dpr' "row";
+   *   let r, is_tuple =
+   *     match maybe_tuple with
+   *     | None -> (\* need to decide if it's a tuple or not - it could be *\)
+   *        let r, _ = unwrap_row r in
+   *        (r, is_tuple ~allow_onetuples:false r) (\* onetuple still has to print as (1=...) to round trip *\)
+   *     | Some x -> r, x (\* definitely it is (not) a tuple *\)
+   *   in
+   *   let fields = row_fields ctx p ~strip_wild ~concise_hear ~is_tuple ~hide_units
+   *                  ~sep:(if is_tuple then concat [sep; " "] else sep) (\* sugar: tuples have spacing in fields *\)
+   *   in
+   *   let { write; add_buffer; read; _ } = create_buffer () in
+   *   match r with
+   *   | Row (r_fields, r_var, is_dual) ->
+   *      let fields_string, fields_shown = fields r_fields in
+   *      add_buffer fields_string;
+   *      (\* dpr' @@ concat ["Fields (if not tuple):" ; Buffer.contents @@ row_fields ctx p strip_wild ~is_tuple:false ~sep:sep r_fields]; *\)
+   *      let var = row_var ctx p r_var in
+   *      begin
+   *        match var with
+   *        | Some s -> (if space_row_var && fields_shown = 0
+   *                     then write " |"
+   *                     else write "|");
+   *                    dpr' "Has row variable";
+   *                    (if is_dual then write "~" else ());
+   *                    write s
+   *        | None -> ()
+   *      end;
+   *      read ()
+   *   | Meta pt -> dpr' "Meta in row!!";
+   *                meta ctx p pt (\* TODO This happens in tests/typed_ir.tests/Generalisation obeys value restriction (#871)
+   *                               * not entirely sure where this Meta is coming through, I though it could be via type_arg *\)
+   *   | _ -> failwith ("Invalid row: " ^ show_datatype @@ DecycleTypes.datatype r) *)
 
   and row_parts : row' printer
     = let open StringBuffer in
@@ -2920,7 +2944,7 @@ module NewPrint = struct
           let hide_primitive_labels = Context.is_ambient_effect ctx in
           let fold = fun label fld printers ->
             match label with
-            | "wild" when hide_primitive_labels -> printers (* skip wild *)
+            | "wild" when hide_primitive_labels -> printers (* skip wild *) (* TODO make sure it's present *)
             | "hear" when hide_primitive_labels ->
                (Printer (fun ctx () buf -> apply presence ctx fld buf)) :: printers
             | _ ->
@@ -2997,7 +3021,7 @@ module NewPrint = struct
                   (if not (Context.is_ambient_tuple ctx) then write buf ":");
                   apply datatype ctx tp buf
                 end
-           | Meta pt -> apply meta (Context.set_ambient Context.Presence ctx) pt buf
+           | Meta pt -> apply (meta pt) (Context.set_ambient Context.Presence ctx) () buf
            | _ -> failwith "[*p] Type not implemented"))
 
   and meta : typ point -> unit printer
@@ -3049,79 +3073,83 @@ module NewPrint = struct
              write buf ")"
         )
 
-  and func : ?is_lolli:bool -> context -> policy * names -> typ -> row -> typ -> Buffer.t =
+  and func : (typ * row * typ) printer
+    (* and func : ?is_lolli:bool -> context -> policy * names -> typ -> row -> typ -> Buffer.t = *)
+    = let open StringBuffer in
 
-    let func_arrow : ?is_lolli:bool -> context -> policy * names -> row -> Buffer.t =
-      let is_field_present fields fld =
-        match FieldEnv.lookup fld fields with
-        | None -> false
-        | Some (Present _) -> true
-        | Some Absent | Some (Meta _) -> false
-        | _ -> failwith "Unexpected field presence value."
+      let func_arrow : row printer
+        (* let func_arrow : ?is_lolli:bool -> context -> policy * names -> row -> Buffer.t = *)
+        = let is_field_present fields fld =
+            match FieldEnv.lookup fld fields with
+            | None -> false
+            | Some (Present _) -> true
+            | Some Absent | Some (Meta _) -> false
+            | _ -> failwith "Unexpected field presence value."
+          in
+          Printer (
+              fun ctx r buf ->
+              let is_lolli = Context.is_ambient_linfun ctx in
+              match r with
+              | Row (fields, rvar, _) as r' ->
+                 let is_wild = is_field_present fields "wild" in
+                 let number_of_visible_fields = (FieldEnv.size fields) - (if is_wild then 1 else 0) in
+                 let row_var_exists =
+                   match meta rvar with
+                   | Empty -> false
+                   | _ -> true
+                 in
+                 dpr' @@ "Visible row fields: " ^ string_of_int number_of_visible_fields;
+                 dpr' @@ "And a row var exists: " ^ string_of_bool row_var_exists;
+                 begin
+                   match number_of_visible_fields, row_var_exists with
+                   | 0, false -> write buf "{}" (* no fields but closed row var *)
+                   | 0, true -> (* there is a row variable, but no fields
+                                 * => use the abbreviated notation -a- or ~a~
+                                 * BUT if it's anonymous => skip entirely *)
+                      begin
+                        match Unionfind.find (extract_row_parts r |> snd3) with (* TODO temporary solution *)
+                        | Var (vid, knd, _) ->
+                           if is_var_anonymous ctx vid
+                           then (dpr' "SKIP";
+                                 ()) (* skip printing it entirely *)
+                           else begin
+                               dpr' "NO SKIP";
+                               (if is_wild
+                                then write buf "~"
+                                else write buf "-");
+                               apply var ctx (vid, knd) buf
+                             end
+                        | _ -> failwith "[*1] Shoudln't happen?" (* TODO *)
+                      (* let varname = datatype ctx p v in
+                       * dpr' "HERE";
+                       * dpr' varname;
+                       * (if is_wild
+                       *  then write "~"
+                       *  else write "-");
+                       * write varname *)
+                      end
+                   | _ -> (* need the full effect row *)
+                      apply row' ctx (Effect r') buf
+                 end;
+
+                 (if is_wild then write buf "~" else write buf "-");
+                 (* add the arrowhead/lollipop *)
+                 (if is_lolli then write buf "@" else write buf ">");
+              | _ -> failwith ("Illformed effect:\n" ^ datatype ctx p r)
+            )
       in
-      fun ?(is_lolli=false) ctx p r ->
-      let { buffer; write; _ } = create_buffer () in
-      match r with
-      | (Row (fields, _, _)) as r' ->
-         let is_wild = is_field_present fields "wild" in
-         let eff_row_string, number_of_visible_fields, row_var_exists = row' ctx p (Effect r') in (* TODO this needs to change now, because of the imperative style:
-                                                                                                   * the number of visible fields and ∃row var can be done easily separately *)
-         (* let number_of_visible_fields = (FieldEnv.size fields) - (if is_wild then 1 else 0) in *)
-         dpr' @@ "Effect row: " ^ eff_row_string;
-         dpr' @@ "Visible row fields: " ^ string_of_int number_of_visible_fields;
-         dpr' @@ "And a row var exists: " ^ string_of_bool row_var_exists;
-         (match number_of_visible_fields, row_var_exists with
-          | 0, false -> write "{}" (* no fields but closed row var *)
-          | 0, true -> (* there is a row variable, but no fields
-                          => use the abbreviated notation -a- or ~a~ *)
-             (* need to see if the variable is anonymous, then skip as well - TODO is this correct? *)
-             begin
-               match Unionfind.find (extract_row_parts r |> snd3) with (* TODO temporary solution *)
-               | Var (vid, knd, _) ->
-                  let is_anonymous = is_var_anonymous ctx p vid in
-                  if is_anonymous
-                  then dpr' "SKIP"
-                            (* () (\* skip printing it entirely *\) *)
-                  else begin
-                      dpr' "NO SKIP";
-                      (if is_wild
-                       then write "~"
-                       else write "-");
-                      write @@ var ctx p vid knd
-                    end
-               | _ -> failwith "[*1] Shoudln't happen?" (* TODO *)
-                  (* let varname = datatype ctx p v in
-                   * dpr' "HERE";
-                   * dpr' varname;
-                   * (if is_wild
-                   *  then write "~"
-                   *  else write "-");
-                   * write varname *)
-             end
-          | _ -> (* need the full effect row *)
-             write eff_row_string);
-         (if is_wild
-          then write "~"
-          else write "-");
-         (* add the arrowhead/lollipop *)
-         (match is_lolli with
-          | false -> write ">"
-          | true -> write "@");
-         buffer
-      | _ -> failwith ("Illformed effect:\n" ^ datatype ctx p r)
-    in
 
-    (* func starts here *)
-    fun ?(is_lolli=false) ctx p domain effects range ->
-    (* dpr' "func"; *)
-    let { buffer; concat; add_buffer; _ } = create_buffer () in
-    let effects, _ = unwrap_row effects in
-    (* build up the function type string: domain, arrow with effects, range *)
-    concat [ row' ~must_omit_labels:true ctx p domain |> fst3 ; " " ];
-    add_buffer (func_arrow ~is_lolli:is_lolli ctx p effects);
-    concat [ " " ; datatype ctx p range ];
-
-    buffer
+      (* func starts here *)
+      Printer (
+          fun ctx (domain, effects, range) buf ->
+          let effects, _ = unwrap_row effects in
+          (* build up the function type string: domain, arrow with effects, range *)
+          apply row' (Context.set_ambient Context.Tuple ctx) domain buf;
+          write buf " ";
+          apply func_arrow ctx effects buf;
+          write buf " ";
+          apply datatype ctx range buf;
+        )
 
   and session_io : context -> policy * names -> typ -> Buffer.t =
     fun ctx p tp ->
