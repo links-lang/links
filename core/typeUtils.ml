@@ -441,6 +441,11 @@ let row_present_types t =
           | Present t -> Some t
           | _ -> None)
 
+let pack_types : Types.datatype list -> Types.datatype = function
+  | [t] -> t
+  | ts -> Types.make_tuple_type ts
+
 let from_present : Types.field_spec -> Types.datatype = function
   | Present t -> t
   | _ -> raise Types.tag_expectation_mismatch
+

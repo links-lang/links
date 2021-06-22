@@ -46,4 +46,6 @@ val check_type_wellformedness : PrimaryKind.t option -> Types.datatype -> unit
 
 val row_present_types : Types.datatype -> Types.datatype Utility.StringMap.t
 
+val pack_types : Types.datatype list -> Types.datatype
+
 val from_present : Types.field_spec -> Types.datatype

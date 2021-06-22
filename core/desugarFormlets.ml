@@ -19,11 +19,6 @@ let rec is_raw phrase =
         ~stage:DesugarFormlets
         ~message:"Invalid element in formlet literal")
 
-let tt =
-  function
-    | [t] -> t
-    | ts -> Types.make_tuple_type ts
-
 let xml_str           = "xml"
 let pure_str          = "pure"
 let plug_str          = "plug"
@@ -96,7 +91,7 @@ object (o : 'self_type)
               in
               let vs, ts = List.rev vs', List.rev ts' in
 
-              (* Given (f1 -> v1 : t1) ... (fn -> vn : tt), we generate a term of the form
+              (* Given (f1 -> v1 : t1) ... (fn -> vn : tn), we generate a term of the form
                  (@@@)(f1, ... (@@@)(fn)(pure (fun(pn : tn)...(p1 : t1) { (p1, ..., pn) }))).
 
                  Thus we generate a function with the arguments in reverse, but the variables
@@ -105,7 +100,7 @@ object (o : 'self_type)
               let ft =
                 List.fold_right
                   (fun t ft -> Types.Function (Types.make_tuple_type [t], Types.closed_wild_row, ft))
-                  ts' (tt ts) in
+                  ts' (TypeUtils.pack_types ts) in
               let open PrimaryKind in
               begin
                   match vs with
@@ -171,7 +166,7 @@ object (o : 'self_type)
             | [p] -> [[p]]
             | _ -> [[tuple_pat ps]] in
 
-        let arg_type = tt ts in
+        let arg_type = TypeUtils.pack_types ts in
         let open PrimaryKind in
         let e =
           fn_appl_node atatat_str
