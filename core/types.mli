@@ -273,6 +273,10 @@ val row_with : (string * field_spec) -> row -> row
 val extend_row : datatype field_env -> row -> row
 val extend_row_safe : datatype field_env -> row -> row option
 
+(** deconstructing rows *)
+val extract_row : datatype -> row
+val extract_row_parts : datatype -> row'
+
 (** constants *)
 val empty_field_env : field_spec_map
 val closed_row_var : row_var

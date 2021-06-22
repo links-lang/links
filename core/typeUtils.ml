@@ -49,22 +49,8 @@ let concrete_type t =
   in
     ct RecIdSet.empty t
 
-let extract_row t = match concrete_type t with
-  | Effect row
-  | Record row -> row
-  | Variant row -> row
-  | t ->
-      error
-        ("Internal error: attempt to extract a row from a datatype that is not a record or a variant: "
-         ^ string_of_datatype t)
-
-
-let extract_row_parts : Types.t -> Types.row' = function
-    | Row parts -> parts
-    | t -> error
-             ("Internal error: attempt to extract row parts from a datatype that is not a row "
-              ^ string_of_datatype t)
-
+let extract_row = Types.extract_row
+let extract_row_parts = Types.extract_row_parts
 
 let split_row name row =
   let (field_env, row_var, dual) = fst (unwrap_row row) |> extract_row_parts in
