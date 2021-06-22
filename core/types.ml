@@ -2887,85 +2887,6 @@ module NewPrint = struct
 
   (* TODO Ignoring shared effects for now *)
 
-  (* and row_fields : context -> policy * names -> strip_wild:bool -> concise_hear:bool -> ?hide_units:bool -> ?sep:string->
-   *                  ?is_tuple:bool -> field_spec_map -> (Buffer.t * int) = (\* TODO count displayed fields for sugaring purposes *\)
-   *   fun ctx p ~strip_wild ~concise_hear ?(hide_units=false) ->
-   *   fun ?(sep=",") ?(is_tuple=false) fs_map ->
-   *   (\* dpr' "row_fields"; *\)
-   *   let { buffer=buf; concat_buffers; _ } = create_buffer () in
-   *   let fold : string -> typ -> (Buffer.t list * int) -> (Buffer.t list * int) =
-   *     fun label fld (accumulator, counter) ->
-   *     match label with
-   *     | "wild" when strip_wild -> accumulator, counter
-   *     | "hear" when concise_hear ->
-   *        let { buffer=buf'; write=write'; _ } = create_buffer () in
-   *        dpr' "concise_hear --> presence_type with colon";
-   *        write' (presence_type ~want_colon:true ctx p fld);
-   *        accumulator @ [buf'], counter + 1
-   *     | _ ->
-   *        let { buffer=buf'; write=write'; _ } = create_buffer () in
-   *        (if is_tuple then () else write' label);
-   *        write' (presence_type ~want_colon:(not is_tuple) ~hide_units ctx p fld);
-   *        accumulator @ [buf'], counter + 1
-   *   in
-   *   let field_buf_list, count = FieldEnv.fold fold fs_map ([], 0) in
-   *   (\* List.iter (fun x -> dpr' (Buffer.contents x)) field_buf_list; *\)
-   *   concat_buffers ~sep:sep field_buf_list;
-   *   buf, count
-   *
-   * and row_var : context -> policy * names -> row_var -> istring option =
-   *   fun ctx p rv ->
-   *   (\* dpr' "row_var"; *\)
-   *   let v = Unionfind.find rv in
-   *   match v with
-   *   | Closed -> None
-   *   | Var (id, knd, _) -> Some (var ctx p id knd)
-   *   | Recursive v -> Some (recursive ctx p v ~want_parens:true)
-   *   | _ -> Some (datatype ctx p v)
-   *
-   * and row :
-   *       (\* ?name not used, it's just to keep the signature compatible for now *\)
-   *       ?maybe_tuple:bool option -> (\* ?maybe_tuple is ternary: None => maybe, Some true => yes, Some false => no *\)
-   *       ?hide_units:bool -> (\* for variants *\)
-   *       ?strip_wild:bool -> ?concise_hear:bool -> ?space_row_var:bool ->
-   *       string -> context -> policy * names -> row -> string =
-   *
-   *   fun ?(maybe_tuple=(Some false)) ?(hide_units=false) ?(strip_wild=false)
-   *       ?(concise_hear=false) ?(space_row_var=false) sep ctx p r ->
-   *   dpr' "row";
-   *   let r, is_tuple =
-   *     match maybe_tuple with
-   *     | None -> (\* need to decide if it's a tuple or not - it could be *\)
-   *        let r, _ = unwrap_row r in
-   *        (r, is_tuple ~allow_onetuples:false r) (\* onetuple still has to print as (1=...) to round trip *\)
-   *     | Some x -> r, x (\* definitely it is (not) a tuple *\)
-   *   in
-   *   let fields = row_fields ctx p ~strip_wild ~concise_hear ~is_tuple ~hide_units
-   *                  ~sep:(if is_tuple then concat [sep; " "] else sep) (\* sugar: tuples have spacing in fields *\)
-   *   in
-   *   let { write; add_buffer; read; _ } = create_buffer () in
-   *   match r with
-   *   | Row (r_fields, r_var, is_dual) ->
-   *      let fields_string, fields_shown = fields r_fields in
-   *      add_buffer fields_string;
-   *      (\* dpr' @@ concat ["Fields (if not tuple):" ; Buffer.contents @@ row_fields ctx p strip_wild ~is_tuple:false ~sep:sep r_fields]; *\)
-   *      let var = row_var ctx p r_var in
-   *      begin
-   *        match var with
-   *        | Some s -> (if space_row_var && fields_shown = 0
-   *                     then write " |"
-   *                     else write "|");
-   *                    dpr' "Has row variable";
-   *                    (if is_dual then write "~" else ());
-   *                    write s
-   *        | None -> ()
-   *      end;
-   *      read ()
-   *   | Meta pt -> dpr' "Meta in row!!";
-   *                meta ctx p pt (\* TODO This happens in tests/typed_ir.tests/Generalisation obeys value restriction (#871)
-   *                               * not entirely sure where this Meta is coming through, I though it could be via type_arg *\)
-   *   | _ -> failwith ("Invalid row: " ^ show_datatype @@ DecycleTypes.datatype r) *)
-
   and row_parts : row' printer
     = let open StringBuffer in
       Printer (
@@ -3028,6 +2949,7 @@ module NewPrint = struct
             | Effect r -> r, "{", "}", (Context.set_ambient Context.Effect ctx)
             | Select r -> r, "[+|", "|+]", ctx (* TODO *)
             | Choice r -> r, "[&|", "|&]", ctx (* TODO *)
+            | Row _ as r -> r, "", "", Context.set_ambient Context.Row ctx (* TODO what is this case? *)
             | _ -> failwith ("[*R] Invalid row:\n" ^ show_datatype @@ DecycleTypes.datatype r)
           in
           write buf before;
