@@ -2675,6 +2675,19 @@ module NewPrint = struct
          p ctx y buf
       | Empty, Empty -> ()
 
+    let constant : string -> unit printer
+      = fun s ->
+      Printer (fun _ctx () buf -> write buf s)
+
+    let wrap : 'a printer -> 'a -> unit printer
+      = fun pr v ->
+      Printer (fun ctx () buf -> apply pr ctx v buf)
+
+    let wrap_ambient : Context.ambient -> 'a printer -> 'a -> unit printer
+      = fun amb pr v ->
+      Printer (fun ctx () buf ->
+          let inner_ctx = Context.set_ambient amb ctx in
+          apply pr inner_ctx v buf)
   end
 
   type 'a printer = 'a StringBuffer.printer
@@ -3151,167 +3164,142 @@ module NewPrint = struct
           apply datatype ctx range buf;
         )
 
-  and session_io : context -> policy * names -> typ -> Buffer.t =
-    fun ctx p tp ->
-    let { buffer; concat; _ } = create_buffer () in
-    let t_char = match tp with
-      | Input _ -> "?"
-      | Output _ -> "!"
-      | _ -> failwith "Invalid session I/O type" (* this will never happen, because the function session_io
-                                                    will only ever be called for Input | Output *)
-                      (* TODO better way to handle the impossible cases? *)
-    in
-    (match tp with
-     | Input (tp, session_tp) | Output (tp, session_tp) ->
-        concat [ t_char ; "(" ; datatype ctx p tp ; ")." ; datatype ctx p session_tp ]
-     | _ -> () (* same as above, no error here because it would have already failed before *)
-    );
-    buffer
+  and session_io : typ printer
+    = let open StringBuffer in
+      Printer (
+          fun ctx tp buf ->
+          let t_char = match tp with
+            | Input _ -> "?"
+            | Output _ -> "!"
+            | _ -> failwith "Invalid session I/O type" (* this will never happen, because the function session_io
+                                                        *  will only ever be called for Input | Output *)
+          in
+          match tp with
+          | Input (tp, session_tp) | Output (tp, session_tp) ->
+             write buf t_char;
+             write buf "(";
+             apply datatype ctx tp buf;
+             write buf ").";
+             apply datatype ctx session_tp buf
+          | _ -> () (* same as above, no error here because it would have already failed before *)
+        )
 
-  and session_select_choice : context -> policy * names -> typ -> Buffer.t =
-    fun ctx p tp ->
-    let { buffer; concat; _ } = create_buffer () in
-    let t_char = match tp with
-      | Select _ -> "+"
-      | Choice _ -> "&"
-      | _ -> failwith "Invalid session type (Select | Choice)" (* this will never happen, because
-                                                                  session_select_choice is only called
-                                                                  from datatype, and only for Select | Choice *)
-    in
-    (match tp with
-     | Select r | Choice r ->
-        concat [ "[" ; t_char ; "|" ; row "," ctx p r ; "|" ; t_char ; "]" ]
-     | _ -> () (* see above, this will never happen (it would have failed above *)
-    );
-    buffer
+  and session_dual : typ printer
+    = let open StringBuffer in
+      Printer (
+          fun ctx tp buf ->
+          let dtype = datatype ctx tp buf in
+          write buf "~";
+          match tp with
+          | Input _ | Output _ | Select _ | Choice _ ->
+             write buf "(";
+             apply dtype buf;
+             write buf ")"
+          | _ -> apply dtype buf
+        )
 
-  and session_dual : context -> policy * names -> typ -> Buffer.t =
-    fun ctx p tp ->
-    let { buffer; write; concat; _ } = create_buffer () in
-    let dtype = datatype ctx p tp in
-    write "~";
-    (match tp with
-     | Input _ | Output _ | Select _ | Choice _ ->
-        concat [ "(" ; dtype ; ")" ]
-     | _ -> write dtype);
-    buffer
+  and quantifier : Quantifier.t printer
+    = let open StringBuffer in
+      Printer (
+          fun ctx qr buf ->
+          (* dpr' "quantifier"; *)
+          let var = Quantifier.to_var qr in
+          let var_name = Vars.find var (Context.tyvar_names ctx) in
+          let knd = Quantifier.to_kind qr in
+          write buf var_name;
+          apply kind_name ctx knd buf)
 
-  and quantifier : (policy * names) -> Quantifier.t -> string =
-    fun ((_, vars) as p) qr ->
-    (* dpr' "quantifier"; *)
-    let var = Quantifier.to_var qr in
-    let var_name = Vars.find var vars in
-    let knd = Quantifier.to_kind qr in
-    let knd_name = kind_name p knd in
-    let { write; read; add_buffer; _ } = create_buffer () in
-    write var_name;
-    (match knd_name with
-     | None -> ()
-     | Some b -> write "::";
-                 add_buffer b);
-    read ()
-
-  and forall : context -> policy * names -> Quantifier.t list -> typ -> Buffer.t =
-    fun ctx p binding formula ->
-    (* dpr' "forall"; *)
-    let { buffer; write; concat; _ } = create_buffer () in
-    let quantifiers = List.map (fun qr -> quantifier p qr) binding in
-    (* let inner_context = { ctx with bound_vars = TypeVarSet.add v bound_vars } in *)
-    let inner_ctx = List.fold_left (fun inner_ctx qr -> let v = Quantifier.to_var qr in
-                                                        { inner_ctx with bound_vars = TypeVarSet.add v inner_ctx.bound_vars } ) ctx binding in
-    write "forall ";
-    concat ~sep:"," quantifiers;
-    write ".";
-    write (datatype inner_ctx p formula);
-    (* Debug.print ("Quantifier: " ^ Buffer.contents buffer); *)
-    buffer
+  and forall : (Quantifier.t list * typ) printer
+    = let open StringBuffer in
+      Printer (
+          fun ctx (binding, tp) buf ->
+          let inner_ctx = Context.bind_tyvars (List.map Quantifier.to_var binding) ctx in
+          write buf "forall ";
+          concat ~sep:"," quantifier binding ctx buf;
+          apply datatype inner_ctx tp buf
+        )
 
   (* code for printing relational lenses taken verbatim from the original printer *)
-  and lens : Lens.Type.t -> string =
-    fun _typ ->
-    let open Lens in
-    let sort = Type.sort _typ in
-    let cols = Sort.present_colset sort |> Column.Set.elements in
-    let fds = Sort.fds sort in
-    let predicate =
-      Sort.predicate sort
-      |> OptionUtils.from_option (Phrase.Constant.bool true) in
-    let pp_col f col =
-      Format.fprintf f "%s : %a"
-        (Lens.Column.alias col)
-        Lens.Phrase.Type.pp_pretty (Lens.Column.typ col) in
-    if Lens.Type.is_abstract _typ
-    then
-      if Lens.Type.is_checked _typ
-      then
-        Format.asprintf "LensChecked((%a), { %a })"
-          (Lens.Utility.Format.pp_comma_list pp_col) cols
-          Lens.Fun_dep.Set.pp_pretty fds
-      else
-        Format.asprintf "LensUnchecked((%a), { %a })"
-          (Lens.Utility.Format.pp_comma_list pp_col) cols
-          Lens.Fun_dep.Set.pp_pretty fds
-    else
-      Format.asprintf "Lens((%a), %a, { %a })"
-        (Lens.Utility.Format.pp_comma_list pp_col) cols
-        Lens.Database.fmt_phrase_dummy predicate
-        Lens.Fun_dep.Set.pp_pretty fds
+  and lens : Lens.Type.t printer
+    = let open StringBuffer in
+      Printer (
+          fun _ctx _typ buf ->
+          let open Lens in
+          let sort = Type.sort _typ in
+          let cols = Sort.present_colset sort |> Column.Set.elements in
+          let fds = Sort.fds sort in
+          let predicate =
+            Sort.predicate sort
+            |> OptionUtils.from_option (Phrase.Constant.bool true) in
+          let pp_col f col =
+            Format.fprintf f "%s : %a"
+              (Lens.Column.alias col)
+              Lens.Phrase.Type.pp_pretty (Lens.Column.typ col) in
+          let ret =
+            if Lens.Type.is_abstract _typ
+            then
+              if Lens.Type.is_checked _typ
+              then
+                Format.asprintf "LensChecked((%a), { %a })"
+                  (Lens.Utility.Format.pp_comma_list pp_col) cols
+                  Lens.Fun_dep.Set.pp_pretty fds
+              else
+                Format.asprintf "LensUnchecked((%a), { %a })"
+                  (Lens.Utility.Format.pp_comma_list pp_col) cols
+                  Lens.Fun_dep.Set.pp_pretty fds
+            else
+              Format.asprintf "Lens((%a), %a, { %a })"
+                (Lens.Utility.Format.pp_comma_list pp_col) cols
+                Lens.Database.fmt_phrase_dummy predicate
+                Lens.Fun_dep.Set.pp_pretty fds
+          in
+          write buf ret)
 
-  and table : context -> policy * names -> typ * typ * typ -> Buffer.t =
-    fun ctx p (r, w, n) ->
-    let datatype' = datatype ctx p in
-    let { buffer; write; concat; _ } = create_buffer () in
-    write "TableHandle(";
-    concat ~sep:"," [ datatype' r ; datatype' w ; datatype' n ];
-    write ")";
-    buffer
+  and table : (typ * typ * typ) printer
+    = let open StringBuffer in
+      Printer (fun ctx (r, w, n) buf ->
+          write buf "TableHandle(";
+          concat ~sep:"," datatype [ r ;  w ;  n ] ctx buf;
+          write buf ")")
 
-  and datatype : context -> policy * names -> datatype -> string =
-    fun ctx p (* ?(seen_metas=None) *) tp ->
-    (* dpr' "datatype"; *)
-    let { write; read; add_buffer; _ } = create_buffer () in
-    begin
-      match tp with
-      | Not_typed -> write "Not typed" (* keeping this in case we ever need to print some intermediate steps *)
+  and datatype : datatype printer
+    (* and datatype : context -> policy * names -> datatype -> string = *)
+    = let open StringBuffer in
+      Printer (
+          fun ctx tp buf ->
+          let printer =
+            match tp with
+            (* keeping this Not_typed in case we ever need to print some intermediate steps *)
+            | Not_typed          -> constant "Not typed"
 
-      (* In original printer, these would fail, saying Var | Recursive | Closed can be only within Meta,
-       * but I think it's not the printer's job to check this, instead only print what was received?
-       * (though I don't know how Closed would even print, so not doing that) *)
-      | Var (vid, knd, _) -> write (var ctx p vid knd)
-      | Recursive v -> write (recursive ctx p v)
-      | Application a -> write (application ctx p a)
-      | Alias ((name, _, arg_types, is_dual), _)
-        | RecursiveApplication { r_name = name; r_args = arg_types; r_dual = is_dual; _ }
-        -> write (alias_recapp ctx p name arg_types is_dual)
+            | Var (vid, knd, _)  -> wrap var (vid, knd)
+            | Recursive v        -> wrap recursive v
+            | Application a      -> wrap application a
+            | Alias ((name, _, arg_types, is_dual), _)
+              | RecursiveApplication { r_name = name; r_args = arg_types; r_dual = is_dual; _ }
+              -> wrap alias_recapp (name, arg_types, is_dual)
 
-      | Meta pt -> write (meta ctx p pt)
-      | Present t -> write (presence ctx p t) (* TODO want colon? *)
-      | Primitive t -> write (primitive t)
+            | Meta pt            -> meta pt
+            | Present t          -> wrap presence t
+            | Primitive t        -> wrap primitive t
 
-      | Function (domain, effects, range) -> add_buffer (func ctx p domain effects range)
-      | Lolli (domain, effects, range) -> add_buffer (func ~is_lolli:true ctx p domain effects range)
+            | Function f         -> wrap func f
+            | Lolli f            -> wrap_ambient Context.Linfun func f
 
-      (* | Record r -> concat [ "(" ; (row ~maybe_tuple:None "," (\* tuples => space | records => no space *\) ctx p r) ; ")" ]
-       * | Variant r -> dpr' "Variant";
-       *                concat [ "[|" ; (row "|" ctx p r ~hide_units:true) ; "|]" ] *)
-      | Table tab -> add_buffer (table ctx p tab)
-      | Lens tp -> write (lens tp)
-      | ForAll (binding, tp) -> add_buffer (forall ctx p binding tp)
+            | Table tab          -> wrap table tab
+            | Lens tp            -> wrap lens tp
+            | ForAll fa          -> wrap forall fa
 
-      (* | Effect r -> concat [ "{"; row "," ctx p r ; "}" ]
-       * | Row r -> concat [ (\* "R<<"; *\) (row " SEP(Row)? " ctx p (Row r)) (\* ; ">>" *\) ] (\* TODO should this case even exist? *\) *)
+            | Input _ | Output _ -> wrap session_io tp
+            | Dual tp            -> wrap session_dual tp
+            | End                -> constant "End"
 
-      (* TODO check if these are correct - largely inspired by how original printer handled these *)
-      | Input _ | Output _ -> add_buffer (session_io ctx p tp)
-      (* | Select _ | Choice _ -> add_buffer (session_select_choice ctx p tp) *)
-      | Dual tp -> add_buffer (session_dual ctx p tp)
-      | End -> write "End" (* TODO think this is just a contructor-like thingy? *)
+            | Record _ | Variant _ | Effect _ | Row _ | Select _ | Choice _
+              -> wrap row' tp
 
-      | (Record _ | Variant _ | Effect _ | Row _ | Select _ | Choice _ ) as r -> write (row' ctx p r |> fst3)
-
-      | _ -> failwith ("Printer for this type not implemented:\n" ^ show_datatype @@ DecycleTypes.datatype tp)
-    end;
-    read ()
+            | _ -> failwith ("Printer for this type not implemented:\n" ^ show_datatype @@ DecycleTypes.datatype tp)
+          in
+          apply printer ctx () buf)
 
   (* let context_with_shared_effect :
    *   policy ->
