@@ -81,7 +81,7 @@ exit : 0
 stdout : fun : forall a::Row.() ~a~> ()
 
 Wild effect compatibility #5 (#873, 3)
-sig foo : () {a}~> () fun foo () { escape e in { (fun (esc) { esc(()) })(e) }}
+sig foo : () { |e}~> () fun foo () { escape e in { (fun (esc) { esc(()) })(e) }}
 exit : 0
 stdout : () : ()
 
