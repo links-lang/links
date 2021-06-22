@@ -529,7 +529,8 @@ struct
 
     method set_allowed_effects eff_row = {< allowed_effects = eff_row >}, allowed_effects
 
-    method impose_presence_of_effect effect_name effect_typ occurrence : unit =
+    method impose_presence_of_effect (effect_name, effect_pre) occurrence : unit =
+      let effect_typ = TypeUtils.from_present effect_pre in
       ensure_effect_present_in_row (o#extract_type_equality_context ()) allowed_effects effect_name effect_typ occurrence
 
     method add_typevar_to_context id kind = {< type_var_env = Env.bind id kind type_var_env  >}
@@ -819,7 +820,7 @@ struct
               o#optionu
                 (fun o (limit, offset) ->
                    (* Query blocks themselves only have the wild effect when they have a range *)
-                   o#impose_presence_of_effect "wild" Types.unit_type (SSpec special);
+                   o#impose_presence_of_effect Types.wild_present (SSpec special);
 
                    let o, limit, ltype = o#value limit in
                    let o, offset, otype = o#value offset in
@@ -850,7 +851,7 @@ struct
                We disambiguate between the two later on. *)
 
             (* The insert itself is wild *)
-            o#impose_presence_of_effect "wild" Types.unit_type (SSpec special);
+            o#impose_presence_of_effect Types.wild_present (SSpec special);
             let o, source, source_t = o#value source in
             (* this implicitly checks that source is a table *)
             let table_read = TypeUtils.table_read_type source_t in
@@ -905,7 +906,7 @@ struct
             end
 
         | Update ((x, source), where, body) ->
-            o#impose_presence_of_effect "wild" Types.unit_type (SSpec special);
+            o#impose_presence_of_effect Types.wild_present (SSpec special);
             let o, source, source_t = o#value source in
             (* this implicitly checks that source is a table *)
             let table_read = TypeUtils.table_read_type source_t in
@@ -938,7 +939,7 @@ struct
               o, Update ((x, source), where, body), Types.unit_type
 
         | Delete ((x, source), where) ->
-            o#impose_presence_of_effect "wild" Types.unit_type (SSpec special);
+            o#impose_presence_of_effect Types.wild_present (SSpec special);
             let o, source, source_t = o#value source in
             (* this implicitly checks that source is a table *)
             let table_read = TypeUtils.table_read_type source_t in
@@ -961,11 +962,11 @@ struct
             (* TODO: What is the correct argument type for v, since it expects a continuation? *)
               o, CallCC v, return_type ~overstep_quantifiers:false t
         | Select (l, v) -> (* TODO perform checks specific to this constructor *)
-           o#impose_presence_of_effect "wild" Types.unit_type (SSpec special);
+           o#impose_presence_of_effect Types.wild_present (SSpec special);
            let o, v, t = o#value v in
            o, Select (l, v), t
         | Choice (v, bs) -> (* TODO perform checks specific to this constructor *)
-           o#impose_presence_of_effect "wild" Types.unit_type (SSpec special);
+           o#impose_presence_of_effect Types.wild_present (SSpec special);
            let o, v, _ = o#value v in
            let o, bs, branch_types =
              o#name_map (fun o (b, c) ->
@@ -1199,7 +1200,7 @@ struct
             | None -> o
         in
 
-        (if is_recursive then o#impose_presence_of_effect "wild" Types.unit_type occurrence);
+        (if is_recursive then o#impose_presence_of_effect Types.wild_present occurrence);
 
         let previous_tyenv = o#get_type_var_env in
         let o = List.fold_left
