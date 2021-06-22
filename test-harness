@@ -201,7 +201,12 @@ def main():
     header = next(stream)
     if config_file == None and "config" in header:
         config_file = header["config"]
+        # Must remove the "config" key because we combine the header-provided
+        # options with the per-file ones later on. However, the global config
+        # file must be provided via the config_file parameter of evaluate only.
+        del header["config"]
 
+    jobs = []
     # Process the body.
     for name, code, opts in stream:
         # Combines the options set in the header with the ones specific to this
@@ -211,10 +216,17 @@ def main():
         # enqueues execution of
         # evaluate(name, code, config_file, **opts)
         # in the thread pool
-        tp.submit(evaluate, name, code, config_file, **opts)
+        jobs.append((name, tp.submit(evaluate, name, code, config_file, **opts)))
 
     # Wait for all jobs to finish
     tp.shutdown(wait=True)
+
+    # Check that none of the jobs raised an exception:
+    for (job_name, result) in jobs:
+        if result.exception():
+            raise SystemExit(("Error: Test \"%s\" failed to execute, producing "
+                              "the following exception:\n%s")
+                             % (job_name, result.exception()))
 
     print("%d failures (+%d ignored)\n%d successes\n" % (failures, ignored, successes))
     if failures > 0:

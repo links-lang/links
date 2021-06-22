@@ -208,9 +208,8 @@ let is_function_type t = match concrete_type t with
 let is_thunk_type t =
   is_function_type t && arg_types t = []
 
-let is_builtin_effect = function
-  | "wild" | "hear" -> true
-  | _ -> false
+let is_builtin_effect lbl =
+  lbl = Types.wild || lbl = Types.hear
 
 let rec element_type ?(overstep_quantifiers=true) t = match (concrete_type t, overstep_quantifiers) with
   | (ForAll (_, t), true) -> element_type t
@@ -445,3 +444,8 @@ let row_present_types t =
 let pack_types : Types.datatype list -> Types.datatype = function
   | [t] -> t
   | ts -> Types.make_tuple_type ts
+
+let from_present : Types.field_spec -> Types.datatype = function
+  | Present t -> t
+  | _ -> raise Types.tag_expectation_mismatch
+
