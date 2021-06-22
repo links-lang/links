@@ -2544,6 +2544,15 @@ module NewPrint = struct
                    ; ambient       = Toplevel
                    ; shared_effect = None }
 
+    (* let context = NewPrint.Context.setup policy Vars.tyvar_name_map (fun o -> o#typ t) in *)
+    let setup : policy -> names (* -> <?> visitor needed for shared effects TODO *) -> t
+      = fun policy tyvar_names -> { policy
+                                  ; bound_vars    = TypeVarSet.empty
+                                  ; tyvar_names
+                                  ; ambient       = Toplevel
+                                  ; shared_effect = None
+                                  }
+
     let bound_vars : t -> TypeVarSet.t
       = fun { bound_vars; _ } -> bound_vars
 
@@ -2554,7 +2563,6 @@ module NewPrint = struct
     let bind_tyvars : tid list -> t -> t
       = fun lst ctx ->
       List.fold_left (fun c' v' -> bind_tyvar v' c') ctx lst
-
 
     let tyvar_names : t -> names
       = fun { tyvar_names; _ } -> tyvar_names
@@ -2688,6 +2696,20 @@ module NewPrint = struct
       Printer (fun ctx () buf ->
           let inner_ctx = Context.set_ambient amb ctx in
           apply pr inner_ctx v buf)
+
+    let eval : 'a printer -> Context.t -> 'a -> string
+      = fun pr ctx v ->
+      let buf = Buffer.create 10 in (* initial size is an arbitrary value here (TODO) *)
+      apply pr ctx v buf;
+      Buffer.contents buf
+
+    let concat_strs : sep:string -> string list -> string
+      = let ctx_dont_care = Context.empty() in (* won't care about the context, just here to reuse the infrastructrue *)
+        fun ~sep lst ->
+        let buf = Buffer.create 10 in
+        let str_pr : string printer = Printer (fun _ s buf -> write buf s) in
+        concat ~sep str_pr lst ctx_dont_care buf;
+        Buffer.contents buf
   end
 
   type 'a printer = 'a StringBuffer.printer
@@ -2697,13 +2719,7 @@ module NewPrint = struct
   (* Set the quantifiers to be true to display any outer quantifiers.
      Set flavours to be true to distinguish flexible type variables
      from rigid type variables. *)
-  type policy = pp_policy
-  type names  = (int, string * Vars.spec) Hashtbl.t
-  type context = { bound_vars: TypeVarSet.t; shared_effect: int option }
 
-
-  let empty_context : context = { bound_vars = TypeVarSet.empty;
-                                  shared_effect = None }
 
   (* For correct printing of subkinds, need to know the subkind in advance:
    * see line (1): that has to be Empty so that the :: is not printed *)
@@ -3148,7 +3164,7 @@ module NewPrint = struct
                  (if is_wild then write buf "~" else write buf "-");
                  (* add the arrowhead/lollipop *)
                  (if is_lolli then write buf "@" else write buf ">");
-              | _ -> failwith ("Illformed effect:\n" ^ datatype ctx p r)
+              | _ -> failwith ("Illformed effect:\n" ^ string_of_datatype ctx r)
             )
       in
 
@@ -3188,14 +3204,14 @@ module NewPrint = struct
     = let open StringBuffer in
       Printer (
           fun ctx tp buf ->
-          let dtype = datatype ctx tp buf in
+          let dtype = wrap datatype tp in
           write buf "~";
           match tp with
           | Input _ | Output _ | Select _ | Choice _ ->
              write buf "(";
-             apply dtype buf;
+             apply dtype ctx () buf;
              write buf ")"
-          | _ -> apply dtype buf
+          | _ -> apply dtype ctx () buf
         )
 
   and quantifier : Quantifier.t printer
@@ -3301,6 +3317,30 @@ module NewPrint = struct
           in
           apply printer ctx () buf)
 
+  (* outside interface functions *)
+  and string_of_datatype : Context.t -> datatype -> string
+    = fun ctx v -> StringBuffer.eval datatype ctx v
+
+  let string_of_row : Context.t -> row -> string
+    = fun ctx v -> StringBuffer.eval row' ctx v
+
+  let string_of_presence : Context.t -> typ -> string
+    = fun ctx v -> StringBuffer.eval presence ctx v
+
+  let string_of_row_var : Context.t -> row_var -> string option
+    = fun ctx v ->
+    let open StringBuffer in
+    let m' = meta v in
+    match m' with
+    | Empty -> None
+    | Printer _ -> Some (StringBuffer.eval m' ctx ())
+
+  let string_of_type_arg : Context.t -> type_arg -> string
+    = fun ctx v -> StringBuffer.eval type_arg ctx v
+
+  let string_of_quantifier : Context.t -> Quantifier.t -> string
+    = fun ctx v -> StringBuffer.eval quantifier ctx v
+
   (* let context_with_shared_effect :
    *   policy ->
    *   (( (\* TODO *\)
@@ -3321,80 +3361,85 @@ module NewPrint = struct
    *   context = *)
 
   (* TODO copied from original to satisfy interface *)
-  let maybe_shared_effect = function
-    | Function _ | Lolli _ -> true
-    | Alias ((_, qs, _, _), _) | RecursiveApplication { r_quantifiers = qs; _ } ->
-       begin match ListUtils.last_opt qs with
-       | Some (PrimaryKind.Row, (_, Restriction.Effect)) -> true
-       | _ -> false
-       end
-    | _ -> false
+  (* let maybe_shared_effect = function
+   *   | Function _ | Lolli _ -> true
+   *   | Alias ((_, qs, _, _), _) | RecursiveApplication { r_quantifiers = qs; _ } ->
+   *      begin match ListUtils.last_opt qs with
+   *      | Some (PrimaryKind.Row, (_, Restriction.Effect)) -> true
+   *      | _ -> false
+   *      end
+   *   | _ -> false *)
 
   (* TODO see above *)
-  let context_with_shared_effect policy visit =
-    let find_row_var r =
-      let r =
-        match fst (unwrap_row r) with
-        | Row (_, r, _) -> r
-        | _ -> raise tag_expectation_mismatch
-      in
-      begin match Unionfind.find r with
-      | Var (var, _, _) -> Some var
-      | _ -> None
-      end
-    in
-    (* Find a shared effect variable from the right most arrow or type alias. *)
-    let rec find_shared_var t =
-      match t with
-      | Function (_, _, r) | Lolli (_, _, r) when maybe_shared_effect r -> find_shared_var r
-      | Function (_, e, _) | Lolli (_, e, _) -> find_row_var e
-      | Alias ((_, _, ts, _), _) | RecursiveApplication { r_args = ts; _ } when maybe_shared_effect t ->
-         begin match ListUtils.last ts with
-         | (PrimaryKind.Row, (Row _ as r)) -> find_row_var r
-         | _ -> None
-         end
-      | _ -> None
-    in
-    let obj =
-      object (self)
-        inherit Transform.visitor as super
-
-        val var = None
-        method var = var
-
-        method! typ typ =
-          match self#var with
-          | None ->
-             begin match find_shared_var typ with
-             | Some v -> {<var = Some v>}, typ
-             | None -> super#typ typ
-             end
-          | Some _ -> self, typ
-      end
-    in
-    if policy.effect_sugar then
-      let (obj, _) = visit obj in
-      { empty_context with shared_effect = obj#var }
-    else
-      empty_context
+  (* let context_with_shared_effect policy visit =
+   *   let find_row_var r =
+   *     let r =
+   *       match fst (unwrap_row r) with
+   *       | Row (_, r, _) -> r
+   *       | _ -> raise tag_expectation_mismatch
+   *     in
+   *     begin match Unionfind.find r with
+   *     | Var (var, _, _) -> Some var
+   *     | _ -> None
+   *     end
+   *   in
+   *   (\* Find a shared effect variable from the right most arrow or type alias. *\)
+   *   let rec find_shared_var t =
+   *     match t with
+   *     | Function (_, _, r) | Lolli (_, _, r) when maybe_shared_effect r -> find_shared_var r
+   *     | Function (_, e, _) | Lolli (_, e, _) -> find_row_var e
+   *     | Alias ((_, _, ts, _), _) | RecursiveApplication { r_args = ts; _ } when maybe_shared_effect t ->
+   *        begin match ListUtils.last ts with
+   *        | (PrimaryKind.Row, (Row _ as r)) -> find_row_var r
+   *        | _ -> None
+   *        end
+   *     | _ -> None
+   *   in
+   *   let obj =
+   *     object (self)
+   *       inherit Transform.visitor as super
+   *
+   *       val var = None
+   *       method var = var
+   *
+   *       method! typ typ =
+   *         match self#var with
+   *         | None ->
+   *            begin match find_shared_var typ with
+   *            | Some v -> {<var = Some v>}, typ
+   *            | None -> super#typ typ
+   *            end
+   *         | Some _ -> self, typ
+   *     end
+   *   in
+   *   if policy.effect_sugar then
+   *     let (obj, _) = visit obj in
+   *     { empty_context with shared_effect = obj#var }
+   *   else
+   *     empty_context *)
 
   (* TODO for now just copied from original to make it work *)
-  let tycon_spec ({ bound_vars; _ } as context) p =
-    let bound_vars tyvars =
-      List.fold_left
-        (fun bound_vars tyvar ->
-          TypeVarSet.add (Quantifier.to_var tyvar) bound_vars)
-        bound_vars tyvars
-    in function
-    | `Alias (tyvars, body) ->
-       let ctx = { context with bound_vars = bound_vars tyvars } in
-       begin
-         match tyvars with
-         | [] -> datatype ctx p body
-         | _ -> mapstrcat "," (quantifier p) tyvars ^"."^ datatype ctx p body
-       end
-    | `Mutual _ -> "mutual"
-    | `Abstract _ -> "abstract"
+  let tycon_spec : [< `Abstract of 'a | `Alias of 'b list * 'c | `Mutual of 'd] printer
+    = let open StringBuffer in
+      Printer (
+          fun ctx v buf ->
+          match v with
+          | `Alias (tyvars, body) ->
+             (* let ctx = { context with bound_vars = bound_vars tyvars } in *)
+             let ctx = Context.bind_tyvars (List.map Quantifier.to_var tyvars) ctx in
+             begin
+               match tyvars with
+               | [] -> apply datatype ctx body buf
+               | _ -> concat ~sep:"," quantifier tyvars ctx buf;
+                      write buf ".";
+                      apply datatype ctx body buf
+             end
+          | `Mutual _ -> write buf "mutual"
+          | `Abstract _ -> write buf "abstract")
+
+  let string_of_tycon_spec : Context.t -> 'a -> string
+    = fun ctx t -> StringBuffer.eval tycon_spec ctx t
+
 end
 
 let default_pp_policy : unit -> pp_policy =
@@ -3529,8 +3574,10 @@ let rec string_of_datatype ?(policy=default_pp_policy) ?(refresh_tyvar_names=tru
         let t = if policy.quantifiers then t
                 else NewPrint.strip_quantifiers t in
         build_tyvar_names ~refresh_tyvar_names free_bound_type_vars [t];
-        let context = NewPrint.context_with_shared_effect policy (fun o -> o#typ t) in
-        let new_type = (NewPrint.datatype context (policy, Vars.tyvar_name_map) t) in
+        (* let context = NewPrint.context_with_shared_effect policy (fun o -> o#typ t) in
+         * let new_type = (NewPrint.string_of_datatype context (policy, Vars.tyvar_name_map) t) in *)
+        let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
+        let new_type = NewPrint.string_of_datatype context t in
         let old_type = begin
             if Settings.get print_old_new then
               begin
@@ -3549,7 +3596,8 @@ let rec string_of_datatype ?(policy=default_pp_policy) ?(refresh_tyvar_names=tru
                      string_of_bool (test_type_roundtrip t new_type) ]
                  else []
         in
-        concat ~sep:"\n" (new_type :: old_type @ rt)
+        let module SB = NewPrint.StringBuffer in
+        SB.concat_strs ~sep:"\n" (new_type :: old_type @ rt)
 
       else
         begin
@@ -3574,8 +3622,10 @@ let string_of_row ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) row =
     build_tyvar_names ~refresh_tyvar_names free_bound_row_type_vars [row];
     begin
       if Settings.get use_new_type_pp then
-        let context = NewPrint.context_with_shared_effect policy (fun o -> o#row row) in
-        NewPrint.row' context (policy, Vars.tyvar_name_map) row |> fst3
+        (* let context = NewPrint.context_with_shared_effect policy (fun o -> o#row row) in
+         * NewPrint.row' context (policy, Vars.tyvar_name_map) row |> fst3 *)
+        let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
+        NewPrint.string_of_row context row
       else
         let context = Print.context_with_shared_effect policy (fun o -> o#row row) in
         Print.row "," context (policy, Vars.tyvar_name_map) row
@@ -3587,7 +3637,9 @@ let string_of_presence ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
                        (f : field_spec) =
   build_tyvar_names ~refresh_tyvar_names free_bound_field_spec_type_vars [f];
   if Settings.get use_new_type_pp then
-    NewPrint.presence NewPrint.empty_context (policy (), Vars.tyvar_name_map) f
+    (* NewPrint.presence NewPrint.empty_context (policy (), Vars.tyvar_name_map) f *)
+    let context = NewPrint.Context.setup (policy ()) Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
+    NewPrint.string_of_presence context f
   else
     Print.presence Print.empty_context (policy (), Vars.tyvar_name_map) f
 
@@ -3596,8 +3648,10 @@ let string_of_type_arg ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
   let policy = policy () in
   build_tyvar_names ~refresh_tyvar_names free_bound_type_arg_type_vars [arg];
   if Settings.get use_new_type_pp then
-    let context = NewPrint.context_with_shared_effect policy (fun o -> o#type_arg arg) in
-    NewPrint.type_arg context (policy, Vars.tyvar_name_map) arg
+    (* let context = NewPrint.context_with_shared_effect policy (fun o -> o#type_arg arg) in
+     * NewPrint.type_arg context (policy, Vars.tyvar_name_map) arg *)
+    let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
+    NewPrint.string_of_type_arg context arg
   else
     let context = Print.context_with_shared_effect policy (fun o -> o#type_arg arg) in
     Print.type_arg context (policy, Vars.tyvar_name_map) arg
@@ -3607,7 +3661,10 @@ let string_of_row_var ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) ro
   match
     begin
       if Settings.get use_new_type_pp then
-        NewPrint.row_var NewPrint.empty_context (policy (), Vars.tyvar_name_map) row_var
+        (* NewPrint.row_var NewPrint.empty_context (policy (), Vars.tyvar_name_map) row_var *)
+        let module C = NewPrint.Context in
+        let context = C.setup (policy ()) Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
+        NewPrint.string_of_row_var (C.set_ambient C.Row context) row_var
       else
         Print.row_var Print.name_of_type "," Print.empty_context (policy (), Vars.tyvar_name_map) row_var
     end
@@ -3617,14 +3674,17 @@ let string_of_row_var ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) ro
 let string_of_tycon_spec ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) (tycon : tycon_spec) =
   build_tyvar_names ~refresh_tyvar_names free_bound_tycon_type_vars [tycon];
   if Settings.get use_new_type_pp then
-    NewPrint.tycon_spec NewPrint.empty_context (policy (), Vars.tyvar_name_map) tycon
+    let context = NewPrint.Context.setup (policy ()) Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
+    NewPrint.string_of_tycon_spec context tycon
   else
     Print.tycon_spec Print.empty_context (policy (), Vars.tyvar_name_map) tycon
 
 let string_of_quantifier ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) (quant : Quantifier.t) =
   build_tyvar_names ~refresh_tyvar_names free_bound_quantifier_vars [quant];
   if Settings.get use_new_type_pp then
-    NewPrint.quantifier (policy (), Vars.tyvar_name_map) quant
+    (* NewPrint.quantifier (policy (), Vars.tyvar_name_map) quant *)
+    let context = NewPrint.Context.setup (policy ()) Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
+    NewPrint.string_of_quantifier context quant
   else
     Print.quantifier (policy (), Vars.tyvar_name_map) quant
 
