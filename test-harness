@@ -97,12 +97,8 @@ def split_arguments(args = []):
             links_args.append(args[i])
     return (links_args, rest_args)
 
-def evaluate(name, code, config_file, old_printer='', stdout='', stderr='', exit = '0', env = None, filemode='', args='', ignore = None):
+def evaluate(name, code, config_file, stdout='', stderr='', exit = '0', env = None, filemode='', args='', ignore = None):
     arg_array, rest_array = split_arguments(patch_arguments(str.split(args)))
-    if old_printer:
-        # Use the old type pretty printer
-        arg_array.insert(0, "-p")
-
     global failures
 
     if config_file != None:
@@ -189,16 +185,13 @@ def parseTestScript(stream):
 def main():
     config_file = None
 
-    from argparse import ArgumentParser
-    parser = ArgumentParser("test-harness")
-    parser.add_argument("filename", help="test file")
-    parser.add_argument("config", nargs="?", help="config file", default=None)
-    parser.add_argument("-opp", "--old-type-pretty-printer", action="store_true")
-
-    args = parser.parse_args()
-    filename = args.filename
-    config_file = args.config
-    old_printer = args.old_type_pretty_printer
+    if len(sys.argv) == 3:
+        filename = sys.argv[1]
+        config_file =  sys.argv[2]
+    elif len(sys.argv) == 2:
+        filename = sys.argv[1]
+    else:
+        raise SystemExit('Usage: run <test file> [<links config file>]')
 
     cpus=multiprocessing.cpu_count()
     tp = concurrent.futures.ThreadPoolExecutor(max_workers=cpus)
@@ -218,7 +211,7 @@ def main():
         # enqueues execution of
         # evaluate(name, code, config_file, **opts)
         # in the thread pool
-        tp.submit(evaluate, name, code, config_file, old_printer, **opts)
+        tp.submit(evaluate, name, code, config_file, **opts)
 
     # Wait for all jobs to finish
     tp.shutdown(wait=True)
