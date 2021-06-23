@@ -1,8 +1,8 @@
 let dpr' : string -> unit  =
-  fun _ ->
+  fun _x ->
   begin
     (* disabling debug printing for tests; to enable, uncomment the print *)
-    (* Printf.printf "%s\n" x;
+    (* Printf.printf "%s\n" _x;
      * flush_all () *)
 
     (* it does flushing because at one point I thought my prints weren't actually showing up;
@@ -1708,9 +1708,7 @@ let extract_tuple = function
 exception TypeDestructionError of string
 
 let extract_row t = match concrete_type t with
-  | Effect row
-  | Record row -> row
-  | Variant row -> row
+  | Effect row | Record row | Variant row | Select row | Choice row -> row
   | t ->
       raise @@ TypeDestructionError
                  ("Internal error: attempt to extract a row from a datatype that is not a record or a variant: "
@@ -2524,7 +2522,7 @@ module NewPrint = struct
                  | Effect
                  | Row
                  | RowVar
-                 | Binder
+                 | Binder [@@deriving show]
 
     type t = { policy: policy
              ; bound_vars: TypeVarSet.t
@@ -2560,6 +2558,7 @@ module NewPrint = struct
 
     let bind_tyvar : tid -> t -> t
       = fun ident ({ bound_vars; _ } as ctxt) ->
+      dpr' ("Context binding variable: " ^ string_of_int ident);
       { ctxt with bound_vars = TypeVarSet.add ident bound_vars }
 
     let bind_tyvars : tid list -> t -> t
@@ -2581,6 +2580,9 @@ module NewPrint = struct
     let set_ambient : ambient -> t -> t
       = fun ambient ctxt -> { ctxt with ambient }
 
+    let toplevel : t -> t
+      = set_ambient Toplevel
+
     (* generator for these below *)
     let is_ambient_toplevel : t -> bool
       = fun { ambient ; _ } -> ambient = Toplevel
@@ -2598,6 +2600,8 @@ module NewPrint = struct
       = fun { ambient ; _ } -> ambient = Effect
     let is_ambient_row : t -> bool
       = fun { ambient ; _ } -> ambient = Row
+    let is_ambient_rowvar : t -> bool
+      = fun { ambient ; _ } -> ambient = RowVar
     let is_ambient_binder : t -> bool
       = fun { ambient ; _ } -> ambient = Binder
 
@@ -2610,7 +2614,10 @@ module NewPrint = struct
            (let* ((amb-def
                    (buffer-substring-no-properties (region-beginning) (region-end)))
                   (amb-cases
-                   (mapcar #'string-trim (split-string (cadr (split-string amb-def "=")) "|"))))
+                   (mapcar #'string-trim
+			   (split-string
+			    (car (split-string
+				  (cadr (split-string amb-def "=")) "\\[")) "|"))))
              (goto-char original-point)
              (dolist (amb-name amb-cases)
                (insert (concat "let is_ambient_" (downcase amb-name) " : t -> bool\n"
@@ -2824,6 +2831,7 @@ module NewPrint = struct
     = let open StringBuffer in
       Printer (fun ctx (vid, knd) buf ->
           let subknd = Kind.subkind knd in
+          dpr' ("Vars.find_spec " ^ string_of_int vid);
           let var_name, (flavour, _ (* kind already known *), _) = Vars.find_spec vid (Context.tyvar_names ctx) in
           let in_binder = Context.is_ambient_binder ctx in
           (* Rules of printing vars:
@@ -2856,7 +2864,6 @@ module NewPrint = struct
   and recursive : (tid * Kind.t * typ) printer
     = let open StringBuffer in
       Printer (fun ctx (binder, knd, tp) buf ->
-          dpr' "recursive";
           (* assumes that the recursive variable itself shouldn't display kind information,
            * because the definition of the type itself is right there *)
           let rec_var_p = { (Context.policy ctx) with kinds = "hide" } in
@@ -2864,16 +2871,14 @@ module NewPrint = struct
           if IntSet.mem binder (Context.bound_vars ctx)
           then (* this recursive was already seen -> just need the variable name *)
             begin
-              dpr' "Already seen mu";
               apply var ctx' (binder, knd) buf
             end
           else (* this the first occurence of this mu -> print the whole type *)
             begin
-              dpr' "New mu";
               let binder_ctx = Context.bind_tyvar binder ctx' in
               let inner_context = Context.bind_tyvar binder ctx in
               let want_parens =
-                match Context.ambient ctx with
+                match Context.ambient ctx with (* TODO if there are no others, simplify this *)
                 | Context.RowVar -> true
                 | _ -> false
               in
@@ -2909,17 +2914,19 @@ module NewPrint = struct
             | "hear" when hide_primitive_labels ->
                (Printer (fun ctx () buf -> apply presence ctx fld buf)) :: printers
             | _ ->
+               dpr' ("Row field, label: " ^ label);
                if Context.is_ambient_tuple ctx
-               then (Printer (fun ctx () buf -> apply presence ctx fld buf)) :: printers
-               else Printer (
-                        fun ctx () buf ->
-                        write buf label;
-                        match concrete_type fld with
-                        | Var (v,knd,_) when Kind.primary_kind knd = PrimaryKind.Presence ->
-                           apply var ctx (v, knd) buf
-                        | _ ->
-                           apply presence ctx fld buf (* TODO label into presence *)
-                      ) :: printers
+               then (dpr' "TUPLE"; (Printer (fun ctx () buf -> apply presence ctx fld buf)) :: printers)
+               else (dpr' "NOT TUPLE";
+                     Printer (
+                         fun ctx () buf ->
+                         write buf label;
+                         match concrete_type fld with
+                         | Var (v,knd,_) when Kind.primary_kind knd = PrimaryKind.Presence ->
+                            apply var ctx (v, knd) buf
+                         | _ ->
+                            apply presence ctx fld buf (* TODO label into presence *)
+                       ) :: printers)
           in
           let printers = List.rev (FieldEnv.fold fold rfields []) in
           let sep =
@@ -2953,17 +2960,19 @@ module NewPrint = struct
              | _ -> extract_row r)
             |> unwrap_row |> fst in
           let r', before, after, new_ctx =
+            let module C = Context in
             match r with
-            | Record r ->
-               let is_tuple = (Context.is_ambient_tuple ctx) || (is_tuple unrolled) in (* not allowing onetuples by default *)
-               r, "(", ")", (if is_tuple then (Context.set_ambient Context.Tuple ctx) else ctx)
-            | Variant r -> r, "[|", "|]", (Context.set_ambient Context.Variant ctx)
-            | Effect r -> r, "{", "}", (Context.set_ambient Context.Effect ctx)
+            | Record _ ->
+               let is_tuple = (C.is_ambient_tuple ctx) || (is_tuple unrolled) in (* not allowing onetuples by default *)
+               unrolled, "(", ")", (if is_tuple then (C.set_ambient C.Tuple ctx) else (C.toplevel ctx))
+            | Variant r -> r, "[|", "|]", (C.set_ambient C.Variant ctx)
+            | Effect r -> r, "{", "}", (C.set_ambient C.Effect ctx)
             | Select r -> r, "[+|", "|+]", ctx (* TODO *)
             | Choice r -> r, "[&|", "|&]", ctx (* TODO *)
-            | Row _ as r -> r, "", "", Context.set_ambient Context.Row ctx (* TODO what is this case? *)
+            | Row _ as r -> r, "", "", C.set_ambient C.Row (C.toplevel ctx) (* TODO what is this case? *)
             | _ -> failwith ("[*R] Invalid row:\n" ^ show_datatype @@ DecycleTypes.datatype r)
           in
+          dpr' @@ Context.show_ambient @@ Context.ambient ctx;
           write buf before;
           apply row_parts new_ctx (extract_row_parts r') buf;
           write buf after
@@ -2975,14 +2984,13 @@ module NewPrint = struct
     = let open StringBuffer in
       Printer (
           fun ctx tp buf ->
-          dpr' "presence_type";
           (match concrete_type tp with
            | Absent -> write buf "-"
            | Present tp ->
               if not (concrete_type tp = unit_type && (Context.is_ambient_variant ctx))
               then begin
                   (if not (Context.is_ambient_tuple ctx) then write buf ":");
-                  apply datatype ctx tp buf
+                  apply datatype (Context.set_ambient Context.Presence ctx) tp buf
                 end
            | Meta pt -> apply (meta pt) (Context.set_ambient Context.Presence ctx) () buf
            | _ -> failwith "[*p] Type not implemented"))
@@ -2992,7 +3000,6 @@ module NewPrint = struct
       fun pt ->
       match Unionfind.find pt with
       | Closed -> (* nothing happens; TODO but maybe something should *sometimes* happen *)
-         dpr' "Closed Meta";
          Empty
       | Var (id, knd, _) -> Printer (fun ctx () buf -> apply var ctx (id, knd) buf)
       | Recursive r -> Printer (fun ctx () buf -> apply recursive ctx r buf)
@@ -3212,6 +3219,7 @@ module NewPrint = struct
   and table : (typ * typ * typ) printer
     = let open StringBuffer in
       Printer (fun ctx (r, w, n) buf ->
+          let ctx = Context.toplevel ctx in
           write buf "TableHandle(";
           concat ~sep:"," datatype [ r ;  w ;  n ] ctx buf;
           write buf ")")
