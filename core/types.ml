@@ -2658,9 +2658,9 @@ module NewPrint = struct
                    (buffer-substring-no-properties (region-beginning) (region-end)))
                   (amb-cases
                    (mapcar #'string-trim
-			   (split-string
-			    (car (split-string
-				  (cadr (split-string amb-def "=")) "\\[")) "|"))))
+                           (split-string
+                            (car (split-string
+                                  (cadr (split-string amb-def "=")) "\\[")) "|"))))
              (goto-char original-point)
              (dolist (amb-name amb-cases)
                (insert (concat "let is_ambient_" (downcase amb-name) " : t -> bool\n"
