@@ -2523,6 +2523,7 @@ module NewPrint = struct
                  | Variant
                  | Effect
                  | Row
+                 | Binder
 
     type t = { policy: policy
              ; bound_vars: TypeVarSet.t
@@ -2596,6 +2597,8 @@ module NewPrint = struct
       = fun { ambient ; _ } -> ambient = Effect
     let is_ambient_row : t -> bool
       = fun { ambient ; _ } -> ambient = Row
+    let is_ambient_binder : t -> bool
+      = fun { ambient ; _ } -> ambient = Binder
 
     (*
        (defun insert-ambient-helpers ()
@@ -2754,48 +2757,52 @@ module NewPrint = struct
        | _ -> full_name
 
 
-  let kind_name : Kind.t printer
-    = StringBuffer.Printer (
-          fun ctxt ((primary, subknd) as knd) buf ->
-          let open StringBuffer in
-          let full_name : Context.t -> Kind.t -> StringBuffer.t -> unit
-            = fun ctxt (k, sk) buf ->
-            write buf (PrimaryKind.to_string k);
-            StringBuffer.apply (subkind_name (Context.policy ctxt) sk) ctxt () buf
-          in
-          let policy = Context.policy ctxt in
-          match policy.kinds with
-          | "full" -> full_name ctxt knd buf
-          | "hide" -> write buf (PrimaryKind.to_string primary)
-          | _ ->
-             let module P = PrimaryKind in
-             let module L = Linearity in
-             let module R = Restriction in
+  let kind_name : Context.t -> Kind.t -> unit printer
+    = let open StringBuffer in
+      let module P = PrimaryKind in
+      let module L = Linearity in
+      let module R = Restriction in
+
+      fun ctx ((primary, subknd) as knd) ->
+
+      let full_name : unit printer
+        = Printer (fun ctxt () buf ->
+              write buf (P.to_string primary);
+              apply (subkind_name (Context.policy ctxt) subknd) ctxt () buf)
+      in
+      let policy = Context.policy ctx in
+      match policy.kinds, knd with
+      | "full", _ -> full_name
+      | "hide", _ -> constant (P.to_string primary)
+      | _, (PrimaryKind.Type, (L.Unl, R.Any)) -> Empty
+      | _ ->
+         Printer (
+             fun ctx () buf ->
              (* do simple cases first, match the other stuff later *)
              match primary with
              | P.Type -> begin
                  match subknd with
-                 | L.Unl, R.Any -> ()
+                 | L.Unl, R.Any -> failwith "[*K] This should not happen!"
                  | L.Unl, R.Base -> write buf (R.to_string res_base)
                  | L.Any, R.Session -> write buf (R.to_string res_session)
                  | subknd ->
-                    let pol = { (Context.policy ctxt) with kinds = "full" } in
-                    StringBuffer.apply (subkind_name pol subknd) ctxt () buf
+                    let pol = { (Context.policy ctx) with kinds = "full" } in
+                    apply (subkind_name pol subknd) ctx () buf
                end
              | PrimaryKind.Row -> begin
                  match subknd with
                  | L.Unl, R.Any | L.Unl, R.Effect ->
                     write buf (P.to_string pk_row)
                  | _ ->
-                    let ctxt' = Context.set_policy { policy with kinds = "full" } ctxt in
-                    full_name ctxt' knd buf
+                    let ctx' = Context.set_policy { policy with kinds = "full" } ctx in
+                    apply full_name ctx' () buf
                end
              | PrimaryKind.Presence -> begin
                  match subknd with
                  | L.Unl, R.Any -> write buf (P.to_string pk_presence)
                  | _ ->
-                    let ctxt' = Context.set_policy { policy with kinds = "full" } ctxt in
-                    full_name ctxt' knd buf
+                    let ctx' = Context.set_policy { policy with kinds = "full" } ctx in
+                    apply full_name ctx' () buf
                end)
 
   let strip_quantifiers : typ -> typ =
@@ -2817,6 +2824,7 @@ module NewPrint = struct
       Printer (fun ctx (vid, knd) buf ->
           let subknd = Kind.subkind knd in
           let var_name, (flavour, _ (* kind already known *), _) = Vars.find_spec vid (Context.tyvar_names ctx) in
+          let in_binder = Context.is_ambient_binder ctx in
           (* Rules of printing vars:
            * 1) If var only appears once (count = 1) & (policy.hide_fresh = true) => only as don't-care "_" [is_unique]
            * 2) But also if the var is bound (in context.bound_vars) it has to appear (by name -> overrides (1))! [is_bound]
@@ -2828,7 +2836,7 @@ module NewPrint = struct
 
           let print_var : string printer =
             Printer (fun ctx var_name buf ->
-                let is_anonymous = is_var_anonymous ctx vid in
+                let is_anonymous = (not in_binder) && is_var_anonymous ctx vid in
                 let show_flexible = (Context.policy ctx).flavours && flavour = `Flexible in
                 let is_presence = (PrimaryKind.Presence = Kind.primary_kind knd) in
 
@@ -2840,7 +2848,9 @@ module NewPrint = struct
                  | _, _        -> write buf var_name);
                 (if is_presence then write buf "}"))
           in
-          seq ~sep:"::" (print_var, subkind_name (Context.policy ctx) subknd) (var_name, ()) ctx buf)
+          if not in_binder
+          then seq ~sep:"::" (print_var, subkind_name (Context.policy ctx) subknd) (var_name, ()) ctx buf
+          else seq ~sep:"::" (print_var, kind_name ctx knd) (var_name, ()) ctx buf)
 
   and recursive : (tid * Kind.t * typ) printer
     = let open StringBuffer in
@@ -2859,8 +2869,8 @@ module NewPrint = struct
           else (* this the first occurence of this mu -> print the whole type *)
             begin
               dpr' "New mu";
+              let binder_ctx = Context.bind_tyvar binder ctx' in
               let inner_context = Context.bind_tyvar binder ctx in
-              let inner_context' = Context.bind_tyvar binder ctx' in
               let want_parens =
                 match Context.ambient ctx with
                 | Context.Toplevel -> false
@@ -2868,7 +2878,7 @@ module NewPrint = struct
               in
               (if want_parens then write buf "(");
               write buf "mu ";
-              apply var inner_context' (binder, knd) buf;
+              apply var binder_ctx (binder, knd) buf;
               write buf " . ";
               apply datatype inner_context tp buf; (* TODO maybe change ambient? *)
               (if want_parens then write buf ")");
@@ -3141,19 +3151,23 @@ module NewPrint = struct
       Printer (
           fun ctx qr buf ->
           (* dpr' "quantifier"; *)
-          let var = Quantifier.to_var qr in
-          let var_name = Vars.find var (Context.tyvar_names ctx) in
+          let vid = Quantifier.to_var qr in
+          (* let var_name = Vars.find var (Context.tyvar_names ctx) in *)
           let knd = Quantifier.to_kind qr in
-          write buf var_name;
-          apply kind_name ctx knd buf)
+          (* seq ~sep:"::" ()
+           * write buf var_name;
+           * apply kind_name ctx knd buf *)
+          apply var ctx (vid, knd) buf)
 
   and forall : (Quantifier.t list * typ) printer
     = let open StringBuffer in
       Printer (
           fun ctx (binding, tp) buf ->
+          let binder_ctx = Context.set_ambient Context.Binder ctx in
           let inner_ctx = Context.bind_tyvars (List.map Quantifier.to_var binding) ctx in
           write buf "forall ";
-          concat ~sep:"," quantifier binding ctx buf;
+          concat ~sep:"," quantifier binding binder_ctx buf;
+          write buf ".";
           apply datatype inner_ctx tp buf
         )
 
