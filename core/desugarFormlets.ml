@@ -19,17 +19,10 @@ let rec is_raw phrase =
         ~stage:DesugarFormlets
         ~message:"Invalid element in formlet literal")
 
-let tt =
-  function
-    | [t] -> t
-    | ts -> Types.make_tuple_type ts
-
 let xml_str           = "xml"
 let pure_str          = "pure"
 let plug_str          = "plug"
 let atatat_str        = "@@@"
-
-let closed_wild = Types.row_with ("wild", Types.Present Types.unit_type) (Types.make_empty_closed_row ())
 
 class desugar_formlets env =
 object (o : 'self_type)
@@ -98,7 +91,7 @@ object (o : 'self_type)
               in
               let vs, ts = List.rev vs', List.rev ts' in
 
-              (* Given (f1 -> v1 : t1) ... (fn -> vn : tt), we generate a term of the form
+              (* Given (f1 -> v1 : t1) ... (fn -> vn : tn), we generate a term of the form
                  (@@@)(f1, ... (@@@)(fn)(pure (fun(pn : tn)...(p1 : t1) { (p1, ..., pn) }))).
 
                  Thus we generate a function with the arguments in reverse, but the variables
@@ -106,8 +99,8 @@ object (o : 'self_type)
                *)
               let ft =
                 List.fold_right
-                  (fun t ft -> Types.Function (Types.make_tuple_type [t], closed_wild, ft))
-                  ts' (tt ts) in
+                  (fun t ft -> Types.Function (Types.make_tuple_type [t], Types.closed_wild_row, ft))
+                  ts' (TypeUtils.pack_types ts) in
               let open PrimaryKind in
               begin
                   match vs with
@@ -117,7 +110,7 @@ object (o : 'self_type)
                          fn_appl ~ppos xml_str [Row, o#lookup_effects] [with_dummy_pos e],
                          Types.unit_type)
                     | _ ->
-                        let args = List.map (fun t -> (Types.make_tuple_type [t], closed_wild)) ts' in
+                        let args = List.map (fun t -> (Types.make_tuple_type [t], Types.closed_wild_row)) ts' in
                         let (o, es, _) = TransformSugar.list o (fun o -> o#formlet_body) contents in
                         let eff = o#lookup_effects in
                         let base : phrase =
@@ -146,7 +139,7 @@ object (o : 'self_type)
               let context : phrase =
                 let name = Utility.gensym ~prefix:"_formlet_" () in
                 fun_lit ~ppos
-                        ~args:[Types.make_tuple_type [Types.xml_type], closed_wild]
+                        ~args:[Types.make_tuple_type [Types.xml_type], Types.closed_wild_row]
                         dl_unl
                         [[variable_pat ~ty:(Types.xml_type) name]]
                         (xml tag attrs attrexp [block ([], var name)]) in
@@ -164,7 +157,7 @@ object (o : 'self_type)
         let (ps, _, ts) = o#formlet_patterns body in
         let (o, body, _body_type) = o#formlet_body body in
         let (o, ps) = TransformSugar.listu o (fun o -> o#pattern) ps in
-        let o = o#with_effects closed_wild in
+        let o = o#with_effects Types.closed_wild_row in
         let (o, yields, yields_type) = o#phrase yields in
         let o = o#with_effects eff in
 
@@ -173,15 +166,15 @@ object (o : 'self_type)
             | [p] -> [[p]]
             | _ -> [[tuple_pat ps]] in
 
-        let arg_type = tt ts in
+        let arg_type = TypeUtils.pack_types ts in
         let open PrimaryKind in
         let e =
           fn_appl_node atatat_str
              [(Type, arg_type); (Type, yields_type); (Row, eff)]
              [body; fn_appl pure_str
-                      [(Type, Types.Function (Types.make_tuple_type [arg_type], closed_wild, yields_type));
+                      [(Type, Types.Function (Types.make_tuple_type [arg_type], Types.closed_wild_row, yields_type));
                        (Row, eff)]
-                    [fun_lit ~args:[Types.make_tuple_type [arg_type], closed_wild] dl_unl pss yields]] in
+                    [fun_lit ~args:[Types.make_tuple_type [arg_type], Types.closed_wild_row] dl_unl pss yields]] in
         (o, e, Instantiate.alias "Formlet" [(Type, yields_type)] tycon_env)
     | e -> super#phrasenode e
 end

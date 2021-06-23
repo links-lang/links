@@ -204,6 +204,10 @@ val float_type : datatype
 val database_type : datatype
 val xml_type : datatype
 val empty_type : datatype
+val wild : Label.t
+val hear : Label.t
+val wild_present : Label.t * datatype
+val hear_present : datatype -> (Label.t * datatype)
 
 (** get type variables *)
 val free_type_vars : datatype -> TypeVarSet.t
@@ -272,6 +276,10 @@ val make_closed_row : datatype field_env -> row
 val row_with : (string * field_spec) -> row -> row
 val extend_row : datatype field_env -> row -> row
 val extend_row_safe : datatype field_env -> row -> row option
+val open_row : Subkind.t -> row -> row
+val close_row : row -> row
+val closed_wild_row : row
+val remove_field : ?idempotent:bool -> Label.t -> row -> row
 
 (** deconstructing rows *)
 val extract_row : datatype -> row
