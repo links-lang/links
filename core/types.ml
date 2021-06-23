@@ -2571,7 +2571,8 @@ module NewPrint = struct
              ; bound_vars: TypeVarSet.t
              ; tyvar_names: names
              ; ambient: ambient
-             ; shared_effect: int option }
+             ; shared_effect: int option
+             ; seen_metas: row point list }
 
     let default_policy : unit -> policy
       = fun () ->
@@ -2585,7 +2586,8 @@ module NewPrint = struct
                    ; bound_vars    = TypeVarSet.empty
                    ; tyvar_names   = Hashtbl.create 0
                    ; ambient       = Toplevel
-                   ; shared_effect = None }
+                   ; shared_effect = None
+                   ; seen_metas    = [] }
 
     (* let context = NewPrint.Context.setup policy Vars.tyvar_name_map (fun o -> o#typ t) in *)
     let setup : policy -> names (* -> <?> visitor needed for shared effects TODO *) -> t
@@ -2594,6 +2596,7 @@ module NewPrint = struct
                                   ; tyvar_names
                                   ; ambient       = Toplevel
                                   ; shared_effect = None
+                                  ; seen_metas    = []
                                   }
 
     let bound_vars : t -> TypeVarSet.t
@@ -2607,6 +2610,10 @@ module NewPrint = struct
     let bind_tyvars : tid list -> t -> t
       = fun lst ctx ->
       List.fold_left (fun c' v' -> bind_tyvar v' c') ctx lst
+
+    let is_tyvar_bound : tid -> t -> bool
+      = fun ident ctx ->
+      TypeVarSet.mem ident (bound_vars ctx)
 
     let tyvar_names : t -> names
       = fun { tyvar_names; _ } -> tyvar_names
@@ -2910,15 +2917,17 @@ module NewPrint = struct
           (* assumes that the recursive variable itself shouldn't display kind information,
            * because the definition of the type itself is right there *)
           let rec_var_p = { (Context.policy ctx) with kinds = "hide" } in
-          let ctx' = Context.set_policy rec_var_p ctx in
-          if IntSet.mem binder (Context.bound_vars ctx)
+          let binder_ctx = Context.set_policy rec_var_p ctx in
+          if Context.is_tyvar_bound binder ctx
           then (* this recursive was already seen -> just need the variable name *)
             begin
-              apply var ctx' (binder, knd) buf
+              print_endline "Seen mu";
+              apply var binder_ctx (binder, knd) buf
             end
           else (* this the first occurence of this mu -> print the whole type *)
             begin
-              let binder_ctx = Context.bind_tyvar binder ctx' in
+              print_endline "Unseen mu";
+              (* let binder_ctx = Context.bind_tyvar binder ctx' in *)
               let inner_context = Context.bind_tyvar binder ctx in
               let want_parens =
                 match Context.ambient ctx with (* TODO if there are no others, simplify this *)
@@ -3041,13 +3050,24 @@ module NewPrint = struct
   and meta : typ point -> unit printer
     = let open StringBuffer in
       fun pt ->
+      let pt = match DecycleTypes.datatype (Meta pt) with
+        | Meta pt -> pt
+        | _ -> failwith "Impossible case"
+      in
       match Unionfind.find pt with
       | Closed -> (* nothing happens; TODO but maybe something should *sometimes* happen *)
          Empty
       | Var (id, knd, _) -> Printer (fun ctx () buf -> apply var ctx (id, knd) buf)
       | Recursive r -> Printer (fun ctx () buf -> apply recursive ctx r buf)
-      | t -> dpr' ("Meta - other type:\n" ^ show_datatype @@ DecycleTypes.datatype t);
-             Printer (fun ctx () buf -> apply datatype ctx t buf)
+      (* TODO need to take care of these recursing non-(var|mu) *)
+      | t -> print_endline ("Meta - other type:\n" ^ show_datatype @@ DecycleTypes.datatype t);
+             Printer (fun ctx () buf ->
+                 let ctx = (if List.mem pt ctx.Context.seen_metas
+                            then (print_endline "Seen meta (other)"; ctx)
+                            else (print_endline "Unseen meta(other)";
+                                  {ctx with Context.seen_metas = pt :: ctx.Context.seen_metas}))
+                 in
+                 apply datatype ctx t buf)
 
   and type_arg : type_arg printer
     = let open StringBuffer in
@@ -3268,7 +3288,6 @@ module NewPrint = struct
           write buf ")")
 
   and datatype : datatype printer
-    (* and datatype : context -> policy * names -> datatype -> string = *)
     = let open StringBuffer in
       Printer (
           fun ctx tp buf ->
