@@ -2523,6 +2523,7 @@ module NewPrint = struct
                  | Variant
                  | Effect
                  | Row
+                 | RowVar
                  | Binder
 
     type t = { policy: policy
@@ -2873,8 +2874,8 @@ module NewPrint = struct
               let inner_context = Context.bind_tyvar binder ctx in
               let want_parens =
                 match Context.ambient ctx with
-                | Context.Toplevel -> false
-                | _ -> true
+                | Context.RowVar -> true
+                | _ -> false
               in
               (if want_parens then write buf "(");
               write buf "mu ";
@@ -2925,7 +2926,7 @@ module NewPrint = struct
             let open Context in
             match ambient ctx with
             | Variant -> "|"
-            | Tuple -> ", "
+            | Tuple -> ", " (* tuples require a space as well *)
             | _ -> ","
           in
           concat' ~sep printers ctx buf;
@@ -2937,6 +2938,7 @@ module NewPrint = struct
                                                  (* starts with {, want to avoid \{\| *)
                 then write buf " |"
                 else write buf "|");
+               let ctx = Context.set_ambient Context.RowVar ctx in
                (if rdual then write buf "~");
                apply pr ctx () buf
              end)
@@ -3456,13 +3458,12 @@ let print_types_pretty
               |> convert parse_bool
               |> sync)
 
-(* Use new pretty printer for types (Samo) *)
-let use_new_type_pp
-  = Settings.(flag ~default:false "use_new_type_pretty_printer"
-              |> synopsis ("Toggles whether to use the new pretty printer for types"
-                           ^ "(this is a temporary dev option).")
-              |> convert parse_bool
-              |> CLI.(add (short 'n' <&> long "use_new_type_pretty_printer"))
+(* Use the old type pretty printer *)
+let use_old_type_pp
+  = Settings.(flag ~default:false "use_old_type_pretty_printer"
+              |> synopsis ("Toggles whether to use the old pretty printer for types")
+              |> (convert parse_bool)
+              |> CLI.(add (short 'p' <&> long "use_old_type_pretty_printer"))
               |> sync)
 
 let print_old_new
@@ -3473,7 +3474,7 @@ let print_old_new
 
 let pp_test_roundtrip
   = Settings.(flag ~default:false "type_pp_roundtrip"
-              |> synopsis "Test whether pretty-printed types are round-trippable."
+              |> synopsis "Test whether pretty-printed types are round-trippable. (NOT WORKING)"
               |> convert parse_bool
               |> CLI.(add (short 't' <&> long "pretty-types-roundtrip"))
               |> sync)
@@ -3494,14 +3495,14 @@ let test_type_roundtrip : datatype (* -> tycon_environment *) -> string -> bool 
    *    (\* TODO compare if the parsed type is isomorphic to t *\)
    *    true *)
   (* TODO dependency cycle; wanna use DesugarDatatypes.read or parts of it *)
-  true
+  failwith "Testing for type round trip is not implemented."
 
 (* string conversions *)
 let rec string_of_datatype ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
           (t : datatype) =
   if Settings.get print_types_pretty then
     begin
-      if Settings.get use_new_type_pp then
+      if not (Settings.get use_old_type_pp) then
         (* preserve the original arguments so old printer can be invoked as well *)
         let policy' = policy in
         let t' = t in
@@ -3517,9 +3518,9 @@ let rec string_of_datatype ?(policy=default_pp_policy) ?(refresh_tyvar_names=tru
         let old_type = begin
             if Settings.get print_old_new then
               begin
-                Settings.set use_new_type_pp false;
+                Settings.set use_old_type_pp true;
                 let s = string_of_datatype ~policy:policy' ~refresh_tyvar_names t' in
-                Settings.set use_new_type_pp true;
+                Settings.set use_old_type_pp false;
                 ["The old printer would say:" ; s ;
                  "New and old pretty types agree:" ;
                  string_of_bool (new_type = s) ]
@@ -3557,7 +3558,7 @@ let string_of_row ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) row =
     let policy = policy () in
     build_tyvar_names ~refresh_tyvar_names free_bound_row_type_vars [row];
     begin
-      if Settings.get use_new_type_pp then
+      if not (Settings.get use_old_type_pp) then
         (* let context = NewPrint.context_with_shared_effect policy (fun o -> o#row row) in
          * NewPrint.row' context (policy, Vars.tyvar_name_map) row |> fst3 *)
         let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
@@ -3572,7 +3573,7 @@ let string_of_row ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) row =
 let string_of_presence ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
                        (f : field_spec) =
   build_tyvar_names ~refresh_tyvar_names free_bound_field_spec_type_vars [f];
-  if Settings.get use_new_type_pp then
+  if not (Settings.get use_old_type_pp) then
     (* NewPrint.presence NewPrint.empty_context (policy (), Vars.tyvar_name_map) f *)
     let context = NewPrint.Context.setup (policy ()) Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
     NewPrint.string_of_presence context f
@@ -3583,7 +3584,7 @@ let string_of_type_arg ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
                        (arg : type_arg) =
   let policy = policy () in
   build_tyvar_names ~refresh_tyvar_names free_bound_type_arg_type_vars [arg];
-  if Settings.get use_new_type_pp then
+  if not (Settings.get use_old_type_pp) then
     (* let context = NewPrint.context_with_shared_effect policy (fun o -> o#type_arg arg) in
      * NewPrint.type_arg context (policy, Vars.tyvar_name_map) arg *)
     let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
@@ -3596,7 +3597,7 @@ let string_of_row_var ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) ro
   build_tyvar_names ~refresh_tyvar_names free_bound_row_var_vars [row_var];
   match
     begin
-      if Settings.get use_new_type_pp then
+      if not (Settings.get use_old_type_pp) then
         (* NewPrint.row_var NewPrint.empty_context (policy (), Vars.tyvar_name_map) row_var *)
         let module C = NewPrint.Context in
         let context = C.setup (policy ()) Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
@@ -3609,7 +3610,7 @@ let string_of_row_var ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) ro
 
 let string_of_tycon_spec ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) (tycon : tycon_spec) =
   build_tyvar_names ~refresh_tyvar_names free_bound_tycon_type_vars [tycon];
-  if Settings.get use_new_type_pp then
+  if not (Settings.get use_old_type_pp) then
     let context = NewPrint.Context.setup (policy ()) Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
     NewPrint.string_of_tycon_spec context tycon
   else
@@ -3617,7 +3618,7 @@ let string_of_tycon_spec ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
 
 let string_of_quantifier ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) (quant : Quantifier.t) =
   build_tyvar_names ~refresh_tyvar_names free_bound_quantifier_vars [quant];
-  if Settings.get use_new_type_pp then
+  if not (Settings.get use_old_type_pp) then
     (* NewPrint.quantifier (policy (), Vars.tyvar_name_map) quant *)
     let context = NewPrint.Context.setup (policy ()) Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
     NewPrint.string_of_quantifier context quant
