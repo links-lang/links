@@ -1711,12 +1711,51 @@ let extract_tuple = function
 (* Some helper functions from typeUtils.ml, to prevent cyclical dependencies *)
 exception TypeDestructionError of string
 
-let extract_row t = match concrete_type t with
+let typeUtils_concrete_type t =
+  let rec ct rec_names t : datatype =
+    match t with
+    | Alias (_, t) -> ct rec_names t
+    | Meta point ->
+       begin
+         match Unionfind.find point with
+         | Var _ -> t
+         | Recursive (var, _kind, t) ->
+            if RecIdSet.mem (MuBoundId var) rec_names then
+              Meta point
+            else
+              ct (RecIdSet.add (MuBoundId var) rec_names) t
+         | t -> ct rec_names t
+       end
+    | ForAll (qs, t) ->
+       begin
+         match ct rec_names t with
+         | ForAll (qs', t') ->
+            ForAll (qs @ qs', t')
+         | t ->
+            begin
+              match qs with
+              | [] -> t
+              | _ -> ForAll (qs, t)
+            end
+       end
+    | Dual s -> dual_type (ct rec_names s)
+    | RecursiveApplication ({ r_unique_name; r_dual; r_args; r_unwind ; _ } as appl) ->
+       if (RecIdSet.mem (NominalId r_unique_name) rec_names) then
+         RecursiveApplication appl
+       else
+         let body = r_unwind r_args r_dual in
+         ct (RecIdSet.add (NominalId r_unique_name) rec_names) body
+    | _ -> t
+  in
+  ct RecIdSet.empty t
+
+let extract_row t =
+  match typeUtils_concrete_type t with
   | Effect row | Record row | Variant row | Select row | Choice row -> row
   | t ->
-      raise @@ TypeDestructionError
-                 ("Internal error: attempt to extract a row from a datatype that is not a record or a variant: "
-                  ^ show_datatype @@ DecycleTypes.datatype t)
+     raise @@ TypeDestructionError
+                ("Internal error: attempt to extract a row from a datatype that is not a row container: "
+                 ^ show_datatype @@ DecycleTypes.datatype t)
 
 let extract_row_parts : t -> row' = function
     | Row parts -> parts

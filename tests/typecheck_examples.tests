@@ -50,6 +50,10 @@ Typecheck example file examples/AIPL14/Solutions/Problem4.links
 examples/AIPL14/Solutions/Problem4.links
 filemode : true
 
+Typecheck alias of record with functional update
+examples/alias_row_update.links
+filemode : true
+
 Typecheck example file examples/buttons.links
 examples/buttons.links
 filemode : true
