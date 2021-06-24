@@ -2667,6 +2667,25 @@ module NewPrint = struct
   end
 
   module StringBuffer = struct
+
+    (* this implementation doesn't use the other methods,
+     * because this is a helper function, not intended to be traced *)
+    let concat_strs : sep:string -> string list -> string
+      = fun ~sep lst ->
+      let _buf = Buffer.create 10 in
+      let wrt = Buffer.add_string _buf in
+      let rec loop =
+        function
+        | [] -> ()
+        | [last] -> wrt last
+        | not_last :: ((_ :: _) as rest) ->
+           begin wrt not_last;
+                 wrt sep;
+                 loop rest
+           end in
+      loop lst;
+      Buffer.contents _buf
+
     let trace_printer =
       Settings.(flag ~default:false "trace_printer"
                 |> synopsis "Trace pretty printer (only new)"
@@ -2702,9 +2721,14 @@ module NewPrint = struct
       let rec iter ~sep = function
         | [] -> ()
         | [last] -> write_trace_item last
-        | not_last :: rest -> write_trace_item not_last;
-                              wrt sep;
-                              iter ~sep rest
+        | ((v, s) as not_last) :: (((nv, ns) as next) :: rest) ->
+           if s = ns (* these sources are the same, join them together *)
+           then iter ~sep ((concat_strs ~sep:"" [v ; nv], s) ::  rest)
+           else begin
+               write_trace_item not_last;
+               wrt sep;
+               iter ~sep (next :: rest)
+             end
       in
       iter ~sep:" " (List.rev trace);
       Buffer.contents _buf
@@ -2715,7 +2739,6 @@ module NewPrint = struct
           begin
             fun bt s ->
             bt.trace <- (s, bt.current_printer) :: bt.trace;
-            Buffer.add_string bt.buf s
           end
         else (fun {buf;_} s -> Buffer.add_string buf s)
 
@@ -2806,24 +2829,6 @@ module NewPrint = struct
             let buf = create 10 in (* initial size is an arbitrary value here (TODO) *)
             apply pr ctx v buf;
             read buf)
-
-    (* this implementation doesn't use the other methods,
-     * because this is a helper function, not intended to be traced *)
-    let concat_strs : sep:string -> string list -> string
-      = fun ~sep lst ->
-      let _buf = Buffer.create 10 in
-      let wrt = Buffer.add_string _buf in
-      let rec loop =
-        function
-        | [] -> ()
-        | [last] -> wrt last
-        | not_last :: ((_ :: _) as rest) ->
-           begin wrt not_last;
-                 wrt sep;
-                 loop rest
-           end in
-      loop lst;
-      Buffer.contents _buf
 
   end
 
