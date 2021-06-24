@@ -3017,21 +3017,21 @@ module NewPrint = struct
                     (Printer ("row_parts.hear", fun ctx () buf -> apply presence ctx fld buf)) :: printers
                  | _ ->
                     if Context.is_ambient_tuple ctx
-                    then (Printer ("row_parts.tuple", fun ctx () buf -> apply presence ctx fld buf)) :: printers
+                    then wrap presence fld :: printers
                     else (Printer ("row_parts.not_tuple",
-                                  fun ctx () buf ->
-                                  write buf label;
-                                  let pre = match fld with
-                                    | Meta point -> Unionfind.find point
-                                    | _ -> fld
-                                  in
-                                  match pre with
-                                  | Var (v,knd,_) when Kind.primary_kind knd = PrimaryKind.Presence ->
-                                     apply var ctx (v, knd) buf
-                                  | Present _ | Absent ->
-                                     apply presence ctx pre buf (* TODO label into presence *)
-                                  | t -> failwith ("Not present: " ^ show_datatype (DecycleTypes.datatype t))
-                           )) :: printers
+                                   fun ctx () buf ->
+                                   write buf label;
+                                   let pre = match fld with
+                                     | Meta point -> Unionfind.find point
+                                     | _ -> fld
+                                   in
+                                   match pre with
+                                   | Var (v,knd,_) when Kind.primary_kind knd = PrimaryKind.Presence ->
+                                      apply var ctx (v, knd) buf
+                                   | Present _ | Absent ->
+                                      apply presence ctx pre buf (* TODO label into presence *)
+                                   | t -> failwith ("Not present: " ^ show_datatype (DecycleTypes.datatype t))
+                         )) :: printers
                in
 
                let printers = List.rev (FieldEnv.fold fold rfields []) in
@@ -3156,10 +3156,10 @@ module NewPrint = struct
              * even if the wild effect is hidden inside the recursive variable (will be visible after one unroll) *)
             (* TODO this is an opinionated solution, need to confirm if this is what we want *)
             let fields = unwrap_row r |> fst |> extract_row_parts |> fst3 in
-            match FieldEnv.lookup fld fields with
-            | None -> false
-            | Some (Present _) -> true
-            | Some Absent | Some (Meta _) -> false
+             match FieldEnv.lookup fld fields with
+             | None -> false
+             | Some (Present _) -> true
+             | Some Absent | Some (Meta _) -> false
             | _ -> failwith "Unexpected field presence value."
           in
           Printer ("func_arrow",
