@@ -3048,12 +3048,20 @@ module NewPrint = struct
                | (Printer _) as pr ->
                   begin
                     let module C = Context in
-                    (if List.length printers = 0 && (match C.ambient ctx with
-                                                     | C.Effect | C.Row | C.Variant -> true
-                                                     | _ -> false)
-                                                      (* starts with { or [|, want to avoid \{\| and [|| *)
-                     then write buf " |"
-                     else write buf "|");
+                    (* (if List.length printers = 0 && (match C.ambient ctx with
+                     *                                  | C.Effect | C.Row | C.Variant -> true
+                     *                                  | _ -> false)
+                     *                                   (\* starts with { or [|, want to avoid \{\| and [|| *\)
+                     *  then write buf " |"
+                     *  else write buf "|"); *)
+                    if List.length printers = 0 then
+                      begin
+                        match C.ambient ctx with
+                        | C.Effect | C.Row (*?*) -> write buf " |"
+                        | C.Variant -> () (* variants don't get pipe *)
+                        | _ -> write buf "|"
+                      end
+                    else write buf "|";
                     let ctx = C.set_ambient C.RowVar ctx in
                     (if rdual then write buf "~");
                     apply pr ctx () buf

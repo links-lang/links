@@ -18,4 +18,4 @@ stdout : fun : (() { |(mu a . F:(() { |a}~> ()) {}-> _::Any,wild:()|c)}~> ()) {F
 
 Recursive variant
 sig f : ([|(mu a. Op:() { |a}-> ())|]) {}-> () fun f(_) { () } f
-stdout : fun : ([| |(mu a . Op:() { |a}-> ())|]) {}-> ()
+stdout : fun : ([|(mu a . Op:() { |a}-> ())|]) {}-> ()
