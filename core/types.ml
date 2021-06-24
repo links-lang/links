@@ -1711,6 +1711,9 @@ let extract_tuple = function
 (* Some helper functions from typeUtils.ml, to prevent cyclical dependencies *)
 exception TypeDestructionError of string
 
+(** remove any top-level meta typevars and aliases from a type
+    (perhaps we can use this version of concrete_type everywhere)
+*)
 let typeUtils_concrete_type t =
   let rec ct rec_names t : datatype =
     match t with

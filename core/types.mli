@@ -281,6 +281,10 @@ val close_row : row -> row
 val closed_wild_row : row
 val remove_field : ?idempotent:bool -> Label.t -> row -> row
 
+(** removing top-level meta typevars and aliases;
+    this was originally in typeUtils, hence the name *)
+val typeUtils_concrete_type : datatype -> datatype
+
 (** deconstructing rows *)
 val extract_row : datatype -> row
 val extract_row_parts : datatype -> row'
