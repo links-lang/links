@@ -3624,31 +3624,6 @@ let print_old_new
               |> convert parse_bool
               |> sync)
 
-let pp_test_roundtrip
-  = Settings.(flag ~default:false "type_pp_roundtrip"
-              |> synopsis "Test whether pretty-printed types are round-trippable. (NOT WORKING)"
-              |> convert parse_bool
-              |> CLI.(add (short 't' <&> long "pretty-types-roundtrip"))
-              |> sync)
-
-let test_type_roundtrip : datatype (* -> tycon_environment *) -> string -> bool =
-  fun _ (* aliases *) _ ->
-  (* let open Parse in
-   * let dt =
-   *   (\* try Some (DesugarDatatypes.read ~aliases str) *\)
-   *   (\* TODO do the full read (including aliases), so that types can be compared *\)
-   *   try Some (parse_string ~in_context:(LinksLexer.fresh_context ())
-   *               datatype str)
-   *   with Errors.RichSyntaxError _ -> None
-   * in
-   * match dt with
-   * | None -> false
-   * | Some _ ->
-   *    (\* TODO compare if the parsed type is isomorphic to t *\)
-   *    true *)
-  (* TODO dependency cycle; wanna use DesugarDatatypes.read or parts of it *)
-  failwith "Testing for type round trip is not implemented."
-
 (* string conversions *)
 let rec string_of_datatype ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
           (t : datatype) =
@@ -3680,13 +3655,8 @@ let rec string_of_datatype ?(policy=default_pp_policy) ?(refresh_tyvar_names=tru
             else
               []
           end in
-        let rt = if Settings.get pp_test_roundtrip then
-                   [ "Type roundtrips:" ;
-                     string_of_bool (test_type_roundtrip t new_type) ]
-                 else []
-        in
         let module SB = NewPrint.StringBuffer in
-        SB.concat_strs ~sep:"\n" (new_type :: old_type @ rt)
+        SB.concat_strs ~sep:"\n" (new_type :: old_type)
 
       else
         begin
