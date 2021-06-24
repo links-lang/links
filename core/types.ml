@@ -2713,7 +2713,7 @@ module NewPrint = struct
 
     let trace : t -> string
       = fun { trace; _ } ->
-      let _buf = Buffer.create 10 in
+      let _buf = Buffer.create 20 in
       let wrt = Buffer.add_string _buf in
       let write_trace_item (vl, src) =
         wrt "<"; wrt vl; wrt "|"; wrt src; wrt ">"
@@ -2827,13 +2827,24 @@ module NewPrint = struct
             apply pr ctx v buf;
             read buf)
 
+    (* this implementation doesn't use the other methods,
+     * because this is a helper function, not intended to be traced *)
     let concat_strs : sep:string -> string list -> string
-      = let ctx_dont_care = Context.empty() in (* won't care about the context, just here to reuse the infrastructrue *)
-        fun ~sep lst ->
-        let buf = create 10 in
-        let str_pr : string printer = Printer ("", fun _ s buf -> write buf s) in
-        concat ~sep str_pr lst ctx_dont_care buf;
-        Buffer.contents buf.buf
+      = fun ~sep lst ->
+      let _buf = Buffer.create 10 in
+      let wrt = Buffer.add_string _buf in
+      let rec loop =
+        function
+        | [] -> ()
+        | [last] -> wrt last
+        | not_last :: ((_ :: _) as rest) ->
+           begin wrt not_last;
+                 wrt sep;
+                 loop rest
+           end in
+      loop lst;
+      Buffer.contents _buf
+
   end
 
   type 'a printer = 'a StringBuffer.printer
@@ -3054,7 +3065,7 @@ module NewPrint = struct
                                       apply var ctx (v, knd) buf
                                    | Present _ | Absent ->
                                       apply presence ctx fld buf (* TODO label into presence *)
-                                   | t -> failwith ("Not present: " ^     show_datatype (DecycleTypes.datatype t))
+                                   | t -> failwith ("Not present: " ^ show_datatype (DecycleTypes.datatype t))
                             ) :: printers)
                in
 
@@ -3071,11 +3082,14 @@ module NewPrint = struct
                | Empty -> ()
                | (Printer _) as pr ->
                   begin
-                    (if List.length printers = 0 && (Context.is_ambient_effect ctx || Context.is_ambient_row ctx)
-                                                      (* starts with {, want to avoid \{\| *)
+                    let module C = Context in
+                    (if List.length printers = 0 && (match C.ambient ctx with
+                                                     | C.Effect | C.Row | C.Variant -> true
+                                                     | _ -> false)
+                                                      (* starts with { or [|, want to avoid \{\| and [|| *)
                      then write buf " |"
                      else write buf "|");
-                    let ctx = Context.set_ambient Context.RowVar ctx in
+                    let ctx = C.set_ambient C.RowVar ctx in
                     (if rdual then write buf "~");
                     apply pr ctx () buf
                   end)
@@ -3090,7 +3104,7 @@ module NewPrint = struct
                  | Record _ ->
                     let unrolled =
                       match r with
-                      | Row _ -> r
+                      | Row _ -> r (* TODO check this *)
                       | _ -> fst (unwrap_row (extract_row r))
                     in
                     let is_tuple = (C.is_ambient_tuple ctx) || (is_tuple unrolled) (* not allowing onetuples by default *)
@@ -3183,11 +3197,13 @@ module NewPrint = struct
         )
 
   and func : (typ * row * typ) printer
-    (* and func : ?is_lolli:bool -> context -> policy * names -> typ -> row -> typ -> Buffer.t = *)
     = let open StringBuffer in
       let func_arrow : row printer
-        (* let func_arrow : ?is_lolli:bool -> context -> policy * names -> row -> Buffer.t = *)
-        = let is_field_present fields fld =
+        = let is_field_present r fld =
+            (* this ensures that if a recursive row does contain a wild, it shows up with a wild arrow,
+             * even if the wild effect is hidden inside the recursive variable (will be visible after one unroll) *)
+            (* TODO this is an opinionated solution, need to confirm if this is what we want *)
+            let fields = unwrap_row r |> fst |> extract_row_parts |> fst3 in
             match FieldEnv.lookup fld fields with
             | None -> false
             | Some (Present _) -> true
@@ -3198,9 +3214,10 @@ module NewPrint = struct
                    fun ctx r buf ->
                    let is_lolli = Context.is_ambient_linfun ctx in
                    match r with
-                   | Row (fields, rvar, _) as r' ->
-                      let is_wild = is_field_present fields "wild" in
-                      let number_of_visible_fields = (FieldEnv.size fields) - (if is_wild then 1 else 0) in (* TODO if there are double wild etc (which is not printed), then this will be the wrong number*)
+                   | Row (fields, rvar, _rdual) as r' ->
+                      let is_wild = is_field_present r' "wild" in
+                      let number_of_visible_fields = (FieldEnv.size fields) - (if is_wild then 1 else 0) in
+                      (* TODO if there are double wild etc (which is not printed), then this will be the wrong number *)
                       let row_var_exists =
                         match meta rvar with
                         | Empty -> false
@@ -3211,11 +3228,11 @@ module NewPrint = struct
                       begin
                         match number_of_visible_fields, row_var_exists with
                         | 0, false -> write buf "{}" (* no fields but closed row var *)
-                        | 0, true -> (* there is a row variable, but no fields
-                                      * => use the abbreviated notation -a- or ~a~
-                                      * BUT if it's anonymous => skip entirely *)
+                        | 0, true ->
+                           (* there is a row variable, but no fields => use the abbreviated notation -a- or ~a~
+                            * BUT if it's anonymous => skip entirely *)
                            begin
-                             match Unionfind.find (extract_row_parts r |> snd3) with (* TODO temporary solution *)
+                             match Unionfind.find (extract_row_parts r |> snd3) with
                              | Var (vid, knd, _) ->
                                 if is_var_anonymous ctx vid
                                 then (dpr' "SKIP";
@@ -3225,18 +3242,20 @@ module NewPrint = struct
                                     (if is_wild
                                      then write buf "~"
                                      else write buf "-");
-                                    apply var ctx (vid, knd) buf
+                                    apply var (Context.set_ambient Context.RowVar ctx) (vid, knd) buf
                                   end
-                             | t -> apply datatype ctx t buf
-                           (* let varname = datatype ctx p v in
-                            * dpr' "HERE";
-                            * dpr' varname;
-                            * (if is_wild
-                            *  then write "~"
-                            *  else write "-");
-                            * write varname *)
+                             | _t ->
+                                begin (* special case, construct row syntax, but only call the inside *)
+                                  write buf "{";
+                                  apply row_parts (Context.set_ambient Context.Effect ctx) (extract_row_parts r') buf; (* TODO test that this doesn't cause problems *)
+                                  write buf "}"
+                                (* Two other approaches: datatype and row_parts with a reconstructed row (but don't need those if row_parts works without stack overflows)
+                                 * write buf " ";
+                                 * apply datatype var_ctx _t buf; *OR*
+                                 * apply row_parts (Context.set_ambient Context.Effect ctx) (FieldEnv.empty, (extract_row_parts r |> snd3), _rdual) buf; *)
+                                end
                            end
-                        | _ -> (* need the full effect row *)
+                        | _ -> (* need the full effect row, but only construct the inside of it *)
                            write buf "{";
                            apply row_parts (Context.set_ambient Context.Effect ctx) (extract_row_parts r') buf;
                            write buf "}";
@@ -3252,7 +3271,6 @@ module NewPrint = struct
       (* func starts here *)
       Printer ("func",
                fun ctx (domain, effects, range) buf ->
-               (* let effects, _ = extract_row effects in *)
                (* build up the function type string: domain, arrow with effects, range *)
                apply row (Context.set_ambient Context.Tuple ctx) domain buf; (* function domain is always a Record *)
                write buf " ";
