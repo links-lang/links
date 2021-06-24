@@ -2775,22 +2775,17 @@ module NewPrint = struct
          in
          loop sep pr items ctx buf
 
-    let rec concat' : sep:string -> unit printer list -> Context.t -> t -> unit
+    let concat' : sep:string -> unit printer list -> Context.t -> t -> unit
       = fun ~sep prs ctx buf ->
-      match prs with
-      | [] -> ()
-      | [last] -> apply last ctx () buf
-      | x :: (y :: rest) ->
-         begin (* TODO maybe with a filter *)
-           match x, y with
-           | Empty, Empty -> concat' ~sep rest ctx buf
-           | Empty, _ -> concat' ~sep (y :: rest) ctx buf
-           | Printer _, Empty -> concat' ~sep (x :: rest) ctx buf
-           | (Printer _) as pr, _ ->
-              apply pr ctx () buf;
-              write buf sep;
-              concat' ~sep (y :: rest) ctx buf
-         end
+      let rec loop sep ctx buf = function
+        | [] -> ()
+        | [pr] -> apply pr ctx () buf
+        | pr :: prs ->
+           apply pr ctx () buf;
+           write buf sep;
+           loop sep ctx buf prs
+      in
+      loop sep ctx buf (List.filter (function Empty -> false | _ -> true) prs)
 
     let seq : sep:string -> ('a printer * 'b printer) -> ('a * 'b) -> Context.t -> t -> unit
       = fun ~sep (lp, rp) (x, y) ctx buf ->
@@ -3050,11 +3045,16 @@ module NewPrint = struct
                           Printer ("row_parts.not_tuple",
                                    fun ctx () buf ->
                                    write buf label;
-                                   match (* concrete_type *) fld with
+                                   let pre = match fld with
+                                     | Meta point -> Unionfind.find point
+                                     | _ -> fld
+                                   in
+                                   match pre with
                                    | Var (v,knd,_) when Kind.primary_kind knd = PrimaryKind.Presence ->
                                       apply var ctx (v, knd) buf
-                                   | _ ->
+                                   | Present _ | Absent ->
                                       apply presence ctx fld buf (* TODO label into presence *)
+                                   | t -> failwith ("Not present: " ^     show_datatype (DecycleTypes.datatype t))
                             ) :: printers)
                in
 
@@ -3084,15 +3084,15 @@ module NewPrint = struct
     = let open StringBuffer in
       Printer ("row",
                fun ctx r buf ->
-               let unrolled =
-                 (match r with
-                  | Row _ -> r
-                  | _ -> extract_row r)
-                 |> unwrap_row |> fst in
                let r', before, after, new_ctx =
                  let module C = Context in
                  match r with
                  | Record _ ->
+                    let unrolled =
+                      match r with
+                      | Row _ -> r
+                      | _ -> fst (unwrap_row (extract_row r))
+                    in
                     let is_tuple = (C.is_ambient_tuple ctx) || (is_tuple unrolled) (* not allowing onetuples by default *)
                     in   (* ! *) unrolled, "(",   ")",   (if is_tuple then (C.set_ambient C.Tuple ctx) else (C.toplevel ctx))
                  | Variant r  -> r,        "[|",  "|]",  (C.set_ambient C.Variant ctx)
@@ -3185,7 +3185,6 @@ module NewPrint = struct
   and func : (typ * row * typ) printer
     (* and func : ?is_lolli:bool -> context -> policy * names -> typ -> row -> typ -> Buffer.t = *)
     = let open StringBuffer in
-
       let func_arrow : row printer
         (* let func_arrow : ?is_lolli:bool -> context -> policy * names -> row -> Buffer.t = *)
         = let is_field_present fields fld =
@@ -3228,7 +3227,7 @@ module NewPrint = struct
                                      else write buf "-");
                                     apply var ctx (vid, knd) buf
                                   end
-                             | _ -> failwith "[*1] Shoudln't happen?" (* TODO *)
+                             | t -> apply datatype ctx t buf
                            (* let varname = datatype ctx p v in
                             * dpr' "HERE";
                             * dpr' varname;
@@ -3238,7 +3237,9 @@ module NewPrint = struct
                             * write varname *)
                            end
                         | _ -> (* need the full effect row *)
-                           apply row ctx (Effect r') buf
+                           write buf "{";
+                           apply row_parts (Context.set_ambient Context.Effect ctx) (extract_row_parts r') buf;
+                           write buf "}";
                       end;
 
                       (if is_wild then write buf "~" else write buf "-");
@@ -3251,7 +3252,7 @@ module NewPrint = struct
       (* func starts here *)
       Printer ("func",
                fun ctx (domain, effects, range) buf ->
-               let effects, _ = unwrap_row effects in
+               (* let effects, _ = extract_row effects in *)
                (* build up the function type string: domain, arrow with effects, range *)
                apply row (Context.set_ambient Context.Tuple ctx) domain buf; (* function domain is always a Record *)
                write buf " ";
