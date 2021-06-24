@@ -3064,7 +3064,7 @@ module NewPrint = struct
                                    | Var (v,knd,_) when Kind.primary_kind knd = PrimaryKind.Presence ->
                                       apply var ctx (v, knd) buf
                                    | Present _ | Absent ->
-                                      apply presence ctx fld buf (* TODO label into presence *)
+                                      apply presence ctx pre buf (* TODO label into presence *)
                                    | t -> failwith ("Not present: " ^ show_datatype (DecycleTypes.datatype t))
                             ) :: printers)
                in

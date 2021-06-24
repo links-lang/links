@@ -1,6 +1,0 @@
-fun w(g) {
-    handle(g()) {
-        case Return(()) -> ()
-        case F(h, res) -> w(h)
-    }
-}
