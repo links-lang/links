@@ -5,3 +5,8 @@ stdout : fun : (TableHandle((id:Int|a::Base),(|_::Base),(|_::Base))) {}-> [(id:I
 Onetuple with unit
 (1=())
 stdout : (1 = ()) : (1:())
+
+Alias record functional update
+tests/roundtrip/record_update.links
+filemode : true
+stdout : (q = [3, 1, 2]) : Q

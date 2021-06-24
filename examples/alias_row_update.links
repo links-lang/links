@@ -1,4 +1,0 @@
-typename Q = (q : [Int]);
-
-sig f : (Q, Int) -> Q
-fun f(x, i) { (x with q=x.q) }

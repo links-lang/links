@@ -3026,10 +3026,17 @@ module NewPrint = struct
       Printer ("row_parts",
                fun ctx (rfields, rvar, rdual) buf ->
                let hide_primitive_labels = Context.is_ambient_effect ctx in
+
                let fold = fun label fld printers ->
-                 match label with
-                 | "wild" when hide_primitive_labels -> printers (* skip wild *) (* TODO make sure it's present *)
-                 | "hear" when hide_primitive_labels ->
+                 match label, fld with
+                 (* this allows function types like this:
+                  *   absent wild|hear:
+                  *     (a) {wild-,hear-}-> b
+                  *   polymorphic in the presence of wild|hear (note the arrow is tame here,
+                  *   wild information is available in the fields (TODO do we want the arrow to be tame)):
+                  *     (a) {wild{_},head{_}}-> b *)
+                 | "wild", Present _ when hide_primitive_labels -> printers (* skip present wild *)
+                 | "hear", Present _ when hide_primitive_labels -> (* omit label of a present hear *)
                     (Printer ("row_parts.hear", fun ctx () buf -> apply presence ctx fld buf)) :: printers
                  | _ ->
                     dpr' ("Row field, label: " ^ label);
@@ -3046,6 +3053,7 @@ module NewPrint = struct
                                       apply presence ctx fld buf (* TODO label into presence *)
                             ) :: printers)
                in
+
                let printers = List.rev (FieldEnv.fold fold rfields []) in
                let sep =
                  let open Context in
@@ -3081,13 +3089,13 @@ module NewPrint = struct
                  let module C = Context in
                  match r with
                  | Record _ ->
-                    let is_tuple = (C.is_ambient_tuple ctx) || (is_tuple unrolled) in (* not allowing onetuples by default *)
-                    unrolled, "(", ")", (if is_tuple then (C.set_ambient C.Tuple ctx) else (C.toplevel ctx))
-                 | Variant r -> r, "[|", "|]", (C.set_ambient C.Variant ctx)
-                 | Effect r -> r, "{", "}", (C.set_ambient C.Effect ctx)
-                 | Select r -> r, "[+|", "|+]", ctx (* TODO *)
-                 | Choice r -> r, "[&|", "|&]", ctx (* TODO *)
-                 | Row _ as r -> r, "", "", C.set_ambient C.Row (C.toplevel ctx) (* TODO what is this case? *)
+                    let is_tuple = (C.is_ambient_tuple ctx) || (is_tuple unrolled) (* not allowing onetuples by default *)
+                    in           unrolled, "(",   ")",   (if is_tuple then (C.set_ambient C.Tuple ctx) else (C.toplevel ctx))
+                 | Variant r  -> r,        "[|",  "|]",  (C.set_ambient C.Variant ctx)
+                 | Effect r   -> r,        "{",   "}",   (C.set_ambient C.Effect ctx)
+                 | Select r   -> r,        "[+|", "|+]", ctx (* TODO *)
+                 | Choice r   -> r,        "[&|", "|&]", ctx (* TODO *)
+                 | Row _ as r -> r,        "",    "",    C.set_ambient C.Row ctx (* TODO what is this case? *)
                  | _ -> failwith ("[*R] Invalid row:\n" ^ show_datatype @@ DecycleTypes.datatype r)
                in
                dpr' @@ Context.show_ambient @@ Context.ambient ctx;
@@ -3116,16 +3124,18 @@ module NewPrint = struct
   and meta : typ point -> unit printer
     = let open StringBuffer in
       fun pt ->
-      let pt = match DecycleTypes.datatype (Meta pt) with
-        | Meta pt -> pt
-        | _ -> failwith "Impossible case"
-      in
+      (* let pt = match DecycleTypes.datatype (Meta pt) with
+       *   | Meta pt -> pt
+       *   | _ -> failwith "Impossible case"
+       * in *)
       match Unionfind.find pt with
       | Closed -> (* nothing happens; TODO but maybe something should *sometimes* happen *)
          Empty
-      | Var (id, knd, _) -> Printer ("", fun ctx () buf -> apply var ctx (id, knd) buf)
-      | Recursive r -> Printer ("", fun ctx () buf -> apply recursive ctx r buf)
+      | Var (id, knd, _) -> wrap var (id, knd)
+      | Recursive r -> wrap recursive r
       (* TODO need to take care of these recursing non-(var|mu) *)
+      | Function f -> print_endline "Function :O";
+                      constant "Some function :'("
       | t -> print_endline ("Meta - other type:\n" ^ show_datatype @@ DecycleTypes.datatype t);
              Printer ("meta",
                       fun ctx () buf ->
@@ -3245,7 +3255,7 @@ module NewPrint = struct
                fun ctx (domain, effects, range) buf ->
                let effects, _ = unwrap_row effects in
                (* build up the function type string: domain, arrow with effects, range *)
-               apply row' (Context.set_ambient Context.Tuple ctx) domain buf;
+               apply row' (Context.set_ambient Context.Tuple ctx) domain buf; (* function domain is always a Record *)
                write buf " ";
                apply func_arrow ctx effects buf;
                write buf " ";
