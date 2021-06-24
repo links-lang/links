@@ -1,14 +1,3 @@
-let dpr' : string -> unit  =
-  fun _x ->
-  begin
-    (* disabling debug printing for tests; to enable, uncomment the print *)
-    (* Printf.printf "%s\n" _x;
-     * flush_all () *)
-
-    (* it does flushing because at one point I thought my prints weren't actually showing up;
-     * that issue is now resolved but I kept it just in case *)
-  end
-
 open Utility
 open CommonTypes
 
@@ -2528,8 +2517,6 @@ let concat : ?sep:string -> string list -> string =
 
 (* New type pretty printer (Samo) *)
 module NewPrint = struct
-  (* TODO maybe it can all be done by having "inner" functions that just pass a Buffer around,
-     and wrapping those in "outer" functions that return just a string to match the interface signature? *)
 
   (* settings (tied to original Print for the time being) *)
   let show_quantifiers = Print.show_quantifiers
@@ -2574,8 +2561,7 @@ module NewPrint = struct
              ; bound_vars: TypeVarSet.t
              ; tyvar_names: names
              ; ambient: ambient
-             ; shared_effect: int option
-             ; seen_metas: row point list }
+             ; shared_effect: int option }
 
     let default_policy : unit -> policy
       = fun () ->
@@ -2589,25 +2575,20 @@ module NewPrint = struct
                    ; bound_vars    = TypeVarSet.empty
                    ; tyvar_names   = Hashtbl.create 0
                    ; ambient       = Toplevel
-                   ; shared_effect = None
-                   ; seen_metas    = [] }
+                   ; shared_effect = None }
 
-    (* let context = NewPrint.Context.setup policy Vars.tyvar_name_map (fun o -> o#typ t) in *)
     let setup : policy -> names (* -> <?> visitor needed for shared effects TODO *) -> t
       = fun policy tyvar_names -> { policy
                                   ; bound_vars    = TypeVarSet.empty
                                   ; tyvar_names
                                   ; ambient       = Toplevel
-                                  ; shared_effect = None
-                                  ; seen_metas    = []
-                                  }
+                                  ; shared_effect = None }
 
     let bound_vars : t -> TypeVarSet.t
       = fun { bound_vars; _ } -> bound_vars
 
     let bind_tyvar : tid -> t -> t
       = fun ident ({ bound_vars; _ } as ctxt) ->
-      dpr' ("Context binding variable: " ^ string_of_int ident);
       { ctxt with bound_vars = TypeVarSet.add ident bound_vars }
 
     let bind_tyvars : tid list -> t -> t
@@ -2658,7 +2639,8 @@ module NewPrint = struct
     let is_ambient_binder : t -> bool
       = fun { ambient ; _ } -> ambient = Binder
 
-    (*
+    (* If you are using Emacs, you can use the following function to generate ambient helpers
+
        (defun insert-ambient-helpers ()
          (interactive)
          (let ((original-point (point)))
@@ -2684,7 +2666,6 @@ module NewPrint = struct
      *)
   end
 
-  (* TODO(dhil): Encapsulate inside a StringBuffer structure. *)
   module StringBuffer = struct
     let trace_printer =
       Settings.(flag ~default:false "trace_printer"
@@ -2733,7 +2714,6 @@ module NewPrint = struct
         then
           begin
             fun bt s ->
-            print_endline ("Printer trace : <" ^ s ^ "|" ^ bt.current_printer ^ ">"); (* TODO this is temporary *)
             bt.trace <- (s, bt.current_printer) :: bt.trace;
             Buffer.add_string bt.buf s
           end
@@ -2849,13 +2829,6 @@ module NewPrint = struct
 
   type 'a printer = 'a StringBuffer.printer
 
-  module BS = Basicsettings (* TODO is this ever used? *)
-
-  (* Set the quantifiers to be true to display any outer quantifiers.
-     Set flavours to be true to distinguish flexible type variables
-     from rigid type variables. *)
-
-
   (* For correct printing of subkinds, need to know the subkind in advance:
    * see line (1): that has to be Empty so that the :: is not printed *)
   let subkind_name : Context.policy -> Subkind.t -> unit printer
@@ -2954,8 +2927,7 @@ module NewPrint = struct
       Printer ("var",
                fun ctx (vid, knd) buf ->
                let subknd = Kind.subkind knd in
-               dpr' ("Vars.find_spec " ^ string_of_int vid);
-               let var_name, (flavour, _ (* kind already known *), _) = Vars.find_spec vid (Context.tyvar_names ctx) in
+               let var_name, (flavour, _, _) = Vars.find_spec vid (Context.tyvar_names ctx) in
                let in_binder = Context.is_ambient_binder ctx in
                (* Rules of printing vars:
                 * 1) If var only appears once (count = 1) & (policy.hide_fresh = true) => only as don't-care "_" [is_unique]
@@ -2995,20 +2967,11 @@ module NewPrint = struct
                let binder_ctx = Context.set_policy rec_var_p ctx in
                if Context.is_tyvar_bound binder ctx
                then (* this recursive was already seen -> just need the variable name *)
-                 begin
-                   dpr' "Seen mu";
-                   apply var binder_ctx (binder, knd) buf
-                 end
+                 apply var binder_ctx (binder, knd) buf
                else (* this the first occurence of this mu -> print the whole type *)
                  begin
-                   dpr' "Unseen mu";
-                   (* let binder_ctx = Context.bind_tyvar binder ctx' in *)
                    let inner_context = Context.bind_tyvar binder ctx in
-                   let want_parens =
-                     match Context.ambient ctx with (* TODO if there are no others, simplify this *)
-                     | Context.RowVar -> true
-                     | _ -> false
-                   in
+                   let want_parens = Context.is_ambient_rowvar ctx in
                    (if want_parens then write buf "(");
                    write buf "mu ";
                    apply var binder_ctx (binder, knd) buf;
@@ -3028,8 +2991,7 @@ module NewPrint = struct
                 | _ -> write buf " (";
                        concat ~sep:"," type_arg arg_types ctx buf;
                        write buf ")"))
-
-  (* TODO Ignoring shared effects for now *)
+  (* TODO Ignoring shared effects for now (original printer does special stuff for them in aliases/recapp) *)
 
   and row_parts : row' printer
     = let open StringBuffer in
@@ -3049,24 +3011,22 @@ module NewPrint = struct
                  | "hear", Present _ when hide_primitive_labels -> (* omit label of a present hear *)
                     (Printer ("row_parts.hear", fun ctx () buf -> apply presence ctx fld buf)) :: printers
                  | _ ->
-                    dpr' ("Row field, label: " ^ label);
                     if Context.is_ambient_tuple ctx
-                    then (dpr' "TUPLE"; (Printer ("row_parts.tuple", fun ctx () buf -> apply presence ctx fld buf)) :: printers)
-                    else (dpr' "NOT TUPLE";
-                          Printer ("row_parts.not_tuple",
-                                   fun ctx () buf ->
-                                   write buf label;
-                                   let pre = match fld with
-                                     | Meta point -> Unionfind.find point
-                                     | _ -> fld
-                                   in
-                                   match pre with
-                                   | Var (v,knd,_) when Kind.primary_kind knd = PrimaryKind.Presence ->
-                                      apply var ctx (v, knd) buf
-                                   | Present _ | Absent ->
-                                      apply presence ctx pre buf (* TODO label into presence *)
-                                   | t -> failwith ("Not present: " ^ show_datatype (DecycleTypes.datatype t))
-                            ) :: printers)
+                    then (Printer ("row_parts.tuple", fun ctx () buf -> apply presence ctx fld buf)) :: printers
+                    else (Printer ("row_parts.not_tuple",
+                                  fun ctx () buf ->
+                                  write buf label;
+                                  let pre = match fld with
+                                    | Meta point -> Unionfind.find point
+                                    | _ -> fld
+                                  in
+                                  match pre with
+                                  | Var (v,knd,_) when Kind.primary_kind knd = PrimaryKind.Presence ->
+                                     apply var ctx (v, knd) buf
+                                  | Present _ | Absent ->
+                                     apply presence ctx pre buf (* TODO label into presence *)
+                                  | t -> failwith ("Not present: " ^ show_datatype (DecycleTypes.datatype t))
+                           )) :: printers
                in
 
                let printers = List.rev (FieldEnv.fold fold rfields []) in
@@ -3104,26 +3064,24 @@ module NewPrint = struct
                  | Record _ ->
                     let unrolled =
                       match r with
-                      | Row _ -> r (* TODO check this *)
+                      | Row _ -> r
                       | _ -> fst (unwrap_row (extract_row r))
                     in
                     let is_tuple = (C.is_ambient_tuple ctx) || (is_tuple unrolled) (* not allowing onetuples by default *)
                     in   (* ! *) unrolled, "(",   ")",   (if is_tuple then (C.set_ambient C.Tuple ctx) else (C.toplevel ctx))
                  | Variant r  -> r,        "[|",  "|]",  (C.set_ambient C.Variant ctx)
                  | Effect r   -> r,        "{",   "}",   (C.set_ambient C.Effect ctx)
-                 | Select r   -> r,        "[+|", "|+]", ctx (* TODO *)
+                 | Select r   -> r,        "[+|", "|+]", ctx (* TODO ambient Session? *)
                  | Choice r   -> r,        "[&|", "|&]", ctx (* TODO *)
                  | Row _ as r -> r,        "",    "",    C.set_ambient C.Row ctx (* TODO what is this case? *)
                  | _ -> failwith ("[*R] Invalid row:\n" ^ show_datatype @@ DecycleTypes.datatype r)
                in
-               dpr' @@ Context.show_ambient @@ Context.ambient ctx;
                write buf before;
                apply row_parts new_ctx (extract_row_parts r') buf;
                write buf after
         )
 
-  (* returns the presence, but possibly without the colon *)
-  (* TODO maybe have this return a Buffer, if that would be more efficient *)
+  (* returns the presence, possibly without the colon *)
   and presence : typ printer
     = let open StringBuffer in
       Printer ("presence",
@@ -3143,20 +3101,11 @@ module NewPrint = struct
     = let open StringBuffer in
       fun pt ->
       match Unionfind.find pt with
-      | Closed -> (* nothing happens; TODO but maybe something should *sometimes* happen *)
+      | Closed -> (* nothing happens; TODO (future) but maybe something should *sometimes* happen *)
          Empty
       | Var (id, knd, _) -> wrap var (id, knd)
       | Recursive r -> wrap recursive r
-      (* TODO need to take care of these recursing non-(var|mu) *)
-      | t -> dpr' ("Meta - other type:\n" ^ show_datatype @@ DecycleTypes.datatype t);
-             Printer ("meta",
-                      fun ctx () buf ->
-                      let ctx = (if List.mem pt ctx.Context.seen_metas
-                                 then (dpr' "Seen meta (other)"; ctx)
-                                 else (dpr' "Unseen meta(other)";
-                                       {ctx with Context.seen_metas = pt :: ctx.Context.seen_metas}))
-                      in
-                      apply datatype ctx t buf)
+      | t -> wrap datatype t
 
   and type_arg : type_arg printer
     = let open StringBuffer in
@@ -3166,13 +3115,11 @@ module NewPrint = struct
                match pknd with
                | P.Type -> apply datatype ctx r buf
                | P.Row -> begin
-                   (* TODO maybe call concrete_type here *)
                    write buf "{";
                    let ctx = Context.set_ambient Context.Row ctx in
                    (match r with
                     | Row rp -> apply row_parts ctx rp buf
                     | Meta pt -> apply (meta pt) ctx () buf
-                    (* TODO can a Var ever be here directly? (without Meta) *)
                     | _ -> failwith ("Non-(row|meta) in type_arg:\n" ^ show_datatype @@ DecycleTypes.datatype r));
                    write buf "}";
                  end
@@ -3223,8 +3170,6 @@ module NewPrint = struct
                         | Empty -> false
                         | _ -> true
                       in
-                      dpr' @@ "Visible row fields: " ^ string_of_int number_of_visible_fields;
-                      dpr' @@ "And a row var exists: " ^ string_of_bool row_var_exists;
                       begin
                         match number_of_visible_fields, row_var_exists with
                         | 0, false -> write buf "{}" (* no fields but closed row var *)
@@ -3235,10 +3180,8 @@ module NewPrint = struct
                              match Unionfind.find (extract_row_parts r |> snd3) with
                              | Var (vid, knd, _) ->
                                 if is_var_anonymous ctx vid
-                                then (dpr' "SKIP";
-                                      ()) (* skip printing it entirely *)
+                                then () (* skip printing it entirely *)
                                 else begin
-                                    dpr' "NO SKIP";
                                     (if is_wild
                                      then write buf "~"
                                      else write buf "-");
@@ -3247,12 +3190,8 @@ module NewPrint = struct
                              | _t ->
                                 begin (* special case, construct row syntax, but only call the inside *)
                                   write buf "{";
-                                  apply row_parts (Context.set_ambient Context.Effect ctx) (extract_row_parts r') buf; (* TODO test that this doesn't cause problems *)
+                                  apply row_parts (Context.set_ambient Context.Effect ctx) (extract_row_parts r') buf;
                                   write buf "}"
-                                (* Two other approaches: datatype and row_parts with a reconstructed row (but don't need those if row_parts works without stack overflows)
-                                 * write buf " ";
-                                 * apply datatype var_ctx _t buf; *OR*
-                                 * apply row_parts (Context.set_ambient Context.Effect ctx) (FieldEnv.empty, (extract_row_parts r |> snd3), _rdual) buf; *)
                                 end
                            end
                         | _ -> (* need the full effect row, but only construct the inside of it *)
@@ -3416,7 +3355,7 @@ module NewPrint = struct
                in
                apply printer ctx () buf)
 
-  (* outside interface functions *)
+  (* external interface functions *)
   and string_of_datatype : Context.t -> datatype -> string
     = fun ctx v -> StringBuffer.eval datatype ctx v
 
@@ -3440,84 +3379,7 @@ module NewPrint = struct
   let string_of_quantifier : Context.t -> Quantifier.t -> string
     = fun ctx v -> StringBuffer.eval quantifier ctx v
 
-  (* let context_with_shared_effect :
-   *   policy ->
-   *   (( (\* TODO *\)
-   *     < field_spec : row -> 'c * row;
-   *     field_spec_map : field_spec_map -> 'c * field_spec_map;
-   *     list : 'a 'b. ('c -> 'a -> 'c * 'b) -> 'a list -> 'c * 'b list;
-   *     meta_presence_var : meta_presence_var -> 'c * meta_presence_var;
-   *     meta_row_var : row_var -> 'c * row_var;
-   *     meta_type_var : meta_type_var -> 'c * meta_type_var;
-   *     primitive : Primitive.t -> 'c * Primitive.t;
-   *     quantifier : Quantifier.t -> 'c * Quantifier.t;
-   *     row : row -> 'c * row; row_var : row_var -> 'c * row_var;
-   *     set_rec_vars : meta_type_var intmap -> 'c; typ : row -> 'c * row;
-   *     type_arg : type_arg -> 'c * type_arg;
-   *     type_args : type_arg list -> 'c * type_arg list; var : tid option >
-   *                                                            as 'c) ->
-   *    < var : tid option; .. > * 'd) ->
-   *   context = *)
 
-  (* TODO copied from original to satisfy interface *)
-  (* let maybe_shared_effect = function
-   *   | Function _ | Lolli _ -> true
-   *   | Alias ((_, qs, _, _), _) | RecursiveApplication { r_quantifiers = qs; _ } ->
-   *      begin match ListUtils.last_opt qs with
-   *      | Some (PrimaryKind.Row, (_, Restriction.Effect)) -> true
-   *      | _ -> false
-   *      end
-   *   | _ -> false *)
-
-  (* TODO see above *)
-  (* let context_with_shared_effect policy visit =
-   *   let find_row_var r =
-   *     let r =
-   *       match fst (unwrap_row r) with
-   *       | Row (_, r, _) -> r
-   *       | _ -> raise tag_expectation_mismatch
-   *     in
-   *     begin match Unionfind.find r with
-   *     | Var (var, _, _) -> Some var
-   *     | _ -> None
-   *     end
-   *   in
-   *   (\* Find a shared effect variable from the right most arrow or type alias. *\)
-   *   let rec find_shared_var t =
-   *     match t with
-   *     | Function (_, _, r) | Lolli (_, _, r) when maybe_shared_effect r -> find_shared_var r
-   *     | Function (_, e, _) | Lolli (_, e, _) -> find_row_var e
-   *     | Alias ((_, _, ts, _), _) | RecursiveApplication { r_args = ts; _ } when maybe_shared_effect t ->
-   *        begin match ListUtils.last ts with
-   *        | (PrimaryKind.Row, (Row _ as r)) -> find_row_var r
-   *        | _ -> None
-   *        end
-   *     | _ -> None
-   *   in
-   *   let obj =
-   *     object (self)
-   *       inherit Transform.visitor as super
-   *
-   *       val var = None
-   *       method var = var
-   *
-   *       method! typ typ =
-   *         match self#var with
-   *         | None ->
-   *            begin match find_shared_var typ with
-   *            | Some v -> {<var = Some v>}, typ
-   *            | None -> super#typ typ
-   *            end
-   *         | Some _ -> self, typ
-   *     end
-   *   in
-   *   if policy.effect_sugar then
-   *     let (obj, _) = visit obj in
-   *     { empty_context with shared_effect = obj#var }
-   *   else
-   *     empty_context *)
-
-  (* TODO for now just copied from original to make it work *)
   let tycon_spec : [< `Abstract of 'a | `Alias of 'b list * 'c | `Mutual of 'd] printer
     = let open StringBuffer in
       Printer ("tycon_spec",
