@@ -2733,6 +2733,7 @@ module NewPrint = struct
         then
           begin
             fun bt s ->
+            print_endline ("Printer trace : <" ^ s ^ "|" ^ bt.current_printer ^ ">"); (* TODO this is temporary *)
             bt.trace <- (s, bt.current_printer) :: bt.trace;
             Buffer.add_string bt.buf s
           end
@@ -3046,7 +3047,7 @@ module NewPrint = struct
                     if Context.is_ambient_tuple ctx
                     then (dpr' "TUPLE"; (Printer ("row_parts.tuple", fun ctx () buf -> apply presence ctx fld buf)) :: printers)
                     else (dpr' "NOT TUPLE";
-                          Printer ("row_parts.not tuple",
+                          Printer ("row_parts.not_tuple",
                                    fun ctx () buf ->
                                    write buf label;
                                    match (* concrete_type *) fld with
@@ -3079,7 +3080,7 @@ module NewPrint = struct
                     apply pr ctx () buf
                   end)
 
-  and row' : typ printer
+  and row : typ printer
     = let open StringBuffer in
       Printer ("row",
                fun ctx r buf ->
@@ -3093,7 +3094,7 @@ module NewPrint = struct
                  match r with
                  | Record _ ->
                     let is_tuple = (C.is_ambient_tuple ctx) || (is_tuple unrolled) (* not allowing onetuples by default *)
-                    in           unrolled, "(",   ")",   (if is_tuple then (C.set_ambient C.Tuple ctx) else (C.toplevel ctx))
+                    in   (* ! *) unrolled, "(",   ")",   (if is_tuple then (C.set_ambient C.Tuple ctx) else (C.toplevel ctx))
                  | Variant r  -> r,        "[|",  "|]",  (C.set_ambient C.Variant ctx)
                  | Effect r   -> r,        "{",   "}",   (C.set_ambient C.Effect ctx)
                  | Select r   -> r,        "[+|", "|+]", ctx (* TODO *)
@@ -3200,7 +3201,7 @@ module NewPrint = struct
                    match r with
                    | Row (fields, rvar, _) as r' ->
                       let is_wild = is_field_present fields "wild" in
-                      let number_of_visible_fields = (FieldEnv.size fields) - (if is_wild then 1 else 0) in
+                      let number_of_visible_fields = (FieldEnv.size fields) - (if is_wild then 1 else 0) in (* TODO if there are double wild etc (which is not printed), then this will be the wrong number*)
                       let row_var_exists =
                         match meta rvar with
                         | Empty -> false
@@ -3237,7 +3238,7 @@ module NewPrint = struct
                             * write varname *)
                            end
                         | _ -> (* need the full effect row *)
-                           apply row' ctx (Effect r') buf
+                           apply row ctx (Effect r') buf
                       end;
 
                       (if is_wild then write buf "~" else write buf "-");
@@ -3252,7 +3253,7 @@ module NewPrint = struct
                fun ctx (domain, effects, range) buf ->
                let effects, _ = unwrap_row effects in
                (* build up the function type string: domain, arrow with effects, range *)
-               apply row' (Context.set_ambient Context.Tuple ctx) domain buf; (* function domain is always a Record *)
+               apply row (Context.set_ambient Context.Tuple ctx) domain buf; (* function domain is always a Record *)
                write buf " ";
                apply func_arrow ctx effects buf;
                write buf " ";
@@ -3390,7 +3391,7 @@ module NewPrint = struct
                  | End                -> constant "End"
 
                  | Record _ | Variant _ | Effect _ | Row _ | Select _ | Choice _
-                   -> wrap row' tp
+                   -> wrap row tp
 
                  | _ -> failwith ("Printer for this type not implemented:\n" ^ show_datatype @@ DecycleTypes.datatype tp)
                in
@@ -3401,7 +3402,7 @@ module NewPrint = struct
     = fun ctx v -> StringBuffer.eval datatype ctx v
 
   let string_of_row : Context.t -> row -> string
-    = fun ctx v -> StringBuffer.eval row' ctx v
+    = fun ctx v -> StringBuffer.eval row ctx v
 
   let string_of_presence : Context.t -> typ -> string
     = fun ctx v -> StringBuffer.eval presence ctx v
@@ -3627,8 +3628,6 @@ let rec string_of_datatype ?(policy=default_pp_policy) ?(refresh_tyvar_names=tru
         let t = if policy.quantifiers then t
                 else NewPrint.strip_quantifiers t in
         build_tyvar_names ~refresh_tyvar_names free_bound_type_vars [t];
-        (* let context = NewPrint.context_with_shared_effect policy (fun o -> o#typ t) in
-         * let new_type = (NewPrint.string_of_datatype context (policy, Vars.tyvar_name_map) t) in *)
         let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
         let new_type = NewPrint.string_of_datatype context t in
         let old_type = begin
@@ -3666,8 +3665,6 @@ let string_of_row ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) row =
     build_tyvar_names ~refresh_tyvar_names free_bound_row_type_vars [row];
     begin
       if not (Settings.get use_old_type_pp) then
-        (* let context = NewPrint.context_with_shared_effect policy (fun o -> o#row row) in
-         * NewPrint.row' context (policy, Vars.tyvar_name_map) row |> fst3 *)
         let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
         NewPrint.string_of_row context row
       else
