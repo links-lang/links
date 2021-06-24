@@ -2989,12 +2989,12 @@ module NewPrint = struct
                if Context.is_tyvar_bound binder ctx
                then (* this recursive was already seen -> just need the variable name *)
                  begin
-                   print_endline "Seen mu";
+                   dpr' "Seen mu";
                    apply var binder_ctx (binder, knd) buf
                  end
                else (* this the first occurence of this mu -> print the whole type *)
                  begin
-                   print_endline "Unseen mu";
+                   dpr' "Unseen mu";
                    (* let binder_ctx = Context.bind_tyvar binder ctx' in *)
                    let inner_context = Context.bind_tyvar binder ctx in
                    let want_parens =
@@ -3049,7 +3049,7 @@ module NewPrint = struct
                           Printer ("row_parts.not tuple",
                                    fun ctx () buf ->
                                    write buf label;
-                                   match concrete_type fld with
+                                   match (* concrete_type *) fld with
                                    | Var (v,knd,_) when Kind.primary_kind knd = PrimaryKind.Presence ->
                                       apply var ctx (v, knd) buf
                                    | _ ->
@@ -3113,10 +3113,10 @@ module NewPrint = struct
     = let open StringBuffer in
       Printer ("presence",
                fun ctx tp buf ->
-               (match concrete_type tp with
+               (match (* concrete_type *) tp with
                 | Absent -> write buf "-"
                 | Present tp ->
-                   if not (concrete_type tp = unit_type && (Context.is_ambient_variant ctx))
+                   if not (concrete_type tp = unit_type && (Context.is_ambient_variant ctx)) (* hide units in variants *)
                    then begin
                        (if not (Context.is_ambient_tuple ctx) then write buf ":");
                        apply datatype (Context.set_ambient Context.Presence ctx) tp buf
@@ -3127,24 +3127,18 @@ module NewPrint = struct
   and meta : typ point -> unit printer
     = let open StringBuffer in
       fun pt ->
-      (* let pt = match DecycleTypes.datatype (Meta pt) with
-       *   | Meta pt -> pt
-       *   | _ -> failwith "Impossible case"
-       * in *)
       match Unionfind.find pt with
       | Closed -> (* nothing happens; TODO but maybe something should *sometimes* happen *)
          Empty
       | Var (id, knd, _) -> wrap var (id, knd)
       | Recursive r -> wrap recursive r
       (* TODO need to take care of these recursing non-(var|mu) *)
-      | Function f -> print_endline "Function :O";
-                      constant "Some function :'("
-      | t -> print_endline ("Meta - other type:\n" ^ show_datatype @@ DecycleTypes.datatype t);
+      | t -> dpr' ("Meta - other type:\n" ^ show_datatype @@ DecycleTypes.datatype t);
              Printer ("meta",
                       fun ctx () buf ->
                       let ctx = (if List.mem pt ctx.Context.seen_metas
-                                 then (print_endline "Seen meta (other)"; ctx)
-                                 else (print_endline "Unseen meta(other)";
+                                 then (dpr' "Seen meta (other)"; ctx)
+                                 else (dpr' "Unseen meta(other)";
                                        {ctx with Context.seen_metas = pt :: ctx.Context.seen_metas}))
                       in
                       apply datatype ctx t buf)
@@ -3303,13 +3297,8 @@ module NewPrint = struct
     = let open StringBuffer in
       Printer ("quantifier",
                fun ctx qr buf ->
-               (* dpr' "quantifier"; *)
                let vid = Quantifier.to_var qr in
-               (* let var_name = Vars.find var (Context.tyvar_names ctx) in *)
                let knd = Quantifier.to_kind qr in
-               (* seq ~sep:"::" ()
-                * write buf var_name;
-                * apply kind_name ctx knd buf *)
                apply var ctx (vid, knd) buf)
 
   and forall : (Quantifier.t list * typ) printer
@@ -3665,11 +3654,7 @@ let rec string_of_datatype ?(policy=default_pp_policy) ?(refresh_tyvar_names=tru
                   else Print.strip_quantifiers t in
           build_tyvar_names ~refresh_tyvar_names free_bound_type_vars [t];
           let context = Print.context_with_shared_effect policy (fun o -> o#typ t) in
-          let dt = Print.datatype context (policy, Vars.tyvar_name_map) t in
-          (if Settings.get pp_test_roundtrip then
-             Printf.printf "Type roundtrips: %s\n" (string_of_bool @@ test_type_roundtrip t dt)
-           else ());
-          dt
+          Print.datatype context (policy, Vars.tyvar_name_map) t
         end
     end
   else

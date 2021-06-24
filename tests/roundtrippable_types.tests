@@ -10,3 +10,9 @@ Alias record functional update
 tests/roundtrip/record_update.links
 filemode : true
 stdout : (q = [3, 1, 2]) : Q
+
+Recursive effect
+tests/roundtrip/recursive_effect.links
+filemode : true
+args : --enable-handlers
+ignore : not roundtrippable
