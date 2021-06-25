@@ -3198,7 +3198,9 @@ module NewPrint = struct
                                     (if is_wild
                                      then write buf "~"
                                      else write buf "-");
-                                    apply var (Context.set_ambient Context.RowVar ctx) (vid, knd) buf
+                                    let ctx = (Context.set_ambient Context.Effect
+                                                 (Context.set_policy { (Context.policy ctx)  with kinds="hide" } ctx)) in
+                                    apply var ctx (vid, knd) buf
                                   end
                              | _t ->
                                 begin (* special case, construct row syntax, but only call the inside *)
