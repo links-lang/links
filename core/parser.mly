@@ -1066,7 +1066,7 @@ vfield:
 | CONSTRUCTOR fieldspec                                        { ($1, $2)      }
 
 efields:
-| fields_def(efield, nonrec_row_var, kinded_nonrec_row_var)    { $1 }
+| fields_def(efield, row_var, kinded_row_var)                  { $1 }
 
 efield:
 | effect_label                                                 { ($1, present) }
