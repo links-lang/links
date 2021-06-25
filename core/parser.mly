@@ -1057,8 +1057,8 @@ record_label:
 
 vfields:
 | vfield                                                       { ([$1], Datatype.Closed) }
-| vrow_var                                                      { ([]  , $1             ) }
-| kinded_vrow_var                                               { ([]  , $1             ) }
+| vrow_var                                                     { ([]  , $1             ) }
+| kinded_vrow_var                                              { ([]  , $1             ) }
 | vfield VBAR vfields                                          { ($1::fst $3, snd $3   ) }
 
 vfield:
@@ -1104,23 +1104,19 @@ kinded_nonrec_row_var:
 | nonrec_row_var subkind                                       { attach_row_subkind ($1, $2) }
 
 kinded_row_var:
-  | row_var subkind                                              { attach_row_subkind ($1, $2) }
+| row_var subkind                                              { attach_row_subkind ($1, $2) }
 
-/* nonrec_row_var: */
-/* | VARIABLE                                                     { Datatype.Open (named_typevar $1 `Rigid   ) } */
-/* | PERCENTVAR                                                   { Datatype.Open (named_typevar $1 `Flexible) } */
-/* | UNDERSCORE                                                   { Datatype.Open (fresh_typevar `Rigid)    } */
-/* | PERCENT                                                      { Datatype.Open (fresh_typevar `Flexible) } */
 
 vrow_var:
 | nonrec_row_var                                               { $1 }
-| LPAREN MU VARIABLE DOT vfields RPAREN                         { Datatype.Recursive (named_typevar $3 `Rigid, $5) }
+| LPAREN MU VARIABLE DOT vfields RPAREN                        { Datatype.Recursive (named_typevar $3 `Rigid, $5) }
 
 kinded_nonrec_vrow_var:
+/* This just uses the usual nonrec_row_var, because it's just the value */
 | nonrec_row_var subkind                                       { attach_row_subkind ($1, $2) }
 
 kinded_vrow_var:
-| vrow_var subkind                                              { attach_row_subkind ($1, $2) }
+| vrow_var subkind                                             { attach_row_subkind ($1, $2) }
 
 
 /*
