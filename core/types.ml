@@ -3173,7 +3173,7 @@ module NewPrint = struct
           Printer ("func_arrow",
                    fun ctx r buf ->
                    let is_lolli = Context.is_ambient_linfun ctx in
-                   match flatten_row r with
+                   match flatten_row r with (* flattened in case there are nested *)
                    | Row (fields, rvar, _rdual) as r' ->
                       let is_wild = is_field_present r' "wild" in
                       let number_of_visible_fields = (FieldEnv.size fields) - (if is_wild then 1 else 0) in
