@@ -90,9 +90,8 @@ object (o : 'self_type)
 
   method! phrasenode = function
     | (Var name as e)
-    | (FreezeVar name as e)
     | (Section (Section.Name name) as e)
-    | (FreezeSection (Section.Name name) as e)
+
          when StringMap.mem name extra_env ->
        let tyargs = o#add_extras name [] in
        let o = o#unbind name in
