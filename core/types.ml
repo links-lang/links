@@ -3074,14 +3074,14 @@ module NewPrint = struct
                let r', before, after, new_ctx =
                  let module C = Context in
                  match r with
-                 | Record _ ->
+                 | Record r' ->
                     let unrolled =
                       match r with
                       | Row _ -> r
                       | _ -> fst (unwrap_row (extract_row r))
                     in
                     let is_tuple = (C.is_ambient_tuple ctx) || (is_tuple unrolled) (* not allowing onetuples by default *)
-                    in   (* ! *) unrolled, "(",   ")",   (if is_tuple then (C.set_ambient C.Tuple ctx) else (C.toplevel ctx))
+                    in   (* ! *) r',       "(",   ")",   (if is_tuple then (C.set_ambient C.Tuple ctx) else (C.toplevel ctx))
                  | Variant r  -> r,        "[|",  "|]",  (C.set_ambient C.Variant ctx)
                  | Effect r   -> r,        "{",   "}",   (C.set_ambient C.Effect ctx)
                  | Select r   -> r,        "[+|", "|+]", ctx (* TODO ambient Session? *)
