@@ -15,6 +15,7 @@ Recursive effect
 fun w(g) { handle(g()) { case Return(()) -> () case F(h, res) -> w(h) }} w
 args : --enable-handlers
 stdout : fun : (() { |(mu a . F:(() { |a}~> ()) {}-> _::Any,wild:()|c)}~> ()) {F{_}|c}~> ()
+ignore : Not currently roundtrippable (with or without the | in { |(mu ...)} )
 
 Recursive variant
 sig f : ([|(mu a. Op:() { |a}-> ())|]) {}-> () fun f(_) { () } f

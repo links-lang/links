@@ -1434,13 +1434,13 @@ and flatten_row : row -> row = fun row ->
                  in
                  Unionfind.change row_var' (Recursive (var, kind, rec_row'));
                  Row (field_env, row_var', dual)
-          | row' ->
-             let field_env', row_var', dual =
-               match flatten_row' rec_env (dual_if row') with
-               | Row (field_env, row_var, dual) -> field_env, row_var, dual
-               | _ -> raise tag_expectation_mismatch
-             in
-             Row (field_env_union (field_env, field_env'), row_var', dual)
+         | row' ->
+            let field_env', row_var', dual =
+              match flatten_row' rec_env (dual_if row') with
+              | Row (field_env, row_var, dual) -> field_env, row_var, dual
+              | _ -> raise tag_expectation_mismatch
+            in
+            Row (field_env_union (field_env, field_env'), row_var', dual)
        in
        assert (is_flattened_row row');
        row'
@@ -3173,7 +3173,7 @@ module NewPrint = struct
           Printer ("func_arrow",
                    fun ctx r buf ->
                    let is_lolli = Context.is_ambient_linfun ctx in
-                   match r with
+                   match flatten_row r with
                    | Row (fields, rvar, _rdual) as r' ->
                       let is_wild = is_field_present r' "wild" in
                       let number_of_visible_fields = (FieldEnv.size fields) - (if is_wild then 1 else 0) in
