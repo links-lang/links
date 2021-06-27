@@ -181,11 +181,8 @@ let rec pr_query quote ignore_fields ppf q =
     let pp_from_clause ppf fc =
       match fc with
         | TableRef (t, x) -> Format.fprintf ppf "%a as %s" pp_quote t (string_of_table_var x)
-        | Subquery (fLateral, q, x) -> 
-            if fLateral then
-              (Format.fprintf ppf "lateral (%a) as %s" pr_q q (string_of_table_var x))
-            else 
-              (Format.fprintf ppf "(%a) as %s" pr_q q (string_of_table_var x)) 
+        | Subquery (false, q, x) -> Format.fprintf ppf "(%a) as %s" pr_q q (string_of_table_var x) 
+        | Subquery (true, q, x) -> Format.fprintf ppf "lateral (%a) as %s" pr_q q (string_of_table_var x) 
     in
     let pp_where ppf condition =
       match condition with
