@@ -785,7 +785,7 @@ struct
                           fieldMap
                           []
                       in
-                      apply_cont cont env (Database.execute_select fields q db) 
+                      apply_cont cont env (Database.execute_select fields q db)
                end
          end
 

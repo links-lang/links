@@ -122,21 +122,21 @@ struct
         | _ -> (* Debug.print ("v: "^string_of_t v); *) assert false
 
   let bind env (x, v) =
-    { env with qenv = Env.Int.bind x v env.qenv }   
+    { env with qenv = Env.Int.bind x v env.qenv }
 
 
   let field_types_of_spec_map =
     StringMap.map (function
       | Types.Present t -> t
       | _ -> assert false)
-  
+
   let field_types_of_row r =
     let (field_spec_map,_,_) = TypeUtils.extract_row_parts r in
       field_types_of_spec_map field_spec_map
-    
+
   let table_field_types (_, _, _, (field_spec_map, _, _)) =
     field_types_of_spec_map field_spec_map
-                  
+
   let labels_of_field_types field_types =
     StringMap.fold
       (fun name _ labels' ->
@@ -171,17 +171,17 @@ struct
     | Constant (Constant.Char   _) -> Types.char_type
     | Constant (Constant.Float  _) -> Types.float_type
     | Constant (Constant.String _) -> Types.string_type
-    | Project (w, name) -> 
-        begin 
+    | Project (w, name) ->
+        begin
           match te w with
           | Types.Record _ as rty -> StringMap.find name (recdty_field_types rty)
-          | ty -> 
-              failwith 
+          | ty ->
+              failwith
                 (Format.asprintf ("term:\n" ^^
                     "%s\n" ^^
                     "has type:\n" ^^
                     "%a\n" ^^
-                    "but it was expected to have a record type.") 
+                    "but it was expected to have a record type.")
                   (string_of_t w) Types.pp_datatype ty)
         end
     | Apply (Primitive "Empty", _) -> Types.bool_type (* HACK *)
@@ -189,10 +189,10 @@ struct
     | Apply (Primitive f, _) -> TypeUtils.return_type (Env.String.find f Lib.type_env)
     | e -> Debug.print("Can't deduce type for: " ^ show e); assert false
 
-  let type_of_for_var gen = 
+  let type_of_for_var gen =
     type_of_expression gen
     |> Types.unwrap_list_type
-  
+
 
   let default_of_base_type =
     function
@@ -245,7 +245,7 @@ struct
   let rec freshen_for_bindings : Var.var Env.Int.t -> t -> t =
     fun env v ->
       let ffb = freshen_for_bindings env in
-      let rec var_lookup x = 
+      let rec var_lookup x =
         match Env.Int.find_opt x env with
         | None -> x
         | Some y -> var_lookup y
@@ -290,7 +290,7 @@ struct
 
   let flatfield f1 f2 = f1 ^ "@" ^ f2
 
-  let rec flattened_pair x y = 
+  let rec flattened_pair x y =
     match x, y with
     | Var (_nx, Types.Record row), _ ->
         let x' = Record (StringMap.fold (fun f _ acc -> StringMap.add f (Project (x,f)) acc) (field_types_of_row row) StringMap.empty)
@@ -306,19 +306,19 @@ struct
         let y' = Record (StringMap.from_alist ["",y])
         in flattened_pair x y'
     | Record fty1, Record fty2 ->
-        let out1 = 
+        let out1 =
             StringMap.fold (fun f v acc -> StringMap.add (flatfield "1" f) v acc) fty1 StringMap.empty
-        in 
+        in
         let out2 = StringMap.fold (fun f v acc -> StringMap.add (flatfield "2" f) v acc) fty2 out1
         in Record out2
     | _ -> assert false
 
-  let rec flattened_pair_ft x y = 
+  let rec flattened_pair_ft x y =
     match x, y with
-    | Var (_nx, Types.Record rowx), Var (_ny, Types.Record rowy) -> 
-        let out1 = 
+    | Var (_nx, Types.Record rowx), Var (_ny, Types.Record rowy) ->
+        let out1 =
             StringMap.fold (fun f t acc -> StringMap.add (flatfield "1" f) t acc) (field_types_of_row rowx) StringMap.empty
-        in 
+        in
         StringMap.fold (fun f t acc -> StringMap.add (flatfield "2" f) t acc) (field_types_of_row rowy) out1
     (* XXX: same as above, using a field with an empty name to deal with variables of non-record type ... will it work? *)
     | Var (nx, tyx), _ -> flattened_pair_ft (Var (nx, Types.make_record_type (StringMap.from_alist ["", tyx]))) y
@@ -382,7 +382,7 @@ struct
 
   let eta_expand_var (x, ty) =
     match ty with
-    | Types.Record row -> 
+    | Types.Record row ->
         let field_types = field_types_of_row row in
         Record
           (StringMap.fold
@@ -403,14 +403,14 @@ struct
   | For (_, gs, os', body) -> gs, os', body
   | Concat (_::_)
   | Singleton _
-  | Prom _ 
+  | Prom _
   | Table _ as xs ->
       (* I think we can omit the `Table case as it
          can never occur *)
       (* eta-expand *)
       eta_expand_list xs
   | _ -> assert false
-  
+
   (* simple optimisations *)
   let reduce_and (a, b) =
     match a, b with
@@ -495,20 +495,20 @@ struct
     match body with
       (* | Concat []                 -> body *)
       | For (_, gs', os', body') -> For (None, gs @ gs', os @ os', body')
-      (* | Prom _ as u               ->           
+      (* | Prom _ as u               ->
             let z = Var.fresh_raw_var () in
             let tyz = type_of_expression u in
             let ftz = recdty_field_types (Types.unwrap_list_type tyz) in
             let vz = Var (z, ftz) in
             For (None, gs @ [(z, u)], [] (* os *), (Singleton vz)) *)
-      (* make sure when we reach this place, gs can NEVER be empty 
+      (* make sure when we reach this place, gs can NEVER be empty
         | _ when gs = [] (* && _os = [] *) -> body *)
       | _                         -> For (None, gs, os, body)
 
   let rec reduce_for_source : env -> var * t * Types.datatype -> (env -> (t list -> t list) -> t) -> t =
     fun env (x, source, ty) body ->
        let empty_os = fun os -> os in
-       let add_os os = fun os' -> os@os' in 
+       let add_os os = fun os' -> os@os' in
        let rs = fun gen' -> reduce_for_source env gen' body in
         match source with
           | Singleton v ->
@@ -517,7 +517,7 @@ struct
               match body env' empty_os with
               (* the normal form of a For does not have Prom in its body
                  --> we hoist it to a generator *)
-              | Prom _ as q -> 
+              | Prom _ as q ->
                   let z = Var.fresh_raw_var () in
                   let tyq = type_of_expression q in
                   (* Debug.print ("reduce_for_source.Singleton fresh var: " ^ show (Var (z,tyq))); *)
@@ -557,9 +557,9 @@ struct
               let body' = body env' empty_os in
               (* Debug.print ("reduce_for_source.Table body after renaming: " ^ show body'); *)
               reduce_for_body ([(y, source)], [], body')
-          | Prom _ -> 
-              let y = Var.fresh_raw_var () in 
-              let ty_elem = type_of_for_var source in 
+          | Prom _ ->
+              let y = Var.fresh_raw_var () in
+              let ty_elem = type_of_for_var source in
               (* Debug.print ("reduce_for_source.Prom fresh var: " ^ string_of_int y); *)
               let env' = bind env (x, Var (y, ty_elem)) in
               let body' = body env' empty_os in
@@ -679,7 +679,7 @@ struct
     { venv = Value.Env.empty; qenv = Env.Int.empty; policy }
 
   let query_bindings_of_env e =
-    let open Lang in 
+    let open Lang in
     Env.Int.bindings (e.qenv)
 
   let (++) e1 e2 =
@@ -779,12 +779,12 @@ struct
                   raise (internal_error ("Variable " ^ string_of_int var ^ " not found"));
             end
         end
-  
+
   let reduce_artifacts = function
   | Q.Apply (Q.Primitive "stringToXml", [u]) ->
     Q.Singleton (Q.XML (Value.Text (Q.unbox_string u)))
   | Q.Apply (Q.Primitive "AsList", [xs]) -> xs
-  | Q.Apply (Q.Primitive "Distinct", [u]) -> Q.Prom (Q.Dedup u) 
+  | Q.Apply (Q.Primitive "Distinct", [u]) -> Q.Prom (Q.Dedup u)
   | u -> u
 
   let check_policies_compatible env_policy block_policy =
@@ -964,7 +964,7 @@ struct
       let t = computation env t in
       let e = computation env e in
         Q.If (c, t, e)
-  
+
   (** returns true iff the input query contains any free variable in the list;
    * the query is assumed to be in normal form! *)
   let contains_free fvs =
@@ -977,12 +977,12 @@ struct
     | Q.Dedup t
     | Q.Prom t
     | Q.Project (t,_) -> cfree bvs t
-    | Q.Erase (t,_) -> 
+    | Q.Erase (t,_) ->
         (* for well-typed normal forms, this is NOT an overapproximation *)
         cfree bvs t
     | Q.Variant (_, t) -> cfree bvs t
     | Q.Concat tl -> List.exists (cfree bvs) tl
-    | Q.For (_, gs, os, b) -> 
+    | Q.For (_, gs, os, b) ->
         let bvs'', res = List.fold_left (fun (bvs',acc) (w,q) -> w::bvs', acc || cfree bvs' q) (bvs, false) gs in
         res || cfree bvs'' b || List.exists (cfree bvs) os
     | Q.Record fl -> StringMap.exists (fun _ t -> cfree bvs t) fl
@@ -990,7 +990,7 @@ struct
     in cfree []
 
   let mk_for_term env (x,xs) body_f =
-    let ty_elem = 
+    let ty_elem =
       Q.type_of_expression xs
       |> TypeUtils.element_type ~overstep_quantifiers:true
     in
@@ -1087,12 +1087,12 @@ struct
         in
         erase (norm false env r, labels)
     | Q.Variant (label, v) -> Q.Variant (label, norm false env v)
-    | Q.Apply (f, xs) as _orig -> 
+    | Q.Apply (f, xs) as _orig ->
       apply in_dedup env (norm false env f, List.map (norm false env) xs)
-    | Q.For (_, gs, os, u) as _orig -> 
+    | Q.For (_, gs, os, u) as _orig ->
         (* Debug.print ("norm.For: " ^ Q.show _orig); *)
         let rec reduce_gs env os_f body = function
-        | [] -> 
+        | [] ->
           begin
             match norm in_dedup env body with
             | Q.For (_, gs', os', u') ->
@@ -1100,16 +1100,16 @@ struct
             (* this special case allows us to hoist a non-standard For body into a generator *)
             | Q.Prom _ as u' ->
                 let z = Var.fresh_raw_var () in
-                let tyz = 
+                let tyz =
                   Q.type_of_expression u'
-                  |> TypeUtils.element_type 
+                  |> TypeUtils.element_type
                 in
                 let vz = Q.Var (z, tyz) in
                 (* Debug.print ("norm.For fresh var: " ^ Q.show vz); *)
-                Q.reduce_for_source env (z, u', tyz) (fun env' os_f' -> 
+                Q.reduce_for_source env (z, u', tyz) (fun env' os_f' ->
                   Q.For (None, [], List.map (norm false env') (os_f' (os_f [])),
                     norm in_dedup env' (Q.Singleton vz)))
-            | u' -> 
+            | u' ->
               (* Q.For (None, [], List.map (norm false env) (os_f []), u') *)
               let os' = os_f [] in
               (* let domenv = Env.Int.fold (fun x _ l -> x::l) env.qenv [] in
@@ -1203,7 +1203,7 @@ struct
                   | Q.Closure (([x], os), closure_env) ->
                       let os =
                         let cenv = Q.bind (env ++ closure_env) (x, Q.tail_of_t body) in
-                          
+
                           let o = norm_comp false cenv os in
                             match o with
                               | Q.Record fields ->
@@ -1216,8 +1216,8 @@ struct
                          auxiliary do_dedup function *)
                       let out = Q.For (None, gs, os @ os', body) in
                       (* Debug.print ("Query.norm SortBY generates: " ^ Q.show out); *)
-                      if in_dedup 
-                        then norm true env out 
+                      if in_dedup
+                        then norm true env out
                         else out
                   | _ -> assert false
                 end
@@ -1239,7 +1239,7 @@ struct
         apply in_dedup env (f, args @ args')
     | t, _ -> query_error "Application of non-function: %s" (string_of_t t)
 
-  and norm_comp in_dedup env c = 
+  and norm_comp in_dedup env c =
     computation env c
     |> norm in_dedup env
   and retn in_dedup u = if in_dedup then Q.Dedup u else u
