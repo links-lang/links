@@ -1,3 +1,3 @@
 database_driver=postgresql
-database_args=localhost:5432::links
+database_args=localhost:5433:links:links
 show_pre_sugar_typing=off

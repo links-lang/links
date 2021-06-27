@@ -350,7 +350,9 @@ module Insert = struct
     let last_id_fun =
       let driver = db.driver_name () in
       match driver with
-      | "mysql" -> "last_insert_id()"
+      | "mysql"
+       |"mysql8" ->
+          "last_insert_id()"
       | "sqlite3" -> "last_insert_rowid()"
       | _ ->
           let fn = "exec_insert_returning_hack" in
@@ -370,7 +372,8 @@ module Insert = struct
   let exec_insert_returning ~db ~field_types data =
     match db.driver_name () with
     | "sqlite3"
-     |"mysql" ->
+     |"mysql"
+     |"mysql8" ->
         exec_insert_returning_hack ~db data
     | _ ->
         let cmd = Format.asprintf "%a" (fmt ~db) data in
@@ -404,7 +407,9 @@ module Change = struct
 
   let exec_multi ~db data =
     match db.driver_name () with
-    | "mysql" -> exec_multi_slow ~db data
+    | "mysql"
+     |"mysql8" ->
+        exec_multi_slow ~db data
     | _ ->
         let fmt_cmd_sep f () = Format.pp_print_string f ";\n" in
         let fmt_cmd_list = Format.pp_print_list ~pp_sep:fmt_cmd_sep (fmt ~db) in

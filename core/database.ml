@@ -2,11 +2,13 @@ open CommonTypes
 open Utility
 
 let connection_info
-  = Settings.(option "database_args"
-              |> synopsis "Database host, name, user, and password"
+  = let setting =
+      Settings.(option "database_args"
+              |> synopsis "Database host, port, user, and password"
               |> to_string from_string_option
-              |> convert Utility.some
+              |> convert (fun s -> Utility.some (Sys.expand s))
               |> sync)
+    in setting
 
 (* Hacky database query result manipulation settings. *)
 let coerce_null_integers

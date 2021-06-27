@@ -1,0 +1,13 @@
+(library
+  (name links_mysql8)
+  (public_name links-mysql8)
+  (synopsis "MySQL8 database backend for Links")
+  (optional)
+  (flags (:standard -safe-string -dtypes -w Ae-42-44-45-60 -g -cclib -lunix -thread))
+  (libraries mysql8 links.core))
+
+
+(install
+  (section share)
+  (files   links_mysql8_dependencies.json)
+  (package links-mysql8))

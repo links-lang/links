@@ -230,3 +230,29 @@ stderr : @.*Type error:.*
 Nested forall
 var x = auto(~id); x(42)
 stdout : 42 : Int
+
+Recursive functions have monomorphic inner types
+mutual { sig f : forall a. (a) {}-> () fun f(x) {()}    fun g(x) {g(~f)} }
+exit : 1
+stderr : @.*Type error:.*
+
+Generalization of recursive functions
+mutual { sig f : forall a. (a) {}-> () fun f(x) {()}    fun g(x) {x} } g(~f)
+exit : 0
+stdout : fun : forall a.(a) {}-> ()
+
+Freezing recursive function inside mutual block, with annotation
+mutual { sig f : forall a. (a) {}-> () fun f(x) {()}    fun g(x: (forall a. (a) {}-> ())) {g(~f)} }
+stdout : () : ()
+
+Freezing recursive function inside mutual block, without annotation
+mutual { fun f(x) {()}    fun g(x) {g(~f); ()} } ~g
+stdout : fun : forall a,b::Row,c::Row.((a) -b-> ()) ~c~> ()
+
+Freezing recursive function outside mutual block, with annotation
+mutual { sig f : forall a. (a) {}-> () fun f(x) {()} } ~f
+stdout : fun : forall a.(a) {}-> ()
+
+Freezing recursive function outside mutual block, without annotation
+mutual { fun f(x) {()} } ~f
+stdout : fun : forall a,b::Row.(a) -b-> ()

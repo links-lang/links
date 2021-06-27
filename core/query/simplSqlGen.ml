@@ -68,7 +68,7 @@ and base_exp = function
     begin
     match Query.likeify r with
         | Some r ->
-        S.Apply ("LIKE", [base_exp s; Sql.Constant (Constant.String r)])
+        S.Apply ("LIKE", [base_exp s; base_exp r])
         | None ->
         let r =
                 (* HACK:

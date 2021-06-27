@@ -2539,7 +2539,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
       (* register wildness if this is a recursive variable instance *)
       if StringSet.mem v context.rec_vars then
         begin
-          let wild_open = Types.make_singleton_open_row ("wild", Types.Present Types.unit_type) default_effect_subkind in
+          let wild_open = Types.(open_row default_effect_subkind closed_wild_row) in
           unify ~handle:Gripers.recursive_usage (no_pos (Types.Effect wild_open), (uexp_pos e, Types.Effect context.effect_row));
         end;
     in
@@ -2910,7 +2910,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             (* delete is wild *)
             let () =
               let outer_effects =
-                Types.make_singleton_open_row ("wild", T.Present Types.unit_type) default_effect_subkind
+                Types.(open_row default_effect_subkind closed_wild_row)
               in
                 unify ~handle:Gripers.delete_outer
                   (no_pos (T.Record context.effect_row), no_pos (T.Record outer_effects))
@@ -2988,7 +2988,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             (* insert is wild *)
             let () =
               let outer_effects =
-                Types.make_singleton_open_row ("wild", T.Present Types.unit_type) default_effect_subkind
+                Types.(open_row default_effect_subkind closed_wild_row)
               in
                 unify ~handle:Gripers.insert_outer
                   (no_pos (T.Record context.effect_row), no_pos (T.Record outer_effects))
@@ -3052,7 +3052,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             (* update is wild *)
             let () =
               let outer_effects =
-                Types.make_singleton_open_row ("wild", T.Present Types.unit_type) default_effect_subkind
+                Types.(open_row default_effect_subkind closed_wild_row)
               in
                 unify ~handle:Gripers.update_outer
                   (no_pos (T.Record context.effect_row), no_pos (T.Record outer_effects))
@@ -3071,7 +3071,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                     let offset = tc offset in
                     let () = unify ~handle:Gripers.range_bound (pos_and_typ offset, no_pos Types.int_type) in
                     let outer_effects =
-                      Types.make_singleton_open_row ("wild", T.Present Types.unit_type) default_effect_subkind
+                      Types.(open_row default_effect_subkind closed_wild_row)
                     in
                     Some (erase limit, erase offset), outer_effects, Usage.combine (usages limit) (usages offset)
             in
@@ -3101,7 +3101,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             (* let pid_type = Application (Types.process, [Row inner_effects]) in *)
             let () =
               let outer_effects =
-                Types.make_singleton_open_row ("wild", T.Present Types.unit_type) default_effect_subkind
+                Types.(open_row default_effect_subkind closed_wild_row)
               in
                 unify ~handle:Gripers.spawn_wait_outer
                   (no_pos (T.Record context.effect_row), no_pos (T.Record outer_effects)) in
@@ -3135,7 +3135,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                wild | e }] (and maybe SessionFail) (call this "inner_effects"), and
                then use e (pid_effects) as the type argument to the process.
              *)
-            let inner_effects = Types.row_with ("wild", T.Present Types.unit_type) pid_effects in
+            let inner_effects = Types.row_with Types.wild_present pid_effects in
             let inner_effects =
               if Settings.get  Basicsettings.Sessions.exceptions_enabled then
                 let ty = Types.make_pure_function_type [] (Types.empty_type) in
@@ -3145,7 +3145,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             let pid_type = T.Application (Types.process, [PrimaryKind.Row, pid_effects]) in
             let () =
               let outer_effects =
-                Types.make_singleton_open_row ("wild", T.Present Types.unit_type) default_effect_subkind
+                Types.(open_row default_effect_subkind closed_wild_row)
               in
                 unify ~handle:Gripers.spawn_outer
                   (no_pos (T.Record context.effect_row), no_pos (T.Record outer_effects)) in
@@ -3168,9 +3168,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
         | Receive (binders, _) ->
             let mb_type = Types.fresh_type_variable (lin_any, res_any) in
             let effects =
-              Types.row_with ("wild", T.Present Types.unit_type)
-                (Types.make_singleton_open_row ("hear", T.Present mb_type) default_effect_subkind) in
-
+              Types.(open_row default_effect_subkind (row_with (hear_present mb_type) closed_wild_row))
+            in
             let () = unify ~handle:Gripers.receive_mailbox
               (no_pos (T.Record context.effect_row), no_pos (T.Record effects)) in
 
@@ -3224,8 +3223,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
         | RangeLit (l, r) ->
             let l, r = tc l, tc r in
             let outer_effects =
-              Types.make_singleton_open_row ("wild", T.Present Types.unit_type)
-                                            default_effect_subkind in
+              Types.(open_row default_effect_subkind closed_wild_row)
+            in
             let () = unify ~handle:Gripers.range_bound  (pos_and_typ l,
                                                          no_pos Types.int_type)
             and () = unify ~handle:Gripers.range_bound  (pos_and_typ r,
@@ -3394,8 +3393,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            let body = type_check context body in
            let env = extract_formlet_bindings (erase body) in
            let vs = Env.domain env in
-           let closed_wild = Types.make_singleton_closed_row ("wild", T.Present Types.unit_type) in
-           let context' = { context with effect_row = closed_wild } ++ env in
+           let context' = { context with effect_row = Types.closed_wild_row } ++ env in
            let yields = type_check context' yields in
            unify ~handle:Gripers.formlet_body (pos_and_typ body, no_pos Types.xml_type);
            (Formlet (erase body, erase yields),
@@ -3527,7 +3525,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             let f = Types.fresh_type_variable (lin_any, res_any) in
             let t = Types.fresh_type_variable (lin_any, res_any) in
 
-            let eff = Types.make_singleton_open_row ("wild", T.Present Types.unit_type) default_effect_subkind in
+            let eff = Types.(open_row default_effect_subkind closed_wild_row) in
 
             let cont_type = T.Function (Types.make_tuple_type [f], eff, t) in
             let context' = {context
@@ -3536,7 +3534,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
 
             let () =
               let outer_effects =
-                Types.make_singleton_open_row ("wild", T.Present Types.unit_type) default_effect_subkind
+                Types.(open_row default_effect_subkind closed_wild_row)
               in
                 unify ~handle:Gripers.escape_outer
                   (no_pos (T.Record context.effect_row), no_pos (T.Record outer_effects)) in
@@ -3686,9 +3684,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            in
            (* allow_wild adds wild : () to the given effect row *)
            let allow_wild : Types.row -> Types.row
-         = fun row ->
-           let fields = StringMap.add "wild" Types.unit_type StringMap.empty in
-           Types.extend_row fields row
+             = fun row ->
+             Types.(row_with wild_present row)
            in
            (* returns a pair of lists whose first component is the
                value clauses, while the second component is the
@@ -4672,7 +4669,7 @@ and type_cp (context : context) = fun {node = p; pos} ->
 
   let unify ~pos ~handle (t, u) = unify_or_raise ~pos:pos ~handle:handle (("<unknown>", t), ("<unknown>", u)) in
 
-  let wild_open = Types.make_singleton_open_row ("wild", Types.Present Types.unit_type) default_effect_subkind in
+  let wild_open = Types.(open_row default_effect_subkind closed_wild_row) in
   unify ~pos ~handle:Gripers.cp_wild (Types.Effect wild_open, Types.Effect context.effect_row);
 
   let module T = Types in

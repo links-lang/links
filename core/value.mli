@@ -21,11 +21,10 @@ class virtual dbvalue :
     method virtual status : db_status
   end
 
-class virtual database :
+class virtual database : Sql.printer ->
   object
     method virtual driver_name : unit -> string
     method virtual escape_string : string -> string
-    method virtual quote_field : string -> string
     method virtual exec : string -> dbvalue
     method make_insert_returning_query :
       string (* "returning" field *) ->
@@ -33,6 +32,7 @@ class virtual database :
       string list
     method virtual supports_shredding : unit -> bool
     method string_of_query : ?range:(Sql.range option) -> Sql.query -> string
+    method sql_printer : Sql.printer
   end
 
 

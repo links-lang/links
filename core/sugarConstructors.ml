@@ -118,8 +118,8 @@ module SugarConstructors (Position : Pos)
   (** Fieldspec *)
 
   let present        = Datatype.Present (WithPos.dummy Datatype.Unit)
-  let wild_present   = ("wild", present)
-  let hear_present p = ("hear", Datatype.Present p)
+  let wild_present   = (Types.wild, present)
+  let hear_present p = (Types.hear, Datatype.Present p)
 
 
   (** Rows *)

@@ -36,9 +36,18 @@ struct
 
     let fvs = U.Value.load (Yojson.Basic.from_string (Utility.base64decode (assoc "__env" cgi_args))) in
 
+    (* There is an artificial distinction between primitive
+       functions (builtin functions) and function pointers (functions
+       defined as part of a Links program). This is the point where we
+       have to do something about it in order for attempts to remotely
+       call primitive functions to work properly. *)
+
     let func =
       match fvs with
-      | `Record [] -> `FunctionPtr (int_of_string fname, None)
+      | `Record [] -> let i_fname = int_of_string fname in
+          if Lib.is_primitive_var i_fname
+          then `PrimitiveFunction (Lib.primitive_name i_fname, Some i_fname)
+          else `FunctionPtr (int_of_string fname, None)
       | _          -> `FunctionPtr (int_of_string fname, Some fvs) in
     RemoteCall(func, valenv, args)
 
@@ -176,6 +185,8 @@ struct
            Lwt.return (mime_type, error_page (Errors.format_exception_html exc)) in
 
     let handle_error e =
+      let req_data = Value.Env.request_data valenv in
+      RequestData.set_http_response_code req_data 500;
       if (RequestData.is_ajax_call cgi_args) then
         handle_ajax_error e
       else

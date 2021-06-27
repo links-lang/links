@@ -1,0 +1,7 @@
+DROP TABLE IF EXISTS factorials;
+
+CREATE TABLE factorials (
+    rowid integer PRIMARY KEY AUTO_INCREMENT,
+    i integer,
+    f bigint
+);

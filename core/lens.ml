@@ -1,6 +1,6 @@
 let relational_lenses =
   Settings.(
-    flag "relational_lenses"
+    flag ~default:true "relational_lenses"
     |> synopsis
          "Toggles whether to enable the incremental relational lenses extension"
     |> convert parse_bool

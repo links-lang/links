@@ -1,5 +1,4 @@
 database_driver=mysql
-database_args=localhost:3306:links:12345
+database_args=$LINKS_MYSQL_HOST:$LINKS_MYSQL_PORT:$LINKS_MYSQL_USER:$LINKS_MYSQL_PASSWORD
 coerce_null_integers=on
 null_integer=-1
-relational_lenses=on
