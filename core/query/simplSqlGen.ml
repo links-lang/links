@@ -14,7 +14,7 @@ module S = Sql
 
 let mapstrcat sep f l = l |> List.map f |> String.concat sep
 
-let dummy_sql_empty_query = 
+let dummy_sql_empty_query =
     (false,S.Fields [(S.Constant (Constant.Int 42), "@unit@")], [], S.Constant (Constant.Bool false), [])
 
 (* convert an NRC-style query into an SQL-style query *)
@@ -35,7 +35,7 @@ and generator locvars = function
     S.Subquery (false, S.Select (true, S.Star, [S.TableRef (tname, v)], S.Constant (Constant.Bool true), []), v)
 | (_, _arg) -> Debug.print ("error in SimpleSqlGen.disjunct: unexpected arg = " ^ Q.show _arg); failwith "generator"
 
-and body is_set gs os j = 
+and body is_set gs os j =
     let selquery body where =
         let froms =
             gs
@@ -52,14 +52,14 @@ and body is_set gs os j =
         selquery
         <| List.map (fun (f,x) -> (base_exp x, f)) (StringMap.to_alist fields)
         <| Sql.Constant (Constant.Bool true)
-    | Q.If (c, Q.Singleton (Q.Record fields), Q.Concat []) -> 
+    | Q.If (c, Q.Singleton (Q.Record fields), Q.Concat []) ->
         selquery
         <| List.map (fun (f,x) -> (base_exp x, f)) (StringMap.to_alist fields)
         <| base_exp c
     | _ -> Debug.print ("error in SimpleSqlGen.body: unexpected j = " ^ Q.show j); failwith "body"
 
 and base_exp = function
-(* XXX: Project expects a (numbered) var, but we have a table name 
+(* XXX: Project expects a (numbered) var, but we have a table name
    so I'll make an act of faith and believe that we never project from tables, but only from variables *)
 (* | Q.Project (Q.Table (_, n, _, _), l) -> S.Project (n,l) *)
 | Q.Project (Q.Var (n,_), l) -> S.Project (n,l)

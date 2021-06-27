@@ -22,7 +22,7 @@ type query =
     }
   | Delete    of { del_table: table_name; del_where: base option }
   | With      of table_name * query * query
-and select_clause = 
+and select_clause =
     bool * select_fields * from_clause list * base * base list  (* bool = DISTINCT? *)
 and select_fields =
   | Star
@@ -177,12 +177,12 @@ class virtual printer =
     let pp_from_clause ppf fc =
       match fc with
         | TableRef (t, x) -> Format.fprintf ppf "%a as %s" self#pp_quote t (string_of_table_var x)
-        | Subquery (false, q, x) -> Format.fprintf ppf "(%a) as %s" pr_q q (string_of_table_var x) 
+        | Subquery (false, q, x) -> Format.fprintf ppf "(%a) as %s" pr_q q (string_of_table_var x)
         | Subquery (true, q, x) -> Format.fprintf ppf "lateral (%a) as %s" pr_q q (string_of_table_var x) in
     let pp_where ppf condition =
       match condition with
         | Constant (Constant.Bool true) -> ()
-        | _ -> Format.fprintf ppf "\nwhere %a" pp_os_condition condition 
+        | _ -> Format.fprintf ppf "\nwhere %a" pp_os_condition condition
       in
       if fDistinct then
         Format.fprintf ppf "select %a\nfrom %a%a%a"
@@ -281,7 +281,7 @@ class virtual printer =
             pr_q q
             Format.pp_print_string (order_by_clause n)
       | Union (fAll, qs, n) ->
-        let pp_sep_union ppf () = 
+        let pp_sep_union ppf () =
           if fAll then
             Format.fprintf ppf "\nunion all\n"
           else
