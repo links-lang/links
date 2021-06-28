@@ -1108,12 +1108,9 @@ kinded_row_var:
 
 
 vrow_var:
+/* This uses the usual nonrec_row_var, because a variant version would be exactly the same. */
 | nonrec_row_var                                               { $1 }
 | LPAREN MU VARIABLE DOT vfields RPAREN                        { Datatype.Recursive (named_typevar $3 `Rigid, $5) }
-
-kinded_nonrec_vrow_var:
-/* This just uses the usual nonrec_row_var, because it's just the value */
-| nonrec_row_var subkind                                       { attach_row_subkind ($1, $2) }
 
 kinded_vrow_var:
 | vrow_var subkind                                             { attach_row_subkind ($1, $2) }
