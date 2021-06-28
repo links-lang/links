@@ -9,8 +9,6 @@ let raise_invalid_element pos =
   raise (desugaring_error ~pos ~stage:DesugarPages
     ~message:"Invalid element in page literal")
 
-let closed_wild = Types.make_singleton_closed_row ("wild", Types.Present Types.unit_type)
-
 let rec is_raw phrase =
   match phrase.node with
   | TextNode _ -> true
@@ -60,7 +58,7 @@ let rec desugar_page (o, page_type) =
         | Xml (name, attrs, dynattrs, children) ->
             let x = Utility.gensym ~prefix:"xml" () in
             fn_appl "plugP" [(PrimaryKind.Row, o#lookup_effects)]
-               [fun_lit ~args:[Types.make_tuple_type [Types.xml_type], closed_wild]
+               [fun_lit ~args:[Types.make_tuple_type [Types.xml_type], Types.closed_wild_row]
                         dl_unl [[variable_pat ~ty:Types.xml_type x]]
                         (xml name attrs dynattrs [block ([], var x)]);
                 desugar_nodes children]
