@@ -10,3 +10,21 @@ stdout : true : Bool
 Test precedence parsing (float minus times)
 42.0 -. 1.0 *. 42.0 == 42.0 -. (1.0 *. 42.0)
 stdout : true : Bool
+
+Parse recursive row variable (record)
+tests/records_oop.links
+stdout : (getName = fun, name = "Object") : (name:String|(mu a . getName:((name:String|a)) -> String))
+filemode : true
+
+Parse recursive row variable (variant)
+sig f : ([|(mu a. Op:() { |a}-> ())|]) {}-> () fun f(_) { () } f
+stdout : fun : ([||(mu a . Op:() {|a}-> ())|]) {}-> ()
+
+Parse recursive row variable (type application)
+sig f : Comp ((),{ |(mu a . Bar,Foo:(() { |a}~> _) {}-> ()|_) }) fun f() { () } f
+stdout : fun : Comp ((),{ |(mu a . Bar,Foo:(() {|a}~> _) {}-> ()|_) })
+
+Parse recursive row variable (effect)
+sig w : (() { |(mu a . F:(() { |a}~> ()) {}-> _|e)}~> ()) {F{_}|e}~> () fun w(g) { handle(g()) { case Return(()) -> () case F(h, res) -> w(h) }} w
+stdout : fun : (() {|(mu a . F:(() {|a}~> ()) {}-> _|c)}~> ()) {F{_}|c}~> ()
+args : --enable-handlers

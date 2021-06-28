@@ -123,8 +123,3 @@ stdout : (x = 1, y = 2, z = 3) : (x:Int,y:Int,z:Int)
 Record field punning (7)
 var x = 1; var y = 2; var z = 3; (=x, =y, =z)
 stdout : (x = 1, y = 2, z = 3) : (x:Int,y:Int,z:Int)
-
-Recursive row variable in records
-tests/records_oop.links
-stdout : (getName = fun, name = "Object") : (name:String|(mu a . getName:((name:String|a)) -> String))
-filemode : true
