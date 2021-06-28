@@ -112,3 +112,7 @@ Constructor names with primes (3)
 'Foo
 exit : 1
 stderr : @.*
+
+Recursive variant
+sig f : ([|(mu a. Op:() { |a}-> ())|]) {}-> () fun f(_) { () } f
+stdout : fun : ([||(mu a . Op:() {|a}-> ())|]) {}-> ()

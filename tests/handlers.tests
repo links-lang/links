@@ -469,3 +469,8 @@ Examples
 filemode : true
 stdout : () : ()
 args : --enable-handlers --path=examples/handlers --set=effect_sugar=true
+
+Recursive effect rows
+sig w : (() { |(mu a . F:(() { |a}~> ()) {}-> _|e)}~> ()) {F{_}|e}~> () fun w(g) { handle(g()) { case Return(()) -> () case F(h, res) -> w(h) }} w
+stdout : fun : (() {|(mu a . F:(() {|a}~> ()) {}-> _|c)}~> ()) {F{_}|c}~> ()
+args : --enable-handlers

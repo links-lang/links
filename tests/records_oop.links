@@ -1,0 +1,7 @@
+sig makeNamedObject : (String) -> (name:String|(mu r . getName:((name:String|r)) -> String))
+fun makeNamedObject(name) {
+    (name = name
+    ,getName = fun(self) { self.name } )
+}
+
+makeNamedObject("Object")
