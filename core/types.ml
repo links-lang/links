@@ -2872,7 +2872,7 @@ module NewPrint = struct
              *   absent wild|hear:
              *     (a) {wild-,hear-}-> b
              *   polymorphic in the presence of wild|hear (note the arrow is tame here,
-             *   wild information is available in the fields (TODO do we want the arrow to be tame)):
+             *   wild information is available in the fields):
              *     (a) {wild{_},head{_}}-> b *)
             | "wild", Present _ when hide_primitive_labels -> printers (* skip present wild *)
             | "hear", Present _ when hide_primitive_labels -> (* omit label of a present hear *)
@@ -3481,7 +3481,12 @@ let string_of_tycon_spec : ?policy:(unit -> pp_policy) -> ?refresh_tyvar_names:b
     let pr_old policy tycon =
       Print.tycon_spec Print.empty_context (policy, Vars.tyvar_name_map) tycon
     in
-    let pr_none _ = failwith "This shouldn't happen?" in
+    (* decycler taken from pp_tycon_spec *)
+    let decycle_tycon_spec = function
+      | `Alias (qlist, ty) -> `Alias (List.map DecycleTypes.quantifier qlist, DecycleTypes.datatype ty)
+      | other -> other
+    in
+    let pr_none = show_tycon_spec -<- decycle_tycon_spec in
     fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) tycon ->
     let policy = policy () in
     build_tyvar_names ~refresh_tyvar_names free_bound_tycon_type_vars [tycon];
@@ -3495,7 +3500,7 @@ let string_of_quantifier : ?policy:(unit -> pp_policy) -> ?refresh_tyvar_names:b
     let pr_old policy quant =
       Print.quantifier (policy, Vars.tyvar_name_map) quant
     in
-    let pr_none _ = failwith "Shouldn't happen" in
+    let pr_none = Quantifier.show -<- DecycleTypes.quantifier in
     fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) quant ->
     let policy = policy () in
     build_tyvar_names ~refresh_tyvar_names free_bound_quantifier_vars [quant];
