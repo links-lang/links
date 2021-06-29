@@ -2845,7 +2845,7 @@ module NewPrint = struct
               write buf "mu ";
               apply var binder_ctx (binder, knd) buf;
               write buf " . ";
-              apply datatype inner_context tp buf; (* TODO maybe change ambient? *)
+              apply datatype inner_context tp buf;
               (if want_parens then write buf ")");
             end)
 
@@ -2890,7 +2890,7 @@ module NewPrint = struct
                          | Var (v,knd,_) when Kind.primary_kind knd = PrimaryKind.Presence ->
                             apply var ctx (v, knd) buf
                          | Present _ | Absent ->
-                            apply presence ctx pre buf (* TODO label into presence *)
+                            apply presence ctx pre buf
                          | t -> failwith ("Not present: " ^ show_datatype (DecycleTypes.datatype t))
                     )) :: printers
           in
@@ -2945,8 +2945,8 @@ module NewPrint = struct
             | Variant r  -> r,        "[|",  "|]",  (C.set_ambient C.Variant ctx)
             | Effect r   -> r,        "{",   "}",   (C.set_ambient C.Effect ctx)
             | Select r   -> r,        "[+|", "|+]", ctx (* TODO ambient Session? *)
-            | Choice r   -> r,        "[&|", "|&]", ctx (* TODO *)
-            | Row _ as r -> r,        "",    "",    C.set_ambient C.Row ctx (* TODO what is this case? *)
+            | Choice r   -> r,        "[&|", "|&]", ctx (* TODO ^ *)
+            | Row _ as r -> r,        "",    "",    C.set_ambient C.Row ctx
             | _ -> failwith ("[*R] Invalid row:\n" ^ show_datatype @@ DecycleTypes.datatype r)
           in
           write buf before;
@@ -3017,10 +3017,11 @@ module NewPrint = struct
     = let open StringBuffer in
       let func_arrow : row printer
         = let is_field_present r fld =
-            (* this ensures that if a recursive row does contain a wild, it shows up with a wild arrow,
-             * even if the wild effect is hidden inside the recursive variable (will be visible after one unroll) *)
-            (* TODO this is an opinionated solution, need to confirm if this is what we want *)
-            let fields = unwrap_row r |> fst |> extract_row_parts |> fst3 in
+            (* The row will NOT be unrolled, which means only the immediately visible wild will have
+               any effect on the function arrow. Any wilds hidden in recursive row variables will be
+               visible there, this is intentional: the printed type will more accurately represent
+               what the internal type is. *)
+            let fields = (* unwrap_row r |> fst |> *) extract_row_parts r |> fst3 in
             match FieldEnv.lookup fld fields with
             | None -> false
             | Some (Present _) -> true
@@ -3033,7 +3034,6 @@ module NewPrint = struct
               | Row (fields, rvar, _rdual) as r' ->
                  let is_wild = is_field_present r' "wild" in
                  let number_of_visible_fields = (FieldEnv.size fields) - (if is_wild then 1 else 0) in
-                 (* TODO if there are double wild etc (which is not printed), then this will be the wrong number *)
                  let row_var_exists =
                    match meta rvar with
                    | Empty -> false
