@@ -2470,51 +2470,6 @@ struct
     | ForAll (_, t) | t -> t
 end
 
-type buffer_container = { buffer: Buffer.t;
-                          write: (string -> unit);
-                          concat: (?sep:string -> string list -> unit);
-                          add_buffer: (Buffer.t -> unit);
-                          concat_buffers: (?sep:string -> Buffer.t list -> unit);
-                          read: (unit -> string) }
-let create_buffer : ?init_size:int -> unit -> buffer_container =
-  fun ?(init_size=16) () ->
-  let buf = Buffer.create init_size in
-  let write' s = Buffer.add_string buf s in
-  let add_buffer' b = Buffer.add_buffer buf b in
-  let rec concat' ?(sep="") =
-    function
-    | [] -> ()
-    | [last] -> write' last
-    | not_last :: ((_ :: _) as rest) -> begin write' not_last;
-                                              write' sep;
-                                              concat' ~sep:sep rest
-                                        end
-  in
-  let rec concat_buffers' ?(sep="") =
-    function
-    | [] -> ()
-    | [last] -> add_buffer' last
-    | not_last :: ((_ :: _) as rest) -> begin add_buffer' not_last;
-                                              write' sep;
-                                              concat_buffers' ~sep:sep rest
-                                        end
-  in
-  let read' () = Buffer.contents buf in
-  { buffer = buf; write = write'; concat = concat'; add_buffer = add_buffer'; concat_buffers=concat_buffers'; read = read' }
-
-let wrap_buffer : string -> Buffer.t =
-  fun s ->
-  let len = String.length s in
-  let { buffer; write; _ } = create_buffer ~init_size:len () in
-  write s;
-  buffer
-
-let concat : ?sep:string -> string list -> string =
-  fun ?(sep="") lst ->
-  let { concat; read; _ } = create_buffer () in
-  concat ~sep:sep lst;
-  read ()
-
 (* New type pretty printer (Samo) *)
 module NewPrint = struct
 
@@ -2638,32 +2593,6 @@ module NewPrint = struct
       = fun { ambient ; _ } -> ambient = RowVar
     let is_ambient_binder : t -> bool
       = fun { ambient ; _ } -> ambient = Binder
-
-    (* If you are using Emacs, you can use the following function to generate ambient helpers
-
-       (defun insert-ambient-helpers ()
-         (interactive)
-         (let ((original-point (point)))
-           (search-backward "type ambient =")
-           (mark-sexp)
-           (let* ((amb-def
-                   (buffer-substring-no-properties (region-beginning) (region-end)))
-                  (amb-cases
-                   (mapcar #'string-trim
-                           (split-string
-                            (car (split-string
-                                  (cadr (split-string amb-def "=")) "\\[")) "|"))))
-             (goto-char original-point)
-             (dolist (amb-name amb-cases)
-               (insert (concat "let is_ambient_" (downcase amb-name) " : t -> bool\n"
-                               "= fun { ambient ; _ } -> ambient = " amb-name "\n")))
-             (set-mark (point))
-             (goto-char original-point)
-             (indent-region (region-beginning) (region-end)))))
-
-       ;; eval the sexp above and use command insert-ambient-helpers above this definition
-       ;; TODO we can throw this away, but it's useful while changing the ambients
-     *)
   end
 
   module StringBuffer = struct
@@ -2672,7 +2601,7 @@ module NewPrint = struct
      * because this is a helper function, not intended to be traced *)
     let concat_strs : sep:string -> string list -> string
       = fun ~sep lst ->
-      let _buf = Buffer.create 10 in
+      let _buf = Buffer.create 280 in
       let wrt = Buffer.add_string _buf in
       let rec loop =
         function
@@ -2807,26 +2736,26 @@ module NewPrint = struct
       = fun s ->
       Printer ("<constant>", fun _ctx () buf -> write buf s)
 
-    let wrap : 'a printer -> 'a -> unit printer
+    let with_value : 'a printer -> 'a -> unit printer
       = fun pr v ->
-      Printer ("<wrap>", fun ctx () buf -> apply pr ctx v buf)
+      Printer ("<with_value>", fun ctx () buf -> apply pr ctx v buf)
 
-    let wrap_ambient : Context.ambient -> 'a printer -> 'a -> unit printer
+    let with_ambient : Context.ambient -> 'a printer -> 'a -> unit printer
       = fun amb pr v ->
-      Printer ("<wrap>", fun ctx () buf ->
-                         let inner_ctx = Context.set_ambient amb ctx in
-                         apply pr inner_ctx v buf)
+      Printer ("<with_ambient>", fun ctx () buf ->
+                                 let inner_ctx = Context.set_ambient amb ctx in
+                                 apply pr inner_ctx v buf)
 
     let eval : 'a printer -> Context.t -> 'a -> string
       = if Settings.get trace_printer
         then
           (fun pr ctx v ->
-            let buf = create 10 in (* initial size is an arbitrary value here (TODO) *)
+            let buf = create 280 in
             apply pr ctx v buf;
             trace buf)
         else
           (fun pr ctx v ->
-            let buf = create 10 in (* initial size is an arbitrary value here (TODO) *)
+            let buf = create 280 in
             apply pr ctx v buf;
             read buf)
 
