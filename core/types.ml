@@ -2615,78 +2615,25 @@ module NewPrint = struct
       loop lst;
       Buffer.contents _buf
 
-    let trace_printer =
-      Settings.(flag ~default:false "trace_printer"
-                |> synopsis "Trace pretty printer (only new)"
-                |> privilege `System
-                |> convert parse_bool
-                |> CLI.(add (long "trace-printer"))
-                |> sync)
+    type t = Buffer.t
 
-    type t = { buf : Buffer.t
-             ; mutable trace : ((string * string) list)
-             ; mutable current_printer : string }
-
-    type 'a printer = Printer of (string * (Context.t -> 'a -> t -> unit))
+    type 'a printer = Printer of (Context.t -> 'a -> t -> unit)
                     | Empty
 
     let create : int -> t
-      = fun size ->
-      { buf             = Buffer.create size
-      ; trace           = []
-      ; current_printer = ""
-      }
+      = fun size -> Buffer.create size
 
     let read : t -> string
-      = fun { buf; _ } -> Buffer.contents buf
-
-    let trace : t -> string
-      = fun { trace; _ } ->
-      let _buf = Buffer.create 20 in
-      let wrt = Buffer.add_string _buf in
-      let write_trace_item (vl, src) =
-        wrt "<"; wrt vl; wrt "|"; wrt src; wrt ">"
-      in
-      let rec iter ~sep = function
-        | [] -> ()
-        | [last] -> write_trace_item last
-        | ((v, s) as not_last) :: (((nv, ns) as next) :: rest) ->
-           if s = ns (* these sources are the same, join them together *)
-           then iter ~sep ((concat_strs ~sep:"" [v ; nv], s) ::  rest)
-           else begin
-               write_trace_item not_last;
-               wrt sep;
-               iter ~sep (next :: rest)
-             end
-      in
-      iter ~sep:" " (List.rev trace);
-      Buffer.contents _buf
+      = fun buf -> Buffer.contents buf
 
     let write : t -> string -> unit
-      = if Settings.get trace_printer
-        then
-          begin
-            fun bt s ->
-            bt.trace <- (s, bt.current_printer) :: bt.trace;
-          end
-        else (fun {buf;_} s -> Buffer.add_string buf s)
+      = fun buf s -> Buffer.add_string buf s
 
     let apply : 'a printer -> Context.t -> 'a -> t -> unit
-      = if Settings.get trace_printer
-        then
-          (fun pr ctx thing bt ->
-            match pr with
-            | Empty -> ()
-            | Printer (n, pr) ->
-               let upper = bt.current_printer in
-               bt.current_printer <- n;
-               pr ctx thing bt;
-               bt.current_printer <- upper)
-        else
-          (fun pr ctx thing buf ->
-            match pr with
-            | Empty -> ()
-            | Printer (_, pr) -> pr ctx thing buf)
+      = fun pr ctx thing buf ->
+      match pr with
+      | Empty -> ()
+      | Printer pr -> pr ctx thing buf
 
     let concat : sep:string -> 'a printer -> 'a list -> Context.t -> t -> unit
       = fun ~sep pr items ctx buf ->
@@ -2734,30 +2681,24 @@ module NewPrint = struct
 
     let constant : string -> unit printer
       = fun s ->
-      Printer ("<constant>", fun _ctx () buf -> write buf s)
+      Printer (fun _ctx () buf -> write buf s)
 
     let with_value : 'a printer -> 'a -> unit printer
       = fun pr v ->
-      Printer ("<with_value>", fun ctx () buf -> apply pr ctx v buf)
+      Printer (fun ctx () buf -> apply pr ctx v buf)
 
     let with_ambient : Context.ambient -> 'a printer -> 'a -> unit printer
       = fun amb pr v ->
-      Printer ("<with_ambient>", fun ctx () buf ->
-                                 let inner_ctx = Context.set_ambient amb ctx in
-                                 apply pr inner_ctx v buf)
+      Printer (
+          fun ctx () buf ->
+          let inner_ctx = Context.set_ambient amb ctx in
+          apply pr inner_ctx v buf)
 
     let eval : 'a printer -> Context.t -> 'a -> string
-      = if Settings.get trace_printer
-        then
-          (fun pr ctx v ->
+      = fun pr ctx v ->
             let buf = create 280 in
             apply pr ctx v buf;
-            trace buf)
-        else
-          (fun pr ctx v ->
-            let buf = create 280 in
-            apply pr ctx v buf;
-            read buf)
+            read buf
 
   end
 
@@ -2769,13 +2710,12 @@ module NewPrint = struct
     = fun pol (lin, res) ->
     let open StringBuffer in
     let full_name : unit printer
-      = Printer ("subkind_name",
-                 fun _ctx () buf ->
-                 write buf "(";
-                 write buf (Linearity.to_string lin);
-                 write buf ",";
-                 write buf (Restriction.to_string res);
-                 write buf ")"
+      = Printer (fun _ctx () buf ->
+            write buf "(";
+            write buf (Linearity.to_string lin);
+            write buf ",";
+            write buf (Restriction.to_string res);
+            write buf ")"
           )
     in
     match pol.kinds with
@@ -2802,10 +2742,9 @@ module NewPrint = struct
       fun ctx ((primary, subknd) as knd) ->
 
       let full_name : unit printer
-        = Printer ("kind_name.full_name",
-                   fun ctxt () buf ->
-                   write buf (P.to_string primary);
-                   apply (subkind_name (Context.policy ctxt) subknd) ctxt () buf)
+        = Printer (fun ctxt () buf ->
+              write buf (P.to_string primary);
+              apply (subkind_name (Context.policy ctxt) subknd) ctxt () buf)
       in
       let policy = Context.policy ctx in
       match policy.kinds, knd with
@@ -2813,34 +2752,33 @@ module NewPrint = struct
       | "hide", _ -> constant (P.to_string primary)
       | _, (PrimaryKind.Type, (L.Unl, R.Any)) -> Empty
       | _ ->
-         Printer ("kind_name.other",
-                  fun ctx () buf ->
-                  (* do simple cases first, match the other stuff later *)
-                  match primary with
-                  | P.Type -> begin
-                      match subknd with
-                      | L.Unl, R.Any -> failwith "[*K] This should not happen!"
-                      | L.Unl, R.Base -> write buf (R.to_string res_base)
-                      | L.Any, R.Session -> write buf (R.to_string res_session)
-                      | subknd ->
-                         let pol = { (Context.policy ctx) with kinds = "full" } in
-                         apply (subkind_name pol subknd) ctx () buf
-                    end
-                  | PrimaryKind.Row -> begin
-                      match subknd with
-                      | L.Unl, R.Any | L.Unl, R.Effect ->
-                         write buf (P.to_string pk_row)
-                      | _ ->
-                         let ctx' = Context.set_policy { policy with kinds = "full" } ctx in
-                         apply full_name ctx' () buf
-                    end
-                  | PrimaryKind.Presence -> begin
-                      match subknd with
-                      | L.Unl, R.Any -> write buf (P.to_string pk_presence)
-                      | _ ->
-                         let ctx' = Context.set_policy { policy with kinds = "full" } ctx in
-                         apply full_name ctx' () buf
-                    end)
+         Printer (fun ctx () buf ->
+             (* do simple cases first, match the other stuff later *)
+             match primary with
+             | P.Type -> begin
+                 match subknd with
+                 | L.Unl, R.Any -> failwith "[*K] This should not happen!"
+                 | L.Unl, R.Base -> write buf (R.to_string res_base)
+                 | L.Any, R.Session -> write buf (R.to_string res_session)
+                 | subknd ->
+                    let pol = { (Context.policy ctx) with kinds = "full" } in
+                    apply (subkind_name pol subknd) ctx () buf
+               end
+             | PrimaryKind.Row -> begin
+                 match subknd with
+                 | L.Unl, R.Any | L.Unl, R.Effect ->
+                    write buf (P.to_string pk_row)
+                 | _ ->
+                    let ctx' = Context.set_policy { policy with kinds = "full" } ctx in
+                    apply full_name ctx' () buf
+               end
+             | PrimaryKind.Presence -> begin
+                 match subknd with
+                 | L.Unl, R.Any -> write buf (P.to_string pk_presence)
+                 | _ ->
+                    let ctx' = Context.set_policy { policy with kinds = "full" } ctx in
+                    apply full_name ctx' () buf
+               end)
 
   let strip_quantifiers : typ -> typ =
     function
@@ -2848,7 +2786,7 @@ module NewPrint = struct
 
   let primitive : Primitive.t printer
     = let open StringBuffer in
-      Printer ("primitive", fun _ctxt prim buf -> write buf (Primitive.to_string prim))
+      Printer (fun _ctxt prim buf -> write buf (Primitive.to_string prim))
 
   let is_var_anonymous : Context.t -> tid -> bool =
     fun ctxt vid ->
@@ -2858,186 +2796,178 @@ module NewPrint = struct
   (* string_of_var : context -> policy * names -> VAR -> string *)
   let rec var : (tid * Kind.t) printer
     = let open StringBuffer in
-      Printer ("var",
-               fun ctx (vid, knd) buf ->
-               let subknd = Kind.subkind knd in
-               let var_name, (flavour, _, _) = Vars.find_spec vid (Context.tyvar_names ctx) in
-               let in_binder = Context.is_ambient_binder ctx in
-               (* Rules of printing vars:
-                * 1) If var only appears once (count = 1) & (policy.hide_fresh = true) => only as don't-care "_" [is_unique]
-                * 2) But also if the var is bound (in context.bound_vars) it has to appear (by name -> overrides (1))! [is_bound]
-                * 3) If a var is flexible (and policy.flavours = true), then it gets a prefix "%" [show_flexible]
-                * 4) Don't-care simplifies: "%_" => "%"
-                * 5) Within Presence (Meta (Var ...)), gets surrounded by "{ ... }"
-                *    (or "{% ... }" if Flexible, but the % will be contributed by rule (3)) [is_presence]
-                *)
+      Printer (fun ctx (vid, knd) buf ->
+          let subknd = Kind.subkind knd in
+          let var_name, (flavour, _, _) = Vars.find_spec vid (Context.tyvar_names ctx) in
+          let in_binder = Context.is_ambient_binder ctx in
+          (* Rules of printing vars:
+           * 1) If var only appears once (count = 1) & (policy.hide_fresh = true) => only as don't-care "_" [is_unique]
+           * 2) But also if the var is bound (in context.bound_vars) it has to appear (by name -> overrides (1))! [is_bound]
+           * 3) If a var is flexible (and policy.flavours = true), then it gets a prefix "%" [show_flexible]
+           * 4) Don't-care simplifies: "%_" => "%"
+           * 5) Within Presence (Meta (Var ...)), gets surrounded by "{ ... }"
+           *    (or "{% ... }" if Flexible, but the % will be contributed by rule (3)) [is_presence]
+           *)
 
-               let print_var : string printer =
-                 Printer ("var.print_var",
-                          fun ctx var_name buf ->
-                          let is_anonymous = (not in_binder) && is_var_anonymous ctx vid in
-                          let show_flexible = (Context.policy ctx).flavours && flavour = `Flexible in
-                          let is_presence = (PrimaryKind.Presence = Kind.primary_kind knd) in
+          let print_var : string printer =
+            Printer (fun ctx var_name buf ->
+                let is_anonymous = (not in_binder) && is_var_anonymous ctx vid in
+                let show_flexible = (Context.policy ctx).flavours && flavour = `Flexible in
+                let is_presence = (PrimaryKind.Presence = Kind.primary_kind knd) in
 
-                          (if is_presence then write buf "{");
-                          (if show_flexible then write buf "%");
-                          (match is_anonymous, show_flexible with
-                           | true, true  -> ()
-                           | true, false -> write buf "_"
-                           | _, _        -> write buf var_name);
-                          (if is_presence then write buf "}"))
-               in
-               if not in_binder
-               then seq ~sep:"::" (print_var, subkind_name (Context.policy ctx) subknd) (var_name, ()) ctx buf
-               else seq ~sep:"::" (print_var, kind_name ctx knd) (var_name, ()) ctx buf)
+                (if is_presence then write buf "{");
+                (if show_flexible then write buf "%");
+                (match is_anonymous, show_flexible with
+                 | true, true  -> ()
+                 | true, false -> write buf "_"
+                 | _, _        -> write buf var_name);
+                (if is_presence then write buf "}"))
+          in
+          if not in_binder
+          then seq ~sep:"::" (print_var, subkind_name (Context.policy ctx) subknd) (var_name, ()) ctx buf
+          else seq ~sep:"::" (print_var, kind_name ctx knd) (var_name, ()) ctx buf)
 
   and recursive : (tid * Kind.t * typ) printer
     = let open StringBuffer in
-      Printer ("recursive",
-               fun ctx (binder, knd, tp) buf ->
-               (* assumes that the recursive variable itself shouldn't display kind information,
-                * because the definition of the type itself is right there *)
-               let rec_var_p = { (Context.policy ctx) with kinds = "hide" } in
-               let binder_ctx = Context.set_policy rec_var_p ctx in
-               if Context.is_tyvar_bound binder ctx
-               then (* this recursive was already seen -> just need the variable name *)
-                 apply var binder_ctx (binder, knd) buf
-               else (* this the first occurence of this mu -> print the whole type *)
-                 begin
-                   let inner_context = Context.bind_tyvar binder ctx in
-                   let want_parens = Context.is_ambient_rowvar ctx in
-                   (if want_parens then write buf "(");
-                   write buf "mu ";
-                   apply var binder_ctx (binder, knd) buf;
-                   write buf " . ";
-                   apply datatype inner_context tp buf; (* TODO maybe change ambient? *)
-                   (if want_parens then write buf ")");
-                 end)
+      Printer (fun ctx (binder, knd, tp) buf ->
+          (* assumes that the recursive variable itself shouldn't display kind information,
+           * because the definition of the type itself is right there *)
+          let rec_var_p = { (Context.policy ctx) with kinds = "hide" } in
+          let binder_ctx = Context.set_policy rec_var_p ctx in
+          if Context.is_tyvar_bound binder ctx
+          then (* this recursive was already seen -> just need the variable name *)
+            apply var binder_ctx (binder, knd) buf
+          else (* this the first occurence of this mu -> print the whole type *)
+            begin
+              let inner_context = Context.bind_tyvar binder ctx in
+              let want_parens = Context.is_ambient_rowvar ctx in
+              (if want_parens then write buf "(");
+              write buf "mu ";
+              apply var binder_ctx (binder, knd) buf;
+              write buf " . ";
+              apply datatype inner_context tp buf; (* TODO maybe change ambient? *)
+              (if want_parens then write buf ")");
+            end)
 
   and alias_recapp : (string * type_arg list * bool) printer
     = let open StringBuffer in
-      Printer ("alias_recapp",
-               fun ctx (name, arg_types, is_dual) buf ->
-               (if is_dual then write buf "~");
-               write buf (Module_hacks.Name.prettify name);
-               (match arg_types with
-                | [] -> ()
-                | _ -> write buf " (";
-                       concat ~sep:"," type_arg arg_types ctx buf;
-                       write buf ")"))
+      Printer (fun ctx (name, arg_types, is_dual) buf ->
+          (if is_dual then write buf "~");
+          write buf (Module_hacks.Name.prettify name);
+          (match arg_types with
+           | [] -> ()
+           | _ -> write buf " (";
+                  concat ~sep:"," type_arg arg_types ctx buf;
+                  write buf ")"))
   (* TODO Ignoring shared effects for now (original printer does special stuff for them in aliases/recapp) *)
 
   and row_parts : row' printer
     = let open StringBuffer in
-      Printer ("row_parts",
-               fun ctx (rfields, rvar, rdual) buf ->
-               let hide_primitive_labels = Context.is_ambient_effect ctx in
+      Printer (fun ctx (rfields, rvar, rdual) buf ->
+          let hide_primitive_labels = Context.is_ambient_effect ctx in
 
-               let fold = fun label fld printers ->
-                 match label, fld with
-                 (* this allows function types like this:
-                  *   absent wild|hear:
-                  *     (a) {wild-,hear-}-> b
-                  *   polymorphic in the presence of wild|hear (note the arrow is tame here,
-                  *   wild information is available in the fields (TODO do we want the arrow to be tame)):
-                  *     (a) {wild{_},head{_}}-> b *)
-                 | "wild", Present _ when hide_primitive_labels -> printers (* skip present wild *)
-                 | "hear", Present _ when hide_primitive_labels -> (* omit label of a present hear *)
-                    (Printer ("row_parts.hear", fun ctx () buf -> apply presence ctx fld buf)) :: printers
-                 | _ ->
-                    if Context.is_ambient_tuple ctx
-                    then wrap presence fld :: printers
-                    else (Printer ("row_parts.not_tuple",
-                                   fun ctx () buf ->
-                                   write buf label;
-                                   let pre = match fld with
-                                     | Meta point -> Unionfind.find point
-                                     | _ -> fld
-                                   in
-                                   match pre with
-                                   | Var (v,knd,_) when Kind.primary_kind knd = PrimaryKind.Presence ->
-                                      apply var ctx (v, knd) buf
-                                   | Present _ | Absent ->
-                                      apply presence ctx pre buf (* TODO label into presence *)
-                                   | t -> failwith ("Not present: " ^ show_datatype (DecycleTypes.datatype t))
-                         )) :: printers
-               in
+          let fold = fun label fld printers ->
+            match label, fld with
+            (* this allows function types like this:
+             *   absent wild|hear:
+             *     (a) {wild-,hear-}-> b
+             *   polymorphic in the presence of wild|hear (note the arrow is tame here,
+             *   wild information is available in the fields (TODO do we want the arrow to be tame)):
+             *     (a) {wild{_},head{_}}-> b *)
+            | "wild", Present _ when hide_primitive_labels -> printers (* skip present wild *)
+            | "hear", Present _ when hide_primitive_labels -> (* omit label of a present hear *)
+               (Printer (fun ctx () buf -> apply presence ctx fld buf)) :: printers
+            | _ ->
+               if Context.is_ambient_tuple ctx
+               then with_value presence fld :: printers
+               else (Printer (fun ctx () buf ->
+                         write buf label;
+                         let pre = match fld with
+                           | Meta point -> Unionfind.find point
+                           | _ -> fld
+                         in
+                         match pre with
+                         | Var (v,knd,_) when Kind.primary_kind knd = PrimaryKind.Presence ->
+                            apply var ctx (v, knd) buf
+                         | Present _ | Absent ->
+                            apply presence ctx pre buf (* TODO label into presence *)
+                         | t -> failwith ("Not present: " ^ show_datatype (DecycleTypes.datatype t))
+                    )) :: printers
+          in
 
-               let printers = List.rev (FieldEnv.fold fold rfields []) in
-               let sep =
-                 let open Context in
-                 match ambient ctx with
-                 | Variant -> "|"
-                 | Tuple -> ", " (* tuples require a space as well *)
-                 | _ -> ","
-               in
-               concat' ~sep printers ctx buf;
-               match meta rvar with
-               | Empty -> ()
-               | (Printer _) as pr ->
-                  begin
-                    let module C = Context in
-                    (* (if List.length printers = 0 && (match C.ambient ctx with
-                     *                                  | C.Effect | C.Row | C.Variant -> true
-                     *                                  | _ -> false)
-                     *                                   (\* starts with { or [|, want to avoid \{\| and [|| *\)
-                     *  then write buf " |"
-                     *  else write buf "|"); *)
-                    if List.length printers = 0 then
-                      begin
-                        match C.ambient ctx with
-                        | C.Effect | C.Row (*?*) -> write buf " |"
-                        | C.Variant -> () (* variants don't get pipe *)
-                        | _ -> write buf "|"
-                      end
-                    else write buf "|";
-                    let ctx = C.set_ambient C.RowVar ctx in
-                    (if rdual then write buf "~");
-                    apply pr ctx () buf
-                  end)
+          let printers = List.rev (FieldEnv.fold fold rfields []) in
+          let sep =
+            let open Context in
+            match ambient ctx with
+            | Variant -> "|"
+            | Tuple -> ", " (* tuples require a space as well *)
+            | _ -> ","
+          in
+          concat' ~sep printers ctx buf;
+          match meta rvar with
+          | Empty -> ()
+          | (Printer _) as pr ->
+             begin
+               let module C = Context in
+               (* (if List.length printers = 0 && (match C.ambient ctx with
+                *                                  | C.Effect | C.Row | C.Variant -> true
+                *                                  | _ -> false)
+                *                                   (\* starts with { or [|, want to avoid \{\| and [|| *\)
+                *  then write buf " |"
+                *  else write buf "|"); *)
+               if List.length printers = 0 then
+                 begin
+                   match C.ambient ctx with
+                   | C.Effect | C.Row (*?*) -> write buf " |"
+                   | C.Variant -> () (* variants don't get pipe *)
+                   | _ -> write buf "|"
+                 end
+               else write buf "|";
+               let ctx = C.set_ambient C.RowVar ctx in
+               (if rdual then write buf "~");
+               apply pr ctx () buf
+             end)
 
   and row : typ printer
     = let open StringBuffer in
-      Printer ("row",
-               fun ctx r buf ->
-               let r', before, after, new_ctx =
-                 let module C = Context in
+      Printer (fun ctx r buf ->
+          let r', before, after, new_ctx =
+            let module C = Context in
+            match r with
+            | Record r' ->
+               let unrolled =
                  match r with
-                 | Record r' ->
-                    let unrolled =
-                      match r with
-                      | Row _ -> r
-                      | _ -> fst (unwrap_row (extract_row r))
-                    in
-                    let is_tuple = (C.is_ambient_tuple ctx) || (is_tuple unrolled) (* not allowing onetuples by default *)
-                    in   (* ! *) r',       "(",   ")",   (if is_tuple then (C.set_ambient C.Tuple ctx) else (C.toplevel ctx))
-                 | Variant r  -> r,        "[|",  "|]",  (C.set_ambient C.Variant ctx)
-                 | Effect r   -> r,        "{",   "}",   (C.set_ambient C.Effect ctx)
-                 | Select r   -> r,        "[+|", "|+]", ctx (* TODO ambient Session? *)
-                 | Choice r   -> r,        "[&|", "|&]", ctx (* TODO *)
-                 | Row _ as r -> r,        "",    "",    C.set_ambient C.Row ctx (* TODO what is this case? *)
-                 | _ -> failwith ("[*R] Invalid row:\n" ^ show_datatype @@ DecycleTypes.datatype r)
+                 | Row _ -> r
+                 | _ -> fst (unwrap_row (extract_row r))
                in
-               write buf before;
-               apply row_parts new_ctx (extract_row_parts r') buf;
-               write buf after
+               let is_tuple = (C.is_ambient_tuple ctx) || (is_tuple unrolled) (* not allowing onetuples by default *)
+               in   (* ! *) r',       "(",   ")",   (if is_tuple then (C.set_ambient C.Tuple ctx) else (C.toplevel ctx))
+            | Variant r  -> r,        "[|",  "|]",  (C.set_ambient C.Variant ctx)
+            | Effect r   -> r,        "{",   "}",   (C.set_ambient C.Effect ctx)
+            | Select r   -> r,        "[+|", "|+]", ctx (* TODO ambient Session? *)
+            | Choice r   -> r,        "[&|", "|&]", ctx (* TODO *)
+            | Row _ as r -> r,        "",    "",    C.set_ambient C.Row ctx (* TODO what is this case? *)
+            | _ -> failwith ("[*R] Invalid row:\n" ^ show_datatype @@ DecycleTypes.datatype r)
+          in
+          write buf before;
+          apply row_parts new_ctx (extract_row_parts r') buf;
+          write buf after
         )
 
   (* returns the presence, possibly without the colon *)
   and presence : typ printer
     = let open StringBuffer in
-      Printer ("presence",
-               fun ctx tp buf ->
-               (match (* concrete_type *) tp with
-                | Absent -> write buf "-"
-                | Present tp ->
-                   if not (concrete_type tp = unit_type && (Context.is_ambient_variant ctx)) (* hide units in variants *)
-                   then begin
-                       (if not (Context.is_ambient_tuple ctx) then write buf ":");
-                       apply datatype (Context.set_ambient Context.Presence ctx) tp buf
-                     end
-                | Meta pt -> apply (meta pt) (Context.set_ambient Context.Presence ctx) () buf
-                | _ -> failwith "[*p] Type not implemented"))
+      Printer (fun ctx tp buf ->
+          (match (* concrete_type *) tp with
+           | Absent -> write buf "-"
+           | Present tp ->
+              if not (concrete_type tp = unit_type && (Context.is_ambient_variant ctx)) (* hide units in variants *)
+              then begin
+                  (if not (Context.is_ambient_tuple ctx) then write buf ":");
+                  apply datatype (Context.set_ambient Context.Presence ctx) tp buf
+                end
+           | Meta pt -> apply (meta pt) (Context.set_ambient Context.Presence ctx) () buf
+           | _ -> failwith "[*p] Type not implemented"))
 
   and meta : typ point -> unit printer
     = let open StringBuffer in
@@ -3045,44 +2975,42 @@ module NewPrint = struct
       match Unionfind.find pt with
       | Closed -> (* nothing happens; TODO (future) but maybe something should *sometimes* happen *)
          Empty
-      | Var (id, knd, _) -> wrap var (id, knd)
-      | Recursive r -> wrap recursive r
-      | t -> wrap datatype t
+      | Var (id, knd, _) -> with_value var (id, knd)
+      | Recursive r -> with_value recursive r
+      | t -> with_value datatype t
 
   and type_arg : type_arg printer
     = let open StringBuffer in
-      Printer ("type_arg",
-               fun ctx (pknd, r) buf ->
-               let module P = PrimaryKind in
-               match pknd with
-               | P.Type -> apply datatype ctx r buf
-               | P.Row -> begin
-                   write buf "{";
-                   let ctx = Context.set_ambient Context.Row ctx in
-                   (match r with
-                    | Row rp -> apply row_parts ctx rp buf
-                    | Meta pt -> apply (meta pt) ctx () buf
-                    | _ -> failwith ("Non-(row|meta) in type_arg:\n" ^ show_datatype @@ DecycleTypes.datatype r));
-                   write buf "}";
-                 end
-               | P.Presence -> failwith "No way to round-trip type variable::Presence")
+      Printer (fun ctx (pknd, r) buf ->
+          let module P = PrimaryKind in
+          match pknd with
+          | P.Type -> apply datatype ctx r buf
+          | P.Row -> begin
+              write buf "{";
+              let ctx = Context.set_ambient Context.Row ctx in
+              (match r with
+               | Row rp -> apply row_parts ctx rp buf
+               | Meta pt -> apply (meta pt) ctx () buf
+               | _ -> failwith ("Non-(row|meta) in type_arg:\n" ^ show_datatype @@ DecycleTypes.datatype r));
+              write buf "}";
+            end
+          | P.Presence -> failwith "No way to round-trip type variable::Presence")
 
   and application : (Abstype.t * type_arg list) printer
     = let open StringBuffer in
-      Printer ("application",
-               fun ctx p buf ->
-               match p with
-               | (abstp, [el]) when Abstype.equal abstp list ->
-                  write buf "[";
-                  apply type_arg ctx el buf;
-                  write buf "]"
-               | (abstp, []) ->
-                  write buf (Abstype.name abstp)
-               | (abstp, args) ->
-                  write buf (Abstype.name abstp);
-                  write buf " (";
-                  concat ~sep:"," type_arg args ctx buf;
-                  write buf ")"
+      Printer (fun ctx p buf ->
+          match p with
+          | (abstp, [el]) when Abstype.equal abstp list ->
+             write buf "[";
+             apply type_arg ctx el buf;
+             write buf "]"
+          | (abstp, []) ->
+             write buf (Abstype.name abstp)
+          | (abstp, args) ->
+             write buf (Abstype.name abstp);
+             write buf " (";
+             concat ~sep:"," type_arg args ctx buf;
+             write buf ")"
         )
 
   and func : (typ * row * typ) printer
@@ -3093,211 +3021,202 @@ module NewPrint = struct
              * even if the wild effect is hidden inside the recursive variable (will be visible after one unroll) *)
             (* TODO this is an opinionated solution, need to confirm if this is what we want *)
             let fields = unwrap_row r |> fst |> extract_row_parts |> fst3 in
-             match FieldEnv.lookup fld fields with
-             | None -> false
-             | Some (Present _) -> true
-             | Some Absent | Some (Meta _) -> false
+            match FieldEnv.lookup fld fields with
+            | None -> false
+            | Some (Present _) -> true
+            | Some Absent | Some (Meta _) -> false
             | _ -> failwith "Unexpected field presence value."
           in
-          Printer ("func_arrow",
-                   fun ctx r buf ->
-                   let is_lolli = Context.is_ambient_linfun ctx in
-                   match flatten_row r with (* flattened in case there are nested *)
-                   | Row (fields, rvar, _rdual) as r' ->
-                      let is_wild = is_field_present r' "wild" in
-                      let number_of_visible_fields = (FieldEnv.size fields) - (if is_wild then 1 else 0) in
-                      (* TODO if there are double wild etc (which is not printed), then this will be the wrong number *)
-                      let row_var_exists =
-                        match meta rvar with
-                        | Empty -> false
-                        | _ -> true
-                      in
+          Printer (fun ctx r buf ->
+              let is_lolli = Context.is_ambient_linfun ctx in
+              match flatten_row r with (* flattened in case there are nested *)
+              | Row (fields, rvar, _rdual) as r' ->
+                 let is_wild = is_field_present r' "wild" in
+                 let number_of_visible_fields = (FieldEnv.size fields) - (if is_wild then 1 else 0) in
+                 (* TODO if there are double wild etc (which is not printed), then this will be the wrong number *)
+                 let row_var_exists =
+                   match meta rvar with
+                   | Empty -> false
+                   | _ -> true
+                 in
+                 begin
+                   match number_of_visible_fields, row_var_exists with
+                   | 0, false -> write buf "{}" (* no fields but closed row var *)
+                   | 0, true ->
+                      (* there is a row variable, but no fields => use the abbreviated notation -a- or ~a~
+                       * BUT if it's anonymous => skip entirely *)
                       begin
-                        match number_of_visible_fields, row_var_exists with
-                        | 0, false -> write buf "{}" (* no fields but closed row var *)
-                        | 0, true ->
-                           (* there is a row variable, but no fields => use the abbreviated notation -a- or ~a~
-                            * BUT if it's anonymous => skip entirely *)
-                           begin
-                             match Unionfind.find (extract_row_parts r |> snd3) with
-                             | Var (vid, knd, _) ->
-                                if is_var_anonymous ctx vid
-                                then () (* skip printing it entirely *)
-                                else begin
-                                    (if is_wild
-                                     then write buf "~"
-                                     else write buf "-");
-                                    let ctx = (Context.set_ambient Context.Effect
-                                                 (Context.set_policy { (Context.policy ctx)  with kinds="hide" } ctx)) in
-                                    apply var ctx (vid, knd) buf
-                                  end
-                             | _t ->
-                                begin (* special case, construct row syntax, but only call the inside *)
-                                  write buf "{";
-                                  apply row_parts (Context.set_ambient Context.Effect ctx) (extract_row_parts r') buf;
-                                  write buf "}"
-                                end
+                        match Unionfind.find (extract_row_parts r |> snd3) with
+                        | Var (vid, knd, _) ->
+                           if is_var_anonymous ctx vid
+                           then () (* skip printing it entirely *)
+                           else begin
+                               (if is_wild
+                                then write buf "~"
+                                else write buf "-");
+                               let ctx = (Context.set_ambient Context.Effect
+                                            (Context.set_policy { (Context.policy ctx)  with kinds="hide" } ctx)) in
+                               apply var ctx (vid, knd) buf
+                             end
+                        | _t ->
+                           begin (* special case, construct row syntax, but only call the inside *)
+                             write buf "{";
+                             apply row_parts (Context.set_ambient Context.Effect ctx) (extract_row_parts r') buf;
+                             write buf "}"
                            end
-                        | _ -> (* need the full effect row, but only construct the inside of it *)
-                           write buf "{";
-                           apply row_parts (Context.set_ambient Context.Effect ctx) (extract_row_parts r') buf;
-                           write buf "}";
-                      end;
+                      end
+                   | _ -> (* need the full effect row, but only construct the inside of it *)
+                      write buf "{";
+                      apply row_parts (Context.set_ambient Context.Effect ctx) (extract_row_parts r') buf;
+                      write buf "}";
+                 end;
 
-                      (if is_wild then write buf "~" else write buf "-");
-                      (* add the arrowhead/lollipop *)
-                      (if is_lolli then write buf "@" else write buf ">");
-                   | _ -> failwith ("Illformed effect:\n" ^ string_of_datatype ctx r)
+                 (if is_wild then write buf "~" else write buf "-");
+                 (* add the arrowhead/lollipop *)
+                 (if is_lolli then write buf "@" else write buf ">");
+              | _ -> failwith ("Illformed effect:\n" ^ string_of_datatype ctx r)
             )
       in
 
       (* func starts here *)
-      Printer ("func",
-               fun ctx (domain, effects, range) buf ->
-               (* build up the function type string: domain, arrow with effects, range *)
-               apply row (Context.set_ambient Context.Tuple ctx) domain buf; (* function domain is always a Record *)
-               write buf " ";
-               apply func_arrow ctx effects buf;
-               write buf " ";
-               apply datatype ctx range buf;
+      Printer (fun ctx (domain, effects, range) buf ->
+          (* build up the function type string: domain, arrow with effects, range *)
+          apply row (Context.set_ambient Context.Tuple ctx) domain buf; (* function domain is always a Record *)
+          write buf " ";
+          apply func_arrow ctx effects buf;
+          write buf " ";
+          apply datatype ctx range buf;
         )
 
   and session_io : typ printer
     = let open StringBuffer in
-      Printer ("session_io",
-               fun ctx tp buf ->
-               let t_char = match tp with
-                 | Input _ -> "?"
-                 | Output _ -> "!"
-                 | _ -> failwith "Invalid session I/O type" (* this will never happen, because the function session_io
-                                                             *  will only ever be called for Input | Output *)
-               in
-               match tp with
-               | Input (tp, session_tp) | Output (tp, session_tp) ->
-                  write buf t_char;
-                  write buf "(";
-                  apply datatype ctx tp buf;
-                  write buf ").";
-                  apply datatype ctx session_tp buf
-               | _ -> () (* same as above, no error here because it would have already failed before *)
+      Printer (fun ctx tp buf ->
+          let t_char = match tp with
+            | Input _ -> "?"
+            | Output _ -> "!"
+            | _ -> failwith "Invalid session I/O type" (* this will never happen, because the function session_io
+                                                        *  will only ever be called for Input | Output *)
+          in
+          match tp with
+          | Input (tp, session_tp) | Output (tp, session_tp) ->
+             write buf t_char;
+             write buf "(";
+             apply datatype ctx tp buf;
+             write buf ").";
+             apply datatype ctx session_tp buf
+          | _ -> () (* same as above, no error here because it would have already failed before *)
         )
 
   and session_dual : typ printer
     = let open StringBuffer in
-      Printer ("session_dual",
-               fun ctx tp buf ->
-               let dtype = wrap datatype tp in
-               write buf "~";
-               match tp with
-               | Input _ | Output _ | Select _ | Choice _ ->
-                  write buf "(";
-                  apply dtype ctx () buf;
-                  write buf ")"
-               | _ -> apply dtype ctx () buf
+      Printer (fun ctx tp buf ->
+          let dtype = with_value datatype tp in
+          write buf "~";
+          match tp with
+          | Input _ | Output _ | Select _ | Choice _ ->
+             write buf "(";
+             apply dtype ctx () buf;
+             write buf ")"
+          | _ -> apply dtype ctx () buf
         )
 
   and quantifier : Quantifier.t printer
     = let open StringBuffer in
-      Printer ("quantifier",
-               fun ctx qr buf ->
-               let vid = Quantifier.to_var qr in
-               let knd = Quantifier.to_kind qr in
-               apply var ctx (vid, knd) buf)
+      Printer (fun ctx qr buf ->
+          let vid = Quantifier.to_var qr in
+          let knd = Quantifier.to_kind qr in
+          apply var ctx (vid, knd) buf)
 
   and forall : (Quantifier.t list * typ) printer
     = let open StringBuffer in
-      Printer ("forall",
-               fun ctx (binding, tp) buf ->
-               let binder_ctx = Context.set_ambient Context.Binder ctx in
-               let inner_ctx = Context.bind_tyvars (List.map Quantifier.to_var binding) ctx in
-               write buf "forall ";
-               concat ~sep:"," quantifier binding binder_ctx buf;
-               write buf ".";
-               apply datatype inner_ctx tp buf
+      Printer (fun ctx (binding, tp) buf ->
+          let binder_ctx = Context.set_ambient Context.Binder ctx in
+          let inner_ctx = Context.bind_tyvars (List.map Quantifier.to_var binding) ctx in
+          write buf "forall ";
+          concat ~sep:"," quantifier binding binder_ctx buf;
+          write buf ".";
+          apply datatype inner_ctx tp buf
         )
 
   (* code for printing relational lenses taken verbatim from the original printer *)
   and lens : Lens.Type.t printer
     = let open StringBuffer in
-      Printer ("lens",
-               fun _ctx _typ buf ->
-               let open Lens in
-               let sort = Type.sort _typ in
-               let cols = Sort.present_colset sort |> Column.Set.elements in
-               let fds = Sort.fds sort in
-               let predicate =
-                 Sort.predicate sort
-                 |> OptionUtils.from_option (Phrase.Constant.bool true) in
-               let pp_col f col =
-                 Format.fprintf f "%s : %a"
-                   (Lens.Column.alias col)
-                   Lens.Phrase.Type.pp_pretty (Lens.Column.typ col) in
-               let ret =
-                 if Lens.Type.is_abstract _typ
-                 then
-                   if Lens.Type.is_checked _typ
-                   then
-                     Format.asprintf "LensChecked((%a), { %a })"
-                       (Lens.Utility.Format.pp_comma_list pp_col) cols
-                       Lens.Fun_dep.Set.pp_pretty fds
-                   else
-                     Format.asprintf "LensUnchecked((%a), { %a })"
-                       (Lens.Utility.Format.pp_comma_list pp_col) cols
-                       Lens.Fun_dep.Set.pp_pretty fds
-                 else
-                   Format.asprintf "Lens((%a), %a, { %a })"
-                     (Lens.Utility.Format.pp_comma_list pp_col) cols
-                     Lens.Database.fmt_phrase_dummy predicate
-                     Lens.Fun_dep.Set.pp_pretty fds
-               in
-               write buf ret)
+      Printer (fun _ctx _typ buf ->
+          let open Lens in
+          let sort = Type.sort _typ in
+          let cols = Sort.present_colset sort |> Column.Set.elements in
+          let fds = Sort.fds sort in
+          let predicate =
+            Sort.predicate sort
+            |> OptionUtils.from_option (Phrase.Constant.bool true) in
+          let pp_col f col =
+            Format.fprintf f "%s : %a"
+              (Lens.Column.alias col)
+              Lens.Phrase.Type.pp_pretty (Lens.Column.typ col) in
+          let ret =
+            if Lens.Type.is_abstract _typ
+            then
+              if Lens.Type.is_checked _typ
+              then
+                Format.asprintf "LensChecked((%a), { %a })"
+                  (Lens.Utility.Format.pp_comma_list pp_col) cols
+                  Lens.Fun_dep.Set.pp_pretty fds
+              else
+                Format.asprintf "LensUnchecked((%a), { %a })"
+                  (Lens.Utility.Format.pp_comma_list pp_col) cols
+                  Lens.Fun_dep.Set.pp_pretty fds
+            else
+              Format.asprintf "Lens((%a), %a, { %a })"
+                (Lens.Utility.Format.pp_comma_list pp_col) cols
+                Lens.Database.fmt_phrase_dummy predicate
+                Lens.Fun_dep.Set.pp_pretty fds
+          in
+          write buf ret)
 
   and table : (typ * typ * typ) printer
     = let open StringBuffer in
-      Printer ("table",
-               fun ctx (r, w, n) buf ->
-               let ctx = Context.toplevel ctx in
-               write buf "TableHandle(";
-               concat ~sep:"," datatype [ r ;  w ;  n ] ctx buf;
-               write buf ")")
+      Printer (fun ctx (r, w, n) buf ->
+          let ctx = Context.toplevel ctx in
+          write buf "TableHandle(";
+          concat ~sep:"," datatype [ r ;  w ;  n ] ctx buf;
+          write buf ")")
 
   and datatype : datatype printer
     = let open StringBuffer in
-      Printer ("datatype",
-               fun ctx tp buf ->
-               let printer =
-                 match tp with
-                 (* keeping this Not_typed in case we ever need to print some intermediate steps *)
-                 | Not_typed          -> constant "Not typed"
+      Printer (fun ctx tp buf ->
+          let printer =
+            match tp with
+            (* keeping this Not_typed in case we ever need to print some intermediate steps *)
+            | Not_typed          -> constant "Not typed"
 
-                 | Var (vid, knd, _)  -> wrap var (vid, knd)
-                 | Recursive v        -> wrap recursive v
-                 | Application a      -> wrap application a
-                 | Alias ((name, _, arg_types, is_dual), _)
-                   | RecursiveApplication { r_name = name; r_args = arg_types; r_dual = is_dual; _ }
-                   -> wrap alias_recapp (name, arg_types, is_dual)
+            | Var (vid, knd, _)  -> with_value var (vid, knd)
+            | Recursive v        -> with_value recursive v
+            | Application a      -> with_value application a
+            | Alias ((name, _, arg_types, is_dual), _)
+              | RecursiveApplication { r_name = name; r_args = arg_types; r_dual = is_dual; _ }
+              -> with_value alias_recapp (name, arg_types, is_dual)
 
-                 | Meta pt            -> meta pt
-                 | Present t          -> wrap presence t
-                 | Primitive t        -> wrap primitive t
+            | Meta pt            -> meta pt
+            | Present t          -> with_value presence t
+            | Primitive t        -> with_value primitive t
 
-                 | Function f         -> wrap func f
-                 | Lolli f            -> wrap_ambient Context.Linfun func f
+            | Function f         -> with_value func f
+            | Lolli f            -> with_ambient Context.Linfun func f
 
-                 | Table tab          -> wrap table tab
-                 | Lens tp            -> wrap lens tp
-                 | ForAll fa          -> wrap forall fa
+            | Table tab          -> with_value table tab
+            | Lens tp            -> with_value lens tp
+            | ForAll fa          -> with_value forall fa
 
-                 | Input _ | Output _ -> wrap session_io tp
-                 | Dual tp            -> wrap session_dual tp
-                 | End                -> constant "End"
+            | Input _ | Output _ -> with_value session_io tp
+            | Dual tp            -> with_value session_dual tp
+            | End                -> constant "End"
 
-                 | Record _ | Variant _ | Effect _ | Row _ | Select _ | Choice _
-                   -> wrap row tp
+            | Record _ | Variant _ | Effect _ | Row _ | Select _ | Choice _
+              -> with_value row tp
 
-                 | _ -> failwith ("Printer for this type not implemented:\n" ^ show_datatype @@ DecycleTypes.datatype tp)
-               in
-               apply printer ctx () buf)
+            | _ -> failwith ("Printer for this type not implemented:\n" ^ show_datatype @@ DecycleTypes.datatype tp)
+          in
+          apply printer ctx () buf)
 
   (* external interface functions *)
   and string_of_datatype : Context.t -> datatype -> string
@@ -3326,21 +3245,20 @@ module NewPrint = struct
 
   let tycon_spec : [< `Abstract of 'a | `Alias of 'b list * 'c | `Mutual of 'd] printer
     = let open StringBuffer in
-      Printer ("tycon_spec",
-               fun ctx v buf ->
-               match v with
-               | `Alias (tyvars, body) ->
-                  (* let ctx = { context with bound_vars = bound_vars tyvars } in *)
-                  let ctx = Context.bind_tyvars (List.map Quantifier.to_var tyvars) ctx in
-                  begin
-                    match tyvars with
-                    | [] -> apply datatype ctx body buf
-                    | _ -> concat ~sep:"," quantifier tyvars ctx buf;
-                           write buf ".";
-                           apply datatype ctx body buf
-                  end
-               | `Mutual _ -> write buf "mutual"
-               | `Abstract _ -> write buf "abstract")
+      Printer (fun ctx v buf ->
+          match v with
+          | `Alias (tyvars, body) ->
+             (* let ctx = { context with bound_vars = bound_vars tyvars } in *)
+             let ctx = Context.bind_tyvars (List.map Quantifier.to_var tyvars) ctx in
+             begin
+               match tyvars with
+               | [] -> apply datatype ctx body buf
+               | _ -> concat ~sep:"," quantifier tyvars ctx buf;
+                      write buf ".";
+                      apply datatype ctx body buf
+             end
+          | `Mutual _ -> write buf "mutual"
+          | `Abstract _ -> write buf "abstract")
 
   let string_of_tycon_spec : Context.t -> 'a -> string
     = fun ctx t -> StringBuffer.eval tycon_spec ctx t
