@@ -3373,9 +3373,10 @@ let print_pretty_all : pr_roundtrip:(pp_policy -> 'a -> string) ->
   let s_roundtrip = pr_roundtrip policy t in
   let s_old = pr_old policy t in
   NewPrint.StringBuffer.concat_strs ~sep:""
-    [ "ROUNDTRIP: " ; s_roundtrip
-      ; "\nOLD: " ; s_old
-      ; "\nRoundtrip and old agree:" ; string_of_bool (s_roundtrip = s_old) ]
+    [ "Roundtrip: `" ; s_roundtrip ; "'"
+      ; "\nOld: `" ; s_old ; "'"
+      ; "\nRoundtrip and old printer " ;
+      if (s_roundtrip = s_old) then "AGREE. " else "DISAGREE." ]
 
 let print_pretty_general : pr_roundtrip:(pp_policy -> 'a -> string) ->
                            pr_old:(pp_policy -> 'a -> string) ->
