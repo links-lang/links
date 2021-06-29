@@ -3337,31 +3337,36 @@ let empty_typing_environment = { var_env = Env.empty;
                                  desugared = false }
 
 (* Which printer to use *)
-type pretty_printer_engine = Old | Roundtrip | All
+type pretty_printer_engine = PPOld | PPRoundtrip | PPAll
 
 let print_types_pretty
   = let parse_engine v =
       match String.lowercase_ascii v with
       | "none" -> None
-      | "old" -> Some Old
-      | "roundtrip" | "new" -> Some Roundtrip
-      | "both" | "all" -> Some  All
+      | "old" -> Some PPOld
+      | "roundtrip" | "new" -> Some PPRoundtrip
+      | "both" | "all" -> Some PPAll
       | _ -> raise (Invalid_argument "accepted values: none | old | roundtrip | both")
     in
     let string_of_engine = function
       | None -> "none"
-      | Some Old -> "old"
-      | Some Roundtrip -> "roundtrip"
-      | Some All -> "all"
+      | Some PPOld -> "old"
+      | Some PPRoundtrip -> "roundtrip"
+      | Some PPAll -> "all"
     in
-    Settings.(option ~default:(Some Roundtrip) "types_pretty_printer_engine"
+    Settings.(option ~default:(Some PPRoundtrip) "types_pretty_printer_engine"
               |> synopsis "Chooses which pretty printer to use (or none, in which case the \
                            derived printer is used). Setting this to <all> will cause both \
-                           printers to be invoked for comparison."
+                           Roundtrip and Old printer to be invoked for comparison."
               |> hint "<none|old|roundtrip|all>"
               |> to_string string_of_engine
               |> convert parse_engine
               |> sync)
+
+let is_type_pretty_printing_on () =
+  match Settings.get print_types_pretty with
+  | Some _ -> true
+  | None   -> false
 
 (** Prints type using both printers *)
 let print_pretty_all : pr_roundtrip:(pp_policy -> 'a -> string) ->
@@ -3381,14 +3386,14 @@ let print_pretty_general : pr_roundtrip:(pp_policy -> 'a -> string) ->
                            pp_policy -> 'a -> string
   = fun ~pr_roundtrip ~pr_old ~pr_none policy x ->
   match Settings.get print_types_pretty with
-  | None           -> pr_none x
-  | Some Roundtrip -> pr_roundtrip policy x
-  | Some Old       -> pr_old policy x
-  | Some All       -> print_pretty_all ~pr_roundtrip ~pr_old policy x
+  | None             -> pr_none x
+  | Some PPRoundtrip -> pr_roundtrip policy x
+  | Some PPOld       -> pr_old policy x
+  | Some PPAll       -> print_pretty_all ~pr_roundtrip ~pr_old policy x
 
 
 (* string conversions *)
-let rec string_of_datatype
+let string_of_datatype : ?policy:(unit -> pp_policy) -> ?refresh_tyvar_names:bool -> datatype -> string
   = let pr_roundtrip policy t =
       let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
       NewPrint.string_of_datatype context t
@@ -3398,12 +3403,12 @@ let rec string_of_datatype
       Print.datatype context (policy, Vars.tyvar_name_map) t
     in
     let pr_none = show_datatype -<- DecycleTypes.datatype in
-    fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) (t : datatype) ->
+    fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) t ->
     let policy = policy () in
     build_tyvar_names ~refresh_tyvar_names free_bound_type_vars [t];
     print_pretty_general ~pr_roundtrip ~pr_old ~pr_none policy t
 
-let string_of_row
+let string_of_row : ?policy:(unit -> pp_policy) -> ?refresh_tyvar_names:bool -> row -> string
   = let pr_roundtrip policy row =
       let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
       NewPrint.string_of_row context row
@@ -3418,7 +3423,7 @@ let string_of_row
     build_tyvar_names ~refresh_tyvar_names free_bound_row_type_vars [row];
     print_pretty_general ~pr_roundtrip ~pr_old ~pr_none policy row
 
-let string_of_presence
+let string_of_presence : ?policy:(unit -> pp_policy) -> ?refresh_tyvar_names:bool -> field_spec -> string
   = let pr_roundtrip policy f =
       let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
       NewPrint.string_of_presence context f
@@ -3427,12 +3432,12 @@ let string_of_presence
       Print.presence Print.empty_context (policy, Vars.tyvar_name_map) f
     in
     let pr_none = show_field_spec -<- DecycleTypes.field_spec in
-    fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) (f : field_spec) ->
+    fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) f ->
     let policy = policy () in
     build_tyvar_names ~refresh_tyvar_names free_bound_field_spec_type_vars [f];
     print_pretty_general ~pr_roundtrip ~pr_old ~pr_none policy f
 
-let string_of_type_arg
+let string_of_type_arg : ?policy:(unit -> pp_policy) -> ?refresh_tyvar_names:bool -> type_arg -> string
   = let pr_roundtrip policy arg =
       let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
       NewPrint.string_of_type_arg context arg
@@ -3442,12 +3447,12 @@ let string_of_type_arg
         Print.type_arg context (policy, Vars.tyvar_name_map) arg
     in
     let pr_none = show_type_arg -<- DecycleTypes.type_arg in
-    fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) (arg : type_arg) ->
+    fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) arg ->
       let policy = policy () in
       build_tyvar_names ~refresh_tyvar_names free_bound_type_arg_type_vars [arg];
       print_pretty_general ~pr_roundtrip ~pr_old ~pr_none policy arg
 
-let string_of_row_var
+let string_of_row_var : ?policy:(unit -> pp_policy) -> ?refresh_tyvar_names:bool -> row_var -> string
   = let string_or_empty = function
       | Some s -> s
       | None -> ""
@@ -3468,7 +3473,7 @@ let string_of_row_var
     build_tyvar_names ~refresh_tyvar_names free_bound_row_var_vars [row_var];
     print_pretty_general ~pr_roundtrip ~pr_old ~pr_none policy row_var
 
-let string_of_tycon_spec
+let string_of_tycon_spec : ?policy:(unit -> pp_policy) -> ?refresh_tyvar_names:bool -> tycon_spec -> string
   = let pr_roundtrip policy tycon =
       let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
       NewPrint.string_of_tycon_spec context tycon
@@ -3477,12 +3482,12 @@ let string_of_tycon_spec
       Print.tycon_spec Print.empty_context (policy, Vars.tyvar_name_map) tycon
     in
     let pr_none _ = failwith "This shouldn't happen?" in
-    fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) (tycon : tycon_spec) ->
+    fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) tycon ->
     let policy = policy () in
     build_tyvar_names ~refresh_tyvar_names free_bound_tycon_type_vars [tycon];
     print_pretty_general ~pr_roundtrip ~pr_old ~pr_none policy tycon
 
-let string_of_quantifier
+let string_of_quantifier : ?policy:(unit -> pp_policy) -> ?refresh_tyvar_names:bool -> Quantifier.t -> string
   = let pr_roundtrip policy quant =
       let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
       NewPrint.string_of_quantifier context quant
@@ -3491,7 +3496,7 @@ let string_of_quantifier
       Print.quantifier (policy, Vars.tyvar_name_map) quant
     in
     let pr_none _ = failwith "Shouldn't happen" in
-    fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) (quant : Quantifier.t) ->
+    fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) quant ->
     let policy = policy () in
     build_tyvar_names ~refresh_tyvar_names free_bound_quantifier_vars [quant];
     print_pretty_general ~pr_roundtrip ~pr_old ~pr_none policy quant
@@ -3848,7 +3853,7 @@ let recursive_applications t =
    possibly containg cycles escape this module without having one
    a version below that removes the cycles first! *)
 let pp : Format.formatter -> t -> unit = fun fmt t ->
-  if Settings.get print_types_pretty then
+  if is_type_pretty_printing_on () then
     Format.pp_print_string fmt (string_of_datatype t)
   else
     pp fmt (DecycleTypes.datatype t)
@@ -3858,19 +3863,19 @@ let pp_datatype = pp
 let pp_field_spec = pp
 
 let pp_meta_type_var : Format.formatter -> meta_type_var -> unit = fun fmt p ->
-  if Settings.get print_types_pretty then
+  if is_type_pretty_printing_on () then
     Format.pp_print_string fmt (string_of_datatype (Meta p))
   else
     pp_typ fmt (DecycleTypes.row (Meta p))
 
 let pp_row' : Format.formatter -> row' -> unit = fun fmt t ->
-  if Settings.get print_types_pretty then
+  if is_type_pretty_printing_on () then
     Format.pp_print_string fmt (string_of_row (Row t))
   else
     pp_row fmt (DecycleTypes.row (Row t))
 
 let pp_type_arg : Format.formatter -> type_arg -> unit = fun fmt t ->
-  if Settings.get print_types_pretty then
+  if is_type_pretty_printing_on () then
     Format.pp_print_string fmt (string_of_type_arg t)
   else
     pp_type_arg fmt (DecycleTypes.type_arg t)
@@ -3880,7 +3885,7 @@ let pp_tycon_spec : Format.formatter -> tycon_spec -> unit = fun fmt t ->
     | `Alias (qlist, ty) -> `Alias (List.map DecycleTypes.quantifier qlist, DecycleTypes.datatype ty)
     | other -> other in
 
-  if Settings.get print_types_pretty then
+  if is_type_pretty_printing_on () then
     Format.pp_print_string fmt (string_of_tycon_spec t)
   else
     pp_tycon_spec fmt (decycle_tycon_spec t)
