@@ -3336,99 +3336,104 @@ let empty_typing_environment = { var_env = Env.empty;
                                  effect_row = make_empty_closed_row ();
                                  desugared = false }
 
-(* Pretty print types or use generated printer? *)
+(* Which printer to use *)
+type pretty_printer_engine = Old | Roundtrip | All
+
 let print_types_pretty
-  = Settings.(flag ~default:true "print_types_pretty"
-              |> synopsis "Toggles whether to use the pretty printer or derived printer for printing types"
-              |> convert parse_bool
+  = let parse_engine v =
+      match String.lowercase_ascii v with
+      | "none" -> None
+      | "old" -> Some Old
+      | "roundtrip" | "new" -> Some Roundtrip
+      | "both" | "all" -> Some  All
+      | _ -> raise (Invalid_argument "accepted values: none | old | roundtrip | both")
+    in
+    let string_of_engine = function
+      | None -> "none"
+      | Some Old -> "old"
+      | Some Roundtrip -> "roundtrip"
+      | Some All -> "all"
+    in
+    Settings.(option ~default:(Some Roundtrip) "types_pretty_printer_engine"
+              |> synopsis "Chooses which pretty printer to use (or none, in which case the \
+                           derived printer is used). Setting this to <all> will cause both \
+                           printers to be invoked for comparison."
+              |> hint "<none|old|roundtrip|all>"
+              |> to_string string_of_engine
+              |> convert parse_engine
               |> sync)
 
-(* Use the old type pretty printer *)
-let use_old_type_pp
-  = Settings.(flag ~default:false "use_old_type_pretty_printer"
-              |> synopsis ("Toggles whether to use the old pretty printer for types")
-              |> (convert parse_bool)
-              |> CLI.(add (short 'p' <&> long "use_old_type_pretty_printer"))
-              |> sync)
+(** Prints type using both printers *)
+let print_pretty_all : pr_roundtrip:(pp_policy -> 'a -> string) ->
+                       pr_old:(pp_policy -> 'a -> string) ->
+                       pp_policy -> 'a -> string
+  = fun ~pr_roundtrip ~pr_old policy t ->
+  let s_roundtrip = pr_roundtrip policy t in
+  let s_old = pr_old policy t in
+  NewPrint.StringBuffer.concat_strs ~sep:""
+    [ "ROUNDTRIP: " ; s_roundtrip
+      ; "\nOLD: " ; s_old
+      ; "\nRoundtrip and old agree:" ; string_of_bool (s_roundtrip = s_old) ]
 
-let print_old_new
-  = Settings.(flag ~default:false "pp_old_new"
-              |> synopsis "(When using the new pretty printer) Print the output of the old pretty printer too"
-              |> convert parse_bool
-              |> sync)
+let print_pretty_general : pr_roundtrip:(pp_policy -> 'a -> string) ->
+                           pr_old:(pp_policy -> 'a -> string) ->
+                           pr_none:('a -> string) ->
+                           pp_policy -> 'a -> string
+  = fun ~pr_roundtrip ~pr_old ~pr_none policy x ->
+  match Settings.get print_types_pretty with
+  | None           -> pr_none x
+  | Some Roundtrip -> pr_roundtrip policy x
+  | Some Old       -> pr_old policy x
+  | Some All       -> print_pretty_all ~pr_roundtrip ~pr_old policy x
+
 
 (* string conversions *)
-let rec string_of_datatype ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
-          (t : datatype) =
-  if Settings.get print_types_pretty then
-    begin
-      if not (Settings.get use_old_type_pp) then
-        (* preserve the original arguments so old printer can be invoked as well *)
-        let policy' = policy in
-        let t' = t in
+let rec string_of_datatype
+  = let pr_roundtrip policy t =
+      let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
+      NewPrint.string_of_datatype context t
+    in
+    let pr_old policy t =
+      let context = Print.context_with_shared_effect policy (fun o -> o#typ t) in
+      Print.datatype context (policy, Vars.tyvar_name_map) t
+    in
+    let pr_none = show_datatype -<- DecycleTypes.datatype in
+    fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) (t : datatype) ->
+    let policy = policy () in
+    build_tyvar_names ~refresh_tyvar_names free_bound_type_vars [t];
+    print_pretty_general ~pr_roundtrip ~pr_old ~pr_none policy t
 
-        let policy = policy () in
-        let t = if policy.quantifiers then t
-                else NewPrint.strip_quantifiers t in
-        build_tyvar_names ~refresh_tyvar_names free_bound_type_vars [t];
-        let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
-        let new_type = NewPrint.string_of_datatype context t in
-        let old_type = begin
-            if Settings.get print_old_new then
-              begin
-                Settings.set use_old_type_pp true;
-                let s = string_of_datatype ~policy:policy' ~refresh_tyvar_names t' in
-                Settings.set use_old_type_pp false;
-                ["The old printer would say:" ; s ;
-                 "New and old pretty types agree:" ;
-                 string_of_bool (new_type = s) ]
-              end
-            else
-              []
-          end in
-        let module SB = NewPrint.StringBuffer in
-        SB.concat_strs ~sep:"\n" (new_type :: old_type)
-
-      else
-        begin
-          let policy = policy () in
-          let t = if policy.quantifiers then t
-                  else Print.strip_quantifiers t in
-          build_tyvar_names ~refresh_tyvar_names free_bound_type_vars [t];
-          let context = Print.context_with_shared_effect policy (fun o -> o#typ t) in
-          Print.datatype context (policy, Vars.tyvar_name_map) t
-        end
-    end
-  else
-    show_datatype (DecycleTypes.datatype t)
-
-let string_of_row ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) row =
-  if Settings.get print_types_pretty then
+let string_of_row
+  = let pr_roundtrip policy row =
+      let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
+      NewPrint.string_of_row context row
+    in
+    let pr_old policy row =
+      let context = Print.context_with_shared_effect policy (fun o -> o#row row) in
+      Print.row "," context (policy, Vars.tyvar_name_map) row
+    in
+    let pr_none = show_row -<- DecycleTypes.row in
+    fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) row ->
     let policy = policy () in
     build_tyvar_names ~refresh_tyvar_names free_bound_row_type_vars [row];
-    begin
-      if not (Settings.get use_old_type_pp) then
-        let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
-        NewPrint.string_of_row context row
-      else
-        let context = Print.context_with_shared_effect policy (fun o -> o#row row) in
-        Print.row "," context (policy, Vars.tyvar_name_map) row
-    end
-  else
-    show_row (DecycleTypes.row row)
+    print_pretty_general ~pr_roundtrip ~pr_old ~pr_none policy row
 
-let string_of_presence ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
-                       (f : field_spec) =
-  build_tyvar_names ~refresh_tyvar_names free_bound_field_spec_type_vars [f];
-  if not (Settings.get use_old_type_pp) then
-    (* NewPrint.presence NewPrint.empty_context (policy (), Vars.tyvar_name_map) f *)
-    let context = NewPrint.Context.setup (policy ()) Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
-    NewPrint.string_of_presence context f
-  else
-    Print.presence Print.empty_context (policy (), Vars.tyvar_name_map) f
+let string_of_presence
+  = let pr_roundtrip policy f =
+      let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
+      NewPrint.string_of_presence context f
+    in
+    let pr_old policy f =
+      Print.presence Print.empty_context (policy, Vars.tyvar_name_map) f
+    in
+    let pr_none = show_field_spec -<- DecycleTypes.field_spec in
+    fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) (f : field_spec) ->
+    let policy = policy () in
+    build_tyvar_names ~refresh_tyvar_names free_bound_field_spec_type_vars [f];
+    print_pretty_general ~pr_roundtrip ~pr_old ~pr_none policy f
 
 let string_of_type_arg ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
-                       (arg : type_arg) =
+      (arg : type_arg) =
   let policy = policy () in
   build_tyvar_names ~refresh_tyvar_names free_bound_type_arg_type_vars [arg];
   if not (Settings.get use_old_type_pp) then
