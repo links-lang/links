@@ -2597,8 +2597,6 @@ module NewPrint = struct
 
   module StringBuffer = struct
 
-    (* this implementation doesn't use the other methods,
-     * because this is a helper function, not intended to be traced *)
     let concat_strs : sep:string -> string list -> string
       = fun ~sep lst ->
       let _buf = Buffer.create 280 in
@@ -2793,7 +2791,6 @@ module NewPrint = struct
     let _, (_, _, count) = Vars.find_spec vid (Context.tyvar_names ctxt) in
     count = 1 && (Context.policy ctxt).hide_fresh && not (IntSet.mem vid (Context.bound_vars ctxt))
 
-  (* string_of_var : context -> policy * names -> VAR -> string *)
   let rec var : (tid * Kind.t) printer
     = let open StringBuffer in
       Printer (fun ctx (vid, knd) buf ->
@@ -2941,7 +2938,7 @@ module NewPrint = struct
                  | _ -> fst (unwrap_row (extract_row r))
                in
                let is_tuple = (C.is_ambient_tuple ctx) || (is_tuple unrolled) (* not allowing onetuples by default *)
-               in   (* ! *) r',       "(",   ")",   (if is_tuple then (C.set_ambient C.Tuple ctx) else (C.toplevel ctx))
+               in           r',       "(",   ")",   (if is_tuple then (C.set_ambient C.Tuple ctx) else (C.toplevel ctx))
             | Variant r  -> r,        "[|",  "|]",  (C.set_ambient C.Variant ctx)
             | Effect r   -> r,        "{",   "}",   (C.set_ambient C.Effect ctx)
             | Select r   -> r,        "[+|", "|+]", ctx (* TODO ambient Session? *)
