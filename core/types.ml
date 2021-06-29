@@ -3432,51 +3432,69 @@ let string_of_presence
     build_tyvar_names ~refresh_tyvar_names free_bound_field_spec_type_vars [f];
     print_pretty_general ~pr_roundtrip ~pr_old ~pr_none policy f
 
-let string_of_type_arg ?(policy=default_pp_policy) ?(refresh_tyvar_names=true)
-      (arg : type_arg) =
-  let policy = policy () in
-  build_tyvar_names ~refresh_tyvar_names free_bound_type_arg_type_vars [arg];
-  if not (Settings.get use_old_type_pp) then
-    (* let context = NewPrint.context_with_shared_effect policy (fun o -> o#type_arg arg) in
-     * NewPrint.type_arg context (policy, Vars.tyvar_name_map) arg *)
-    let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
-    NewPrint.string_of_type_arg context arg
-  else
-    let context = Print.context_with_shared_effect policy (fun o -> o#type_arg arg) in
-    Print.type_arg context (policy, Vars.tyvar_name_map) arg
+let string_of_type_arg
+  = let pr_roundtrip policy arg =
+      let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
+      NewPrint.string_of_type_arg context arg
+    in
+    let pr_old policy arg =
+              let context = Print.context_with_shared_effect policy (fun o -> o#type_arg arg) in
+        Print.type_arg context (policy, Vars.tyvar_name_map) arg
+    in
+    let pr_none = show_type_arg -<- DecycleTypes.type_arg in
+    fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) (arg : type_arg) ->
+      let policy = policy () in
+      build_tyvar_names ~refresh_tyvar_names free_bound_type_arg_type_vars [arg];
+      print_pretty_general ~pr_roundtrip ~pr_old ~pr_none policy arg
 
-let string_of_row_var ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) row_var =
-  build_tyvar_names ~refresh_tyvar_names free_bound_row_var_vars [row_var];
-  match
-    begin
-      if not (Settings.get use_old_type_pp) then
-        (* NewPrint.row_var NewPrint.empty_context (policy (), Vars.tyvar_name_map) row_var *)
-        let module C = NewPrint.Context in
-        let context = C.setup (policy ()) Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
-        NewPrint.string_of_row_var (C.set_ambient C.Row context) row_var
-      else
-        Print.row_var Print.name_of_type "," Print.empty_context (policy (), Vars.tyvar_name_map) row_var
-    end
-  with | None -> ""
-       | Some s -> s
+let string_of_row_var
+  = let string_or_empty = function
+      | Some s -> s
+      | None -> ""
+    in
+    let pr_roundtrip policy row_var =
+      let module C = NewPrint.Context in
+      let context = C.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
+      let st = NewPrint.string_of_row_var (C.set_ambient C.Row context) row_var in
+      string_or_empty st
+    in
+    let pr_old policy row_var =
+      let st = Print.row_var Print.name_of_type "," Print.empty_context (policy, Vars.tyvar_name_map) row_var in
+      string_or_empty st
+    in
+    let pr_none = show_row_var -<- DecycleTypes.row_var in
+    fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) row_var ->
+    let policy = policy () in
+    build_tyvar_names ~refresh_tyvar_names free_bound_row_var_vars [row_var];
+    print_pretty_general ~pr_roundtrip ~pr_old ~pr_none policy row_var
 
-let string_of_tycon_spec ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) (tycon : tycon_spec) =
-  build_tyvar_names ~refresh_tyvar_names free_bound_tycon_type_vars [tycon];
-  if not (Settings.get use_old_type_pp) then
-    let context = NewPrint.Context.setup (policy ()) Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
-    NewPrint.string_of_tycon_spec context tycon
-  else
-    Print.tycon_spec Print.empty_context (policy (), Vars.tyvar_name_map) tycon
+let string_of_tycon_spec
+  = let pr_roundtrip policy tycon =
+      let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
+      NewPrint.string_of_tycon_spec context tycon
+    in
+    let pr_old policy tycon =
+      Print.tycon_spec Print.empty_context (policy, Vars.tyvar_name_map) tycon
+    in
+    let pr_none _ = failwith "This shouldn't happen?" in
+    fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) (tycon : tycon_spec) ->
+    let policy = policy () in
+    build_tyvar_names ~refresh_tyvar_names free_bound_tycon_type_vars [tycon];
+    print_pretty_general ~pr_roundtrip ~pr_old ~pr_none policy tycon
 
-let string_of_quantifier ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) (quant : Quantifier.t) =
-  build_tyvar_names ~refresh_tyvar_names free_bound_quantifier_vars [quant];
-  if not (Settings.get use_old_type_pp) then
-    (* NewPrint.quantifier (policy (), Vars.tyvar_name_map) quant *)
-    let context = NewPrint.Context.setup (policy ()) Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
-    NewPrint.string_of_quantifier context quant
-  else
-    Print.quantifier (policy (), Vars.tyvar_name_map) quant
-
+let string_of_quantifier
+  = let pr_roundtrip policy quant =
+      let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
+      NewPrint.string_of_quantifier context quant
+    in
+    let pr_old policy quant =
+      Print.quantifier (policy, Vars.tyvar_name_map) quant
+    in
+    let pr_none _ = failwith "Shouldn't happen" in
+    fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) (quant : Quantifier.t) ->
+    let policy = policy () in
+    build_tyvar_names ~refresh_tyvar_names free_bound_quantifier_vars [quant];
+    print_pretty_general ~pr_roundtrip ~pr_old ~pr_none policy quant
 
 let normalise_typing_environment env =
   { env with
