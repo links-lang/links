@@ -1946,6 +1946,12 @@ struct
   let find_spec var tbl =      Hashtbl.find tbl var
 end
 
+let effect_sugar
+  = Settings.(flag "effect_sugar"
+              |> synopsis "Toggles the effect sugar in pretty printer."
+              |> convert parse_bool
+              |> sync)
+
 (** Type printers *)
 
 module Policy = struct
@@ -1992,12 +1998,6 @@ module Policy = struct
                 |> convert parse_bool
                 |> sync)
 
-  let effect_sugar_setting
-    = Settings.(flag "effect_sugar"
-                |> synopsis "Toggles the effect sugar in pretty printer."
-                |> convert parse_bool
-                |> sync)
-
   type t = { quantifiers  : bool
            ; flavours     : bool
            ; hide_fresh   : bool
@@ -2014,7 +2014,7 @@ module Policy = struct
     ; flavours     = Settings.get show_flavours
     ; hide_fresh   = Settings.get hide_fresh_type_vars
     ; kinds        = kp
-    ; effect_sugar = Settings.get effect_sugar_setting }
+    ; effect_sugar = Settings.get effect_sugar }
 
   let quantifiers : t -> bool
     = fun p -> p.quantifiers

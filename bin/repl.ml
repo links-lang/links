@@ -177,7 +177,7 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
           Env.String.fold
             (fun name var () ->
               if not (Lib.is_primitive name) then
-                let ty = (Types.string_of_datatype ~policy:Types.Print.default_policy ~refresh_tyvar_names:true
+                let ty = (Types.string_of_datatype ~policy:Types.Policy.default_policy ~refresh_tyvar_names:true
                           -<- (fun name -> Env.String.find name tyenv.Types.var_env)) name in
                 let name =
                   if Settings.get Debug.enabled
@@ -361,4 +361,3 @@ let interact : Context.t -> unit
   in
   Sys.set_signal Sys.sigint (Sys.Signal_handle (fun _ -> raise Sys.Break));
   loop context
-

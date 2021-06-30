@@ -35,13 +35,40 @@ module Vars : sig
   type vars_list = (int * (flavour * kind * scope)) list
 end
 
-(* TODO return this to original (~S) *)
-type pp_policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool}
-module Print : sig
-  type policy = pp_policy
-    (* {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool} *)
-
-  val default_policy : unit -> policy
+val effect_sugar : bool Settings.setting
+module Policy : sig
+  val show_quantifiers : bool Settings.setting
+  val show_flavours : bool Settings.setting
+  type kind_policy = Default | Full | Hide
+  val show_kinds : kind_policy option Settings.setting
+  val hide_fresh_type_vars : bool Settings.setting
+  type t = {
+    quantifiers : bool;
+    flavours : bool;
+    hide_fresh : bool;
+    kinds : kind_policy;
+    effect_sugar : bool;
+  }
+  val default_policy : unit -> t
+  val quantifiers : t -> bool
+  val flavours : t -> bool
+  val hide_fresh : t -> bool
+  val kinds : t -> kind_policy
+  val effect_sugar : t -> bool
+  val set_quantifiers : bool -> t -> t
+  val set_flavours : bool -> t -> t
+  val set_hide_fresh : bool -> t -> t
+  val set_kinds : kind_policy -> t -> t
+  val set_effect_sugar : bool -> t -> t
+  type old_t = {
+    quantifiers : bool;
+    flavours : bool;
+    hide_fresh : bool;
+    kinds : string;
+    effect_sugar : bool;
+  }
+  val as_old : t -> old_t
+  val old_default_policy : unit -> old_t
 end
 
 val process      : Abstype.t
@@ -353,20 +380,18 @@ val make_wobbly_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMa
 
 val combine_per_kind_envs : datatype Utility.IntMap.t * row Utility.IntMap.t * field_spec Utility.IntMap.t -> type_arg Utility.IntMap.t
 
-val effect_sugar : bool Settings.setting
-
 (** pretty printing *)
-val string_of_datatype   : ?policy:(unit -> Print.policy)
+val string_of_datatype   : ?policy:(unit -> Policy.t)
                         -> ?refresh_tyvar_names:bool -> datatype   -> string
-val string_of_row        : ?policy:(unit -> Print.policy)
+val string_of_row        : ?policy:(unit -> Policy.t)
                         -> ?refresh_tyvar_names:bool -> row        -> string
-val string_of_presence   : ?policy:(unit -> Print.policy)
+val string_of_presence   : ?policy:(unit -> Policy.t)
                         -> ?refresh_tyvar_names:bool -> field_spec -> string
-val string_of_type_arg   : ?policy:(unit -> Print.policy)
+val string_of_type_arg   : ?policy:(unit -> Policy.t)
                         -> ?refresh_tyvar_names:bool -> type_arg   -> string
-val string_of_row_var    : ?policy:(unit -> Print.policy)
+val string_of_row_var    : ?policy:(unit -> Policy.t)
                         -> ?refresh_tyvar_names:bool -> row_var    -> string
-val string_of_tycon_spec : ?policy:(unit -> Print.policy)
+val string_of_tycon_spec : ?policy:(unit -> Policy.t)
                         -> ?refresh_tyvar_names:bool -> tycon_spec -> string
 val string_of_environment        : environment -> string
 val string_of_typing_environment : typing_environment -> string
