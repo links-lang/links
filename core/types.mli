@@ -35,13 +35,8 @@ module Vars : sig
   type vars_list = (int * (flavour * kind * scope)) list
 end
 
-val effect_sugar : bool Settings.setting
 module Policy : sig
-  val show_quantifiers : bool Settings.setting
-  val show_flavours : bool Settings.setting
   type kind_policy = Default | Full | Hide
-  val show_kinds : kind_policy option Settings.setting
-  val hide_fresh_type_vars : bool Settings.setting
   type t = {
     quantifiers : bool;
     flavours : bool;
@@ -50,25 +45,18 @@ module Policy : sig
     effect_sugar : bool;
   }
   val default_policy : unit -> t
+
   val quantifiers : t -> bool
   val flavours : t -> bool
   val hide_fresh : t -> bool
   val kinds : t -> kind_policy
   val effect_sugar : t -> bool
+
   val set_quantifiers : bool -> t -> t
   val set_flavours : bool -> t -> t
   val set_hide_fresh : bool -> t -> t
   val set_kinds : kind_policy -> t -> t
   val set_effect_sugar : bool -> t -> t
-  type old_t = {
-    quantifiers : bool;
-    flavours : bool;
-    hide_fresh : bool;
-    kinds : string;
-    effect_sugar : bool;
-  }
-  val as_old : t -> old_t
-  val old_default_policy : unit -> old_t
 end
 
 val process      : Abstype.t
