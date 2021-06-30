@@ -5,9 +5,6 @@ open CommonTypes
 type 'a stringmap = 'a Utility.StringMap.t [@@deriving show]
 type 'a field_env = 'a stringmap [@@deriving show]
 
-type pretty_printer_engine = PPOld | PPRoundtrip | PPAll
-val print_types_pretty : pretty_printer_engine option Settings.setting
-
 (* type var sets *)
 module TypeVarSet : sig
   include Utility.INTSET

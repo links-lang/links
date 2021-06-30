@@ -1946,54 +1946,126 @@ struct
   let find_spec var tbl =      Hashtbl.find tbl var
 end
 
-let effect_sugar
-  = Settings.(flag "effect_sugar"
-              |> convert parse_bool
-              |> sync)
-
 (** Type printers *)
 
-type pp_policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool}
-
-(* TODO: check over the pretty-printer in light of the types refactoring *)
-module Print =
-struct
-  module BS = Basicsettings
+module Policy = struct
+  (* Set the quantifiers to be true to display any outer quantifiers.
+     Set flavours to be true to distinguish flexible type variables
+     from rigid type variables. *)
   let show_quantifiers
     = Settings.(flag "show_quantifiers"
+                |> synopsis "Toggles whether to display (outer) quantifiers."
                 |> convert parse_bool
                 |> sync)
 
   let show_flavours
     = Settings.(flag "show_flavours"
+                |> synopsis "Toggles whether to show flavours."
                 |> convert parse_bool
                 |> sync)
 
+  type kind_policy = Default | Full | Hide
   let show_kinds
-    = Settings.(option ~default:(Some "default") "show_kinds"
-                |> to_string from_string_option
-                |> convert Utility.some
+    = let parse_kp v =
+        match String.lowercase_ascii v with
+        | "default" -> Some Default
+        | "full"    -> Some Full
+        | "hide"    -> Some Hide
+        | _ -> raise (Invalid_argument "accepted values: default | full | hide")
+      in
+      let string_of_kp = function
+        | None         -> "<none> (shouldn't happen)"
+        | Some Default -> "default"
+        | Some Full    -> "full"
+        | Some Hide    -> "hide"
+      in
+      Settings.(option ~default:(Some Default) "show_kinds"
+                |> synopsis "Sets the policy for showing kinds."
+                |> hint "<default|full|hide>"
+                |> to_string string_of_kp
+                |> convert parse_kp
                 |> sync)
 
   let hide_fresh_type_vars
     = Settings.(flag ~default:true "hide_fresh_type_vars"
+                |> synopsis "Toggles whether to hide fresh type variables."
                 |> convert parse_bool
                 |> sync)
 
-  (* Set the quantifiers to be true to display any outer quantifiers.
-     Set flavours to be true to distinguish flexible type variables
-     from rigid type variables. *)
-  type policy = pp_policy
-  (* {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool} *)
+  let effect_sugar_setting
+    = Settings.(flag "effect_sugar"
+                |> synopsis "Toggles the effect sugar in pretty printer."
+                |> convert parse_bool
+                |> sync)
+
+  type t = { quantifiers  : bool
+           ; flavours     : bool
+           ; hide_fresh   : bool
+           ; kinds        : kind_policy
+           ; effect_sugar : bool }
+
+  let default_policy : unit -> t =
+    fun () ->
+    let kp = match Settings.get show_kinds with
+      | None -> failwith "Invalid value of setting show_kinds."
+      | Some s -> s
+    in
+    { quantifiers  = Settings.get show_quantifiers
+    ; flavours     = Settings.get show_flavours
+    ; hide_fresh   = Settings.get hide_fresh_type_vars
+    ; kinds        = kp
+    ; effect_sugar = Settings.get effect_sugar_setting }
+
+  let quantifiers : t -> bool
+    = fun p -> p.quantifiers
+  let flavours : t -> bool
+    = fun p -> p.flavours
+  let hide_fresh : t -> bool
+    = fun p -> p.hide_fresh
+  let kinds : t -> kind_policy
+    = fun p -> p.kinds
+  let effect_sugar : t -> bool
+    = fun p -> p.effect_sugar
+
+  let set_quantifiers : bool -> t -> t
+    = fun v p -> { p with quantifiers = v }
+  let set_flavours : bool -> t -> t
+    = fun v p -> { p with flavours = v }
+  let set_hide_fresh : bool -> t -> t
+    = fun v p -> { p with hide_fresh = v }
+  let set_kinds : kind_policy -> t -> t
+    = fun v p -> { p with kinds = v }
+  let set_effect_sugar : bool -> t -> t
+    = fun v p -> { p with effect_sugar = v }
+
+  (* TODO these are for the old printer, so it doesn't have to be changed much *)
+  type old_t = { quantifiers  : bool
+               ; flavours     : bool
+               ; hide_fresh   : bool
+               ; kinds        : string
+               ; effect_sugar : bool }
+
+  let as_old : t -> old_t
+    = fun { quantifiers; flavours; hide_fresh; kinds; effect_sugar } ->
+    let kinds = match kinds with
+      | Default -> "default"
+      | Full    -> "full"
+      | Hide    -> "hide"
+    in
+    { quantifiers; flavours; hide_fresh; kinds; effect_sugar }
+
+  let old_default_policy : unit -> old_t
+    = as_old -<- default_policy
+end
+
+(* TODO: check over the pretty-printer in light of the types refactoring *)
+module Print =
+struct
+  module BS = Basicsettings
+
+  type policy = Policy.old_t
   type names  = (int, string * Vars.spec) Hashtbl.t
   type context = { bound_vars: TypeVarSet.t; shared_effect: int option }
-
-  let default_policy : unit -> policy = fun () ->
-    {quantifiers=Settings.get show_quantifiers;
-     flavours=Settings.get show_flavours;
-     hide_fresh=Settings.get hide_fresh_type_vars;
-     kinds=val_of (Settings.get show_kinds);
-     effect_sugar=Settings.get effect_sugar}
 
   let empty_context = { bound_vars = TypeVarSet.empty; shared_effect = None }
 
@@ -2020,7 +2092,7 @@ struct
        end
     | _ -> false
 
-  let context_with_shared_effect policy visit =
+  let context_with_shared_effect (policy : policy) visit =
     let find_row_var r =
       let r =
         match fst (unwrap_row r) with
@@ -2061,7 +2133,7 @@ struct
           | Some _ -> self, typ
       end
     in
-    if policy.effect_sugar then
+    if policy.Policy.effect_sugar then
       let (obj, _) = visit obj in
       { empty_context with shared_effect = obj#var }
     else
@@ -2072,9 +2144,9 @@ struct
                         Restriction.to_string r ^ ")"
     in
     fun (policy, _vars) ->
-    if policy.kinds = "full"
+    if policy.Policy.kinds = "full"
     then full
-    else if policy.kinds = "hide"
+    else if policy.Policy.kinds = "hide"
     then function (_, _) -> ""
     else function
       | (Linearity.Unl, Restriction.Any)     -> ""
@@ -2088,9 +2160,9 @@ struct
     let full (policy, _vars) (k, sk) =
       PrimaryKind.to_string k ^ subkind (policy, _vars) sk in
     fun (policy, _vars) (k, sk) ->
-    if policy.kinds = "full" then
+    if policy.Policy.kinds = "full" then
       full (policy, _vars) (k, sk)
-    else if policy.kinds = "hide" then
+    else if policy.Policy.kinds = "hide" then
       PrimaryKind.to_string k
     else
       match (k, sk) with
@@ -2100,7 +2172,7 @@ struct
       | PrimaryKind.Type, (Linearity.Any, Restriction.Session) ->
          Restriction.to_string res_session
       | PrimaryKind.Type, sk ->
-         subkind ({policy with kinds="full"}, _vars) sk
+         subkind ({policy with Policy.kinds="full"}, _vars) sk
       | PrimaryKind.Row, (Linearity.Unl, Restriction.Any) ->
          PrimaryKind.to_string pk_row
       | PrimaryKind.Row, (Linearity.Unl, Restriction.Effect) ->
@@ -2108,7 +2180,7 @@ struct
       | PrimaryKind.Presence, (Linearity.Unl, Restriction.Any) ->
          PrimaryKind.to_string pk_presence
       | PrimaryKind.Row, _ | PrimaryKind.Presence, _ ->
-         full ({policy with kinds="full"}, _vars) (k, sk)
+         full ({policy with Policy.kinds="full"}, _vars) (k, sk)
 
   let quantifier : (policy * names) -> Quantifier.t -> string =
     fun (policy, vars) q ->
@@ -2119,8 +2191,8 @@ struct
      pass name of type variable to n2 so that it can construct a name. *)
   let name_of_type_plain { bound_vars; _ } (policy, vars : policy * names) var n1 n2 =
     let name, (flavour, _, count) = Vars.find_spec var vars in
-    if policy.hide_fresh && count = 1
-       && ((flavour = `Flexible && not (policy.flavours)) || not (IntSet.mem var bound_vars))
+    if policy.Policy.hide_fresh && count = 1
+       && ((flavour = `Flexible && not (policy.Policy.flavours)) || not (IntSet.mem var bound_vars))
     then n1
     else n2 name
 
@@ -2175,7 +2247,7 @@ struct
             (flex_name_hidden, flex_name)
             (name_hidden, name) =
         match Unionfind.find to_match with
-        | Var (var, k, `Flexible) when policy.flavours ->
+        | Var (var, k, `Flexible) when policy.Policy.flavours ->
            name_of_eff_var ~allows_shared var k flex_name_hidden flex_name
         | Var (var, k, _) ->
            name_of_eff_var ~allows_shared var k name_hidden name
@@ -2277,7 +2349,7 @@ struct
             begin
               match Unionfind.find point with
               | Closed -> ""
-              | Var (var, k, `Flexible) when policy.flavours ->
+              | Var (var, k, `Flexible) when policy.Policy.flavours ->
                  (name_of_type var (Kind.subkind k) "%" (fun name -> "%" ^ name))
               | Var (var, k, _) ->
                  (name_of_type var (Kind.subkind k) "_" (fun name -> name))
@@ -2355,7 +2427,7 @@ struct
                   TypeVarSet.add (Quantifier.to_var tyvar) bound_vars)
                 bound_vars tyvars
             in
-            if not (policy.flavours) then
+            if not (policy.Policy.flavours) then
               match tyvars with
               | [] -> datatype { context with bound_vars } p body
               | _ ->
@@ -2388,10 +2460,10 @@ struct
             let name_of_type var n1 n2 =
               let name, (_, _, count) = Vars.find_spec var vars in
               (* decycling ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~vvvvvvvvvvvvvvvvvvvvvvvvv *)
-              if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then n1
+              if policy.Policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then n1
               else (n2 name) in
             match Unionfind.find point with
-              | Var (var, _, `Flexible) when policy.flavours ->
+              | Var (var, _, `Flexible) when policy.Policy.flavours ->
                  name_of_type var "{%}" (fun name -> "{%" ^ name ^ "}")
               | Var (var, _, _) ->
                  name_of_type var "{_}" (fun name -> "{" ^ name ^ "}")
@@ -2430,7 +2502,7 @@ struct
   and row_var name_of_type sep ({ bound_vars; _ } as context) ((policy, vars) as p) rv =
     match Unionfind.find rv with
       | Closed -> None
-      | Var (var, k, `Flexible) when policy.flavours ->
+      | Var (var, k, `Flexible) when policy.Policy.flavours ->
          Some (name_of_type context (policy, vars) var (Kind.subkind k) "%" (fun name -> "%" ^ name))
       | Var (var, k, _) ->
          Some (name_of_type context (policy, vars) var (Kind.subkind k) "_" (fun name -> name))
@@ -2472,32 +2544,7 @@ end
 
 (* New type pretty printer (Samo) *)
 module NewPrint = struct
-
-  (* settings (tied to original Print for the time being) *)
-  let show_quantifiers = Print.show_quantifiers
-    (* = Settings.(flag "show_quantifiers"
-     *             |> convert parse_bool
-     *             |> sync) *)
-
-  let show_flavours = Print.show_flavours
-    (* = Settings.(flag "show_flavours"
-     *             |> convert parse_bool
-     *             |> sync) *)
-
-  let show_kinds = Print.show_kinds
-    (* = Settings.(option ~default:(Some "default") "show_kinds"
-     *             |> to_string from_string_option
-     *             |> convert Utility.some
-     *             |> sync) *)
-
-  let hide_fresh_type_vars = Print.hide_fresh_type_vars
-    (* = Settings.(flag ~default:true "hide_fresh_type_vars"
-     *             |> convert parse_bool
-     *             |> sync) *)
-
-
   module Context = struct
-    type policy = pp_policy
 
     type names  = (int, string * Vars.spec) Hashtbl.t
 
@@ -2512,27 +2559,19 @@ module NewPrint = struct
                  | RowVar
                  | Binder [@@deriving show]
 
-    type t = { policy: policy
+    type t = { policy: Policy.t
              ; bound_vars: TypeVarSet.t
              ; tyvar_names: names
              ; ambient: ambient
              ; shared_effect: int option }
 
-    let default_policy : unit -> policy
-      = fun () ->
-      { quantifiers = Settings.get show_quantifiers
-      ; flavours    = Settings.get show_flavours
-      ; hide_fresh  = Settings.get hide_fresh_type_vars
-      ; kinds       = val_of (Settings.get show_kinds)
-      ; effect_sugar= Settings.get effect_sugar }
-
-    let empty () = { policy        = default_policy ()
+    let empty () = { policy        = Policy.default_policy ()
                    ; bound_vars    = TypeVarSet.empty
                    ; tyvar_names   = Hashtbl.create 0
                    ; ambient       = Toplevel
                    ; shared_effect = None }
 
-    let setup : policy -> names (* -> <?> visitor needed for shared effects TODO *) -> t
+    let setup : Policy.t -> names (* -> <?> visitor needed for shared effects TODO *) -> t
       = fun policy tyvar_names -> { policy
                                   ; bound_vars    = TypeVarSet.empty
                                   ; tyvar_names
@@ -2557,11 +2596,30 @@ module NewPrint = struct
     let tyvar_names : t -> names
       = fun { tyvar_names; _ } -> tyvar_names
 
-    let policy : t -> policy
+    let policy : t -> Policy.t
       = fun { policy; _ } -> policy
 
-    let set_policy : policy -> t -> t
+    (* Convenient aliases *)
+    let pol_quantifiers  = Policy.quantifiers  -<- policy
+    let pol_flavours     = Policy.flavours     -<- policy
+    let pol_hide_fresh   = Policy.hide_fresh   -<- policy
+    let pol_kinds        = Policy.kinds        -<- policy
+    let pol_effect_sugar = Policy.effect_sugar -<- policy
+
+    let set_policy : Policy.t -> t -> t
       = fun policy ctxt -> { ctxt with policy }
+
+    (* Convenient aliases *)
+    let set_pol_quantifiers : bool -> t -> t
+      = fun v ({ policy; _ } as ctx) -> set_policy (Policy.set_quantifiers v policy) ctx
+    (* let set_pol_flavours : bool -> t -> t
+     *   = fun v ({ policy; _ } as ctx) -> set_policy (Policy.set_flavours v policy) ctx *)
+    (* let set_pol_hide_fresh : bool -> t -> t
+     *   = fun v ({ policy; _ } as ctx) -> set_policy (Policy.set_hide_fresh v policy) ctx *)
+    let set_pol_kinds : Policy.kind_policy -> t -> t
+      = fun v ({ policy; _ } as ctx) -> set_policy (Policy.set_kinds v policy) ctx
+    (* let set_pol_effect_sugar : bool -> t -> t
+     *   = fun v ({ policy; _ } as ctx) -> set_policy (Policy.set_effect_sugar v policy) ctx *)
 
     let ambient : t -> ambient
       = fun { ambient; _ } -> ambient
@@ -2704,7 +2762,7 @@ module NewPrint = struct
 
   (* For correct printing of subkinds, need to know the subkind in advance:
    * see line (1): that has to be Empty so that the :: is not printed *)
-  let subkind_name : Context.policy -> Subkind.t -> unit printer
+  let subkind_name : Policy.t -> Subkind.t -> unit printer
     = fun pol (lin, res) ->
     let open StringBuffer in
     let full_name : unit printer
@@ -2716,9 +2774,9 @@ module NewPrint = struct
             write buf ")"
           )
     in
-    match pol.kinds with
-    | "full" -> full_name
-    | "hide" -> Empty
+    match Policy.kinds pol with
+    | Policy.Full -> full_name
+    | Policy.Hide -> Empty
     | _ ->
        let module L = Linearity in
        let module R = Restriction in
@@ -2745,9 +2803,9 @@ module NewPrint = struct
               apply (subkind_name (Context.policy ctxt) subknd) ctxt () buf)
       in
       let policy = Context.policy ctx in
-      match policy.kinds, knd with
-      | "full", _ -> full_name
-      | "hide", _ -> constant (P.to_string primary)
+      match Policy.kinds policy, knd with
+      | Policy.Full, _ -> full_name
+      | Policy.Hide, _ -> constant (P.to_string primary)
       | _, (PrimaryKind.Type, (L.Unl, R.Any)) -> Empty
       | _ ->
          Printer (fun ctx () buf ->
@@ -2759,7 +2817,7 @@ module NewPrint = struct
                  | L.Unl, R.Base -> write buf (R.to_string res_base)
                  | L.Any, R.Session -> write buf (R.to_string res_session)
                  | subknd ->
-                    let pol = { (Context.policy ctx) with kinds = "full" } in
+                    let pol = Policy.set_kinds Policy.Full (Context.policy ctx) in
                     apply (subkind_name pol subknd) ctx () buf
                end
              | PrimaryKind.Row -> begin
@@ -2767,14 +2825,14 @@ module NewPrint = struct
                  | L.Unl, R.Any | L.Unl, R.Effect ->
                     write buf (P.to_string pk_row)
                  | _ ->
-                    let ctx' = Context.set_policy { policy with kinds = "full" } ctx in
+                    let ctx' = Context.set_pol_kinds Policy.Full ctx in
                     apply full_name ctx' () buf
                end
              | PrimaryKind.Presence -> begin
                  match subknd with
                  | L.Unl, R.Any -> write buf (P.to_string pk_presence)
                  | _ ->
-                    let ctx' = Context.set_policy { policy with kinds = "full" } ctx in
+                    let ctx' = Context.set_pol_kinds Policy.Full ctx in
                     apply full_name ctx' () buf
                end)
 
@@ -2789,7 +2847,7 @@ module NewPrint = struct
   let is_var_anonymous : Context.t -> tid -> bool =
     fun ctxt vid ->
     let _, (_, _, count) = Vars.find_spec vid (Context.tyvar_names ctxt) in
-    count = 1 && (Context.policy ctxt).hide_fresh && not (IntSet.mem vid (Context.bound_vars ctxt))
+    count = 1 && (Context.pol_hide_fresh ctxt) && not (IntSet.mem vid (Context.bound_vars ctxt))
 
   let rec var : (tid * Kind.t) printer
     = let open StringBuffer in
@@ -2809,7 +2867,7 @@ module NewPrint = struct
           let print_var : string printer =
             Printer (fun ctx var_name buf ->
                 let is_anonymous = (not in_binder) && is_var_anonymous ctx vid in
-                let show_flexible = (Context.policy ctx).flavours && flavour = `Flexible in
+                let show_flexible = (Context.pol_flavours ctx) && flavour = `Flexible in
                 let is_presence = (PrimaryKind.Presence = Kind.primary_kind knd) in
 
                 (if is_presence then write buf "{");
@@ -2829,8 +2887,7 @@ module NewPrint = struct
       Printer (fun ctx (binder, knd, tp) buf ->
           (* assumes that the recursive variable itself shouldn't display kind information,
            * because the definition of the type itself is right there *)
-          let rec_var_p = { (Context.policy ctx) with kinds = "hide" } in
-          let binder_ctx = Context.set_policy rec_var_p ctx in
+          let binder_ctx = Context.set_pol_kinds Policy.Hide ctx in
           if Context.is_tyvar_bound binder ctx
           then (* this recursive was already seen -> just need the variable name *)
             apply var binder_ctx (binder, knd) buf
@@ -3052,7 +3109,7 @@ module NewPrint = struct
                                 then write buf "~"
                                 else write buf "-");
                                let ctx = (Context.set_ambient Context.Effect
-                                            (Context.set_policy { (Context.policy ctx)  with kinds="hide" } ctx)) in
+                                            (Context.set_pol_kinds Policy.Hide ctx)) in
                                apply var ctx (vid, knd) buf
                              end
                         | _t ->
@@ -3262,14 +3319,6 @@ module NewPrint = struct
 
 end
 
-let default_pp_policy : unit -> pp_policy =
-  fun () ->
-  {quantifiers=Settings.get Print.show_quantifiers;
-   flavours=Settings.get Print.show_flavours;
-   hide_fresh=Settings.get Print.hide_fresh_type_vars;
-   kinds=val_of (Settings.get Print.show_kinds);
-   effect_sugar=Settings.get effect_sugar}
-
 
 
 let free_bound_type_vars            = Vars.free_bound_type_vars TypeVarSet.empty
@@ -3334,24 +3383,24 @@ let empty_typing_environment = { var_env = Env.empty;
                                  desugared = false }
 
 (* Which printer to use *)
-type pretty_printer_engine = PPOld | PPRoundtrip | PPAll
+type pretty_printer_engine = Old | Roundtrip | All
 
 let print_types_pretty
   = let parse_engine v =
       match String.lowercase_ascii v with
       | "none" -> None
-      | "old" -> Some PPOld
-      | "roundtrip" | "new" -> Some PPRoundtrip
-      | "both" | "all" -> Some PPAll
+      | "old" -> Some Old
+      | "roundtrip" | "new" -> Some Roundtrip
+      | "both" | "all" -> Some All
       | _ -> raise (Invalid_argument "accepted values: none | old | roundtrip | both")
     in
     let string_of_engine = function
       | None -> "none"
-      | Some PPOld -> "old"
-      | Some PPRoundtrip -> "roundtrip"
-      | Some PPAll -> "all"
+      | Some Old -> "old"
+      | Some Roundtrip -> "roundtrip"
+      | Some All -> "all"
     in
-    Settings.(option ~default:(Some PPRoundtrip) "types_pretty_printer_engine"
+    Settings.(option ~default:(Some Roundtrip) "types_pretty_printer_engine"
               |> synopsis "Chooses which pretty printer to use (or none, in which case the \
                            derived printer is used). Setting this to <all> will cause both \
                            Roundtrip and Old printer to be invoked for comparison."
@@ -3366,9 +3415,9 @@ let is_type_pretty_printing_on () =
   | None   -> false
 
 (** Prints type using both printers *)
-let print_pretty_all : pr_roundtrip:(pp_policy -> 'a -> string) ->
-                       pr_old:(pp_policy -> 'a -> string) ->
-                       pp_policy -> 'a -> string
+let print_pretty_all : pr_roundtrip:(Policy.t -> 'a -> string) ->
+                       pr_old:(Policy.t -> 'a -> string) ->
+                       Policy.t -> 'a -> string
   = fun ~pr_roundtrip ~pr_old policy t ->
   let s_roundtrip = pr_roundtrip policy t in
   let s_old = pr_old policy t in
@@ -3378,79 +3427,86 @@ let print_pretty_all : pr_roundtrip:(pp_policy -> 'a -> string) ->
       ; "\nRoundtrip and old printer " ;
       if (s_roundtrip = s_old) then "AGREE. " else "DISAGREE." ]
 
-let print_pretty_general : pr_roundtrip:(pp_policy -> 'a -> string) ->
-                           pr_old:(pp_policy -> 'a -> string) ->
+let print_pretty_general : pr_roundtrip:(Policy.t -> 'a -> string) ->
+                           pr_old:(Policy.t -> 'a -> string) ->
                            pr_none:('a -> string) ->
-                           pp_policy -> 'a -> string
+                           Policy.t -> 'a -> string
   = fun ~pr_roundtrip ~pr_old ~pr_none policy x ->
   match Settings.get print_types_pretty with
   | None             -> pr_none x
-  | Some PPRoundtrip -> pr_roundtrip policy x
-  | Some PPOld       -> pr_old policy x
-  | Some PPAll       -> print_pretty_all ~pr_roundtrip ~pr_old policy x
+  | Some Roundtrip -> pr_roundtrip policy x
+  | Some Old       -> pr_old policy x
+  | Some All       -> print_pretty_all ~pr_roundtrip ~pr_old policy x
 
+(* TODO (future) most of the functions below can be merged, as they do
+   essentially the same thing, and also the functions they use for building
+   tyvar names are aliases of the same things (in most cases) *)
 
 (* string conversions *)
-let string_of_datatype : ?policy:(unit -> pp_policy) -> ?refresh_tyvar_names:bool -> datatype -> string
+let string_of_datatype : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool -> datatype -> string
   = let pr_roundtrip policy t =
       let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
       NewPrint.string_of_datatype context t
     in
     let pr_old policy t =
+      let policy = Policy.as_old policy in
       let context = Print.context_with_shared_effect policy (fun o -> o#typ t) in
       Print.datatype context (policy, Vars.tyvar_name_map) t
     in
     let pr_none = show_datatype -<- DecycleTypes.datatype in
-    fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) t ->
+    fun ?(policy=Policy.default_policy) ?(refresh_tyvar_names=true) t ->
     let policy = policy () in
     build_tyvar_names ~refresh_tyvar_names free_bound_type_vars [t];
     print_pretty_general ~pr_roundtrip ~pr_old ~pr_none policy t
 
-let string_of_row : ?policy:(unit -> pp_policy) -> ?refresh_tyvar_names:bool -> row -> string
+let string_of_row : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool -> row -> string
   = let pr_roundtrip policy row =
       let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
       NewPrint.string_of_row context row
     in
     let pr_old policy row =
+      let policy = Policy.as_old policy in
       let context = Print.context_with_shared_effect policy (fun o -> o#row row) in
       Print.row "," context (policy, Vars.tyvar_name_map) row
     in
     let pr_none = show_row -<- DecycleTypes.row in
-    fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) row ->
+    fun ?(policy=Policy.default_policy) ?(refresh_tyvar_names=true) row ->
     let policy = policy () in
     build_tyvar_names ~refresh_tyvar_names free_bound_row_type_vars [row];
     print_pretty_general ~pr_roundtrip ~pr_old ~pr_none policy row
 
-let string_of_presence : ?policy:(unit -> pp_policy) -> ?refresh_tyvar_names:bool -> field_spec -> string
+let string_of_presence : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool -> field_spec -> string
   = let pr_roundtrip policy f =
       let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
       NewPrint.string_of_presence context f
     in
     let pr_old policy f =
+      let policy = Policy.as_old policy in
       Print.presence Print.empty_context (policy, Vars.tyvar_name_map) f
     in
     let pr_none = show_field_spec -<- DecycleTypes.field_spec in
-    fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) f ->
+    fun ?(policy=Policy.default_policy) ?(refresh_tyvar_names=true) f ->
     let policy = policy () in
     build_tyvar_names ~refresh_tyvar_names free_bound_field_spec_type_vars [f];
     print_pretty_general ~pr_roundtrip ~pr_old ~pr_none policy f
 
-let string_of_type_arg : ?policy:(unit -> pp_policy) -> ?refresh_tyvar_names:bool -> type_arg -> string
+let string_of_type_arg : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool -> type_arg -> string
   = let pr_roundtrip policy arg =
       let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
       NewPrint.string_of_type_arg context arg
     in
     let pr_old policy arg =
-              let context = Print.context_with_shared_effect policy (fun o -> o#type_arg arg) in
-        Print.type_arg context (policy, Vars.tyvar_name_map) arg
+      let policy = Policy.as_old policy in
+      let context = Print.context_with_shared_effect policy (fun o -> o#type_arg arg) in
+      Print.type_arg context (policy, Vars.tyvar_name_map) arg
     in
     let pr_none = show_type_arg -<- DecycleTypes.type_arg in
-    fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) arg ->
-      let policy = policy () in
-      build_tyvar_names ~refresh_tyvar_names free_bound_type_arg_type_vars [arg];
-      print_pretty_general ~pr_roundtrip ~pr_old ~pr_none policy arg
+    fun ?(policy=Policy.default_policy) ?(refresh_tyvar_names=true) arg ->
+    let policy = policy () in
+    build_tyvar_names ~refresh_tyvar_names free_bound_type_arg_type_vars [arg];
+    print_pretty_general ~pr_roundtrip ~pr_old ~pr_none policy arg
 
-let string_of_row_var : ?policy:(unit -> pp_policy) -> ?refresh_tyvar_names:bool -> row_var -> string
+let string_of_row_var : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool -> row_var -> string
   = let string_or_empty = function
       | Some s -> s
       | None -> ""
@@ -3462,21 +3518,23 @@ let string_of_row_var : ?policy:(unit -> pp_policy) -> ?refresh_tyvar_names:bool
       string_or_empty st
     in
     let pr_old policy row_var =
+      let policy = Policy.as_old policy in
       let st = Print.row_var Print.name_of_type "," Print.empty_context (policy, Vars.tyvar_name_map) row_var in
       string_or_empty st
     in
     let pr_none = show_row_var -<- DecycleTypes.row_var in
-    fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) row_var ->
+    fun ?(policy=Policy.default_policy) ?(refresh_tyvar_names=true) row_var ->
     let policy = policy () in
     build_tyvar_names ~refresh_tyvar_names free_bound_row_var_vars [row_var];
     print_pretty_general ~pr_roundtrip ~pr_old ~pr_none policy row_var
 
-let string_of_tycon_spec : ?policy:(unit -> pp_policy) -> ?refresh_tyvar_names:bool -> tycon_spec -> string
+let string_of_tycon_spec : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool -> tycon_spec -> string
   = let pr_roundtrip policy tycon =
       let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
       NewPrint.string_of_tycon_spec context tycon
     in
     let pr_old policy tycon =
+      let policy = Policy.as_old policy in
       Print.tycon_spec Print.empty_context (policy, Vars.tyvar_name_map) tycon
     in
     (* decycler taken from pp_tycon_spec *)
@@ -3485,21 +3543,22 @@ let string_of_tycon_spec : ?policy:(unit -> pp_policy) -> ?refresh_tyvar_names:b
       | other -> other
     in
     let pr_none = show_tycon_spec -<- decycle_tycon_spec in
-    fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) tycon ->
+    fun ?(policy=Policy.default_policy) ?(refresh_tyvar_names=true) tycon ->
     let policy = policy () in
     build_tyvar_names ~refresh_tyvar_names free_bound_tycon_type_vars [tycon];
     print_pretty_general ~pr_roundtrip ~pr_old ~pr_none policy tycon
 
-let string_of_quantifier : ?policy:(unit -> pp_policy) -> ?refresh_tyvar_names:bool -> Quantifier.t -> string
+let string_of_quantifier : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool -> Quantifier.t -> string
   = let pr_roundtrip policy quant =
       let context = NewPrint.Context.setup policy Vars.tyvar_name_map (* (fun o -> o#typ t) TODO for shared effects *) in
       NewPrint.string_of_quantifier context quant
     in
     let pr_old policy quant =
+      let policy = Policy.as_old policy in
       Print.quantifier (policy, Vars.tyvar_name_map) quant
     in
     let pr_none = Quantifier.show -<- DecycleTypes.quantifier in
-    fun ?(policy=default_pp_policy) ?(refresh_tyvar_names=true) quant ->
+    fun ?(policy=Policy.default_policy) ?(refresh_tyvar_names=true) quant ->
     let policy = policy () in
     build_tyvar_names ~refresh_tyvar_names free_bound_quantifier_vars [quant];
     print_pretty_general ~pr_roundtrip ~pr_old ~pr_none policy quant
