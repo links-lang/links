@@ -1680,10 +1680,10 @@ let is_tuple ?(allow_onetuples=false) row =
                    | Meta _    -> false
                    | _ -> raise tag_expectation_mismatch))
              (fromTo 1 (n+1))) (* need to go up to n *)
-     (* TODO I think this was a bug: (dis)allowing one-tuples is
-        handled below, but here we need to make sure that the object
-        is a tuple at all; if there was only one field, it wasn't
-        checked for int *)
+     (* (Samo) I think there was a bug here, calling (fromTo 1 n):
+        (dis)allowing one-tuples is handled below, but here we need to make sure
+        that the object is a tuple at all; if there was only one field, it
+        wasn't checked for int *)
      in
      (* 0/1-tuples are displayed as records *)
      b && (allow_onetuples || n <> 1)
@@ -1702,7 +1702,9 @@ exception TypeDestructionError of string
 
 (** remove any top-level meta typevars and aliases from a type
     (perhaps we can use this version of concrete_type everywhere)
-*)
+ *)
+(* The name is intentionally prefixed, because there is another concrete_type in
+   this file and it works slightly differently, and we need to keep both *)
 let typeUtils_concrete_type t =
   let rec ct rec_names t : datatype =
     match t with
@@ -1780,7 +1782,9 @@ struct
      variables.  And even if it does we don't care about performance penalty
      because we're printing the error message and thus stopping the compilation
      anyway. *)
-  (* TODO check this - mem leak? *)
+  (* TODO check this - mem leak?
+     (Samo: I think it's fine, because when tyvarnames are being rebuilt in
+     build_tyvar_names (see below), this hashtable gets reset *)
   let tyvar_name_map = Hashtbl.create 20
   let tyvar_name_counter = ref 0
 
@@ -2058,7 +2062,6 @@ module Policy = struct
     = as_old -<- default_policy
 end
 
-(* TODO: check over the pretty-printer in light of the types refactoring *)
 module Print =
 struct
   module BS = Basicsettings
@@ -2403,7 +2406,6 @@ struct
               Format.fprintf f "%s : %a"
                 (Lens.Column.alias col)
                 Lens.Phrase.Type.pp_pretty (Lens.Column.typ col) in
-            (* TODO *)
             if Lens.Type.is_abstract _typ
             then
               if Lens.Type.is_checked _typ
@@ -2459,7 +2461,6 @@ struct
           begin
             let name_of_type var n1 n2 =
               let name, (_, _, count) = Vars.find_spec var vars in
-              (* decycling ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~vvvvvvvvvvvvvvvvvvvvvvvvv *)
               if policy.Policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then n1
               else (n2 name) in
             match Unionfind.find point with
