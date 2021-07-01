@@ -83,7 +83,7 @@ exit : 1
 
 Polymorphic function parameters (annotated)
 fun (f : (forall a,e::Row.(a) -e-> a)) {(f(42), f(true))}
-stdout : fun : (forall a,b::Row.(a) -b-> a) -> (Int, Bool)
+stdout : @fun : \(forall (\w),(\w)::Row\.\(\1\) -\2-> \1\) -> \(Int, Bool\)
 
 Explicitly polymorphic signatures
 sig choose : forall a,d::Row,e::Row. (a) -d-> (a) -e-> a fun choose(x)(y) {x} choose
@@ -91,7 +91,7 @@ stdout : fun : (a) -> (a) -> a
 
 Quantifiers in different orders
 fun (x:(forall a,b.(a,b)), y:(forall b,a.(a,b))) {[x,y]}
-stdout : fun : (forall a,b.(a, b), forall c,d.(d, c)) -> [(_, _)]
+stdout : @fun : \(forall (\w),(\w)\.\(\1, \2\), forall (\w),(\w)\.\(\4, \3\)\) -> \[\(_, _\)\]
 
 Polymorphic function arguments and freeze
 fun poly(f : (forall a::Any,e::Row.(a) -e-> a)) {(f(42), f(true))} poly(~id)
