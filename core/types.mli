@@ -369,6 +369,9 @@ val make_wobbly_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMa
 val combine_per_kind_envs : datatype Utility.IntMap.t * row Utility.IntMap.t * field_spec Utility.IntMap.t -> type_arg Utility.IntMap.t
 
 (** pretty printing *)
+type pretty_printer_engine = Old | Roundtrip | Both
+val print_types_pretty : pretty_printer_engine option Settings.setting
+
 val string_of_datatype   : ?policy:(unit -> Policy.t)
                         -> ?refresh_tyvar_names:bool -> datatype   -> string
 val string_of_row        : ?policy:(unit -> Policy.t)

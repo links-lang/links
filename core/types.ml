@@ -3372,7 +3372,7 @@ let empty_typing_environment = { var_env = Env.empty;
                                  desugared = false }
 
 (* Which printer to use *)
-type pretty_printer_engine = Old | Roundtrip | All
+type pretty_printer_engine = Old | Roundtrip | Both
 
 let print_types_pretty
   = let parse_engine v =
@@ -3380,20 +3380,20 @@ let print_types_pretty
       | "none" -> None
       | "old" -> Some Old
       | "roundtrip" | "new" -> Some Roundtrip
-      | "both" | "all" -> Some All
+      | "both" | "all" -> Some Both
       | _ -> raise (Invalid_argument "accepted values: none | old | roundtrip | both")
     in
     let string_of_engine = function
       | None -> "none"
       | Some Old -> "old"
       | Some Roundtrip -> "roundtrip"
-      | Some All -> "all"
+      | Some Both -> "both"
     in
     Settings.(option ~default:(Some Roundtrip) "types_pretty_printer_engine"
               |> synopsis "Chooses which pretty printer to use (or none, in which case the \
-                           derived printer is used). Setting this to <all> will cause both \
+                           derived printer is used). Setting this to <both> will cause both \
                            Roundtrip and Old printer to be invoked for comparison."
-              |> hint "<none|old|roundtrip|all>"
+              |> hint "<none|old|roundtrip|both>"
               |> to_string string_of_engine
               |> convert parse_engine
               |> CLI.(add (long "types-pp-engine"))
@@ -3426,7 +3426,7 @@ let print_pretty_general : pr_roundtrip:(Policy.t -> 'a -> string) ->
   | None           -> pr_none x
   | Some Roundtrip -> pr_roundtrip policy x
   | Some Old       -> pr_old policy x
-  | Some All       -> print_pretty_all ~pr_roundtrip ~pr_old policy x
+  | Some Both       -> print_pretty_all ~pr_roundtrip ~pr_old policy x
 
 let policy_as_old : Policy.t -> Print.policy
   = fun Policy.({ quantifiers; flavours; hide_fresh; kinds; effect_sugar }) ->
