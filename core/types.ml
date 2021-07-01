@@ -2884,11 +2884,11 @@ module NewPrint = struct
           else (* this the first occurence of this mu -> print the whole type *)
             begin
               let inner_context = Context.bind_tyvar binder ctx in
-              let want_parens = Context.is_ambient_rowvar ctx || Context.is_ambient_variant_rowvar ctx in
+              let want_parens = (Context.is_ambient_rowvar ctx) || (Context.is_ambient_variant_rowvar ctx) in
               (if want_parens then write buf "(");
               write buf "mu ";
               apply var binder_ctx (binder, knd) buf;
-              write buf " . ";
+              write buf ".";
               apply datatype inner_context tp buf;
               (if want_parens then write buf ")");
             end)
@@ -2943,7 +2943,7 @@ module NewPrint = struct
           let sep =
             let open Context in
             match ambient ctx with
-            | Variant -> "|"
+            | Variant | VariantRowVar -> "|"
             | Tuple -> ", " (* tuples require a space as well *)
             | _ -> ","
           in
@@ -2984,7 +2984,7 @@ module NewPrint = struct
             | Effect r   -> r,        "{",   "}",   (C.set_ambient C.Effect ctx)
             | Select r   -> r,        "[+|", "|+]", ctx (* TODO ambient Session? *)
             | Choice r   -> r,        "[&|", "|&]", ctx (* TODO ^ *)
-            | Row _ as r -> r,        "",    "",    C.set_ambient C.Row ctx
+            | Row _ as r -> r,        "",    "",    ctx
             | _ -> failwith ("[*R] Invalid row:\n" ^ show_datatype @@ DecycleTypes.datatype r)
           in
           write buf before;
@@ -2999,8 +2999,8 @@ module NewPrint = struct
           (match (* concrete_type *) tp with
            | Absent -> write buf "-"
            | Present tp ->
-              if not (concrete_type tp = unit_type && (Context.is_ambient_variant ctx (* hide units in variants *)
-                                                       || Context.is_ambient_variant_rowvar ctx)) (* also hide units if this is a
+              if not (concrete_type tp = unit_type && ((Context.is_ambient_variant ctx) (* hide units in variants *)
+                                                       || (Context.is_ambient_variant_rowvar ctx))) (* also hide units if this is a
                                                                                                      recursive row variable that
                                                                                                      is know to be a variant*)
               then begin

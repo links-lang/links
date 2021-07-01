@@ -22,7 +22,7 @@ stdout : fun : ([|(mu a . Op:() { |a}-> ())|]) {}-> ()
 
 Recursive row variable in variant [2]
 sig tsize : ([|( mu t. Node:([|t|],[|t|])|Leaf)|]) ~> Int fun tsize(t) { switch (t) { case Leaf -> 1 case Node(l,r) -> 1 + tsize(l) + tsize(r) } } tsize
-stdout : fun : ([|(mu b . Leaf:(),Node:([|b|], [|b|]))|]) ~> Int
+stdout : fun : ([|(mu b . Leaf|Node:([|b|], [|b|]))|]) ~> Int
 
 Recursive row variable in row type argument
 sig f : Comp ((),{ |(mu a . Bar,Foo:(() { |a}~> _) {}-> ()|_) }) fun f() { () } f
