@@ -3459,6 +3459,10 @@ let string_of_datatype : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool
     let pr_none = show_datatype -<- DecycleTypes.datatype in
     fun ?(policy=Policy.default_policy) ?(refresh_tyvar_names=true) t ->
     let policy = policy () in
+    let t = if Policy.quantifiers policy
+            then t
+            else NewPrint.strip_quantifiers t (* both printers have the same strip_quantifiers, using the new one *)
+    in
     build_tyvar_names ~refresh_tyvar_names free_bound_type_vars [t];
     print_pretty_general ~pr_roundtrip ~pr_old ~pr_none policy t
 
