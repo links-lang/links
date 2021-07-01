@@ -2825,9 +2825,10 @@ module NewPrint = struct
                     apply full_name ctx' () buf
                end)
 
-  let strip_quantifiers : typ -> typ =
+  let rec strip_quantifiers : typ -> typ =
     function
-    | ForAll (_, t) | t -> t
+    | ForAll (_, t) -> strip_quantifiers t (* recurses to strip all toplevel quantifiers (if they happen to be separate) *)
+    | t -> t
 
   let primitive : Primitive.t printer
     = let open StringBuffer in
@@ -3171,19 +3172,14 @@ module NewPrint = struct
   and forall : (Quantifier.t list * typ) printer
     = let open StringBuffer in
       Printer (fun ctx (binding, tp) buf ->
-          if Context.pol_quantifiers ctx || (not (Context.is_ambient_toplevel ctx)) (* only toplevel quantifiers hidden *)
-          then begin
-              let binder_ctx = Context.set_ambient Context.Binder ctx in
-              let inner_ctx = Context.bind_tyvars (List.map Quantifier.to_var binding) ctx in
-              write buf "forall ";
-              concat ~sep:"," quantifier binding binder_ctx buf;
-              write buf ".";
-              apply datatype inner_ctx tp buf
-            end
-          else
-            (* context is just passed through - no variables get bound here *)
-            apply datatype ctx tp buf
-        )
+          (* toplevel quantifiers were already stripped by the calling string_of_datatype (provided we started there; if we
+             started in another string_of_X, then it's not toplevel anyway and quantifiers should stay) *)
+          let binder_ctx = Context.set_ambient Context.Binder ctx in
+          let inner_ctx = Context.bind_tyvars (List.map Quantifier.to_var binding) ctx in
+          write buf "forall ";
+          concat ~sep:"," quantifier binding binder_ctx buf;
+          write buf ".";
+          apply datatype inner_ctx tp buf)
 
   (* code for printing relational lenses taken verbatim from the original printer *)
   and lens : Lens.Type.t printer
@@ -3459,6 +3455,10 @@ let string_of_datatype : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool
     let pr_none = show_datatype -<- DecycleTypes.datatype in
     fun ?(policy=Policy.default_policy) ?(refresh_tyvar_names=true) t ->
     let policy = policy () in
+    (* If we want to hide toplevel quantifiers, they get removed entirely here. This influences the names of
+       type variables: the one seen first (i.e. getting the name "a") may no longer be the one that is bound
+       by the quantifier. Tests expect this.
+       TODO (possibly; future) is this the right way to do things? Maybe this logic should be decided in the printer? *)
     let t = if Policy.quantifiers policy
             then t
             else NewPrint.strip_quantifiers t (* both printers have the same strip_quantifiers, using the new one *)
