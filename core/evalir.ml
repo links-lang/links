@@ -717,8 +717,8 @@ struct
            | QueryPolicy.Flat ->
                begin
                  let evaluator e =
-                   if Settings.get Database.mixing_norm then 
-                     EvalMixingQuery.compile_mixing ~delateralize:policy env e 
+                   if Settings.get Database.mixing_norm then
+                     EvalMixingQuery.compile_mixing ~delateralize:policy env e
                    else EvalQuery.compile env (range, e)
                  in
                  match evaluator e with

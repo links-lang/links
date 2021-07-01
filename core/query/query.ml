@@ -1073,7 +1073,7 @@ let rec select_clause : Sql.index -> bool -> Q.t -> Sql.select_clause =
          to produce non-eta expanded tables. *)
       let var = Sql.fresh_table_var () in
       let fields =
-        Sql.Fields 
+        Sql.Fields
         (List.rev
             (StringMap.fold
               (fun name _ fields ->
