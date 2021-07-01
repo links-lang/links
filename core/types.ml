@@ -1954,7 +1954,7 @@ module Policy = struct
      from rigid type variables. *)
   let show_quantifiers
     = Settings.(flag "show_quantifiers"
-                |> synopsis "Toggles whether to display (outer) quantifiers."
+                |> synopsis "Toggles whether to display outer quantifiers (non-toplevel quantifiers will still be shown)."
                 |> convert parse_bool
                 |> sync)
 
