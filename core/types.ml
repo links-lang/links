@@ -2038,7 +2038,7 @@ module Policy = struct
   let set_effect_sugar : bool -> t -> t
     = fun v p -> { p with effect_sugar = v }
 
-  (* TODO these are for the old printer, so it doesn't have to be changed much *)
+  (* TODO these are for the old printer, so that it doesn't have to be changed much *)
   type old_t = { quantifiers  : bool
                ; flavours     : bool
                ; hide_fresh   : bool
@@ -2852,8 +2852,12 @@ module NewPrint = struct
   let rec var : (tid * Kind.t) printer
     = let open StringBuffer in
       Printer (fun ctx (vid, knd) buf ->
+          print_endline ("\n     var policy:\n" ^
+                           "          kinds: " ^ ((Policy.as_old -<- Context.policy) ctx).Policy.kinds ^
+                             "\n    quantifiers:" ^ ((string_of_bool -<- Policy.quantifiers -<- Context.policy) ctx));
           let subknd = Kind.subkind knd in
           let var_name, (flavour, _, _) = Vars.find_spec vid (Context.tyvar_names ctx) in
+          print_endline ("       var name: " ^ var_name);
           let in_binder = Context.is_ambient_binder ctx in
           (* Rules of printing vars:
            * 1) If var only appears once (count = 1) & (policy.hide_fresh = true) => only as don't-care "_" [is_unique]
@@ -3184,11 +3188,17 @@ module NewPrint = struct
   and forall : (Quantifier.t list * typ) printer
     = let open StringBuffer in
       Printer (fun ctx (binding, tp) buf ->
+          print_endline ("\n  forall policy:\n" ^
+                           "          kinds: " ^ ((Policy.as_old -<- Context.policy) ctx).Policy.kinds ^
+                             "\n    quantifiers:" ^ ((string_of_bool -<- Policy.quantifiers -<- Context.policy) ctx));
           let binder_ctx = Context.set_ambient Context.Binder ctx in
           let inner_ctx = Context.bind_tyvars (List.map Quantifier.to_var binding) ctx in
-          write buf "forall ";
-          concat ~sep:"," quantifier binding binder_ctx buf;
-          write buf ".";
+          if Context.pol_quantifiers ctx
+          then begin
+              write buf "forall ";
+              concat ~sep:"," quantifier binding binder_ctx buf;
+              write buf ".";
+            end;
           apply datatype inner_ctx tp buf
         )
 
@@ -3238,6 +3248,9 @@ module NewPrint = struct
   and datatype : datatype printer
     = let open StringBuffer in
       Printer (fun ctx tp buf ->
+          print_endline ("\ndatatype policy:\n" ^
+                           "          kinds: " ^ ((Policy.as_old -<- Context.policy) ctx).Policy.kinds ^
+                             "\n    quantifiers: " ^ ((string_of_bool -<- Policy.quantifiers -<- Context.policy) ctx));
           let printer =
             match tp with
             (* keeping this Not_typed in case we ever need to print some intermediate steps *)
@@ -3407,6 +3420,7 @@ let print_types_pretty
               |> hint "<none|old|roundtrip|all>"
               |> to_string string_of_engine
               |> convert parse_engine
+              |> CLI.(add (long "types-pp-engine"))
               |> sync)
 
 let is_type_pretty_printing_on () =
