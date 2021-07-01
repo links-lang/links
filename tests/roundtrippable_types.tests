@@ -14,4 +14,4 @@ stdout : (q = [3, 1, 2]) : Q
 Recursive effect
 fun w(g) { handle(g()) { case Return(()) -> () case F(h, res) -> w(h) }} w
 args : --enable-handlers
-stdout : @fun : \(\(\) \{ \|\(mu (\w) \. F:\(\(\) \{ \|\1\}\-> \(\)\) \{\}\-> _::Any,wild:\(\)\|(\w)\)\}\-> \(\)\) \{F\{_\}\|\2\}~> \(\)
+stdout : fun : (() { |(mu a.F:(() { |a}-> ()) {}-> _::Any,wild:()|c)}-> ()) {F{_}|c}~> ()
