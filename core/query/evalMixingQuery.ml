@@ -7,8 +7,8 @@
 open Utility
 open CommonTypes
 
-module Q = Query.Lang
-module E = Query.Eval
+module Q = MixingQuery.Lang
+module E = MixingQuery.Eval
 module C = Constant
 module S = Sql
 
@@ -66,7 +66,7 @@ and base_exp = function
 | Q.If (c, t, e) -> S.Case (base_exp c, base_exp t, base_exp e)
 | Q.Apply (Q.Primitive "tilde", [s; r]) ->
     begin
-    match Query.likeify r with
+    match MixingQuery.likeify r with
         | Some r ->
         S.Apply ("LIKE", [base_exp s; base_exp r])
         | None ->
@@ -91,6 +91,7 @@ and base_exp = function
 
 let compile_mixing : delateralize:QueryPolicy.t -> Value.env -> Ir.computation -> (Value.database * Sql.query * Types.datatype) option =
   fun ~delateralize env e ->
+    Debug.print "using compile_mixing";
     (* Debug.print ("env: "^Value.show_env env);
     Debug.print ("e: "^Ir.show_computation e); *)
     (* XXX: I don't see how the evaluation here is different depending on the policy *)
@@ -98,14 +99,14 @@ let compile_mixing : delateralize:QueryPolicy.t -> Value.env -> Ir.computation -
         (* FIXME *)
         if delateralize = QueryPolicy.Delat
             then Delateralize.eval QueryPolicy.Flat
-            else Query.Eval.eval QueryPolicy.Flat
+            else MixingQuery.Eval.eval QueryPolicy.Flat
     in
     let v = evaluator env e in
       (* Debug.print ("v: "^ Q.show v); *)
-      match Query.used_database v with
+      match MixingQuery.used_database v with
         | None -> None
         | Some db ->
-            let t = Types.unwrap_list_type (Query.type_of_expression v) in
+            let t = Types.unwrap_list_type (MixingQuery.type_of_expression v) in
             (* Debug.print ("Generated NRC query: " ^ Q.show v ); *)
             let q = sql_of_query false v in
             let _range = None in

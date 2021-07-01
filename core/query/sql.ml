@@ -8,7 +8,7 @@ type table_name = string (* FIXME: allow variables? *)
     [@@deriving show]
 
 type query =
-  | Union     of bool * query list * int  (* bool = ALL? *)
+  | Union     of bool * query list * int  (* bool = is_set? = not "UNION ALL"? *)
   | Select    of select_clause
   | Insert    of {
       ins_table: table_name;
@@ -23,7 +23,7 @@ type query =
   | Delete    of { del_table: table_name; del_where: base option }
   | With      of table_name * query * query
 and select_clause =
-    bool * select_fields * from_clause list * base * base list  (* bool = DISTINCT? *)
+    bool * select_fields * from_clause list * base * base list  (* bool = is_set? = "DISTINCT"? *)
 and select_fields =
   | Star
   | Fields    of (base * string) list
@@ -185,13 +185,13 @@ class virtual printer =
         | _ -> Format.fprintf ppf "\nwhere %a" pp_os_condition condition
       in
       if fDistinct then
-        Format.fprintf ppf "select %a\nfrom %a%a%a"
+        Format.fprintf ppf "select distinct %a\nfrom %a%a%a"
         self#pp_fields fields
         (self#pp_comma_separated pp_from_clause) tables
         pp_where condition
         pp_orderby os
       else
-        Format.fprintf ppf "select distinct %a\nfrom %a%a%a"
+        Format.fprintf ppf "select %a\nfrom %a%a%a"
         self#pp_fields fields
         (self#pp_comma_separated pp_from_clause) tables
         pp_where condition
@@ -280,12 +280,12 @@ class virtual printer =
           Format.fprintf ppf "%a%a"
             pr_q q
             Format.pp_print_string (order_by_clause n)
-      | Union (fAll, qs, n) ->
+      | Union (fSet, qs, n) ->
         let pp_sep_union ppf () =
-          if fAll then
-            Format.fprintf ppf "\nunion all\n"
-          else
+          if fSet then
             Format.fprintf ppf "\nunion\n"
+          else
+            Format.fprintf ppf "\nunion all\n"
           in
         let pp_value ppf x = Format.fprintf ppf "(%a)" pr_q x in
         Format.fprintf ppf "%a%a"
@@ -424,7 +424,7 @@ let rec inline_outer_with q =
     | fromclause -> fromclause
   in
   match q with
-    | With (z, q, Select (fDistinct, fields, tables, condition, os)) ->
-        Select(fDistinct, fields, List.map (replace_subquery z q) tables, condition, os)
-    | Union (fAll, qs,n) -> Union (fAll, List.map inline_outer_with qs,n)
+    | With (z, q, Select (fSet, fields, tables, condition, os)) ->
+        Select(fSet, fields, List.map (replace_subquery z q) tables, condition, os)
+    | Union (fSet, qs,n) -> Union (fSet, List.map inline_outer_with qs,n)
     | q -> q

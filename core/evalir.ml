@@ -716,7 +716,12 @@ struct
          begin match policy with
            | QueryPolicy.Flat ->
                begin
-                 match EvalQuery.compile env (range, e) with
+                 let evaluator e =
+                   if Settings.get Database.mixing_norm then 
+                     EvalMixingQuery.compile_mixing ~delateralize:policy env e 
+                   else EvalQuery.compile env (range, e)
+                 in
+                 match evaluator e with
                    | None -> computation env cont e
                    | Some (db, q, t) ->
                        let q = db#string_of_query ~range q in
@@ -768,7 +773,7 @@ struct
            | _ ->
                begin
                   if range != None then eval_error "Range is not supported for heterogeneous queries";
-                  match SimplSqlGen.compile_mixing ~delateralize:policy env e with
+                  match EvalMixingQuery.compile_mixing ~delateralize:policy env e with
                   | None -> computation env cont e
                   | Some (db, q, t) ->
                       let q = db#string_of_query ~range q in

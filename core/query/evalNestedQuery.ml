@@ -25,8 +25,6 @@ let tag_query : QL.t -> QL.t =
         | Singleton e -> Singleton (tag e)
         | Concat es ->
           Concat (List.map tag es)
-        | Dedup q -> Dedup (tag q)
-        | Prom q -> Prom (tag q)
         | Record fields -> Record (StringMap.map tag fields)
         | Project (e, l) -> Project (tag e, l)
         | Erase (e, fields) -> Erase (tag e, fields)
@@ -375,20 +373,21 @@ struct
   (* dynamic index type *)
   let index_type = Types.int_type
 
-  let rec lins_inner (z, tyz) ys : QL.t -> QL.t =
+  let rec lins_inner (z, z_fields) ys : QL.t -> QL.t =
     let open QL in
-    let li x = lins_inner (z, tyz) ys x in
-    let liq = lins_inner_query (z, tyz) ys in
+    let li x = lins_inner (z, z_fields) ys x in
+    let liq = lins_inner_query (z, z_fields) ys in
     function
-      | Project (Var (x, tyx), l) ->
+      (* Need to make sure this happens on the regex, too. *)
+      | Project (Var (x, fields), l) ->
         begin
           match position_of x ys with
-            | None -> Project (Var (x, tyx), l)
+            | None -> Project (Var (x, fields), l)
             | Some i ->
               (* z.1.i.l *)
               Project
                 (Project
-                    (Project (Var (z, tyz), "1"), string_of_int i), l)
+                    (Project (Var (z, z_fields), "1"), string_of_int i), l)
         end
       | Apply (Primitive "Empty", [e]) -> Apply (Primitive "Empty", [liq e])
       | Apply (Primitive "length", [e]) -> Apply (Primitive "length", [liq e])
@@ -401,7 +400,7 @@ struct
         Record (StringMap.map li fields)
       | Primitive "out" ->
         (* z.2 *)
-        Project (Var (z, tyz), "2")
+        Project (Var (z, z_fields), "2")
       | Primitive "in"  -> Primitive "index"
       | Constant c      -> Constant c
       (* Regex variants. *)
@@ -462,7 +461,7 @@ struct
                (fun (x, source) ->
                  match source with
                    | QL.Table t ->
-                     QL.eta_expand_var (x, Types.make_record_type (QL.table_field_types t))
+                     Q.Eval.eta_expand_var (x, Q.table_field_types t)
                    | _ -> assert false)
                gs_out) in
     let r_out_type =
@@ -481,20 +480,16 @@ struct
     let os = List.concat (orders c) in
     let q = Var.fresh_raw_var () in
     let z = Var.fresh_raw_var () in
-    (* let z_fields =
-      QL.recdty_field_types
+    let z_fields =
+      Q.record_field_types
         (Types.make_tuple_type
            [r_out_type; index_type])
-    in *)
-    let tyz =
-      Types.make_tuple_type
-        [r_out_type; index_type]
     in
       (q, QL.For (None, gs_out, [], where x_out (QL.Singleton (pair r_out index))),
        z, QL.For (None, gs_in, os,
                 where
-                  (opt_map (lins_inner (z, tyz) ys) x_in)
-                  (QL.Singleton (lins_inner (z, tyz) ys (body c)))))
+                  (opt_map (lins_inner (z, z_fields) ys) x_in)
+                  (QL.Singleton (lins_inner (z, z_fields) ys (body c)))))
 
   and lins_query : QL.t -> query =
     function

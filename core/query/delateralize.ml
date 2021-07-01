@@ -6,7 +6,7 @@
 open Utility
 open CommonTypes
 
-module Q = Query.Lang
+module Q = MixingQuery.Lang
 
 let (>>=) (o : 'a option) (f : 'a -> 'b option) =
     match o with
@@ -82,7 +82,7 @@ let rec subst t x u =
     | Q.Dedup v -> Q.Dedup (srec v)
     | Q.Prom v -> Q.Prom (srec v)
     | Q.Closure (c, closure_env) ->
-        let cenv = Query.Lang.bind closure_env (x,u) in
+        let cenv = MixingQuery.Lang.bind closure_env (x,u) in
         Q.Closure (c, cenv)
     | v -> v
 
@@ -228,7 +228,7 @@ let rec delateralize_step q =
     | _ -> None
 
 let rec delateralize env q =
-    let q = Query.Eval.norm env q in
+    let q = MixingQuery.Eval.norm env q in
     (* Debug.print "*** normalization step\n";
     Debug.print (Q.show q ^ "\n\n"); *)
     match delateralize_step q with
@@ -240,8 +240,8 @@ let rec delateralize env q =
 
 let eval policy env e =
     (*    Debug.print ("e: "^Ir.show_computation e); *)
-    let env = Query.Eval.env_of_value_env policy env in
-    Debug.debug_time "Query.eval" (fun () ->
+    let env = MixingQuery.Eval.env_of_value_env policy env in
+    Debug.debug_time "MixingQuery.eval" (fun () ->
         e
-        |> Query.Eval.computation env
+        |> MixingQuery.Eval.computation env
         |> delateralize env)

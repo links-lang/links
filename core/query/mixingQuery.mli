@@ -16,6 +16,8 @@ sig
       | Database  of (Value.database * string)
       | Singleton of t
       | Concat    of t list
+      | Dedup     of t
+      | Prom      of t
       | Record    of t StringMap.t
       | Project   of t * string
       | Erase     of t * StringSet.t
@@ -25,10 +27,24 @@ sig
       | Closure   of (Var.var list * Ir.computation) * env
       | Case      of t * (Var.binder * t) StringMap.t * (Var.binder * t) option
       | Primitive of string
-      | Var       of Var.var * Types.datatype StringMap.t
+      | Var       of Var.var * Types.datatype
       | Constant  of Constant.t
   and env = { venv: Value.env; qenv: t Env.Int.t; policy: QueryPolicy.t }
       [@@deriving show]
+
+  val nil : t
+
+  val value_of_expression : t -> Value.t
+
+  val bind : env -> Env.Int.name * t -> env
+
+  val flatfield : string -> string -> string
+  val flattened_pair : t -> t -> t
+  val flattened_pair_ft : t -> t -> Types.datatype stringmap
+  val recdty_field_types : Types.datatype -> Types.datatype StringMap.t
+  val table_field_types : Value.table -> Types.typ Utility.StringMap.t
+  val type_of_for_var : t -> Types.datatype
+  val eta_expand_var : Var.var * Types.datatype -> t
 
   val reduce_where_then : t * t -> t
   val reduce_and : t * t -> t
@@ -46,9 +62,6 @@ val default_of_base_type : Primitive.t -> Lang.t
 
 val value_of_expression : Lang.t -> Value.t
 
-val labels_of_field_types : 'a Utility.StringMap.t -> Utility.StringSet.t
-val record_field_types : Types.datatype -> Types.datatype StringMap.t
-val table_field_types : Value.table -> Types.typ Utility.StringMap.t
 val is_list : Lang.t -> bool
 
 val sql_of_query : Lang.t -> Sql.query
@@ -60,12 +73,16 @@ val sql_of_let_query : let_query -> Sql.query
 
 module Eval :
 sig
+  val empty_env : QueryPolicy.t -> Lang.env
   val env_of_value_env : QueryPolicy.t -> Value.env -> Lang.env
-  val bind : Lang.env -> Env.Int.name * Lang.t -> Lang.env
-  val eta_expand_var : Var.var * Types.datatype StringMap.t -> Lang.t
+  val query_bindings_of_env : Lang.env -> (Var.var * Lang.t) list
   val computation : Lang.env -> Ir.computation -> Lang.t
+  val contains_free : Var.var list -> Lang.t -> bool
+  val norm : Lang.env -> Lang.t -> Lang.t
   val eval : QueryPolicy.t -> Value.t Value.Env.t -> Ir.computation -> Lang.t
 end
+
+val likeify : Lang.t -> Lang.t option
 
 val compile_update : Value.database -> Value.env ->
   ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> Sql.query
