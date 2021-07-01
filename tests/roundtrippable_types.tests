@@ -15,14 +15,3 @@ Recursive effect
 fun w(g) { handle(g()) { case Return(()) -> () case F(h, res) -> w(h) }} w
 args : --enable-handlers
 stdout : fun : (() { |(mu a . F:(() { |a}~> ()) {}-> _::Any,wild:()|c)}-> ()) {F{_}|c}~> ()
-ignore : Not currently roundtrippable (with or without the | in { |(mu ...)} )
-
-Recursive variant
-sig f : ([|(mu a. Op:() { |a}-> ())|]) {}-> () fun f(_) { () } f
-stdout : fun : ([|(mu a . Op:() { |a}-> ())|]) {}-> ()
-
-Recursive record (simulating OOP)
-tests/roundtrip/record_oop.links
-filemode : true
-stdout : (getName = fun, name = "Object") : (name:String|(mu a . getName:((name:String|a)) -> String))
-ignore : pending parser allowing recursive variables in records (#993)
