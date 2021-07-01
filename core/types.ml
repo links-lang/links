@@ -2847,17 +2847,20 @@ module NewPrint = struct
   let is_var_anonymous : Context.t -> tid -> bool =
     fun ctxt vid ->
     let _, (_, _, count) = Vars.find_spec vid (Context.tyvar_names ctxt) in
-    count = 1 && (Context.pol_hide_fresh ctxt) && not (IntSet.mem vid (Context.bound_vars ctxt))
+    (count = 1 && (Context.pol_hide_fresh ctxt)) (* we want to hide it *)
+    && (not (Context.is_tyvar_bound vid ctxt) || not (Context.pol_quantifiers ctxt))
+  (* Var will become anonymous even if it's bound, if quantifiers are off
+     (meaning its quantifier is not displayed) *)
 
   let rec var : (tid * Kind.t) printer
     = let open StringBuffer in
       Printer (fun ctx (vid, knd) buf ->
-          print_endline ("\n     var policy:\n" ^
-                           "          kinds: " ^ ((Policy.as_old -<- Context.policy) ctx).Policy.kinds ^
-                             "\n    quantifiers:" ^ ((string_of_bool -<- Policy.quantifiers -<- Context.policy) ctx));
+          (* print_endline ("\n     var policy:\n" ^
+           *                  "          kinds: " ^ ((Policy.as_old -<- Context.policy) ctx).Policy.kinds ^
+           *                    "\n    quantifiers:" ^ ((string_of_bool -<- Policy.quantifiers -<- Context.policy) ctx)); *)
           let subknd = Kind.subkind knd in
           let var_name, (flavour, _, _) = Vars.find_spec vid (Context.tyvar_names ctx) in
-          print_endline ("       var name: " ^ var_name);
+          (* print_endline ("       var name: " ^ var_name); *)
           let in_binder = Context.is_ambient_binder ctx in
           (* Rules of printing vars:
            * 1) If var only appears once (count = 1) & (policy.hide_fresh = true) => only as don't-care "_" [is_unique]
@@ -3188,9 +3191,9 @@ module NewPrint = struct
   and forall : (Quantifier.t list * typ) printer
     = let open StringBuffer in
       Printer (fun ctx (binding, tp) buf ->
-          print_endline ("\n  forall policy:\n" ^
-                           "          kinds: " ^ ((Policy.as_old -<- Context.policy) ctx).Policy.kinds ^
-                             "\n    quantifiers:" ^ ((string_of_bool -<- Policy.quantifiers -<- Context.policy) ctx));
+          (* print_endline ("\n  forall policy:\n" ^
+           *                  "          kinds: " ^ ((Policy.as_old -<- Context.policy) ctx).Policy.kinds ^
+           *                    "\n    quantifiers:" ^ ((string_of_bool -<- Policy.quantifiers -<- Context.policy) ctx)); *)
           let binder_ctx = Context.set_ambient Context.Binder ctx in
           let inner_ctx = Context.bind_tyvars (List.map Quantifier.to_var binding) ctx in
           if Context.pol_quantifiers ctx
@@ -3248,9 +3251,9 @@ module NewPrint = struct
   and datatype : datatype printer
     = let open StringBuffer in
       Printer (fun ctx tp buf ->
-          print_endline ("\ndatatype policy:\n" ^
-                           "          kinds: " ^ ((Policy.as_old -<- Context.policy) ctx).Policy.kinds ^
-                             "\n    quantifiers: " ^ ((string_of_bool -<- Policy.quantifiers -<- Context.policy) ctx));
+          (* print_endline ("\ndatatype policy:\n" ^
+           *                  "          kinds: " ^ ((Policy.as_old -<- Context.policy) ctx).Policy.kinds ^
+           *                    "\n    quantifiers: " ^ ((string_of_bool -<- Policy.quantifiers -<- Context.policy) ctx)); *)
           let printer =
             match tp with
             (* keeping this Not_typed in case we ever need to print some intermediate steps *)
@@ -3447,7 +3450,7 @@ let print_pretty_general : pr_roundtrip:(Policy.t -> 'a -> string) ->
                            Policy.t -> 'a -> string
   = fun ~pr_roundtrip ~pr_old ~pr_none policy x ->
   match Settings.get print_types_pretty with
-  | None             -> pr_none x
+  | None           -> pr_none x
   | Some Roundtrip -> pr_roundtrip policy x
   | Some Old       -> pr_old policy x
   | Some All       -> print_pretty_all ~pr_roundtrip ~pr_old policy x
