@@ -714,32 +714,6 @@ struct
               Lwt.return (Some (Value.unbox_int limit, Value.unbox_int offset))
        end >>= fun range ->
          begin match policy with
-           | QueryPolicy.Flat ->
-               begin
-                 let evaluator e =
-                   if Settings.get Database.mixing_norm then
-                     EvalMixingQuery.compile_mixing ~delateralize:policy env e
-                   else EvalQuery.compile env (range, e)
-                 in
-                 match evaluator e with
-                   | None -> computation env cont e
-                   | Some (db, q, t) ->
-                       let q = db#string_of_query ~range q in
-                       let (fieldMap, _, _) =
-                         let r, _ = Types.unwrap_row (TypeUtils.extract_row t) in
-                         TypeUtils.extract_row_parts r in
-                       let fields =
-                         StringMap.fold
-                           (fun name t fields ->
-                             let open Types in
-                             match t with
-                               | Present t -> (name, t)::fields
-                               | _ -> assert false)
-                           fieldMap
-                           []
-                       in
-                       apply_cont cont env (Database.execute_select fields q db)
-               end
            | QueryPolicy.Nested ->
                begin
                  if range != None then eval_error "Range is not supported for nested queries";
@@ -771,9 +745,13 @@ struct
                        raise (Errors.runtime_error error_msg)
                end
            | _ ->
+               let evaluator e =
+                 match policy with
+                 | QueryPolicy.Flat when not (Settings.get Database.mixing_norm) -> EvalQuery.compile env (range, e)
+                 | _ -> EvalMixingQuery.compile_mixing ~delateralize:policy env (range, e)
+               in
                begin
-                  if range != None then eval_error "Range is not supported for heterogeneous queries";
-                  match EvalMixingQuery.compile_mixing ~delateralize:policy env e with
+                  match evaluator e with
                   | None -> computation env cont e
                   | Some (db, q, t) ->
                       let q = db#string_of_query ~range q in

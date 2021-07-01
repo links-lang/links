@@ -12,6 +12,13 @@ module E = MixingQuery.Eval
 module C = Constant
 module S = Sql
 
+
+exception EvalMixingUnimplemented of string
+
+let error msg : 'a = raise (EvalMixingUnimplemented msg)
+let eval_error fmt : 'r =
+    Printf.ksprintf error fmt
+
 let mapstrcat sep f l = l |> List.map f |> String.concat sep
 
 let dummy_sql_empty_query =
@@ -89,12 +96,12 @@ and base_exp = function
     Debug.print ("Not a base expression: " ^ (Q.show e) ^ "\n");
     failwith "base_exp"
 
-let compile_mixing : delateralize:QueryPolicy.t -> Value.env -> Ir.computation -> (Value.database * Sql.query * Types.datatype) option =
-  fun ~delateralize env e ->
-    Debug.print "using compile_mixing";
+let compile_mixing : delateralize:QueryPolicy.t -> Value.env -> (int * int) option * Ir.computation -> (Value.database * Sql.query * Types.datatype) option =
+  fun ~delateralize env (range, e) ->
     (* Debug.print ("env: "^Value.show_env env);
     Debug.print ("e: "^Ir.show_computation e); *)
     (* XXX: I don't see how the evaluation here is different depending on the policy *)
+    if range != None then eval_error "Range is not (yet) supported by the new mixing normaliser";
     let evaluator =
         (* FIXME *)
         if delateralize = QueryPolicy.Delat
