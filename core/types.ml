@@ -2848,19 +2848,13 @@ module NewPrint = struct
     fun ctxt vid ->
     let _, (_, _, count) = Vars.find_spec vid (Context.tyvar_names ctxt) in
     (count = 1 && (Context.pol_hide_fresh ctxt)) (* we want to hide it *)
-    && (not (Context.is_tyvar_bound vid ctxt) || not (Context.pol_quantifiers ctxt))
-  (* Var will become anonymous even if it's bound, if quantifiers are off
-     (meaning its quantifier is not displayed) *)
+    && not (Context.is_tyvar_bound vid ctxt) (* and it is not bound (if it is bound, it has to show up *)
 
   let rec var : (tid * Kind.t) printer
     = let open StringBuffer in
       Printer (fun ctx (vid, knd) buf ->
-          (* print_endline ("\n     var policy:\n" ^
-           *                  "          kinds: " ^ ((Policy.as_old -<- Context.policy) ctx).Policy.kinds ^
-           *                    "\n    quantifiers:" ^ ((string_of_bool -<- Policy.quantifiers -<- Context.policy) ctx)); *)
           let subknd = Kind.subkind knd in
           let var_name, (flavour, _, _) = Vars.find_spec vid (Context.tyvar_names ctx) in
-          (* print_endline ("       var name: " ^ var_name); *)
           let in_binder = Context.is_ambient_binder ctx in
           (* Rules of printing vars:
            * 1) If var only appears once (count = 1) & (policy.hide_fresh = true) => only as don't-care "_" [is_unique]
@@ -3191,18 +3185,18 @@ module NewPrint = struct
   and forall : (Quantifier.t list * typ) printer
     = let open StringBuffer in
       Printer (fun ctx (binding, tp) buf ->
-          (* print_endline ("\n  forall policy:\n" ^
-           *                  "          kinds: " ^ ((Policy.as_old -<- Context.policy) ctx).Policy.kinds ^
-           *                    "\n    quantifiers:" ^ ((string_of_bool -<- Policy.quantifiers -<- Context.policy) ctx)); *)
-          let binder_ctx = Context.set_ambient Context.Binder ctx in
-          let inner_ctx = Context.bind_tyvars (List.map Quantifier.to_var binding) ctx in
-          if Context.pol_quantifiers ctx
+          if Context.pol_quantifiers ctx || (not (Context.is_ambient_toplevel ctx)) (* only toplevel quantifiers hidden *)
           then begin
+              let binder_ctx = Context.set_ambient Context.Binder ctx in
+              let inner_ctx = Context.bind_tyvars (List.map Quantifier.to_var binding) ctx in
               write buf "forall ";
               concat ~sep:"," quantifier binding binder_ctx buf;
               write buf ".";
-            end;
-          apply datatype inner_ctx tp buf
+              apply datatype inner_ctx tp buf
+            end
+          else
+            (* context is just passed through - no variables get bound here *)
+            apply datatype ctx tp buf
         )
 
   (* code for printing relational lenses taken verbatim from the original printer *)
@@ -3251,9 +3245,6 @@ module NewPrint = struct
   and datatype : datatype printer
     = let open StringBuffer in
       Printer (fun ctx tp buf ->
-          (* print_endline ("\ndatatype policy:\n" ^
-           *                  "          kinds: " ^ ((Policy.as_old -<- Context.policy) ctx).Policy.kinds ^
-           *                    "\n    quantifiers: " ^ ((string_of_bool -<- Policy.quantifiers -<- Context.policy) ctx)); *)
           let printer =
             match tp with
             (* keeping this Not_typed in case we ever need to print some intermediate steps *)
