@@ -2041,32 +2041,17 @@ module Policy = struct
     = fun v p -> { p with kinds = v }
   let set_effect_sugar : bool -> t -> t
     = fun v p -> { p with effect_sugar = v }
-
-  (* TODO these are for the old printer, so that it doesn't have to be changed much *)
-  type old_t = { quantifiers  : bool
-               ; flavours     : bool
-               ; hide_fresh   : bool
-               ; kinds        : string
-               ; effect_sugar : bool }
-
-  let as_old : t -> old_t
-    = fun { quantifiers; flavours; hide_fresh; kinds; effect_sugar } ->
-    let kinds = match kinds with
-      | Default -> "default"
-      | Full    -> "full"
-      | Hide    -> "hide"
-    in
-    { quantifiers; flavours; hide_fresh; kinds; effect_sugar }
-
-  let old_default_policy : unit -> old_t
-    = as_old -<- default_policy
 end
 
 module Print =
 struct
   module BS = Basicsettings
 
-  type policy = Policy.old_t
+  type policy = { quantifiers  : bool
+                ; flavours     : bool
+                ; hide_fresh   : bool
+                ; kinds        : string
+                ; effect_sugar : bool }
   type names  = (int, string * Vars.spec) Hashtbl.t
   type context = { bound_vars: TypeVarSet.t; shared_effect: int option }
 
@@ -2095,7 +2080,7 @@ struct
        end
     | _ -> false
 
-  let context_with_shared_effect (policy : policy) visit =
+  let context_with_shared_effect policy visit =
     let find_row_var r =
       let r =
         match fst (unwrap_row r) with
@@ -2136,7 +2121,7 @@ struct
           | Some _ -> self, typ
       end
     in
-    if policy.Policy.effect_sugar then
+    if policy.effect_sugar then
       let (obj, _) = visit obj in
       { empty_context with shared_effect = obj#var }
     else
@@ -2147,9 +2132,9 @@ struct
                         Restriction.to_string r ^ ")"
     in
     fun (policy, _vars) ->
-    if policy.Policy.kinds = "full"
+    if policy.kinds = "full"
     then full
-    else if policy.Policy.kinds = "hide"
+    else if policy.kinds = "hide"
     then function (_, _) -> ""
     else function
       | (Linearity.Unl, Restriction.Any)     -> ""
@@ -2163,9 +2148,9 @@ struct
     let full (policy, _vars) (k, sk) =
       PrimaryKind.to_string k ^ subkind (policy, _vars) sk in
     fun (policy, _vars) (k, sk) ->
-    if policy.Policy.kinds = "full" then
+    if policy.kinds = "full" then
       full (policy, _vars) (k, sk)
-    else if policy.Policy.kinds = "hide" then
+    else if policy.kinds = "hide" then
       PrimaryKind.to_string k
     else
       match (k, sk) with
@@ -2175,7 +2160,7 @@ struct
       | PrimaryKind.Type, (Linearity.Any, Restriction.Session) ->
          Restriction.to_string res_session
       | PrimaryKind.Type, sk ->
-         subkind ({policy with Policy.kinds="full"}, _vars) sk
+         subkind ({policy with kinds="full"}, _vars) sk
       | PrimaryKind.Row, (Linearity.Unl, Restriction.Any) ->
          PrimaryKind.to_string pk_row
       | PrimaryKind.Row, (Linearity.Unl, Restriction.Effect) ->
@@ -2183,7 +2168,7 @@ struct
       | PrimaryKind.Presence, (Linearity.Unl, Restriction.Any) ->
          PrimaryKind.to_string pk_presence
       | PrimaryKind.Row, _ | PrimaryKind.Presence, _ ->
-         full ({policy with Policy.kinds="full"}, _vars) (k, sk)
+         full ({policy with kinds="full"}, _vars) (k, sk)
 
   let quantifier : (policy * names) -> Quantifier.t -> string =
     fun (policy, vars) q ->
@@ -2194,8 +2179,8 @@ struct
      pass name of type variable to n2 so that it can construct a name. *)
   let name_of_type_plain { bound_vars; _ } (policy, vars : policy * names) var n1 n2 =
     let name, (flavour, _, count) = Vars.find_spec var vars in
-    if policy.Policy.hide_fresh && count = 1
-       && ((flavour = `Flexible && not (policy.Policy.flavours)) || not (IntSet.mem var bound_vars))
+    if policy.hide_fresh && count = 1
+       && ((flavour = `Flexible && not (policy.flavours)) || not (IntSet.mem var bound_vars))
     then n1
     else n2 name
 
@@ -2250,7 +2235,7 @@ struct
             (flex_name_hidden, flex_name)
             (name_hidden, name) =
         match Unionfind.find to_match with
-        | Var (var, k, `Flexible) when policy.Policy.flavours ->
+        | Var (var, k, `Flexible) when policy.flavours ->
            name_of_eff_var ~allows_shared var k flex_name_hidden flex_name
         | Var (var, k, _) ->
            name_of_eff_var ~allows_shared var k name_hidden name
@@ -2352,7 +2337,7 @@ struct
             begin
               match Unionfind.find point with
               | Closed -> ""
-              | Var (var, k, `Flexible) when policy.Policy.flavours ->
+              | Var (var, k, `Flexible) when policy.flavours ->
                  (name_of_type var (Kind.subkind k) "%" (fun name -> "%" ^ name))
               | Var (var, k, _) ->
                  (name_of_type var (Kind.subkind k) "_" (fun name -> name))
@@ -2429,7 +2414,7 @@ struct
                   TypeVarSet.add (Quantifier.to_var tyvar) bound_vars)
                 bound_vars tyvars
             in
-            if not (policy.Policy.flavours) then
+            if not (policy.flavours) then
               match tyvars with
               | [] -> datatype { context with bound_vars } p body
               | _ ->
@@ -2461,10 +2446,10 @@ struct
           begin
             let name_of_type var n1 n2 =
               let name, (_, _, count) = Vars.find_spec var vars in
-              if policy.Policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then n1
+              if policy.hide_fresh && count = 1 && not (IntSet.mem var bound_vars) then n1
               else (n2 name) in
             match Unionfind.find point with
-              | Var (var, _, `Flexible) when policy.Policy.flavours ->
+              | Var (var, _, `Flexible) when policy.flavours ->
                  name_of_type var "{%}" (fun name -> "{%" ^ name ^ "}")
               | Var (var, _, _) ->
                  name_of_type var "{_}" (fun name -> "{" ^ name ^ "}")
@@ -2503,7 +2488,7 @@ struct
   and row_var name_of_type sep ({ bound_vars; _ } as context) ((policy, vars) as p) rv =
     match Unionfind.find rv with
       | Closed -> None
-      | Var (var, k, `Flexible) when policy.Policy.flavours ->
+      | Var (var, k, `Flexible) when policy.flavours ->
          Some (name_of_type context (policy, vars) var (Kind.subkind k) "%" (fun name -> "%" ^ name))
       | Var (var, k, _) ->
          Some (name_of_type context (policy, vars) var (Kind.subkind k) "_" (fun name -> name))
@@ -3447,6 +3432,15 @@ let print_pretty_general : pr_roundtrip:(Policy.t -> 'a -> string) ->
   | Some Old       -> pr_old policy x
   | Some All       -> print_pretty_all ~pr_roundtrip ~pr_old policy x
 
+let policy_as_old : Policy.t -> Print.policy
+  = fun Policy.({ quantifiers; flavours; hide_fresh; kinds; effect_sugar }) ->
+  let kinds = match kinds with
+    | Policy.Default -> "default"
+    | Policy.Full    -> "full"
+    | Policy.Hide    -> "hide"
+  in
+  Print.({ quantifiers; flavours; hide_fresh; kinds; effect_sugar })
+
 (* TODO (future) most of the functions below can be merged, as they do
    essentially the same thing, and also the functions they use for building
    tyvar names are aliases of the same things (in most cases) *)
@@ -3458,7 +3452,7 @@ let string_of_datatype : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool
       NewPrint.string_of_datatype context t
     in
     let pr_old policy t =
-      let policy = Policy.as_old policy in
+      let policy = policy_as_old policy in
       let context = Print.context_with_shared_effect policy (fun o -> o#typ t) in
       Print.datatype context (policy, Vars.tyvar_name_map) t
     in
@@ -3474,7 +3468,7 @@ let string_of_row : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool -> r
       NewPrint.string_of_row context row
     in
     let pr_old policy row =
-      let policy = Policy.as_old policy in
+      let policy = policy_as_old policy in
       let context = Print.context_with_shared_effect policy (fun o -> o#row row) in
       Print.row "," context (policy, Vars.tyvar_name_map) row
     in
@@ -3490,7 +3484,7 @@ let string_of_presence : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool
       NewPrint.string_of_presence context f
     in
     let pr_old policy f =
-      let policy = Policy.as_old policy in
+      let policy = policy_as_old policy in
       Print.presence Print.empty_context (policy, Vars.tyvar_name_map) f
     in
     let pr_none = show_field_spec -<- DecycleTypes.field_spec in
@@ -3505,7 +3499,7 @@ let string_of_type_arg : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool
       NewPrint.string_of_type_arg context arg
     in
     let pr_old policy arg =
-      let policy = Policy.as_old policy in
+      let policy = policy_as_old policy in
       let context = Print.context_with_shared_effect policy (fun o -> o#type_arg arg) in
       Print.type_arg context (policy, Vars.tyvar_name_map) arg
     in
@@ -3527,7 +3521,7 @@ let string_of_row_var : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool 
       string_or_empty st
     in
     let pr_old policy row_var =
-      let policy = Policy.as_old policy in
+      let policy = policy_as_old policy in
       let st = Print.row_var Print.name_of_type "," Print.empty_context (policy, Vars.tyvar_name_map) row_var in
       string_or_empty st
     in
@@ -3543,7 +3537,7 @@ let string_of_tycon_spec : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bo
       NewPrint.string_of_tycon_spec context tycon
     in
     let pr_old policy tycon =
-      let policy = Policy.as_old policy in
+      let policy = policy_as_old policy in
       Print.tycon_spec Print.empty_context (policy, Vars.tyvar_name_map) tycon
     in
     (* decycler taken from pp_tycon_spec *)
@@ -3563,7 +3557,7 @@ let string_of_quantifier : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bo
       NewPrint.string_of_quantifier context quant
     in
     let pr_old policy quant =
-      let policy = Policy.as_old policy in
+      let policy = policy_as_old policy in
       Print.quantifier (policy, Vars.tyvar_name_map) quant
     in
     let pr_none = Quantifier.show -<- DecycleTypes.quantifier in
