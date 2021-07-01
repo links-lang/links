@@ -22,21 +22,21 @@ stdout : fun : ([|(mu a . Op:() { |a}-> ())|]) {}-> ()
 
 Recursive row variable in variant [2]
 sig tsize : ([|( mu t. Node:([|t|],[|t|])|Leaf)|]) ~> Int fun tsize(t) { switch (t) { case Leaf -> 1 case Node(l,r) -> 1 + tsize(l) + tsize(r) } } tsize
-stdout : fun : ([|(mu a . Leaf|Node:([|a|], [|a|]))|]) ~> Int
+stdout : fun : ([|(mu b . Leaf:(),Node:([|b|], [|b|]))|]) ~> Int
 
 Recursive row variable in row type argument
 sig f : Comp ((),{ |(mu a . Bar,Foo:(() { |a}~> _) {}-> ()|_) }) fun f() { () } f
-stdout : fun : Comp ((),{ |(mu a . Bar,Foo:(() { |a}~> _) {}-> ()|_) })
+stdout : fun : Comp ((),{ |(mu c . Bar:(),Foo:(() { |c}~> _) {}-> ()|_)})
 
 Recursive row variable in effect signature [1]
 sig w : (() { |(mu a . F:(() { |a}~> ()) {}-> _|e)}~> ()) {F{_}|e}~> () fun w(g) { handle(g()) { case Return(()) -> () case F(h, res) -> w(h) }} w
-stdout : fun : (() { |(mu a . F:(() { |a}~> ()) {}-> _|c)}~> ()) {F{_}|c}~> ()
+stdout : fun : (() { |(mu d . F:(() { |d}~> ()) {}-> _|b)}~> ()) {F{_}|b}~> ()
 args : --enable-handlers
 
 Recursive row variable in effect signature [2]
 sig f : () { |(mu a. Op:(() ~e~> ()) -> ())}~> () fun f() { () } f
-stdout : fun : () { |(mu a . Op:(() ~> ()) -> ())}~> ()
+stdout : fun : () { |(mu c . Op:(() ~> ()) -> ())}~> ()
 
 Recursive type variable in codomain
 sig f : (() ~a~> mu b . [|Op:() ~a~> b|]) ~a~> c fun f(m) { switch(m()) { case Op(g) -> f(g) } } f
-stdout : fun : (() ~a~> mu b . [|Op:() ~a~> b|]) ~a~> _
+stdout : fun : (() ~a~> mu c . [|Op:() ~a~> c|]) ~a~> _
