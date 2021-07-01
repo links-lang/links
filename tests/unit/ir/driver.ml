@@ -31,14 +31,14 @@ let check_program_first_error ir_prog =
         with e -> Some e ) )
 
 let assert_failure msg ir_program =
-  with_setting Types.print_types_pretty false
+  with_setting Types.print_types_pretty None
     ( lazy
       (OUnit2.assert_failure
          (Printf.sprintf "%s\nIR program:\n%s" msg
             (Ir.show_computation ir_program))) )
 
 let assert_bool msg ir_program bool =
-  with_setting Types.print_types_pretty false
+  with_setting Types.print_types_pretty None
     ( lazy
       (OUnit2.assert_bool
          (Printf.sprintf "%s\nIR program:\n%s" msg
