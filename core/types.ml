@@ -2543,6 +2543,7 @@ module NewPrint = struct
                  | Effect
                  | Row
                  | RowVar
+                 | VariantRowVar
                  | Binder [@@deriving show]
 
     type t = { policy: Policy.t
@@ -2635,6 +2636,8 @@ module NewPrint = struct
       = fun { ambient ; _ } -> ambient = Row
     let is_ambient_rowvar : t -> bool
       = fun { ambient ; _ } -> ambient = RowVar
+    let is_ambient_variant_rowvar : t -> bool
+      = fun { ambient ; _ } -> ambient = VariantRowVar
     let is_ambient_binder : t -> bool
       = fun { ambient ; _ } -> ambient = Binder
   end
@@ -2881,7 +2884,7 @@ module NewPrint = struct
           else (* this the first occurence of this mu -> print the whole type *)
             begin
               let inner_context = Context.bind_tyvar binder ctx in
-              let want_parens = Context.is_ambient_rowvar ctx in
+              let want_parens = Context.is_ambient_rowvar ctx || Context.is_ambient_variant_rowvar ctx in
               (if want_parens then write buf "(");
               write buf "mu ";
               apply var binder_ctx (binder, knd) buf;
@@ -2950,12 +2953,6 @@ module NewPrint = struct
           | (Printer _) as pr ->
              begin
                let module C = Context in
-               (* (if List.length printers = 0 && (match C.ambient ctx with
-                *                                  | C.Effect | C.Row | C.Variant -> true
-                *                                  | _ -> false)
-                *                                   (\* starts with { or [|, want to avoid \{\| and [|| *\)
-                *  then write buf " |"
-                *  else write buf "|"); *)
                if List.length printers = 0 then
                  begin
                    match C.ambient ctx with
@@ -2964,7 +2961,7 @@ module NewPrint = struct
                    | _ -> write buf "|"
                  end
                else write buf "|";
-               let ctx = C.set_ambient C.RowVar ctx in
+               let ctx = C.set_ambient (if C.is_ambient_variant ctx then C.VariantRowVar else C.RowVar) ctx in
                (if rdual then write buf "~");
                apply pr ctx () buf
              end)
@@ -3002,7 +2999,10 @@ module NewPrint = struct
           (match (* concrete_type *) tp with
            | Absent -> write buf "-"
            | Present tp ->
-              if not (concrete_type tp = unit_type && (Context.is_ambient_variant ctx)) (* hide units in variants *)
+              if not (concrete_type tp = unit_type && (Context.is_ambient_variant ctx (* hide units in variants *)
+                                                       || Context.is_ambient_variant_rowvar ctx)) (* also hide units if this is a
+                                                                                                     recursive row variable that
+                                                                                                     is know to be a variant*)
               then begin
                   (if not (Context.is_ambient_tuple ctx) then write buf ":");
                   apply datatype (Context.set_ambient Context.Presence ctx) tp buf
