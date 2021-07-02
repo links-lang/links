@@ -2989,7 +2989,13 @@ module NewPrint = struct
             | _ -> failwith ("[*R] Invalid row:\n" ^ show_datatype @@ DecycleTypes.datatype r)
           in
           write buf before;
-          apply row_parts new_ctx (extract_row_parts r') buf;
+          (* this row will be flattened, because sometimes rows of form (e.g. in the case of
+             a record) Record(Row( | Row(l_j : P_j | rho))) appear, and unflattened they
+             would get printed as: (|l_j:P_j|rho) because a Row itself gets no parentheses
+             (it would be ambiguous which ones to get, because this can appear in any
+             row-based type, nonetheless the case of Row in a Row-based type does occur in
+             the internal representation, and so it must be allowed *)
+          apply row_parts new_ctx (extract_row_parts (flatten_row r')) buf;
           write buf after
         )
 
@@ -3072,7 +3078,7 @@ module NewPrint = struct
           in
           Printer (fun ctx r buf ->
               let is_lolli = Context.is_ambient_linfun ctx in
-              match flatten_row r with (* flattened in case there are nested *)
+              match flatten_row r with (* flattened in case there are nested variables *)
               | Row (fields, rvar, _rdual) as r' ->
                  let is_wild = is_field_present r' "wild" in
                  let number_of_visible_fields = (FieldEnv.size fields) - (if is_wild then 1 else 0) in
