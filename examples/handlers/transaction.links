@@ -20,7 +20,7 @@ fun dequeue(q) {
 }
 
 # Concurrency API
-typename Co(e::Eff) = () {Fork:(Co({ |e})) -> (), Yield |e}~> ();
+typename Co(e::Eff) = () {Fork:(Co({ |e})) -> (), Yield:() |e}~> ();
 
 sig yield : () { Yield |e}~> ()
 fun yield() { do Yield }
