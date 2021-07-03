@@ -2645,44 +2645,29 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
   end
 
   module StringBuffer = struct
-
-    let concat_strs : sep:string -> string list -> string
-      = fun ~sep lst ->
-      let _buf = Buffer.create 280 in
-      let wrt = Buffer.add_string _buf in
-      let rec loop =
-        function
-        | [] -> ()
-        | [last] -> wrt last
-        | not_last :: ((_ :: _) as rest) ->
-           begin wrt not_last;
-                 wrt sep;
-                 loop rest
-           end in
-      loop lst;
-      Buffer.contents _buf
-
     type t = Buffer.t
-
-    type 'a printer = Printer of (Context.t -> 'a -> t -> unit)
-                    | Empty
 
     let create : int -> t
       = fun size -> Buffer.create size
 
-    let read : t -> string
+    let to_string : t -> string
       = fun buf -> Buffer.contents buf
 
     let write : t -> string -> unit
       = fun buf s -> Buffer.add_string buf s
+  end
 
-    let apply : 'a printer -> Context.t -> 'a -> t -> unit
+  module Printer = struct
+    type 'a t = Printer of (Context.t -> 'a -> StringBuffer.t -> unit)
+              | Empty
+
+    let apply : 'a t -> Context.t -> 'a -> StringBuffer.t -> unit
       = fun pr ctx thing buf ->
       match pr with
       | Empty -> ()
       | Printer pr -> pr ctx thing buf
 
-    let concat : sep:string -> 'a printer -> 'a list -> Context.t -> t -> unit
+    let concat_items : sep:string -> 'a t -> 'a list -> Context.t -> StringBuffer.t -> unit
       = fun ~sep pr items ctx buf ->
       match pr with
       | Empty -> ()
@@ -2695,30 +2680,30 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
              | [last] -> apply pr ctx last buf
              | not_last :: rest ->
                 apply pr ctx not_last buf;
-                write buf sep;
+                StringBuffer.write buf sep;
                 loop sep pr rest ctx buf
            end
          in
          loop sep pr items ctx buf
 
-    let concat' : sep:string -> unit printer list -> Context.t -> t -> unit
+    let concat_printers : sep:string -> unit t list -> Context.t -> StringBuffer.t -> unit
       = fun ~sep prs ctx buf ->
       let rec loop sep ctx buf = function
         | [] -> ()
         | [pr] -> apply pr ctx () buf
         | pr :: prs ->
            apply pr ctx () buf;
-           write buf sep;
+           StringBuffer.write buf sep;
            loop sep ctx buf prs
       in
       loop sep ctx buf (List.filter (function Empty -> false | _ -> true) prs)
 
-    let seq : sep:string -> ('a printer * 'b printer) -> ('a * 'b) -> Context.t -> t -> unit
+    let seq : sep:string -> ('a t * 'b t) -> ('a * 'b) -> Context.t -> StringBuffer.t -> unit
       = fun ~sep (lp, rp) (x, y) ctx buf ->
       match lp, rp with
       | Printer _, Printer _ ->
          apply lp ctx x buf;
-         write buf sep;
+         StringBuffer.write buf sep;
          apply rp ctx y buf
       | Printer _, Empty ->
          apply lp ctx x buf
@@ -2726,43 +2711,41 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
          apply rp ctx y buf
       | Empty, Empty -> ()
 
-    let constant : string -> unit printer
+    let constant : string -> unit t
       = fun s ->
-      Printer (fun _ctx () buf -> write buf s)
+      Printer (fun _ctx () buf -> StringBuffer.write buf s)
 
-    let with_value : 'a printer -> 'a -> unit printer
+    let with_value : 'a t -> 'a -> unit t
       = fun pr v ->
       Printer (fun ctx () buf -> apply pr ctx v buf)
 
-    let with_ambient : Context.ambient -> 'a printer -> 'a -> unit printer
+    let with_ambient : Context.ambient -> 'a t -> 'a -> unit t
       = fun amb pr v ->
-      Printer (
-          fun ctx () buf ->
+      Printer (fun ctx () buf ->
           let inner_ctx = Context.set_ambient amb ctx in
           apply pr inner_ctx v buf)
 
-    let eval : 'a printer -> Context.t -> 'a -> string
+    let generate_string : 'a t -> Context.t -> 'a -> string
       = fun pr ctx v ->
-            let buf = create 280 in
-            apply pr ctx v buf;
-            read buf
-
+      let buf = StringBuffer.create 280 in
+      apply pr ctx v buf;
+      StringBuffer.to_string buf
   end
 
-  type 'a printer = 'a StringBuffer.printer
+  type 'a printer = 'a Printer.t
 
   (* For correct printing of subkinds, need to know the subkind in advance:
    * see line (1): that has to be Empty so that the :: is not printed *)
   let subkind_name : Policy.t -> Subkind.t -> unit printer
     = fun policy (lin, res) ->
-    let open StringBuffer in
+    let open Printer in
     let full_name : unit printer
       = Printer (fun _ctx () buf ->
-            write buf "(";
-            write buf (Linearity.to_string lin);
-            write buf ",";
-            write buf (Restriction.to_string res);
-            write buf ")"
+            StringBuffer.write buf "(";
+            StringBuffer.write buf (Linearity.to_string lin);
+            StringBuffer.write buf ",";
+            StringBuffer.write buf (Restriction.to_string res);
+            StringBuffer.write buf ")"
           )
     in
     match Policy.kinds policy with
@@ -2781,7 +2764,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
 
   let kind_name : Context.t -> Kind.t -> unit printer
-    = let open StringBuffer in
+    = let open Printer in
       let module P = PrimaryKind in
       let module L = Linearity in
       let module R = Restriction in
@@ -2790,8 +2773,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
       let full_name : unit printer
         = Printer (fun ctxt () buf ->
-              write buf (P.to_string primary);
-              apply (subkind_name (Context.policy ctxt) subknd) ctxt () buf)
+              StringBuffer.write buf (P.to_string primary);
+              Printer.apply (subkind_name (Context.policy ctxt) subknd) ctxt () buf)
       in
       let policy = Context.policy ctx in
       match Policy.kinds policy, knd with
@@ -2804,27 +2787,28 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
              match primary with
              | P.Type -> begin
                  match subknd with
-                 | L.Unl, R.Any -> failwith "[*K] This should not happen!"
-                 | L.Unl, R.Base -> write buf (R.to_string res_base)
-                 | L.Any, R.Session -> write buf (R.to_string res_session)
+                 | L.Unl, R.Any     -> assert false
+                 | L.Unl, R.Base    -> StringBuffer.write buf (R.to_string res_base)
+                 | L.Any, R.Session -> StringBuffer.write buf (R.to_string res_session)
                  | subknd ->
                     let policy = Policy.set_kinds Policy.Full (Context.policy ctx) in
-                    apply (subkind_name policy subknd) ctx () buf
+                    Printer.apply (subkind_name policy subknd) ctx () buf
                end
              | PrimaryKind.Row -> begin
                  match subknd with
                  | L.Unl, R.Any | L.Unl, R.Effect ->
-                    write buf (P.to_string pk_row)
+                    StringBuffer.write buf (P.to_string pk_row)
                  | _ ->
                     let ctx' = Context.(with_policy Policy.(set_kinds Full (policy ctx)) ctx) in
-                    apply full_name ctx' () buf
+                    Printer.apply full_name ctx' () buf
                end
              | PrimaryKind.Presence -> begin
                  match subknd with
-                 | L.Unl, R.Any -> write buf (P.to_string pk_presence)
+                 | L.Unl, R.Any ->
+                    StringBuffer.write buf (P.to_string pk_presence)
                  | _ ->
                     let ctx' = Context.(with_policy Policy.(set_kinds Full (policy ctx)) ctx) in
-                    apply full_name ctx' () buf
+                    Printer.apply full_name ctx' () buf
                end)
 
   let rec strip_quantifiers : typ -> typ =
@@ -2833,8 +2817,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     | t -> t
 
   let primitive : Primitive.t printer
-    = let open StringBuffer in
-      Printer (fun _ctxt prim buf -> write buf (Primitive.to_string prim))
+    = let open Printer in
+      Printer (fun _ctxt prim buf ->
+          StringBuffer.write buf (Primitive.to_string prim))
 
   let is_var_anonymous : Context.t -> tid -> bool =
     fun ctxt vid ->
@@ -2843,7 +2828,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     && not (Context.is_tyvar_bound vid ctxt) (* and it is not bound (if it is bound, it has to show up *)
 
   let rec var : (tid * Kind.t) printer
-    = let open StringBuffer in
+    = let open Printer in
       Printer (fun ctx (vid, knd) buf ->
           let subknd = Kind.subkind knd in
           let var_name, (flavour, _, _) = Vars.find_spec vid (Context.tyvar_names ctx) in
@@ -2863,53 +2848,53 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 let show_flexible = (Policy.flavours Context.(policy ctx)) && flavour = `Flexible in
                 let is_presence = (PrimaryKind.Presence = Kind.primary_kind knd) in
 
-                (if is_presence then write buf "{");
-                (if show_flexible then write buf "%");
+                (if is_presence then StringBuffer.write buf "{");
+                (if show_flexible then StringBuffer.write buf "%");
                 (match is_anonymous, show_flexible with
                  | true, true  -> ()
-                 | true, false -> write buf "_"
-                 | _, _        -> write buf var_name);
-                (if is_presence then write buf "}"))
+                 | true, false -> StringBuffer.write buf "_"
+                 | _, _        -> StringBuffer.write buf var_name);
+                (if is_presence then StringBuffer.write buf "}"))
           in
           if not in_binder
           then seq ~sep:"::" (print_var, subkind_name (Context.policy ctx) subknd) (var_name, ()) ctx buf
           else seq ~sep:"::" (print_var, kind_name ctx knd) (var_name, ()) ctx buf)
 
   and recursive : (tid * Kind.t * typ) printer
-    = let open StringBuffer in
+    = let open Printer in
       Printer (fun ctx (binder, knd, tp) buf ->
           (* assumes that the recursive variable itself shouldn't display kind information,
            * because the definition of the type itself is right there *)
           let binder_ctx = Context.with_policy Policy.(set_kinds Hide (Context.policy ctx)) ctx in
           if Context.is_tyvar_bound binder ctx
           then (* this recursive was already seen -> just need the variable name *)
-            apply var binder_ctx (binder, knd) buf
+            Printer.apply var binder_ctx (binder, knd) buf
           else (* this the first occurence of this mu -> print the whole type *)
             begin
               let inner_context = Context.bind_tyvar binder ctx in
               let want_parens = (Context.is_ambient_rowvar ctx) || (Context.is_ambient_variant_rowvar ctx) in
-              (if want_parens then write buf "(");
-              write buf "mu ";
-              apply var binder_ctx (binder, knd) buf;
-              write buf ".";
-              apply datatype inner_context tp buf;
-              (if want_parens then write buf ")");
+              (if want_parens then StringBuffer.write buf "(");
+              StringBuffer.write buf "mu ";
+              Printer.apply var binder_ctx (binder, knd) buf;
+              StringBuffer.write buf ".";
+              Printer.apply datatype inner_context tp buf;
+              (if want_parens then StringBuffer.write buf ")");
             end)
 
   and alias_recapp : (string * type_arg list * bool) printer
-    = let open StringBuffer in
+    = let open Printer in
       Printer (fun ctx (name, arg_types, is_dual) buf ->
-          (if is_dual then write buf "~");
-          write buf (Module_hacks.Name.prettify name);
+          (if is_dual then StringBuffer.write buf "~");
+          StringBuffer.write buf (Module_hacks.Name.prettify name);
           (match arg_types with
            | [] -> ()
-           | _ -> write buf " (";
-                  concat ~sep:"," type_arg arg_types ctx buf;
-                  write buf ")"))
+           | _ -> StringBuffer.write buf " (";
+                  Printer.concat_items ~sep:"," type_arg arg_types ctx buf;
+                  StringBuffer.write buf ")"))
   (* TODO Ignoring shared effects for now (original printer does special stuff for them in aliases/recapp) *)
 
   and row_parts : row' printer
-    = let open StringBuffer in
+    = let open Printer in
       Printer (fun ctx (rfields, rvar, rdual) buf ->
           let hide_primitive_labels = Context.is_ambient_effect ctx in
 
@@ -2923,20 +2908,20 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               if lbl = wild && is_present pre && hide_primitive_labels
               then printers (* do not print wild:() *)
               else if lbl = hear && is_present pre && hide_primitive_labels
-              then (Printer (fun ctx () buf -> apply presence ctx pre buf)) :: printers
+              then (Printer (fun ctx () buf -> Printer.apply presence ctx pre buf)) :: printers
               else if Context.is_ambient_tuple ctx
               then with_value presence pre :: printers
               else (Printer (fun ctx () buf ->
-                        write buf lbl;
+                        StringBuffer.write buf lbl;
                         let pre = match pre with
                           | Meta point -> Unionfind.find point
                           | _ -> pre
                         in
                         match pre with
                         | Var (v,knd,_) when Kind.primary_kind knd = PrimaryKind.Presence ->
-                           apply var ctx (v, knd) buf
+                           Printer.apply var ctx (v, knd) buf
                         | Present _ | Absent ->
-                           apply presence ctx pre buf
+                           Printer.apply presence ctx pre buf
                         | t -> raise (internal_error ("Not present: " ^ show_datatype (DecycleTypes.datatype t)))
                    )) :: printers
           in
@@ -2949,7 +2934,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | Tuple -> ", " (* tuples require a space as well *)
             | _ -> ","
           in
-          concat' ~sep printers ctx buf;
+          Printer.concat_printers ~sep printers ctx buf;
           match meta rvar with
           | Empty -> ()
           | (Printer _) as pr ->
@@ -2957,21 +2942,21 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                if List.length printers = 0 then
                  begin
                    match Context.ambient ctx with
-                   | Context.Effect | Context.Row -> write buf " |"
+                   | Context.Effect | Context.Row -> StringBuffer.write buf " |"
                    | Context.Variant -> () (* variants don't get pipe *)
-                   | _ -> write buf "|"
+                   | _ -> StringBuffer.write buf "|"
                  end
-               else write buf "|";
+               else StringBuffer.write buf "|";
                let ctx = Context.set_ambient (if Context.is_ambient_variant ctx
                                               then Context.RowVar `Variant
                                               else Context.RowVar `NonVariant) ctx
                in
-               (if rdual then write buf "~");
-               apply pr ctx () buf
+               (if rdual then StringBuffer.write buf "~");
+               Printer.apply pr ctx () buf
              end)
 
   and row : typ printer
-    = let open StringBuffer in
+    = let open Printer in
       Printer (fun ctx r buf ->
           let r', before, after, new_ctx =
             let module C = Context in
@@ -2991,23 +2976,23 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | Row _ as r -> r,        "",    "",    ctx
             | _ -> failwith ("[*R] Invalid row:\n" ^ show_datatype @@ DecycleTypes.datatype r)
           in
-          write buf before;
+          StringBuffer.write buf before;
           (* this row will be flattened, because sometimes rows of form (e.g. in the case of
              a record) Record(Row( | Row(l_j : P_j | rho))) appear, and unflattened they
              would get printed as: (|l_j:P_j|rho) because a Row itself gets no parentheses
              (it would be ambiguous which ones to get, because this can appear in any
              row-based type, nonetheless the case of Row in a Row-based type does occur in
              the internal representation, and so it must be allowed *)
-          apply row_parts new_ctx (extract_row_parts (flatten_row r')) buf;
-          write buf after
+          Printer.apply row_parts new_ctx (extract_row_parts (flatten_row r')) buf;
+          StringBuffer.write buf after
         )
 
   (* returns the presence, possibly without the colon *)
   and presence : typ printer
-    = let open StringBuffer in
+    = let open Printer in
       Printer (fun ctx tp buf ->
           (match tp with
-           | Absent -> write buf "-"
+           | Absent -> StringBuffer.write buf "-"
            | Present tp ->
               (* Nullary variant payloads do not get printed. *)
               let is_nullary = concrete_type tp = unit_type in
@@ -3016,13 +3001,13 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 || Context.is_ambient_variant_rowvar ctx (* recursive row variable in a variant row. *)
               in
               if not (is_nullary && inside_variant)
-              then ((if not (Context.is_ambient_tuple ctx) then write buf ":");
-                    apply datatype (Context.set_ambient Context.Presence ctx) tp buf)
-           | Meta pt -> apply (meta pt) (Context.set_ambient Context.Presence ctx) () buf
+              then ((if not (Context.is_ambient_tuple ctx) then StringBuffer.write buf ":");
+                    Printer.apply datatype (Context.set_ambient Context.Presence ctx) tp buf)
+           | Meta pt -> Printer.apply (meta pt) (Context.set_ambient Context.Presence ctx) () buf
            | _ -> raise tag_expectation_mismatch))
 
   and meta : typ point -> unit printer
-    = let open StringBuffer in
+    = let open Printer in
       fun pt ->
       match Unionfind.find pt with
       | Closed -> (* nothing happens; TODO (future) but maybe something should *sometimes* happen *)
@@ -3032,41 +3017,41 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       | t -> with_value datatype t
 
   and type_arg : type_arg printer
-    = let open StringBuffer in
+    = let open Printer in
       Printer (fun ctx (pknd, r) buf ->
           let module P = PrimaryKind in
           match pknd with
-          | P.Type -> apply datatype ctx r buf
+          | P.Type -> Printer.apply datatype ctx r buf
           | P.Row -> begin
-              write buf "{";
+              StringBuffer.write buf "{";
               let ctx = Context.set_ambient Context.Row ctx in
               (match r with
-               | Row rp -> apply row_parts ctx rp buf
-               | Meta pt -> apply (meta pt) ctx () buf
+               | Row rp  -> Printer.apply row_parts ctx rp buf
+               | Meta pt -> Printer.apply (meta pt) ctx () buf
                | _ -> raise tag_expectation_mismatch);
-              write buf "}";
+              StringBuffer.write buf "}";
             end
           | P.Presence -> raise (internal_error "missing surface syntax for type argument of kind presence"))
 
   and application : (Abstype.t * type_arg list) printer
-    = let open StringBuffer in
+    = let open Printer in
       Printer (fun ctx p buf ->
           match p with
           | (abstp, [el]) when Abstype.equal abstp list ->
-             write buf "[";
-             apply type_arg ctx el buf;
-             write buf "]"
+             StringBuffer.write buf "[";
+             Printer.apply type_arg ctx el buf;
+             StringBuffer.write buf "]"
           | (abstp, []) ->
-             write buf (Abstype.name abstp)
+             StringBuffer.write buf (Abstype.name abstp)
           | (abstp, args) ->
-             write buf (Abstype.name abstp);
-             write buf " (";
-             concat ~sep:"," type_arg args ctx buf;
-             write buf ")"
+             StringBuffer.write buf (Abstype.name abstp);
+             StringBuffer.write buf " (";
+             Printer.concat_items ~sep:"," type_arg args ctx buf;
+             StringBuffer.write buf ")"
         )
 
   and func : (typ * row * typ) printer
-    = let open StringBuffer in
+    = let open Printer in
       let func_arrow : row printer
         = let is_field_present fields lbl =
             (* The row will NOT be unrolled, which means only the immediately visible wild will have
@@ -3091,7 +3076,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               in
               if visible_fields = 0
               then if not row_var_exists
-                   then write buf "{}" (* empty closed row *)
+                   then StringBuffer.write buf "{}" (* empty closed row *)
                    else (* empty open row use the abbreviated notation
                            -a- or ~a~ unless it's anonymous in which
                            case we skip it entirely *)
@@ -3101,42 +3086,43 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                         then () (* skip printing it entirely *)
                         else begin
                             (if is_wild
-                             then write buf "~"
-                             else write buf "-");
-                            let ctx = Context.(set_ambient Effect
-                                                 (with_policy Policy.(set_kinds Hide (policy ctx)) ctx))
+                             then StringBuffer.write buf "~"
+                             else StringBuffer.write buf "-");
+                            let ctx =
+                              Context.(set_ambient Effect
+                                         (with_policy Policy.(set_kinds Hide (policy ctx)) ctx))
                             in
-                            apply var ctx (vid, knd) buf
+                            Printer.apply var ctx (vid, knd) buf
                           end
-                     | _t ->
+                     | _ ->
                         begin (* special case, construct row syntax, but only call the inside *)
-                          write buf "{";
-                          apply row_parts (Context.set_ambient Context.Effect ctx) r' buf;
-                          write buf "}"
+                          StringBuffer.write buf "{";
+                          Printer.apply row_parts (Context.set_ambient Context.Effect ctx) r' buf;
+                          StringBuffer.write buf "}"
                         end
               else begin (* need the full effect row, but only construct the inside of it *)
-                write buf "{";
-                apply row_parts (Context.set_ambient Context.Effect ctx) r' buf;
-                write buf "}";
+                StringBuffer.write buf "{";
+                Printer.apply row_parts (Context.set_ambient Context.Effect ctx) r' buf;
+                StringBuffer.write buf "}";
                 end;
-              (if is_wild then write buf "~" else write buf "-");
+              (if is_wild then StringBuffer.write buf "~" else StringBuffer.write buf "-");
               (* add the arrowhead/lollipop *)
-              (if is_lolli then write buf "@" else write buf ">")
+              (if is_lolli then StringBuffer.write buf "@" else StringBuffer.write buf ">")
             )
       in
 
       (* func starts here *)
       Printer (fun ctx (domain, effects, range) buf ->
           (* build up the function type string: domain, arrow with effects, range *)
-          apply row (Context.set_ambient Context.Tuple ctx) domain buf; (* function domain is always a Record *)
-          write buf " ";
-          apply func_arrow ctx effects buf;
-          write buf " ";
-          apply datatype ctx range buf;
+          Printer.apply row (Context.set_ambient Context.Tuple ctx) domain buf; (* function domain is always a Record *)
+          StringBuffer.write buf " ";
+          Printer.apply func_arrow ctx effects buf;
+          StringBuffer.write buf " ";
+          Printer.apply datatype ctx range buf;
         )
 
   and session_io : typ printer
-    = let open StringBuffer in
+    = let open Printer in
       Printer (fun ctx tp buf ->
           let t_char = match tp with
             | Input _ -> "?"
@@ -3146,49 +3132,49 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           in
           match tp with
           | Input (tp, session_tp) | Output (tp, session_tp) ->
-             write buf t_char;
-             write buf "(";
-             apply datatype ctx tp buf;
-             write buf ").";
-             apply datatype ctx session_tp buf
+             StringBuffer.write buf t_char;
+             StringBuffer.write buf "(";
+             Printer.apply datatype ctx tp buf;
+             StringBuffer.write buf ").";
+             Printer.apply datatype ctx session_tp buf
           | _ -> () (* same as above, no error here because it would have already failed before *)
         )
 
   and session_dual : typ printer
-    = let open StringBuffer in
+    = let open Printer in
       Printer (fun ctx tp buf ->
           let dtype = with_value datatype tp in
-          write buf "~";
+          StringBuffer.write buf "~";
           match tp with
           | Input _ | Output _ | Select _ | Choice _ ->
-             write buf "(";
-             apply dtype ctx () buf;
-             write buf ")"
-          | _ -> apply dtype ctx () buf
+             StringBuffer.write buf "(";
+             Printer.apply dtype ctx () buf;
+             StringBuffer.write buf ")"
+          | _ -> Printer.apply dtype ctx () buf
         )
 
   and quantifier : Quantifier.t printer
-    = let open StringBuffer in
+    = let open Printer in
       Printer (fun ctx qr buf ->
           let vid = Quantifier.to_var qr in
           let knd = Quantifier.to_kind qr in
-          apply var ctx (vid, knd) buf)
+          Printer.apply var ctx (vid, knd) buf)
 
   and forall : (Quantifier.t list * typ) printer
-    = let open StringBuffer in
+    = let open Printer in
       Printer (fun ctx (binding, tp) buf ->
           (* toplevel quantifiers were already stripped by the calling string_of_datatype (provided we started there; if we
              started in another string_of_X, then it's not toplevel anyway and quantifiers should stay) *)
           let binder_ctx = Context.set_ambient Context.Binder ctx in
           let inner_ctx = Context.bind_tyvars (List.map Quantifier.to_var binding) ctx in
-          write buf "forall ";
-          concat ~sep:"," quantifier binding binder_ctx buf;
-          write buf ".";
-          apply datatype inner_ctx tp buf)
+          StringBuffer.write buf "forall ";
+          Printer.concat_items ~sep:"," quantifier binding binder_ctx buf;
+          StringBuffer.write buf ".";
+          Printer.apply datatype inner_ctx tp buf)
 
   (* code for printing relational lenses taken verbatim from the original printer *)
   and lens : Lens.Type.t printer
-    = let open StringBuffer in
+    = let open Printer in
       Printer (fun _ctx _typ buf ->
           let open Lens in
           let sort = Type.sort _typ in
@@ -3219,18 +3205,18 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 Lens.Database.fmt_phrase_dummy predicate
                 Lens.Fun_dep.Set.pp_pretty fds
           in
-          write buf ret)
+          StringBuffer.write buf ret)
 
   and table : (typ * typ * typ) printer
-    = let open StringBuffer in
+    = let open Printer in
       Printer (fun ctx (r, w, n) buf ->
           let ctx = Context.toplevel ctx in
-          write buf "TableHandle(";
-          concat ~sep:"," datatype [ r ;  w ;  n ] ctx buf;
-          write buf ")")
+          StringBuffer.write buf "TableHandle(";
+          Printer.concat_items ~sep:"," datatype [ r ;  w ;  n ] ctx buf;
+          StringBuffer.write buf ")")
 
   and datatype : datatype printer
-    = let open StringBuffer in
+    = let open Printer in
       Printer (fun ctx tp buf ->
           let printer =
             match tp with
@@ -3264,56 +3250,55 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
             | _ -> raise (internal_error ("Printer for this type not implemented:\n" ^ show_datatype @@ DecycleTypes.datatype tp))
           in
-          apply printer ctx () buf)
+          Printer.apply printer ctx () buf)
 
-  (* external interface functions *)
-  and string_of_datatype : Policy.t -> names -> datatype -> string
+  let string_of_datatype : Policy.t -> names -> datatype -> string
     = fun policy' names ty ->
     let ctxt = Context.(with_policy policy' (with_tyvar_names names (empty ()))) in
-    StringBuffer.eval datatype ctxt ty
+    Printer.generate_string datatype ctxt ty
 
   let string_of_row_var : Policy.t -> names -> row_var -> string
     = fun policy' names rvar ->
     let ctxt = Context.(with_policy policy' (with_tyvar_names names (empty ()))) in
     match meta rvar with
-    | StringBuffer.Empty -> ""
-    | (StringBuffer.Printer _) as pr -> StringBuffer.eval pr ctxt ()
+    | Printer.Empty -> ""
+    | (Printer.Printer _) as pr -> Printer.generate_string pr ctxt ()
 
   let string_of_type_arg : Policy.t -> names -> type_arg -> string
     = fun policy' names tyarg ->
     let ctxt = Context.(with_policy policy' (with_tyvar_names names (empty ()))) in
-    StringBuffer.eval type_arg ctxt tyarg
+    Printer.generate_string type_arg ctxt tyarg
 
   let string_of_quantifier : Policy.t -> names -> Quantifier.t -> string
     = fun policy' names q ->
     let ctxt = Context.(with_policy policy' (with_tyvar_names names (empty ()))) in
-    StringBuffer.eval quantifier ctxt q
+    Printer.generate_string quantifier ctxt q
 
   let tycon_spec : tycon_spec printer
-    = let open StringBuffer in
+    = let open Printer in
       Printer (fun ctx v buf ->
           match v with
           | `Alias (tyvars, body) ->
              let ctx = Context.bind_tyvars (List.map Quantifier.to_var tyvars) ctx in
              begin
                match tyvars with
-               | [] -> apply datatype ctx body buf
-               | _ -> concat ~sep:"," quantifier tyvars ctx buf;
-                      write buf ".";
-                      apply datatype ctx body buf
+               | [] -> Printer.apply datatype ctx body buf
+               | _ -> Printer.concat_items ~sep:"," quantifier tyvars ctx buf;
+                      StringBuffer.write buf ".";
+                      Printer.apply datatype ctx body buf
              end
-          | `Mutual _ -> write buf "mutual"
-          | `Abstract _ -> write buf "abstract")
+          | `Mutual _ -> StringBuffer.write buf "mutual"
+          | `Abstract _ -> StringBuffer.write buf "abstract")
 
   let string_of_tycon_spec : Policy.t -> names -> tycon_spec -> string
     = fun policy' names tycon ->
     let ctxt = Context.(with_policy policy' (with_tyvar_names names (empty ()))) in
-    StringBuffer.eval tycon_spec ctxt tycon
+    Printer.generate_string tycon_spec ctxt tycon
 
   let string_of_presence : Policy.t -> names -> field_spec -> string
     = fun policy' names pre ->
     let ctxt = Context.(with_policy policy' (with_tyvar_names names (empty ()))) in
-    StringBuffer.eval presence ctxt pre
+    Printer.generate_string presence ctxt pre
 end
 
 module DerivedPrinter : PRETTY_PRINTER = struct
