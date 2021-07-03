@@ -40,3 +40,8 @@ stdout : fun : () { |(mu a.Op:(() ~> ()) -> ())}~> ()
 Recursive type variable in codomain
 sig f : (() ~a~> mu b . [|Op:() ~a~> b|]) ~a~> c fun f(m) { switch(m()) { case Op(g) -> f(g) } } f
 stdout : fun : (() ~a~> mu b.[|Op:() ~a~> b|]) ~a~> _
+
+Mono restriction
+id : (a::(Any,Mono)) -> a::(Any,Mono)
+stdout : fun : (a::(Any,Mono)) -> a::(Any,Mono)
+args : --set=show_kinds=full

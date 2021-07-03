@@ -110,7 +110,7 @@ def evaluate(name, code, config_file, stdout='', stderr='', exit = '0', env = No
                 failures += 1
                 return
 
-        arg_array += ["--config=" + config_file]
+        arg_array = ["--config=" + config_file] + arg_array
 
     if not filemode.startswith('true'):
         arg_array += ["-e"]
