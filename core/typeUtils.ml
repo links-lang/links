@@ -8,7 +8,7 @@ exception TypeDestructionError of string
 let error t = raise (TypeDestructionError t)
 
 
-let concrete_type = Types.typeUtils_concrete_type
+let concrete_type = Types.concrete_type'
 let extract_row = Types.extract_row
 let extract_row_parts = Types.extract_row_parts
 

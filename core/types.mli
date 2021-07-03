@@ -294,9 +294,8 @@ val close_row : row -> row
 val closed_wild_row : row
 val remove_field : ?idempotent:bool -> Label.t -> row -> row
 
-(** removing top-level meta typevars and aliases;
-    this was originally in typeUtils, hence the name *)
-val typeUtils_concrete_type : datatype -> datatype
+(** removing top-level meta typevars and aliases; imported from typeUtils.ml *)
+val concrete_type' : datatype -> datatype
 
 (** deconstructing rows *)
 val extract_row : datatype -> row
@@ -369,8 +368,7 @@ val make_wobbly_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMa
 val combine_per_kind_envs : datatype Utility.IntMap.t * row Utility.IntMap.t * field_spec Utility.IntMap.t -> type_arg Utility.IntMap.t
 
 (** pretty printing *)
-type pretty_printer_engine = Old | Roundtrip | Both
-val print_types_pretty : pretty_printer_engine option Settings.setting
+val print_types_pretty : bool Settings.setting
 
 val string_of_datatype   : ?policy:(unit -> Policy.t)
                         -> ?refresh_tyvar_names:bool -> datatype   -> string
