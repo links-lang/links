@@ -46,7 +46,7 @@ The following steps are only performed when effect_sugar is enabled:
    should be replaced by a shared row variabled later on. *)
 let shared_effect_var_name = "$eff"
 
-let has_effect_sugar () = Settings.get Types.effect_sugar
+let has_effect_sugar () = Types.Policy.effect_sugar (Types.Policy.default_policy ())
 
 let internal_error message =
   Errors.internal_error ~filename:"desugarEffects.ml" ~message

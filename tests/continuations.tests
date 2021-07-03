@@ -44,7 +44,7 @@ stdout : A : [|A|_::Any|]
 
 Escape body [2]
 escape k in A(k)
-stdout : A(Continuationpure_continuation) : [|A:(mu a . [|A:(a) ~b~> c::Any|d::Any|]) ~b~> c::Any|d::Any|]
+stdout : A(Continuationpure_continuation) : [|A:(mu a.[|A:(a) ~b~> c::Any|d::Any|]) ~b~> c::Any|d::Any|]
 
 Escape body [3]
 escape k in switch (A) { case A -> 0 case B -> 1 }
