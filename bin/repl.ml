@@ -194,10 +194,13 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
         ((fun context args ->
           match args with
           | [filename] ->
-             let (context', datatype, value) =
-               Driver.Phases.whole_program context filename
-             in
-             print_value datatype value; context'
+             Errors.display
+               ~default:(fun _ -> context)
+               (lazy
+                  (let (context', datatype, value) =
+                     Driver.Phases.whole_program context filename
+                   in
+                   print_value datatype value; context'))
           | _ -> prerr_endline "syntax: @load \"filename\""; context),
          "load in a Links source file, extending the current environment");
 
@@ -255,6 +258,7 @@ let execute_directive context (name, args) =
       let f = fst (assoc name (Lazy.force directives)) in
       f context args
     with NotFound _ ->
+      Printexc.print_backtrace stdout;
       Printf.fprintf stderr "unknown directive : %s\n" name;
       context
   in
