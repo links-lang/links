@@ -2570,7 +2570,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
              ; bound_vars: TypeVarSet.t
              ; tyvar_names: names
              ; ambient: ambient
-             ; shared_effect: int option }
+             ; shared_effect: tid option }
 
     let empty () = { policy        = Policy.default_policy ()
                    ; bound_vars    = TypeVarSet.empty
@@ -2643,6 +2643,53 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     let is_ambient_binder : t -> bool
       = fun { ambient ; _ } -> ambient = Binder
   end
+
+  module SharedEffect : sig
+    val allowed_in : typ -> bool
+    val of_datatype : datatype -> tid option
+  end = struct
+
+    (* inspired by how the original code does it (see maybe_shared_effect)  *)
+    let allowed_in : typ -> bool
+      = function
+      (* functions can share effects *)
+      | Function _ | Lolli _ -> true
+      (* type aliases can actually be functions as well, though when determining if we
+         need those to share an effect variable, we only need to look at the surface
+         (here the kinds of type arguments), because if this has a shared effect, it
+         must be visible in type arguments *)
+      | Alias ((_, kinds, _, _), _)
+        | RecursiveApplication { r_quantifiers = kinds; _ } ->
+         begin
+           (* by convention, if the alias has an argument containing shared effect, it
+              must be in the last position (alternatively could be first, but not
+              anywhere else, that would not be practical) *)
+           match ListUtils.last_opt kinds with
+           (* and it must be an effect row *)
+           | Some (PrimaryKind.Row, (_, Restriction.Effect)) -> true
+           | _ -> false
+         end
+      (* and no other types may share effect variables *)
+      | _ -> false
+
+    let find : 'v -> tid option
+      = let visitor =
+          object (o : 'self_type)
+            inherit Transform.visitor as super
+
+            val var : tid option = None
+            method var = var
+          end
+        in
+        fun visit ->
+        let o = (visit visitor) in
+        o#var
+
+    let of_datatype : datatype -> tid option
+      = fun tp ->
+      find (fun o -> o#typ tp)
+  end
+
 
   module StringBuffer = struct
     type t = Buffer.t
