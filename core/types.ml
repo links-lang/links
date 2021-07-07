@@ -2827,7 +2827,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | _ -> super#typ tp
         end
 
-    let sugar_introducer shared_var
+    let sugar_introducer shared_var nonpoly
       = object (o : 'self_type)
           inherit Transform.visitor as super
 
@@ -2844,8 +2844,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
              non-polymorphic, and if it does, its polymorphic occurences will be
              removed by sugar, but if it's only ever poly, then at least one occurence
              must stay. *)
-          val seen_shared_var : bool = false
-          method see_shared = {< seen_shared_var = true >}
+          (* val seen_shared_var : bool = false *)
+          (* method see_shared = {< seen_shared_var = true >} *)
+
+          val nonpoly : bool stringmap = nonpoly
 
           method effect_row : row -> 'self_type * row
             = fun r -> (o, r)       (* TODO *)
@@ -2929,13 +2931,17 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
     let ensugar_datatype : tid -> datatype -> datatype
       = fun vid tp ->
-      let o = sugar_introducer vid in
+      let (label_gatherer, _) = (label_gatherer vid)#typ tp in
+      let nonpoly = label_gatherer#nonpoly in
+      let o = sugar_introducer vid nonpoly in
       let (_, tp) = o#typ tp in
       tp
 
     let ensugar_type_arg : tid -> type_arg -> type_arg
       = fun vid ta ->
-      let o = sugar_introducer vid in
+      let (label_gatherer, _) = (label_gatherer vid)#type_arg ta in
+      let nonpoly = label_gatherer#nonpoly in
+      let o = sugar_introducer vid nonpoly in
       let (_, ta) = o#type_arg ta in
       ta
 
