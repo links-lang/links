@@ -2643,6 +2643,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     let is_ambient_binder : t -> bool
       = fun { ambient ; _ } -> ambient = Binder
 
+    let shared_effect : t -> tid option
+      = fun { shared_effect ; _ } -> shared_effect
 
     let set_shared_effect : tid option -> t -> t
       = fun shared_effect ctx -> { ctx with shared_effect }
@@ -2729,13 +2731,23 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       = fun tp ->
       let o = new shared_finder in
       let (o, _) = o#typ tp in
-      o#var
+      let r = o#var in
+      let () = match r with
+        | Some vid -> print_endline ("Shared effect: " ^ string_of_int vid)
+        | None -> ()
+      in
+      r
 
     let of_type_arg : type_arg -> tid option
       = fun ta ->
       let o = new shared_finder in
       let (o, _) = o#type_arg ta in
-      o#var
+      let r = o#var in
+      let () = match r with
+        | Some vid -> print_endline ("Shared effect: " ^ string_of_int vid)
+        | None -> ()
+      in
+      r
 
   end
 
@@ -2978,16 +2990,38 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             end)
 
   and alias_recapp : (string * type_arg list * bool) printer
-    = let open Printer in
+    = let maybe_remove_shared_effect : Context.t -> type_arg list -> type_arg list
+        = let extract_row_var r =
+            let rv = unwrap_row r |> fst |> extract_row_parts |> snd3 in
+            match Unionfind.find rv with
+            | Var (vid, _, _) -> Some vid
+            | _ -> None
+          in
+          fun ctx arg_types ->
+          match Context.shared_effect ctx with
+          | None -> arg_types (* No shared effect var => return unchanged list *)
+          | Some vid ->
+             (* we have a shared effect var, so maybe we'll need to remove the last
+              (by convention, see SharedEffect) argument from this application *)
+             let others, last = ListUtils.unsnoc arg_types in
+             match last with
+             | (PrimaryKind.Row, (Row _ as r)) ->
+                (match extract_row_var r with
+                 | Some v when v = vid -> others (* omit the last type argument *)
+                 | _ -> arg_types (* the original list *)
+                )
+             | _ -> arg_types (* the original list *)
+      in
+      let open Printer in
       Printer (fun ctx (name, arg_types, is_dual) buf ->
           (if is_dual then StringBuffer.write buf "~");
           StringBuffer.write buf (Module_hacks.Name.prettify name);
           (match arg_types with
            | [] -> ()
            | _ -> StringBuffer.write buf " (";
-                  Printer.concat_items ~sep:"," type_arg arg_types ctx buf;
+                  let arg_types' = maybe_remove_shared_effect ctx arg_types in
+                  Printer.concat_items ~sep:"," type_arg arg_types' ctx buf;
                   StringBuffer.write buf ")"))
-  (* TODO Ignoring shared effects for now (original printer does special stuff for them in aliases/recapp) *)
 
   and row_parts : row' printer
     = let open Printer in
