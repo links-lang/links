@@ -2796,12 +2796,16 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 StringMap.update label (disj_update is_nonpoly) acc
               in
               fun r ->
-              let fields = unwrap_row r |> fst |> extract_row_parts |> fst3 in
-              (o#with_nonpoly (StringMap.fold fold_fields fields nonpoly), r)
+              let (fields, rvar, _) = unwrap_row r |> fst |> extract_row_parts in
+              let rvar = Unionfind.find rvar in
+              match rvar with
+              | Var (vid,_,_) when vid = shared_var ->
+                 (* this is a row with the shared var, collect its operations *)
+                 (o#with_nonpoly (StringMap.fold fold_fields fields nonpoly), r)
+              | _ ->
+                 (* it is something else, some other row, don't collect *)
+                 (o, r)
 
-          (* TODO *)
-          method! type_args = super#type_args
-          
           method! typ : typ -> 'self_type * typ
             = fun tp ->
             match tp with
@@ -2813,10 +2817,14 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | Alias ((_,_,type_args,_), _)
               | RecursiveApplication { r_args = type_args ; _ } when allowed_in tp ->
                begin
-                 let (o, _) = o#type_args type_args in
+                 (* we know that a last element exists (and that it is an effect row),
+                    because that is also a condition in allowed_in *)
+                 let (_,last_row) = ListUtils.last type_args in
+                 (* reusing effect_row, because this is an effect row *)
+                 let (o, _) = o#effect_row last_row in
                  (o, tp)
                end
-            | _ -> (o, tp)
+            | _ -> super#typ tp
         end
 
     let sugar_introducer shared_var
