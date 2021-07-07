@@ -2752,91 +2752,134 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       in
       r
 
-    let sugar_introducer shared_var = object (o : 'self_type)
-      inherit Transform.visitor as super
-
-      val seen_shared_var : bool = false
-      method see_shared () = {< seen_shared_var = true >}
-
-      method effect_row : row -> 'self_type * row
-        = fun r -> (o, r)       (* TODO *)
-
-      method func : datatype -> 'self_type * datatype
-        = fun tp ->
-        let fl, (dom, eff, cod) = match tp with
-          | Function f -> `Func, f
-          | Lolli f -> `Lolli, f
-          | _ -> assert false
+    (** This object will gather all operations from the type's effects.  It returns a
+       map: { label =>
+              (does the operation exists as non-polymorphic in its presence?) : bool } *)
+    let label_gatherer shared_var
+      = let disj_update : bool -> bool option -> bool option
+          = fun is_np ->
+          function
+          | None -> Some is_np
+          | Some original -> Some (original || is_np)
         in
-        let (o, dom) = o#typ dom in
-        let (o, eff) = o#effect_row eff in
-        let (o, cod) = o#typ cod in
-        let tp = match fl with
-          | `Func -> Function (dom, eff, cod)
-          | `Lolli -> Lolli (dom, eff, cod)
-        in
-        (o, tp)
+        object (o : 'self_type)
+          inherit Transform.visitor as super
 
-      (** This function will analyze an Alias and possibly omit the last type
-         argument, if that is an effect row with the shared variable *)
-      method alias : typ -> 'self_type * typ
-        = fun al ->
-        let ((name, kinds, tyargs, dual) as prop, tp) = match al with
-          | Alias a -> a
-          | _ -> assert false
-        in
-        let (o, prop) =
-          if ListUtils.empty kinds
-          then (o, prop) (* no arguments to check *)
-          else begin
-              let kinds_others, kinds_last = ListUtils.unsnoc kinds in
-              let args_others, args_last = ListUtils.unsnoc tyargs in
-              match kinds_last, args_last with
-              | ((PrimaryKind.Row, (_, Restriction.Effect)),
-                 (_ (* must be the same kind *), (Row _ as r))) ->
-                 begin
-                   match extract_row_var r with
-                   | Some v when v = shared_var ->
-                      (* found the row with a shared var, omit it *)
-                      (o#see_shared (), (name, kinds_others, args_others, dual))
-                   | _ -> (o, prop)
-                 end
-              | _ -> (o, prop)
-            end in
-        let (o, tp) = o#typ tp in
-        let al = Alias (prop, tp) in
-        (o, al)
+          val nonpoly : bool stringmap = StringMap.empty
+          method nonpoly = nonpoly
 
-      (** This function unpacks Rec. App. and lets Alias handle it *)
-      method recapp : typ -> 'self_type * typ
-        = fun ra ->
-        let { r_name; r_dual; r_quantifiers; r_args; _ } as ra =
-          match ra with
-          | RecursiveApplication ra -> ra
-          | _ -> assert false
-        in
-        let al = Alias ((r_name, r_quantifiers, r_args, r_dual),
-                        Not_typed (* this is jut a placeholder *)) in
-        let (o, al) = o#alias al in
-        let ((_, r_quantifiers, r_args, _), _) = match al with
-          | Alias al -> al
-          | _ -> assert false
-        in
-        let ra = RecursiveApplication { ra with r_quantifiers; r_args } in
-        (o, ra)
+          (** Will add the operation as possibly polymorphic (but if it already exists
+              as non-polymorphic, it's unchanged. *)
+          method add_poly label =
+            let nonpoly = StringMap.update label (disj_update false) nonpoly in
+            {< nonpoly >}
 
-      method! typ : typ -> 'self_type * typ
-        = fun tp ->
-        if seen_shared_var
-        then super#typ tp
-        else begin
-            match tp with
-            | Function _ | Lolli _ -> o#func tp
-            | Alias _ -> o#alias tp
-            | RecursiveApplication _ -> o#recapp tp
-            | _ -> super#typ tp
-          end
-    end
+          (** Will add the operation as definitely non-polymorphic (if it already
+              exists as polymorphic, it is changed to non-poly. *)
+          method add_nonpoly label =
+            let nonpoly = StringMap.update label (disj_update true) nonpoly in
+            {< nonpoly >}
+        end
+
+    let sugar_introducer shared_var
+      = object (o : 'self_type)
+          inherit Transform.visitor as super
+
+          (* TODO Actually there is a better way to do it I think.
+
+             The way sugar should work, it should eliminate all (really all? (1))
+             presence polymorhpic operations, and then if there's nothing left, remove
+             the whole effect row (in an alias, this will be an actual removal, in a
+             function the row will just become empty and closed, to that it shows as a
+             simple arrow.
+
+             (1) Actually, what if a programmer explicitly specifies some operation to
+             be polymorphic everywhere? Need to remember if a label appears also as
+             non-polymorphic, and if it does, its polymorphic occurences will be
+             removed by sugar, but if it's only ever poly, then at least one occurence
+             must stay. *)
+          val seen_shared_var : bool = false
+          method see_shared = {< seen_shared_var = true >}
+
+          method effect_row : row -> 'self_type * row
+            = fun r -> (o, r)       (* TODO *)
+
+          method func : datatype -> 'self_type * datatype
+            = fun tp ->
+            let fl, (dom, eff, cod) = match tp with
+              | Function f -> `Func, f
+              | Lolli f -> `Lolli, f
+              | _ -> assert false
+            in
+            let (o, dom) = o#typ dom in
+            let (o, eff) = o#effect_row eff in
+            let (o, cod) = o#typ cod in
+            let tp = match fl with
+              | `Func -> Function (dom, eff, cod)
+              | `Lolli -> Lolli (dom, eff, cod)
+            in
+            (o, tp)
+
+          (** This function will analyze an Alias and possibly omit the last type
+              argument, if that is an effect row with the shared variable *)
+          method alias : typ -> 'self_type * typ
+            = fun al ->
+            let ((name, kinds, tyargs, dual) as prop, tp) = match al with
+              | Alias a -> a
+              | _ -> assert false
+            in
+            let (o, prop) =
+              if ListUtils.empty kinds
+              then (o, prop) (* no arguments to check *)
+              else begin
+                  let kinds_others, kinds_last = ListUtils.unsnoc kinds in
+                  let args_others, args_last = ListUtils.unsnoc tyargs in
+                  match kinds_last, args_last with
+                  | ((PrimaryKind.Row, (_, Restriction.Effect)),
+                     (_ (* must be the same kind *), (Row _ as r))) ->
+                     begin
+                       match extract_row_var r with
+                       | Some v when v = shared_var ->
+                          (* found the row with a shared var, omit it *)
+                          (o#see_shared, (name, kinds_others, args_others, dual))
+                       | _ -> (o, prop)
+                     end
+                  | _ -> (o, prop)
+                end in
+            let (o, tp) = o#typ tp in
+            let al = Alias (prop, tp) in
+            (o, al)
+
+          (** This function unpacks Rec. App. and lets Alias handle it *)
+          method recapp : typ -> 'self_type * typ
+            = fun ra ->
+            let { r_name; r_dual; r_quantifiers; r_args; _ } as ra =
+              match ra with
+              | RecursiveApplication ra -> ra
+              | _ -> assert false
+            in
+            let al = Alias ((r_name, r_quantifiers, r_args, r_dual),
+                            Not_typed (* this is jut a placeholder *)) in
+            let (o, al) = o#alias al in
+            let ((_, r_quantifiers, r_args, _), _) = match al with
+              | Alias al -> al
+              | _ -> assert false
+            in
+            let ra = RecursiveApplication { ra with r_quantifiers; r_args } in
+            (o, ra)
+
+          method! typ : typ -> 'self_type * typ
+            = fun tp ->
+            if seen_shared_var
+            then super#typ tp
+            else begin
+                match tp with
+                | Function _ | Lolli _ -> o#func tp
+                | Alias _ -> o#alias tp
+                | RecursiveApplication _ -> o#recapp tp
+                | _ -> super#typ tp
+              end
+        end
 
     let ensugar_datatype : tid -> datatype -> datatype
       = fun vid tp ->
