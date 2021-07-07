@@ -2672,7 +2672,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       (* and no other types may share effect variables *)
       | _ -> false
 
-    let find : ('o -> 'o * 't) -> tid option
+    let find (type t) : ('o -> ('o * 't)) -> tid option
       = let visitor =
           object (o : 'self_type)
             inherit Transform.visitor as super
@@ -2726,12 +2726,19 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
         o#var
 
     let of_datatype : datatype -> tid option
-      = fun tp ->
-      find (fun o -> o#typ tp)
+      = let v (type t) : 't -> 'o -> 'o * 't
+          = fun tp o -> o#typ tp
+        in
+        fun tp ->
+        find (v tp)
 
     let of_type_arg : type_arg -> tid option
-      = fun ta ->
-      find (fun o -> o#type_arg ta)
+      = let v (type t) : 't -> 'o -> 'o * 't
+          = fun tp o -> o#type_arg tp
+        in
+        fun tp ->
+        find (v tp)
+
   end
 
 
