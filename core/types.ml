@@ -2758,7 +2758,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       method see_shared () = {< seen_shared_var = true >}
 
       method effect_row : row -> 'self_type * row
-        = fun r -> (o, r)
+        = fun r -> (o, r)       (* TODO *)
 
       method func : datatype -> 'self_type * datatype
         = fun tp ->
@@ -3486,9 +3486,13 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
   let string_of_datatype : Policy.t -> names -> datatype -> string
     = fun policy' names ty ->
     let ctxt = Context.(with_policy policy' (with_tyvar_names names (empty ()))) in
-    let ctxt = if Policy.effect_sugar policy'
-               then Context.set_shared_effect (SharedEffect.of_datatype ty) ctxt
-               else ctxt
+    let shared_effect = if Policy.effect_sugar policy'
+                        then SharedEffect.of_datatype ty
+                        else None
+    in
+    let ctxt, ty = match shared_effect with
+      | None -> ctxt, ty
+      | Some vid -> Context.set_shared_effect (Some vid) ctxt, SharedEffect.ensugar_datatype vid ty
     in
     Printer.generate_string datatype ctxt ty
 
@@ -3502,9 +3506,13 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
   let string_of_type_arg : Policy.t -> names -> type_arg -> string
     = fun policy' names tyarg ->
     let ctxt = Context.(with_policy policy' (with_tyvar_names names (empty ()))) in
-    let ctxt = if Policy.effect_sugar policy'
-               then Context.set_shared_effect (SharedEffect.of_type_arg tyarg) ctxt
-               else ctxt
+    let shared_effect = if Policy.effect_sugar policy'
+                        then SharedEffect.of_type_arg tyarg
+                        else None
+    in
+    let ctxt, tyarg = match shared_effect with
+      | None -> ctxt, tyarg
+      | Some vid -> Context.set_shared_effect (Some vid) ctxt, SharedEffect.ensugar_type_arg vid tyarg
     in
     Printer.generate_string type_arg ctxt tyarg
 
