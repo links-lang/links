@@ -2642,6 +2642,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                                | _ -> false
     let is_ambient_binder : t -> bool
       = fun { ambient ; _ } -> ambient = Binder
+
+
+    let set_shared_effect : tid option -> t -> t
+      = fun shared_effect ctx -> { ctx with shared_effect }
   end
 
   module SharedEffect : sig
@@ -3353,6 +3357,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
   let string_of_datatype : Policy.t -> names -> datatype -> string
     = fun policy' names ty ->
     let ctxt = Context.(with_policy policy' (with_tyvar_names names (empty ()))) in
+    let ctxt = if Policy.effect_sugar policy'
+               then Context.set_shared_effect (SharedEffect.of_datatype ty) ctxt
+               else ctxt
+    in
     Printer.generate_string datatype ctxt ty
 
   let string_of_row_var : Policy.t -> names -> row_var -> string
@@ -3365,6 +3373,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
   let string_of_type_arg : Policy.t -> names -> type_arg -> string
     = fun policy' names tyarg ->
     let ctxt = Context.(with_policy policy' (with_tyvar_names names (empty ()))) in
+    let ctxt = if Policy.effect_sugar policy'
+               then Context.set_shared_effect (SharedEffect.of_type_arg tyarg) ctxt
+               else ctxt
+    in
     Printer.generate_string type_arg ctxt tyarg
 
   let string_of_quantifier : Policy.t -> names -> Quantifier.t -> string
