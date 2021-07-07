@@ -2651,6 +2651,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
   module SharedEffect : sig
     val allowed_in : typ -> bool
     val of_datatype : datatype -> tid option
+    val of_type_arg : type_arg -> tid option
   end = struct
 
     (* inspired by how the original code does it (see maybe_shared_effect)  *)
@@ -2676,72 +2677,65 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       (* and no other types may share effect variables *)
       | _ -> false
 
-    let find (type t) : ('o -> ('o * 't)) -> tid option
-      = let visitor =
-          object (o : 'self_type)
-            inherit Transform.visitor as super
 
-            val var : tid option = None
-            method var = var
-            method with_var v = {< var = v >}
+    class shared_finder = object (o : 'self_type)
+      inherit Transform.visitor as super
 
-            method! typ : typ -> 'self_type * typ
-              = let extract_row_var r =
-                  let rv = unwrap_row r |> fst |> extract_row_parts |> snd3 in
-                  match Unionfind.find rv with
-                  | Var (vid, _, _) -> Some vid
-                  | _ -> None
-                in
-                fun tp ->
-                match var with
-                (* a shared var already found, stop search *)
-                | Some _ -> o, tp
-                (* no var found yet, continue *)
-                | None ->
-                   let v = match tp with
-                     (* first, check if there are more arrows to the right (curried
+      val var : tid option = None
+      method var = var
+      method with_var v = {< var = v >}
+
+      method! typ : typ -> 'self_type * typ
+        = let extract_row_var r =
+            let rv = unwrap_row r |> fst |> extract_row_parts |> snd3 in
+            match Unionfind.find rv with
+            | Var (vid, _, _) -> Some vid
+            | _ -> None
+          in
+          fun tp ->
+          match var with
+          (* a shared var already found, stop search *)
+          | Some _ -> o, tp
+          (* no var found yet, continue *)
+          | None ->
+             let v = match tp with
+               (* first, check if there are more arrows to the right (curried
                         function: if so, walk down the curries function to the rightmost
                         arrow/alias *)
-                     | Function (_,_,r) | Lolli (_,_,r) when allowed_in r ->
-                        (fst (o#typ r))#var
+               | Function (_,_,r) | Lolli (_,_,r) when allowed_in r ->
+                  (fst (o#typ r))#var
 
-                     (* this is the last arrow, extract effect row var *)
-                     | Function (_,e,_) | Lolli (_,e,_) ->
-                        (* the last arrow *)
-                        extract_row_var e
+               (* this is the last arrow, extract effect row var *)
+               | Function (_,e,_) | Lolli (_,e,_) ->
+                  (* the last arrow *)
+                  extract_row_var e
 
-                     (* alternatively, this is the rightmost alias, which can also have a
+               (* alternatively, this is the rightmost alias, which can also have a
                         shared effect - this is by convention the last argument *)
-                     | Alias ((_,_,type_args,_), _)
-                       | RecursiveApplication { r_args = type_args ; _ }
-                          when allowed_in tp ->
-                        begin
-                          match ListUtils.last type_args with
-                          | (PrimaryKind.Row, (Row _ as r)) -> extract_row_var r
-                          | _ -> None
-                        end
-                     | _ -> None
-                   in
-                   (o#with_var v, tp)
-          end
-        in
-        fun visit ->
-        let (o, _) = visit visitor in
-        o#var
+               | Alias ((_,_,type_args,_), _)
+                 | RecursiveApplication { r_args = type_args ; _ }
+                    when allowed_in tp ->
+                  begin
+                    match ListUtils.last type_args with
+                    | (PrimaryKind.Row, (Row _ as r)) -> extract_row_var r
+                    | _ -> None
+                  end
+               | _ -> None
+             in
+             (o#with_var v, tp)
+    end
 
     let of_datatype : datatype -> tid option
-      = let v (type t) : 't -> 'o -> 'o * 't
-          = fun tp o -> o#typ tp
-        in
-        fun tp ->
-        find (v tp)
+      = fun tp ->
+      let o = new shared_finder in
+      let (o, _) = o#typ tp in
+      o#var
 
     let of_type_arg : type_arg -> tid option
-      = let v (type t) : 't -> 'o -> 'o * 't
-          = fun tp o -> o#type_arg tp
-        in
-        fun tp ->
-        find (v tp)
+      = fun ta ->
+      let o = new shared_finder in
+      let (o, _) = o#type_arg ta in
+      o#var
 
   end
 
