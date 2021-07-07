@@ -242,8 +242,9 @@ struct
           if IntMap.mem var rec_vars then
             o, (IntMap.find var rec_vars)
           else
-            (* FIXME: seems unnecessary to freshen type variables here! *)
-            let var' = fresh_raw_variable () in
+            (* FIXME: seems unnecessary to freshen type variables here!
+               TODO (Samo): the comment is likely right, check this again later *)
+            let var' = (* fresh_raw_variable () *) var in
             let point' = Unionfind.fresh (Var (var', kind, `Flexible)) in
             let rec_vars' = IntMap.add var point' rec_vars in
             let o = {< rec_vars = rec_vars' >} in
