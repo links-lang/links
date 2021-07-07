@@ -2654,7 +2654,15 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     val allowed_in : typ -> bool
     val of_datatype : datatype -> tid option
     val of_type_arg : type_arg -> tid option
+    val ensugar_datatype : tid -> datatype -> datatype
+    val ensugar_type_arg : tid -> type_arg -> type_arg
   end = struct
+
+    let extract_row_var r =
+      let rv = unwrap_row r |> fst |> extract_row_parts |> snd3 in
+      match Unionfind.find rv with
+      | Var (vid, _, _) -> Some vid
+      | _ -> None
 
     (* inspired by how the original code does it (see maybe_shared_effect)  *)
     let allowed_in : typ -> bool
@@ -2688,13 +2696,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       method with_var v = {< var = v >}
 
       method! typ : typ -> 'self_type * typ
-        = let extract_row_var r =
-            let rv = unwrap_row r |> fst |> extract_row_parts |> snd3 in
-            match Unionfind.find rv with
-            | Var (vid, _, _) -> Some vid
-            | _ -> None
-          in
-          fun tp ->
+        = fun tp ->
           match var with
           (* a shared var already found, stop search *)
           | Some _ -> o, tp
@@ -2748,6 +2750,104 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
         | None -> ()
       in
       r
+
+    let sugar_introducer shared_var = object (o : 'self_type)
+      inherit Transform.visitor as super
+
+      val seen_shared_var : bool = false
+      method see_shared () = {< seen_shared_var = true >}
+
+      method effect_row : row -> 'self_type * row
+        = fun r -> (o, r)
+
+      method func : datatype -> 'self_type * datatype
+        = fun tp ->
+        let fl, (dom, eff, cod) = match tp with
+          | Function f -> `Func, f
+          | Lolli f -> `Lolli, f
+          | _ -> assert false
+        in
+        let (o, dom) = o#typ dom in
+        let (o, eff) = o#effect_row eff in
+        let (o, cod) = o#typ cod in
+        let tp = match fl with
+          | `Func -> Function (dom, eff, cod)
+          | `Lolli -> Lolli (dom, eff, cod)
+        in
+        (o, tp)
+
+      (** This function will analyze an Alias and possibly omit the last type
+         argument, if that is an effect row with the shared variable *)
+      method alias : typ -> 'self_type * typ
+        = fun al ->
+        let ((name, kinds, tyargs, dual) as prop, tp) = match al with
+          | Alias a -> a
+          | _ -> assert false
+        in
+        let (o, prop) =
+          if ListUtils.empty kinds
+          then (o, prop) (* no arguments to check *)
+          else begin
+              let kinds_others, kinds_last = ListUtils.unsnoc kinds in
+              let args_others, args_last = ListUtils.unsnoc tyargs in
+              match kinds_last, args_last with
+              | ((PrimaryKind.Row, (_, Restriction.Effect)),
+                 (_ (* must be the same kind *), (Row _ as r))) ->
+                 begin
+                   match extract_row_var r with
+                   | Some v when v = shared_var ->
+                      (* found the row with a shared var, omit it *)
+                      (o#see_shared (), (name, kinds_others, args_others, dual))
+                   | _ -> (o, prop)
+                 end
+              | _ -> (o, prop)
+            end in
+        let (o, tp) = o#typ tp in
+        let al = Alias (prop, tp) in
+        (o, al)
+
+      (** This function unpacks Rec. App. and lets Alias handle it *)
+      method recapp : typ -> 'self_type * typ
+        = fun ra ->
+        let { r_name; r_dual; r_quantifiers; r_args; _ } as ra =
+          match ra with
+          | RecursiveApplication ra -> ra
+          | _ -> assert false
+        in
+        let al = Alias ((r_name, r_quantifiers, r_args, r_dual),
+                        Not_typed (* this is jut a placeholder *)) in
+        let (o, al) = o#alias al in
+        let ((_, r_quantifiers, r_args, _), _) = match al with
+          | Alias al -> al
+          | _ -> assert false
+        in
+        let ra = RecursiveApplication { ra with r_quantifiers; r_args } in
+        (o, ra)
+
+      method! typ : typ -> 'self_type * typ
+        = fun tp ->
+        if seen_shared_var
+        then super#typ tp
+        else begin
+            match tp with
+            | Function _ | Lolli _ -> o#func tp
+            | Alias _ -> o#alias tp
+            | RecursiveApplication _ -> o#recapp tp
+            | _ -> super#typ tp
+          end
+    end
+
+    let ensugar_datatype : tid -> datatype -> datatype
+      = fun vid tp ->
+      let o = sugar_introducer vid in
+      let (_, tp) = o#typ tp in
+      tp
+
+    let ensugar_type_arg : tid -> type_arg -> type_arg
+      = fun vid ta ->
+      let o = sugar_introducer vid in
+      let (_, ta) = o#type_arg ta in
+      ta
 
   end
 
@@ -2990,28 +3090,29 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             end)
 
   and alias_recapp : (string * type_arg list * bool) printer
-    = let maybe_remove_shared_effect : Context.t -> type_arg list -> type_arg list
-        = let extract_row_var r =
-            let rv = unwrap_row r |> fst |> extract_row_parts |> snd3 in
-            match Unionfind.find rv with
-            | Var (vid, _, _) -> Some vid
-            | _ -> None
-          in
-          fun ctx arg_types ->
-          match Context.shared_effect ctx with
-          | None -> arg_types (* No shared effect var => return unchanged list *)
-          | Some vid ->
-             (* we have a shared effect var, so maybe we'll need to remove the last
-              (by convention, see SharedEffect) argument from this application *)
-             let others, last = ListUtils.unsnoc arg_types in
-             match last with
-             | (PrimaryKind.Row, (Row _ as r)) ->
-                (match extract_row_var r with
-                 | Some v when v = vid -> others (* omit the last type argument *)
-                 | _ -> arg_types (* the original list *)
-                )
-             | _ -> arg_types (* the original list *)
-      in
+    =
+    (* let maybe_remove_shared_effect : Context.t -> type_arg list -> type_arg list
+     *     = let extract_row_var r =
+     *         let rv = unwrap_row r |> fst |> extract_row_parts |> snd3 in
+     *         match Unionfind.find rv with
+     *         | Var (vid, _, _) -> Some vid
+     *         | _ -> None
+     *       in
+     *       fun ctx arg_types ->
+     *       match Context.shared_effect ctx with
+     *       | None -> arg_types (\* No shared effect var => return unchanged list *\)
+     *       | Some vid ->
+     *          (\* we have a shared effect var, so maybe we'll need to remove the last
+     *           (by convention, see SharedEffect) argument from this application *\)
+     *          let others, last = ListUtils.unsnoc arg_types in
+     *          match last with
+     *          | (PrimaryKind.Row, (Row _ as r)) ->
+     *             (match extract_row_var r with
+     *              | Some v when v = vid -> others (\* omit the last type argument *\)
+     *              | _ -> arg_types (\* the original list *\)
+     *             )
+     *          | _ -> arg_types (\* the original list *\)
+     *   in *)
       let open Printer in
       Printer (fun ctx (name, arg_types, is_dual) buf ->
           (if is_dual then StringBuffer.write buf "~");
@@ -3019,8 +3120,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           (match arg_types with
            | [] -> ()
            | _ -> StringBuffer.write buf " (";
-                  let arg_types' = maybe_remove_shared_effect ctx arg_types in
-                  Printer.concat_items ~sep:"," type_arg arg_types' ctx buf;
+                  (* let arg_types' = maybe_remove_shared_effect ctx arg_types in *)
+                  Printer.concat_items ~sep:"," type_arg arg_types(* ' *) ctx buf;
                   StringBuffer.write buf ")"))
 
   and row_parts : row' printer
