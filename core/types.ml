@@ -2753,8 +2753,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       r
 
     (** This object will gather all operations from the type's effects.  It returns a
-       map: { label =>
-              (does the operation exists as non-polymorphic in its presence?) : bool } *)
+        map: { label =>
+               (does the operation exists as non-polymorphic in its presence?) : bool } *)
     let label_gatherer shared_var
       = let disj_update : bool -> bool option -> bool option
           = fun is_np ->
@@ -2767,6 +2767,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
           val nonpoly : bool stringmap = StringMap.empty
           method nonpoly = nonpoly
+          method with_nonpoly nonpoly = {< nonpoly >}
 
           (** Will add the operation as possibly polymorphic (but if it already exists
               as non-polymorphic, it's unchanged. *)
@@ -2779,6 +2780,43 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           method add_nonpoly label =
             let nonpoly = StringMap.update label (disj_update true) nonpoly in
             {< nonpoly >}
+
+          method effect_row : row -> 'self_type * row
+            = let fold_fields : string -> field_spec -> bool stringmap -> bool stringmap
+                = fun label pres acc ->
+                let pres = match pres with
+                  | Meta pt -> Unionfind.find pt
+                  | _ -> pres
+                in
+                let is_nonpoly = match pres with
+                  | Present _ | Absent -> true
+                  | Var _ -> false
+                  | _ -> failwith "Field spec that is not a P|A|V !!"
+                in
+                StringMap.update label (disj_update is_nonpoly) acc
+              in
+              fun r ->
+              let fields = unwrap_row r |> fst |> extract_row_parts |> fst3 in
+              (o#with_nonpoly (StringMap.fold fold_fields fields nonpoly), r)
+
+          (* TODO *)
+          method! type_args = super#type_args
+          
+          method! typ : typ -> 'self_type * typ
+            = fun tp ->
+            match tp with
+            | Function (d,e,r) | Lolli (d,e,r) ->
+               let (o, _) = o#typ d in
+               let (o, _) = o#effect_row e in
+               let (o, _) = o#typ r in
+               (o, tp)
+            | Alias ((_,_,type_args,_), _)
+              | RecursiveApplication { r_args = type_args ; _ } when allowed_in tp ->
+               begin
+                 let (o, _) = o#type_args type_args in
+                 (o, tp)
+               end
+            | _ -> (o, tp)
         end
 
     let sugar_introducer shared_var
