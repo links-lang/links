@@ -3457,6 +3457,36 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | None | Some Absent | Some (Meta _) -> false
             | _ -> raise tag_expectation_mismatch
           in
+          let decide_skip ctx vid =
+            (* decide whether to skip the variable:
+
+               1) if explicit shared arrows are off => shared effects are hidden, and
+               non-shared anonymous variables are made explicit to distinguish them
+               from shared effects
+
+               2) if explicit shared arrows are on => shared effects will be explicit
+               (written as `-_->' | `-_-@'), and so non-shared anonymous variables can
+               be hidden
+
+               Both of these are only relevant if there is a shared effect to talk
+               about. *)
+            let anonymity = get_var_anonymity ctx vid in
+            print_endline ("\nShared exists: " ^ string_of_bool @@ Context.shared_effect_exists ctx);
+            print_endline ("Anonymity: " ^ (if anonymity = Anonymous then "Anonymous" else if anonymity = SharedEff then "SharedEff" else "Visible"));
+            print_endline ("Explicit arrows: " ^ string_of_bool @@ Policy.es_arrows_explicit (Context.policy ctx));
+            let skip = match (Context.shared_effect_exists ctx, anonymity,
+                              Policy.es_arrows_explicit (Context.policy ctx)) with
+              | (true, SharedEff, true) -> print_endline "A"; false
+              | (true, SharedEff, false) -> print_endline "B"; true
+              | (true, Anonymous, true) -> print_endline "C"; true
+              | (true, Anonymous, false) -> print_endline "D"; false
+              | (false, Anonymous, _) -> print_endline "E"; true
+              | (_, Visible, _) -> print_endline "F"; false
+              | (false, SharedEff, _) -> assert false
+            in
+            print_endline ("Skip: " ^ string_of_bool skip);
+            skip
+          in
           Printer (fun ctx r buf ->
               let is_lolli = Context.is_ambient_linfun ctx in
               (* flatten here in case there are nested row variables *)
@@ -3476,26 +3506,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                            case we skip it entirely *)
                      match Unionfind.find (snd3 (extract_row_parts r)) with
                      | Var (vid, knd, _) ->
-                        let anonymity = get_var_anonymity ctx vid in
-                        (* decide whether to skip the variable:
-
-                           1) if explicit shared arrows are off => shared effects are
-                           hidden, and non-shared anonymous variables are made
-                           explicit to distinguish them from shared effects
-
-                           2) if explicit shared arrows are on => shared effects will
-                           be explicit (written as `-_->' | `-_-@'), and so non-shared
-                           anonymous variables can be hidden
-
-                           Both of these are only relevant if there is a shared effect
-                           to talk about. *)
-                        let skip = match (Context.shared_effect_exists ctx, anonymity,
-                                          Policy.es_arrows_explicit (Context.policy ctx)) with
-                          | (true, Anonymous, true) | (true, SharedEff, false) -> true
-                          | (false, Anonymous, _) -> true (* SharedEff will never happen if there is no shared effect *)
-                          | _ -> false
-                        in
-                        if skip
+                        if decide_skip ctx vid
                         then () (* skip printing it entirely *)
                         else begin
                             (if is_wild
