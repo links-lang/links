@@ -2858,8 +2858,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               fun label ->
               o#with_operations (StringMap.update label upd operations)
 
-          method effect_row : row -> 'self_type * row
-            = fun r -> (o, r)       (* TODO *)
+          method effect_row : row -> 'self_type * row option
+            = fun r -> (o, Some r)       (* TODO *)
 
           method func : datatype -> 'self_type * datatype
             = fun tp ->
@@ -2870,6 +2870,13 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             in
             let (o, dom) = o#typ dom in
             let (o, eff) = o#effect_row eff in
+            let eff = match eff with
+              | None ->
+                 (* all fields were eliminated, shared row to be hidden *)
+                 (* TODO could use the helper here, but it's below, hence not visible *)
+                 Row (FieldEnv.empty, closed_row_var, false)
+              | Some r -> r (* some fields were kept, row needs to stay *)
+            in
             let (o, cod) = o#typ cod in
             let tp = match fl with
               | `Func -> Function (dom, eff, cod)
@@ -2895,11 +2902,21 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                   | ((PrimaryKind.Row, (_, Restriction.Effect)),
                      (_ (* must be the same kind *), (Row _ as r))) ->
                      begin
-                       match extract_row_var r with
-                       | Some v when v = shared_var ->
-                          (* found the row with a shared var, omit it *)
-                          (o#see_shared, (name, kinds_others, args_others, dual))
-                       | _ -> (o, prop)
+                       (* match extract_row_var r with
+                        * | Some v when v = shared_var ->
+                        *    (\* found the row with a shared var, omit it *\)
+                        *    (o#see_shared, (name, kinds_others, args_others, dual))
+                        * | _ -> (o, prop) *)
+                       let (o, r) = o#effect_row r in
+                       match r with
+                       | Some r ->
+                          (* nonempty shared effect row was returned (meaning there
+                             is some field that must be displayed here) => reattach
+                             is to the arguments *)
+                          (o, (name, kinds, args_others @ [(PrimaryKind.Row, r)], dual))
+                       | None ->
+                          (* all fields were eliminated, omit the whole row *)
+                          (o, (name, kinds_others, args_others, dual))
                      end
                   | _ -> (o, prop)
                 end in
@@ -2908,6 +2925,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             (o, al)
 
           (** This function unpacks Rec. App. and lets Alias handle it *)
+          (* TODO make a universal method instead and have both Alias and RecApp use it *)
           method recapp : typ -> 'self_type * typ
             = fun ra ->
             let { r_name; r_dual; r_quantifiers; r_args; _ } as ra =
@@ -2927,15 +2945,15 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
           method! typ : typ -> 'self_type * typ
             = fun tp ->
-            if seen_shared_var
-            then super#typ tp
-            else begin
-                match tp with
-                | Function _ | Lolli _ -> o#func tp
-                | Alias _ -> o#alias tp
-                | RecursiveApplication _ -> o#recapp tp
-                | _ -> super#typ tp
-              end
+            (* if seen_shared_var
+             * then super#typ tp
+             * else begin *)
+            match tp with
+            | Function _ | Lolli _ -> o#func tp
+            | Alias _ -> o#alias tp
+            | RecursiveApplication _ -> o#recapp tp
+            | _ -> super#typ tp
+                        (* end *)
         end
 
     let ensugar_datatype : tid -> datatype -> datatype
@@ -3437,9 +3455,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                           StringBuffer.write buf "}"
                         end
               else begin (* need the full effect row, but only construct the inside of it *)
-                StringBuffer.write buf "{";
-                Printer.apply row_parts (Context.set_ambient Context.Effect ctx) r' buf;
-                StringBuffer.write buf "}";
+                  StringBuffer.write buf "{";
+                  Printer.apply row_parts (Context.set_ambient Context.Effect ctx) r' buf;
+                  StringBuffer.write buf "}";
                 end;
               (if is_wild then StringBuffer.write buf "~" else StringBuffer.write buf "-");
               (* add the arrowhead/lollipop *)
