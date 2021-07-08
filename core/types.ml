@@ -2848,18 +2848,68 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
            * method see_shared = {< seen_shared_var = true >} *)
 
           val operations : bool stringmap = operations
+          method operations = operations
           method with_operations operations = {< operations >}
           method mark_nonpoly_operation : string -> 'self_type
             = let upd : bool option -> bool option
                 = function
                 | None -> failwith "[*SI] should not happen?"
-                | Some _ -> Some false
+                | Some _ -> Some true
               in
               fun label ->
               o#with_operations (StringMap.update label upd operations)
 
           method effect_row : row -> 'self_type * row option
-            = fun r -> (o, Some r)       (* TODO *)
+            = fun r ->
+            (* (o, Some r)       (\* TODO *\) *)
+            let (fields, rv_pt, dual) = unwrap_row r |> fst |> extract_row_parts in
+            let rvar = match Unionfind.find rv_pt with
+              | Var (vid, _, _) -> Some vid
+              | _ -> None
+            in
+            match rvar with
+            | Some vid when vid = shared_var ->
+               (* this row needs sugaring *)
+               begin
+               (* here we need to filter out the fields that are:
+                  1) polymorphic in their presence, AND
+                  2) occur SOMEWHERE in the type as non-polymorphic (this is what the
+                  map `operations' is for)
+
+                  The operations which are only presence-poly in the whole type (they
+                  have no non-poly occurence) have to appear once (we can't have them
+                  disappear completely). If this happens here, that operation will be
+                  marked (in `operations'), so in the next occurence, it can be
+                  hidden. *)
+                 let decide_field : string -> field_spec -> 'self_type * field_spec_map -> 'self_type * field_spec_map
+                   = fun label field (o, kept) ->
+                   let pre = match field with
+                     | Meta pt -> Unionfind.find pt
+                     | _ -> field
+                   in
+                   match pre with
+                   | Present _ | Absent ->
+                      (* field has specified presence => it has to appear here (also
+                         mark it as already kept, so in other places where it's
+                         presence-poly, it can be omitted *)
+                      (o#mark_nonpoly_operation label, FieldEnv.add label field kept)
+                   | Var _ ->
+                      (* presence polymorphic, need to decide whether to keep it *)
+                      if FieldEnv.find label o#operations
+                      then (* occurs as nonpoly (or if only poly, it was already kept
+                              elsewhere) => can be safely removed *)
+                        (o, kept)
+                      else (* only occurs as poly, and has not been kept elsewhere =>
+                              keep it here, mark for removal in other occurences *)
+                        (o#mark_nonpoly_operation label, FieldEnv.add label field kept)
+                   | _ -> failwith "This should not happen!"
+                 in
+                 let (o, kept) = FieldEnv.fold decide_field fields (o, FieldEnv.empty) in
+                 (o, Some (Row (kept, rv_pt, dual)))
+               end
+            | _ ->
+               (* this row doesn't need sugaring, return it identically *)
+               (o, Some r)
 
           method func : datatype -> 'self_type * datatype
             = fun tp ->
