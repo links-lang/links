@@ -3471,27 +3471,23 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                Both of these are only relevant if there is a shared effect to talk
                about. *)
             let anonymity = get_var_anonymity ctx vid in
-            print_endline ("\nShared exists: " ^ string_of_bool @@ Context.shared_effect_exists ctx);
-            print_endline ("Anonymity: " ^ (if anonymity = Anonymous then "Anonymous" else if anonymity = SharedEff then "SharedEff" else "Visible"));
-            print_endline ("Explicit arrows: " ^ string_of_bool @@ Policy.es_arrows_explicit (Context.policy ctx));
             let skip = match (Context.shared_effect_exists ctx, anonymity,
                               Policy.es_arrows_explicit (Context.policy ctx)) with
-              | (true, SharedEff, true)  -> print_endline "A"; false
-              | (true, SharedEff, false) -> print_endline "B"; true
-              | (true, Anonymous, true)  -> print_endline "C"; true
-              | (true, Anonymous, false) -> print_endline "D"; false
-              | (false, Anonymous, _)    -> print_endline "E"; true
-              | (_, Visible, _)          -> print_endline "F"; false
+              | (true, SharedEff, true)  -> false
+              | (true, SharedEff, false) -> true
+              | (true, Anonymous, true)  -> true
+              | (true, Anonymous, false) -> false
+              | (false, Anonymous, _)    -> true
+              | (_, Visible, _)          -> false
               | (false, SharedEff, _) -> assert false
             in
-            print_endline ("Skip: " ^ string_of_bool skip);
             skip
           in
           Printer (fun ctx r buf ->
               let is_lolli = Context.is_ambient_linfun ctx in
               (* flatten here in case there are nested row variables *)
               let (fields, rvar, _) as r' = extract_row_parts (flatten_row r) in
-              print_endline @@ FieldEnv.show (fun _ _ -> ()) fields;
+              (* print_endline @@ FieldEnv.show (fun _ _ -> ()) fields; *)
               let is_wild = is_field_present fields wild in
               let visible_fields = (FieldEnv.size fields) - (if is_wild then 1 else 0) in
               let row_var_exists =
