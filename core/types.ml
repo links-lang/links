@@ -1657,6 +1657,9 @@ let hear = "hear"
 let wild_present   = (wild, Present unit_type)
 let hear_present t = (hear, Present t)
 
+let is_builtin_effect lbl =
+  lbl = wild || lbl = hear
+
 
 (* precondition: the row is unwrapped *)
 let is_tuple ?(allow_onetuples=false) row =
@@ -2857,6 +2860,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 | Some _ -> Some true
               in
               fun label ->
+              print_endline ("Marking " ^ label ^ " as nonpoly.");
               o#with_operations (StringMap.update label upd operations)
 
           method effect_row : row -> 'self_type * row option
@@ -2871,7 +2875,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | Some vid when vid = shared_var ->
                (* this row needs sugaring *)
                begin
-               (* here we need to filter out the fields that are:
+                 (* here we need to filter out the fields that are:
                   1) polymorphic in their presence, AND
                   2) occur SOMEWHERE in the type as non-polymorphic (this is what the
                   map `operations' is for)
@@ -2883,27 +2887,30 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                   hidden. *)
                  let decide_field : string -> field_spec -> 'self_type * field_spec_map -> 'self_type * field_spec_map
                    = fun label field (o, kept) ->
-                   let pre = match field with
-                     | Meta pt -> Unionfind.find pt
-                     | _ -> field
-                   in
-                   match pre with
-                   | Present _ | Absent ->
-                      (* field has specified presence => it has to appear here (also
+                   if is_builtin_effect label
+                   then (o, kept) (* builtin effects are preserved here (TODO also hear?) *)
+                   else begin
+                       let pre = match field with
+                         | Meta pt -> Unionfind.find pt
+                         | _ -> field
+                       in
+                       match pre with
+                       | Present _ | Absent ->
+                          (* field has specified presence => it has to appear here (also
                          mark it as already kept, so in other places where it's
                          presence-poly, it can be omitted *)
-                      (o#mark_nonpoly_operation label, FieldEnv.add label field kept)
-                   | Var _ ->
-                      (* presence polymorphic, need to decide whether to keep it *)
-                      if FieldEnv.find label o#operations
-                      then (* occurs as nonpoly (or if only poly, it was already kept
+                          (o#mark_nonpoly_operation label, FieldEnv.add label field kept)
+                       | Var _ ->
+                          (* presence polymorphic, need to decide whether to keep it *)
+                          if FieldEnv.find label o#operations
+                          then (* occurs as nonpoly (or if only poly, it was already kept
                               elsewhere) => can be safely removed *)
-                        (o, kept)
-                      else (* only occurs as poly, and has not been kept elsewhere =>
+                            (o, kept)
+                          else (* only occurs as poly, and has not been kept elsewhere =>
                               keep it here, mark for removal in other occurences *)
-                        (o#mark_nonpoly_operation label, FieldEnv.add label field kept)
-                   | _ -> failwith "This should not happen!"
-                 in
+                            (o#mark_nonpoly_operation label, FieldEnv.add label field kept)
+                       | _ -> failwith "This should not happen!"
+                     end in
                  let (o, kept) = FieldEnv.fold decide_field fields (o, FieldEnv.empty) in
                  (o, Some (Row (kept, rv_pt, dual)))
                end
@@ -3003,13 +3010,15 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | Alias _ -> o#alias tp
             | RecursiveApplication _ -> o#recapp tp
             | _ -> super#typ tp
-                        (* end *)
+            (* end *)
         end
 
     let ensugar_datatype : tid -> datatype -> datatype
       = fun vid tp ->
       let (label_gatherer, _) = (label_gatherer vid)#typ tp in
       let nonpoly = label_gatherer#operations in
+      print_endline "Nonpoly:";
+      StringMap.iter (fun label np -> print_endline (label ^ " => " ^ string_of_bool np)) nonpoly;
       let o = sugar_introducer vid nonpoly in
       let (_, tp) = o#typ tp in
       tp

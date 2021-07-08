@@ -221,6 +221,7 @@ val wild : Label.t
 val hear : Label.t
 val wild_present : Label.t * datatype
 val hear_present : datatype -> (Label.t * datatype)
+val is_builtin_effect : string -> bool
 
 (** get type variables *)
 val free_type_vars : datatype -> TypeVarSet.t
