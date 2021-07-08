@@ -3197,14 +3197,17 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       Printer (fun _ctxt prim buf ->
           StringBuffer.write buf (Primitive.to_string prim))
 
-  let is_var_anonymous : Context.t -> tid -> bool =
-    fun ctxt vid ->
+  type var_anonymity = Visible | Anonymous | SharedEff
+  let get_var_anonymity : Context.t -> tid -> var_anonymity
+    = fun ctxt vid ->
     match Context.shared_effect ctxt with
-    | Some v when v = vid -> true
+    | Some v when v = vid -> SharedEff
     | _ ->
        let _, (_, _, count) = Vars.find_spec vid (Context.tyvar_names ctxt) in
-       (count = 1 && (Policy.hide_fresh Context.(policy ctxt))) (* we want to hide it *)
-       && not (Context.is_tyvar_bound vid ctxt) (* and it is not bound (if it is bound, it has to show up *)
+       if (count = 1 && (Policy.hide_fresh Context.(policy ctxt))) (* we want to hide it *)
+          && not (Context.is_tyvar_bound vid ctxt) (* and it is not bound (if it is bound, it has to show up *)
+       then Anonymous
+       else Visible
 
   let rec var : (tid * Kind.t) printer
     = let open Printer in
@@ -3223,7 +3226,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
           let print_var : string printer =
             Printer (fun ctx var_name buf ->
-                let is_anonymous = (not in_binder) && is_var_anonymous ctx vid in
+                let anonymity = get_var_anonymity ctx vid in
+                let is_anonymous = (not in_binder) && (anonymity = Anonymous || anonymity = SharedEff) in
                 let show_flexible = (Policy.flavours Context.(policy ctx)) && flavour = `Flexible in
                 let is_presence = (PrimaryKind.Presence = Kind.primary_kind knd) in
 
@@ -3460,7 +3464,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                            case we skip it entirely *)
                      match Unionfind.find (snd3 (extract_row_parts r)) with
                      | Var (vid, knd, _) ->
-                        if is_var_anonymous ctx vid
+                        let anonymity = get_var_anonymity ctx vid in
+                        if anonymity = Anonymous
                         then () (* skip printing it entirely *)
                         else begin
                             (if is_wild
