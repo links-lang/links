@@ -2895,7 +2895,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                  let decide_field : string -> field_spec -> 'self_type * field_spec_map -> 'self_type * field_spec_map
                    = fun label field (o, kept) ->
                    if is_builtin_effect label
-                   then (o, kept) (* builtin effects are preserved here (TODO also hear?) *)
+                   then (o, FieldEnv.add label field kept) (* builtin effects are preserved here (TODO also hear?) *)
                    else begin
                        let pre = match field with
                          | Meta pt -> Unionfind.find pt
@@ -3476,12 +3476,12 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             print_endline ("Explicit arrows: " ^ string_of_bool @@ Policy.es_arrows_explicit (Context.policy ctx));
             let skip = match (Context.shared_effect_exists ctx, anonymity,
                               Policy.es_arrows_explicit (Context.policy ctx)) with
-              | (true, SharedEff, true) -> print_endline "A"; false
+              | (true, SharedEff, true)  -> print_endline "A"; false
               | (true, SharedEff, false) -> print_endline "B"; true
-              | (true, Anonymous, true) -> print_endline "C"; true
+              | (true, Anonymous, true)  -> print_endline "C"; true
               | (true, Anonymous, false) -> print_endline "D"; false
-              | (false, Anonymous, _) -> print_endline "E"; true
-              | (_, Visible, _) -> print_endline "F"; false
+              | (false, Anonymous, _)    -> print_endline "E"; true
+              | (_, Visible, _)          -> print_endline "F"; false
               | (false, SharedEff, _) -> assert false
             in
             print_endline ("Skip: " ^ string_of_bool skip);
@@ -3491,6 +3491,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               let is_lolli = Context.is_ambient_linfun ctx in
               (* flatten here in case there are nested row variables *)
               let (fields, rvar, _) as r' = extract_row_parts (flatten_row r) in
+              print_endline @@ FieldEnv.show (fun _ _ -> ()) fields;
               let is_wild = is_field_present fields wild in
               let visible_fields = (FieldEnv.size fields) - (if is_wild then 1 else 0) in
               let row_var_exists =
@@ -3501,9 +3502,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               if visible_fields = 0
               then if not row_var_exists
                    then StringBuffer.write buf "{}" (* empty closed row *)
-                   else (* empty open row use the abbreviated notation
-                           -a- or ~a~ unless it's anonymous in which
-                           case we skip it entirely *)
+                   else (* empty open row => use the abbreviated notation -a- or ~a~
+                           unless it's anonymous in which case we skip it entirely *)
                      match Unionfind.find (snd3 (extract_row_parts r)) with
                      | Var (vid, knd, _) ->
                         if decide_skip ctx vid
