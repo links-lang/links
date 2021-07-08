@@ -2858,7 +2858,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               print_endline ("Marking " ^ label ^ " as nonpoly.");
               o#with_operations (StringMap.update label upd operations)
 
-          method effect_row : row -> 'self_type * row option
+          method effect_row : row -> 'self_type * row option * row_var
             = fun r ->
             let (fields, rv_pt, dual) = unwrap_row r |> fst |> extract_row_parts in
             let rvar = match Unionfind.find rv_pt with
@@ -2908,12 +2908,12 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                  let (o, kept) = FieldEnv.fold decide_field fields (o, FieldEnv.empty) in
                  (* if no operations were kept, the whole row will be eliminated *)
                  if FieldEnv.is_empty kept
-                 then (o, None)
-                 else (o, Some (Row (kept, rv_pt, dual)))
+                 then (o, None, rv_pt)
+                 else (o, Some (Row (kept, rv_pt, dual)), rv_pt)
                end
             | _ ->
                (* this row doesn't need sugaring, return it identically *)
-               (o, Some r)
+               (o, Some r, rv_pt)
 
           method func : datatype -> 'self_type * datatype
             = fun tp ->
@@ -2923,13 +2923,12 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               | _ -> assert false
             in
             let (o, dom) = o#typ dom in
-            let (o, eff) = o#effect_row eff in
+            let (o, eff, eff_var) = o#effect_row eff in
             let eff = match eff with
               | None ->
-                 (* all fields were eliminated, shared row to be hidden *)
-                 (* TODO could use the helper make_closed_row here, but it's below
-                    this code, hence not in scope *)
-                 Row (FieldEnv.empty, closed_row_var, false)
+                 (* all fields were eliminated, the row var needs to stay in so that
+                    the printer knows it's there *)
+                 Row (FieldEnv.empty, eff_var, false)
               | Some r -> r (* some fields were kept, row needs to stay *)
             in
             let (o, cod) = o#typ cod in
@@ -2947,7 +2946,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | ((PrimaryKind.Row, (_, Restriction.Effect)),
                (_ (* must be the same kind anyway *), (Row _ as r))) ->
                begin
-                 let (o, r) = o#effect_row r in
+                 let (o, r, _) = o#effect_row r in
                  match r with
                  | Some r ->
                     (* nonempty shared effect row was returned (meaning there is some
