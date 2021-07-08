@@ -3489,10 +3489,11 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
                            Both of these are only relevant if there is a shared effect
                            to talk about. *)
-                        let skip = Context.shared_effect_exists ctx
-                                   && (match anonymity, Policy.es_arrows_explicit (Context.policy ctx) with
-                                       | (Anonymous, true) | (SharedEff, false) -> true
-                                       | _ -> false)
+                        let skip = match (Context.shared_effect_exists ctx, anonymity,
+                                          Policy.es_arrows_explicit (Context.policy ctx)) with
+                          | (true, Anonymous, true) | (true, SharedEff, false) -> true
+                          | (false, Anonymous, _) -> true (* SharedEff will never happen if there is no shared effect *)
+                          | _ -> false
                         in
                         if skip
                         then () (* skip printing it entirely *)
