@@ -2834,19 +2834,16 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       = object (o : 'self_type)
           inherit Transform.visitor as super
 
-          (* TODO Actually there is a better way to do it I think.
+          (* The sugaring will eliminate almost all (1) presence polymorhpic
+             operations, and then if there's nothing left, remove the whole effect row
+             (in an alias, this will be an actual removal, in a function the row will
+             just become empty and closed, to that it shows as a simple arrow).
 
-             The way sugar should work, it should eliminate all (really all? (1))
-             presence polymorhpic operations, and then if there's nothing left, remove
-             the whole effect row (in an alias, this will be an actual removal, in a
-             function the row will just become empty and closed, to that it shows as a
-             simple arrow.
-
-             (1) Actually, what if a programmer explicitly specifies some operation to
-             be polymorphic everywhere? Need to remember if a label appears also as
-             non-polymorphic, and if it does, its polymorphic occurences will be
-             removed by sugar, but if it's only ever poly, then at least one occurence
-             must stay. *)
+             (1) If a programmer explicitly specifies some operation to be polymorphic
+             everywhere, we need to remember that: if a label appears everywhere only
+             as presence-polymorphic, one (exactly one) of its occurences must be
+             preserved (the label must be visible in the type). This is what the map
+             `operations' keeps track of. *)
 
           val operations : bool stringmap = operations
           method operations = operations
