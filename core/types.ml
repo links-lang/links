@@ -2737,23 +2737,13 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       = fun tp ->
       let o = new shared_finder in
       let (o, _) = o#typ tp in
-      let r = o#var in
-      let () = match r with
-        | Some vid -> print_endline ("Shared effect: " ^ string_of_int vid)
-        | None -> ()
-      in
-      r
+      o#var
 
     let of_type_arg : type_arg -> tid option
       = fun ta ->
       let o = new shared_finder in
       let (o, _) = o#type_arg ta in
-      let r = o#var in
-      let () = match r with
-        | Some vid -> print_endline ("Shared effect: " ^ string_of_int vid)
-        | None -> ()
-      in
-      r
+      o#var
 
     (** This object will gather all operations from the type's effects.  It returns a
         map: { label =>
@@ -2855,7 +2845,6 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 | Some _ -> Some true
               in
               fun label ->
-              print_endline ("Marking " ^ label ^ " as nonpoly.");
               o#with_operations (StringMap.update label upd operations)
 
           method effect_row : row -> 'self_type * row option * row_var
@@ -3003,8 +2992,6 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       = fun vid tp ->
       let (label_gatherer, _) = (label_gatherer vid)#typ tp in
       let nonpoly = label_gatherer#operations in
-      print_endline "Nonpoly:";
-      StringMap.iter (fun label np -> print_endline (label ^ " => " ^ string_of_bool np)) nonpoly;
       let o = sugar_introducer vid nonpoly in
       let (_, tp) = o#typ tp in
       tp
@@ -3203,6 +3190,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     match Context.shared_effect ctxt with
     | Some v when v = vid -> SharedEff
     | _ ->
+       (* this var is not a shared effect variable (or they are disabled) *)
        let _, (_, _, count) = Vars.find_spec vid (Context.tyvar_names ctxt) in
        if (count = 1 && (Policy.hide_fresh Context.(policy ctxt))) (* we want to hide it *)
           && not (Context.is_tyvar_bound vid ctxt) (* and it is not bound (if it is bound, it has to show up *)
