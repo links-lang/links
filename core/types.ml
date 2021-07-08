@@ -2847,8 +2847,6 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
              non-polymorphic, and if it does, its polymorphic occurences will be
              removed by sugar, but if it's only ever poly, then at least one occurence
              must stay. *)
-          (* val seen_shared_var : bool = false
-           * method see_shared = {< seen_shared_var = true >} *)
 
           val operations : bool stringmap = operations
           method operations = operations
@@ -2865,7 +2863,6 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
           method effect_row : row -> 'self_type * row option
             = fun r ->
-            (* (o, Some r)       (\* TODO *\) *)
             let (fields, rv_pt, dual) = unwrap_row r |> fst |> extract_row_parts in
             let rvar = match Unionfind.find rv_pt with
               | Var (vid, _, _) -> Some vid
@@ -2876,15 +2873,15 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                (* this row needs sugaring *)
                begin
                  (* here we need to filter out the fields that are:
-                  1) polymorphic in their presence, AND
-                  2) occur SOMEWHERE in the type as non-polymorphic (this is what the
-                  map `operations' is for)
+                    1) polymorphic in their presence, AND
+                    2) occur SOMEWHERE in the type as non-polymorphic (this is what
+                    the map `operations' is for)
 
-                  The operations which are only presence-poly in the whole type (they
-                  have no non-poly occurence) have to appear once (we can't have them
-                  disappear completely). If this happens here, that operation will be
-                  marked (in `operations'), so in the next occurence, it can be
-                  hidden. *)
+                    The operations which are only presence-poly in the whole type
+                    (they have no non-poly occurence) have to appear once (we can't
+                    have them disappear completely). If this happens here, that
+                    operation will be marked (in `operations'), so in the next
+                    occurence, it can be hidden. *)
                  let decide_field : string -> field_spec -> 'self_type * field_spec_map -> 'self_type * field_spec_map
                    = fun label field (o, kept) ->
                    if is_builtin_effect label
@@ -2896,18 +2893,18 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                        in
                        match pre with
                        | Present _ | Absent ->
-                          (* field has specified presence => it has to appear here (also
-                         mark it as already kept, so in other places where it's
-                         presence-poly, it can be omitted *)
+                          (* field has specified presence => it has to appear here
+                             (also mark it as already kept, so in other places where
+                             it's presence-poly, it can be omitted *)
                           (o#mark_nonpoly_operation label, FieldEnv.add label field kept)
                        | Var _ ->
                           (* presence polymorphic, need to decide whether to keep it *)
                           if FieldEnv.find label o#operations
                           then (* occurs as nonpoly (or if only poly, it was already kept
-                              elsewhere) => can be safely removed *)
+                                  elsewhere) => can be safely removed *)
                             (o, kept)
                           else (* only occurs as poly, and has not been kept elsewhere =>
-                              keep it here, mark for removal in other occurences *)
+                                  keep it here, mark for removal in other occurences *)
                             (o#mark_nonpoly_operation label, FieldEnv.add label field kept)
                        | _ -> failwith "This should not happen!"
                      end in
@@ -2930,7 +2927,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             let eff = match eff with
               | None ->
                  (* all fields were eliminated, shared row to be hidden *)
-                 (* TODO could use the helper here, but it's below, hence not visible *)
+                 (* TODO could use the helper here, but it's below this code, hence not in scope *)
                  Row (FieldEnv.empty, closed_row_var, false)
               | Some r -> r (* some fields were kept, row needs to stay *)
             in
