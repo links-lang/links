@@ -2765,21 +2765,21 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
         object (o : 'self_type)
           inherit Transform.visitor as super
 
-          val nonpoly : bool stringmap = StringMap.empty
-          method nonpoly = nonpoly
-          method with_nonpoly nonpoly = {< nonpoly >}
+          val operations : bool stringmap = StringMap.empty
+          method operations = operations
+          method with_operations operations = {< operations >}
 
           (** Will add the operation as possibly polymorphic (but if it already exists
               as non-polymorphic, it's unchanged. *)
           method add_poly label =
-            let nonpoly = StringMap.update label (disj_update false) nonpoly in
-            {< nonpoly >}
+            let operations = StringMap.update label (disj_update false) operations in
+            {< operations >}
 
           (** Will add the operation as definitely non-polymorphic (if it already
               exists as polymorphic, it is changed to non-poly. *)
           method add_nonpoly label =
-            let nonpoly = StringMap.update label (disj_update true) nonpoly in
-            {< nonpoly >}
+            let operations = StringMap.update label (disj_update true) operations in
+            {< operations >}
 
           method effect_row : row -> 'self_type * row
             = let fold_fields : string -> field_spec -> bool stringmap -> bool stringmap
@@ -2801,7 +2801,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               match rvar with
               | Var (vid,_,_) when vid = shared_var ->
                  (* this is a row with the shared var, collect its operations *)
-                 (o#with_nonpoly (StringMap.fold fold_fields fields nonpoly), r)
+                 (o#with_operations (StringMap.fold fold_fields fields operations), r)
               | _ ->
                  (* it is something else, some other row, don't collect *)
                  (o, r)
@@ -2844,8 +2844,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
              non-polymorphic, and if it does, its polymorphic occurences will be
              removed by sugar, but if it's only ever poly, then at least one occurence
              must stay. *)
-          (* val seen_shared_var : bool = false *)
-          (* method see_shared = {< seen_shared_var = true >} *)
+          val seen_shared_var : bool = false
+          method see_shared = {< seen_shared_var = true >}
 
           val nonpoly : bool stringmap = nonpoly
 
@@ -2932,7 +2932,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     let ensugar_datatype : tid -> datatype -> datatype
       = fun vid tp ->
       let (label_gatherer, _) = (label_gatherer vid)#typ tp in
-      let nonpoly = label_gatherer#nonpoly in
+      let nonpoly = label_gatherer#operations in
       let o = sugar_introducer vid nonpoly in
       let (_, tp) = o#typ tp in
       tp
@@ -2940,7 +2940,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     let ensugar_type_arg : tid -> type_arg -> type_arg
       = fun vid ta ->
       let (label_gatherer, _) = (label_gatherer vid)#type_arg ta in
-      let nonpoly = label_gatherer#nonpoly in
+      let nonpoly = label_gatherer#operations in
       let o = sugar_introducer vid nonpoly in
       let (_, ta) = o#type_arg ta in
       ta
