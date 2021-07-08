@@ -3200,9 +3200,12 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
   let is_var_anonymous : Context.t -> tid -> bool =
     fun ctxt vid ->
-    let _, (_, _, count) = Vars.find_spec vid (Context.tyvar_names ctxt) in
-    (count = 1 && (Policy.hide_fresh Context.(policy ctxt))) (* we want to hide it *)
-    && not (Context.is_tyvar_bound vid ctxt) (* and it is not bound (if it is bound, it has to show up *)
+    match Context.shared_effect ctxt with
+    | Some v when v = vid -> true
+    | _ ->
+       let _, (_, _, count) = Vars.find_spec vid (Context.tyvar_names ctxt) in
+       (count = 1 && (Policy.hide_fresh Context.(policy ctxt))) (* we want to hide it *)
+       && not (Context.is_tyvar_bound vid ctxt) (* and it is not bound (if it is bound, it has to show up *)
 
   let rec var : (tid * Kind.t) printer
     = let open Printer in
