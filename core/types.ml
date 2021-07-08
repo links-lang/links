@@ -2939,6 +2939,28 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             in
             (o, tp)
 
+          method tyarg_list : Kind.t list -> type_arg list -> 'self_type * Kind.t list * type_arg list
+            = fun kinds tyargs ->
+            let kinds_others, kinds_last = ListUtils.unsnoc kinds in
+            let args_others, args_last = ListUtils.unsnoc tyargs in
+            match kinds_last, args_last with
+            | ((PrimaryKind.Row, (_, Restriction.Effect)),
+               (_ (* must be the same kind anyway *), (Row _ as r))) ->
+               begin
+                 let (o, r) = o#effect_row r in
+                 match r with
+                 | Some r ->
+                    (* nonempty shared effect row was returned (meaning there is some
+                       field that must be displayed here) => reattach the last row to
+                       the arguments *)
+                    (o, kinds, args_others @ [(PrimaryKind.Row, r)])
+                 | None ->
+                    (* all fields were eliminated, omit the whole row *)
+                    (o, kinds_others, args_others)
+               end
+            | _ -> (o, kinds, tyargs) (* doesn't have a shared effect row, return indentically *)
+
+
           (** This function will analyze an Alias and possibly omit the last type
               argument, if that is an effect row with the shared variable *)
           method alias : typ -> 'self_type * typ
@@ -2950,60 +2972,32 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             let (o, prop) =
               if ListUtils.empty kinds
               then (o, prop) (* no arguments to check *)
-              else begin
-                  let kinds_others, kinds_last = ListUtils.unsnoc kinds in
-                  let args_others, args_last = ListUtils.unsnoc tyargs in
-                  match kinds_last, args_last with
-                  | ((PrimaryKind.Row, (_, Restriction.Effect)),
-                     (_ (* must be the same kind *), (Row _ as r))) ->
-                     begin
-                       let (o, r) = o#effect_row r in
-                       match r with
-                       | Some r ->
-                          (* nonempty shared effect row was returned (meaning there
-                             is some field that must be displayed here) => reattach
-                             is to the arguments *)
-                          (o, (name, kinds, args_others @ [(PrimaryKind.Row, r)], dual))
-                       | None ->
-                          (* all fields were eliminated, omit the whole row *)
-                          (o, (name, kinds_others, args_others, dual))
-                     end
-                  | _ -> (o, prop)
-                end in
+              else let (o, kinds, tyargs) = o#tyarg_list kinds tyargs in
+                   (o, (name, kinds, tyargs, dual))
+            in
             let (o, tp) = o#typ tp in
             let al = Alias (prop, tp) in
             (o, al)
 
           (** This function unpacks Rec. App. and lets Alias handle it *)
-          (* TODO make a universal method instead and have both Alias and RecApp use it *)
           method recapp : typ -> 'self_type * typ
             = fun ra ->
-            let { r_name; r_dual; r_quantifiers; r_args; _ } as ra =
+            let { r_quantifiers; r_args; _ } as ra =
               match ra with
               | RecursiveApplication ra -> ra
               | _ -> assert false
             in
-            let al = Alias ((r_name, r_quantifiers, r_args, r_dual),
-                            Not_typed (* this is jut a placeholder *)) in
-            let (o, al) = o#alias al in
-            let ((_, r_quantifiers, r_args, _), _) = match al with
-              | Alias al -> al
-              | _ -> assert false
-            in
-            let ra = RecursiveApplication { ra with r_quantifiers; r_args } in
+            let (o, r_quantifiers, r_args) = o#tyarg_list r_quantifiers r_args in
+            let ra = RecursiveApplication { ra with r_quantifiers; r_args }in
             (o, ra)
 
           method! typ : typ -> 'self_type * typ
             = fun tp ->
-            (* if seen_shared_var
-             * then super#typ tp
-             * else begin *)
             match tp with
             | Function _ | Lolli _ -> o#func tp
             | Alias _ -> o#alias tp
             | RecursiveApplication _ -> o#recapp tp
             | _ -> super#typ tp
-            (* end *)
         end
 
     let ensugar_datatype : tid -> datatype -> datatype
