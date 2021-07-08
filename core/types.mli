@@ -43,6 +43,7 @@ module Policy : sig
     hide_fresh : bool;
     kinds : kind_policy;
     effect_sugar : bool;
+    es_arrows_explicit : bool;
   }
   val default_policy : unit -> t
 

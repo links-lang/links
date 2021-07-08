@@ -1999,16 +1999,23 @@ module Policy = struct
                 |> sync)
 
   let effect_sugar
-  = Settings.(flag "effect_sugar"
-              |> synopsis "Toggles the effect sugar in pretty printer."
-              |> convert parse_bool
-              |> sync)
+    = Settings.(flag "effect_sugar"
+                |> synopsis "Toggles the effect sugar in pretty printer."
+                |> convert parse_bool
+                |> sync)
 
-  type t = { quantifiers  : bool
-           ; flavours     : bool
-           ; hide_fresh   : bool
-           ; kinds        : kind_policy
-           ; effect_sugar : bool }
+  let effect_sugar_print_arrows_shared_explicit
+    = Settings.(flag "effect_sugar_print_shared_explicit"
+                |> synopsis "Toggles whether to explicitly print that an arrow has a shared effect."
+                |> convert parse_bool
+                |> sync)
+
+  type t = { quantifiers        : bool
+           ; flavours           : bool
+           ; hide_fresh         : bool
+           ; kinds              : kind_policy
+           ; effect_sugar       : bool
+           ; es_arrows_explicit : bool }
 
   let default_policy : unit -> t =
     fun () ->
@@ -2016,11 +2023,12 @@ module Policy = struct
       | None -> failwith "Invalid value of setting show_kinds."
       | Some s -> s
     in
-    { quantifiers  = Settings.get show_quantifiers
-    ; flavours     = Settings.get show_flavours
-    ; hide_fresh   = Settings.get hide_fresh_type_vars
-    ; kinds        = kp
-    ; effect_sugar = Settings.get effect_sugar }
+    { quantifiers        = Settings.get show_quantifiers
+    ; flavours           = Settings.get show_flavours
+    ; hide_fresh         = Settings.get hide_fresh_type_vars
+    ; kinds              = kp
+    ; effect_sugar       = Settings.get effect_sugar
+    ; es_arrows_explicit = Settings.get effect_sugar_print_arrows_shared_explicit }
 
   let quantifiers : t -> bool
     = fun p -> p.quantifiers
@@ -2032,6 +2040,8 @@ module Policy = struct
     = fun p -> p.kinds
   let effect_sugar : t -> bool
     = fun p -> p.effect_sugar
+  let es_arrows_explicit : t -> bool
+    = fun p -> p.es_arrows_explicit
 
   let set_quantifiers : bool -> t -> t
     = fun v p -> { p with quantifiers = v }
@@ -2043,6 +2053,8 @@ module Policy = struct
     = fun v p -> { p with kinds = v }
   let set_effect_sugar : bool -> t -> t
     = fun v p -> { p with effect_sugar = v }
+  let set_es_arrows_explicit : bool -> t -> t
+    = fun v p -> { p with es_arrows_explicit = v }
 end
 
 type names = (tid, string * Vars.spec) Hashtbl.t
@@ -2649,6 +2661,18 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
     let shared_effect : t -> tid option
       = fun { shared_effect ; _ } -> shared_effect
+
+    let shared_effect_exists : t -> bool
+      = fun { shared_effect ; _ } ->
+      match shared_effect with
+      | None -> false
+      | _ -> true
+
+    let is_shared_effect : tid -> t -> bool
+      = fun vid { shared_effect; _ } ->
+      match shared_effect with
+      | Some vid' when vid = vid' -> true
+      | _ -> false
 
     let set_shared_effect : tid option -> t -> t
       = fun shared_effect ctx -> { ctx with shared_effect }
@@ -3453,7 +3477,24 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                      match Unionfind.find (snd3 (extract_row_parts r)) with
                      | Var (vid, knd, _) ->
                         let anonymity = get_var_anonymity ctx vid in
-                        if anonymity = Anonymous
+                        (* decide whether to skip the variable:
+
+                           1) if explicit shared arrows are off => shared effects are
+                           hidden, and non-shared anonymous variables are made
+                           explicit to distinguish them from shared effects
+
+                           2) if explicit shared arrows are on => shared effects will
+                           be explicit (written as `-_->' | `-_-@'), and so non-shared
+                           anonymous variables can be hidden
+
+                           Both of these are only relevant if there is a shared effect
+                           to talk about. *)
+                        let skip = Context.shared_effect_exists ctx
+                                   && (match anonymity, Policy.es_arrows_explicit (Context.policy ctx) with
+                                       | (Anonymous, true) | (SharedEff, false) -> true
+                                       | _ -> false)
+                        in
+                        if skip
                         then () (* skip printing it entirely *)
                         else begin
                             (if is_wild
