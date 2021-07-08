@@ -2906,7 +2906,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                        | _ -> failwith "This should not happen!"
                      end in
                  let (o, kept) = FieldEnv.fold decide_field fields (o, FieldEnv.empty) in
-                 (o, Some (Row (kept, rv_pt, dual)))
+                 (* if no operations were kept, the whole row will be eliminated *)
+                 if FieldEnv.is_empty kept
+                 then (o, None)
+                 else (o, Some (Row (kept, rv_pt, dual)))
                end
             | _ ->
                (* this row doesn't need sugaring, return it identically *)
@@ -2924,7 +2927,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             let eff = match eff with
               | None ->
                  (* all fields were eliminated, shared row to be hidden *)
-                 (* TODO could use the helper here, but it's below this code, hence not in scope *)
+                 (* TODO could use the helper make_closed_row here, but it's below
+                    this code, hence not in scope *)
                  Row (FieldEnv.empty, closed_row_var, false)
               | Some r -> r (* some fields were kept, row needs to stay *)
             in
@@ -2953,11 +2957,6 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                   | ((PrimaryKind.Row, (_, Restriction.Effect)),
                      (_ (* must be the same kind *), (Row _ as r))) ->
                      begin
-                       (* match extract_row_var r with
-                        * | Some v when v = shared_var ->
-                        *    (\* found the row with a shared var, omit it *\)
-                        *    (o#see_shared, (name, kinds_others, args_others, dual))
-                        * | _ -> (o, prop) *)
                        let (o, r) = o#effect_row r in
                        match r with
                        | Some r ->
