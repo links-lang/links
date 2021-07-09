@@ -2005,30 +2005,35 @@ module Policy = struct
                 |> sync)
 
   module EffectSugar : sig
-    type opt = PresenceOmit | ArrowsExplicit | AliasOmit | ClosedDefault
+    type opt = PresenceOmit | ArrowsExplicit | AliasOmit | OpenDefault
     type t = opt list
     val default : unit -> t
 
     val presence_omit   : t -> bool
     val arrows_explicit : t -> bool
     val alias_omit      : t -> bool
-    val closed_default  : t -> bool
+    val open_default    : t -> bool
   end = struct
-    type opt = PresenceOmit | ArrowsExplicit | AliasOmit | ClosedDefault
-                                                             [@@deriving show]
+    type opt = PresenceOmit | ArrowsExplicit | AliasOmit | OpenDefault
     type t = opt list
     let default = [PresenceOmit ; AliasOmit]
 
+    let show_opt : opt -> string
+      = function
+      | PresenceOmit   -> "presence_omit"
+      | ArrowsExplicit -> "arrows_explicit"
+      | AliasOmit      -> "alias_omit"
+      | OpenDefault    -> "open_default"
     let string_of_opts = Settings.string_of_paths -<- List.map show_opt
 
     let parse_opts : string -> opt list
       = let parse_opt : string -> opt
           = fun s ->
-          match s with
-          | "PresenceOmit"   -> PresenceOmit
-          | "ArrowsExplicit" -> ArrowsExplicit
-          | "AliasOmit"      -> AliasOmit
-          | "ClosedDefault"  -> ClosedDefault
+          match String.lowercase_ascii s with
+          | "presence_omit"   -> PresenceOmit
+          | "arrows_explicit" -> ArrowsExplicit
+          | "alias_omit"      -> AliasOmit
+          | "open_default"    -> OpenDefault
           | _ -> failwith ("Invalid option: " ^ s)
         in
         let is_correct : opt list -> bool
@@ -2039,12 +2044,28 @@ module Policy = struct
         if is_correct lst then lst
         else failwith "Options cannot be duplicate."
 
+    let syno
+      = let fst = "Fine grained control over effect sugar (only works when \
+                   effect_sugar = true)." in
+        let lines =
+          [  "Options:"
+           ; " * presence_omit: omit presence polymorphic operations within effect rows (1)"
+           ; " * arrows_explicit: explicitly show empty (1) shared effect rows in arrows"
+           ; " * alias_omit: hide empty (1) shared effect rows in last argument of aliases"
+           ; " * open_default: effect rows are open by default, closed with syntax { |.}" ]
+        in
+        let buf = Buffer.create 600 in
+        let indent = String.make 15 ' ' in
+        Buffer.add_string buf fst;
+        List.iter (fun x -> Buffer.add_string buf "\n";
+                            Buffer.add_string buf indent;
+                            Buffer.add_string buf x) lines;
+        Buffer.contents buf
+
     let sugar_specifics : opt list Settings.setting
       = Settings.(multi_option ~default "effect_sugar_policy"
-                  |> synopsis "Fine grained control over effect sugar (only works \
-                               when effect_sugar = true).\n\
-                               Options:\n"
-                  |> hint "<default|>"
+                  |> synopsis syno
+                  |> hint "<presence_omit|arrows_explicit|alias_omit|closed_default>"
                   |> to_string string_of_opts
                   |> convert parse_opts
                   |> sync)
@@ -2052,7 +2073,7 @@ module Policy = struct
     let presence_omit   = List.mem PresenceOmit
     let arrows_explicit = List.mem ArrowsExplicit
     let alias_omit      = List.mem AliasOmit
-    let closed_default  = List.mem ClosedDefault
+    let open_default    = List.mem OpenDefault
 
     let default () = Settings.get sugar_specifics
   end

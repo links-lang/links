@@ -37,13 +37,25 @@ end
 
 module Policy : sig
   type kind_policy = Default | Full | Hide
+
+  module EffectSugar :  sig
+    type opt = PresenceOmit | ArrowsExplicit | AliasOmit | OpenDefault
+    type t = opt list
+    val default : unit -> t
+
+    val presence_omit   : t -> bool
+    val arrows_explicit : t -> bool
+    val alias_omit      : t -> bool
+    val open_default    : t -> bool
+  end
+
   type t = {
     quantifiers : bool;
     flavours : bool;
     hide_fresh : bool;
     kinds : kind_policy;
     effect_sugar : bool;
-    es_arrows_explicit : bool;
+    es_policy : EffectSugar.t;
   }
   val default_policy : unit -> t
 
