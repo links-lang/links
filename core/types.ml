@@ -2016,7 +2016,7 @@ module Policy = struct
   end = struct
     type opt = PresenceOmit | ArrowsExplicit | AliasOmit | OpenDefault
     type t = opt list
-    let default = [PresenceOmit ; AliasOmit]
+    let default_opts = [PresenceOmit ; AliasOmit]
 
     let show_opt : opt -> string
       = function
@@ -2040,9 +2040,12 @@ module Policy = struct
           = not -<- ListUtils.has_duplicates
         in
         fun s ->
-        let lst = List.map parse_opt (Settings.parse_paths s) in
-        if is_correct lst then lst
-        else failwith "Options cannot be duplicate."
+        match String.lowercase_ascii s with
+        | "none" -> []
+        | "default" -> default_opts
+        | _ -> let lst = List.map parse_opt (Settings.parse_paths s) in
+               if is_correct lst then lst
+               else failwith "Options cannot be duplicate."
 
     let syno
       = let fst = "Fine grained control over effect sugar (only works when \
@@ -2052,7 +2055,10 @@ module Policy = struct
            ; " * presence_omit: omit presence polymorphic operations within effect rows (1)"
            ; " * arrows_explicit: explicitly show empty (1) shared effect rows in arrows"
            ; " * alias_omit: hide empty (1) shared effect rows in last argument of aliases"
-           ; " * open_default: effect rows are open by default, closed with syntax { |.}" ]
+           ; " * open_default: effect rows are open by default, closed with syntax { |.}"
+           ; "Meta-options:"
+           ; " * none: turn all of the above off"
+           ; " * default: revert to default value"]
         in
         let buf = Buffer.create 600 in
         let indent = String.make 15 ' ' in
@@ -2063,9 +2069,9 @@ module Policy = struct
         Buffer.contents buf
 
     let sugar_specifics : opt list Settings.setting
-      = Settings.(multi_option ~default "effect_sugar_policy"
+      = Settings.(multi_option ~default:default_opts "effect_sugar_policy"
                   |> synopsis syno
-                  |> hint "<presence_omit|arrows_explicit|alias_omit|closed_default>"
+                  |> hint "<default|none|(presence_omit|arrows_explicit|alias_omit|closed_default)>"
                   |> to_string string_of_opts
                   |> convert parse_opts
                   |> sync)
