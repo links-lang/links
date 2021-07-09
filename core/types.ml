@@ -2933,8 +2933,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | _ -> super#typ tp
         end
 
-    let sugar_introducer shared_var operations
-      = object (o : 'self_type)
+    let sugar_introducer policy shared_var operations
+      = let module ES = Policy.EffectSugar in
+        object (o : 'self_type)
           inherit Transform.visitor as super
 
           (* The sugaring will eliminate almost all (1) presence polymorhpic
@@ -3007,8 +3008,12 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                             (o#mark_nonpoly_operation label, FieldEnv.add label field kept)
                        | _ -> failwith "This should not happen!"
                      end in
-                 let (o, kept) = FieldEnv.fold decide_field fields (o, FieldEnv.empty) in
-                 (* if no operations were kept, the whole row will be eliminated *)
+                 let (o, kept) =
+                   if ES.presence_omit policy
+                   then FieldEnv.fold decide_field fields (o, FieldEnv.empty)
+                   else (o, fields) (* keep every field *)
+                 in
+                 (* if no operations are present, the whole row may be eliminated *)
                  if FieldEnv.is_empty kept
                  then (o, None, rv_pt)
                  else (o, Some (Row (kept, rv_pt, dual)), rv_pt)
@@ -3056,8 +3061,14 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                        the arguments *)
                     (o, kinds, args_others @ [(PrimaryKind.Row, r)])
                  | None ->
-                    (* all fields were eliminated, omit the whole row *)
-                    (o, kinds_others, args_others)
+                    (* empty field spec (all fields were eliminated, or were never there) *)
+                    if ES.alias_omit policy
+                    then
+                      (* whole row omitted *)
+                      (o, kinds_others, args_others)
+                    else
+                      (* empty row kept in place *)
+                      (o, kinds, tyargs)
                end
             | _ -> (o, kinds, tyargs) (* doesn't have a shared effect row, return indentically *)
 
@@ -3105,7 +3116,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       = fun pol vid tp ->
       let (label_gatherer, _) = (label_gatherer vid)#typ tp in
       let nonpoly = label_gatherer#operations in
-      let o = sugar_introducer vid nonpoly in
+      let o = sugar_introducer pol vid nonpoly in
       let (_, tp) = o#typ tp in
       tp
 
@@ -3113,7 +3124,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       = fun pol vid ta ->
       let (label_gatherer, _) = (label_gatherer vid)#type_arg ta in
       let nonpoly = label_gatherer#operations in
-      let o = sugar_introducer vid nonpoly in
+      let o = sugar_introducer pol vid nonpoly in
       let (_, ta) = o#type_arg ta in
       ta
 
