@@ -2991,17 +2991,20 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                     match pre with
                     | Present _ | Absent ->
                        (* field has specified presence => it has to appear here
-                             (also mark it as already kept, so in other places where
-                             it's presence-poly, it can be omitted *)
+                          (also mark it as already kept, so in other places
+                          where it's presence-poly, it can be omitted *)
                        (o#mark_nonpoly_operation label, FieldEnv.add label field kept)
                     | Var _ ->
+                       (* TODO this is what needs to be changed next: need to check the poly var ids *)
                        (* presence polymorphic, need to decide whether to keep it *)
                        if fst (FieldEnv.find label o#operations)
-                       then (* occurs as nonpoly (or if only poly, it was already kept
-                                  elsewhere) => can be safely removed *)
+                       then (* occurs as nonpoly (or if only poly, it was
+                               already kept elsewhere) => can be safely removed
+                             *)
                          (o, kept)
-                       else (* only occurs as poly, and has not been kept elsewhere =>
-                                  keep it here, mark for removal in other occurences *)
+                       else (* only occurs as poly, and has not been kept
+                               elsewhere => keep it here, mark for removal in
+                               other occurences *)
                          (o#mark_nonpoly_operation label, FieldEnv.add label field kept)
                     | _ -> failwith "This should not happen!"
                   end
