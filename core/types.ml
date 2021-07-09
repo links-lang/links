@@ -2045,7 +2045,7 @@ module Policy = struct
         | "default" -> default_opts
         | _ -> let lst = List.map parse_opt (Settings.parse_paths s) in
                if is_correct lst then lst
-               else failwith "Options cannot be duplicate."
+               else failwith "Options cannot be duplicated."
 
     let syno
       = let fst = "Fine grained control over effect sugar (only works when \
@@ -2968,65 +2968,69 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               o#with_operations (StringMap.update label upd operations)
 
           method effect_row : row -> 'self_type * row option * row_var
-            = fun r ->
-            let (fields, rv_pt, dual) = unwrap_row r |> fst |> extract_row_parts in
-            let rvar = match Unionfind.find rv_pt with
-              | Var (vid, _, _) -> Some vid
-              | _ -> None
-            in
-            match rvar with
-            | Some vid when vid = shared_var ->
-               (* this row needs sugaring *)
-               begin
-                 (* here we need to filter out the fields that are:
-                    1) polymorphic in their presence, AND
-                    2) occur SOMEWHERE in the type as non-polymorphic (this is what
-                    the map `operations' is for)
+            = let decide_field : string -> field_spec -> 'self_type * field_spec_map -> 'self_type * field_spec_map
+                (* here we need to filter out the fields that are:
+                   1) polymorphic in their presence, AND
+                   2) occur SOMEWHERE in the type as non-polymorphic (this is
+                   what the map `operations' is for)
 
-                    The operations which are only presence-poly in the whole type
-                    (they have no non-poly occurence) have to appear once (we can't
-                    have them disappear completely). If this happens here, that
-                    operation will be marked (in `operations'), so in the next
-                    occurence, it can be hidden. *)
-                 let decide_field : string -> field_spec -> 'self_type * field_spec_map -> 'self_type * field_spec_map
-                   = fun label field (o, kept) ->
-                   if is_builtin_effect label
-                   then (o, FieldEnv.add label field kept) (* builtin effects are preserved here (TODO also hear?) *)
-                   else begin
-                       let pre = match field with
-                         | Meta pt -> Unionfind.find pt
-                         | _ -> field
-                       in
-                       match pre with
-                       | Present _ | Absent ->
-                          (* field has specified presence => it has to appear here
+                   The operations which are only presence-poly in the whole type
+                   (they have no non-poly occurence) have to appear once (we
+                   can't have them disappear completely). If this happens here,
+                   that operation will be marked (in `operations'), so in the
+                   next occurence, it can be hidden. *)
+                = fun label field (o, kept) ->
+                if is_builtin_effect label
+                then (o, FieldEnv.add label field kept) (* builtin effects are preserved here (TODO also hear?) *)
+                else begin
+                    let pre = match field with
+                      | Meta pt -> Unionfind.find pt
+                      | _ -> field
+                    in
+                    match pre with
+                    | Present _ | Absent ->
+                       (* field has specified presence => it has to appear here
                              (also mark it as already kept, so in other places where
                              it's presence-poly, it can be omitted *)
-                          (o#mark_nonpoly_operation label, FieldEnv.add label field kept)
-                       | Var _ ->
-                          (* presence polymorphic, need to decide whether to keep it *)
-                          if FieldEnv.find label o#operations
-                          then (* occurs as nonpoly (or if only poly, it was already kept
+                       (o#mark_nonpoly_operation label, FieldEnv.add label field kept)
+                    | Var _ ->
+                       (* presence polymorphic, need to decide whether to keep it *)
+                       if FieldEnv.find label o#operations
+                       then (* occurs as nonpoly (or if only poly, it was already kept
                                   elsewhere) => can be safely removed *)
-                            (o, kept)
-                          else (* only occurs as poly, and has not been kept elsewhere =>
+                         (o, kept)
+                       else (* only occurs as poly, and has not been kept elsewhere =>
                                   keep it here, mark for removal in other occurences *)
-                            (o#mark_nonpoly_operation label, FieldEnv.add label field kept)
-                       | _ -> failwith "This should not happen!"
-                     end in
-                 let (o, kept) =
-                   if ES.presence_omit policy
-                   then FieldEnv.fold decide_field fields (o, FieldEnv.empty)
-                   else (o, fields) (* keep every field *)
-                 in
-                 (* if no operations are present, the whole row may be eliminated *)
-                 if FieldEnv.is_empty kept
-                 then (o, None, rv_pt)
-                 else (o, Some (Row (kept, rv_pt, dual)), rv_pt)
-               end
-            | _ ->
-               (* this row doesn't need sugaring, return it identically *)
-               (o, Some r, rv_pt)
+                         (o#mark_nonpoly_operation label, FieldEnv.add label field kept)
+                    | _ -> failwith "This should not happen!"
+                  end
+              in
+              fun r ->
+              let (fields, rv_pt, dual) = unwrap_row r |> fst |> extract_row_parts in
+              let rvar = match Unionfind.find rv_pt with
+                | Var (vid, _, _) -> Some vid
+                | _ -> None
+              in
+              match rvar with
+              | Some vid when vid = shared_var ->
+                 (* this row needs sugaring *)
+                 begin
+                   let (o, kept) =
+                     if ES.presence_omit policy
+                     then
+                       FieldEnv.fold decide_field fields (o, FieldEnv.empty)
+                     else
+                       (o, fields) (* keep every field *)
+
+                   in
+                   (* if no operations are present, the whole row may be eliminated *)
+                   if FieldEnv.is_empty kept
+                   then (o, None, rv_pt)
+                   else (o, Some (Row (kept, rv_pt, dual)), rv_pt)
+                 end
+              | _ ->
+                 (* this row doesn't need sugaring, return it identically *)
+                 (o, Some r, rv_pt)
 
           method func : datatype -> 'self_type * datatype
             = fun tp ->
@@ -3057,9 +3061,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             let args_others, args_last = ListUtils.unsnoc tyargs in
             match kinds_last, args_last with
             | ((PrimaryKind.Row, (_, Restriction.Effect)),
-               (_ (* must be the same kind anyway *), (Row _ as r))) ->
+               (_ (* must be the same kind anyway *), (Row (_,_,dual) as r))) ->
                begin
-                 let (o, r, _) = o#effect_row r in
+                 let (o, r, rv) = o#effect_row r in
                  match r with
                  | Some r ->
                     (* nonempty shared effect row was returned (meaning there is some
@@ -3074,7 +3078,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                       (o, kinds_others, args_others)
                     else
                       (* empty row kept in place *)
-                      (o, kinds, tyargs)
+                      (o, kinds, args_others @ [(PrimaryKind.Row, Row (FieldEnv.empty, rv, dual))])
                end
             | _ -> (o, kinds, tyargs) (* doesn't have a shared effect row, return indentically *)
 
