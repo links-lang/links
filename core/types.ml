@@ -2571,8 +2571,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
   module Context = struct
 
     type ambient = Toplevel
-                 | Function
-                 | Linfun
+                 | Function of [ `Final | `Curried ]
+                 | Linfun   of [ `Final | `Curried ] (* TODO maybe merge these *)
                  | Presence
                  | Tuple
                  | Variant
@@ -2631,13 +2631,33 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     let toplevel : t -> t
       = set_ambient Toplevel
 
+    let set_ambient_arrow : [ `Final | `Curried ] -> t -> t
+      = fun f ({ ambient ; _ } as ctx) ->
+      match ambient with
+      | Linfun _ -> set_ambient (Linfun f) ctx
+      | _ -> set_ambient (Function f) ctx
+
     (* generator for these below *)
     let is_ambient_toplevel : t -> bool
       = fun { ambient ; _ } -> ambient = Toplevel
     let is_ambient_function : t -> bool
-      = fun { ambient ; _ } -> ambient = Function
+      = fun { ambient ; _ } -> match ambient with
+                               | Function _ -> true
+                               | _ -> false
     let is_ambient_linfun : t -> bool
-      = fun { ambient ; _ } -> ambient = Linfun
+      = fun { ambient ; _ } -> match ambient with
+                               | Linfun _ -> true
+                               | _ -> false
+    (* TODO not sure what to call it so it doesn't get confused with an unrestricted
+       function *)
+    let is_ambient_arrow_curried : t -> bool
+      = fun { ambient ; _ } -> match ambient with
+                               | Function `Curried | Linfun `Curried -> true
+                               | _ -> false
+    let is_ambient_arrow_final : t -> bool
+      = fun { ambient ; _ } -> match ambient with
+                               | Function `Final | Linfun `Final -> true
+                               | _ -> false
     let is_ambient_presence : t -> bool
       = fun { ambient ; _ } -> ambient = Presence
     let is_ambient_tuple : t -> bool
@@ -2732,8 +2752,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           | None ->
              let v = match tp with
                (* first, check if there are more arrows to the right (curried
-                        function: if so, walk down the curries function to the rightmost
-                        arrow/alias *)
+                  function: if so, walk down the curried function to the rightmost
+                  arrow/alias *)
                | Function (_,_,r) | Lolli (_,_,r) when allowed_in r ->
                   (fst (o#typ r))#var
 
@@ -2743,7 +2763,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                   extract_row_var e
 
                (* alternatively, this is the rightmost alias, which can also have a
-                        shared effect - this is by convention the last argument *)
+                  shared effect - this is by convention the last argument *)
                | Alias ((_,_,type_args,_), _)
                  | RecursiveApplication { r_args = type_args ; _ }
                     when allowed_in tp ->
@@ -3536,8 +3556,13 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           (* build up the function type string: domain, arrow with effects, range *)
           Printer.apply row (Context.set_ambient Context.Tuple ctx) domain buf; (* function domain is always a Record *)
           StringBuffer.write buf " ";
-          Printer.apply func_arrow ctx effects buf;
+
+          let finality = if SharedEffect.allowed_in range
+                         then `Curried else `Final in
+          Printer.apply func_arrow (Context.set_ambient_arrow finality ctx) effects buf;
           StringBuffer.write buf " ";
+
+
           Printer.apply datatype ctx range buf;
         )
 
@@ -3655,7 +3680,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | Primitive t        -> with_value primitive t
 
             | Function f         -> with_value func f
-            | Lolli f            -> with_ambient Context.Linfun func f
+            | Lolli f            -> with_ambient (Context.Linfun `Final) func f
 
             | Table tab          -> with_value table tab
             | Lens tp            -> with_value lens tp
