@@ -2571,8 +2571,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
   module Context = struct
 
     type ambient = Toplevel
-                 | Function of [ `Final | `Curried ]
-                 | Linfun   of [ `Final | `Curried ] (* TODO maybe merge these *)
+                 | Arrow of [ `Function | `Linear ] * [ `Final | `Curried ]
+                 (* | Function of [ `Final | `Curried ]
+                  * | Linfun   of [ `Final | `Curried ] (\* TODO maybe merge these *\) *)
                  | Presence
                  | Tuple
                  | Variant
@@ -2631,32 +2632,32 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     let toplevel : t -> t
       = set_ambient Toplevel
 
-    let set_ambient_arrow : [ `Final | `Curried ] -> t -> t
+    let set_ambient_arrow_finality : [ `Final | `Curried ] -> t -> t
       = fun f ({ ambient ; _ } as ctx) ->
       match ambient with
-      | Linfun _ -> set_ambient (Linfun f) ctx
-      | _ -> set_ambient (Function f) ctx
+      | Arrow (l, _) -> set_ambient (Arrow (l, f)) ctx
+      | _ -> raise tag_expectation_mismatch
 
-    (* generator for these below *)
+    let ambient_function_default : ambient = Arrow (`Function, `Final)
+    let ambient_linfun_default : ambient = Arrow (`Linear, `Final)
+
     let is_ambient_toplevel : t -> bool
       = fun { ambient ; _ } -> ambient = Toplevel
     let is_ambient_function : t -> bool
       = fun { ambient ; _ } -> match ambient with
-                               | Function _ -> true
+                               | Arrow (`Function, _) -> true
                                | _ -> false
     let is_ambient_linfun : t -> bool
       = fun { ambient ; _ } -> match ambient with
-                               | Linfun _ -> true
+                               | Arrow (`Linear, _) -> true
                                | _ -> false
-    (* TODO not sure what to call it so it doesn't get confused with an unrestricted
-       function *)
     let is_ambient_arrow_curried : t -> bool
       = fun { ambient ; _ } -> match ambient with
-                               | Function `Curried | Linfun `Curried -> true
+                               | Arrow (_, `Curried) -> true
                                | _ -> false
     let is_ambient_arrow_final : t -> bool
       = fun { ambient ; _ } -> match ambient with
-                               | Function `Final | Linfun `Final -> true
+                               | Arrow (_, `Final) -> true
                                | _ -> false
     let is_ambient_presence : t -> bool
       = fun { ambient ; _ } -> ambient = Presence
@@ -3557,9 +3558,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           Printer.apply row (Context.set_ambient Context.Tuple ctx) domain buf; (* function domain is always a Record *)
           StringBuffer.write buf " ";
 
-          let finality = if SharedEffect.allowed_in range
+          let finality = if SharedEffect.allowed_in range (* TODO maybe only if it's a function/linfun? *)
                          then `Curried else `Final in
-          Printer.apply func_arrow (Context.set_ambient_arrow finality ctx) effects buf;
+          Printer.apply func_arrow (Context.set_ambient_arrow_finality finality ctx) effects buf;
           StringBuffer.write buf " ";
 
 
@@ -3679,8 +3680,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | Present t          -> with_value presence t
             | Primitive t        -> with_value primitive t
 
-            | Function f         -> with_value func f
-            | Lolli f            -> with_ambient (Context.Linfun `Final) func f
+            | Function f         -> with_ambient Context.ambient_function_default func f
+            | Lolli f            -> with_ambient Context.ambient_linfun_default   func f
 
             | Table tab          -> with_value table tab
             | Lens tp            -> with_value lens tp
