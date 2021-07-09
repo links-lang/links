@@ -2874,7 +2874,12 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           inherit Transform.visitor as super
 
           val operations : op_map = StringMap.empty
-          method operations = operations (* TODO  *)
+
+          method operations =
+            StringMap.map
+              (fun (np, lst) -> (np, ListUtils.collect_duplicates (=) lst))
+              operations
+
           method with_operations operations = {< operations >}
 
           method effect_row : row -> 'self_type * row

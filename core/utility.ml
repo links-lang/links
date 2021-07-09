@@ -471,6 +471,14 @@ struct
     | elem :: elems -> (let _, others = List.partition (equal elem) elems in
                           elem :: unduplicate equal others)
 
+  (** Collects only elements which are duplicate in the original list. *)
+  let rec collect_duplicates equal = function
+    | [] -> []
+    | elem :: elems -> (let same, others = List.partition (equal elem) elems in
+                        if empty same
+                        then collect_duplicates equal others
+                        else elem :: collect_duplicates equal others)
+
   let rec ordered_consecutive = function
     | [] -> true
     | [_] -> true
