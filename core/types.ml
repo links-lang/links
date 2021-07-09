@@ -2866,46 +2866,42 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
     (** This object will gather all operations from the type's effects.  It returns a
         map: { label =>
-               (does the operation exists as non-polymorphic in its presence?) : bool } *)
+               (does the operation exists as non-polymorphic in its presence?,
+                list of presence-poly vars associated with this label) : bool * tid list } *)
+    type op_map = (bool * tid list) stringmap
     let label_gatherer shared_var
-      = let disj_update : bool -> bool option -> bool option
-          = fun is_np ->
-          function
-          | None -> Some is_np
-          | Some original -> Some (original || is_np)
-        in
-        object (o : 'self_type)
+      = object (o : 'self_type)
           inherit Transform.visitor as super
 
-          val operations : bool stringmap = StringMap.empty
-          method operations = operations
+          val operations : op_map = StringMap.empty
+          method operations = operations (* TODO  *)
           method with_operations operations = {< operations >}
 
-          (** Will add the operation as possibly polymorphic (but if it already exists
-              as non-polymorphic, it's unchanged. *)
-          method add_poly label =
-            let operations = StringMap.update label (disj_update false) operations in
-            {< operations >}
-
-          (** Will add the operation as definitely non-polymorphic (if it already
-              exists as polymorphic, it is changed to non-poly. *)
-          method add_nonpoly label =
-            let operations = StringMap.update label (disj_update true) operations in
-            {< operations >}
-
           method effect_row : row -> 'self_type * row
-            = let fold_fields : string -> field_spec -> bool stringmap -> bool stringmap
+            = let add_poly label pres_vid ops =
+                let upd = function
+                  | None           -> Some (false, [pres_vid])
+                  | Some (np, lst) -> Some (np, pres_vid :: lst)
+                in
+                StringMap.update label upd ops
+              in
+              let add_nonpoly label ops =
+                let upd = function
+                  | None          -> Some (true, [])
+                  | Some (_, lst) -> Some (true, lst)
+                in
+                StringMap.update label upd ops
+              in
+              let fold_fields : string -> field_spec -> op_map -> op_map
                 = fun label pres acc ->
                 let pres = match pres with
                   | Meta pt -> Unionfind.find pt
                   | _ -> pres
                 in
-                let is_nonpoly = match pres with
-                  | Present _ | Absent -> true
-                  | Var _ -> false
-                  | _ -> failwith "Field spec that is not a P|A|V !!"
-                in
-                StringMap.update label (disj_update is_nonpoly) acc
+                match pres with
+                | Present _ | Absent -> add_nonpoly label acc
+                | Var (pres_vid,_,_) -> add_poly label pres_vid acc
+                | _ -> failwith "Field spec that is not a P|A|V !!"
               in
               fun r ->
               let (fields, rvar, _) = unwrap_row r |> fst |> extract_row_parts in
@@ -2955,14 +2951,14 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
              preserved (the label must be visible in the type). This is what the map
              `operations' keeps track of. *)
 
-          val operations : bool stringmap = operations
+          val operations : op_map = operations
           method operations = operations
           method with_operations operations = {< operations >}
           method mark_nonpoly_operation : string -> 'self_type
-            = let upd : bool option -> bool option
+            = let upd : (bool * tid list) option -> (bool * tid list) option
                 = function
                 | None -> failwith "[*SI] should not happen?"
-                | Some _ -> Some true
+                | Some (_, lst) -> Some (true, lst)
               in
               fun label ->
               o#with_operations (StringMap.update label upd operations)
@@ -2995,7 +2991,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                        (o#mark_nonpoly_operation label, FieldEnv.add label field kept)
                     | Var _ ->
                        (* presence polymorphic, need to decide whether to keep it *)
-                       if FieldEnv.find label o#operations
+                       if fst (FieldEnv.find label o#operations)
                        then (* occurs as nonpoly (or if only poly, it was already kept
                                   elsewhere) => can be safely removed *)
                          (o, kept)
