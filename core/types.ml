@@ -3492,17 +3492,22 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                Both of these are only relevant if there is a shared effect to talk
                about. *)
             let anonymity = get_var_anonymity ctx vid in
-            let skip = match (Context.shared_effect_exists ctx, anonymity,
-                              Policy.es_arrows_explicit (Context.policy ctx)) with
-              | (true, SharedEff, true)  -> false
-              | (true, SharedEff, false) -> true
-              | (true, Anonymous, true)  -> true
-              | (true, Anonymous, false) -> false
-              | (false, Anonymous, _)    -> true
-              | (_, Visible, _)          -> false
-              | (false, SharedEff, _) -> assert false
-            in
-            skip
+            if Context.shared_effect_exists ctx
+            then begin
+                (* TODO support for currying *)
+                match (anonymity, Policy.es_arrows_explicit (Context.policy ctx)) with
+                | (Visible, _)       -> false
+                | (Anonymous, true)  -> true
+                | (Anonymous, false) -> false
+                | (SharedEff, true)  -> false
+                | (SharedEff, false) -> true
+              end
+            else match anonymity with
+                 | Anonymous -> true (* skip *)
+                 | Visible   -> false (* no skip *)
+                 | _         ->
+                    (* this is not supposed to happen if there is no shared effect variable *)
+                    raise tag_expectation_mismatch
           in
           Printer (fun ctx r buf ->
               let is_lolli = Context.is_ambient_linfun ctx in
