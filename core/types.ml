@@ -2004,18 +2004,65 @@ module Policy = struct
                 |> convert parse_bool
                 |> sync)
 
-  let effect_sugar_print_arrows_shared_explicit
-    = Settings.(flag "effect_sugar_print_shared_explicit"
-                |> synopsis "Toggles whether to explicitly print that an arrow has a shared effect."
-                |> convert parse_bool
-                |> sync)
+  module EffectSugar : sig
+    type opt = PresenceOmit | ArrowsExplicit | AliasOmit | ClosedDefault
+    type t = opt list
+    val default : unit -> t
+
+    val presence_omit   : t -> bool
+    val arrows_explicit : t -> bool
+    val alias_omit      : t -> bool
+    val closed_default  : t -> bool
+  end = struct
+    type opt = PresenceOmit | ArrowsExplicit | AliasOmit | ClosedDefault
+                                                             [@@deriving show]
+    type t = opt list
+    let default = [PresenceOmit ; AliasOmit]
+
+    let string_of_opts = Settings.string_of_paths -<- List.map show_opt
+
+    let parse_opts : string -> opt list
+      = let parse_opt : string -> opt
+          = fun s ->
+          match s with
+          | "PresenceOmit"   -> PresenceOmit
+          | "ArrowsExplicit" -> ArrowsExplicit
+          | "AliasOmit"      -> AliasOmit
+          | "ClosedDefault"  -> ClosedDefault
+          | _ -> failwith ("Invalid option: " ^ s)
+        in
+        let is_correct : opt list -> bool
+          = not -<- ListUtils.has_duplicates
+        in
+        fun s ->
+        let lst = List.map parse_opt (Settings.parse_paths s) in
+        if is_correct lst then lst
+        else failwith "Options cannot be duplicate."
+
+    let sugar_specifics : opt list Settings.setting
+      = Settings.(multi_option ~default "effect_sugar_policy"
+                  |> synopsis "Fine grained control over effect sugar (only works \
+                               when effect_sugar = true).\n\
+                               Options:\n"
+                  |> hint "<default|>"
+                  |> to_string string_of_opts
+                  |> convert parse_opts
+                  |> sync)
+
+    let presence_omit   = List.mem PresenceOmit
+    let arrows_explicit = List.mem ArrowsExplicit
+    let alias_omit      = List.mem AliasOmit
+    let closed_default  = List.mem ClosedDefault
+
+    let default () = Settings.get sugar_specifics
+  end
 
   type t = { quantifiers        : bool
            ; flavours           : bool
            ; hide_fresh         : bool
            ; kinds              : kind_policy
            ; effect_sugar       : bool
-           ; es_arrows_explicit : bool }
+           ; es_policy          : EffectSugar.t }
 
   let default_policy : unit -> t =
     fun () ->
@@ -2028,7 +2075,7 @@ module Policy = struct
     ; hide_fresh         = Settings.get hide_fresh_type_vars
     ; kinds              = kp
     ; effect_sugar       = Settings.get effect_sugar
-    ; es_arrows_explicit = Settings.get effect_sugar_print_arrows_shared_explicit }
+    ; es_policy          = EffectSugar.default () }
 
   let quantifiers : t -> bool
     = fun p -> p.quantifiers
@@ -2040,8 +2087,8 @@ module Policy = struct
     = fun p -> p.kinds
   let effect_sugar : t -> bool
     = fun p -> p.effect_sugar
-  let es_arrows_explicit : t -> bool
-    = fun p -> p.es_arrows_explicit
+  let es_policy : t -> EffectSugar.t
+    = fun p -> p.es_policy
 
   let set_quantifiers : bool -> t -> t
     = fun v p -> { p with quantifiers = v }
@@ -2053,8 +2100,8 @@ module Policy = struct
     = fun v p -> { p with kinds = v }
   let set_effect_sugar : bool -> t -> t
     = fun v p -> { p with effect_sugar = v }
-  let set_es_arrows_explicit : bool -> t -> t
-    = fun v p -> { p with es_arrows_explicit = v }
+  let set_es_policy : EffectSugar.t -> t -> t
+    = fun v p -> { p with es_policy = v }
 end
 
 type names = (tid, string * Vars.spec) Hashtbl.t
@@ -3495,7 +3542,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             if Context.shared_effect_exists ctx
             then begin
                 (* TODO support for currying *)
-                match (anonymity, Policy.es_arrows_explicit (Context.policy ctx)) with
+                let es_policy = Policy.es_policy (Context.policy ctx) in
+                match (anonymity, Policy.EffectSugar.arrows_explicit es_policy) with
                 | (Visible, _)       -> false
                 | (Anonymous, true)  -> true
                 | (Anonymous, false) -> false
