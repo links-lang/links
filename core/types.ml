@@ -2771,8 +2771,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     val allowed_in : typ -> bool
     val of_datatype : datatype -> tid option
     val of_type_arg : type_arg -> tid option
-    val ensugar_datatype : tid -> datatype -> datatype
-    val ensugar_type_arg : tid -> type_arg -> type_arg
+    val ensugar_datatype : Policy.EffectSugar.t -> tid -> datatype -> datatype
+    val ensugar_type_arg : Policy.EffectSugar.t -> tid -> type_arg -> type_arg
   end = struct
 
     let extract_row_var r =
@@ -3101,16 +3101,16 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | _ -> super#typ tp
         end
 
-    let ensugar_datatype : tid -> datatype -> datatype
-      = fun vid tp ->
+    let ensugar_datatype : Policy.EffectSugar.t -> tid -> datatype -> datatype
+      = fun pol vid tp ->
       let (label_gatherer, _) = (label_gatherer vid)#typ tp in
       let nonpoly = label_gatherer#operations in
       let o = sugar_introducer vid nonpoly in
       let (_, tp) = o#typ tp in
       tp
 
-    let ensugar_type_arg : tid -> type_arg -> type_arg
-      = fun vid ta ->
+    let ensugar_type_arg : Policy.EffectSugar.t -> tid -> type_arg -> type_arg
+      = fun pol vid ta ->
       let (label_gatherer, _) = (label_gatherer vid)#type_arg ta in
       let nonpoly = label_gatherer#operations in
       let o = sugar_introducer vid nonpoly in
@@ -3781,7 +3781,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     in
     let ctxt, ty = match shared_effect with
       | None -> ctxt, ty
-      | Some vid -> Context.set_shared_effect (Some vid) ctxt, SharedEffect.ensugar_datatype vid ty
+      | Some vid ->
+         (Context.set_shared_effect (Some vid) ctxt,
+          SharedEffect.ensugar_datatype (Policy.es_policy policy') vid ty)
     in
     Printer.generate_string datatype ctxt ty
 
@@ -3801,7 +3803,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     in
     let ctxt, tyarg = match shared_effect with
       | None -> ctxt, tyarg
-      | Some vid -> Context.set_shared_effect (Some vid) ctxt, SharedEffect.ensugar_type_arg vid tyarg
+      | Some vid ->
+         (Context.set_shared_effect (Some vid) ctxt,
+          SharedEffect.ensugar_type_arg (Policy.es_policy policy') vid tyarg)
     in
     Printer.generate_string type_arg ctxt tyarg
 
