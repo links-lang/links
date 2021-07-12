@@ -2867,7 +2867,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     (** This object will gather all operations from the type's effects.  It returns a
         map: { label =>
                (does the operation exists as non-polymorphic in its presence?,
-                list of presence-poly vars associated with this label) : bool * tid list } *)
+                list of *NON-FRESH* presence-poly vars associated with this label) : bool * tid list } *)
     type op_map = (bool * tid list) stringmap
     let label_gatherer shared_var
       = object (o : 'self_type)
@@ -2875,6 +2875,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
           val operations : op_map = StringMap.empty
 
+          (* This will only leave those presence variables, which occur multiple times <=>
+             are not fresh, and hence will need to be shown by printer *)
           method operations =
             StringMap.map
               (fun (np, lst) -> (np, ListUtils.collect_duplicates (=) lst))
@@ -2994,18 +2996,21 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                           (also mark it as already kept, so in other places
                           where it's presence-poly, it can be omitted *)
                        (o#mark_operation_visible label, FieldEnv.add label field kept)
-                    | Var _ ->
-                       (* TODO this is what needs to be changed next: need to check the poly var ids *)
+                    | Var (pres_vid,_,_) ->
                        (* presence polymorphic, need to decide whether to keep it *)
-                       if fst (FieldEnv.find label o#operations)
-                       then (* occurs as nonpoly (or if only poly, it was
-                               already kept elsewhere) => can be safely removed
-                             *)
-                         (o, kept)
-                       else (* only occurs as poly, and has not been kept
-                               elsewhere => keep it here, mark for removal in
-                               other occurences *)
+                       let (exists_nonpoly, nonfresh_vids) = FieldEnv.find label operations in
+                       if List.mem pres_vid nonfresh_vids
+                       then
+                         (* presence, but non-fresh => needs to be kept here *)
                          (o#mark_operation_visible label, FieldEnv.add label field kept)
+                       else
+                         (* fresh presence => only keep if the label doesn't appear anywhere else *)
+                         if not exists_nonpoly
+                         then
+                           (o#mark_operation_visible label, FieldEnv.add label field kept)
+                         else
+                           (* skip *)
+                           (o, kept)
                     | _ -> failwith "This should not happen!"
                   end
               in
