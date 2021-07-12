@@ -2648,8 +2648,6 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
     type ambient = Toplevel
                  | Arrow of [ `Function | `Linear ] * [ `Final | `Curried ]
-                 (* | Function of [ `Final | `Curried ]
-                  * | Linfun   of [ `Final | `Curried ] (\* TODO maybe merge these *\) *)
                  | Presence
                  | Tuple
                  | Variant
@@ -3661,15 +3659,18 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 | _ -> true
               in
               if visible_fields = 0
-              then if not row_var_exists
+              then if (not row_var_exists)
                    then begin
-                       (* empty closed row *)
-                       if Policy.EffectSugar.open_default (Policy.es_policy (Context.policy ctx))
-                       then
-                         (* effect sugar for rows open by default *)
-                         StringBuffer.write buf "{.}"
-                       else
-                         StringBuffer.write buf "{}"
+                       if not (Context.is_ambient_effect ctx)
+                       then begin
+                           (* empty closed row *)
+                           if Policy.EffectSugar.open_default (Policy.es_policy (Context.policy ctx))
+                           then
+                             (* effect sugar for rows open by default *)
+                             StringBuffer.write buf "{.}"
+                           else
+                             StringBuffer.write buf "{}"
+                         end
                      end
                    else (* empty open row => use the abbreviated notation -a- or ~a~
                            unless it's anonymous in which case we skip it entirely *)
@@ -3710,9 +3711,16 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           Printer.apply row (Context.set_ambient Context.Tuple ctx) domain buf; (* function domain is always a Record *)
           StringBuffer.write buf " ";
 
-          let finality = if SharedEffect.allowed_in range (* TODO maybe only if it's a function/linfun? *)
-                         then `Curried else `Final in
-          Printer.apply func_arrow (Context.set_ambient_arrow_finality finality ctx) effects buf;
+          let ctx' = if not (Context.is_ambient_effect ctx)
+                     then
+                       let finality = if SharedEffect.allowed_in range (* TODO maybe only if it's a function/linfun? *)
+                                      then `Curried else `Final in
+                       Context.set_ambient_arrow_finality finality ctx
+                     else
+                       (* If this is inside an effect row, preserve ambient, so we can get operation arrows *)
+                       ctx
+          in
+          Printer.apply func_arrow ctx' effects buf;
           StringBuffer.write buf " ";
 
 
