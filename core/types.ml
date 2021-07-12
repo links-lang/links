@@ -2958,8 +2958,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
           val operations : op_map = ops
 
-          (* this will mark that the operation was already kept visible somewhere, so its
-             fresh presence-poly occurences can be removed in the rest of the type *)
+          (* this will mark that the operation was already kept visible somewhere, so
+             its fresh presence-poly occurences can be removed in the rest of the type
+             *)
           method mark_operation_visible : string -> 'self_type
             = let upd : (bool * tid list) option -> (bool * tid list) option
                 = function
@@ -2970,25 +2971,27 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               let operations = StringMap.update label upd operations in
               {< operations >}
 
-          method effect_row : row -> 'self_type * row option * row_var
+          method effect_row : row -> 'self_type * row option * row_var * bool
             = let decide_field : string -> field_spec -> 'self_type * field_spec_map -> 'self_type * field_spec_map
                 (* here we need to filter out the fields that are:
                    1) polymorphic in their presence with a fresh variable, AND
-                   2) occur SOMEWHERE in the type as non-polymorphic (this is what the map
-                   `operations' is for)
+                   2) occur SOMEWHERE in the type as non-polymorphic (this is what the
+                   map `operations' is for)
 
-                   The operations which are only presence-poly in the whole type (they have
-                   no non-poly occurence) have to appear once (we can't have them disappear
-                   completely). If this happens here, that operation will be marked (in
-                   `operations'), so in the next occurence, it can be hidden.
+                   The operations which are only presence-poly in the whole type (they
+                   have no non-poly occurence) have to appear once (we can't have them
+                   disappear completely). If this happens here, that operation will be
+                   marked (in `operations'), so in the next occurence, it can be
+                   hidden.
 
-                   Presence-poly operations that have a non-fresh variable (in the list in
-                   `operations`) have to be shown in each occasion, because we need to
-                   inform the programmer that the variable is the same. *)
+                   Presence-poly operations that have a non-fresh variable (in the
+                   list in `operations`) have to be shown in each occasion, because we
+                   need to inform the programmer that the variable is the same. *)
                 = fun label field (o, kept) ->
                 if is_builtin_effect label
                 then
-                  (* builtin effects are preserved here (TODO also hear?; TODO a new option for this) *)
+                  (* builtin effects are preserved here (TODO also hear?; TODO a new
+                     option for this) *)
                   (o, FieldEnv.add label field kept)
                 else begin
                     let pre = match field with
@@ -2997,8 +3000,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                     in
                     match pre with
                     | Present _ | Absent ->
-                       (* field has specified presence => it has to appear here (also mark
-                          it as already kept, so in other places where it's fresh
+                       (* field has specified presence => it has to appear here (also
+                          mark it as already kept, so in other places where it's fresh
                           presence-poly, it can be omitted *)
                        (o#mark_operation_visible label, FieldEnv.add label field kept)
                     | Var (pres_vid,_,_) ->
@@ -3015,8 +3018,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                          if (not exists_nonpoly) && ListUtils.empty nonfresh_vids
                          then
                            (* TODO this is the most general case of a label appearing
-                              everywhere only as presence-poly, but never having the same
-                              presence variable; I believe this case is actually illegal? *)
+                              everywhere only as presence-poly, but never having the
+                              same presence variable; I believe this case is actually
+                              illegal? *)
                            let () = print_endline ("[*ALLPOLY] " ^ label) in
                            (o#mark_operation_visible label, FieldEnv.add label field kept)
                          else
@@ -3027,12 +3031,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               in
               fun r ->
               let (fields, rv_pt, dual) = unwrap_row r |> fst |> extract_row_parts in
-              let rvar = match Unionfind.find rv_pt with
-                | Var (vid, _, _) -> Some vid
-                | _ -> None
-              in
-              match rvar with
-              | Some vid when vid = shared_var ->
+              match Unionfind.find rv_pt with
+              | Var (vid, _, _) when vid = shared_var ->
                  (* this row needs sugaring *)
                  begin
                    let (o, kept) =
@@ -3041,17 +3041,22 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                        FieldEnv.fold decide_field fields (o, FieldEnv.empty)
                      else
                        (o, fields) (* keep every field *)
-
                    in
-                   (* if no operations are present, the whole row may be eliminated *)
-                   if FieldEnv.is_empty kept
-                   then (o, None, rv_pt)
-                   else (o, Some (Row (kept, rv_pt, dual)), rv_pt)
+                   (* if no operations are present, the whole row may be eliminated:
+                      this is signified by None (the actual decision of whether to
+                      completely remove it depends on the context where it appears and
+                      on the policy) *)
+                   let row_opt = if FieldEnv.is_empty kept
+                                 then None
+                                 else Some (Row (kept, rv_pt, dual))
+                   in
+                   (o, row_opt, rv_pt, dual) (* TODO this could be nicer *)
                  end
               | _ ->
                  (* this row doesn't need sugaring, return it identically *)
-                 (o, Some r, rv_pt)
+                 (o, Some r, rv_pt, dual)
 
+          (** This function will sugar the function effect row *)
           method func : datatype -> 'self_type * datatype
             = fun tp ->
             let fl, (dom, eff, cod) = match tp with
@@ -3060,12 +3065,12 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               | _ -> assert false
             in
             let (o, dom) = o#typ dom in
-            let (o, eff, eff_var) = o#effect_row eff in
+            let (o, eff, eff_var, eff_dual) = o#effect_row eff in
             let eff = match eff with
               | None ->
                  (* all fields were eliminated, the row var needs to stay in so that
-                    the printer knows it's there *)
-                 Row (FieldEnv.empty, eff_var, false)
+                    the printer knows it's the shared effect row *)
+                 Row (FieldEnv.empty, eff_var, eff_dual)
               | Some r -> r (* some fields were kept, row needs to stay *)
             in
             let (o, cod) = o#typ cod in
@@ -3075,6 +3080,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             in
             (o, tp)
 
+          (** This function handles a list of type arguments. By convention, if the
+              last argument is an effect row, it may be the shared effect and the sugar
+              may apply to it. *)
           method tyarg_list : Kind.t list -> type_arg list -> 'self_type * Kind.t list * type_arg list
             = fun kinds tyargs ->
             let kinds_others, kinds_last = ListUtils.unsnoc kinds in
@@ -3083,7 +3091,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | ((PrimaryKind.Row, (_, Restriction.Effect)),
                (_ (* must be the same kind anyway *), (Row (_,_,dual) as r))) ->
                begin
-                 let (o, r, rv) = o#effect_row r in
+                 let (o, r, rv, _) = o#effect_row r in
                  match r with
                  | Some r ->
                     (* nonempty shared effect row was returned (meaning there is some
@@ -3091,7 +3099,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                        the arguments *)
                     (o, kinds, args_others @ [(PrimaryKind.Row, r)])
                  | None ->
-                    (* empty field spec (all fields were eliminated, or were never there) *)
+                    (* empty field spec (all fields were eliminated, or were never
+                       there in the first place); this may be omitted completely,
+                       depending on policy *)
                     if ES.alias_omit policy
                     then
                       (* whole row omitted *)
@@ -3100,11 +3110,11 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                       (* empty row kept in place *)
                       (o, kinds, args_others @ [(PrimaryKind.Row, Row (FieldEnv.empty, rv, dual))])
                end
-            | _ -> (o, kinds, tyargs) (* doesn't have a shared effect row, return indentically *)
+            | _ ->
+               (* doesn't have a shared effect row, return indentically *)
+               (o, kinds, tyargs)
 
-
-          (** This function will analyze an Alias and possibly omit the last type
-              argument, if that is an effect row with the shared variable *)
+          (** Deconstruct Alias, let tyarg_list handle it *)
           method alias : typ -> 'self_type * typ
             = fun al ->
             let ((name, kinds, tyargs, dual) as prop, tp) = match al with
@@ -3121,7 +3131,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             let al = Alias (prop, tp) in
             (o, al)
 
-          (** This function unpacks Rec. App. and lets Alias handle it *)
+          (** Deconstruct Rec.App., let tyarg_list handle it *)
           method recapp : typ -> 'self_type * typ
             = fun ra ->
             let { r_quantifiers; r_args; _ } as ra =
