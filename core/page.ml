@@ -110,7 +110,7 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
   (* generate code to resolve JSONized toplevel let-bound values *)
   let resolve_toplevel_values : string list -> string =
     fun names ->
-      String.concat "" (List.map (fun name -> "    LINKS.resolveValue(state, " ^ name ^ ");\n") names)
+      String.concat "" (List.map (fun name -> "    " ^ name ^ " = LINKS.resolveValue(state, " ^ name ^ ");\n") names)
 
   let page : ?cgi_env:(string * string) list ->
              wsconn_url:(Webserver_types.websocket_url option) ->
