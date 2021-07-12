@@ -2868,7 +2868,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
     type op_entry = bool * tid list
     type op_map   = op_entry stringmap
-    (** This object will gather all operations from the type's effects. It returns an
+    (** This object will gather all operations from the type's effects. It creates an
         op_map: { label =>
                   (does the operation exists as non-polymorphic in its presence?,
                    list of *NON-FRESH* presence-poly vars associated with this label) } *)
@@ -3019,8 +3019,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                          then
                            (* TODO this is the most general case of a label appearing
                               everywhere only as presence-poly, but never having the
-                              same presence variable; I believe this case is actually
-                              illegal? *)
+                              same presence variable illegal? *)
                            (o#mark_operation_visible label, FieldEnv.add label field kept)
                          else
                            (* it is fresh, and is visible elsewhere, can be skipped *)
@@ -3473,7 +3472,14 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | _ -> ","
           in
           Printer.concat_printers ~sep printers ctx buf;
-          match meta rvar with
+          let var_printer = match meta rvar with
+            | Empty when (Context.is_ambient_effect ctx)
+                         && (Policy.EffectSugar.open_default (Policy.es_policy (Context.policy ctx))) ->
+               (* effect sugar: effect rows open by default => need to explicitly close this row *)
+               Printer (fun _ctx () buf -> StringBuffer.write buf ".")
+            | x -> x
+          in
+          match var_printer with
           | Empty -> ()
           | (Printer _) as pr ->
              begin
@@ -3620,6 +3626,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 (* TODO support for currying: if arrows are implicit, and the last one
                    has the shared effect, then this does not need to be printed (if
                    the row has been emptied by previous sugaring pass) *)
+                (* TODO another setting: if shared arrow is wild, any non-wild arrow
+                   is obviously not shared; and conversely for tame *)
                 let es_policy = Policy.es_policy (Context.policy ctx) in
                 let is_final = Context.is_ambient_arrow_final ctx in
                 let arrows_explicit = Policy.EffectSugar.arrows_explicit es_policy in
@@ -3654,7 +3662,15 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               in
               if visible_fields = 0
               then if not row_var_exists
-                   then StringBuffer.write buf "{}" (* empty closed row *)
+                   then begin
+                       (* empty closed row *)
+                       if Policy.EffectSugar.open_default (Policy.es_policy (Context.policy ctx))
+                       then
+                         (* effect sugar for rows open by default *)
+                         StringBuffer.write buf "{.}"
+                       else
+                         StringBuffer.write buf "{}"
+                     end
                    else (* empty open row => use the abbreviated notation -a- or ~a~
                            unless it's anonymous in which case we skip it entirely *)
                      match Unionfind.find (snd3 (extract_row_parts r)) with
