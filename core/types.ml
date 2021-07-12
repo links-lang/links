@@ -3117,18 +3117,17 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           (** Deconstruct Alias, let tyarg_list handle it *)
           method alias : typ -> 'self_type * typ
             = fun al ->
-            let ((name, kinds, tyargs, dual) as prop, tp) = match al with
+            let ((name, kinds, tyargs, dual), tp) = match al with
               | Alias a -> a
               | _ -> assert false
             in
-            let (o, prop) =
+            let (o, kinds, tyargs) =
               if ListUtils.empty kinds
-              then (o, prop) (* no arguments to check *)
-              else let (o, kinds, tyargs) = o#tyarg_list kinds tyargs in
-                   (o, (name, kinds, tyargs, dual))
+              then (o, kinds, tyargs) (* no arguments to check *)
+              else o#tyarg_list kinds tyargs
             in
             let (o, tp) = o#typ tp in
-            let al = Alias (prop, tp) in
+            let al = Alias ((name, kinds, tyargs, dual), tp) in
             (o, al)
 
           (** Deconstruct Rec.App., let tyarg_list handle it *)
