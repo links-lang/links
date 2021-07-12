@@ -2877,7 +2877,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
           (* This will only leave those presence variables, which occur multiple times <=>
              are not fresh, and hence will need to be shown by printer *)
-          method operations =
+          method get_operations =
             StringMap.map
               (fun (np, lst) -> (np, ListUtils.collect_duplicates (=) lst))
               operations
@@ -2917,6 +2917,12 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 | _ -> failwith "Field spec that is not a P|A|V !!"
               in
               fun r ->
+              print_endline "effect_row";
+              let oalst = StringMap.to_alist operations in
+              print_endline "operations:";
+              List.iter (fun (label, (is_np, lst)) -> print_endline ("  " ^ label ^ " => " ^ string_of_bool is_np ^ "; "
+                                                                     ^ List.fold_left (fun acc x -> acc ^ string_of_int x ^ ",") "" lst)) oalst;
+
               let (fields, rvar, _) = unwrap_row r |> fst |> extract_row_parts in
               let rvar = Unionfind.find rvar in
               match rvar with
@@ -2926,7 +2932,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                  let oalst = StringMap.to_alist operations' in
                  print_endline "operations:";
                  List.iter (fun (label, (is_np, lst)) -> print_endline ("  " ^ label ^ " => " ^ string_of_bool is_np ^ "; "
-                                                               ^ List.fold_left (fun acc x -> acc ^ string_of_int x ^ ",") "" lst)) oalst;
+                                                                        ^ List.fold_left (fun acc x -> acc ^ string_of_int x ^ ",") "" lst)) oalst;
                  (o#with_operations operations', r)
               (* TODO somewhere the object is not passed back and loses track of already existing presences *)
               | _ ->
@@ -2935,6 +2941,11 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
           method! typ : typ -> 'self_type * typ
             = fun tp ->
+            print_endline "typ";
+            let oalst = StringMap.to_alist operations in
+            print_endline "operations:";
+            List.iter (fun (label, (is_np, lst)) -> print_endline ("  " ^ label ^ " => " ^ string_of_bool is_np ^ "; "
+                                                                   ^ List.fold_left (fun acc x -> acc ^ string_of_int x ^ ",") "" lst)) oalst;
             match tp with
             | Function (d,e,r) | Lolli (d,e,r) ->
                let (o, _) = o#typ d in
@@ -3152,7 +3163,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     let ensugar_datatype : Policy.EffectSugar.t -> tid -> datatype -> datatype
       = fun pol vid tp ->
       let (label_gatherer, _) = (label_gatherer vid)#typ tp in
-      let nonpoly = label_gatherer#operations in
+      let nonpoly = label_gatherer#get_operations in
       let o = sugar_introducer pol vid nonpoly in
       let (_, tp) = o#typ tp in
       tp
@@ -3160,7 +3171,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     let ensugar_type_arg : Policy.EffectSugar.t -> tid -> type_arg -> type_arg
       = fun pol vid ta ->
       let (label_gatherer, _) = (label_gatherer vid)#type_arg ta in
-      let nonpoly = label_gatherer#operations in
+      let nonpoly = label_gatherer#get_operations in
       let o = sugar_introducer pol vid nonpoly in
       let (_, ta) = o#type_arg ta in
       ta
