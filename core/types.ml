@@ -3005,8 +3005,12 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                          (o#mark_operation_visible label, FieldEnv.add label field kept)
                        else
                          (* fresh presence => only keep if the label doesn't appear anywhere else *)
-                         if not exists_nonpoly
+                         if not exists_nonpoly && ListUtils.empty nonfresh_vids
                          then
+                           (* TODO this is the most general case of a label appearing
+                              everywhere only as presence-poly, but never having the same
+                              presence variable; I believe this case should not actually
+                              happen, but for now keeping this for completeness *)
                            (o#mark_operation_visible label, FieldEnv.add label field kept)
                          else
                            (* skip *)
