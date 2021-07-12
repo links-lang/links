@@ -184,7 +184,7 @@ struct
     let handle_exception = function
       | Aborted r -> Lwt.return r (* Aborts are not "real" errors, as
                                      every client call throws a
-                                     Proc.Abort. *)
+                                     Proc.Aborted. *)
       | e ->
          let req_data = Value.Env.request_data valenv in
          RequestData.set_http_response_code req_data 500;
