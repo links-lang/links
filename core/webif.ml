@@ -176,12 +176,12 @@ struct
       let mime_type = "text/html; charset=utf-8" in
       match e with
        | Failure msg as e ->
-          prerr_endline msg;
+          Debug.print (Printf.sprintf "Failure(%s)" msg);
           Lwt.return (mime_type, error_page (Errors.format_exception_html e))
        | exc ->
           Lwt.return (mime_type, error_page (Errors.format_exception_html exc)) in
 
-    let handle_error = function
+    let handle_exception = function
       | Aborted r -> Lwt.return r (* Aborts are not "real" errors. *)
       | e ->
          let req_data = Value.Env.request_data valenv in
@@ -193,7 +193,7 @@ struct
 
     Lwt.catch
       (fun () -> perform_request valenv run render_cont render_servercont_cont request )
-      (handle_error) >>=
-    fun (content_type, content) ->
+      handle_exception >>=
+      fun (content_type, content) ->
       response_printer [("Content-type", content_type)] content
 end
