@@ -2940,7 +2940,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           (o, r)
       end
 
-    let sugar_introducer policy shared_var operations
+    let sugar_introducer policy shared_var ops
       = let module ES = Policy.EffectSugar in
         object (o : 'self_type)
           inherit Transform.visitor as super
@@ -2956,33 +2956,40 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
              preserved (the label must be visible in the type). This is what the map
              `operations' keeps track of. *)
 
-          (* val operations : op_map = operations
-           * method operations = operations
-           * method with_operations operations = {< operations >} *)
+          val operations : op_map = ops
+
+          (* this will mark that the operation was already kept visible somewhere, so its
+             fresh presence-poly occurences can be removed in the rest of the type *)
           method mark_operation_visible : string -> 'self_type
             = let upd : (bool * tid list) option -> (bool * tid list) option
                 = function
                 | None -> failwith "[*SI] should not happen?"
                 | Some (_, lst) -> Some (true, lst)
               in
-              fun label -> o
-              (* o#with_operations (StringMap.update label upd operations) *)
+              fun label ->
+              let operations = StringMap.update label upd operations in
+              {< operations >}
 
           method effect_row : row -> 'self_type * row option * row_var
             = let decide_field : string -> field_spec -> 'self_type * field_spec_map -> 'self_type * field_spec_map
                 (* here we need to filter out the fields that are:
-                   1) polymorphic in their presence, AND
-                   2) occur SOMEWHERE in the type as non-polymorphic (this is
-                   what the map `operations' is for)
+                   1) polymorphic in their presence with a fresh variable, AND
+                   2) occur SOMEWHERE in the type as non-polymorphic (this is what the map
+                   `operations' is for)
 
-                   The operations which are only presence-poly in the whole type
-                   (they have no non-poly occurence) have to appear once (we
-                   can't have them disappear completely). If this happens here,
-                   that operation will be marked (in `operations'), so in the
-                   next occurence, it can be hidden. *)
+                   The operations which are only presence-poly in the whole type (they have
+                   no non-poly occurence) have to appear once (we can't have them disappear
+                   completely). If this happens here, that operation will be marked (in
+                   `operations'), so in the next occurence, it can be hidden.
+
+                   Presence-poly operations that have a non-fresh variable (in the list in
+                   `operations`) have to be shown in each occasion, because we need to
+                   inform the programmer that the variable is the same. *)
                 = fun label field (o, kept) ->
                 if is_builtin_effect label
-                then (o, FieldEnv.add label field kept) (* builtin effects are preserved here (TODO also hear?) *)
+                then
+                  (* builtin effects are preserved here (TODO also hear?; TODO a new option for this) *)
+                  (o, FieldEnv.add label field kept)
                 else begin
                     let pre = match field with
                       | Meta pt -> Unionfind.find pt
@@ -2990,9 +2997,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                     in
                     match pre with
                     | Present _ | Absent ->
-                       (* field has specified presence => it has to appear here
-                          (also mark it as already kept, so in other places
-                          where it's presence-poly, it can be omitted *)
+                       (* field has specified presence => it has to appear here (also mark
+                          it as already kept, so in other places where it's fresh
+                          presence-poly, it can be omitted *)
                        (o#mark_operation_visible label, FieldEnv.add label field kept)
                     | Var (pres_vid,_,_) ->
                        (* presence polymorphic, need to decide whether to keep it *)
@@ -3012,10 +3019,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                               presence variable; I believe this case is actually illegal? *)
                            let () = print_endline ("[*ALLPOLY] " ^ label) in
                            (o#mark_operation_visible label, FieldEnv.add label field kept)
-                         (* failwith ("[*ALLPOLY] " ^ label ^ " " ^ string_of_bool exists_nonpoly ^ " "
-                          *           ^ List.fold_left (fun acc x -> acc ^ string_of_int x ^ ",") "" nonfresh_vids) *)
                          else
-                           (* skip *)
+                           (* it is fresh, and is visible elsewhere, can be skipped *)
                            (o, kept)
                     | _ -> failwith "This should not happen!"
                   end
