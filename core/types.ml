@@ -3154,12 +3154,12 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       = fun pol vid tp ->
       let (label_gatherer, _) = (label_gatherer vid)#typ tp in
       let nonpoly = label_gatherer#get_operations in
-      print_endline "nonpoly:";
-      print_endline (StringMap.show (fun ppf (np, vars) ->
-                         Format.fprintf ppf "(ENP=%s, vars=[%s]"
-                           (string_of_bool np)
-                           (List.fold_left (fun acc x -> acc ^ string_of_int x ^ ",") "" vars))
-                       nonpoly);
+      (* print_endline "nonpoly:";
+       * print_endline (StringMap.show (fun ppf (np, vars) ->
+       *                    Format.fprintf ppf "(ENP=%s, vars=[%s]"
+       *                      (string_of_bool np)
+       *                      (List.fold_left (fun acc x -> acc ^ string_of_int x ^ ",") "" vars))
+       *                  nonpoly); *)
       let o = sugar_introducer pol vid nonpoly in
       let (_, tp) = o#typ tp in
       tp
@@ -3617,14 +3617,21 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             let anonymity = get_var_anonymity ctx vid in
             if Context.shared_effect_exists ctx
             then begin
-                (* TODO support for currying *)
+                (* TODO support for currying: if arrows are implicit, and the last one
+                   has the shared effect, then this does not need to be printed (if
+                   the row has been emptied by previous sugaring pass) *)
                 let es_policy = Policy.es_policy (Context.policy ctx) in
-                match (anonymity, Policy.EffectSugar.arrows_explicit es_policy) with
-                | (Visible, _)       -> false
-                | (Anonymous, true)  -> true
-                | (Anonymous, false) -> false
-                | (SharedEff, true)  -> false
-                | (SharedEff, false) -> true
+                let is_final = Context.is_ambient_arrow_final ctx in
+                let arrows_explicit = Policy.EffectSugar.arrows_explicit es_policy in
+                print_endline ("Final: " ^ string_of_bool is_final);
+                match (anonymity, is_final, arrows_explicit) with
+                | (  Visible,     _,     _) -> false
+                | (Anonymous,     _,  true) -> true
+                | (Anonymous, false, false) -> false (* ???? *)
+                | (Anonymous,  true, false) -> true  (* ???? *)
+                | (SharedEff,     _,  true) -> false
+                | (SharedEff,  true, false) -> true  (* ???? *)
+                | (SharedEff, false, false) -> false (* ???? *)
               end
             else match anonymity with
                  | Anonymous -> true (* skip *)
