@@ -2041,8 +2041,9 @@ module Policy = struct
         in
         fun s ->
         match String.lowercase_ascii s with
-        | "none" -> []
+        | "none"    -> []
         | "default" -> default_opts
+        | "all"     -> [PresenceOmit; ArrowsExplicit; AliasOmit; OpenDefault]
         | _ -> let lst = List.map parse_opt (Settings.parse_paths s) in
                if is_correct lst then lst
                else failwith "Options cannot be duplicated."
@@ -2058,9 +2059,10 @@ module Policy = struct
            ; " * open_default: effect rows are open by default, closed with syntax { |.}"
            ; "Meta-options:"
            ; " * none: turn all of the above off"
-           ; " * default: revert to default value"]
+           ; " * default: revert to default value"
+           ; " * all: turn all of the options on"]
         in
-        let buf = Buffer.create 600 in
+        let buf = Buffer.create 800 in
         let indent = String.make 15 ' ' in
         Buffer.add_string buf fst;
         List.iter (fun x -> Buffer.add_string buf "\n";
@@ -2071,7 +2073,7 @@ module Policy = struct
     let sugar_specifics : opt list Settings.setting
       = Settings.(multi_option ~default:default_opts "effect_sugar_policy"
                   |> synopsis syno
-                  |> hint "<default|none|(presence_omit|arrows_explicit|alias_omit|closed_default)>"
+                  |> hint "<default|none|all|(presence_omit|arrows_explicit|alias_omit|closed_default)>"
                   |> to_string string_of_opts
                   |> convert parse_opts
                   |> sync)
