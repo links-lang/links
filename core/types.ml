@@ -2864,113 +2864,19 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       let (o, _) = o#type_arg ta in
       o#var
 
-    (** This object will gather all operations from the type's effects.  It returns a
-        map: { label =>
-               (does the operation exists as non-polymorphic in its presence?,
-                list of *NON-FRESH* presence-poly vars associated with this label) : bool * tid list } *)
     type op_entry = bool * tid list
     type op_map   = op_entry stringmap
-    (* let label_gatherer shared_var
-     *   = object (o : 'self_type)
-     *       inherit Transform.visitor as super
-     * 
-     *       val operations : op_map = StringMap.empty
-     * 
-     *       (\* This will only leave those presence variables, which occur multiple times <=>
-     *          are not fresh, and hence will need to be shown by printer *\)
-     *       method get_operations =
-     *         StringMap.map
-     *           (fun (np, lst) -> (np, ListUtils.collect_duplicates (=) lst))
-     *           operations
-     * 
-     *       method with_operations operations = {< operations >}
-     * 
-     *       method effect_row : row -> 'self_type * row
-     *         = let add_poly label pres_vid ops =
-     *             print_endline ("Adding poly: " ^ label ^ " " ^ string_of_int pres_vid);
-     *             let upd = function
-     *               | None           -> print_endline "None => Some(false, [^vid])"; Some (false, [pres_vid])
-     *               | Some (np, lst) -> print_endline ("Some(" ^ string_of_bool np ^ ", "
-     *                                                  ^ List.fold_left (fun acc x -> acc ^ string_of_int x ^ ",") "" lst ^ ") => "
-     *                                                  ^ "Some(" ^ string_of_bool np ^ ", "
-     *                                                  ^ List.fold_left (fun acc x -> acc ^ string_of_int x ^ ",") "" (pres_vid :: lst)
-     *                                                  ^ ")"); Some (np, pres_vid :: lst)
-     *             in
-     *             StringMap.update label upd ops
-     *           in
-     *           let add_nonpoly label ops =
-     *             print_endline ("Adding nonpoly: " ^ label);
-     *             let upd = function
-     *               | None          -> Some (true, [])
-     *               | Some (_, lst) -> Some (true, lst)
-     *             in
-     *             StringMap.update label upd ops
-     *           in
-     *           let fold_fields : string -> field_spec -> op_map -> op_map
-     *             = fun label pres acc ->
-     *             let pres = match pres with
-     *               | Meta pt -> Unionfind.find pt
-     *               | _ -> pres
-     *             in
-     *             match pres with
-     *             | Present _ | Absent -> add_nonpoly label acc
-     *             | Var (pres_vid,_,_) -> add_poly label pres_vid acc
-     *             | _ -> failwith "Field spec that is not a P|A|V !!"
-     *           in
-     *           fun r ->
-     *           print_endline "effect_row";
-     *           let oalst = StringMap.to_alist operations in
-     *           print_endline "operations:";
-     *           List.iter (fun (label, (is_np, lst)) -> print_endline ("  " ^ label ^ " => " ^ string_of_bool is_np ^ "; "
-     *                                                                  ^ List.fold_left (fun acc x -> acc ^ string_of_int x ^ ",") "" lst)) oalst;
-     * 
-     *           let (fields, rvar, _) = unwrap_row r |> fst |> extract_row_parts in
-     *           let rvar = Unionfind.find rvar in
-     *           match rvar with
-     *           | Var (vid,_,_) when vid = shared_var ->
-     *              (\* this is a row with the shared var, collect its operations *\)
-     *              let operations' = StringMap.fold fold_fields fields operations in
-     *              let oalst = StringMap.to_alist operations' in
-     *              print_endline "operations:";
-     *              List.iter (fun (label, (is_np, lst)) -> print_endline ("  " ^ label ^ " => " ^ string_of_bool is_np ^ "; "
-     *                                                                     ^ List.fold_left (fun acc x -> acc ^ string_of_int x ^ ",") "" lst)) oalst;
-     *              (o#with_operations operations', r)
-     *           (\* TODO somewhere the object is not passed back and loses track of already existing presences *\)
-     *           | _ ->
-     *              (\* it is something else, some other row, don't collect *\)
-     *              (o, r)
-     * 
-     *       method! typ : typ -> 'self_type * typ
-     *         = fun tp ->
-     *         print_endline "typ";
-     *         let oalst = StringMap.to_alist operations in
-     *         print_endline "operations:";
-     *         List.iter (fun (label, (is_np, lst)) -> print_endline ("  " ^ label ^ " => " ^ string_of_bool is_np ^ "; "
-     *                                                                ^ List.fold_left (fun acc x -> acc ^ string_of_int x ^ ",") "" lst)) oalst;
-     *         match tp with
-     *         | Function (d,e,r) | Lolli (d,e,r) ->
-     *            let (o, _) = o#typ d in
-     *            let (o, _) = o#effect_row e in
-     *            let (o, _) = o#typ r in
-     *            (o, tp)
-     *         | Alias ((_,_,type_args,_), _)
-     *           | RecursiveApplication { r_args = type_args ; _ } when allowed_in tp ->
-     *            begin
-     *              (\* we know that a last element exists (and that it is an effect row),
-     *                 because that is also a condition in allowed_in *\)
-     *              let (_,last_row) = ListUtils.last type_args in
-     *              (\* reusing effect_row, because this is an effect row *\)
-     *              let (o, _) = o#effect_row last_row in
-     *              (o, tp)
-     *            end
-     *         | _ -> super#typ tp
-     *     end *)
-
+    (** This object will gather all operations from the type's effects. It returns an
+        op_map: { label =>
+                  (does the operation exists as non-polymorphic in its presence?,
+                   list of *NON-FRESH* presence-poly vars associated with this label) } *)
     let label_gatherer shared_var =
       object (o : 'self_type)
         inherit Transform.visitor as super
 
         val operations : op_map = StringMap.empty
+        (* We only want the non-fresh variables (the ones that appear more than once),
+           because these will have to be printed. *)
         method get_operations =
           StringMap.map (fun (np, lst) -> (np, ListUtils.collect_duplicates (=) lst)) operations
 
@@ -3004,7 +2910,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
              (o, tp)
           | Alias ((_,_,tyargs,_), _)
             | RecursiveApplication { r_args = tyargs ; _ } when allowed_in tp ->
-             (* a last element exists, because that is also a condition in `allowed_in' *)
+             (* a last element definitely exists, because that is also a condition in
+                `allowed_in' *)
              let (_, last_row) = ListUtils.last tyargs in
              let (o, _) = o#effect_row last_row in
              (o, tp)
@@ -3012,14 +2919,13 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
         method effect_row : row -> 'self_type * row
           = let fold_fields label field acc =
-              print_endline ("Folding " ^ label);
               let pre = match field with
                 | Meta pt -> Unionfind.find pt
                 | _ -> field
               in
               match pre with
-              | Present _ | Absent -> print_endline "NONPOLY"; acc#with_nonpoly_operation label
-              | Var (pres_vid,_,_) -> print_endline "~~~POLY"; acc#with_poly_operation label pres_vid
+              | Present _ | Absent -> acc#with_nonpoly_operation label
+              | Var (pres_vid,_,_) -> acc#with_poly_operation label pres_vid
               | _ -> assert false (* field spec can only be P|A|V *)
             in
             fun r ->
@@ -3027,7 +2933,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             let rvar = Unionfind.find rvar in
             let o = match rvar with
               | Var (vid,_,_) when vid = shared_var ->
-                 (* this is a shared effect row *)
+                 (* this is a shared effect row, collect its operations *)
                  FieldEnv.fold fold_fields fields o
               | _ -> o (* not a shared effect row, ignore *)
           in
