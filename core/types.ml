@@ -2886,13 +2886,19 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
           method effect_row : row -> 'self_type * row
             = let add_poly label pres_vid ops =
+                print_endline ("Adding poly: " ^ label ^ " " ^ string_of_int pres_vid);
                 let upd = function
-                  | None           -> Some (false, [pres_vid])
-                  | Some (np, lst) -> Some (np, pres_vid :: lst)
+                  | None           -> print_endline "None => Some(false, [^vid])"; Some (false, [pres_vid])
+                  | Some (np, lst) -> print_endline ("Some(" ^ string_of_bool np ^ ", "
+                                                     ^ List.fold_left (fun acc x -> acc ^ string_of_int x ^ ",") "" lst ^ ") => "
+                                                     ^ "Some(" ^ string_of_bool np ^ ", "
+                                                     ^ List.fold_left (fun acc x -> acc ^ string_of_int x ^ ",") "" (pres_vid :: lst)
+                                                     ^ ")"); Some (np, pres_vid :: lst)
                 in
                 StringMap.update label upd ops
               in
               let add_nonpoly label ops =
+                print_endline ("Adding nonpoly: " ^ label);
                 let upd = function
                   | None          -> Some (true, [])
                   | Some (_, lst) -> Some (true, lst)
@@ -2916,7 +2922,13 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               match rvar with
               | Var (vid,_,_) when vid = shared_var ->
                  (* this is a row with the shared var, collect its operations *)
-                 (o#with_operations (StringMap.fold fold_fields fields operations), r)
+                 let operations' = StringMap.fold fold_fields fields operations in
+                 let oalst = StringMap.to_alist operations' in
+                 print_endline "operations:";
+                 List.iter (fun (label, (is_np, lst)) -> print_endline ("  " ^ label ^ " => " ^ string_of_bool is_np ^ "; "
+                                                               ^ List.fold_left (fun acc x -> acc ^ string_of_int x ^ ",") "" lst)) oalst;
+                 (o#with_operations operations', r)
+              (* TODO somewhere the object is not passed back and loses track of already existing presences *)
               | _ ->
                  (* it is something else, some other row, don't collect *)
                  (o, r)
@@ -3005,13 +3017,15 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                          (o#mark_operation_visible label, FieldEnv.add label field kept)
                        else
                          (* fresh presence => only keep if the label doesn't appear anywhere else *)
-                         if not exists_nonpoly && ListUtils.empty nonfresh_vids
+                         if (not exists_nonpoly) && ListUtils.empty nonfresh_vids
                          then
                            (* TODO this is the most general case of a label appearing
                               everywhere only as presence-poly, but never having the same
-                              presence variable; I believe this case should not actually
-                              happen, but for now keeping this for completeness *)
-                           (o#mark_operation_visible label, FieldEnv.add label field kept)
+                              presence variable; I believe this case is actually illegal? *)
+                           (* let () = print_endline ("[*ALLPOLY] " ^ label) in
+                            * (o#mark_operation_visible label, FieldEnv.add label field kept) *)
+                           failwith ("[*ALLPOLY] " ^ label ^ " " ^ string_of_bool exists_nonpoly ^ " "
+                                     ^ List.fold_left (fun acc x -> acc ^ string_of_int x ^ ",") "" nonfresh_vids)
                          else
                            (* skip *)
                            (o, kept)
