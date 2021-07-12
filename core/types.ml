@@ -2959,7 +2959,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           val operations : op_map = operations
           method operations = operations
           method with_operations operations = {< operations >}
-          method mark_nonpoly_operation : string -> 'self_type
+          method mark_operation_visible : string -> 'self_type
             = let upd : (bool * tid list) option -> (bool * tid list) option
                 = function
                 | None -> failwith "[*SI] should not happen?"
@@ -2993,7 +2993,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                        (* field has specified presence => it has to appear here
                           (also mark it as already kept, so in other places
                           where it's presence-poly, it can be omitted *)
-                       (o#mark_nonpoly_operation label, FieldEnv.add label field kept)
+                       (o#mark_operation_visible label, FieldEnv.add label field kept)
                     | Var _ ->
                        (* TODO this is what needs to be changed next: need to check the poly var ids *)
                        (* presence polymorphic, need to decide whether to keep it *)
@@ -3005,7 +3005,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                        else (* only occurs as poly, and has not been kept
                                elsewhere => keep it here, mark for removal in
                                other occurences *)
-                         (o#mark_nonpoly_operation label, FieldEnv.add label field kept)
+                         (o#mark_operation_visible label, FieldEnv.add label field kept)
                     | _ -> failwith "This should not happen!"
                   end
               in
