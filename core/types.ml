@@ -3007,8 +3007,6 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                     | Var (pres_vid,_,_) ->
                        (* presence polymorphic, need to decide whether to keep it *)
                        let (exists_nonpoly, nonfresh_vids) = FieldEnv.find label operations in
-                       print_endline ("Sugaring effect row: `" ^ label ^ "', existing nonpoly: " ^ string_of_bool exists_nonpoly
-                                      ^ ", with non-fresh vars: " ^ List.fold_left (fun acc x -> acc ^ "," ^ x) "" (List.map string_of_int nonfresh_vids));
                        if List.mem pres_vid nonfresh_vids
                        then
                          (* presence, but non-fresh => needs to be kept here *)
@@ -3021,7 +3019,6 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                               everywhere only as presence-poly, but never having the
                               same presence variable; I believe this case is actually
                               illegal? *)
-                           let () = print_endline ("[*ALLPOLY] " ^ label) in
                            (o#mark_operation_visible label, FieldEnv.add label field kept)
                          else
                            (* it is fresh, and is visible elsewhere, can be skipped *)
@@ -3155,6 +3152,12 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       = fun pol vid tp ->
       let (label_gatherer, _) = (label_gatherer vid)#typ tp in
       let nonpoly = label_gatherer#get_operations in
+      print_endline "nonpoly:";
+      print_endline (StringMap.show (fun ppf (np, vars) ->
+                         Format.fprintf ppf "(ENP=%s, vars=[%s]"
+                           (string_of_bool np)
+                           (List.fold_left (fun acc x -> acc ^ string_of_int x ^ ",") "" vars))
+                       nonpoly);
       let o = sugar_introducer pol vid nonpoly in
       let (_, tp) = o#typ tp in
       tp
