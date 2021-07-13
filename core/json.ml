@@ -108,7 +108,7 @@ let rec jsonize_value' : Value.t -> Yojson.Basic.t =
       `Assoc
         [("_clientAPID", AccessPointID.to_json apid);
          ("_clientId", ClientID.to_json cid);
-         ("_tag", `String "ClientAccessPoint ")
+         ("_tag", `String "ClientAccessPoint")
          ]
   | `AccessPointID (`ServerAccessPoint (apid)) ->
       `Assoc [("_serverAPID", AccessPointID.to_json apid);
@@ -133,7 +133,7 @@ let rec jsonize_value' : Value.t -> Yojson.Basic.t =
   | `SpawnLocation (`ClientSpawnLoc client_id) ->
       `Assoc
         [("_clientSpawnLoc", ClientID.to_json client_id);
-          ("_tag", `String "ServerSpawnLoc")
+          ("_tag", `String "ClientSpawnLoc")
         ]
   | `SpawnLocation (`ServerSpawnLoc) ->
       `Assoc [("_serverSpawnLoc", `List []);
