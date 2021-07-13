@@ -2005,35 +2005,41 @@ module Policy = struct
                 |> sync)
 
   module EffectSugar : sig
-    type opt = PresenceOmit | ArrowsExplicit | AliasOmit | OpenDefault
+    type opt = PresenceOmit | AliasOmit | ArrowsExplicit | ArrowsCurriedImplicit | OpenDefault
     type t = opt list
     val default : unit -> t
 
-    val presence_omit   : t -> bool
-    val arrows_explicit : t -> bool
-    val alias_omit      : t -> bool
-    val open_default    : t -> bool
+    val presence_omit           : t -> bool
+    val alias_omit              : t -> bool
+    val arrows_explicit         : t -> bool
+    val arrows_curried_implicit : t -> bool
+    val open_default            : t -> bool
   end = struct
-    type opt = PresenceOmit | ArrowsExplicit | AliasOmit | OpenDefault
+    type opt = PresenceOmit | AliasOmit (* omissions *)
+               | ArrowsExplicit | ArrowsCurriedImplicit (* arrows *)
+               | OpenDefault (* rows *)
     type t = opt list
-    let default_opts = [PresenceOmit ; AliasOmit]
+    let default_opts = [PresenceOmit ; AliasOmit; ArrowsCurriedImplicit]
+    let all_opts = [PresenceOmit ; AliasOmit ; ArrowsExplicit ; ArrowsCurriedImplicit ; OpenDefault]
 
     let show_opt : opt -> string
       = function
-      | PresenceOmit   -> "presence_omit"
-      | ArrowsExplicit -> "arrows_explicit"
-      | AliasOmit      -> "alias_omit"
-      | OpenDefault    -> "open_default"
+      | PresenceOmit          -> "presence_omit"
+      | ArrowsExplicit        -> "arrows_explicit"
+      | ArrowsCurriedImplicit -> "arrows_curried_implicit"
+      | AliasOmit             -> "alias_omit"
+      | OpenDefault           -> "open_default"
     let string_of_opts = Settings.string_of_paths -<- List.map show_opt
 
     let parse_opts : string -> opt list
       = let parse_opt : string -> opt
           = fun s ->
           match String.lowercase_ascii s with
-          | "presence_omit"   -> PresenceOmit
-          | "arrows_explicit" -> ArrowsExplicit
-          | "alias_omit"      -> AliasOmit
-          | "open_default"    -> OpenDefault
+          | "presence_omit"           -> PresenceOmit
+          | "arrows_explicit"         -> ArrowsExplicit
+          | "arrows_curried_implicit" -> ArrowsCurriedImplicit
+          | "alias_omit"              -> AliasOmit
+          | "open_default"            -> OpenDefault
           | _ -> failwith ("Invalid option: " ^ s)
         in
         let is_correct : opt list -> bool
@@ -2043,7 +2049,7 @@ module Policy = struct
         match String.lowercase_ascii s with
         | "none"    -> []
         | "default" -> default_opts
-        | "all"     -> [PresenceOmit; ArrowsExplicit; AliasOmit; OpenDefault]
+        | "all"     -> all_opts
         | _ -> let lst = List.map parse_opt (Settings.parse_paths s) in
                if is_correct lst then lst
                else failwith "Options cannot be duplicated."
@@ -2054,8 +2060,9 @@ module Policy = struct
         let lines =
           [  "Options:"
            ; " * presence_omit: omit presence polymorphic operations within effect rows (1)"
-           ; " * arrows_explicit: explicitly show empty (1) shared effect rows in arrows"
            ; " * alias_omit: hide empty (1) shared effect rows in last argument of aliases"
+           ; " * arrows_explicit: explicitly show empty (1) shared effect rows in arrows"
+           ; " * arrows_curried_implicit: curried functions (not final arrow) assumed implictly fresh"
            ; " * open_default: effect rows are open by default, closed with syntax { |.}"
            ; "Meta-options:"
            ; " * none: turn all of the above off"
@@ -2078,10 +2085,11 @@ module Policy = struct
                   |> convert parse_opts
                   |> sync)
 
-    let presence_omit   = List.mem PresenceOmit
-    let arrows_explicit = List.mem ArrowsExplicit
-    let alias_omit      = List.mem AliasOmit
-    let open_default    = List.mem OpenDefault
+    let presence_omit           = List.mem PresenceOmit
+    let alias_omit              = List.mem AliasOmit
+    let arrows_explicit         = List.mem ArrowsExplicit
+    let arrows_curried_implicit = List.mem ArrowsCurriedImplicit
+    let open_default            = List.mem OpenDefault
 
     let default () = Settings.get sugar_specifics
   end
