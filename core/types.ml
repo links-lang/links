@@ -3395,16 +3395,17 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           let print_var : string printer =
             Printer (fun ctx var_name buf ->
                 let anonymity = get_var_anonymity ctx vid in
-                let is_anonymous = (not in_binder) && (anonymity = Anonymous || anonymity = SharedEff) in
+                (* let is_anonymous = (not in_binder) && (anonymity = Anonymous || anonymity = SharedEff) in *)
                 let show_flexible = (Policy.flavours Context.(policy ctx)) && flavour = `Flexible in
                 let is_presence = (PrimaryKind.Presence = Kind.primary_kind knd) in
 
                 (if is_presence then StringBuffer.write buf "{");
                 (if show_flexible then StringBuffer.write buf "%");
-                (match is_anonymous, show_flexible with
-                 | true, true  -> ()
-                 | true, false -> StringBuffer.write buf "_"
-                 | _, _        -> StringBuffer.write buf var_name);
+                (match anonymity, show_flexible with
+                 | Anonymous, true  -> ()
+                 | Anonymous, false -> StringBuffer.write buf "_"
+                 | SharedEff, _     -> StringBuffer.write buf "$"
+                 | _, _             -> StringBuffer.write buf var_name);
                 (if is_presence then StringBuffer.write buf "}"))
           in
           if not in_binder
@@ -3644,17 +3645,28 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 (* TODO another setting: if shared arrow is wild, any non-wild arrow
                    is obviously not shared; and conversely for tame *)
                 let es_policy = Policy.es_policy (Context.policy ctx) in
+                let module ES = Policy.EffectSugar in
+
                 let is_final = Context.is_ambient_arrow_final ctx in
-                let arrows_explicit = Policy.EffectSugar.arrows_explicit es_policy in
-                print_endline ("Final: " ^ string_of_bool is_final);
-                match (anonymity, is_final, arrows_explicit) with
-                | (  Visible,     _,     _) -> false
-                | (Anonymous,     _,  true) -> true
-                | (Anonymous, false, false) -> false (* ???? *)
-                | (Anonymous,  true, false) -> true  (* ???? *)
-                | (SharedEff,     _,  true) -> false
-                | (SharedEff,  true, false) -> true  (* ???? *)
-                | (SharedEff, false, false) -> false (* ???? *)
+                let arrows_explicit = ES.arrows_explicit es_policy in
+                let arrows_curried_implicit = ES.arrows_curried_implicit es_policy in
+
+                (* match (anonymity, is_final, arrows_explicit, arrows_curried_implicit) with
+                 * | (  Visible,     _,     _,     _) -> false (\* decided Visible, cannot skip *\)
+                 * | (Anonymous,     _,  true,     _) -> true
+                 * | (Anonymous, false, false,     _) -> false (\* ???? *\)
+                 * | (Anonymous,  true, false,     _) -> true  (\* ???? *\)
+                 * | (SharedEff,     _,  true,     _) -> false
+                 * | (SharedEff,  true, false,     _) -> true  (\* ???? *\)
+                 * | (SharedEff, false, false,     _) -> false (\* ???? *\) *)
+                match anonymity with
+                | Visible -> false (* decided Visible, cannot skip *)
+                | Anonymous ->
+                   (* decision for anonymous vars based on policy *)
+                   arrows_explicit || ((not is_final) && arrows_curried_implicit)
+                | SharedEff ->
+                   (* decision for shared effect based on policy *)
+                   (not arrows_explicit)
               end
             else match anonymity with
                  | Anonymous -> true (* skip *)
