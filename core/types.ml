@@ -3511,14 +3511,15 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | _ -> ","
           in
           Printer.concat_printers ~sep printers ctx buf;
-          let var_printer = match meta rvar with
-            | Empty when (Context.is_ambient_effect ctx)
-                         && (Policy.EffectSugar.open_default (Policy.es_policy (Context.policy ctx))) ->
-               (* effect sugar: effect rows open by default => need to explicitly close this row *)
-               Printer (fun _ctx () buf -> StringBuffer.write buf ".")
-            | x -> x
-          in
-          match var_printer with
+          (* TODO row vars need special handling for sugar *)
+          (* let var_printer = match meta ctx rvar with
+           *   | Empty when (Context.is_ambient_effect ctx)
+           *                && (Policy.EffectSugar.open_default (Policy.es_policy (Context.policy ctx))) ->
+           *      (\* effect sugar: effect rows open by default => need to explicitly close this row *\)
+           *      Printer (fun _ctx () buf -> StringBuffer.write buf ".")
+           *   | x -> x
+           * in *)
+          match meta ctx rvar with
           | Empty -> ()
           | (Printer _) as pr ->
              begin
@@ -3586,18 +3587,27 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               if not (is_nullary && inside_variant)
               then ((if not (Context.is_ambient_tuple ctx) then StringBuffer.write buf ":");
                     Printer.apply datatype ctx tp buf)
-           | Meta pt -> Printer.apply (meta pt) ctx () buf
+           | Meta pt -> Printer.apply (meta ctx pt) ctx () buf
            (* (Samo): removed Context.Presence here, as it's nowhere used and it's
               useful to push the ambient through *)
            | _ -> raise tag_expectation_mismatch))
 
-  and meta : typ point -> unit printer
+  and meta : Context.t -> typ point -> unit printer
     = let open Printer in
-      fun pt ->
+      let module ES = Policy.EffectSugar in
+      fun ctx pt ->
+      let es_policy = Policy.es_policy (Context.policy ctx) in
       match Unionfind.find pt with
-      | Closed -> (* nothing happens; TODO (future) but maybe something should *sometimes* happen *)
-         Empty
-      | Var (id, knd, _) -> with_value var (id, knd)
+      (* TODO handling of row vars needs extension *)
+      | Closed ->
+         if (ES.open_default es_policy) && (Context.is_ambient_effect ctx)
+         then Printer (fun _ () buf -> StringBuffer.write buf ".")
+         else Empty
+      | Var (id, knd, _) ->
+         (* TODO check correctness *)
+         if (Context.is_ambient_effect ctx) && (ES.open_default es_policy) && (Context.is_shared_effect id ctx)
+         then Empty
+         else with_value var (id, knd)
       | Recursive r -> with_value recursive r
       | t -> with_value datatype t
 
@@ -3613,7 +3623,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                         else Context.set_ambient Context.Row ctx in
               (match r with
                | Row rp  -> Printer.apply row_parts ctx rp buf
-               | Meta pt -> Printer.apply (meta pt) ctx () buf
+               | Meta pt -> Printer.apply (meta ctx pt) ctx () buf
                | _ -> raise tag_expectation_mismatch);
               StringBuffer.write buf "}";
             end
@@ -3709,7 +3719,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               let is_wild = is_field_present fields wild in
               let visible_fields = (FieldEnv.size fields) - (if is_wild then 1 else 0) in
               let row_var_exists =
-                match meta rvar with
+                match meta ctx rvar with
                 | Empty -> false
                 | _ -> true
               in
@@ -3891,7 +3901,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               | RecursiveApplication { r_name = name; r_quantifiers = arg_kinds ; r_args = arg_types; r_dual = is_dual; _ }
               -> with_value alias_recapp (name, arg_kinds, arg_types, is_dual)
 
-            | Meta pt            -> meta pt
+            | Meta pt            -> meta ctx pt
             | Present t          -> with_value presence t
             | Primitive t        -> with_value primitive t
 
@@ -3934,7 +3944,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
   let string_of_row_var : Policy.t -> names -> row_var -> string
     = fun policy' names rvar ->
     let ctxt = Context.(with_policy policy' (with_tyvar_names names (empty ()))) in
-    match meta rvar with
+    match meta ctxt rvar with
     | Printer.Empty -> ""
     | (Printer.Printer _) as pr -> Printer.generate_string pr ctxt ()
 
