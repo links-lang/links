@@ -15,13 +15,19 @@ fun choice() {
 #
 
 # The "positive" handler
-var positive = handler(m) {
-    case Choose(_,k) -> k(true)
+sig positive : (Comp(a, {Choose:Bool |e})) -> Comp(a, {Choose{_} |e})
+fun positive(m)() {
+  handle(m()) {
+    case Choose(k) -> k(true)
     case Return(x)   -> x
-};
+  }
+}
 
 # The "I'll-take-everything" handler
-var enumerate = handler(m) {
-    case Choose(_,k) -> k(true) ++ k(false)
-    case Return(x)   -> [x]
-};
+sig enumerate : (Comp(a, {Choose:Bool |e})) -> Comp([a], {Choose{_} |e})
+fun enumerate(m)() {
+  handle(m()) {
+    case Choose(k) -> k(true) ++ k(false)
+    case Return(x) -> [x]
+  }
+}
