@@ -25,9 +25,9 @@ typename Queue(a) = (rear: [a], front: [a]);
 typename Option(a) = [|Some:a|None|];
 typename PrioQueue(a) = (high: Queue(a), low: Queue(a));
 typename Priority = [|High|Low|];
-typename Co(e::Eff) = () {Fork: (Co({ |e}), Priority) -> (), Yield |e}~> ();
+typename Co(e::Eff) = () {Fork: (Co({ |e}), Priority) -> (), Yield:() |e}~> ();
 typename Time = Int;
-typename Fiber0(e::Eff) = (prio: Priority, f: () {Fork: (Fiber0({ |e})) -> (), Yield |e}~> ());
+typename Fiber0(e::Eff) = (prio: Priority, f: () {Fork: (Fiber0({ |e})) -> (), Yield:() |e}~> ());
 typename SchedulerState(a) = (runQ: PrioQueue(a), prio: Priority, startTime: Time);
 typename Fiber(e::Eff) = (prio:Priority, f: (SchedulerState(Fiber({ |e}))) ~e~> ());
 typename FiberQueue(e::Eff) = PrioQueue(Fiber({ |e}));
@@ -116,22 +116,22 @@ fun fiberQueueLength(q){
     length(q.low.rear) + length(q.high.front) + length(q.high.rear) + length(q.low.front)
 }
 
-sig fork : (Fiber0({ |e})) {Fork: (Fiber0({ |e})) -> (), Yield |e}~> ()
+sig fork : (Fiber0({ |e})) {Fork: (Fiber0({ |e})) -> (), Yield:() |e}~> ()
 fun fork(f){
     do Fork(f)
 }
 
-sig yield: () {Yield |e}~> ()
+sig yield: () {Yield:() |e}~> ()
 fun yield(){
     do Yield
 }
 
-sig makeFiber: (Priority, () {Fork: (Fiber0({ |e})) -> (), Yield |e}~> ()) -> Fiber0({ |e})
+sig makeFiber: (Priority, () {Fork: (Fiber0({ |e})) -> (), Yield:() |e}~> ()) -> Fiber0({ |e})
 fun makeFiber(prio, f){
     (prio= prio, f=f)
 }
 
-sig forever: () {Yield |e}~> ()
+sig forever: () {Yield:() |e}~> ()
 fun forever(){ yield(); forever()}
 
 sig schedule: (Fiber0({ |e})) {Yield-, Fork- | e}~> ()
@@ -258,7 +258,7 @@ fun getPoints(){
     }
 }
 
-sig drawHorizontalLine: (Point, Point, String) {Yield |e}~> ()
+sig drawHorizontalLine: (Point, Point, String) {Yield:() |e}~> ()
 fun drawHorizontalLine(start, end, color){
     var div = getNodeById("box");
     var context = jsGetContext2D(div);
@@ -273,7 +273,7 @@ fun drawHorizontalLine(start, end, color){
     aux(absolute(diff.x), start)
 }
 
-sig drawVerticalLine: (Point, Point, String) {Yield |e}~> ()
+sig drawVerticalLine: (Point, Point, String) {Yield:() |e}~> ()
 fun drawVerticalLine(start, end, color){
     var div = getNodeById("box");
     var context = jsGetContext2D(div);
@@ -288,7 +288,7 @@ fun drawVerticalLine(start, end, color){
     aux(absolute(diff.y), start)
 }
 
-sig drawLineInColor: (Point, Point, String) {Yield |e}~> ()
+sig drawLineInColor: (Point, Point, String) {Yield:() |e}~> ()
 fun drawLineInColor(start, end, color){
     println("start drawing " ^^ color ^^ ", yield.");
     yield();
@@ -303,14 +303,14 @@ fun addStringToNode(string, id){
     appendChildren(<#><p style="text-align: center;"> {stringToXml(string)} </p></#>, node)
 }
 
-sig prepareDrawingFunction: (Point, Point, String) ~> () {Yield |e}~> ()
+sig prepareDrawingFunction: (Point, Point, String) ~> () {Yield:() |e}~> ()
 fun prepareDrawingFunction(start, end, color){
     fun(){
         drawLineInColor(start, end, color)
     }
 }
 
-sig setUpLineDrawing: (String) ~> () {Yield |e}~> ()
+sig setUpLineDrawing: (String) ~> () {Yield:() |e}~> ()
 fun setUpLineDrawing(color){
     var points = getPoints();
     switch(points){

@@ -1,0 +1,46 @@
+---
+config: tests/presence_type_arg.config
+---
+
+No implicit wild present with type unit [1]
+fun() { () } : () {wild}-> ()
+stderr : @..*
+exit : 1
+
+No implicit wild present with type unit [2]
+fun() { () } : () {wild |e}-> ()
+stderr : @..*
+exit : 1
+
+No implicit wild present with type unit [3]
+fun() { () } : () {Foo:(),wild,Bar:()}-> ()
+stderr : @..*
+exit : 1
+
+Absence application
+(bar=()) : T({-})
+stdout : (bar = ()) : T ({-})
+
+Present application
+(bar=(),foo=42) : T({:Int})
+stdout : (bar = (), foo = 42) : T ({:Int})
+
+Flexible application
+(bar=(),foo=true) : T({%})
+stdout : (bar = (), foo = true) : T ({:Bool})
+
+Named flexible application
+(bar=(),foo=true) : T({%p})
+stdout : (bar = (), foo = true) : T ({:Bool})
+
+Anonymous variable application [1]
+fun (r : T({_})) { r.bar }
+stdout : fun : (T ({_})) -> ()
+
+Anonymous variable application [2]
+fun (r : T({_})) { r }
+stdout : fun : (T ({a})) -> T ({a})
+
+Named variable application
+fun (r : T({p})) { r }
+stdout : fun : (T ({a})) -> T ({a})

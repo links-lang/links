@@ -9,6 +9,7 @@ TEST_DIR="tests"
 BLACKLIST = {
   "tests/empty_prelude.links",
   "tests/freezeml_prelude.links",
+  "tests/presence_type_arg_typename.links",
   "tests/modules/alien_blocks_dependency.links",
   "tests/modules/cyclicA.links",
   "tests/modules/cyclicB.links",
