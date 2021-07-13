@@ -37,7 +37,7 @@ fun dequeue() {do Dequeue}
 ## process queues
 
 # process queue computations
-typename Proc(e::Row) =
+typename Proc(e::Eff) =
   Comp ((), {Enqueue:(Proc({ |e})) {}-> (),
              Dequeue:Maybe(Proc({ |e}))
             |e});
