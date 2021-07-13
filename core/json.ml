@@ -63,9 +63,9 @@ let json_of_lens (db, lens) : Yojson.Basic.t =
 let jsonize_location loc = `String (Location.to_string loc)
 
 let rec cons_listify : Yojson.Basic.t list -> Yojson.Basic.t = function
-  | [] -> `Null
+  | [] -> `Assoc [("_tag", `String "List")]
   | x::xs ->
-      `Assoc [("_head", x); ("_tail", cons_listify xs)]
+      `Assoc [("_head", x); ("_tail", cons_listify xs); ("_tag", `String "List")]
 
 let rec jsonize_value' : Value.t -> Yojson.Basic.t =
   function
@@ -76,6 +76,7 @@ let rec jsonize_value' : Value.t -> Yojson.Basic.t =
   | `Socket _
       as r ->
       raise (Errors.runtime_error ("Can't jsonize " ^ Value.string_of_value r));
+
   | `FunctionPtr (f, fvs) ->
     let (_, _, _, location) = Tables.find Tables.fun_defs f in
     let location = jsonize_location location in
@@ -85,38 +86,59 @@ let rec jsonize_value' : Value.t -> Yojson.Basic.t =
       | Some fvs -> [("environment", jsonize_value' fvs)] in
     let entries = [
       ("func", `String (Js.var_name_var f));
-      ("location", location)] @ env_entry in
+      ("location", location)] @ env_entry @ ["_tag", `String "FunctionPtr"] in
     `Assoc entries
+
   | `ClientDomRef i ->
-      `Assoc [("_domRefKey", `String (string_of_int i))]
-  | `ClientFunction name -> `Assoc [("func", `String name)]
+      `Assoc [("_domRefKey", `String (string_of_int i)); ("_tag", `String "ClientDomRef")]
+
+  | `ClientFunction name -> `Assoc [("func", `String name); ("_tag", `String "ClientFunction")]
+
   | #Value.primitive_value as p -> jsonize_primitive p
+
   | `Variant (label, value) ->
-      `Assoc [("_label", `String label); ("_value", jsonize_value' value)]
+      `Assoc [("_label", `String label); ("_value", jsonize_value' value); ("_tag", `String "Variant")]
+
   | `Record fields ->
-    `Assoc (List.map (fun (k, v) -> (k, jsonize_value' v )) fields)
+    `Assoc ( (List.map (fun (k, v) -> (k, jsonize_value' v )) fields) @ [("_tag", `String "Record")])
+
   | `List l ->  cons_listify (List.map jsonize_value' l)
+
   | `AccessPointID (`ClientAccessPoint (cid, apid)) ->
       `Assoc
         [("_clientAPID", AccessPointID.to_json apid);
-         ("_clientId", ClientID.to_json cid)]
+         ("_clientId", ClientID.to_json cid);
+         ("_tag", `String "ClientAccessPoint ")
+         ]
   | `AccessPointID (`ServerAccessPoint (apid)) ->
-      `Assoc [("_serverAPID", AccessPointID.to_json apid)]
+      `Assoc [("_serverAPID", AccessPointID.to_json apid);
+         ("_tag", `String "ServerAccessPoint")
+      ]
   | `Pid (`ClientPid (client_id, process_id)) ->
       `Assoc
         [("_clientPid", ProcessID.to_json process_id);
-         ("_clientId", ClientID.to_json client_id) ]
+         ("_clientId", ClientID.to_json client_id);
+         ("_tag", `String "ClientPid")
+         ]
   | `Pid (`ServerPid (process_id)) ->
-      `Assoc [("_serverPid", ProcessID.to_json process_id)]
+      `Assoc [("_serverPid", ProcessID.to_json process_id);
+              ("_tag", `String "ServerPid")
+              ]
   | `SessionChannel (ep1, ep2) ->
       `Assoc
         [("_sessEP1", ChannelID.to_json ep1);
-         ("_sessEP2", ChannelID.to_json ep2)]
+         ("_sessEP2", ChannelID.to_json ep2);
+          ("_tag", `String "SessionChannel")
+         ]
   | `SpawnLocation (`ClientSpawnLoc client_id) ->
       `Assoc
-        [("_clientSpawnLoc", ClientID.to_json client_id)]
+        [("_clientSpawnLoc", ClientID.to_json client_id);
+          ("_tag", `String "ServerSpawnLoc")
+        ]
   | `SpawnLocation (`ServerSpawnLoc) ->
-      `Assoc [("_serverSpawnLoc", `List [])]
+      `Assoc [("_serverSpawnLoc", `List []);
+        ("_tag", `String "ServerSpawnLoc")
+      ]
   | `Alien -> raise (Errors.runtime_error "Can't jsonize alien")
 and jsonize_primitive : Value.primitive_value -> Yojson.Basic.t  = function
   | `Bool value -> `Bool value
