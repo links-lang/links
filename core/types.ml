@@ -2080,7 +2080,7 @@ module Policy = struct
     let sugar_specifics : opt list Settings.setting
       = Settings.(multi_option ~default:default_opts "effect_sugar_policy"
                   |> synopsis syno
-                  |> hint "<default|none|all|(presence_omit|arrows_explicit|alias_omit|closed_default)>"
+                  |> hint "<default|none|all|(presence_omit|alias_omit|arrows_explicit|arrows_curried_implicit|open_default)>"
                   |> to_string string_of_opts
                   |> convert parse_opts
                   |> sync)
@@ -3229,6 +3229,28 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
          in
          loop sep pr items ctx buf
 
+    let concat_items_with_ambients : sep:string -> 'a t -> 'a list -> Context.ambient option list -> Context.t -> StringBuffer.t -> unit
+      = let new_ctx ambient ctx =
+          match ambient with
+          | None         -> ctx
+          | Some ambient -> Context.set_ambient ambient ctx
+        in
+        fun ~sep pr items ambients ctx buf ->
+        match pr with
+        | Empty -> ()
+        | Printer _ ->
+           let rec loop
+             = fun sep pr items ctx buf ->
+             match items with
+             | [] -> ()
+             | [last,ambient] -> apply pr (new_ctx ambient ctx) last buf
+             | (not_last,ambient) :: rest ->
+                apply pr (new_ctx ambient ctx) not_last buf;
+                StringBuffer.write buf sep;
+                loop sep pr rest ctx buf
+           in
+           loop sep pr (List.combine items ambients) ctx buf
+
     let concat_printers : sep:string -> unit t list -> Context.t -> StringBuffer.t -> unit
       = fun ~sep prs ctx buf ->
       let rec loop sep ctx buf = function
@@ -3433,15 +3455,18 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               (if want_parens then StringBuffer.write buf ")");
             end)
 
-  and alias_recapp : (string * type_arg list * bool) printer
+  and alias_recapp : (string * Kind.t list * type_arg list * bool) printer
     = let open Printer in
-      Printer (fun ctx (name, arg_types, is_dual) buf ->
+      Printer (fun ctx (name, arg_kinds, arg_types, is_dual) buf ->
           (if is_dual then StringBuffer.write buf "~");
           StringBuffer.write buf (Module_hacks.Name.prettify name);
           (match arg_types with
            | [] -> ()
            | _ -> StringBuffer.write buf " (";
-                  Printer.concat_items ~sep:"," type_arg arg_types ctx buf;
+                  let ambients = List.map (function
+                                     | (PrimaryKind.Row, (_, Restriction.Effect)) -> Some Context.Effect
+                                     | _ -> None) arg_kinds in
+                  Printer.concat_items_with_ambients ~sep:"," type_arg arg_types ambients ctx buf;
                   StringBuffer.write buf ")"))
 
   and row_parts : row' printer
@@ -3584,7 +3609,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           | P.Type -> Printer.apply datatype ctx r buf
           | P.Row -> begin
               StringBuffer.write buf "{";
-              let ctx = Context.set_ambient Context.Row ctx in
+              let ctx = if Context.is_ambient_effect ctx then ctx
+                        else Context.set_ambient Context.Row ctx in
               (match r with
                | Row rp  -> Printer.apply row_parts ctx rp buf
                | Meta pt -> Printer.apply (meta pt) ctx () buf
@@ -3861,9 +3887,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | Var (vid, knd, _)  -> with_value var (vid, knd)
             | Recursive v        -> with_value recursive v
             | Application a      -> with_value application a
-            | Alias ((name, _, arg_types, is_dual), _)
-              | RecursiveApplication { r_name = name; r_args = arg_types; r_dual = is_dual; _ }
-              -> with_value alias_recapp (name, arg_types, is_dual)
+            | Alias ((name, arg_kinds, arg_types, is_dual), _)
+              | RecursiveApplication { r_name = name; r_quantifiers = arg_kinds ; r_args = arg_types; r_dual = is_dual; _ }
+              -> with_value alias_recapp (name, arg_kinds, arg_types, is_dual)
 
             | Meta pt            -> meta pt
             | Present t          -> with_value presence t

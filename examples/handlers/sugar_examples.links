@@ -54,13 +54,14 @@ g3 : (Comp ((),{Eff:() {}-> ()|$})) -_-> Comp (())
 
 # open_default
 g1 : (() {Eff:() -> ()|$}~> ()) -_-> () {Eff{_}|$}~> ()
-#                      ^                        ^ there are wrong, won't be here
+#                      ^ this will not be here  ^
 g2 : (() {Eff:() -> ()|.}~> ()) -> () {Eff{_}|.}~> ()
-g3 : (Comp ((),{Eff:() {.}-> ()|$})) -_-> Comp ((),{Eff{_}|$})
-#                       ^ this is wrong currently, it will disappear
+g3 : (Comp ((),{Eff:() -> ()|$})) -_-> Comp ((),{Eff{_}|$})
+#                            ^ this will not be here    ^
 
 # all = default + open_default = presence_omit,alias_omit,arrows_explicit,arrows_curried_implicit,open_default
 g1 : (() {Eff:() -> ()|$}~> ()) -> () ~$~> ()
+#                      ^ !!
 g2 : (() {Eff:() -> ()|.}~> ()) -> () {Eff{_}|.}~> ()
-g3 : (Comp ((),{Eff:() {.}-> ()|$})) -> Comp (())
-
+g3 : (Comp ((),{Eff:() -> ()|$})) -> Comp (())
+#                            ^ !!
