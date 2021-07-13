@@ -2647,8 +2647,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
   module Context = struct
 
     type ambient = Toplevel
-                 | Arrow of [ `Function | `Linear ] * [ `Final | `Curried ]
-                 | Presence
+                 | Arrow of [ `Function | `Linear (* | `Operation *) ] * [ `Final | `Curried ]
+                 (* TODO does it make sense to have a linear arrow in operation space? *)
+                 (* | Presence *)
                  | Tuple
                  | Variant
                  | Effect
@@ -2714,6 +2715,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
     let ambient_function_default : ambient = Arrow (`Function, `Final)
     let ambient_linfun_default : ambient = Arrow (`Linear, `Final)
+    (* let ambient_operation_default : ambient = Arrow (`Operation, `Final) *)
 
     let is_ambient_toplevel : t -> bool
       = fun { ambient ; _ } -> ambient = Toplevel
@@ -2725,6 +2727,11 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       = fun { ambient ; _ } -> match ambient with
                                | Arrow (`Linear, _) -> true
                                | _ -> false
+    (* let is_ambient_operation : t -> bool
+     *   = fun { ambient ; _ } -> match ambient with
+     *                            | Arrow (`Operation, `Final) -> true
+     *                            | Arrow (`Operation, `Curried) -> raise tag_expectation_mismatch (\* this should not happen, DEBUG *\)
+     *                            | _ -> false *)
     let is_ambient_arrow_curried : t -> bool
       = fun { ambient ; _ } -> match ambient with
                                | Arrow (_, `Curried) -> true
@@ -2733,8 +2740,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       = fun { ambient ; _ } -> match ambient with
                                | Arrow (_, `Final) -> true
                                | _ -> false
-    let is_ambient_presence : t -> bool
-      = fun { ambient ; _ } -> ambient = Presence
+    (* let is_ambient_presence : t -> bool
+     *   = fun { ambient ; _ } -> ambient = Presence *)
     let is_ambient_tuple : t -> bool
       = fun { ambient ; _ } -> ambient = Tuple
     let is_ambient_variant : t -> bool
@@ -3544,8 +3551,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               in
               if not (is_nullary && inside_variant)
               then ((if not (Context.is_ambient_tuple ctx) then StringBuffer.write buf ":");
-                    Printer.apply datatype (Context.set_ambient Context.Presence ctx) tp buf)
-           | Meta pt -> Printer.apply (meta pt) (Context.set_ambient Context.Presence ctx) () buf
+                    Printer.apply datatype ctx tp buf)
+           | Meta pt -> Printer.apply (meta pt) ctx () buf
+           (* (Samo): removed Context.Presence here, as it's nowhere used and it's
+              useful to push the ambient through *)
            | _ -> raise tag_expectation_mismatch))
 
   and meta : typ point -> unit printer
@@ -3840,7 +3849,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | Present t          -> with_value presence t
             | Primitive t        -> with_value primitive t
 
-            | Function f         -> with_ambient Context.ambient_function_default func f
+            | Function f         -> let ambient = if Context.is_ambient_effect ctx
+                                                  then Context.Effect (* TODO make this explicitly an operation arrow *)
+                                                  else Context.ambient_function_default in
+                                    with_ambient ambient func f
             | Lolli f            -> with_ambient Context.ambient_linfun_default   func f
 
             | Table tab          -> with_value table tab
