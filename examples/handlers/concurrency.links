@@ -3,15 +3,14 @@
 #
 
 # type of a concurrent computation
-typename Co(e::Row) = Comp ({Fork : (Co({ |e})) {}-> (),
-                             Yield : () | e},
-                            ());
+typename Co(e::Eff) = Comp ((), {Fork  : (Co({ |e})) {}-> (),
+                                 Yield : () | e});
 
 ## cooperative concurrency interface
 sig fork : (Co({ |e})) {Fork:(Co({ |e})) {}-> ()|_}~> ()
 fun fork(p) {do Fork(p)}
 
-sig yield : Comp({Yield:()|_}, ())
+sig yield : Comp((), {Yield:()|_})
 fun yield() {do Yield}
 
 # example abstract concurrent computation
@@ -25,7 +24,7 @@ fun test() {
   yield();
   println("M3 ");
   yield();
-  println("\n");
+  println("\n")
 }
 
 ## queue interface
@@ -38,15 +37,15 @@ fun dequeue() {do Dequeue}
 ## process queues
 
 # process queue computations
-typename Proc(e::Row) =
-  Comp ({Enqueue:(Proc({ |e})) {}-> (),
-         Dequeue:Maybe(Proc({ |e}))
-        |e}, ());
+typename Proc(e::Eff) =
+  Comp ((), {Enqueue:(Proc({ |e})) {}-> (),
+             Dequeue:Maybe(Proc({ |e}))
+            |e});
 
 # return true if the process queue is empty
-sig dequeueAndRun : Comp ({Enqueue:(Proc({ |e})) {}-> (),
-                           Dequeue:Maybe(Proc({ |e}))
-                      |e}, Bool)
+sig dequeueAndRun : Comp (Bool, {Enqueue:(Proc({ |e})) {}-> (),
+                                 Dequeue:Maybe(Proc({ |e}))
+                                |e})
 fun dequeueAndRun() {
   switch (dequeue()) {
     case (Just(p)) -> p(); false
@@ -72,10 +71,12 @@ sig scheduleBreadthFirst :
        Dequeue:Maybe(Proc({Fork{p}, Yield{q} |e}))
       |e})) ->
    Proc ({Fork{p}, Yield{q} | e})
-handler scheduleBreadthFirst {
-  case Yield(k)   -> enqueue(fun() {k (())}); runNext()
-  case Fork(p, k) -> enqueue(scheduleBreadthFirst(p)); k(())
-  case Return(()) -> runAll()
+fun scheduleBreadthFirst(m)() {
+  handle(m()) {
+    case Yield(k)   -> enqueue(fun() {k (())}); runNext()
+    case Fork(p, k) -> enqueue(scheduleBreadthFirst(p)); k(())
+    case Return(()) -> runAll()
+  }
 }
 
 # eagerly run forked processes
@@ -84,12 +85,14 @@ sig scheduleDepthFirst :
        Dequeue:Maybe(Proc({Fork{p}, Yield{q} |e}))
       |e})) ->
    Proc ({Fork{p}, Yield{q} | e})
-handler scheduleDepthFirst {
-  case Yield(k)   -> enqueue(fun() {k (())});
-                     runNext();
-  case Fork(p, k) -> enqueue(fun() {k (())});
-                     scheduleDepthFirst(p)()
-  case Return(()) -> runAll()
+fun scheduleDepthFirst(m)() {
+  handle(m()) {
+    case Yield(k)   -> enqueue(fun() {k (())});
+                       runNext()
+    case Fork(p, k) -> enqueue(fun() {k (())});
+                       scheduleDepthFirst(p)()
+    case Return(()) -> runAll()
+  }
 }
 
 # randomly choose when to run forked processes
@@ -98,34 +101,37 @@ sig scheduleRandom :
        Dequeue:Maybe(Proc({Fork{p}, Yield{q} |e}))
       |e})) ->
    Proc ({Fork{p}, Yield{q} | e})
-handler scheduleRandom {
-  case Yield(k)   -> enqueue(fun() {k (())}); runNext();
-  case Fork(p, k) -> if (random() < 0.5) {
-                       enqueue(scheduleRandom(p)); k(())
-                     } else {
-                       enqueue(fun() {k (())});
-                       scheduleRandom(p)()
-                     }
-  case Return(()) -> runAll()
+fun scheduleRandom(m)() {
+  handle(m()) {
+    case Yield(k)   -> enqueue(fun() {k (())}); runNext()
+    case Fork(p, k) -> if (random() < 0.5) {
+                         enqueue(scheduleRandom(p)); k(())
+                       } else {
+                         enqueue(fun() {k (())});
+                         scheduleRandom(p)()
+                       }
+    case Return(()) -> runAll()
+  }
 }
 
 
 ## queue implementation using a zipper
 sig zipQueue :
-  (Comp ({Enqueue:(s) {}-> (), Dequeue:Maybe(s)|e}, a)) ->
-   Comp ({Enqueue{_},          Dequeue{_}      |e}, a)
-fun zipQueue(m) {
-  (handler (front, back) {
-     case Enqueue(x, k) -> k(())(front, x :: back)
-     case Dequeue(k)    ->
-       switch ((front, back)) {
-         case ([], [])   -> k(Nothing)([], [])
-         case ([], back) -> var (x::front) = reverse(back);
-                            k(Just(x))(front, [])
-         case (x::front, back) -> k(Just(x))(front, back)
-       }
-     case Return(x) -> x
-   })([], [])(m)
+  (Comp (a, {Enqueue:(s) {}-> (), Dequeue:Maybe(s)|e})) ->
+   Comp (a, {Enqueue{_},          Dequeue{_}      |e})
+fun zipQueue(m)() {
+  handle(m())((front, back) <- ([], [])) {
+    case Enqueue(x, k) -> k((),(front, x :: back))
+    case Dequeue(k)    ->
+      switch ((front, back)) {
+        case ([], [])   -> k(Nothing,([], []))
+        case ([], back) -> var (x::front) = reverse(back);
+                           k(Just(x),(front, []))
+        case (x::front, back) ->
+                           k(Just(x),(front, back))
+      }
+    case Return(x) -> x
+  }
 }
 
 
