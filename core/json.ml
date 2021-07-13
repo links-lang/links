@@ -141,15 +141,15 @@ let rec jsonize_value' : Value.t -> Yojson.Basic.t =
       ]
   | `Alien -> raise (Errors.runtime_error "Can't jsonize alien")
 and jsonize_primitive : Value.primitive_value -> Yojson.Basic.t  = function
-  | `Bool value -> `Bool value
-  | `Int value -> `Int value
-  | `Float value -> `Float value
+  | `Bool value -> `Assoc [("_val", `Bool value); ("_tag", `String "Bool")]
+  | `Int value -> `Assoc [("_val", `Int value); ("_tag", `String "Int")]
+  | `Float value -> `Assoc [("_val", `Float value); ("_tag", `String "Float")]
   | `Char c ->
-      `Assoc [("_c", `String (String.make 1 c))]
-  | `Database db -> json_of_db db
-  | `Table t -> json_of_table t
-  | `XML xmlitem -> json_of_xmlitem xmlitem
-  | `String s -> `String s
+      `Assoc [("_c", `String (String.make 1 c)); ("_tag", `String "Char")]
+  | `Database db -> `Assoc [("_val", json_of_db db); ("_tag", `String "Database")]
+  | `Table t -> `Assoc [("_val", json_of_table t); ("_tag", `String "Table")]
+  | `XML xmlitem -> `Assoc [("_val", json_of_xmlitem xmlitem); ("_tag", `String "XML")]
+  | `String s -> `Assoc [("_val", `String s); ("_tag", `String "String")]
 and json_of_xmlitem = function
   | Value.Text s ->
       `Assoc [("type", `String "TEXT"); ("text", `String s)]
