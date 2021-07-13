@@ -1,0 +1,66 @@
+# Effect sugar examples:
+
+# Functions (defined with no sugar):
+# (Note that all the functions do the same thing, they just have different signature)
+
+sig g1 : (() {Eff:()|e}~> ()) -> (() {Eff{_}|e}~> ())
+fun g1(x)() { handle(x()) { case Return() -> () case Eff(res) -> () } };
+# g1 = fun : (() {Eff:() -> ()|a}~> ()) -> () {Eff{_}|a}~> ()
+
+sig g2 : (() {Eff:()}~> ()) -> (() {Eff{_}}~> ())
+fun g2(x)() { handle(x()) { case Return() -> () case Eff(res) -> () } };
+# g2 = fun : (() {Eff:() -> ()}~> ()) -> () {Eff{_}}~> ()
+
+sig g3 : (Comp((), {Eff|e})) -> Comp((), {Eff{_}|e})
+fun g3(x)() { handle(x()) { case Return() -> () case Eff(res) -> () } };
+# g3 = fun : (Comp ((),{Eff:() {}-> ()|a})) -> Comp ((),{Eff{_}|a})
+
+
+# Effect sugar on, empty policy:
+g1 : (() {Eff:() -> ()|$}~> ()) -_-> () {Eff{_}|$}~> ()
+g2 : (() {Eff:() -> ()}~> ()) -> () {Eff{_}}~> ()
+g3 : (Comp ((),{Eff:() {}-> ()|$})) -_-> Comp ((),{Eff{_}|$})
+
+# presence_omit (note that Eff{_} disappears)
+g1 : (() {Eff:() -> ()|$}~> ()) -_-> () ~> ()
+g2 : (() {Eff:() -> ()}~> ()) -> () {Eff{_}}~> ()
+g3 : (Comp ((),{Eff:() {}-> ()|$})) -_-> Comp ((),{ |$})
+
+# alias_omit ({ |$} would disappear in an alias (no such here))
+g1 : (() {Eff:() -> ()|$}~> ()) -_-> () {Eff{_}|$}~> ()
+g2 : (() {Eff:() -> ()}~> ()) -> () {Eff{_}}~> ()
+g3 : (Comp ((),{Eff:() {}-> ()|$})) -_-> Comp ((),{Eff{_}|$})
+
+# presence_omit,alias_omit (Eff{_} disappears, hence there is no { |$} and that disappears as well)
+g1 : (() {Eff:() -> ()|$}~> ()) -_-> () ~> ()
+g2 : (() {Eff:() -> ()}~> ()) -> () {Eff{_}}~> ()
+g3 : (Comp ((),{Eff:() {}-> ()|$})) -_-> Comp (())
+
+# arrows_explicit (makes shared effect arrows explicit)
+g1 : (() {Eff:() -> ()|$}~> ()) -> () {Eff{_}|$}~> ()
+g2 : (() {Eff:() -> ()}~> ()) -> () {Eff{_}}~> ()
+g3 : (Comp ((),{Eff:() {}-> ()|$})) -> Comp ((),{Eff{_}|$})
+
+# arrows_curried_implicit (hides non-shared fresh effects on arrows in a curried function)
+g1 : (() {Eff:() -> ()|$}~> ()) -> () {Eff{_}|$}~> ()
+g2 : (() {Eff:() -> ()}~> ()) -> () {Eff{_}}~> ()
+g3 : (Comp ((),{Eff:() {}-> ()|$})) -> Comp ((),{Eff{_}|$})
+
+# default = presence_omit,alias_omit,arrows_curried_implicit
+g1 : (() {Eff:() -> ()|$}~> ()) -> () ~> ()
+g2 : (() {Eff:() -> ()}~> ()) -> () {Eff{_}}~> ()
+g3 : (Comp ((),{Eff:() {}-> ()|$})) -_-> Comp (())
+#                                    ^ ???
+
+# open_default
+g1 : (() {Eff:() -> ()|$}~> ()) -_-> () {Eff{_}|$}~> ()
+#                      ^                        ^ there are wrong, won't be here
+g2 : (() {Eff:() -> ()|.}~> ()) -> () {Eff{_}|.}~> ()
+g3 : (Comp ((),{Eff:() {.}-> ()|$})) -_-> Comp ((),{Eff{_}|$})
+#                       ^ this is wrong currently, it will disappear
+
+# all = default + open_default = presence_omit,alias_omit,arrows_explicit,arrows_curried_implicit,open_default
+g1 : (() {Eff:() -> ()|$}~> ()) -> () ~$~> ()
+g2 : (() {Eff:() -> ()|.}~> ()) -> () {Eff{_}|.}~> ()
+g3 : (Comp ((),{Eff:() {.}-> ()|$})) -> Comp (())
+
