@@ -19,6 +19,12 @@ type json_string = string
 
 let nil_literal = `Null
 
+let lit : ?tag:string -> (string * Yojson.Basic.t) list -> Yojson.Basic.t
+  = fun ?tag fields ->
+  match tag with
+  | None -> `Assoc fields
+  | Some tag -> `Assoc (("_tag", `String tag) :: fields)
+
 (* Helper functions for jsonization *)
 (*
   SL:
@@ -53,19 +59,14 @@ let json_of_lens (db, lens) : Yojson.Basic.t =
     let open Lens.Database in
     db.serialize () in
   let l = Lens.Value.serialize lens in
-  `Assoc [
-    ("_lens",
-     `Assoc [
-       ("db", `String db);
-       ("lens", `String l)
-     ])]
+  lit ~tag:"Lens" [ ("_lens", lit [ ("db", `String db);
+                                    ("lens", `String l) ]) ]
 
 let jsonize_location loc = `String (Location.to_string loc)
 
 let rec cons_listify : Yojson.Basic.t list -> Yojson.Basic.t = function
-  | [] -> `Null
-  | x::xs ->
-      `Assoc [("_head", x); ("_tail", cons_listify xs)]
+  | [] -> lit ~tag:"List" []
+  | x::xs -> lit ~tag:"List" [("_head", x); ("_tail", cons_listify xs)]
 
 let rec jsonize_value' : Value.t -> Yojson.Basic.t =
   function
@@ -76,61 +77,56 @@ let rec jsonize_value' : Value.t -> Yojson.Basic.t =
   | `Socket _
       as r ->
       raise (Errors.runtime_error ("Can't jsonize " ^ Value.string_of_value r));
+
   | `FunctionPtr (f, fvs) ->
     let (_, _, _, location) = Tables.find Tables.fun_defs f in
     let location = jsonize_location location in
-    let env_entry =
+    let fields = [ ("func", `String (Js.var_name_var f));
+                   ("location", location) ]
+    in
+    let fields' =
       match fvs with
-      | None     -> []
-      | Some fvs -> [("environment", jsonize_value' fvs)] in
-    let entries = [
-      ("func", `String (Js.var_name_var f));
-      ("location", location)] @ env_entry in
-    `Assoc entries
+      | None     -> fields
+      | Some fvs -> ("environment", jsonize_value' fvs) :: fields in
+    lit ~tag:"FunctionPtr" fields'
   | `ClientDomRef i ->
-      `Assoc [("_domRefKey", `String (string_of_int i))]
-  | `ClientFunction name -> `Assoc [("func", `String name)]
+     lit ~tag:"ClientDomRef" [("_domRefKey", `String (string_of_int i))]
+  | `ClientFunction name -> lit ~tag:"ClientFunction" [("func", `String name); ("_tag", `String "ClientFunction")]
   | #Value.primitive_value as p -> jsonize_primitive p
   | `Variant (label, value) ->
-      `Assoc [("_label", `String label); ("_value", jsonize_value' value)]
+     lit ~tag:"Variant" [("_label", `String label); ("_value", jsonize_value' value)]
   | `Record fields ->
-    `Assoc (List.map (fun (k, v) -> (k, jsonize_value' v )) fields)
+     lit ~tag:"Record" (List.map (fun (k, v) -> (k, jsonize_value' v )) fields)
   | `List l ->  cons_listify (List.map jsonize_value' l)
   | `AccessPointID (`ClientAccessPoint (cid, apid)) ->
-      `Assoc
-        [("_clientAPID", AccessPointID.to_json apid);
-         ("_clientId", ClientID.to_json cid)]
+     lit ~tag:"ClientAccessPoint" [ ("_clientAPID", AccessPointID.to_json apid);
+                                     ("_clientId", ClientID.to_json cid) ]
   | `AccessPointID (`ServerAccessPoint (apid)) ->
-      `Assoc [("_serverAPID", AccessPointID.to_json apid)]
+     lit ~tag:"ServerAccessPoint" [ ("_serverAPID", AccessPointID.to_json apid) ]
   | `Pid (`ClientPid (client_id, process_id)) ->
-      `Assoc
-        [("_clientPid", ProcessID.to_json process_id);
-         ("_clientId", ClientID.to_json client_id) ]
+     lit ~tag:"ClientPid" [ ("_clientPid", ProcessID.to_json process_id);
+                            ("_clientId", ClientID.to_json client_id) ]
   | `Pid (`ServerPid (process_id)) ->
-      `Assoc [("_serverPid", ProcessID.to_json process_id)]
+     lit ~tag:"ServerPid"[ ("_serverPid", ProcessID.to_json process_id) ]
   | `SessionChannel (ep1, ep2) ->
-      `Assoc
-        [("_sessEP1", ChannelID.to_json ep1);
-         ("_sessEP2", ChannelID.to_json ep2)]
+     lit ~tag:"SessionChannel" [ ("_sessEP1", ChannelID.to_json ep1);
+                                 ("_sessEP2", ChannelID.to_json ep2) ]
   | `SpawnLocation (`ClientSpawnLoc client_id) ->
-      `Assoc
-        [("_clientSpawnLoc", ClientID.to_json client_id)]
+     lit ~tag:"ClientSpawnLoc" [ ("_clientSpawnLoc", ClientID.to_json client_id) ]
   | `SpawnLocation (`ServerSpawnLoc) ->
-      `Assoc [("_serverSpawnLoc", `List [])]
+     lit ~tag:"ServerSpawnLoc" [ ("_serverSpawnLoc", `List []) ]
   | `Alien -> raise (Errors.runtime_error "Can't jsonize alien")
 and jsonize_primitive : Value.primitive_value -> Yojson.Basic.t  = function
-  | `Bool value -> `Bool value
-  | `Int value -> `Int value
-  | `Float value -> `Float value
-  | `Char c ->
-      `Assoc [("_c", `String (String.make 1 c))]
-  | `Database db -> json_of_db db
-  | `Table t -> json_of_table t
-  | `XML xmlitem -> json_of_xmlitem xmlitem
-  | `String s -> `String s
+  | `Bool value -> lit ~tag:"Bool" [ ("_value", `Bool value) ]
+  | `Int value -> lit ~tag:"Int"  [ ("_value", `Int value) ]
+  | `Float value -> lit ~tag:"Float" [ ("_value", `Float value) ]
+  | `Char c -> lit ~tag:"Char" [ ("_c", `String (String.make 1 c)) ]
+  | `Database db -> lit ~tag:"Database" [ ("_value", json_of_db db) ]
+  | `Table t -> lit ~tag:"Table" [ ("_value", json_of_table t) ]
+  | `XML xmlitem -> lit ~tag:"XML" [ ("_value", json_of_xmlitem xmlitem) ]
+  | `String s -> lit ~tag:"String" [ ("_value", `String s) ]
 and json_of_xmlitem = function
-  | Value.Text s ->
-      `Assoc [("type", `String "TEXT"); ("text", `String s)]
+  | Value.Text s -> lit ~tag:"Text" [("type", `String "TEXT"); ("text", `String s)]
   (* TODO: check that we don't run into problems when HTML containing
      an event handler is copied *)
   | Value.NsNode (ns, tag, xml) ->
@@ -145,14 +141,15 @@ and json_of_xmlitem = function
               let s = json_of_xmlitem xmlitem in
               attrs, s :: body) xml ([], [])
       in
-        let assocKeys = [
+      let assocKeys = [
           ("type", `String "ELEMENT");
           ("tagName", `String tag);
           ("attrs", `Assoc attrs);
-          ("children", cons_listify body)] in
-        let nsKey =
-          if (String.length ns > 0) then [("namespace", `String ns)] else [] in
-        `Assoc (assocKeys @ nsKey)
+          ("children", cons_listify body)]
+      in
+      lit ~tag:"NsNode" (if (String.length ns > 0)
+                         then ("namespace", `String ns) :: assocKeys
+                         else assocKeys)
   | Value.Node (name, children) -> json_of_xmlitem (Value.NsNode ("", name, children))
   | _ -> raise (Errors.runtime_error "Cannot jsonize a detached attribute.")
 
@@ -169,10 +166,11 @@ let show_processes procs =
   (* Show the JSON for a prcess, including the PID, process to be run, and mailbox *)
   let show_process (pid, (proc, msgs)) =
     let ms = `List (List.map jsonize_value' msgs) in
-    `Assoc
-      [("pid", ProcessID.to_json pid);
-       ("process", jsonize_value' proc);
-       ("messages", ms)] in
+    lit ~tag:"Process"
+      [ ("pid", ProcessID.to_json pid);
+        ("process", jsonize_value' proc);
+        ("messages", ms) ]
+  in
   let bnds = PidMap.bindings procs in
   `List (List.map show_process bnds)
 
@@ -183,10 +181,13 @@ let show_handlers evt_handlers =
        JS Array. This Array is supposed to be processes  by jslib code only*)
     let jsonize_handler_list = function
       | `List elems -> cons_listify (List.map jsonize_value' elems)
-      | _ ->  jsonize_value' proc in
-    `Assoc [
-      ("key", `Int key); ("eventHandlers", jsonize_handler_list proc)
-    ] in
+      | _ ->  jsonize_value' proc
+    in
+    (* TODO(dhil): We ought to tag the collection of event
+       handlers. Currently, this structure is handled specially by the
+       server value resolution algorithm in jslib. *)
+    lit [ ("key", `Int key); ("eventHandlers", jsonize_handler_list proc) ]
+  in
   let bnds = IntMap.bindings evt_handlers in
   `List (List.map show_evt_handler bnds)
 
@@ -198,25 +199,26 @@ let show_aps aps =
 let show_buffers bufs =
   let bufs =
     List.map (fun (endpoint_id, values) ->
-      let json_values = `List (List.rev (List.map jsonize_value' values)) in
-      `Assoc [
-        ("buf_id", ChannelID.to_json endpoint_id);
-        ("values", json_values)]) (ChannelIDMap.bindings bufs) in
+        let json_values = `List (List.rev (List.map jsonize_value' values)) in
+        (* TODO(dhil): Currently unclear whether we need to tag
+           buffers. *)
+        lit [ ("buf_id", ChannelID.to_json endpoint_id);
+              ("values", json_values) ])
+      (ChannelIDMap.bindings bufs)
+  in
   `List bufs
 
 let serialise_json_state client_id conn_url procs handlers aps bufs =
-  let ws_url_data =
-  (match conn_url with
-     | Some ws_conn_url ->
-         [("ws_conn_url", `String ws_conn_url)]
-     | None -> []) in
   let assoc_keys = [
     ("client_id", ClientID.to_json client_id);
     ("access_points", show_aps aps);
     ("buffers", show_buffers bufs);
     ("processes", show_processes procs);
-    ("handlers", show_handlers handlers) ] @ ws_url_data in
-  `Assoc assoc_keys
+    ("handlers", show_handlers handlers) ]
+  in
+  lit (match conn_url with
+       | None -> assoc_keys
+       | Some url -> ("ws_conn_url", `String url) :: assoc_keys)
 
 (* JSON state definition *)
 module JsonState = struct
@@ -285,7 +287,7 @@ end
 type json_state = JsonState.t
 
 let value_with_state v s =
-  `Assoc [("value", v); ("state", JsonState.to_json s)]
+  lit [ ("value", v); ("state", JsonState.to_json s) ]
 
 (* External interface *)
 let jsonize_value_with_state value state =
