@@ -58,7 +58,9 @@ let json_of_lens (db, lens) : Yojson.Basic.t =
      `Assoc [
        ("db", `String db);
        ("lens", `String l)
-     ])]
+     ]); 
+    ("_tag", `String "Lens")
+  ]
 
 let jsonize_location loc = `String (Location.to_string loc)
 
