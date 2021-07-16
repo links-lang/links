@@ -242,8 +242,9 @@ struct
           if IntMap.mem var rec_vars then
             o, (IntMap.find var rec_vars)
           else
-            (* FIXME: seems unnecessary to freshen type variables here! *)
-            let var' = fresh_raw_variable () in
+            (* FIXME: seems unnecessary to freshen type variables here!
+               TODO (Samo): the comment is likely right, check this again later *)
+            let var' = (* fresh_raw_variable () *) var in
             let point' = Unionfind.fresh (Var (var', kind, `Flexible)) in
             let rec_vars' = IntMap.add var point' rec_vars in
             let o = {< rec_vars = rec_vars' >} in
@@ -1656,6 +1657,9 @@ let hear = "hear"
 let wild_present   = (wild, Present unit_type)
 let hear_present t = (hear, Present t)
 
+let is_builtin_effect lbl =
+  lbl = wild || lbl = hear
+
 
 (* precondition: the row is unwrapped *)
 let is_tuple ?(allow_onetuples=false) row =
@@ -1995,16 +1999,111 @@ module Policy = struct
                 |> sync)
 
   let effect_sugar
-  = Settings.(flag "effect_sugar"
-              |> synopsis "Toggles the effect sugar in pretty printer."
-              |> convert parse_bool
-              |> sync)
+    = Settings.(flag "effect_sugar"
+                |> synopsis "Toggles the effect sugar in pretty printer."
+                |> convert parse_bool
+                |> sync)
 
-  type t = { quantifiers  : bool
-           ; flavours     : bool
-           ; hide_fresh   : bool
-           ; kinds        : kind_policy
-           ; effect_sugar : bool }
+  module EffectSugar : sig
+                                          (* TODO name; for now it's the One Effect To Rule Them All *)
+    type opt = PresenceOmit | AliasOmit | ArrowsShowTheOneEffect | ArrowsShowFresh | ContractOperationArrows | OpenDefault
+    type t = opt list
+    val default : unit -> t
+
+    val presence_omit             : t -> bool
+    val alias_omit                : t -> bool
+    val arrows_show_the_one       : t -> bool
+    val arrows_show_fresh         : t -> bool
+    val contract_operation_arrows : t -> bool
+    val open_default              : t -> bool
+  end = struct
+    type opt = PresenceOmit | AliasOmit | ArrowsShowTheOneEffect | ArrowsShowFresh | ContractOperationArrows | OpenDefault
+    type t = opt list
+    let default_opts = [PresenceOmit ; AliasOmit ; ContractOperationArrows]
+    let all_opts = [PresenceOmit ; AliasOmit ; ArrowsShowTheOneEffect ; ArrowsShowFresh ; ContractOperationArrows ; OpenDefault]
+
+    let show_opt : opt -> string
+      = function
+      | PresenceOmit            -> "presence_omit"
+      | ArrowsShowTheOneEffect  -> "arrows_show_the_one_effect"
+      | ArrowsShowFresh         -> "arrows_show_fresh"
+      | AliasOmit               -> "alias_omit"
+      | ContractOperationArrows -> "contract_operation_arrows"
+      | OpenDefault             -> "open_default"
+    let string_of_opts = Settings.string_of_paths -<- List.map show_opt
+
+    let parse_opts : string -> opt list
+      = let parse_opt : string -> opt
+          = fun s ->
+          match String.lowercase_ascii s with
+          | "presence_omit"              -> PresenceOmit
+          | "arrows_show_the_one_effect" -> ArrowsShowTheOneEffect
+          | "arrows_show_fresh"          -> ArrowsShowFresh
+          | "alias_omit"                 -> AliasOmit
+          | "contract_operation_arrows"  -> ContractOperationArrows
+          | "open_default"               -> OpenDefault
+          | _ -> failwith ("Invalid option: " ^ s)
+        in
+        let is_correct : opt list -> bool
+          = not -<- ListUtils.has_duplicates
+        in
+        fun s ->
+        match String.lowercase_ascii s with
+        | "none"    -> []
+        | "default" -> default_opts
+        | "all"     -> all_opts
+        | _ -> let lst = List.map parse_opt (Settings.parse_paths s) in
+               if is_correct lst then lst
+               else failwith "Options cannot be duplicated."
+
+    let syno
+      = let fst = "Fine grained control over effect sugar (only works when \
+                   effect_sugar = true)." in
+        let lines =
+          [  "Options:"
+           ; " * presence_omit: omit presence polymorphic operations within effect rows (1)"
+           ; " * alias_omit: hide empty (1) shared effect rows in last argument of aliases"
+           ; " * arrows_show_the_one_effect: display the imlicit shared effect on arrows"
+           ; " * arrows_show_fresh: display the fresh effect variables"
+           ; " * contract_operation_arrows: contract operations E:() {}-> a to E:a"
+           ; " * open_default: effect rows are open by default, closed with syntax { |.}"
+           ; "Meta-options:"
+           ; " * none: turn all of the above off"
+           ; " * default: revert to default value"
+           ; " * all: turn all of the options on"]
+        in
+        let buf = Buffer.create 800 in
+        let indent = String.make 15 ' ' in
+        Buffer.add_string buf fst;
+        List.iter (fun x -> Buffer.add_string buf "\n";
+                            Buffer.add_string buf indent;
+                            Buffer.add_string buf x) lines;
+        Buffer.contents buf
+
+    let sugar_specifics : opt list Settings.setting
+      = Settings.(multi_option ~default:default_opts "effect_sugar_policy"
+                  |> synopsis syno
+                  |> hint "list of options or a meta-option, see help"
+                  |> to_string string_of_opts
+                  |> convert parse_opts
+                  |> sync)
+
+    let presence_omit             = List.mem PresenceOmit
+    let alias_omit                = List.mem AliasOmit
+    let arrows_show_the_one       = List.mem ArrowsShowTheOneEffect
+    let arrows_show_fresh         = List.mem ArrowsShowFresh
+    let contract_operation_arrows = List.mem ContractOperationArrows
+    let open_default              = List.mem OpenDefault
+
+    let default () = Settings.get sugar_specifics
+  end
+
+  type t = { quantifiers        : bool
+           ; flavours           : bool
+           ; hide_fresh         : bool
+           ; kinds              : kind_policy
+           ; effect_sugar       : bool
+           ; es_policy          : EffectSugar.t }
 
   let default_policy : unit -> t =
     fun () ->
@@ -2012,11 +2111,12 @@ module Policy = struct
       | None -> failwith "Invalid value of setting show_kinds."
       | Some s -> s
     in
-    { quantifiers  = Settings.get show_quantifiers
-    ; flavours     = Settings.get show_flavours
-    ; hide_fresh   = Settings.get hide_fresh_type_vars
-    ; kinds        = kp
-    ; effect_sugar = Settings.get effect_sugar }
+    { quantifiers        = Settings.get show_quantifiers
+    ; flavours           = Settings.get show_flavours
+    ; hide_fresh         = Settings.get hide_fresh_type_vars
+    ; kinds              = kp
+    ; effect_sugar       = Settings.get effect_sugar
+    ; es_policy          = EffectSugar.default () }
 
   let quantifiers : t -> bool
     = fun p -> p.quantifiers
@@ -2028,6 +2128,8 @@ module Policy = struct
     = fun p -> p.kinds
   let effect_sugar : t -> bool
     = fun p -> p.effect_sugar
+  let es_policy : t -> EffectSugar.t
+    = fun p -> p.es_policy
 
   let set_quantifiers : bool -> t -> t
     = fun v p -> { p with quantifiers = v }
@@ -2039,6 +2141,8 @@ module Policy = struct
     = fun v p -> { p with kinds = v }
   let set_effect_sugar : bool -> t -> t
     = fun v p -> { p with effect_sugar = v }
+  let set_es_policy : EffectSugar.t -> t -> t
+    = fun v p -> { p with es_policy = v }
 end
 
 type names = (tid, string * Vars.spec) Hashtbl.t
@@ -2555,9 +2659,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
   module Context = struct
 
     type ambient = Toplevel
-                 | Function
-                 | Linfun
-                 | Presence
+                 | Arrow of [ `Function | `Linear (* | `Operation *) ] * [ `Final | `Curried ]
+                 (* TODO does it make sense to have a linear arrow in operation space? *)
+                 (* | Presence *)
                  | Tuple
                  | Variant
                  | Effect
@@ -2566,17 +2670,17 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                  | Binder
                  [@@deriving show]
 
-    type t = { policy: Policy.t
-             ; bound_vars: TypeVarSet.t
-             ; tyvar_names: names
-             ; ambient: ambient
-             ; shared_effect: int option }
+    type t = { policy                 : Policy.t
+             ; bound_vars             : TypeVarSet.t
+             ; tyvar_names            : names
+             ; ambient                : ambient
+             ; implicit_shared_effect : tid option }
 
-    let empty () = { policy        = Policy.default_policy ()
-                   ; bound_vars    = TypeVarSet.empty
-                   ; tyvar_names   = Hashtbl.create 0
-                   ; ambient       = Toplevel
-                   ; shared_effect = None }
+    let empty () = { policy                 = Policy.default_policy ()
+                   ; bound_vars             = TypeVarSet.empty
+                   ; tyvar_names            = Hashtbl.create 0
+                   ; ambient                = Toplevel
+                   ; implicit_shared_effect = None }
 
 
     let with_policy : Policy.t -> t -> t
@@ -2615,15 +2719,41 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     let toplevel : t -> t
       = set_ambient Toplevel
 
-    (* generator for these below *)
+    let set_ambient_arrow_finality : [ `Final | `Curried ] -> t -> t
+      = fun f ({ ambient ; _ } as ctx) ->
+      match ambient with
+      | Arrow (l, _) -> set_ambient (Arrow (l, f)) ctx
+      | _ -> raise tag_expectation_mismatch
+
+    let ambient_function_default : ambient = Arrow (`Function, `Final)
+    let ambient_linfun_default : ambient = Arrow (`Linear, `Final)
+    (* let ambient_operation_default : ambient = Arrow (`Operation, `Final) *)
+
     let is_ambient_toplevel : t -> bool
       = fun { ambient ; _ } -> ambient = Toplevel
     let is_ambient_function : t -> bool
-      = fun { ambient ; _ } -> ambient = Function
+      = fun { ambient ; _ } -> match ambient with
+                               | Arrow (`Function, _) -> true
+                               | _ -> false
     let is_ambient_linfun : t -> bool
-      = fun { ambient ; _ } -> ambient = Linfun
-    let is_ambient_presence : t -> bool
-      = fun { ambient ; _ } -> ambient = Presence
+      = fun { ambient ; _ } -> match ambient with
+                               | Arrow (`Linear, _) -> true
+                               | _ -> false
+    (* let is_ambient_operation : t -> bool
+     *   = fun { ambient ; _ } -> match ambient with
+     *                            | Arrow (`Operation, `Final) -> true
+     *                            | Arrow (`Operation, `Curried) -> raise tag_expectation_mismatch (\* this should not happen, DEBUG *\)
+     *                            | _ -> false *)
+    let is_ambient_arrow_curried : t -> bool
+      = fun { ambient ; _ } -> match ambient with
+                               | Arrow (_, `Curried) -> true
+                               | _ -> false
+    let is_ambient_arrow_final : t -> bool
+      = fun { ambient ; _ } -> match ambient with
+                               | Arrow (_, `Final) -> true
+                               | _ -> false
+    (* let is_ambient_presence : t -> bool
+     *   = fun { ambient ; _ } -> ambient = Presence *)
     let is_ambient_tuple : t -> bool
       = fun { ambient ; _ } -> ambient = Tuple
     let is_ambient_variant : t -> bool
@@ -2642,7 +2772,481 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                                | _ -> false
     let is_ambient_binder : t -> bool
       = fun { ambient ; _ } -> ambient = Binder
+
+    let implicit_shared_effect : t -> tid option
+      = fun { implicit_shared_effect ; _ } -> implicit_shared_effect
+
+    let implicit_shared_effect_exists : t -> bool
+      = fun { implicit_shared_effect ; _ } ->
+      match implicit_shared_effect with
+      | None -> false
+      | _ -> true
+
+    let is_implicit_shared_effect : tid -> t -> bool
+      = fun vid { implicit_shared_effect; _ } ->
+      match implicit_shared_effect with
+      | Some vid' when vid = vid' -> true
+      | _ -> false
+
+    let set_implicit_shared_effect : tid option -> t -> t
+      = fun implicit_shared_effect ctx -> { ctx with implicit_shared_effect }
   end
+
+  module SharedEffect : sig
+    val implicit_allowed_in : typ -> bool
+    val implicit_of_datatype : datatype -> tid option
+    val implicit_of_type_arg : type_arg -> tid option
+    val ensugar_datatype : Policy.EffectSugar.t -> tid -> datatype -> datatype
+    val ensugar_type_arg : Policy.EffectSugar.t -> tid -> type_arg -> type_arg
+  end = struct
+
+    let extract_row_var r =
+      let rv = unwrap_row r |> fst |> extract_row_parts |> snd3 in
+      match Unionfind.find rv with
+      | Var (vid, _, _) -> Some vid
+      | _ -> None
+
+    let is_effect_row_kind : Kind.t -> bool
+      = fun (primary, (_, restriction)) ->
+      primary = PrimaryKind.Row && restriction = Restriction.Effect
+
+    (* inspired by how the original code does it (see maybe_shared_effect)  *)
+    let implicit_allowed_in : typ -> bool
+      = function
+      (* functions can share effects *)
+      | Function _ | Lolli _ -> true
+      (* type aliases can actually be functions as well, though when determining if we
+         need those to share an effect variable, we only need to look at the surface
+         (here the kinds of type arguments), because if this has a shared effect, it
+         must be visible in type arguments *)
+      | Alias ((_, kinds, _, _), _)
+        | RecursiveApplication { r_quantifiers = kinds; _ } ->
+         begin
+           (* by convention, if the alias has an argument containing shared effect, it
+              must be in the last position (alternatively could be first, but not
+              anywhere else, that would not be practical) *)
+           match ListUtils.last_opt kinds with
+           (* and it must be an effect row *)
+           | Some knd -> is_effect_row_kind knd
+           | _ -> false
+         end
+      (* and no other types may share effect variables *)
+      | _ -> false
+
+
+    class implicit_shared_finder = object (o : 'self_type)
+      inherit Transform.visitor as super
+
+      val var : tid option = None
+      method var = var
+      method with_var v = {< var = v >}
+
+      method! typ : typ -> 'self_type * typ
+        = fun tp ->
+          match var with
+          (* a shared var already found, stop search *)
+          | Some _ -> o, tp
+          (* no var found yet, continue *)
+          | None ->
+             let v = match tp with
+               (* first, check if there are more arrows to the right (curried
+                  function: if so, walk down the curried function to the rightmost
+                  arrow/alias *)
+               | Function (_,_,r) | Lolli (_,_,r) when implicit_allowed_in r ->
+                  (fst (o#typ r))#var
+
+               (* this is the last arrow, extract effect row var *)
+               | Function (_,e,_) | Lolli (_,e,_) ->
+                  (* the last arrow *)
+                  extract_row_var e
+
+               (* alternatively, this is the rightmost alias, which can also have a
+                  shared effect - this is by convention the last argument *)
+               | Alias ((_,_,type_args,_), _)
+                 | RecursiveApplication { r_args = type_args ; _ }
+                    when implicit_allowed_in tp ->
+                  begin
+                    match ListUtils.last type_args with
+                    | (PrimaryKind.Row, (Row _ as r)) -> extract_row_var r
+                    | _ -> None
+                  end
+               | _ -> None
+             in
+             (o#with_var v, tp)
+    end
+
+    let implicit_of_datatype : datatype -> tid option
+      = fun tp ->
+      let o = new implicit_shared_finder in
+      let (o, _) = o#typ tp in
+      o#var
+
+    let implicit_of_type_arg : type_arg -> tid option
+      = fun ta ->
+      let o = new implicit_shared_finder in
+      let (o, _) = o#type_arg ta in
+      o#var
+
+    module OperationMap = Utility.Map.Make(struct
+                              type t = tid * string [@@deriving show]
+                              let compare (xi,xs) (yi,ys) =
+                                if xi = yi
+                                then String.compare xs ys
+                                else Int.compare xi yi
+                            end)
+    type op_entry = tid list
+    type op_map = op_entry OperationMap.t
+
+    (** This object will gather all operations from all of the type's OPEN effect rows.
+        It creates an op_map:
+        { (vid, label) =>
+           (does the operation exists as non-polymorphic in its presence?,
+            list of *NON-FRESH* presence-poly vars associated with this label) } *)
+    let label_gatherer =
+      object (o : 'self_type)
+        inherit Transform.visitor as super
+
+        val operations : op_map = OperationMap.empty
+
+        (* We only want the non-fresh variables (the ones that appear more than once),
+           because these will have to be printed. *)
+        method get_operations =
+          OperationMap.map (fun vars -> ListUtils.collect_duplicates (=) vars) operations
+
+        method with_nonpoly_operation : tid -> string -> 'self_type
+          = let upd =
+              function
+              | None      -> Some []
+              | Some vars -> Some vars
+            in
+            fun effect_vid label ->
+            let operations = OperationMap.update (effect_vid, label) upd operations in
+            {< operations >}
+
+        method with_poly_operation : tid -> string -> tid -> 'self_type
+          = let upd vid =
+              function
+              | None      -> Some [vid]
+              | Some vars -> Some (vid :: vars)
+            in
+            fun effect_vid label pres_vid ->
+            let operations = OperationMap.update (effect_vid, label) (upd pres_vid) operations in
+            {< operations >}
+
+        method effect_row : row -> 'self_type * row
+          = let fold_fields effect_vid label field acc =
+              let pre = match field with
+                | Meta pt -> Unionfind.find pt
+                | _ -> field
+              in
+              match pre with
+              | Present _ | Absent -> acc#with_nonpoly_operation effect_vid label
+              | Var (pres_vid,_,_) -> acc#with_poly_operation effect_vid label pres_vid
+              | _ -> assert false (* field spec can only be P|A|V *)
+            in
+            fun r ->
+            let (fields, rvar, _) = unwrap_row r |> fst |> extract_row_parts in
+            let rvar = Unionfind.find rvar in
+            let o = match rvar with
+              | Var (vid,_,_)  ->
+                 (* this is an open effect row, collect its operations *)
+                 FieldEnv.fold (fold_fields vid) fields o
+              | _ -> o (* not a shared effect row, ignore *)
+            in
+            (o, r)
+
+        method! typ : typ -> 'self_type * typ
+          = fun tp ->
+          match tp with
+          | Function (d,e,r) | Lolli (d,e,r) ->
+             let (o, _) = o#typ d in
+             let (o, _) = o#effect_row e in
+             let (o, _) = o#typ r in
+             (o, tp)
+          | Alias ((_,kinds,tyargs,_), _)
+            | RecursiveApplication { r_quantifiers = kinds; r_args = tyargs ; _ } (* when implicit_allowed_in tp *) ->
+             (* (\* a last element definitely exists, because that is also a condition in
+              *    `allowed_in' *\)
+              * let (_, last_row) = ListUtils.last tyargs in
+              * let (o, _) = o#effect_row last_row in
+              * (o, tp) *)
+             (* actually we want to gather all possible effect rows *)
+             let effect_rows = ListUtils.filter_map2
+                                 (fun (knd, _) -> is_effect_row_kind knd)
+                                 (fun (_, (_, typ)) -> typ)
+                                 kinds tyargs in
+             let o = List.fold_left (fun acc r -> fst (acc#effect_row r)) o effect_rows in
+             (o, tp)
+          | _ -> super#typ tp
+      end
+
+    type row_omis = Omissible of row
+                  | NonOmissible of row
+    let extract_omis = function
+      | Omissible r | NonOmissible r -> r
+
+    let sugar_introducer policy shared_variable ops
+      = let module ES = Policy.EffectSugar in
+        object (o : 'self_type)
+          inherit Transform.visitor as super
+
+          (* The sugaring will eliminate almost all (1) presence polymorhpic
+             operations, and then if there's nothing left, remove the whole effect row
+             (in an alias, this will be an actual removal, in a function the row will
+             just become empty and closed, to that it shows as a simple arrow).
+
+             (1) If a programmer explicitly specifies some operation to be polymorphic
+             everywhere, we need to remember that: if a label appears everywhere only
+             as presence-polymorphic, one (exactly one) of its occurences must be
+             preserved (the label must be visible in the type). This is what the map
+             `operations' keeps track of. *)
+
+          val operations : op_map = ops
+
+          (* this will mark that the operation was already kept visible somewhere, so
+             its fresh presence-poly occurences can be removed in the rest of the type
+             *)
+          (* method mark_operation_visible : string -> 'self_type
+           *   = let upd : (bool * tid list) option -> (bool * tid list) option
+           *       = function
+           *       | None -> failwith "[*SI] should not happen?"
+           *       | Some (_, lst) -> Some (true, lst)
+           *     in
+           *     fun label ->
+           *     let operations = StringMap.update label upd operations in
+           *     {< operations >} *)
+
+          method effect_row : row -> 'self_type * row_omis * tid option
+            = let decide_field : tid -> string -> field_spec -> 'self_type * field_spec_map -> 'self_type * field_spec_map
+                (* Here we need to filter out the fields that are polymorphic in their
+                   presence with a fresh variable.
+
+                   Presence-poly operations that have a non-fresh variable (see
+                   `operations`) have to be shown in each occasion, because we need to
+                   inform the programmer that the variable is the same. *)
+                = fun effect_vid label field (o, kept) ->
+                if is_builtin_effect label
+                then
+                  (* builtin effects are preserved here (TODO also hear?; TODO a new
+                     option for this) *)
+                  (o, FieldEnv.add label field kept)
+                else begin
+                    let pre = match field with
+                      | Meta pt -> Unionfind.find pt
+                      | _ -> field
+                    in
+                    match pre with
+                    | Present p ->
+                       (* field has specified presence => it has to appear here *)
+                       let field =
+                         if ES.contract_operation_arrows policy
+                         then begin match p with
+                              | Function (d,_,c) ->
+                                 (* it is an arrow and we want contractions: check if
+                                    possible *)
+                                 (* also this is an effect row, so this arrow will
+                                    never have any effect of its own *)
+                                 if d = unit_type then Present c
+                                 else field
+                              | _ -> field
+                              end
+                         else field
+                       in
+                       (o, FieldEnv.add label field kept)
+                    | Absent ->
+                       (* field has specified presence => it has to appear here *)
+                       (o, FieldEnv.add label field kept)
+                    | Var (pres_vid,_,_) ->
+                       (* presence polymorphic, need to decide whether to keep it *)
+                       let nonfresh_vids = OperationMap.find (effect_vid, label) operations in
+                       if List.mem pres_vid nonfresh_vids
+                       then
+                         (* presence, but non-fresh => needs to be kept here *)
+                         (o, FieldEnv.add label field kept)
+                       else
+                         (* fresh presence in an open row => this doesn't need to be
+                            visible *)
+                         (o, kept)
+                    | _ -> failwith "This should not happen!"
+                  end
+              in
+              fun r ->
+              let (fields, rv_pt, dual) = unwrap_row r |> fst |> extract_row_parts in
+              match Unionfind.find rv_pt with
+              | Var (effect_vid, _, _) ->
+                 (* this row may need sugaring *)
+                 begin
+                   let (o, kept) =
+                     if ES.presence_omit policy
+                     then
+                       FieldEnv.fold (decide_field effect_vid) fields (o, FieldEnv.empty)
+                     else
+                       (o, fields) (* keep every field *)
+                   in
+                   (* if no operations are present, the whole row may be eliminated:
+                      this is signified by None (the actual decision of whether to
+                      completely remove it depends on the context where it appears and
+                      on the policy) *)
+                   let row_opt = if FieldEnv.is_empty kept
+                                 then Omissible (Row (FieldEnv.empty, rv_pt, dual))
+                                 else NonOmissible (Row (kept, rv_pt, dual))
+                   in
+                   (o, row_opt, Some effect_vid)
+                 end
+              | _ ->
+                 (* this row doesn't need sugaring, return it identically *)
+                 (o, NonOmissible r, None)
+
+          (** This function will sugar the function effect row *)
+          method func : datatype -> 'self_type * datatype
+            = fun tp ->
+            let fl, (dom, eff, cod) = match tp with
+              | Function f -> `Func, f
+              | Lolli f -> `Lolli, f
+              | _ -> assert false
+            in
+            let (o, dom) = o#typ dom in
+            let (o, eff', _) = o#effect_row eff in
+            (* eliminated or not, the row needs to stay in the function effect *)
+            let eff = extract_omis eff' in
+            let (o, cod) = o#typ cod in
+            let tp = match fl with
+              | `Func -> Function (dom, eff, cod)
+              | `Lolli -> Lolli (dom, eff, cod)
+            in
+            (o, tp)
+
+          (** This function handles a list of type arguments. Any argument can be an
+              effect row and sugar will apply to it. The last argument can by
+              convention be also completely omitted, if all its fields are eliminated
+              by the sugar. *)
+          method tyarg_list : Kind.t list -> type_arg list -> 'self_type * Kind.t list * type_arg list
+            = fun kinds tyargs ->
+            match (kinds, tyargs) with
+            | [], [] -> (o, [], [])
+            | [knd], [(pk, tp)] ->
+               (* last - can be implicit *)
+               if is_effect_row_kind knd then
+                 begin
+                   let (o, r, rvid) = o#effect_row tp in
+                   match r with
+                   | Omissible _ when rvid = Some shared_variable
+                                      && ES.alias_omit policy ->
+                      (* this is the implicit shared effect row in last position: if
+                         it's been emptied, it can now be completely omitted *)
+                      (o, [], [])
+                   | Omissible r | NonOmissible r ->
+                      (* otherwise, it was possibly sugared, but exists still *)
+                      (o, [knd], [(pk, r)])
+                 end
+               else
+                 (o, [knd], [(pk, tp)])
+            | knd :: kinds, (pk, tp) :: tyargs ->
+               (* not last - cannot be implicit, but can still get sugared *)
+               if is_effect_row_kind knd then
+                 begin
+                   let (o, r, _) = o#effect_row tp in
+                   (* not last => cannot be omitted, don't care if it's empty *)
+                   let r = extract_omis r in
+                   let (o, kinds, tyargs) = o#tyarg_list kinds tyargs in
+                   (o, knd :: kinds, (pk, r) :: tyargs)
+                 end
+               else let (o, kinds, tyargs) = o#tyarg_list kinds tyargs in
+                    (o, knd :: kinds, (pk, tp) :: tyargs)
+            | _ -> raise ListUtils.Lists_length_mismatch
+          (* let lst = List.combine kinds tyargs in
+           * let (o, lst) = List.fold_left
+           *                  (fun (o, acc) (knd, (pk, tp)) ->
+           *                    let (o, tp) = if is_effect_row_kind knd
+           *                                  then o#effect_row tp
+           *                                  else (o, tp)
+           *                    in (o, (knd, (pk, tp))::acc))
+           *                  (o, []) lst
+           * in
+           * let kinds_others, kinds_last = ListUtils.unsnoc kinds in
+           * let args_others, args_last = ListUtils.unsnoc tyargs in
+           * match kinds_last, args_last with
+           * | ((PrimaryKind.Row, (_, Restriction.Effect)),
+           *    (_ (\* must be the same kind anyway *\), (Row (_,_,dual) as r))) ->
+           *    begin
+           *      let (o, r, rv, _) = o#effect_row r in
+           *      match r with
+           *      | Some r ->
+           *         (\* nonempty shared effect row was returned (meaning there is some
+           *            field that must be displayed here) => reattach the last row to
+           *            the arguments *\)
+           *         (o, kinds, args_others @ [(PrimaryKind.Row, r)])
+           *      | None ->
+           *         (\* empty field spec (all fields were eliminated, or were never
+           *            there in the first place); this may be omitted completely,
+           *            depending on policy *\)
+           *         if ES.alias_omit policy
+           *         then
+           *           (\* whole row omitted *\)
+           *           (o, kinds_others, args_others)
+           *         else
+           *           (\* empty row kept in place *\)
+           *           (o, kinds, args_others @ [(PrimaryKind.Row, Row (FieldEnv.empty, rv, dual))])
+           *    end
+           * | _ ->
+           *    (\* doesn't have a shared effect row, return indentically *\)
+           *    (o, kinds, tyargs) *)
+
+          (** Deconstruct Alias, let tyarg_list handle it *)
+          method alias : typ -> 'self_type * typ
+            = fun al ->
+            let ((name, kinds, tyargs, dual), tp) = match al with
+              | Alias a -> a
+              | _ -> assert false
+            in
+            let (o, kinds, tyargs) =
+              if ListUtils.empty kinds
+              then (o, kinds, tyargs) (* no arguments to check *)
+              else o#tyarg_list kinds tyargs
+            in
+            let (o, tp) = o#typ tp in
+            let al = Alias ((name, kinds, tyargs, dual), tp) in
+            (o, al)
+
+          (** Deconstruct Rec.App., let tyarg_list handle it *)
+          method recapp : typ -> 'self_type * typ
+            = fun ra ->
+            let { r_quantifiers; r_args; _ } as ra =
+              match ra with
+              | RecursiveApplication ra -> ra
+              | _ -> assert false
+            in
+            let (o, r_quantifiers, r_args) = o#tyarg_list r_quantifiers r_args in
+            let ra = RecursiveApplication { ra with r_quantifiers; r_args }in
+            (o, ra)
+
+          method! typ : typ -> 'self_type * typ
+            = fun tp ->
+            match tp with
+            | Function _ | Lolli _ -> o#func tp
+            | Alias _ -> o#alias tp
+            | RecursiveApplication _ -> o#recapp tp
+            | _ -> super#typ tp
+        end
+
+    let ensugar_datatype : Policy.EffectSugar.t -> tid -> datatype -> datatype
+      = fun pol vid tp ->
+      let (label_gatherer, _) = label_gatherer#typ tp in
+      let operations = label_gatherer#get_operations in
+      let o = sugar_introducer pol vid operations in
+      let (_, tp) = o#typ tp in
+      tp
+
+    let ensugar_type_arg : Policy.EffectSugar.t -> tid -> type_arg -> type_arg
+      = fun pol vid ta ->
+      let (label_gatherer, _) = label_gatherer#type_arg ta in
+      let operations = label_gatherer#get_operations in
+      let o = sugar_introducer pol vid operations in
+      let (_, ta) = o#type_arg ta in
+      ta
+
+  end
+
 
   module StringBuffer = struct
     type t = Buffer.t
@@ -2685,6 +3289,28 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
            end
          in
          loop sep pr items ctx buf
+
+    let concat_items_with_ambients : sep:string -> 'a t -> 'a list -> Context.ambient option list -> Context.t -> StringBuffer.t -> unit
+      = let new_ctx ambient ctx =
+          match ambient with
+          | None         -> ctx
+          | Some ambient -> Context.set_ambient ambient ctx
+        in
+        fun ~sep pr items ambients ctx buf ->
+        match pr with
+        | Empty -> ()
+        | Printer _ ->
+           let rec loop
+             = fun sep pr items ctx buf ->
+             match items with
+             | [] -> ()
+             | [last,ambient] -> apply pr (new_ctx ambient ctx) last buf
+             | (not_last,ambient) :: rest ->
+                apply pr (new_ctx ambient ctx) not_last buf;
+                StringBuffer.write buf sep;
+                loop sep pr rest ctx buf
+           in
+           loop sep pr (List.combine items ambients) ctx buf
 
     let concat_printers : sep:string -> unit t list -> Context.t -> StringBuffer.t -> unit
       = fun ~sep prs ctx buf ->
@@ -2821,11 +3447,18 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       Printer (fun _ctxt prim buf ->
           StringBuffer.write buf (Primitive.to_string prim))
 
-  let is_var_anonymous : Context.t -> tid -> bool =
-    fun ctxt vid ->
-    let _, (_, _, count) = Vars.find_spec vid (Context.tyvar_names ctxt) in
-    (count = 1 && (Policy.hide_fresh Context.(policy ctxt))) (* we want to hide it *)
-    && not (Context.is_tyvar_bound vid ctxt) (* and it is not bound (if it is bound, it has to show up *)
+  type var_anonymity = Visible | Anonymous | ImplicitEff
+  let get_var_anonymity : Context.t -> tid -> var_anonymity
+    = fun ctxt vid ->
+    match Context.implicit_shared_effect ctxt with
+    | Some v when v = vid -> ImplicitEff
+    | _ ->
+       (* this var is not a shared effect variable (or they are disabled) *)
+       let _, (_, _, count) = Vars.find_spec vid (Context.tyvar_names ctxt) in
+       if (count = 1 && (Policy.hide_fresh Context.(policy ctxt))) (* we want to hide it *)
+          && not (Context.is_tyvar_bound vid ctxt) (* and it is not bound (if it is bound, it has to show up *)
+       then Anonymous
+       else Visible
 
   let rec var : (tid * Kind.t) printer
     = let open Printer in
@@ -2844,16 +3477,18 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
           let print_var : string printer =
             Printer (fun ctx var_name buf ->
-                let is_anonymous = (not in_binder) && is_var_anonymous ctx vid in
+                let anonymity = get_var_anonymity ctx vid in
+                (* let is_anonymous = (not in_binder) && (anonymity = Anonymous || anonymity = SharedEff) in *)
                 let show_flexible = (Policy.flavours Context.(policy ctx)) && flavour = `Flexible in
                 let is_presence = (PrimaryKind.Presence = Kind.primary_kind knd) in
 
                 (if is_presence then StringBuffer.write buf "{");
                 (if show_flexible then StringBuffer.write buf "%");
-                (match is_anonymous, show_flexible with
-                 | true, true  -> ()
-                 | true, false -> StringBuffer.write buf "_"
-                 | _, _        -> StringBuffer.write buf var_name);
+                (match anonymity, show_flexible with
+                 | Anonymous, true  -> ()
+                 | Anonymous, false -> StringBuffer.write buf "_"
+                 | ImplicitEff, _   -> StringBuffer.write buf "$"
+                 | _, _             -> StringBuffer.write buf var_name);
                 (if is_presence then StringBuffer.write buf "}"))
           in
           if not in_binder
@@ -2881,17 +3516,19 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               (if want_parens then StringBuffer.write buf ")");
             end)
 
-  and alias_recapp : (string * type_arg list * bool) printer
+  and alias_recapp : (string * Kind.t list * type_arg list * bool) printer
     = let open Printer in
-      Printer (fun ctx (name, arg_types, is_dual) buf ->
+      Printer (fun ctx (name, arg_kinds, arg_types, is_dual) buf ->
           (if is_dual then StringBuffer.write buf "~");
           StringBuffer.write buf (Module_hacks.Name.prettify name);
           (match arg_types with
            | [] -> ()
            | _ -> StringBuffer.write buf " (";
-                  Printer.concat_items ~sep:"," type_arg arg_types ctx buf;
+                  let ambients = List.map (function
+                                     | (PrimaryKind.Row, (_, Restriction.Effect)) -> Some Context.Effect
+                                     | _ -> None) arg_kinds in
+                  Printer.concat_items_with_ambients ~sep:"," type_arg arg_types ambients ctx buf;
                   StringBuffer.write buf ")"))
-  (* TODO Ignoring shared effects for now (original printer does special stuff for them in aliases/recapp) *)
 
   and row_parts : row' printer
     = let open Printer in
@@ -2935,7 +3572,15 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | _ -> ","
           in
           Printer.concat_printers ~sep printers ctx buf;
-          match meta rvar with
+          (* TODO row vars need special handling for sugar *)
+          (* let var_printer = match meta ctx rvar with
+           *   | Empty when (Context.is_ambient_effect ctx)
+           *                && (Policy.EffectSugar.open_default (Policy.es_policy (Context.policy ctx))) ->
+           *      (\* effect sugar: effect rows open by default => need to explicitly close this row *\)
+           *      Printer (fun _ctx () buf -> StringBuffer.write buf ".")
+           *   | x -> x
+           * in *)
+          match meta ctx rvar with
           | Empty -> ()
           | (Printer _) as pr ->
              begin
@@ -3002,17 +3647,28 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               in
               if not (is_nullary && inside_variant)
               then ((if not (Context.is_ambient_tuple ctx) then StringBuffer.write buf ":");
-                    Printer.apply datatype (Context.set_ambient Context.Presence ctx) tp buf)
-           | Meta pt -> Printer.apply (meta pt) (Context.set_ambient Context.Presence ctx) () buf
+                    Printer.apply datatype ctx tp buf)
+           | Meta pt -> Printer.apply (meta ctx pt) ctx () buf
+           (* (Samo): removed Context.Presence here, as it's nowhere used and it's
+              useful to push the ambient through *)
            | _ -> raise tag_expectation_mismatch))
 
-  and meta : typ point -> unit printer
+  and meta : Context.t -> typ point -> unit printer
     = let open Printer in
-      fun pt ->
+      let module ES = Policy.EffectSugar in
+      fun ctx pt ->
+      let es_policy = Policy.es_policy (Context.policy ctx) in
       match Unionfind.find pt with
-      | Closed -> (* nothing happens; TODO (future) but maybe something should *sometimes* happen *)
-         Empty
-      | Var (id, knd, _) -> with_value var (id, knd)
+      (* TODO handling of row vars needs extension *)
+      | Closed ->
+         if (ES.open_default es_policy) && (Context.is_ambient_effect ctx)
+         then Printer (fun _ () buf -> StringBuffer.write buf ".")
+         else Empty
+      | Var (id, knd, _) ->
+         (* TODO check correctness *)
+         if (Context.is_ambient_effect ctx) && (ES.open_default es_policy) && (Context.is_implicit_shared_effect id ctx)
+         then Empty
+         else with_value var (id, knd)
       | Recursive r -> with_value recursive r
       | t -> with_value datatype t
 
@@ -3024,10 +3680,11 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           | P.Type -> Printer.apply datatype ctx r buf
           | P.Row -> begin
               StringBuffer.write buf "{";
-              let ctx = Context.set_ambient Context.Row ctx in
+              let ctx = if Context.is_ambient_effect ctx then ctx
+                        else Context.set_ambient Context.Row ctx in
               (match r with
                | Row rp  -> Printer.apply row_parts ctx rp buf
-               | Meta pt -> Printer.apply (meta pt) ctx () buf
+               | Meta pt -> Printer.apply (meta ctx pt) ctx () buf
                | _ -> raise tag_expectation_mismatch);
               StringBuffer.write buf "}";
             end
@@ -3063,26 +3720,77 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | None | Some Absent | Some (Meta _) -> false
             | _ -> raise tag_expectation_mismatch
           in
+          let decide_skip ctx vid =
+            (* decide whether to skip the variable:
+
+               1) if explicit shared arrows are off => shared effects are hidden, and
+               non-shared anonymous variables are made explicit to distinguish them
+               from shared effects
+
+               2) if explicit shared arrows are on => shared effects will be explicit
+               (written as `-_->' | `-_-@'), and so non-shared anonymous variables can
+               be hidden
+
+               Both of these are only relevant if there is a shared effect to talk
+               about. *)
+            let anonymity = get_var_anonymity ctx vid in
+            if Context.implicit_shared_effect_exists ctx
+            then begin
+                (* TODO support for currying: if arrows are implicit, and the last one
+                   has the shared effect, then this does not need to be printed (if
+                   the row has been emptied by previous sugaring pass) *)
+                (* TODO another setting: if shared arrow is wild, any non-wild arrow
+                   is obviously not shared; and conversely for tame *)
+                let es_policy = Policy.es_policy (Context.policy ctx) in
+                let module ES = Policy.EffectSugar in
+
+                let is_final = Context.is_ambient_arrow_final ctx in
+                let arrows_show_impl_shared = ES.arrows_show_the_one es_policy in
+                let arrows_show_fresh = ES.arrows_show_fresh es_policy in
+
+                match anonymity with
+                | Visible -> false (* decided Visible, cannot skip *)
+                | Anonymous -> not arrows_show_fresh
+                | ImplicitEff -> not arrows_show_impl_shared
+              end
+            else match anonymity with
+                 | Anonymous -> true (* skip *)
+                 | Visible   -> false (* no skip *)
+                 | _         ->
+                    (* this is not supposed to happen if there is no shared effect variable *)
+                    raise tag_expectation_mismatch
+          in
           Printer (fun ctx r buf ->
               let is_lolli = Context.is_ambient_linfun ctx in
               (* flatten here in case there are nested row variables *)
               let (fields, rvar, _) as r' = extract_row_parts (flatten_row r) in
+              (* print_endline @@ FieldEnv.show (fun _ _ -> ()) fields; *)
               let is_wild = is_field_present fields wild in
               let visible_fields = (FieldEnv.size fields) - (if is_wild then 1 else 0) in
               let row_var_exists =
-                match meta rvar with
+                match meta ctx rvar with
                 | Empty -> false
                 | _ -> true
               in
               if visible_fields = 0
-              then if not row_var_exists
-                   then StringBuffer.write buf "{}" (* empty closed row *)
-                   else (* empty open row use the abbreviated notation
-                           -a- or ~a~ unless it's anonymous in which
-                           case we skip it entirely *)
+              then if (not row_var_exists)
+                   then begin
+                       if not (Context.is_ambient_effect ctx)
+                       then begin
+                           (* empty closed row *)
+                           if Policy.EffectSugar.open_default (Policy.es_policy (Context.policy ctx))
+                           then
+                             (* effect sugar for rows open by default *)
+                             StringBuffer.write buf "{.}"
+                           else
+                             StringBuffer.write buf "{}"
+                         end
+                     end
+                   else (* empty open row => use the abbreviated notation -a- or ~a~
+                           unless it's anonymous in which case we skip it entirely *)
                      match Unionfind.find (snd3 (extract_row_parts r)) with
                      | Var (vid, knd, _) ->
-                        if is_var_anonymous ctx vid
+                        if decide_skip ctx vid
                         then () (* skip printing it entirely *)
                         else begin
                             (if is_wild
@@ -3101,9 +3809,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                           StringBuffer.write buf "}"
                         end
               else begin (* need the full effect row, but only construct the inside of it *)
-                StringBuffer.write buf "{";
-                Printer.apply row_parts (Context.set_ambient Context.Effect ctx) r' buf;
-                StringBuffer.write buf "}";
+                  StringBuffer.write buf "{";
+                  Printer.apply row_parts (Context.set_ambient Context.Effect ctx) r' buf;
+                  StringBuffer.write buf "}";
                 end;
               (if is_wild then StringBuffer.write buf "~" else StringBuffer.write buf "-");
               (* add the arrowhead/lollipop *)
@@ -3116,8 +3824,20 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           (* build up the function type string: domain, arrow with effects, range *)
           Printer.apply row (Context.set_ambient Context.Tuple ctx) domain buf; (* function domain is always a Record *)
           StringBuffer.write buf " ";
-          Printer.apply func_arrow ctx effects buf;
+
+          let ctx' = if not (Context.is_ambient_effect ctx)
+                     then
+                       let finality = if SharedEffect.implicit_allowed_in range (* TODO maybe only if it's a function/linfun? *)
+                                      then `Curried else `Final in
+                       Context.set_ambient_arrow_finality finality ctx
+                     else
+                       (* If this is inside an effect row, preserve ambient, so we can get operation arrows *)
+                       ctx
+          in
+          Printer.apply func_arrow ctx' effects buf;
           StringBuffer.write buf " ";
+
+
           Printer.apply datatype ctx range buf;
         )
 
@@ -3226,16 +3946,19 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | Var (vid, knd, _)  -> with_value var (vid, knd)
             | Recursive v        -> with_value recursive v
             | Application a      -> with_value application a
-            | Alias ((name, _, arg_types, is_dual), _)
-              | RecursiveApplication { r_name = name; r_args = arg_types; r_dual = is_dual; _ }
-              -> with_value alias_recapp (name, arg_types, is_dual)
+            | Alias ((name, arg_kinds, arg_types, is_dual), _)
+              | RecursiveApplication { r_name = name; r_quantifiers = arg_kinds ; r_args = arg_types; r_dual = is_dual; _ }
+              -> with_value alias_recapp (name, arg_kinds, arg_types, is_dual)
 
-            | Meta pt            -> meta pt
+            | Meta pt            -> meta ctx pt
             | Present t          -> with_value presence t
             | Primitive t        -> with_value primitive t
 
-            | Function f         -> with_value func f
-            | Lolli f            -> with_ambient Context.Linfun func f
+            | Function f         -> let ambient = if Context.is_ambient_effect ctx
+                                                  then Context.Effect (* TODO make this explicitly an operation arrow *)
+                                                  else Context.ambient_function_default in
+                                    with_ambient ambient func f
+            | Lolli f            -> with_ambient Context.ambient_linfun_default   func f
 
             | Table tab          -> with_value table tab
             | Lens tp            -> with_value lens tp
@@ -3255,18 +3978,38 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
   let string_of_datatype : Policy.t -> names -> datatype -> string
     = fun policy' names ty ->
     let ctxt = Context.(with_policy policy' (with_tyvar_names names (empty ()))) in
+    let shared_effect = if Policy.effect_sugar policy'
+                        then SharedEffect.implicit_of_datatype ty
+                        else None
+    in
+    let ctxt, ty = match shared_effect with
+      | None -> ctxt, ty
+      | Some vid ->
+         (Context.set_implicit_shared_effect (Some vid) ctxt,
+          SharedEffect.ensugar_datatype (Policy.es_policy policy') vid ty)
+    in
     Printer.generate_string datatype ctxt ty
 
   let string_of_row_var : Policy.t -> names -> row_var -> string
     = fun policy' names rvar ->
     let ctxt = Context.(with_policy policy' (with_tyvar_names names (empty ()))) in
-    match meta rvar with
+    match meta ctxt rvar with
     | Printer.Empty -> ""
     | (Printer.Printer _) as pr -> Printer.generate_string pr ctxt ()
 
   let string_of_type_arg : Policy.t -> names -> type_arg -> string
     = fun policy' names tyarg ->
     let ctxt = Context.(with_policy policy' (with_tyvar_names names (empty ()))) in
+    let shared_effect = if Policy.effect_sugar policy'
+                        then SharedEffect.implicit_of_type_arg tyarg
+                        else None
+    in
+    let ctxt, tyarg = match shared_effect with
+      | None -> ctxt, tyarg
+      | Some vid ->
+         (Context.set_implicit_shared_effect (Some vid) ctxt,
+          SharedEffect.ensugar_type_arg (Policy.es_policy policy') vid tyarg)
+    in
     Printer.generate_string type_arg ctxt tyarg
 
   let string_of_quantifier : Policy.t -> names -> Quantifier.t -> string
