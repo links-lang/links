@@ -2005,30 +2005,28 @@ module Policy = struct
                 |> sync)
 
   module EffectSugar : sig
-    type opt = PresenceOmit | AliasOmit | ArrowsExplicit | ArrowsCurriedImplicit | ContractOperationArrows | OpenDefault
+                                          (* TODO name; for now it's the One Effect To Rule Them All *)
+    type opt = PresenceOmit | AliasOmit | ArrowsShowTheOneEffect | ArrowsShowFresh | ContractOperationArrows | OpenDefault
     type t = opt list
     val default : unit -> t
 
     val presence_omit             : t -> bool
     val alias_omit                : t -> bool
-    val arrows_explicit           : t -> bool
-    val arrows_curried_implicit   : t -> bool
+    val arrows_show_the_one       : t -> bool
+    val arrows_show_fresh         : t -> bool
     val contract_operation_arrows : t -> bool
     val open_default              : t -> bool
   end = struct
-    type opt = PresenceOmit | AliasOmit (* omissions *)
-               | ArrowsExplicit | ArrowsCurriedImplicit (* arrows *)
-               | ContractOperationArrows
-               | OpenDefault (* rows *)
+    type opt = PresenceOmit | AliasOmit | ArrowsShowTheOneEffect | ArrowsShowFresh | ContractOperationArrows | OpenDefault
     type t = opt list
-    let default_opts = [PresenceOmit ; AliasOmit; ArrowsCurriedImplicit; ContractOperationArrows]
-    let all_opts = [PresenceOmit ; AliasOmit ; ArrowsExplicit ; ArrowsCurriedImplicit ; ContractOperationArrows ; OpenDefault]
+    let default_opts = [PresenceOmit ; AliasOmit ; ContractOperationArrows]
+    let all_opts = [PresenceOmit ; AliasOmit ; ArrowsShowTheOneEffect ; ArrowsShowFresh ; ContractOperationArrows ; OpenDefault]
 
     let show_opt : opt -> string
       = function
       | PresenceOmit            -> "presence_omit"
-      | ArrowsExplicit          -> "arrows_explicit"
-      | ArrowsCurriedImplicit   -> "arrows_curried_implicit"
+      | ArrowsShowTheOneEffect  -> "arrows_show_the_one_effect"
+      | ArrowsShowFresh         -> "arrows_show_fresh"
       | AliasOmit               -> "alias_omit"
       | ContractOperationArrows -> "contract_operation_arrows"
       | OpenDefault             -> "open_default"
@@ -2038,12 +2036,12 @@ module Policy = struct
       = let parse_opt : string -> opt
           = fun s ->
           match String.lowercase_ascii s with
-          | "presence_omit"             -> PresenceOmit
-          | "arrows_explicit"           -> ArrowsExplicit
-          | "arrows_curried_implicit"   -> ArrowsCurriedImplicit
-          | "alias_omit"                -> AliasOmit
-          | "contract_operation_arrows" -> ContractOperationArrows
-          | "open_default"              -> OpenDefault
+          | "presence_omit"              -> PresenceOmit
+          | "arrows_show_the_one_effect" -> ArrowsShowTheOneEffect
+          | "arrows_show_fresh"          -> ArrowsShowFresh
+          | "alias_omit"                 -> AliasOmit
+          | "contract_operation_arrows"  -> ContractOperationArrows
+          | "open_default"               -> OpenDefault
           | _ -> failwith ("Invalid option: " ^ s)
         in
         let is_correct : opt list -> bool
@@ -2065,8 +2063,8 @@ module Policy = struct
           [  "Options:"
            ; " * presence_omit: omit presence polymorphic operations within effect rows (1)"
            ; " * alias_omit: hide empty (1) shared effect rows in last argument of aliases"
-           ; " * arrows_explicit: explicitly show empty (1) shared effect rows in arrows"
-           ; " * arrows_curried_implicit: curried functions (not final arrow) assumed implictly fresh"
+           ; " * arrows_show_the_one_effect: display the imlicit shared effect on arrows"
+           ; " * arrows_show_fresh: display the fresh effect variables"
            ; " * contract_operation_arrows: contract operations E:() {}-> a to E:a"
            ; " * open_default: effect rows are open by default, closed with syntax { |.}"
            ; "Meta-options:"
@@ -2092,8 +2090,8 @@ module Policy = struct
 
     let presence_omit             = List.mem PresenceOmit
     let alias_omit                = List.mem AliasOmit
-    let arrows_explicit           = List.mem ArrowsExplicit
-    let arrows_curried_implicit   = List.mem ArrowsCurriedImplicit
+    let arrows_show_the_one       = List.mem ArrowsShowTheOneEffect
+    let arrows_show_fresh         = List.mem ArrowsShowFresh
     let contract_operation_arrows = List.mem ContractOperationArrows
     let open_default              = List.mem OpenDefault
 
@@ -3747,8 +3745,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 let module ES = Policy.EffectSugar in
 
                 let is_final = Context.is_ambient_arrow_final ctx in
-                let arrows_explicit = ES.arrows_explicit es_policy in
-                let arrows_curried_implicit = ES.arrows_curried_implicit es_policy in
+                let show_impl_shared = ES.arrows_show_the_one es_policy in
+                let show_fresh = ES.arrows_show_fresh es_policy in
 
                 (* match (anonymity, is_final, arrows_explicit, arrows_curried_implicit) with
                  * | (  Visible,     _,     _,     _) -> false (\* decided Visible, cannot skip *\)
@@ -3760,12 +3758,12 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                  * | (SharedEff, false, false,     _) -> false (\* ???? *\) *)
                 match anonymity with
                 | Visible -> false (* decided Visible, cannot skip *)
-                | Anonymous ->
+                | Anonymous -> true
                    (* decision for anonymous vars based on policy *)
-                   arrows_explicit || ((not is_final) && arrows_curried_implicit)
-                | ImplicitEff ->
+                   (* arrows_explicit || ((not is_final) && arrows_curried_implicit) *)
+                | ImplicitEff -> true
                    (* decision for shared effect based on policy *)
-                   (not arrows_explicit)
+                   (* (not arrows_explicit) *)
               end
             else match anonymity with
                  | Anonymous -> true (* skip *)
