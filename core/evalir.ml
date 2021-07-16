@@ -705,36 +705,15 @@ struct
           | _ -> eval_error "Error evaluating table handle"
       end
     | Query (range, policy, e, _t) ->
-       begin
-         match range with
-           | None -> Lwt.return None
-           | Some (limit, offset) ->
+        begin
+          match range with
+          | None -> Lwt.return None
+          | Some (limit, offset) ->
               value env limit >>= fun limit ->
               value env offset >>= fun offset ->
               Lwt.return (Some (Value.unbox_int limit, Value.unbox_int offset))
        end >>= fun range ->
          begin match policy with
-           | QueryPolicy.Flat ->
-               begin
-                 match EvalQuery.compile env (range, e) with
-                   | None -> computation env cont e
-                   | Some (db, q, t) ->
-                       let q = db#string_of_query ~range q in
-                       let (fieldMap, _, _) =
-                         let r, _ = Types.unwrap_row (TypeUtils.extract_row t) in
-                         TypeUtils.extract_row_parts r in
-                       let fields =
-                         StringMap.fold
-                           (fun name t fields ->
-                             let open Types in
-                             match t with
-                               | Present t -> (name, t)::fields
-                               | _ -> assert false)
-                           fieldMap
-                           []
-                       in
-                       apply_cont cont env (Database.execute_select fields q db)
-               end
            | QueryPolicy.Nested ->
                begin
                  if range != None then eval_error "Range is not supported for nested queries";
@@ -764,6 +743,32 @@ struct
                            (db#driver_name ())
                        in
                        raise (Errors.runtime_error error_msg)
+               end
+           | _ ->
+               let evaluator e =
+                 match policy with
+                 | QueryPolicy.Flat when not (Settings.get Database.mixing_norm) -> EvalQuery.compile env (range, e)
+                 | _ -> EvalMixingQuery.compile_mixing ~delateralize:policy env (range, e)
+               in
+               begin
+                  match evaluator e with
+                  | None -> computation env cont e
+                  | Some (db, q, t) ->
+                      let q = db#string_of_query ~range q in
+                      let (fieldMap, _, _) =
+                        let r, _ = Types.unwrap_row (TypeUtils.extract_row t) in
+                        TypeUtils.extract_row_parts r in
+                      let fields =
+                        StringMap.fold
+                          (fun name t fields ->
+                            let open Types in
+                            match t with
+                              | Present t -> (name, t)::fields
+                              | _ -> assert false)
+                          fieldMap
+                          []
+                      in
+                      apply_cont cont env (Database.execute_select fields q db)
                end
          end
 

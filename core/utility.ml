@@ -28,7 +28,14 @@ include Functional
 
 (** left-associative *)
 let ( <| ) f arg = f arg
-(*let ( |> ) arg f = f arg*)
+let ( |> ) arg f = f arg
+
+(* option-disjunction *)
+let (||=) o o' =
+    match o with
+    | None -> o'
+    | _ -> o
+
 
 (** {0 Maps and sets} *)
 module type OrderedShow = sig
