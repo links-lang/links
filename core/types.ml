@@ -2929,23 +2929,6 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             let operations = OperationMap.update (effect_vid, label) (upd pres_vid) operations in
             {< operations >}
 
-        method! typ : typ -> 'self_type * typ
-          = fun tp ->
-          match tp with
-          | Function (d,e,r) | Lolli (d,e,r) ->
-             let (o, _) = o#typ d in
-             let (o, _) = o#effect_row e in
-             let (o, _) = o#typ r in
-             (o, tp)
-          | Alias ((_,_,tyargs,_), _)
-            | RecursiveApplication { r_args = tyargs ; _ } when implicit_allowed_in tp ->
-             (* a last element definitely exists, because that is also a condition in
-                `allowed_in' *)
-             let (_, last_row) = ListUtils.last tyargs in
-             let (o, _) = o#effect_row last_row in
-             (o, tp)
-          | _ -> super#typ tp
-
         method effect_row : row -> 'self_type * row
           = let fold_fields effect_vid label field acc =
               let pre = match field with
@@ -2965,8 +2948,32 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                  (* this is an open effect row, collect its operations *)
                  FieldEnv.fold (fold_fields vid) fields o
               | _ -> o (* not a shared effect row, ignore *)
-          in
-          (o, r)
+            in
+            (o, r)
+
+        method! typ : typ -> 'self_type * typ
+          = fun tp ->
+          match tp with
+          | Function (d,e,r) | Lolli (d,e,r) ->
+             let (o, _) = o#typ d in
+             let (o, _) = o#effect_row e in
+             let (o, _) = o#typ r in
+             (o, tp)
+          | Alias ((_,kinds,tyargs,_), _)
+            | RecursiveApplication { r_quantifiers = kinds; r_args = tyargs ; _ } (* when implicit_allowed_in tp *) ->
+             (* (\* a last element definitely exists, because that is also a condition in
+              *    `allowed_in' *\)
+              * let (_, last_row) = ListUtils.last tyargs in
+              * let (o, _) = o#effect_row last_row in
+              * (o, tp) *)
+             (* actually we want to gather all possible effect rows *)
+             let effect_rows = ListUtils.filter_map2
+                                 (fun (knd, _) -> is_effect_row_kind knd)
+                                 (fun (_, (_, typ)) -> typ)
+                                 kinds tyargs in
+             let o = List.fold_left (fun acc r -> fst (acc#effect_row r)) o effect_rows in
+             (o, tp)
+          | _ -> super#typ tp
       end
 
     let sugar_introducer policy shared_variable ops
