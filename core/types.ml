@@ -2789,9 +2789,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
   end
 
   module SharedEffect : sig
-    val allowed_in : typ -> bool
-    val of_datatype : datatype -> tid option
-    val of_type_arg : type_arg -> tid option
+    val implicit_allowed_in : typ -> bool
+    val implicit_of_datatype : datatype -> tid option
+    val implicit_of_type_arg : type_arg -> tid option
     val ensugar_datatype : Policy.EffectSugar.t -> tid -> datatype -> datatype
     val ensugar_type_arg : Policy.EffectSugar.t -> tid -> type_arg -> type_arg
   end = struct
@@ -2802,8 +2802,12 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       | Var (vid, _, _) -> Some vid
       | _ -> None
 
+    let is_effect_row_kind : Kind.t -> bool
+      = fun (primary, (_, restriction)) ->
+      primary = PrimaryKind.Row && restriction = Restriction.Effect
+
     (* inspired by how the original code does it (see maybe_shared_effect)  *)
-    let allowed_in : typ -> bool
+    let implicit_allowed_in : typ -> bool
       = function
       (* functions can share effects *)
       | Function _ | Lolli _ -> true
@@ -2819,14 +2823,14 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               anywhere else, that would not be practical) *)
            match ListUtils.last_opt kinds with
            (* and it must be an effect row *)
-           | Some (PrimaryKind.Row, (_, Restriction.Effect)) -> true
+           | Some knd -> is_effect_row_kind knd
            | _ -> false
          end
       (* and no other types may share effect variables *)
       | _ -> false
 
 
-    class shared_finder = object (o : 'self_type)
+    class implicit_shared_finder = object (o : 'self_type)
       inherit Transform.visitor as super
 
       val var : tid option = None
@@ -2844,7 +2848,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                (* first, check if there are more arrows to the right (curried
                   function: if so, walk down the curried function to the rightmost
                   arrow/alias *)
-               | Function (_,_,r) | Lolli (_,_,r) when allowed_in r ->
+               | Function (_,_,r) | Lolli (_,_,r) when implicit_allowed_in r ->
                   (fst (o#typ r))#var
 
                (* this is the last arrow, extract effect row var *)
@@ -2856,7 +2860,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                   shared effect - this is by convention the last argument *)
                | Alias ((_,_,type_args,_), _)
                  | RecursiveApplication { r_args = type_args ; _ }
-                    when allowed_in tp ->
+                    when implicit_allowed_in tp ->
                   begin
                     match ListUtils.last type_args with
                     | (PrimaryKind.Row, (Row _ as r)) -> extract_row_var r
@@ -2867,52 +2871,62 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
              (o#with_var v, tp)
     end
 
-    let of_datatype : datatype -> tid option
+    let implicit_of_datatype : datatype -> tid option
       = fun tp ->
-      let o = new shared_finder in
+      let o = new implicit_shared_finder in
       let (o, _) = o#typ tp in
       o#var
 
-    let of_type_arg : type_arg -> tid option
+    let implicit_of_type_arg : type_arg -> tid option
       = fun ta ->
-      let o = new shared_finder in
+      let o = new implicit_shared_finder in
       let (o, _) = o#type_arg ta in
       o#var
 
-    type op_entry = bool * tid list
-    type op_map   = op_entry stringmap
-    (** This object will gather all operations from the type's effects. It creates an
-        op_map: { label =>
-                  (does the operation exists as non-polymorphic in its presence?,
-                   list of *NON-FRESH* presence-poly vars associated with this label) } *)
-    let label_gatherer shared_var =
+    module OperationMap = Utility.Map.Make(struct
+                              type t = tid * string [@@deriving show]
+                              let compare (xi,xs) (yi,ys) =
+                                if xi = yi
+                                then String.compare xs ys
+                                else Int.compare xi yi
+                            end)
+    type op_entry = tid list
+    type op_map = op_entry OperationMap.t
+
+    (** This object will gather all operations from all of the type's OPEN effect rows.
+        It creates an op_map:
+        { (vid, label) =>
+           (does the operation exists as non-polymorphic in its presence?,
+            list of *NON-FRESH* presence-poly vars associated with this label) } *)
+    let label_gatherer =
       object (o : 'self_type)
         inherit Transform.visitor as super
 
-        val operations : op_map = StringMap.empty
+        val operations : op_map = OperationMap.empty
+
         (* We only want the non-fresh variables (the ones that appear more than once),
            because these will have to be printed. *)
         method get_operations =
-          StringMap.map (fun (np, lst) -> (np, ListUtils.collect_duplicates (=) lst)) operations
+          OperationMap.map (fun vars -> ListUtils.collect_duplicates (=) vars) operations
 
-        method with_nonpoly_operation : string -> 'self_type
+        method with_nonpoly_operation : tid -> string -> 'self_type
           = let upd =
               function
-              | None           -> Some (true, [])
-              | Some (_, vars) -> Some (true, vars)
+              | None      -> Some []
+              | Some vars -> Some vars
             in
-            fun label ->
-            let operations = StringMap.update label upd operations in
+            fun effect_vid label ->
+            let operations = OperationMap.update (effect_vid, label) upd operations in
             {< operations >}
 
-        method with_poly_operation : string -> tid -> 'self_type
+        method with_poly_operation : tid -> string -> tid -> 'self_type
           = let upd vid =
               function
-              | None            -> Some (false, [vid])
-              | Some (np, vars) -> Some (np, vid :: vars)
+              | None      -> Some [vid]
+              | Some vars -> Some (vid :: vars)
             in
-            fun label vid ->
-            let operations = StringMap.update label (upd vid) operations in
+            fun effect_vid label pres_vid ->
+            let operations = OperationMap.update (effect_vid, label) (upd pres_vid) operations in
             {< operations >}
 
         method! typ : typ -> 'self_type * typ
@@ -2924,7 +2938,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
              let (o, _) = o#typ r in
              (o, tp)
           | Alias ((_,_,tyargs,_), _)
-            | RecursiveApplication { r_args = tyargs ; _ } when allowed_in tp ->
+            | RecursiveApplication { r_args = tyargs ; _ } when implicit_allowed_in tp ->
              (* a last element definitely exists, because that is also a condition in
                 `allowed_in' *)
              let (_, last_row) = ListUtils.last tyargs in
@@ -2933,29 +2947,29 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           | _ -> super#typ tp
 
         method effect_row : row -> 'self_type * row
-          = let fold_fields label field acc =
+          = let fold_fields effect_vid label field acc =
               let pre = match field with
                 | Meta pt -> Unionfind.find pt
                 | _ -> field
               in
               match pre with
-              | Present _ | Absent -> acc#with_nonpoly_operation label
-              | Var (pres_vid,_,_) -> acc#with_poly_operation label pres_vid
+              | Present _ | Absent -> acc#with_nonpoly_operation effect_vid label
+              | Var (pres_vid,_,_) -> acc#with_poly_operation effect_vid label pres_vid
               | _ -> assert false (* field spec can only be P|A|V *)
             in
             fun r ->
             let (fields, rvar, _) = unwrap_row r |> fst |> extract_row_parts in
             let rvar = Unionfind.find rvar in
             let o = match rvar with
-              | Var (vid,_,_) when vid = shared_var ->
-                 (* this is a shared effect row, collect its operations *)
-                 FieldEnv.fold fold_fields fields o
+              | Var (vid,_,_)  ->
+                 (* this is an open effect row, collect its operations *)
+                 FieldEnv.fold (fold_fields vid) fields o
               | _ -> o (* not a shared effect row, ignore *)
           in
           (o, r)
       end
 
-    let sugar_introducer policy shared_var ops
+    let sugar_introducer policy shared_variable ops
       = let module ES = Policy.EffectSugar in
         object (o : 'self_type)
           inherit Transform.visitor as super
@@ -2976,18 +2990,18 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           (* this will mark that the operation was already kept visible somewhere, so
              its fresh presence-poly occurences can be removed in the rest of the type
              *)
-          method mark_operation_visible : string -> 'self_type
-            = let upd : (bool * tid list) option -> (bool * tid list) option
-                = function
-                | None -> failwith "[*SI] should not happen?"
-                | Some (_, lst) -> Some (true, lst)
-              in
-              fun label ->
-              let operations = StringMap.update label upd operations in
-              {< operations >}
+          (* method mark_operation_visible : string -> 'self_type
+           *   = let upd : (bool * tid list) option -> (bool * tid list) option
+           *       = function
+           *       | None -> failwith "[*SI] should not happen?"
+           *       | Some (_, lst) -> Some (true, lst)
+           *     in
+           *     fun label ->
+           *     let operations = StringMap.update label upd operations in
+           *     {< operations >} *)
 
           method effect_row : row -> 'self_type * row option * row_var * bool
-            = let decide_field : string -> field_spec -> 'self_type * field_spec_map -> 'self_type * field_spec_map
+            = let decide_field : tid -> string -> field_spec -> 'self_type * field_spec_map -> 'self_type * field_spec_map
                 (* here we need to filter out the fields that are:
                    1) polymorphic in their presence with a fresh variable, AND
                    2) occur SOMEWHERE in the type as non-polymorphic (this is what the
@@ -3002,7 +3016,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                    Presence-poly operations that have a non-fresh variable (in the
                    list in `operations`) have to be shown in each occasion, because we
                    need to inform the programmer that the variable is the same. *)
-                = fun label field (o, kept) ->
+                = fun effect_vid label field (o, kept) ->
                 if is_builtin_effect label
                 then
                   (* builtin effects are preserved here (TODO also hear?; TODO a new
@@ -3015,41 +3029,31 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                     in
                     match pre with
                     | Present _ | Absent ->
-                       (* field has specified presence => it has to appear here (also
-                          mark it as already kept, so in other places where it's fresh
-                          presence-poly, it can be omitted *)
-                       (o#mark_operation_visible label, FieldEnv.add label field kept)
+                       (* field has specified presence => it has to appear here *)
+                       (o, FieldEnv.add label field kept)
                     | Var (pres_vid,_,_) ->
                        (* presence polymorphic, need to decide whether to keep it *)
-                       let (exists_nonpoly, nonfresh_vids) = FieldEnv.find label operations in
+                       let nonfresh_vids = OperationMap.find (effect_vid, label) operations in
                        if List.mem pres_vid nonfresh_vids
                        then
                          (* presence, but non-fresh => needs to be kept here *)
-                         (o#mark_operation_visible label, FieldEnv.add label field kept)
+                         (o, FieldEnv.add label field kept)
                        else
-                         (* fresh presence => only keep if the label doesn't appear anywhere else *)
-                         if (not exists_nonpoly) && ListUtils.empty nonfresh_vids
-                         then
-                           (* TODO this is the most general case of a label appearing
-                              everywhere only as presence-poly, but never having the
-                              same presence variable illegal? *)
-                           (o#mark_operation_visible label, FieldEnv.add label field kept)
-                         else
-                           (* it is fresh, and is visible elsewhere, can be skipped *)
-                           (o, kept)
+                         (* fresh presence in an open row => this doesn't need to show up *)
+                         (o, kept)
                     | _ -> failwith "This should not happen!"
                   end
               in
               fun r ->
               let (fields, rv_pt, dual) = unwrap_row r |> fst |> extract_row_parts in
               match Unionfind.find rv_pt with
-              | Var (vid, _, _) when vid = shared_var ->
-                 (* this row needs sugaring *)
+              | Var (effect_vid, _, _) ->
+                 (* this row may need sugaring *)
                  begin
                    let (o, kept) =
                      if ES.presence_omit policy
                      then
-                       FieldEnv.fold decide_field fields (o, FieldEnv.empty)
+                       FieldEnv.fold (decide_field effect_vid) fields (o, FieldEnv.empty)
                      else
                        (o, fields) (* keep every field *)
                    in
@@ -3164,23 +3168,17 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
     let ensugar_datatype : Policy.EffectSugar.t -> tid -> datatype -> datatype
       = fun pol vid tp ->
-      let (label_gatherer, _) = (label_gatherer vid)#typ tp in
-      let nonpoly = label_gatherer#get_operations in
-      (* print_endline "nonpoly:";
-       * print_endline (StringMap.show (fun ppf (np, vars) ->
-       *                    Format.fprintf ppf "(ENP=%s, vars=[%s]"
-       *                      (string_of_bool np)
-       *                      (List.fold_left (fun acc x -> acc ^ string_of_int x ^ ",") "" vars))
-       *                  nonpoly); *)
-      let o = sugar_introducer pol vid nonpoly in
+      let (label_gatherer, _) = label_gatherer#typ tp in
+      let operations = label_gatherer#get_operations in
+      let o = sugar_introducer pol vid operations in
       let (_, tp) = o#typ tp in
       tp
 
     let ensugar_type_arg : Policy.EffectSugar.t -> tid -> type_arg -> type_arg
       = fun pol vid ta ->
-      let (label_gatherer, _) = (label_gatherer vid)#type_arg ta in
-      let nonpoly = label_gatherer#get_operations in
-      let o = sugar_introducer pol vid nonpoly in
+      let (label_gatherer, _) = label_gatherer#type_arg ta in
+      let operations = label_gatherer#get_operations in
+      let o = sugar_introducer pol vid operations in
       let (_, ta) = o#type_arg ta in
       ta
 
@@ -3778,7 +3776,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
           let ctx' = if not (Context.is_ambient_effect ctx)
                      then
-                       let finality = if SharedEffect.allowed_in range (* TODO maybe only if it's a function/linfun? *)
+                       let finality = if SharedEffect.implicit_allowed_in range (* TODO maybe only if it's a function/linfun? *)
                                       then `Curried else `Final in
                        Context.set_ambient_arrow_finality finality ctx
                      else
@@ -3930,7 +3928,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     = fun policy' names ty ->
     let ctxt = Context.(with_policy policy' (with_tyvar_names names (empty ()))) in
     let shared_effect = if Policy.effect_sugar policy'
-                        then SharedEffect.of_datatype ty
+                        then SharedEffect.implicit_of_datatype ty
                         else None
     in
     let ctxt, ty = match shared_effect with
@@ -3952,7 +3950,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     = fun policy' names tyarg ->
     let ctxt = Context.(with_policy policy' (with_tyvar_names names (empty ()))) in
     let shared_effect = if Policy.effect_sugar policy'
-                        then SharedEffect.of_type_arg tyarg
+                        then SharedEffect.implicit_of_type_arg tyarg
                         else None
     in
     let ctxt, tyarg = match shared_effect with
