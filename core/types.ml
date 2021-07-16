@@ -3745,25 +3745,13 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 let module ES = Policy.EffectSugar in
 
                 let is_final = Context.is_ambient_arrow_final ctx in
-                let show_impl_shared = ES.arrows_show_the_one es_policy in
-                let show_fresh = ES.arrows_show_fresh es_policy in
+                let arrows_show_impl_shared = ES.arrows_show_the_one es_policy in
+                let arrows_show_fresh = ES.arrows_show_fresh es_policy in
 
-                (* match (anonymity, is_final, arrows_explicit, arrows_curried_implicit) with
-                 * | (  Visible,     _,     _,     _) -> false (\* decided Visible, cannot skip *\)
-                 * | (Anonymous,     _,  true,     _) -> true
-                 * | (Anonymous, false, false,     _) -> false (\* ???? *\)
-                 * | (Anonymous,  true, false,     _) -> true  (\* ???? *\)
-                 * | (SharedEff,     _,  true,     _) -> false
-                 * | (SharedEff,  true, false,     _) -> true  (\* ???? *\)
-                 * | (SharedEff, false, false,     _) -> false (\* ???? *\) *)
                 match anonymity with
                 | Visible -> false (* decided Visible, cannot skip *)
-                | Anonymous -> true
-                   (* decision for anonymous vars based on policy *)
-                   (* arrows_explicit || ((not is_final) && arrows_curried_implicit) *)
-                | ImplicitEff -> true
-                   (* decision for shared effect based on policy *)
-                   (* (not arrows_explicit) *)
+                | Anonymous -> not arrows_show_fresh
+                | ImplicitEff -> not arrows_show_impl_shared
               end
             else match anonymity with
                  | Anonymous -> true (* skip *)
