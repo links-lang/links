@@ -2005,41 +2005,45 @@ module Policy = struct
                 |> sync)
 
   module EffectSugar : sig
-    type opt = PresenceOmit | AliasOmit | ArrowsExplicit | ArrowsCurriedImplicit | OpenDefault
+    type opt = PresenceOmit | AliasOmit | ArrowsExplicit | ArrowsCurriedImplicit | ContractOperationArrows | OpenDefault
     type t = opt list
     val default : unit -> t
 
-    val presence_omit           : t -> bool
-    val alias_omit              : t -> bool
-    val arrows_explicit         : t -> bool
-    val arrows_curried_implicit : t -> bool
-    val open_default            : t -> bool
+    val presence_omit             : t -> bool
+    val alias_omit                : t -> bool
+    val arrows_explicit           : t -> bool
+    val arrows_curried_implicit   : t -> bool
+    val contract_operation_arrows : t -> bool
+    val open_default              : t -> bool
   end = struct
     type opt = PresenceOmit | AliasOmit (* omissions *)
                | ArrowsExplicit | ArrowsCurriedImplicit (* arrows *)
+               | ContractOperationArrows
                | OpenDefault (* rows *)
     type t = opt list
-    let default_opts = [PresenceOmit ; AliasOmit; ArrowsCurriedImplicit]
-    let all_opts = [PresenceOmit ; AliasOmit ; ArrowsExplicit ; ArrowsCurriedImplicit ; OpenDefault]
+    let default_opts = [PresenceOmit ; AliasOmit; ArrowsCurriedImplicit; ContractOperationArrows]
+    let all_opts = [PresenceOmit ; AliasOmit ; ArrowsExplicit ; ArrowsCurriedImplicit ; ContractOperationArrows ; OpenDefault]
 
     let show_opt : opt -> string
       = function
-      | PresenceOmit          -> "presence_omit"
-      | ArrowsExplicit        -> "arrows_explicit"
-      | ArrowsCurriedImplicit -> "arrows_curried_implicit"
-      | AliasOmit             -> "alias_omit"
-      | OpenDefault           -> "open_default"
+      | PresenceOmit            -> "presence_omit"
+      | ArrowsExplicit          -> "arrows_explicit"
+      | ArrowsCurriedImplicit   -> "arrows_curried_implicit"
+      | AliasOmit               -> "alias_omit"
+      | ContractOperationArrows -> "contract_operation_arrows"
+      | OpenDefault             -> "open_default"
     let string_of_opts = Settings.string_of_paths -<- List.map show_opt
 
     let parse_opts : string -> opt list
       = let parse_opt : string -> opt
           = fun s ->
           match String.lowercase_ascii s with
-          | "presence_omit"           -> PresenceOmit
-          | "arrows_explicit"         -> ArrowsExplicit
-          | "arrows_curried_implicit" -> ArrowsCurriedImplicit
-          | "alias_omit"              -> AliasOmit
-          | "open_default"            -> OpenDefault
+          | "presence_omit"             -> PresenceOmit
+          | "arrows_explicit"           -> ArrowsExplicit
+          | "arrows_curried_implicit"   -> ArrowsCurriedImplicit
+          | "alias_omit"                -> AliasOmit
+          | "contract_operation_arrows" -> ContractOperationArrows
+          | "open_default"              -> OpenDefault
           | _ -> failwith ("Invalid option: " ^ s)
         in
         let is_correct : opt list -> bool
@@ -2063,6 +2067,7 @@ module Policy = struct
            ; " * alias_omit: hide empty (1) shared effect rows in last argument of aliases"
            ; " * arrows_explicit: explicitly show empty (1) shared effect rows in arrows"
            ; " * arrows_curried_implicit: curried functions (not final arrow) assumed implictly fresh"
+           ; " * contract_operation_arrows: contract operations E:() {}-> a to E:a"
            ; " * open_default: effect rows are open by default, closed with syntax { |.}"
            ; "Meta-options:"
            ; " * none: turn all of the above off"
@@ -2080,16 +2085,17 @@ module Policy = struct
     let sugar_specifics : opt list Settings.setting
       = Settings.(multi_option ~default:default_opts "effect_sugar_policy"
                   |> synopsis syno
-                  |> hint "<default|none|all|(presence_omit|alias_omit|arrows_explicit|arrows_curried_implicit|open_default)>"
+                  |> hint "list of options or a meta-option, see help"
                   |> to_string string_of_opts
                   |> convert parse_opts
                   |> sync)
 
-    let presence_omit           = List.mem PresenceOmit
-    let alias_omit              = List.mem AliasOmit
-    let arrows_explicit         = List.mem ArrowsExplicit
-    let arrows_curried_implicit = List.mem ArrowsCurriedImplicit
-    let open_default            = List.mem OpenDefault
+    let presence_omit             = List.mem PresenceOmit
+    let alias_omit                = List.mem AliasOmit
+    let arrows_explicit           = List.mem ArrowsExplicit
+    let arrows_curried_implicit   = List.mem ArrowsCurriedImplicit
+    let contract_operation_arrows = List.mem ContractOperationArrows
+    let open_default              = List.mem OpenDefault
 
     let default () = Settings.get sugar_specifics
   end
@@ -3007,6 +3013,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
            *     let operations = StringMap.update label upd operations in
            *     {< operations >} *)
 
+          method maybe_contract_op_arrow : typ -> typ
+            = fun tp -> tp
+
           method effect_row : row -> 'self_type * row option * row_var * bool
             = let decide_field : tid -> string -> field_spec -> 'self_type * field_spec_map -> 'self_type * field_spec_map
                 (* here we need to filter out the fields that are:
@@ -3035,7 +3044,22 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                       | _ -> field
                     in
                     match pre with
-                    | Present _ | Absent ->
+                    | Present p ->
+                       (* field has specified presence => it has to appear here *)
+                       let field =
+                         if ES.contract_operation_arrows policy
+                         then begin match p with
+                              | Function (d,_,c) ->
+                                 (* it is an arrow and we want contractions: check if possible *)
+                                 (* also this is an effect row, so this arrow will never have any effect *)
+                                 if d = unit_type then Present c
+                                 else field
+                              | _ -> field
+                              end
+                         else field
+                       in
+                       (o, FieldEnv.add label field kept)
+                    | Absent ->
                        (* field has specified presence => it has to appear here *)
                        (o, FieldEnv.add label field kept)
                     | Var (pres_vid,_,_) ->
