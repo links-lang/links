@@ -2982,6 +2982,11 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           | _ -> super#typ tp
       end
 
+    type row_omis = Omissible of row
+                  | NonOmissible of row
+    let extract_omis = function
+      | Omissible r | NonOmissible r -> r
+
     let sugar_introducer policy shared_variable ops
       = let module ES = Policy.EffectSugar in
         object (o : 'self_type)
@@ -3013,25 +3018,14 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
            *     let operations = StringMap.update label upd operations in
            *     {< operations >} *)
 
-          method maybe_contract_op_arrow : typ -> typ
-            = fun tp -> tp
-
-          method effect_row : row -> 'self_type * row option * row_var * bool
+          method effect_row : row -> 'self_type * row_omis * tid option
             = let decide_field : tid -> string -> field_spec -> 'self_type * field_spec_map -> 'self_type * field_spec_map
-                (* here we need to filter out the fields that are:
-                   1) polymorphic in their presence with a fresh variable, AND
-                   2) occur SOMEWHERE in the type as non-polymorphic (this is what the
-                   map `operations' is for)
+                (* Here we need to filter out the fields that are polymorphic in their
+                   presence with a fresh variable.
 
-                   The operations which are only presence-poly in the whole type (they
-                   have no non-poly occurence) have to appear once (we can't have them
-                   disappear completely). If this happens here, that operation will be
-                   marked (in `operations'), so in the next occurence, it can be
-                   hidden.
-
-                   Presence-poly operations that have a non-fresh variable (in the
-                   list in `operations`) have to be shown in each occasion, because we
-                   need to inform the programmer that the variable is the same. *)
+                   Presence-poly operations that have a non-fresh variable (see
+                   `operations`) have to be shown in each occasion, because we need to
+                   inform the programmer that the variable is the same. *)
                 = fun effect_vid label field (o, kept) ->
                 if is_builtin_effect label
                 then
@@ -3096,14 +3090,14 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                       completely remove it depends on the context where it appears and
                       on the policy) *)
                    let row_opt = if FieldEnv.is_empty kept
-                                 then None
-                                 else Some (Row (kept, rv_pt, dual))
+                                 then Omissible (Row (FieldEnv.empty, rv_pt, dual))
+                                 else NonOmissible (Row (kept, rv_pt, dual))
                    in
-                   (o, row_opt, rv_pt, dual) (* TODO this could be nicer *)
+                   (o, row_opt, Some effect_vid)
                  end
               | _ ->
                  (* this row doesn't need sugaring, return it identically *)
-                 (o, Some r, rv_pt, dual)
+                 (o, NonOmissible r, None)
 
           (** This function will sugar the function effect row *)
           method func : datatype -> 'self_type * datatype
@@ -3114,14 +3108,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               | _ -> assert false
             in
             let (o, dom) = o#typ dom in
-            let (o, eff, eff_var, eff_dual) = o#effect_row eff in
-            let eff = match eff with
-              | None ->
-                 (* all fields were eliminated, the row var needs to stay in so that
-                    the printer knows it's the shared effect row *)
-                 Row (FieldEnv.empty, eff_var, eff_dual)
-              | Some r -> r (* some fields were kept, row needs to stay *)
-            in
+            let (o, eff', _) = o#effect_row eff in
+            (* eliminated or not, the row needs to stay in the function effect *)
+            let eff = extract_omis eff' in
             let (o, cod) = o#typ cod in
             let tp = match fl with
               | `Func -> Function (dom, eff, cod)
@@ -3129,39 +3118,80 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             in
             (o, tp)
 
-          (** This function handles a list of type arguments. By convention, if the
-              last argument is an effect row, it may be the shared effect and the sugar
-              may apply to it. *)
+          (** This function handles a list of type arguments. Any argument can be an
+              effect row and sugar will apply to it. The last argument can by
+              convention be also completely omitted, if all its fields are eliminated
+              by the sugar. *)
           method tyarg_list : Kind.t list -> type_arg list -> 'self_type * Kind.t list * type_arg list
             = fun kinds tyargs ->
-            let kinds_others, kinds_last = ListUtils.unsnoc kinds in
-            let args_others, args_last = ListUtils.unsnoc tyargs in
-            match kinds_last, args_last with
-            | ((PrimaryKind.Row, (_, Restriction.Effect)),
-               (_ (* must be the same kind anyway *), (Row (_,_,dual) as r))) ->
-               begin
-                 let (o, r, rv, _) = o#effect_row r in
-                 match r with
-                 | Some r ->
-                    (* nonempty shared effect row was returned (meaning there is some
-                       field that must be displayed here) => reattach the last row to
-                       the arguments *)
-                    (o, kinds, args_others @ [(PrimaryKind.Row, r)])
-                 | None ->
-                    (* empty field spec (all fields were eliminated, or were never
-                       there in the first place); this may be omitted completely,
-                       depending on policy *)
-                    if ES.alias_omit policy
-                    then
-                      (* whole row omitted *)
-                      (o, kinds_others, args_others)
-                    else
-                      (* empty row kept in place *)
-                      (o, kinds, args_others @ [(PrimaryKind.Row, Row (FieldEnv.empty, rv, dual))])
-               end
-            | _ ->
-               (* doesn't have a shared effect row, return indentically *)
-               (o, kinds, tyargs)
+            match (kinds, tyargs) with
+            | [], [] -> (o, [], [])
+            | [knd], [(pk, tp)] ->
+               (* last - can be implicit *)
+               if is_effect_row_kind knd then
+                 begin
+                   let (o, r, rvid) = o#effect_row tp in
+                   match r with
+                   | Omissible _ when rvid = Some shared_variable ->
+                      (* this is the implicit shared effect row in last position: if
+                         it's been emptied, it can now be completely omitted *)
+                      (o, [], [])
+                   | Omissible r | NonOmissible r ->
+                      (* otherwise, it was possibly sugared, but exists still *)
+                      (o, [knd], [(pk, r)])
+                 end
+               else
+                 (o, [knd], [(pk, tp)])
+            | knd :: kinds, (pk, tp) :: tyargs ->
+               (* not last - cannot be implicit, but can still get sugared *)
+               if is_effect_row_kind knd then
+                 begin
+                   let (o, r, _) = o#effect_row tp in
+                   (* not last => cannot be omitted, don't care if it's empty *)
+                   let r = extract_omis r in
+                   let (o, kinds, tyargs) = o#tyarg_list kinds tyargs in
+                   (o, knd :: kinds, (pk, r) :: tyargs)
+                 end
+               else let (o, kinds, tyargs) = o#tyarg_list kinds tyargs in
+                    (o, knd :: kinds, (pk, tp) :: tyargs)
+            | _ -> raise ListUtils.Lists_length_mismatch
+          (* let lst = List.combine kinds tyargs in
+           * let (o, lst) = List.fold_left
+           *                  (fun (o, acc) (knd, (pk, tp)) ->
+           *                    let (o, tp) = if is_effect_row_kind knd
+           *                                  then o#effect_row tp
+           *                                  else (o, tp)
+           *                    in (o, (knd, (pk, tp))::acc))
+           *                  (o, []) lst
+           * in
+           * let kinds_others, kinds_last = ListUtils.unsnoc kinds in
+           * let args_others, args_last = ListUtils.unsnoc tyargs in
+           * match kinds_last, args_last with
+           * | ((PrimaryKind.Row, (_, Restriction.Effect)),
+           *    (_ (\* must be the same kind anyway *\), (Row (_,_,dual) as r))) ->
+           *    begin
+           *      let (o, r, rv, _) = o#effect_row r in
+           *      match r with
+           *      | Some r ->
+           *         (\* nonempty shared effect row was returned (meaning there is some
+           *            field that must be displayed here) => reattach the last row to
+           *            the arguments *\)
+           *         (o, kinds, args_others @ [(PrimaryKind.Row, r)])
+           *      | None ->
+           *         (\* empty field spec (all fields were eliminated, or were never
+           *            there in the first place); this may be omitted completely,
+           *            depending on policy *\)
+           *         if ES.alias_omit policy
+           *         then
+           *           (\* whole row omitted *\)
+           *           (o, kinds_others, args_others)
+           *         else
+           *           (\* empty row kept in place *\)
+           *           (o, kinds, args_others @ [(PrimaryKind.Row, Row (FieldEnv.empty, rv, dual))])
+           *    end
+           * | _ ->
+           *    (\* doesn't have a shared effect row, return indentically *\)
+           *    (o, kinds, tyargs) *)
 
           (** Deconstruct Alias, let tyarg_list handle it *)
           method alias : typ -> 'self_type * typ
