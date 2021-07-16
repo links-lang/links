@@ -2672,17 +2672,17 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                  | Binder
                  [@@deriving show]
 
-    type t = { policy: Policy.t
-             ; bound_vars: TypeVarSet.t
-             ; tyvar_names: names
-             ; ambient: ambient
-             ; shared_effect: tid option }
+    type t = { policy                 : Policy.t
+             ; bound_vars             : TypeVarSet.t
+             ; tyvar_names            : names
+             ; ambient                : ambient
+             ; implicit_shared_effect : tid option }
 
-    let empty () = { policy        = Policy.default_policy ()
-                   ; bound_vars    = TypeVarSet.empty
-                   ; tyvar_names   = Hashtbl.create 0
-                   ; ambient       = Toplevel
-                   ; shared_effect = None }
+    let empty () = { policy                 = Policy.default_policy ()
+                   ; bound_vars             = TypeVarSet.empty
+                   ; tyvar_names            = Hashtbl.create 0
+                   ; ambient                = Toplevel
+                   ; implicit_shared_effect = None }
 
 
     let with_policy : Policy.t -> t -> t
@@ -2775,23 +2775,23 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     let is_ambient_binder : t -> bool
       = fun { ambient ; _ } -> ambient = Binder
 
-    let shared_effect : t -> tid option
-      = fun { shared_effect ; _ } -> shared_effect
+    let implicit_shared_effect : t -> tid option
+      = fun { implicit_shared_effect ; _ } -> implicit_shared_effect
 
-    let shared_effect_exists : t -> bool
-      = fun { shared_effect ; _ } ->
-      match shared_effect with
+    let implicit_shared_effect_exists : t -> bool
+      = fun { implicit_shared_effect ; _ } ->
+      match implicit_shared_effect with
       | None -> false
       | _ -> true
 
-    let is_shared_effect : tid -> t -> bool
-      = fun vid { shared_effect; _ } ->
-      match shared_effect with
+    let is_implicit_shared_effect : tid -> t -> bool
+      = fun vid { implicit_shared_effect; _ } ->
+      match implicit_shared_effect with
       | Some vid' when vid = vid' -> true
       | _ -> false
 
-    let set_shared_effect : tid option -> t -> t
-      = fun shared_effect ctx -> { ctx with shared_effect }
+    let set_implicit_shared_effect : tid option -> t -> t
+      = fun implicit_shared_effect ctx -> { ctx with implicit_shared_effect }
   end
 
   module SharedEffect : sig
@@ -3452,7 +3452,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
   type var_anonymity = Visible | Anonymous | SharedEff
   let get_var_anonymity : Context.t -> tid -> var_anonymity
     = fun ctxt vid ->
-    match Context.shared_effect ctxt with
+    match Context.implicit_shared_effect ctxt with
     | Some v when v = vid -> SharedEff
     | _ ->
        (* this var is not a shared effect variable (or they are disabled) *)
@@ -3668,7 +3668,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
          else Empty
       | Var (id, knd, _) ->
          (* TODO check correctness *)
-         if (Context.is_ambient_effect ctx) && (ES.open_default es_policy) && (Context.is_shared_effect id ctx)
+         if (Context.is_ambient_effect ctx) && (ES.open_default es_policy) && (Context.is_implicit_shared_effect id ctx)
          then Empty
          else with_value var (id, knd)
       | Recursive r -> with_value recursive r
@@ -3736,7 +3736,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                Both of these are only relevant if there is a shared effect to talk
                about. *)
             let anonymity = get_var_anonymity ctx vid in
-            if Context.shared_effect_exists ctx
+            if Context.implicit_shared_effect_exists ctx
             then begin
                 (* TODO support for currying: if arrows are implicit, and the last one
                    has the shared effect, then this does not need to be printed (if
@@ -3999,7 +3999,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     let ctxt, ty = match shared_effect with
       | None -> ctxt, ty
       | Some vid ->
-         (Context.set_shared_effect (Some vid) ctxt,
+         (Context.set_implicit_shared_effect (Some vid) ctxt,
           SharedEffect.ensugar_datatype (Policy.es_policy policy') vid ty)
     in
     Printer.generate_string datatype ctxt ty
@@ -4021,7 +4021,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     let ctxt, tyarg = match shared_effect with
       | None -> ctxt, tyarg
       | Some vid ->
-         (Context.set_shared_effect (Some vid) ctxt,
+         (Context.set_implicit_shared_effect (Some vid) ctxt,
           SharedEffect.ensugar_type_arg (Policy.es_policy policy') vid tyarg)
     in
     Printer.generate_string type_arg ctxt tyarg
