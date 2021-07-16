@@ -3132,7 +3132,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                  begin
                    let (o, r, rvid) = o#effect_row tp in
                    match r with
-                   | Omissible _ when rvid = Some shared_variable ->
+                   | Omissible _ when rvid = Some shared_variable
+                                      && ES.alias_omit policy ->
                       (* this is the implicit shared effect row in last position: if
                          it's been emptied, it can now be completely omitted *)
                       (o, [], [])
