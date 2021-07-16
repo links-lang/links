@@ -3050,8 +3050,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                          if ES.contract_operation_arrows policy
                          then begin match p with
                               | Function (d,_,c) ->
-                                 (* it is an arrow and we want contractions: check if possible *)
-                                 (* also this is an effect row, so this arrow will never have any effect *)
+                                 (* it is an arrow and we want contractions: check if
+                                    possible *)
+                                 (* also this is an effect row, so this arrow will
+                                    never have any effect of its own *)
                                  if d = unit_type then Present c
                                  else field
                               | _ -> field
@@ -3070,7 +3072,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                          (* presence, but non-fresh => needs to be kept here *)
                          (o, FieldEnv.add label field kept)
                        else
-                         (* fresh presence in an open row => this doesn't need to show up *)
+                         (* fresh presence in an open row => this doesn't need to be
+                            visible *)
                          (o, kept)
                     | _ -> failwith "This should not happen!"
                   end
