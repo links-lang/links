@@ -39,16 +39,17 @@ module Policy : sig
   type kind_policy = Default | Full | Hide
 
   module EffectSugar : sig
-    type opt = PresenceOmit | AliasOmit | ArrowsShowTheOneEffect | ArrowsShowFresh | ContractOperationArrows | OpenDefault
+    type opt = PresenceOmit | AliasOmit | ArrowsShowTheOneEffect | ArrowsShowFresh | ContractOperationArrows | OpenDefault | DifferentOperationArrows
     type t = opt list
     val default : unit -> t
 
-    val presence_omit             : t -> bool
-    val alias_omit                : t -> bool
-    val arrows_show_the_one       : t -> bool
-    val arrows_show_fresh         : t -> bool
-    val contract_operation_arrows : t -> bool
-    val open_default              : t -> bool
+    val presence_omit              : t -> bool
+    val alias_omit                 : t -> bool
+    val arrows_show_the_one        : t -> bool
+    val arrows_show_fresh          : t -> bool
+    val contract_operation_arrows  : t -> bool
+    val open_default               : t -> bool
+    val different_operation_arrows : t -> bool
   end
 
   type t = {

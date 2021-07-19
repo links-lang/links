@@ -2005,31 +2005,33 @@ module Policy = struct
                 |> sync)
 
   module EffectSugar : sig
-                                          (* TODO name; for now it's the One Effect To Rule Them All *)
-    type opt = PresenceOmit | AliasOmit | ArrowsShowTheOneEffect | ArrowsShowFresh | ContractOperationArrows | OpenDefault
+                                       (* vvvvvvvvvvvvvvvvvvvvvv TODO name; for now it's the One Effect To Rule Them All *)
+    type opt = PresenceOmit | AliasOmit | ArrowsShowTheOneEffect | ArrowsShowFresh | ContractOperationArrows | OpenDefault | DifferentOperationArrows
     type t = opt list
     val default : unit -> t
 
-    val presence_omit             : t -> bool
-    val alias_omit                : t -> bool
-    val arrows_show_the_one       : t -> bool
-    val arrows_show_fresh         : t -> bool
-    val contract_operation_arrows : t -> bool
-    val open_default              : t -> bool
+    val presence_omit              : t -> bool
+    val alias_omit                 : t -> bool
+    val arrows_show_the_one        : t -> bool
+    val arrows_show_fresh          : t -> bool
+    val contract_operation_arrows  : t -> bool
+    val open_default               : t -> bool
+    val different_operation_arrows : t -> bool
   end = struct
-    type opt = PresenceOmit | AliasOmit | ArrowsShowTheOneEffect | ArrowsShowFresh | ContractOperationArrows | OpenDefault
+    type opt = PresenceOmit | AliasOmit | ArrowsShowTheOneEffect | ArrowsShowFresh | ContractOperationArrows | OpenDefault | DifferentOperationArrows
     type t = opt list
     let default_opts = [PresenceOmit ; AliasOmit ; ContractOperationArrows]
-    let all_opts = [PresenceOmit ; AliasOmit ; ArrowsShowTheOneEffect ; ArrowsShowFresh ; ContractOperationArrows ; OpenDefault]
+    let all_opts = [PresenceOmit ; AliasOmit ; ArrowsShowTheOneEffect ; ArrowsShowFresh ; ContractOperationArrows ; OpenDefault ; DifferentOperationArrows ]
 
     let show_opt : opt -> string
       = function
-      | PresenceOmit            -> "presence_omit"
-      | ArrowsShowTheOneEffect  -> "arrows_show_the_one_effect"
-      | ArrowsShowFresh         -> "arrows_show_fresh"
-      | AliasOmit               -> "alias_omit"
-      | ContractOperationArrows -> "contract_operation_arrows"
-      | OpenDefault             -> "open_default"
+      | PresenceOmit             -> "presence_omit"
+      | ArrowsShowTheOneEffect   -> "arrows_show_the_one_effect"
+      | ArrowsShowFresh          -> "arrows_show_fresh"
+      | AliasOmit                -> "alias_omit"
+      | ContractOperationArrows  -> "contract_operation_arrows"
+      | OpenDefault              -> "open_default"
+      | DifferentOperationArrows -> "different_operation_arrow"
     let string_of_opts = Settings.string_of_paths -<- List.map show_opt
 
     let parse_opts : string -> opt list
@@ -2042,6 +2044,7 @@ module Policy = struct
           | "alias_omit"                 -> AliasOmit
           | "contract_operation_arrows"  -> ContractOperationArrows
           | "open_default"               -> OpenDefault
+          | "different_operation_arrows" -> DifferentOperationArrows
           | _ -> failwith ("Invalid option: " ^ s)
         in
         let is_correct : opt list -> bool
@@ -2067,6 +2070,7 @@ module Policy = struct
            ; " * arrows_show_fresh: display the fresh effect variables"
            ; " * contract_operation_arrows: contract operations E:() {}-> a to E:a"
            ; " * open_default: effect rows are open by default, closed with syntax { |.}"
+           ; " * different_operation_arrows: operation arrow will be syntactically differentiated"
            ; "Meta-options:"
            ; " * none: turn all of the above off"
            ; " * default: revert to default value"
@@ -2088,12 +2092,13 @@ module Policy = struct
                   |> convert parse_opts
                   |> sync)
 
-    let presence_omit             = List.mem PresenceOmit
-    let alias_omit                = List.mem AliasOmit
-    let arrows_show_the_one       = List.mem ArrowsShowTheOneEffect
-    let arrows_show_fresh         = List.mem ArrowsShowFresh
-    let contract_operation_arrows = List.mem ContractOperationArrows
-    let open_default              = List.mem OpenDefault
+    let presence_omit              = List.mem PresenceOmit
+    let alias_omit                 = List.mem AliasOmit
+    let arrows_show_the_one        = List.mem ArrowsShowTheOneEffect
+    let arrows_show_fresh          = List.mem ArrowsShowFresh
+    let contract_operation_arrows  = List.mem ContractOperationArrows
+    let open_default               = List.mem OpenDefault
+    let different_operation_arrows = List.mem DifferentOperationArrows
 
     let default () = Settings.get sugar_specifics
   end
@@ -3813,8 +3818,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                   StringBuffer.write buf "}";
                 end;
               (if is_wild then StringBuffer.write buf "~" else StringBuffer.write buf "-");
-              (* add the arrowhead/lollipop *)
-              (if is_lolli then StringBuffer.write buf "@" else StringBuffer.write buf ">")
+              (* add the arrowhead/lollipop/oparrow *)
+              (if is_lolli then StringBuffer.write buf "@"
+               else if Context.is_ambient_operation ctx then StringBuffer.write buf ">>"
+               else StringBuffer.write buf ">")
             )
       in
 
