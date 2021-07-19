@@ -2659,8 +2659,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
   module Context = struct
 
     type ambient = Toplevel
-                 | Arrow of [ `Function | `Linear (* | `Operation *) ] * [ `Final | `Curried ]
-                 (* TODO does it make sense to have a linear arrow in operation space? *)
+                 | Arrow of [ `Function | `Linear | `Operation ] * [ `Final | `Curried ]
                  (* | Presence *)
                  | Tuple
                  | Variant
@@ -2727,7 +2726,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
     let ambient_function_default : ambient = Arrow (`Function, `Final)
     let ambient_linfun_default : ambient = Arrow (`Linear, `Final)
-    (* let ambient_operation_default : ambient = Arrow (`Operation, `Final) *)
+    let ambient_operation_default : ambient = Arrow (`Operation, `Final)
 
     let is_ambient_toplevel : t -> bool
       = fun { ambient ; _ } -> ambient = Toplevel
@@ -2739,11 +2738,11 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       = fun { ambient ; _ } -> match ambient with
                                | Arrow (`Linear, _) -> true
                                | _ -> false
-    (* let is_ambient_operation : t -> bool
-     *   = fun { ambient ; _ } -> match ambient with
-     *                            | Arrow (`Operation, `Final) -> true
-     *                            | Arrow (`Operation, `Curried) -> raise tag_expectation_mismatch (\* this should not happen, DEBUG *\)
-     *                            | _ -> false *)
+    let is_ambient_operation : t -> bool
+      = fun { ambient ; _ } -> match ambient with
+                               | Arrow (`Operation, `Final) -> true
+                               | Arrow (`Operation, `Curried) -> raise tag_expectation_mismatch (* this should not happen, DEBUG *)
+                               | _ -> false
     let is_ambient_arrow_curried : t -> bool
       = fun { ambient ; _ } -> match ambient with
                                | Arrow (_, `Curried) -> true
@@ -3775,7 +3774,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               if visible_fields = 0
               then if (not row_var_exists)
                    then begin
-                       if not (Context.is_ambient_effect ctx)
+                       if not (Context.is_ambient_operation ctx)
                        then begin
                            (* empty closed row *)
                            if Policy.EffectSugar.open_default (Policy.es_policy (Context.policy ctx))
@@ -3832,7 +3831,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                        Context.set_ambient_arrow_finality finality ctx
                      else
                        (* If this is inside an effect row, preserve ambient, so we can get operation arrows *)
-                       ctx
+                       Context.set_ambient Context.ambient_operation_default ctx
           in
           Printer.apply func_arrow ctx' effects buf;
           StringBuffer.write buf " ";
