@@ -814,7 +814,7 @@ case_expression:
 | SWITCH LPAREN exp RPAREN LBRACE case* RBRACE                 { with_pos $loc (Switch ($3, $6, None)) }
 | RECEIVE LBRACE case* RBRACE                                  { with_pos $loc (Receive ($3, None)) }
 | SHALLOWHANDLE LPAREN exp RPAREN LBRACE case* RBRACE          { with_pos $loc (Handle (untyped_handler $3 $6 Shallow)) }
-| HANDLE LPAREN exp RPAREN LBRACE handle_cases RBRACE          { (*with_pos $loc (Handle (untyped_handler $3 $6 Deep   ))*) failwith "TODO" }
+| HANDLE LPAREN exp RPAREN LBRACE handle_cases RBRACE          { with_pos $loc (Handle (untyped_handler $3 $6 Deep   )) }
 | HANDLE LPAREN exp RPAREN LPAREN handle_params RPAREN LBRACE case* RBRACE
                                                                { with_pos $loc (Handle (untyped_handler ~parameters:$6 $3 $9 Deep)) }
 | RAISE                                                        { with_pos $loc (Raise) }
@@ -825,12 +825,12 @@ handle_params:
     separated_pair(pattern, LARROW, exp))                      { $1 }
 
 handle_cases:
-| handle_cases effect_case { failwith "TODO" }
-| handle_cases case { failwith "TODO" }
-| /* empty */ { failwith "TODO" }
+| handle_cases effect_case { [] (* TODO *) }
+| handle_cases case { [] (* TODO *) }
+| /* empty */ { [] }
 
 effect_case:
-| CASE effect_pattern RARROW case_contents { failwith "TODO" }
+| CASE effect_pattern RARROW case_contents { () (* TODO *) }
 
 iteration_expression:
 | FOR LPAREN perhaps_generators RPAREN
@@ -1309,36 +1309,37 @@ pattern:
 | typed_pattern                                                { $1 }
 | typed_pattern COLON primary_datatype_pos                     { with_pos $loc (Pattern.HasType ($1, datatype $3)) }
 
-%inline
-maybe_parenthesise(prod):
-| LPAREN prod RPAREN { failwith "TODO" }
-| prod { failwith "TODO" }
-
 effect_pattern:
-| lt = OPERATOR operation_patterns gt = OPERATOR {
-      if (lt <> "<") then raise (ConcreteSyntaxError (pos $loc(lt), ""))
+| lt = OPERATOR operation_patterns gt = OPERATOR
+    { if (lt <> "<") then raise (ConcreteSyntaxError (pos $loc(lt), ""))
       else if (gt <> ">") then raise (ConcreteSyntaxError (pos $loc(gt), ""))
-      else failwith "TODO" }
+      else let (pats, kpat) = $2 in with_pos $loc (Pattern.Effect2 (pats, kpat)) }
 
 operation_patterns:
-| unary_operation_pattern { failwith "TODO" }
-| LPAREN shallow_operation_pattern COMMA separated_nonempty_list(COMMA, shallow_operation_pattern) RPAREN FATRARROW pattern                { failwith "TODO" }
-| LPAREN shallow_operation_pattern COMMA separated_nonempty_list(COMMA, shallow_operation_pattern) RPAREN                { failwith "TODO" }
-| shallow_operation_pattern COMMA separated_nonempty_list(COMMA, shallow_operation_pattern)                { failwith "TODO" }
-
+| unary_operation_pattern
+    { $1 }
+| LPAREN shallow_operation_pattern COMMA separated_nonempty_list(COMMA, shallow_operation_pattern) RPAREN FATRARROW pattern
+    { $2 :: $4, Some $7 }
+| shallow_operation_pattern COMMA separated_nonempty_list(COMMA, shallow_operation_pattern)
+    { $1 :: $3, None }
 
 unary_operation_pattern:
-| operation_pattern { failwith "TODO" }
-| shallow_operation_pattern { failwith "TODO" }
-| maybe_parenthesise(operation_pattern) FATRARROW pattern { failwith "TODO" }
-| LPAREN shallow_operation_pattern RPAREN FATRARROW pattern { failwith "TODO" }
-
-operation_pattern:
-| CONSTRUCTOR { failwith "TODO" }
-| CONSTRUCTOR multi_args { failwith "TODO" }
+| shallow_operation_pattern
+    { [$1], None }
+| LPAREN shallow_operation_pattern RPAREN FATRARROW pattern
+    { [$2], Some $5 }
+| operation_pattern FATRARROW pattern
+    { [with_pos $loc (Pattern.Operation (fst $1, snd $1, None))], Some $3 }
 
 shallow_operation_pattern:
-| operation_pattern RARROW pattern { failwith "TODO" }
+| operation_pattern RARROW pattern
+    { with_pos $loc (Pattern.Operation (fst $1, snd $1, Some $3)) }
+| operation_pattern
+    { with_pos $loc (Pattern.Operation (fst $1, snd $1, None)) }
+
+operation_pattern:
+| CONSTRUCTOR { ($1, []) }
+| CONSTRUCTOR multi_args { ($1, $2) }
 
 typed_pattern:
 | cons_pattern                                                 { $1 }
