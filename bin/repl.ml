@@ -258,7 +258,6 @@ let execute_directive context (name, args) =
       let f = fst (assoc name (Lazy.force directives)) in
       f context args
     with NotFound _ ->
-      Printexc.print_backtrace stdout;
       Printf.fprintf stderr "unknown directive : %s\n" name;
       context
   in
