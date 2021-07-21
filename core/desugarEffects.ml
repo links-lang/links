@@ -46,7 +46,7 @@ The following steps are only performed when effect_sugar is enabled:
    should be replaced by a shared row variabled later on. *)
 let shared_effect_var_name = "$eff"
 
-let has_effect_sugar () = Settings.get Types.effect_sugar
+let has_effect_sugar () = Types.Policy.effect_sugar (Types.Policy.default_policy ())
 
 let internal_error message =
   Errors.internal_error ~filename:"desugarEffects.ml" ~message
@@ -229,10 +229,14 @@ let may_have_shared_eff (tycon_env : simple_tycon_env) dt =
   | Lolli _ ->
       true
   | TypeApplication (tycon, _) -> (
-      let param_kinds, _has_implicit_effect = SEnv.find tycon tycon_env in
-      match ListUtils.last_opt param_kinds with
-      | Some (PrimaryKind.Row, (_, Restriction.Effect)) -> true
-      | _ -> false )
+    let param_kinds, _has_implicit_effect =
+      try
+        SEnv.find tycon tycon_env
+      with NotFound _ -> raise (Errors.UnboundTyCon (SourceCode.WithPos.pos dt, tycon))
+    in
+    match ListUtils.last_opt param_kinds with
+    | Some (PrimaryKind.Row, (_, Restriction.Effect)) -> true
+    | _ -> false )
   (* TODO: in the original version, this was true for every tycon with a Row var with restriction effect as the last param *)
   | _ -> false
 
@@ -272,8 +276,12 @@ let cleanup_effects tycon_env =
              let a, e, r = do_fun a e r in
              Lolli (a, e, r)
          | TypeApplication (name, ts) ->
-             let tycon_info = SEnv.find_opt name tycon_env in
-             let rec go =
+            let tycon_info =
+              try
+                SEnv.find_opt name tycon_env
+              with NotFound _ -> raise (Errors.UnboundTyCon (pos, name))
+            in
+            let rec go =
                (* We don't know if the arities match up yet (nor the final arities
                   of the definitions), so we handle mismatches, assuming spare rows
                   are effects.

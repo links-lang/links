@@ -195,18 +195,21 @@ let format_exception =
 let format_exception_html e =
   Printf.sprintf "<h1>Links Error</h1><p>%s</p>\n" (format_exception e)
 
+let internal_error ~filename ~message =
+  InternalError { filename; message }
+
 let display ?(default=(fun e -> raise e)) ?(stream=stderr) (e) =
   try
-    Lazy.force e
+    (try Lazy.force e with
+       Notfound.NotFound _ ->
+       let backtrace = Printexc.get_raw_backtrace () in
+       Printexc.raise_with_backtrace (internal_error ~filename:"errors.ml" ~message:"Unhandled NotFound exception") backtrace)
   with exc ->
     (if Printexc.print_backtraces
      then Printexc.print_backtrace stderr);
     output_string stream (format_exception exc ^ "\n");
     flush stream;
     default exc
-
-let internal_error ~filename ~message =
-  InternalError { filename; message }
 
 let desugaring_error ~pos ~stage ~message =
   DesugaringError { pos; stage; message }

@@ -75,6 +75,7 @@ let restriction_of_string p =
   | "Any"     -> res_any
   | "Base"    -> res_base
   | "Session" -> res_session
+  | "Mono"    -> res_mono
   | rest      ->
      raise (ConcreteSyntaxError (pos p, "Invalid kind restriction: " ^ rest))
 
@@ -1094,10 +1095,6 @@ nonrec_row_var:
 | UNDERSCORE                                                   { Datatype.Open (fresh_typevar `Rigid)    }
 | PERCENT                                                      { Datatype.Open (fresh_typevar `Flexible) }
 
-/* FIXME:
- *
- * recursive row vars shouldn't be restricted to vfields.
- */
 row_var:
 | nonrec_row_var                                               { $1 }
 | LPAREN MU VARIABLE DOT fields RPAREN                         { Datatype.Recursive (named_typevar $3 `Rigid, $5) }

@@ -5,8 +5,6 @@ open CommonTypes
 type 'a stringmap = 'a Utility.StringMap.t [@@deriving show]
 type 'a field_env = 'a stringmap [@@deriving show]
 
-val print_types_pretty : bool Settings.setting
-
 (* type var sets *)
 module TypeVarSet : sig
   include Utility.INTSET
@@ -37,10 +35,28 @@ module Vars : sig
   type vars_list = (int * (flavour * kind * scope)) list
 end
 
-module Print : sig
-  type policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool}
+module Policy : sig
+  type kind_policy = Default | Full | Hide
+  type t = {
+    quantifiers : bool;
+    flavours : bool;
+    hide_fresh : bool;
+    kinds : kind_policy;
+    effect_sugar : bool;
+  }
+  val default_policy : unit -> t
 
-  val default_policy : unit -> policy
+  val quantifiers : t -> bool
+  val flavours : t -> bool
+  val hide_fresh : t -> bool
+  val kinds : t -> kind_policy
+  val effect_sugar : t -> bool
+
+  val set_quantifiers : bool -> t -> t
+  val set_flavours : bool -> t -> t
+  val set_hide_fresh : bool -> t -> t
+  val set_kinds : kind_policy -> t -> t
+  val set_effect_sugar : bool -> t -> t
 end
 
 val process      : Abstype.t
@@ -278,6 +294,13 @@ val close_row : row -> row
 val closed_wild_row : row
 val remove_field : ?idempotent:bool -> Label.t -> row -> row
 
+(** removing top-level meta typevars and aliases; imported from typeUtils.ml *)
+val concrete_type' : datatype -> datatype
+
+(** deconstructing rows *)
+val extract_row : datatype -> row
+val extract_row_parts : datatype -> row'
+
 (** constants *)
 val empty_field_env : field_spec_map
 val closed_row_var : row_var
@@ -344,20 +367,20 @@ val make_wobbly_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMa
 
 val combine_per_kind_envs : datatype Utility.IntMap.t * row Utility.IntMap.t * field_spec Utility.IntMap.t -> type_arg Utility.IntMap.t
 
-val effect_sugar : bool Settings.setting
-
 (** pretty printing *)
-val string_of_datatype   : ?policy:(unit -> Print.policy)
+val print_types_pretty : bool Settings.setting
+
+val string_of_datatype   : ?policy:(unit -> Policy.t)
                         -> ?refresh_tyvar_names:bool -> datatype   -> string
-val string_of_row        : ?policy:(unit -> Print.policy)
+val string_of_row        : ?policy:(unit -> Policy.t)
                         -> ?refresh_tyvar_names:bool -> row        -> string
-val string_of_presence   : ?policy:(unit -> Print.policy)
+val string_of_presence   : ?policy:(unit -> Policy.t)
                         -> ?refresh_tyvar_names:bool -> field_spec -> string
-val string_of_type_arg   : ?policy:(unit -> Print.policy)
+val string_of_type_arg   : ?policy:(unit -> Policy.t)
                         -> ?refresh_tyvar_names:bool -> type_arg   -> string
-val string_of_row_var    : ?policy:(unit -> Print.policy)
+val string_of_row_var    : ?policy:(unit -> Policy.t)
                         -> ?refresh_tyvar_names:bool -> row_var    -> string
-val string_of_tycon_spec : ?policy:(unit -> Print.policy)
+val string_of_tycon_spec : ?policy:(unit -> Policy.t)
                         -> ?refresh_tyvar_names:bool -> tycon_spec -> string
 val string_of_environment        : environment -> string
 val string_of_typing_environment : typing_environment -> string

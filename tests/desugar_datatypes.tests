@@ -93,32 +93,32 @@ stderr : @.*Multiple definitions of type variable `a'.\.*
 Sugar for shared effect variables in functions
 fun (f, x: Int) { f(x) + 0 }
 stdout : @fun : \(\(Int\) -> Int, Int\) -> Int
-args : --set=effect_sugar=true
+args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
 
 Sugar for shared effect variables in type applications (1)
 sig forever : (Comp(a)) ~> b fun forever(f) { ignore(f()); forever(f) } forever
 stdout : fun : (Comp (_)) ~> _
-args : --set=effect_sugar=true
+args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
 
 Sugar for shared effect variables in type applications (2)
 sig f : Comp(()) fun f() { } f
 stdout : fun : Comp (())
-args : --set=effect_sugar=true
+args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
 
 Implicit effect variables are shared across different functions
 (map, id) : (((a) -> b, [a]) -> [b], (c) -> c)
 stdout : (fun, fun) : (((a) -> c, [a]) -> [c], (d) -> d)
-args : --set=effect_sugar=true
+args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
 
 Sugar for implicit effect variables in typenames
 typename Comp(a) = () ~> a; fun() {} : Comp((), { | e})
 stdout : fun : Comp (())
-args : --set=effect_sugar=true
+args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
 
 Sugar for implicit effect variables in typenames (propagates through types)
 mutual { typename Either(a) = [|A:() ~> a|B:Indirect(a)|]; typename Indirect(a) = Either(a); } A(fun() {}) : Either((), { | e})
 stdout : A(fun) : Either (())
-args : --set=effect_sugar=true
+args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
 
 Type names with effect arrows are not considered
 typename X = Comp((), {Var:() -> ()}); fun() { } : X({ |_})

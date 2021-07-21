@@ -8,63 +8,9 @@ exception TypeDestructionError of string
 let error t = raise (TypeDestructionError t)
 
 
-(** remove any top-level meta typevars and aliases from a type
-    (perhaps we can use this version of concrete_type everywhere)
-*)
-let concrete_type t =
-  let rec ct rec_names t : datatype =
-    match t with
-      | Alias (_, t) -> ct rec_names t
-      | Meta point ->
-          begin
-            match Unionfind.find point with
-            | Var _ -> t
-            | Recursive (var, _kind, t) ->
-             if RecIdSet.mem (MuBoundId var) rec_names then
-               Meta point
-             else
-               ct (RecIdSet.add (MuBoundId var) rec_names) t
-            | t -> ct rec_names t
-          end
-      | ForAll (qs, t) ->
-          begin
-            match ct rec_names t with
-              | ForAll (qs', t') ->
-                  ForAll (qs @ qs', t')
-              | t ->
-                  begin
-                    match qs with
-                      | [] -> t
-                      | _ -> ForAll (qs, t)
-                  end
-          end
-      | Dual s -> dual_type (ct rec_names s)
-      | RecursiveApplication ({ r_unique_name; r_dual; r_args; r_unwind ; _ } as appl) ->
-          if (RecIdSet.mem (NominalId r_unique_name) rec_names) then
-            RecursiveApplication appl
-          else
-            let body = r_unwind r_args r_dual in
-            ct (RecIdSet.add (NominalId r_unique_name) rec_names) body
-      | _ -> t
-  in
-    ct RecIdSet.empty t
-
-let extract_row t = match concrete_type t with
-  | Effect row
-  | Record row -> row
-  | Variant row -> row
-  | t ->
-      error
-        ("Internal error: attempt to extract a row from a datatype that is not a record or a variant: "
-         ^ string_of_datatype t)
-
-
-let extract_row_parts : Types.t -> Types.row' = function
-    | Row parts -> parts
-    | t -> error
-             ("Internal error: attempt to extract row parts from a datatype that is not a row "
-              ^ string_of_datatype t)
-
+let concrete_type = Types.concrete_type'
+let extract_row = Types.extract_row
+let extract_row_parts = Types.extract_row_parts
 
 let split_row name row =
   let (field_env, row_var, dual) = fst (unwrap_row row) |> extract_row_parts in

@@ -58,23 +58,23 @@ stdout : @fun : .*A:Bool.*B:Bool.* -> Bool
 
 Recursive variant types [1]
 fun (x) { switch (x) { case A(a) -> a case y -> x } }
-stdout : @fun : \(mu [a-z]+ \. \[|A:[a-z]+ | [a-z0-9]+|\]\)-> mu [a-z]+ \. \[|A:[a-z]+ | [a-z0-9]+|\]
+stdout : @fun : \(mu [a-z]+\.\[|A:[a-z]+ | [a-z0-9]+|\]\)-> mu [a-z]+\.\[|A:[a-z]+ | [a-z0-9]+|\]
 
 Recursive variant types [2]
 fun increment(x) { switch (x) { case Zero -> Succ (Zero) case Succ (n) -> Succ ((increment(n))) }} increment
-stdout : @fun : \(mu [a-z]+ \. \[|Succ:[a-z]+ | Zero|\]\) -> \[|Zero | mu [0-9]+ \. Succ:\[|Zero | [0-9]+|\] | [0-9]+|\]
+stdout : @fun : \(mu [a-z]+\.\[|Succ:[a-z]+ | Zero|\]\) -> \[|Zero | mu [0-9]+\.Succ:\[|Zero | [0-9]+|\] | [0-9]+|\]
 
 Recursive variant types [3]
 fun rev(x, r) { switch (x) { case Empty -> r case Cons(a, b) -> rev(b, Cons(a, r)) }} rev
-stdout : @fun : \(mu [a-z]+ \. \[|Cons:\([a-z]+, [a-z]+\) | Empty|\], mu [a-z]+ \. \[|Cons:\([a-z]+, [a-z]+\) | [0-9]+|\]\) -> mu [a-z]+ \. \[|Cons:\([a-z]+, [a-z]+\) | [0-9]+|\]
+stdout : @fun : \(mu [a-z]+\.\[|Cons:\([a-z]+, [a-z]+\) | Empty|\], mu [a-z]+\.\[|Cons:\([a-z]+, [a-z]+\) | [0-9]+|\]\) -> mu [a-z]+\.\[|Cons:\([a-z]+, [a-z]+\) | [0-9]+|\]
 
 Recursive variant types [4]
 fun increment(x) { switch (x) { case Zero -> Succ (Zero) case Succ (n) -> Succ (increment(n))}} fun (x) {switch (increment(x)) { case Foo -> 0 case Zero -> 1 case Succ (n) -> 2 }}
-stdout : @fun : \(mu ([a-z]+) . \[|Succ:\\1 | Zero|\]\) -> Int
+stdout : @fun : \(mu ([a-z]+).\[|Succ:\\1 | Zero|\]\) -> Int
 
 Recursive variant types [5]
 fun increment(x) { switch (x) { case Zero -> Succ (Zero) case Succ (n) -> Succ (increment(n))}} increment(increment(Zero))
-stdout : @Succ *\(Succ *\(Zero\)\) : \[|Zero | (mu ([0-9]*) . Succ:\[|Zero | \\1|\] | [0-9]*)|\]
+stdout : @Succ *\(Succ *\(Zero\)\) : \[|Zero | (mu ([0-9]*).Succ:\[|Zero | \\1|\] | [0-9]*)|\]
 
 Rows preserved across functions
 fun f(x) { switch (x) { case Foo -> Bar case s -> s } } f
@@ -90,7 +90,7 @@ stdout : @\[C *\(A\), C *\(B\)\] : .*
 
 Type annotations
 fun increment(x) {(Succ (x)):([|Succ:(mu a . [|Zero | Succ:a|])|])} increment
-stdout : @fun : \(mu ([a-z]+) \. \[|Succ:\\1 | Zero|]\) -> \[|Succ:mu ([a-z]+) . \[|Succ:\\2 | Zero|\]|\]
+stdout : @fun : \(mu ([a-z]+)\.\[|Succ:\\1 | Zero|]\) -> \[|Succ:mu ([a-z]+).\[|Succ:\\2 | Zero|\]|\]
 
 Closure at top-level (issue #422) [1]
 (switch(Foo(id)) { case Foo(id) -> fun(x) { id(x) } })(2)

@@ -444,7 +444,7 @@ end
     let nli () = nl () ^ tab ()
 
     (* Always display fresh variables when printing error messages *)
-    let error_policy () = { (Types.Print.default_policy ()) with Types.Print.hide_fresh = false }
+    let error_policy () = Types.Policy.set_hide_fresh false (Types.Policy.default_policy ())
 
     (* Do not automatically refresh type variable names when pretty-printing
        types in error messages.  This will be done manually by calling
@@ -1043,7 +1043,7 @@ end
     let type_apply pos lexpr ty tys =
       build_tyvar_names [ty];
       add_typearg_names tys;
-      let quant_policy () = { (error_policy ()) with Types.Print.quantifiers = true } in
+      let quant_policy () = Types.Policy.set_quantifiers true (error_policy ()) in
       let ppr_type  = Types.string_of_datatype ~policy:quant_policy ~refresh_tyvar_names:false ty in
       let ppr_types = List.map (fun t -> tab() ^ code (show_type_arg t)) tys in
       die pos ("The term"                                     ^ nli () ^
@@ -1535,7 +1535,7 @@ end
 
    (* quantifier checks *)
    let inconsistent_quantifiers ~pos ~t1:l ~t2:r =
-     let policy () = {(Types.Print.default_policy ()) with Types.Print.quantifiers = true} in
+     let policy () = Types.Policy.set_quantifiers true (Types.Policy.default_policy ()) in
      let typ = Types.string_of_datatype ~policy in
        die pos ("Inconsistent quantifiers, expected: " ^ nli () ^
                 typ l                                  ^ nl ()  ^
@@ -1556,7 +1556,7 @@ end
     let escaped_quantifier ~pos ~var ~annotation ~escapees =
       let escaped_tys = List.map snd escapees in
       build_tyvar_names (annotation :: escaped_tys);
-      let policy () = { (error_policy ()) with Types.Print.quantifiers = true } in
+      let policy () = Types.Policy.set_quantifiers true (error_policy ()) in
       let display_ty (var, ty) =
         Printf.sprintf "%s: %s" var
           (Types.string_of_datatype ~policy ~refresh_tyvar_names:false ty) in
