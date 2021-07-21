@@ -8,7 +8,7 @@ type table_name = string (* FIXME: allow variables? *)
     [@@deriving show]
 
 type query =
-  | Union     of bool * query list * int  (* bool = is_set? = not "UNION ALL"? *)
+  | Union     of multiplicity * query list * int
   | Select    of select_clause
   | Insert    of {
       ins_table: table_name;
@@ -23,7 +23,7 @@ type query =
   | Delete    of { del_table: table_name; del_where: base option }
   | With      of table_name * query * query
 and select_clause =
-    bool * select_fields * from_clause list * base * base list  (* bool = is_set? = "DISTINCT"? *)
+    multiplicity * select_fields * from_clause list * base * base list
 and select_fields =
   | Star
   | Fields    of (base * string) list
@@ -38,6 +38,7 @@ and base =
   | Empty     of query
   | Length    of query
   | RowNumber of (Var.var * string) list
+and multiplicity = All | Distinct
     [@@deriving show]
 
 (* optimizing smart constructor for && *)
@@ -164,7 +165,7 @@ class virtual printer =
     (* SQL doesn't support empty records, so this is a hack. *)
     Format.pp_print_string ppf "0 as \"@unit@\""
 
-  method pp_select ppf fDistinct fields tables condition os ignore_fields =
+  method pp_select ppf mult fields tables condition os ignore_fields =
     let pp_os_condition ppf a =
       Format.fprintf ppf "%a" (self#pp_base false) a in
     let pr_q = self#pp_query ignore_fields in
@@ -183,19 +184,19 @@ class virtual printer =
       match condition with
         | Constant (Constant.Bool true) -> ()
         | _ -> Format.fprintf ppf "\nwhere %a" pp_os_condition condition
-      in
-      if fDistinct then
-        Format.fprintf ppf "select distinct %a\nfrom %a%a%a"
-        self#pp_fields fields
-        (self#pp_comma_separated pp_from_clause) tables
-        pp_where condition
-        pp_orderby os
-      else
-        Format.fprintf ppf "select %a\nfrom %a%a%a"
-        self#pp_fields fields
-        (self#pp_comma_separated pp_from_clause) tables
-        pp_where condition
-        pp_orderby os
+      in match mult with
+      | Distinct ->
+          Format.fprintf ppf "select distinct %a\nfrom %a%a%a"
+          self#pp_fields fields
+          (self#pp_comma_separated pp_from_clause) tables
+          pp_where condition
+          pp_orderby os
+      | All ->
+          Format.fprintf ppf "select %a\nfrom %a%a%a"
+          self#pp_fields fields
+          (self#pp_comma_separated pp_from_clause) tables
+          pp_where condition
+          pp_orderby os
 
   method private pr_b_ignore_fields = self#pp_base true
 
@@ -280,13 +281,11 @@ class virtual printer =
           Format.fprintf ppf "%a%a"
             pr_q q
             Format.pp_print_string (order_by_clause n)
-      | Union (fSet, qs, n) ->
-        let pp_sep_union ppf () =
-          if fSet then
-            Format.fprintf ppf "\nunion\n"
-          else
-            Format.fprintf ppf "\nunion all\n"
-          in
+      | Union (mult, qs, n) ->
+        let pp_sep_union ppf () = match mult with
+          | Distinct -> Format.fprintf ppf "\nunion\n"
+          | All -> Format.fprintf ppf "\nunion all\n"
+        in
         let pp_value ppf x = Format.fprintf ppf "(%a)" pr_q x in
         Format.fprintf ppf "%a%a"
           (Format.pp_print_list ~pp_sep:pp_sep_union pp_value) qs
@@ -298,8 +297,8 @@ class virtual printer =
           pp_fields fields
           Format.pp_print_string (fresh_dummy_var ())
           pr_b condition
-      | Select (fDistinct, fields, tables, condition, os) ->
-          self#pp_select ppf fDistinct fields tables condition os ignore_fields
+      | Select (mult, fields, tables, condition, os) ->
+          self#pp_select ppf mult fields tables condition os ignore_fields
       | Delete { del_table; del_where } ->
           self#pp_delete ppf del_table del_where
       | Update { upd_table; upd_fields; upd_where } ->
