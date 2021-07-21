@@ -18,19 +18,6 @@ let (||=) o o' =
     | None -> o'
     | _ -> o
 
-(* let squash o = o >>= fun x -> x *)
-
-(* conjunctive bind for option lists, not used
-let rec (>>>=) (l : ('a option) list) (f : 'a -> 'b option) : ('b list) option =
-    match l with
-    | [] -> Some []
-    | o::ol ->
-           o >>= fun a ->
-           f a >>= fun b ->
-           (ol >>>= f) >>= fun bl ->
-           Some (b :: bl)
-*)
-
 let unopt_default ox x' = match ox with None -> x' | Some x'' -> x''
 
 let rec (>>==) (l : 'a list) (f : 'a -> 'a option) : 'a list option =

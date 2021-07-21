@@ -1345,7 +1345,7 @@ let rec select_clause : Sql.index -> bool -> Q.t -> Sql.select_clause =
           begin
             match body with
               | (_, fields, tables, condition, []) ->
-                  (false, fields, Sql.TableRef(table, x)::tables, condition, os)
+                  (Sql.All, fields, Sql.TableRef(table, x)::tables, condition, os)
               | _ -> assert false
           end
     | If (c, body, Concat []) ->
@@ -1354,7 +1354,7 @@ let rec select_clause : Sql.index -> bool -> Q.t -> Sql.select_clause =
       let c = base index c in
       let (_, fields, tables, c', os) = select_clause index unit_query body in
       let c = Sql.smart_and c c' in
-      (false, fields, tables, c, os)
+      (Sql.All, fields, tables, c, os)
     | Table (_db, table, _keys, (fields, _, _)) ->
       (* eta expand tables. We might want to do this earlier on.  *)
       (* In fact this should never be necessary as it is impossible
@@ -1369,13 +1369,13 @@ let rec select_clause : Sql.index -> bool -> Q.t -> Sql.select_clause =
               fields
               []))
       in
-        (false, fields, [Sql.TableRef(table, var)], Sql.Constant (Constant.Bool true), [])
+        (Sql.All, fields, [Sql.TableRef(table, var)], Sql.Constant (Constant.Bool true), [])
     | Singleton _ when unit_query ->
       (* If we're inside an Sql.Empty or a Sql.Length it's safe to ignore
          any fields here. *)
       (* We currently detect this earlier, so the unit_query stuff here
          is redundant. *)
-      (false, Sql.Fields [], [], Sql.Constant (Constant.Bool true), [])
+      (Sql.All, Sql.Fields [], [], Sql.Constant (Constant.Bool true), [])
     | Singleton (Record fields) ->
       let fields =
         Sql.Fields
@@ -1386,7 +1386,7 @@ let rec select_clause : Sql.index -> bool -> Q.t -> Sql.select_clause =
               fields
               []))
       in
-        (false, fields, [], Sql.Constant (Constant.Bool true), [])
+        (Sql.All, fields, [], Sql.Constant (Constant.Bool true), [])
     | _ -> assert false
 and clause : Sql.index -> bool -> Q.t -> Sql.query =
   fun index unit_query v -> Sql.Select(select_clause index unit_query v)
@@ -1436,7 +1436,7 @@ and unit_query v =
   (* queries passed to Empty and Length
      (where we don't care about what data they return)
   *)
-  Sql.Union (false, List.map (clause [] true) (prepare_clauses v), 0)
+  Sql.Union (Sql.All, List.map (clause [] true) (prepare_clauses v), 0)
 and sql_of_query v =
   clause [] false v
 
@@ -1490,12 +1490,12 @@ let let_clause : let_clause -> Sql.query =
     let q_outer = clause (outer_index gs_out) false outer in
     let (_fDist, result,tables,where,os) = select_clause (inner_index t gs_in) false inner in
     let tablename = Sql.string_of_subquery_var q in
-    let q_inner = Sql.Select(false,result,Sql.TableRef(tablename,t)::tables,where,os) in
+    let q_inner = Sql.Select(Sql.All,result,Sql.TableRef(tablename,t)::tables,where,os) in
     Sql.With (tablename, q_outer, q_inner)
 
 let sql_of_let_query : let_query -> Sql.query =
   fun cs ->
-    Sql.Union (false, List.map (let_clause) cs, 0)
+    Sql.Union (Sql.All, List.map (let_clause) cs, 0)
 
 let update : ((Ir.var * string) * Q.t option * Q.t) -> Sql.query =
   fun ((_, table), where, body) ->

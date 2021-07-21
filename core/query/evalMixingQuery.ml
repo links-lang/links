@@ -22,7 +22,7 @@ let eval_error fmt : 'r =
 let mapstrcat sep f l = l |> List.map f |> String.concat sep
 
 let dummy_sql_empty_query =
-    (false,S.Fields [(S.Constant (Constant.Int 42), "@unit@")], [], S.Constant (Constant.Bool false), [])
+    (S.All,S.Fields [(S.Constant (Constant.Int 42), "@unit@")], [], S.Constant (Constant.Bool false), [])
 
 (* convert an NRC-style query into an SQL-style query *)
 let rec sql_of_query is_set = function
@@ -30,16 +30,16 @@ let rec sql_of_query is_set = function
 | q -> disjunct is_set q
 
 and disjunct is_set = function
-| Q.Prom p -> sql_of_query true p
+| Q.Prom p -> sql_of_query S.Distinct p
 | Q.Singleton _ as j -> S.Select (body is_set [] [] j)
 | Q.For (_, gs, os, j) -> S.Select (body is_set gs os j)
 | _arg -> Debug.print ("error in SimpleSqlGen.disjunct: unexpected arg = " ^ Q.show _arg); failwith "disjunct"
 
 and generator locvars = function
-| (v, Q.Prom p) -> (S.Subquery (E.contains_free locvars p, sql_of_query true p, v))
+| (v, Q.Prom p) -> (S.Subquery (E.contains_free locvars p, sql_of_query S.Distinct p, v))
 | (v, Q.Table (_, tname, _, _)) -> (S.TableRef (tname, v))
 | (v, Q.Dedup (Q.Table (_, tname, _, _))) ->
-    S.Subquery (false, S.Select (true, S.Star, [S.TableRef (tname, v)], S.Constant (Constant.Bool true), []), v)
+    S.Subquery (false, S.Select (S.Distinct, S.Star, [S.TableRef (tname, v)], S.Constant (Constant.Bool true), []), v)
 | (_, _arg) -> Debug.print ("error in SimpleSqlGen.disjunct: unexpected arg = " ^ Q.show _arg); failwith "generator"
 
 and body is_set gs os j =
@@ -86,8 +86,8 @@ and base_exp = function
             in
                 Sql.Apply ("RLIKE", [base_exp s; r])
     end
-| Q.Apply (Q.Primitive "Empty", [v]) -> S.Empty (sql_of_query false v)
-| Q.Apply (Q.Primitive "length", [v]) -> S.Length (sql_of_query false v)
+| Q.Apply (Q.Primitive "Empty", [v]) -> S.Empty (sql_of_query S.All v)
+| Q.Apply (Q.Primitive "length", [v]) -> S.Length (sql_of_query S.All v)
 | Q.Apply (Q.Primitive f, vs) -> S.Apply (f, List.map base_exp vs)
 | Q.Constant c -> S.Constant c
 (* WR: we don't support indices in this simple Sql generator *)
@@ -95,6 +95,9 @@ and base_exp = function
 | e ->
     Debug.print ("Not a base expression: " ^ (Q.show e) ^ "\n");
     failwith "base_exp"
+
+(* external call will start with a bag query *)
+let sql_of_query = sql_of_query S.All
 
 let compile_mixing : delateralize:QueryPolicy.t -> Value.env -> (int * int) option * Ir.computation -> (Value.database * Sql.query * Types.datatype) option =
   fun ~delateralize env (range, e) ->
@@ -115,7 +118,7 @@ let compile_mixing : delateralize:QueryPolicy.t -> Value.env -> (int * int) opti
         | Some db ->
             let t = Types.unwrap_list_type (MixingQuery.type_of_expression v) in
             (* Debug.print ("Generated NRC query: " ^ Q.show v ); *)
-            let q = sql_of_query false v in
+            let q = sql_of_query v in
             let _range = None in
               (* Debug.print ("Generated SQL query: "^(Sql.string_of_query db _range q)); *)
               Some (db, q, t)
