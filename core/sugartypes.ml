@@ -243,6 +243,8 @@ module Pattern = struct
     | List     of with_pos list
     | Variant  of Name.t * with_pos option
     | Effect   of Name.t * with_pos list * with_pos
+    | Effect2  of with_pos list * with_pos option
+    | Operation of Label.t * with_pos list * with_pos option
     | Negative of Name.t list
     | Record   of (Name.t * with_pos) list * with_pos option
     | Tuple    of with_pos list
