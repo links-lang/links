@@ -1,5 +1,9 @@
 (*****************************************************************************
- ** Delateralize.ml - Implements the delateralization algorithm             **
+ ** delateralize.ml - Implements the "query delateralization" algorithm:    **
+ **                   * produces an equivalent query whose "from" inputs    **
+ **                     are not expressed in terms of one another           **
+ **                   * does not require SQL99 "lateral"                    **
+ **                   * see Ricciotti-Cheney, ESOP2021                      **
  **                                                                         **
  ** author: Wilmer Ricciotti                                                **
  *****************************************************************************)
@@ -73,17 +77,23 @@ let rec subst t x u =
         Q.Closure (c, cenv)
     | v -> v
 
-(* C(q1, x.q2) := for x :- q1, #y :- q2 do {(x,#y)}
-   also returns the fieltypes of the graph *)
+(* returns the "query graph"
+     G(x <- q1; q2) := for x :- q1, #y :- q2 do {(x,#y)}
+     i.e. a graph representation of the "function" mapping each element x of q1 to q2[x]
+
+   Also returns the fieldtypes of the graph *)
 let graph_query (q1,ty1) x (q2,ty2) =
     let y = Var.fresh_raw_var () in
     let p = Q.flattened_pair (Q.Var (x,ty1)) (Q.Var (y,ty2)) in
     let ftys = Q.flattened_pair_ft (Q.Var (x,ty1)) (Q.Var (y,ty2)) in
     Q.For (None, [(x, q1); (y, q2)], [], Q.Singleton p), ftys
 
-(* DELATERALIZING REWRITE for iota
-     for gs, y :- I(q3) do q1     -- s.t. x :- q2 in gs
-    ~> for gs, p :- I(C(Dq2,x.q3)) where x = p.1 do ([y]q1) p.2 *)
+(*
+    DELATERALIZING REWRITE for Prom:
+     for gs, y <- Prom(q3) do q1                          -- s.t. x <- q2 in gs
+     ~> for gs, p <- Prom(G(x <- Dedup q2; q3))
+        where x = p.1 do (\lambda y.q1) p.2
+*)
 let prom_delateralize gs q1 x (q2,ty2) y (q3,ty3) =
     let p = Var.fresh_raw_var () in
     let graph, ftys = graph_query (Q.Dedup q2,ty2) x (q3,ty3) in
