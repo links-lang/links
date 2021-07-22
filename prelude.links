@@ -97,10 +97,7 @@ fun the(l) {
 }
 
 fun elem(x, l) {
-  switch (l) {
-    case [] -> false
-    case hd::tl -> x == hd || x `elem` tl
-  }
+  not(l==[]) && (x == hd(l) || x `elem` tl(l))
 }
 
 fun odd(i)  { i `mod` 2 == 1 }
