@@ -3760,7 +3760,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           in
           Printer (fun ctx r buf ->
               let is_lolli = Context.is_ambient_linfun ctx in
-              (* flatten here in case there are nested row variables *)
+              (* flatten here in case there are nested row variables,
+                 e.g. {  | { wild:() } } *)
               let (fields, rvar, _) as r' = extract_row_parts (flatten_row r) in
               (* print_endline @@ FieldEnv.show (fun _ _ -> ()) fields; *)
               let is_wild = is_field_present fields wild in
@@ -3771,41 +3772,44 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 | _ -> true
               in
               if visible_fields = 0
-              then if (not row_var_exists)
-                   then begin
-                       if not (Context.is_ambient_operation ctx)
-                       then begin
-                           (* empty closed row *)
-                           if Policy.EffectSugar.open_default (Policy.es_policy (Context.policy ctx))
-                           then
-                             (* effect sugar for rows open by default *)
-                             StringBuffer.write buf "{.}"
-                           else
-                             StringBuffer.write buf "{}"
-                         end
-                     end
-                   else (* empty open row => use the abbreviated notation -a- or ~a~
-                           unless it's anonymous in which case we skip it entirely *)
-                     match Unionfind.find (snd3 (extract_row_parts r)) with
-                     | Var (vid, knd, _) ->
-                        if decide_skip ctx vid
-                        then () (* skip printing it entirely *)
-                        else begin
-                            (if is_wild
-                             then StringBuffer.write buf "~"
-                             else StringBuffer.write buf "-");
-                            let ctx =
-                              Context.(set_ambient Effect
-                                         (with_policy Policy.(set_kinds Hide (policy ctx)) ctx))
-                            in
-                            Printer.apply var ctx (vid, knd) buf
-                          end
-                     | _ ->
-                        begin (* special case, construct row syntax, but only call the inside *)
-                          StringBuffer.write buf "{";
-                          Printer.apply row_parts (Context.set_ambient Context.Effect ctx) r' buf;
-                          StringBuffer.write buf "}"
+              then begin
+                  if not row_var_exists
+                  then begin
+                      if not (Context.is_ambient_operation ctx)
+                      then begin
+                          (* empty closed row *)
+                          if Policy.EffectSugar.open_default (Policy.es_policy (Context.policy ctx))
+                          then
+                            (* effect sugar for rows open by default *)
+                            StringBuffer.write buf "{.}"
+                          else
+                            StringBuffer.write buf "{}"
                         end
+                    end
+                  else (* empty open row use the abbreviated notation
+                           -a- or ~a~ unless it's anonymous in which
+                           case we skip it entirely *)
+                    match Unionfind.find rvar with
+                    | Var (vid, knd, _) ->
+                       if decide_skip ctx vid
+                       then () (* skip printing it entirely *)
+                       else begin
+                           (if is_wild
+                            then StringBuffer.write buf "~"
+                            else StringBuffer.write buf "-");
+                           let ctx =
+                             Context.(set_ambient Effect
+                                        (with_policy Policy.(set_kinds Hide (policy ctx)) ctx))
+                           in
+                           Printer.apply var ctx (vid, knd) buf
+                         end
+                    | _ ->
+                       begin (* special case, construct row syntax, but only call the inside *)
+                         StringBuffer.write buf "{";
+                         Printer.apply row_parts (Context.set_ambient Context.Effect ctx) r' buf;
+                         StringBuffer.write buf "}"
+                       end
+                end
               else begin (* need the full effect row, but only construct the inside of it *)
                   StringBuffer.write buf "{";
                   Printer.apply row_parts (Context.set_ambient Context.Effect ctx) r' buf;
