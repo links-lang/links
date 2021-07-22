@@ -29,7 +29,7 @@ and select_fields =
   | Fields    of (base * string) list
 and from_clause =
   | TableRef of table_name * Var.var
-  | Subquery of bool * query * Var.var  (* bool = LATERAL? *)
+  | Subquery of dependency * query * Var.var  (* bool = LATERAL? *)
 and base =
   | Case      of base * base * base
   | Constant  of Constant.t
@@ -40,6 +40,7 @@ and base =
   | RowNumber of (Var.var * string) list
 and multiplicity = All | Distinct
     [@@deriving show]
+and dependency = Standard | Lateral
 
 (* optimizing smart constructor for && *)
 let smart_and c c' =
@@ -169,6 +170,10 @@ class virtual printer =
     let pp_os_condition ppf a =
       Format.fprintf ppf "%a" (self#pp_base false) a in
     let pr_q = self#pp_query ignore_fields in
+    let pp_distinct ppf = function
+      | Distinct -> Format.pp_print_string ppf "distinct "
+      | All -> ()
+    in
     let pp_orderby ppf os =
       match os with
         | [] -> ()
@@ -178,25 +183,19 @@ class virtual printer =
     let pp_from_clause ppf fc =
       match fc with
         | TableRef (t, x) -> Format.fprintf ppf "%a as %s" self#pp_quote t (string_of_table_var x)
-        | Subquery (false, q, x) -> Format.fprintf ppf "(%a) as %s" pr_q q (string_of_table_var x)
-        | Subquery (true, q, x) -> Format.fprintf ppf "lateral (%a) as %s" pr_q q (string_of_table_var x) in
+        | Subquery (Standard, q, x) -> Format.fprintf ppf "(%a) as %s" pr_q q (string_of_table_var x)
+        | Subquery (Lateral, q, x) -> Format.fprintf ppf "lateral (%a) as %s" pr_q q (string_of_table_var x) in
     let pp_where ppf condition =
       match condition with
         | Constant (Constant.Bool true) -> ()
         | _ -> Format.fprintf ppf "\nwhere %a" pp_os_condition condition
-      in match mult with
-      | Distinct ->
-          Format.fprintf ppf "select distinct %a\nfrom %a%a%a"
-          self#pp_fields fields
-          (self#pp_comma_separated pp_from_clause) tables
-          pp_where condition
-          pp_orderby os
-      | All ->
-          Format.fprintf ppf "select %a\nfrom %a%a%a"
-          self#pp_fields fields
-          (self#pp_comma_separated pp_from_clause) tables
-          pp_where condition
-          pp_orderby os
+    in
+    Format.fprintf ppf "select %a%a\nfrom %a%a%a"
+      pp_distinct mult
+      self#pp_fields fields
+      (self#pp_comma_separated pp_from_clause) tables
+      pp_where condition
+      pp_orderby os
 
   method private pr_b_ignore_fields = self#pp_base true
 
@@ -258,7 +257,7 @@ class virtual printer =
     | Insert { ins_table; ins_fields; ins_records } ->
         pr_insert ppf ins_table ins_fields ins_records
     | With (z, q, q') ->
-        Format.fprintf ppf "with %s as (@[<v>%a@])\n%a"
+        Format.fprintf ppf "with %  s as (@[<v>%a@])\n%a"
           z
           pr_q q
           pr_q q'
@@ -273,6 +272,10 @@ class virtual printer =
       else
         self#pp_fields ppf fields in
 
+    let pp_all ppf = function
+      | All -> Format.pp_print_string ppf "all"
+      | Distinct -> ()
+    in
     match q with
       | Union (_, [], _) ->
           Format.pp_print_string ppf
@@ -282,10 +285,7 @@ class virtual printer =
             pr_q q
             Format.pp_print_string (order_by_clause n)
       | Union (mult, qs, n) ->
-        let pp_sep_union ppf () = match mult with
-          | Distinct -> Format.fprintf ppf "\nunion\n"
-          | All -> Format.fprintf ppf "\nunion all\n"
-        in
+        let pp_sep_union ppf () = Format.fprintf ppf "\nunion %a\n" pp_all mult in
         let pp_value ppf x = Format.fprintf ppf "(%a)" pr_q x in
         Format.fprintf ppf "%a%a"
           (Format.pp_print_list ~pp_sep:pp_sep_union pp_value) qs
@@ -419,7 +419,7 @@ let default_printer quote =
 
 let rec inline_outer_with q =
   let replace_subquery z q = function
-    | TableRef(y,x) when y = z -> Subquery(false, q,x)
+    | TableRef(y,x) when y = z -> Subquery(Standard, q,x)
     | fromclause -> fromclause
   in
   match q with

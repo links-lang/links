@@ -1,5 +1,6 @@
 (*****************************************************************************
- ** simpleSqlGen.ml - Simple Sql syntax generator                           **
+ ** evalMixingQuery.ml - compilation of DB queries mixing set and bag       **
+ **                      semantics to SQL                                   **
  **                                                                         **
  ** author: Wilmer Ricciotti                                                **
  *****************************************************************************)
@@ -24,6 +25,8 @@ let mapstrcat sep f l = l |> List.map f |> String.concat sep
 let dummy_sql_empty_query =
     (S.All,S.Fields [(S.Constant (Constant.Int 42), "@unit@")], [], S.Constant (Constant.Bool false), [])
 
+let dependency_of_contains_free = function true -> S.Lateral | _ -> S.Standard
+
 (* convert an NRC-style query into an SQL-style query *)
 let rec sql_of_query is_set = function
 | Q.Concat ds -> S.Union (is_set, List.map (disjunct is_set) ds, 0)
@@ -36,10 +39,10 @@ and disjunct is_set = function
 | _arg -> Debug.print ("error in SimpleSqlGen.disjunct: unexpected arg = " ^ Q.show _arg); failwith "disjunct"
 
 and generator locvars = function
-| (v, Q.Prom p) -> (S.Subquery (E.contains_free locvars p, sql_of_query S.Distinct p, v))
+| (v, Q.Prom p) -> (S.Subquery (dependency_of_contains_free (E.contains_free locvars p), sql_of_query S.Distinct p, v))
 | (v, Q.Table (_, tname, _, _)) -> (S.TableRef (tname, v))
 | (v, Q.Dedup (Q.Table (_, tname, _, _))) ->
-    S.Subquery (false, S.Select (S.Distinct, S.Star, [S.TableRef (tname, v)], S.Constant (Constant.Bool true), []), v)
+    S.Subquery (S.Standard, S.Select (S.Distinct, S.Star, [S.TableRef (tname, v)], S.Constant (Constant.Bool true), []), v)
 | (_, _arg) -> Debug.print ("error in SimpleSqlGen.disjunct: unexpected arg = " ^ Q.show _arg); failwith "generator"
 
 and body is_set gs os j =
