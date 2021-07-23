@@ -3065,7 +3065,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           in
           Printer (fun ctx r buf ->
               let is_lolli = Context.is_ambient_linfun ctx in
-              (* flatten here in case there are nested row variables *)
+              (* flatten here in case there are nested row variables,
+                 e.g. {  | { wild:() } } *)
               let (fields, rvar, _) as r' = extract_row_parts (flatten_row r) in
               let is_wild = is_field_present fields wild in
               let visible_fields = (FieldEnv.size fields) - (if is_wild then 1 else 0) in
@@ -3080,7 +3081,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                    else (* empty open row use the abbreviated notation
                            -a- or ~a~ unless it's anonymous in which
                            case we skip it entirely *)
-                     match Unionfind.find (snd3 (extract_row_parts r)) with
+                     match Unionfind.find rvar with
                      | Var (vid, knd, _) ->
                         if is_var_anonymous ctx vid
                         then () (* skip printing it entirely *)
