@@ -147,6 +147,76 @@ struct
   let recdty_field_types (t : Types.datatype) : Types.datatype StringMap.t =
     field_types_of_row (TypeUtils.extract_row t)
 
+  let rec subst t x u =
+    let srec t = subst t x u in
+    match t with
+    | Var (var, _) when var = x -> u
+    | Record fl -> Record (StringMap.map srec fl)
+    | Singleton v -> Singleton (srec v)
+    | Concat xs -> Concat (List.map srec xs)
+    | Project (r, label) -> Project (srec r, label)
+    | Erase (r, labels) -> Erase (srec r, labels)
+    | Variant (label, v) -> Variant (label, srec v)
+    | Apply (f, xs) -> Apply (srec f, List.map srec xs)
+    | For (_, gs, os, u) ->
+        (* XXX: assuming fresh x!*)
+        let gs' = List.map (fun (v,g) -> (v, srec g)) gs in
+        let os' = List.map srec os in
+        let u' = srec u in
+        For (None, gs', os', u')
+    | If (c, t, e) ->
+        If (srec c, srec t, srec e)
+    | Case (v, cases, default) ->
+        let v' = srec v in
+        let cases' = StringMap.map (fun (v,q) -> (v,srec q)) cases in
+        let default' = default >>=? fun d -> Some (fst d, srec (snd d)) in
+        Case (v', cases', default')
+    | Dedup v -> Dedup (srec v)
+    | Prom v -> Prom (srec v)
+    | Closure (c, closure_env) ->
+        let cenv = bind closure_env (x,u) in
+        Closure (c, cenv)
+    | v -> v
+
+  (** Returns (Some ty) if v occurs free with type ty, None otherwise *)
+  let occurs_free (v : Var.var) =
+    let rec occf bvs = function
+    | Var (w,tyw) ->
+        if w = v && not (List.mem v bvs)
+            then Some tyw
+            else None
+    | If (c,t,e) -> occf bvs c ||=? occf bvs t ||=? occf bvs e
+    | Closure ((_wl,_b),_e) ->
+        (* XXX: to be checked
+          we use this function only in normalized queries, so there shouldn't be any closure;
+          recursion on b would require deeper analysis of computations, so for the moment
+          let's not implement this and hope everything works fine
+        let bvs' = bvs @ wl @ List.map (fun (w,_) -> w) (Query.Eval.query_bindings_of_env e) in
+        occf bvs' b ||= tryPick (fun _ q -> occf bvs q) e *)
+        failwith "Delateralize.occurs_free: unexpected Closure in query"
+    | Apply (t, args) -> occf bvs t ||=? list_tryPick (occf bvs) args
+    | Singleton t
+    | Dedup t
+    | Prom t
+    | Project (t,_) -> occf bvs t
+    | Concat tl -> list_tryPick (occf bvs) tl
+    | For (_, gs, _os, b) ->
+        (* FIXME: do we need to check os as well? *)
+        let bvs'', res = List.fold_left (fun (bvs',acc) (w,q) -> w::bvs', acc ||=? occf bvs' q) (bvs, None) gs in
+        res ||=? occf bvs'' b
+    | Record fl -> map_tryPick (fun _ t -> occf bvs t) fl
+    | _ -> None
+    in occf []
+
+  (** Returns Some (x,qx,tyx) for the first generator x <- qx such that x occurs free with type tyx *)
+  let rec occurs_free_gens (gs : (Var.var * t) list) q =
+    match gs with
+    | [] -> None
+    | (x,qx)::gs' ->
+        match occurs_free x (For (None, gs', [], q)) with
+        | Some tyx -> Some (x,qx,tyx)
+        | None -> occurs_free_gens gs' q
+
   (** Return the type associated with an expression *)
   (* Inferring the type of an expression is straightforward because all
      variables are annotated with their types. *)

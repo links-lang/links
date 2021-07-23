@@ -30,13 +30,6 @@ include Functional
 let ( <| ) f arg = f arg
 let ( |> ) arg f = f arg
 
-(* option-disjunction *)
-let (||=) o o' =
-    match o with
-    | None -> o'
-    | _ -> o
-
-
 (** {0 Maps and sets} *)
 module type OrderedShow = sig
   type t [@@deriving show]
@@ -883,6 +876,10 @@ struct
     | None -> None
     | Some x -> Some (f x)
 
+  let opt_bind f = function
+    | None -> None
+    | Some a -> f a
+
   let opt_split = function
     | None -> None, None
     | Some (x, y) -> Some x, Some y
@@ -925,6 +922,39 @@ struct
 
   let some : 'a -> 'a option
     = fun x -> Some x
+
+  let (>>=?) o f = opt_bind f o
+
+  (* option-disjunction *)
+  let (||=?) o o' =
+    match o with
+    | None -> o'
+    | _ -> o
+
+  let rec (>>==?) (l : 'a list) (f : 'a -> 'a option) : 'a list option =
+    match l with
+    | [] -> None
+    | a::al ->
+        match f a, al >>==? f with
+        | None, None -> None
+        | fa, fal ->
+            Some (from_option a fa::from_option al fal)
+
+  let map_tryPick f m =
+    StringMap.fold
+      (fun k v acc -> lazy (match f k v with
+        | None -> Lazy.force acc
+        | y -> y))
+      m
+      (lazy None)
+    |> Lazy.force
+
+  let rec list_tryPick f = function
+    | [] -> None
+    | x::l -> match f x with
+      | None -> list_tryPick f l
+      | y -> y
+
 end
 include OptionUtils
 

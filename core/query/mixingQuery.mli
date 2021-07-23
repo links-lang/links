@@ -41,6 +41,8 @@ sig
   val flatfield : string -> string -> string
   val flattened_pair : t -> t -> t
   val flattened_pair_ft : t -> t -> Types.datatype stringmap
+  val subst : t -> Var.var -> t -> t
+  val occurs_free_gens : (Var.var * t) list -> t -> (Var.var * t * Types.datatype) option
   val recdty_field_types : Types.datatype -> Types.datatype StringMap.t
   val table_field_types : Value.table -> Types.typ Utility.StringMap.t
   val type_of_for_var : t -> Types.datatype
