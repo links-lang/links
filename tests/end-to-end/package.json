@@ -4,11 +4,14 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
     "selenium-webdriver": "^4.0.0-beta.4"
+  },
+  "devDependencies": {
+    "jest": "^27.0.6"
   }
 }
