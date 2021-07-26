@@ -426,12 +426,12 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
 
       let parse_date xs () =
           match (List.assoc_opt "_type" xs, List.assoc_opt "_value" xs) with
-            | (Some (`String "infinity"), _) -> 
+            | (Some (`String "infinity"), _) ->
                 Some (Timestamp.infinity |> Value.box_datetime)
             | (Some (`String "-infinity"), _) ->
                 Some (Timestamp.minus_infinity |> Value.box_datetime)
             | (Some (`String "timestamp"), Some (`Int utc_time)) ->
-                Some 
+                Some
                   (utc_time
                     |> float_of_int
                     |> UnixTimestamp.to_utc_calendar

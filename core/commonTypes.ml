@@ -83,7 +83,7 @@ module Timestamp = struct
             fprintf str_formatter "%a" print_position lexbuf;
             let err = flush_str_formatter () in
             raise (bad_date err)
-      
+
     (** Parses a user timestamp string. Lack of an offset is assumed to mean
         local time. *)
     let parse_user_string str =

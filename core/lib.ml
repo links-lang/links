@@ -1182,7 +1182,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     IMPURE);
 
   "showUTC",
-  (p1 (fun dt -> 
+  (p1 (fun dt ->
       let dt = Value.unbox_datetime dt in
       let str =
       match dt with

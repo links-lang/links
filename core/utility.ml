@@ -1535,7 +1535,7 @@ module CalendarShow = struct
 end
 
 module UnixTimestamp = struct
-  let of_calendar cal = 
+  let of_calendar cal =
     let tm = {
       Unix.tm_sec = CalendarShow.second cal |> int_of_float;
       Unix.tm_min = CalendarShow.minute cal;
@@ -1558,9 +1558,9 @@ module UnixTimestamp = struct
       ~minute:tm.Unix.tm_min
       ~second:(float_of_int tm.Unix.tm_sec) ())
 
-  let to_local_calendar t = 
+  let to_local_calendar t =
     Unix.localtime t |> to_calendar
-    
+
   let to_utc_calendar t =
     Unix.gmtime t |> to_calendar
 end
