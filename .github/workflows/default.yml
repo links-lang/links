@@ -355,7 +355,9 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v2
       - run: npm install
+        working-directory: tests/end-to-end
       - run: npm run test
+        working-directory: tests/end-to-end
 
   # install npm dependencies
   # Run Links server on examples at some fixed port
