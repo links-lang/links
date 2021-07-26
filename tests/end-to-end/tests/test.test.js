@@ -11,7 +11,28 @@ const options = new Options().headless();
 // Build a firefox driver
 const driver = new Builder().forBrowser('firefox').setFirefoxOptions(options).build();
 
-test('adds 1 + 2 to equal 3', async () => {
+const command = "cd ../../ && ./links examples/webserver/buttons.links";
+
+const util = require('util');
+const exec = util.promisify(require('child_process').exec);
+
+async function startServer() {
+    try {
+        const { stdout, stderr } = await exec(command);
+        console.log('stdout:', stdout);
+        console.log('stderr:', stderr);
+        return;
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+beforeAll(resolve => {
+  startServer();
+  resolve();
+});
+
+test('adds 1 + 2 to equal 3', async ()=> {
   await driver.get(URL);
 
   const inputLeft = By.name('input_0');
