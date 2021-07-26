@@ -3486,7 +3486,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 (match anonymity, show_flexible with
                  | Anonymous, true  -> ()
                  | Anonymous, false -> StringBuffer.write buf "_"
-                 | ImplicitEff, _   -> StringBuffer.write buf "$"
+                 | ImplicitEff, _   -> StringBuffer.write buf "_"
                  | _, _             -> StringBuffer.write buf var_name);
                 (if is_presence then StringBuffer.write buf "}"))
           in
@@ -3743,7 +3743,6 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 let es_policy = Policy.es_policy (Context.policy ctx) in
                 let module ES = Policy.EffectSugar in
 
-                let is_final = Context.is_ambient_arrow_final ctx in
                 let arrows_show_impl_shared = ES.arrows_show_the_one es_policy in
 
                 match anonymity with
@@ -3818,7 +3817,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               (if is_wild then StringBuffer.write buf "~" else StringBuffer.write buf "-");
               (* add the arrowhead/lollipop/oparrow *)
               (if is_lolli then StringBuffer.write buf "@"
-               else if Context.is_ambient_operation ctx then StringBuffer.write buf ">>"
+               else if Policy.EffectSugar.different_operation_arrows (Policy.es_policy (Context.policy ctx))
+                       && Context.is_ambient_operation ctx
+               then StringBuffer.write buf ">>"
                else StringBuffer.write buf ">")
             )
       in
