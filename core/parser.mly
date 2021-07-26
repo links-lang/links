@@ -1091,7 +1091,6 @@ nonrec_row_var:
 | VARIABLE                                                     { Datatype.Open (named_typevar $1 `Rigid   ) }
 | PERCENTVAR                                                   { Datatype.Open (named_typevar $1 `Flexible) }
 | UNDERSCORE                                                   { Datatype.Open (fresh_typevar `Rigid)    }
-| DOLLAR                                                       { Datatype.Open (fresh_typevar `Rigid)    }
 | PERCENT                                                      { Datatype.Open (fresh_typevar `Flexible) }
 
 row_var:

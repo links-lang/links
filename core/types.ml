@@ -3449,15 +3449,17 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
   type var_anonymity = Visible | Anonymous | ImplicitEff
   let get_var_anonymity : Context.t -> tid -> var_anonymity
     = fun ctxt vid ->
-    match Context.implicit_shared_effect ctxt with
-    | Some v when v = vid -> ImplicitEff
-    | _ ->
-       (* this var is not a shared effect variable (or they are disabled) *)
-       let _, (_, _, count) = Vars.find_spec vid (Context.tyvar_names ctxt) in
-       if (count = 1 && (Policy.hide_fresh Context.(policy ctxt))) (* we want to hide it *)
-          && not (Context.is_tyvar_bound vid ctxt) (* and it is not bound (if it is bound, it has to show up *)
-       then Anonymous
-       else Visible
+    if Context.is_ambient_binder ctxt then Visible
+    else
+      match Context.implicit_shared_effect ctxt with
+      | Some v when v = vid -> ImplicitEff
+      | _ ->
+         (* this var is not a shared effect variable (or they are disabled) *)
+         let _, (_, _, count) = Vars.find_spec vid (Context.tyvar_names ctxt) in
+         if (count = 1 && (Policy.hide_fresh Context.(policy ctxt))) (* we want to hide it *)
+            && not (Context.is_tyvar_bound vid ctxt) (* and it is not bound (if it is bound, it has to show up *)
+         then Anonymous
+         else Visible
 
   let rec var : (tid * Kind.t) printer
     = let open Printer in
