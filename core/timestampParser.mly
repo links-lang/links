@@ -13,7 +13,7 @@ open Utility
 %start timestamp
 %type < [>`Timestamp of (CalendarShow.t * int option) | `Infinity | `MinusInfinity] > timestamp
 
-%% 
+%%
 
 date:
 | UINTEGER MINUS UINTEGER MINUS UINTEGER                       { $1, $3, $5 }

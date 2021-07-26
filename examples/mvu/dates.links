@@ -28,7 +28,7 @@ fun updt(msg, model) {
                 } else {
                     MvuCommands.empty
                 };
-                
+
             # Update timestamp on every tick
             ((model with timestamp = now()), cmd)
         case NoOp -> (model, MvuCommands.empty)
