@@ -2834,7 +2834,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
 
     class implicit_shared_finder = object (o : 'self_type)
-      inherit Transform.visitor as super
+      inherit Transform.visitor
 
       val var : tid option = None
       method var = var
