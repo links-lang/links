@@ -1,11 +1,15 @@
 const { Builder, By, Key, until } = require('selenium-webdriver');
+const { Options } = require('selenium-webdriver/firefox');
 
-const script = require('jest');
 
 const URL = 'http://localhost:8080/';
 const TIMEOUT = 10000;
 
-let driver = new Builder().forBrowser('firefox').build();
+// Make browser headless
+const options = new Options().headless();
+
+// Build a firefox driver
+const driver = new Builder().forBrowser('firefox').setFirefoxOptions(options).build();
 
 test('adds 1 + 2 to equal 3', async () => {
   await driver.get(URL);
