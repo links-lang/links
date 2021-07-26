@@ -342,3 +342,21 @@ jobs:
           LINKS_MYSQL_PASSWORD: links
           LINKS_MYSQL_PORT: ${{ job.services.mysql.ports[3306] }}
         shell: bash
+
+  e2e-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-20.04
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+      - run: npm install
+      - run: npm run test
+
+  # install npm dependencies
+  # Run Links server on examples at some fixed port
+  # run tests, see if it fails
