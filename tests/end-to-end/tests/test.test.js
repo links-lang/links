@@ -30,8 +30,11 @@ beforeAll(async () => {
     //   });
     //   break;
     // }
+    default:
+      throw Error('Unknown browser' + process.env.BROWSER)
   }
   driver = await new Builder()
+    .forBrowser(process.env.BROWSER)
     .withCapabilities(capabilities)
     .build();
 });
