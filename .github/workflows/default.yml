@@ -350,6 +350,26 @@ jobs:
       - run: npm run test
         working-directory: tests/end-to-end
 
+  test-selenium:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-18.04
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      # The proceeding lines are added for E2E testing
+      - uses: actions/setup-node@v2
+      - run: npm install
+        working-directory: tests/end-to-end
+      - run: npm run test
+        working-directory: tests/end-to-end
+
   # install npm dependencies
   # Run Links server on examples at some fixed port
   # run tests, see if it fails
