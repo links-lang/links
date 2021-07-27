@@ -372,10 +372,13 @@ jobs:
 
   e2e-firefox:
     runs-on: ubuntu-20.04
+    env:
+      BROWSER: firefox
+      WORKING_DIR: tests/end-to-end
     steps:
       - uses: actions/checkout@v1
       - uses: actions/setup-node@v1
       - run: npm install
+        working-directory: ${{ env.WORKING_DIR }}
       - run: npm test
-        env:
-          BROWSER: firefox
+        working-directory: ${{ env.WORKING_DIR }}
