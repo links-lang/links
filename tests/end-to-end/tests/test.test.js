@@ -47,8 +47,7 @@ beforeAll(async () => {
 // });
 
 it("Google", async () => {
-  // await driver.get('http://google.com');
-  // assert.equal(await driver.getTitle(), "Google");
-  assert.equal(1, 1);
+  await driver.get('http://localhost:8125');
+  assert.equal(await driver.getTitle(), "HelloWorld");
 });
 

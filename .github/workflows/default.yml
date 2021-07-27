@@ -382,5 +382,7 @@ jobs:
           node-version: 16
       - run: npm install
         working-directory: ${{ env.WORKING_DIR }}
+      - run: node index.js
+        working-directory: ${{ env.WORKING_DIR }}
       - run: npm test
         working-directory: ${{ env.WORKING_DIR }}
