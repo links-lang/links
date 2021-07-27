@@ -4,6 +4,7 @@ on:
   pull_request:
     branches: master
   push:
+    # TODO: change back to master
     branches: e2e-tests 
   schedule:
     # Prime the caches every Monday
@@ -352,9 +353,53 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install system dependencies
+        run: sudo apt-get install -y libev-dev
+        shell: bash
+
+      - name: Use OCaml ${{ matrix.ocaml-compiler }}
+        uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: ${{ matrix.ocaml-compiler }}
+
+      - run: opam install -y conf-libev
+
+      - name: Install Links dependencies
+        run: >-
+          opam install
+          ./links.opam
+          ./links-mysql.opam
+          --deps-only
+          --ignore-constraints-on=links
+
+      - name: Build Links from source
+        run: |
+          eval $(opam env)
+          make all-ci
+        shell: bash
+
+      - name: Run MySQL5.7 database testsuite
+        run: |
+          eval $(opam env)
+          ./run-database-tests tests/database -d mysql
+          ./run-database-tests tests/relational-lenses -d mysql
+        env:
+          # TODO(dhil): I do not know how to index into the
+          # environments of either service. Until we figure out how to
+          # do it, we will just duplicate information here.
+          LINKS_MYSQL_HOST: 127.0.0.1
+          LINKS_MYSQL_USER: links
+          LINKS_MYSQL_PASSWORD: links
+          LINKS_MYSQL_PORT: ${{ job.services.mysql.ports[3306] }}
+        shell: bash
+
+      # - name: Run Tests 
+      #   uses: actions/checkout@v2
       - run: npm install
+        uses: actions/setup-node@v2
         working-directory: tests/end-to-end
       - run: npm run test
         working-directory: tests/end-to-end
