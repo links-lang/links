@@ -48,8 +48,6 @@ beforeAll(async () => {
     .forBrowser('firefox')
     .setFirefoxOptions(options)
     .build();
-  console.log("Driver before? " + driver);
-  // console.log("__ BROWSER: " + process.env.BROWSER)
 });
 
 // afterAll(async () => {
