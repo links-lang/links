@@ -1,5 +1,6 @@
 
-const { Builder, Capabilities } = require('selenium-webdriver');
+const { Builder } = require('selenium-webdriver');
+const { Options } = require('selenium-webdriver/firefox');
 const assert = require('assert');
 // const path = require('path');
 
@@ -13,8 +14,13 @@ beforeAll(async () => {
   //   //   break;
   //   // }
   //   case "firefox": {
+
       require("geckodriver");
-      capabilities = Capabilities.firefox();
+      // Make browser headless
+      const options = new Options().headless();
+
+      // Build a firefox driver
+      // capabilities = Capabilities.firefox();
       // break;
     // }
     // case "chrome": {
@@ -33,9 +39,14 @@ beforeAll(async () => {
     // default:
     //   throw Error('Unknown browser' + process.env.BROWSER)
   // }
+  // driver = await new Builder()
+  //   .forBrowser(process.env.BROWSER)
+  //   .withCapabilities(capabilities)
+  //   .build();
+
   driver = await new Builder()
-    .forBrowser(process.env.BROWSER)
-    .withCapabilities(capabilities)
+    .forBrowser('firefox')
+    .setFirefoxOptions(options)
     .build();
   console.log("Driver before? " + driver);
   // console.log("__ BROWSER: " + process.env.BROWSER)
