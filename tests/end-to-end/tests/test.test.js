@@ -37,6 +37,8 @@ beforeAll(async () => {
     .forBrowser(process.env.BROWSER)
     .withCapabilities(capabilities)
     .build();
+  console.log("== Driver: " + driver);
+  console.log("__ BROWSER: " + process.env.BROWSER)
 });
 
 afterAll(async () => {
