@@ -370,6 +370,12 @@ jobs:
       - run: npm run test
         working-directory: tests/end-to-end
 
-  # install npm dependencies
-  # Run Links server on examples at some fixed port
-  # run tests, see if it fails
+  e2e-firefox:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions/setup-node@v1
+      - run: npm install
+      - run: npm test
+        env:
+          BROWSER: firefox
