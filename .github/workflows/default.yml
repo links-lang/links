@@ -398,8 +398,8 @@ jobs:
 
       # - name: Run Tests 
       #   uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
       - run: npm install
-        uses: actions/setup-node@v2
         working-directory: tests/end-to-end
       - run: npm run test
         working-directory: tests/end-to-end
