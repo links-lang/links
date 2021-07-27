@@ -7,7 +7,7 @@ const assert = require('assert');
 let driver;
 
 beforeAll(async () => {
-  let capabilities;
+  // let capabilities;
   // switch (process.env.BROWSER || "chrome") {
   //   // case "safari": {
   //   //   capabilities = Capabilities.safari();
@@ -50,10 +50,10 @@ beforeAll(async () => {
     .build();
 });
 
-// afterAll(async () => {
-//   console.log("== Driver: " + driver);
-//   // await driver.quit()
-// });
+afterAll(async () => {
+  console.log("== Driver: " + driver);
+  await driver.quit()
+});
 
 it("Google", async () => {
   await driver.get('http://localhost:8125');
