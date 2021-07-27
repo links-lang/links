@@ -37,7 +37,8 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await driver.quit()
+  console.log("== Driver: " + driver);
+  // await driver.quit()
 });
 
 it("Google", async () => {
