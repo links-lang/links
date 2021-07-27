@@ -7,16 +7,16 @@ let driver;
 
 beforeAll(async () => {
   let capabilities;
-  switch (process.env.BROWSER || "chrome") {
-    // case "safari": {
-    //   capabilities = Capabilities.safari();
-    //   break;
-    // }
-    case "firefox": {
+  // switch (process.env.BROWSER || "chrome") {
+  //   // case "safari": {
+  //   //   capabilities = Capabilities.safari();
+  //   //   break;
+  //   // }
+  //   case "firefox": {
       require("geckodriver");
       capabilities = Capabilities.firefox();
       break;
-    }
+    // }
     // case "chrome": {
     //   require("chromedriver");
     //   capabilities = Capabilities.chrome();
@@ -30,15 +30,15 @@ beforeAll(async () => {
     //   });
     //   break;
     // }
-    default:
-      throw Error('Unknown browser' + process.env.BROWSER)
-  }
+    // default:
+    //   throw Error('Unknown browser' + process.env.BROWSER)
+  // }
   driver = await new Builder()
     .forBrowser(process.env.BROWSER)
     .withCapabilities(capabilities)
     .build();
-  console.log("== Driver: " + driver);
-  console.log("__ BROWSER: " + process.env.BROWSER)
+  console.log("Driver before? " + driver);
+  // console.log("__ BROWSER: " + process.env.BROWSER)
 });
 
 afterAll(async () => {
