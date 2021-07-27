@@ -344,6 +344,24 @@ jobs:
           LINKS_MYSQL_PORT: ${{ job.services.mysql.ports[3306] }}
         shell: bash
 
+  e2e-tests-no-build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-20.04
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - uses: actions/setup-node@v2
+      - run: npm install
+        working-directory: tests/end-to-end
+      - run: npm run test
+        working-directory: tests/end-to-end
+
   e2e-tests:
     strategy:
       fail-fast: false
