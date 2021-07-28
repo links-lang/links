@@ -376,13 +376,13 @@ jobs:
       BROWSER: firefox
       WORKING_DIR: tests/end-to-end
     steps:
-      - uses: actions/checkout@v1
-      - uses: actions/setup-node@v1
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
         with: 
           node-version: 16
       - run: npm install
         working-directory: ${{ env.WORKING_DIR }}
-      - run: node index.js & exit 0
-        working-directory: ${{ env.WORKING_DIR }}
+      # - run: node index.js & exit 0
+      #   working-directory: ${{ env.WORKING_DIR }}
       - run: npm test
         working-directory: ${{ env.WORKING_DIR }}
