@@ -3058,6 +3058,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                     | Present p ->
                        (* field has specified presence => it has to appear here *)
                        let field =
+                         print_endline "field";
                          if ES.contract_operation_arrows policy
                          then begin match p with
                               | Function (d,_,c) ->
@@ -3065,7 +3066,12 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                                     possible *)
                                  (* also this is an effect row, so this arrow will
                                     never have any effect of its own *)
-                                 if d = unit_type then Present c
+                                 if d = unit_type then
+                                   begin print_endline "domain is unit";
+                                         if c = unit_type
+                                         then Present unit_type
+                                         else Present c
+                                   end
                                  else field
                               | _ -> field
                               end
@@ -3078,6 +3084,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                     | Var (pres_vid,_,_) ->
                        (* presence polymorphic, need to decide whether to keep it *)
                        let nonfresh_vids = OperationMap.find (effect_vid, label) operations in
+                       (* TODO run this function for all rows so ω can
+                          apply, then here need to check policy if we
+                          want to remove presence-poly fields *)
                        if List.mem pres_vid nonfresh_vids
                        then
                          (* presence, but non-fresh => needs to be kept here *)
