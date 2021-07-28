@@ -3501,7 +3501,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 (match anonymity, show_flexible with
                  | Anonymous, true  -> ()
                  | Anonymous, false -> StringBuffer.write buf "_"
-                 | ImplicitEff, _   -> StringBuffer.write buf "_"
+                 | ImplicitEff, _   ->
+                    if Policy.(EffectSugar.arrows_show_the_one (es_policy (Context.policy ctx)))
+                    then StringBuffer.write buf var_name
+                    else StringBuffer.write buf "_"
                  | _, _             -> StringBuffer.write buf var_name);
                 (if is_presence then StringBuffer.write buf "}"))
           in
