@@ -540,13 +540,7 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
 
 let preprocess_type (dt : Datatype.with_pos) tycon_env allow_fresh shared_effect
   =
-  print_endline "Before cleanup:";
-  print_endline @@ Datatype.show_with_pos dt;
-  print_endline "===================";
   let dt = cleanup_effects tycon_env dt in
-  print_endline "After cleanup:";
-  print_endline @@ Datatype.show_with_pos dt;
-  print_newline ();
   let row_operations = gather_operations tycon_env allow_fresh dt in
   let shared_effect =
     match shared_effect with
