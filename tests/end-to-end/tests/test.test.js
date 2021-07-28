@@ -3,34 +3,45 @@ const { Options } = require('selenium-webdriver/firefox');
 
 
 const URL = 'http://localhost:8080/';
-const TIMEOUT = 10000;
+const TIMEOUT = 10000 * 2;
 
 jest.setTimeout(TIMEOUT);
 
 let driver;
 
-async function startServer() {
-  const command = "cd ../../ && ./links examples/webserver/buttons.links";
-  const util = require('util');
-  const exec = util.promisify(require('child_process').exec);
-  try {
-    const { stdout, stderr } = await exec(command);
-    console.log('stdout:', stdout);
-    console.log('stderr:', stderr);
-    return;
-  } catch (err) {
-    console.error(err);
-  }
+function execShellCommand(cmd) {
+ const exec = require('child_process').exec;
+ return new Promise((resolve, reject) => {
+  exec(cmd, (error, stdout, stderr) => {
+   if (error) {
+    console.warn(error);
+   }
+   resolve(stdout? stdout : stderr);
+  });
+ });
 }
 
+// async function startServer() {
+//   const command = "../../links ../../examples/webserver/buttons.links & ";
+//   const exec= require('util').promisify(require('child_process').exec);
+  
+//   exec(command).then( (p) => {
+//     console.log('error', process.error);
+//     console.log('stdout ', process.stdout);
+//     console.log('stderr ', process.stderr);
+//   });
+
+//   // TODO: Fix - Arbitrary time for the server to start
+//   // return new Promise(resolve => setTimeout(resolve, 10000));
+//   return execShellCommand(command);
+// }
+
 beforeAll(async () => {
-  startServer();
-
   require('geckodriver');
-
+  // await startServer();
+  
   // Make browser headless
-  const options = new Options()
-    // .headless();
+  const options = new Options().headless();
 
   driver = await new Builder()
     .forBrowser('firefox')
@@ -61,3 +72,12 @@ test('adds 1 + 2 to equal 3', async () => {
 
   expect(output.trim()).toBe('3');
 });
+
+test("Google", async () => {
+  await driver.get('http://google.com');
+  expect(await driver.getTitle()).toBe("Google");
+});
+
+test("True", () => {
+  expect(1).toBe(1);
+})
