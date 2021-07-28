@@ -2031,20 +2031,27 @@ module Policy = struct
       | AliasOmit                -> "alias_omit"
       | ContractOperationArrows  -> "contract_operation_arrows"
       | OpenDefault              -> "open_default"
-      | DifferentOperationArrows -> "different_operation_arrow"
+      | DifferentOperationArrows -> "different_operation_arrows"
     let string_of_opts = Settings.string_of_paths -<- List.map show_opt
 
     let parse_opts : string -> opt list
       = let parse_opt : string -> opt
           = fun s ->
           match String.lowercase_ascii s with
-          | "presence_omit" | "pi"       -> PresenceOmit
-          | "arrows_show_the_one_effect" -> ArrowsShowTheOneEffect
-          | "arrows_curried_collection_assume_fresh" | "c*1" -> ArrowsCurriedCollectionAssumeFresh
-          | "alias_omit"                 -> AliasOmit
-          | "contract_operation_arrows" | "omega" -> ContractOperationArrows
-          | "open_default"               -> OpenDefault
-          | "different_operation_arrows" | "->>" -> DifferentOperationArrows
+          | "presence_omit" | "pres"
+            -> PresenceOmit
+          | "arrows_show_the_one_effect"
+            -> ArrowsShowTheOneEffect
+          | "arrows_curried_collection_assume_fresh" | "ccf"
+            -> ArrowsCurriedCollectionAssumeFresh
+          | "alias_omit" | "alias"
+            -> AliasOmit
+          | "contract_operation_arrows" | "contract"
+            -> ContractOperationArrows
+          | "open_default" | "|.}"
+            -> OpenDefault
+          | "different_operation_arrows" | "->>"
+            -> DifferentOperationArrows
           | _ -> failwith ("Invalid option: " ^ s)
         in
         let is_correct : opt list -> bool
@@ -2064,19 +2071,19 @@ module Policy = struct
                    effect_sugar = true)." in
         let lines =
           [  "Options (shortcuts in [brackets]):"
-           ; " * presence_omit [pi]: omit presence polymorphic operations"
+           ; " * presence_omit [pres]: omit presence polymorphic operations"
            ; "   within effect rows (1)"
-           ; " * alias_omit: hide empty (1) shared effect rows in last"
+           ; " * alias_omit [alias]: hide empty (1) shared effect rows in last"
            ; "   argument of aliases"
            ; " * arrows_show_the_one_effect: display the imlicit shared effect"
            ; "   on arrows"
-           ; " * arrows_curried_collection_assume_fresh [c*1]: in curried"
+           ; " * arrows_curried_collection_assume_fresh [ccf]: in curried"
            ; "   functions, collection arrows are assumed to have fresh"
            ; "   effects and these are hidden"
-           ; " * contract_operation_arrows [omega]: contract operations"
+           ; " * contract_operation_arrows [contract]: contract operations"
            ; "   `E:() {}-> a' to `E:a'"
-           ; " * open_default: effect rows are open by default, closed with"
-           ; "   syntax { |.}"
+           ; " * open_default [|.}]: effect rows are open by default,"
+           ; "   closed with syntax { |.}"
            ; " * different_operation_arrows [->>]: operation arrow will be"
            ; "   syntactically differentiated"
            ; "Meta-options:"
