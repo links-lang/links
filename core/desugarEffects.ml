@@ -227,7 +227,7 @@ let may_have_shared_eff (tycon_env : simple_tycon_env) dt =
   match node with
   | Function _
   | Lolli _ ->
-      true
+     Some `Arrow
   | TypeApplication (tycon, _) -> (
     let param_kinds, _has_implicit_effect =
       try
@@ -235,10 +235,10 @@ let may_have_shared_eff (tycon_env : simple_tycon_env) dt =
       with NotFound _ -> raise (Errors.UnboundTyCon (SourceCode.WithPos.pos dt, tycon))
     in
     match ListUtils.last_opt param_kinds with
-    | Some (PrimaryKind.Row, (_, Restriction.Effect)) -> true
-    | _ -> false )
+    | Some (PrimaryKind.Row, (_, Restriction.Effect)) -> Some `Alias
+    | _ -> None )
   (* TODO: in the original version, this was true for every tycon with a Row var with restriction effect as the last param *)
-  | _ -> false
+  | _ -> None
 
 (** Perform some initial desugaring of effect rows, to make them more amenable
    to later analysis.
@@ -262,8 +262,18 @@ let cleanup_effects tycon_env =
        let { pos; node = t } = dt in
        let do_fun a e r =
          let a = self#list (fun o -> o#datatype) a in
-         let has_shared = may_have_shared_eff tycon_env r in
-         let e = self#effect_row ~allow_shared:(not has_shared) e in
+         let allow_shared = match may_have_shared_eff tycon_env r with
+           | None ->
+              (* range is irrelevant - this arrow can share effect *)
+              true
+           | Some `Arrow ->
+              (* range is another arrow - this is a collector in a curried function, fresh *)
+              false
+           | Some `Alias ->
+              (* range is an alias, this is a rightmost arrow, can share *)
+              true
+         in
+         let e = self#effect_row ~allow_shared e in
          let r = self#datatype r in
          (a, e, r)
        in
