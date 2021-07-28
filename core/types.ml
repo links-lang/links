@@ -2006,26 +2006,28 @@ module Policy = struct
 
   module EffectSugar : sig
                                        (* vvvvvvvvvvvvvvvvvvvvvv TODO name; for now it's the One Effect To Rule Them All *)
-    type opt = PresenceOmit | AliasOmit | ArrowsShowTheOneEffect | ContractOperationArrows | OpenDefault | DifferentOperationArrows
+    type opt = PresenceOmit | AliasOmit | ArrowsShowTheOneEffect | ArrowsCurriedCollectionAssumeFresh | ContractOperationArrows | OpenDefault | DifferentOperationArrows
     type t = opt list
     val default : unit -> t
 
     val presence_omit              : t -> bool
     val alias_omit                 : t -> bool
     val arrows_show_the_one        : t -> bool
+    val arrows_collection_fresh    : t -> bool
     val contract_operation_arrows  : t -> bool
     val open_default               : t -> bool
     val different_operation_arrows : t -> bool
   end = struct
-    type opt = PresenceOmit | AliasOmit | ArrowsShowTheOneEffect | ContractOperationArrows | OpenDefault | DifferentOperationArrows
+    type opt = PresenceOmit | AliasOmit | ArrowsShowTheOneEffect | ArrowsCurriedCollectionAssumeFresh | ContractOperationArrows | OpenDefault | DifferentOperationArrows
     type t = opt list
-    let default_opts = [PresenceOmit ; AliasOmit ; ContractOperationArrows]
-    let all_opts = [PresenceOmit ; AliasOmit ; ArrowsShowTheOneEffect ; ContractOperationArrows ; OpenDefault ; DifferentOperationArrows ]
+    let default_opts = [PresenceOmit ; AliasOmit ; ContractOperationArrows ; ArrowsCurriedCollectionAssumeFresh ]
+    let all_opts = [PresenceOmit ; AliasOmit ; ArrowsShowTheOneEffect ; ArrowsCurriedCollectionAssumeFresh ; ContractOperationArrows ; OpenDefault ; DifferentOperationArrows ]
 
     let show_opt : opt -> string
       = function
       | PresenceOmit             -> "presence_omit"
       | ArrowsShowTheOneEffect   -> "arrows_show_the_one_effect"
+      | ArrowsCurriedCollectionAssumeFresh -> "arrows_curried_collection_assume_fresh"
       | AliasOmit                -> "alias_omit"
       | ContractOperationArrows  -> "contract_operation_arrows"
       | OpenDefault              -> "open_default"
@@ -2036,12 +2038,13 @@ module Policy = struct
       = let parse_opt : string -> opt
           = fun s ->
           match String.lowercase_ascii s with
-          | "presence_omit"              -> PresenceOmit
+          | "presence_omit" | "pi"       -> PresenceOmit
           | "arrows_show_the_one_effect" -> ArrowsShowTheOneEffect
+          | "arrows_curried_collection_assume_fresh" | "c*1" -> ArrowsCurriedCollectionAssumeFresh
           | "alias_omit"                 -> AliasOmit
-          | "contract_operation_arrows"  -> ContractOperationArrows
+          | "contract_operation_arrows" | "omega" -> ContractOperationArrows
           | "open_default"               -> OpenDefault
-          | "different_operation_arrows" -> DifferentOperationArrows
+          | "different_operation_arrows" | "->>" -> DifferentOperationArrows
           | _ -> failwith ("Invalid option: " ^ s)
         in
         let is_correct : opt list -> bool
@@ -2060,13 +2063,14 @@ module Policy = struct
       = let fst = "Fine grained control over effect sugar (only works when \
                    effect_sugar = true)." in
         let lines =
-          [  "Options:"
-           ; " * presence_omit: omit presence polymorphic operations within effect rows (1)"
+          [  "Options (shortcuts in [brackets]):"
+           ; " * presence_omit [pi]: omit presence polymorphic operations within effect rows (1)"
            ; " * alias_omit: hide empty (1) shared effect rows in last argument of aliases"
            ; " * arrows_show_the_one_effect: display the imlicit shared effect on arrows"
-           ; " * contract_operation_arrows: contract operations E:() {}-> a to E:a"
+           ; " * arrows_curried_collection_assume_fresh [c*1]: in curried functions, collection arrows are assumed to have fresh effects and these are hidden"
+           ; " * contract_operation_arrows [omega]: contract operations E:() {}-> a to E:a"
            ; " * open_default: effect rows are open by default, closed with syntax { |.}"
-           ; " * different_operation_arrows: operation arrow will be syntactically differentiated"
+           ; " * different_operation_arrows [->>]: operation arrow will be syntactically differentiated"
            ; "Meta-options:"
            ; " * none: turn all of the above off"
            ; " * default: revert to default value"
@@ -2091,6 +2095,7 @@ module Policy = struct
     let presence_omit              = List.mem PresenceOmit
     let alias_omit                 = List.mem AliasOmit
     let arrows_show_the_one        = List.mem ArrowsShowTheOneEffect
+    let arrows_collection_fresh    = List.mem ArrowsCurriedCollectionAssumeFresh
     let contract_operation_arrows  = List.mem ContractOperationArrows
     let open_default               = List.mem OpenDefault
     let different_operation_arrows = List.mem DifferentOperationArrows
@@ -3543,25 +3548,25 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
              *   polymorphic in the presence of wild|hear (note the arrow is tame here,
              *   wild information is available in the fields):
              *     (a) {wild{_},head{_}}-> b *)
-              if lbl = wild && is_present pre && hide_primitive_labels
-              then printers (* do not print wild:() *)
-              else if lbl = hear && is_present pre && hide_primitive_labels
-              then (Printer (fun ctx () buf -> Printer.apply presence ctx pre buf)) :: printers
-              else if Context.is_ambient_tuple ctx
-              then with_value presence pre :: printers
-              else (Printer (fun ctx () buf ->
-                        StringBuffer.write buf lbl;
-                        let pre = match pre with
-                          | Meta point -> Unionfind.find point
-                          | _ -> pre
-                        in
-                        match pre with
-                        | Var (v,knd,_) when Kind.primary_kind knd = PrimaryKind.Presence ->
-                           Printer.apply var ctx (v, knd) buf
-                        | Present _ | Absent ->
-                           Printer.apply presence ctx pre buf
-                        | t -> raise (internal_error ("Not present: " ^ show_datatype (DecycleTypes.datatype t)))
-                   )) :: printers
+            if lbl = wild && is_present pre && hide_primitive_labels
+            then printers (* do not print wild:() *)
+            else if lbl = hear && is_present pre && hide_primitive_labels
+            then (Printer (fun ctx () buf -> Printer.apply presence ctx pre buf)) :: printers
+            else if Context.is_ambient_tuple ctx
+            then with_value presence pre :: printers
+            else (Printer (fun ctx () buf ->
+                      StringBuffer.write buf lbl;
+                      let pre = match pre with
+                        | Meta point -> Unionfind.find point
+                        | _ -> pre
+                      in
+                      match pre with
+                      | Var (v,knd,_) when Kind.primary_kind knd = PrimaryKind.Presence ->
+                         Printer.apply var ctx (v, knd) buf
+                      | Present _ | Absent ->
+                         Printer.apply presence ctx pre buf
+                      | t -> raise (internal_error ("Not present: " ^ show_datatype (DecycleTypes.datatype t)))
+                 )) :: printers
           in
 
           let printers = List.rev (FieldEnv.fold field_printer rfields []) in
@@ -3722,34 +3727,21 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | _ -> raise tag_expectation_mismatch
           in
           let decide_skip ctx vid =
-            (* decide whether to skip the variable:
-
-               1) if explicit shared arrows are off => shared effects are hidden, and
-               non-shared anonymous variables are made explicit to distinguish them
-               from shared effects
-
-               2) if explicit shared arrows are on => shared effects will be explicit
-               (written as `-_->' | `-_-@'), and so non-shared anonymous variables can
-               be hidden
-
-               Both of these are only relevant if there is a shared effect to talk
-               about. *)
             let anonymity = get_var_anonymity ctx vid in
             if Context.implicit_shared_effect_exists ctx
             then begin
-                (* TODO support for currying: if arrows are implicit, and the last one
-                   has the shared effect, then this does not need to be printed (if
-                   the row has been emptied by previous sugaring pass) *)
                 (* TODO another setting: if shared arrow is wild, any non-wild arrow
                    is obviously not shared; and conversely for tame *)
                 let es_policy = Policy.es_policy (Context.policy ctx) in
                 let module ES = Policy.EffectSugar in
 
                 let arrows_show_impl_shared = ES.arrows_show_the_one es_policy in
+                let arrows_collection_fresh = ES.arrows_collection_fresh es_policy in
 
                 match anonymity with
                 | Visible -> false (* decided Visible, cannot skip *)
-                | Anonymous -> arrows_show_impl_shared
+                | Anonymous -> arrows_show_impl_shared ||
+                                 (arrows_collection_fresh && Context.is_ambient_arrow_curried ctx)
                 | ImplicitEff -> not arrows_show_impl_shared
               end
             else match anonymity with
@@ -3834,8 +3826,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
           let ctx' = if not (Context.is_ambient_effect ctx)
                      then
-                       let finality = if SharedEffect.implicit_allowed_in range (* TODO maybe only if it's a function/linfun? *)
-                                      then `Curried else `Final in
+                       let finality = (* if SharedEffect.implicit_allowed_in range (\* TODO maybe only if it's a function/linfun? *\) INDEED *)
+                         if Context.is_ambient_function ctx || Context.is_ambient_linfun ctx
+                         then `Curried else `Final in
                        Context.set_ambient_arrow_finality finality ctx
                      else
                        (* If this is inside an effect row, preserve ambient, so we can get operation arrows *)
