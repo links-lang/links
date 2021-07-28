@@ -347,42 +347,21 @@ jobs:
       - uses: actions/setup-node@v2
       - run: npm install
         working-directory: tests/end-to-end
-      - run: npm run test
-        working-directory: tests/end-to-end
-
-  test-selenium:
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-18.04
-
-    runs-on: ${{ matrix.os }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
-      # The proceeding lines are added for E2E testing
-      - uses: actions/setup-node@v2
-      - run: npm install
-        working-directory: tests/end-to-end
-      - run: npm run test
-        working-directory: tests/end-to-end
-
-  e2e-firefox:
-    runs-on: ubuntu-20.04
-    env:
-      BROWSER: firefox
-      WORKING_DIR: tests/end-to-end
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
-        with: 
-          node-version: 16
-      - run: npm install
-        working-directory: ${{ env.WORKING_DIR }}
-      # - run: node index.js & exit 0
-      #   working-directory: ${{ env.WORKING_DIR }}
+      - run: ./links examples/webserver/buttons.links & exit 0
       - run: npm test
-        working-directory: ${{ env.WORKING_DIR }}
+        working-directory: tests/end-to-end
+
+  # e2e-firefox:
+  #   runs-on: ubuntu-20.04
+  #   env:
+  #     BROWSER: firefox
+  #     WORKING_DIR: tests/end-to-end
+  #   steps:
+  #     - uses: actions/checkout@v2
+  #     - uses: actions/setup-node@v2
+  #     - run: npm install
+  #       working-directory: ${{ env.WORKING_DIR }}
+  #     - run: ./links examples/webserver/buttons.links & exit 0
+  #       working-directory: ${{ env.WORKING_DIR }}
+  #     - run: npm test
+  #       working-directory: ${{ env.WORKING_DIR }}
