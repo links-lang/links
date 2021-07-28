@@ -539,8 +539,14 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
   else RowVarMap.empty
 
 let preprocess_type (dt : Datatype.with_pos) tycon_env allow_fresh shared_effect
-    =
+  =
+  print_endline "Before cleanup:";
+  print_endline @@ Datatype.show_with_pos dt;
+  print_endline "===================";
   let dt = cleanup_effects tycon_env dt in
+  print_endline "After cleanup:";
+  print_endline @@ Datatype.show_with_pos dt;
+  print_newline ();
   let row_operations = gather_operations tycon_env allow_fresh dt in
   let shared_effect =
     match shared_effect with
@@ -957,12 +963,16 @@ class main_traversal simple_tycon_env =
     method! datatype dt =
       let pos = SourceCode.WithPos.pos dt in
       let dt, o =
-        if not inside_type then
+        if not inside_type then begin
+            print_endline "\n\nEntering datatype:";
+            print_endline @@ Datatype.show_with_pos dt;
+            print_endline "===================";
           let dt, row_operations, shared_effect =
             preprocess_type dt tycon_env allow_implictly_bound_vars
               shared_effect
           in
           (dt, {<row_operations; shared_effect>})
+          end
         else (dt, o)
       in
       let o = o#set_inside_type true in
@@ -970,6 +980,11 @@ class main_traversal simple_tycon_env =
         Errors.rethrow_errors_if_better_position pos o#super_datatype dt
       in
       let o = o#set_inside_type inside_type in
+      if not inside_type then begin
+          print_endline "===================\nExiting datatype:";
+          print_endline @@ Datatype.show_with_pos dt;
+          print_endline "==================="
+        end;
       (o, dt)
 
     method super_function_definition = super#function_definition
