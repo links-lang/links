@@ -256,7 +256,7 @@ let may_have_shared_eff (tycon_env : simple_tycon_env) dt =
       ` -_->` becomes `-$eff->`.
 
   Also this cleans up the effect row closing - depending on EffectSugar.open_default:
-  - if open_default     => { Closed    -> Open with $ or $eff
+  - if open_default     => { Closed    -> Open with $eff
                              DotClosed -> Closed }
   - if not open_default => { Closed    -> Closed
                              DotClosed -> Closed OR error? TODO }
@@ -266,12 +266,6 @@ let cleanup_effects tycon_env =
   let open_default = open_default () in
   (object (self)
      inherit SugarTraversals.map as super
-
-     (* Need this so that open_default does not modify operation arrows:
-        E:(a) { empty | Closed }-> b should !not! change to
-        E:(a) { empty | Open fresh }-> b *)
-     (* val in_effect_fields : bool = false
-      * method set_in_effect_fields in_effect_fields = {< in_effect_fields >} *)
 
      method! datatype dt =
        let open Datatype in
@@ -346,7 +340,7 @@ let cleanup_effects tycon_env =
                       | [], Closed
                         | [], Open _
                         | [], DotClosed -> ()
-                      (* TODO possibly error if DotClosed and  not open_default? *)
+                      (* TODO possibly error if DotClosed and not open_default? *)
                       | _, _ -> raise (unexpected_effects_on_abstract_op pos name)
                     in
                     Present (SourceCode.WithPos.make ~pos
@@ -381,17 +375,14 @@ let cleanup_effects tycon_env =
              let stv' = SugarTypeVar.mk_unresolved "$eff" None `Rigid in
              Datatype.Open stv'
          | Datatype.Closed when has_effect_sugar
-                                && open_default
-                                (* && (not in_effect_fields) *) ->
+                                && open_default ->
             let stv = SugarTypeVar.mk_unresolved "$eff" None `Rigid in
             Datatype.Open stv
          | Datatype.DotClosed ->
-            (* TODO possibly error when not (has_sugar && open_default) *)
+            (* TODO possibly error when not (has_sugar && open_default)? *)
             Datatype.Closed
          | _ -> var
        in
-       (* let self = self#set_in_effect_fields true in
-        * self#row (fields, var) *)
        let var = self#row_var var in
        (fields, var)
   end)
