@@ -914,7 +914,6 @@ straight_arrow:
   straight_arrow_prefix LOLLI datatype                         { Datatype.Lolli    ($1, $2, $4) }
 | parenthesized_datatypes RARROW datatype                      { Datatype.Function ($1, fresh_effects, $3) }
 | parenthesized_datatypes LOLLI datatype                       { Datatype.Lolli    ($1, fresh_effects, $3) }
-/* | parenthesized_datatypes RRARROW datatype                     { Datatype.Function ($1, ([], Datatype.Closed), $3) } */
 
 squiggly_arrow:
 | parenthesized_datatypes
@@ -1076,7 +1075,7 @@ efields:
 
 efield:
 | effect_label                                                 { ($1, present) }
-| effect_label efieldspec                                       { ($1, $2)      }
+| effect_label efieldspec                                      { ($1, $2)      }
 
 effect_label:
 | CONSTRUCTOR                                                  { $1 }
