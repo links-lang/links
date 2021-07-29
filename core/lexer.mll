@@ -181,7 +181,7 @@ rule lex ctxt nl = parse
   | '_'                                 { UNDERSCORE }
   | '='                                 { EQ }
   | "->"                                { RARROW }
-  | "->>"				{ RRARROW }
+  | "->>"                               { RRARROW }
   | "~>"                                { SQUIGRARROW }
   | "-@"                                { LOLLI }
   | "~@"                                { SQUIGLOLLI }
