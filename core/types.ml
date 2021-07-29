@@ -2815,8 +2815,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     val implicit_allowed_in : typ -> bool
     val implicit_of_datatype : datatype -> tid option
     val implicit_of_type_arg : type_arg -> tid option
-    val ensugar_datatype : Policy.EffectSugar.t -> tid -> datatype -> datatype
-    val ensugar_type_arg : Policy.EffectSugar.t -> tid -> type_arg -> type_arg
+    val ensugar_datatype : Policy.EffectSugar.t -> tid option -> datatype -> datatype
+    val ensugar_type_arg : Policy.EffectSugar.t -> tid option -> type_arg -> type_arg
   end = struct
 
     let extract_row_var r =
@@ -3039,7 +3039,16 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
            *     {< operations >} *)
 
           method effect_row : row -> 'self_type * row_omis * tid option
-            = let decide_field : tid -> string -> field_spec -> 'self_type * field_spec_map -> 'self_type * field_spec_map
+            = let maybe_contract : typ -> typ
+                = function
+                | Function (d,_,c) as tp when ES.contract_operation_arrows policy ->
+                   (* we are in an operation fieldspec and it's an arrow, and we
+                      want contractions: check if a contraction is possible here
+                    *)
+                   if d = unit_type then c else tp
+                | tp -> tp
+              in
+              let decide_field : tid -> string -> field_spec -> 'self_type * field_spec_map -> 'self_type * field_spec_map
                 (* Here we need to filter out the fields that are polymorphic in their
                    presence with a fresh variable.
 
@@ -3061,51 +3070,29 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                       | _ -> field
                     in
                     match pre with
-                    | Present p ->
-                       (* field has specified presence => it has to appear here *)
-                       let field =
-                         print_endline "field";
-                         if ES.contract_operation_arrows policy
-                         then begin match p with
-                              | Function (d,_,c) ->
-                                 (* it is an arrow and we want contractions: check if
-                                    possible *)
-                                 (* also this is an effect row, so this arrow will
-                                    never have any effect of its own *)
-                                 if d = unit_type then
-                                   begin print_endline "domain is unit";
-                                         if c = unit_type
-                                         then Present unit_type
-                                         else Present c
-                                   end
-                                 else field
-                              | _ -> field
-                              end
-                         else field
-                       in
-                       (o, FieldEnv.add label field kept)
-                    | Absent ->
+                    | Present _ | Absent ->
                        (* field has specified presence => it has to appear here *)
                        (o, FieldEnv.add label field kept)
                     | Var (pres_vid,_,_) ->
                        (* presence polymorphic, need to decide whether to keep it *)
                        let nonfresh_vids = OperationMap.find (effect_vid, label) operations in
-                       (* TODO run this function for all rows so ω can
-                          apply, then here need to check policy if we
-                          want to remove presence-poly fields *)
                        if List.mem pres_vid nonfresh_vids
                        then
-                         (* presence, but non-fresh => needs to be kept here *)
+                         (* presence-poly, but non-fresh => needs to be kept here *)
                          (o, FieldEnv.add label field kept)
                        else
-                         (* fresh presence in an open row => this doesn't need to be
-                            visible *)
+                         (* fresh presence in an open row => this doesn't need
+                            to be visible *)
                          (o, kept)
                     | _ -> failwith "This should not happen!"
                   end
               in
               fun r ->
               let (fields, rv_pt, dual) = unwrap_row r |> fst |> extract_row_parts in
+              let fields = FieldEnv.map
+                             (function
+                              | Present p -> Present (maybe_contract p)
+                              | x -> x) fields in
               match Unionfind.find rv_pt with
               | Var (effect_vid, _, _) ->
                  (* this row may need sugaring *)
@@ -3128,7 +3115,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                    (o, row_opt, Some effect_vid)
                  end
               | _ ->
-                 (* this row doesn't need sugaring, return it identically *)
+                 (* This row cannot omit presence-poly fields, but arrows can
+                    still contract *)
+                 let r = Row (fields, rv_pt, dual) in
                  (o, NonOmissible r, None)
 
           (** This function will sugar the function effect row *)
@@ -3163,13 +3152,13 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                if is_effect_row_kind knd then
                  begin
                    let (o, r, rvid) = o#effect_row tp in
-                   match r with
-                   | Omissible _ when rvid = Some shared_variable
-                                      && ES.alias_omit policy ->
+                   match r, rvid with
+                   | Omissible _, Some rvid when Some rvid = shared_variable
+                                                 && ES.alias_omit policy ->
                       (* this is the implicit shared effect row in last position: if
                          it's been emptied, it can now be completely omitted *)
                       (o, [], [])
-                   | Omissible r | NonOmissible r ->
+                   | Omissible r, _ | NonOmissible r, _ ->
                       (* otherwise, it was possibly sugared, but exists still *)
                       (o, [knd], [(pk, r)])
                  end
@@ -3263,7 +3252,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | _ -> super#typ tp
         end
 
-    let ensugar_datatype : Policy.EffectSugar.t -> tid -> datatype -> datatype
+    let ensugar_datatype : Policy.EffectSugar.t -> tid option -> datatype -> datatype
       = fun pol vid tp ->
       let (label_gatherer, _) = label_gatherer#typ tp in
       let operations = label_gatherer#get_operations in
@@ -3271,7 +3260,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       let (_, tp) = o#typ tp in
       tp
 
-    let ensugar_type_arg : Policy.EffectSugar.t -> tid -> type_arg -> type_arg
+    let ensugar_type_arg : Policy.EffectSugar.t -> tid option -> type_arg -> type_arg
       = fun pol vid ta ->
       let (label_gatherer, _) = label_gatherer#type_arg ta in
       let operations = label_gatherer#get_operations in
@@ -4012,16 +4001,17 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
   let string_of_datatype : Policy.t -> names -> datatype -> string
     = fun policy' names ty ->
+    let effect_sugar = Policy.effect_sugar policy' in
     let ctxt = Context.(with_policy policy' (with_tyvar_names names (empty ()))) in
-    let shared_effect = if Policy.effect_sugar policy'
+    let shared_effect = if effect_sugar
                         then SharedEffect.implicit_of_datatype ty
                         else None
     in
-    let ctxt, ty = match shared_effect with
-      | None -> ctxt, ty
-      | Some vid ->
-         (Context.set_implicit_shared_effect (Some vid) ctxt,
-          SharedEffect.ensugar_datatype (Policy.es_policy policy') vid ty)
+    let ctxt = Context.set_implicit_shared_effect shared_effect ctxt in
+    let ty = if effect_sugar
+             then SharedEffect.ensugar_datatype
+                    (Policy.es_policy policy') shared_effect ty
+             else ty
     in
     Printer.generate_string datatype ctxt ty
 
@@ -4034,16 +4024,17 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
   let string_of_type_arg : Policy.t -> names -> type_arg -> string
     = fun policy' names tyarg ->
+    let effect_sugar = Policy.effect_sugar policy' in
     let ctxt = Context.(with_policy policy' (with_tyvar_names names (empty ()))) in
-    let shared_effect = if Policy.effect_sugar policy'
+    let shared_effect = if effect_sugar
                         then SharedEffect.implicit_of_type_arg tyarg
                         else None
     in
-    let ctxt, tyarg = match shared_effect with
-      | None -> ctxt, tyarg
-      | Some vid ->
-         (Context.set_implicit_shared_effect (Some vid) ctxt,
-          SharedEffect.ensugar_type_arg (Policy.es_policy policy') vid tyarg)
+    let ctxt = Context.set_implicit_shared_effect shared_effect ctxt in
+    let tyarg = if effect_sugar
+                then SharedEffect.ensugar_type_arg
+                       (Policy.es_policy policy') shared_effect tyarg
+                else tyarg
     in
     Printer.generate_string type_arg ctxt tyarg
 
