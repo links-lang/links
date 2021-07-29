@@ -2916,6 +2916,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     type op_entry = tid list
     type op_map = op_entry OperationMap.t
 
+    (* TODO tidy up these comments, update them to what the code actually does *)
     (** This object will gather all operations from all of the type's OPEN effect rows.
         It creates an op_map:
         { (vid, label) =>
@@ -3009,6 +3010,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
         object (o : 'self_type)
           inherit Transform.visitor as super
 
+          (* TODO clean up comments *)
+
           (* The sugaring will eliminate almost all (1) presence polymorhpic
              operations, and then if there's nothing left, remove the whole effect row
              (in an alias, this will be an actual removal, in a function the row will
@@ -3047,7 +3050,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 if is_builtin_effect label
                 then
                   (* builtin effects are preserved here (TODO also hear?; TODO a new
-                     option for this) *)
+                     option for this);
+
+                     TODO2: remove this check and give wild|hear the same behaviour as everything else,
+                     this will be useful for desugaring with all fresh arrows shared *)
                   (o, FieldEnv.add label field kept)
                 else begin
                     let pre = match field with
