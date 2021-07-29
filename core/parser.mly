@@ -264,7 +264,7 @@ let parse_foreign_language pos lang =
 
 %token EOF
 %token EQ IN
-%token FUN LINFUN FROZEN_FUN FROZEN_LINFUN RARROW LOLLI FATRARROW VAR OP
+%token FUN LINFUN FROZEN_FUN FROZEN_LINFUN RARROW RRARROW LOLLI FATRARROW VAR OP
 %token SQUIGRARROW SQUIGLOLLI TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
@@ -914,6 +914,7 @@ straight_arrow:
   straight_arrow_prefix LOLLI datatype                         { Datatype.Lolli    ($1, $2, $4) }
 | parenthesized_datatypes RARROW datatype                      { Datatype.Function ($1, fresh_effects, $3) }
 | parenthesized_datatypes LOLLI datatype                       { Datatype.Lolli    ($1, fresh_effects, $3) }
+| parenthesized_datatypes RRARROW datatype                     { Datatype.Function ($1, ([], Datatype.Closed), $3) }
 
 squiggly_arrow:
 | parenthesized_datatypes
