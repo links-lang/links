@@ -104,6 +104,7 @@ class map =
       let open Datatype in
       function
       | Closed -> Closed
+      | DotClosed -> DotClosed
       | Open _x ->
           let _x = o#type_variable _x in Open _x
       | Recursive ((_x, _x_i1)) ->
@@ -900,7 +901,7 @@ class fold =
 
     method row_var : Datatype.row_var -> 'self_type =
       let open Datatype in function
-      | Closed -> o
+      | Closed | DotClosed -> o
       | Open _x ->
           let o = o#type_variable _x in o
       | Recursive ((_x, _x_i1)) ->
@@ -1624,6 +1625,7 @@ class fold_map =
     method row_var : Datatype.row_var -> ('self_type * Datatype.row_var) =
       let open Datatype in function
       | Closed -> (o, Closed)
+      | DotClosed -> (o, DotClosed)
       | Open _x ->
           let (o, _x) = o#type_variable _x in (o, (Open _x))
       | Recursive ((_x, _x_i1)) ->

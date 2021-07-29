@@ -281,7 +281,7 @@ let parse_foreign_language pos lang =
 %token LEFTTRIANGLE RIGHTTRIANGLE NU
 %token FOR LARROW LLARROW WHERE FORMLET PAGE
 %token LRARROW
-%token COMMA VBAR DOT DOTDOT COLON COLONCOLON
+%token COMMA VBAR DOT VBARDOT DOTDOT COLON COLONCOLON
 %token TABLE TABLEHANDLE TABLEKEYS FROM DATABASE QUERY WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET RETURNING
 %token LENS LENSDROP LENSSELECT LENSJOIN DETERMINED BY ON DELETE_LEFT
@@ -1068,6 +1068,10 @@ vfield:
 
 efields:
 | fields_def(efield, row_var, kinded_row_var)                  { $1 }
+| DOT                                                          { ( [] , Datatype.DotClosed) }
+| soption(efield) VBARDOT                                      { ( $1 , Datatype.DotClosed) }
+| soption(efield) VBAR DOT                                     { ( $1 , Datatype.DotClosed) }
+
 
 efield:
 | effect_label                                                 { ($1, present) }

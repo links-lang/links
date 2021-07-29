@@ -210,6 +210,7 @@ module Datatype = struct
   and row = (string * fieldspec) list * row_var
   and row_var =
     | Closed
+    | DotClosed
     | Open of SugarTypeVar.t
     | Recursive of SugarTypeVar.t * row
   and fieldspec =

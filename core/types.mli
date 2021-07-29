@@ -67,6 +67,7 @@ module Policy : sig
   val hide_fresh : t -> bool
   val kinds : t -> kind_policy
   val effect_sugar : t -> bool
+  val es_policy : t -> EffectSugar.t
 
   val set_quantifiers : bool -> t -> t
   val set_flavours : bool -> t -> t

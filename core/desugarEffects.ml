@@ -47,6 +47,9 @@ The following steps are only performed when effect_sugar is enabled:
 let shared_effect_var_name = "$eff"
 
 let has_effect_sugar () = Types.Policy.effect_sugar (Types.Policy.default_policy ())
+let open_default () =
+  let open Types.Policy in
+  EffectSugar.open_default (es_policy (default_policy ()))
 
 let internal_error message =
   Errors.internal_error ~filename:"desugarEffects.ml" ~message
@@ -250,11 +253,25 @@ let may_have_shared_eff (tycon_env : simple_tycon_env) dt =
       right of an arrow/typename chain) then remap to "$". For instance,
       `(a) -> (b) -> c` becomes `(a) -$-> (b) -$-> c`.
    - If we're an anonymous variable in a row, remap to "$". (For instance,
-      ` -_->` becomes `-$eff->`. *)
+      ` -_->` becomes `-$eff->`.
+
+  Also this cleans up the effect row closing - depending on EffectSugar.open_default:
+  - if open_default     => { Closed    -> Open with $ or $eff
+                             DotClosed -> Closed }
+  - if not open_default => { Closed    -> Closed
+                             DotClosed -> Closed OR error? TODO }
+*)
 let cleanup_effects tycon_env =
   let has_effect_sugar = has_effect_sugar () in
+  let open_default = open_default () in
   (object (self)
      inherit SugarTraversals.map as super
+
+     (* Need this so that open_default does not modify operation arrows:
+        E:(a) { empty | Closed }-> b should !not! change to
+        E:(a) { empty | Open fresh }-> b *)
+     (* val in_effect_fields : bool = false
+      * method set_in_effect_fields in_effect_fields = {< in_effect_fields >} *)
 
      method! datatype dt =
        let open Datatype in
@@ -314,30 +331,36 @@ let cleanup_effects tycon_env =
        let open SourceCode.WithPos in
        let fields =
          List.map
-           (function
-             | ( name,
-                 Present
-                   { node = Function (domain, (fields, rv), codomain); pos } )
-               as op
-               when not (TypeUtils.is_builtin_effect name) -> (
-                 (* Elaborates `Op : a -> b' to `Op : a {}-> b' *)
-                 match (rv, fields) with
-                 | Closed, [] -> op
-                 | Open _, []
-                 | Recursive _, [] ->
-                     (* might need an extra check on recursive rows *)
-                     ( name,
-                       Present
-                         (SourceCode.WithPos.make ~pos
-                            (Function (domain, ([], Closed), codomain))) )
-                 | _, _ -> raise (unexpected_effects_on_abstract_op pos name) )
-             | name, Present node when not (TypeUtils.is_builtin_effect name) ->
-                 (* Elaborates `Op : a' to `Op : () {}-> a' *)
-                 ( name,
-                   Present
-                     (SourceCode.WithPos.make ~pos:node.pos
-                        (Function ([], ([], Closed), node))) )
-             | x -> x)
+           (fun (name, fspec) ->
+             let name = self#name name in
+             let fspec =
+               match fspec with
+               | Present { node = Function (domain, (fields, rv), codomain) ; pos }
+                    when not (TypeUtils.is_builtin_effect name) ->
+                  begin
+                    (* Elaborates `Op : a -> b' to `Op : a {}-> b'
+                       and rewrites `Op : a {.}-> b' to `Op : a {}-> b' *)
+                    let domain = self#list (fun o dt -> o#datatype dt) domain in
+                    let codomain = self#datatype codomain in
+                    let () = match (fields, rv) with
+                      | [], Closed
+                        | [], Open _
+                        | [], DotClosed -> ()
+                      (* TODO possibly error if DotClosed and  not open_default? *)
+                      | _, _ -> raise (unexpected_effects_on_abstract_op pos name)
+                    in
+                    Present (SourceCode.WithPos.make ~pos
+                               (Function (domain, ([], Closed), codomain)))
+                  end
+               | Present node when not (TypeUtils.is_builtin_effect name) ->
+                  (* Elaborates `Op : a' to `Op : () {}-> a' *)
+                  Present
+                    (SourceCode.WithPos.make ~pos:node.pos
+                       (Function ([], ([], Closed), node)))
+               | x -> x
+             in
+             (name, fspec)
+           )
            fields
        in
        let gue = SugarTypeVar.get_unresolved_exn in
@@ -357,9 +380,20 @@ let cleanup_effects tycon_env =
                 && gue stv = ("$", None, `Rigid) ->
              let stv' = SugarTypeVar.mk_unresolved "$eff" None `Rigid in
              Datatype.Open stv'
+         | Datatype.Closed when has_effect_sugar
+                                && open_default
+                                (* && (not in_effect_fields) *) ->
+            let stv = SugarTypeVar.mk_unresolved "$eff" None `Rigid in
+            Datatype.Open stv
+         | Datatype.DotClosed ->
+            (* TODO possibly error when not (has_sugar && open_default) *)
+            Datatype.Closed
          | _ -> var
        in
-       self#row (fields, var)
+       (* let self = self#set_in_effect_fields true in
+        * self#row (fields, var) *)
+       let var = self#row_var var in
+       (fields, var)
   end)
     #datatype
 
@@ -503,6 +537,7 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
             let q : Quantifier.t = (var, (pk_row, sk)) in
             let sq = SugarQuantifier.mk_resolved q in
             self#quantified (fun o -> o#row r) [ sq ]
+        | DotClosed -> raise (internal_error "DotClosed is not legal anymore, it should have been handled by cleanup")
 
       method effect_row ((fields, var) : Datatype.row) =
         let self =
@@ -751,6 +786,7 @@ class main_traversal simple_tycon_env =
       let o, rv =
         match rv with
         | D.Closed -> (o, rv)
+        | D.DotClosed -> raise (internal_error "DotClosed is not legal anymore, it should have been handled by cleanup")
         | D.Open stv
           when (not (SugarTypeVar.is_resolved stv))
                && SugarTypeVar.get_unresolved_name_exn stv

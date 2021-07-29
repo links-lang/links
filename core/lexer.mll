@@ -212,6 +212,7 @@ rule lex ctxt nl = parse
   | "||"                                { BARBAR }
   | "&&"                                { AMPAMP }
   | '|'                                 { VBAR }
+  | "|."                                { VBARDOT }
   | '~'                                 { TILDE }
   | "=~"                                { ctxt#push_lexer (regex' ctxt nl); EQUALSTILDE }
   | ','                                 { COMMA }

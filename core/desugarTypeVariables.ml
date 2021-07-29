@@ -413,6 +413,7 @@ object (o : 'self)
   method! row_var =
     let open Datatype in function
     | Closed -> o, Closed
+    | DotClosed -> o, DotClosed
     | Open srv as orig when is_anonymous srv ->
        (* This transformation pass does not check whether anonymous row variables
           appear in contexts where implictly scoped variables are allowed.  *)
