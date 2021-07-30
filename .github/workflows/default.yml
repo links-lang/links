@@ -345,14 +345,13 @@ jobs:
         shell: bash
 
   e2e-firefox:
-    needs: links-mysql_mysql57
+
     runs-on: ubuntu-20.04
     env:
       BROWSER: firefox
       NPM_DIR: tests/end-to-end
     steps:
-      # The proceeding lines are added for E2E testing
-      # - uses: actions/checkout@v2
+      - uses: actions/checkout@v2
       - uses: actions/setup-node@v2
       - run: npm install
         working-directory: ${{ env.NPM_DIR }}
