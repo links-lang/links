@@ -21,24 +21,24 @@ function execShellCommand(cmd) {
  });
 }
 
-// async function startServer() {
-//   const command = "../../links ../../examples/webserver/buttons.links & ";
-//   const exec= require('util').promisify(require('child_process').exec);
+async function startServer() {
+  const command = "../../links ../../examples/webserver/buttons.links & ";
+  const exec= require('util').promisify(require('child_process').exec);
   
-//   exec(command).then( (p) => {
-//     console.log('error', process.error);
-//     console.log('stdout ', process.stdout);
-//     console.log('stderr ', process.stderr);
-//   });
+  exec(command, {detached: true}).then( (p) => {
+    console.log('error', process.error);
+    console.log('stdout ', process.stdout);
+    console.log('stderr ', process.stderr);
+  });
 
-//   // TODO: Fix - Arbitrary time for the server to start
-//   // return new Promise(resolve => setTimeout(resolve, 10000));
-//   return execShellCommand(command);
-// }
+  // TODO: Find workaround to wait for the server to start.
+  // The following line produces an uncondtiional timeout.
+  return new Promise(resolve => setTimeout(resolve, 10000));
+}
 
 beforeAll(async () => {
   require('geckodriver');
-  // await startServer();
+  await startServer();
   
   // Make browser headless
   const options = new Options().headless();
