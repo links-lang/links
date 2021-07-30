@@ -250,14 +250,7 @@ let may_have_shared_eff (tycon_env : simple_tycon_env) dt =
       right of an arrow/typename chain) then remap to "$". For instance,
       `(a) -> (b) -> c` becomes `(a) -$-> (b) -$-> c`.
    - If we're an anonymous variable in a row, remap to "$". (For instance,
-      ` -_->` becomes `-$eff->`.
-
-  Also this cleans up the effect row closing - depending on EffectSugar.open_default:
-  - if open_default     => { Closed    -> Open with $eff
-                             DotClosed -> Closed }
-  - if not open_default => { Closed    -> Closed
-                             DotClosed -> Closed OR error? TODO }
-*)
+      ` -_->` becomes `-$eff->`. *)
 let cleanup_effects tycon_env =
   let has_effect_sugar = has_effect_sugar () in
   (object (self)
@@ -321,34 +314,30 @@ let cleanup_effects tycon_env =
        let open SourceCode.WithPos in
        let fields =
          List.map
-           (fun (name, fspec) ->
-             let name = self#name name in
-             let fspec =
-               match fspec with
-               | Present { node = Function (domain, (fields, rv), codomain) ; pos }
-                    when not (TypeUtils.is_builtin_effect name) ->
-                  begin
-                    (* Elaborates `Op : a -> b' to `Op : a {}-> b'
-                       and rewrites `Op : a {.}-> b' to `Op : a {}-> b' *)
-                    let domain = self#list (fun o dt -> o#datatype dt) domain in
-                    let codomain = self#datatype codomain in
-                    let () = match (fields, rv) with
-                      | [], Closed
-                        | [], Open _ -> ()
-                      | _, _ -> raise (unexpected_effects_on_abstract_op pos name)
-                    in
-                    Present (SourceCode.WithPos.make ~pos
-                               (Function (domain, ([], Closed), codomain)))
-                  end
-               | Present node when not (TypeUtils.is_builtin_effect name) ->
-                  (* Elaborates `Op : a' to `Op : () {}-> a' *)
-                  Present
-                    (SourceCode.WithPos.make ~pos:node.pos
-                       (Function ([], ([], Closed), node)))
-               | x -> x
-             in
-             (name, fspec)
-           )
+           (function
+             | ( name,
+                 Present
+                   { node = Function (domain, (fields, rv), codomain); pos } )
+               as op
+               when not (TypeUtils.is_builtin_effect name) -> (
+                 (* Elaborates `Op : a -> b' to `Op : a {}-> b' *)
+                 match (rv, fields) with
+                 | Closed, [] -> op
+                 | Open _, []
+                 | Recursive _, [] ->
+                     (* might need an extra check on recursive rows *)
+                     ( name,
+                       Present
+                         (SourceCode.WithPos.make ~pos
+                            (Function (domain, ([], Closed), codomain))) )
+                 | _, _ -> raise (unexpected_effects_on_abstract_op pos name) )
+             | name, Present node when not (TypeUtils.is_builtin_effect name) ->
+                 (* Elaborates `Op : a' to `Op : () {}-> a' *)
+                 ( name,
+                   Present
+                     (SourceCode.WithPos.make ~pos:node.pos
+                        (Function ([], ([], Closed), node))) )
+             | x -> x)
            fields
        in
        let gue = SugarTypeVar.get_unresolved_exn in
@@ -368,17 +357,9 @@ let cleanup_effects tycon_env =
                 && gue stv = ("$", None, `Rigid) ->
              let stv' = SugarTypeVar.mk_unresolved "$eff" None `Rigid in
              Datatype.Open stv'
-         (* | Datatype.Closed when has_effect_sugar
-          *                        && open_default ->
-          *    let stv = SugarTypeVar.mk_unresolved "$eff" None `Rigid in
-          *    Datatype.Open stv
-          * | Datatype.DotClosed ->
-          *    (\* TODO possibly error when not (has_sugar && open_default)? *\)
-          *    Datatype.Closed *)
          | _ -> var
        in
-       let var = self#row_var var in
-       (fields, var)
+       self#row (fields, var)
   end)
     #datatype
 
