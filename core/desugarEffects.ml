@@ -958,9 +958,6 @@ class main_traversal simple_tycon_env =
       let pos = SourceCode.WithPos.pos dt in
       let dt, o =
         if not inside_type then begin
-            print_endline "\n\nEntering datatype:";
-            print_endline @@ Datatype.show_with_pos dt;
-            print_endline "===================";
           let dt, row_operations, shared_effect =
             preprocess_type dt tycon_env allow_implictly_bound_vars
               shared_effect
@@ -974,11 +971,6 @@ class main_traversal simple_tycon_env =
         Errors.rethrow_errors_if_better_position pos o#super_datatype dt
       in
       let o = o#set_inside_type inside_type in
-      if not inside_type then begin
-          print_endline "===================\nExiting datatype:";
-          print_endline @@ Datatype.show_with_pos dt;
-          print_endline "==================="
-        end;
       (o, dt)
 
     method super_function_definition = super#function_definition
