@@ -1,0 +1,34 @@
+Desugaring [1]: Implicit sharing of effects on aliases
+typename T = () -> (); sig f : (T) -> () fun f(t) { t() } f
+stdout : fun : (T ({ |a})) -a-> ()
+args : --enable-handlers --set=effect_sugar=true
+
+Desugaring [2]: Implicit sharing of effects on aliases
+typename T = () -> (); sig f : (T, T) -> T fun f(p,q) { fun () { p(); q() } } f
+stdout : fun : (T ({ |a}), T ({ |a})) -a-> T ({ |a})
+args : --enable-handlers --set=effect_sugar=true
+
+Desugaring [3]: Implicit sharing of effects on aliases
+typename T = () -> (); sig f : (T, T) -> () -> () fun f(p,q) { fun () { p(); q() } } f
+stdout : fun : (T ({ |a}), T ({ |a})) -> () -a-> ()
+args : --enable-handlers --set=effect_sugar=true
+
+Desugaring [4]: Collector arrows fresh
+sig f : () -> () -> () -> () -> () fun f()()()() { () } f
+stdout : fun : forall a::Row,b::Row,c::Row,d::Row.() -a-> () -b-> () -c-> () -d-> ()
+args : --enable-handlers --set=effect_sugar=true --set=show_quantifiers=true
+
+Desugaring [5]: Higher order, collector arrows fresh
+sig f : (() -> () -> () -> ()) -> (() -> () -> ()) -> () fun f(a)(b) { () } f
+stdout : fun : forall a::Row,b::Row,c::Row,d::Row,e::Row.(() -a-> () -b-> () -c-> ()) -d-> (() -e-> () -c-> ()) -c-> ()
+args : --enable-handlers --set=effect_sugar=true --set=show_quantifiers=true
+
+Desugaring [6]: Higher order, aliases
+typename Comp(a) = () ~> a; sig mapc : ((a) -> Comp(b)) -> ([a]) -> [Comp(b)] fun mapc(c)(lst) { map(c, lst) } mapc
+stdout : fun : forall a,b::Row,c,d::Row.((a) -b-> Comp (c,{ |b})) -d-> ([a]) -b-> [Comp (c,{ |b})]
+args : --enable-handlers --set=effect_sugar=true --set=show_quantifiers=true
+
+Desugaring [7]: Structure containing own helper
+typename S(a) = (ord:(a,a) ~> [|G|LE|],m:a); sig upd : (a, S(a)) ~> S(a) fun upd(x,s) { switch(s.ord(x, s.m)) { case G -> (s with m=x) case LE -> s }} upd
+stdout : fun : (a, S (a,{ |b})) ~b~> S (a,{ |b})
+args : --enable-handlers --set=effect_sugar=true
