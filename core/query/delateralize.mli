@@ -1,3 +1,3 @@
 open CommonTypes
 
-val eval : QueryPolicy.t -> Value.env -> Ir.computation -> MixingQuery.Lang.t
+val eval : QueryPolicy.t -> Value.env -> Ir.computation -> QueryLang.t

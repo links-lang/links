@@ -1,7 +1,7 @@
 open Utility
 open CommonTypes
 module Q = Query
-module QL = Query.Lang
+module QL = QueryLang
 
 (* Introducing ordering indexes in order to support a list
    semantics. *)
@@ -103,20 +103,21 @@ struct
   let gen : (Var.var * QL.t) -> QL.t list =
     function
       | (x, QL.Table t) ->
-        let field_types = Q.table_field_types t in
-          List.rev
+        let field_types = QL.table_field_types t in
+        let tyx = Types.make_record_type field_types in
+        List.rev
             (StringMap.fold
                (fun name _t es ->
-                 QL.Project (QL.Var (x, field_types), name) :: es
+                 QL.Project (QL.Var (x, tyx), name) :: es
                ) field_types [])
       | _ -> assert false
 
   let base_type_of_expression t =
-    match Q.type_of_expression t with
+    match QL.type_of_expression t with
       | Types.Primitive p -> p
       | _ -> assert false
 
-  let default_of_base_value = Q.default_of_base_type -<- base_type_of_expression
+  let default_of_base_value = QL.default_of_base_type -<- base_type_of_expression
 
   (* convert orders to a list of expressions
 
@@ -129,7 +130,7 @@ struct
         | Val t        -> [t]
         | Gen g        -> gen g
         | TailGen _    -> []
-        | DefVal t     -> [Q.default_of_base_type t]
+        | DefVal t     -> [QL.default_of_base_type t]
         | DefGen g     -> List.map default_of_base_value (gen g)
         | DefTailGen _ -> []
         | Branch i     -> [QL.Constant (Constant.Int i)]
@@ -148,17 +149,17 @@ struct
           let cs = queries gs cond vs in
             Node ([], cs)
         | If (cond', v, Concat []) ->
-          query gs (QL.reduce_and (cond, cond')) v
+          query gs (Q.reduce_and (cond, cond')) v
         | For (_, gs', os, Concat vs) ->
           let os' = lift_vals os @ lift_gens gs' in
           let cs = queries (gs @ gs') cond vs in
             Node (os', cs)
         | For (_, gs', os, body) ->
           Leaf ((gs @ gs',
-                  QL.reduce_where_then (cond, body)),
+                  Q.reduce_where_then (cond, body)),
                  lift_vals os @ lift_gens gs @ lift_tail_gens gs')
         | Singleton r ->
-          Leaf ((gs, QL.reduce_where_then (cond, Singleton r)), [])
+          Leaf ((gs, Q.reduce_where_then (cond, Singleton r)), [])
         | _ -> assert false
   and queries : context -> QL.t -> QL.t list -> (int * query_tree) list =
     fun gs cond vs ->
@@ -302,10 +303,10 @@ let compile : Value.env -> (int * int) option * Ir.computation -> (Value.databas
     (* Debug.print ("e: "^Ir.show_computation e); *)
     let v = Q.Eval.eval QueryPolicy.Flat env e in
       (* Debug.print ("v: "^Q.string_of_t v); *)
-      match Q.used_database v with
+      match QL.used_database v with
         | None -> None
         | Some db ->
-            let t = Types.unwrap_list_type (Q.type_of_expression v) in
+            let t = Types.unwrap_list_type (QL.type_of_expression v) in
             let q = ordered_query v in
               Debug.print ("Generated query: "^(db#string_of_query ~range q));
               Some (db, q, t)
