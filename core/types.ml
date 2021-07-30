@@ -3717,8 +3717,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                   if not row_var_exists
                   then begin
                       if not ((Context.is_ambient_operation ctx)
-                              && (let esp = (Policy.es_policy (Context.policy ctx)) in
-                                  Policy.EffectSugar.(contract_operation_arrows esp (* || different_operation_arrows esp *)) )) (* TODO make this code nicer *)
+                              && (Policy.EffectSugar.(contract_operation_arrows
+                                                        (Policy.es_policy (Context.policy ctx)))))
+                             (* this needs to check for different_operation_arrows if we ever enable it in the future *)
                       then begin
                           (* empty closed row *)
                           if Policy.EffectSugar.open_default (Policy.es_policy (Context.policy ctx))
@@ -3729,9 +3730,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                             StringBuffer.write buf "{}"
                         end
                     end
-                  else (* empty open row use the abbreviated notation
-                           -a- or ~a~ unless it's anonymous in which
-                           case we skip it entirely *)
+                  else (* empty open row use the abbreviated notation -a- or ~a~ unless
+                          it's anonymous in which case we skip it entirely *)
                     match Unionfind.find rvar with
                     | Var (vid, knd, _) ->
                        if decide_skip ctx vid
