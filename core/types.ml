@@ -3798,7 +3798,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                           if Policy.EffectSugar.open_default (Policy.es_policy (Context.policy ctx))
                           then
                             (* effect sugar for rows open by default *)
-                            StringBuffer.write buf "{.}"
+                            StringBuffer.write buf "{ |.}"
                           else
                             StringBuffer.write buf "{}"
                         end
