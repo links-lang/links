@@ -345,12 +345,29 @@ jobs:
         shell: bash
 
   e2e-firefox:
-    needs: links-mysql_mysql57
     runs-on: ubuntu-20.04
     env:
       BROWSER: firefox
       NPM_DIR: tests/end-to-end
     steps:
+      - name: Use OCaml ${{ matrix.ocaml-compiler }}
+        uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: ${{ matrix.ocaml-compiler }}
+
+      - run: opam install -y ounit2
+
+      - name: Install Links dependencies
+        run: >-
+          opam install
+          ./links.opam
+          --deps-only
+
+      - name: Build Links from source
+        run: |
+          eval $(opam env)
+          make all-ci
+        shell: bash
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v2
       - run: npm install
