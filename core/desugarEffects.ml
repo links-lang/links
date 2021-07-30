@@ -47,9 +47,6 @@ The following steps are only performed when effect_sugar is enabled:
 let shared_effect_var_name = "$eff"
 
 let has_effect_sugar () = Types.Policy.effect_sugar (Types.Policy.default_policy ())
-let open_default () =
-  let open Types.Policy in
-  EffectSugar.open_default (es_policy (default_policy ()))
 
 let internal_error message =
   Errors.internal_error ~filename:"desugarEffects.ml" ~message
@@ -263,7 +260,6 @@ let may_have_shared_eff (tycon_env : simple_tycon_env) dt =
 *)
 let cleanup_effects tycon_env =
   let has_effect_sugar = has_effect_sugar () in
-  let open_default = open_default () in
   (object (self)
      inherit SugarTraversals.map as super
 
@@ -374,13 +370,13 @@ let cleanup_effects tycon_env =
                 && gue stv = ("$", None, `Rigid) ->
              let stv' = SugarTypeVar.mk_unresolved "$eff" None `Rigid in
              Datatype.Open stv'
-         | Datatype.Closed when has_effect_sugar
-                                && open_default ->
-            let stv = SugarTypeVar.mk_unresolved "$eff" None `Rigid in
-            Datatype.Open stv
-         | Datatype.DotClosed ->
-            (* TODO possibly error when not (has_sugar && open_default)? *)
-            Datatype.Closed
+         (* | Datatype.Closed when has_effect_sugar
+          *                        && open_default ->
+          *    let stv = SugarTypeVar.mk_unresolved "$eff" None `Rigid in
+          *    Datatype.Open stv
+          * | Datatype.DotClosed ->
+          *    (\* TODO possibly error when not (has_sugar && open_default)? *\)
+          *    Datatype.Closed *)
          | _ -> var
        in
        let var = self#row_var var in
