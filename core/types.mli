@@ -39,7 +39,7 @@ module Policy : sig
   type kind_policy = Default | Full | Hide
 
   module EffectSugar : sig
-    type opt = PresenceOmit | AliasOmit | ArrowsShowTheOneEffect | ArrowsCurriedCollectionAssumeFresh | ContractOperationArrows | OpenDefault | DifferentOperationArrows
+    type opt = PresenceOmit | AliasOmit | ArrowsShowTheOneEffect | ArrowsCurriedCollectionAssumeFresh | ContractOperationArrows | OpenDefault
     type t = opt list
     val default : unit -> t
 
@@ -49,7 +49,6 @@ module Policy : sig
     val arrows_collection_fresh    : t -> bool
     val contract_operation_arrows  : t -> bool
     val open_default               : t -> bool
-    val different_operation_arrows : t -> bool
   end
 
   type t = {

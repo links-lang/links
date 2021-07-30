@@ -2006,7 +2006,7 @@ module Policy = struct
 
   module EffectSugar : sig
                                        (* vvvvvvvvvvvvvvvvvvvvvv TODO name; for now it's the One Effect To Rule Them All *)
-    type opt = PresenceOmit | AliasOmit | ArrowsShowTheOneEffect | ArrowsCurriedCollectionAssumeFresh | ContractOperationArrows | OpenDefault | DifferentOperationArrows
+    type opt = PresenceOmit | AliasOmit | ArrowsShowTheOneEffect | ArrowsCurriedCollectionAssumeFresh | ContractOperationArrows | OpenDefault (* | DifferentOperationArrows *)
     type t = opt list
     val default : unit -> t
 
@@ -2016,12 +2016,12 @@ module Policy = struct
     val arrows_collection_fresh    : t -> bool
     val contract_operation_arrows  : t -> bool
     val open_default               : t -> bool
-    val different_operation_arrows : t -> bool
+    (* val different_operation_arrows : t -> bool *)
   end = struct
-    type opt = PresenceOmit | AliasOmit | ArrowsShowTheOneEffect | ArrowsCurriedCollectionAssumeFresh | ContractOperationArrows | OpenDefault | DifferentOperationArrows
+    type opt = PresenceOmit | AliasOmit | ArrowsShowTheOneEffect | ArrowsCurriedCollectionAssumeFresh | ContractOperationArrows | OpenDefault (* | DifferentOperationArrows *)
     type t = opt list
     let default_opts = [PresenceOmit ; AliasOmit ; ContractOperationArrows ; ArrowsCurriedCollectionAssumeFresh ]
-    let all_opts = [PresenceOmit ; AliasOmit ; ArrowsShowTheOneEffect ; ArrowsCurriedCollectionAssumeFresh ; ContractOperationArrows ; OpenDefault ; DifferentOperationArrows ]
+    let all_opts = [PresenceOmit ; AliasOmit ; ArrowsShowTheOneEffect ; ArrowsCurriedCollectionAssumeFresh ; ContractOperationArrows ; OpenDefault (* ; DifferentOperationArrows *) ]
 
     let show_opt : opt -> string
       = function
@@ -2031,7 +2031,7 @@ module Policy = struct
       | AliasOmit                -> "alias_omit"
       | ContractOperationArrows  -> "contract_operation_arrows"
       | OpenDefault              -> "open_default"
-      | DifferentOperationArrows -> "different_operation_arrows"
+      (* | DifferentOperationArrows -> "different_operation_arrows" *)
     let string_of_opts = Settings.string_of_paths -<- List.map show_opt
 
     let parse_opts : string -> opt list
@@ -2050,8 +2050,8 @@ module Policy = struct
             -> ContractOperationArrows
           | "open_default" | "|.}"
             -> OpenDefault
-          | "different_operation_arrows" | "->>"
-            -> DifferentOperationArrows
+          (* | "different_operation_arrows" | "->>"
+           *   -> DifferentOperationArrows *)
           | _ -> failwith ("Invalid option: " ^ s)
         in
         let is_correct : opt list -> bool
@@ -2084,8 +2084,8 @@ module Policy = struct
            ; "   `E:() {}-> a' to `E:a'"
            ; " * open_default [|.}]: effect rows are open by default,"
            ; "   closed with syntax { |.}"
-           ; " * different_operation_arrows [->>]: operation arrow will be"
-           ; "   syntactically differentiated"
+           (* ; " * different_operation_arrows [->>]: operation arrow will be"
+            * ; "   syntactically differentiated" *)
            ; "Meta-options:"
            ; " * none: turn all of the above off"
            ; " * default: revert to default value"
@@ -2113,7 +2113,7 @@ module Policy = struct
     let arrows_collection_fresh    = List.mem ArrowsCurriedCollectionAssumeFresh
     let contract_operation_arrows  = List.mem ContractOperationArrows
     let open_default               = List.mem OpenDefault
-    let different_operation_arrows = List.mem DifferentOperationArrows
+    (* let different_operation_arrows = List.mem DifferentOperationArrows *)
 
     let default () = Settings.get sugar_specifics
   end
@@ -3792,7 +3792,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                   then begin
                       if not ((Context.is_ambient_operation ctx)
                               && (let esp = (Policy.es_policy (Context.policy ctx)) in
-                                  Policy.EffectSugar.(contract_operation_arrows esp || different_operation_arrows esp) )) (* TODO make this code nicer *)
+                                  Policy.EffectSugar.(contract_operation_arrows esp (* || different_operation_arrows esp *)) )) (* TODO make this code nicer *)
                       then begin
                           (* empty closed row *)
                           if Policy.EffectSugar.open_default (Policy.es_policy (Context.policy ctx))
@@ -3835,10 +3835,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               (if is_wild then StringBuffer.write buf "~" else StringBuffer.write buf "-");
               (* add the arrowhead/lollipop/oparrow *)
               (if is_lolli then StringBuffer.write buf "@"
-               else if Policy.EffectSugar.different_operation_arrows (Policy.es_policy (Context.policy ctx))
-                       && Context.is_ambient_operation ctx
-               then StringBuffer.write buf ">>"
-               else StringBuffer.write buf ">")
+               else (* if Policy.EffectSugar.different_operation_arrows (Policy.es_policy (Context.policy ctx))
+                *         && Context.is_ambient_operation ctx
+                * then StringBuffer.write buf ">>"
+                * else *) StringBuffer.write buf ">")
             )
       in
 
