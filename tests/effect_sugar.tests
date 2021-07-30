@@ -1,6 +1,12 @@
-Sugar off
+Sugar off [1]
 sig f : (() {E|e}~> ()) -> () {E{_}|e}~> () fun f(g) { fun() { handle(g()) { case E(res) -> res(()) }}} f
 stdout : fun : (() {E:() -> ()|a}~> ()) -> () {E{_}|a}~> ()
+args : --enable-handlers --set=effect_sugar=false
+
+Sugar off [2], implicit not unifying, no propagation
+sig f : (() {E|_}~> ()) -> () { |_}~> () fun f(g) { fun() { handle(g()) { case E(res) -> res(()) }}} f
+stderr : @.
+exit : 1
 args : --enable-handlers --set=effect_sugar=false
 
 Policy: none [1], signature with explicit shared effect
@@ -47,6 +53,12 @@ Policy: none [8], no arrows_show_the_one_effect
 sig map : ((a) ~e~> b) -> ([a]) ~e~> [b] fun map(f)(lst) { switch(lst) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs) }} map
 stdout : fun : ((a) ~> c) -_-> ([a]) ~> [c]
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=none
+
+Policy: none [9], dot when not open_default not allowed
+sig ask : () {Ask:a|.}-> a fun ask() { do Ask } ask
+stderr : @.
+exit : 1
+args : --enable-handlers --set=prelude=tests/empty_prelude.links --set=effect_sugar=true --set=effect_sugar_policy=none
 
 Policy: presence_omit [1]: signature with implicit shared effect, handler
 sig f : (() {E|_}~> ()) -> () {E{_}|_}~> () fun f(g) { fun() { handle(g()) { case E(res) -> res(()) }}} f
@@ -108,6 +120,11 @@ sig f : () {E:() {}-> ()}-> () fun f() { do E } f
 stdout : fun : () {E:()}-> ()
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=contract
 
+Policy: contract_operation_arrows [4]
+sig f : (a) {E:(a) {}-> ()}-> () fun f(x) { do E(x) } f
+stdout : fun : (a) {E:(a) -> ()}-> ()
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=contract
+
 Policy: ccf [1]
 sig map : ((a) ~> b) -> ([a]) ~> [b] fun map(f)(xs) { switch(xs) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs) }} map
 stdout : fun : ((a) ~> c) -> ([a]) ~> [c]
@@ -127,3 +144,43 @@ Policy: arrows_show_the_one_effect [2]
 sig map : ((a) ~e~> b) -> ([a]) ~e~> [b] fun map(f)(lst) { switch(lst) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs) }} map
 stdout : fun : ((a) ~b~> c) -> ([a]) ~b~> [c]
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=arrows_show_the_one_effect
+
+Policy: open_default [1], open
+sig ask : () {Ask:a}-> a fun ask() { do Ask } ask
+stdout : fun : () {Ask:() { |.}-> a}-> a
+args : --enable-handlers --set=prelude=tests/empty_prelude.links --set=effect_sugar=true --set=effect_sugar_policy=open_default
+
+Policy: open_default [2], closed
+sig ask : () {Ask:a|.}-> a fun ask() { do Ask } ask
+stdout : fun : () {Ask:() { |.}-> a|.}-> a
+args : --enable-handlers --set=prelude=tests/empty_prelude.links --set=effect_sugar=true --set=effect_sugar_policy=open_default
+
+Policy: contract_operation_arrows, open_default [1], open
+sig ask : () {Ask:a}-> a fun ask() { do Ask } ask
+stdout : fun : () {Ask:a}-> a
+args : --enable-handlers --set=prelude=tests/empty_prelude.links --set=effect_sugar=true --set=effect_sugar_policy=open_default,contract
+
+Policy: contract_operation_arrows, open_default [2], closed
+sig ask : () {Ask:a|.}-> a fun ask() { do Ask } ask
+stdout : fun : () {Ask:a|.}-> a
+args : --enable-handlers --set=prelude=tests/empty_prelude.links --set=effect_sugar=true --set=effect_sugar_policy=open_default,contract
+
+Policy: contract_operation_arrows, open_default [3], open
+sig ask : (a) {Ask:(a) { |.}-> b}-> b fun ask(x) { do Ask(x) } ask
+stdout : fun : (a) {Ask:(a) -> b}-> b
+args : --enable-handlers --set=prelude=tests/empty_prelude.links --set=effect_sugar=true --set=effect_sugar_policy=open_default,contract
+
+Policy: contract_operation_arrows, open_default [4], closed
+sig ask : (a) {Ask:(a) { |.}-> b|.}-> b fun ask(x) { do Ask(x) } ask
+stdout : fun : (a) {Ask:(a) -> b|.}-> b
+args : --enable-handlers --set=prelude=tests/empty_prelude.links --set=effect_sugar=true --set=effect_sugar_policy=open_default,contract
+
+Policy: contract_operation_arrows, open_default [5], open, include desugaring
+sig ask : (a) {Ask:(a) -> b}-> b fun ask(x) { do Ask(x) } ask
+stdout : fun : (a) {Ask:(a) -> b}-> b
+args : --enable-handlers --set=prelude=tests/empty_prelude.links --set=effect_sugar=true --set=effect_sugar_policy=open_default,contract
+
+Policy: contract_operation_arrows, open_default [6], closed, include desugaring
+sig ask : (a) {Ask:(a) -> b|.}-> b fun ask(x) { do Ask(x) } ask
+stdout : fun : (a) {Ask:(a) -> b|.}-> b
+args : --enable-handlers --set=prelude=tests/empty_prelude.links --set=effect_sugar=true --set=effect_sugar_policy=open_default,contract
