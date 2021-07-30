@@ -334,9 +334,7 @@ let cleanup_effects tycon_env =
                     let codomain = self#datatype codomain in
                     let () = match (fields, rv) with
                       | [], Closed
-                        | [], Open _
-                        | [], DotClosed -> ()
-                      (* TODO possibly error if DotClosed and not open_default? *)
+                        | [], Open _ -> ()
                       | _, _ -> raise (unexpected_effects_on_abstract_op pos name)
                     in
                     Present (SourceCode.WithPos.make ~pos
@@ -524,7 +522,6 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
             let q : Quantifier.t = (var, (pk_row, sk)) in
             let sq = SugarQuantifier.mk_resolved q in
             self#quantified (fun o -> o#row r) [ sq ]
-        | DotClosed -> raise (internal_error "DotClosed is not legal anymore, it should have been handled by cleanup")
 
       method effect_row ((fields, var) : Datatype.row) =
         let self =
@@ -773,7 +770,6 @@ class main_traversal simple_tycon_env =
       let o, rv =
         match rv with
         | D.Closed -> (o, rv)
-        | D.DotClosed -> raise (internal_error "DotClosed is not legal anymore, it should have been handled by cleanup")
         | D.Open stv
           when (not (SugarTypeVar.is_resolved stv))
                && SugarTypeVar.get_unresolved_name_exn stv
