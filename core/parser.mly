@@ -188,11 +188,12 @@ let effect_row_var_maybe_closed (* : has_dot:bool -> Position.t -> Datatype.row_
   let pol = default_policy () in
   let effect_sugar = effect_sugar pol in
   let open_default = EffectSugar.open_default (es_policy pol) in
+
   match effect_sugar, open_default, has_dot with
-  | true, true, true -> Datatype.Closed
+  | true, true, true  -> Datatype.Closed
   | true, true, false -> Datatype.Open (SugarTypeVar.mk_unresolved "$eff" None `Rigid)
-  | _, _, true -> raise (ConcreteSyntaxError (pos loc, "Dot syntax in effect row variables is only supported when effect_sugar and open_default are enabled."))
-  | _ -> Datatype.Closed
+  |    _,    _, true  -> raise (ConcreteSyntaxError (pos loc, "Dot syntax in effect row variables is only supported when effect_sugar and effect_sugar_policy.open_default are enabled."))
+  | _                 -> Datatype.Closed
 
 module MutualBindings = struct
 
@@ -594,6 +595,7 @@ sigop:
 
 op:
 | OPERATOR                                                     { with_pos $loc $1 }
+| VBARDOT                                                      { with_pos $loc "|." }
 
 spawn_expression:
 | SPAWNAT LPAREN exp COMMA block RPAREN                        { spawn ~ppos:$loc Demon (ExplicitSpawnLocation $3) $5 }
@@ -1079,11 +1081,13 @@ vfield:
 | CONSTRUCTOR fieldspec                                        { ($1, $2)      }
 
 efields:
-| fields_def(efield, erow_var, kinded_erow_var)                { $1 }
-/* Extending the rule here, so that we can keep using row_var, kinded_row_var */
-/* | DOT                                                          { ( [] , effect_row_var_maybe_closed ()) } */
-| soption(efield) VBARDOT                                      { ( $1 , effect_row_var_maybe_closed ~has_dot:true $loc) }
-| soption(efield) VBAR DOT                                     { ( $1 , effect_row_var_maybe_closed ~has_dot:true $loc) }
+| efield                                                       { ([$1], effect_row_var_maybe_closed ~has_dot:false $loc) }
+| soption(efield) VBAR DOT                                     { ( $1 , effect_row_var_maybe_closed ~has_dot:true $loc ) }
+| soption(efield) VBARDOT                                      { ( $1 , effect_row_var_maybe_closed ~has_dot:true $loc ) }
+| soption(efield) VBAR row_var                                 { ( $1 , $3                                             ) }
+| soption(efield) VBAR kinded_row_var                          { ( $1 , $3                                             ) }
+| efield COMMA efields                                         { ( $1::fst $3, snd $3                                  ) }
+/* | DOT                                                          { ( [] , effect_row_var_maybe_closed ~had_dot:true $loc ) } */
 
 
 efield:
