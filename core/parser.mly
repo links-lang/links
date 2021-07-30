@@ -1087,7 +1087,6 @@ efields:
 | soption(efield) VBAR row_var                                 { ( $1 , $3                                             ) }
 | soption(efield) VBAR kinded_row_var                          { ( $1 , $3                                             ) }
 | efield COMMA efields                                         { ( $1::fst $3, snd $3                                  ) }
-/* | DOT                                                          { ( [] , effect_row_var_maybe_closed ~had_dot:true $loc ) } */
 
 
 efield:
