@@ -357,6 +357,9 @@ jobs:
       BROWSER: firefox
       NPM_DIR: tests/end-to-end
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
       - name: Use OCaml ${{ matrix.ocaml-compiler }}
         uses: ocaml/setup-ocaml@v2
         with:
@@ -375,7 +378,7 @@ jobs:
           eval $(opam env)
           make all-ci
         shell: bash
-      - uses: actions/checkout@v2
+
       - uses: actions/setup-node@v2
       - run: npm install
         working-directory: ${{ env.NPM_DIR }}
