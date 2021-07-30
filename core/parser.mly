@@ -264,7 +264,7 @@ let parse_foreign_language pos lang =
 
 %token EOF
 %token EQ IN
-%token FUN LINFUN FROZEN_FUN FROZEN_LINFUN RARROW RRARROW LOLLI FATRARROW VAR OP
+%token FUN LINFUN FROZEN_FUN FROZEN_LINFUN RARROW LOLLI FATRARROW VAR OP
 %token SQUIGRARROW SQUIGLOLLI TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
@@ -1075,19 +1075,11 @@ efields:
 
 efield:
 | effect_label                                                 { ($1, present) }
-| effect_label efieldspec                                      { ($1, $2)      }
+| effect_label fieldspec                                       { ($1, $2)      }
 
 effect_label:
 | CONSTRUCTOR                                                  { $1 }
 | VARIABLE                                                     { $1 }
-
-efieldspec:
-| COLON operation_arrow                                        { Datatype.Present $2 }
-| fieldspec                                                    { $1 }
-
-operation_arrow:
-| parenthesized_datatypes RRARROW datatype                     { with_pos $loc (Datatype.Function ($1, ([], Datatype.Closed), $3)) }
-
 
 fieldspec:
 | COLON datatype                                               { Datatype.Present $2 }
