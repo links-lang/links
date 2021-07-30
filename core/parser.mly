@@ -182,6 +182,18 @@ let fresh_effects =
   let stv = SugarTypeVar.mk_unresolved "$eff" None `Rigid in
   ([], Datatype.Open stv)
 
+let effect_row_var_maybe_closed (* : has_dot:bool -> Position.t -> Datatype.row_var *)
+  = fun ~has_dot loc ->
+  let open Types.Policy in
+  let pol = default_policy () in
+  let effect_sugar = effect_sugar pol in
+  let open_default = EffectSugar.open_default (es_policy pol) in
+  match effect_sugar, open_default, has_dot with
+  | true, true, true -> Datatype.Closed
+  | true, true, false -> Datatype.Open (SugarTypeVar.mk_unresolved "$eff" None `Rigid)
+  | _, _, true -> raise (ConcreteSyntaxError (pos loc, "Dot syntax in effect row variables is only supported when effect_sugar and open_default are enabled."))
+  | _ -> Datatype.Closed
+
 module MutualBindings = struct
 
   type mutual_bindings =
@@ -1067,10 +1079,11 @@ vfield:
 | CONSTRUCTOR fieldspec                                        { ($1, $2)      }
 
 efields:
-| fields_def(efield, row_var, kinded_row_var)                  { $1 }
-| DOT                                                          { ( [] , Datatype.DotClosed) }
-| soption(efield) VBARDOT                                      { ( $1 , Datatype.DotClosed) }
-| soption(efield) VBAR DOT                                     { ( $1 , Datatype.DotClosed) }
+| fields_def(efield, erow_var, kinded_erow_var)                { $1 }
+/* Extending the rule here, so that we can keep using row_var, kinded_row_var */
+/* | DOT                                                          { ( [] , effect_row_var_maybe_closed ()) } */
+| soption(efield) VBARDOT                                      { ( $1 , effect_row_var_maybe_closed ~has_dot:true $loc) }
+| soption(efield) VBAR DOT                                     { ( $1 , effect_row_var_maybe_closed ~has_dot:true $loc) }
 
 
 efield:
