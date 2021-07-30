@@ -345,7 +345,14 @@ jobs:
         shell: bash
 
   e2e-firefox:
-    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-20.04
+        ocaml-compiler:
+          - 4.08.0
+    runs-on: ${{ matrix.os }}
     env:
       BROWSER: firefox
       NPM_DIR: tests/end-to-end
