@@ -263,15 +263,12 @@ let cleanup_effects tycon_env =
        let do_fun a e r =
          let a = self#list (fun o -> o#datatype) a in
          let allow_shared = match may_have_shared_eff tycon_env r with
-           | None ->
-              (* range is irrelevant - this arrow can share effect *)
-              true
-           | Some `Arrow ->
-              (* range is another arrow - this is a collector in a curried function, fresh *)
-              false
-           | Some `Alias ->
-              (* range is an alias, this is a rightmost arrow, can share *)
-              true
+           (* range is irrelevant - this arrow can share effect *)
+           | None -> true
+           (* range is another arrow - this is a collector in a curried function, fresh *)
+           | Some `Arrow -> false
+           (* range is an alias, this is a rightmost arrow, can share *)
+           | Some `Alias -> true
          in
          let e = self#effect_row ~allow_shared e in
          let r = self#datatype r in
@@ -957,13 +954,12 @@ class main_traversal simple_tycon_env =
     method! datatype dt =
       let pos = SourceCode.WithPos.pos dt in
       let dt, o =
-        if not inside_type then begin
+        if not inside_type then
           let dt, row_operations, shared_effect =
             preprocess_type dt tycon_env allow_implictly_bound_vars
               shared_effect
           in
           (dt, {<row_operations; shared_effect>})
-          end
         else (dt, o)
       in
       let o = o#set_inside_type true in
