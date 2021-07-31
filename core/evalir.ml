@@ -713,6 +713,9 @@ struct
               value env offset >>= fun offset ->
               Lwt.return (Some (Value.unbox_int limit, Value.unbox_int offset))
        end >>= fun range ->
+        (* wricciot - this code matches over the policy twice: first to check whether Nested evaluation was requested,
+           and, if it wasn't, to choose between the standard (Flat) or Mixing evaluator...
+           can we separate the logic for Nested and that for Flat/Mixing more cleanly? *)
          begin match policy with
            | QueryPolicy.Nested ->
                begin

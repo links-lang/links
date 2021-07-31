@@ -249,19 +249,7 @@ class virtual printer =
             pr_b_one_table l
             (Arithmetic.sql_name op)
             pr_b_one_table r
-(*
-    | Delete { del_table; del_where } ->
-        pr_delete ppf del_table del_where
-    | Update { upd_table; upd_fields; upd_where } ->
-        pr_update ppf upd_table upd_fields upd_where
-    | Insert { ins_table; ins_fields; ins_records } ->
-        pr_insert ppf ins_table ins_fields ins_records
-    | With (z, q, q') ->
-        Format.fprintf ppf "with %  s as (@[<v>%a@])\n%a"
-          z
-          pr_q q
-          pr_q q'
-*)
+
   method pp_query ignore_fields ppf q =
     let pr_q = self#pp_query ignore_fields in
     let pr_b = self#pp_base false in

@@ -66,12 +66,13 @@ and body is_set gs os j =
         selquery
         <| List.map (fun (f,x) -> (base_exp x, f)) (StringMap.to_alist fields)
         <| base_exp c
-    | _ -> Debug.print ("error in SimpleSqlGen.body: unexpected j = " ^ QL.show j); failwith "body"
+    | _ -> Debug.print ("error in EvalMixingQuery.body: unexpected j = " ^ QL.show j); failwith "body"
 
 and base_exp = function
 (* XXX: Project expects a (numbered) var, but we have a table name
    so I'll make an act of faith and believe that we never project from tables, but only from variables *)
-(* | QL.Project (QL.Table (_, n, _, _), l) -> S.Project (n,l) *)
+| QL.Project (QL.Table (_, _n, _, _), _l) as q ->
+    Debug.print ("error in EvalMixingQuery.base_exp: unexpected Project on Table: " ^ QL.show q); failwith "base_exp"
 | QL.Project (QL.Var (n,_), l) -> S.Project (n,l)
 | QL.If (c, t, e) -> S.Case (base_exp c, base_exp t, base_exp e)
 | QL.Apply (QL.Primitive "tilde", [s; r]) ->
@@ -93,8 +94,6 @@ and base_exp = function
 | QL.Apply (QL.Primitive "length", [v]) -> S.Length (sql_of_query S.All v)
 | QL.Apply (QL.Primitive f, vs) -> S.Apply (f, List.map base_exp vs)
 | QL.Constant c -> S.Constant c
-(* WR: we don't support indices in this simple Sql generator *)
-(* | QL.Primitive "index" -> ??? *)
 | e ->
     Debug.print ("Not a base expression: " ^ (QL.show e) ^ "\n");
     failwith "base_exp"
@@ -106,13 +105,11 @@ let compile_mixing : delateralize:QueryPolicy.t -> Value.env -> (int * int) opti
   fun ~delateralize env (range, e) ->
     (* Debug.print ("env: "^Value.show_env env);
     Debug.print ("e: "^Ir.show_computation e); *)
-    (* XXX: I don't see how the evaluation here is different depending on the policy *)
     if range != None then eval_error "Range is not (yet) supported by the new mixing normaliser";
     let evaluator =
-        (* FIXME *)
         if delateralize = QueryPolicy.Delat
-            then Delateralize.eval QueryPolicy.Flat
-            else MixingQuery.Eval.eval QueryPolicy.Flat
+            then Delateralize.eval QueryPolicy.Mixing
+            else MixingQuery.Eval.eval QueryPolicy.Mixing
     in
     let v = evaluator env e in
       (* Debug.print ("v: "^ QL.show v); *)

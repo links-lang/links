@@ -315,17 +315,6 @@ struct
       (* yuck! *)
       let env' = Q.bind (empty_env env.policy) (z, xlate env v) in
       Q.Closure ((xs, body), env')
-      (* (\* Debug.print("looking up query closure: "^string_of_int f); *\) *)
-      (* begin *)
-      (*   match value env (`Variable f) with *)
-      (*   | `Closure ((z::xs, body), closure_env) -> *)
-      (*     (\* Debug.print("binding query closure parameter: "^string_of_int z); *\) *)
-      (*     (\* partially apply the closure to bind the closure *)
-      (*        environment *\) *)
-      (*     `Closure ((xs, body), bind closure_env (z, value env v)) *)
-      (*   | _ -> *)
-      (*     failwith "ill-formed closure in query compilation" *)
-      (* end *)
     | Coerce (v, _) -> xlate env v
 
   and computation env (binders, tailcomp) : Q.t =

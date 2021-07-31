@@ -88,7 +88,7 @@ let rec flattened_pair x y =
   | _, Q.Var (_ny, Types.Record row) ->
       let y' = Q.Record (StringMap.fold (fun f _ acc -> StringMap.add f (Q.Project (y,f)) acc) (Q.field_types_of_row row) StringMap.empty)
       in flattened_pair x y'
-  (* XXX: using a field with an empty name to deal with variables of non-record type ... will it work? *)
+  (* We uese a field with an empty name to deal with variables of non-record type *)
   | Q.Var (_nx, _), _ ->
       let x' = Q.Record (StringMap.from_alist ["",x])
       in flattened_pair x' y
@@ -433,17 +433,6 @@ struct
       (* yuck! *)
       let env' = bind (Q.empty_env env.policy) (z, xlate env v) in
       Q.Closure ((xs, body), env')
-      (* (\* Debug.print("looking up query closure: "^string_of_int f); *\) *)
-      (* begin *)
-      (*   match value env (`Variable f) with *)
-      (*   | `Closure ((z::xs, body), closure_env) -> *)
-      (*     (\* Debug.print("binding query closure parameter: "^string_of_int z); *\) *)
-      (*     (\* partially apply the closure to bind the closure *)
-      (*        environment *\) *)
-      (*     `Closure ((xs, body), bind closure_env (z, value env v)) *)
-      (*   | _ -> *)
-      (*     failwith "ill-formed closure in query compilation" *)
-      (* end *)
     | Coerce (v, _) -> xlate env v
 
   and computation env (binders, tailcomp) : Q.t =
@@ -639,7 +628,6 @@ struct
     | Q.Apply (f, xs) as _orig ->
       apply in_dedup env (norm false env f, List.map (norm false env) xs)
     | Q.For (_, gs, os, u) as _orig ->
-        (* Debug.print ("norm.For: " ^ Q.show _orig); *)
         let rec reduce_gs env os_f body = function
         | [] ->
           begin
@@ -654,26 +642,16 @@ struct
                   |> TypeUtils.element_type
                 in
                 let vz = Q.Var (z, tyz) in
-                (* Debug.print ("norm.For fresh var: " ^ Q.show vz); *)
                 reduce_for_source env (z, u', tyz) (fun env' os_f' ->
                   Q.For (None, [], List.map (norm false env') (os_f' (os_f [])),
                     norm in_dedup env' (Q.Singleton vz)))
             | u' ->
-              (* Q.For (None, [], List.map (norm false env) (os_f []), u') *)
-              let os' = os_f [] in
-              (* let domenv = Env.Int.fold (fun x _ l -> x::l) env.qenv [] in
-              Debug.print(">>> final env variables: " ^ String.concat ", "  (List.map string_of_int domenv));
-              Debug.print(">>> final input os: " ^ String.concat ", " (List.map Q.show os));
-              Debug.print(">>> final u': " ^ Q.show u'); *)
-              let os'' = List.map (norm false env) os' in
-              Q.For (None, [], os'', u')
+                Q.For (None, [], List.map (norm false env) (os_f []), u')
           end
         | (x,g)::gs' -> (* equivalent to xs = For gs' u, body = g, but possibly the arguments aren't normalized *)
             let tyg = Q.type_of_expression g in
             reduce_for_source env (x, norm in_dedup env g, tyg) (fun env' os_f' -> reduce_gs env' (os_f -<- os_f') body gs')
         in
-        (* Debug.print(">>> env variables: " ^ String.concat ", "  (List.map string_of_int (Env.Int.fold (fun x _ l -> x::l) env.qenv [])));
-        Debug.print(">>> os :" ^ String.concat ", " (List.map Q.show os)); *)
         reduce_gs env (fun os' -> os@os') u gs
     | Q.If (c, t, e) ->
         reduce_if_condition (norm false env c, norm in_dedup env t, norm in_dedup env e)
