@@ -76,7 +76,7 @@ and base_exp = function
 | QL.If (c, t, e) -> S.Case (base_exp c, base_exp t, base_exp e)
 | QL.Apply (QL.Primitive "tilde", [s; r]) ->
     begin
-    match MixingQuery.likeify r with
+    match QueryLang.likeify r with
         | Some r ->
         S.Apply ("LIKE", [base_exp s; base_exp r])
         | None ->

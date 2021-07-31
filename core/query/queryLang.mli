@@ -94,21 +94,14 @@ val labels_of_field_types : 'a Utility.StringMap.t -> Utility.StringSet.t
 val table_field_types : Value.table -> Types.typ Utility.StringMap.t
 val is_list : t -> bool
 
-(*
-module Eval :
-sig
-  val env_of_value_env : QueryPolicy.t -> Value.env -> Lang.env
-  val bind : Lang.env -> Env.Int.name * Lang.t -> Lang.env
-  val eta_expand_var : Var.var * Types.datatype StringMap.t -> Lang.t
-  val computation : Lang.env -> Ir.computation -> Lang.t
-  val eval : QueryPolicy.t -> Value.t Value.Env.t -> Ir.computation -> Lang.t
-end
+val likeify : t -> t option
+val sql_of_query : t -> Sql.query
 
-val compile_update : Value.database -> Value.env ->
-  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> Sql.query
+(* Specific to nested queries *)
+type let_clause = Var.var * t * Var.var * t
+type let_query = let_clause list
+val sql_of_let_query : let_query -> Sql.query
 
-val compile_delete : Value.database -> Value.env ->
-  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> Sql.query
-
+val update : (Var.var * string) * t option * t -> Sql.query
+val delete : (Var.var * string) * t option -> Sql.query
 val insert : string -> string list -> Value.t list list -> Sql.query
-*)

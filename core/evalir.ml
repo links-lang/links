@@ -781,7 +781,7 @@ struct
           | `Table ((db, _params), table_name, _, _), rows ->
               let (field_names,rows) = Value.row_columns_values rows in
               let q =
-                Query.insert table_name field_names rows
+                QueryLang.insert table_name field_names rows
                 |> db#string_of_query in
               Debug.print ("RUNNING INSERT QUERY:\n" ^ q);
               let () = ignore (Database.execute_command q db) in
@@ -809,7 +809,7 @@ struct
           | `Table ((db, _params), table_name, _, _), rows, returning ->
               let (field_names,vss) = Value.row_columns_values rows in
               let returning = Value.unbox_string returning in
-              let q = Query.insert table_name field_names vss in
+              let q = QueryLang.insert table_name field_names vss in
               Debug.print ("RUNNING INSERT ... RETURNING QUERY:\n" ^
                            String.concat "\n"
                              (db#make_insert_returning_query returning q));
