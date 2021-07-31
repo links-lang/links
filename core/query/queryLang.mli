@@ -46,7 +46,11 @@ val nil : t
 
 val bind : env -> Env.Int.name * t -> env
 
+val lookup : env -> Var.var -> t
+
 val expression_of_base_value : Value.t -> t
+
+val check_policies_compatible : CommonTypes.QueryPolicy.t -> CommonTypes.QueryPolicy.t -> unit
 
 val field_types_of_row : Types.datatype -> Types.datatype StringMap.t
 
@@ -65,6 +69,12 @@ val used_database : t -> Value.database option
 val string_of_t : t -> string
 
 val recdty_field_types : Types.datatype -> Types.datatype StringMap.t
+
+val env_of_value_env : CommonTypes.QueryPolicy.t ->  Value.env -> env
+
+val empty_env : CommonTypes.QueryPolicy.t -> env
+
+val append_env : env -> env -> env
 
 val subst : t -> Var.var -> t -> t
 

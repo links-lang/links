@@ -343,13 +343,6 @@ let eta_expand_list xs =
     (* Debug.print ("eta_expand_list create: " ^ show (Var (x, ty))); *)
     ([x, xs], [], Singleton (eta_expand_var (x, ty)))
 
-let rec field_types_of_list =
-  function
-    | Concat (v::_) -> field_types_of_list v
-    | Singleton (Record fields) -> StringMap.map type_of_expression fields
-    | Table table -> table_field_types table
-    | _ -> assert false
-
 (* takes a normal form expression and returns true iff it has list type *)
 let is_list =
   function
@@ -427,7 +420,7 @@ let env_of_value_env policy value_env =
 let empty_env policy =
   { venv = Value.Env.empty; qenv = Env.Int.empty; policy }
 
-let (++) e1 e2 =
+let append_env e1 e2 =
   if (e1.policy <> e2.policy) then
     raise (internal_error "Trying to append environments with different query policies")
   else

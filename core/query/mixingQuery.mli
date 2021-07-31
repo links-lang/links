@@ -28,8 +28,6 @@ val sql_of_let_query : let_query -> Sql.query
 
 module Eval :
 sig
-  val empty_env : QueryPolicy.t -> QueryLang.env
-  val env_of_value_env : QueryPolicy.t -> Value.env -> QueryLang.env
   val query_bindings_of_env : QueryLang.env -> (Var.var * QueryLang.t) list
   val computation : QueryLang.env -> Ir.computation -> QueryLang.t
   val contains_free : Var.var list -> QueryLang.t -> bool

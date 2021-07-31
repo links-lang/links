@@ -13,7 +13,6 @@ val sql_of_let_query : let_query -> Sql.query
 
 module Eval :
 sig
-  val env_of_value_env : QueryPolicy.t -> Value.env -> QueryLang.env
   val computation : QueryLang.env -> Ir.computation -> QueryLang.t
   val eval : QueryPolicy.t -> Value.t Value.Env.t -> Ir.computation -> QueryLang.t
 end

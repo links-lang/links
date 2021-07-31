@@ -134,7 +134,7 @@ let rec delateralize env q =
 
 let eval policy env e =
     (*    Debug.print ("e: "^Ir.show_computation e); *)
-    let env = MixingQuery.Eval.env_of_value_env policy env in
+    let env = QL.env_of_value_env policy env in
     Debug.debug_time "MixingQuery.eval" (fun () ->
         e
         |> MixingQuery.Eval.computation env
