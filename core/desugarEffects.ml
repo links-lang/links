@@ -273,7 +273,7 @@ let cleanup_effects tycon_env =
 
            (* range is another arrow and this is a collector in a
               curried function => must be fresh
-              (TODO (Samo) this will change in a future PR) *)
+              (TODO (Samo) this will (optionally) change in a future PR) *)
            | Some `Arrow -> false
 
            (* range is an alias, this is a rightmost arrow, effect

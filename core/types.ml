@@ -2001,9 +2001,9 @@ module Policy = struct
                 |> sync)
 
   module EffectSugar : sig
-                                       (* vvvvvvvvvvvvvvvvvvvvvv TODO name; for now it's the One Effect To Rule Them All *)
     type opt = PresenceOmit
              | AliasOmit
+             (* vvv TODO name; for now it's the One Effect To Rule Them All *)
              | ArrowsShowTheOneEffect
              | ArrowsCurriedCollectionAssumeFresh
              | ContractOperationArrows
