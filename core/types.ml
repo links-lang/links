@@ -2087,7 +2087,7 @@ module Policy = struct
             -> OpenDefault
           (* | "different_operation_arrows" | "->>"
            *   -> DifferentOperationArrows *)
-          | "final_arrow_shares_with_alias" | "-e->T(e)"
+          | "final_arrow_shares_with_alias" | "-e->t(e)" (* hacky due to lowercase *)
             -> FinalArrowSharesWithAlias
           | _ -> failwith ("Invalid option: " ^ s)
         in
