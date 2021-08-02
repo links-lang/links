@@ -3794,7 +3794,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               then begin
                   if not row_var_exists
                   then begin
+                      (* TODO make this nicer *)
                       if not ((Context.is_ambient_operation ctx)
+                              && (Policy.effect_sugar (Context.policy ctx))
                               && (Policy.EffectSugar.(contract_operation_arrows
                                                         (Policy.es_policy (Context.policy ctx)))))
                              (* this needs to check for different_operation_arrows if we ever enable it in the future *)
