@@ -2070,7 +2070,7 @@ module Policy = struct
       | ContractOperationArrows  -> "contract"
       | OpenDefault              -> "|.}"
       (* | DifferentOperationArrows -> "->>" *)
-      | FinalArrowSharesWithAlias-> "-e->T(e)"
+      | FinalArrowSharesWithAlias-> "-e->t(e)"
     let shortcuts_of_opts = Settings.string_of_paths -<- List.map show_shortcut
 
     let parse_opts : string -> opt list
