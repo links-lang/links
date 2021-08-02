@@ -3,7 +3,7 @@ const { Options } = require('selenium-webdriver/firefox');
 
 
 const URL = 'http://localhost:8080/';
-const TIMEOUT = 10000;
+const TIMEOUT = 50000;
 
 jest.setTimeout(TIMEOUT);
 
