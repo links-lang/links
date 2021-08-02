@@ -15,7 +15,7 @@ async function startServer() {
 
   process = require('child_process').spawn(command, {
     detached: true,
-    stdio: 'inherit', // print the child process stdoutinto the Nodes stdout 
+    stdio: 'inherit', // print the child process stdoutinto the Nodes stdout
     shell: true
   });
   process.unref();
