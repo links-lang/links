@@ -17,8 +17,8 @@ typename Queue(a) = (rear: [a], front: [a]);
 typename Option(a) = [|Some:a|None|];
 typename PrioQueue(a) = (high: Queue(a), low: Queue(a));
 typename Priority = [|High|Low|];
-typename Co(e::Eff) = () {Fork: (Co({ |e}), Priority) -> (), Yield |e}~> ();
-typename Fiber0(e::Eff) = (prio: Priority, f: () {Fork: (Fiber0({ |e})) -> (), Yield |e}~> ());
+typename Co(e::Eff) = () {Fork: (Co({ |e}), Priority) -> (), Yield:() |e}~> ();
+typename Fiber0(e::Eff) = (prio: Priority, f: () {Fork: (Fiber0({ |e})) -> (), Yield:()|e}~> ());
 typename SchedulerState(a) = (runQ: PrioQueue(a), prio: Priority, startTime: Int);
 typename Fiber = (prio:Priority, f: (SchedulerState(Fiber)) ~> ());
 typename FiberQueue = PrioQueue(Fiber);
@@ -116,17 +116,17 @@ fun fiberQueueLength(q){
     length(q.low.rear) + length(q.high.front) + length(q.high.rear) + length(q.low.front)
 }
 
-sig fork : (Fiber0({ |e})) {Fork: (Fiber0({ |e})) -> (), Yield |e}~> ()
+sig fork : (Fiber0({ |e})) {Fork: (Fiber0({ |e})) -> (), Yield:() |e}~> ()
 fun fork(f){
     do Fork(f)
 }
 
-sig yield: () {Yield |e}~> ()
+sig yield: () {Yield:() |e}~> ()
 fun yield(){
     do Yield
 }
 
-sig makeFiber: (Priority, () {Fork: (Fiber0({ |e})) -> (), Yield |e}~> ()) -> Fiber0({ |e})
+sig makeFiber: (Priority, () {Fork: (Fiber0({ |e})) -> (), Yield:() |e}~> ()) -> Fiber0({ |e})
 fun makeFiber(prio, f){
     (prio= prio, f=f)
 }
@@ -228,7 +228,7 @@ fun makeDot(x, y, startTime) {
     sysEnqueue(makeFiber(High, g(drawDot)))
 }
 
-sig forever: () {Yield |e}~> ()
+sig forever: () {Yield:() |e}~> ()
 fun forever(){ yield(); forever()}
 
 sig schedule: (Fiber0({ |e})) {Yield-, Fork- | e}~> ()
