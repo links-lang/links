@@ -2096,11 +2096,11 @@ module Policy = struct
         in
         fun s ->
         match String.lowercase_ascii s with
-        | "none"         -> []
-        | "preset_comp"  -> preset_comp
-        | "preset_stuct" -> preset_struct
-        | "default"      -> default_opts
-        | "all"          -> all_opts
+        | "none"          -> []
+        | "preset_comp"   -> preset_comp
+        | "preset_struct" -> preset_struct
+        | "default"       -> default_opts
+        | "all"           -> all_opts
         | _ -> let lst = List.map parse_opt (Settings.parse_paths s) in
                if is_correct lst then lst
                else failwith "Options cannot be duplicated."
