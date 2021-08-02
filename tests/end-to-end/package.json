@@ -1,7 +1,5 @@
 {
-  "name": "end-to-end",
-  "version": "1.0.0",
-  "description": "",
+  "name": "links-end-to-end",
   "main": "index.js",
   "directories": {
     "test": "tests"
@@ -9,8 +7,10 @@
   "scripts": {
     "test": "jest --detectOpenHandles"
   },
-  "author": "",
-  "license": "ISC",
+  "jest": {
+    "testTimeout": 20000
+  },
+  "author": "ChefYeum",
   "devDependencies": {
     "geckodriver": "^2.0.1",
     "jest": "^27.0.6",

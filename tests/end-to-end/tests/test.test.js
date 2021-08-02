@@ -2,9 +2,6 @@ const { By, Key, until } = require('selenium-webdriver');
 const { loadFirefox } = require('../browserDrivers');
 const { startServer, DEFAULT_BASE_URL } = require('../linksServerRunner');
 
-const TIMEOUT = 50000;
-jest.setTimeout(TIMEOUT);
-
 let driver;
 let process;
 
@@ -27,7 +24,7 @@ test('adds 1 + 2 to equal 3', async () => {
   const inputLeft = By.name('input_0');
   const inputRight = By.name('input_1');
 
-  Promise.all(['input_0', 'input_1'].map(inputName => driver.wait(until.elementsLocated(By.name(inputName)), TIMEOUT)));
+  Promise.all(['input_0', 'input_1'].map(inputName => driver.wait(until.elementsLocated(By.name(inputName)))));
 
   await driver.findElement(inputLeft).sendKeys('1');
   await driver.findElement(inputRight).sendKeys('2', Key.ENTER);
@@ -35,7 +32,7 @@ test('adds 1 + 2 to equal 3', async () => {
   // Wait for the result to load
   await driver.wait(until.urlIs(DEFAULT_BASE_URL + '#'));
 
-  var elem = await driver.findElement(By.css('body'), TIMEOUT);
+  var elem = await driver.findElement(By.css('body'));
   var output = await elem.getText();
 
   expect(output.trim()).toBe('3');
