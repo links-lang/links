@@ -1,0 +1,1 @@
+typename T(p::Presence) = (bar:(),foo{p});
