@@ -47,6 +47,11 @@ The following steps are only performed when effect_sugar is enabled:
 let shared_effect_var_name = "$eff"
 
 let has_effect_sugar () = Types.Policy.effect_sugar (Types.Policy.default_policy ())
+let final_arrow_shares_with_alias () =
+  let open Types.Policy in
+  let policy = default_policy () in
+  let es_policy = es_policy policy in
+  EffectSugar.final_arrow_shares_with_alias es_policy
 
 let internal_error message =
   Errors.internal_error ~filename:"desugarEffects.ml" ~message
@@ -265,10 +270,15 @@ let cleanup_effects tycon_env =
          let allow_shared = match may_have_shared_eff tycon_env r with
            (* range is irrelevant - this arrow can share effect *)
            | None -> true
-           (* range is another arrow - this is a collector in a curried function, fresh *)
+
+           (* range is another arrow and this is a collector in a
+              curried function => must be fresh
+              (TODO (Samo) this will change in a future PR) *)
            | Some `Arrow -> false
-           (* range is an alias, this is a rightmost arrow, can share *)
-           | Some `Alias -> true
+
+           (* range is an alias, this is a rightmost arrow, effect
+              sugar is active => decide based on policy *)
+           | Some `Alias -> final_arrow_shares_with_alias ()
          in
          let e = self#effect_row ~allow_shared e in
          let r = self#datatype r in
