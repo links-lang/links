@@ -1,28 +1,21 @@
-const { Builder, By, Key, until } = require('selenium-webdriver');
-const { Options } = require('selenium-webdriver/firefox');
+const { By, Key, until } = require('selenium-webdriver');
+const { loadFirefox } = require('../browserDrivers');
 const startServer = require('../linksServerRunner');
 
 
 const URL = 'http://localhost:8080/';
-const TIMEOUT = 50000;
 
+const TIMEOUT = 50000;
 jest.setTimeout(TIMEOUT);
 
 let driver;
 let process;
 
 beforeAll(async () => {
-  // Load Firefox browser engine
-  require('geckodriver');
+  // Instantiate browser driver
+  driver = await loadFirefox();
 
-  // Make browser headless
-  const options = new Options().headless();
-
-  driver = await new Builder()
-    .forBrowser('firefox')
-    .setFirefoxOptions(options)
-    .build();
-
+  // Start links server
   process = await startServer("../../../examples/webserver/buttons.links");
 });
 
