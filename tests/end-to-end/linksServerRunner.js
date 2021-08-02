@@ -1,5 +1,3 @@
-const { builtinModules } = require('module');
-
 const LINKS_ROOT = __dirname + '/../..';
 const LINKS_EXEC = `${LINKS_ROOT}/links`
 
