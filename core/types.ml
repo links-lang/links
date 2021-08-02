@@ -2031,7 +2031,11 @@ module Policy = struct
              (* | DifferentOperationArrows *)
              | FinalArrowSharesWithAlias
     type t = opt list
-    let default_opts = [PresenceOmit ; AliasOmit ; ContractOperationArrows ; ArrowsCurriedCollectionAssumeFresh ]
+
+    let preset_comp = [PresenceOmit ; AliasOmit ; ContractOperationArrows ; ArrowsCurriedCollectionAssumeFresh ]
+    let preset_struct = preset_comp @ [ FinalArrowSharesWithAlias ]
+    let default_opts = preset_struct
+
     let all_opts = [ PresenceOmit
                    ; AliasOmit
                    ; ArrowsShowTheOneEffect
@@ -2052,6 +2056,18 @@ module Policy = struct
     (* | DifferentOperationArrows -> "different_operation_arrows" *)
       | FinalArrowSharesWithAlias-> "final_arrow_shares_with_alias"
     let string_of_opts = Settings.string_of_paths -<- List.map show_opt
+
+    let show_shortcut : opt -> string
+      = function
+      | PresenceOmit             -> "pres"
+      | ArrowsShowTheOneEffect   -> "arrows_show_the_one_effect"
+      | ArrowsCurriedCollectionAssumeFresh -> "ccf"
+      | AliasOmit                -> "alias"
+      | ContractOperationArrows  -> "contract"
+      | OpenDefault              -> "|.}"
+      (* | DifferentOperationArrows -> "->>" *)
+      | FinalArrowSharesWithAlias-> "-e->T(e)"
+    let shortcuts_of_opts = Settings.string_of_paths -<- List.map show_shortcut
 
     let parse_opts : string -> opt list
       = let parse_opt : string -> opt
@@ -2080,9 +2096,11 @@ module Policy = struct
         in
         fun s ->
         match String.lowercase_ascii s with
-        | "none"    -> []
-        | "default" -> default_opts
-        | "all"     -> all_opts
+        | "none"         -> []
+        | "preset_comp"  -> preset_comp
+        | "preset_stuct" -> preset_struct
+        | "default"      -> default_opts
+        | "all"          -> all_opts
         | _ -> let lst = List.map parse_opt (Settings.parse_paths s) in
                if is_correct lst then lst
                else failwith "Options cannot be duplicated."
@@ -2112,8 +2130,13 @@ module Policy = struct
            ; "   (This is only a desugaring setting)."
            ; "Meta-options:"
            ; " * none: turn all of the above off"
-           ; " * default: revert to default value"
-           (* TODO presets *)
+           ; " * preset_comp: default preset for transforming Comps"
+           ; "   enables " ^ (shortcuts_of_opts preset_comp)
+           ; " * preset_struct: default preset for transforming structures"
+           ; "   that contain functions"
+           ; "   enables " ^ (shortcuts_of_opts preset_struct)
+           (* TODO!! change this if default changes *)
+           ; " * default: revert to default value (currently preset_struct)"
            ; " * all: turn all of the options on"]
         in
         let buf = Buffer.create 800 in
