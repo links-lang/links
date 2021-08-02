@@ -1,9 +1,6 @@
 const { By, Key, until } = require('selenium-webdriver');
 const { loadFirefox } = require('../browserDrivers');
-const startServer = require('../linksServerRunner');
-
-
-const URL = 'http://localhost:8080/';
+const { startServer, DEFAULT_BASE_URL } = require('../linksServerRunner');
 
 const TIMEOUT = 50000;
 jest.setTimeout(TIMEOUT);
@@ -25,7 +22,7 @@ beforeAll(async () => {
 // }
 
 test('adds 1 + 2 to equal 3', async () => {
-  await driver.get(URL);
+  await driver.get(DEFAULT_BASE_URL);
 
   const inputLeft = By.name('input_0');
   const inputRight = By.name('input_1');
@@ -36,7 +33,7 @@ test('adds 1 + 2 to equal 3', async () => {
   await driver.findElement(inputRight).sendKeys('2', Key.ENTER);
 
   // Wait for the result to load
-  await driver.wait(until.urlIs(URL + '#'));
+  await driver.wait(until.urlIs(DEFAULT_BASE_URL + '#'));
 
   var elem = await driver.findElement(By.css('body'), TIMEOUT);
   var output = await elem.getText();
