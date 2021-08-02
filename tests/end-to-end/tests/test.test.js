@@ -13,10 +13,9 @@ beforeAll(async () => {
   process = await startServer("../../../examples/webserver/buttons.links");
 });
 
-// TODO: Yay or nay?
-// afterAll(async () => {
-//   await driver.quit();
-// }
+afterAll(async () => {
+  await driver.quit();
+});
 
 test('adds 1 + 2 to equal 3', async () => {
   await driver.get(DEFAULT_BASE_URL);
