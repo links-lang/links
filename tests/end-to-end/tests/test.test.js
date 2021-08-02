@@ -5,6 +5,14 @@ const { startServer, DEFAULT_BASE_URL } = require('../linksServerRunner');
 let driver;
 let process;
 
+console.log('CWD' + __dirname);
+console.log('CWD' + __dirname);
+console.log('CWD' + __dirname);
+console.log('CWD' + __dirname);
+console.log('CWD' + __dirname);
+console.log('CWD' + __dirname);
+console.log('CWD' + __dirname);
+
 beforeAll(async () => {
   // Instantiate browser driver
   driver = await loadBrowser();
