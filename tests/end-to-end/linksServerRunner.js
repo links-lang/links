@@ -1,7 +1,7 @@
 const { builtinModules } = require('module');
 
-const LINKS_DIR = '../..';
-const LINKS_EXEC = `${LINKS_DIR}/links`
+const LINKS_ROOT = __dirname + '/../..';
+const LINKS_EXEC = `${LINKS_ROOT}/links`
 
 module.exports = {
   startServer: (linksScriptPath) => {
@@ -20,5 +20,6 @@ module.exports = {
       }, 5000)
     });
   },
-  DEFAULT_BASE_URL: 'http://localhost:8080/'
+  DEFAULT_BASE_URL: 'http://localhost:8080/',
+  LINKS_ROOT: LINKS_ROOT
 }

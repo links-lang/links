@@ -1,24 +1,16 @@
 const { By, Key, until } = require('selenium-webdriver');
 const { loadFirefox, loadBrowser } = require('../browserDrivers');
-const { startServer, DEFAULT_BASE_URL } = require('../linksServerRunner');
+const { startServer, DEFAULT_BASE_URL, LINKS_ROOT } = require('../linksServerRunner');
 
 let driver;
 let process;
-
-console.log('CWD' + __dirname);
-console.log('CWD' + __dirname);
-console.log('CWD' + __dirname);
-console.log('CWD' + __dirname);
-console.log('CWD' + __dirname);
-console.log('CWD' + __dirname);
-console.log('CWD' + __dirname);
 
 beforeAll(async () => {
   // Instantiate browser driver
   driver = await loadBrowser();
 
-  // Start links server
-  process = await startServer("../../../examples/webserver/buttons.links");
+  // Start links serverS
+  process = await startServer(`${LINKS_ROOT}/examples/webserver/buttons.links`);
 });
 
 afterAll(async () => {
