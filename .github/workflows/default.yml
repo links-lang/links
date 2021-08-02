@@ -352,9 +352,12 @@ jobs:
           - ubuntu-20.04
         ocaml-compiler:
           - 4.08.0
+        browser:
+          - firefox
+          - chrome
     runs-on: ${{ matrix.os }}
     env:
-      BROWSER: firefox
+      BROWSER: ${{ matrix.browser }} 
       NPM_DIR: tests/end-to-end
     steps:
       - name: Checkout code

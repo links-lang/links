@@ -1,19 +1,25 @@
 
 const { Builder } = require('selenium-webdriver');
+const { Options } = require(`selenium-webdriver/${process.env.BROWSER}`);
 
 module.exports = {
-  loadFirefox: () => {
-    const { Options } = require('selenium-webdriver/firefox');
-
-    // Load Firefox browser engine
-    require('geckodriver');
-
-    // Make browser headless
+  loadBrowser: () => {
     const options = new Options().headless();
 
-    return new Builder()
-      .forBrowser('firefox')
-      .setFirefoxOptions(options)
-      .build();
+    switch (process.env.BROWSER) {
+      case 'firefox':
+        require('geckodriver');
+        return new Builder()
+          .forBrowser(process.env.BROWSER)
+          .setFirefoxOptions(options)
+          .build();
+      case 'chrome':
+        return new Builder()
+          .forBrowser(process.env.BROWSER)
+          .setChromeOptions(options)
+          .build();
+
+    }
+
   }
 }
