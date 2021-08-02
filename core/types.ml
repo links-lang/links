@@ -3668,7 +3668,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               in
               if not (is_nullary && inside_variant)
               then ((if not (Context.is_ambient_tuple ctx) then StringBuffer.write buf ":");
-                    Printer.apply datatype (Context.set_ambient Context.Presence ctx) tp buf) (* TODO (merge conflict resolution) check ambient *)
+                    Printer.apply datatype ctx tp buf) (* TODO (merge conflict resolution) check ambient *)
            | Meta pt ->
               let () =
                 (* We need to emit the colon if the point is a
@@ -3679,14 +3679,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 | Var _ | Recursive _ | Absent | Present _ -> ()
                 | _ -> StringBuffer.write buf ":"
               in
-              let ctx' =
-                if Context.is_ambient_type_arg ctx then ctx
-                else Context.(set_ambient Presence ctx)
               (* TODO (merge conflict resolution) check this; I
                  removed the ambient change to pass the original
                  ambient through for effect row printing *)
-              in
-              Printer.apply (meta ctx' pt) ctx' () buf
+              Printer.apply (meta ctx pt) ctx () buf
            | _ -> raise tag_expectation_mismatch))
 
   (* TODO (merge conflict resolution) check this: has to do with |.} *)
