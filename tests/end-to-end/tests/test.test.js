@@ -1,5 +1,6 @@
 const { Builder, By, Key, until } = require('selenium-webdriver');
 const { Options } = require('selenium-webdriver/firefox');
+const startServer = require('../linksServerRunner');
 
 
 const URL = 'http://localhost:8080/';
@@ -10,37 +11,25 @@ jest.setTimeout(TIMEOUT);
 let driver;
 let process;
 
-async function startServer() {
-  const command = "../../links ../../examples/webserver/buttons.links --debug";
-
-  process = require('child_process').spawn(command, {
-    detached: true,
-    stdio: 'inherit', // print the child process stdoutinto the Nodes stdout
-    shell: true
-  });
-  process.unref();
-
-  // TODO: Find workaround to wait for the server to start.
-  // The following line produces an uncondtiional timeout.
-  return new Promise(resolve => setTimeout(resolve, 5000));
-}
-
 beforeAll(async () => {
+  // Load Firefox browser engine
+  require('geckodriver');
+
   // Make browser headless
   const options = new Options().headless();
 
-  require('geckodriver');
   driver = await new Builder()
     .forBrowser('firefox')
     .setFirefoxOptions(options)
     .build();
 
-  await startServer();
+  process = await startServer("../../../examples/webserver/buttons.links");
 });
 
-afterAll(async () => {
-  await driver.quit();
-})
+// TODO: Yay or nay?
+// afterAll(async () => {
+//   await driver.quit();
+// }
 
 test('adds 1 + 2 to equal 3', async () => {
   await driver.get(URL);
