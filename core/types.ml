@@ -2733,12 +2733,14 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
     type ambient = Toplevel
                  | Arrow of [ `Function | `Linear | `Operation ] * [ `Final | `Curried ]
+                 | Presence
                  | Tuple
                  | Variant
                  | Effect
                  | Row
                  | RowVar of [`Variant | `NonVariant]
                  | Binder
+                 | Type_arg
                  [@@deriving show]
 
     type t = { policy                 : Policy.t
@@ -2823,6 +2825,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       = fun { ambient ; _ } -> match ambient with
                                | Arrow (_, `Final) -> true
                                | _ -> false
+    let is_ambient_presence : t -> bool
+      = fun { ambient ; _ } -> ambient = Presence
     let is_ambient_tuple : t -> bool
       = fun { ambient ; _ } -> ambient = Tuple
     let is_ambient_variant : t -> bool
@@ -2842,6 +2846,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     let is_ambient_binder : t -> bool
       = fun { ambient ; _ } -> ambient = Binder
 
+    let is_ambient_type_arg : t -> bool
+      = fun { ambient ; _ } -> ambient = Type_arg
+
     let implicit_shared_effect : t -> tid option
       = fun { implicit_shared_effect ; _ } -> implicit_shared_effect
 
@@ -2860,6 +2867,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     let set_implicit_shared_effect : tid option -> t -> t
       = fun implicit_shared_effect ctx -> { ctx with implicit_shared_effect }
   end
+
 
   module SharedEffect : sig
     val implicit_allowed_in : typ -> bool
@@ -3499,7 +3507,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 let show_flexible = (Policy.flavours Context.(policy ctx)) && flavour = `Flexible in
                 let is_presence = (PrimaryKind.Presence = Kind.primary_kind knd) in
 
-                (if is_presence then StringBuffer.write buf "{");
+                (if is_presence && not (Context.is_ambient_type_arg ctx) then StringBuffer.write buf "{");
                 (if show_flexible then StringBuffer.write buf "%");
                 (match anonymity, show_flexible with
                  | Anonymous, true  -> ()
@@ -3509,7 +3517,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                     then StringBuffer.write buf var_name
                     else StringBuffer.write buf "_"
                  | _, _             -> StringBuffer.write buf var_name);
-                (if is_presence then StringBuffer.write buf "}"))
+                (if is_presence && not (Context.is_ambient_type_arg ctx) then StringBuffer.write buf "}"))
           in
           if not in_binder
           then seq ~sep:"::" (print_var, subkind_name (Context.policy ctx) subknd) (var_name, ()) ctx buf
@@ -3649,7 +3657,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     = let open Printer in
       Printer (fun ctx tp buf ->
           (match tp with
-           | Absent -> StringBuffer.write buf "-"
+           | Absent ->
+              StringBuffer.write buf "-"
            | Present tp ->
               (* Nullary variant payloads do not get printed. *)
               let is_nullary = concrete_type tp = unit_type in
@@ -3659,12 +3668,28 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               in
               if not (is_nullary && inside_variant)
               then ((if not (Context.is_ambient_tuple ctx) then StringBuffer.write buf ":");
-                    Printer.apply datatype ctx tp buf)
-           | Meta pt -> Printer.apply (meta ctx pt) ctx () buf
-           (* (Samo): removed Context.Presence here, as it's nowhere used and it's
-              useful to push the ambient through *)
+                    Printer.apply datatype (Context.set_ambient Context.Presence ctx) tp buf) (* TODO (merge conflict resolution) check ambient *)
+           | Meta pt ->
+              let () =
+                (* We need to emit the colon if the point is a
+                   concrete type. Here Present is a special case as it
+                   will be handled above by the call to `presence`
+                   inside `meta`. *)
+                match Unionfind.find pt with
+                | Var _ | Recursive _ | Absent | Present _ -> ()
+                | _ -> StringBuffer.write buf ":"
+              in
+              let ctx' =
+                if Context.is_ambient_type_arg ctx then ctx
+                else Context.(set_ambient Presence ctx)
+              (* TODO (merge conflict resolution) check this; I
+                 removed the ambient change to pass the original
+                 ambient through for effect row printing *)
+              in
+              Printer.apply (meta ctx' pt) ctx' () buf
            | _ -> raise tag_expectation_mismatch))
 
+  (* TODO (merge conflict resolution) check this: has to do with |.} *)
   and meta : Context.t -> typ point -> unit printer
     = let open Printer in
       let module ES = Policy.EffectSugar in
@@ -3698,7 +3723,11 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                | _ -> raise tag_expectation_mismatch);
               StringBuffer.write buf "}";
             end
-          | P.Presence -> raise (internal_error "missing surface syntax for type argument of kind presence"))
+          | P.Presence ->
+             let ctx' = Context.(set_ambient Type_arg ctx) in
+             StringBuffer.write buf "{";
+             Printer.apply presence ctx' r buf;
+             StringBuffer.write buf "}";)
 
   and application : (Abstype.t * type_arg list) printer
     = let open Printer in
@@ -3815,9 +3844,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               (* add the arrowhead/lollipop/oparrow *)
               (if is_lolli then StringBuffer.write buf "@"
                else (* if Policy.EffectSugar.different_operation_arrows (Policy.es_policy (Context.policy ctx))
-                *         && Context.is_ambient_operation ctx
-                * then StringBuffer.write buf ">>"
-                * else *) StringBuffer.write buf ">")
+                     *         && Context.is_ambient_operation ctx
+                     * then StringBuffer.write buf ">>"
+                     * else *) StringBuffer.write buf ">")
             )
       in
 
