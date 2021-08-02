@@ -2006,22 +2006,44 @@ module Policy = struct
 
   module EffectSugar : sig
                                        (* vvvvvvvvvvvvvvvvvvvvvv TODO name; for now it's the One Effect To Rule Them All *)
-    type opt = PresenceOmit | AliasOmit | ArrowsShowTheOneEffect | ArrowsCurriedCollectionAssumeFresh | ContractOperationArrows | OpenDefault (* | DifferentOperationArrows *)
+    type opt = PresenceOmit
+             | AliasOmit
+             | ArrowsShowTheOneEffect
+             | ArrowsCurriedCollectionAssumeFresh
+             | ContractOperationArrows
+             | OpenDefault
+             (* | DifferentOperationArrows *)
+             | FinalArrowSharesWithAlias
     type t = opt list
     val default : unit -> t
 
-    val presence_omit              : t -> bool
-    val alias_omit                 : t -> bool
-    val arrows_show_the_one        : t -> bool
-    val arrows_collection_fresh    : t -> bool
-    val contract_operation_arrows  : t -> bool
-    val open_default               : t -> bool
-    (* val different_operation_arrows : t -> bool *)
+    val presence_omit                 : t -> bool
+    val alias_omit                    : t -> bool
+    val arrows_show_the_one           : t -> bool
+    val arrows_collection_fresh       : t -> bool
+    val contract_operation_arrows     : t -> bool
+    val open_default                  : t -> bool
+    (* val different_operation_arrows    : t -> bool *)
+    val final_arrow_shares_with_alias : t -> bool
   end = struct
-    type opt = PresenceOmit | AliasOmit | ArrowsShowTheOneEffect | ArrowsCurriedCollectionAssumeFresh | ContractOperationArrows | OpenDefault (* | DifferentOperationArrows *)
+    type opt = PresenceOmit
+             | AliasOmit
+             | ArrowsShowTheOneEffect
+             | ArrowsCurriedCollectionAssumeFresh
+             | ContractOperationArrows
+             | OpenDefault
+             (* | DifferentOperationArrows *)
+             | FinalArrowSharesWithAlias
     type t = opt list
     let default_opts = [PresenceOmit ; AliasOmit ; ContractOperationArrows ; ArrowsCurriedCollectionAssumeFresh ]
-    let all_opts = [PresenceOmit ; AliasOmit ; ArrowsShowTheOneEffect ; ArrowsCurriedCollectionAssumeFresh ; ContractOperationArrows ; OpenDefault (* ; DifferentOperationArrows *) ]
+    let all_opts = [ PresenceOmit
+                   ; AliasOmit
+                   ; ArrowsShowTheOneEffect
+                   ; ArrowsCurriedCollectionAssumeFresh
+                   ; ContractOperationArrows
+                   ; OpenDefault
+                       (* ; DifferentOperationArrows *)
+                   ; FinalArrowSharesWithAlias ]
 
     let show_opt : opt -> string
       = function
@@ -2031,7 +2053,8 @@ module Policy = struct
       | AliasOmit                -> "alias_omit"
       | ContractOperationArrows  -> "contract_operation_arrows"
       | OpenDefault              -> "open_default"
-      (* | DifferentOperationArrows -> "different_operation_arrows" *)
+    (* | DifferentOperationArrows -> "different_operation_arrows" *)
+      | FinalArrowSharesWithAlias-> "final_arrow_shares_with_alias"
     let string_of_opts = Settings.string_of_paths -<- List.map show_opt
 
     let parse_opts : string -> opt list
@@ -2052,6 +2075,8 @@ module Policy = struct
             -> OpenDefault
           (* | "different_operation_arrows" | "->>"
            *   -> DifferentOperationArrows *)
+          | "final_arrow_shares_with_alias" | "-e->T(e)"
+            -> FinalArrowSharesWithAlias
           | _ -> failwith ("Invalid option: " ^ s)
         in
         let is_correct : opt list -> bool
@@ -2086,9 +2111,13 @@ module Policy = struct
            ; "   closed with syntax { |.}"
            (* ; " * different_operation_arrows [->>]: operation arrow will be"
             * ; "   syntactically differentiated" *)
+           ; " * final_arrow_shares_with_alias [-e->T(e)]: final arrow and"
+           ; "   a following type alias will be assumed to share implicit effects"
+           ; "   (This is only a desugaring setting)."
            ; "Meta-options:"
            ; " * none: turn all of the above off"
            ; " * default: revert to default value"
+           (* TODO presets *)
            ; " * all: turn all of the options on"]
         in
         let buf = Buffer.create 800 in
@@ -2107,13 +2136,14 @@ module Policy = struct
                   |> convert parse_opts
                   |> sync)
 
-    let presence_omit              = List.mem PresenceOmit
-    let alias_omit                 = List.mem AliasOmit
-    let arrows_show_the_one        = List.mem ArrowsShowTheOneEffect
-    let arrows_collection_fresh    = List.mem ArrowsCurriedCollectionAssumeFresh
-    let contract_operation_arrows  = List.mem ContractOperationArrows
-    let open_default               = List.mem OpenDefault
-    (* let different_operation_arrows = List.mem DifferentOperationArrows *)
+    let presence_omit                 = List.mem PresenceOmit
+    let alias_omit                    = List.mem AliasOmit
+    let arrows_show_the_one           = List.mem ArrowsShowTheOneEffect
+    let arrows_collection_fresh       = List.mem ArrowsCurriedCollectionAssumeFresh
+    let contract_operation_arrows     = List.mem ContractOperationArrows
+    let open_default                  = List.mem OpenDefault
+    (* let different_operation_arrows    = List.mem DifferentOperationArrows *)
+    let final_arrow_shares_with_alias = List.mem FinalArrowSharesWithAlias
 
     let default () = Settings.get sugar_specifics
   end
