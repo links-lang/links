@@ -3821,15 +3821,15 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               then begin
                   if not row_var_exists
                   then begin
-                      (* TODO make this nicer *)
+                      let effect_sugar = Policy.effect_sugar (Context.policy ctx) in
+                      let es_policy = Policy.es_policy (Context.policy ctx) in
                       if not ((Context.is_ambient_operation ctx)
-                              && (Policy.effect_sugar (Context.policy ctx))
-                              && (Policy.EffectSugar.(contract_operation_arrows
-                                                        (Policy.es_policy (Context.policy ctx)))))
-                             (* this needs to check for different_operation_arrows if we ever enable it in the future *)
+                              && effect_sugar
+                              && Policy.EffectSugar.contract_operation_arrows es_policy)
                       then begin
                           (* empty closed row *)
-                          if Policy.EffectSugar.open_default (Policy.es_policy (Context.policy ctx))
+                          if (effect_sugar
+                              && Policy.EffectSugar.open_default es_policy)
                           then
                             (* effect sugar for rows open by default *)
                             StringBuffer.write buf "{ |.}"
