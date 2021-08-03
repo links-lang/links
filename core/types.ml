@@ -195,6 +195,7 @@ module type TYPE_VISITOR =
 sig
   class visitor :
   object ('self_type)
+    method set_refresh_tyvars : bool -> 'self_type
     method set_rec_vars : (meta_type_var) Utility.IntMap.t -> 'self_type
 
     method primitive : Primitive.t -> ('self_type * Primitive.t)
@@ -227,8 +228,12 @@ let is_field_spec_body = is_type_body
 module Transform : TYPE_VISITOR =
 struct
   class visitor = object ((o : 'self_type))
-    val rec_vars : (meta_type_var) IntMap.t = IntMap.empty
 
+    (* (Samo) need to disable this sometimes; hacky solution *)
+    val refresh_tyvars : bool = true
+    method set_refresh_tyvars refresh_tyvars = {< refresh_tyvars >}
+
+    val rec_vars : (meta_type_var) IntMap.t = IntMap.empty
     method set_rec_vars rec_vars = {< rec_vars = rec_vars >}
 
     method primitive : Primitive.t -> ('self_type * Primitive.t) = fun p -> (o,p)
@@ -243,8 +248,13 @@ struct
             o, (IntMap.find var rec_vars)
           else
             (* FIXME: seems unnecessary to freshen type variables here!
-               TODO (Samo): the comment is likely right, check this again later *)
-            let var' = (* fresh_raw_variable () *) var in
+               TODO (Samo): the comment is likely right, check this again later;
+               [2021-08-03]: Not refreshing here breaks the unifier! Using this hacky
+               solution to select if we want refresh for now. *)
+            let var' = if refresh_tyvars
+                       then fresh_raw_variable ()
+                       else var
+            in
             let point' = Unionfind.fresh (Var (var', kind, `Flexible)) in
             let rec_vars' = IntMap.add var point' rec_vars in
             let o = {< rec_vars = rec_vars' >} in
@@ -3059,7 +3069,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
     let sugar_introducer policy shared_variable ops
       = let module ES = Policy.EffectSugar in
-        object (o : 'self_type)
+        let o =
+          object (o : 'self_type)
           inherit Transform.visitor as super
 
           (* The sugaring will eliminate all fresh presence polymorphic operations in open
@@ -3257,7 +3268,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | Alias _ -> o#alias tp
             | RecursiveApplication _ -> o#recapp tp
             | _ -> super#typ tp
-        end
+          end
+        in
+        o#set_refresh_tyvars false
 
     let ensugar_datatype : Policy.EffectSugar.t -> tid option -> datatype -> datatype
       = fun pol vid tp ->

@@ -446,6 +446,7 @@ module type TYPE_VISITOR =
 sig
   class visitor :
   object ('self_type)
+    method set_refresh_tyvars : bool -> 'self_type
     method set_rec_vars : (meta_type_var) Utility.IntMap.t -> 'self_type
 
     method primitive : Primitive.t -> ('self_type * Primitive.t)
