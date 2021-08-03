@@ -3042,17 +3042,14 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             (o, r)
 
         method alias_recapp
-          = fun kinds tyargs inner_tp ->
+          = fun kinds tyargs ->
           (* not just the implicit effect: actually we want to gather all possible effect
              rows *)
           let effect_rows = ListUtils.filter_map2
                               (fun (knd, _) -> is_effect_row_kind knd)
                               (fun (_, (_, typ)) -> typ)
                               kinds tyargs in
-          let o = List.fold_left (fun acc r -> fst (acc#effect_row r)) o effect_rows in
-          (* collect fields from inside; TODO do we want this? *)
-          let (o, _) = o#typ inner_tp in
-          o
+          List.fold_left (fun acc r -> fst (acc#effect_row r)) o effect_rows
 
         method! typ : typ -> 'self_type * typ
           = fun tp ->
@@ -3062,11 +3059,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
              let (o, _) = o#effect_row e in
              let (o, _) = o#typ r in
              (o, tp)
-          | Alias ((_,kinds,tyargs,_), inner_tp) ->
-             (o#alias_recapp kinds tyargs inner_tp, tp)
-          | RecursiveApplication { r_quantifiers = kinds; r_args = tyargs ; r_unwind ; r_dual ;_ } ->
-             let inner_tp = r_unwind tyargs r_dual in
-             (o#alias_recapp kinds tyargs inner_tp, tp)
+          | Alias ((_,kinds,tyargs,_), _)
+            | RecursiveApplication { r_quantifiers = kinds; r_args = tyargs ; _ } ->
+             (o#alias_recapp kinds tyargs, tp)
           | _ -> super#typ tp
       end
 
@@ -3250,7 +3245,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 then (o, kinds, tyargs) (* no arguments to check *)
                 else o#tyarg_list kinds tyargs
               in
-              let (o, tp) = o#typ tp in
+              (* let (o, tp) = o#typ tp in *)
               let al = Alias ((name, kinds, tyargs, dual), tp) in
               (o, al)
 
