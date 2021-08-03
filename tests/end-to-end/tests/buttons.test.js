@@ -2,14 +2,14 @@ const { By, Key, until } = require('selenium-webdriver');
 const { loadBrowser } = require('../browserDrivers');
 const { startServer, DEFAULT_BASE_URL, LINKS_ROOT } = require('../linksServerRunner');
 
-let driver, process;
+let driver;
 
 beforeAll(async () => {
   // Instantiate browser driver
   driver = await loadBrowser();
 
   // Start Links server
-  process = await startServer(`${LINKS_ROOT}/examples/webserver/buttons.links`);
+  await startServer(`${LINKS_ROOT}/examples/webserver/buttons.links`);
 });
 
 afterAll(async () => {

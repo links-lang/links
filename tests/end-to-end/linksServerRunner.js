@@ -11,19 +11,29 @@ async function sleep(sec) {
 }
 
 module.exports = {
-  startServer: (linksScriptPath) => {
+  startServer: async (linksScriptPath) => {
 
-    process = require('child_process').spawn(`${LINKS_EXEC} ${linksScriptPath} --debug`, {
+    linksServer = require('child_process').spawn(`${LINKS_EXEC} ${linksScriptPath} --debug`, {
       detached: true,
       // stdio: 'inherit', // Print the Links stdout into the Node stdout
       stdio: 'ignore',  // Do not print the Links log
       shell: true
     });
-    process.unref();
 
     return new Promise(async (resolve, reject) => {
 
-      for (var i = 1; i <= 100; i++) {
+      linksServer.on('exit', (code) => {
+        reject(`Links server exited with Code ${code}. Is the given Links script working?`);
+        return;
+      });
+
+      // Sleep to detect exit
+      await sleep(2000);
+
+      linksServer.unref();
+
+      const TRIAL_COUNT = 10
+      for (var i = 1; i <= TRIAL_COUNT; i++) {
         // Some delay
         await sleep(2000);
 
