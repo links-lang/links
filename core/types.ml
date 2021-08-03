@@ -3043,6 +3043,19 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             in
             (o, r)
 
+        method alias_recapp
+          = fun kinds tyargs inner_tp ->
+          (* not just the implicit effect: actually we want to gather all possible effect
+             rows *)
+          let effect_rows = ListUtils.filter_map2
+                              (fun (knd, _) -> is_effect_row_kind knd)
+                              (fun (_, (_, typ)) -> typ)
+                              kinds tyargs in
+          let o = List.fold_left (fun acc r -> fst (acc#effect_row r)) o effect_rows in
+          (* collect fields from inside *)
+          let (o, _) = o#typ inner_tp in
+          o
+
         method! typ : typ -> 'self_type * typ
           = fun tp ->
           match tp with
@@ -3052,25 +3065,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
              let (o, _) = o#typ r in
              (o, tp)
           | Alias ((_,kinds,tyargs,_), inner_tp) ->
-             (* not just the implicit effect: actually we want to gather all possible
-                effect rows *)
-             let effect_rows = ListUtils.filter_map2
-                                 (fun (knd, _) -> is_effect_row_kind knd)
-                                 (fun (_, (_, typ)) -> typ)
-                                 kinds tyargs in
-             let o = List.fold_left (fun acc r -> fst (acc#effect_row r)) o effect_rows in
-             (* collect fields from inside *)
-             let (o, _) = o#typ inner_tp in
-             (o, tp)
-          | RecursiveApplication { r_quantifiers = kinds; r_args = tyargs ; _ } ->
-             (* not just the implicit effect: actually we want to gather all possible
-                effect rows *)
-             let effect_rows = ListUtils.filter_map2
-                                 (fun (knd, _) -> is_effect_row_kind knd)
-                                 (fun (_, (_, typ)) -> typ)
-                                 kinds tyargs in
-             let o = List.fold_left (fun acc r -> fst (acc#effect_row r)) o effect_rows in
-             (o, tp)
+             (o#alias_recapp kinds tyargs inner_tp, tp)
+          | RecursiveApplication { r_quantifiers = kinds; r_args = tyargs ; r_unwind ; r_dual ;_ } ->
+             let inner_tp = r_unwind tyargs r_dual in
+             (o#alias_recapp kinds tyargs inner_tp, tp)
           | _ -> super#typ tp
       end
 
