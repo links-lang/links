@@ -3071,203 +3071,204 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       = let module ES = Policy.EffectSugar in
         let o =
           object (o : 'self_type)
-          inherit Transform.visitor as super
+            inherit Transform.visitor as super
 
-          (* The sugaring will eliminate all fresh presence polymorphic operations in open
-             effect rows, provided the policy `presence_omit' is active.
+            (* The sugaring will eliminate all fresh presence polymorphic operations in
+               open effect rows, provided the policy `presence_omit' is active.
 
-             If an operation has a non-fresh presence variable (this information comes
-             from the map `operations' below), this must be preserved, because we need to
-             signify that the presence is the same in multiple places.
+               If an operation has a non-fresh presence variable (this information comes
+               from the map `operations' below), this must be preserved, because we need
+               to signify that the presence is the same in multiple places.
 
-             If `alias_omit' is active, shared effect rows in the last position of and
-             Alias will be removed. This includes if the row has been emptied by
-             `presence_omit'. *)
+               If `alias_omit' is active, shared effect rows in the last position of and
+               Alias will be removed. This includes if the row has been emptied by
+               `presence_omit'. *)
 
-          val operations : op_map = ops
+            val operations : op_map = ops
 
-          method effect_row : row -> 'self_type * row_omis * tid option
-            = let maybe_contract : typ -> typ
-                = function
-                | Function (d,_,c) as tp when ES.contract_operation_arrows policy ->
-                   (* we are in an operation fieldspec and it's an arrow, and we
+            method effect_row : row -> 'self_type * row_omis * tid option
+              = let maybe_contract : typ -> typ
+                  = function
+                  | Function (d,_,c) as tp when ES.contract_operation_arrows policy ->
+                     (* we are in an operation fieldspec and it's an arrow, and we
                       want contractions: check if a contraction is possible here
-                    *)
-                   if d = unit_type then c else tp
-                | tp -> tp
+                      *)
+                     if d = unit_type then c else tp
+                  | tp -> tp
+                in
+                let decide_field : tid -> string -> field_spec -> 'self_type * field_spec_map -> 'self_type * field_spec_map
+                  (* Here we need to filter out the fields that are polymorphic in their
+                     presence with a fresh variable.
+
+                     Presence-poly operations that have a non-fresh variable (see
+                     `operations`) have to be shown in each occasion, because we need to
+                     inform the programmer that the variable is the same. *)
+                  = fun effect_vid label field (o, kept) ->
+                  if is_builtin_effect label
+                  then
+                    (* builtin effects are preserved here (TODO also hear?; TODO a new
+                       option for this);
+
+                       TODO2 (Act 3): remove this check and give wild|hear the same
+                       behaviour as everything else, this will be useful for desugaring
+                       with all fresh arrows shared *)
+                    (o, FieldEnv.add label field kept)
+                  else begin
+                      let pre = match field with
+                        | Meta pt -> Unionfind.find pt
+                        | _ -> field
+                      in
+                      match pre with
+                      | Present _ | Absent ->
+                         (* field has specified presence => it has to appear here *)
+                         (o, FieldEnv.add label field kept)
+                      | Var (pres_vid,_,_) ->
+                         begin
+                           (* presence polymorphic, need to decide whether to keep it *)
+                           try begin
+                               let nonfresh_vids = OperationMap.find (effect_vid, label) operations in
+                               if List.mem pres_vid nonfresh_vids
+                               then
+                                 (* presence-poly, but non-fresh => needs to be kept here *)
+                                 (o, FieldEnv.add label field kept)
+                               else
+                                 (* fresh presence in an open row => this doesn't need to
+                                    be visible *)
+                                 (o, kept)
+                             end
+                           with NotFound e -> print_endline ("Failed in OperationMap.find(" ^ (string_of_int effect_vid) ^ ", " ^ label ^ "): " ^ e);
+                                              (o, kept)
+                         end
+                      | _ -> failwith "This should not happen!"
+                    end
+                in
+                fun r ->
+                let (fields, rv_pt, dual) = unwrap_row r |> fst |> extract_row_parts in
+                (* TODO maybe integrate this into the existing cycle to optimize it *)
+                let fields = FieldEnv.map
+                               (function
+                                | Present p -> Present (maybe_contract p)
+                                | x -> x) fields in
+                match Unionfind.find rv_pt with
+                | Var (effect_vid, _, _) ->
+                   (* this row may need sugaring *)
+                   begin
+                     let (o, kept) =
+                       if ES.presence_omit policy
+                       then
+                         FieldEnv.fold (decide_field effect_vid) fields (o, FieldEnv.empty)
+                       else
+                         (o, fields) (* keep every field *)
+                     in
+                     (* if no operations are present, the whole row may be eliminated:
+                        this is signified by Omissible (the actual decision of whether to
+                        completely remove it depends on the context where it appears and
+                        on the policy) *)
+                     let row_opt = if FieldEnv.is_empty kept
+                                   then Omissible (Row (FieldEnv.empty, rv_pt, dual))
+                                   else NonOmissible (Row (kept, rv_pt, dual))
+                     in
+                     (o, row_opt, Some effect_vid)
+                   end
+                | _ ->
+                   (* This row cannot omit presence-poly fields, but arrows can still
+                      contract *)
+                   let r = Row (fields, rv_pt, dual) in
+                   (o, NonOmissible r, None)
+
+            (** This function will sugar the function effect row *)
+            method func : datatype -> 'self_type * datatype
+              = fun tp ->
+              let fl, (dom, eff, cod) = match tp with
+                | Function f -> `Func, f
+                | Lolli f -> `Lolli, f
+                | _ -> assert false
               in
-              let decide_field : tid -> string -> field_spec -> 'self_type * field_spec_map -> 'self_type * field_spec_map
-                (* Here we need to filter out the fields that are polymorphic in their
-                   presence with a fresh variable.
-
-                   Presence-poly operations that have a non-fresh variable (see
-                   `operations`) have to be shown in each occasion, because we need to
-                   inform the programmer that the variable is the same. *)
-                = fun effect_vid label field (o, kept) ->
-                if is_builtin_effect label
-                then
-                  (* builtin effects are preserved here (TODO also hear?; TODO a new
-                     option for this);
-
-                     TODO2 (Act 3): remove this check and give wild|hear the same behaviour as everything else,
-                     this will be useful for desugaring with all fresh arrows shared *)
-                  (o, FieldEnv.add label field kept)
-                else begin
-                    let pre = match field with
-                      | Meta pt -> Unionfind.find pt
-                      | _ -> field
-                    in
-                    match pre with
-                    | Present _ | Absent ->
-                       (* field has specified presence => it has to appear here *)
-                       (o, FieldEnv.add label field kept)
-                    | Var (pres_vid,_,_) ->
-                       begin
-                         (* presence polymorphic, need to decide whether to keep it *)
-                         try begin
-                             let nonfresh_vids = OperationMap.find (effect_vid, label) operations in
-                             if List.mem pres_vid nonfresh_vids
-                             then
-                               (* presence-poly, but non-fresh => needs to be kept here *)
-                               (o, FieldEnv.add label field kept)
-                             else
-                               (* fresh presence in an open row => this doesn't need
-                                  to be visible *)
-                               (o, kept)
-                           end
-                         with NotFound e -> print_endline ("Failed in OperationMap.find(" ^ (string_of_int effect_vid) ^ ", " ^ label ^ "): " ^ e);
-                                            (o, kept)
-                       end
-                    | _ -> failwith "This should not happen!"
-                  end
+              let (o, dom) = o#typ dom in
+              let (o, eff', _) = o#effect_row eff in
+              (* eliminated or not, the row needs to stay in the function effect *)
+              let eff = extract_omis eff' in
+              let (o, cod) = o#typ cod in
+              let tp = match fl with
+                | `Func -> Function (dom, eff, cod)
+                | `Lolli -> Lolli (dom, eff, cod)
               in
-              fun r ->
-              let (fields, rv_pt, dual) = unwrap_row r |> fst |> extract_row_parts in
-              (* TODO maybe integrate this into the existing cycle to optimize it *)
-              let fields = FieldEnv.map
-                             (function
-                              | Present p -> Present (maybe_contract p)
-                              | x -> x) fields in
-              match Unionfind.find rv_pt with
-              | Var (effect_vid, _, _) ->
-                 (* this row may need sugaring *)
-                 begin
-                   let (o, kept) =
-                     if ES.presence_omit policy
-                     then
-                       FieldEnv.fold (decide_field effect_vid) fields (o, FieldEnv.empty)
-                     else
-                       (o, fields) (* keep every field *)
-                   in
-                   (* if no operations are present, the whole row may be eliminated:
-                      this is signified by Omissible (the actual decision of whether to
-                      completely remove it depends on the context where it appears and
-                      on the policy) *)
-                   let row_opt = if FieldEnv.is_empty kept
-                                 then Omissible (Row (FieldEnv.empty, rv_pt, dual))
-                                 else NonOmissible (Row (kept, rv_pt, dual))
-                   in
-                   (o, row_opt, Some effect_vid)
-                 end
-              | _ ->
-                 (* This row cannot omit presence-poly fields, but arrows can
-                    still contract *)
-                 let r = Row (fields, rv_pt, dual) in
-                 (o, NonOmissible r, None)
+              (o, tp)
 
-          (** This function will sugar the function effect row *)
-          method func : datatype -> 'self_type * datatype
-            = fun tp ->
-            let fl, (dom, eff, cod) = match tp with
-              | Function f -> `Func, f
-              | Lolli f -> `Lolli, f
-              | _ -> assert false
-            in
-            let (o, dom) = o#typ dom in
-            let (o, eff', _) = o#effect_row eff in
-            (* eliminated or not, the row needs to stay in the function effect *)
-            let eff = extract_omis eff' in
-            let (o, cod) = o#typ cod in
-            let tp = match fl with
-              | `Func -> Function (dom, eff, cod)
-              | `Lolli -> Lolli (dom, eff, cod)
-            in
-            (o, tp)
-
-          (** This function handles a list of type arguments. Any argument can be an
+            (** This function handles a list of type arguments. Any argument can be an
               effect row and sugar will apply to it. The last argument can by
               convention be also completely omitted, if all its fields are eliminated
               by the sugar. *)
-          method tyarg_list : Kind.t list -> type_arg list -> 'self_type * Kind.t list * type_arg list
-            = fun kinds tyargs ->
-            match (kinds, tyargs) with
-            | [], [] -> (o, [], [])
-            | [knd], [(pk, tp)] ->
-               (* last - can be implicit *)
-               if is_effect_row_kind knd then
-                 begin
-                   let (o, r, rvid) = o#effect_row tp in
-                   match r, rvid with
-                   | Omissible _, Some rvid when Some rvid = shared_variable
-                                                 && ES.alias_omit policy ->
-                      (* this is the implicit shared effect row in last position: if
-                         it's been emptied, it can now be completely omitted *)
-                      (o, [], [])
-                   | Omissible r, _ | NonOmissible r, _ ->
-                      (* otherwise, it was possibly sugared, but exists still *)
-                      (o, [knd], [(pk, r)])
-                 end
-               else
-                 (o, [knd], [(pk, tp)])
-            | knd :: kinds, (pk, tp) :: tyargs ->
-               (* not last - cannot be implicit, but can still get sugared *)
-               if is_effect_row_kind knd then
-                 begin
-                   let (o, r, _) = o#effect_row tp in
-                   (* not last => cannot be omitted, don't care if it's empty *)
-                   let r = extract_omis r in
-                   let (o, kinds, tyargs) = o#tyarg_list kinds tyargs in
-                   (o, knd :: kinds, (pk, r) :: tyargs)
-                 end
-               else let (o, kinds, tyargs) = o#tyarg_list kinds tyargs in
-                    (o, knd :: kinds, (pk, tp) :: tyargs)
-            | _ -> raise ListUtils.Lists_length_mismatch
+            method tyarg_list : Kind.t list -> type_arg list -> 'self_type * Kind.t list * type_arg list
+              = fun kinds tyargs ->
+              match (kinds, tyargs) with
+              | [], [] -> (o, [], [])
+              | [knd], [(pk, tp)] ->
+                 (* last - can be implicit *)
+                 if is_effect_row_kind knd then
+                   begin
+                     let (o, r, rvid) = o#effect_row tp in
+                     match r, rvid with
+                     | Omissible _, Some rvid when Some rvid = shared_variable
+                                                   && ES.alias_omit policy ->
+                        (* this is the implicit shared effect row in last position: if
+                           it's been emptied, it can now be completely omitted *)
+                        (o, [], [])
+                     | Omissible r, _ | NonOmissible r, _ ->
+                        (* otherwise, it was possibly sugared, but exists still *)
+                        (o, [knd], [(pk, r)])
+                   end
+                 else
+                   (o, [knd], [(pk, tp)])
+              | knd :: kinds, (pk, tp) :: tyargs ->
+                 (* not last - cannot be implicit, but can still get sugared *)
+                 if is_effect_row_kind knd then
+                   begin
+                     let (o, r, _) = o#effect_row tp in
+                     (* not last => cannot be omitted, don't care if it's empty *)
+                     let r = extract_omis r in
+                     let (o, kinds, tyargs) = o#tyarg_list kinds tyargs in
+                     (o, knd :: kinds, (pk, r) :: tyargs)
+                   end
+                 else let (o, kinds, tyargs) = o#tyarg_list kinds tyargs in
+                      (o, knd :: kinds, (pk, tp) :: tyargs)
+              | _ -> raise ListUtils.Lists_length_mismatch
 
-          (** Deconstruct Alias, let tyarg_list handle it *)
-          method alias : typ -> 'self_type * typ
-            = fun al ->
-            let ((name, kinds, tyargs, dual), tp) = match al with
-              | Alias a -> a
-              | _ -> assert false
-            in
-            let (o, kinds, tyargs) =
-              if ListUtils.empty kinds
-              then (o, kinds, tyargs) (* no arguments to check *)
-              else o#tyarg_list kinds tyargs
-            in
-            let (o, tp) = o#typ tp in
-            let al = Alias ((name, kinds, tyargs, dual), tp) in
-            (o, al)
+            (** Deconstruct Alias, let tyarg_list handle it *)
+            method alias : typ -> 'self_type * typ
+              = fun al ->
+              let ((name, kinds, tyargs, dual), tp) = match al with
+                | Alias a -> a
+                | _ -> assert false
+              in
+              let (o, kinds, tyargs) =
+                if ListUtils.empty kinds
+                then (o, kinds, tyargs) (* no arguments to check *)
+                else o#tyarg_list kinds tyargs
+              in
+              let (o, tp) = o#typ tp in
+              let al = Alias ((name, kinds, tyargs, dual), tp) in
+              (o, al)
 
-          (** Deconstruct Rec.App., let tyarg_list handle it *)
-          method recapp : typ -> 'self_type * typ
-            = fun ra ->
-            let { r_quantifiers; r_args; _ } as ra =
-              match ra with
-              | RecursiveApplication ra -> ra
-              | _ -> assert false
-            in
-            let (o, r_quantifiers, r_args) = o#tyarg_list r_quantifiers r_args in
-            let ra = RecursiveApplication { ra with r_quantifiers; r_args }in
-            (o, ra)
+            (** Deconstruct Rec.App., let tyarg_list handle it *)
+            method recapp : typ -> 'self_type * typ
+              = fun ra ->
+              let { r_quantifiers; r_args; _ } as ra =
+                match ra with
+                | RecursiveApplication ra -> ra
+                | _ -> assert false
+              in
+              let (o, r_quantifiers, r_args) = o#tyarg_list r_quantifiers r_args in
+              let ra = RecursiveApplication { ra with r_quantifiers; r_args }in
+              (o, ra)
 
-          method! typ : typ -> 'self_type * typ
-            = fun tp ->
-            match tp with
-            | Function _ | Lolli _ -> o#func tp
-            | Alias _ -> o#alias tp
-            | RecursiveApplication _ -> o#recapp tp
-            | _ -> super#typ tp
+            method! typ : typ -> 'self_type * typ
+              = fun tp ->
+              match tp with
+              | Function _ | Lolli _ -> o#func tp
+              | Alias _ -> o#alias tp
+              | RecursiveApplication _ -> o#recapp tp
+              | _ -> super#typ tp
           end
         in
         o#set_refresh_tyvars false
