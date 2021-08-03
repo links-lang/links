@@ -1,6 +1,6 @@
 Sugar off [1]
 sig f : (() {E:()|e}~> ()) -> () {E{_}|e}~> () fun f(g) { fun() { handle(g()) { case E(res) -> res(()) }}} f
-stdout : fun : (() {E:() -> ()|a}~> ()) -> () {E{_}|a}~> ()
+stdout : fun : (() {E:() {}-> ()|a}~> ()) -> () {E{_}|a}~> ()
 args : --enable-handlers --set=effect_sugar=false
 
 Sugar off [2], implicit not unifying, no propagation
