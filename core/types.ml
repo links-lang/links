@@ -2988,7 +2988,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
         It creates an op_map:
         { (row var id, label) =>
            list of *NON-FRESH* presence-poly vars associated with this label } *)
-    (* TODO: Need to use the tycon as well to get all ops (?) *)
+    (* TODO: Need to use the tycon as well to get all ops (?);
+       for now just ignore nonexistant operations that were inferred into a type *)
     let label_gatherer =
       object (o : 'self_type)
         inherit Transform.visitor as super
@@ -3126,17 +3127,25 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                       | Var (pres_vid,_,_) ->
                          begin
                            (* presence polymorphic, need to decide whether to keep it *)
-                           Printf.printf "^^ Looking for (%i, %s)\n" effect_vid label;
+                           (* Printf.printf "^^ Looking for (%i, %s)\n" effect_vid label; *)
                            flush_all ();
-                           let nonfresh_vids = OperationMap.find (effect_vid, label) operations in
-                           if List.mem pres_vid nonfresh_vids
-                           then
-                             (* presence-poly, but non-fresh => needs to be kept here *)
-                             (o, FieldEnv.add label field kept)
-                           else
-                             (* fresh presence in an open row => this doesn't need to be
+                           let nonfresh_vids = OperationMap.lookup (effect_vid, label) operations in
+                           match nonfresh_vids with
+                           | None -> (o, kept) (* this operation was inferred into the
+                                                  type, not entered by programmer - keep
+                                                  hidden, it's gonna be {_} anyway (TODO
+                                                  but will it?; this is a bit hacky, but
+                                                  to make it non-hacky, we need to access
+                                                  the typing environment here) *)
+                           | Some nonfresh_vids ->
+                              if List.mem pres_vid nonfresh_vids
+                              then
+                                (* presence-poly, but non-fresh => needs to be kept here *)
+                                (o, FieldEnv.add label field kept)
+                              else
+                                (* fresh presence in an open row => this doesn't need to be
                                 visible *)
-                             (o, kept)
+                                (o, kept)
                          end
                       | _ -> failwith "This should not happen!"
                     end
@@ -3273,18 +3282,18 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
         o#set_refresh_tyvars false
 
     let ensugar_datatype : Policy.EffectSugar.t -> tid option -> datatype -> string -> datatype
-      = fun pol vid tp no_sugar_tp ->
-      Printf.printf "\n\nSugaring type:\n  %s\n" no_sugar_tp;
+      = fun pol vid tp _no_sugar_tp ->
+      (* Printf.printf "\n\nSugaring type:\n  %s\n" _no_sugar_tp; *)
       let (label_gatherer, _) = label_gatherer#typ tp in
       let operations = label_gatherer#get_operations in
-      Printf.printf "Collected operations:\n  %s\n"
-        (OperationMap.show
-           (fun ppr item ->
-             let s = ListUtils.print_list
-                       (List.map string_of_int item)
-             in
-             Format.fprintf ppr "%s" s) operations);
-      flush_all ();
+      (* Printf.printf "Collected operations:\n  %s\n"
+       *   (OperationMap.show
+       *      (fun ppr item ->
+       *        let s = ListUtils.print_list
+       *                  (List.map string_of_int item)
+       *        in
+       *        Format.fprintf ppr "%s" s) operations);
+       * flush_all (); *)
       let o = sugar_introducer pol vid operations in
       let (_, tp) = o#typ tp in
       tp
