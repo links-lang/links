@@ -3111,16 +3111,22 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                        (* field has specified presence => it has to appear here *)
                        (o, FieldEnv.add label field kept)
                     | Var (pres_vid,_,_) ->
-                       (* presence polymorphic, need to decide whether to keep it *)
-                       let nonfresh_vids = OperationMap.find (effect_vid, label) operations in
-                       if List.mem pres_vid nonfresh_vids
-                       then
-                         (* presence-poly, but non-fresh => needs to be kept here *)
-                         (o, FieldEnv.add label field kept)
-                       else
-                         (* fresh presence in an open row => this doesn't need
-                            to be visible *)
-                         (o, kept)
+                       begin
+                         (* presence polymorphic, need to decide whether to keep it *)
+                         try begin
+                             let nonfresh_vids = OperationMap.find (effect_vid, label) operations in
+                             if List.mem pres_vid nonfresh_vids
+                             then
+                               (* presence-poly, but non-fresh => needs to be kept here *)
+                               (o, FieldEnv.add label field kept)
+                             else
+                               (* fresh presence in an open row => this doesn't need
+                                  to be visible *)
+                               (o, kept)
+                           end
+                         with NotFound e -> print_endline ("Failed in OperationMap.find(" ^ (string_of_int effect_vid) ^ ", " ^ label ^ "): " ^ e);
+                                            (o, kept)
+                       end
                     | _ -> failwith "This should not happen!"
                   end
               in
