@@ -2988,8 +2988,6 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
         It creates an op_map:
         { (row var id, label) =>
            list of *NON-FRESH* presence-poly vars associated with this label } *)
-    (* TODO: Need to use the tycon as well to get all ops (?);
-       for now just ignore nonexistant operations that were inferred into a type *)
     let label_gatherer =
       object (o : 'self_type)
         inherit Transform.visitor as super
@@ -3052,7 +3050,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                               (fun (_, (_, typ)) -> typ)
                               kinds tyargs in
           let o = List.fold_left (fun acc r -> fst (acc#effect_row r)) o effect_rows in
-          (* collect fields from inside *)
+          (* collect fields from inside; TODO do we want this? *)
           let (o, _) = o#typ inner_tp in
           o
 
@@ -3135,22 +3133,15 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                       | Var (pres_vid,_,_) ->
                          begin
                            (* presence polymorphic, need to decide whether to keep it *)
-                           (* Printf.printf "^^ Looking for (%i, %s)\n" effect_vid label; *)
-                           flush_all ();
-                           let nonfresh_vids = OperationMap.lookup (effect_vid, label) operations in
-                           match nonfresh_vids with
-                           (* None => wtf? *)
-                           | None -> print_endline "WOOP WOOP";
-                                     (o, FieldEnv.add label field kept)
-                           | Some nonfresh_vids ->
-                              if List.mem pres_vid nonfresh_vids
-                              then
-                                (* presence-poly, but non-fresh => needs to be kept here *)
-                                (o, FieldEnv.add label field kept)
-                              else
-                                (* fresh presence in an open row => this doesn't need to be
+                           let nonfresh_vids = OperationMap.find (effect_vid, label) operations in
+                           if List.mem pres_vid nonfresh_vids
+                           then
+                             (* presence-poly, but non-fresh => needs to be kept here *)
+                             (o, FieldEnv.add label field kept)
+                           else
+                             (* fresh presence in an open row => this doesn't need to be
                                 visible *)
-                                (o, kept)
+                             (o, kept)
                          end
                       | _ -> failwith "This should not happen!"
                     end
@@ -3209,9 +3200,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               (o, tp)
 
             (** This function handles a list of type arguments. Any argument can be an
-              effect row and sugar will apply to it. The last argument can by
-              convention be also completely omitted, if all its fields are eliminated
-              by the sugar. *)
+                effect row and sugar will apply to it. The last argument can by
+                convention be also completely omitted, if all its fields are eliminated
+                by the sugar. *)
             method tyarg_list : Kind.t list -> type_arg list -> 'self_type * Kind.t list * type_arg list
               = fun kinds tyargs ->
               match (kinds, tyargs) with
@@ -3288,18 +3279,18 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
     let ensugar_datatype : Policy.EffectSugar.t -> tid option -> datatype -> string -> datatype
       = fun pol vid tp _no_sugar_tp ->
-      Printf.printf "\n\nSugaring type:\n  %s\n" _no_sugar_tp;
-      Printf.printf "Which is actually:\n%s\n" (show_datatype @@ DecycleTypes.datatype tp);
+      (* Printf.printf "\n\nSugaring type:\n  %s\n" _no_sugar_tp;
+       * Printf.printf "Which is actually:\n%s\n" (show_datatype @@ DecycleTypes.datatype tp); *)
       let (label_gatherer, _) = label_gatherer#typ tp in
       let operations = label_gatherer#get_operations in
-      Printf.printf "Collected operations:\n  %s\n"
-        (OperationMap.show
-           (fun ppr item ->
-             let s = ListUtils.print_list
-                       (List.map string_of_int item)
-             in
-             Format.fprintf ppr "%s" s) operations);
-      flush_all ();
+      (* Printf.printf "Collected operations:\n  %s\n"
+       *   (OperationMap.show
+       *      (fun ppr item ->
+       *        let s = ListUtils.print_list
+       *                  (List.map string_of_int item)
+       *        in
+       *        Format.fprintf ppr "%s" s) operations);
+       * flush_all (); *)
       let o = sugar_introducer pol vid operations in
       let (_, tp) = o#typ tp in
       tp
@@ -4078,8 +4069,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
              else ty
     in
     let ret = Printer.generate_string datatype ctxt ty in
-    (if effect_sugar
-     then Printf.printf "Sugared type:\n  %s\n" ret);
+    (* (if effect_sugar
+     *  then Printf.printf "Sugared type:\n  %s\n" ret); *)
     ret
 
   let string_of_row_var : Policy.t -> names -> row_var -> string
