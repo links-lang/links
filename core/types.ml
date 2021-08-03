@@ -3668,6 +3668,13 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               in
               if not (is_nullary && inside_variant)
               then ((if not (Context.is_ambient_tuple ctx) then StringBuffer.write buf ":");
+                    (* If we are inside tuple, that information already took effect. Now,
+                       going inside, we need to reset the tuple ambient: otherwise we'll
+                       be a tuple all the way down, and this will cause records within
+                       tuples to print as tuples. *)
+                    let ctx = if Context.is_ambient_tuple ctx
+                              then Context.toplevel ctx
+                              else ctx in
                     Printer.apply datatype ctx tp buf) (* TODO (merge conflict resolution) check ambient *)
            | Meta pt ->
               let () =
