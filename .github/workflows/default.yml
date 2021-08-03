@@ -344,7 +344,7 @@ jobs:
           LINKS_MYSQL_PORT: ${{ job.services.mysql.ports[3306] }}
         shell: bash
 
-  end-to-end:
+  webbrowser:
     strategy:
       fail-fast: false
       matrix:
