@@ -3033,7 +3033,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               | _ -> assert false (* field spec can only be P|A|V *)
             in
             fun r ->
-            let (fields, rvar, _) = unwrap_row r |> fst |> extract_row_parts in
+            let (fields, rvar, _) = flatten_row r (* |> fst *) |> extract_row_parts in
             let rvar = Unionfind.find rvar in
             let o = match rvar with
               | Var (vid,_,_)  ->
@@ -3051,8 +3051,18 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
              let (o, _) = o#effect_row e in
              let (o, _) = o#typ r in
              (o, tp)
-          | Alias ((_,kinds,tyargs,_), _)
-            | RecursiveApplication { r_quantifiers = kinds; r_args = tyargs ; _ } ->
+          | Alias ((_,kinds,tyargs,_), inner_tp) ->
+             (* not just the implicit effect: actually we want to gather all possible
+                effect rows *)
+             let effect_rows = ListUtils.filter_map2
+                                 (fun (knd, _) -> is_effect_row_kind knd)
+                                 (fun (_, (_, typ)) -> typ)
+                                 kinds tyargs in
+             let o = List.fold_left (fun acc r -> fst (acc#effect_row r)) o effect_rows in
+             (* collect fields from inside *)
+             let (o, _) = o#typ inner_tp in
+             (o, tp)
+          | RecursiveApplication { r_quantifiers = kinds; r_args = tyargs ; _ } ->
              (* not just the implicit effect: actually we want to gather all possible
                 effect rows *)
              let effect_rows = ListUtils.filter_map2
@@ -3131,8 +3141,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                            flush_all ();
                            let nonfresh_vids = OperationMap.lookup (effect_vid, label) operations in
                            match nonfresh_vids with
-                           (* None => this operation was inferred into the type, not
-                              entered by programmer - keep for now *)
+                           (* None => wtf? *)
                            | None -> print_endline "WOOP WOOP";
                                      (o, FieldEnv.add label field kept)
                            | Some nonfresh_vids ->
@@ -3282,6 +3291,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     let ensugar_datatype : Policy.EffectSugar.t -> tid option -> datatype -> string -> datatype
       = fun pol vid tp _no_sugar_tp ->
       Printf.printf "\n\nSugaring type:\n  %s\n" _no_sugar_tp;
+      Printf.printf "Which is actually:\n%s\n" (show_datatype @@ DecycleTypes.datatype tp);
       let (label_gatherer, _) = label_gatherer#typ tp in
       let operations = label_gatherer#get_operations in
       Printf.printf "Collected operations:\n  %s\n"
