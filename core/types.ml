@@ -2062,7 +2062,7 @@ module Policy = struct
     let show_opt : opt -> string
       = function
       | PresenceOmit             -> "presence_omit"
-      | ArrowsShowTheOneEffect   -> "arrows_show_the_one_effect"
+      | ArrowsShowTheOneEffect   -> "arrows_show_implicit_effect"
       | ArrowsCurriedCollectionAssumeFresh -> "arrows_curried_collection_assume_fresh"
       | AliasOmit                -> "alias_omit"
       | ContractOperationArrows  -> "contract_operation_arrows"
@@ -2089,7 +2089,7 @@ module Policy = struct
           match String.lowercase_ascii s with
           | "presence_omit" | "pres"
             -> PresenceOmit
-          | "arrows_show_the_one_effect" | "show_implicit"
+          | "arrows_show_implicit_effect" | "show_implicit"
             -> ArrowsShowTheOneEffect
           | "arrows_curried_collection_assume_fresh" | "ccf"
             -> ArrowsCurriedCollectionAssumeFresh
@@ -2128,7 +2128,7 @@ module Policy = struct
            ; "   within effect rows (1)"
            ; " * alias_omit [alias]: hide empty (1) shared effect rows in last"
            ; "   argument of aliases"
-           ; " * arrows_show_the_one_effect [show_implicit]: display the imlicit"
+           ; " * arrows_show_implicit_effect [show_implicit]: display the imlicit"
            ; "   shared effect on arrows"
            ; " * arrows_curried_collection_assume_fresh [ccf]: in curried"
            ; "   functions, collection arrows are assumed to have fresh"
