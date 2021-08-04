@@ -1,5 +1,6 @@
+const BROWSER = process.env.BROWSER || 'chrome';
 const { Builder } = require('selenium-webdriver');
-const { Options } = require(`selenium-webdriver/${process.env.BROWSER}`);
+const { Options } = require(`selenium-webdriver/${BROWSER}`);
 
 module.exports = {
   loadBrowser: () => {
