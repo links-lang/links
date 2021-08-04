@@ -5,7 +5,7 @@ on:
     branches: master
   push:
     # TODO: change back to master
-    branches: [e2e-tests, e2e-tests-just-jest]
+    branches: [master, e2e-tests]
   schedule:
     # Prime the caches every Monday
     - cron: 0 1 * * MON
