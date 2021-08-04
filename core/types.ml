@@ -2868,13 +2868,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
   end
 
 
-  module SharedEffect (* : sig
-   *   val implicit_allowed_in : typ -> bool
-   *   val implicit_of_datatype : datatype -> tid option
-   *   val implicit_of_type_arg : type_arg -> tid option
-   *   val ensugar_datatype : Policy.EffectSugar.t -> tid option -> datatype -> datatype
-   *   val ensugar_type_arg : Policy.EffectSugar.t -> tid option -> type_arg -> type_arg
-   * end *) = struct
+  module SharedEffect = struct
 
     let extract_row_var r =
       let rv = unwrap_row r |> fst |> extract_row_parts |> snd3 in
