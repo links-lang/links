@@ -182,7 +182,7 @@ let fresh_effects =
   let stv = SugarTypeVar.mk_unresolved "$eff" None `Rigid in
   ([], Datatype.Open stv)
 
-let make_effect_var : is_dot:bool -> Position.t -> Datatype.row_var
+let make_effect_var : is_dot:bool -> ParserPosition.t -> Datatype.row_var
   = fun ~is_dot loc ->
   let open Types.Policy in
   let pol = default_policy () in

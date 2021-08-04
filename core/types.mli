@@ -41,22 +41,21 @@ module Policy : sig
   module EffectSugar : sig
     type opt = PresenceOmit
              | AliasOmit
-             | ArrowsShowTheOneEffect
-             | ArrowsCurriedCollectionAssumeFresh
+             | ArrowsShowImplicitEffectVariable
+             | ArrowsCurriedCollectionAssumeFresh (* TODO name *)
              | ContractOperationArrows
              | OpenDefault
-             (* | DifferentOperationArrows *)
-             | FinalArrowSharesWithAlias
+             (* | FinalArrowSharesWithAlias *)
     type t = opt list
     val default : unit -> t
 
     val presence_omit                 : t -> bool
     val alias_omit                    : t -> bool
-    val arrows_show_the_one           : t -> bool
+    val arrows_show_implicit          : t -> bool
     val arrows_collection_fresh       : t -> bool
     val contract_operation_arrows     : t -> bool
     val open_default                  : t -> bool
-    val final_arrow_shares_with_alias : t -> bool
+    (* val final_arrow_shares_with_alias : t -> bool *)
   end
 
   type t = {
