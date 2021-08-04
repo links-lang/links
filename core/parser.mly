@@ -182,14 +182,14 @@ let fresh_effects =
   let stv = SugarTypeVar.mk_unresolved "$eff" None `Rigid in
   ([], Datatype.Open stv)
 
-let effect_row_var_maybe_closed (* : has_dot:bool -> Position.t -> Datatype.row_var *)
-  = fun ~has_dot loc ->
+let make_effect_var : is_dot:bool -> Position.t -> Datatype.row_var
+  = fun ~is_dot loc ->
   let open Types.Policy in
   let pol = default_policy () in
   let effect_sugar = effect_sugar pol in
   let open_default = EffectSugar.open_default (es_policy pol) in
 
-  match effect_sugar, open_default, has_dot with
+  match effect_sugar, open_default, is_dot with
   | true, true, true  -> Datatype.Closed
   | true, true, false -> Datatype.Open (SugarTypeVar.mk_unresolved "$eff" None `Rigid)
   |    _,    _, true  -> raise (ConcreteSyntaxError (pos loc, "Dot syntax in effect row variables is only supported when effect_sugar and effect_sugar_policy.open_default are enabled."))
@@ -1075,12 +1075,12 @@ vfield:
 | CONSTRUCTOR fieldspec                                        { ($1, $2)      }
 
 efields:
-| efield                                                       { ([$1], effect_row_var_maybe_closed ~has_dot:false $loc) }
-| soption(efield) VBAR DOT                                     { ( $1 , effect_row_var_maybe_closed ~has_dot:true $loc ) }
-| soption(efield) VBARDOT                                      { ( $1 , effect_row_var_maybe_closed ~has_dot:true $loc ) }
-| soption(efield) VBAR row_var                                 { ( $1 , $3                                             ) }
-| soption(efield) VBAR kinded_row_var                          { ( $1 , $3                                             ) }
-| efield COMMA efields                                         { ( $1::fst $3, snd $3                                  ) }
+| efield                                                       { ([$1], make_effect_var ~is_dot:false $loc) }
+| soption(efield) VBAR DOT                                     { ( $1 , make_effect_var ~is_dot:true  $loc) }
+| soption(efield) VBARDOT                                      { ( $1 , make_effect_var ~is_dot:true  $loc) }
+| soption(efield) VBAR row_var                                 { ( $1 , $3                                ) }
+| soption(efield) VBAR kinded_row_var                          { ( $1 , $3                                ) }
+| efield COMMA efields                                         { ( $1::fst $3, snd $3                     ) }
 
 
 efield:

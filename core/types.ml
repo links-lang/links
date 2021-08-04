@@ -3253,6 +3253,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               | _ -> super#typ tp
           end
         in
+        (* This visitor needs to keep the original tyvars *)
         o#set_refresh_tyvars false
 
     let ensugar_datatype : Policy.EffectSugar.t -> tid option -> datatype -> datatype
