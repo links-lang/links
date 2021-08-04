@@ -1,22 +1,26 @@
 const BROWSER = process.env.BROWSER || 'chrome';
 const { Builder } = require('selenium-webdriver');
-const { Options } = require(`selenium-webdriver/${BROWSER}`);
+
+let Options;
 
 module.exports = {
   loadBrowser: () => {
-    const options = new Options().headless();
-    switch (process.env.BROWSER) {
+    switch (BROWSER) {
       case 'firefox':
+        Options = require(`selenium-webdriver/firefox`).Options;
         require('geckodriver'); // Load Firefox engine
         return new Builder()
-          .forBrowser(process.env.BROWSER)
-          .setFirefoxOptions(options)
+          .forBrowser(BROWSER)
+          .setFirefoxOptions(new Options().headless())
           .build();
       case 'chrome':
+        Options = require(`selenium-webdriver/chrome`).Options;
         return new Builder()
-          .forBrowser(process.env.BROWSER)
-          .setChromeOptions(options)
+          .forBrowser(BROWSER)
+          .setChromeOptions(new Options().headless())
           .build();
+      default:
+        throw new Error(`Browser name ${BROWSER} not recognised`);
     }
   }
 }
