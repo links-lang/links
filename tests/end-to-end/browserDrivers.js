@@ -1,4 +1,4 @@
-const BROWSER = process.env.BROWSER || 'chrome';
+const BROWSER = process.env.LINKS_BROWSER || 'chrome';
 const { Builder } = require('selenium-webdriver');
 
 let Options;

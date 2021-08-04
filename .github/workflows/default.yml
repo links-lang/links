@@ -357,7 +357,7 @@ jobs:
           - chrome
     runs-on: ${{ matrix.os }}
     env:
-      BROWSER: ${{ matrix.browser }} 
+      LINKS_BROWSER: ${{ matrix.browser }} 
       NPM_DIR: tests/end-to-end
     steps:
       - name: Checkout code
