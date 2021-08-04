@@ -44,12 +44,12 @@ sig map : ((a) ~> b) -> ([a]) -> () ~> [b] fun map(f)(xs)() { switch(xs) { case 
 stdout : fun : ((a) ~> c) -_-> ([a]) -_-> () ~> [c]
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=none
 
-Policy: none [7], no arrows_show_the_one_effect
+Policy: none [7], no arrows_show_implicit_effect_variable
 sig map : ((a) ~e~> b, [a]) ~e~> [b] fun map(f, lst) { switch(lst) { case [] -> [] case (x::xs) -> f(x) :: map(f, xs) }} map
 stdout : fun : ((a) ~> c, [a]) ~> [c]
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=none
 
-Policy: none [8], no arrows_show_the_one_effect
+Policy: none [8], no arrows_show_implicit_effect_variable
 sig map : ((a) ~e~> b) -> ([a]) ~e~> [b] fun map(f)(lst) { switch(lst) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs) }} map
 stdout : fun : ((a) ~> c) -_-> ([a]) ~> [c]
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=none
@@ -135,15 +135,15 @@ sig map : ((a) ~> b) -> ([a]) -> () ~> [b] fun map(f)(xs)() { switch(xs) { case 
 stdout : fun : ((a) ~> c) -> ([a]) -> () ~> [c]
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=ccf
 
-Policy: arrows_show_the_one_effect [1]
+Policy: arrows_show_implicit_effect_variable [1]
 sig map : ((a) ~e~> b, [a]) ~e~> [b] fun map(f, lst) { switch(lst) { case [] -> [] case (x::xs) -> f(x) :: map(f, xs) }} map
 stdout : fun : ((a) ~b~> c, [a]) ~b~> [c]
-args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=arrows_show_the_one_effect
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=arrows_show_implicit_effect_variable
 
-Policy: arrows_show_the_one_effect [2]
+Policy: arrows_show_implicit_effect_variable [2]
 sig map : ((a) ~e~> b) -> ([a]) ~e~> [b] fun map(f)(lst) { switch(lst) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs) }} map
 stdout : fun : ((a) ~b~> c) -> ([a]) ~b~> [c]
-args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=arrows_show_the_one_effect
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=arrows_show_implicit_effect_variable
 
 Policy: open_default [1], open
 sig ask : () {Ask:a}-> a fun ask() { do Ask } ask
