@@ -2795,7 +2795,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       = fun f ({ ambient ; _ } as ctx) ->
       match ambient with
       | Arrow (l, _) -> set_ambient (Arrow (l, f)) ctx
-      | _ -> raise tag_expectation_mismatch
+      | _ -> raise (internal_error "set_ambient_arrow_finality can only be used on an Arrow ambient")
 
     let ambient_function_default : ambient = Arrow (`Function, `Final)
     let ambient_linfun_default : ambient = Arrow (`Linear, `Final)
@@ -2814,7 +2814,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     let is_ambient_operation : t -> bool
       = fun { ambient ; _ } -> match ambient with
                                | Arrow (`Operation, `Final) -> true
-                               | Arrow (`Operation, `Curried) -> raise tag_expectation_mismatch (* this is not allowed *)
+                               | Arrow (`Operation, `Curried) ->
+                                  raise (internal_error "Operation arrow is not allowed to be curried.")
                                | _ -> false
     let is_ambient_arrow_curried : t -> bool
       = fun { ambient ; _ } -> match ambient with
@@ -3794,8 +3795,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                  | Anonymous -> true (* skip *)
                  | Visible   -> false (* no skip *)
                  | _         ->
-                    (* this is not supposed to happen if there is no shared effect variable *)
-                    raise tag_expectation_mismatch
+                    raise (internal_error "ImplicitEffectVar anonymity is not allowed when effect sugar is disabled")
           in
           Printer (fun ctx r buf ->
               let is_lolli = Context.is_ambient_linfun ctx in
