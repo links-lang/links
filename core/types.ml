@@ -2017,19 +2017,17 @@ module Policy = struct
   module EffectSugar : sig
     type opt = PresenceOmit
              | AliasOmit
-             (* vvv TODO name; for now it's the One Effect To Rule Them All *)
-             | ArrowsShowTheOneEffect
-             | ArrowsCurriedCollectionAssumeFresh
+             | ArrowsShowImplicitEffectVariable
+             | ArrowsCurriedCollectionAssumeFresh (* TODO name *)
              | ContractOperationArrows
              | OpenDefault
-             (* | DifferentOperationArrows *)
              | FinalArrowSharesWithAlias
     type t = opt list
     val default : unit -> t
 
     val presence_omit                 : t -> bool
     val alias_omit                    : t -> bool
-    val arrows_show_the_one           : t -> bool
+    val arrows_show_implicit          : t -> bool
     val arrows_collection_fresh       : t -> bool
     val contract_operation_arrows     : t -> bool
     val open_default                  : t -> bool
@@ -2038,11 +2036,10 @@ module Policy = struct
   end = struct
     type opt = PresenceOmit
              | AliasOmit
-             | ArrowsShowTheOneEffect
+             | ArrowsShowImplicitEffectVariable
              | ArrowsCurriedCollectionAssumeFresh
              | ContractOperationArrows
              | OpenDefault
-             (* | DifferentOperationArrows *)
              | FinalArrowSharesWithAlias
     type t = opt list
 
@@ -2052,35 +2049,32 @@ module Policy = struct
 
     let all_opts = [ PresenceOmit
                    ; AliasOmit
-                   ; ArrowsShowTheOneEffect
+                   ; ArrowsShowImplicitEffectVariable
                    ; ArrowsCurriedCollectionAssumeFresh
                    ; ContractOperationArrows
                    ; OpenDefault
-                       (* ; DifferentOperationArrows *)
                    ; FinalArrowSharesWithAlias ]
 
     let show_opt : opt -> string
       = function
-      | PresenceOmit             -> "presence_omit"
-      | ArrowsShowTheOneEffect   -> "arrows_show_implicit_effect"
+      | PresenceOmit                       -> "presence_omit"
+      | ArrowsShowImplicitEffectVariable   -> "arrows_show_implicit_effect_variable"
       | ArrowsCurriedCollectionAssumeFresh -> "arrows_curried_collection_assume_fresh"
-      | AliasOmit                -> "alias_omit"
-      | ContractOperationArrows  -> "contract_operation_arrows"
-      | OpenDefault              -> "open_default"
-    (* | DifferentOperationArrows -> "different_operation_arrows" *)
-      | FinalArrowSharesWithAlias-> "final_arrow_shares_with_alias"
+      | AliasOmit                          -> "alias_omit"
+      | ContractOperationArrows            -> "contract_operation_arrows"
+      | OpenDefault                        -> "open_default"
+      | FinalArrowSharesWithAlias          -> "final_arrow_shares_with_alias"
     let string_of_opts = Settings.string_of_paths -<- List.map show_opt
 
     let show_shortcut : opt -> string
       = function
-      | PresenceOmit             -> "pres"
-      | ArrowsShowTheOneEffect   -> "show_implicit"
+      | PresenceOmit                       -> "pres"
+      | ArrowsShowImplicitEffectVariable   -> "show_implicit"
       | ArrowsCurriedCollectionAssumeFresh -> "ccf"
-      | AliasOmit                -> "alias"
-      | ContractOperationArrows  -> "contract"
-      | OpenDefault              -> "|.}"
-      (* | DifferentOperationArrows -> "->>" *)
-      | FinalArrowSharesWithAlias-> "-e->t(e)"
+      | AliasOmit                          -> "alias"
+      | ContractOperationArrows            -> "contract"
+      | OpenDefault                        -> "|.}"
+      | FinalArrowSharesWithAlias          -> "-e->t(e)"
     let shortcuts_of_opts = Settings.string_of_paths -<- List.map show_shortcut
 
     let parse_opts : string -> opt list
@@ -2089,8 +2083,8 @@ module Policy = struct
           match String.lowercase_ascii s with
           | "presence_omit" | "pres"
             -> PresenceOmit
-          | "arrows_show_implicit_effect" | "show_implicit"
-            -> ArrowsShowTheOneEffect
+          | "arrows_show_implicit_effect_variable" | "show_implicit"
+            -> ArrowsShowImplicitEffectVariable
           | "arrows_curried_collection_assume_fresh" | "ccf"
             -> ArrowsCurriedCollectionAssumeFresh
           | "alias_omit" | "alias"
@@ -2128,8 +2122,8 @@ module Policy = struct
            ; "   within effect rows (1)"
            ; " * alias_omit [alias]: hide empty (1) shared effect rows in last"
            ; "   argument of aliases"
-           ; " * arrows_show_implicit_effect [show_implicit]: display the imlicit"
-           ; "   shared effect on arrows"
+           ; " * arrows_show_implicit_effect_variable [show_implicit]:"
+           ; "   display the imlicit shared effect on arrows"
            ; " * arrows_curried_collection_assume_fresh [ccf]: in curried"
            ; "   functions, collection arrows are assumed to have fresh"
            ; "   effects and these are hidden"
@@ -2171,11 +2165,10 @@ module Policy = struct
 
     let presence_omit                 = List.mem PresenceOmit
     let alias_omit                    = List.mem AliasOmit
-    let arrows_show_the_one           = List.mem ArrowsShowTheOneEffect
+    let arrows_show_implicit          = List.mem ArrowsShowImplicitEffectVariable
     let arrows_collection_fresh       = List.mem ArrowsCurriedCollectionAssumeFresh
     let contract_operation_arrows     = List.mem ContractOperationArrows
     let open_default                  = List.mem OpenDefault
-    (* let different_operation_arrows    = List.mem DifferentOperationArrows *)
     let final_arrow_shares_with_alias = List.mem FinalArrowSharesWithAlias
 
     let default () = Settings.get sugar_specifics
@@ -3542,7 +3535,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                  | Anonymous, true  -> ()
                  | Anonymous, false -> StringBuffer.write buf "_"
                  | ImplicitEff, _   ->
-                    if Policy.(EffectSugar.arrows_show_the_one (es_policy (Context.policy ctx)))
+                    if Policy.(EffectSugar.arrows_show_implicit (es_policy (Context.policy ctx)))
                     then StringBuffer.write buf var_name
                     else StringBuffer.write buf "_"
                  | _, _             -> StringBuffer.write buf var_name);
@@ -3798,7 +3791,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 let es_policy = Policy.es_policy (Context.policy ctx) in
                 let module ES = Policy.EffectSugar in
 
-                let arrows_show_impl_shared = ES.arrows_show_the_one es_policy in
+                let arrows_show_impl_shared = ES.arrows_show_implicit es_policy in
                 let arrows_collection_fresh = ES.arrows_collection_fresh es_policy in
 
                 match anonymity with
