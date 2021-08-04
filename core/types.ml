@@ -3255,20 +3255,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
         in
         o#set_refresh_tyvars false
 
-    let ensugar_datatype : Policy.EffectSugar.t -> tid option -> datatype -> string -> datatype
-      = fun pol vid tp _no_sugar_tp ->
-      (* Printf.printf "\n\nSugaring type:\n  %s\n" _no_sugar_tp;
-       * Printf.printf "Which is actually:\n%s\n" (show_datatype @@ DecycleTypes.datatype tp); *)
+    let ensugar_datatype : Policy.EffectSugar.t -> tid option -> datatype -> datatype
+      = fun pol vid tp ->
       let (label_gatherer, _) = label_gatherer#typ tp in
       let operations = label_gatherer#get_operations in
-      (* Printf.printf "Collected operations:\n  %s\n"
-       *   (OperationMap.show
-       *      (fun ppr item ->
-       *        let s = ListUtils.print_list
-       *                  (List.map string_of_int item)
-       *        in
-       *        Format.fprintf ppr "%s" s) operations);
-       * flush_all (); *)
       let o = sugar_introducer pol vid operations in
       let (_, tp) = o#typ tp in
       tp
@@ -4027,21 +4017,11 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     let ctxt = Context.set_implicit_shared_effect shared_effect ctxt in
     let ty = if effect_sugar
              then
-               let tctx = Context.(with_policy
-                                     (Policy.set_hide_fresh false
-                                        (Policy.set_effect_sugar false policy'))
-                                     (with_tyvar_names names (empty ())))in
-               let no_sugar_tp = Printer.generate_string datatype tctx ty
-               in
-                 SharedEffect.ensugar_datatype
-                   (Policy.es_policy policy') shared_effect ty
-                   no_sugar_tp
+               SharedEffect.ensugar_datatype
+                 (Policy.es_policy policy') shared_effect ty
              else ty
     in
-    let ret = Printer.generate_string datatype ctxt ty in
-    (* (if effect_sugar
-     *  then Printf.printf "Sugared type:\n  %s\n" ret); *)
-    ret
+    Printer.generate_string datatype ctxt ty
 
   let string_of_row_var : Policy.t -> names -> row_var -> string
     = fun policy' names rvar ->
