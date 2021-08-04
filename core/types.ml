@@ -229,7 +229,7 @@ module Transform : TYPE_VISITOR =
 struct
   class visitor = object ((o : 'self_type))
 
-    (* (Samo) need to disable this sometimes; hacky solution *)
+    (* need to disable this sometimes, but refreshing should by default happen *)
     val refresh_tyvars : bool = true
     method set_refresh_tyvars refresh_tyvars = {< refresh_tyvars >}
 
@@ -247,10 +247,9 @@ struct
           if IntMap.mem var rec_vars then
             o, (IntMap.find var rec_vars)
           else
-            (* FIXME: seems unnecessary to freshen type variables here!
-               TODO (Samo): the comment is likely right, check this again later;
-               [2021-08-03]: Not refreshing here breaks the unifier! Using this hacky
-               solution to select if we want refresh for now. *)
+            (* Decycling (and probably other uses) need to refresh variables; however in
+               effect sugar we want to keep them: this allows the choice whether to do
+               it. *)
             let var' = if refresh_tyvars
                        then fresh_raw_variable ()
                        else var
@@ -3688,7 +3687,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                     let ctx = if Context.is_ambient_tuple ctx
                               then Context.toplevel ctx
                               else ctx in
-                    Printer.apply datatype ctx tp buf) (* TODO (merge conflict resolution) check ambient *)
+                    Printer.apply datatype ctx tp buf)
            | Meta pt ->
               let () =
                 (* We need to emit the colon if the point is a
@@ -3699,13 +3698,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 | Var _ | Recursive _ | Absent | Present _ -> ()
                 | _ -> StringBuffer.write buf ":"
               in
-              (* TODO (merge conflict resolution) check this; I
-                 removed the ambient change to pass the original
-                 ambient through for effect row printing *)
               Printer.apply (meta ctx pt) ctx () buf
            | _ -> raise tag_expectation_mismatch))
 
-  (* TODO (merge conflict resolution) check this: has to do with |.} *)
   and meta : Context.t -> typ point -> unit printer
     = let open Printer in
       let module ES = Policy.EffectSugar in
@@ -3860,10 +3855,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               (if is_wild then StringBuffer.write buf "~" else StringBuffer.write buf "-");
               (* add the arrowhead/lollipop/oparrow *)
               (if is_lolli then StringBuffer.write buf "@"
-               else (* if Policy.EffectSugar.different_operation_arrows (Policy.es_policy (Context.policy ctx))
-                     *         && Context.is_ambient_operation ctx
-                     * then StringBuffer.write buf ">>"
-                     * else *) StringBuffer.write buf ">")
+               else StringBuffer.write buf ">")
             )
       in
 
