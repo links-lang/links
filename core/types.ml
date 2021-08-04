@@ -3700,7 +3700,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       match Unionfind.find pt with
       | Closed ->
          if (ES.open_default es_policy) && (Context.is_ambient_effect ctx)
-         then Printer (fun _ () buf -> StringBuffer.write buf ".")
+         then
+           (* open_default: keeping the space for now *)
+           Printer (fun _ () buf -> StringBuffer.write buf " .")
          else Empty
       | Var (id, knd, _) ->
          if (Context.is_ambient_effect ctx) && (ES.open_default es_policy) && (Context.is_implicit_shared_effect id ctx)
@@ -3809,8 +3811,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                           if (effect_sugar
                               && Policy.EffectSugar.open_default es_policy)
                           then
-                            (* effect sugar for rows open by default *)
-                            StringBuffer.write buf "{ |.}"
+                            (* effect sugar for rows open by default; for now keeping the space too *)
+                            StringBuffer.write buf "{ | .}"
                           else
                             StringBuffer.write buf "{}"
                         end

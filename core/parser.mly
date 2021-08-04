@@ -299,7 +299,7 @@ let parse_foreign_language pos lang =
 %token LEFTTRIANGLE RIGHTTRIANGLE NU
 %token FOR LARROW LLARROW WHERE FORMLET PAGE
 %token LRARROW
-%token COMMA VBAR DOT VBARDOT DOTDOT COLON COLONCOLON
+%token COMMA VBAR DOT DOTDOT COLON COLONCOLON
 %token TABLE TABLEHANDLE TABLEKEYS FROM DATABASE QUERY WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET RETURNING
 %token LENS LENSDROP LENSSELECT LENSJOIN DETERMINED BY ON DELETE_LEFT
@@ -599,7 +599,6 @@ sigop:
 
 op:
 | OPERATOR                                                     { with_pos $loc $1 }
-| VBARDOT                                                      { with_pos $loc "|." }
 
 spawn_expression:
 | SPAWNAT LPAREN exp COMMA block RPAREN                        { spawn ~ppos:$loc Demon (ExplicitSpawnLocation $3) $5 }
@@ -1082,7 +1081,6 @@ vfield:
 efields:
 | efield                                                       { ([$1], make_effect_var ~is_dot:false $loc) }
 | soption(efield) VBAR DOT                                     { ( $1 , make_effect_var ~is_dot:true  $loc) }
-| soption(efield) VBARDOT                                      { ( $1 , make_effect_var ~is_dot:true  $loc) }
 | soption(efield) VBAR row_var                                 { ( $1 , $3                                ) }
 | soption(efield) VBAR kinded_row_var                          { ( $1 , $3                                ) }
 | efield COMMA efields                                         { ( $1::fst $3, snd $3                     ) }
