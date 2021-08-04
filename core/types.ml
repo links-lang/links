@@ -3484,13 +3484,13 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       Printer (fun _ctxt prim buf ->
           StringBuffer.write buf (Primitive.to_string prim))
 
-  type var_anonymity = Visible | Anonymous | ImplicitEff
+  type var_anonymity = Visible | Anonymous | ImplicitEffectVar
   let get_var_anonymity : Context.t -> tid -> var_anonymity
     = fun ctxt vid ->
     if Context.is_ambient_binder ctxt then Visible
     else
       match Context.implicit_shared_effect ctxt with
-      | Some v when v = vid -> ImplicitEff
+      | Some v when v = vid -> ImplicitEffectVar
       | _ ->
          (* this var is not a shared effect variable (or they are disabled) *)
          let _, (_, _, count) = Vars.find_spec vid (Context.tyvar_names ctxt) in
@@ -3525,7 +3525,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 (match anonymity, show_flexible with
                  | Anonymous, true  -> ()
                  | Anonymous, false -> StringBuffer.write buf "_"
-                 | ImplicitEff, _   ->
+                 | ImplicitEffectVar, _   ->
                     if Policy.(EffectSugar.arrows_show_implicit (es_policy (Context.policy ctx)))
                     then StringBuffer.write buf var_name
                     else StringBuffer.write buf "_"
@@ -3789,7 +3789,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 | Visible -> false (* decided Visible, cannot skip *)
                 | Anonymous -> arrows_show_impl_shared ||
                                  (arrows_collection_fresh && Context.is_ambient_arrow_curried ctx)
-                | ImplicitEff -> not arrows_show_impl_shared
+                | ImplicitEffectVar -> not arrows_show_impl_shared
               end
             else match anonymity with
                  | Anonymous -> true (* skip *)
