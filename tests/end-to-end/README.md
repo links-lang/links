@@ -1,5 +1,6 @@
 # End-to-end Testing
-Automated browser testing. Designed to run as part of the GitHub Actions pipeline for Links.
+Automated browser testing to test Links.
+Designed to run as part of the GitHub Actions pipeline for Links.
 
 ## How to run locally
 ### Steps
