@@ -368,8 +368,6 @@ jobs:
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
-      - run: opam install -y ounit2
-
       - name: Install Links dependencies
         run: >-
           opam install
