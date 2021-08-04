@@ -1,7 +1,10 @@
-const fetch = require('node-fetch')
-const LINKS_ROOT = __dirname + '/../..';
-const LINKS_EXEC = `${LINKS_ROOT}/links`
-const DEFAULT_BASE_URL = 'http://localhost:8080/';
+const fetch = require('node-fetch');
+const LINKS_ROOT_DIR = __dirname + '/../..';
+const LINKS_EXEC = `${LINKS_ROOT_DIR}/links`;
+
+const HOSTNAME = 'localhost';
+const PORT = process.env.LINKS_PORT || '8080';
+const DEFAULT_BASE_URL = `http://${HOSTNAME}:${PORT}/`;
 
 // Delay function
 async function sleep(sec) {
@@ -56,5 +59,5 @@ module.exports = {
     });
   },
   DEFAULT_BASE_URL: DEFAULT_BASE_URL,
-  LINKS_ROOT: LINKS_ROOT
+  LINKS_ROOT: LINKS_ROOT_DIR
 }
