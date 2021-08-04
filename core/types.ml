@@ -2072,7 +2072,7 @@ module Policy = struct
       | ArrowsCurriedCollectionAssumeFresh -> "ccf"
       | AliasOmit                          -> "alias"
       | ContractOperationArrows            -> "contract"
-      | OpenDefault                        -> "|.}"
+      | OpenDefault                        -> "open"
       (* | FinalArrowSharesWithAlias          -> "-e->t(e)" *)
     let shortcuts_of_opts = Settings.string_of_paths -<- List.map show_shortcut
 
@@ -2090,7 +2090,7 @@ module Policy = struct
             -> AliasOmit
           | "contract_operation_arrows" | "contract"
             -> ContractOperationArrows
-          | "open_default" | "|.}"
+          | "open_default" | "open"
             -> OpenDefault
           (* | "final_arrow_shares_with_alias" | "-e->t(e)"
            *   -> FinalArrowSharesWithAlias *)
@@ -2126,8 +2126,8 @@ module Policy = struct
            ; "   effects and these are hidden"
            ; " * contract_operation_arrows [contract]: contract operations"
            ; "   `E:() {}-> a' to `E:a'"
-           ; " * open_default [|.}]: effect rows are open by default,"
-           ; "   closed with syntax { |.}"
+           ; " * open_default [open]: effect rows are open by default,"
+           ; "   closed with syntax { | .}"
            (* ; " * final_arrow_shares_with_alias [-e->T(e)]: final arrow and"
             * ; "   a following type alias will be assumed to share implicit effects"
             * ; "   (This is only a desugaring setting)." *)
@@ -2139,7 +2139,7 @@ module Policy = struct
             * ; "   that contain functions"
             * ; "   enables " ^ (shortcuts_of_opts preset_struct) *)
            (* TODO!! change this if default changes *)
-           ; " * default: revert to default value (currently preset_struct)"
+           ; " * default: revert to default value (currently preset_comp)"
            ; " * all: turn all of the options on"]
         in
         let buf = Buffer.create 800 in
