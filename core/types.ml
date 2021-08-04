@@ -3048,10 +3048,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           | _ -> super#typ tp
       end
 
-    type row_omis = Omissible of row
-                  | NonOmissible of row
-    let extract_omis = function
-      | Omissible r | NonOmissible r -> r
+    type row_erasability = Erasable of row
+                         | Indelible of row
+    let row_of_erasability = function
+      | Erasable r | Indelible r -> r
 
     let sugar_introducer policy shared_variable ops
       = let module ES = Policy.EffectSugar in
@@ -3072,7 +3072,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
             val operations : op_map = ops
 
-            method effect_row : row -> 'self_type * row_omis * tid option
+            method effect_row : row -> 'self_type * row_erasability * tid option
               = let maybe_contract : typ -> typ
                   = function
                   | Function (d,_,c) as tp when ES.contract_operation_arrows policy ->
@@ -3147,8 +3147,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                         completely remove it depends on the context where it appears and
                         on the policy) *)
                      let row_opt = if FieldEnv.is_empty kept
-                                   then Omissible (Row (FieldEnv.empty, rv_pt, dual))
-                                   else NonOmissible (Row (kept, rv_pt, dual))
+                                   then Erasable (Row (FieldEnv.empty, rv_pt, dual))
+                                   else Indelible (Row (kept, rv_pt, dual))
                      in
                      (o, row_opt, Some effect_vid)
                    end
@@ -3156,7 +3156,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                    (* This row cannot omit presence-poly fields, but arrows can still
                       contract *)
                    let r = Row (fields, rv_pt, dual) in
-                   (o, NonOmissible r, None)
+                   (o, Indelible r, None)
 
             (** This function will sugar the function effect row *)
             method func : datatype -> 'self_type * datatype
@@ -3169,7 +3169,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               let (o, dom) = o#typ dom in
               let (o, eff', _) = o#effect_row eff in
               (* eliminated or not, the row needs to stay in the function effect *)
-              let eff = extract_omis eff' in
+              let eff = row_of_erasability eff' in
               let (o, cod) = o#typ cod in
               let tp = match fl with
                 | `Func -> Function (dom, eff, cod)
@@ -3191,12 +3191,12 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                    begin
                      let (o, r, rvid) = o#effect_row tp in
                      match r, rvid with
-                     | Omissible _, Some rvid when Some rvid = shared_variable
-                                                   && ES.alias_omit policy ->
+                     | Erasable _, Some rvid when Some rvid = shared_variable
+                                                  && ES.alias_omit policy ->
                         (* this is the implicit shared effect row in last position: if
                            it's been emptied, it can now be completely omitted *)
                         (o, [], [])
-                     | Omissible r, _ | NonOmissible r, _ ->
+                     | Erasable r, _ | Indelible r, _ ->
                         (* otherwise, it was possibly sugared, but exists still *)
                         (o, [knd], [(pk, r)])
                    end
@@ -3208,7 +3208,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                    begin
                      let (o, r, _) = o#effect_row tp in
                      (* not last => cannot be omitted, don't care if it's empty *)
-                     let r = extract_omis r in
+                     let r = row_of_erasability r in
                      let (o, kinds, tyargs) = o#tyarg_list kinds tyargs in
                      (o, knd :: kinds, (pk, r) :: tyargs)
                    end
