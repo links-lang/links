@@ -189,11 +189,16 @@ let make_effect_var : is_dot:bool -> ParserPosition.t -> Datatype.row_var
   let effect_sugar = effect_sugar pol in
   let open_default = EffectSugar.open_default (es_policy pol) in
 
-  match effect_sugar, open_default, is_dot with
-  | true, true, true  -> Datatype.Closed
-  | true, true, false -> Datatype.Open (SugarTypeVar.mk_unresolved "$eff" None `Rigid)
-  |    _,    _, true  -> raise (ConcreteSyntaxError (pos loc, "Dot syntax in effect row variables is only supported when effect_sugar and effect_sugar_policy.open_default are enabled."))
-  | _                 -> Datatype.Closed
+  if effect_sugar && open_default
+  then begin
+      if is_dot
+      then Datatype.Closed
+      else Datatype.Open (SugarTypeVar.mk_unresolved "$eff" None `Rigid)
+    end else begin
+      if is_dot
+      then raise (ConcreteSyntaxError (pos loc, "Dot syntax in effect row variables is only supported when effect_sugar and effect_sugar_policy.open_default are enabled."))
+      else Datatype.Closed
+    end
 
 module MutualBindings = struct
 
