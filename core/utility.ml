@@ -528,6 +528,22 @@ struct
         if pred x then (f x)::(filter_map pred f xs) else
           (filter_map pred f xs)
 
+
+  exception Lists_length_mismatch
+
+  (** Filter on two lists and map them together.
+      Equivalent to map -<- filter -<- zip
+      precondition: the two lists must be the same length *)
+  let rec filter_map2 pred f =
+    fun xs ys ->
+    match (xs, ys) with
+    | ([], []) -> []
+    | (x::xs, y::ys) ->
+       if pred (x, y)
+       then (f (x, y))::(filter_map2 pred f xs ys)
+       else filter_map2 pred f xs ys
+    | _ -> raise Lists_length_mismatch
+
   let rec map_filter f pred = function
     | [] -> []
     | x :: xs ->
@@ -558,8 +574,6 @@ struct
   let split_with : ('a -> 'b * 'c) -> 'a list -> 'b list * 'c list = fun f xs ->
     List.fold_right (fun a (bs, cs) -> let (b, c) = f a in (b::bs, c::cs))
                     xs ([], [])
-
-  exception Lists_length_mismatch
 
   let rec zip' xs ys =
     match xs, ys with

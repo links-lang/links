@@ -127,8 +127,13 @@ module type ROW_VAR_MAP = sig
   val empty : 'a t
 
   val add : key -> 'a -> 'a t -> 'a t
+  val add_raw : int -> 'a -> 'a t -> 'a t
+  val update : int -> ('a option -> 'a option) -> 'a t -> 'a t
   val find_opt : key -> 'a t -> 'a option
   val map : ('a -> 'b) -> 'a t -> 'b t
+  val fold : (int -> 'a -> 'acc -> 'acc) -> 'a t -> 'acc -> 'acc
+
+  val show : (Format.formatter -> 'a -> unit) -> 'a t -> string
 
   (* val remove : key -> 'a t -> 'a t *)
 
@@ -192,13 +197,20 @@ module RowVarMap : ROW_VAR_MAP = struct
     let var = get_var k in
     IntMap.add var v m
 
+  let add_raw k v m = IntMap.add k v m
+  let update k upd m = IntMap.update k upd m
+
   let empty = IntMap.empty
 
   let map : ('a -> 'b) -> 'a t -> 'b t = fun f m -> IntMap.map f m
 
+  let fold : (int -> 'a -> 'acc -> 'acc) -> 'a t -> 'acc -> 'acc
+    = fun f m acc -> IntMap.fold f m acc
   (* let remove : key -> 'a t -> 'a t = fun k m ->
    *   let var = get_var k in
    *   IntMap.remove var m *)
+
+  let show = IntMap.show
 
   (* functions using SugarQuantifier.t as key *)
   let update_by_quantifier :
@@ -420,6 +432,77 @@ let gather_mutual_info (tycon_env : simple_tycon_env) =
   end)
     #datatype
 
+let collect_operation_of_type tp
+  = let open Types in
+    let module FieldEnv = Utility.StringMap in
+    let is_effect_row_kind : Kind.t -> bool
+      = fun (primary, (_, restriction)) ->
+      primary = PrimaryKind.Row && restriction = Restriction.Effect
+    in
+    let o =
+      object (o : 'self_type)
+        inherit Types.Transform.visitor as super
+
+        val operations : stringset RowVarMap.t = RowVarMap.empty
+        method operations = operations
+
+        method with_label vid label =
+          let operations = RowVarMap.update vid
+                             (function
+                              | None -> Some (StringSet.singleton label)
+                              | Some sset -> Some (StringSet.add label sset))
+                             operations
+          in
+          {< operations >}
+
+        method effect_row : row -> 'self_type * row
+          = fun r ->
+          let (fields, rvar, _) = flatten_row r (* |> fst *) |> extract_row_parts in
+          let rvar = Unionfind.find rvar in
+          let o = match rvar with
+            | Var (vid,_,_)  ->
+               (* this is an open effect row, collect its operations *)
+               (* FieldEnv.fold (fold_fields vid) fields o *)
+               FieldEnv.fold
+                 (fun label _field acc ->
+                   acc#with_label vid label)
+                 fields o
+            | _ -> o (* not an open effect row, ignore *)
+          in
+          (o, r)
+
+        method alias_recapp
+          = fun kinds tyargs ->
+          let effect_rows = ListUtils.filter_map2
+                              (fun (knd, _) -> is_effect_row_kind knd)
+                              (fun (_, (_, typ)) -> typ)
+                              kinds tyargs in
+          List.fold_left (fun acc r -> fst (acc#effect_row r)) o effect_rows
+
+        method! typ : typ -> 'self_type * typ
+          = fun tp ->
+          match tp with
+          | Function (d,e,r) | Lolli (d,e,r) ->
+             let (o, _) = o#typ d in
+             let (o, _) = o#effect_row e in
+             let (o, _) = o#typ r in
+             (o, tp)
+          | Alias ((_,kinds,tyargs,_), _)
+            | RecursiveApplication { r_quantifiers = kinds; r_args = tyargs ; _ } ->
+             (o#alias_recapp kinds tyargs, tp)
+          | _ -> super#typ tp
+
+      end
+    in
+    let (o,_) = (o#typ tp)in
+    let operations = o#operations in
+    print_endline "Collected operations:";
+    print_endline
+      (RowVarMap.show (fun ppr x -> Format.fprintf ppr "%s"
+                                      (StringSet.show x)) operations);
+    flush_all ();
+    operations
+
 (** Gather information about which operations are used with which row
     variables.
     Precondition: cleanup_effects ran on this type *)
@@ -480,7 +563,25 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
               | (([] as qs) | _ :: qs), t :: ts -> go (o#type_arg t) (qs, ts)
             in
             match tycon_info with
-            | Some (params, _has_implict_eff, internal_type) -> go self (params, ts)
+            | Some (params, _has_implict_eff, internal_type) ->
+               let self = go self (params, ts) in
+               let ops = match internal_type with
+                 | None -> RowVarMap.empty
+                 | Some internal_type ->
+                    print_endline ("Has internal tp: " ^ name);
+                    collect_operation_of_type internal_type
+               in
+               let operations =
+                 RowVarMap.fold
+                   (fun vid sset acc ->
+                     RowVarMap.update vid
+                       (function
+                        | None -> Some sset
+                        | Some opset -> Some (StringSet.union opset sset))
+                       acc)
+                   ops operations
+               in
+               {< operations >}
             | None -> raise (Errors.UnboundTyCon (pos, name)) )
         | Mu (v, t) ->
             let mtv = SugarTypeVar.get_resolved_type_exn v in
@@ -710,8 +811,9 @@ class main_traversal simple_tycon_env =
 
                     let fields =
                       match RowVarMap.find_opt eff_sugar_var row_operations with
-                      | None -> []
+                      | None -> print_endline "No fields"; []
                       | Some ops ->
+                         print_endline "Some fields";
                           StringMap.fold
                             (fun op p fields ->
                               let mpv : Types.meta_presence_var =
@@ -800,6 +902,8 @@ class main_traversal simple_tycon_env =
                   List.fold_left
                     (fun ops (op, _) -> StringMap.remove op ops)
                     ops fields in
+                print_endline "ops_to_add:";
+                print_endline (StringMap.show (fun ppr x -> ()) ops_to_add);
                 let add_op op pres_var fields =
                   if not allow_implictly_bound_vars then
                     (* Alternatively, we could just decide not to touch the row and let the type checker
