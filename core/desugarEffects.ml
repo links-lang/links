@@ -514,8 +514,12 @@ let collect_operation_of_type tp
              let (o, _) = o#typ r in
              let (o, _) = o#typ d in
              (o, tp)
-          | Alias ((_,kinds,tyargs,_), _)
-            | RecursiveApplication { r_quantifiers = kinds; r_args = tyargs ; _ } ->
+          | Alias ((_,kinds,tyargs,_), inner_tp) ->
+             let o = o#alias_recapp kinds tyargs in
+             let (o,_) = o#typ inner_tp in
+             (o, tp)
+          | RecursiveApplication { r_quantifiers = kinds; r_args = tyargs ; _ } ->
+             (* TODO also go inside these, but decycle *)
              (o#alias_recapp kinds tyargs, tp)
           | _ -> super#typ tp
 
