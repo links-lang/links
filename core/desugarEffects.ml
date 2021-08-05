@@ -535,6 +535,18 @@ let collect_operation_of_type tp
     flush_all ();
     operations
 
+(* TODO: pull out operations from alias, propagate them to the alias where they
+   were taken from, but give it a fresh presence var or just the actual type
+
+   typename HasL = () {L:()|_}~> ();
+   # HasL = a::Eff.() {L:() {}-> ()|a::Eff}~> ()
+
+   sig handleL : (HasL) -> () ~> ()
+   fun handleL(f)() { handle(f()) { case L(res) -> () }};
+   # handleL = fun : (HasL ({L{a},wild{_}|c})) -> () {L{a}|c}~> ()
+                              ^^^ this is wrong!
+*)
+
 (** Gather information about which operations are used with which row
     variables.
     Precondition: cleanup_effects ran on this type *)
