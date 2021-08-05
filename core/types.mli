@@ -42,19 +42,19 @@ module Policy : sig
     type opt = PresenceOmit
              | AliasOmit
              | ArrowsShowImplicitEffectVariable
-             | ArrowsCurriedCollectionAssumeFresh (* TODO name *)
+             | ArrowsCurriedHideFresh
              | ContractOperationArrows
              | OpenDefault
              (* | FinalArrowSharesWithAlias *)
     type t = opt list
     val default : unit -> t
 
-    val presence_omit                 : t -> bool
-    val alias_omit                    : t -> bool
-    val arrows_show_implicit          : t -> bool
-    val arrows_collection_fresh       : t -> bool
-    val contract_operation_arrows     : t -> bool
-    val open_default                  : t -> bool
+    val presence_omit             : t -> bool
+    val alias_omit                : t -> bool
+    val arrows_show_implicit      : t -> bool
+    val arrows_curried_hide_fresh : t -> bool
+    val contract_operation_arrows : t -> bool
+    val open_default              : t -> bool
     (* val final_arrow_shares_with_alias : t -> bool *)
   end
 

@@ -2017,7 +2017,7 @@ module Policy = struct
     type opt = PresenceOmit
              | AliasOmit
              | ArrowsShowImplicitEffectVariable
-             | CurriedCollectionFresh (* TODO name *)
+             | ArrowsCurriedHideFresh
              | ContractOperationArrows
              | OpenDefault
              (* | FinalArrowSharesWithAlias *)
@@ -2027,7 +2027,7 @@ module Policy = struct
     val presence_omit             : t -> bool
     val alias_omit                : t -> bool
     val arrows_show_implicit      : t -> bool
-    val curried_collection_fresh  : t -> bool
+    val arrows_curried_hide_fresh : t -> bool
     val contract_operation_arrows : t -> bool
     val open_default              : t -> bool
     (* val final_arrow_shares_with_alias : t -> bool *)
@@ -2035,20 +2035,20 @@ module Policy = struct
     type opt = PresenceOmit
              | AliasOmit
              | ArrowsShowImplicitEffectVariable
-             | CurriedCollectionFresh
+             | ArrowsCurriedHideFresh
              | ContractOperationArrows
              | OpenDefault
              (* | FinalArrowSharesWithAlias *)
     type t = opt list
 
-    let preset_comp = [PresenceOmit ; AliasOmit ; ContractOperationArrows ; CurriedCollectionFresh ]
+    let preset_comp = [PresenceOmit ; AliasOmit ; ContractOperationArrows ; ArrowsCurriedHideFresh ]
     (* let preset_struct = preset_comp @ [ FinalArrowSharesWithAlias ] *)
     let default_opts = preset_comp
 
     let all_opts = [ PresenceOmit
                    ; AliasOmit
                    ; ArrowsShowImplicitEffectVariable
-                   ; CurriedCollectionFresh
+                   ; ArrowsCurriedHideFresh
                    ; ContractOperationArrows
                    ; OpenDefault
                    (* ; FinalArrowSharesWithAlias *)
@@ -2058,7 +2058,7 @@ module Policy = struct
       = function
       | PresenceOmit                     -> "presence_omit"
       | ArrowsShowImplicitEffectVariable -> "arrows_show_implicit_effect_variable"
-      | CurriedCollectionFresh           -> "curried_collection_fresh"
+      | ArrowsCurriedHideFresh           -> "arrows_curried_hide_fresh"
       | AliasOmit                        -> "alias_omit"
       | ContractOperationArrows          -> "contract_operation_arrows"
       | OpenDefault                      -> "open_default"
@@ -2069,7 +2069,7 @@ module Policy = struct
       = function
       | PresenceOmit                     -> "pres"
       | ArrowsShowImplicitEffectVariable -> "show_implicit"
-      | CurriedCollectionFresh           -> "ccf"
+      | ArrowsCurriedHideFresh           -> "chf"
       | AliasOmit                        -> "alias"
       | ContractOperationArrows          -> "contract"
       | OpenDefault                      -> "open"
@@ -2084,8 +2084,8 @@ module Policy = struct
             -> PresenceOmit
           | "arrows_show_implicit_effect_variable" | "show_implicit"
             -> ArrowsShowImplicitEffectVariable
-          | "curried_collection_fresh" | "ccf"
-            -> CurriedCollectionFresh
+          | "arrows_curried_hide_fresh" | "chf"
+            -> ArrowsCurriedHideFresh
           | "alias_omit" | "alias"
             -> AliasOmit
           | "contract_operation_arrows" | "contract"
@@ -2121,7 +2121,7 @@ module Policy = struct
            ; "   argument of aliases"
            ; " * arrows_show_implicit_effect_variable [show_implicit]:"
            ; "   display the imlicit shared effect on arrows"
-           ; " * curried_collection_fresh [ccf]: in curried functions,"
+           ; " * arrows_curried_hide_fresh [chf]: in curried functions,"
            ; "   argument collection arrows are assumed to have fresh"
            ; "   effects and these are hidden"
            ; " * contract_operation_arrows [contract]: contract operations"
@@ -2161,7 +2161,7 @@ module Policy = struct
     let presence_omit             = List.mem PresenceOmit
     let alias_omit                = List.mem AliasOmit
     let arrows_show_implicit      = List.mem ArrowsShowImplicitEffectVariable
-    let curried_collection_fresh  = List.mem CurriedCollectionFresh
+    let arrows_curried_hide_fresh = List.mem ArrowsCurriedHideFresh
     let contract_operation_arrows = List.mem ContractOperationArrows
     let open_default              = List.mem OpenDefault
     (* let final_arrow_shares_with_alias = List.mem FinalArrowSharesWithAlias *)
@@ -3771,12 +3771,12 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 let module ES = Policy.EffectSugar in
 
                 let arrows_show_impl_shared = ES.arrows_show_implicit es_policy in
-                let curried_collection_fresh = ES.curried_collection_fresh  es_policy in
+                let arrows_curried_hide_fresh = ES.arrows_curried_hide_fresh es_policy in
 
                 match anonymity with
                 | Visible -> false (* decided Visible, cannot skip *)
                 | Anonymous -> arrows_show_impl_shared ||
-                                 (curried_collection_fresh && Context.is_ambient_arrow_curried ctx)
+                                 (arrows_curried_hide_fresh && Context.is_ambient_arrow_curried ctx)
                 | ImplicitEffectVar -> not arrows_show_impl_shared
               end
             else match anonymity with
