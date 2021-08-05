@@ -34,12 +34,12 @@ typename T(a, e::Eff) = (a) -e-> a; sig f : T(a, { |e}) fun f(x) { x } f
 stdout : fun : T (_)
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=alias_omit
 
-Policy: none [5], no ccf
+Policy: none [5], no chf
 sig map : ((a) ~> b) -> ([a]) ~> [b] fun map(f)(xs) { switch(xs) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs) }} map
 stdout : fun : ((a) ~> c) -_-> ([a]) ~> [c]
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=none
 
-Policy: none [6], no ccf
+Policy: none [6], no chf
 sig map : ((a) ~> b) -> ([a]) -> () ~> [b] fun map(f)(xs)() { switch(xs) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs)() }} map
 stdout : fun : ((a) ~> c) -_-> ([a]) -_-> () ~> [c]
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=none
@@ -95,15 +95,15 @@ sig f : (Comp ((), {E:()|_})) -> Comp ((), {E{_}|_}) fun f(x)() { handle(x()) { 
 stdout : fun : (Comp ((),{E:() {}-> ()|_})) -_-> Comp (())
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=presence_omit,alias_omit
 
-Policy: presence_omit, alias_omit, ccf [1], handler
+Policy: presence_omit, alias_omit, chf [1], handler
 sig f : (Comp ((), {E:()|_})) -> Comp ((), {E{_}|_}) fun f(x)() { handle(x()) { case Return() -> () case E(res) -> () }} f
 stdout : fun : (Comp ((),{E:() {}-> ()|_})) -> Comp (())
-args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=presence_omit,alias_omit,ccf
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=presence_omit,alias_omit,chf
 
-Policy: pres, alias, ccf, contract [1], handler
+Policy: pres, alias, chf, contract [1], handler
 sig f : (Comp ((), {E:()|_})) -> Comp ((), {E{_}|_}) fun f(x)() { handle(x()) { case Return() -> () case E(res) -> () }} f
 stdout : fun : (Comp ((),{E:()|_})) -> Comp (())
-args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=pres,alias,ccf,contract
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=pres,alias,chf,contract
 
 Policy: contract_operation_arrows [1]
 sig f : (a) {E:(a) {}-> b}-> b fun f(x) { do E(x) } f
@@ -125,15 +125,15 @@ sig f : (a) {E:(a) {}-> ()}-> () fun f(x) { do E(x) } f
 stdout : fun : (a) {E:(a) -> ()}-> ()
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=contract
 
-Policy: ccf [1]
+Policy: chf [1]
 sig map : ((a) ~> b) -> ([a]) ~> [b] fun map(f)(xs) { switch(xs) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs) }} map
 stdout : fun : ((a) ~> c) -> ([a]) ~> [c]
-args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=ccf
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=chf
 
-Policy: ccf [2]
+Policy: chf [2]
 sig map : ((a) ~> b) -> ([a]) -> () ~> [b] fun map(f)(xs)() { switch(xs) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs)() }} map
 stdout : fun : ((a) ~> c) -> ([a]) -> () ~> [c]
-args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=ccf
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=chf
 
 Policy: arrows_show_implicit_effect_variable [1]
 sig map : ((a) ~e~> b, [a]) ~e~> [b] fun map(f, lst) { switch(lst) { case [] -> [] case (x::xs) -> f(x) :: map(f, xs) }} map
