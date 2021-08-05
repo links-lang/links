@@ -577,7 +577,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   PURE);
 
   (* XML *)
-  "elementChildNodes",
+  "itemChildNodes",
   (p1 (function
          | `XML (Value.Node (_, children)) ->
            let children = List.filter Value.is_node children in
@@ -586,7 +586,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
            let children = List.filter Value.is_node children in
            `List (List.map (fun x -> `XML x) children)
          | `XML (_) -> `List []
-         | _ -> raise (runtime_type_error "non-XML given to elementChildNodes")),
+         | _ -> raise (runtime_type_error "non-XML given to itemChildNodes")),
    datatype "(XmlItem) -> Xml",
   IMPURE);
 
@@ -798,8 +798,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   IMPURE);
 
 
-  "getTextContent",
-  (`Client, datatype "(Xml) ~> String",
+  "itemTextContent",
+  (p1 (function
+         | `XML (Value.Text str) -> Value.box_string str
+         | _ -> raise (runtime_type_error "non-text node given to textContent")), 
+   datatype "(XmlItem) ~> String",
   IMPURE);
 
   "getAttributes",
