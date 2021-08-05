@@ -190,6 +190,7 @@ module RowVarMap : ROW_VAR_MAP = struct
   let find_opt : key -> 'a t -> 'a option =
    fun k m ->
     let var = get_var k in
+    print_endline ("find_opt: " ^ SugarTypeVar.show k ^ " <-> " ^ string_of_int var);
     IntMap.find_opt var m
 
   let add : key -> 'a -> 'a t -> 'a t =
@@ -571,6 +572,7 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
                     print_endline ("Has internal tp: " ^ name);
                     collect_operation_of_type internal_type
                in
+               (* TODO need to unify the shared var from within with $eff *)
                let operations =
                  RowVarMap.fold
                    (fun vid sset acc ->
@@ -896,6 +898,10 @@ class main_traversal simple_tycon_env =
       let fields =
         match rv with
         | Datatype.Open stv when RowVarMap.is_relevant stv -> (
+          print_endline "Searching for:";
+          print_endline @@ SugarTypeVar.show stv;
+          print_endline "^ in:";
+          print_endline (RowVarMap.show (fun ppr x -> ()) row_operations);
             match RowVarMap.find_opt stv row_operations with
             | Some ops ->
                 let ops_to_add =
@@ -913,7 +919,9 @@ class main_traversal simple_tycon_env =
                     SugarTypeVar.mk_resolved_presence (Lazy.force pres_var) in
                   (op, Datatype.Var rpv) :: fields in
                 StringMap.fold add_op ops_to_add fields
-            | None -> fields )
+            | None ->
+               print_endline "No ops to add";
+               fields )
         | _ -> fields in
       (* We need to perform the actions above prior to calling o#row.
          Otherwise, we resolve $eff already, and the lookup in row_operations
