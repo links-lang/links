@@ -129,6 +129,7 @@ module type ROW_VAR_MAP = sig
   val add : key -> 'a -> 'a t -> 'a t
   val add_raw : int -> 'a -> 'a t -> 'a t
   val find_raw : int -> 'a t -> 'a
+  val find_raw_opt : int -> 'a t -> 'a option
   val update : int -> ('a option -> 'a option) -> 'a t -> 'a t
   val find_opt : key -> 'a t -> 'a option
   val map : ('a -> 'b) -> 'a t -> 'b t
@@ -202,6 +203,7 @@ module RowVarMap : ROW_VAR_MAP = struct
   let add_raw k v m = IntMap.add k v m
   let update k upd m = IntMap.update k upd m
   let find_raw k m = IntMap.find k m
+  let find_raw_opt k m = IntMap.find_opt k m
 
   let empty = IntMap.empty
 
@@ -535,17 +537,7 @@ let collect_operation_of_type tp
     flush_all ();
     operations
 
-(* TODO: pull out operations from alias, propagate them to the alias where they
-   were taken from, but give it a fresh presence var or just the actual type
-
-   typename HasL = () {L:()|_}~> ();
-   # HasL = a::Eff.() {L:() {}-> ()|a::Eff}~> ()
-
-   sig handleL : (HasL) -> () ~> ()
-   fun handleL(f)() { handle(f()) { case L(res) -> () }};
-   # handleL = fun : (HasL ({L{a},wild{_}|c})) -> () {L{a}|c}~> ()
-                              ^^^ this is wrong!
-*)
+(* TODO nested aliases? watch out for recapps *)
 
 (** Gather information about which operations are used with which row
     variables.
@@ -556,8 +548,21 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
       inherit SugarTraversals.fold as super
 
       val operations = RowVarMap.empty
-
       method operations = operations
+      method with_operations operations = {< operations >}
+
+      val hidden_operations : stringset stringmap = StringMap.empty
+      method hidden_operations = hidden_operations
+      method add_hidden_op alias_name label =
+        let hidden_operations = StringMap.update alias_name
+                                  (function
+                                   | None -> print_endline ("Singleton: " ^ label);
+                                             Some (StringSet.singleton label)
+                                   | Some lset -> print_endline ("Adding: " ^ label);
+                                                  Some (StringSet.add label lset))
+                                  hidden_operations
+        in
+        {< hidden_operations >}
 
       method replace quantifier map =
         let ubq = RowVarMap.update_by_quantifier in
@@ -625,7 +630,15 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
                        acc)
                    ops operations
                in
-               {< operations >}
+               let self = match RowVarMap.find_raw_opt (-1) ops with
+                 | None -> self
+                 | Some hide_ops ->
+                    StringSet.fold
+                      (fun label acc ->
+                        acc#add_hidden_op name label)
+                      hide_ops self
+               in
+               self#with_operations operations
             | None -> raise (Errors.UnboundTyCon (pos, name)) )
         | Mu (v, t) ->
             let mtv = SugarTypeVar.get_resolved_type_exn v in
@@ -660,18 +673,20 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
     end
   in
   if allow_fresh && has_effect_sugar () then
-    (o#datatype dt)#operations
-    |> RowVarMap.map (fun v ->
-           StringSet.fold
-             (fun op m ->
-               let point =
-                 lazy
-                   (let var = Types.fresh_raw_variable () in
-                    Unionfind.fresh (Types.Var (var, (PrimaryKind.Presence, default_subkind), `Rigid)))
-               in
-               StringMap.add op point m)
-             v StringMap.empty)
-  else RowVarMap.empty
+    let o = o#datatype dt in
+    (o#operations
+     |> RowVarMap.map (fun v ->
+            StringSet.fold
+              (fun op m ->
+                let point =
+                  lazy
+                    (let var = Types.fresh_raw_variable () in
+                     Unionfind.fresh (Types.Var (var, (PrimaryKind.Presence, default_subkind), `Rigid)))
+                in
+                StringMap.add op point m)
+              v StringMap.empty),
+     o#hidden_operations)
+  else (RowVarMap.empty, StringMap.empty)
 
 let preprocess_type (dt : Datatype.with_pos) tycon_env allow_fresh shared_effect
     =
@@ -719,7 +734,9 @@ class main_traversal simple_tycon_env =
         corresponding effect variables. *)
     val row_operations : Types.meta_presence_var Lazy.t StringMap.t RowVarMap.t
         =
-      RowVarMap.empty
+        RowVarMap.empty
+
+    val hidden_operations : stringset stringmap = StringMap.empty
 
     method set_inside_type inside_type = {<inside_type>}
 
@@ -787,7 +804,7 @@ class main_traversal simple_tycon_env =
               let process_type_arg i : Kind.t * type_arg -> Datatype.type_arg =
                 function
                 | (PK.Row, (_, Restriction.Effect)), Row r ->
-                    let _o, erow = o#effect_row r in
+                    let _o, erow = o#effect_row ~in_alias:(Some tycon) r in
                     Row erow
                 | (PK.Row, _), Row r ->
                     let _o, row = o#row r in
@@ -857,19 +874,32 @@ class main_traversal simple_tycon_env =
                       match RowVarMap.find_opt eff_sugar_var row_operations with
                       | None -> print_endline "No fields"; []
                       | Some ops ->
-                         print_endline "Some fields";
+                         print_endline "Some fields:";
+                         print_endline (StringMap.show (fun _ _ -> ()) ops);
+                         print_endline "hidemap:";
+                         print_endline (StringMap.show (fun ppr x -> Format.fprintf ppr "%s" (StringSet.show x)) hidden_operations);
+                         let ops_to_hide = match StringMap.find_opt tycon hidden_operations with
+                           | None -> StringSet.empty
+                           | Some hidden -> hidden
+                         in
+                         print_endline "ops_to_hide:";
+                         print_endline @@ StringSet.show ops_to_hide;
                           StringMap.fold
                             (fun op p fields ->
-                              let mpv : Types.meta_presence_var =
-                                Lazy.force p
-                              in
-                              let fieldspec =
-                                Datatype.Var
-                                  (SugarTypeVar.mk_resolved_presence mpv)
-                              in
-                              if not allow_implictly_bound_vars then
-                                raise (cannot_insert_presence_var2 pos op);
-                              (op, fieldspec) :: fields)
+                              if StringSet.mem op ops_to_hide
+                              then fields
+                              else begin
+                                  let mpv : Types.meta_presence_var =
+                                    Lazy.force p
+                                  in
+                                  let fieldspec =
+                                    Datatype.Var
+                                      (SugarTypeVar.mk_resolved_presence mpv)
+                                  in
+                                  if not allow_implictly_bound_vars then
+                                    raise (cannot_insert_presence_var2 pos op);
+                                  (op, fieldspec) :: fields
+                                end)
                             ops []
                     in
                     let row_var =
@@ -935,7 +965,7 @@ class main_traversal simple_tycon_env =
       in
       (o, (fields, rv))
 
-    method effect_row ((fields, rv) : Datatype.row) =
+    method effect_row ?(in_alias=None) ((fields, rv) : Datatype.row) =
       let dpos = SourceCode.Position.dummy in
       let fields =
         match rv with
@@ -946,20 +976,32 @@ class main_traversal simple_tycon_env =
           print_endline (RowVarMap.show (fun ppr x -> ()) row_operations);
             match RowVarMap.find_opt stv row_operations with
             | Some ops ->
+               let ops_to_hide = match in_alias with
+                 | None -> print_endline "Not alias"; StringSet.empty
+                 | Some name ->
+                    print_endline ("In Alias: " ^ name);
+                    (match StringMap.find_opt name hidden_operations with
+                     | None -> StringSet.empty
+                     | Some hidden -> hidden)
+               in
                 let ops_to_add =
                   List.fold_left
                     (fun ops (op, _) -> StringMap.remove op ops)
                     ops fields in
                 print_endline "ops_to_add:";
                 print_endline (StringMap.show (fun ppr x -> ()) ops_to_add);
+                print_endline "ops_to_hide:";
+                print_endline (StringSet.show ops_to_hide);
                 let add_op op pres_var fields =
                   if not allow_implictly_bound_vars then
                     (* Alternatively, we could just decide not to touch the row and let the type checker
                        complain about the incompatible rows? *)
                     raise (cannot_insert_presence_var dpos op);
-                  let rpv =
-                    SugarTypeVar.mk_resolved_presence (Lazy.force pres_var) in
-                  (op, Datatype.Var rpv) :: fields in
+                  if StringSet.mem op ops_to_hide
+                  then fields
+                  else let rpv =
+                         SugarTypeVar.mk_resolved_presence (Lazy.force pres_var) in
+                       (op, Datatype.Var rpv) :: fields in
                 StringMap.fold add_op ops_to_add fields
             | None ->
                print_endline "No ops to add";
@@ -1105,12 +1147,15 @@ class main_traversal simple_tycon_env =
     method! datatype dt =
       let pos = SourceCode.WithPos.pos dt in
       let dt, o =
-        if not inside_type then
-          let dt, row_operations, shared_effect =
-            preprocess_type dt tycon_env allow_implictly_bound_vars
-              shared_effect
-          in
-          (dt, {<row_operations; shared_effect>})
+        if not inside_type then begin
+            let dt, (row_operations, hidden_operations), shared_effect =
+              preprocess_type dt tycon_env allow_implictly_bound_vars
+                shared_effect
+            in
+            print_endline "Preprocess -> hidemap:";
+            print_endline (StringMap.show (fun ppr s -> Format.fprintf ppr "%s" (StringSet.show s)) hidden_operations);
+            (dt, {<row_operations; shared_effect; hidden_operations>})
+          end
         else (dt, o)
       in
       let o = o#set_inside_type true in
