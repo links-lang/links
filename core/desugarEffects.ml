@@ -128,6 +128,7 @@ module type ROW_VAR_MAP = sig
 
   val add : key -> 'a -> 'a t -> 'a t
   val add_raw : int -> 'a -> 'a t -> 'a t
+  val find_raw : int -> 'a t -> 'a
   val update : int -> ('a option -> 'a option) -> 'a t -> 'a t
   val find_opt : key -> 'a t -> 'a option
   val map : ('a -> 'b) -> 'a t -> 'b t
@@ -200,6 +201,7 @@ module RowVarMap : ROW_VAR_MAP = struct
 
   let add_raw k v m = IntMap.add k v m
   let update k upd m = IntMap.update k upd m
+  let find_raw k m = IntMap.find k m
 
   let empty = IntMap.empty
 
@@ -447,6 +449,12 @@ let collect_operation_of_type tp
         val operations : stringset RowVarMap.t = RowVarMap.empty
         method operations = operations
 
+        val implicit_shared_var : int option = None
+        method implicit_shared_var = implicit_shared_var
+        method set_implicit_shared_var : int -> 'self_type
+          = fun vid ->
+          {< implicit_shared_var = Some vid >}
+
         method with_label vid label =
           let operations = RowVarMap.update vid
                              (function
@@ -456,14 +464,18 @@ let collect_operation_of_type tp
           in
           {< operations >}
 
-        method effect_row : row -> 'self_type * row
-          = fun r ->
+        method effect_row : maybe_main_var:bool -> row -> 'self_type * row
+          = fun ~maybe_main_var r ->
           let (fields, rvar, _) = flatten_row r (* |> fst *) |> extract_row_parts in
           let rvar = Unionfind.find rvar in
           let o = match rvar with
             | Var (vid,_,_)  ->
                (* this is an open effect row, collect its operations *)
                (* FieldEnv.fold (fold_fields vid) fields o *)
+               let o = if maybe_main_var
+                       then o#set_implicit_shared_var vid
+                       else o
+               in
                FieldEnv.fold
                  (fun label _field acc ->
                    acc#with_label vid label)
@@ -478,15 +490,27 @@ let collect_operation_of_type tp
                               (fun (knd, _) -> is_effect_row_kind knd)
                               (fun (_, (_, typ)) -> typ)
                               kinds tyargs in
-          List.fold_left (fun acc r -> fst (acc#effect_row r)) o effect_rows
+          List.fold_left
+            (fun acc r ->
+              fst (acc#effect_row ~maybe_main_var:true r))
+            o effect_rows
 
         method! typ : typ -> 'self_type * typ
           = fun tp ->
           match tp with
           | Function (d,e,r) | Lolli (d,e,r) ->
-             let (o, _) = o#typ d in
-             let (o, _) = o#effect_row e in
+             let maybe_main_var = match implicit_shared_var with
+               | Some _ -> false
+               | None ->
+                  begin match r with
+                  | Function _ | Lolli _
+                    | Alias _ | RecursiveApplication _ -> false
+                  | _ -> true
+                  end
+             in
+             let (o, _) = o#effect_row ~maybe_main_var e in
              let (o, _) = o#typ r in
+             let (o, _) = o#typ d in
              (o, tp)
           | Alias ((_,kinds,tyargs,_), _)
             | RecursiveApplication { r_quantifiers = kinds; r_args = tyargs ; _ } ->
@@ -497,6 +521,13 @@ let collect_operation_of_type tp
     in
     let (o,_) = (o#typ tp)in
     let operations = o#operations in
+    let implicit_shared_var = o#implicit_shared_var in
+    (* if implicit shared var exists, we replace its id with $eff *)
+    let operations = match implicit_shared_var with
+      | None -> operations
+      | Some vid -> RowVarMap.add_raw (-1)
+                      (RowVarMap.find_raw vid operations) operations
+    in
     print_endline "Collected operations:";
     print_endline
       (RowVarMap.show (fun ppr x -> Format.fprintf ppr "%s"
@@ -572,7 +603,6 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
                     print_endline ("Has internal tp: " ^ name);
                     collect_operation_of_type internal_type
                in
-               (* TODO need to unify the shared var from within with $eff *)
                let operations =
                  RowVarMap.fold
                    (fun vid sset acc ->
