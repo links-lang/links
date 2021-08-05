@@ -135,7 +135,7 @@ module type ROW_VAR_MAP = sig
   val map : ('a -> 'b) -> 'a t -> 'b t
   val fold : (int -> 'a -> 'acc -> 'acc) -> 'a t -> 'acc -> 'acc
 
-  val show : (Format.formatter -> 'a -> unit) -> 'a t -> string
+  (* val show : (Format.formatter -> 'a -> unit) -> 'a t -> string *)
 
   (* val remove : key -> 'a t -> 'a t *)
 
@@ -215,7 +215,7 @@ module RowVarMap : ROW_VAR_MAP = struct
    *   let var = get_var k in
    *   IntMap.remove var m *)
 
-  let show = IntMap.show
+  (* let show = IntMap.show *)
 
   (* functions using SugarQuantifier.t as key *)
   let update_by_quantifier :
@@ -793,7 +793,7 @@ class main_traversal simple_tycon_env =
           let pos = SourceCode.Position.dummy in
           match SEnv.find_opt tycon tycon_env with
           | None -> raise (Errors.UnboundTyCon (pos, tycon))
-          | Some (params, _has_implicit_eff, internal_type) ->
+          | Some (params, _has_implicit_eff, _internal_type) ->
               let qn = List.length params in
               let tn = List.length ts in
               let arity_err () =
