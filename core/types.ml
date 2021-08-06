@@ -2012,7 +2012,8 @@ module Policy = struct
       | FinalArrowSharesWithAlias
     type t = opt list
 
-    let preset_struct = [ FinalArrowSharesWithAlias ]
+    let preset_comp = []
+    let preset_struct = preset_comp @ [ FinalArrowSharesWithAlias ]
     let default_opts = preset_struct
 
     let all_opts = [ FinalArrowSharesWithAlias ]
@@ -2041,6 +2042,7 @@ module Policy = struct
         fun s ->
         match String.lowercase_ascii s with
         | "none"          -> []
+        | "preset_comp"   -> preset_comp
         | "preset_struct" -> preset_struct
         | "default"       -> default_opts
         | "all"           -> all_opts
@@ -2058,6 +2060,8 @@ module Policy = struct
            ; "   (This is only a desugaring setting)."
            ; "Meta-options:"
            ; " * none: turn all of the above off"
+           ; " * preset_comp: default preset for transforming Comps"
+           ; "   enables " ^ (shortcuts_of_opts preset_comp)
            ; " * preset_struct: default preset for transforming structures"
            ; "   that contain functions"
            ; "   enables " ^ (shortcuts_of_opts preset_struct)
