@@ -577,22 +577,17 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   PURE);
 
   (* XML *)
-  "childNodes",
+  "itemChildNodes",
   (p1 (function
-         | `List [`XML (Value.Node (_, children))] ->
-           let children = List.filter (function
-             | (Value.Node _) -> true
-             | (Value.NsNode _) -> true
-             | _ -> false) children in
+         | `XML (Value.Node (_, children)) ->
+           let children = List.filter Value.is_node children in
            `List (List.map (fun x -> `XML x) children)
-         | `List [ `XML (Value.NsNode (_, _, children)) ] ->
-           let children = List.filter (function
-             | (Value.Node _) -> true
-             | (Value.NsNode _) -> true
-             | _ -> false) children in
+         | `XML (Value.NsNode (_, _, children)) ->
+           let children = List.filter Value.is_node children in
            `List (List.map (fun x -> `XML x) children)
-         | _ -> raise (runtime_type_error "non-XML given to childNodes")),
-   datatype "(Xml) -> Xml",
+         | `XML (_) -> `List []
+         | _ -> raise (runtime_type_error "non-XML given to itemChildNodes")),
+   datatype "(XmlItem) -> Xml",
   IMPURE);
 
   "objectType",
@@ -803,8 +798,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   IMPURE);
 
 
-  "getTextContent",
-  (`Client, datatype "(Xml) ~> String",
+  "itemTextContent",
+  (p1 (function
+         | `XML (Value.Text str) -> Value.box_string str
+         | _ -> raise (runtime_type_error "non-text node given to textContent")),
+   datatype "(XmlItem) ~> String",
   IMPURE);
 
   "getAttributes",
@@ -813,13 +811,9 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
       | (Value.Attr (name, value)) -> `Record [("1", Value.box_string name); ("2", Value.box_string value)]
       | (Value.NsAttr (ns, name, value)) -> `Record [ ("1", Value.box_string (ns ^ ":" ^ name)); ("2", Value.box_string value) ]
       | _ -> assert false
-    and is_attr = function
-      | Value.Attr _ -> true
-      | Value.NsAttr _ -> true
-      | _ -> false
     in match v with
-      | `List [ `XML (Value.Node (_, children)) ]      -> `List (List.map attr_to_record (List.filter is_attr children))
-      | `List [ `XML (Value.NsNode (_, _, children)) ] -> `List (List.map attr_to_record (List.filter is_attr children))
+      | `List [ `XML (Value.Node (_, children)) ]      -> `List (List.map attr_to_record (List.filter Value.is_attr children))
+      | `List [ `XML (Value.NsNode (_, _, children)) ] -> `List (List.map attr_to_record (List.filter Value.is_attr children))
       | _ -> raise (runtime_type_error "non-element given to getAttributes")),
   datatype "(Xml) ~> [(String,String)]",
   IMPURE);
@@ -830,18 +824,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "getAttribute",
   (`Client, datatype "(Xml, String) ~> String",
-  IMPURE);
-
-  (* Section: Navigation for XML *)
-  "getChildNodes",
-  (p1 (fun v ->
-         match v with
-           | `List [`XML(Value.Node(_, children))] ->
-               `List (List.map (fun x -> `XML(x)) (List.filter (function (Value.Node _) -> true | (Value.NsNode _) -> true | _ -> false) children))
-           | `List [`XML(Value.NsNode(_, _, children))] ->
-               `List (List.map (fun x -> `XML(x)) (List.filter (function (Value.Node _) -> true | (Value.NsNode _) -> true | _ -> false) children))
-           | _ -> raise (runtime_type_error "non-element given to getChildNodes")),
-   datatype "(Xml) ~> Xml",
   IMPURE);
 
   "not",
