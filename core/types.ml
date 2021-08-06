@@ -1995,77 +1995,35 @@ module Policy = struct
                 |> sync)
 
   let effect_sugar
-    = Settings.(flag "effect_sugar"
-                |> synopsis "Toggles the effect sugar in pretty printer."
-                |> convert parse_bool
-                |> sync)
+  = Settings.(flag "effect_sugar"
+              |> synopsis "Toggles the effect sugar in pretty printer."
+              |> convert parse_bool
+              |> sync)
 
   module EffectSugar : sig
-    type opt = PresenceOmit
-             | AliasOmit
-             (* vvv TODO name; for now it's the One Effect To Rule Them All *)
-             | ArrowsShowTheOneEffect
-             | ArrowsCurriedCollectionAssumeFresh
-             | ContractOperationArrows
-             | OpenDefault
-             (* | DifferentOperationArrows *)
-             | FinalArrowSharesWithAlias
+    type opt =
+      | FinalArrowSharesWithAlias
     type t = opt list
     val default : unit -> t
 
-    val presence_omit                 : t -> bool
-    val alias_omit                    : t -> bool
-    val arrows_show_the_one           : t -> bool
-    val arrows_collection_fresh       : t -> bool
-    val contract_operation_arrows     : t -> bool
-    val open_default                  : t -> bool
-    (* val different_operation_arrows    : t -> bool *)
     val final_arrow_shares_with_alias : t -> bool
   end = struct
-    type opt = PresenceOmit
-             | AliasOmit
-             | ArrowsShowTheOneEffect
-             | ArrowsCurriedCollectionAssumeFresh
-             | ContractOperationArrows
-             | OpenDefault
-             (* | DifferentOperationArrows *)
-             | FinalArrowSharesWithAlias
+    type opt =
+      | FinalArrowSharesWithAlias
     type t = opt list
 
-    let preset_comp = [PresenceOmit ; AliasOmit ; ContractOperationArrows ; ArrowsCurriedCollectionAssumeFresh ]
-    let preset_struct = preset_comp @ [ FinalArrowSharesWithAlias ]
+    let preset_struct = [ FinalArrowSharesWithAlias ]
     let default_opts = preset_struct
 
-    let all_opts = [ PresenceOmit
-                   ; AliasOmit
-                   ; ArrowsShowTheOneEffect
-                   ; ArrowsCurriedCollectionAssumeFresh
-                   ; ContractOperationArrows
-                   ; OpenDefault
-                       (* ; DifferentOperationArrows *)
-                   ; FinalArrowSharesWithAlias ]
+    let all_opts = [ FinalArrowSharesWithAlias ]
 
     let show_opt : opt -> string
       = function
-      | PresenceOmit             -> "presence_omit"
-      | ArrowsShowTheOneEffect   -> "arrows_show_the_one_effect"
-      | ArrowsCurriedCollectionAssumeFresh -> "arrows_curried_collection_assume_fresh"
-      | AliasOmit                -> "alias_omit"
-      | ContractOperationArrows  -> "contract_operation_arrows"
-      | OpenDefault              -> "open_default"
-    (* | DifferentOperationArrows -> "different_operation_arrows" *)
       | FinalArrowSharesWithAlias-> "final_arrow_shares_with_alias"
     let string_of_opts = Settings.string_of_paths -<- List.map show_opt
 
     let show_shortcut : opt -> string
       = function
-      | PresenceOmit             -> "pres"
-      | ArrowsShowTheOneEffect   -> "arrows_show_the_one_effect"
-      | ArrowsCurriedCollectionAssumeFresh -> "ccf"
-      | AliasOmit                -> "alias"
-      | ContractOperationArrows  -> "contract"
-      | OpenDefault              -> "|.}"
-      (* | DifferentOperationArrows -> "->>" *)
       | FinalArrowSharesWithAlias-> "-e->T(e)"
     let shortcuts_of_opts = Settings.string_of_paths -<- List.map show_shortcut
 
@@ -2073,20 +2031,6 @@ module Policy = struct
       = let parse_opt : string -> opt
           = fun s ->
           match String.lowercase_ascii s with
-          | "presence_omit" | "pres"
-            -> PresenceOmit
-          | "arrows_show_the_one_effect"
-            -> ArrowsShowTheOneEffect
-          | "arrows_curried_collection_assume_fresh" | "ccf"
-            -> ArrowsCurriedCollectionAssumeFresh
-          | "alias_omit" | "alias"
-            -> AliasOmit
-          | "contract_operation_arrows" | "contract"
-            -> ContractOperationArrows
-          | "open_default" | "|.}"
-            -> OpenDefault
-          (* | "different_operation_arrows" | "->>"
-           *   -> DifferentOperationArrows *)
           | "final_arrow_shares_with_alias" | "-e->t(e)" (* hacky due to lowercase *)
             -> FinalArrowSharesWithAlias
           | _ -> failwith ("Invalid option: " ^ s)
@@ -2097,7 +2041,6 @@ module Policy = struct
         fun s ->
         match String.lowercase_ascii s with
         | "none"          -> []
-        | "preset_comp"   -> preset_comp
         | "preset_struct" -> preset_struct
         | "default"       -> default_opts
         | "all"           -> all_opts
@@ -2110,28 +2053,11 @@ module Policy = struct
                    effect_sugar = true)." in
         let lines =
           [  "Options (shortcuts in [brackets]):"
-           ; " * presence_omit [pres]: omit presence polymorphic operations"
-           ; "   within effect rows (1)"
-           ; " * alias_omit [alias]: hide empty (1) shared effect rows in last"
-           ; "   argument of aliases"
-           ; " * arrows_show_the_one_effect: display the imlicit shared effect"
-           ; "   on arrows"
-           ; " * arrows_curried_collection_assume_fresh [ccf]: in curried"
-           ; "   functions, collection arrows are assumed to have fresh"
-           ; "   effects and these are hidden"
-           ; " * contract_operation_arrows [contract]: contract operations"
-           ; "   `E:() {}-> a' to `E:a'"
-           ; " * open_default [|.}]: effect rows are open by default,"
-           ; "   closed with syntax { |.}"
-           (* ; " * different_operation_arrows [->>]: operation arrow will be"
-            * ; "   syntactically differentiated" *)
            ; " * final_arrow_shares_with_alias [-e->T(e)]: final arrow and"
            ; "   a following type alias will be assumed to share implicit effects"
            ; "   (This is only a desugaring setting)."
            ; "Meta-options:"
            ; " * none: turn all of the above off"
-           ; " * preset_comp: default preset for transforming Comps"
-           ; "   enables " ^ (shortcuts_of_opts preset_comp)
            ; " * preset_struct: default preset for transforming structures"
            ; "   that contain functions"
            ; "   enables " ^ (shortcuts_of_opts preset_struct)
@@ -2155,13 +2081,6 @@ module Policy = struct
                   |> convert parse_opts
                   |> sync)
 
-    let presence_omit                 = List.mem PresenceOmit
-    let alias_omit                    = List.mem AliasOmit
-    let arrows_show_the_one           = List.mem ArrowsShowTheOneEffect
-    let arrows_collection_fresh       = List.mem ArrowsCurriedCollectionAssumeFresh
-    let contract_operation_arrows     = List.mem ContractOperationArrows
-    let open_default                  = List.mem OpenDefault
-    (* let different_operation_arrows    = List.mem DifferentOperationArrows *)
     let final_arrow_shares_with_alias = List.mem FinalArrowSharesWithAlias
 
     let default () = Settings.get sugar_specifics
