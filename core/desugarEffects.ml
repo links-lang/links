@@ -529,7 +529,6 @@ let collect_operation_of_type tp
              let o = if StringSet.mem r_unique_name seen_recapps
                      then o (* skip, decycling *)
                      else begin
-                         (* TODO is the usage of r_unique_name correct? *)
                          let inner_type = r_unwind tyargs r_dual in
                          let o = o#add_seen_recapp r_unique_name in
                          fst (o#typ inner_type)
