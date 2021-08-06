@@ -801,7 +801,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "itemTextContent",
   (p1 (function
          | `XML (Value.Text str) -> Value.box_string str
-         | _ -> raise (runtime_type_error "non-text node given to textContent")), 
+         | _ -> raise (runtime_type_error "non-text node given to textContent")),
    datatype "(XmlItem) ~> String",
   IMPURE);
 
