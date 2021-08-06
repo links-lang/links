@@ -448,6 +448,11 @@ let collect_operation_of_type tp
       object (o : 'self_type)
         inherit Types.Transform.visitor as super
 
+        val seen_recapps : stringset = StringSet.empty
+        method add_seen_recapp name =
+          let seen_recapps = StringSet.add name seen_recapps in
+          {< seen_recapps >}
+
         val operations : stringset RowVarMap.t = RowVarMap.empty
         method operations = operations
 
@@ -518,9 +523,19 @@ let collect_operation_of_type tp
              let o = o#alias_recapp kinds tyargs in
              let (o,_) = o#typ inner_tp in
              (o, tp)
-          | RecursiveApplication { r_quantifiers = kinds; r_args = tyargs ; _ } ->
-             (* TODO also go inside these, but decycle *)
-             (o#alias_recapp kinds tyargs, tp)
+          | RecursiveApplication { r_unique_name ; r_quantifiers = kinds
+                                   ; r_args = tyargs ; r_unwind; r_dual ; _ } ->
+             let o = o#alias_recapp kinds tyargs in
+             let o = if StringSet.mem r_unique_name seen_recapps
+                     then o (* skip, decycling *)
+                     else begin
+                         (* TODO is the usage of r_unique_name correct? *)
+                         let inner_type = r_unwind tyargs r_dual in
+                         let o = o#add_seen_recapp r_unique_name in
+                         fst (o#typ inner_type)
+                       end
+             in
+             (o, tp)
           | _ -> super#typ tp
 
       end
