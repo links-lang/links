@@ -502,6 +502,22 @@ fun asList(t) server {
   for (x <-- t) [x]
 }
 
+# Gets children of elements in an XML forest, concatenated in order
+# @param {Xml} xml
+# @returns {Xml}
+sig childNodes : (Xml) ~> Xml
+fun childNodes(xml) {
+  for (x <- xml) itemChildNodes(x)
+}
+
+# Gets text content of an XML forest, concatenated in order
+# @param {Xml} xml
+# @returns {String}
+sig getTextContent : (Xml) ~> String
+fun getTextContent(xml) {
+  fold_left((^^),"",for (x <- xml) [itemTextContent(x)])
+}
+
 # Appends a XML forest to an XmlItems children
 # @param {XmlItem} item
 # @param {Xml} child

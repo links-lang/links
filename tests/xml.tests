@@ -311,3 +311,15 @@ Variables with hyphens are not OK
 var hello-world = "hello"
 stderr : @..*
 exit : 1
+
+Getting the children of a singleton Xml is OK
+childNodes(<a><b/></a>)
+stdout : <b/> : Xml
+
+Getting the children of an empty XML is OK
+childNodes([])
+stdout : [] : Xml
+
+Getting the children of a list of children is OK
+childNodes(childNodes(<z><a><b/></a><c><d/></c></z>))
+stdout : <b/><d/> : Xml
