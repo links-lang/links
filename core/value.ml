@@ -156,6 +156,11 @@ let is_attr = function
   | NsAttr _ -> true
   | _        -> false
 
+let is_node = function
+  | Node _   -> true
+  | NsNode _ -> true
+  | _        -> false
+
 let attrs = List.filter is_attr
 and nodes = List.filter (not -<- is_attr)
 

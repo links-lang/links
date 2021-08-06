@@ -291,6 +291,9 @@ val value_of_xml : xml -> t
 val xml_of_variants : t -> xml
 val xmlitem_of_variant : t -> xmlitem
 
+val is_attr : xmlitem -> bool
+val is_node : xmlitem -> bool
+
 val split_html : xml -> xml * xml
 
 val is_channel : t -> bool
