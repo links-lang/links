@@ -30,7 +30,7 @@ test('adds 1 + 2 to equal 3', async () => {
   await driver.findElement(inputRight).sendKeys('2', Key.ENTER);
 
   // Wait for the result to load
-  await driver.wait(until.urlIs(DEFAULT_BASE_URL + '#'));
+  await driver.wait(until.urlIs(DEFAULT_BASE_URL + '/#'));
 
   var elem = await driver.findElement(By.css('body'));
   var output = await elem.getText();

@@ -7,7 +7,7 @@ require('dotenv').config({ path: './linksconfig' })
 
 const HOSTNAME = process.env.host;
 const PORT = process.env.port;
-const DEFAULT_BASE_URL = `http://${HOSTNAME}:${PORT}/`;
+const DEFAULT_BASE_URL = `http://${HOSTNAME}:${PORT}`;
 
 // Delay function
 async function sleep(sec) {
