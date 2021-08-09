@@ -21,15 +21,34 @@ afterAll(async () => {
   linksServer.kill('SIGINT');
 });
 
-test('something', async () => {
+test('Check factorial up to 64', async () => {
   await driver.get(`${DEFAULT_BASE_URL}/examples/factorial.links`);
+
+  // Type '64' in the text box
+  // Due to refresh, the element need to be located twice.
+  await driver.findElement(By.xpath('/html/body/form/input[1]')).sendKeys('6');
+  await driver.findElement(By.xpath('/html/body/form/input[1]')).sendKeys('4');
+
+  await driver.findElement(By.xpath('/html/body/form/input[2]'))
+    .click();
+
+  // Find tables
+  await driver.wait(until.elementsLocated(By.xpath('/html/body/table/tbody')));
+  let table = await driver.findElement(By.xpath('/html/body/table/tbody'));
+
+  // Find all rows
+  let rows = await table.findElements(By.css('tr'));
+  let factAccum = 1;
+
+  for await (const row of rows.map(r => r.findElements(By.css('td')))) {
+
+    // Extract two values from a row
+    let i = parseInt(await (row[0].getText()));
+    let fact = parseInt(await (row[1].getText()));
+
+    // Accumulate factorial value
+    factAccum *= i;
+
+    expect(fact).toBe(factAccum);
+  }
 });
-
-// test("Google", async () => {
-//     await driver.get('http://google.com');
-//     expect(await driver.getTitle()).toBe("Google");
-// });
-
-// test("True", () => {
-//     expect(1).toBe(1);
-// })
