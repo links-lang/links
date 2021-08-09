@@ -17,13 +17,20 @@ async function sleep(sec) {
 }
 
 module.exports = {
-  startServer: async (linksScriptPath) => {
+  startServer: async (linksScriptPath, linksModulePath = '') => {
+    let cmd = `${LINKS_EXEC} ${linksScriptPath}`
+    let args = [
+      "--debug",
+      "--config='linksconfig'",
+      linksModulePath ? `--path=${linksModulePath}` : ''
+    ].join(' ');
 
     linksServer = require('child_process')
       .spawn(`${LINKS_EXEC} ${linksScriptPath}`,
         [
           "--debug",
           "--config='linksconfig'",
+          linksModulePath ? `--path=${linksModulePath}` : ''
         ],
         {
           detached: true,
