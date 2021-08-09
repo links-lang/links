@@ -21,13 +21,12 @@ afterAll(async () => {
 test('adds 1 + 2 to equal 3', async () => {
   await driver.get(DEFAULT_BASE_URL);
 
-  const inputLeft = By.name('input_0');
-  const inputRight = By.name('input_1');
+  // Wait for all elements to be located
+  Promise.all(['input_0', 'input_1']
+    .map(inputName => driver.wait(until.elementsLocated(By.name(inputName)))));
 
-  Promise.all(['input_0', 'input_1'].map(inputName => driver.wait(until.elementsLocated(By.name(inputName)))));
-
-  await driver.findElement(inputLeft).sendKeys('1');
-  await driver.findElement(inputRight).sendKeys('2', Key.ENTER);
+  await driver.findElement(By.name('input_0')).sendKeys('1');
+  await driver.findElement(By.name('input_1')).sendKeys('2', Key.ENTER);
 
   // Wait for the result to load
   await driver.wait(until.urlIs(DEFAULT_BASE_URL + '/#'));
