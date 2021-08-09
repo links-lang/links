@@ -13,6 +13,7 @@
   "author": "ChefYeum",
   "dependencies": {
     "chromedriver": "^92.0.1",
+    "dotenv": "^10.0.0",
     "geckodriver": "^2.0.1",
     "jest": "^27.0.6",
     "node-fetch": "^2.6.1",

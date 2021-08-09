@@ -2,18 +2,20 @@ const { By, Key, until } = require('selenium-webdriver');
 const { loadBrowser } = require('../browserDrivers');
 const { startServer, DEFAULT_BASE_URL, LINKS_ROOT } = require('../linksServerRunner');
 
-let driver;
+let driver, linksServer;
 
 beforeAll(async () => {
   // Instantiate browser driver
   driver = await loadBrowser();
 
   // Start Links server
-  await startServer(`${LINKS_ROOT}/examples/webserver/buttons.links`);
+  linksServer = await startServer(`${LINKS_ROOT}/examples/webserver/buttons.links`);
+  return linksServer;
 });
 
 afterAll(async () => {
   await driver.quit();
+  linksServer.kill('SIGINT');
 });
 
 test('adds 1 + 2 to equal 3', async () => {
