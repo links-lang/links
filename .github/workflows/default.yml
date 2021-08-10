@@ -356,6 +356,29 @@ jobs:
           - firefox
           - chrome
     runs-on: ${{ matrix.os }}
+    services:
+      postgres:
+        image: postgres:12
+        env:
+          POSTGRES_USER: links
+          POSTGRES_PASSWORD: links
+        ports:
+          - 5433:5432
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_USER: links
+          MYSQL_PASSWORD: links
+          MYSQL_ROOT_PASSWORD: links
+          MYSQL_DATABASE: links
+          MYSQL_ROOT_HOST: "%"
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
     env:
       LINKS_BROWSER: ${{ matrix.browser }}
       NPM_DIR: tests/end-to-end
