@@ -38,6 +38,7 @@ module.exports = {
           // stdio: 'ignore',  // Do not print the Links log
           shell: true
         });
+    linksServer.unref();
 
     return new Promise(async (resolve, reject) => {
 

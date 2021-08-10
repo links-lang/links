@@ -16,8 +16,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await driver.quit();
 
-  // TODO: find workaround to kill links process
-  require('child_process').exec('killall links.exe')
+  process.kill(-linksServer.pid, 'SIGTERM');
 });
 
 test('adds 1 + 2 to equal 3', async () => {

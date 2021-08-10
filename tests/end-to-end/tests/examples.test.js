@@ -20,7 +20,9 @@ afterAll(async () => {
   await driver.quit();
 
   // TODO: find workaround to kill links process
-  require('child_process').exec('killall links.exe');
+  // require('child_process').exec('killall links.exe');
+
+  process.kill(-linksServer.pid, 'SIGTERM');
 });
 
 test('Check factorial up to 64', async () => {
