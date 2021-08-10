@@ -3,7 +3,7 @@ const LINKS_ROOT_DIR = __dirname + '/../..';
 const LINKS_EXEC = `${LINKS_ROOT_DIR}/links`;
 
 // Load Links config as environment variables
-require('dotenv').config({ path: './linksconfig' })
+require('dotenv').config({ path: './linksconfig' });
 
 const HOSTNAME = process.env.host;
 const PORT = process.env.port;
@@ -18,13 +18,6 @@ async function sleep(sec) {
 
 module.exports = {
   startServer: async (linksScriptPath, linksModulePath = '') => {
-    let cmd = `${LINKS_EXEC} ${linksScriptPath}`
-    let args = [
-      "--debug",
-      "--config='linksconfig'",
-      linksModulePath ? `--path=${linksModulePath}` : ''
-    ].join(' ');
-
     linksServer = require('child_process')
       .spawn(`${LINKS_EXEC} ${linksScriptPath}`,
         [
@@ -52,17 +45,17 @@ module.exports = {
 
       linksServer.unref();
 
-      const TRIAL_COUNT = 10
+      const TRIAL_COUNT = 10;
       for (var i = 1; i <= TRIAL_COUNT; i++) {
         // Some delay
         await sleep(2000);
 
-        console.log(`(${i + 1}) request ${DEFAULT_BASE_URL} `)
+        console.log(`(${i + 1}) request ${DEFAULT_BASE_URL} `);
 
         try {
           let response = await fetch(DEFAULT_BASE_URL);
           if (response.ok) {
-            console.log(`Request ${i} successful.`)
+            console.log(`Request ${i} successful.`);
             resolve(linksServer);
             return;
           }
@@ -77,4 +70,4 @@ module.exports = {
   },
   DEFAULT_BASE_URL: DEFAULT_BASE_URL,
   LINKS_ROOT: LINKS_ROOT_DIR
-}
+};

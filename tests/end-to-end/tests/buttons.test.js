@@ -45,4 +45,4 @@ test("Google", async () => {
 
 test("True", () => {
   expect(1).toBe(1);
-})
+});

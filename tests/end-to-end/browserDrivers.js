@@ -23,4 +23,4 @@ module.exports = {
         throw new Error(`Browser name ${BROWSER} not recognised`);
     }
   }
-}
+};
