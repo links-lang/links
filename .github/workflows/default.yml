@@ -357,7 +357,7 @@ jobs:
           - chrome
     runs-on: ${{ matrix.os }}
     env:
-      LINKS_BROWSER: ${{ matrix.browser }} 
+      LINKS_BROWSER: ${{ matrix.browser }}
       NPM_DIR: tests/end-to-end
     steps:
       - name: Checkout code
@@ -374,7 +374,7 @@ jobs:
       #     ./links.opam
       #     --deps-only
 
-        # Start
+      # Start
       - name: Install system dependencies
         run: sudo apt-get install -y libev-dev
         shell: bash
@@ -396,13 +396,37 @@ jobs:
           ./links-sqlite3.opam
           --deps-only
           --ignore-constraints-on=links
-        # End
 
       - name: Build Links from source
         run: |
           eval $(opam env)
           make all-ci
         shell: bash
+
+      - name: Run database testsuite
+        run: |
+          eval $(opam env)
+          ./run-database-tests tests/database -d all
+          ./run-database-tests tests/shredding -d all
+          ./run-database-tests tests/relational-lenses -d all
+          ./run-tests db-unit-tests
+        env:
+          # TODO(dhil): I do not know how to index into the
+          # environments of either service. Until we figure out how to
+          # do it, we will just duplicate information here.
+          LINKS_POSTGRES_HOST: localhost
+          LINKS_POSTGRES_USER: links
+          LINKS_POSTGRES_PASSWORD: links
+          LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+          LINKS_MYSQL8_HOST: 127.0.0.1
+          LINKS_MYSQL8_USER: links
+          LINKS_MYSQL8_PASSWORD: links
+          LINKS_MYSQL8_PORT: ${{ job.services.mysql.ports[3306] }}
+        shell: bash
+
+        # End
+      # - name: Start PostgreSQL
+      #   run:
 
       - uses: actions/setup-node@v2
       - run: npm install
