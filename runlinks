@@ -1,0 +1,27 @@
+#!/bin/bash
+# usage: runlinks [debug] [application.links]
+LINKSHOME="./"
+CONFIG="$LINKSHOME/handlers.config"
+LINKSPATH="$LINKSHOME/examples:$LINKSHOME/examples/games:$LINKSHOME/examples/handlers:$LINKSHOME/examples/dictionary"
+
+PROG=$1
+DEBUG=""
+if [[ $1 = "debug" ]]; then
+   DEBUG="-d"
+   PROG=$2
+fi
+
+PROG=$(test -z $PROG && echo "$LINKSHOME/examples/webserver/examples.links" || echo "$PROG")
+if [ ! -f $PROG ]; then
+    echo "error: no such Links program '$PROG'."
+    exit 1
+fi
+
+timestamp="$(date +'%R:%S%z%Z, %b %d, %Y')"
+echo "Starting Links with parameters ($timestamp):"
+printf "%4s  debug=%s\n" "" $(test -z $DEBUG && echo "false" || echo "true")
+printf "%4s config=%s\n" "" $CONFIG
+printf "%4s   path=%s\n" "" $LINKSPATH
+printf "%4sprogram=%s\n\n" "" $PROG
+
+$LINKSHOME/links $DEBUG --path=$LINKSPATH $PROG
