@@ -457,3 +457,5 @@ jobs:
           LINKS_MYSQL8_USER: links
           LINKS_MYSQL8_PASSWORD: links
           LINKS_MYSQL8_PORT: ${{ job.services.mysql.ports[3306] }}
+          POSTGRES_USER: links
+          POSTGRES_PASSWORD: links
