@@ -1,6 +1,6 @@
 typename Zero = [||];
 
-typename Comp(a, e::Eff) = (() ~e~> a);
+typename Comp(a) = (() ~> a);
 typename CF(a, e::Eff) = Comp(a, {Choice: (()) {}-> Bool,
                                   Failure:(()) {}-> Zero|e});
 
@@ -24,7 +24,7 @@ fun allResults(m) {
 
 typename Toss = [|Heads|Tails|];
 
-sig drunkToss : CF(Toss, {})
+sig drunkToss : CF(Toss)
 fun drunkToss() {
   if (choice()) {
     choose(Heads, Tails)
@@ -33,7 +33,7 @@ fun drunkToss() {
   }
 }
 
-sig drunkTosses : (Int) -> CF([Toss], {})
+sig drunkTosses : (Int) -> CF([Toss])
 fun drunkTosses(n)() {
   for (_ <- [1..n]) [drunkToss()]
 }
