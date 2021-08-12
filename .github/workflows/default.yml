@@ -471,7 +471,9 @@ jobs:
       #     POSTGRES_USER: links
       #     POSTGRES_PASSWORD: links
       - name: Add database args
-        run: echo "database_args=localhost:${LINKS_POSTGRES_PORT}:links:" >> linksconfig
+        run: |
+          echo "database_args=localhost:${LINKS_POSTGRES_PORT}:links:"
+          echo "database_args=localhost:${LINKS_POSTGRES_PORT}:links:" >> linksconfig
         working-directory: ${{ env.NPM_DIR }}
         env:
           LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
