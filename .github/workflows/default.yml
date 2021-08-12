@@ -491,5 +491,5 @@ jobs:
       - name: Test Links server
         run: ../../links "../../examples/webserver/examples.links" --config='linksconfig'  --path=../../examples:/../../examples/games:../../examples/handlers:../../examples/dictionary:../../examples/games
         working-directory: ${{ env.NPM_DIR }}
-
-
+        env:
+          LINKS_POSTGRES_PASSWORD: links
