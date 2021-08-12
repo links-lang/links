@@ -437,8 +437,8 @@ jobs:
         shell: bash
 
         # End
-      - name: Show all databases 
-        run: psql -l
+      - name: log 
+        run: sudo netstat -plunt | grep postgres
         env:
           LINKS_POSTGRES_HOST: localhost
           LINKS_POSTGRES_USER: links
