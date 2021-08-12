@@ -1126,7 +1126,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   datatype "(Int) ~> DateTime",
   IMPURE);
 
-  "dateYear", (project_datetime_conv (fun dt -> CalendarShow.year dt));
+  "dateYear", (project_datetime_conv CalendarShow.year);
   "dateDay", project_datetime_conv (fun dt -> CalendarShow.day_of_month dt);
   "dateMonth", project_datetime_conv (CalendarShow.month ->- CalendarLib.Date.int_of_month);
   "dateHours", project_datetime_conv (fun dt -> CalendarShow.hour dt);
