@@ -1,3 +1,33 @@
+# 0.9.4
+
+## DateTime type
+Links now includes a primitive type, `DateTime`, for dates and times.
+This is a *breaking change* from previous versions, where `dateToInt`
+and `intToDate` operated on a record.
+
+The primitive type allows us to better timezones, and also allows us
+to work seamlessly with timestamps in the database.
+
+Obtain a DateTime via:
+
+  *  the `now()` function to get a timestamp for the current local time
+  *  Using `parseDate` on an ISO-formatted string (e.g., `parseDate("26-07-2021 14:26:00+1")`)
+  *  A `DateTime` field in the database
+  *  `intToDate(X)` where `X` is a UNIX timestamp
+  *  `beginningOfTime` and `forever`, which are special timestamps guaranteed to be less than (resp. greater than) all other timestamps
+
+Project fields out of the type:
+
+  * utcYear, utcMonth, utcDay, utcHours, utcMinutes, utcSeconds projects the given field in the UTC time zone
+  * localYear, localMonth, localDay, localHours, localMinutes, localSeconds projects the given field in the local time zone
+  * dateYear, dateMonth, dateDay, dateHours, dateMinutes, dateSeconds projects the given field in a given timezone (e.g., to project the hours field of a DateTime dt in BST, one would write dateHours(dt, 1), where 1 is the timezone offset.
+
+You can also print out the `DateTime` using `show` (which is an alias of
+`showLocal`) and `showUTC`.
+
+`DateTime`s are comparable as normal.
+
+
 # 0.9.3
 
 This minor release fixes a few bugs.
