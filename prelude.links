@@ -1412,7 +1412,7 @@ fun assertEq (actual, expected) server {
   else {
       print("Assertion failed.");
       print("Expected:\n");
-      print(show(expected));
+      println(show(expected));
       print("\nbut got:\n");
       print(show(actual));
       sysexit(2)
@@ -1576,4 +1576,3 @@ sig showLocal : (DateTime) ~> String
 fun showLocal(dt) {
     show(dt)
 }
-
