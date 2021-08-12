@@ -1128,7 +1128,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "dateYear", (project_datetime_conv (fun dt -> CalendarShow.year dt));
   "dateDay", project_datetime_conv (fun dt -> CalendarShow.day_of_month dt);
-  "dateMonth", project_datetime_conv (fun dt -> CalendarShow.month dt |> CalendarLib.Date.int_of_month);
+  "dateMonth", project_datetime_conv (CalendarShow.month ->- CalendarLib.Date.int_of_month);
   "dateHours", project_datetime_conv (fun dt -> CalendarShow.hour dt);
   "dateMinutes", project_datetime (fun dt -> CalendarShow.minute dt);
   "dateSeconds",
