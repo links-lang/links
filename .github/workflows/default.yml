@@ -437,8 +437,19 @@ jobs:
         shell: bash
 
         # End
-      # - name: Start PostgreSQL
-      #   run:
+      - name: Show all databases 
+        run: psql -l
+        env:
+          LINKS_POSTGRES_HOST: localhost
+          LINKS_POSTGRES_USER: links
+          LINKS_POSTGRES_PASSWORD: links
+          LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+          LINKS_MYSQL8_HOST: 127.0.0.1
+          LINKS_MYSQL8_USER: links
+          LINKS_MYSQL8_PASSWORD: links
+          LINKS_MYSQL8_PORT: ${{ job.services.mysql.ports[3306] }}
+          POSTGRES_USER: links
+          POSTGRES_PASSWORD: links
 
       - uses: actions/setup-node@v2
       - run: npm install
@@ -459,3 +470,5 @@ jobs:
           LINKS_MYSQL8_PORT: ${{ job.services.mysql.ports[3306] }}
           POSTGRES_USER: links
           POSTGRES_PASSWORD: links
+
+
