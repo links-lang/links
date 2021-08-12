@@ -18,15 +18,16 @@ Obtain a DateTime via:
 
 Project fields out of the type:
 
-  * utcYear, utcMonth, utcDay, utcHours, utcMinutes, utcSeconds projects the given field in the UTC time zone
-  * localYear, localMonth, localDay, localHours, localMinutes, localSeconds projects the given field in the local time zone
-  * dateYear, dateMonth, dateDay, dateHours, dateMinutes, dateSeconds projects the given field in a given timezone (e.g., to project the hours field of a DateTime dt in BST, one would write dateHours(dt, 1), where 1 is the timezone offset.
+  * utcYear, utcMonth, utcDay, utcHours, utcMinutes, utcSeconds, utcMilliseconds projects the given field in the UTC time zone
+  * localYear, localMonth, localDay, localHours, localMinutes, localSeconds, localMilliseconds projects the given field in the local time zone
+  * dateYear, dateMonth, dateDay, dateHours, dateMinutes, dateSeconds, dateMilliseconds projects the given field in a given timezone (e.g., to project the hours field of a DateTime dt in BST, one would write `dateHours(dt, 1)`, where 1 is the timezone offset.
 
 You can also print out the `DateTime` using `show` (which is an alias of
 `showLocal`) and `showUTC`.
 
 `DateTime`s are comparable as normal.
 
+Due to limitations of the underlying library, the minimum timezone granularity is one hour. Unfortunately, this means we can't handle Indian timezones, for example.
 
 # 0.9.3
 

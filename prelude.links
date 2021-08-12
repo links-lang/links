@@ -1545,8 +1545,11 @@ fun utcHours(dt) { dateHours(dt, 0) }
 sig utcMinutes : (DateTime) -> Int
 fun utcMinutes(dt) { dateMinutes(dt) }
 
-sig utcSeconds : (DateTime) -> Float
+sig utcSeconds : (DateTime) -> Int
 fun utcSeconds(dt) { dateSeconds(dt) }
+
+sig utcMilliseconds : (DateTime) -> Int
+fun utcMilliseconds(dt) { dateMilliseconds(dt) }
 
 # Local time accessors (Note that these are impure since we use utcOffset() to
 # get the currently-set UTC offset to convert from UTC to local time)
@@ -1566,8 +1569,11 @@ fun localHours(dt) { dateHours(dt, utcOffset()) }
 sig localMinutes : (DateTime) ~> Int
 fun localMinutes(dt) { dateMinutes(dt) }
 
-sig localSeconds : (DateTime) ~> Float
+sig localSeconds : (DateTime) ~> Int
 fun localSeconds(dt) { dateSeconds(dt) }
+
+sig localMilliseconds : (DateTime) -> Int
+fun localMilliseconds(dt) { dateMilliseconds(dt) }
 
 # Default serialisation of DTs at the moment is in local time,
 # so `showLocal` is just a specialisation of the default `show`

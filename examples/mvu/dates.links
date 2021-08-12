@@ -23,7 +23,7 @@ fun updt(msg, model) {
 
             # Print the time out on the server every 10 seconds.
             var cmd =
-                if (mod(floatToInt(localSeconds(dt)), 10) == 0) {
+                if (mod(localSeconds(dt), 10) == 0) {
                     MvuCommands.spawnProc(fun() { printClientTimeOnServer(dt); NoOp })
                 } else {
                     MvuCommands.empty
@@ -57,7 +57,8 @@ fun view(model) {
     entry("Local month", intToString(localMonth(ts))) +*
     entry("Local hour", intToString(localHours(ts))) +*
     entry("Local minute", intToString(localMinutes(ts))) +*
-    entry("Local seconds", floatToString(localSeconds(ts))) +*
+    entry("Local seconds", intToString(localSeconds(ts))) +*
+    entry("Local milliseconds", intToString(localMilliseconds(ts))) +*
     entry("Client-parsed date", show(parseDate("2021-07-26 10:10:10+1"))) +*
     entry("Infinity on client", show(forever)) +*
     entry("-Infinity on client", show(beginningOfTime))
@@ -65,7 +66,7 @@ fun view(model) {
 
 sig subscriptions : (Model) ~> MvuSubscriptions.Sub(Msg)
 fun subscriptions(model) {
-    getEvery(1000, fun() {
+    getEvery(125, fun() {
       Tick
     })
 }

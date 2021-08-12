@@ -1136,8 +1136,26 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     match Value.unbox_datetime dt with
       | Timestamp.Infinity -> raise (runtime_error "Cannot project from 'forever'")
       | Timestamp.MinusInfinity -> raise (runtime_error "Cannot project from beginningOfTime")
-      | Timestamp.Timestamp ts -> Value.box_float (CalendarShow.second ts)),
-  datatype "(DateTime) -> Float",
+      | Timestamp.Timestamp ts ->
+          CalendarShow.second ts
+          |> floor
+          |> int_of_float
+          |> Value.box_int),
+  datatype "(DateTime) -> Int",
+  PURE);
+
+  (* We are precise to three decimal places. *)
+  "dateMilliseconds",
+    (p1 (fun dt ->
+    match Value.unbox_datetime dt with
+      | Timestamp.Infinity -> raise (runtime_error "Cannot project from 'forever'")
+      | Timestamp.MinusInfinity -> raise (runtime_error "Cannot project from beginningOfTime")
+      | Timestamp.Timestamp ts ->
+          mod_float ((CalendarShow.second ts) *. 1000.0) 1000.0
+          |> int_of_float
+          |> Value.box_int
+    ),
+  datatype "(DateTime) -> Int",
   PURE);
 
 
