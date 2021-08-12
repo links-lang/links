@@ -35,7 +35,7 @@ parseDate("2021-07-26 11:14:57+1") == intToDate(1627294497)
 stdout : true : Bool
 
 -infinity lowest value
-beginning_of_time < intToDate(0)
+beginningOfTime < intToDate(0)
 stdout : true : Bool
 
 +infinity highest value
@@ -43,7 +43,7 @@ forever > intToDate(2147483647)
 stdout : true : Bool
 
 -infinity = -infinity
-beginning_of_time == beginning_of_time
+beginningOfTime == beginningOfTime
 stdout : true : Bool
 
 +infinity = +infinity

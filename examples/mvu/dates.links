@@ -60,7 +60,7 @@ fun view(model) {
     entry("Local seconds", floatToString(localSeconds(ts))) +*
     entry("Client-parsed date", show(parseDate("2021-07-26 10:10:10+1"))) +*
     entry("Infinity on client", show(forever)) +*
-    entry("-Infinity on client", show(beginning_of_time))
+    entry("-Infinity on client", show(beginningOfTime))
 }
 
 sig subscriptions : (Model) ~> MvuSubscriptions.Sub(Msg)

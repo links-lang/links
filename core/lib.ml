@@ -199,7 +199,7 @@ let project_datetime_conv (f: CalendarShow.t -> int) : located_primitive * Types
   (p2 (fun dt offset ->
     match Value.unbox_datetime dt with
       | Timestamp.Infinity -> raise (runtime_error "Cannot project from 'forever'")
-      | Timestamp.MinusInfinity -> raise (runtime_error "Cannot project from beginning_of_time")
+      | Timestamp.MinusInfinity -> raise (runtime_error "Cannot project from beginningOfTime")
       | Timestamp.Timestamp ts ->
               let open CalendarLib in
               (* Convert according to offset, and then apply projection function. *)
@@ -216,7 +216,7 @@ let project_datetime (f: CalendarShow.t -> int) : located_primitive * Types.data
   (p1 (fun dt ->
     match Value.unbox_datetime dt with
       | Timestamp.Infinity -> raise (runtime_error "Cannot project from 'forever'")
-      | Timestamp.MinusInfinity -> raise (runtime_error "Cannot project from beginning_of_time")
+      | Timestamp.MinusInfinity -> raise (runtime_error "Cannot project from beginningOfTime")
       | Timestamp.Timestamp ts -> Value.box_int (f ts)),
   datatype "(DateTime) -> Int",
   PURE)
@@ -1107,7 +1107,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
            | `DateTime (Timestamp.Infinity) | `DateTime (Timestamp.MinusInfinity) ->
                (* SJF: Not sure what the semantics should be here...
                 * For now, just throwing a runtime exception. *)
-               raise (runtime_error "Cannot convert 'forever' or 'beginning_of_time' into an integer")
+               raise (runtime_error "Cannot convert 'forever' or beginningOfTime into an integer")
            | `DateTime (Timestamp.Timestamp dt) ->
                UnixTimestamp.of_calendar dt
                    |> int_of_float
@@ -1135,7 +1135,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (p1 (fun dt ->
     match Value.unbox_datetime dt with
       | Timestamp.Infinity -> raise (runtime_error "Cannot project from 'forever'")
-      | Timestamp.MinusInfinity -> raise (runtime_error "Cannot project from beginning_of_time")
+      | Timestamp.MinusInfinity -> raise (runtime_error "Cannot project from beginningOfTime")
       | Timestamp.Timestamp ts -> Value.box_float (CalendarShow.second ts)),
   datatype "(DateTime) -> Float",
   PURE);
@@ -1182,7 +1182,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     datatype "DateTime",
     PURE);
 
-  "beginning_of_time",
+  "beginningOfTime",
   (`DateTime Timestamp.minus_infinity,
     datatype "DateTime",
     PURE);

@@ -63,6 +63,8 @@ module Timestamp = struct
         fprintf str_formatter "%a" pp x;
         flush_str_formatter ()
 
+    let to_string = show
+
     let parse_string str =
       let open Lexing in
 
