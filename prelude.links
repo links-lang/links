@@ -1413,7 +1413,7 @@ fun assertEq (actual, expected) server {
       print("Assertion failed.");
       print("Expected:\n");
       println(show(expected));
-      print("\nbut got:\n");
+      println("but got:");
       print(show(actual));
       sysexit(2)
   }
