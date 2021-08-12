@@ -133,7 +133,7 @@ and jsonize_primitive : Value.primitive_value -> Yojson.Basic.t  = function
      that is transferred between client and server. *)
   | `DateTime (Timestamp.Timestamp ts) ->
       let utc_timestamp =
-        UnixTimestamp.of_calendar ts |> int_of_float in
+        int_of_float (UnixTimestamp.of_calendar ts) in
       lit ~tag:"DateTime"
         [ ("_type", `String "timestamp");
           ("_value", `Int utc_timestamp) ]
