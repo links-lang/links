@@ -483,14 +483,24 @@ jobs:
           repository: dhil/links-database-setup
           path: ./links-database-setup
 
+      - name: Generate .pgpass
+        run: echo $LINKS_POSTGRES_HOST:${{ job.services.postgres.ports[5432] }}:links:LINKS_POSTGRES_USER:LINKS_POSTGRES_PASSWORD >> ~/.pgpass
+        env:
+          LINKS_POSTGRES_HOST: localhost
+          LINKS_POSTGRES_USER: links
+          LINKS_POSTGRES_PASSWORD: links
+          LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+      
+      - run: cat ~/.pgpass
+
       - name: Populate DB for the examples
         run: |
           cd links-database-setup
           for f in `ls *.sql`; do
-            dropdb -U links -h localhost ${f%.sql} -p ${{ job.services.postgres.ports[5432] }}
-            createdb -O links ${f%.sql} -p ${{ job.services.postgres.ports[5432] }}
+            dropdb ${f%.sql} -w
+            createdb ${f%.sql} -w
           done
-          for f in `ls *.sql`; do psql -U links -h localhost -d ${f%.sql} < $f; done
+          for f in `ls *.sql`; do psql -w -d ${f%.sql} < $f; done
 
       - name: Test Links server
         run: ../../links "../../examples/webserver/examples.links" --config='linksconfig'  --path=../../examples:/../../examples/games:../../examples/handlers:../../examples/dictionary:../../examples/games
