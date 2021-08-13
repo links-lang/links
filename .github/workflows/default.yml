@@ -485,7 +485,6 @@ jobs:
         run: |
           cd links-database-setup
           for f in `ls *.sql`; do
-            dropdb ${f%.sql} -w
             createdb ${f%.sql} -w
           done
           for f in `ls *.sql`; do psql -w -d ${f%.sql} < $f; done
