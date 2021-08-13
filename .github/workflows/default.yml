@@ -436,20 +436,7 @@ jobs:
       #     LINKS_MYSQL8_PORT: ${{ job.services.mysql.ports[3306] }}
       #   shell: bash
 
-        # End
-      # - name: log 
-      #   run: sudo netstat -plunt | grep postgres
-      #   env:
-      #     LINKS_POSTGRES_HOST: localhost
-      #     LINKS_POSTGRES_USER: links
-      #     LINKS_POSTGRES_PASSWORD: links
-      #     LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
-      #     LINKS_MYSQL8_HOST: 127.0.0.1
-      #     LINKS_MYSQL8_USER: links
-      #     LINKS_MYSQL8_PASSWORD: links
-      #     LINKS_MYSQL8_PORT: ${{ job.services.mysql.ports[3306] }}
-      #     POSTGRES_USER: links
-      #     POSTGRES_PASSWORD: links
+      # End
 
       # - uses: actions/setup-node@v2
       # - run: npm install
@@ -483,14 +470,34 @@ jobs:
           repository: dhil/links-database-setup
           path: ./links-database-setup
 
+      - name: Generate .pgpass
+        run: |
+          echo $LINKS_POSTGRES_HOST:${{ job.services.postgres.ports[5432] }}:links:LINKS_POSTGRES_USER:LINKS_POSTGRES_PASSWORD >> ${{ env.NPM_+DIR }}/.pgpass
+        env:
+          LINKS_POSTGRES_HOST: localhost
+          LINKS_POSTGRES_USER: links
+          LINKS_POSTGRES_PASSWORD: links
+          LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+      
+      - run: cat ${{ env.NPM_DIR }}/.pgpass
+
       - name: Populate DB for the examples
         run: |
           cd links-database-setup
           for f in `ls *.sql`; do
-            dropdb -U links -h localhost ${f%.sql} -p ${{ job.services.postgres.ports[5432] }}
-            createdb -O links ${f%.sql} -p ${{ job.services.postgres.ports[5432] }}
+            dropdb ${f%.sql} -w
+            createdb ${f%.sql} -w
           done
-          for f in `ls *.sql`; do psql -U links -h localhost -d ${f%.sql} < $f; done
+          for f in `ls *.sql`; do psql -w -d ${f%.sql} < $f; done
+        env:
+          PGPASSWORD: ${{ env.NPM_DIR }}/.pgpass
+
+
+      # -w
+      # --no-password
+      # Never issue a password prompt.
+      # If the server requires password authentication and a password is not available by other means such as a .pgpass file, the connection attempt will fail.
+      # This option can be useful in batch jobs and scripts where no user is present to enter a password.
 
       - name: Test Links server
         run: ../../links "../../examples/webserver/examples.links" --config='linksconfig'  --path=../../examples:/../../examples/games:../../examples/handlers:../../examples/dictionary:../../examples/games
