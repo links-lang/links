@@ -277,27 +277,20 @@ let cleanup_effects tycon_env =
            | None -> `Allow
 
            (* range is another arrow and this is a collector in a
-              curried function => must be fresh
-              (TODO (Samo) this will (optionally) change in a future PR) *)
+              curried function => must be fresh, unless we want to share all arrows *)
            | Some `Arrow ->
-              (* false *)
               if all_implicit_arrows_share ()
               then `Allow
               else `Disallow
 
            (* range is an alias, this is a rightmost arrow, effect
-              sugar is active => decide based on policy *)
+              sugar is active => decide based on policies *)
            | Some `Alias ->
-              (* final_arrow_shares_with_alias ()
-               * || all_implicit_arrows_share () *)
               if all_implicit_arrows_share ()
-              then (print_endline "all => `Allow";
-                    `Allow)
+              then `Allow
               else if final_arrow_shares_with_alias ()
-              then (print_endline "not all, but last => `Infer";
-                    `Infer)
-              else (print_endline "nope => `Disallow";
-                    `Disallow)
+              then `Infer
+              else `Disallow
          in
          let e = self#effect_row ~allow_shared e in
          let r = self#datatype r in
@@ -391,36 +384,31 @@ let cleanup_effects tycon_env =
            when has_effect_sugar
                 && (not (SugarTypeVar.is_resolved stv))
                 && gue stv = ("$", None, `Rigid) ->
-            print_endline "here2";
             let stv' =
               match allow_shared with
               | `Allow -> SugarTypeVar.mk_unresolved "$eff" None `Rigid
-              | `Infer -> print_endline "Flexible";
-                          SugarTypeVar.mk_resolved_row
+              | `Infer -> SugarTypeVar.mk_resolved_row
                             (let var = Types.fresh_raw_variable () in
                              Unionfind.fresh
                                (Types.Var (var, (PrimaryKind.Row, (lin_unl, res_effect)), `Flexible)))
-              | `Disallow -> assert false
+              | `Disallow -> assert false (* TODO is this correct? *)
             in
             Datatype.Open stv'
          | Datatype.Open stv
            when has_effect_sugar
                 && (not (SugarTypeVar.is_resolved stv))
                 && gue stv = ("$eff", None, `Rigid) ->
-            print_endline "here2+i";
             let stv' =
               match allow_shared with
               | `Allow -> SugarTypeVar.mk_unresolved "$eff" None `Rigid
-              | `Infer -> print_endline "Flexible";
-                          SugarTypeVar.mk_resolved_row
+              | `Infer -> SugarTypeVar.mk_resolved_row
                             (let var = Types.fresh_raw_variable () in
                              Unionfind.fresh
                                (Types.Var (var, (PrimaryKind.Row, (lin_unl, res_effect)), `Flexible)))
-              | `Disallow -> assert false
+              | `Disallow -> assert false (* TODO correct? *)
             in
             Datatype.Open stv'
-         | _ -> print_endline "here3";
-                var
+         | _ -> var
        in
        self#row (fields, var)
   end)
