@@ -41,10 +41,12 @@ module Policy : sig
   module EffectSugar : sig
     type opt =
       | FinalArrowSharesWithAlias
+      | AllImplicitArrowsShare
     type t = opt list
     val default : unit -> t
 
     val final_arrow_shares_with_alias : t -> bool
+    val all_implicit_arrows_share : t -> bool
   end
 
   type t = {

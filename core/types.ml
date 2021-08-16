@@ -2003,29 +2003,36 @@ module Policy = struct
   module EffectSugar : sig
     type opt =
       | FinalArrowSharesWithAlias
+      | AllImplicitArrowsShare
     type t = opt list
     val default : unit -> t
 
     val final_arrow_shares_with_alias : t -> bool
+    val all_implicit_arrows_share : t -> bool
   end = struct
     type opt =
       | FinalArrowSharesWithAlias
+      | AllImplicitArrowsShare
     type t = opt list
 
     let preset_comp = []
     let preset_struct = preset_comp @ [ FinalArrowSharesWithAlias ]
     let default_opts = preset_struct
 
-    let all_opts = [ FinalArrowSharesWithAlias ]
+    let all_opts = [ FinalArrowSharesWithAlias
+                   ; AllImplicitArrowsShare
+                   ]
 
     let show_opt : opt -> string
       = function
-      | FinalArrowSharesWithAlias-> "final_arrow_shares_with_alias"
+      | FinalArrowSharesWithAlias -> "final_arrow_shares_with_alias"
+      | AllImplicitArrowsShare -> "all_implicit_arrows_share"
     let string_of_opts = Settings.string_of_paths -<- List.map show_opt
 
     let show_shortcut : opt -> string
       = function
-      | FinalArrowSharesWithAlias-> "-e->T(e)"
+      | FinalArrowSharesWithAlias -> "-e->T(e)"
+      | AllImplicitArrowsShare -> "all_arrows"
     let shortcuts_of_opts = Settings.string_of_paths -<- List.map show_shortcut
 
     let parse_opts : string -> opt list
@@ -2034,6 +2041,8 @@ module Policy = struct
           match String.lowercase_ascii s with
           | "final_arrow_shares_with_alias" | "-e->t(e)" (* hacky due to lowercase *)
             -> FinalArrowSharesWithAlias
+          | "all_implicit_arrows_share" | "all_arrows" ->
+             AllImplicitArrowsShare
           | _ -> failwith ("Invalid option: " ^ s)
         in
         let is_correct : opt list -> bool
@@ -2058,6 +2067,8 @@ module Policy = struct
            ; " * final_arrow_shares_with_alias [-e->T(e)]: final arrow and"
            ; "   a following type alias will be assumed to share implicit effects"
            ; "   (This is only a desugaring setting)."
+           ; " * all_implicit_arrows_share [all_arrows]: all arrows with implicit"
+           ; "   effect vars will be unified"
            ; "Meta-options:"
            ; " * none: turn all of the above off"
            ; " * preset_comp: default preset for transforming Comps"
@@ -2086,6 +2097,7 @@ module Policy = struct
                   |> sync)
 
     let final_arrow_shares_with_alias = List.mem FinalArrowSharesWithAlias
+    let all_implicit_arrows_share = List.mem AllImplicitArrowsShare
 
     let default () = Settings.get sugar_specifics
   end
