@@ -52,6 +52,11 @@ let final_arrow_shares_with_alias () =
   let policy = default_policy () in
   let es_policy = es_policy policy in
   EffectSugar.final_arrow_shares_with_alias es_policy
+let all_implicit_arrows_share () =
+  let open Types.Policy in
+  let policy = default_policy () in
+  let es_policy = es_policy policy in
+  EffectSugar.all_implicit_arrows_share es_policy
 
 let internal_error message =
   Errors.internal_error ~filename:"desugarEffects.ml" ~message
@@ -269,16 +274,30 @@ let cleanup_effects tycon_env =
          let a = self#list (fun o -> o#datatype) a in
          let allow_shared = match may_have_shared_eff tycon_env r with
            (* range is irrelevant - this arrow can share effect *)
-           | None -> true
+           | None -> `Allow
 
            (* range is another arrow and this is a collector in a
               curried function => must be fresh
               (TODO (Samo) this will (optionally) change in a future PR) *)
-           | Some `Arrow -> false
+           | Some `Arrow ->
+              (* false *)
+              if all_implicit_arrows_share ()
+              then `Allow
+              else `Disallow
 
            (* range is an alias, this is a rightmost arrow, effect
               sugar is active => decide based on policy *)
-           | Some `Alias -> final_arrow_shares_with_alias ()
+           | Some `Alias ->
+              (* final_arrow_shares_with_alias ()
+               * || all_implicit_arrows_share () *)
+              if all_implicit_arrows_share ()
+              then (print_endline "all => `Allow";
+                    `Allow)
+              else if final_arrow_shares_with_alias ()
+              then (print_endline "not all, but last => `Infer";
+                    `Infer)
+              else (print_endline "nope => `Disallow";
+                    `Disallow)
          in
          let e = self#effect_row ~allow_shared e in
          let r = self#datatype r in
@@ -308,10 +327,10 @@ let cleanup_effects tycon_env =
                function
                | _, [] -> []
                | [], Row t :: ts ->
-                   Row (self#effect_row ~allow_shared:false t) :: go ([], ts)
+                   Row (self#effect_row ~allow_shared:`Disallow t) :: go ([], ts)
                | (PrimaryKind.Row, (_, Restriction.Effect)) :: qs, Row t :: ts
                  ->
-                   Row (self#effect_row ~allow_shared:false t) :: go (qs, ts)
+                   Row (self#effect_row ~allow_shared:`Disallow t) :: go (qs, ts)
                | (([] as qs) | _ :: qs), t :: ts ->
                    self#type_arg t :: go (qs, ts)
              in
@@ -361,7 +380,7 @@ let cleanup_effects tycon_env =
        let var =
          match var with
          | Datatype.Open stv
-           when ((not allow_shared) || not has_effect_sugar)
+           when ((allow_shared = `Disallow) || not has_effect_sugar)
                 && (not (SugarTypeVar.is_resolved stv))
                 && SugarTypeVar.get_unresolved_name_exn stv
                    = shared_effect_var_name ->
@@ -372,9 +391,17 @@ let cleanup_effects tycon_env =
            when has_effect_sugar
                 && (not (SugarTypeVar.is_resolved stv))
                 && gue stv = ("$", None, `Rigid) ->
-             let stv' = SugarTypeVar.mk_unresolved "$eff" None `Rigid in
-             Datatype.Open stv'
-         | _ -> var
+            print_endline "here2";
+            let stv' =
+              match allow_shared with
+              | `Allow -> SugarTypeVar.mk_unresolved "$eff" None `Rigid
+              | `Infer -> print_endline "Flexible";
+                          SugarTypeVar.mk_unresolved "%" None `Flexible
+              | `Disallow -> assert false
+            in
+            Datatype.Open stv'
+         | _ -> print_endline "here3";
+                var
        in
        self#row (fields, var)
   end)
