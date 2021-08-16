@@ -391,7 +391,8 @@ let cleanup_effects tycon_env =
                 if has_effect_sugar
                 then
                   begin
-                    if name = "$" || name = "$eff" (* TODO need sk,fr? *)
+                    if (name = "$" || name = "$eff")
+                       && sk = None && fr = `Rigid (* TODO need sk,fr? *)
                     then let stv' = match allow_shared with
                            | `Allow -> gen_unresolved_eff ()
                            | `Infer -> gen_resolved_flex ()
