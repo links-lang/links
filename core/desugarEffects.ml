@@ -396,7 +396,26 @@ let cleanup_effects tycon_env =
               match allow_shared with
               | `Allow -> SugarTypeVar.mk_unresolved "$eff" None `Rigid
               | `Infer -> print_endline "Flexible";
-                          SugarTypeVar.mk_unresolved "%" None `Flexible
+                          SugarTypeVar.mk_resolved_row
+                            (let var = Types.fresh_raw_variable () in
+                             Unionfind.fresh
+                               (Types.Var (var, (PrimaryKind.Row, (lin_unl, res_effect)), `Flexible)))
+              | `Disallow -> assert false
+            in
+            Datatype.Open stv'
+         | Datatype.Open stv
+           when has_effect_sugar
+                && (not (SugarTypeVar.is_resolved stv))
+                && gue stv = ("$eff", None, `Rigid) ->
+            print_endline "here2+i";
+            let stv' =
+              match allow_shared with
+              | `Allow -> SugarTypeVar.mk_unresolved "$eff" None `Rigid
+              | `Infer -> print_endline "Flexible";
+                          SugarTypeVar.mk_resolved_row
+                            (let var = Types.fresh_raw_variable () in
+                             Unionfind.fresh
+                               (Types.Var (var, (PrimaryKind.Row, (lin_unl, res_effect)), `Flexible)))
               | `Disallow -> assert false
             in
             Datatype.Open stv'
