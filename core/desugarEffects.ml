@@ -391,7 +391,7 @@ let cleanup_effects tycon_env =
                             (let var = Types.fresh_raw_variable () in
                              Unionfind.fresh
                                (Types.Var (var, (PrimaryKind.Row, (lin_unl, res_effect)), `Flexible)))
-              | `Disallow -> assert false (* TODO is this correct? *)
+              | `Disallow -> stv
             in
             Datatype.Open stv'
          | Datatype.Open stv
@@ -405,7 +405,7 @@ let cleanup_effects tycon_env =
                             (let var = Types.fresh_raw_variable () in
                              Unionfind.fresh
                                (Types.Var (var, (PrimaryKind.Row, (lin_unl, res_effect)), `Flexible)))
-              | `Disallow -> assert false (* TODO correct? *)
+              | `Disallow -> SugarTypeVar.mk_unresolved "$" None `Rigid
             in
             Datatype.Open stv'
          | _ -> var
