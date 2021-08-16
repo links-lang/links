@@ -372,42 +372,43 @@ let cleanup_effects tycon_env =
        let gue = SugarTypeVar.get_unresolved_exn in
        let var =
          match var with
-         | Datatype.Open stv
-           when ((allow_shared = `Disallow) || not has_effect_sugar)
-                && (not (SugarTypeVar.is_resolved stv))
-                && SugarTypeVar.get_unresolved_name_exn stv
-                   = shared_effect_var_name ->
-             let _, sk, fr = gue stv in
-             let stv' = SugarTypeVar.mk_unresolved "$" sk fr in
-             Datatype.Open stv'
-         | Datatype.Open stv
-           when has_effect_sugar
-                && (not (SugarTypeVar.is_resolved stv))
-                && gue stv = ("$", None, `Rigid) ->
-            let stv' =
-              match allow_shared with
-              | `Allow -> SugarTypeVar.mk_unresolved "$eff" None `Rigid
-              | `Infer -> SugarTypeVar.mk_resolved_row
-                            (let var = Types.fresh_raw_variable () in
-                             Unionfind.fresh
-                               (Types.Var (var, (PrimaryKind.Row, (lin_unl, res_effect)), `Flexible)))
-              | `Disallow -> stv
-            in
-            Datatype.Open stv'
-         | Datatype.Open stv
-           when has_effect_sugar
-                && (not (SugarTypeVar.is_resolved stv))
-                && gue stv = ("$eff", None, `Rigid) ->
-            let stv' =
-              match allow_shared with
-              | `Allow -> SugarTypeVar.mk_unresolved "$eff" None `Rigid
-              | `Infer -> SugarTypeVar.mk_resolved_row
-                            (let var = Types.fresh_raw_variable () in
-                             Unionfind.fresh
-                               (Types.Var (var, (PrimaryKind.Row, (lin_unl, res_effect)), `Flexible)))
-              | `Disallow -> SugarTypeVar.mk_unresolved "$" None `Rigid
-            in
-            Datatype.Open stv'
+         | Datatype.Open stv -> (* TODO check if this does the same thing as before *)
+            if not (SugarTypeVar.is_resolved stv)
+            then begin
+                let gen_unresolved_eff () =
+                  SugarTypeVar.mk_unresolved shared_effect_var_name None `Rigid
+                in
+                let to_unresolved_general sk fr =
+                  SugarTypeVar.mk_unresolved "$" sk fr
+                in
+                let gen_resolved_flex () =
+                  SugarTypeVar.mk_resolved_row
+                    (let var = Types.fresh_raw_variable () in
+                     Unionfind.fresh
+                       (Types.Var (var, (PrimaryKind.Row, (lin_unl, res_effect)), `Flexible)))
+                in
+                let name, sk, fr = gue stv in
+                if has_effect_sugar
+                then
+                  begin
+                    if name = "$" || name = "$eff" (* TODO need sk,fr? *)
+                    then let stv' = match allow_shared with
+                           | `Allow -> gen_unresolved_eff ()
+                           | `Infer -> gen_resolved_flex ()
+                           | `Disallow -> to_unresolved_general sk fr
+                         in
+                         Datatype.Open stv'
+                    else var
+                  end
+                else
+                  begin
+                    if name = shared_effect_var_name
+                    then let stv' = to_unresolved_general sk fr in
+                         Datatype.Open stv'
+                    else var
+                  end
+              end
+            else var
          | _ -> var
        in
        self#row (fields, var)
