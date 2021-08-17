@@ -227,7 +227,7 @@ args : --set=effect_sugar=true
 Typecheck example file examples/handlers/fringe.links
 examples/handlers/fringe.links
 filemode : true
-args : --set=effect_sugar=true --set=effect_sugar_policy=preset_comp
+args : --set=effect_sugar=true
 
 Typecheck example file examples/handlers/identity.links
 examples/handlers/identity.links
@@ -236,7 +236,7 @@ filemode : true
 Typecheck example file examples/handlers/lambda.links
 examples/handlers/lambda.links
 filemode : true
-args : --set=effect_sugar=true --set=effect_sugar_policy=preset_comp
+args : --set=effect_sugar=true
 
 Typecheck example file examples/handlers/light_switch.links
 examples/handlers/light_switch.links
@@ -275,7 +275,7 @@ filemode : true
 Typecheck example file examples/handlers/sat.links
 examples/handlers/sat.links
 filemode : true
-args : --set=effect_sugar=true --set=effect_sugar_policy=preset_comp
+args : --set=effect_sugar=true
 
 Typecheck example file examples/handlers/shiftreset.links
 examples/handlers/shiftreset.links
@@ -285,7 +285,7 @@ args : --set=effect_sugar=true
 Typecheck example file examples/handlers/shallow_state.links
 examples/handlers/shallow_state.links
 filemode : true
-args : --set=effect_sugar=true --set=effect_sugar_policy=preset_comp
+args : --set=effect_sugar=true
 
 Typecheck example file examples/handlers/sierpinski-triangle.links
 examples/handlers/sierpinski-triangle.links
