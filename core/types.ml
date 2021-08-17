@@ -2017,7 +2017,7 @@ module Policy = struct
 
     let preset_comp = []
     let preset_struct = preset_comp @ [ FinalArrowSharesWithAlias ]
-    let default_opts = preset_comp
+    let default_opts = preset_struct
 
     let all_opts = [ FinalArrowSharesWithAlias
                    ; AllImplicitArrowsShare
@@ -2077,7 +2077,7 @@ module Policy = struct
            ; "   that contain functions"
            ; "   enables " ^ (shortcuts_of_opts preset_struct)
            (* TODO!! change this if default changes *)
-           ; " * default: revert to default value (currently preset_comp)"
+           ; " * default: revert to default value (currently preset_struct)"
            ; " * all: turn all of the options on"]
         in
         let buf = Buffer.create 800 in
