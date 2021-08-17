@@ -127,6 +127,7 @@ module type ROW_VAR_MAP = sig
   val empty : 'a t
 
   val add : key -> 'a -> 'a t -> 'a t
+  (* TODO renaming to something more obvious *)
   val add_raw : int -> 'a -> 'a t -> 'a t
   val find_raw : int -> 'a t -> 'a
   val find_raw_opt : int -> 'a t -> 'a option
@@ -134,10 +135,6 @@ module type ROW_VAR_MAP = sig
   val find_opt : key -> 'a t -> 'a option
   val map : ('a -> 'b) -> 'a t -> 'b t
   val fold : (int -> 'a -> 'acc -> 'acc) -> 'a t -> 'acc -> 'acc
-
-  (* val show : (Format.formatter -> 'a -> unit) -> 'a t -> string *)
-
-  (* val remove : key -> 'a t -> 'a t *)
 
   (* Predicate telling you if a given sugar variable should/can be
      handled by this map *)
@@ -192,7 +189,6 @@ module RowVarMap : ROW_VAR_MAP = struct
   let find_opt : key -> 'a t -> 'a option =
    fun k m ->
     let var = get_var k in
-    (* print_endline ("find_opt: " ^ SugarTypeVar.show k ^ " <-> " ^ string_of_int var); *)
     IntMap.find_opt var m
 
   let add : key -> 'a -> 'a t -> 'a t =
@@ -211,11 +207,6 @@ module RowVarMap : ROW_VAR_MAP = struct
 
   let fold : (int -> 'a -> 'acc -> 'acc) -> 'a t -> 'acc -> 'acc
     = fun f m acc -> IntMap.fold f m acc
-  (* let remove : key -> 'a t -> 'a t = fun k m ->
-   *   let var = get_var k in
-   *   IntMap.remove var m *)
-
-  (* let show = IntMap.show *)
 
   (* functions using SugarQuantifier.t as key *)
   let update_by_quantifier :
