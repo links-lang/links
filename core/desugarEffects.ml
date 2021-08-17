@@ -437,7 +437,7 @@ let gather_mutual_info (tycon_env : simple_tycon_env) =
   end)
     #datatype
 
-let collect_operation_of_type tp
+let gather_operation_of_type tp
   = let open Types in
     let module FieldEnv = Utility.StringMap in
     let is_effect_row_kind : Kind.t -> bool
@@ -626,7 +626,7 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
                let ops = match internal_type with
                  | None -> RowVarMap.empty
                  | Some internal_type ->
-                    collect_operation_of_type internal_type
+                    gather_operation_of_type internal_type
                in
                let operations =
                  RowVarMap.fold
