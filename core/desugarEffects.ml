@@ -135,7 +135,7 @@ module type ROW_VAR_MAP = sig
   val map : ('a -> 'b) -> 'a t -> 'b t
   val fold : (int -> 'a -> 'acc -> 'acc) -> 'a t -> 'acc -> 'acc
 
-  val show : (Format.formatter -> 'a -> unit) -> 'a t -> string
+  (* val show : (Format.formatter -> 'a -> unit) -> 'a t -> string *)
 
   (* val remove : key -> 'a t -> 'a t *)
 
@@ -215,7 +215,7 @@ module RowVarMap : ROW_VAR_MAP = struct
    *   let var = get_var k in
    *   IntMap.remove var m *)
 
-  let show = IntMap.show
+  (* let show = IntMap.show *)
 
   (* functions using SugarQuantifier.t as key *)
   let update_by_quantifier :
@@ -548,11 +548,11 @@ let collect_operation_of_type tp
       | Some vid -> RowVarMap.add_raw (-1)
                       (RowVarMap.find_raw vid operations) operations
     in
-    print_endline "Collected operations:";
-    print_endline
-      (RowVarMap.show (fun ppr x -> Format.fprintf ppr "%s"
-                                      (StringSet.show x)) operations);
-    flush_all ();
+    (* print_endline "Collected operations:";
+     * print_endline
+     *   (RowVarMap.show (fun ppr x -> Format.fprintf ppr "%s"
+     *                                   (StringSet.show x)) operations);
+     * flush_all (); *)
     operations
 
 (* TODO nested aliases? watch out for recapps *)
@@ -641,10 +641,10 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
                let operations =
                  RowVarMap.fold
                    (fun vid sset acc ->
-                     print_endline "folding";
-                     print_endline @@ string_of_int vid;
-                     print_endline (StringSet.show sset);
-                     print_endline (RowVarMap.show (fun ppr x -> Format.fprintf ppr "%s" (StringSet.show x)) acc);
+                     (* print_endline "folding";
+                      * print_endline @@ string_of_int vid;
+                      * print_endline (StringSet.show sset);
+                      * print_endline (RowVarMap.show (fun ppr x -> Format.fprintf ppr "%s" (StringSet.show x)) acc); *)
                      RowVarMap.update vid
                        (function
                         | None -> Some sset
@@ -714,9 +714,9 @@ let preprocess_type (dt : Datatype.with_pos) tycon_env allow_fresh shared_effect
     =
   let dt = cleanup_effects tycon_env dt in
   let row_operations = gather_operations tycon_env allow_fresh dt in
-  print_endline "Preprocessing: gathered operation labels. RowVarMap, stringmap";
-  print_endline (RowVarMap.show (fun ppr x -> Format.fprintf ppr "%s" (StringMap.show (fun _ _ -> ()) x)) (fst row_operations));
-  print_endline (StringMap.show (fun ppr x -> Format.fprintf ppr "%s" (StringSet.show x)) (snd row_operations));
+  (* print_endline "Preprocessing: gathered operation labels. RowVarMap, stringmap";
+   * print_endline (RowVarMap.show (fun ppr x -> Format.fprintf ppr "%s" (StringMap.show (fun _ _ -> ()) x)) (fst row_operations));
+   * print_endline (StringMap.show (fun ppr x -> Format.fprintf ppr "%s" (StringSet.show x)) (snd row_operations)); *)
   let shared_effect =
     match shared_effect with
     | None when allow_fresh && has_effect_sugar () ->
