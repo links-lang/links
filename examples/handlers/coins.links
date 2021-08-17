@@ -42,7 +42,7 @@ sig rand : Comp(Float, {Rand:(()) {}-> Float|_})
 fun rand() {do Rand(())}
 
 sig randomResult :
-  (Comp(a, {Choice:(()) {}-> Bool, Rand:(()) {}-> Float|e})) ->
+  (Comp(a, {Choice:(()) {}-> Bool, Rand:(()) {}-> Float|e})) -f->
    Comp(a, {Choice{_},             Rand:(()) {}-> Float|e})
 fun randomResult(m)() {
   handle(m()) {
@@ -51,7 +51,7 @@ fun randomResult(m)() {
   }
 }
 
-sig persevere : (Comp(a, {Failure:(()) {}-> Zero|e})) ->
+sig persevere : (Comp(a, {Failure:(()) {}-> Zero|e})) -f->
                  Comp(a, {Failure{_}            |e})
 fun persevere(m)() {
   handle(m()) {
@@ -60,7 +60,7 @@ fun persevere(m)() {
   }
 }
 
-sig maybeResult : (Comp(a,        {Failure:(()) {}-> Zero|e})) ->
+sig maybeResult : (Comp(a,        {Failure:(()) {}-> Zero|e})) -f->
                    Comp(Maybe(a), {Failure{_}            |e})
 fun maybeResult(m)() {
   handle(m()) {

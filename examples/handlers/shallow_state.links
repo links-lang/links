@@ -6,7 +6,7 @@ typename Unit = [|Unit|];
 
 # Convenient auxiliary function: turns a shallow continuation into a
 # computation.
-sig compify : ((a) ~> b) -> ((a) -> Comp(b))
+sig compify : ((a) ~e~> b) -> ((a) -> Comp(b, { |e}))
 fun compify(k)(x) {
   fun() {k(x)}
 }
@@ -30,9 +30,9 @@ sig logVal : (a) {Log:(a) -> ()|_}~> ()
 fun logVal(p) {do Log(p)}
 
 # Stateful computation evaluator
-sig evalState : (s) ->
-                (Comp(a, {Get:s,Put:(s) -> () |_})) ->
-                 Comp(a)
+sig evalState : (s) -f->
+                (Comp(a, {Get:s,Put:(s) -> () |e})) -f->
+                 Comp(a, { |e})
 fun evalState(st)(m)() {
   (shallowhandle(m()) {
     case Return(x) -> fun(_)  { x }
@@ -55,7 +55,7 @@ fun logState(m)() {
 }
 
 # Prints integers to stdout
-sig logPrinter : (Comp(a, {Log:(Int) -> () |_})) -> Comp(a)
+sig logPrinter : (Comp(a, {Log:(Int) -> () |e})) -f-> Comp(a, { |e})
 fun logPrinter(m)() {
   shallowhandle(m()) {
     case Return(x) -> x
@@ -66,9 +66,9 @@ fun logPrinter(m)() {
 }
 
 # Log accumulator
-sig logAccumulator : ([a]) ->
-                     (Comp(b,       {Log:(a) -> () |_})) ->
-                      Comp((b,[a]))
+sig logAccumulator : ([a]) -f->
+                     (Comp(b,       {Log:(a) -> () |e})) -f->
+                      Comp((b,[a]), { |e})
 fun logAccumulator(ps)(m)() {
   shallowhandle(m()) {
     case Return(x) -> (x,ps)
