@@ -386,15 +386,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - run: >-
-          for i in {5432..5433}
-          do
-            lsof -i $i
-          done
-
       - run: lsof -i $LINKS_POSTGRES_PORT
         env:
           LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+
 
       # Start
       - name: Install system dependencies
