@@ -372,7 +372,7 @@ let cleanup_effects tycon_env =
        let gue = SugarTypeVar.get_unresolved_exn in
        let var =
          match var with
-         | Datatype.Open stv -> (* TODO check if this does the same thing as before *)
+         | Datatype.Open stv ->
             if not (SugarTypeVar.is_resolved stv)
             then begin
                 let gen_unresolved_eff () =
@@ -391,7 +391,7 @@ let cleanup_effects tycon_env =
                 if has_effect_sugar
                 then
                   begin
-                    if (name = "$" || name = "$eff")
+                    if (name = "$" || name = shared_effect_var_name)
                        && sk = None && fr = `Rigid (* TODO need sk,fr? *)
                     then let stv' = match allow_shared with
                            | `Allow -> gen_unresolved_eff ()
