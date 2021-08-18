@@ -510,7 +510,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-      - run: docker ps –a 
+      - run: docker ps -a 
       # - run: lsof -i ":${LINKS_POSTGRES_PORT}"
       #   env:
       #     LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
