@@ -145,10 +145,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - run: lsof -i :$LINKS_POSTGRES_PORT
-        env:
-          LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
-
       - name: Install system dependencies
         run: sudo apt-get install -y libev-dev
         shell: bash
