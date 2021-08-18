@@ -45,7 +45,6 @@ module Policy : sig
              | ArrowsCurriedHideFresh
              | ContractOperationArrows
              | OpenDefault
-             (* | FinalArrowSharesWithAlias *)
     type t = opt list
     val default : unit -> t
 
@@ -55,7 +54,6 @@ module Policy : sig
     val arrows_curried_hide_fresh : t -> bool
     val contract_operation_arrows : t -> bool
     val open_default              : t -> bool
-    (* val final_arrow_shares_with_alias : t -> bool *)
   end
 
   type t = {

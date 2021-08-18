@@ -2020,7 +2020,6 @@ module Policy = struct
              | ArrowsCurriedHideFresh
              | ContractOperationArrows
              | OpenDefault
-             (* | FinalArrowSharesWithAlias *)
     type t = opt list
     val default : unit -> t
 
@@ -2030,7 +2029,6 @@ module Policy = struct
     val arrows_curried_hide_fresh : t -> bool
     val contract_operation_arrows : t -> bool
     val open_default              : t -> bool
-    (* val final_arrow_shares_with_alias : t -> bool *)
   end = struct
     type opt = PresenceOmit
              | AliasOmit
@@ -2038,11 +2036,9 @@ module Policy = struct
              | ArrowsCurriedHideFresh
              | ContractOperationArrows
              | OpenDefault
-             (* | FinalArrowSharesWithAlias *)
     type t = opt list
 
     let preset_comp = [PresenceOmit ; AliasOmit ; ContractOperationArrows ; ArrowsCurriedHideFresh ]
-    (* let preset_struct = preset_comp @ [ FinalArrowSharesWithAlias ] *)
     let default_opts = preset_comp
 
     let all_opts = [ PresenceOmit
@@ -2051,7 +2047,6 @@ module Policy = struct
                    ; ArrowsCurriedHideFresh
                    ; ContractOperationArrows
                    ; OpenDefault
-                   (* ; FinalArrowSharesWithAlias *)
                    ]
 
     let show_opt : opt -> string
@@ -2062,7 +2057,6 @@ module Policy = struct
       | AliasOmit                        -> "alias_omit"
       | ContractOperationArrows          -> "contract_operation_arrows"
       | OpenDefault                      -> "open_default"
-      (* | FinalArrowSharesWithAlias          -> "final_arrow_shares_with_alias" *)
     let string_of_opts = Settings.string_of_paths -<- List.map show_opt
 
     let show_shortcut : opt -> string
@@ -2073,7 +2067,6 @@ module Policy = struct
       | AliasOmit                        -> "alias"
       | ContractOperationArrows          -> "contract"
       | OpenDefault                      -> "open"
-      (* | FinalArrowSharesWithAlias          -> "-e->t(e)" *)
     let shortcuts_of_opts = Settings.string_of_paths -<- List.map show_shortcut
 
     let parse_opts : string -> opt list
@@ -2092,8 +2085,6 @@ module Policy = struct
             -> ContractOperationArrows
           | "open_default" | "open"
             -> OpenDefault
-          (* | "final_arrow_shares_with_alias" | "-e->t(e)"
-           *   -> FinalArrowSharesWithAlias *)
           | _ -> failwith ("Invalid option: " ^ s)
         in
         let is_correct : opt list -> bool
@@ -2103,7 +2094,6 @@ module Policy = struct
         match String.lowercase_ascii s with
         | "none"          -> []
         | "preset_comp"   -> preset_comp
-        (* | "preset_struct" -> preset_struct *)
         | "default"       -> default_opts
         | "all"           -> all_opts
         | _ -> let lst = List.map parse_opt (Settings.parse_paths s) in
@@ -2128,16 +2118,10 @@ module Policy = struct
            ; "   `E:() {}-> a' to `E:a'"
            ; " * open_default [open]: effect rows are open by default,"
            ; "   closed with syntax { | .}"
-           (* ; " * final_arrow_shares_with_alias [-e->T(e)]: final arrow and"
-            * ; "   a following type alias will be assumed to share implicit effects"
-            * ; "   (This is only a desugaring setting)." *)
            ; "Meta-options:"
            ; " * none: turn all of the above off"
            ; " * preset_comp: default preset for transforming Comps"
            ; "   enables " ^ (shortcuts_of_opts preset_comp)
-           (* ; " * preset_struct: default preset for transforming structures"
-            * ; "   that contain functions"
-            * ; "   enables " ^ (shortcuts_of_opts preset_struct) *)
            (* TODO!! change this if default changes *)
            ; " * default: revert to default value (currently preset_comp)"
            ; " * all: turn all of the options on"]
@@ -2164,7 +2148,6 @@ module Policy = struct
     let arrows_curried_hide_fresh = List.mem ArrowsCurriedHideFresh
     let contract_operation_arrows = List.mem ContractOperationArrows
     let open_default              = List.mem OpenDefault
-    (* let final_arrow_shares_with_alias = List.mem FinalArrowSharesWithAlias *)
 
     let default () = Settings.get sugar_specifics
   end
