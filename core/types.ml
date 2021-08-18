@@ -2015,9 +2015,7 @@ module Policy = struct
       | AllImplicitArrowsShare
     type t = opt list
 
-    let preset_comp = []
-    let preset_struct = preset_comp @ [ FinalArrowSharesWithAlias ]
-    let default_opts = preset_struct
+    let default_opts = [ FinalArrowSharesWithAlias ]
 
     let all_opts = [ FinalArrowSharesWithAlias
                    ; AllImplicitArrowsShare
@@ -2051,8 +2049,6 @@ module Policy = struct
         fun s ->
         match String.lowercase_ascii s with
         | "none"          -> []
-        | "preset_comp"   -> preset_comp
-        | "preset_struct" -> preset_struct
         | "default"       -> default_opts
         | "all"           -> all_opts
         | _ -> let lst = List.map parse_opt (Settings.parse_paths s) in
@@ -2071,13 +2067,8 @@ module Policy = struct
            ; "   effect vars will be unified"
            ; "Meta-options:"
            ; " * none: turn all of the above off"
-           ; " * preset_comp: default preset for transforming Comps"
-           ; "   enables " ^ (shortcuts_of_opts preset_comp)
-           ; " * preset_struct: default preset for transforming structures"
-           ; "   that contain functions"
-           ; "   enables " ^ (shortcuts_of_opts preset_struct)
-           (* TODO!! change this if default changes *)
-           ; " * default: revert to default value (currently preset_struct)"
+           ; " * default: revert to default value"
+           ; "   enables \"" ^ (shortcuts_of_opts default_opts) ^ "\""
            ; " * all: turn all of the options on"]
         in
         let buf = Buffer.create 800 in
