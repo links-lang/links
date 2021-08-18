@@ -2038,8 +2038,7 @@ module Policy = struct
              | OpenDefault
     type t = opt list
 
-    let preset_comp = [PresenceOmit ; AliasOmit ; ContractOperationArrows ; ArrowsCurriedHideFresh ]
-    let default_opts = preset_comp
+    let default_opts = [PresenceOmit ; AliasOmit ; ContractOperationArrows ; ArrowsCurriedHideFresh ]
 
     let all_opts = [ PresenceOmit
                    ; AliasOmit
@@ -2093,7 +2092,6 @@ module Policy = struct
         fun s ->
         match String.lowercase_ascii s with
         | "none"          -> []
-        | "preset_comp"   -> preset_comp
         | "default"       -> default_opts
         | "all"           -> all_opts
         | _ -> let lst = List.map parse_opt (Settings.parse_paths s) in
@@ -2120,10 +2118,8 @@ module Policy = struct
            ; "   closed with syntax { | .}"
            ; "Meta-options:"
            ; " * none: turn all of the above off"
-           ; " * preset_comp: default preset for transforming Comps"
-           ; "   enables " ^ (shortcuts_of_opts preset_comp)
-           (* TODO!! change this if default changes *)
-           ; " * default: revert to default value (currently preset_comp)"
+           ; " * default: revert to default value"
+           ; "   enables \"" ^ (shortcuts_of_opts default_opts) ^ "\""
            ; " * all: turn all of the options on"]
         in
         let buf = Buffer.create 800 in
