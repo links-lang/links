@@ -470,24 +470,26 @@ jobs:
           repository: dhil/links-database-setup
           path: ./links-database-setup
 
-      - name: Generate .pgpass
+      - name: Make .pgpass
         run: |
-          echo $LINKS_POSTGRES_HOST:${{ job.services.postgres.ports[5432] }}:links:$LINKS_POSTGRES_USER:$LINKS_POSTGRES_PASSWORD >> ~/.pgpass
+          touch ~/.pgpass
+          chmod 0600 .pgpass
+          
+      - name: Populate DB for the examples
+        run: |
+          cd links-database-setup
+          for f in `ls *.sql`; do
+            echo $LINKS_POSTGRES_HOST:${{ job.services.postgres.ports[5432] }}:${f%}:$LINKS_POSTGRES_USER:$LINKS_POSTGRES_PASSWORD >> ~/.pgpass
+            createdb -O links ${f%.sql} -w
+          done
+          for f in `ls *.sql`; do psql -w -d ${f%.sql} < $f; done
         env:
           LINKS_POSTGRES_HOST: localhost
           LINKS_POSTGRES_USER: links
           LINKS_POSTGRES_PASSWORD: links
           LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
-      
-      - run: cat ~/.pgpass
 
-      - name: Populate DB for the examples
-        run: |
-          cd links-database-setup
-          for f in `ls *.sql`; do
-            createdb ${f%.sql} -w
-          done
-          for f in `ls *.sql`; do psql -w -d ${f%.sql} < $f; done
+      - run: cat ~/.pgpass
 
       - name: Test Links server
         run: ../../links "../../examples/webserver/examples.links" --config='linksconfig'  --path=../../examples:/../../examples/games:../../examples/handlers:../../examples/dictionary:../../examples/games
