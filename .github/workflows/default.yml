@@ -363,7 +363,7 @@ jobs:
           POSTGRES_USER: links
           POSTGRES_PASSWORD: links
         ports:
-          - 5433:5432
+          - 5432:5432
       mysql:
         image: mysql:8.0
         env:
