@@ -475,6 +475,7 @@ jobs:
           echo $LINKS_POSTGRES_HOST:${{ job.services.postgres.ports[5432] }}:links:$LINKS_POSTGRES_USER:$LINKS_POSTGRES_PASSWORD >> ~/.pgpass
           chmod 0600 ~/.pgpass          
           cd links-database-setup
+          ls
           for f in `ls *.sql`; do
             echo $LINKS_POSTGRES_HOST:${{ job.services.postgres.ports[5432] }}:${f%}:$LINKS_POSTGRES_USER:$LINKS_POSTGRES_PASSWORD >> ~/.pgpass
             createdb -O links ${f%.sql} -w
