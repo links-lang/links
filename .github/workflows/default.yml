@@ -486,3 +486,45 @@ jobs:
         working-directory: ${{ env.NPM_DIR }}
         env:
           LINKS_POSTGRES_PASSWORD: links
+  checkDB:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-20.04
+        ocaml-compiler:
+          - 4.08.0
+
+    runs-on: ${{ matrix.os }}
+
+    services:
+      postgres:
+        image: postgres:12
+        env:
+          POSTGRES_USER: links
+          POSTGRES_PASSWORD: links
+        ports:
+          - 5433:5432
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_USER: links
+          MYSQL_PASSWORD: links
+          MYSQL_ROOT_PASSWORD: links
+          MYSQL_DATABASE: links
+          MYSQL_ROOT_HOST: "%"
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - run: lsof -i ":${LINKS_POSTGRES_PORT}"
+        env:
+          LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+
