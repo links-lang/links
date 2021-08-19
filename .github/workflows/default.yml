@@ -554,3 +554,7 @@ jobs:
         env:
           POSTGRES_HOST: localhost
           POSTGRES_PORT: 5432
+      - run: psql -U postgres
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
