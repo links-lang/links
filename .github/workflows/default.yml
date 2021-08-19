@@ -554,7 +554,20 @@ jobs:
         env:
           POSTGRES_HOST: localhost
           POSTGRES_PORT: 5432
-      - run: psql -U postgres
-        env:
-          POSTGRES_HOST: localhost
-          POSTGRES_PORT: 5432
+
+      # This doesn't work
+      # - run: psql -U postgres
+      #   env:
+      #     POSTGRES_HOST: localhost
+      #     POSTGRES_PORT: 5432
+
+      - uses: actions/checkout@v2
+        with:
+          repository: dhil/links-database-setup
+      
+      - run: |
+          cd links-database-setup
+          for f in `ls *.sql`; do
+            echo "Creating DB ${f%.sql}..."
+            createdb -U postgres ${f%.sql} -w
+          done
