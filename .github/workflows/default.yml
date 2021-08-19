@@ -532,9 +532,9 @@ jobs:
       postgres:
         image: postgres
         env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: test
+          POSTGRES_USER: links 
+          POSTGRES_PASSWORD: links 
+          POSTGRES_DB: links 
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -556,7 +556,7 @@ jobs:
           POSTGRES_PORT: 5432
 
       # This doesn't work
-      # - run: psql -U postgres
+      # - run: psql -U links
       #   env:
       #     POSTGRES_HOST: localhost
       #     POSTGRES_PORT: 5432
@@ -570,5 +570,9 @@ jobs:
           cd links-database-setup
           for f in `ls *.sql`; do
             echo "Creating DB ${f%.sql}..."
-            createdb -U postgres ${f%.sql} -w
+            createdb -U links ${f%.sql}
           done
+        env:
+          POSTGRES_USER: links 
+          POSTGRES_PASSWORD: links 
+          POSTGRES_DB: links 
