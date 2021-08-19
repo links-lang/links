@@ -501,13 +501,14 @@ jobs:
           LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
       
       - run: ps -ef | grep "post"
+      - run: psql -U links --list
 
       - name: Populate DB for the examples
         run: |
           cd links-database-setup
           for f in `ls *.sql`; do
             echo "Creating DB ${f%}..."
-            createdb -O links ${f%.sql} -w
+            createdb -U $LINKS_POSTGRES_USER -h $LINKS_POSTGRES_HOST -p $LINKS_POSTGRES_PORT -O links ${f%.sql} -w
           done
           for f in `ls *.sql`; do psql -w -d ${f%.sql} < $f; done
         env:
