@@ -501,6 +501,8 @@ jobs:
           LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
       
       - run: ps -ef | grep "post"
+      - run: psql -U links
+      - run: psql -U postgres
       - run: psql -U links --list
 
       - name: Populate DB for the examples
