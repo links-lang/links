@@ -499,6 +499,8 @@ jobs:
           LINKS_POSTGRES_USER: links
           LINKS_POSTGRES_PASSWORD: links
           LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+      
+      - run: ps -ef | grep "post"
 
       - name: Populate DB for the examples
         run: |
