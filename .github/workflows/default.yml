@@ -504,7 +504,7 @@ jobs:
         run: |
           cd links-database-setup
           for f in `ls *.sql`; do
-            echo $LINKS_POSTGRES_HOST:${{ job.services.postgres.ports[5432] }}:${f%}:$LINKS_POSTGRES_USER:$LINKS_POSTGRES_PASSWORD >> ~/.pgpass
+            echo "Creating DB ${f%}..."
             createdb -O links ${f%.sql} -w
           done
           for f in `ls *.sql`; do psql -w -d ${f%.sql} < $f; done
