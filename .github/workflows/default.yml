@@ -570,7 +570,7 @@ jobs:
           cd links-database-setup
           for f in `ls *.sql`; do
             echo "Creating DB ${f%.sql}..."
-            createdb -U links ${f%.sql}
+            createdb -U links -O links ${f%.sql}
           done
         env:
           POSTGRES_USER: links 
