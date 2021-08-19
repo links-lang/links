@@ -452,7 +452,6 @@ jobs:
       #     LINKS_MYSQL8_PORT: ${{ job.services.mysql.ports[3306] }}
       #     POSTGRES_USER: links
       #     POSTGRES_PASSWORD: links
-      - name: Add database args
       - name: Test Links server
         run: ../../links "../../examples/webserver/examples.links" --config='linksconfig'  --path=../../examples:/../../examples/games:../../examples/handlers:../../examples/dictionary:../../examples/games
         working-directory: ${{ env.NPM_DIR }}
@@ -482,7 +481,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-        
+
       - run: docker ps -a 
 
       - uses: actions/checkout@v2
