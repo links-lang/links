@@ -489,16 +489,16 @@ jobs:
           repository: dhil/links-database-setup
           path: ./links-database-setup
 
-      - name: Generate pgpass
-        run: |
-          echo $LINKS_POSTGRES_HOST:${{ job.services.postgres.ports[5432] }}:links:$LINKS_POSTGRES_USER:$LINKS_POSTGRES_PASSWORD >> ~/.pgpass
-          chmod 0600 ~/.pgpass          
-          cat ~/.pgpass
-        env:
-          LINKS_POSTGRES_HOST: localhost
-          LINKS_POSTGRES_USER: links
-          LINKS_POSTGRES_PASSWORD: links
-          LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+      # - name: Generate pgpass
+      #   run: |
+      #     echo $LINKS_POSTGRES_HOST:${{ job.services.postgres.ports[5432] }}:links:$LINKS_POSTGRES_USER:$LINKS_POSTGRES_PASSWORD >> ~/.pgpass
+      #     chmod 0600 ~/.pgpass          
+      #     cat ~/.pgpass
+      #   env:
+      #     LINKS_POSTGRES_HOST: localhost
+      #     LINKS_POSTGRES_USER: links
+      #     LINKS_POSTGRES_PASSWORD: links
+      #     LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
       
       - run: ps -ef | grep "post"
       - run: psql -U links
