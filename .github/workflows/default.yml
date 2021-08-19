@@ -373,6 +373,14 @@ jobs:
 
       - run: docker ps -a 
 
+      - run: |
+          echo "database_args=localhost:${LINKS_POSTGRES_PORT}:links:"
+          echo "database_args=localhost:${LINKS_POSTGRES_PORT}:links:" >> linksconfig
+        env:
+          LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+
+
+
       # Start
       - name: Install system dependencies
         run: sudo apt-get install -y libev-dev
@@ -445,37 +453,6 @@ jobs:
       #     POSTGRES_USER: links
       #     POSTGRES_PASSWORD: links
       - name: Add database args
-        run: |
-          echo "database_args=localhost:${LINKS_POSTGRES_PORT}:links:"
-          echo "database_args=localhost:${LINKS_POSTGRES_PORT}:links:" >> linksconfig
-        working-directory: ${{ env.NPM_DIR }}
-        env:
-          LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
-
-      - uses: actions/checkout@v2
-        with:
-          repository: dhil/links-database-setup
-          path: ./links-database-setup
-
-      - name: Populate DB for the examples
-        run: |
-          echo $LINKS_POSTGRES_HOST:${{ job.services.postgres.ports[5432] }}:links:$LINKS_POSTGRES_USER:$LINKS_POSTGRES_PASSWORD >> ~/.pgpass
-          chmod 0600 ~/.pgpass          
-          cd links-database-setup
-          ls
-          for f in `ls *.sql`; do
-            echo $LINKS_POSTGRES_HOST:${{ job.services.postgres.ports[5432] }}:${f%}:$LINKS_POSTGRES_USER:$LINKS_POSTGRES_PASSWORD >> ~/.pgpass
-            createdb -O links ${f%.sql} -w
-          done
-          for f in `ls *.sql`; do psql -w -d ${f%.sql} < $f; done
-        env:
-          LINKS_POSTGRES_HOST: localhost
-          LINKS_POSTGRES_USER: links
-          LINKS_POSTGRES_PASSWORD: links
-          LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
-
-      - run: cat ~/.pgpass
-
       - name: Test Links server
         run: ../../links "../../examples/webserver/examples.links" --config='linksconfig'  --path=../../examples:/../../examples/games:../../examples/handlers:../../examples/dictionary:../../examples/games
         working-directory: ${{ env.NPM_DIR }}
@@ -506,7 +483,37 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
       - run: docker ps -a 
+      - run: |
+
       # - run: lsof -i ":${LINKS_POSTGRES_PORT}"
       #   env:
       #     LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
   
+      - uses: actions/checkout@v2
+        with:
+          repository: dhil/links-database-setup
+          path: ./links-database-setup
+
+      - run: | 
+          cd links-database-setup
+          ls
+
+      - name: Populate DB for the examples
+        run: |
+          echo $LINKS_POSTGRES_HOST:${{ job.services.postgres.ports[5432] }}:links:$LINKS_POSTGRES_USER:$LINKS_POSTGRES_PASSWORD >> ~/.pgpass
+          chmod 0600 ~/.pgpass          
+          cd links-database-setup
+          ls
+          for f in `ls *.sql`; do
+            echo $LINKS_POSTGRES_HOST:${{ job.services.postgres.ports[5432] }}:${f%}:$LINKS_POSTGRES_USER:$LINKS_POSTGRES_PASSWORD >> ~/.pgpass
+            createdb -O links ${f%.sql} -w
+          done
+          for f in `ls *.sql`; do psql -w -d ${f%.sql} < $f; done
+        env:
+          LINKS_POSTGRES_HOST: localhost
+          LINKS_POSTGRES_USER: links
+          LINKS_POSTGRES_PASSWORD: links
+          LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+
+      - run: cat ~/.pgpass
+
