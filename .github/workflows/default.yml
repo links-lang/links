@@ -466,7 +466,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     services:
       postgres:
-        image: postgres:12
+        image: postgres
         env:
           POSTGRES_USER: links
           POSTGRES_PASSWORD: links
