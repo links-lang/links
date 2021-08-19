@@ -489,16 +489,20 @@ jobs:
           repository: dhil/links-database-setup
           path: ./links-database-setup
 
-      - run: | 
-          cd links-database-setup
-          ls
-
-      - name: Populate DB for the examples
+      - name: Generate pgpass
         run: |
           echo $LINKS_POSTGRES_HOST:${{ job.services.postgres.ports[5432] }}:links:$LINKS_POSTGRES_USER:$LINKS_POSTGRES_PASSWORD >> ~/.pgpass
           chmod 0600 ~/.pgpass          
+          cat ~/.pgpass
+        env:
+          LINKS_POSTGRES_HOST: localhost
+          LINKS_POSTGRES_USER: links
+          LINKS_POSTGRES_PASSWORD: links
+          LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+
+      - name: Populate DB for the examples
+        run: |
           cd links-database-setup
-          ls
           for f in `ls *.sql`; do
             echo $LINKS_POSTGRES_HOST:${{ job.services.postgres.ports[5432] }}:${f%}:$LINKS_POSTGRES_USER:$LINKS_POSTGRES_PASSWORD >> ~/.pgpass
             createdb -O links ${f%.sql} -w
@@ -510,5 +514,4 @@ jobs:
           LINKS_POSTGRES_PASSWORD: links
           LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
 
-      - run: cat ~/.pgpass
 
