@@ -371,15 +371,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - run: docker ps -a 
+      - run: docker ps -a
 
       - run: |
           echo "database_args=localhost:${LINKS_POSTGRES_PORT}:links:"
           echo "database_args=localhost:${LINKS_POSTGRES_PORT}:links:" >> linksconfig
         env:
           LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
-
-
 
       # Start
       - name: Install system dependencies
@@ -459,6 +457,11 @@ jobs:
           LINKS_POSTGRES_PASSWORD: links
 
   dbTest:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-20.04
+    runs-on: ${{ matrix.os }}
     services:
       postgres:
         image: postgres
@@ -476,7 +479,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - run: docker ps -a 
+      - run: docker ps -a
 
       - uses: actions/checkout@v2
         with:
@@ -486,14 +489,14 @@ jobs:
       # - name: Generate pgpass
       #   run: |
       #     echo $LINKS_POSTGRES_HOST:${{ job.services.postgres.ports[5432] }}:links:$LINKS_POSTGRES_USER:$LINKS_POSTGRES_PASSWORD >> ~/.pgpass
-      #     chmod 0600 ~/.pgpass          
+      #     chmod 0600 ~/.pgpass
       #     cat ~/.pgpass
       #   env:
       #     LINKS_POSTGRES_HOST: localhost
       #     LINKS_POSTGRES_USER: links
       #     LINKS_POSTGRES_PASSWORD: links
       #     LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
-      
+
       - run: ps -ef | grep "post"
       - run: psql -U postgres
       # - run: psql -U links
@@ -512,5 +515,3 @@ jobs:
           LINKS_POSTGRES_USER: links
           LINKS_POSTGRES_PASSWORD: links
           LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
-
-
