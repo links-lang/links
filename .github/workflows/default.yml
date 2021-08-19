@@ -466,7 +466,9 @@ jobs:
       postgres:
         image: postgres
         env:
+          POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -499,6 +501,10 @@ jobs:
 
       - run: ps -ef | grep "post"
       - run: psql -U postgres
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test
       # - run: psql -U links
       # - run: psql -U links --list
 
@@ -515,3 +521,36 @@ jobs:
           LINKS_POSTGRES_USER: links
           LINKS_POSTGRES_PASSWORD: links
           LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+
+  dbTestJS:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-20.04
+    runs-on: ${{ matrix.os }}
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - run: |
+          cd dbtest
+          npm ci
+      - run: |
+          cd dbtest
+          node index.js
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
