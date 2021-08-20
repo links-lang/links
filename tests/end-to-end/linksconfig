@@ -2,4 +2,4 @@
 port=8080
 host=0.0.0.0
 database_driver=postgresql
-database_args=localhost:5432:links:
+database_args=localhost:5432:links:links
