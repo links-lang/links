@@ -1101,6 +1101,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "(TableHandle(r, w, n)) {}-> [r]",
   IMPURE);
 
+  "Distinct",
+  (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
+   datatype "(TableHandle(r, w, n)) {}-> [r]",
+  IMPURE);
+
   "getDatabaseConfig",
   (`PFun
      (fun _ _ ->
