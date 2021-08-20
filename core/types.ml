@@ -2066,8 +2066,8 @@ module Policy = struct
       | AliasOmit                        -> "alias_omit"
       | ContractOperationArrows          -> "contract_operation_arrows"
       | OpenDefault                      -> "open_default"
-      | FinalArrowSharesWithAlias -> "final_arrow_shares_with_alias"
-      | AllImplicitArrowsShare -> "all_implicit_arrows_share"
+      | FinalArrowSharesWithAlias        -> "final_arrow_shares_with_alias"
+      | AllImplicitArrowsShare           -> "all_implicit_arrows_share"
     let string_of_opts = Settings.string_of_paths -<- List.map show_opt
 
     let show_shortcut : opt -> string
