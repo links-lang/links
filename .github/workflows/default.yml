@@ -567,11 +567,7 @@ jobs:
           path: ./links-database-setup
       
       - run: |
-          cd links-database-setup
-          for f in `ls *.sql`; do
-            echo "Creating DB ${f%.sql}..."
-            createdb -U links -O links ${f%.sql}
-          done
+          bash links-database-setup/dbsetup
         env:
           POSTGRES_USER: links 
           POSTGRES_PASSWORD: links 
