@@ -556,7 +556,7 @@ jobs:
           path: ./links-database-setup
 
       - name: Populate database
-      - run: |
+        run: |
           bash links-database-setup/dbsetup
         env:
           POSTGRES_USER: links
