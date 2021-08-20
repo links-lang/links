@@ -10,6 +10,8 @@ let lens_phrase_value_of_constant c =
   | Constant.Char c -> LPV.Char c
   | Constant.Float f -> LPV.Float f
   | Constant.String s -> LPV.String s
+  | Constant.DateTime _ ->
+      raise (Errors.runtime_error "DateTime not yet supported in lenses.")
 
 let rec lens_phrase_value_of_value t =
   match t with
