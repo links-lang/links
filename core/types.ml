@@ -2067,7 +2067,7 @@ module Policy = struct
            ; "   effect vars will be unified"
            ; "Meta-options:"
            ; " * none: turn all of the above off"
-           ; " * default: revert to default value"
+           ; " * default: revert to default configuration"
            ; "   enables \"" ^ (shortcuts_of_opts default_opts) ^ "\""
            ; " * all: turn all of the options on"]
         in
