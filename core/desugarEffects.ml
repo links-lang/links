@@ -95,6 +95,12 @@ let unpack_var_id = function
 
 module SEnv = Env.String
 
+(* tycon_info stores information about a type alias;
+   - Kind.t list = list of kinds of type arguments
+   - bool = whether tycon has implicit shared effect
+   - Types.typ option = the actual type inside the alias, if it exists (None for abstract types)
+     - this is used to propagate operations, sometimes the type behind an alias will have some
+       operations labels hidden inside it *)
 type tycon_info = Kind.t list * bool * Types.typ option
 
 type simple_tycon_env = tycon_info SEnv.t
