@@ -22,6 +22,12 @@ let null_integer
               |> convert (fun s -> Some (int_of_string s))
               |> sync)
 
+let mixing_norm
+  = Settings.(flag "mixing_norm"
+              |> synopsis "Enables the new mixing normaliser for all queries"
+              |> convert parse_bool
+              |> sync)
+
 type database = Value.database
 let runtime_error str = (Errors.runtime_error str)
 

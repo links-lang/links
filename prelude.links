@@ -502,6 +502,34 @@ fun asList(t) server {
   for (x <-- t) [x]
 }
 
+fun dedup(l) server {
+  # an unsafe local definition of elem, only for use within dedup!
+  # (ensures dedup is tame, while keeping the global def of elem wild)
+  unsafe sig elem : (a,[a]) -b-> Bool
+  fun elem(x, l) {
+    switch (l) {
+      case [] -> false
+      case hd::tl -> x == hd || x `elem` tl
+    }
+  }
+  unsafe sig aux : ([a],[a]) -> [a]
+  fun aux(vl, rl) {
+    switch (rl) {
+      case [] -> []
+      case r::rl0 ->
+        if (r `elem` vl)
+          aux(vl, rl0)
+        else 
+          r::aux(r::vl, rl0)
+    }
+  }
+  aux([]:[a], l) 
+}
+
+fun distinct(t) server {
+	dedup(asList(t))
+}
+
 # Gets children of elements in an XML forest, concatenated in order
 # @param {Xml} xml
 # @returns {Xml}
