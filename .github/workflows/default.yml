@@ -576,12 +576,11 @@ jobs:
       #     echo "database_args=localhost:${LINKS_POSTGRES_PORT}:links:" >> linksconfig
       #   env:
       #     LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
-
-      - name: Generate pgpass
-        run: |
-          echo "localhost:5432:links:links:links" >> ~/.pgpass
-          chmod 600 ~/.pgpass
-
+      
       - run: npm test
         working-directory: ${{ env.NPM_DIR }}
-      
+        env:
+          LINKS_POSTGRES_HOST: localhost
+          LINKS_POSTGRES_USER: links
+          LINKS_POSTGRES_PASSWORD: links
+          LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
