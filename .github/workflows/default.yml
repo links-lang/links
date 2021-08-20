@@ -456,72 +456,6 @@ jobs:
         env:
           LINKS_POSTGRES_PASSWORD: links
 
-  dbTest:
-    strategy:
-      matrix:
-        os:
-          - ubuntu-20.04
-    runs-on: ${{ matrix.os }}
-    services:
-      postgres:
-        image: postgres
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
-      - run: docker ps -a
-
-      - uses: actions/checkout@v2
-        with:
-          repository: dhil/links-database-setup
-          path: ./links-database-setup
-
-      # - name: Generate pgpass
-      #   run: |
-      #     echo $LINKS_POSTGRES_HOST:${{ job.services.postgres.ports[5432] }}:links:$LINKS_POSTGRES_USER:$LINKS_POSTGRES_PASSWORD >> ~/.pgpass
-      #     chmod 0600 ~/.pgpass
-      #     cat ~/.pgpass
-      #   env:
-      #     LINKS_POSTGRES_HOST: localhost
-      #     LINKS_POSTGRES_USER: links
-      #     LINKS_POSTGRES_PASSWORD: links
-      #     LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
-
-      - run: ps -ef | grep "post"
-      - run: psql -U postgres
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: test
-      # - run: psql -U links
-      # - run: psql -U links --list
-
-      - name: Populate DB for the examples
-        run: |
-          cd links-database-setup
-          for f in `ls *.sql`; do
-            echo "Creating DB ${f%}..."
-            createdb -U $LINKS_POSTGRES_USER -h $LINKS_POSTGRES_HOST -p $LINKS_POSTGRES_PORT -O links ${f%.sql} -w
-          done
-          for f in `ls *.sql`; do psql -w -d ${f%.sql} < $f; done
-        env:
-          LINKS_POSTGRES_HOST: localhost
-          LINKS_POSTGRES_USER: links
-          LINKS_POSTGRES_PASSWORD: links
-          LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
-
   dbTestJS:
     strategy:
       matrix:
@@ -532,9 +466,9 @@ jobs:
       postgres:
         image: postgres
         env:
-          POSTGRES_USER: links 
-          POSTGRES_PASSWORD: links 
-          POSTGRES_DB: links 
+          POSTGRES_USER: links
+          POSTGRES_PASSWORD: links
+          POSTGRES_DB: links
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -545,30 +479,92 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-      - run: |
-          cd dbtest
-          npm ci
-      - run: |
-          cd dbtest
-          node index.js
-        env:
-          POSTGRES_HOST: localhost
-          POSTGRES_PORT: 5432
-
-      # This doesn't work
-      # - run: psql -U links
-      #   env:
-      #     POSTGRES_HOST: localhost
-      #     POSTGRES_PORT: 5432
 
       - uses: actions/checkout@v2
         with:
           repository: dhil/links-database-setup
           path: ./links-database-setup
-      
+
       - run: |
           bash links-database-setup/dbsetup
         env:
-          POSTGRES_USER: links 
-          POSTGRES_PASSWORD: links 
-          POSTGRES_DB: links 
+          POSTGRES_USER: links
+          POSTGRES_PASSWORD: links
+          POSTGRES_DB: links
+
+  dbTest:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-20.04
+        ocaml-compiler:
+          - 4.08.0
+        browser:
+          - firefox
+          - chrome
+    runs-on: ${{ matrix.os }}
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_USER: links
+          POSTGRES_PASSWORD: links
+          POSTGRES_DB: links
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install system dependencies
+        run: sudo apt-get install -y libev-dev
+        shell: bash
+
+      - name: Use OCaml ${{ matrix.ocaml-compiler }}
+        uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: ${{ matrix.ocaml-compiler }}
+
+      - run: opam install -y conf-libev
+      - run: opam install -y ounit2
+
+      - name: Install Links dependencies
+        run: >-
+          opam install
+          ./links.opam
+          ./links-postgresql.opam
+          ./links-mysql8.opam
+          ./links-sqlite3.opam
+          --deps-only
+          --ignore-constraints-on=links
+
+      - name: Build Links from source
+        run: |
+          eval $(opam env)
+          make all-ci
+        shell: bash
+
+      - uses: actions/checkout@v2
+        with:
+          repository: dhil/links-database-setup
+          path: ./links-database-setup
+
+      - name: Populate database
+      - run: |
+          bash links-database-setup/dbsetup
+        env:
+          POSTGRES_USER: links
+          POSTGRES_PASSWORD: links
+          POSTGRES_DB: links
+
+      - name: Test Links server
+        run: ../../links "../../examples/webserver/examples.links" --config='linksconfig'  --path=../../examples:/../../examples/games:../../examples/handlers:../../examples/dictionary:../../examples/games
+        working-directory: ${{ env.NPM_DIR }}
+        env:
+          LINKS_POSTGRES_PASSWORD: links
