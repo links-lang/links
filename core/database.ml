@@ -68,6 +68,8 @@ let value_of_db_string (value:string) t =
     | Types.Primitive Primitive.Float ->
        if value = "" then Value.box_float 0.00      (* HACK HACK *)
        else Value.box_float (float_of_string value)
+    | Types.Primitive Primitive.DateTime ->
+       Value.box_datetime (Timestamp.parse_db_string value)
     | t -> raise (runtime_error
       ("value_of_db_string: unsupported datatype: '" ^
         Types.string_of_datatype t ^"'"))

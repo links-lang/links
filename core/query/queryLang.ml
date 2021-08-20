@@ -28,7 +28,7 @@ let query_error fmt =
   let error msg = raise (DbEvaluationError msg) in
     Printf.kprintf error fmt
 
-type base_type = | Bool | Char | Float | Int | String
+type base_type = | Bool | Char | Float | Int | String | DateTime
 
 type tag = int
     [@@deriving show]
@@ -116,12 +116,13 @@ let bind env (x, v) =
 
 let default_of_base_type =
   function
-    | Primitive.Bool   -> Constant (Constant.Bool false)
-    | Primitive.Int    -> Constant (Constant.Int 42)
-    | Primitive.Char   -> Constant (Constant.Char '?')
-    | Primitive.Float  -> Constant (Constant.Float 0.0)
-    | Primitive.String -> Constant (Constant.String "")
-    | _                -> assert false
+    | Primitive.Bool     -> Constant (Constant.Bool false)
+    | Primitive.Int      -> Constant (Constant.Int 42)
+    | Primitive.Char     -> Constant (Constant.Char '?')
+    | Primitive.Float    -> Constant (Constant.Float 0.0)
+    | Primitive.String   -> Constant (Constant.String "")
+    | Primitive.DateTime -> Constant (Constant.DateTime.now())
+    | _                  -> assert false
 
 let rec value_of_expression = fun v ->
   let ve = value_of_expression in
@@ -158,6 +159,7 @@ let rec expression_of_base_value : Value.t -> t = function
         |> List.map (fun (k, v) -> (k, expression_of_base_value v))
         |> StringMap.from_alist in
       Record fields
+  | `DateTime dt -> Constant (Constant.DateTime dt)
   | other ->
       raise (internal_error ("expression_of_base_value undefined for " ^
         Value.string_of_value other))
@@ -307,6 +309,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
   | Constant (Constant.Char   _) -> Types.char_type
   | Constant (Constant.Float  _) -> Types.float_type
   | Constant (Constant.String _) -> Types.string_type
+  | Constant (Constant.DateTime _) -> Types.datetime_type
   | Project (w, name) ->
       begin
         match te w with
@@ -492,6 +495,7 @@ let rec expression_of_value : env -> Value.t -> t = fun env v ->
     | `XML xmlitem -> XML xmlitem
     | `FunctionPtr (f, fvs) -> find_fun env (f, fvs)
     | `PrimitiveFunction (f,_) -> Primitive f
+    | `DateTime dt -> Constant (Constant.DateTime dt)
     | v ->
         raise (internal_error (Printf.sprintf
             "Cannot convert value %s to expression" (Value.string_of_value v)))

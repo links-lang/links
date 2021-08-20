@@ -80,8 +80,7 @@ let reduce_not a =
 
 let rec reduce_eq (a, b) =
   let bool x = Q.Constant (Constant.Bool x) in
-  let eq_constant =
-    function
+  let eq_constant = function
       | (Constant.Bool a  , Constant.Bool b)   -> bool (a = b)
       | (Constant.Int a   , Constant.Int b)    -> bool (a = b)
       | (Constant.Float a , Constant.Float b)  -> bool (a = b)
@@ -89,21 +88,21 @@ let rec reduce_eq (a, b) =
       | (Constant.String a, Constant.String b) -> bool (a = b)
       | (a, b)                 -> Q.Apply (Q.Primitive "==", [Q.Constant a; Q.Constant b])
   in
-    match a, b with
-      | (Q.Constant a, Q.Constant b) -> eq_constant (a, b)
-      | (Q.Variant (s1, a), Q.Variant (s2, b)) ->
-        if s1 <> s2 then
-          Q.Constant (Constant.Bool false)
-        else
-          reduce_eq (a, b)
-      | (Q.Record lfields, Q.Record rfields) ->
-        List.fold_right2
-          (fun (_, v1) (_, v2) e ->
-            reduce_and (reduce_eq (v1, v2), e))
-          (StringMap.to_alist lfields)
-          (StringMap.to_alist rfields)
-          (Q.Constant (Constant.Bool true))
-      | (a, b) -> Q.Apply (Q.Primitive "==", [a; b])
+  match a, b with
+  | (Q.Constant a, Q.Constant b) -> eq_constant (a, b)
+  | (Q.Variant (s1, a), Q.Variant (s2, b)) ->
+     if s1 <> s2 then
+       Q.Constant (Constant.Bool false)
+     else
+       reduce_eq (a, b)
+  | (Q.Record lfields, Q.Record rfields) ->
+     List.fold_right2
+       (fun (_, v1) (_, v2) e ->
+         reduce_and (reduce_eq (v1, v2), e))
+       (StringMap.to_alist lfields)
+       (StringMap.to_alist rfields)
+       (Q.Constant (Constant.Bool true))
+  | (a, b) -> Q.Apply (Q.Primitive "==", [a; b])
 
 let reduce_concat vs =
   let vs =
@@ -113,9 +112,9 @@ let reduce_concat vs =
         | v -> [v])
       vs
   in
-    match vs with
-      | [v] -> v
-      | vs -> Q.Concat vs
+  match vs with
+  | [v] -> v
+  | vs -> Q.Concat vs
 
 let rec reduce_where_then (c, t) =
   match t with

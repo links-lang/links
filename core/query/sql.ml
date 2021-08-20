@@ -340,6 +340,12 @@ class virtual printer =
               pr_b_one_table c
               pr_b_one_table t
               pr_b_one_table e
+        | Constant (Constant.DateTime (Timestamp.Infinity))
+        | Constant (Constant.DateTime (Timestamp.MinusInfinity)) ->
+            raise (Errors.runtime_error "infinity / -infinity only supported on PostgreSQL")
+        | Constant (Constant.DateTime (Timestamp.Timestamp ts)) ->
+            CalendarShow.show ts
+            |> Format.fprintf ppf "'%s UTC' :: timestamp with time zone"
         | Constant c ->
             Format.pp_print_string ppf (Constant.to_string c)
         | Project (var, label) ->

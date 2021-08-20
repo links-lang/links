@@ -156,7 +156,8 @@ struct
       | Constant.Int    n -> `Int n
       | Constant.Char   c -> `Char c
       | Constant.String s -> Value.box_string s
-      | Constant.Float  f -> `Float f in
+      | Constant.Float  f -> `Float f
+      | Constant.DateTime dt -> Value.box_datetime dt in
 
     match v with
     | Constant c -> Lwt.return (constant c)

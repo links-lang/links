@@ -42,6 +42,79 @@ module DeclaredLinearity = struct
     | _   -> false
 end
 
+module Timestamp = struct
+    type t = Timestamp of CalendarShow.t | MinusInfinity | Infinity
+      [@@deriving ord]
+
+    let timestamp ts = Timestamp ts
+    let now () = Timestamp (CalendarShow.now ())
+    let infinity = Infinity
+    let minus_infinity = MinusInfinity
+
+    let pp ppf =
+      let open Format in
+      function
+        | Timestamp ts  -> CalendarShow.pp ppf ts
+        | Infinity      -> pp_print_string ppf "'infinity'"
+        | MinusInfinity -> pp_print_string ppf "'-infinity'"
+
+    let show x =
+        let open Format in
+        fprintf str_formatter "%a" pp x;
+        flush_str_formatter ()
+
+    let to_string = show
+
+    let parse_string str =
+      let open Lexing in
+
+      let print_position outx lexbuf =
+          let pos = lexbuf.lex_curr_p in
+          Format.fprintf outx "%s:%d:%d" pos.pos_fname
+            pos.pos_lnum (pos.pos_cnum - pos.pos_bol + 1) in
+
+      let bad_date msg =
+          Errors.RuntimeError
+            (Printf.sprintf "Ill-formed date: %s (%s)" str msg) in
+
+      let lexbuf = from_string str in
+      lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = "<string>" };
+      try TimestampParser.timestamp TimestampLexer.lex lexbuf with
+        | TimestampParser.Error ->
+            let open Format in
+            fprintf str_formatter "%a" print_position lexbuf;
+            let err = flush_str_formatter () in
+            raise (bad_date err)
+
+    (** Parses a user timestamp string. Lack of an offset is assumed to mean
+        local time. *)
+    let parse_user_string str =
+      match parse_string str with
+        | `Timestamp (cal, Some offset) ->
+              Timestamp (CalendarShow.convert cal
+                (CalendarLib.Time_Zone.UTC_Plus offset)
+                (CalendarLib.Time_Zone.UTC))
+        | `Timestamp (cal, None) ->
+              Timestamp (CalendarShow.convert cal
+                (CalendarLib.Time_Zone.Local)
+                (CalendarLib.Time_Zone.UTC))
+        | `Infinity -> Infinity
+        | `MinusInfinity -> MinusInfinity
+
+    (** Parses a database timestamp string. Lack of an offset is assumed to mean
+        UTC. *)
+    let parse_db_string str =
+      match parse_string str with
+        | `Timestamp (cal, offset) ->
+            let offset = OptionUtils.from_option 0 offset in
+            Timestamp (CalendarShow.convert cal
+                (CalendarLib.Time_Zone.UTC_Plus offset)
+                (CalendarLib.Time_Zone.UTC))
+        | `Infinity -> Infinity
+        | `MinusInfinity -> MinusInfinity
+end
+
+
 (* Convenient aliases for constructing values *)
 let dl_lin = DeclaredLinearity.Lin
 let dl_unl = DeclaredLinearity.Unl
@@ -228,17 +301,18 @@ module ForeignLanguage = struct
 end
 
 module Primitive = struct
-  type t = Bool | Int | Char | Float | XmlItem | DB | String
+  type t = Bool | Int | Char | Float | XmlItem | DB | String | DateTime
     [@@deriving show]
 
   let to_string = function
-    | Bool    -> "Bool"
-    | Int     -> "Int"
-    | Char    -> "Char"
-    | Float   -> "Float"
-    | XmlItem -> "XmlItem"
-    | DB      -> "Database"
-    | String  -> "String"
+    | Bool     -> "Bool"
+    | Int      -> "Int"
+    | Char     -> "Char"
+    | Float    -> "Float"
+    | XmlItem  -> "XmlItem"
+    | DB       -> "Database"
+    | String   -> "String"
+    | DateTime -> "DateTime"
 end
 
 module Constant = struct
@@ -248,14 +322,22 @@ module Constant = struct
     | Bool   of bool
     | String of string
     | Char   of char
+    | DateTime of Timestamp.t
       [@@deriving show, ord]
 
   let type_of = function
-    | Float  _ -> Primitive.Float
-    | Int    _ -> Primitive.Int
-    | Bool   _ -> Primitive.Bool
-    | Char   _ -> Primitive.Char
-    | String _ -> Primitive.String
+    | Float    _ -> Primitive.Float
+    | Int      _ -> Primitive.Int
+    | Bool     _ -> Primitive.Bool
+    | Char     _ -> Primitive.Char
+    | String   _ -> Primitive.String
+    | DateTime _ -> Primitive.DateTime
+
+  module DateTime = struct
+    let now () = DateTime (Timestamp.timestamp (CalendarShow.now()))
+    let beginning_of_time = DateTime (Timestamp.minus_infinity)
+    let forever = DateTime (Timestamp.infinity)
+  end
 
   (* SQL standard for escaping single quotes in a string *)
   let escape_string s =
@@ -269,6 +351,7 @@ module Constant = struct
     | Char c      -> "'"^ Char.escaped c ^"'"
     | String s    -> "'" ^ escape_string s ^ "'"
     | Float value -> string_of_float' value
+    | DateTime ts -> Timestamp.show ts
 end
 
 module QueryPolicy = struct
