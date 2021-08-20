@@ -624,6 +624,13 @@ end = functor (K : CONTINUATION) -> struct
          | Constant.Bool v   -> Lit (string_of_bool v)
          | Constant.Char v   -> chrlit v
          | Constant.String v -> chrlistlit v
+         | Constant.DateTime (Timestamp.Timestamp ts) ->
+             Dict [("_type", strlit "timestamp");
+                   ("_value", Lit (UnixTimestamp.of_calendar ts |> string_of_float))]
+         | Constant.DateTime Timestamp.Infinity ->
+             Dict [("_type", strlit "infinity")]
+         | Constant.DateTime Timestamp.MinusInfinity ->
+             Dict [("_type", strlit "-infinity")]
        end
     | Variable var ->
           (* HACK *)

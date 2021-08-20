@@ -69,7 +69,8 @@ type primitive_value_basis =  [
 type primitive_value = [
   | primitive_value_basis
   | `Database of (database * string)
-  | `Table of table ]
+  | `Table of table
+  | `DateTime of Timestamp.t ]
   [@@deriving show]
 
 type spawn_location = [
@@ -276,11 +277,15 @@ val box_channel : chan -> t
 val unbox_channel : t -> chan
 val box_access_point : access_point -> t
 val unbox_access_point : t -> access_point
+val box_datetime : Timestamp.t -> t
+val unbox_datetime : t -> Timestamp.t
 
 val intmap_of_record : t -> t Utility.intmap option
 
 val string_of_value : t -> string
 val string_of_xml : ?close_tags:bool -> xml -> string
+val string_of_calendar_utc : Utility.CalendarShow.t -> string
+
 val p_value: Format.formatter -> t -> unit
 
 (* Given a value, retreives a list of channels that are contained inside *)

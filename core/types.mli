@@ -39,12 +39,23 @@ module Policy : sig
   type kind_policy = Default | Full | Hide
 
   module EffectSugar : sig
-    type opt =
-      | FinalArrowSharesWithAlias
-      | AllImplicitArrowsShare
+    type opt = PresenceOmit
+             | AliasOmit
+             | ArrowsShowImplicitEffectVariable
+             | ArrowsCurriedHideFresh
+             | ContractOperationArrows
+             | OpenDefault
+             | FinalArrowSharesWithAlias
+             | AllImplicitArrowsShare
     type t = opt list
     val default : unit -> t
 
+    val presence_omit             : t -> bool
+    val alias_omit                : t -> bool
+    val arrows_show_implicit      : t -> bool
+    val arrows_curried_hide_fresh : t -> bool
+    val contract_operation_arrows : t -> bool
+    val open_default              : t -> bool
     val final_arrow_shares_with_alias : t -> bool
     val all_implicit_arrows_share : t -> bool
   end
@@ -228,6 +239,7 @@ val char_type : datatype
 val bool_type : datatype
 val int_type : datatype
 val float_type : datatype
+val datetime_type : datatype
 val database_type : datatype
 val xml_type : datatype
 val empty_type : datatype
@@ -235,6 +247,7 @@ val wild : Label.t
 val hear : Label.t
 val wild_present : Label.t * datatype
 val hear_present : datatype -> (Label.t * datatype)
+val is_builtin_effect : string -> bool
 
 (** get type variables *)
 val free_type_vars : datatype -> TypeVarSet.t
@@ -435,6 +448,7 @@ module type TYPE_VISITOR =
 sig
   class visitor :
   object ('self_type)
+    method set_refresh_tyvars : bool -> 'self_type
     method set_rec_vars : (meta_type_var) Utility.IntMap.t -> 'self_type
 
     method primitive : Primitive.t -> ('self_type * Primitive.t)
