@@ -95,20 +95,26 @@ let unpack_var_id = function
 
 module SEnv = Env.String
 
-type tycon_info = Kind.t list * bool
+(* tycon_info stores information about a type alias;
+   - Kind.t list = list of kinds of type arguments
+   - bool = whether tycon has implicit shared effect
+   - Types.typ option = the actual type inside the alias, if it exists (None for abstract types)
+     - this is used to propagate operations, sometimes the type behind an alias will have some
+       operations labels hidden inside it *)
+type tycon_info = Kind.t list * bool * Types.typ option
 
 type simple_tycon_env = tycon_info SEnv.t
 
 let simplify_tycon_env (tycon_env : Types.tycon_environment) : simple_tycon_env
     =
   let simplify_tycon name tycon simpl_env =
-    let param_kinds =
+    let param_kinds, internal_type =
       match tycon with
-      | `Alias (qs, _) -> List.map Quantifier.to_kind qs
-      | `Abstract abs -> Types.Abstype.arity abs
+      | `Alias (qs, tp) -> List.map Quantifier.to_kind qs, Some tp
+      | `Abstract abs -> Types.Abstype.arity abs, None
       | `Mutual _ -> raise (internal_error "Found `Mutual in global tycon env")
     in
-    SEnv.bind name (param_kinds, false) simpl_env
+    SEnv.bind name (param_kinds, false, internal_type) simpl_env
   in
   SEnv.fold simplify_tycon tycon_env SEnv.empty
 
@@ -127,10 +133,14 @@ module type ROW_VAR_MAP = sig
   val empty : 'a t
 
   val add : key -> 'a -> 'a t -> 'a t
+  (* TODO renaming to something more obvious *)
+  val add_raw : int -> 'a -> 'a t -> 'a t
+  val find_raw : int -> 'a t -> 'a
+  val find_raw_opt : int -> 'a t -> 'a option
+  val update : int -> ('a option -> 'a option) -> 'a t -> 'a t
   val find_opt : key -> 'a t -> 'a option
   val map : ('a -> 'b) -> 'a t -> 'b t
-
-  (* val remove : key -> 'a t -> 'a t *)
+  val fold : (int -> 'a -> 'acc -> 'acc) -> 'a t -> 'acc -> 'acc
 
   (* Predicate telling you if a given sugar variable should/can be
      handled by this map *)
@@ -192,13 +202,17 @@ module RowVarMap : ROW_VAR_MAP = struct
     let var = get_var k in
     IntMap.add var v m
 
+  let add_raw k v m = IntMap.add k v m
+  let update k upd m = IntMap.update k upd m
+  let find_raw k m = IntMap.find k m
+  let find_raw_opt k m = IntMap.find_opt k m
+
   let empty = IntMap.empty
 
   let map : ('a -> 'b) -> 'a t -> 'b t = fun f m -> IntMap.map f m
 
-  (* let remove : key -> 'a t -> 'a t = fun k m ->
-   *   let var = get_var k in
-   *   IntMap.remove var m *)
+  let fold : (int -> 'a -> 'acc -> 'acc) -> 'a t -> 'acc -> 'acc
+    = fun f m acc -> IntMap.fold f m acc
 
   (* functions using SugarQuantifier.t as key *)
   let update_by_quantifier :
@@ -229,7 +243,7 @@ let may_have_shared_eff (tycon_env : simple_tycon_env) dt =
   | Lolli _ ->
       true
   | TypeApplication (tycon, _) -> (
-    let param_kinds, _has_implicit_effect =
+    let param_kinds, _has_implicit_effect, _internal_type =
       try
         SEnv.find tycon tycon_env
       with NotFound _ -> raise (Errors.UnboundTyCon (SourceCode.WithPos.pos dt, tycon))
@@ -300,7 +314,7 @@ let cleanup_effects tycon_env =
              in
              let ts =
                match tycon_info with
-               | Some (params, _) -> go (params, ts)
+               | Some (params, _, _) -> go (params, ts)
                | None -> raise (Errors.UnboundTyCon (pos, name))
              in
              TypeApplication (name, ts)
@@ -405,7 +419,7 @@ let gather_mutual_info (tycon_env : simple_tycon_env) =
            let tycon_info = SEnv.find_opt name tycon_env in
            let self = self#list (fun o ta -> o#type_arg ta) ts in
            match tycon_info with
-           | Some (param_kinds, _other_has_implicit)
+           | Some (param_kinds, _other_has_implicit, _internal_type)
              when List.length param_kinds = List.length ts + 1 ->
                let poss_with_implicit =
                  match ListUtils.last param_kinds with
@@ -420,6 +434,119 @@ let gather_mutual_info (tycon_env : simple_tycon_env) =
   end)
     #datatype
 
+let gather_operation_of_type tp
+  = let open Types in
+    let module FieldEnv = Utility.StringMap in
+    let is_effect_row_kind : Kind.t -> bool
+      = fun (primary, (_, restriction)) ->
+      primary = PrimaryKind.Row && restriction = Restriction.Effect
+    in
+    let o =
+      object (o : 'self_type)
+        inherit Types.Transform.visitor as super
+
+        val seen_recapps : stringset = StringSet.empty
+        method add_seen_recapp name =
+          let seen_recapps = StringSet.add name seen_recapps in
+          {< seen_recapps >}
+
+        val operations : stringset RowVarMap.t = RowVarMap.empty
+        method operations = operations
+
+        val implicit_shared_var : int option = None
+        method implicit_shared_var = implicit_shared_var
+        method set_implicit_shared_var : int -> 'self_type
+          = fun vid ->
+          {< implicit_shared_var = Some vid >}
+
+        method with_label vid label =
+          let operations = RowVarMap.update vid
+                             (function
+                              | None -> Some (StringSet.singleton label)
+                              | Some sset -> Some (StringSet.add label sset))
+                             operations
+          in
+          {< operations >}
+
+        method effect_row : maybe_main_var:bool -> row -> 'self_type * row
+          = fun ~maybe_main_var r ->
+          let (fields, rvar, _) = flatten_row r (* |> fst *) |> extract_row_parts in
+          let rvar = Unionfind.find rvar in
+          let o = match rvar with
+            | Var (vid,_,_)  ->
+               (* this is an open effect row, collect its operations *)
+               (* FieldEnv.fold (fold_fields vid) fields o *)
+               let o = if maybe_main_var
+                       then o#set_implicit_shared_var vid
+                       else o
+               in
+               FieldEnv.fold
+                 (fun label _field acc ->
+                   acc#with_label vid label)
+                 fields o
+            | _ -> o (* not an open effect row, ignore *)
+          in
+          (o, r)
+
+        method alias_recapp
+          = fun kinds tyargs ->
+          let effect_rows = ListUtils.filter_map2
+                              (fun (knd, _) -> is_effect_row_kind knd)
+                              (fun (_, (_, typ)) -> typ)
+                              kinds tyargs in
+          List.fold_left
+            (fun acc r ->
+              fst (acc#effect_row ~maybe_main_var:true r))
+            o effect_rows
+
+        method! typ : typ -> 'self_type * typ
+          = fun tp ->
+          match tp with
+          | Function (d,e,r) | Lolli (d,e,r) ->
+             let maybe_main_var = match implicit_shared_var with
+               | Some _ -> false
+               | None ->
+                  begin match r with
+                  | Function _ | Lolli _
+                    | Alias _ | RecursiveApplication _ -> false
+                  | _ -> true
+                  end
+             in
+             let (o, _) = o#effect_row ~maybe_main_var e in
+             let (o, _) = o#typ r in
+             let (o, _) = o#typ d in
+             (o, tp)
+          | Alias ((_,kinds,tyargs,_), inner_tp) ->
+             let o = o#alias_recapp kinds tyargs in
+             let (o,_) = o#typ inner_tp in
+             (o, tp)
+          | RecursiveApplication { r_unique_name ; r_quantifiers = kinds
+                                   ; r_args = tyargs ; r_unwind; r_dual ; _ } ->
+             let o = o#alias_recapp kinds tyargs in
+             let o = if StringSet.mem r_unique_name seen_recapps
+                     then o (* skip, decycling *)
+                     else begin
+                         let inner_type = r_unwind tyargs r_dual in
+                         let o = o#add_seen_recapp r_unique_name in
+                         fst (o#typ inner_type)
+                       end
+             in
+             (o, tp)
+          | _ -> super#typ tp
+
+      end
+    in
+    let (o,_) = (o#typ tp)in
+    let operations = o#operations in
+    let implicit_shared_var = o#implicit_shared_var in
+    (* if implicit shared var exists, we replace its id with $eff *)
+    let operations = match implicit_shared_var with
+      | None -> operations
+      | Some vid -> RowVarMap.add_raw (-1)
+                      (RowVarMap.find_raw vid operations) operations
+    in
+    operations
+
 (** Gather information about which operations are used with which row
     variables.
     Precondition: cleanup_effects ran on this type *)
@@ -429,8 +556,19 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
       inherit SugarTraversals.fold as super
 
       val operations = RowVarMap.empty
-
       method operations = operations
+      method with_operations operations = {< operations >}
+
+      val hidden_operations : stringset stringmap = StringMap.empty
+      method hidden_operations = hidden_operations
+      method add_hidden_op alias_name label =
+        let hidden_operations = StringMap.update alias_name
+                                  (function
+                                   | None -> Some (StringSet.singleton label)
+                                   | Some lset -> Some (StringSet.add label lset))
+                                  hidden_operations
+        in
+        {< hidden_operations >}
 
       method replace quantifier map =
         let ubq = RowVarMap.update_by_quantifier in
@@ -480,7 +618,32 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
               | (([] as qs) | _ :: qs), t :: ts -> go (o#type_arg t) (qs, ts)
             in
             match tycon_info with
-            | Some (params, _has_implict_eff) -> go self (params, ts)
+            | Some (params, _has_implict_eff, internal_type) ->
+               let self = go self (params, ts) in
+               let ops = match internal_type with
+                 | None -> RowVarMap.empty
+                 | Some internal_type ->
+                    gather_operation_of_type internal_type
+               in
+               let operations =
+                 RowVarMap.fold
+                   (fun vid sset acc ->
+                     RowVarMap.update vid
+                       (function
+                        | None -> Some sset
+                        | Some opset -> Some (StringSet.union opset sset))
+                       acc)
+                   ops self#operations
+               in
+               let self = match RowVarMap.find_raw_opt (-1) ops with
+                 | None -> self
+                 | Some hide_ops ->
+                    StringSet.fold
+                      (fun label acc ->
+                        acc#add_hidden_op name label)
+                      hide_ops self
+               in
+               self#with_operations operations
             | None -> raise (Errors.UnboundTyCon (pos, name)) )
         | Mu (v, t) ->
             let mtv = SugarTypeVar.get_resolved_type_exn v in
@@ -515,18 +678,20 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
     end
   in
   if allow_fresh && has_effect_sugar () then
-    (o#datatype dt)#operations
-    |> RowVarMap.map (fun v ->
-           StringSet.fold
-             (fun op m ->
-               let point =
-                 lazy
-                   (let var = Types.fresh_raw_variable () in
-                    Unionfind.fresh (Types.Var (var, (PrimaryKind.Presence, default_subkind), `Rigid)))
-               in
-               StringMap.add op point m)
-             v StringMap.empty)
-  else RowVarMap.empty
+    let o = o#datatype dt in
+    (o#operations
+     |> RowVarMap.map (fun v ->
+            StringSet.fold
+              (fun op m ->
+                let point =
+                  lazy
+                    (let var = Types.fresh_raw_variable () in
+                     Unionfind.fresh (Types.Var (var, (PrimaryKind.Presence, default_subkind), `Rigid)))
+                in
+                StringMap.add op point m)
+              v StringMap.empty),
+     o#hidden_operations)
+  else (RowVarMap.empty, StringMap.empty)
 
 let preprocess_type (dt : Datatype.with_pos) tycon_env allow_fresh shared_effect
     =
@@ -574,7 +739,9 @@ class main_traversal simple_tycon_env =
         corresponding effect variables. *)
     val row_operations : Types.meta_presence_var Lazy.t StringMap.t RowVarMap.t
         =
-      RowVarMap.empty
+        RowVarMap.empty
+
+    val hidden_operations : stringset stringmap = StringMap.empty
 
     method set_inside_type inside_type = {<inside_type>}
 
@@ -631,7 +798,7 @@ class main_traversal simple_tycon_env =
           let pos = SourceCode.Position.dummy in
           match SEnv.find_opt tycon tycon_env with
           | None -> raise (Errors.UnboundTyCon (pos, tycon))
-          | Some (params, _has_implicit_eff) ->
+          | Some (params, _has_implicit_eff, _internal_type) ->
               let qn = List.length params in
               let tn = List.length ts in
               let arity_err () =
@@ -642,7 +809,7 @@ class main_traversal simple_tycon_env =
               let process_type_arg i : Kind.t * type_arg -> Datatype.type_arg =
                 function
                 | (PK.Row, (_, Restriction.Effect)), Row r ->
-                    let _o, erow = o#effect_row r in
+                    let _o, erow = o#effect_row ~in_alias:(Some tycon) r in
                     Row erow
                 | (PK.Row, _), Row r ->
                     let _o, row = o#row r in
@@ -712,18 +879,26 @@ class main_traversal simple_tycon_env =
                       match RowVarMap.find_opt eff_sugar_var row_operations with
                       | None -> []
                       | Some ops ->
+                         let ops_to_hide = match StringMap.find_opt tycon hidden_operations with
+                           | None -> StringSet.empty
+                           | Some hidden -> hidden
+                         in
                           StringMap.fold
                             (fun op p fields ->
-                              let mpv : Types.meta_presence_var =
-                                Lazy.force p
-                              in
-                              let fieldspec =
-                                Datatype.Var
-                                  (SugarTypeVar.mk_resolved_presence mpv)
-                              in
-                              if not allow_implictly_bound_vars then
-                                raise (cannot_insert_presence_var2 pos op);
-                              (op, fieldspec) :: fields)
+                              if StringSet.mem op ops_to_hide
+                              then fields
+                              else begin
+                                  let mpv : Types.meta_presence_var =
+                                    Lazy.force p
+                                  in
+                                  let fieldspec =
+                                    Datatype.Var
+                                      (SugarTypeVar.mk_resolved_presence mpv)
+                                  in
+                                  if not allow_implictly_bound_vars then
+                                    raise (cannot_insert_presence_var2 pos op);
+                                  (op, fieldspec) :: fields
+                                end)
                             ops []
                     in
                     let row_var =
@@ -789,13 +964,20 @@ class main_traversal simple_tycon_env =
       in
       (o, (fields, rv))
 
-    method effect_row ((fields, rv) : Datatype.row) =
+    method effect_row ?(in_alias=None) ((fields, rv) : Datatype.row) =
       let dpos = SourceCode.Position.dummy in
       let fields =
         match rv with
         | Datatype.Open stv when RowVarMap.is_relevant stv -> (
             match RowVarMap.find_opt stv row_operations with
             | Some ops ->
+               let ops_to_hide = match in_alias with
+                 | None -> StringSet.empty
+                 | Some name ->
+                    (match StringMap.find_opt name hidden_operations with
+                     | None -> StringSet.empty
+                     | Some hidden -> hidden)
+               in
                 let ops_to_add =
                   List.fold_left
                     (fun ops (op, _) -> StringMap.remove op ops)
@@ -805,11 +987,14 @@ class main_traversal simple_tycon_env =
                     (* Alternatively, we could just decide not to touch the row and let the type checker
                        complain about the incompatible rows? *)
                     raise (cannot_insert_presence_var dpos op);
-                  let rpv =
-                    SugarTypeVar.mk_resolved_presence (Lazy.force pres_var) in
-                  (op, Datatype.Var rpv) :: fields in
+                  if StringSet.mem op ops_to_hide
+                  then fields
+                  else let rpv =
+                         SugarTypeVar.mk_resolved_presence (Lazy.force pres_var) in
+                       (op, Datatype.Var rpv) :: fields in
                 StringMap.fold add_op ops_to_add fields
-            | None -> fields )
+            | None ->
+               fields )
         | _ -> fields in
       (* We need to perform the actions above prior to calling o#row.
          Otherwise, we resolve $eff already, and the lookup in row_operations
@@ -840,7 +1025,8 @@ class main_traversal simple_tycon_env =
                     args
                 in
                 (* initially pretend that no type needs an implict parameter *)
-                let env' = SEnv.bind t (params, false) alias_env in
+                (* TODO                                vvvv ??? *)
+                let env' = SEnv.bind t (params, false, None) alias_env in
                 let tycons' = StringSet.add t tycons in
                 (env', tycons'))
               (tycon_env, StringSet.empty)
@@ -886,7 +1072,7 @@ class main_traversal simple_tycon_env =
               implicits sorted_graph
           in
           (* Now patch up the types to include this effect variable. *)
-          let patch_type_param_list (tycon_env, shared_var_env, ts)
+          let patch_type_param_list ((tycon_env : simple_tycon_env), shared_var_env, ts)
               ({ node = t, args, (d, _); pos } as tn) =
             if StringMap.find t implicits then
               let var = Types.fresh_raw_variable () in
@@ -899,7 +1085,9 @@ class main_traversal simple_tycon_env =
                   (SugarQuantifier.get_resolved_exn ->- Quantifier.to_kind)
                   args
               in
-              let tycon_env = SEnv.bind t (env_args, true) tycon_env in
+              (* TODO maybe this is already bound, take the type from inside
+                                                           vvvv *)
+              let tycon_env = SEnv.bind t (env_args, true, None) tycon_env in
               let shared_effect_var : Types.meta_row_var Lazy.t =
                 lazy
                   (Unionfind.fresh (Types.Var (var, (PrimaryKind.Row, (lin_unl, res_effect)), `Rigid)))
@@ -947,12 +1135,13 @@ class main_traversal simple_tycon_env =
     method! datatype dt =
       let pos = SourceCode.WithPos.pos dt in
       let dt, o =
-        if not inside_type then
-          let dt, row_operations, shared_effect =
-            preprocess_type dt tycon_env allow_implictly_bound_vars
-              shared_effect
-          in
-          (dt, {<row_operations; shared_effect>})
+        if not inside_type then begin
+            let dt, (row_operations, hidden_operations), shared_effect =
+              preprocess_type dt tycon_env allow_implictly_bound_vars
+                shared_effect
+            in
+            (dt, {<row_operations; shared_effect; hidden_operations>})
+          end
         else (dt, o)
       in
       let o = o#set_inside_type true in
