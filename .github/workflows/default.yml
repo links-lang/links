@@ -580,7 +580,7 @@ jobs:
       - name: Generate pgpass
         run: |
           echo "localhost:5432:links:links:links" >> ~/.pgpass
-          chmod 600 .pgpass
+          chmod 600 ~/.pgpass
 
       - run: npm test
         working-directory: ${{ env.NPM_DIR }}
