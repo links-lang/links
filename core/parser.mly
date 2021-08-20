@@ -83,6 +83,8 @@ let query_policy_of_string p =
   function
   | "flat" -> QueryPolicy.Flat
   | "nested" -> QueryPolicy.Nested
+  | "mixing" -> QueryPolicy.Mixing
+  | "delat" -> QueryPolicy.Delat
   | rest      ->
      raise (ConcreteSyntaxError (pos p, "Invalid query policy: " ^ rest ^ ", expected 'flat' or 'nested'"))
 
@@ -1001,6 +1003,7 @@ primary_datatype:
                                                                    | "Float"   -> Primitive Primitive.Float
                                                                    | "XmlItem" -> Primitive Primitive.XmlItem
                                                                    | "String"  -> Primitive Primitive.String
+                                                                   | "DateTime" -> Primitive Primitive.DateTime
                                                                    | "Database"-> DB
                                                                    | "End"     -> Datatype.End
                                                                    | t         -> TypeApplication (t, [])

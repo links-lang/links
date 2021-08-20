@@ -83,6 +83,7 @@ struct
         | Constant.Char   _ -> o, c, char_type
         | Constant.String _ -> o, c, string_type
         | Constant.Float  _ -> o, c, float_type
+        | Constant.DateTime  _ -> o, c, datetime_type
 
     method optionu :
       'a.

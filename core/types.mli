@@ -235,6 +235,7 @@ val char_type : datatype
 val bool_type : datatype
 val int_type : datatype
 val float_type : datatype
+val datetime_type : datatype
 val database_type : datatype
 val xml_type : datatype
 val empty_type : datatype
