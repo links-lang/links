@@ -29,7 +29,7 @@ and select_fields =
   | Fields    of (base * string) list
 and from_clause =
   | TableRef of table_name * Var.var
-  | Subquery of dependency * query * Var.var  (* bool = LATERAL? *)
+  | Subquery of dependency * query * Var.var
 and base =
   | Case      of base * base * base
   | Constant  of Constant.t
