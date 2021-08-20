@@ -2078,8 +2078,8 @@ module Policy = struct
       | AliasOmit                        -> "alias"
       | ContractOperationArrows          -> "contract"
       | OpenDefault                      -> "open"
-      | FinalArrowSharesWithAlias -> "-e->T(e)"
-      | AllImplicitArrowsShare -> "all_arrows"
+      | FinalArrowSharesWithAlias        -> "final_arrow"
+      | AllImplicitArrowsShare           -> "all_arrows"
     let shortcuts_of_opts = Settings.string_of_paths -<- List.map show_shortcut
 
     let parse_opts : string -> opt list
@@ -2098,7 +2098,7 @@ module Policy = struct
             -> ContractOperationArrows
           | "open_default" | "open"
             -> OpenDefault
-          | "final_arrow_shares_with_alias" | "-e->t(e)" (* hacky due to lowercase *)
+          | "final_arrow_shares_with_alias" | "final_arrow"
             -> FinalArrowSharesWithAlias
           | "all_implicit_arrows_share" | "all_arrows" ->
              AllImplicitArrowsShare
@@ -2134,7 +2134,7 @@ module Policy = struct
            ; "   `E:() {}-> a' to `E:a'"
            ; " * open_default [open]: effect rows are open by default,"
            ; "   closed with syntax { | .}"
-           ; " * final_arrow_shares_with_alias [-e->T(e)]: final arrow and"
+           ; " * final_arrow_shares_with_alias [final_arrow]: final arrow and"
            ; "   a following type alias will be assumed to share implicit effects"
            ; "   (This is only a desugaring setting)."
            ; " * all_implicit_arrows_share [all_arrows]: all arrows with implicit"
