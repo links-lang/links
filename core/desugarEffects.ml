@@ -47,6 +47,16 @@ The following steps are only performed when effect_sugar is enabled:
 let shared_effect_var_name = "$eff"
 
 let has_effect_sugar () = Types.Policy.effect_sugar (Types.Policy.default_policy ())
+let final_arrow_shares_with_alias () =
+  let open Types.Policy in
+  let policy = default_policy () in
+  let es_policy = es_policy policy in
+  EffectSugar.final_arrow_shares_with_alias es_policy
+let all_implicit_arrows_share () =
+  let open Types.Policy in
+  let policy = default_policy () in
+  let es_policy = es_policy policy in
+  EffectSugar.all_implicit_arrows_share es_policy
 
 let internal_error message =
   Errors.internal_error ~filename:"desugarEffects.ml" ~message
@@ -241,7 +251,7 @@ let may_have_shared_eff (tycon_env : simple_tycon_env) dt =
   match node with
   | Function _
   | Lolli _ ->
-      true
+     Some `Arrow
   | TypeApplication (tycon, _) -> (
     let param_kinds, _has_implicit_effect, _internal_type =
       try
@@ -249,10 +259,10 @@ let may_have_shared_eff (tycon_env : simple_tycon_env) dt =
       with NotFound _ -> raise (Errors.UnboundTyCon (SourceCode.WithPos.pos dt, tycon))
     in
     match ListUtils.last_opt param_kinds with
-    | Some (PrimaryKind.Row, (_, Restriction.Effect)) -> true
-    | _ -> false )
+    | Some (PrimaryKind.Row, (_, Restriction.Effect)) -> Some `Alias
+    | _ -> None )
   (* TODO: in the original version, this was true for every tycon with a Row var with restriction effect as the last param *)
-  | _ -> false
+  | _ -> None
 
 (** Perform some initial desugaring of effect rows, to make them more amenable
    to later analysis.
@@ -276,8 +286,27 @@ let cleanup_effects tycon_env =
        let { pos; node = t } = dt in
        let do_fun a e r =
          let a = self#list (fun o -> o#datatype) a in
-         let has_shared = may_have_shared_eff tycon_env r in
-         let e = self#effect_row ~allow_shared:(not has_shared) e in
+         let allow_shared = match may_have_shared_eff tycon_env r with
+           (* range is irrelevant - this arrow can share effect *)
+           | None -> `Allow
+
+           (* range is another arrow and this is a collector in a
+              curried function => must be fresh, unless we want to share all arrows *)
+           | Some `Arrow ->
+              if all_implicit_arrows_share ()
+              then `Allow
+              else `Disallow
+
+           (* range is an alias, this is a rightmost arrow, effect
+              sugar is active => decide based on policies *)
+           | Some `Alias ->
+              if all_implicit_arrows_share ()
+              then `Allow
+              else if final_arrow_shares_with_alias ()
+              then `Infer
+              else `Disallow
+         in
+         let e = self#effect_row ~allow_shared e in
          let r = self#datatype r in
          (a, e, r)
        in
@@ -305,10 +334,10 @@ let cleanup_effects tycon_env =
                function
                | _, [] -> []
                | [], Row t :: ts ->
-                   Row (self#effect_row ~allow_shared:false t) :: go ([], ts)
+                   Row (self#effect_row ~allow_shared:`Disallow t) :: go ([], ts)
                | (PrimaryKind.Row, (_, Restriction.Effect)) :: qs, Row t :: ts
                  ->
-                   Row (self#effect_row ~allow_shared:false t) :: go (qs, ts)
+                   Row (self#effect_row ~allow_shared:`Disallow t) :: go (qs, ts)
                | (([] as qs) | _ :: qs), t :: ts ->
                    self#type_arg t :: go (qs, ts)
              in
@@ -357,20 +386,44 @@ let cleanup_effects tycon_env =
        let gue = SugarTypeVar.get_unresolved_exn in
        let var =
          match var with
-         | Datatype.Open stv
-           when ((not allow_shared) || not has_effect_sugar)
-                && (not (SugarTypeVar.is_resolved stv))
-                && SugarTypeVar.get_unresolved_name_exn stv
-                   = shared_effect_var_name ->
-             let _, sk, fr = gue stv in
-             let stv' = SugarTypeVar.mk_unresolved "$" sk fr in
-             Datatype.Open stv'
-         | Datatype.Open stv
-           when has_effect_sugar
-                && (not (SugarTypeVar.is_resolved stv))
-                && gue stv = ("$", None, `Rigid) ->
-             let stv' = SugarTypeVar.mk_unresolved "$eff" None `Rigid in
-             Datatype.Open stv'
+         | Datatype.Open stv ->
+            if not (SugarTypeVar.is_resolved stv)
+            then begin
+                let gen_unresolved_eff () =
+                  SugarTypeVar.mk_unresolved shared_effect_var_name None `Rigid
+                in
+                let to_unresolved_general sk fr =
+                  SugarTypeVar.mk_unresolved "$" sk fr
+                in
+                let gen_resolved_flex () =
+                  SugarTypeVar.mk_resolved_row
+                    (let var = Types.fresh_raw_variable () in
+                     Unionfind.fresh
+                       (Types.Var (var, (PrimaryKind.Row, (lin_unl, res_effect)), `Flexible)))
+                in
+                let name, sk, fr = gue stv in
+                if has_effect_sugar
+                then
+                  begin
+                    if (name = "$" || name = shared_effect_var_name)
+                       && sk = None && fr = `Rigid (* TODO need sk,fr? *)
+                    then let stv' = match allow_shared with
+                           | `Allow -> gen_unresolved_eff ()
+                           | `Infer -> gen_resolved_flex ()
+                           | `Disallow -> to_unresolved_general sk fr
+                         in
+                         Datatype.Open stv'
+                    else var
+                  end
+                else
+                  begin
+                    if name = shared_effect_var_name
+                    then let stv' = to_unresolved_general sk fr in
+                         Datatype.Open stv'
+                    else var
+                  end
+              end
+            else var
          | _ -> var
        in
        self#row (fields, var)
@@ -694,7 +747,7 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
   else (RowVarMap.empty, StringMap.empty)
 
 let preprocess_type (dt : Datatype.with_pos) tycon_env allow_fresh shared_effect
-    =
+  =
   let dt = cleanup_effects tycon_env dt in
   let row_operations = gather_operations tycon_env allow_fresh dt in
   let shared_effect =
