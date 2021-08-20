@@ -10,7 +10,8 @@ beforeAll(async () => {
 
   // Start Links server
   linksServer = await startServer(`${LINKS_ROOT}/examples/webserver/examples.links`,
-    `${LINKS_ROOT}/examples:${LINKS_ROOT}/examples/games:${LINKS_ROOT}/examples/handlers:${LINKS_ROOT}/examples/dictionary`
+    `${LINKS_ROOT}/examples:${LINKS_ROOT}/examples/games:${LINKS_ROOT}/examples/handlers:${LINKS_ROOT}/examples/dictionary`,
+    'config=linksconfig'
   );
 
   return linksServer;
@@ -33,8 +34,7 @@ test('Check factorial up to 64', async () => {
   await driver.findElement(By.xpath('/html/body/form/input[1]')).sendKeys('6');
   await driver.findElement(By.xpath('/html/body/form/input[1]')).sendKeys('4');
 
-  await driver.findElement(By.xpath('/html/body/form/input[2]'))
-    .click();
+  await driver.findElement(By.xpath('/html/body/form/input[2]')).click();
 
   // Find tables
   await driver.wait(until.elementsLocated(By.xpath('/html/body/table/tbody')));
