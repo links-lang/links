@@ -518,6 +518,9 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
+    env:
+      LINKS_BROWSER: ${{ matrix.browser }}
+      NPM_DIR: tests/end-to-end
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -563,8 +566,8 @@ jobs:
           POSTGRES_PASSWORD: links
           POSTGRES_DB: links
 
-      - name: Test Links server
-        run: ../../links "../../examples/webserver/examples.links" --config='linksconfig'  --path=../../examples:/../../examples/games:../../examples/handlers:../../examples/dictionary:../../examples/games
+      - run: npm install
         working-directory: ${{ env.NPM_DIR }}
-        env:
-          LINKS_POSTGRES_PASSWORD: links
+
+      - run: npm test
+        working-directory: ${{ env.NPM_DIR }}
