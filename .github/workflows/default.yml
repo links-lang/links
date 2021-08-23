@@ -532,10 +532,10 @@ jobs:
           --health-retries 5
 
     steps:
-      - name: Install PostgreSQL client
-        run: |
-          apt-get update
-          apt-get install --yes postgresql-client
+      # - name: Install PostgreSQL client
+      #   run: |
+      #     sudo apt-get update
+      #     sudo apt-get install --yes postgresql-client
 
       - uses: actions/checkout@v2
         with:
