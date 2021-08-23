@@ -600,6 +600,24 @@ jobs:
         env:
           PGPASSWORD: postgres_password
 
+      - run: npm install
+        working-directory: ${{ env.NPM_DIR }}
+
+      # - name: Generate linksconfig
+      #   working-directory: ${{ env.NPM_DIR }}
+      #   run: |
+      #     echo "database_args=localhost:${LINKS_POSTGRES_PORT}:links:"
+      #     echo "database_args=localhost:${LINKS_POSTGRES_PORT}:links:" >> linksconfig
+      #   env:
+      #     LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+
+      - run: npm test
+        working-directory: ${{ env.NPM_DIR }}
+        env:
+          LINKS_POSTGRES_HOST: localhost
+          LINKS_POSTGRES_USER: links
+          LINKS_POSTGRES_PASSWORD: links
+          LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
 
   # dbTest:
   #   services:
