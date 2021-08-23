@@ -539,13 +539,7 @@ jobs:
           apt-get update
           apt-get install --yes postgresql-client
 
-      # queries database with postgres client
-      - name: Query database
-        run: psql -h postgres -d links -U postgres_user -c 'SELECT 1;'
-        env:
-          # postgress password is required; alternatively, you can run:
-          # `PGPASSWORD=postgres_password psql ...`
-          PGPASSWORD: postgres_password
+
 
       - uses: actions/checkout@v2
         with:
@@ -555,12 +549,19 @@ jobs:
       - name: Populate database
         run: |
           for f in `ls *.sql`; do
-            dropdb -U links -h localhost ${f%.sql} -w
-            createdb -O links ${f%.sql} -w;
+            createdb -O links ${f%.sql};
           done
-          for f in `ls *.sql`; do psql -w -U links -h localhost -d ${f%.sql} < $f; done
+          for f in `ls *.sql`; do psql -h postgres -U postgres_user -d ${f%.sql} < $f; done
         working-directory: links-database-setup
         env:
+          PGPASSWORD: postgres_password
+
+      # queries database with postgres client
+      - name: Query database
+        run: psql -h postgres -d links -U postgres_user -c 'SELECT 1;'
+        env:
+          # postgress password is required; alternatively, you can run:
+          # `PGPASSWORD=postgres_password psql ...`
           PGPASSWORD: postgres_password
 
   # dbTest:
