@@ -493,16 +493,12 @@ jobs:
       - name: Populate database #2
         run: |
           for f in `ls *.sql`; do
-            dropdb -U links -h localhost ${f%.sql}
             createdb -U links -O links -h localhost ${f%.sql};
           done
           for f in `ls *.sql`; do psql -U links -d ${f%.sql} -h localhost < $f; done
         working-directory: links-database-setup
         env:
-          POSTGRES_USER: links
           POSTGRES_PASSWORD: links
-          POSTGRES_DB: links
-          PGPASSWORD: links
 
   dbTest:
     strategy:
