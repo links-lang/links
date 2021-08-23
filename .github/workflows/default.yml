@@ -561,7 +561,8 @@ jobs:
       - name: Populate database
         run: |
           ls
-          bash links-database-setup/dbsetup
+          bash dbsetup
+        working-directory: ${{ env.NPM_DIR }}/links-database-setup
         env:
           POSTGRES_USER: links
           POSTGRES_PASSWORD: links
