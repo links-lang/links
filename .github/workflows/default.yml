@@ -511,6 +511,10 @@ jobs:
         browser:
           - firefox
           - chrome
+          
+    env:
+      LINKS_BROWSER: ${{ matrix.browser }}
+      NPM_DIR: tests/end-to-end
 
     runs-on: ${{ matrix.os }}
     # service containers to run with `postgres-job`
@@ -585,9 +589,7 @@ jobs:
   #         --health-retries 5
   #       ports:
   #         - 5432:5432
-  #   env:
-  #     LINKS_BROWSER: ${{ matrix.browser }}
-  #     NPM_DIR: tests/end-to-end
+  
   #   steps:
   #     - name: Checkout code
   #       uses: actions/checkout@v2
