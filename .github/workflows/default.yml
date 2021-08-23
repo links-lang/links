@@ -562,6 +562,20 @@ jobs:
         run: |
           echo "localhost:5432:links:links:links" >> ~/.pgpass
           chmod 600 ~/.pgpass
+      
+      - name: Populate database #2
+        run: |
+          for f in `ls *.sql`; do
+            dropdb -U links -h localhost ${f%.sql} -w
+            createdb -O links ${f%.sql} -w;
+          done
+          for f in `ls *.sql`; do psql -U links -h localhost -d ${f%.sql} < $f; done
+        working-directory: links-database-setup
+        env:
+          POSTGRES_USER: links
+          POSTGRES_PASSWORD: links
+          POSTGRES_DB: links
+
       - name: Populate database
         run: |
           ls
