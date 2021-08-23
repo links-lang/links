@@ -527,7 +527,7 @@ jobs:
         # `POSTGRES_HOST` is `postgres`
         env:
           # optional (defaults to `postgres`)``
-          POSTGRES_DB: links 
+          POSTGRES_DB: links
           # required
           POSTGRES_PASSWORD: links
           # optional (defaults to `5432`)
@@ -545,7 +545,6 @@ jobs:
           --health-retries 5
 
     steps:
-
       - name: Checkout code
         uses: actions/checkout@v2
 
@@ -592,7 +591,7 @@ jobs:
         env:
           PGPASSWORD: links
 
-      - run: npm ci 
+      - run: npm ci
         working-directory: ${{ env.NPM_DIR }}
 
       # - name: Generate linksconfig
@@ -610,73 +609,76 @@ jobs:
           LINKS_POSTGRES_USER: links
           LINKS_POSTGRES_PASSWORD: links
           LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+          POSTGRES_USER: links
+          POSTGRES_PASSWORD: links
 
-  # dbTest:
-  #   services:
-  #     postgres:
-  #       image: postgres
-  #       env:
-  #         POSTGRES_USER: links
-  #         POSTGRES_PASSWORD: links
-  #         POSTGRES_DB: links
-  #       options: >-
-  #         --health-cmd pg_isready
-  #         --health-interval 10s
-  #         --health-timeout 5s
-  #         --health-retries 5
-  #       ports:
-  #         - 5432:5432
-  
-    # steps:
-      
-    #   - uses: actions/checkout@v2
-    #     with:
-    #       repository: dhil/links-database-setup
-    #       path: ./links-database-setup
+          # dbTest:
+          #   services:
+          #     postgres:
+          #       image: postgres
+          #       env:
+          #         POSTGRES_USER: links
+          #         POSTGRES_PASSWORD: links
+          #         POSTGRES_DB: links
+          #       options: >-
+          #         --health-cmd pg_isready
+          #         --health-interval 10s
+          #         --health-timeout 5s
+          #         --health-retries 5
+          #       ports:
+          #         - 5432:5432
 
-    #   - name: Generate pgpass
-    #     run: |
-    #       echo "localhost:5432:links:links:links" >> ~/.pgpass
-    #       chmod 600 ~/.pgpass
+          # steps:
 
-    #   - name: Populate database #2
-    #     run: |
-    #       for f in `ls *.sql`; do
-    #         dropdb -U links -h localhost ${f%.sql} -w
-    #         createdb -O links ${f%.sql} -w;
-    #       done
-    #       for f in `ls *.sql`; do psql -w -U links -h localhost -d ${f%.sql} < $f; done
-    #     working-directory: links-database-setup
-    #     env:
-    #       POSTGRES_USER: links
-    #       POSTGRES_PASSWORD: links
-    #       POSTGRES_DB: links
+          #   - uses: actions/checkout@v2
+          #     with:
+          #       repository: dhil/links-database-setup
+          #       path: ./links-database-setup
 
-    #   - name: Populate database
-    #     run: |
-    #       ls
-    #       bash dbsetup
-    #     working-directory: links-database-setup
-    #     env:
-    #       POSTGRES_USER: links
-    #       POSTGRES_PASSWORD: links
-    #       POSTGRES_DB: links
+          #   - name: Generate pgpass
+          #     run: |
+          #       echo "localhost:5432:links:links:links" >> ~/.pgpass
+          #       chmod 600 ~/.pgpass
 
-    #   - run: npm install
-    #     working-directory: ${{ env.NPM_DIR }}
+          #   - name: Populate database #2
+          #     run: |
+          #       for f in `ls *.sql`; do
+          #         dropdb -U links -h localhost ${f%.sql} -w
+          #         createdb -O links ${f%.sql} -w;
+          #       done
+          #       for f in `ls *.sql`; do psql -w -U links -h localhost -d ${f%.sql} < $f; done
+          #     working-directory: links-database-setup
+          #     env:
+          #       POSTGRES_USER: links
+          #       POSTGRES_PASSWORD: links
+          #       POSTGRES_DB: links
 
-    #   # - name: Generate linksconfig
-    #   #   working-directory: ${{ env.NPM_DIR }}
-    #   #   run: |
-    #   #     echo "database_args=localhost:${LINKS_POSTGRES_PORT}:links:"
-    #   #     echo "database_args=localhost:${LINKS_POSTGRES_PORT}:links:" >> linksconfig
-    #   #   env:
-    #   #     LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+          #   - name: Populate database
+          #     run: |
+          #       ls
+          #       bash dbsetup
+          #     working-directory: links-database-setup
+          #     env:
+          #       POSTGRES_USER: links
+          #       POSTGRES_PASSWORD: links
+          #       POSTGRES_DB: links
 
-    #   - run: npm test
-    #     working-directory: ${{ env.NPM_DIR }}
-    #     env:
-    #       LINKS_POSTGRES_HOST: localhost
-    #       LINKS_POSTGRES_USER: links
-    #       LINKS_POSTGRES_PASSWORD: links
-    #       LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+          #   - run: npm install
+          #     working-directory: ${{ env.NPM_DIR }}
+
+          #   # - name: Generate linksconfig
+          #   #   working-directory: ${{ env.NPM_DIR }}
+          #   #   run: |
+          #   #     echo "database_args=localhost:${LINKS_POSTGRES_PORT}:links:"
+          #   #     echo "database_args=localhost:${LINKS_POSTGRES_PORT}:links:" >> linksconfig
+          #   #   env:
+          #   #     LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+
+          #   - run: npm test
+          #     working-directory: ${{ env.NPM_DIR }}
+          #     env:
+          #       LINKS_POSTGRES_HOST: localhost
+          #       LINKS_POSTGRES_USER: links
+          #       LINKS_POSTGRES_PASSWORD: links
+          #       LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+          
