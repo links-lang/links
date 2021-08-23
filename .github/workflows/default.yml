@@ -493,7 +493,7 @@ jobs:
       - name: Populate database #2
         run: |
           for f in `ls *.sql`; do
-            createdb -U links -O links -h localhost ${f%.sql};
+            createdb -U links -O links ${f%.sql};
           done
           for f in `ls *.sql`; do psql -U links -d ${f%.sql} -h localhost < $f; done
         working-directory: links-database-setup
