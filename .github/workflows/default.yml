@@ -539,8 +539,6 @@ jobs:
           apt-get update
           apt-get install --yes postgresql-client
 
-
-
       - uses: actions/checkout@v2
         with:
           repository: dhil/links-database-setup
@@ -549,7 +547,7 @@ jobs:
       - name: Populate database
         run: |
           for f in `ls *.sql`; do
-            createdb -O links ${f%.sql};
+            createdb -O postgres_user ${f%.sql};
           done
           for f in `ls *.sql`; do psql -h postgres -U postgres_user -d ${f%.sql} < $f; done
         working-directory: links-database-setup
