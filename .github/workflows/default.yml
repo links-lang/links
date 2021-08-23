@@ -569,7 +569,7 @@ jobs:
             dropdb -U links -h localhost ${f%.sql} -w
             createdb -O links ${f%.sql} -w;
           done
-          for f in `ls *.sql`; do psql -U links -h localhost -d ${f%.sql} < $f; done
+          for f in `ls *.sql`; do psql -w -U links -h localhost -d ${f%.sql} < $f; done
         working-directory: links-database-setup
         env:
           POSTGRES_USER: links
