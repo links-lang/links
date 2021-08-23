@@ -582,14 +582,6 @@ jobs:
           repository: dhil/links-database-setup
           path: ./links-database-setup
 
-      # queries database with postgres client
-      - name: Query database
-        run: psql -h localhost -d links -U postgres_user -c 'SELECT 1;'
-        env:
-          # postgress password is required; alternatively, you can run:
-          # `PGPASSWORD=postgres_password psql ...`
-          PGPASSWORD: postgres_password
-
       - name: Populate database
         run: |
           for f in `ls *.sql`; do
