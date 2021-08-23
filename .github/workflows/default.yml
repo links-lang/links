@@ -485,6 +485,11 @@ jobs:
           repository: dhil/links-database-setup
           path: ./links-database-setup
 
+      - name: Generate pgpass
+        run: |
+          echo "localhost:5432:links:links:links" >> ~/.pgpass
+          chmod 600 ~/.pgpass
+
       - run: |
           cd links-database-setup/
           bash dbsetup
