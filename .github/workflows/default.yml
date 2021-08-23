@@ -486,7 +486,8 @@ jobs:
           path: ./links-database-setup
 
       - run: |
-          bash links-database-setup/dbsetup
+          cd links-database-setup/
+          bash dbsetup
         env:
           POSTGRES_USER: links
           POSTGRES_PASSWORD: links
