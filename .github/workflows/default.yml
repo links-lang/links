@@ -503,8 +503,6 @@ jobs:
   postgres-job:
     # containers must run in Linux based operating systems
     runs-on: ubuntu-latest
-    # Docker Hub image that `postgres-job` executes in
-    container: node:latest
 
     # service containers to run with `postgres-job`
     services:
