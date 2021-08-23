@@ -501,9 +501,18 @@ jobs:
   #         PGPASSWORD: links
 
   postgres-job:
-    # containers must run in Linux based operating systems
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-20.04
+        ocaml-compiler:
+          - 4.08.0
+        browser:
+          - firefox
+          - chrome
 
+    runs-on: ${{ matrix.os }}
     # service containers to run with `postgres-job`
     services:
       # label used to access the service container
@@ -562,17 +571,6 @@ jobs:
 
 
   # dbTest:
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       os:
-  #         - ubuntu-20.04
-  #       ocaml-compiler:
-  #         - 4.08.0
-  #       browser:
-  #         - firefox
-  #         - chrome
-  #   runs-on: ${{ matrix.os }}
   #   services:
   #     postgres:
   #       image: postgres
