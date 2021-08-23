@@ -555,7 +555,7 @@ jobs:
       - name: Populate database
         run: |
           for f in `ls *.sql`; do
-            createdb -h postgres -d links -U postgres_user -O postgres_user ${f%.sql};
+            createdb -h postgres -U postgres_user -O postgres_user ${f%.sql};
           done
           for f in `ls *.sql`; do psql -h postgres -U postgres_user -d ${f%.sql} < $f; done
         working-directory: links-database-setup
