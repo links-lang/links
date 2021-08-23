@@ -526,10 +526,10 @@ jobs:
         # service environment variables
         # `POSTGRES_HOST` is `postgres`
         env:
-          # optional (defaults to `postgres`)
+          # optional (defaults to `postgres`)``
           POSTGRES_DB: links 
           # required
-          POSTGRES_PASSWORD: postgres_password
+          POSTGRES_PASSWORD: links
           # optional (defaults to `5432`)
           POSTGRES_PORT: 5432
           # optional (defaults to `postgres`)
@@ -590,7 +590,7 @@ jobs:
           for f in `ls *.sql`; do psql -h localhost -U postgres_user -d ${f%.sql} < $f; done
         working-directory: links-database-setup
         env:
-          PGPASSWORD: postgres_password
+          PGPASSWORD: links
 
       - run: npm ci 
         working-directory: ${{ env.NPM_DIR }}
