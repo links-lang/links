@@ -562,7 +562,7 @@ jobs:
         run: |
           ls
           bash dbsetup
-        working-directory: ${{ env.NPM_DIR }}/links-database-setup
+        working-directory: links-database-setup
         env:
           POSTGRES_USER: links
           POSTGRES_PASSWORD: links
