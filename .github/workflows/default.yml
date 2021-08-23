@@ -498,7 +498,7 @@ jobs:
           for f in `ls *.sql`; do psql -U links -d ${f%.sql} -h localhost < $f; done
         working-directory: links-database-setup
         env:
-          POSTGRES_PASSWORD: links
+          PGPASSWORD: links
 
   dbTest:
     strategy:
