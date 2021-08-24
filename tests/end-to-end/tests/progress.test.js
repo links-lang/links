@@ -20,22 +20,19 @@ afterAll(async () => {
 });
 
 test('Count up to 1234', async () => {
-
   await driver.get(DEFAULT_BASE_URL);
 
+  // Define locators for each element
   const inputBox = By.name('lname__g135');
   const outputBar = By.id('bar');
   const submitButton = By.xpath('/html/body/form/input[2]');
 
-  // Wait for all elements to be located
   await driver.wait(until.elementsLocated(inputBox));
 
-  // TODO: try send keys
   // Insert 1234 into the input box
-  for (let n = 1; n <= 4; n++) {
-    await driver.findElement(inputBox).sendKeys(n);
-  }
+  await driver.findElement(inputBox).sendKeys('1234');
 
+  // Press submit
   await driver.findElement(submitButton).click();
 
   // Wait for the progress bar to fill up
@@ -53,6 +50,7 @@ test('Count up to 1234', async () => {
       }
     }));
 
+  // Assert output
   const elem = driver.findElement(outputBar);
   const outputText = await elem.getText();
   expect(outputText.trim()).toBe('done counting to 1234');
