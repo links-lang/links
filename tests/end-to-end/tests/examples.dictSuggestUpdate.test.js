@@ -68,10 +68,7 @@ test('Test dictSuggestUpdate', async () => {
       return [word, definition];
     });
 
-  let resolvedItems;
-  await Promise.all(tableItems).then(items => {
-    resolvedItems = items;
+  await Promise.all(tableItems).then(resolvedItems => {
+    expect(resolvedItems).toContainEqual(['Dee', 'A very important person']);
   });
-
-  expect(resolvedItems).toContainEqual(['Dee', 'A very important person']);
 });
