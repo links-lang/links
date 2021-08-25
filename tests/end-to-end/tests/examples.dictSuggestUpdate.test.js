@@ -1,4 +1,4 @@
-const { By, until } = require('selenium-webdriver');
+const { By, error, until, Condition } = require('selenium-webdriver');
 const { loadBrowser } = require('../browserDrivers');
 const { startServer, DEFAULT_BASE_URL, LINKS_ROOT } = require('../linksServerRunner');
 
@@ -27,11 +27,11 @@ test('Test dictSuggestUpdate', async () => {
   await driver.get(`${DEFAULT_BASE_URL}/examples/dictionary/dictSuggestUpdate.links`);
 
   const searchBar = By.xpath('/html/body/form/input');
-  const searchResultTable = By.css('#suggestions > div > table');
 
   const newWordInput = By.xpath('/html/body/div[2]/div/form/table/tbody/tr[1]/td[2]/input');
   const newWordMeaningInput = By.xpath('/html/body/div[2]/div/form/table/tbody/tr[2]/td[2]/textarea');
   const newWordAddButton = By.css('#add > form > table > tbody > tr:nth-child(3) > td > button');
+  const allChildren = By.xpath('*');
 
   // Add new word "Dee"
   await driver.findElement(newWordInput).sendKeys('Dee');
@@ -41,19 +41,37 @@ test('Test dictSuggestUpdate', async () => {
   // search Dee
   await driver.findElement(searchBar).sendKeys('Dee');
 
-  // confirm search result showing
+  const searchResultTable = By.css('#suggestions > div > table');
   await driver.wait(until.elementLocated(searchResultTable));
+  await driver.wait(
+    new Condition("until progress bar is complete", async (driver) => {
+      try {
+        let table = await driver.findElement(searchResultTable);
+        return await table.findElements(allChildren);
+      } catch (e) {
+        if (e instanceof error.StaleElementReferenceError) {
+          // ignore
+        } else {
+          throw e;
+        }
+      }
+    }));
+
+  // confirm search result showing
   const searchResult = await driver.findElement(searchResultTable);
-  const tableItems = await searchResult.findElements(By.xpath('*'))
-    .then(elements => elements.map(async (element) => {
-      const word = await element.findElement(By.xpath('td[1]'));
-      const definition = await element.findElement(By.xpath('td[2]/span'));
-      return [await word.getText(), await definition.getText()];
-    })).catch(err => {
-      throw err;
+  let tableItems = (await searchResult.findElements(allChildren))
+    .map(async (element) => {
+      const word = await element.findElement(By.xpath('td[1]'))
+        .then(async elem => await elem.getText());
+      const definition = await element.findElement(By.xpath('td[2]/span'))
+        .then(async elem => await elem.getText());
+      return [word, definition];
     });
 
-  Promise.all(tableItems).then(items => {
-    expect(items).toContainEqual(['Dee', 'A very important person']);
+  let resolvedItems;
+  await Promise.all(tableItems).then(items => {
+    resolvedItems = items;
   });
+
+  expect(resolvedItems).toContainEqual(['Dee', 'A very important person']);
 });
