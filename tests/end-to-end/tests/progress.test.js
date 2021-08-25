@@ -23,7 +23,7 @@ test('Count up to 1234', async () => {
   await driver.get(DEFAULT_BASE_URL);
 
   // Define locators for each element
-  const inputBox = By.name('lname__g135');
+  const inputBox = By.xpath('/html/body/form/input[1]');
   const outputBar = By.id('bar');
   const submitButton = By.xpath('/html/body/form/input[2]');
 
