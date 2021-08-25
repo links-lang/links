@@ -56,3 +56,39 @@ test('Check factorial up to 64', async () => {
     expect(fact).toBe(factAccum);
   }
 });
+
+
+test('Test dictSuggestUpdate', async () => {
+  await driver.get(`${DEFAULT_BASE_URL}/examples/dictionary/dictSuggestUpdate.links`);
+
+  const searchBar = By.xpath('/html/body/form/input');
+  const searchResultTable = By.css('#suggestions > div > table');
+
+  const newWordInput = By.xpath('/html/body/div[2]/div/form/table/tbody/tr[1]/td[2]/input');
+  const newWordMeaningInput = By.xpath('/html/body/div[2]/div/form/table/tbody/tr[2]/td[2]/textarea');
+  const newWordAddButton = By.css('#add > form > table > tbody > tr:nth-child(3) > td > button');
+
+
+
+  //  //Add new word "Dee"
+  await driver.findElement(newWordInput).sendKeys('Dee');
+  await driver.findElement(newWordMeaningInput).sendKeys('A very important person');
+  await driver.findElement(newWordAddButton).click();
+
+  // confirm search result showing
+  // search Dee
+  await driver.findElement(searchBar).sendKeys('Dee');
+
+  await driver.wait(until.elementLocated(searchResultTable));
+  const searchResult = await driver.findElement(searchResultTable);
+  const tableItems = await searchResult.findElements(By.xpath('*'))
+    .then(elements => elements.map(async element => {
+      const word = await element.findElement(By.xpath('td[1]'));
+      const definition = await element.findElement(By.xpath('td[2]/span'));
+      return [await word.getText(), await definition.getText()];
+    }));
+  
+  Promise.all(tableItems).then(items => {
+    expect(items).toContainEqual(['Dee', 'A very important person']);
+  })
+});
