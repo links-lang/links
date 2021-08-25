@@ -8,7 +8,7 @@
     "test": "jest --detectOpenHandles"
   },
   "jest": {
-    "testTimeout": 20000
+    "testTimeout": 35000
   },
   "author": "ChefYeum",
   "dependencies": {
