@@ -27,8 +27,8 @@ module.exports = {
         ],
         {
           detached: true,
-          stdio: 'inherit', // Print the Links stdout into the Node stdout
-          // stdio: 'ignore',  // Do not print the Links log
+          // stdio: 'inherit', // Print the Links stdout into the Node stdout
+          stdio: 'ignore',  // Do not print the Links log
           shell: true
         });
     linksServer.unref();
@@ -36,7 +36,7 @@ module.exports = {
     return new Promise(async (resolve, reject) => {
 
       linksServer.on('exit', (code) => {
-        reject(`Links server exited with Code ${code}.Is the given Links script working?`);
+        reject(`Links server exited with Code ${code}. Is the given Links script working?`);
         return;
       });
 
