@@ -98,7 +98,7 @@ class pg_dbresult (pgresult:Postgresql.result) = object
 end
 
 let pg_printer = object(self)
-  inherit Sql.printer
+  inherit Sql.printer as super
 
   method quote_field x =
     "\"" ^ Str.global_replace (Str.regexp "\"") "\"\"" x ^ "\""
@@ -132,6 +132,14 @@ let pg_printer = object(self)
     in
     Format.fprintf ppf
       "insert into %s %s" table_name body
+
+    method! pp_base one_table ppf = function
+      | Sql.Constant (CommonTypes.Constant.DateTime (CommonTypes.Timestamp.Infinity)) ->
+          Format.pp_print_string ppf "'infinity' :: timestamp with time zone"
+      | Sql.Constant (CommonTypes.Constant.DateTime (CommonTypes.Timestamp.MinusInfinity)) ->
+          Format.pp_print_string ppf "'-infinity' :: timestamp with time zone"
+      | b -> super#pp_base one_table ppf b
+
 end
 
 class pg_database host port dbname user password = object(self)

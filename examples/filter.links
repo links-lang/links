@@ -4,7 +4,7 @@ fun domValue(id) client {
 }
 
 fun domContent(id) client {
-  getChildNodes(getValue(getNodeById(id)))
+  childNodes(getValue(getNodeById(id)))
 }
 
 fun stringToComparison(s) {

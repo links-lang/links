@@ -83,6 +83,8 @@ let query_policy_of_string p =
   function
   | "flat" -> QueryPolicy.Flat
   | "nested" -> QueryPolicy.Nested
+  | "mixing" -> QueryPolicy.Mixing
+  | "delat" -> QueryPolicy.Delat
   | rest      ->
      raise (ConcreteSyntaxError (pos p, "Invalid query policy: " ^ rest ^ ", expected 'flat' or 'nested'"))
 
@@ -181,6 +183,24 @@ let fresh_typevar freedom : SugarTypeVar.t =
 let fresh_effects =
   let stv = SugarTypeVar.mk_unresolved "$eff" None `Rigid in
   ([], Datatype.Open stv)
+
+let make_effect_var : is_dot:bool -> ParserPosition.t -> Datatype.row_var
+  = fun ~is_dot loc ->
+  let open Types.Policy in
+  let pol = default_policy () in
+  let effect_sugar = effect_sugar pol in
+  let open_default = EffectSugar.open_default (es_policy pol) in
+
+  if effect_sugar && open_default
+  then begin
+      if is_dot
+      then Datatype.Closed
+      else Datatype.Open (SugarTypeVar.mk_unresolved "$eff" None `Rigid)
+    end else begin
+      if is_dot
+      then raise (ConcreteSyntaxError (pos loc, "Dot syntax in effect row variables is only supported when effect_sugar and effect_sugar_policy.open_default are enabled."))
+      else Datatype.Closed
+    end
 
 module MutualBindings = struct
 
@@ -309,7 +329,6 @@ let parse_foreign_language pos lang =
 %token UNDERSCORE AS
 %token <Operators.Associativity.t> FIXITY
 %token TYPENAME
-%token TYPE ROW PRESENCE
 %token TRY OTHERWISE RAISE
 %token <string> OPERATOR
 
@@ -984,6 +1003,7 @@ primary_datatype:
                                                                    | "Float"   -> Primitive Primitive.Float
                                                                    | "XmlItem" -> Primitive Primitive.XmlItem
                                                                    | "String"  -> Primitive Primitive.String
+                                                                   | "DateTime" -> Primitive Primitive.DateTime
                                                                    | "Database"-> DB
                                                                    | "End"     -> Datatype.End
                                                                    | t         -> TypeApplication (t, [])
@@ -1002,14 +1022,9 @@ kinded_type_var:
 type_arg_list:
 | separated_nonempty_list(COMMA, type_arg)                     { $1 }
 
-/* TODO: fix the syntax for type arguments
-   (TYPE, ROW, and PRESENCE are no longer tokens...)
-*/
 type_arg:
 | datatype                                                     { Datatype.Type $1     }
-| TYPE LPAREN datatype RPAREN                                  { Datatype.Type $3     }
-| ROW LPAREN row RPAREN                                        { Datatype.Row $3      }
-| PRESENCE LPAREN fieldspec RPAREN                             { Datatype.Presence $3 }
+| braced_fieldspec                                             { Datatype.Presence $1 }
 | LBRACE row RBRACE                                            { Datatype.Row $2      }
 
 datatypes:
@@ -1034,7 +1049,7 @@ fields:
 | fields_def(field, row_var, kinded_row_var)                   { $1 }
 
 field:
-| field_label                                                  { ($1, present) }
+| CONSTRUCTOR /* allows nullary variant labels */              { ($1, present) }
 | field_label fieldspec                                        { ($1, $2) }
 
 field_label:
@@ -1067,10 +1082,14 @@ vfield:
 | CONSTRUCTOR fieldspec                                        { ($1, $2)      }
 
 efields:
-| fields_def(efield, row_var, kinded_row_var)                  { $1 }
+| efield                                                       { ([$1], make_effect_var ~is_dot:false $loc) }
+| soption(efield) VBAR DOT                                     { ( $1 , make_effect_var ~is_dot:true  $loc) }
+| soption(efield) VBAR row_var                                 { ( $1 , $3                                ) }
+| soption(efield) VBAR kinded_row_var                          { ( $1 , $3                                ) }
+| efield COMMA efields                                         { ( $1::fst $3, snd $3                     ) }
+
 
 efield:
-| effect_label                                                 { ($1, present) }
 | effect_label fieldspec                                       { ($1, $2)      }
 
 effect_label:
@@ -1078,9 +1097,12 @@ effect_label:
 | VARIABLE                                                     { $1 }
 
 fieldspec:
+| braced_fieldspec                                             { $1 }
 | COLON datatype                                               { Datatype.Present $2 }
-| LBRACE COLON datatype RBRACE                                 { Datatype.Present $3 }
 | MINUS                                                        { Datatype.Absent }
+
+braced_fieldspec:
+| LBRACE COLON datatype RBRACE                                 { Datatype.Present $3 }
 | LBRACE MINUS RBRACE                                          { Datatype.Absent }
 | LBRACE VARIABLE RBRACE                                       { Datatype.Var (named_typevar $2 `Rigid) }
 | LBRACE PERCENTVAR RBRACE                                     { Datatype.Var (named_typevar $2 `Flexible) }
