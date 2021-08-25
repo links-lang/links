@@ -35,9 +35,8 @@ test('Check factorial up to 64', async () => {
   await driver.findElement(inputBox).sendKeys('4');
   await driver.findElement(button).click();
 
-  const table = By.xpath('/html/body/table/tbody');
   // Find tables
-  await driver.wait(until.elementsLocated(table));
+  await driver.wait(until.elementsLocated(By.xpath('/html/body/table/tbody')));
   let table = await driver.findElement(By.xpath('/html/body/table/tbody'));
 
   // Find all rows
