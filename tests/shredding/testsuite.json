@@ -1,12 +1,14 @@
 {"databases" :
  [ "pgsql" ],
  "setups" :
- [ "factorials",
+ [ "dates",
+   "factorials",
    "jrules",
    "organisation",
    "travel_portal" ],
  "tests" :
- [ "empty",
+ [ "dates",
+   "empty",
    "emptyfun",
    "factorials",
    "unit",

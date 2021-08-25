@@ -37,4 +37,5 @@ depends: [
   "ocamlfind"
   "menhir"
   "ppx_sexp_conv"
+  "calendar" { >= "2.0.4" }
 ]

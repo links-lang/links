@@ -28,7 +28,7 @@ include Functional
 
 (** left-associative *)
 let ( <| ) f arg = f arg
-(*let ( |> ) arg f = f arg*)
+let ( |> ) arg f = f arg
 
 (** {0 Maps and sets} *)
 module type OrderedShow = sig
@@ -471,6 +471,14 @@ struct
     | elem :: elems -> (let _, others = List.partition (equal elem) elems in
                           elem :: unduplicate equal others)
 
+  (** Collects only elements which are duplicate in the original list. *)
+  let rec collect_duplicates equal = function
+    | [] -> []
+    | elem :: elems -> (let same, others = List.partition (equal elem) elems in
+                        if empty same
+                        then collect_duplicates equal others
+                        else elem :: collect_duplicates equal others)
+
   let rec ordered_consecutive = function
     | [] -> true
     | [_] -> true
@@ -528,6 +536,22 @@ struct
         if pred x then (f x)::(filter_map pred f xs) else
           (filter_map pred f xs)
 
+
+  exception Lists_length_mismatch
+
+  (** Filter on two lists and map them together.
+      Equivalent to map -<- filter -<- zip
+      precondition: the two lists must be the same length *)
+  let rec filter_map2 pred f =
+    fun xs ys ->
+    match (xs, ys) with
+    | ([], []) -> []
+    | (x::xs, y::ys) ->
+       if pred (x, y)
+       then (f (x, y))::(filter_map2 pred f xs ys)
+       else filter_map2 pred f xs ys
+    | _ -> raise Lists_length_mismatch
+
   let rec map_filter f pred = function
     | [] -> []
     | x :: xs ->
@@ -558,8 +582,6 @@ struct
   let split_with : ('a -> 'b * 'c) -> 'a list -> 'b list * 'c list = fun f xs ->
     List.fold_right (fun a (bs, cs) -> let (b, c) = f a in (b::bs, c::cs))
                     xs ([], [])
-
-  exception Lists_length_mismatch
 
   let rec zip' xs ys =
     match xs, ys with
@@ -876,6 +898,10 @@ struct
     | None -> None
     | Some x -> Some (f x)
 
+  let opt_bind f = function
+    | None -> None
+    | Some a -> f a
+
   let opt_split = function
     | None -> None, None
     | Some (x, y) -> Some x, Some y
@@ -918,6 +944,39 @@ struct
 
   let some : 'a -> 'a option
     = fun x -> Some x
+
+  let (>>=?) o f = opt_bind f o
+
+  (* option-disjunction *)
+  let (||=?) o o' =
+    match o with
+    | None -> o'
+    | _ -> o
+
+  let rec (>>==?) (l : 'a list) (f : 'a -> 'a option) : 'a list option =
+    match l with
+    | [] -> None
+    | a::al ->
+        match f a, al >>==? f with
+        | None, None -> None
+        | fa, fal ->
+            Some (from_option a fa::from_option al fal)
+
+  let map_tryPick f m =
+    StringMap.fold
+      (fun k v acc -> lazy (match f k v with
+        | None -> Lazy.force acc
+        | y -> y))
+      m
+      (lazy None)
+    |> Lazy.force
+
+  let rec list_tryPick f = function
+    | [] -> None
+    | x::l -> match f x with
+      | None -> list_tryPick f l
+      | y -> y
+
 end
 include OptionUtils
 
@@ -1520,4 +1579,47 @@ struct
     buf.nextitem <- buf.nextitem + 1
 
   let to_list buf = List.init (length buf) (get buf)
+end
+
+module CalendarShow = struct
+  include CalendarLib.Fcalendar.Precise
+
+  let pp ppf x =
+    Format.fprintf ppf "%04d-%02d-%02d %02d:%02d:%09.6f"
+      (year x) (month x |> CalendarLib.Date.int_of_month)
+      (day_of_month x) (hour x) (minute x) (second x)
+
+  let show x =
+      Format.asprintf "%a" pp x
+end
+
+module UnixTimestamp = struct
+  let of_calendar cal =
+    let tm = {
+      Unix.tm_sec = CalendarShow.second cal |> int_of_float;
+      Unix.tm_min = CalendarShow.minute cal;
+      Unix.tm_hour = CalendarShow.hour cal;
+      Unix.tm_mday = CalendarShow.day_of_month cal;
+      Unix.tm_mon = (CalendarShow.month cal |> CalendarLib.Date.int_of_month) - 1;
+      Unix.tm_year = (CalendarShow.year cal) - 1900;
+      Unix.tm_wday = 0; (* ignored *)
+      Unix.tm_yday =  0; (* ignored *)
+      Unix.tm_isdst = false (* ignored *)
+    } in
+    Unix.mktime tm |> fst
+
+  let to_calendar tm =
+    (CalendarShow.lmake
+      ~year:(tm.Unix.tm_year + 1900)
+      ~month:(tm.Unix.tm_mon + 1)
+      ~day:tm.Unix.tm_mday
+      ~hour:tm.Unix.tm_hour
+      ~minute:tm.Unix.tm_min
+      ~second:(float_of_int tm.Unix.tm_sec) ())
+
+  let to_local_calendar t =
+    Unix.localtime t |> to_calendar
+
+  let to_utc_calendar t =
+    Unix.gmtime t |> to_calendar
 end

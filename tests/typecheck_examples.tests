@@ -751,3 +751,7 @@ filemode : true
 Typecheck example file examples/mvu/commands.links
 examples/mvu/commands.links
 filemode : true
+
+Typecheck example file examples/mvu/dates.links
+examples/mvu/dates.links
+filemode : true
