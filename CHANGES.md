@@ -43,6 +43,23 @@ You can also print out the `DateTime` using `show` (which is an alias of
 
 Due to limitations of the underlying library, the minimum timezone granularity is one hour. Unfortunately, this means we can't handle Indian timezones, for example.
 
+## Surface syntax for presence type argument
+
+**Breaking change**: New syntax has been added to support type arguments of kind `Presence`. Here are some example of the syntax:
+
+```links
+typename T(p::Presence) = (foo{p});
+
+(foo=4200) : T({:Int})         # Present with type Int
+()         : T({-})            # Absent
+(foo=4200) : T({%})            # Unnamed flexible variable
+(foo=true) : T({%p})           # Named flexible variable
+fun(r : T({_})) { () }         # Anonymous presence variable
+fun(r : T({p})) { r : T({p}) } # Named presence variable
+```
+
+The syntactic sugar for effect and record fields which lets one omit the `()` has been removed in order to resolve the otherwise ambiguity between the presence type argument `{wild}` from the row type argument `{wild}`. Note however that it is still possible to omit the `()` for variant fields.
+
 # 0.9.3
 
 This minor release fixes a few bugs.
