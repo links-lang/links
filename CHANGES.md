@@ -66,13 +66,35 @@ The syntactic sugar for effect and record fields which lets one omit the `()` ha
 
 It is now possible to annotate type variables with `Mono` restriction, e.g. `sig id : (a::(Any,Mono)) -> a::(Any,Mono)`.
 
-### Recursive row variables
+### Recursive rows
 
+* We can now enter a recursive row effect type, such as `{ |(mu a.F:(() { |a}-> ()) {}-> b|c)}`.
 
+* **Breaking change**: recursive rows of different types cannot mix anymore - a variant can only contain fields with variant syntax (i.e. uppercase and separated by `|`) in its recursive row variable, and the same goes for others (e.g. records - lowecase, separated by `,`); compare:
+
+```links
+# these are fine
+# variant
+links> sig f : ([|(mu a . Foo:()|Bar:()|d)|]) -> () fun f(_) { () };
+
+# record
+links> sig g : ((|(mu a. foo:(),bar:()|d))) -> () fun g(_) { () };
+
+# but these don't work anymore
+links> sig f : ([|(mu a. foo:()|bar:()|d)|]) -> () fun f(_) { () };
+links> sig g : ((|(mu a. foo:()|bar:()|d))) -> () fun g(_) { () };
+```
+
+* **Breaking change**: Recursive variants with no directly exposed fields no longer require (nor allow) the vertical bar separating fields from the row variable:
+
+```links
+links> sig f : ([| |(mu a . Foo:()|Bar:()|d)|]) -> () fun f(_) { () };
+                   ^ this is not allowed anymore
+```
 
 ## Roundtrip: New pretty printer for types
 
-This version of Links introduces a new pretty printer for types, called Roundtrip. This should fix various round-tripping issues.
+This version of Links introduces a new pretty printer for types, called Roundtrip. This fixes various round-tripping issues.
 
 The Roundtrip printer is now active by default. The old printer is still present.
 
@@ -84,7 +106,7 @@ The printer(s) to be used can be selected using the setting `types_pretty_printe
 Note that one can select multiple printers at once, for comparison; this is done by separating printer names by commas, e.g.:
 
 ```links
-@set types_pretty_printer_engine "roundtrip,old"
+@set types_pretty_printer_engine "roundtrip,old";
 ```
 
 ## Effect Syntactic Sugar
