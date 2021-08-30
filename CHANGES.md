@@ -43,7 +43,9 @@ You can also print out the `DateTime` using `show` (which is an alias of
 
 Due to limitations of the underlying library, the minimum timezone granularity is one hour. Unfortunately, this means we can't handle Indian timezones, for example.
 
-## Surface syntax for presence type argument
+## New surface syntax
+
+### Presence type arguments
 
 **Breaking change**: New syntax has been added to support type arguments of kind `Presence`. Here are some example of the syntax:
 
@@ -59,6 +61,19 @@ fun(r : T({p})) { r : T({p}) } # Named presence variable
 ```
 
 The syntactic sugar for effect and record fields which lets one omit the `()` has been removed in order to resolve the otherwise ambiguity between the presence type argument `{wild}` from the row type argument `{wild}`. Note however that it is still possible to omit the `()` for variant fields.
+
+### Mono restriction
+
+It is now possible to annotate type variables with `Mono` restriction, e.g. `sig id : (a::(Any,Mono)) -> a::(Any,Mono)`.
+
+## Other fixes
+
+* Fixed a bug where the REPL would unconditionally print a stacktrace for unknown directives.
+* Fixed a bug where deeply nested JSON literals would cause the client to stack overflow.
+* Fixed a bug where big server side values would cause the client to stack overflow.
+* Fixed JavaScript compilation of top-level anonymous functions.
+* Fixed a bug where the server would inadvertently respond with response `500` following the (successful) termination of a server side process.
+* The body of an escape expression has been made more permissive (grammatically) as it can now be any expression.
 
 # 0.9.3
 
