@@ -69,28 +69,10 @@ It is now possible to annotate type variables with `Mono` restriction, e.g. `sig
 ### Recursive rows
 
 * We can now enter a recursive row effect type, such as `{ |(mu a.F:(() { |a}-> ()) {}-> b|c)}`.
-
-* **Breaking change**: recursive rows of different types cannot mix anymore - a variant can only contain fields with variant syntax (i.e. uppercase and separated by `|`) in its recursive row variable, and the same goes for others (e.g. records - lowecase, separated by `,`); compare:
-
-```links
-# these are fine
-# variant
-links> sig f : ([|(mu a . Foo:()|Bar:()|d)|]) -> () fun f(_) { () };
-
-# record
-links> sig g : ((|(mu a. foo:(),bar:()|d))) -> () fun g(_) { () };
-
-# but these don't work anymore
-links> sig f : ([|(mu a. foo:()|bar:()|d)|]) -> () fun f(_) { () };
-links> sig g : ((|(mu a. foo:()|bar:()|d))) -> () fun g(_) { () };
-```
-
-* **Breaking change**: Recursive variants with no directly exposed fields no longer require (nor allow) the vertical bar separating fields from the row variable:
-
-```links
-links> sig f : ([| |(mu a . Foo:()|Bar:()|d)|]) -> () fun f(_) { () };
-                   ^ this is not allowed anymore
-```
+* **Breaking change**: recursive rows of different types cannot mix anymore - a variant can only contain fields with variant syntax (i.e. uppercase and separated by `|`) in its recursive row variable, and the same goes for others (e.g. records - lowecase, separated by `,`);
+  * these are correct: `[|(mu a. Foo:()|Bar:()|d)|]`, `(|(mu a. foo:(),bar:()|d))`
+  * these are not: `[|(mu a. foo:()|bar:()|d)|]`, `(|(mu a. foo:()|bar:()|d))`
+* **Breaking change**: Recursive variants with no directly exposed fields no longer require (nor allow) the vertical bar separating fields from the row variable: the following is no longer correct: `[| |(mu a . Foo:()|Bar:()|d)|]` (note the bar before `mu`)
 
 ## Roundtrip: New pretty printer for types
 
@@ -99,19 +81,35 @@ This version of Links introduces a new pretty printer for types, called Roundtri
 The Roundtrip printer is now active by default. The old printer is still present.
 
 The printer(s) to be used can be selected using the setting `types_pretty_printer_engine`, with the following values:
+
   * `roundtrip`: the new printer
   * `old`: the original printer
   * `derived`: no pretty printing - prints the OCaml representation of the types
 
-Note that one can select multiple printers at once, for comparison; this is done by separating printer names by commas, e.g.:
-
-```links
-@set types_pretty_printer_engine "roundtrip,old";
-```
+Note that one can select multiple printers at once, for comparison; this is done by separating printer names by commas, e.g.: `@set types_pretty_printer_engine "roundtrip,old";`
 
 ## Effect Syntactic Sugar
 
-This version implements enhanced syntactic sugar for effects. These include both 
+**Breaking change** (for code using effect sugar): This version implements enhanced syntactic sugar for effects. The changes influence both the Roundtrip printer (see above) and the desugaring passes (between parsing and typechecking).
+
+(*Note: Most of effect sugar, and in particular the changes introduced in this version, requires the `effect_sugar` setting to be `true`.*)
+
+There is a new setting `effect_sugar_policy` which allows one to set which components of effect sugar to use. The available options (with shortcuts for convencience) are:
+
+  * `presence_omit` [shotcut `pres`]: omit presence polymorphic operations within effect rows
+  * `alias_omit` [shortcut `alias`]: hide empty (and emptied using `pres`) shared effect rows in the last argument of aliases
+  * `arrows_show_implicit_effect_variable` [shortcut `show_implicit`]: display the imlicit shared effect on arrows
+  * `arrows_curried_hide_fresh` [shortcut `chf`]: in curried functions, argument collection arrows are assumed to have fresh effects and these are hidden
+  * `contract_operation_arrows` [shortcut `contract`]: contract operation arrows: `E:() {}-> a` to `E:a` and `E:(a) {}-> b` to `E:(a) -> b`
+  * `open_default` [shortcut `open`]: effect rows are open by default, closed with syntax `{ | .}`
+  * `final_arrow_shares_with_alias` [shortcut `final_arrow`]: final arrow and a following type alias may share implicit effects
+  * `all_implicit_arrows_share` [shortcut `all_arrows`]: all arrows with implicit effect vars will be unified, an experimental setting
+
+Multiple of these can be selected, separated by commas, e.g.: `@set effect_sugar_policy "pres,alias,contract";`.
+
+A version of the above is also available by entering `@help effect_sugar_policy;` in Links.
+
+These changes are explained in more depth and with examples in [Links GitHub Wiki/Effect Sugar](https://github.com/links-lang/links/wiki/Effect-Sugar).
 
 ## Other fixes
 
