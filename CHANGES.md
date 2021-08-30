@@ -66,6 +66,31 @@ The syntactic sugar for effect and record fields which lets one omit the `()` ha
 
 It is now possible to annotate type variables with `Mono` restriction, e.g. `sig id : (a::(Any,Mono)) -> a::(Any,Mono)`.
 
+### Recursive row variables
+
+
+
+## Roundtrip: New pretty printer for types
+
+This version of Links introduces a new pretty printer for types, called Roundtrip. This should fix various round-tripping issues.
+
+The Roundtrip printer is now active by default. The old printer is still present.
+
+The printer(s) to be used can be selected using the setting `types_pretty_printer_engine`, with the following values:
+  * `roundtrip`: the new printer
+  * `old`: the original printer
+  * `derived`: no pretty printing - prints the OCaml representation of the types
+
+Note that one can select multiple printers at once, for comparison; this is done by separating printer names by commas, e.g.:
+
+```links
+@set types_pretty_printer_engine "roundtrip,old"
+```
+
+## Effect Syntactic Sugar
+
+This version implements enhanced syntactic sugar for effects. These include both 
+
 ## Other fixes
 
 * Fixed a bug where the REPL would unconditionally print a stacktrace for unknown directives.
