@@ -1,5 +1,19 @@
 # 0.9.4
 
+## Queries mixing set and bag semantics
+Links now provides experimental support for SQL queries mixing set and bag semantics. 
+
+When the `mixing_norm=on` flag is added to the configuration file, or when a query is defined in a `query mixing { ... }` block, Links will use a new query evaluator, allowing the programmer to call deduplication functions (`dedup` and `distinct`) within database queries. These are handled with set-based SQL statements `select distinct / union`, in addition to the usual bag-based `select / union all`.
+
+    # will run on the DB as "select distinct e.dept as dept from employees"
+    query mixing {
+      dedup(for (e <-- employees) [(dept = e.dept)])
+    }
+
+Queries mixing set and bag semantics may, in some cases, require the use of the SQL:1999 keyword `lateral`; Links implements an optional query transformation to produce queries that do not use `lateral` (allowing the use of older DBMSs): this behaviour is enabled by using `query delat` in place of `query mixing`.
+
+Further information on this feature is provided in the [Links GitHub wiki](https://github.com/links-lang/links/wiki/Deduplication-in-database-queries).
+
 ## DateTime type
 Links now includes a primitive type, `DateTime`, for dates and times.
 This is a *breaking change* from previous versions, where `dateToInt`
