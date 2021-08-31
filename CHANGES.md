@@ -68,11 +68,9 @@ It is now possible to annotate type variables with `Mono` restriction, e.g. `sig
 
 ### Recursive rows
 
-* We can now enter a recursive row effect type, such as `{ |(mu a.F:(() { |a}-> ()) {}-> b|c)}`.
-* **Breaking change**: recursive rows of different types cannot mix anymore - a variant can only contain fields with variant syntax (i.e. uppercase and separated by `|`) in its recursive row variable, and the same goes for others (e.g. records - lowecase, separated by `,`);
-  * these are correct: `[|(mu a. Foo:()|Bar:()|d)|]`, `(|(mu a. foo:(),bar:()|d))`
-  * these are not: `[|(mu a. foo:()|bar:()|d)|]`, `(|(mu a. foo:()|bar:()|d))`
-* **Breaking change**: Recursive variants with no directly exposed fields no longer require (nor allow) the vertical bar separating fields from the row variable: the following is no longer correct: `[| |(mu a . Foo:()|Bar:()|d)|]` (note the bar before `mu`)
+* Effect variables can be recursive, e.g. `{ |(mu a.F:(() { |a}-> ()) {}-> b|c)}`.
+* **Breaking change**: Recursive rows are no longer restricted to variant syntax, i.e. separating fields using `|`. Recursive record and effects rows separate fields using `,` now. 
+* Recursive variants with no directly exposed fields no longer require the vertical bar separating fields from the row variable, e.g. `[|(mu a. Foo)|]` is equivalent to `[| |(mu a . Foo)|]`.
 
 ## Roundtrip: New pretty printer for types
 
