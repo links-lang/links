@@ -468,4 +468,4 @@ Examples
 ./examples/handlers/tests.links
 filemode : true
 stdout : () : ()
-args : --enable-handlers --path=examples/handlers --set=effect_sugar=true
+args : --enable-handlers --path=examples/handlers --set=effect_sugar=true --set=effect_sugar_policy=final_arrow

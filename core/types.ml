@@ -2046,7 +2046,7 @@ module Policy = struct
              | AllImplicitArrowsShare
     type t = opt list
 
-    let default_opts = [PresenceOmit ; AliasOmit ; ContractOperationArrows ; ArrowsCurriedHideFresh ; FinalArrowSharesWithAlias ]
+    let default_opts = [PresenceOmit ; AliasOmit ; ContractOperationArrows ; ArrowsCurriedHideFresh ]
 
     let all_opts = [ PresenceOmit
                    ; AliasOmit
@@ -2100,8 +2100,8 @@ module Policy = struct
             -> OpenDefault
           | "final_arrow_shares_with_alias" | "final_arrow"
             -> FinalArrowSharesWithAlias
-          | "all_implicit_arrows_share" | "all_arrows" ->
-             AllImplicitArrowsShare
+          | "all_implicit_arrows_share" | "all_arrows"
+            -> AllImplicitArrowsShare
           | _ -> failwith ("Invalid option: " ^ s)
         in
         let is_correct : opt list -> bool
@@ -2113,7 +2113,8 @@ module Policy = struct
         | "default"       -> default_opts
         | "all"           -> all_opts
         | _ -> let lst = List.map parse_opt (Settings.parse_paths s) in
-               if is_correct lst then lst
+               if is_correct lst
+               then lst
                else failwith "Options cannot be duplicated."
 
     let syno
@@ -2135,17 +2136,16 @@ module Policy = struct
            ; " * open_default [open]: effect rows are open by default,"
            ; "   closed with syntax { | .}"
            ; " * final_arrow_shares_with_alias [final_arrow]: final arrow and"
-           ; "   a following type alias will be assumed to share implicit effects"
-           ; "   (This is only a desugaring setting)."
+           ; "   a following type alias may share the implicit effect variable"
            ; " * all_implicit_arrows_share [all_arrows]: all arrows with implicit"
-           ; "   effect vars will be unified"
+           ; "   effect vars will be unified (experimental)"
            ; "Meta-options:"
            ; " * none: turn all of the above off"
            ; " * default: revert to default configuration"
            ; "   enables \"" ^ (shortcuts_of_opts default_opts) ^ "\""
            ; " * all: turn all of the options on"]
         in
-        let buf = Buffer.create 800 in
+        let buf = Buffer.create 1000 in
         let indent = String.make 15 ' ' in
         Buffer.add_string buf fst;
         List.iter (fun x -> Buffer.add_string buf "\n";
