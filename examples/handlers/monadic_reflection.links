@@ -11,14 +11,14 @@ fun return(v)(st) {(st, v)}
 sig run : (State(a, s), s) ~> (s, a)
 fun run(m,st) {m(st)}
 
-sig bind : (State(a, s, { |e}), (a) { |e}~> State(b, s, { |e})) -> State(b, s, { |e})
+sig bind : (State(a, s), (a) { |_}~> State(b, s)) -> State(b, s)
 fun bind(m,k)(st) {
   var (st1, x) = run(m, st);
   k(x)(st1)
 }
 
 infixl 1 >>=;
-sig >>= : (State(a, s, { |e}), (a) { |e}~> State(b, s, { |e})) -> State(b, s, { |e})
+sig >>= : (State(a, s), (a) { |_}~> State(b, s)) -> State(b, s)
 op m >>= k {bind(m,k)}
 
 sig get : State(s, s)
@@ -28,7 +28,7 @@ sig put : (s) -> State(Unit, s)
 fun put(s)(_) {(s, Unit)}
 
 # Reify reflect
-sig reify : (Comp(b, {Reflect:(State(a, s, { |e})) {}-> a |e})) { |e}~> State(b, s, { |e})
+sig reify : (Comp(b, {Reflect:(State(a, s)) {}-> a |_})) { |_}~> State(b, s)
 fun reify(m) {
   handle(m()) {
     case Return(x)     -> return(x)
