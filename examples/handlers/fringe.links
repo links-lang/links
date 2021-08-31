@@ -17,7 +17,7 @@ sig yield : (a) {Yield:(a) {}-> ()|_}-> ()
 fun yield(v) {do Yield(v)}
 
 # Post-order tree traversal
-sig walkTree : (Tree(a)) -> Comp((), {Yield:(a) {}-> ()|_})
+sig walkTree : (Tree(a)) -f-> Comp((), {Yield:(a) {}-> ()|e})
 fun walkTree(tree)() {
   switch (tree) {
     case Leaf(v)   -> yield(v)
@@ -31,7 +31,7 @@ typename Status(a) = mu r . [|Done:()
                             |Yielded:(a, Continuation((), r))|];
 
 # Pauses evaluation of a computation whenever Yield occurs
-sig step : (Comp((), { Yield:(a) {}-> () |e})) -> (()) { |e}~> Status(a, { |e})
+sig step : (Comp((), { Yield:(a) {}-> () |_})) -> (()) { |_}~> Status(a)
 fun step(f)(()) {
   handle (f()) {
     case Return(()) -> Done(())
