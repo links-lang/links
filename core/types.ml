@@ -2138,7 +2138,7 @@ module Policy = struct
            ; " * final_arrow_shares_with_alias [final_arrow]: final arrow and"
            ; "   a following type alias may share the implicit effect variable"
            ; " * all_implicit_arrows_share [all_arrows]: all arrows with implicit"
-           ; "   effect vars will be unified (EXPERIMENTAL)"
+           ; "   effect vars will be unified (experimental)"
            ; "Meta-options:"
            ; " * none: turn all of the above off"
            ; " * default: revert to default configuration"
