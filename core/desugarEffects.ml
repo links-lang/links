@@ -57,11 +57,6 @@ let all_implicit_arrows_share () =
   let policy = default_policy () in
   let es_policy = es_policy policy in
   EffectSugar.all_implicit_arrows_share es_policy
-let old_sharing () =
-  let open Types.Policy in
-  let policy = default_policy () in
-  let es_policy = es_policy policy in
-  EffectSugar.old_sharing es_policy
 
 let internal_error message =
   Errors.internal_error ~filename:"desugarEffects.ml" ~message
@@ -305,7 +300,7 @@ let cleanup_effects tycon_env =
            (* range is an alias, this is a rightmost arrow, effect
               sugar is active => decide based on policies *)
            | Some `Alias ->
-              if all_implicit_arrows_share () || old_sharing ()
+              if all_implicit_arrows_share ()
               then `Allow
               else if final_arrow_shares_with_alias ()
               then `Infer

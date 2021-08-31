@@ -2023,7 +2023,6 @@ module Policy = struct
              | OpenDefault
              | FinalArrowSharesWithAlias
              | AllImplicitArrowsShare
-             | OldSharing
 
     type t = opt list
     val default : unit -> t
@@ -2036,7 +2035,6 @@ module Policy = struct
     val open_default              : t -> bool
     val final_arrow_shares_with_alias : t -> bool
     val all_implicit_arrows_share : t -> bool
-    val old_sharing               : t -> bool
   end = struct
     type opt = PresenceOmit
              | AliasOmit
@@ -2046,10 +2044,9 @@ module Policy = struct
              | OpenDefault
              | FinalArrowSharesWithAlias
              | AllImplicitArrowsShare
-             | OldSharing
     type t = opt list
 
-    let default_opts = [PresenceOmit ; AliasOmit ; ContractOperationArrows ; ArrowsCurriedHideFresh ; OldSharing ]
+    let default_opts = [PresenceOmit ; AliasOmit ; ContractOperationArrows ; ArrowsCurriedHideFresh ]
 
     let all_opts = [ PresenceOmit
                    ; AliasOmit
@@ -2071,7 +2068,6 @@ module Policy = struct
       | OpenDefault                      -> "open_default"
       | FinalArrowSharesWithAlias        -> "final_arrow_shares_with_alias"
       | AllImplicitArrowsShare           -> "all_implicit_arrows_share"
-      | OldSharing                       -> "old_sharing"
     let string_of_opts = Settings.string_of_paths -<- List.map show_opt
 
     let show_shortcut : opt -> string
@@ -2084,7 +2080,6 @@ module Policy = struct
       | OpenDefault                      -> "open"
       | FinalArrowSharesWithAlias        -> "final_arrow"
       | AllImplicitArrowsShare           -> "all_arrows"
-      | OldSharing                       -> "old_sharing"
     let shortcuts_of_opts = Settings.string_of_paths -<- List.map show_shortcut
 
     let parse_opts : string -> opt list
@@ -2107,17 +2102,10 @@ module Policy = struct
             -> FinalArrowSharesWithAlias
           | "all_implicit_arrows_share" | "all_arrows"
             -> AllImplicitArrowsShare
-          | "old_sharing"
-            -> OldSharing
           | _ -> failwith ("Invalid option: " ^ s)
         in
         let is_correct : opt list -> bool
           = not -<- ListUtils.has_duplicates
-        in
-        let check_mutual_exclusion opts =
-          (not (List.mem OldSharing opts))
-          || ((not (List.mem FinalArrowSharesWithAlias opts))
-              && (not (List.mem AllImplicitArrowsShare opts)))
         in
         fun s ->
         match String.lowercase_ascii s with
@@ -2126,11 +2114,7 @@ module Policy = struct
         | "all"           -> all_opts
         | _ -> let lst = List.map parse_opt (Settings.parse_paths s) in
                if is_correct lst
-               then begin
-                   if check_mutual_exclusion lst
-                   then lst
-                   else failwith "Option old_sharing excludes final_arrow and all_arrows"
-                 end
+               then lst
                else failwith "Options cannot be duplicated."
 
     let syno
@@ -2153,9 +2137,6 @@ module Policy = struct
            ; "   closed with syntax { | .}"
            ; " * final_arrow_shares_with_alias [final_arrow]: final arrow and"
            ; "   a following type alias may share the implicit effect variable"
-           ; " * old_sharing [old_sharing]: final arrow and a following"
-           ; "   type alias may not BOTH have the implicit shared effect variable"
-           ; "   (for backwards compatibility)"
            ; " * all_implicit_arrows_share [all_arrows]: all arrows with implicit"
            ; "   effect vars will be unified (EXPERIMENTAL)"
            ; "Meta-options:"
@@ -2188,7 +2169,6 @@ module Policy = struct
     let open_default              = List.mem OpenDefault
     let final_arrow_shares_with_alias = List.mem FinalArrowSharesWithAlias
     let all_implicit_arrows_share = List.mem AllImplicitArrowsShare
-    let old_sharing               = List.mem OldSharing
 
     let default () = Settings.get sugar_specifics
   end
