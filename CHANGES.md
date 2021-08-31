@@ -92,7 +92,7 @@ Note that one can select multiple printers at once, for comparison; this is done
 
 ## Effect Syntactic Sugar
 
-**Breaking change** (for code using effect sugar): This version implements enhanced syntactic sugar for effects. The changes influence both the Roundtrip printer (see above) and the desugaring passes (between parsing and typechecking).
+This version implements enhanced syntactic sugar for effects. The changes influence both the Roundtrip printer (see above) and the desugaring passes (between parsing and typechecking).
 
 (*Note: Most of effect sugar, and in particular the changes introduced in this version, requires the `effect_sugar` setting to be `true`.*)
 
