@@ -227,7 +227,7 @@ args : --set=effect_sugar=true
 Typecheck example file examples/handlers/fringe.links
 examples/handlers/fringe.links
 filemode : true
-args : --set=effect_sugar=true
+args : --set=effect_sugar=true --set=effect_sugar_policy=final_arrow
 
 Typecheck example file examples/handlers/identity.links
 examples/handlers/identity.links
@@ -245,7 +245,7 @@ filemode : true
 Typecheck example file examples/handlers/monadic_reflection.links
 examples/handlers/monadic_reflection.links
 filemode : true
-args : --set=effect_sugar=true
+args : --set=effect_sugar=true --set=effect_sugar_policy=final_arrow
 
 Typecheck example file examples/handlers/nim.links
 examples/handlers/nim.links
