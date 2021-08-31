@@ -47,6 +47,7 @@ module Policy : sig
              | OpenDefault
              | FinalArrowSharesWithAlias
              | AllImplicitArrowsShare
+             | OldSharing
     type t = opt list
     val default : unit -> t
 
@@ -58,6 +59,7 @@ module Policy : sig
     val open_default              : t -> bool
     val final_arrow_shares_with_alias : t -> bool
     val all_implicit_arrows_share : t -> bool
+    val old_sharing               : t -> bool
   end
 
   type t = {
