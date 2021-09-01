@@ -117,8 +117,9 @@ A version of the above is also available by entering `@help effect_sugar_policy;
 
 These changes are explained in more depth and with examples in [Links GitHub Wiki/Effect Sugar](https://github.com/links-lang/links/wiki/Effect-Sugar).
 
-## Other fixes
+## Other fixes / Miscellaneous
 
+* Relational lenses are now enabled by default.
 * Fixed a bug where the REPL would unconditionally print a stacktrace for unknown directives.
 * Fixed a bug where deeply nested JSON literals would cause the client to stack overflow.
 * Fixed a bug where big server side values would cause the client to stack overflow.
