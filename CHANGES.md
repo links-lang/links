@@ -1,3 +1,7 @@
+# 0.9.5
+
+WIP
+
 # 0.9.4
 
 ## Queries mixing set and bag semantics
