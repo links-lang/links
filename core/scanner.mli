@@ -18,6 +18,7 @@ module Scanner (Lex : LexerSig) : sig
           -> parse:('result Lex.grammar)
           -> infun:(bytes -> int -> int)
           -> name:string
+          -> unit
           -> 'result * position_context
 
   val normalize_context : Lex.lexer_context option -> Lex.lexer_context
