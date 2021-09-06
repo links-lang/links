@@ -4,7 +4,7 @@ open Utility
 (** IR variable environment *)
 module VEnv = Env.Int
 
-(** Type of environments mapping IR variables to source variables *)
+(** Type of environments mapping IR variables to object variables *)
 type venv = string VEnv.t
 
 (** Intermediate language *)
