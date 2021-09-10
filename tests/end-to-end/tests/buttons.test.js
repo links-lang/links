@@ -37,12 +37,3 @@ test('adds 1 + 2 to equal 3', async () => {
 
   expect(output.trim()).toBe('3');
 });
-
-// test("Google", async () => {
-//   await driver.get('http://google.com');
-//   expect(await driver.getTitle()).toBe("Google");
-// });
-
-// test("True", () => {
-//   expect(1).toBe(1);
-// });
