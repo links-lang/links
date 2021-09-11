@@ -75,12 +75,12 @@ let parse_string ?(pp=default_preprocessor ()) ?in_context:context grammar strin
   let pp = normalize_pp pp
   and context = LinksParser.normalize_context context in
     LinksParser.read ?nlhook:None ~parse:grammar
-      ~infun:(reader_of_string ?pp string) ~name:"<string>" ~context
+      ~infun:(reader_of_string ?pp string) ~name:"<string>" ~context ()
 
 let parse_channel ?interactive ?in_context:context grammar (channel, name) =
   let context = LinksParser.normalize_context context in
     LinksParser.read ?nlhook:interactive ~parse:grammar
-      ~infun:(reader_of_channel channel) ~name:name ~context
+      ~infun:(reader_of_channel channel) ~name:name ~context ()
 
 let parse_file ?(pp=default_preprocessor ()) ?in_context:context grammar filename =
   match normalize_pp pp with
@@ -93,7 +93,7 @@ let parse_file ?(pp=default_preprocessor ()) ?in_context:context grammar filenam
                ~parse:grammar
                ~infun:(reader_of_string ~pp (String.concat "\n" (lines channel)))
                ~name:filename
-               ~context)
+               ~context ())
 
 module Readline = struct
   (** Readline settings. **)
@@ -162,7 +162,7 @@ module Readline = struct
     let context = LinksParser.normalize_context context in
     let (accessor_fun, populate_fun) = reader_of_readline ps1 in
     LinksParser.read ?nlhook:(Some populate_fun) ~parse:grammar
-      ~infun:accessor_fun ~name:"<stdin>" ~context
+      ~infun:accessor_fun ~name:"<stdin>" ~context ()
 
   let prepare_prompt : string -> unit
     = fun ps1 ->

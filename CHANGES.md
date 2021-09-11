@@ -1,4 +1,22 @@
+# 0.9.5
+
+WIP
+
 # 0.9.4
+
+## Queries mixing set and bag semantics
+Links now provides experimental support for SQL queries mixing set and bag semantics. 
+
+When the `mixing_norm=on` flag is added to the configuration file, or when a query is defined in a `query mixing { ... }` block, Links will use a new query evaluator, allowing the programmer to call deduplication functions (`dedup` and `distinct`) within database queries. These are handled with set-based SQL statements `select distinct / union`, in addition to the usual bag-based `select / union all`.
+
+    # will run on the DB as "select distinct e.dept as dept from employees"
+    query mixing {
+      dedup(for (e <-- employees) [(dept = e.dept)])
+    }
+
+Queries mixing set and bag semantics may, in some cases, require the use of the SQL:1999 keyword `lateral`; Links implements an optional query transformation to produce queries that do not use `lateral` (allowing the use of older DBMSs): this behaviour is enabled by using `query delat` in place of `query mixing`.
+
+Further information on this feature is provided in the [Links GitHub wiki](https://github.com/links-lang/links/wiki/Deduplication-in-database-queries).
 
 ## DateTime type
 Links now includes a primitive type, `DateTime`, for dates and times.
@@ -28,6 +46,90 @@ You can also print out the `DateTime` using `show` (which is an alias of
 `DateTime`s are comparable as normal.
 
 Due to limitations of the underlying library, the minimum timezone granularity is one hour. Unfortunately, this means we can't handle Indian timezones, for example.
+
+## New surface syntax
+
+### Presence type arguments
+
+**Breaking change**: New syntax has been added to support type arguments of kind `Presence`. Here are some example of the syntax:
+
+```links
+typename T(p::Presence) = (foo{p});
+
+(foo=4200) : T({:Int})         # Present with type Int
+()         : T({-})            # Absent
+(foo=4200) : T({%})            # Unnamed flexible variable
+(foo=true) : T({%p})           # Named flexible variable
+fun(r : T({_})) { () }         # Anonymous presence variable
+fun(r : T({p})) { r : T({p}) } # Named presence variable
+```
+
+The syntactic sugar for effect and record fields which lets one omit the `()` has been removed in order to resolve the otherwise ambiguity between the presence type argument `{wild}` from the row type argument `{wild}`. Note however that it is still possible to omit the `()` for variant fields.
+
+### Mono restriction
+
+It is now possible to annotate type variables with `Mono` restriction, e.g. `sig id : (a::(Any,Mono)) -> a::(Any,Mono)`.
+
+### Recursive rows
+
+* Effect variables can be recursive, e.g. `{ |(mu a.F:(() { |a}-> ()) {}-> b|c)}`.
+* **Breaking change**: Recursive rows are no longer restricted to variant syntax, i.e. separating fields using `|`. Recursive record and effects rows separate fields using `,` now. 
+* Recursive variants with no directly exposed fields no longer require the vertical bar separating fields from the row variable, e.g. `[|(mu a. Foo)|]` is equivalent to `[| |(mu a . Foo)|]`.
+
+## Roundtrip: New pretty printer for types
+
+This version of Links introduces a new pretty printer for types, called Roundtrip. This fixes various round-tripping issues.
+
+The Roundtrip printer is now active by default. The old printer is still present.
+
+The printer(s) to be used can be selected using the setting `types_pretty_printer_engine`, with the following values:
+
+  * `roundtrip`: the new printer
+  * `old`: the original printer
+  * `derived`: no pretty printing - prints the OCaml representation of the types
+
+Note that one can select multiple printers at once, for comparison; this is done by separating printer names by commas, e.g.:
+
+```links
+@set types_pretty_printer_engine "roundtrip,old";
+```
+
+## Effect Syntactic Sugar
+
+This version implements enhanced syntactic sugar for effects. The changes influence both the Roundtrip printer (see above) and the desugaring passes (between parsing and typechecking).
+
+(*Note: Most of effect sugar, and in particular the changes introduced in this version, requires the `effect_sugar` setting to be `true`.*)
+
+There is a new setting `effect_sugar_policy` which allows one to set which components of effect sugar to use. The available options (with shortcuts for convencience) are:
+
+  * `presence_omit` [shotcut `pres`]: omit presence polymorphic operations within effect rows
+  * `alias_omit` [shortcut `alias`]: hide empty (and emptied using `pres`) shared effect rows in the last argument of aliases
+  * `arrows_show_implicit_effect_variable` [shortcut `show_implicit`]: display the imlicit shared effect on arrows
+  * `arrows_curried_hide_fresh` [shortcut `chf`]: in curried functions, argument collection arrows are assumed to have fresh effects and these are hidden
+  * `contract_operation_arrows` [shortcut `contract`]: contract operation arrows: `E:() {}-> a` to `E:a` and `E:(a) {}-> b` to `E:(a) -> b`
+  * `open_default` [shortcut `open`]: effect rows are open by default, closed with syntax `{ | .}`
+  * `final_arrow_shares_with_alias` [shortcut `final_arrow`]: final arrow and a following type alias may share implicit effects
+  * `all_implicit_arrows_share` [shortcut `all_arrows`]: all arrows with implicit effect vars will be unified, an experimental setting
+
+Multiple of these can be selected, separated by commas, e.g.:
+
+```links
+@set effect_sugar_policy "pres,alias,contract";
+```
+
+A version of the above is also available by entering `@help effect_sugar_policy;` in Links.
+
+These changes are explained in more depth and with examples in [Links GitHub Wiki/Effect Sugar](https://github.com/links-lang/links/wiki/Effect-Sugar).
+
+## Other fixes / Miscellaneous
+
+* Relational lenses are now enabled by default.
+* Fixed a bug where the REPL would unconditionally print a stacktrace for unknown directives.
+* Fixed a bug where deeply nested JSON literals would cause the client to stack overflow.
+* Fixed a bug where big server side values would cause the client to stack overflow.
+* Fixed JavaScript compilation of top-level anonymous functions.
+* Fixed a bug where the server would inadvertently respond with response `500` following the (successful) termination of a server side process.
+* The body of an escape expression has been made more permissive (grammatically) as it can now be any expression.
 
 # 0.9.3
 
