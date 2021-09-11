@@ -4,7 +4,6 @@ on:
   pull_request:
     branches: master
   push:
-    # TODO: change back to master
     branches: [master]
   schedule:
     # Prime the caches every Monday
