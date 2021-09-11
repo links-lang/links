@@ -357,7 +357,7 @@ jobs:
 
     env:
       LINKS_BROWSER: ${{ matrix.browser }}
-      NPM_DIR: tests/end-to-end
+      NPM_DIR: tests/headless
 
     runs-on: ${{ matrix.os }}
 
