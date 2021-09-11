@@ -371,7 +371,6 @@ jobs:
           POSTGRES_USER: links
         ports:
           - 5432:5432
-        # set health checks to wait until postgres has started
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -414,7 +413,11 @@ jobs:
           path: ./links-database-setup
 
       - name: Populate database
-        run: bash ./dbsetup
+        run: |
+          for f in `ls *.sql`; do
+            createdb -h localhost -U links -O links ${f%.sql};
+          done
+          for f in `ls *.sql`; do psql -h localhost -U links -d ${f%.sql} < $f; done
         working-directory: links-database-setup
         env:
           PGPASSWORD: links
