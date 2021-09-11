@@ -131,7 +131,7 @@ jobs:
           MYSQL_PASSWORD: links
           MYSQL_ROOT_PASSWORD: links
           MYSQL_DATABASE: links
-          MYSQL_ROOT_HOST: '%'
+          MYSQL_ROOT_HOST: "%"
         ports:
           - 3306:3306
         options: >-
@@ -212,7 +212,7 @@ jobs:
           MYSQL_PASSWORD: links
           MYSQL_ROOT_PASSWORD: links
           MYSQL_DATABASE: links
-          MYSQL_ROOT_HOST: '%'
+          MYSQL_ROOT_HOST: "%"
         ports:
           - 3306:3306
         options: >-
@@ -290,7 +290,7 @@ jobs:
           MYSQL_PASSWORD: links
           MYSQL_ROOT_PASSWORD: links
           MYSQL_DATABASE: links
-          MYSQL_ROOT_HOST: '%'
+          MYSQL_ROOT_HOST: "%"
         ports:
           - 3306:3306
         options: >-
@@ -366,11 +366,17 @@ jobs:
         image: postgres:12
         env:
           POSTGRES_DB: links
-          POSTGRES_PASSWORD: links      
+          POSTGRES_PASSWORD: links
           POSTGRES_PORT: 5432
-          POSTGRES_USER: links 
-        ports:      
+          POSTGRES_USER: links
+        ports:
           - 5432:5432
+        # set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Checkout code
@@ -408,7 +414,7 @@ jobs:
           path: ./links-database-setup
 
       - name: Populate database
-        run: bash dbsetup || true
+        run: bash ./dbsetup
         working-directory: links-database-setup
         env:
           PGPASSWORD: links
