@@ -5,7 +5,7 @@ on:
     branches: master
   push:
     # TODO: change back to master
-    branches: [master, e2e-tests-*]
+    branches: [master]
   schedule:
     # Prime the caches every Monday
     - cron: 0 1 * * MON
@@ -132,7 +132,7 @@ jobs:
           MYSQL_PASSWORD: links
           MYSQL_ROOT_PASSWORD: links
           MYSQL_DATABASE: links
-          MYSQL_ROOT_HOST: "%"
+          MYSQL_ROOT_HOST: '%'
         ports:
           - 3306:3306
         options: >-
@@ -213,7 +213,7 @@ jobs:
           MYSQL_PASSWORD: links
           MYSQL_ROOT_PASSWORD: links
           MYSQL_DATABASE: links
-          MYSQL_ROOT_HOST: "%"
+          MYSQL_ROOT_HOST: '%'
         ports:
           - 3306:3306
         options: >-
@@ -291,7 +291,7 @@ jobs:
           MYSQL_PASSWORD: links
           MYSQL_ROOT_PASSWORD: links
           MYSQL_DATABASE: links
-          MYSQL_ROOT_HOST: "%"
+          MYSQL_ROOT_HOST: '%'
         ports:
           - 3306:3306
         options: >-
@@ -361,32 +361,17 @@ jobs:
       NPM_DIR: tests/end-to-end
 
     runs-on: ${{ matrix.os }}
-    # service containers to run with `postgres-job`
+
     services:
-      # label used to access the service container
       postgres:
-        # Docker Hub image
-        image: postgres:latest
-        # service environment variables
-        # `POSTGRES_HOST` is `postgres`
+        image: postgres:12
         env:
-          # optional (defaults to `postgres`)``
           POSTGRES_DB: links
-          # required
-          POSTGRES_PASSWORD: links
-          # optional (defaults to `5432`)
+          POSTGRES_PASSWORD: links      
           POSTGRES_PORT: 5432
-          # optional (defaults to `postgres`)
           POSTGRES_USER: links 
-        ports:
-          # maps tcp port 5432 on service container to the host
+        ports:      
           - 5432:5432
-        # set health checks to wait until postgres has started
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
 
     steps:
       - name: Checkout code
@@ -424,11 +409,7 @@ jobs:
           path: ./links-database-setup
 
       - name: Populate database
-        run: |
-          for f in `ls *.sql`; do
-            createdb -h localhost -U links -O links ${f%.sql};
-          done
-          for f in `ls *.sql`; do psql -h localhost -U links -d ${f%.sql} < $f; done
+        run: bash dbsetup || true
         working-directory: links-database-setup
         env:
           PGPASSWORD: links
