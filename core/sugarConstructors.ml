@@ -221,12 +221,12 @@ module SugarConstructors (Position : Pos)
   (* Create a database insertion query.  Raises an exception when the list of
      labeled expression is empty and the returning variable has not been named.
      *)
-  let db_insert ?(ppos=dp) ins_exp lbls exps var_opt =
+  let db_insert ?(ppos=dp) temporality ins_exp lbls exps var_opt =
     if is_empty_db_exps exps && var_opt == None then
       raise (ConcreteSyntaxError (pos ppos, "Invalid insert statement. " ^
           "Either provide a nonempty list of labeled expression or a return " ^
           "variable."));
-    with_pos ppos (DBInsert (ins_exp, lbls, exps,
+    with_pos ppos (DBInsert (temporality, ins_exp, lbls, exps,
        opt_map (fun name -> constant_str ~ppos name) var_opt))
 
   (* Create a query. *)

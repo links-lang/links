@@ -138,7 +138,7 @@ module type SugarConstructorsSig = sig
   val db_exps
       : ?ppos:t -> (Name.t * phrase) list -> phrase
   val db_insert
-      : ?ppos:t -> phrase -> Name.t list -> phrase -> string option
+      : ?ppos:t -> Temporality.t -> phrase -> Name.t list -> phrase -> string option
      -> phrase
   val query
       : ?ppos:t -> (phrase * phrase) option -> QueryPolicy.t -> phrase -> phrase

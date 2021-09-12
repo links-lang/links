@@ -392,6 +392,27 @@ and handler_parameterisation =
 and iterpatt =
   | List  of Pattern.with_pos * phrase
   | Table of Pattern.with_pos * phrase
+and valid_time_update =
+  (* Update current row, terminating previous end period and creating new row *)
+  | CurrentUpdate
+  (* Update between two times *)
+  | SequencedUpdate of { validity_from: phrase; validity_to: phrase }
+  (* Update with direct access to to- and from- fields, potentially setting the to
+     and from fields directly (from_time, to_time) *)
+  | NonsequencedUpdate of { from_time: phrase option; to_time: phrase option }
+and temporal_update =
+  | ValidTimeUpdate of valid_time_update
+  | TransactionTimeUpdate
+and valid_time_deletion =
+  (* Remove current row by terminating end-period *)
+  | CurrentDeletion
+  (* Delete within a range, potentially creating multiple rows *)
+  | SequencedDeletion of { validity_from: phrase; validity_to: phrase }
+  (* Give direct access to to- and from- fields *)
+  | NonsequencedDeletion
+and temporal_deletion =
+  | ValidTimeDeletion of valid_time_deletion
+  | TransactionTimeDeletion
 and phrasenode =
   | Constant         of Constant.t
   | Var              of Name.t
@@ -439,10 +460,12 @@ and phrasenode =
   | TableLit         of phrase * (Datatype.with_pos * (Types.datatype *
                            Types.datatype * Types.datatype) option) *
                           (Name.t * fieldconstraint list) list * phrase * phrase
-  | DBDelete         of Pattern.with_pos * phrase * phrase option
-  | DBInsert         of phrase * Name.t list * phrase * phrase option
-  | DBUpdate         of Pattern.with_pos * phrase * phrase option *
-                          (Name.t * phrase) list
+  | DBDelete         of temporal_deletion option * Pattern.with_pos * phrase * phrase option
+  | DBInsert         of Temporality.t * phrase * Name.t list * phrase * phrase option
+  | DBUpdate         of temporal_update option * Pattern.with_pos * phrase *
+                          phrase option * (Name.t * phrase) list
+  | DBTemporalJoin   of Temporality.t * phrase * Types.datatype option
+  | TemporalOp       of TemporalOperation.t * phrase (* Target *) * phrase list  (* Arguments *)
   | LensLit          of phrase * Lens.Type.t option
   | LensSerialLit    of phrase * string list * Lens.Type.t option
   (* the lens keys lit is a literal that takes an expression and is converted
@@ -672,7 +695,7 @@ struct
     | ConstructorLit (_, popt, _) -> option_map phrase popt
     | DatabaseLit (p, (popt1, popt2)) ->
         union_all [phrase p; option_map phrase popt1; option_map phrase popt2]
-    | DBInsert (p1, _labels, p2, popt) ->
+    | DBInsert (_, p1, _labels, p2, popt) ->
         union_all [phrase p1; phrase p2; option_map phrase popt]
     | TableLit (p1, _, _, _, p2) -> union (phrase p1) (phrase p2)
     | Xml (_, attrs, attrexp, children) ->
@@ -712,15 +735,40 @@ struct
     | Offer (p, cases, _) -> union (phrase p) (union_map case cases)
     | CP cp -> cp_phrase cp
     | Receive (cases, _) -> union_map case cases
-    | DBDelete (pat, p, where) ->
-        union (phrase p)
-          (diff (option_map phrase where)
-             (pattern pat))
-    | DBUpdate (pat, from, where, fields) ->
+    | DBDelete (del, pat, p, where) ->
+        let del =
+          match del with
+            | Some (ValidTimeDeletion (SequencedDeletion { validity_from; validity_to })) ->
+                (* Note: validity periods cannot refer to the pattern. *)
+                union (phrase validity_from) (phrase validity_to)
+            | _ -> empty
+        in
+        union del
+          (union (phrase p)
+             (diff (option_map phrase where)
+               (pattern pat)))
+    | DBUpdate (upd, pat, from, where, fields) ->
+        let upd =
+          match upd with
+            | Some (ValidTimeUpdate (SequencedUpdate { validity_from; validity_to })) ->
+                union (phrase validity_from) (phrase validity_to)
+            | Some (ValidTimeUpdate (NonsequencedUpdate { from_time; to_time })) ->
+                (* Nonsequenced updates *can* refer to the pattern, however. *)
+                (diff
+                  (union
+                    (option_map phrase from_time)
+                    (option_map phrase to_time))
+                  (pattern pat))
+            | _ -> empty
+        in
         let pat_bound = pattern pat in
-          union_all [phrase from;
+        union_all [upd;
+                     phrase from;
                      diff (option_map phrase where) pat_bound;
                      diff (union_map (snd ->- phrase) fields) pat_bound]
+    | DBTemporalJoin (_, p, _) -> phrase p
+    | TemporalOp (_, p, p_opt) ->
+        union_all [phrase p; union_map phrase p_opt]
     | DoOperation (_, ps, _) -> union_map phrase ps
     | QualifiedVar _ -> empty
     | TryInOtherwise (p1, pat, p2, p3, _ty) ->
