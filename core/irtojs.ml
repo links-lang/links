@@ -17,27 +17,106 @@ let rec strip_poly =
     | e -> e
 
 (** Intermediate language *)
-type code = | Var    of string
-            | Lit    of string
-            | Fn     of (string list * code)
+module Code = struct
 
-            | LetFun of ((string * string list * code * Ir.location) * code)
-            | LetRec of ((string * string list * code * Ir.location) list * code)
-            | Call   of (code * code list)
-            | Unop   of (string * code)
-            | Binop  of (code * string * code)
-            | If     of (code * code * code)
-            | Case   of (string * (string * code) stringmap * (string * code) option)
-            | Dict   of ((string * code) list)
-            | Arr    of (code list)
+  module Var = struct
+    type t = string
+    [@@deriving show]
+  end
 
-            | Bind   of (string * code * code)
-            | Return of code
+  module Label = struct
+    type t = string
+    [@@deriving show]
+  end
 
-            | Die    of (string)
-            | Nothing
-  [@@deriving show]
+  type t = Var    of Var.t
+         | Lit    of string
+         | Fn     of Var.t list * t
 
+         | LetFun of (Var.t * Var.t list * t * Ir.location) * t
+         | LetRec of (Var.t * Var.t list * t * Ir.location) list * t
+         | Call   of t * t list
+         | Unop   of Var.t * t
+         | Binop  of t * Var.t * t
+         | If     of t * t * t
+         | Case   of Var.t * (Var.t * t) stringmap * (Var.t * t) option
+         | Dict   of (Label.t * t) list
+         | Arr    of t list
+
+         | Bind   of Var.t * t * t
+         | Return of t
+
+         | Die    of string
+         | Nothing
+         [@@deriving show]
+
+  module MetaContinuation = struct
+    type nonrec t = (t -> t)
+    let identity code = code
+  end
+
+  module ObjectContinuation = struct
+    let __kappa = "__kappa"
+    (* let fresh () = gensym ~prefix:"kappa" () *)
+  end
+
+  module Constructors = struct
+    (** Create a JS string literal, quoting special characters *)
+    let string_js_quote s =
+      String.escaped s
+      |> Str.global_replace (Str.regexp "'") "\\'"
+      |> Printf.sprintf "'%s'"
+
+    (** Return a JS literal string from an OCaml int. *)
+    let intlit i = Lit (string_of_int i)
+    (** Return a JS literal string from an OCaml string. *)
+    let strlit s = Lit (string_js_quote s)
+    (** Return a JS literal string from an OCaml character. *)
+    let chrlit ch = Dict ["_c", Lit(string_js_quote(string_of_char ch))]
+    (** Return a literal for the JS representation of a Links string. *)
+    let chrlistlit = strlit
+  end
+
+  module Runtime = struct
+
+    module LINKS = struct
+      let project = Var "LINKS.project"
+      let erase   = Var "LINKS.erase"
+      let union   = Var "LINKS.union"
+      let remoteCall = Var "LINKS.remoteCall"
+      let xml = Var "LINKS.XML"
+      let eq = Var "LINKS.eq"
+      let neq = Var "LINKS.neq"
+      let gt = Var "LINKS.gt"
+      let lt = Var "LINKS.lt"
+      let gte = Var "LINKS.gte"
+      let lte = Var "LINKS.lte"
+    end
+
+    module CONSTANTS = struct
+      let unit = Var "CONSTANTS.UNIT"
+    end
+
+    module List = struct
+      let nil = Var "LINKEDLIST.Nil"
+      let cons = Var "LINKEDLIST.Cons"
+
+      let hd = Var "LINKEDLIST.hd"
+      let tl = Var "LINKEDLIST.tl"
+
+      let append = Var "LINKEDLIST.append"
+    end
+
+    module JSON = struct
+      let parse = Var "JSON.parse"
+    end
+
+    module Math = struct
+      let floor = Var "Math.floor"
+      let pow = Var "Math.pow"
+    end
+  end
+end
 
 (** IR variable environment *)
 module VEnv = Env.Int
@@ -59,6 +138,7 @@ module VariableInspection = struct
       res in
 
     let rec go cmd =
+      let open Code in
       match cmd with
         | Var s -> add_var s
         | Fn (bnds, cmd) ->
@@ -89,12 +169,12 @@ module VariableInspection = struct
 
   let get_affected_variables code =
     inspect_code_variables code
-    |> List.map (fun v -> Var(v))
+    |> List.map (fun v -> Code.Var(v))
 end
 
 
 (** Continuation parameter name (convention) *)
-let __kappa = "__kappa"
+let __kappa = Code.ObjectContinuation.__kappa
 (**
   Required runtime support (documenting any JavaScript functions used):
 
@@ -125,17 +205,18 @@ let __kappa = "__kappa"
 
 
 module type JS_CODEGEN = sig
-  val string_of_js : code -> string
+  val string_of_js : Code.t -> string
 end
 
 module Js_CodeGen : JS_CODEGEN = struct
   (** Pretty printer for JavaScript code *)
   module PP :
   sig
-    val show : code -> string
+    val show : Code.t -> string
   end =
     struct
       open PP
+      open Code
 
       (** Pretty-print a Code value as a JavaScript string. *)
       let rec show c : PP.doc =
@@ -228,21 +309,6 @@ module Js_CodeGen : JS_CODEGEN = struct
   let string_of_js x = PP.show x
 end
 
-(** Create a JS string literal, quoting special characters *)
-let string_js_quote s =
-  String.escaped s
-    |> Str.global_replace (Str.regexp "'") "\\'"
-    |> Printf.sprintf "'%s'"
-
-(** Return a JS literal string from an OCaml int. *)
-let intlit i = Lit (string_of_int i)
-(** Return a JS literal string from an OCaml string. *)
-let strlit s = Lit (string_js_quote s)
-(** Return a JS literal string from an OCaml character. *)
-let chrlit ch = Dict ["_c", Lit(string_js_quote(string_of_char ch))]
-(** Return a literal for the JS representation of a Links string. *)
-let chrlistlit = strlit
-
 (* Specialness:
 
    * Top-level boilerplate code to replace the root element and reset the focus
@@ -254,13 +320,11 @@ let chrlistlit = strlit
      (e.g. int_of_string, xml)
  *)
 
-module Arithmetic :
-sig
+module Arithmetic : sig
   val is : string -> bool
-  val gen : (code * string * code) -> code
-end =
-struct
-  let builtin_ops =
+  val gen : string -> Code.t list -> Code.t
+end = struct
+  let builtin_binops =
     StringMap.from_alist
       [ "+",   Some "+"  ;
         "+.",  Some "+"  ;
@@ -274,20 +338,28 @@ struct
         "/.",  Some "/"  ;
         "mod", Some "%"  ]
 
-  let is x = StringMap.mem x builtin_ops
-  let js_name op = val_of (StringMap.find op builtin_ops)
-  let gen (l, op, r) =
-    match op with
-      | "/" -> Call (Var "Math.floor", [Binop (l, "/", r)])
-      | "^" -> Call (Var "Math.floor", [Call (Var "Math.pow", [l; r])])
-      | "^." -> Call (Var "Math.pow", [l; r])
-      | _ -> Binop(l, js_name op, r)
+
+  let builtin_unops =
+    [ "negate", "-" ;
+      "negatef", "-" ]
+
+  let is x = StringMap.mem x builtin_binops || List.mem_assoc x builtin_unops
+  let js_name op = val_of (StringMap.find op builtin_binops)
+  let gen op args =
+    let open Code in
+    match op, args with
+      | "/", [l; r] -> Call (Runtime.Math.floor, [Binop (l, "/", r)])
+      | "^", [_; _] -> Call (Runtime.Math.floor, [Call (Runtime.Math.pow, args)])
+      | "^.", [_; _] -> Call (Runtime.Math.pow, args)
+      | ("negate" | "negatef"), [_] -> Call (Var "-", args)
+      | _, [l; r] -> Binop(l, js_name op, r)
+      | _, _ -> raise (internal_error (Printf.sprintf "Unrecognised primitive arithmetic operation '%s' with arity %d\n" op (List.length args)))
 end
 
 module StringOp :
 sig
   val is : string -> bool
-  val gen : (code * string * code) -> code
+  val gen : string -> Code.t list -> Code.t
 end =
 struct
   let builtin_ops =
@@ -296,32 +368,37 @@ struct
 
   let is x = StringMap.mem x builtin_ops
   let js_name op = val_of (StringMap.find op builtin_ops)
-  let gen (l, op, r) =
-    Binop(l, js_name op, r)
+  let gen op args =
+    let open Code in
+    match args with
+    | [l; r] -> Binop(l, js_name op, r)
+    | _ -> raise (internal_error (Printf.sprintf "Unrecognised string operation '%s' with arity %d\n" op (List.length args)))
 end
 
 module Comparison :
 sig
   val is : string -> bool
-  val js_name : string -> string
-  val gen : (code * string * code) -> code
+  val js_name : string -> Code.t
+  val gen : string -> Code.t list -> Code.t
 end =
 struct
   (* these names should be used for non-primitive types *)
   let funs =
+    let open Code in
     StringMap.from_alist
-      [ "==", "LINKS.eq"  ;
-        "<>", "LINKS.neq" ;
-        "<",  "LINKS.lt"  ;
-        ">",  "LINKS.gt"  ;
-        "<=", "LINKS.lte" ;
-        ">=", "LINKS.gte" ]
+      [ "==", Runtime.LINKS.eq ;
+        "<>", Runtime.LINKS.neq;
+        "<",  Runtime.LINKS.lt ;
+        ">",  Runtime.LINKS.gt ;
+        "<=", Runtime.LINKS.lte;
+        ">=", Runtime.LINKS.gte ]
 
   let is x = StringMap.mem x funs
   let js_name op = StringMap.find op funs
-  let gen (l, op, r) =
-    match op with
-      | "<>" -> Unop("!", Call (Var "LINKS.eq", [l; r]))
+  let gen op args =
+    let open Code in
+    match op, args with
+      | "<>", [l; r] -> Unop("!", Call (Runtime.LINKS.eq, [l; r]))
           (* HACK
 
              This is technically wrong, but as we haven't implemented
@@ -332,9 +409,35 @@ struct
              and the general functions otherwise. This would
              necessitate making the JS compiler type-aware.
           *)
-      | "<" | ">" | "<=" | ">=" ->
-          Binop(l, op, r)
-      | _ ->  Call(Var (js_name op), [l; r])
+      | ( "<" | ">" | "<=" | ">="), [l; r] ->
+        Binop(l, op, r)
+      | _, [l; r] ->  Call(js_name op, [l; r])
+      | _, _ -> raise (internal_error (Printf.sprintf "Unrecognised relational operator '%s' with arity %d\n" op (List.length args)))
+end
+
+module ListPrim : sig
+  val is : string -> bool
+  val gen : string -> Code.t list -> Code.t
+end = struct
+  let names =
+    let open Code.Runtime.List in
+    [ "Cons", cons
+    ; "Nil", nil
+    ; "$$hd", hd
+    ; "$$tl", tl
+    ; "hd", hd
+    ; "tl", tl
+    ; "Concat", append ]
+
+  let is fname = List.mem_assoc fname names
+
+  let gen fname vs =
+    let open Code in
+    match fname with
+    | "Nil" -> List.assoc fname names
+    | _ ->
+      let name = List.assoc fname names in
+      Call (name, vs)
 end
 
 (** [cps_prims]: a list of primitive functions that need to see the
@@ -366,25 +469,25 @@ module type CONTINUATION = sig
 
   (* Returns a scope in which the head and tail of the continuation
      are accessible. *)
-  val pop : t -> (code -> code) * t * t
+  val pop : t -> Code.MetaContinuation.t * t * t
 
   (* Turns code into a continuation. *)
-  val reflect : code -> t
+  val reflect : Code.t -> t
   (* Turns a continuation into code. *)
-  val reify   : t -> code
+  val reify   : t -> Code.t
 
   (* Continuation name binding. *)
-  val bind : t -> (t -> code) -> code
+  val bind : t -> (t -> Code.t) -> Code.t
 
   (* Continuation application generation. The optional strategy
      parameter decides whether the application should be yielding or
      direct. *)
-  val apply : ?strategy:[`Yield | `Direct] -> t -> code -> code
+  val apply : ?strategy:[`Yield | `Direct] -> t -> Code.MetaContinuation.t
 
   (* Augments a function [Fn] with a continuation parameter and
      reflects the result as a continuation. The continuation parameter
      in the callback provides access to the current continuation. *)
-  val contify_with_env : (t -> venv * code) -> venv * t
+  val contify_with_env : (t -> venv * Code.t) -> venv * t
 
   (* Generates appropriate bindings for primitives *)
   val primitive_bindings : string
@@ -398,10 +501,10 @@ module Default_Continuation : CONTINUATION = struct
   (* We can think of this particular continuation structure as
      singleton list. *)
   type t = Identity
-         | Code of code
+         | Code of Code.t
 
   let identity = Identity
-  let toplevel = Code (Fn (["x"], Nothing))
+  let toplevel = Code Code.(Fn (["x"], Nothing))
   (* This continuation is a degenerate monoid. The multiplicative
      operator is "forgetful" in the sense that it ignores its second
      argument b whenever a != Identity. Meaning that a <> b == a when
@@ -414,12 +517,12 @@ module Default_Continuation : CONTINUATION = struct
 
   let reflect x = Code x
   let reify = function
-    | Identity -> Fn (["_x"], Var "_x")
+    | Identity -> Code.(Fn (["_x"], Var "_x"))
     | Code code -> code
 
   let bind k body =
     match k with
-    | Code (Var _) -> body k
+    | Code (Code.Var _) -> body k
     | _ ->
         (* It is important to generate a unique name for continuation
            bindings because in the JavaScript code:
@@ -433,9 +536,10 @@ module Default_Continuation : CONTINUATION = struct
            f(args) {body}.)
         *)
        let kb = "_kappa" ^ (string_of_int (Var.fresh_raw_var ())) in
-       Bind (kb, reify k, body (reflect (Var kb)))
+       Code.Bind (kb, reify k, body (reflect (Code.Var kb)))
 
   let apply ?(strategy=`Yield) k arg =
+    let open Code in
     match strategy with
     | `Direct -> Call (Var "_applyCont", [reify k; arg])
     | _       -> Call (Var "_yieldCont", [reify k; arg])
@@ -450,17 +554,17 @@ module Default_Continuation : CONTINUATION = struct
 
   let contify_with_env fn =
     match fn Identity with
-    | env, (Fn _ as k) -> env, reflect k
+    | env, (Code.Fn _ as k) -> env, reflect k
     | _ -> raise (internal_error "error: contify: non-function argument.")
 
   (* Pop returns the code in "the singleton list" as the second
      component, and returns a fresh singleton list containing the
      identity element in the third component. *)
-  let pop k = (fun code -> code), k, Identity
+  let pop k = Code.MetaContinuation.identity, k, Identity
 
   let to_string = function
     | Identity -> "IDENTITY"
-    | Code code -> "CODE: " ^ (show_code code)
+    | Code code -> "CODE: " ^ (Code.show code)
 end
 
 (* The higher-order continuation structure for effect handlers
@@ -468,16 +572,16 @@ end
 module Higher_Order_Continuation : CONTINUATION = struct
   (* We can think of this particular continuation structure as a
      nonempty stack with an even number of elements. *)
-  type t = Cons of code * t
-         | Reflect of code
+  type t = Cons of Code.t * t
+         | Reflect of Code.t
          | Identity
 
   (* Auxiliary functions for manipulating the continuation stack *)
-  let nil = Var "Nil"
-  let cons x xs = Call (Var "_Cons", [x; xs])
-  let head xs = Call (Var "_hd", [xs])
-  let tail xs = Call (Var "_tl", [xs])
-  let toplevel = Cons (Var "_idk", Cons (Var "_efferr", Reflect nil))
+  let nil = Code.Runtime.List.nil
+  let cons x xs = Code.(Call (Runtime.List.cons, [x; xs]))
+  let head xs = Code.(Call (Runtime.List.hd, [xs]))
+  let tail xs = Code.(Call (Runtime.List.tl, [xs]))
+  let toplevel = Cons (Code.Var "_idk", Cons (Code.Var "_efferr", Reflect nil))
 
   let reflect x = Reflect x
   let rec reify = function
@@ -504,6 +608,7 @@ module Higher_Order_Continuation : CONTINUATION = struct
   let bind kappas body =
     (* Binds a continuation *)
     let rec bind bs ks =
+      let open Code in
       fun kappas ->
         match kappas with
         | Identity ->
@@ -523,10 +628,11 @@ module Higher_Order_Continuation : CONTINUATION = struct
              (fun code -> bs (Bind (k, v, code)))
              (fun kappas -> Cons (Var k, kappas)) kappas
   in
-  let bs, ks, seed = bind (fun code -> code) (fun kappas -> kappas) kappas in
+  let bs, ks, seed = bind Code.MetaContinuation.identity (fun kappas -> kappas) kappas in
   bs (body (ks (reflect seed)))
 
   let apply ?(strategy=`Yield) k arg =
+    let open Code in
     match strategy with
     | `Direct -> Call (Var "_applyCont", [reify k; arg])
     | _       -> Call (Var "_yieldCont", [reify k; arg])
@@ -547,6 +653,7 @@ module Higher_Order_Continuation : CONTINUATION = struct
         "var receive = _default_receive;"
 
   let contify_with_env fn =
+    let open Code in
     let name = __kappa in
     match fn (reflect (Var name)) with
     | env, Fn (args, body) -> env, reflect (Fn (args @ [name], body))
@@ -554,21 +661,21 @@ module Higher_Order_Continuation : CONTINUATION = struct
 
   let rec pop = function
     | Cons (kappa, kappas) ->
-       (fun code -> code), (reflect kappa), kappas
+       Code.MetaContinuation.identity, (reflect kappa), kappas
     | Reflect ks ->
        let __k = gensym ~prefix:"__k" () in
        let __ks = gensym ~prefix:"__ks" () in
        (fun code ->
-         Bind (__k, head ks,
-               Bind (__ks, tail ks, code))),
-       (reflect (Var __k)), reflect (Var __ks)
+         Code.Bind (__k, head ks,
+               Code.Bind (__ks, tail ks, code))),
+       (reflect (Code.Var __k)), reflect (Code.Var __ks)
     | Identity -> pop toplevel
 
   let rec to_string = function
     | Identity -> "IDENTITY"
-    | Reflect code -> "REFLECT: " ^ (show_code code)
+    | Reflect code -> "REFLECT: " ^ (Code.show code)
     | Cons (code, k) ->
-        "CONS: " ^ (show_code code) ^ ", \n" ^ (to_string k)
+        "CONS: " ^ (Code.show code) ^ ", \n" ^ (to_string k)
 
 end
 
@@ -583,10 +690,10 @@ end
 
 module type JS_PAGE_COMPILER = sig
   (* include JS_COMPILER *)
-  val generate_program : venv -> Ir.computation -> venv * code
-  val generate_stubs : Value.env -> Ir.binding list -> code -> code
-  val generate_toplevel_bindings : Value.env -> Json.json_state -> venv -> Ir.binding list -> Json.json_state * venv * string list * (code -> code)
-  val wrap_with_server_lib_stubs : code -> code
+  val generate_program : venv -> Ir.computation -> venv * Code.t
+  val generate_stubs : Value.env -> Ir.binding list -> Code.MetaContinuation.t
+  val generate_toplevel_bindings : Value.env -> Json.json_state -> venv -> Ir.binding list -> Json.json_state * venv * string list * Code.MetaContinuation.t
+  val wrap_with_server_lib_stubs : Code.MetaContinuation.t
   val primitive_bindings : string
 end
 
@@ -601,12 +708,15 @@ end = functor (K : CONTINUATION) -> struct
   type continuation = K.t
 
   let apply_yielding f args k =
+    let open Code in
     Call (Var "_yield", f :: (args @ [K.reify k]))
 
   let contify fn =
     snd @@ K.contify_with_env (fun k -> VEnv.empty, fn k)
 
-  let rec generate_value env : Ir.value -> code =
+  let rec generate_value env : Ir.value -> Code.t =
+    let open Code in
+    let open Code.Constructors in
     let gv v = generate_value env v in
     function
     | Constant c ->
@@ -633,18 +743,18 @@ end = functor (K : CONTINUATION) -> struct
              Dict [("_type", strlit "-infinity")]
        end
     | Variable var ->
-          (* HACK *)
+       (* HACK *)
        let name = VEnv.find var env in
        if Arithmetic.is name then
          Fn (["x"; "y"; __kappa],
              K.apply (K.reflect (Var __kappa))
-               (Arithmetic.gen (Var "x", name, Var "y")))
+               (Arithmetic.gen name [Var "x"; Var "y"]))
        else if StringOp.is name then
          Fn (["x"; "y"; __kappa],
              K.apply (K.reflect (Var __kappa))
-               (StringOp.gen (Var "x", name, Var "y")))
+               (StringOp.gen name [Var "x"; Var "y"]))
        else if Comparison.is name then
-         Var (Comparison.js_name name)
+         Comparison.js_name name
        else
          Var name
     | Extend (field_map, rest) ->
@@ -659,12 +769,12 @@ end = functor (K : CONTINUATION) -> struct
          match rest with
          | None -> dict
          | Some v ->
-            Call (Var "LINKS.union", [gv v; dict])
+            Call (Runtime.LINKS.union, [gv v; dict])
        end
     | Project (name, v) ->
-       Call (Var "LINKS.project", [gv v; strlit name])
+       Call (Runtime.LINKS.project, [gv v; strlit name])
     | Erase (names, v) ->
-       Call (Var "LINKS.erase",
+       Call (Runtime.LINKS.erase,
              [gv v; Arr (List.map strlit (StringSet.elements names))])
     | Inject (name, v, _t) ->
        Dict [("_label", strlit name);
@@ -685,14 +795,14 @@ end = functor (K : CONTINUATION) -> struct
             let f_name = VEnv.find f env in
             begin
               match vs with
-              | [l; r] when Arithmetic.is f_name ->
-                 Arithmetic.gen (gv l, f_name, gv r)
               | [l; r] when StringOp.is f_name ->
-                 StringOp.gen (gv l, f_name, gv r)
+                StringOp.gen f_name [gv l; gv r]
               | [l; r] when Comparison.is f_name ->
-                 Comparison.gen (gv l, f_name, gv r)
-              | [v] when f_name = "negate" || f_name = "negatef" ->
-                 Unop ("-", gv v)
+                Comparison.gen f_name [gv l; gv r]
+              | vs when Arithmetic.is f_name ->
+                Arithmetic.gen f_name (List.map gv vs)
+              | vs when ListPrim.is f_name ->
+                ListPrim.gen f_name (List.map gv vs)
               | _ ->
                  if Lib.is_primitive f_name
                    && not (List.mem f_name cps_prims)
@@ -713,15 +823,17 @@ end = functor (K : CONTINUATION) -> struct
        gv v
 
   and generate_xml env tag attrs children =
-    Call(Var "LINKS.XML",
-         [strlit tag;
+    let open Code in
+    Call(Runtime.LINKS.xml,
+         [Constructors.strlit tag;
           Dict (StringMap.fold (fun name v bs ->
             (name, generate_value env v) :: bs) attrs []);
           Arr (List.map (generate_value env) children)])
 
   let generate_remote_call f_var xs_names env =
-    Call(Call (Var "LINKS.remoteCall", [Var __kappa]),
-         [intlit f_var;
+    let open Code in
+    Call(Call (Runtime.LINKS.remoteCall, [Var __kappa]),
+         [Constructors.intlit f_var;
           env;
           Dict (
             List.map2
@@ -734,12 +846,14 @@ end = functor (K : CONTINUATION) -> struct
 (** Generate stubs for processing functions serialised in remote calls *)
   module GenStubs =
   struct
-    let rec fun_def : Ir.fun_def -> code -> code =
+    let rec fun_def : Ir.fun_def -> Code.MetaContinuation.t =
       fun fundef code ->
+        let module Var' = Var in
+        let open Code in
         let {fn_binder = fb; fn_tyvars = _; fn_params = xsb; fn_body = _; fn_closure = zb;
                         fn_location; fn_unsafe = _} = fundef
         in
-        let f_var = Var.var_of_binder fb in
+        let f_var = Var'.var_of_binder fb in
         let bs = List.map name_binder xsb in
         let _, xs_names = List.split bs in
 
@@ -766,21 +880,21 @@ end = functor (K : CONTINUATION) -> struct
                     generate_remote_call f_var xs_names env,
                     fn_location),
                    code)
-    and binding : Ir.binding -> code -> code =
+    and binding : Ir.binding -> Code.MetaContinuation.t =
       function
       | Fun def ->
          fun_def def
       | Rec defs ->
          List.fold_right (-<-)
            (List.map (fun_def) defs)
-           identity
-      | _ -> identity
-    and bindings : Ir.binding list -> code -> code =
+           Code.MetaContinuation.identity
+      | _ -> Code.MetaContinuation.identity
+    and bindings : Ir.binding list -> Code.MetaContinuation.t =
       fun bindings code ->
         (List.fold_right
            (-<-)
            (List.map binding bindings)
-           identity)
+           Code.MetaContinuation.identity)
           code
 
 (* FIXME: this code should really be merged with the other
@@ -789,7 +903,8 @@ end = functor (K : CONTINUATION) -> struct
 *)
 
 (** stubs for server-only primitives *)
-    let wrap_with_server_lib_stubs : code -> code = fun code ->
+    let wrap_with_server_lib_stubs : Code.t -> Code.t = fun code ->
+      let open Code in
       let server_library_funcs =
         List.rev
           (Env.Int.fold
@@ -811,7 +926,7 @@ end = functor (K : CONTINUATION) -> struct
             None -> []
           | Some arity ->
              let args = some_vars arity in
-             [(name, args, generate_remote_call var args (Dict[]))])
+             [(name, args, generate_remote_call var args (Dict []))])
           server_library_funcs
       in
       List.fold_right
@@ -826,80 +941,86 @@ end = functor (K : CONTINUATION) -> struct
         code
   end
 
-  let rec generate_tail_computation env : Ir.tail_computation -> continuation -> code =
+  let rec generate_tail_computation env : Ir.tail_computation -> continuation -> Code.t =
     fun tc kappa ->
-      let gv v = generate_value env v in
-      let gc c kappa = snd (generate_computation env c kappa) in
-      match (tc : Ir.tail_computation) with
-      | Ir.Return v ->
-         K.apply kappa (gv v)
-      | Apply (f, vs) ->
-         let f = strip_poly f in
-         begin
-           match f with
-           | Variable f ->
-              let f_name = VEnv.find f env in
-              begin
-                match vs with
-                | [l; r] when Arithmetic.is f_name ->
-                   K.apply kappa (Arithmetic.gen (gv l, f_name, gv r))
-                | [l; r] when StringOp.is f_name ->
-                   K.apply kappa (StringOp.gen (gv l, f_name, gv r))
-                | [l; r] when Comparison.is f_name ->
-                   K.apply kappa (Comparison.gen (gv l, f_name, gv r))
-                | [v] when f_name = "negate" || f_name = "negatef" ->
-                   K.apply kappa (Unop ("-", gv v))
-                | _ ->
-                   if Lib.is_primitive f_name
-                     && not (List.mem f_name cps_prims)
-                     && not (Location.is_server (Lib.primitive_location f_name))
-                   then
-                     let arg = Call (Var ("_" ^ f_name), List.map gv vs) in
-                     K.apply ~strategy:`Direct kappa arg
-                   else
-                     if (f_name = "receive" && session_exceptions_enabled) then
-                       let code_vs = List.map gv vs in
-                       let action cancel_thunk =
-                         apply_yielding (Var f_name) (code_vs @ [cancel_thunk]) kappa in
-                         generate_cancel_stub env action kappa
-                     else
-                       apply_yielding (gv (Variable f)) (List.map gv vs) kappa
-              end
-           | _ ->
-              apply_yielding (gv f) (List.map gv vs) kappa
-         end
-      | Special special ->
-         generate_special env special kappa
-      | Ir.Case (v, cases, default) ->
-         let v = gv v in
-         let k, x =
-           match v with
-           | Var x -> (fun e -> e), x
-           | _ ->
-              let x = gensym ~prefix:"x" () in
-              (fun e -> Bind (x, v, e)), x
-         in
-         K.bind kappa
-           (fun kappa ->
-             let gen_cont (xb, c) =
-               let (x, x_name) = name_binder xb in
-               x_name, (snd (generate_computation (VEnv.bind x x_name env) c kappa)) in
-             let cases = StringMap.map gen_cont cases in
-             let default = opt_map gen_cont default in
-             k (Case (x, cases, default)))
-      | Ir.If (v, c1, c2) ->
-         K.bind kappa
-           (fun kappa ->
-             If (gv v, gc c1 kappa, gc c2 kappa))
+    let open Code in
+    let gv v = generate_value env v in
+    let gc c kappa = snd (generate_computation env c kappa) in
+    match (tc : Ir.tail_computation) with
+    | Ir.Return v ->
+      K.apply kappa (gv v)
+    | Apply (f, vs) ->
+      let f = strip_poly f in
+      begin
+        match f with
+        | Variable f ->
+          let f_name = VEnv.find f env in
+          begin
+            match vs with
+            | [l; r] when StringOp.is f_name ->
+              (* TODO(dhil): It'd be safer and more robust to hoist
+                 and let bind `gv l` and `gv r`. *)
+              K.apply kappa (StringOp.gen f_name [gv l; gv r])
+            | [l; r] when Comparison.is f_name ->
+              K.apply kappa (Comparison.gen f_name [gv l; gv r])
+            | vs when Arithmetic.is f_name ->
+              K.apply kappa (Arithmetic.gen f_name (List.map gv vs))
+            | vs when ListPrim.is f_name ->
+              K.apply kappa (ListPrim.gen f_name (List.map gv vs))
+            | _ ->
+              if Lib.is_primitive f_name
+              && not (List.mem f_name cps_prims)
+              && not (Location.is_server (Lib.primitive_location f_name))
+              then
+                let arg = Call (Var ("_" ^ f_name), List.map gv vs) in
+                K.apply ~strategy:`Direct kappa arg
+              else if f_name = "receive" && session_exceptions_enabled then
+                let code_vs = List.map gv vs in
+                let action cancel_thunk =
+                  apply_yielding (Var f_name) (code_vs @ [cancel_thunk]) kappa
+                in
+                generate_cancel_stub env action kappa
+              else
+                apply_yielding (gv (Variable f)) (List.map gv vs) kappa
+          end
+        | _ ->
+          apply_yielding (gv f) (List.map gv vs) kappa
+      end
+    | Special special ->
+      generate_special env special kappa
+    | Ir.Case (v, cases, default) ->
+      let v = gv v in
+      let k, x =
+        match v with
+        | Var x -> (fun e -> e), x
+        | _ ->
+          let x = gensym ~prefix:"x" () in
+          (fun e -> Bind (x, v, e)), x
+      in
+      K.bind kappa
+        (fun kappa ->
+           let gen_cont (xb, c) =
+             let (x, x_name) = name_binder xb in
+             x_name, (snd (generate_computation (VEnv.bind x x_name env) c kappa)) in
+           let cases = StringMap.map gen_cont cases in
+           let default = opt_map gen_cont default in
+           k (Case (x, cases, default)))
+    | Ir.If (v, c1, c2) ->
+      K.bind kappa
+        (fun kappa ->
+           If (gv v, gc c1 kappa, gc c2 kappa))
 
-  and generate_special env : Ir.special -> continuation -> code
+  and generate_special env : Ir.special -> continuation -> Code.t
     = fun sp kappa ->
+      let module Var' = Var in
+      let open Code in
+      let open Code.Constructors in
       let gv v = generate_value env v in
       match sp with
       | Wrong _ -> Die "Internal Error: Pattern matching failed" (* THIS MESSAGE SHOULD BE MORE INFORMATIVE *)
       | Database _ | Table _
           when Settings.get js_hide_database_info ->
-         K.apply kappa (Dict [])
+         K.apply kappa Runtime.CONSTANTS.unit
       | Database v ->
          K.apply kappa (Dict [("_db", gv v)])
       | Table (db, table_name, keys, (readtype, _writetype, _needtype)) ->
@@ -912,7 +1033,7 @@ end = functor (K : CONTINUATION) -> struct
                           strlit (Types.string_of_datatype (readtype)))])])
       | LensSerial _ | LensSelect _ | LensJoin _ | LensDrop _ | Lens _ | LensCheck _ ->
               (* Is there a reason to not use js_hide_database_info ? *)
-              K.apply kappa (Dict [])
+              K.apply kappa Runtime.CONSTANTS.unit
       | LensGet _ | LensPut _ -> Die "Attempt to run a relational lens operation on client"
       | Query _ -> Die "Attempt to run a query on the client"
       | InsertRows _ -> Die "Attempt to run a database insert on the client"
@@ -931,8 +1052,8 @@ end = functor (K : CONTINUATION) -> struct
          let bind, skappa, skappas = K.pop kappa in
          let skappa' =
            contify (fun kappa ->
-             let scrutinee = Call (Var "LINKS.project", [Var result; strlit "1"]) in
-             let channel = Call (Var "LINKS.project", [Var result; strlit "2"]) in
+             let scrutinee = Call (Runtime.LINKS.project, [Var result; strlit "1"]) in
+             let channel = Call (Runtime.LINKS.project, [Var result; strlit "2"]) in
              let generate_branch (cb, b) =
                let (c, cname) = name_binder cb in
                cname, Bind (cname, channel, snd (generate_computation (VEnv.bind c cname env) b K.(skappa <> kappa))) in
@@ -952,9 +1073,9 @@ end = functor (K : CONTINUATION) -> struct
            | vs -> Dict (List.mapi (fun i v -> (string_of_int @@ i + 1, gv v)) vs)
          in
          let cons k ks =
-           Call (Var "_Cons", [k;ks])
+           Call (Runtime.List.cons, [k;ks])
          in
-         let nil = Var "Nil" in
+         let nil = Runtime.List.nil in
          K.bind kappa
            (fun kappas ->
              (* kappa -- pure continuation *)
@@ -997,10 +1118,10 @@ end = functor (K : CONTINUATION) -> struct
       | Handle { Ir.ih_comp = comp; Ir.ih_cases = eff_cases; Ir.ih_return = return; Ir.ih_depth = depth } ->
          let comp_env = env in
          let cons v vs =
-           Call (Var "_Cons", [v; vs])
+           Call (Runtime.List.cons, [v; vs])
          in
          let project record label =
-           Call (Var "LINKS.project", [record; label])
+           Call (Runtime.LINKS.project, [record; label])
          in
          let vmap r y =
            Call (Var "_vmapOp", [r; y])
@@ -1015,8 +1136,8 @@ end = functor (K : CONTINUATION) -> struct
             let translate_parameters params =
               let is_parameterised = List.length params > 0 in
               let param_ptr_binder =
-                Var.fresh_binder
-                  (Var.make_local_info (Types.Not_typed, "_param_ptr"))
+                Var'.fresh_binder
+                  (Var'.make_local_info (Types.Not_typed, "_param_ptr"))
               in
               let env =
                 let (x, n) = name_binder param_ptr_binder in
@@ -1025,7 +1146,7 @@ end = functor (K : CONTINUATION) -> struct
               let params =
                 List.mapi (fun i (binder,initial_value) -> (i, binder, initial_value)) params
               in
-              let ptr = Ir.Variable (Var.var_of_binder param_ptr_binder) in
+              let ptr = Ir.Variable (Var'.var_of_binder param_ptr_binder) in
               let initial_parameterise (bs, tc) =
                 let name_map =
                   List.fold_left
@@ -1125,10 +1246,11 @@ end = functor (K : CONTINUATION) -> struct
             snd (generate_computation comp_env (initial_parameterise comp) kappa)
          end
 
-  and generate_computation env : Ir.computation -> continuation -> (venv * code) =
+  and generate_computation env : Ir.computation -> continuation -> (venv * Code.t) =
     fun (bs, tc) kappa ->
-      let rec gbs : venv -> continuation -> Ir.binding list -> venv * code =
+      let rec gbs : venv -> continuation -> Ir.binding list -> venv * Code.t =
         fun env kappa ->
+          let open Code in
           function
           | Ir.Let (b, (_, Ir.Return v)) :: bs ->
              let (x, x_name) = name_binder b in
@@ -1161,7 +1283,7 @@ end = functor (K : CONTINUATION) -> struct
 
   and generate_function env fs :
       Ir.fun_def ->
-    (string * string list * code * Ir.location) =
+    (string * string list * Code.t * Ir.location) =
     fun fundef ->
       let {fn_binder = fb; fn_tyvars = _; fn_params = xsb; fn_body; fn_closure = zb;
                         fn_location; fn_unsafe = _} = fundef
@@ -1186,20 +1308,22 @@ end = functor (K : CONTINUATION) -> struct
       let body =
         match fn_location with
         | Location.Client | Location.Unknown ->
-           snd (generate_computation body_env fn_body (K.reflect (Var __kappa)))
-        | Location.Server -> generate_remote_call f xs_names (Dict [])
+           snd (generate_computation body_env fn_body (K.reflect (Code.Var __kappa)))
+        | Location.Server -> generate_remote_call f xs_names (Code.Dict [])
       in
       (f_name,
        xs_names @ [__kappa],
        body,
        fn_location)
-  and generate_cancel_stub env (action: code -> code) (kappa: K.t)  =
+  and generate_cancel_stub env (action: Code.MetaContinuation.t) (kappa: K.t)  =
+    let module Var' = Var in
+    let open Code in
     (* Compile a thunk to be invoked if the operation fails *)
     let cancellation_thunk_name =
       gensym ~prefix:"cancellation_thunk" () in
     (* Grab affected variables from the continuation *)
     let affected_vars_name = gensym ~prefix:"affected_vars" () in
-    let fresh_var = Var.fresh_raw_var () in
+    let fresh_var = Var'.fresh_raw_var () in
     let affected_variables =
        VariableInspection.get_affected_variables (K.reify kappa) in
     (* Bind affected variables array to a fresh variable *)
@@ -1223,56 +1347,57 @@ end = functor (K : CONTINUATION) -> struct
     Json.json_state ->
     venv ->
     Ir.binding ->
-    Json.json_state * venv * string option * (code -> code) =
+    Json.json_state * venv * string option * Code.MetaContinuation.t =
 
     fun valenv state varenv ->
-      function
-      | Let (b, _) ->
-         let (x, x_name) = name_binder b in
+    let open Code in
+    function
+    | Let (b, _) ->
+      let (x, x_name) = name_binder b in
       (* Debug.print ("let_binding: " ^ x_name); *)
-         let varenv = VEnv.bind x x_name varenv in
-         let value = Value.Env.find x valenv in
-         let jsonized_val = Json.jsonize_value value |> Json.json_to_string in
-         let state = ResolveJsonState.add_value_information value state in
-         (state,
-          varenv,
-          Some x_name,
-          fun code -> Bind (x_name, Call (Var "JSON.parse", [strlit jsonized_val]), code))
-      | Fun def ->
-         let {fn_binder = fb; _} = def
-         in
-         let (f, f_name) = name_binder fb in
-         let varenv = VEnv.bind f f_name varenv in
-         let def_header = generate_function varenv [] def in
-         (state,
-          varenv,
-          None,
-          fun code -> LetFun (def_header, code))
-      | Rec defs ->
-         let fs = List.map (fun {fn_binder = fb; _} -> name_binder fb) defs in
-         let varenv =
-           List.fold_left
-             (fun env (n, x) -> VEnv.bind n x env)
-             varenv fs
-         in
-         (state, varenv, None, fun code -> LetRec (List.map (generate_function varenv fs) defs, code))
-      | Alien { binder; object_name; language } ->
-         begin
-           let open ForeignLanguage in
-           (* TODO(dhil): If the foreign language isn't JavaScript,
-              then I think a server-call should be generated. *)
-           match language with
-           | JavaScript ->
-              let (a, _a_name) = name_binder binder in
-              let varenv = VEnv.bind a object_name varenv in
-              state, varenv, None, (fun code -> code)
-         end
-      | Module _ -> state, varenv, None, (fun code -> code)
+      let varenv = VEnv.bind x x_name varenv in
+      let value = Value.Env.find x valenv in
+      let jsonized_val = Json.jsonize_value value |> Json.json_to_string in
+      let state = ResolveJsonState.add_value_information value state in
+      (state,
+       varenv,
+       Some x_name,
+       fun code -> Bind (x_name, Call (Runtime.JSON.parse, [Constructors.strlit jsonized_val]), code))
+    | Fun def ->
+      let {fn_binder = fb; _} = def
+      in
+      let (f, f_name) = name_binder fb in
+      let varenv = VEnv.bind f f_name varenv in
+      let def_header = generate_function varenv [] def in
+      (state,
+       varenv,
+       None,
+       fun code -> LetFun (def_header, code))
+    | Rec defs ->
+      let fs = List.map (fun {fn_binder = fb; _} -> name_binder fb) defs in
+      let varenv =
+        List.fold_left
+          (fun env (n, x) -> VEnv.bind n x env)
+          varenv fs
+      in
+      (state, varenv, None, fun code -> LetRec (List.map (generate_function varenv fs) defs, code))
+    | Alien { binder; object_name; language } ->
+      begin
+        let open ForeignLanguage in
+        (* TODO(dhil): If the foreign language isn't JavaScript,
+           then I think a server-call should be generated. *)
+        match language with
+        | JavaScript ->
+          let (a, _a_name) = name_binder binder in
+          let varenv = VEnv.bind a object_name varenv in
+          state, varenv, None, Code.MetaContinuation.identity
+      end
+    | Module _ -> state, varenv, None, Code.MetaContinuation.identity
 
-  let rec generate_toplevel_bindings : Value.env -> Json.json_state -> venv -> Ir.binding list -> Json.json_state * venv * string list * (code -> code) =
+  let rec generate_toplevel_bindings : Value.env -> Json.json_state -> venv -> Ir.binding list -> Json.json_state * venv * string list * Code.MetaContinuation.t =
     fun valenv state venv ->
       function
-      | []      -> state, venv, [], identity
+      | []      -> state, venv, [], Code.MetaContinuation.identity
       | b :: bs ->
          let state, venv, x, f = generate_toplevel_binding valenv state venv b in
          let state, venv, xs, g = generate_toplevel_bindings valenv state venv bs in
