@@ -358,3 +358,137 @@ module QueryPolicy = struct
   type t = Flat | Nested | Mixing | Delat
     [@@deriving show]
 end
+
+(* Information about the temporality of a table, including the fields that are
+   used for timestamping *)
+module TemporalMetadata = struct
+  type t =
+    | Current
+    | TransactionTime of { tt_from_field: string; tt_to_field: string }
+    | ValidTime       of { vt_from_field: string; vt_to_field: string }
+    | Bitemporal      of
+      { tt_from_field: string; tt_to_field: string;
+        vt_from_field: string; vt_to_field: string }
+
+  let current = Current
+
+  let transaction_time tt_from_field tt_to_field =
+    TransactionTime { tt_from_field; tt_to_field }
+
+  let valid_time vt_from_field vt_to_field =
+    ValidTime { vt_from_field; vt_to_field }
+
+  let bitemporal tt_from_field tt_to_field vt_from_field vt_to_field =
+    Bitemporal { tt_from_field; tt_to_field; vt_from_field; vt_to_field }
+
+  let show =
+    let open Printf in
+    function
+    | Current -> "Current"
+    | TransactionTime { tt_from_field; tt_to_field } ->
+        sprintf "Transaction(%s, %s)" tt_from_field tt_to_field
+    | ValidTime { vt_from_field; vt_to_field } ->
+        sprintf "Valid(%s, %s)" vt_from_field vt_to_field
+    | Bitemporal { tt_from_field; tt_to_field; vt_from_field; vt_to_field } ->
+        sprintf "Bitemporal(%s, %s, %s, %s)" tt_from_field tt_to_field
+          vt_from_field vt_to_field
+
+  let show_term =
+    let open Printf in
+    function
+    | Current -> "current"
+    | TransactionTime { tt_from_field; tt_to_field } ->
+        sprintf "transaction_time(%s, %s)" tt_from_field tt_to_field
+    | ValidTime { vt_from_field; vt_to_field } ->
+        sprintf "valid_time(%s, %s)" vt_from_field vt_to_field
+    | Bitemporal { tt_from_field; tt_to_field; vt_from_field; vt_to_field } ->
+        sprintf "bitemporal(%s, %s, %s, %s)" tt_from_field tt_to_field
+          vt_from_field vt_to_field
+
+  let pp fmt x = Format.pp_print_string fmt (show x)
+
+  module type METADATA_FIELDS = sig
+    val data_field : string
+    val from_field : string
+    val to_field : string
+  end
+
+  module Transaction : METADATA_FIELDS = struct
+    let data_field = "!ttdata"
+    let from_field = "!ttfrom"
+    let to_field = "!ttto"
+  end
+
+  module Valid : METADATA_FIELDS = struct
+    let data_field = "!vtdata"
+    let from_field = "!vtfrom"
+    let to_field = "!vtto"
+  end
+end
+
+(* Temporality of queries, inserts, and temporal joins *)
+module Temporality = struct
+  type t = Current | Transaction | Valid | Bitemporal
+  [@@deriving show]
+
+  let current = Current
+  let transaction = Transaction
+  let valid = Valid
+  let bitemporal = Bitemporal
+end
+
+(* Accessor / Mutation operations *)
+module TemporalOperation = struct
+  (* TODO: Expand when we implement valid time / bitemporal tables *)
+  type table_type =
+    | Transaction
+    | Valid
+    [@@deriving show]
+
+  type field = Data | From | To
+    [@@deriving show]
+
+  type t =
+    | Accessor of table_type * field
+    | Mutator  of field (* Mutators only apply to valid-time tables *)
+    [@@deriving show]
+
+  let name = function
+    | Accessor (Transaction, field) ->
+        begin
+          match field with
+            | From -> "ttFrom"
+            | To -> "ttTo"
+            | Data -> "ttData"
+        end
+    | Accessor (Valid, field) ->
+        begin
+          match field with
+            | From -> "vtFrom"
+            | To -> "vtTo"
+            | Data -> "vtData"
+        end
+    | Mutator field ->
+        begin
+          match field with
+            | From -> "vtSetFrom"
+            | To -> "vtSetFrom"
+            | Data -> "vtSetData"
+        end
+
+  let field = function
+    | (Transaction, field) ->
+        begin
+          match field with
+            | Data -> TemporalMetadata.Transaction.data_field
+            | From -> TemporalMetadata.Transaction.from_field
+            | To -> TemporalMetadata.Transaction.to_field
+        end
+    | (Valid, field) ->
+        begin
+          match field with
+            | Data -> TemporalMetadata.Valid.data_field
+            | From -> TemporalMetadata.Valid.from_field
+            | To -> TemporalMetadata.Valid.to_field
+        end
+end

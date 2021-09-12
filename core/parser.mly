@@ -666,11 +666,56 @@ typed_expression:
 | typed_expression COLON datatype                              { with_pos $loc (TypeAnnotation ($1, datatype $3)) }
 | typed_expression COLON datatype LARROW datatype              { with_pos $loc (Upcast ($1, datatype $3, datatype $5)) }
 
-db_expression:
-| DELETE LPAREN table_generator RPAREN perhaps_where           { let pat, phrase = $3 in with_pos $loc (DBDelete (pat, phrase, $5)) }
-| UPDATE LPAREN table_generator RPAREN
+mode_not_valid:
+| LLARROW                                                      { Temporality.current }
+| LTLARROW                                                     { Temporality.transaction }
+| LBLARROW                                                     { Temporality.bitemporal }
+
+update_expression:
+| UPDATE CURRENT LPAREN pattern LVLARROW exp RPAREN
+         perhaps_where SET LPAREN labeled_exps RPAREN          { with_pos $loc (DBUpdate (None, $4, $6, $8, $11)) }
+
+| UPDATE NONSEQUENCED LPAREN pattern LVLARROW exp RPAREN
+         perhaps_where SET LPAREN valid_time_exps RPAREN       { let exps, from_time, to_time = $11 in
+                                                                 let upd = ValidTimeUpdate (NonsequencedUpdate { from_time; to_time }) in
+                                                                 with_pos $loc (DBUpdate (Some upd, $4, $6, $8, exps)) }
+| UPDATE SEQUENCED LPAREN pattern LVLARROW exp RPAREN
+         BETWEEN LPAREN exp COMMA exp RPAREN perhaps_where
+         SET LPAREN labeled_exps RPAREN                        { let upd = ValidTimeUpdate (SequencedUpdate { validity_from = $10; validity_to = $12 }) in
+                                                                 with_pos $loc (DBUpdate (Some upd, $4, $6, $14, $17)) }
+| UPDATE LPAREN pattern mode_not_valid exp RPAREN
          perhaps_where
-         SET LPAREN labeled_exps RPAREN                        { let pat, phrase = $3 in with_pos $loc (DBUpdate(pat, phrase, $5, $8)) }
+         SET LPAREN labeled_exps RPAREN                        { let upd =
+                                                                   match $4 with
+                                                                     | Temporality.Current -> None
+                                                                     | Temporality.Transaction -> Some TransactionTimeUpdate
+                                                                     | Temporality.Valid -> assert false
+                                                                     | Temporality.Bitemporal -> assert false (* not yet supported *) in
+                                                                 with_pos $loc (DBUpdate (upd, $3, $5, $7, $10)) }
+
+delete_expression:
+| DELETE CURRENT LPAREN pattern LVLARROW exp RPAREN
+         perhaps_where                                         { let upd = ValidTimeDeletion CurrentDeletion in
+                                                                 with_pos $loc (DBDelete (Some upd, $4, $6, $8)) }
+| DELETE NONSEQUENCED LPAREN pattern LVLARROW exp RPAREN
+         perhaps_where                                         { let upd = ValidTimeDeletion NonsequencedDeletion in
+                                                                 with_pos $loc (DBDelete (Some upd, $4, $6, $8)) }
+| DELETE SEQUENCED LPAREN pattern LVLARROW exp RPAREN
+         BETWEEN LPAREN exp COMMA exp RPAREN perhaps_where     { let upd = ValidTimeDeletion (SequencedDeletion { validity_from = $10; validity_to = $12 }) in
+                                                                 with_pos $loc (DBDelete (Some upd, $4, $6, $14)) }
+
+| DELETE LPAREN pattern mode_not_valid exp RPAREN
+    perhaps_where                                              { let upd =
+                                                                   match $4 with
+                                                                     | Temporality.Current -> None
+                                                                     | Temporality.Transaction -> Some TransactionTimeDeletion
+                                                                     | Temporality.Valid -> assert false
+                                                                     | Temporality.Bitemporal -> assert false (* unsupported *) in
+                                                                 with_pos $loc (DBDelete (upd, $3, $5, $7)) }
+
+db_expression:
+| delete_expression                                            { $1 }
+| update_expression                                            { $1 }
 
 /* XML */
 xmlid:
