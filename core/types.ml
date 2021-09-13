@@ -136,7 +136,7 @@ and typ =
   | Lolli of (typ * row * typ)
   | Record of row
   | Variant of row
-  | Table of (typ * typ * typ)
+  | Table of (Temporality.t * typ * typ * typ)
   | Lens of Lens.Type.t
   | ForAll of (Quantifier.t list * typ)
   (* Effect *)
@@ -352,11 +352,11 @@ struct
       | Variant row ->
          let (o, row') = o#row row in
          (o, Variant row')
-      | Table (read, write, needed) ->
+      | Table (temporality, read, write, needed) ->
          let (o, read') = o#typ read in
          let (o, write') = o#typ write in
          let (o, needed') = o#typ needed in
-         (o, Table (read', write', needed'))
+         (o, Table (temporality, read', write', needed'))
       | Lens _ -> assert false (* TODO FIXME *)
       | ForAll (names, body) ->
          let (o, names') = o#list (fun o -> o#quantifier) names in
@@ -1143,7 +1143,7 @@ let free_type_vars, free_row_type_vars, free_tyarg_vars =
     | Lolli (f, m, t)         ->
        S.union_all [free_type_vars' rec_vars f; free_row_type_vars' rec_vars m; free_type_vars' rec_vars t]
     | Effect row | Record row | Variant row -> free_row_type_vars' rec_vars row
-    | Table (r, w, n)         ->
+    | Table (_, r, w, n)         ->
        S.union_all
          [free_type_vars' rec_vars r; free_type_vars' rec_vars w; free_type_vars' rec_vars n]
     | Lens _          -> S.empty
@@ -1340,7 +1340,7 @@ and subst_dual_type : var_map -> datatype -> datatype =
   | Record row -> Record (sdr row)
   | Variant row -> Variant (sdr row)
   | Effect row -> Effect (sdr row)
-  | Table (r, w, n) -> Table (sdt r, sdt w, sdt n)
+  | Table (t, r, w, n) -> Table (t, sdt r, sdt w, sdt n)
   | Lens _sort -> t
   (* TODO: we could do a check to see if we can preserve aliases here *)
   | Alias (_, t) -> sdt t
@@ -1543,8 +1543,8 @@ and normalise_datatype rec_names t =
   | Record row              -> Record (nr row)
   | Variant row             -> Variant (nr row)
   | Effect row              -> Effect (nr row)
-  | Table (r, w, n)         ->
-     Table (nt r, nt w, nt n)
+  | Table (t, r, w, n)         ->
+     Table (t, nt r, nt w, nt n)
   | Lens sort               -> Lens sort
   | Alias ((name, qs, ts, is_dual), datatype) ->
      Alias ((name, qs, ts, is_dual), nt datatype)
@@ -1838,7 +1838,7 @@ struct
        (fbtv f) @ (free_bound_row_type_vars bound_vars m) @ (fbtv t)
     | Record row
       | Variant row -> free_bound_row_type_vars bound_vars row
-    | Table (r, w, n) -> (fbtv r) @ (fbtv w) @ (fbtv n)
+    | Table (_, r, w, n) -> (fbtv r) @ (fbtv w) @ (fbtv n)
     | Lens _ -> []
     | ForAll (tyvars, body) ->
        let bound_vars, vars =
@@ -2555,12 +2555,11 @@ struct
             (if is_tuple ur then string_of_tuple context r
              else "(" ^ row "," context p (Row r) ^ ")")
          | Variant r -> "[|" ^ row "|" context p r ^ "|]"
-         | Table (r, w, n)   ->
+         | Table (t, r, w, n)   ->
             (* TODO: pretty-print this using constraints? *)
-            "TableHandle(" ^
-              sd r ^ "," ^
-                sd w ^ "," ^
-                  sd n ^ ")"
+            Printf.sprintf "TableHandle(%s, %s, %s, %s)"
+                (Temporality.show t)
+                (sd r) (sd w) (sd n)
          | Lens _typ ->
             let open Lens in
             let sort = Type.sort _typ in

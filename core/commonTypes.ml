@@ -361,6 +361,11 @@ end
 
 (* Information about the temporality of a table, including the fields that are
    used for timestamping *)
+(* FIXME: I've decided not to do this at the level of types anymore. The only place we
+   needed it before was for nonsequenced updates, in order to allow direct access to the
+   timestamping fields. I think we would be better to just add in an access operation instead.
+   This therefore should me moved to sugartypes, value, or its own file.
+ *)
 module TemporalMetadata = struct
   type t =
     | Current
