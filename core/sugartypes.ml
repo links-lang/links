@@ -195,7 +195,7 @@ module Datatype = struct
     | Record          of row
     | Variant         of row
     | Effect          of row
-    | Table           of with_pos * with_pos * with_pos
+    | Table           of Temporality.t * with_pos * with_pos * with_pos
     | List            of with_pos
     | TypeApplication of string * type_arg list
     | Primitive       of Primitive.t
@@ -391,7 +391,7 @@ and handler_parameterisation =
   }
 and iterpatt =
   | List  of Pattern.with_pos * phrase
-  | Table of Pattern.with_pos * phrase
+  | Table of Temporality.t * Pattern.with_pos * phrase
 and valid_time_update =
   (* Update current row, terminating previous end period and creating new row *)
   | CurrentUpdate
@@ -710,10 +710,10 @@ struct
     | Iteration (generators, body, where, orderby) ->
         let xs = union_map (function
                              | List (_, source)
-                             | Table (_, source) -> phrase source) generators in
+                             | Table (_, _, source) -> phrase source) generators in
         let pat_bound = union_map (function
                                   | List (pat, _)
-                                  | Table (pat, _) -> pattern pat) generators in
+                                  | Table (_, pat, _) -> pattern pat) generators in
           union_all [xs;
                      diff (phrase body) pat_bound;
                      diff (option_map phrase where) pat_bound;

@@ -114,7 +114,8 @@ object (o : 'self_type)
                    let xb = binder ~ty:element_type var in
                      o, (e::es, with_dummy_pos (Pattern.As (xb, p))::ps,
                          var::xs, element_type::ts)
-               | Table (p, e) ->
+               (* Iterator temporality only needed for typechecking *)
+               | Table (_t, p, e) ->
                    let (o, e, t) = o#phrase e in
                    let (o, p) = o#pattern p in
 

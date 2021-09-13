@@ -794,13 +794,17 @@ perhaps_generators:
 
 generator:
 | list_generator                                               { List  (fst $1, snd $1) }
-| table_generator                                              { Table (fst $1, snd $1) }
+| table_generator                                              { let (temp, pat, phr) = $1 in Table (temp, pat, phr) }
 
 list_generator:
 | pattern LARROW exp                                           { ($1, $3) }
 
+
 table_generator:
-| pattern LLARROW exp                                          { ($1, $3) }
+| pattern LLARROW exp                                          { (TableMode.current, $1, $3) }
+| pattern LTLARROW exp                                         { (TableMode.transaction, $1, $3) }
+| pattern LVLARROW exp                                         { (TableMode.valid, $1, $3) }
+| pattern LBLARROW exp                                         { (TableMode.bitemporal, $1, $3) }
 
 perhaps_where:
 | /* empty */                                                  { None    }

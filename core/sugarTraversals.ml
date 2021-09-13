@@ -586,9 +586,9 @@ class map =
       | List ((_x, _x_i1)) ->
           let _x = o#pattern _x in
           let _x_i1 = o#phrase _x_i1 in List ((_x, _x_i1))
-      | Table ((_x, _x_i1)) ->
+      | Table ((_t, _x, _x_i1)) ->
           let _x = o#pattern _x in
-          let _x_i1 = o#phrase _x_i1 in Table ((_x, _x_i1))
+          let _x_i1 = o#phrase _x_i1 in Table ((_t, _x, _x_i1))
 
     method funlit : funlit -> funlit =
       fun f ->
@@ -659,10 +659,10 @@ class map =
       | Record _x -> let _x = o#row _x in Record _x
       | Variant _x -> let _x = o#row _x in Variant _x
       | Effect r -> let r = o#row r in Effect r
-      | Table (_x, _x_i1, _x_i2) ->
+      | Table (_t, _x, _x_i1, _x_i2) ->
          let _x = o#datatype _x in
          let _x_i1 = o#datatype _x_i1 in
-         let _x_i2 = o#datatype _x_i2 in Table (_x, _x_i1, _x_i2)
+         let _x_i2 = o#datatype _x_i2 in Table (_t, _x, _x_i1, _x_i2)
       | List _x -> let _x = o#datatype _x in List _x
       | TypeApplication (_x, _x_i1) ->
           let _x = o#name _x in
@@ -1356,7 +1356,7 @@ class fold =
       function
       | List ((_x, _x_i1)) ->
           let o = o#pattern _x in let o = o#phrase _x_i1 in o
-      | Table ((_x, _x_i1)) ->
+      | Table ((_t, _x, _x_i1)) ->
           let o = o#pattern _x in let o = o#phrase _x_i1 in o
 
     method funlit : funlit -> 'self_type =
@@ -1419,8 +1419,10 @@ class fold =
       | Record _x -> let o = o#row _x in o
       | Variant _x -> let o = o#row _x in o
       | Effect r -> let o = o#row r in o
-      | Table (_x, _x_i1, _x_i2) ->
-          let o = o#datatype _x in let o = o#datatype _x_i1 in let o = o#datatype _x_i2 in o
+      | Table (_t, _x, _x_i1, _x_i2) ->
+          let o = o#datatype _x in
+          let o = o#datatype _x_i1 in
+          let o = o#datatype _x_i2 in o
       | List _x -> let o = o#datatype _x in o
       | TypeApplication (_x, _x_i1) ->
           let o = o#name _x in
@@ -2224,9 +2226,9 @@ class fold_map =
       | List ((_x, _x_i1)) ->
           let (o, _x) = o#pattern _x in
           let (o, _x_i1) = o#phrase _x_i1 in (o, (List ((_x, _x_i1))))
-      | Table ((_x, _x_i1)) ->
+      | Table ((_t, _x, _x_i1)) ->
           let (o, _x) = o#pattern _x in
-          let (o, _x_i1) = o#phrase _x_i1 in (o, (Table ((_x, _x_i1))))
+          let (o, _x_i1) = o#phrase _x_i1 in (o, (Table ((_t, _x, _x_i1))))
 
     method funlit : funlit -> ('self_type * funlit) =
       fun f ->
@@ -2308,10 +2310,10 @@ class fold_map =
       | Record _x -> let (o, _x) = o#row _x in (o, (Record _x))
       | Variant _x -> let (o, _x) = o#row _x in (o, (Variant _x))
       | Effect r -> let (o, r) = o#row r in (o, Effect r)
-      | Table (_x, _x_i1, _x_i2) ->
+      | Table (_t, _x, _x_i1, _x_i2) ->
           let (o, _x) = o#datatype _x in
           let (o, _x_i1) = o#datatype _x_i1 in
-          let (o, _x_i2) = o#datatype _x_i2 in (o, (Table (_x, _x_i1, _x_i2)))
+          let (o, _x_i2) = o#datatype _x_i2 in (o, (Table (_t, _x, _x_i1, _x_i2)))
       | List _x -> let (o, _x) = o#datatype _x in (o, (List _x))
       | TypeApplication (_x, _x_i1) ->
           let (o, _x) = o#string _x in
