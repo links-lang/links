@@ -435,8 +435,11 @@ end
 module rec Websockets : WEBSOCKETS =
 struct
 
+  (* TODO(dhil): The field `_client_id` is never read. It seems that
+     the client ID is manually threaded through every function. This
+     module possibly warrants a refactor/redesign at some point. *)
   type links_websocket = {
-    client_id : client_id;
+    _client_id : client_id;
     send_fn : Websocket.Frame.t option -> unit
   }
 
@@ -464,7 +467,7 @@ struct
       | _ -> None
 
   let make_links_websocket cid send_fn = {
-    client_id = cid;
+    _client_id = cid;
     send_fn = send_fn
   }
 
