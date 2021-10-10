@@ -49,3 +49,5 @@ val row_present_types : Types.datatype -> Types.datatype Utility.StringMap.t
 val pack_types : Types.datatype list -> Types.datatype
 
 val from_present : Types.field_spec -> Types.datatype
+
+val temporal_op_return_type : TemporalOperation.t -> Types.datatype -> Types.datatype

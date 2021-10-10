@@ -649,7 +649,7 @@ class transform (env : Types.typing_environment) =
       | TemporalOp (op, target, args) ->
           let (o, target, target_ty) = o#phrase target in
           let (o, args, _) = list o (fun o -> o#phrase) args in
-          let ty = TypeUtils.metadata_operation_type op target_ty in
+          let ty = TypeUtils.temporal_op_return_type op target_ty in
           (o, TemporalOp (op, target, args), ty)
       | DBTemporalJoin (mode, body, Some t) ->
           let (o, body, _) =
