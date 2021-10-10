@@ -444,56 +444,50 @@ end
 
 (* Accessor / Mutation operations *)
 module TemporalOperation = struct
-  (* TODO: Expand when we implement valid time / bitemporal tables *)
-  type table_type =
-    | Transaction
-    | Valid
-    [@@deriving show]
-
   type field = Data | From | To
     [@@deriving show]
 
+  (* TODO: We might only need accessors. If that's the case,
+     then we might be able to simplify this further.
+     Conversely, we might need it for things like grabbing the to/from
+     times in a nonsequenced update. *)
   type t =
-    | Accessor of table_type * field
-    | Mutator  of field (* Mutators only apply to valid-time tables *)
+    | Accessor of Temporality.t * field
     [@@deriving show]
 
   let name = function
-    | Accessor (Transaction, field) ->
+    | Accessor (Temporality.Transaction, field) ->
         begin
           match field with
             | From -> "ttFrom"
             | To -> "ttTo"
             | Data -> "ttData"
         end
-    | Accessor (Valid, field) ->
+    | Accessor (Temporality.Valid, field) ->
         begin
           match field with
             | From -> "vtFrom"
             | To -> "vtTo"
             | Data -> "vtData"
         end
-    | Mutator field ->
-        begin
-          match field with
-            | From -> "vtSetFrom"
-            | To -> "vtSetFrom"
-            | Data -> "vtSetData"
-        end
+    | Accessor (_, _) -> assert false
 
   let field = function
-    | (Transaction, field) ->
+    | (Temporality.Transaction, field) ->
         begin
           match field with
             | Data -> TemporalMetadata.Transaction.data_field
             | From -> TemporalMetadata.Transaction.from_field
             | To -> TemporalMetadata.Transaction.to_field
         end
-    | (Valid, field) ->
+    | (Temporality.Valid, field) ->
         begin
           match field with
             | Data -> TemporalMetadata.Valid.data_field
             | From -> TemporalMetadata.Valid.from_field
             | To -> TemporalMetadata.Valid.to_field
         end
+    | _ ->
+        (* No way of constructing an accessor for other temporalities. *)
+        assert false
 end

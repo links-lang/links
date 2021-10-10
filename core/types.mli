@@ -137,7 +137,7 @@ and typ =
   | Lolli of (typ * row * typ)
   | Record of row
   | Variant of row
-  | Table of (typ * typ * typ)
+  | Table of (Temporality.t * typ * typ * typ)
   | Lens of Lens.Type.t
   | ForAll of (Quantifier.t list * typ)
   (* Effect *)
@@ -374,7 +374,7 @@ val make_list_type : datatype -> datatype
 val make_process_type : row -> datatype
 val make_record_type  : datatype field_env -> datatype
 val make_variant_type : datatype field_env -> datatype
-val make_table_type : datatype * datatype * datatype -> datatype
+val make_table_type : Temporality.t * datatype * datatype * datatype -> datatype
 val make_endbang_type : datatype
 
 (** subtyping *)

@@ -394,51 +394,18 @@ let from_present : Types.field_spec -> Types.datatype = function
   | Present t -> t
   | _ -> raise Types.tag_expectation_mismatch
 
+(*
+let table_temporality : Types.t -> Temporality.t = fun x ->
+  match concrete_type x with
+      | Table (temp, _r, _w, _n) -> temp
+      | _ -> error ("Attempt to get temporality of non-table type " ^ string_of_datatype x)
+      *)
 
-(* SJF FIXME: Likely need to deal with records here, as I believe there's some desugaring *)
-let rec metadata_payload_type t =
-  match concrete_type t with
-    | ForAll (_, t) -> metadata_payload_type t
-    | Table (_, r, _w, _n) -> Record (extract_row r)
-    (*
-    | Record (fields, _, _) ->
-        (* SJF: Really need to sort this out *)
-        begin
-          match StringMap.lookup (TemporalMetadata.Transaction.data_field) fields with
-            | Some (`Present typ) ->
-                typ
-            | _ ->
-                begin
-                  match StringMap.lookup (TemporalMetadata.Valid.data_field) fields with
-                    | Some (`Present typ) -> typ
-                    | _ -> error ("Attempt to deconstruct non-metadata type "^string_of_datatype t)
-                end
-        end
-    | `Table (row, _, _, _) -> row
-    *)
-    | t ->
-        error ("Attempt to deconstruct non-metadata type "^string_of_datatype t)
-
-let metadata_operation_type op t =
+(* Returns the result type of a temporal operation, given the table type. *)
+let temporal_op_return_type op t =
   let open TemporalOperation in
-  let accessor_type temporality field =
-    match tbl with
-      | Transaction
-      | Valid ->
-          begin
-            match field with
-              | Data -> metadata_payload_type t
-              | From | To -> `Primitive (Primitive.DateTime)
-          end
-    in
-  let demotion_type =
-    let row = metadata_payload_type t in
-    `Table (row,
-      `Record (Types.make_empty_closed_row ()),
-      `Record (Types.make_empty_closed_row ()),
-      Types.make_table_metadata_var (TemporalMetadata.current true)) in
   match op with
-    | Accessor (tbl, field) -> accessor_type tbl field
-    | Mutator Data -> metadata_payload_type t
-    | Mutator From | Mutator To -> `Primitive (Primitive.DateTime)
-    | Demotion _ -> demotion_type
+    | Accessor (_, Data) ->
+        Record (table_read_type t)
+    | Accessor (_, From) | Accessor (_, To) ->
+        Primitive (Primitive.DateTime)

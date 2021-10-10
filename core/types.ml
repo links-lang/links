@@ -3964,11 +3964,23 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           in
           StringBuffer.write buf ret)
 
-  and table : (typ * typ * typ) printer
+(*
+    let full_name : unit printer
+      = Printer (fun _ctx () buf ->
+            StringBuffer.write buf "(";
+            StringBuffer.write buf (Linearity.to_string lin);
+            StringBuffer.write buf ",";
+            StringBuffer.write buf (Restriction.to_string res);
+            StringBuffer.write buf ")"
+          )
+    in
+*)
+  and table : (Temporality.t * typ * typ * typ) printer
     = let open Printer in
-      Printer (fun ctx (r, w, n) buf ->
+      Printer (fun ctx (t, r, w, n) buf ->
           let ctx = Context.toplevel ctx in
           StringBuffer.write buf "TableHandle(";
+          StringBuffer.write buf (Temporality.show t ^ ",");
           Printer.concat_items ~sep:"," datatype [ r ;  w ;  n ] ctx buf;
           StringBuffer.write buf ")")
 
@@ -4329,7 +4341,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
     | Function (f, m, t)      -> union [make_env boundvars f; make_env boundvars m; make_env boundvars t]
     | Lolli (f, m, t)         -> union [make_env boundvars f; make_env boundvars m; make_env boundvars t]
     | Effect row | Record row | Variant row -> make_env boundvars row
-    | Table (r, w, n)         -> union [make_env boundvars r; make_env boundvars w; make_env boundvars n]
+    | Table (_, r, w, n)         -> union [make_env boundvars r; make_env boundvars w; make_env boundvars n]
     | Lens _                  -> empties
     | Alias ((_, _, ts, _), d) -> union (List.map (make_env_ta boundvars) ts @ [make_env boundvars d])
     | Application (_, ds)     -> union (List.map (make_env_ta boundvars) ds)
@@ -4610,7 +4622,7 @@ let make_closed_row : datatype field_env -> row =
 let make_record_type ts = Record (make_closed_row ts)
 let make_variant_type ts = Variant (make_closed_row ts)
 
-let make_table_type (r, w, n) = Table (r, w, n)
+let make_table_type (t, r, w, n) = Table (t, r, w, n)
 let make_endbang_type : datatype = Alias (("EndBang", [], [], false), Output (unit_type, End))
 
 let make_function_type : ?linear:bool -> datatype list -> row -> datatype -> datatype
