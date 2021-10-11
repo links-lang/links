@@ -76,7 +76,7 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
         | Record row -> Record (instr row)
         | Variant row -> Variant (instr row)
         | Effect row -> Effect (instr row)
-        | Table (f, d, r) -> Table (inst f, inst d, inst r)
+        | Table (tmp, f, d, r) -> Table (tmp, inst f, inst d, inst r)
         | ForAll (qs, t) ->
            let remove_shadowed_quantifier tmap q =
              let var = Quantifier.to_var q in

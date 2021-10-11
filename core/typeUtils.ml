@@ -165,19 +165,19 @@ let rec element_type ?(overstep_quantifiers=true) t = match (concrete_type t, ov
 
 let rec table_read_type t = match concrete_type t with
   | ForAll (_, t) -> table_read_type t
-  | Table (r, _, _) -> r
+  | Table (_, r, _, _) -> r
   | t ->
       error ("Attempt to take read type of non-table: " ^ string_of_datatype t)
 
 let rec table_write_type t = match concrete_type t with
   | ForAll (_, t) -> table_write_type t
-  | Table (_, w, _) -> w
+  | Table (_, _, w, _) -> w
   | t ->
       error ("Attempt to take write type of non-table: " ^ string_of_datatype t)
 
 let rec table_needed_type t = match concrete_type t with
   | ForAll (_, t) -> table_needed_type t
-  | Table (_, _, n) -> n
+  | Table (_, _, _, n) -> n
   | t ->
       error ("Attempt to take needed type of non-table: " ^ string_of_datatype t)
 
@@ -335,7 +335,7 @@ let check_type_wellformedness primary_kind t : unit =
     | Variant row ->
        irow row;
        pk_type
-    | Table (f, d, r) ->
+    | Table (_, f, d, r) ->
        idatatype f; idatatype d; idatatype r;
        pk_type
     | Lens _s ->
