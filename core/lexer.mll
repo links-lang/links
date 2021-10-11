@@ -130,6 +130,7 @@ let keywords = [
  "typename" , TYPENAME;
  "update"   , UPDATE;
  "unsafe"   , UNSAFE;
+ "using"    , USING;
  "values"   , VALUES;
  "var"      , VAR;
  "where"    , WHERE;

@@ -389,6 +389,16 @@ and handler_parameterisation =
   { shp_bindings : (Pattern.with_pos * phrase) list
   ; shp_types    : Types.datatype list
   }
+and table_lit = {
+    tbl_name: phrase;
+    tbl_type:
+        (Temporality.t * Datatype.with_pos * (Types.datatype *
+         Types.datatype * Types.datatype) option);
+    tbl_field_constraints: (Name.t * fieldconstraint list) list;
+    tbl_keys: phrase;
+    tbl_temporal_fields: (string * string) option;
+    tbl_database: phrase
+}
 and iterpatt =
   | List  of Pattern.with_pos * phrase
   | Table of Temporality.t * Pattern.with_pos * phrase
@@ -457,9 +467,7 @@ and phrasenode =
                           Types.datatype option
   | Receive          of (Pattern.with_pos * phrase) list * Types.datatype option
   | DatabaseLit      of phrase * (phrase option * phrase option)
-  | TableLit         of phrase * (Datatype.with_pos * (Types.datatype *
-                           Types.datatype * Types.datatype) option) *
-                          (Name.t * fieldconstraint list) list * phrase * phrase
+  | TableLit         of table_lit
   | DBDelete         of temporal_deletion option * Pattern.with_pos * phrase * phrase option
   | DBInsert         of Temporality.t * phrase * Name.t list * phrase * phrase option
   | DBUpdate         of temporal_update option * Pattern.with_pos * phrase *
@@ -697,7 +705,8 @@ struct
         union_all [phrase p; option_map phrase popt1; option_map phrase popt2]
     | DBInsert (_, p1, _labels, p2, popt) ->
         union_all [phrase p1; phrase p2; option_map phrase popt]
-    | TableLit (p1, _, _, _, p2) -> union (phrase p1) (phrase p2)
+    | TableLit { tbl_name; tbl_database; _ } ->
+        union (phrase tbl_name) (phrase tbl_database)
     | Xml (_, attrs, attrexp, children) ->
         union_all
           [union_map (snd ->- union_map phrase) attrs;

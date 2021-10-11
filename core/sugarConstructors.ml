@@ -297,6 +297,26 @@ module SugarConstructors (Position : Pos)
         };
     }
 
+  (** Tables *)
+  let table ?(ppos=dp) ~tbl_keys tbl_name tbl_type
+    tbl_field_constraints temporal tbl_database =
+    let tbl_keys = OptionUtils.from_option (list ~ppos []) tbl_keys in
+    let (tmp, tbl_temporal_fields) =
+      match temporal with
+        | None -> (Temporality.current, None)
+        | Some (tmp, fields) ->
+            (tmp, Some fields)
+    in
+    let tbl_type = (tmp, tbl_type, None) in
+    with_pos ppos
+    (TableLit {
+        tbl_name;
+        tbl_type;
+        tbl_field_constraints;
+        tbl_keys;
+        tbl_temporal_fields;
+        tbl_database
+    })
 end
 
 (* Positions module based on standard Sugartypes positions. *)

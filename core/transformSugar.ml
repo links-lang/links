@@ -608,14 +608,29 @@ class transform (env : Types.typing_environment) =
           let (o, data, _) = o#phrase data in
           let (o, t) = o#datatype t in
             (o, LensPutLit (lens, data, Some t), Types.make_list_type t)
-      | TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db) ->
-          let (o, name, _) = o#phrase name in
-          let (o, db, _) = o#phrase db in
+      | TableLit {
+            tbl_name;
+            tbl_type = (tmp, dtype, Some (read_row, write_row, needed_row));
+            tbl_field_constraints;
+            tbl_keys; tbl_temporal_fields; tbl_database
+         } ->
+          let (o, tbl_name, _) = o#phrase tbl_name in
+          let (o, tbl_database, _) = o#phrase tbl_database in
           let (o, dtype) = o#sugar_datatype dtype in
           let (o, read_row) = o#datatype read_row in
           let (o, write_row) = o#datatype write_row in
           let (o, needed_row) = o#datatype needed_row in
-            (o, TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db), Table (read_row, write_row, needed_row))
+          let tbl =
+              TableLit {
+                  tbl_name;
+                  tbl_type = (tmp, dtype, Some (read_row, write_row, needed_row));
+                  tbl_field_constraints;
+                  tbl_keys;
+                  tbl_temporal_fields;
+                  tbl_database
+              }
+          in
+          (o, tbl, Table (tmp, read_row, write_row, needed_row))
       | DBDelete (del, p, from, where) ->
           let (o, del) = optionu o (fun o -> o#temporal_deletion) del in
           let (o, from, _) = o#phrase from in
