@@ -331,6 +331,7 @@ let parse_foreign_language pos lang =
 %token TYPENAME
 %token TRY OTHERWISE RAISE
 %token <string> OPERATOR
+%token USING
 
 %start just_datatype
 %start interactive
@@ -801,10 +802,10 @@ list_generator:
 
 
 table_generator:
-| pattern LLARROW exp                                          { (TableMode.current, $1, $3) }
-| pattern LTLARROW exp                                         { (TableMode.transaction, $1, $3) }
-| pattern LVLARROW exp                                         { (TableMode.valid, $1, $3) }
-| pattern LBLARROW exp                                         { (TableMode.bitemporal, $1, $3) }
+| pattern LLARROW exp                                          { (Temporality.current, $1, $3) }
+| pattern LTLARROW exp                                         { (Temporality.transaction, $1, $3) }
+| pattern LVLARROW exp                                         { (Temporality.valid, $1, $3) }
+| pattern LBLARROW exp                                         { (Temporality.bitemporal, $1, $3) }
 
 perhaps_where:
 | /* empty */                                                  { None    }
@@ -815,18 +816,21 @@ perhaps_orderby:
 | ORDERBY LPAREN exps RPAREN                                   { Some (orderby_tuple ~ppos:$loc($3) $3) }
 
 escape_expression:
-| ESCAPE VARIABLE IN exp                        { with_pos $loc (Escape (binder ~ppos:$loc($2) $2, $4)) }
+| ESCAPE VARIABLE IN exp                                       { with_pos $loc (Escape (binder ~ppos:$loc($2) $2, $4)) }
 
 formlet_expression:
 | FORMLET xml YIELDS exp                                       { with_pos $loc (Formlet ($2, $4)) }
 | PAGE xml                                                     { with_pos $loc (Page $2)          }
 
+temporal:
+| USING temporality LPAREN field_name COMMA field_name RPAREN  { ($2, Some ($4, $6)) }
+
+table_keys:
+| TABLEKEYS expr                                               { with_pos $loc $2 }
+
 table_expression:
-| TABLE exp WITH datatype perhaps_table_constraints FROM exp   { with_pos $loc (TableLit ($2, datatype $4, $5,
-                                                                                          list ~ppos:$loc [], $7)) }
-/* SAND */
 | TABLE exp WITH datatype perhaps_table_constraints
-            TABLEKEYS exp FROM exp                             { with_pos $loc (TableLit ($2, datatype $4, $5, $7, $9))}
+    option(table_keys) option(temporal) FROM exp               { table ~ppos:$loc ~tbl_keys:$6 $2 $4 $5 $7 $9}
 
 perhaps_table_constraints:
 | loption(preceded(WHERE, table_constraints))                  { $1 }

@@ -376,24 +376,30 @@ class map =
                let _x_i1 = o#option (fun o -> o#phrase) _x_i1 in (_x, _x_i1))
               _x_i1
           in DatabaseLit ((_x, _x_i1))
-      | TableLit ((_x, (y, z), _x_i2, _x_i3, _x_i4)) ->
-          let _x = o#phrase _x in
-          let y = o#datatype y in
-          let z = o#option
+      | TableLit { tbl_name; tbl_type = (tmp, dt, rows_opt);
+          tbl_field_constraints;
+          tbl_keys; tbl_temporal_fields; tbl_database } ->
+          let tbl_name = o#phrase tbl_name in
+          let dt = o#datatype dt in
+          let rows_opt = o#option
             (fun o (a, b, c) ->
               let a = o#typ a in
               let b = o#typ b in
               let c = o#typ c in
-              (a, b, c)) z in
-          let _x_i2 =
+              (a, b, c)) rows_opt in
+          let tbl_field_constraints =
             o#list
               (fun o (_x, _x_i1) ->
                  let _x = o#name _x in
                  let _x_i1 = o#list (fun o -> o#fieldconstraint) _x_i1
                  in (_x, _x_i1))
-              _x_i2 in
-          let _x_i3 = o#phrase _x_i3 in
-      let _x_i4 = o#phrase _x_i4 in TableLit ((_x, (y, z), _x_i2, _x_i3, _x_i4))
+              tbl_field_constraints in
+          let tbl_keys = o#phrase tbl_keys in
+          let tbl_database = o#phrase tbl_database in
+          let tbl_type = (tmp, dt, rows_opt) in
+          TableLit
+            { tbl_name; tbl_type; tbl_field_constraints;
+              tbl_keys; tbl_temporal_fields; tbl_database }
       | LensLit ((_x, _x_i1)) ->
           let _x = o#phrase _x in
           let _x_i1 = o#option (fun o -> o#unknown) _x_i1 in
@@ -1167,22 +1173,24 @@ class fold =
                let o = o#option (fun o -> o#phrase) _x_i1 in o)
               _x_i1
           in o
-      | TableLit ((_x, (y,z), _x_i2, _x_i3, _x_i4)) ->
-          let o = o#phrase _x in
-          let o = o#datatype y in
+      | TableLit { tbl_name; tbl_type = (_, dt, rows_opt);
+          tbl_field_constraints;
+          tbl_keys; tbl_database; _ } ->
+          let o = o#phrase tbl_name in
+          let o = o#datatype dt in
           let o = o#option
             (fun o r ->
                let o = o#unknown r in
-                 o) z in
+                 o) rows_opt in
           let o =
             o#list
               (fun o (_x, _x_i1) ->
                  let o = o#name _x in
                  let o = o#list (fun o -> o#fieldconstraint) _x_i1 in o)
-              _x_i2 in
-          let o = o#phrase _x_i3 in
-      let o = o#phrase _x_i4 in
-        o
+              tbl_field_constraints in
+          let o = o#phrase tbl_keys in
+          let o = o#phrase tbl_database in
+          o
       | TemporalOp (_op, p, args) ->
           let o = o#phrase p in
           let o = o#list (fun o -> o#phrase) args in
@@ -1977,30 +1985,38 @@ class fold_map =
                in (o, (_x, _x_i1)))
               _x_i1
           in (o, (DatabaseLit ((_x, _x_i1))))
+      | TableLit { tbl_name; tbl_type; tbl_field_constraints;
+          tbl_keys; tbl_temporal_fields; tbl_database } ->
+            (*
       | TableLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4)) ->
-          let (o, _x) = o#phrase _x in
-          let (o, _x_i1) =
-            (fun (_x, _x_i1) ->
-               let (o, _x) = o#datatype _x in
-               let (o, _x_i1) =
+          *)
+          let (o, tbl_name) = o#phrase tbl_name in
+          let (o, tbl_type) =
+            (fun (tmp, dt, rows_opt) ->
+               let (o, dt) = o#datatype dt in
+               let (o, rows_opt) =
                  o#option
                    (fun o (a, b, c) ->
                      let o, a = o#typ a in
                      let o, b = o#typ b in
                      let o, c = o#typ c in
-                     o, (a, b, c)) _x_i1
-               in (o, (_x, _x_i1)))
-              _x_i1 in
-          let (o, _x_i2) =
+                     o, (a, b, c)) rows_opt
+               in (o, (tmp, dt, rows_opt)))
+              tbl_type in
+          let (o, tbl_field_constraints) =
             o#list
               (fun o (_x, _x_i1) ->
                  let (o, _x) = o#name _x in
                  let (o, _x_i1) = o#list (fun o -> o#fieldconstraint) _x_i1
                  in (o, (_x, _x_i1)))
-              _x_i2 in
-          let (o, _x_i3) = o#phrase _x_i3 in
-          let (o, _x_i4) = o#phrase _x_i4
-          in (o, (TableLit ((_x, _x_i1, _x_i2, _x_i3, _x_i4))))
+              tbl_field_constraints in
+          let (o, tbl_keys) = o#phrase tbl_keys in
+          let (o, tbl_database) = o#phrase tbl_database in
+          let tbl =
+            TableLit { tbl_name; tbl_type; tbl_field_constraints;
+            tbl_keys; tbl_temporal_fields; tbl_database }
+          in
+          (o, tbl)
       | TemporalOp (op, p, args) ->
           let (o, p) = o#phrase p in
           let (o, args) = o#list (fun o -> o#phrase) args in
