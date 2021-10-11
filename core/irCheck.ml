@@ -315,9 +315,10 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
            Variant r -> eq_rows (context, l, r)
          | _          -> false
          end
-      | Table (lt1, lt2, lt3) ->
+      | Table (tmp1, lt1, lt2, lt3) ->
          begin match t2 with
-         | Table (rt1, rt2, rt3) ->
+         | Table (tmp2, rt1, rt2, rt3) ->
+            tmp1 = tmp2 &&
             eqt (context, lt1, rt1) &&
             eqt (context, lt2, rt2) &&
             eqt (context, lt3, rt3)
