@@ -332,7 +332,7 @@ sig
   val iteration_list_body : griper
   val iteration_list_pattern : griper
   val iteration_table_body : griper
-  val iteration_table_pattern : griper
+  val iteration_table_pattern : Temporality.t -> griper
   val iteration_body : griper
   val iteration_where : griper
   val iteration_base_order : griper
@@ -1134,11 +1134,11 @@ end
       build_tyvar_names [snd l; t];
       fixed_type pos "The body of a table generator" t l
 
-    let iteration_table_pattern ~pos ~t1:l ~t2:(rexpr,rt) ~error:_ =
+    let iteration_table_pattern tmp ~pos ~t1:l ~t2:(rexpr,rt) ~error:_ =
       build_tyvar_names [snd l; rt];
       let rt = Types.make_table_type
-                 (rt, Types.fresh_type_variable (lin_any, res_any)
-                    , Types.fresh_type_variable (lin_any, res_any)) in
+                 (tmp, rt, Types.fresh_type_variable (lin_any, res_any),
+                  Types.fresh_type_variable (lin_any, res_any)) in
         with_but2things pos
           ("The binding must match the table in a table generator")
           ("pattern", l) ("expression", (rexpr, rt))
@@ -2765,16 +2765,33 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             and name   = tc name in
               DatabaseLit (erase name, (opt_map erase driver, opt_map erase args)), T.Primitive Primitive.DB,
               Usage.combine_many [from_option Usage.empty (opt_map usages driver); from_option Usage.empty (opt_map usages args); usages name]
-        | TableLit (tname, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db) ->
+        | TableLit {
+            tbl_name = tname;
+            tbl_type = (tmp, dtype, Some (read_row, write_row, needed_row));
+            tbl_field_constraints;
+            tbl_keys;
+            tbl_temporal_fields;
+            tbl_database
+        } ->
             let tname = tc tname
-            and db = tc db
-            and keys = tc keys in
+            and tbl_database = tc tbl_database
+            and tbl_keys = tc tbl_keys in
             let () = unify ~handle:Gripers.table_name (pos_and_typ tname, no_pos Types.string_type)
-            and () = unify ~handle:Gripers.table_db (pos_and_typ db, no_pos Types.database_type)
-            and () = unify ~handle:Gripers.table_keys (pos_and_typ keys, no_pos Types.keys_type) in
-              TableLit (erase tname, (dtype, Some (read_row, write_row, needed_row)), constraints, erase keys, erase db),
-              T.Table (read_row, write_row, needed_row),
-              Usage.combine (usages tname) (usages db)
+            and () = unify ~handle:Gripers.table_db (pos_and_typ tbl_database, no_pos Types.database_type)
+            and () = unify ~handle:Gripers.table_keys (pos_and_typ tbl_keys, no_pos Types.keys_type) in
+            let tlit =
+                TableLit {
+                    tbl_name = erase tname;
+                    tbl_type = (tmp, dtype, Some (read_row, write_row, needed_row));
+                    tbl_field_constraints;
+                    tbl_keys = erase tbl_keys;
+                    tbl_temporal_fields;
+                    tbl_database = erase tbl_database
+                }
+            in
+            tlit,
+            T.Table (tmp, read_row, write_row, needed_row),
+            Usage.combine (usages tname) (usages tbl_database)
         | TableLit _ -> assert false
         | LensLit (table, _) ->
            relational_lenses_guard pos;
@@ -2885,14 +2902,33 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            let ltrow = Lens_type_conv.type_of_lens_phrase_type ~context trow in
            unify (pos_and_typ data, (exp_pos lens, Types.make_list_type ltrow)) ~handle:Gripers.lens_put_input;
            LensPutLit (erase lens, erase data, Some Types.unit_type), make_tuple_type [], Usage.combine (usages lens) (usages data)
-        | DBDelete (pat, from, where) ->
+        | DBDelete (tdel, pat, from, where) ->
+            (* Check the temporal_deletion to ascertain the temporality *)
+            let (tmp, tdel, tmp_usages) =
+                match tdel with
+                    | None ->
+                        (Temporality.current, tdel, Usage.empty)
+                    | Some (ValidTimeDeletion (SequencedDeletion { validity_from; validity_to })) ->
+                        let validity_from = tc validity_from in
+                        let validity_to = tc validity_to in
+                        (Temporality.valid,
+                         Some (ValidTimeDeletion (SequencedDeletion {
+                             validity_from = erase validity_from;
+                             validity_to = erase validity_to
+                         })),
+                         Usage.combine (usages validity_from) (usages validity_to))
+                    | Some (ValidTimeDeletion _) ->
+                        (Temporality.valid, tdel, Usage.empty)
+                    | Some TransactionTimeDeletion ->
+                        (Temporality.transaction, tdel, Usage.empty)
+            in
             let pat  = tpc pat in
             let from = tc from in
             let read  = T.Record (Types.make_empty_open_row (lin_any, res_base)) in
             let write = T.Record (Types.make_empty_open_row (lin_any, res_base)) in
             let needed = T.Record (Types.make_empty_open_row (lin_any, res_base)) in
             let () = unify ~handle:Gripers.delete_table
-              (pos_and_typ from, no_pos (T.Table (read, write, needed))) in
+              (pos_and_typ from, no_pos (T.Table (tmp, read, write, needed))) in
             let () = unify ~handle:Gripers.delete_pattern (ppos_and_typ pat, no_pos read) in
 
             let hide =
@@ -2915,9 +2951,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                 unify ~handle:Gripers.delete_outer
                   (no_pos (T.Record context.effect_row), no_pos (T.Record outer_effects))
             in
-              DBDelete (erase_pat pat, erase from, opt_map erase where), Types.unit_type,
-              Usage.combine (usages from) (hide (from_option Usage.empty (opt_map usages where)))
-        | DBInsert (into, labels, values, id) ->
+              DBDelete (tdel, erase_pat pat, erase from, opt_map erase where), Types.unit_type,
+              Usage.combine_many [
+                  usages from;
+                  hide (from_option Usage.empty (opt_map usages where));
+                  tmp_usages
+              ]
+        | DBInsert (tmp, into, labels, values, id) ->
             let into   = tc into in
             let values = tc values in
             let id = opt_map tc id in
@@ -2925,7 +2965,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             let write = T.Record (Types.make_empty_open_row (lin_any, res_base)) in
             let needed = T.Record (Types.make_empty_open_row (lin_any, res_base)) in
             let () = unify ~handle:Gripers.insert_table
-              (pos_and_typ into, no_pos (T.Table (read, write, needed))) in
+              (pos_and_typ into, no_pos (T.Table (tmp, read, write, needed))) in
 
             let field_env =
               List.fold_right
@@ -2993,16 +3033,48 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                 unify ~handle:Gripers.insert_outer
                   (no_pos (T.Record context.effect_row), no_pos (T.Record outer_effects))
             in
-              DBInsert (erase into, labels, erase values, opt_map erase id), return_type,
+              DBInsert (tmp, erase into, labels, erase values, opt_map erase id), return_type,
               Usage.combine_many [usages into; usages values; from_option Usage.empty (opt_map usages id)]
-        | DBUpdate (pat, from, where, set) ->
+        | DBUpdate (tmp_upd, pat, from, where, set) ->
+            let (tmp, tmp_upd, tmp_usages) =
+                match tmp_upd with
+                    | None ->
+                        (Temporality.current, tmp_upd, Usage.empty)
+                    | Some (ValidTimeUpdate (CurrentUpdate)) ->
+                        (Temporality.valid, tmp_upd, Usage.empty)
+                    | Some (ValidTimeUpdate (SequencedUpdate { validity_from; validity_to })) ->
+                        let validity_from = tc validity_from in
+                        let validity_to = tc validity_to in
+                        let usages = Usage.combine (usages validity_from) (usages validity_to) in
+                        let tmp_upd = Some (ValidTimeUpdate (SequencedUpdate {
+                            validity_from = erase validity_from;
+                            validity_to = erase validity_to
+                        })) in
+                        (Temporality.valid, tmp_upd, usages)
+                    | Some (ValidTimeUpdate (NonsequencedUpdate { from_time; to_time })) ->
+                        let from_time = OptionUtils.opt_map tc from_time in
+                        let to_time = OptionUtils.opt_map tc to_time in
+                        let usages =
+                            List.map (OptionUtils.opt_as_list) [from_time; to_time]
+                            |> List.concat
+                            |> List.map usages
+                            |> Usage.combine_many
+                        in
+                        let from_time = OptionUtils.opt_map erase from_time in
+                        let to_time = OptionUtils.opt_map erase to_time in
+                        (Temporality.valid,
+                            (Some (ValidTimeUpdate (NonsequencedUpdate { from_time; to_time }))),
+                            usages)
+                    | Some TransactionTimeUpdate ->
+                        (Temporality.transaction, tmp_upd, Usage.empty)
+            in
             let pat  = tpc pat in
             let from = tc from in
             let read =  T.Record (Types.make_empty_open_row (lin_any, res_base)) in
             let write = T.Record (Types.make_empty_open_row (lin_any, res_base)) in
             let needed = T.Record (Types.make_empty_open_row (lin_any, res_base)) in
             let () = unify ~handle:Gripers.update_table
-              (pos_and_typ from, no_pos (T.Table (read, write, needed))) in
+              (pos_and_typ from, no_pos (T.Table (tmp, read, write, needed))) in
 
             let hide =
               let bs = Env.domain (pattern_env pat) in
@@ -3057,9 +3129,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                 unify ~handle:Gripers.update_outer
                   (no_pos (T.Record context.effect_row), no_pos (T.Record outer_effects))
             in
-              DBUpdate (erase_pat pat, erase from, opt_map erase where, List.map (fun (n,(p,_,_)) -> n, p) set),
+              DBUpdate (tmp_upd, erase_pat pat, erase from,
+                opt_map erase where, List.map (fun (n,(p,_,_)) -> n, p) set),
               Types.unit_type,
-              Usage.combine_many (usages from :: hide (from_option Usage.empty (opt_map usages where)) :: List.map hide (List.map (usages -<- snd) set))
+              Usage.combine_many
+                ([ usages from;
+                   tmp_usages;
+                   hide (from_option Usage.empty (opt_map usages where))]
+                  @
+                  (List.map hide (List.map (usages -<- snd) set)))
         | Query (range, policy, p, _) ->
             let open QueryPolicy in
             let range, outer_effects, range_usages =
@@ -3454,19 +3532,19 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                            (List (erase_pat pattern, erase e) :: generators,
                             usages e :: generator_usages,
                             pattern_env pattern :: environments)
-                     | Table (pattern, e) ->
+                     | Table (tmp, pattern, e) ->
                          unify ~handle:Gripers.iteration_ambient_effect
                            (no_pos (T.Effect context.effect_row),
                             no_pos (T.Effect (Types.make_empty_closed_row ())));
                          let a = T.Record (Types.make_empty_open_row (lin_unl, res_base)) in
                          let b = T.Record (Types.make_empty_open_row (lin_unl, res_base)) in
                          let c = T.Record (Types.make_empty_open_row (lin_unl, res_base)) in
-                         let tt = Types.make_table_type (a, b, c) in
+                         let tt = Types.make_table_type (tmp, a, b, c) in
                          let pattern = tpc pattern in
                          let e = tc e in
                          let () = unify ~handle:Gripers.iteration_table_body (pos_and_typ e, no_pos tt) in
-                         let () = unify ~handle:Gripers.iteration_table_pattern (ppos_and_typ pattern, (exp_pos e, a)) in
-                           (Table (erase_pat pattern, erase e) :: generators,
+                         let () = unify ~handle:(Gripers.iteration_table_pattern tmp) (ppos_and_typ pattern, (exp_pos e, a)) in
+                           (Table (tmp, erase_pat pattern, erase e) :: generators,
                             usages e :: generator_usages,
                             pattern_env pattern:: environments))
                 ([], [], []) generators in
