@@ -3,7 +3,7 @@ open OUnit2
 let suites =
   "all"
   >::: [
-         ( "ir"
+         ("ir"
          >:::
          let open Links_ir_unit_tests in
          [
@@ -13,7 +13,7 @@ let suites =
            Quantifiers.suite;
            Closures.suite;
            Variants.suite;
-         ] );
+         ]);
        ]
 
 let () = run_test_tt_main suites

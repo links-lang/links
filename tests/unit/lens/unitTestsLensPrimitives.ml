@@ -118,7 +118,7 @@ let test_put test_ctx ~db lens res =
       >> print_endline
     in
     prlist qts;
-    prlist tts )
+    prlist tts)
   else
     (* calculate what the first step does *)
     let _res = H.time_query false run in
@@ -307,8 +307,8 @@ let test_put_delta test_ctx =
       (Query.map
          (Query.setcol "a" (Query.iadd n << Query.col "a"))
          (Query.filter
-            ( Query.band (Query.gt (upto * 2)) (Query.le (upto * 3))
-            << Query.col "a" )
+            (Query.band (Query.gt (upto * 2)) (Query.le (upto * 3))
+            << Query.col "a")
             res))
   in
   let table =

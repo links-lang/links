@@ -3,7 +3,7 @@ open OUnit2
 let suites =
   "all"
   >::: [
-         ( "lenses"
+         ("lenses"
          >:::
          let open Links_lens_unit_tests in
          [
@@ -17,7 +17,7 @@ let suites =
            UnitTestsLensLang.suite;
            UnitTestsLensSort.suite;
            UnitTestsLensAlias.suite;
-         ] );
+         ]);
        ]
 
 let () = run_test_tt_main suites

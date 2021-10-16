@@ -76,11 +76,11 @@ let cat_tex cols name delta =
         List.map
           ~f:(fun (row, m) ->
             Debug.print
-              ( List.fold_left
-                  (fun a (_, b) -> a ^ "& " ^ string_of_int (unbox_int b) ^ " ")
-                  ("\t" ^ string_of_int m)
-                  (unbox_record row)
-              ^ "\\\\" ))
+              (List.fold_left
+                 (fun a (_, b) -> a ^ "& " ^ string_of_int (unbox_int b) ^ " ")
+                 ("\t" ^ string_of_int m)
+                 (unbox_record row)
+              ^ "\\\\"))
           delta
       in
       ()
@@ -99,9 +99,9 @@ let test_calculate_fd_changelist test_ctx =
       ~f:(fun ((cols_l, cols_r), changes) ->
         let _ =
           H.print_verbose test_ctx
-            ( H.col_list_to_string cols_l " "
+            (H.col_list_to_string cols_l " "
             ^ " -> "
-            ^ H.col_list_to_string cols_r " " )
+            ^ H.col_list_to_string cols_r " ")
         in
         let strfn dat =
           if dat = [] then ""

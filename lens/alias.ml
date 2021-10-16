@@ -41,7 +41,8 @@ module Set = struct
           s Base.empty
         |> ignore;
         Result.return ()
-      with Not_disjoint t -> Result.error t
+      with
+      | Not_disjoint t -> Result.error t
   end
 
   module Set = struct

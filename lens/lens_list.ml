@@ -20,8 +20,8 @@ let rec map_result t ~f =
       | Result.Ok x -> (
           match map_result xs ~f with
           | Result.Ok xs -> x :: xs |> Lens_result.return
-          | Result.Error _ as err -> err )
-      | Result.Error _ as err -> err )
+          | Result.Error _ as err -> err)
+      | Result.Error _ as err -> err)
 
 let map_if t ~b ~f =
   let f x = if b x then f x else x in
@@ -59,7 +59,7 @@ let rec filter_map t ~f =
   | x :: xs -> (
       match f x with
       | None -> filter_map xs ~f
-      | Some y -> y :: filter_map xs ~f )
+      | Some y -> y :: filter_map xs ~f)
 
 let rec unzip3 l =
   match l with

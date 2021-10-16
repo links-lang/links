@@ -24,26 +24,27 @@ let check_program_first_error ir_prog =
 
   (* We tell the IR type-checker to fail with an exception on IR errors *)
   with_setting IrCheck.fail_on_ir_type_error true
-    ( lazy
-      ( try
-          ignore (IrCheck.Typecheck.program dummy_state ir_prog);
-          None
-        with e -> Some e ) )
+    (lazy
+      (try
+         ignore (IrCheck.Typecheck.program dummy_state ir_prog);
+         None
+       with
+      | e -> Some e))
 
 let assert_failure msg ir_program =
   with_setting Types.print_types_pretty false
-    ( lazy
+    (lazy
       (OUnit2.assert_failure
          (Printf.sprintf "%s\nIR program:\n%s" msg
-            (Ir.show_computation ir_program))) )
+            (Ir.show_computation ir_program))))
 
 let assert_bool msg ir_program bool =
   with_setting Types.print_types_pretty false
-    ( lazy
+    (lazy
       (OUnit2.assert_bool
          (Printf.sprintf "%s\nIR program:\n%s" msg
             (Ir.show_computation ir_program))
-         bool) )
+         bool))
 
 let assemble_ir_program schinks_prog =
   try Schinks.reify schinks_prog with
@@ -51,8 +52,8 @@ let assemble_ir_program schinks_prog =
       OUnit2.assert_failure ("Assembling IR program failed with message:\n" ^ m)
   | e ->
       OUnit2.assert_failure
-        ( "Unhandled expection while assembing IR program :\n"
-        ^ Printexc.to_string e )
+        ("Unhandled expection while assembing IR program :\n"
+        ^ Printexc.to_string e)
 
 let extract_ir_error_message exn_opt ir_program =
   match exn_opt with
@@ -88,9 +89,9 @@ let expect_error ~name ~(error_regex : string) prog : OUnit2.test =
           Str.global_replace (Str.regexp "[\n\r]") " " msg
         in
         assert_bool
-          ( "Got the following IR error message, which did not match the \
-             expected one:\n"
-          ^ msg )
+          ("Got the following IR error message, which did not match the \
+            expected one:\n"
+          ^ msg)
           ir_prog
           (Str.string_match regexp non_newline_msg 0)
   in
