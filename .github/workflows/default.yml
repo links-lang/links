@@ -33,7 +33,7 @@ jobs:
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
-      - run: opam install -y ocamlformat.0.14.2
+      - run: opam install -y ocamlformat
 
       - name: Ad-hoc rule check
         run: |
@@ -353,7 +353,8 @@ jobs:
           - 4.08.0
         browser:
           - firefox
-          - chrome
+          # - chrome # The Selenium Chrome driver does not work with
+          # the latest stable Chrome browser. Disabled until we have a robust solution.
 
     env:
       LINKS_BROWSER: ${{ matrix.browser }}
