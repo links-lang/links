@@ -46,6 +46,10 @@ class TestFileStream:
     line = None
     while is_comment or (self.prev_readline_was_empty and is_empty):
       line = self.stream.readline()
+
+      if line == TestFileStream.EOF_MARKER:
+        return line
+
       is_comment = re.match("^\\s*#", line) is not None
       is_empty = re.match("^\\s*$", line) is not None
 
