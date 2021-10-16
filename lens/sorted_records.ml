@@ -45,7 +45,7 @@ module Simple_record = struct
         | `Key _, `NewKeyMapped _ -> -1
         | `NewKeyMapped v1, `NewKeyMapped v2 -> compare v1 v2
         | `Key v1, `Key v2 -> compare v1 v2
-        | _ -> E.Unsupported_phrase_value_cmp { v1; v2 } |> E.raise )
+        | _ -> E.Unsupported_phrase_value_cmp { v1; v2 } |> E.raise)
     | _, _ -> E.Unsupported_phrase_value_cmp { v1; v2 } |> E.raise
 
   let equal_val a b = compare_val a b = 0
@@ -127,9 +127,8 @@ end
 let construct_cols ~columns ~records =
   let recs = List.map ~f:Value.unbox_record records in
   let col_val a r =
-    try List.find_exn ~f:(fst >> ( = ) a) r |> snd
-    with _ ->
-      Inconsistent_columns_error.E (columns, List.map ~f:fst r) |> raise
+    try List.find_exn ~f:(fst >> ( = ) a) r |> snd with
+    | _ -> Inconsistent_columns_error.E (columns, List.map ~f:fst r) |> raise
   in
   let simpl_rec r =
     List.map2 (fun a (k, v) -> if a = k then v else col_val a r) columns r
@@ -223,7 +222,7 @@ let get_col_map_list cols col =
           let fn2 = fn xs in
           match fn2 with
           | Some fn2 -> Some (fun x -> fn2 (List.tl x))
-          | None -> None )
+          | None -> None)
     | _ -> None
   in
   fn cols
@@ -281,7 +280,7 @@ let zip_delta_merge left right =
             (* x > y, so take y and try find x *)
             let left, right = do_next left ys in
             (left, y :: right)
-        | _ -> (* x = y, so skip both *) do_next xs ys )
+        | _ -> (* x = y, so skip both *) do_next xs ys)
     | _ -> (left, right)
     (* one of them is empty so return rest *)
   in
@@ -514,7 +513,7 @@ let relational_update t ~fun_deps ~update_with =
                   fun yl target -> List.hd yl :: fn (List.tl yl) target
               | Some mp ->
                   (* the column has been found, replace *)
-                  fun yl target -> mp target :: fn (List.tl yl) target )
+                  fun yl target -> mp target :: fn (List.tl yl) target)
         in
         columns t |> upd)
       changelist

@@ -46,7 +46,7 @@ let rec lens_phrase_type_of_type t =
           failwith
           @@ Format.asprintf
                "Unsupported primitive type %a in lens_phrase_type_of_type." T.pp
-               t )
+               t)
   | T.Record r -> lens_phrase_type_of_type r
   | T.Row (fields, _, _) ->
       let fields =
