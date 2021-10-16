@@ -113,8 +113,7 @@ let lens_put_set_step ~db ~env lens delt
       let delta_m1 =
         Sorted.merge
           (delta_merge_affected ~db
-             (Value.lens_select_internal lens
-                ~predicate:(Phrase.not' predicate))
+             (Value.lens_select_internal lens ~predicate:(Phrase.not' predicate))
              delt)
           (Sorted.negative delt)
       in
@@ -185,7 +184,7 @@ let apply_delta ~table ~db ~sort ~env data =
             | Serial (`NewKeyMapped key) -> (
                 match Int.Map.find ~key env with
                 | Some key -> Serial (`Key key)
-                | None -> v )
+                | None -> v)
             | _ -> v)
           r)
       vals

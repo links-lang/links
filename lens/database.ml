@@ -94,11 +94,11 @@ let fmt_cols ~db f cols =
 
 let fmt_phrase_value ~db f v =
   Format.fprintf f "%s"
-    ( match v with
+    (match v with
     | LPV.Bool b -> (
         match b with
         | true -> "(1=1)"
-        | false -> "(0=1)" )
+        | false -> "(0=1)")
     | LPV.Int v -> string_of_int v
     | LPV.String v -> db.escape_string v
     | LPV.Char c -> db.escape_string (String.make 1 c)
@@ -109,7 +109,7 @@ let fmt_phrase_value ~db f v =
         string_of_int k (* only support converting known keys. *)
     | LPV.Serial (`NewKeyMapped k) ->
         string_of_int k (* only support converting known keys. *)
-    | _ -> E.Unsupported_phrase_value { value = v } |> E.raise )
+    | _ -> E.Unsupported_phrase_value { value = v } |> E.raise)
 
 module Precedence = struct
   type t = Or | And | Not | Add | Sub | Mult | Divide | Cmp
@@ -184,7 +184,7 @@ let rec fmt_phrase_ex ?(precedence = Precedence.And) ~db ~map f expr =
             (Format.pp_print_list ~pp_sep fmt_name)
             names
             (Format.pp_print_list ~pp_sep fmt_val)
-            vals )
+            vals)
   | Phrase.Case (inp, cases, otherwise) ->
       if cases = [] then Format.fprintf f "%a" (fmt precedence) otherwise
       else

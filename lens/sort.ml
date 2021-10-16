@@ -221,11 +221,11 @@ let drop_lens_sort sort ~drop ~default ~key =
            Alias.Map.find replace ~key)
   in
   (* Ensure that (A=a) satisfies P[A]. *)
-  ( match (predicate', predicate) with
+  (match (predicate', predicate) with
   | Some (Phrase.Constant (Phrase.Value.Bool false)), _ -> Result.return ()
   | _, Some (Phrase.Constant (Phrase.Value.Bool false)) ->
       Result.error Drop_sort_error.DefaultDoesntMatchPredicate
-  | _ -> Result.return () )
+  | _ -> Result.return ())
   >>| fun () ->
   (* query is unchanged *)
   let query = query sort in

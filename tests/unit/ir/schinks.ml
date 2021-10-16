@@ -39,9 +39,13 @@ let check_assoc_list_for_duplicates assoc description =
 
 (* Got a list of tuples (with the second arg being a t) and another arg *)
 let helper_tuple1_with_transform :
-      'a 'b 'c 'd 'e 'r. ('a * 'b t) list -> 'c ->
-      arg1_transf1:('c -> 'd Repr.stage1) -> arg1_transf2:('d -> 'e lookup) ->
-      (('a * 'b) list -> 'e -> 'r) -> 'r t =
+      'a 'b 'c 'd 'e 'r.
+      ('a * 'b t) list ->
+      'c ->
+      arg1_transf1:('c -> 'd Repr.stage1) ->
+      arg1_transf2:('d -> 'e lookup) ->
+      (('a * 'b) list -> 'e -> 'r) ->
+      'r t =
  fun tuples arg1 ~arg1_transf1 ~arg1_transf2 builder ->
   let* arg1 = arg1_transf1 arg1 in
   let+ tuples =
@@ -181,7 +185,7 @@ let fun_t ?effects parameters codomain =
       stage2
 
 (* need to make sure that d .-->{e} c
-  becomes Function(d,c,e) even though the operator is just binary, not ternary *)
+   becomes Function(d,c,e) even though the operator is just binary, not ternary *)
 let ( .-->{} ) lhs middle rhs = fun_t ~effects:middle lhs rhs
 
 let fun_ct parameters codomain = fun_t parameters codomain

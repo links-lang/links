@@ -27,7 +27,7 @@ let rec tc_infix ~env ~data ~op p q =
       | Types.Bool, Types.Bool -> Result.return Types.Bool
       | _ ->
           Result.error
-            { data; msg = "Logical operator requires boolean operands." } )
+            { data; msg = "Logical operator requires boolean operands." })
   | Binary.Greater
    |Binary.GreaterEqual
    |Binary.Less
@@ -43,8 +43,7 @@ let rec tc_infix ~env ~data ~op p q =
       | Types.Int, Types.Int -> Types.Int |> Result.return
       | Types.Float, Types.Float -> Types.Float |> Result.return
       | _ ->
-          Result.error { data; msg = "Incorrect or unmatching numeric types." }
-      )
+          Result.error { data; msg = "Incorrect or unmatching numeric types." })
 
 and tc_unary ~env ~data ~op p =
   tc ~env p >>= fun p ->
@@ -52,13 +51,12 @@ and tc_unary ~env ~data ~op p =
   | Unary.Not -> (
       match p with
       | Types.Bool -> Result.return Types.Bool
-      | _ -> Result.error { msg = "Unsupported unary negation operand."; data }
-      )
+      | _ -> Result.error { msg = "Unsupported unary negation operand."; data })
   | Unary.Minus -> (
       match p with
       | Types.Int -> Result.Ok Types.Int
       | Types.Float -> Result.Ok Types.Float
-      | _ -> Result.Error { msg = "Unsuported unary minus operand."; data } )
+      | _ -> Result.Error { msg = "Unsuported unary minus operand."; data })
 
 and tc ~env (data, phrase) =
   match phrase with
