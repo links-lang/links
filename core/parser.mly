@@ -486,7 +486,7 @@ signature:
 typedecl:
 | TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (Typenames [with_pos $loc ($2, $3, datatype $5)]) }
 
-/* Lists of type parameters in square brackets denote type abstractions */
+(* Lists of quantifiers in square brackets denote type abstractions *)
 type_abstracion_vars:
 | LBRACKET varlist RBRACKET                                    { $2 }
 
