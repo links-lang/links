@@ -63,6 +63,8 @@ module type SugarConstructorsSig = sig
     ?ppos:t -> ?ty:Types.datatype -> phrase list -> phrase
   val constructor :
     ?ppos:t -> ?body:phrase -> ?ty:Types.datatype -> Name.t -> phrase
+  val type_abstraction : ?ppos:t -> SugarQuantifier.t list -> phrase -> phrase
+
 
   (* Constants *)
   val constant      : ?ppos:t -> Constant.t -> phrase

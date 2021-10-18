@@ -254,6 +254,8 @@ object (o : 'self)
 
   method set_toplevelness at_toplevel = {< at_toplevel >}
 
+  method get_toplevelness = at_toplevel
+
   method set_allow_implictly_bound_vars allow_implictly_bound_vars = {< allow_implictly_bound_vars >}
 
 
@@ -348,8 +350,8 @@ object (o : 'self)
 
 
   (**  Used for Forall and Typenames *)
-  method quantified : 'a. SugarQuantifier.t list -> ('self -> 'self * 'a) -> 'self * SugarQuantifier.t list * 'a =
-    fun unresolved_qs action ->
+  method quantified : 'a. rigidify:bool -> SugarQuantifier.t list -> ('self -> 'self * 'a) -> 'self * SugarQuantifier.t list * 'a =
+    fun ~rigidify unresolved_qs action ->
     let original_o = o in
     let bind_quantifier (o, names) sq =
       let (name, _, _) as v =
@@ -357,6 +359,7 @@ object (o : 'self)
       let pos = SourceCode.Position.dummy in
       if StringSet.mem name names then raise (duplicate_var pos name);
       let (_, (pk, sk), freedom) = ensure_kinded v in
+      let freedom = if rigidify then `Rigid else freedom in
       (* let point = make_opt_kinded_point sk `Rigid in *)
       let entry = make_fresh_entry pk sk freedom in
       let o' = o#bind name entry in
@@ -392,7 +395,7 @@ object (o : 'self)
        (* let resolved_tv = resolved_var_of_entry entry in *)
        o, TypeVar resolved_tv
     | Forall (unresolved_qs, body) ->
-       let o, resolved_qs, body = o#quantified unresolved_qs (fun o' -> o'#datatype body) in
+       let o, resolved_qs, body = o#quantified ~rigidify:false unresolved_qs (fun o' -> o'#datatype body) in
        o, Forall (resolved_qs, body)
 
     | Mu (stv, t) ->
@@ -445,8 +448,20 @@ object (o : 'self)
        let o, resolved_pv = o#add name pk_presence sk freedom in
        o, Var resolved_pv
 
+  method! phrase p =
+    match SourceCode.WithPos.node p with
+    | TAbstr (tyvars, exp) ->
+       let handle_tabstr o =
+         let prev_at_toplevel = o#get_toplevelness in
+         let o = o#set_toplevelness false in
 
-
+         let (o, p) = o#phrase exp in
+         let o = o#set_toplevelness prev_at_toplevel in
+         o, p
+       in
+       let (o, new_tyvars, new_phrase) = o#quantified ~rigidify:true tyvars handle_tabstr in
+       o, SourceCode.WithPos.with_node p (TAbstr (new_tyvars, new_phrase))
+    | _ -> super#phrase p
 
   method! function_definition : function_definition -> 'self * function_definition
       = fun { fun_binder;
@@ -517,7 +532,7 @@ object (o : 'self)
     (* Typenames must never use type variables from an outer scope *)
     let o = o#reset_vars in
 
-    let o, resolved_qs, body = o#quantified unresolved_qs (fun o' -> o'#datatype' body) in
+    let o, resolved_qs, body = o#quantified ~rigidify:true unresolved_qs (fun o' -> o'#datatype' body) in
 
     let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
     let o = o#set_vars tyvar_map in
