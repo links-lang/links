@@ -193,3 +193,68 @@ Signatures (var): free variable in body, quantified sig (7)
 fun f(x) {x}     sig x : forall a. (a) -> a var x = f : ((a) -> a); x
 exit : 1
 stderr : @.*Type error:.*
+
+# Tests for type abstractions /\ [...]. { ... }
+
+Type abstraction: correct, non-polymorphic body
+/\ [a]. { 123 }
+exit : 0
+stdout : 123 : forall a.Int
+args : --set=show_quantifiers=true
+
+Type abstraction: correct, polymorphic body
+/\ [a]. { $(fun(x){x}) }
+exit : 0
+stdout : fun : forall a,b::(Any,Any),c::Row.(b::Any) -c-> b::Any
+args : --set=show_quantifiers=true
+
+Type abstraction: correct, use type variable in signature
+/\ [a]. { sig f : (a) {}-> a fun f(x){x : a} f }
+exit : 0
+stdout : fun : forall a.(a) {}-> a
+args : --set=show_quantifiers=true
+
+Type abstraction: correct, use type variable in body
+# Note that we need the signature to enforce a function without effects
+/\ [a]. { sig f : (%b) {}-> %b fun f (x) {x : a} ~f }
+exit : 0
+stdout : fun : forall a.(a) {}-> a
+args : --set=show_quantifiers=true
+
+Type abstraction: Ambigous type (1)
+# The lambda has type (%b) -%e-> %b, so we must fail
+/\ [a]. { fun(x) { x } }
+exit : 1
+stderr : @.*Type error:.*The phrase under a type abstraction must have a unique type.*
+
+Type abstraction: Ambigous type (2)
+# This example is somewhat tricky.
+# One may assume that calling g from the toplevel fixes its effect and we can therefore accept this program.
+# However, If we did allow this, then g wouldn't have a most general type before the call g(): Both
+# forall e :: Row. (Int) -e-> (Int) and
+# forall e :: Row. (Int) -R-> (Int) for any effect row R would be an option.
+# We would like our terms to have most general types at any point, not just at the end of type-checking.
+# Therefore, we require that the body of the /\ must have unqiue type immediately after checking
+# it. Unifying away the flexible variables afterwards doesn't save us.
+var g = /\ [e::Row]. { fun(x) { x + 1 } }; g()
+exit : 1
+stderr : @.*Type error:.*The phrase under a type abstraction must have a unique type.*
+
+Type abstraction: correct, shadowing (1)
+sig f : () -a-> (forall b.()) fun f() {  /\ [a]. {  sig g : (a) {}-> a fun g(x){x} ()   } } f
+exit : 0
+stdout : fun : forall a::Row.() -a-> forall b.()
+args : --set=show_quantifiers=true
+
+Type abstraction: correct, shadowing (2)
+# Like previous version, but this time with an explicit forall on the outer variable a!
+sig f : forall a::Row. () -a-> (forall b.()) fun f() {  /\ [a]. {  sig g : (a) {}-> a fun g(x){x} ()   } } f
+exit : 0
+stdout : fun : forall a::Row.() -a-> forall b.()
+args : --set=show_quantifiers=true
+
+Type abstraction: correct, shadowing (3)
+/\ [e::Row]. { sig f : forall e. (e) {}-> e fun f(x){x}  id : ( (Int) -e-> Int ) }
+exit : 0
+stdout : fun : forall a::Row.(Int) -a-> Int
+args : --set=show_quantifiers=true
