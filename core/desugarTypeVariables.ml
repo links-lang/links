@@ -1,5 +1,5 @@
 (*
-  aThis pass resolves type variables and reports errors w.r.t. their
+  This pass resolves type variables and reports errors w.r.t. their
   scoping. Specifically, this means that the pass replaces all TUnresolved from
   {Sugartypes.SugarTypeVar.t} by appropriate TResolved*. The latter contain
   Unionfind points and the pass guarantees that syntactic/unresolved variables
