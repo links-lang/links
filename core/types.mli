@@ -91,6 +91,8 @@ val dom_node     : Abstype.t
 val access_point : Abstype.t
 val socket       : Abstype.t
 val spawn_location : Abstype.t
+val transaction_time_data : Abstype.t
+val valid_time_data : Abstype.t
 
 (* Type groups *)
 
@@ -376,6 +378,8 @@ val make_record_type  : datatype field_env -> datatype
 val make_variant_type : datatype field_env -> datatype
 val make_table_type : Temporality.t * datatype * datatype * datatype -> datatype
 val make_endbang_type : datatype
+val make_transaction_time_data_type : datatype -> datatype
+val make_valid_time_data_type : datatype -> datatype
 
 (** subtyping *)
 val is_sub_type : datatype * datatype -> bool

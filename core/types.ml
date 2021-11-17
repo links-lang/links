@@ -87,6 +87,18 @@ let spawn_location = {
   arity = []
 }
 
+let transaction_time_data = {
+  Abstype.id = "TransactionTime";
+  name       = "TransactionTime";
+  arity      = [pk_type, (lin_any, res_any)]
+}
+
+let valid_time_data = {
+  Abstype.id = "ValidTime";
+  name       = "ValidTime";
+  arity      = [pk_type, (lin_any, res_any)]
+}
+
 (* When unifying, we need to keep track of both mu-bound recursive variables
  * and names of recursive type applications. The `rec_id` type allows us to
  * abstract this and keep both in the same environment. *)
@@ -213,6 +225,7 @@ sig
     method type_arg : type_arg -> ('self_type * type_arg)
   end
 end
+
 
 (* FIXME: these will probably go when we relax the constraint that
    Var, Recursive, and Closed constructors can only appear inside a
@@ -4570,6 +4583,13 @@ let make_tuple_type (ts : datatype list) : datatype =
 
 let make_list_type t = Application (list, [PrimaryKind.Type, t])
 let make_process_type r = Application (process, [PrimaryKind.Row, r])
+
+let make_transaction_time_data_type typ =
+  Application (transaction_time_data, [PrimaryKind.Type, typ])
+
+let make_valid_time_data_type typ =
+  Application (valid_time_data, [PrimaryKind.Type, typ])
+
 
 let extend_row_check_duplicates fields row =
   match row with
