@@ -88,7 +88,14 @@ let query_policy_of_string p =
   | rest      ->
      raise (ConcreteSyntaxError (pos p, "Invalid query policy: " ^ rest ^ ", expected 'flat' or 'nested'"))
 
-
+let temporality_of_string p =
+  function
+  | "valid"       -> Temporality.valid
+  | "transaction" -> Temporality.transaction
+  | "current"     -> Temporality.current
+  | "bitemporal"  -> Temporality.bitemporal
+  | rest          ->
+     raise (ConcreteSyntaxError (pos p, "Invalid temporality: " ^ rest))
 
 let full_kind_of pos prim lin rest =
   let p = primary_kind_of_string pos prim in
@@ -332,6 +339,9 @@ let parse_foreign_language pos lang =
 %token TRY OTHERWISE RAISE
 %token <string> OPERATOR
 %token USING
+%token LTLARROW LBLARROW LVLARROW
+%token SEQUENCED CURRENT NONSEQUENCED TO BETWEEN
+%token TTINSERT VTINSERT
 
 %start just_datatype
 %start interactive
@@ -672,6 +682,13 @@ mode_not_valid:
 | LTLARROW                                                     { Temporality.transaction }
 | LBLARROW                                                     { Temporality.bitemporal }
 
+valid_time_exps:
+| labeled_exps { $1, None, None }
+| labeled_exps WITH FROM EQ exp COMMA TO EQ exp { $1, Some $5, Some $9 }
+| labeled_exps WITH TO EQ exp COMMA FROM EQ exp { $1, Some $9, Some $5 }
+| labeled_exps WITH FROM EQ exp { $1, Some $5, None }
+| labeled_exps WITH TO EQ exp { $1, None, Some $5 }
+
 update_expression:
 | UPDATE CURRENT LPAREN pattern LVLARROW exp RPAREN
          perhaps_where SET LPAREN labeled_exps RPAREN          { with_pos $loc (DBUpdate (None, $4, $6, $8, $11)) }
@@ -822,11 +839,14 @@ formlet_expression:
 | FORMLET xml YIELDS exp                                       { with_pos $loc (Formlet ($2, $4)) }
 | PAGE xml                                                     { with_pos $loc (Page $2)          }
 
+temporality:
+| VARIABLE                                                     { temporality_of_string $loc $1 }
+
 temporal:
-| USING temporality LPAREN field_name COMMA field_name RPAREN  { ($2, Some ($4, $6)) }
+| USING temporality LPAREN field_label COMMA field_label RPAREN  { ($2, ($4, $6)) }
 
 table_keys:
-| TABLEKEYS expr                                               { with_pos $loc $2 }
+| TABLEKEYS exp                                                { $2 }
 
 table_expression:
 | TABLE exp WITH datatype perhaps_table_constraints
@@ -866,12 +886,17 @@ exp:
 | table_expression
 | typed_expression                                             { $1 }
 
+insert_keyword:
+| TTINSERT                                                     { Temporality.transaction }
+| VTINSERT                                                     { Temporality.valid }
+| INSERT                                                       { Temporality.current }
+
 database_expression:
-| INSERT exp VALUES LPAREN record_labels RPAREN exp            { db_insert ~ppos:$loc $2 $5 $7 None }
-| INSERT exp VALUES LBRACKET LPAREN loption(labeled_exps)
-  RPAREN RBRACKET preceded(RETURNING, VARIABLE)?               { db_insert ~ppos:$loc $2 (labels $6) (db_exps ~ppos:$loc($6) $6) $9  }
-| INSERT exp VALUES LPAREN record_labels RPAREN typed_expression
-  RETURNING VARIABLE                                           { db_insert ~ppos:$loc $2 $5 $7 (Some $9) }
+| insert_keyword exp VALUES LPAREN record_labels RPAREN exp    { db_insert ~ppos:$loc $1 $2 $5 $7 None }
+| insert_keyword exp VALUES LBRACKET LPAREN loption(labeled_exps)
+  RPAREN RBRACKET preceded(RETURNING, VARIABLE)?               { db_insert ~ppos:$loc $1 $2 (labels $6) (db_exps ~ppos:$loc($6) $6) $9  }
+| insert_keyword exp VALUES LPAREN record_labels RPAREN typed_expression
+  RETURNING VARIABLE                                           { db_insert ~ppos:$loc $1 $2 $5 $7 (Some $9) }
 | DATABASE atomic_expression perhaps_db_driver                 { with_pos $loc (DatabaseLit ($2, $3))           }
 
 fn_dep_cols:
@@ -1043,7 +1068,8 @@ primary_datatype:
                                                                    | ts  -> Datatype.Tuple ts }
 | LPAREN rfields RPAREN                                        { Datatype.Record $2 }
 | TABLEHANDLE
-     LPAREN datatype COMMA datatype COMMA datatype RPAREN      { Datatype.Table ($3, $5, $7) }
+     LPAREN temporality COMMA datatype COMMA datatype COMMA datatype RPAREN
+                                                               { Datatype.Table ($3, $5, $7, $9) }
 | LBRACKETBAR vrow BARRBRACKET                                 { Datatype.Variant $2 }
 | LBRACKET datatype RBRACKET                                   { Datatype.List $2 }
 | type_var                                                     { $1 }

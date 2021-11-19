@@ -63,9 +63,11 @@ let count_newlines = StringUtils.count '\n'
 let keywords = [
  "alien"    , ALIEN;
  "as"       , AS;
+ "between"  , BETWEEN;
  "by"       , BY;
  "case"     , CASE;
  "client"   , CLIENT;
+ "current"  , CURRENT;
  "database" , DATABASE;
  "default"  , DEFAULT;
  "delete"   , DELETE;
@@ -98,6 +100,7 @@ let keywords = [
  "module"   , MODULE;
  "mu"       , MU;
  "mutual"   , MUTUAL;
+ "nonsequenced", NONSEQUENCED;
  "nu"       , NU;
  "offer"    , OFFER;
  "on"       , ON;
@@ -113,6 +116,7 @@ let keywords = [
  "returning", RETURNING;
  "select"   , SELECT;
  "server"   , SERVER;
+ "sequenced", SEQUENCED;
  "set"      , SET;
  "shallowhandle", SHALLOWHANDLE;
  "sig"      , SIG;
@@ -125,14 +129,17 @@ let keywords = [
  "switch"   , SWITCH;
  "table"    , TABLE;
  "TableHandle", TABLEHANDLE;
+ "to"       , TO;
  "true"     , TRUE;
  "try"     , TRY;
+ "tt_insert" , TTINSERT;
  "typename" , TYPENAME;
  "update"   , UPDATE;
  "unsafe"   , UNSAFE;
  "using"    , USING;
  "values"   , VALUES;
  "var"      , VAR;
+ "vt_insert", VTINSERT;
  "where"    , WHERE;
  "with"     , WITH;
 (* SAND *)
@@ -196,6 +203,9 @@ rule lex ctxt nl = parse
   | '}'                                 { ctxt#pop_lexer (* fall back *); RBRACE }
   | "<->"                               { LRARROW }
   | "<--"                               { LLARROW }
+  | "<-t-"                              { LTLARROW }
+  | "<-v-"                              { LVLARROW }
+  | "<-b-"                              { LBLARROW }
   | "<-"                                { LARROW }
   | "<|"                                { LEFTTRIANGLE }
   | "|>"                                { RIGHTTRIANGLE }
