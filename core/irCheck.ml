@@ -805,7 +805,7 @@ struct
               ) ["name"; "args"; "driver"];
             o, Database v, Primitive Primitive.DB
 
-        | Table (db, table_name, keys, tt) ->
+        | Table { database = db; table = table_name; keys; temporal_fields; table_type = tt } ->
             let o, db, db_type = o#value db in
             o#check_eq_types db_type Types.database_type (SSpec special);
             let o, table_name, table_name_type = o#value table_name in
@@ -814,8 +814,14 @@ struct
             o#check_eq_types keys_type Types.keys_type (SSpec special);
             (* TODO: tt is a tuple of three records. Discussion pending about what kind of checks we should do here
                From an implementation perspective, we should check the consistency of the read, write, needed info here *)
-              o, Table (db, table_name, keys, tt), Table tt
+            o, Table { table = table_name; database = db; keys; temporal_fields; table_type = tt }, Table tt
 
+        | TemporalJoin (tmp, comp, dt) ->
+            (* Note: This is fairly bare-bones at the moment: checks that the type of the computation matches
+               recorded type. May want to do more later. *)
+            let o, comp, comp_dt = o#computation comp in
+            o#check_eq_types dt comp_dt (SSpec special);
+            o, TemporalJoin (tmp, comp, dt), dt
         | Query (range, policy, e, original_t) ->
             let o, range =
               o#optionu
@@ -906,7 +912,7 @@ struct
                 | _ -> assert false (* impossible at this point *)
             end
 
-        | Update ((x, source), where, body) ->
+        | Update (upd, (x, source), where, body) ->
             o#impose_presence_of_effect Types.wild_present (SSpec special);
             let o, source, source_t = o#value source in
             (* this implicitly checks that source is a table *)
@@ -937,9 +943,9 @@ struct
               ) body_record_row;
             let o = o#remove_binder x in
             let o, _ = o#set_allowed_effects outer_effects in
-              o, Update ((x, source), where, body), Types.unit_type
+              o, Update (upd, (x, source), where, body), Types.unit_type
 
-        | Delete ((x, source), where) ->
+        | Delete (del, (x, source), where) ->
             o#impose_presence_of_effect Types.wild_present (SSpec special);
             let o, source, source_t = o#value source in
             (* this implicitly checks that source is a table *)
@@ -956,7 +962,7 @@ struct
                where in
             let o = o#remove_binder x in
             let o, _ = o#set_allowed_effects outer_effects in
-              o, Delete ((x, source), where), Types.unit_type
+              o, Delete (del, (x, source), where), Types.unit_type
 
         | CallCC v ->
             let o, v, t = o#value v in
