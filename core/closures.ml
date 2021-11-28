@@ -132,7 +132,7 @@ struct
       method! special = fun s ->
         (* We need to find all types occuring in the given IR fragment *)
         let o = match s with
-          | Table (_, _, _, (t1, t2, t3)) ->
+          | Table { table_type = (_, t1, t2, t3); _ } ->
             let o1 = o#typ t1 in
             let o2 = o1#typ t2 in
             o2#typ t3
