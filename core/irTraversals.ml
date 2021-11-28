@@ -42,6 +42,9 @@ module type IR_VISITOR = sig
       ('self_type -> 'a -> ('self_type * 'a * Types.datatype)) ->
       'a var_map -> 'self_type * 'a var_map * Types.datatype var_map
     method var : var -> ('self_type * var * Types.datatype)
+    method temporal_update : temporal_update -> ('self_type * temporal_update)
+    method temporal_deletion : temporal_deletion -> ('self_type * temporal_deletion)
+
     method value : value -> ('self_type * value * Types.datatype)
 
     method tail_computation :
@@ -150,6 +153,26 @@ struct
 
     method var : var -> ('self_type * var * datatype) =
       fun var -> (o, var, o#lookup_type var)
+
+    method temporal_update : temporal_update -> ('self_type * temporal_update) =
+      function
+        | ValidTimeUpdate (NonsequencedUpdate { from_time; to_time }) ->
+            let o, from_time, _ = o#option (fun o -> o#computation) from_time in
+            let o, to_time  , _ = o#option (fun o -> o#computation) to_time in
+            o, ValidTimeUpdate (NonsequencedUpdate { from_time; to_time })
+        | ValidTimeUpdate (SequencedUpdate { validity_from; validity_to }) ->
+            let o, validity_from, _ = o#value validity_from in
+            let o, validity_to  , _ = o#value validity_to in
+            o, ValidTimeUpdate (SequencedUpdate { validity_from; validity_to })
+        | x -> o, x
+
+    method temporal_deletion : temporal_deletion -> ('self_type * temporal_deletion) =
+      function
+        | ValidTimeDeletion (SequencedDeletion { validity_from; validity_to }) ->
+            let o, validity_from, _ = o#value validity_from in
+            let o, validity_to,   _ = o#value validity_to in
+            o, ValidTimeDeletion (SequencedDeletion { validity_from; validity_to })
+        | x -> o, x
 
     method value : value -> ('self_type * value * datatype) =
       function
@@ -280,11 +303,11 @@ struct
         | Database v ->
             let o, v, _ = o#value v in
               o, Database v, Types.Primitive Primitive.DB
-        | Table (db, table_name, keys, tt) ->
-            let o, db, _ = o#value db in
+        | Table { database; table; keys; temporal_fields; table_type } ->
+            let o, database, _ = o#value database in
             let o, keys, _ = o#value keys in
-            let o, table_name, _ = o#value table_name in
-              o, Table (db, table_name, keys, tt), Types.Table tt
+            let o, table, _ = o#value table in
+              o, Table { database; table; keys; temporal_fields; table_type }, Types.Table table_type
         | Lens (table, rtype) ->
             let o, table, _ = o#value table in
               o, Lens (table, rtype), Types.Lens rtype
@@ -318,6 +341,9 @@ struct
             let o, lens, _ = o#value lens in
             let o, data, _ = o#value data in
             o, LensPut (lens, data, rtype), Types.make_tuple_type []
+        | TemporalJoin (tmp, comp, _) ->
+            let o, comp, t = o#computation comp in
+            o, TemporalJoin (tmp, comp, t), t
         | Query (range, policy, e, _) ->
             let o, range =
               o#optionu
@@ -337,17 +363,19 @@ struct
             let o, rows, _ = o#value rows in
             let o, returning, _ = o#value returning in
               o, InsertReturning(source, rows, returning), Types.unit_type
-        | Update ((x, source), where, body) ->
+        | Update (upd, (x, source), where, body) ->
+            let o, upd = o#optionu (fun o -> o#temporal_update) upd in
             let o, source, _ = o#value source in
             let o, x = o#binder x in
             let o, where, _ = o#option (fun o -> o#computation) where in
             let o, body, _ = o#computation body in
-              o, Update ((x, source), where, body), Types.unit_type
-        | Delete ((x, source), where) ->
+              o, Update (upd, (x, source), where, body), Types.unit_type
+        | Delete (del, (x, source), where) ->
+            let o, del = o#optionu (fun o -> o#temporal_deletion) del in
             let o, source, _ = o#value source in
             let o, x = o#binder x in
             let o, where, _ = o#option (fun o -> o#computation) where in
-              o, Delete ((x, source), where), Types.unit_type
+              o, Delete (del, (x, source), where), Types.unit_type
         | CallCC v ->
             let o, v, t = o#value v in
               o, CallCC v, deconstruct (return_type ~overstep_quantifiers:true) t
@@ -835,11 +863,11 @@ let ir_type_mod_visitor tyenv type_visitor =
             | Wrong datatype ->
                let (_, datatype) = type_visitor#typ datatype in
                super#special (Wrong datatype)
-            | Table (v1, v2, v3, (t1, t2, t3)) ->
+            | Table { database; table; keys; temporal_fields; table_type = (tmp, t1, t2, t3) } ->
                let (_, t1) = type_visitor#typ t1 in
                let (_, t2) = type_visitor#typ t2 in
                let (_, t3) = type_visitor#typ t3 in
-               super#special (Table (v1, v2, v3, (t1, t2, t3)))
+               super#special (Table { database; table; keys; temporal_fields; table_type = (tmp, t1, t2, t3) })
             | Query (opt, policy, computation, datatype) ->
                let (_, datatype) = type_visitor#typ datatype in
                super#special (Query (opt, policy, computation, datatype))
