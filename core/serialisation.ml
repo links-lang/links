@@ -452,6 +452,51 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
                     |> Value.box_datetime)
             | _, _ -> None
       in
+
+      let parse_table bs =
+        let database =
+          begin
+            match List.assoc "db" bs |> from_json with
+            | `Database db -> db
+            | _ -> raise (error ("first argument to a table must be a database"))
+          end in
+        let name = assoc_string "name" bs in
+        let keys = List.assoc "keys" bs |> unwrap_list in
+        let keys =
+          List.map (function
+              | `List part_keys -> List.map unwrap_string part_keys
+              | _ -> raise (error "keys must be lists of strings")) keys in
+        let temporality =
+          match assoc_string "temporality" bs with
+            | "current" -> Temporality.current
+            | "transaction_time" -> Temporality.transaction
+            | "valid_time" -> Temporality.valid
+            | _ -> raise (error "Temporality must be one of current, transaction_time, or valid_time")
+        in
+        let temporal_fields =
+          match List.assoc_opt "temporal_fields" bs with
+            | Some (`Assoc temporal_fields) ->
+                Some (
+                  assoc_string "from_field" temporal_fields,
+                  assoc_string "to_field" temporal_fields)
+            | Some _ ->
+                raise (error "Temporal fields must be an association list")
+            | _ -> None
+        in
+        let row_type =
+          DesugarDatatypes.read
+            ~aliases:E.String.empty
+            (assoc_string "row" bs) in
+        let row =
+          begin
+            match row_type with
+            | Types.Record (Types.Row row) -> row
+            | _ -> raise (error ("tables must have record type"))
+          end
+        in
+        Value.make_table ~database ~name ~keys ~temporality ~temporal_fields ~row
+      in
+
       let (<|>) (o1: unit -> t option) (o2: unit -> t option) : unit -> t option =
         match o1 () with
         | Some x -> (fun () -> Some x)
@@ -506,29 +551,7 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
          raise (error (
                     "db should be an assoc list. Got: " ^ (Yojson.Basic.to_string nonsense)))
       | `Assoc [("_table", `Assoc bs)] ->
-         let db =
-           begin
-             match List.assoc "db" bs |> from_json with
-             | `Database db -> db
-             | _ -> raise (error ("first argument to a table must be a database"))
-           end in
-         let name = assoc_string "name" bs in
-         let row_type =
-           DesugarDatatypes.read
-             ~aliases:E.String.empty
-             (assoc_string "row" bs) in
-         let row =
-           begin
-             match row_type with
-             | Types.Record (Types.Row row) -> row
-             | _ -> raise (error ("tables must have record type"))
-           end in
-         let keys = List.assoc "keys" bs |> unwrap_list in
-         let keys =
-           List.map (function
-               | `List part_keys -> List.map unwrap_string part_keys
-               | _ -> raise (error "keys must be lists of strings")) keys in
-         `Table (db, name, keys, row)
+         `Table (parse_table bs)
       | `Assoc [("_table", nonsense)] ->
          raise (error (
                     "table should be an assoc list. Got: " ^ (Yojson.Basic.to_string nonsense)))
