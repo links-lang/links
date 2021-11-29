@@ -789,4 +789,4 @@ let insert table_name field_names rows =
   Sql.(Insert {
       ins_table = table_name;
       ins_fields = field_names;
-      ins_records = rows })
+      ins_records = Values rows })
