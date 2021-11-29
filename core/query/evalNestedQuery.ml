@@ -472,7 +472,7 @@ struct
         (List.map
            (fun (_, source) ->
              match source with
-               | QL.Table (_, _, _, row) ->
+               | QL.Table Value.{ row; _ } ->
                  Types.Record (Types.Row row)
                | _ -> assert false)
            gs_out) in
