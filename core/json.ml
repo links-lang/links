@@ -45,14 +45,38 @@ let json_of_db (db, params) : Yojson.Basic.t =
 WARNING:
   May need to be careful about free type variables / aliases in row
 *)
-let json_of_table ((db, params), name, keys, row) : Yojson.Basic.t =
+let json_of_table Value.{
+  database = (db, params); name; keys; temporality;
+  temporal_fields; row } : Yojson.Basic.t =
+
   let json_of_key k = `List (List.map (fun x -> `String x) k) in
   let json_of_keylist ks = `List (List.map json_of_key ks)  in
-  `Assoc [
-    ("_table",
-      `Assoc [("db", json_of_db (db, params)); ("name", `String name);
+  let tmp =
+    match temporality with
+      | Temporality.Current -> "current"
+      | Temporality.Transaction -> "current"
+      | Temporality.Valid -> "current"
+  in
+  let tmp_fields =
+    match temporal_fields with
+      | Some (from_field, to_field) ->
+          [("temporal_fields",
+              `Assoc [
+                ("from_field", `String from_field);
+                ("to_field",   `String to_field)
+              ])]
+      | None -> []
+  in
+  let table_assoc =
+    [
+        ("db", json_of_db (db, params));
+        ("name", `String name);
+        ("temporality", `String tmp);
         ("row", `String (Types.(string_of_datatype (Record (Row row)))));
-        ("keys", json_of_keylist keys)])]
+        ("keys", json_of_keylist keys)
+    ] @ tmp_fields
+  in
+  `Assoc [("_table", `Assoc table_assoc)]
 
 let json_of_lens (db, lens) : Yojson.Basic.t =
   let db =

@@ -361,13 +361,12 @@ end
 
 (* Temporality of queries, inserts, and temporal joins *)
 module Temporality = struct
-  type t = Current | Transaction | Valid | Bitemporal
+  type t = Current | Transaction | Valid
   [@@deriving show, yojson]
 
   let current = Current
   let transaction = Transaction
   let valid = Valid
-  let bitemporal = Bitemporal
 end
 
 (* Accessor / Mutation operations *)
