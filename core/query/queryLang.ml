@@ -532,261 +532,261 @@ let check_policies_compatible env_policy block_policy =
     raise (Errors.runtime_error error)
 
 (* convert a regexp to a like if possible *)
-  let rec likeify v =
-    let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
-    let append x y = Apply (Primitive "^^",  [x; y]) in
-    let str x = Constant (Constant.String x) in
-      match v with
-        | Variant ("Repeat", pair) ->
-            begin
-              match unbox_pair pair with
-                | Variant ("Star", _), Variant ("Any", _) ->
-                    Some (str "%")
-                | _ -> None
-            end
-        | Variant ("Simply", Constant (Constant.String s)) ->
-            Some (str (quote s))
-        | Variant ("Simply", Project (v, field)) ->
-            Some (Project (v, field))
-        | Variant ("Quote", Variant ("Simply", v)) ->
-           let rec string =
-              function
-                | Constant (Constant.String s) -> Some (str (quote s))
-                | Singleton (Constant (Constant.Char c)) ->
-                    Some (str (string_of_char c))
-                | Project (v, field) ->
-                    Some (Project (v, field))
-                | Apply (Primitive "intToString", [Constant (Constant.Int x)]) ->
-                    Some (str (string_of_int x))
-                | Concat vs ->
-                    let rec concat =
-                      function
-                        | [] -> Some (str "")
-                        | v::vs ->
-                            begin
-                              match string v with
-                                | None -> None
-                                | Some s ->
-                                    begin
-                                      match concat vs with
-                                        | None -> None
-                                        | Some s' ->
-                                            Some (append s s')
-                                    end
-                            end
-                    in
-                      concat vs
-                | _ -> None
-            in
-              string v
-        | Variant ("Seq", rs) ->
-            let rec seq =
-              function
-                | [] -> Some (str "")
-                | r::rs ->
-                    begin
-                      match likeify r with
-                        | None -> None
-                        | Some s ->
-                            begin
-                              match seq rs with
-                                | None -> None
-                                | Some s' -> Some (append s s')
-                            end
-                    end
-            in
-              seq (unbox_list rs)
-        | Variant ("StartAnchor", _) -> Some (str "")
-        | Variant ("EndAnchor", _) -> Some (str "")
-        | e ->
-            Debug.print ("Could not likeify: " ^ (string_of_t e));
-            assert false
-
-  let rec select_clause : Sql.index -> bool -> t -> Sql.select_clause =
-    fun index unit_query v ->
-    (*  Debug.print ("select_clause: "^string_of_t v); *)
+let rec likeify v =
+  let quote = Str.global_replace (Str.regexp_string "%") "\\%" in
+  let append x y = Apply (Primitive "^^",  [x; y]) in
+  let str x = Constant (Constant.String x) in
     match v with
-      | Concat _ -> assert false
-      | For (_, [], _, body) ->
-          select_clause index unit_query body
-      | For (_, (x, Table Value.{ name; _ })::gs, os, body) ->
-          let body = select_clause index unit_query (For (None, gs, [], body)) in
-          let os = List.map (base index) os in
-            begin
-              match body with
-                | (_, fields, tables, condition, []) ->
-                    (Sql.All, fields, Sql.TableRef(name, x)::tables, condition, os)
-                | _ -> assert false
-            end
-      | If (c, body, Concat []) ->
-        (* Turn conditionals into where clauses. We might want to do
-           this earlier on.  *)
-        let c = base index c in
-        let (_, fields, tables, c', os) = select_clause index unit_query body in
-        let c = Sql.smart_and c c' in
-        (Sql.All, fields, tables, c, os)
-      | Table Value.{ name = table; row = (fields, _, _); _ } ->
-        (* eta expand tables. We might want to do this earlier on.  *)
-        (* In fact this should never be necessary as it is impossible
-           to produce non-eta expanded tables. *)
-        let var = Sql.fresh_table_var () in
-        let fields =
-          Sql.Fields
-            (List.rev
-              (StringMap.fold
-                (fun name _ fields ->
-                  (Sql.Project (var, name), name)::fields)
-                fields
-                []))
-        in
-          (Sql.All, fields, [Sql.TableRef(table, var)], Sql.Constant (Constant.Bool true), [])
-      | Singleton _ when unit_query ->
-        (* If we're inside an Sql.Empty or a Sql.Length it's safe to ignore
-           any fields here. *)
-        (* We currently detect this earlier, so the unit_query stuff here
-           is redundant. *)
-        (Sql.All, Sql.Fields [], [], Sql.Constant (Constant.Bool true), [])
-      | Singleton (Record fields) ->
-        let fields =
-          Sql.Fields
-            (List.rev
-              (StringMap.fold
-                (fun name v fields ->
-                  (base index v, name)::fields)
-                fields
-                []))
-        in
-          (Sql.All, fields, [], Sql.Constant (Constant.Bool true), [])
-      | _ -> assert false
-  and clause : Sql.index -> bool -> t -> Sql.query =
-    fun index unit_query v -> Sql.Select(select_clause index unit_query v)
-  and base : Sql.index -> t -> Sql.base = fun index ->
-    function
-      | If (c, t, e) ->
-        Sql.Case (base index c, base index t, base index e)
-      | Apply (Primitive "tilde", [s; r]) ->
-        begin
-          match likeify r with
-            | Some r ->
-              Sql.Apply ("LIKE", [base index s; base index r])
-            | None ->
-                begin
-                  let r =
-                    (* HACK:
-                       this only works if the regexp doesn't include any variables bound by the query
-                    *)
-                    Sql.Constant (Constant.String (Regex.string_of_regex (Linksregex.Regex.ofLinks (value_of_expression r))))
-                  in
-                    Sql.Apply ("RLIKE", [base index s; r])
-                end
+      | Variant ("Repeat", pair) ->
+          begin
+            match unbox_pair pair with
+              | Variant ("Star", _), Variant ("Any", _) ->
+                  Some (str "%")
+              | _ -> None
           end
-      | Apply (Primitive "Empty", [v]) ->
-          Sql.Empty (unit_query v)
-      | Apply (Primitive "length", [v]) ->
-          Sql.Length (unit_query v)
-      | Apply (Primitive f, vs) ->
-          Sql.Apply (f, List.map (base index) vs)
-      | Project (Var (x, _tyx), name) ->
-          Sql.Project (x, name)
-      | Constant c -> Sql.Constant c
-      | Primitive "index" ->
-          (* This is the only place the index parameter is ever materially used. *)
-          Sql.RowNumber index
+      | Variant ("Simply", Constant (Constant.String s)) ->
+          Some (str (quote s))
+      | Variant ("Simply", Project (v, field)) ->
+          Some (Project (v, field))
+      | Variant ("Quote", Variant ("Simply", v)) ->
+         let rec string =
+            function
+              | Constant (Constant.String s) -> Some (str (quote s))
+              | Singleton (Constant (Constant.Char c)) ->
+                  Some (str (string_of_char c))
+              | Project (v, field) ->
+                  Some (Project (v, field))
+              | Apply (Primitive "intToString", [Constant (Constant.Int x)]) ->
+                  Some (str (string_of_int x))
+              | Concat vs ->
+                  let rec concat =
+                    function
+                      | [] -> Some (str "")
+                      | v::vs ->
+                          begin
+                            match string v with
+                              | None -> None
+                              | Some s ->
+                                  begin
+                                    match concat vs with
+                                      | None -> None
+                                      | Some s' ->
+                                          Some (append s s')
+                                  end
+                          end
+                  in
+                    concat vs
+              | _ -> None
+          in
+            string v
+      | Variant ("Seq", rs) ->
+          let rec seq =
+            function
+              | [] -> Some (str "")
+              | r::rs ->
+                  begin
+                    match likeify r with
+                      | None -> None
+                      | Some s ->
+                          begin
+                            match seq rs with
+                              | None -> None
+                              | Some s' -> Some (append s s')
+                          end
+                  end
+          in
+            seq (unbox_list rs)
+      | Variant ("StartAnchor", _) -> Some (str "")
+      | Variant ("EndAnchor", _) -> Some (str "")
       | e ->
-        Debug.print ("Not a base expression: " ^ show e);
-        assert false
+          Debug.print ("Could not likeify: " ^ (string_of_t e));
+          assert false
 
-  and unit_query v =
-    let prepare_clauses : t -> t list =
-      function
-        | Concat vs -> vs
-        | v -> [v]
-    in
-    (* queries passed to Empty and Length
-       (where we don't care about what data they return)
-    *)
-    Sql.Union (Sql.All, List.map (clause [] true) (prepare_clauses v), 0)
-  and sql_of_query v =
-    clause [] false v
+let rec select_clause : Sql.index -> bool -> t -> Sql.select_clause =
+  fun index unit_query v ->
+  (*  Debug.print ("select_clause: "^string_of_t v); *)
+  match v with
+    | Concat _ -> assert false
+    | For (_, [], _, body) ->
+        select_clause index unit_query body
+    | For (_, (x, Table Value.{ name; _ })::gs, os, body) ->
+        let body = select_clause index unit_query (For (None, gs, [], body)) in
+        let os = List.map (base index) os in
+          begin
+            match body with
+              | (_, fields, tables, condition, []) ->
+                  (Sql.All, fields, Sql.TableRef(name, x)::tables, condition, os)
+              | _ -> assert false
+          end
+    | If (c, body, Concat []) ->
+      (* Turn conditionals into where clauses. We might want to do
+         this earlier on.  *)
+      let c = base index c in
+      let (_, fields, tables, c', os) = select_clause index unit_query body in
+      let c = Sql.smart_and c c' in
+      (Sql.All, fields, tables, c, os)
+    | Table Value.{ name = table; row = (fields, _, _); _ } ->
+      (* eta expand tables. We might want to do this earlier on.  *)
+      (* In fact this should never be necessary as it is impossible
+         to produce non-eta expanded tables. *)
+      let var = Sql.fresh_table_var () in
+      let fields =
+        Sql.Fields
+          (List.rev
+            (StringMap.fold
+              (fun name _ fields ->
+                (Sql.Project (var, name), name)::fields)
+              fields
+              []))
+      in
+        (Sql.All, fields, [Sql.TableRef(table, var)], Sql.Constant (Constant.Bool true), [])
+    | Singleton _ when unit_query ->
+      (* If we're inside an Sql.Empty or a Sql.Length it's safe to ignore
+         any fields here. *)
+      (* We currently detect this earlier, so the unit_query stuff here
+         is redundant. *)
+      (Sql.All, Sql.Fields [], [], Sql.Constant (Constant.Bool true), [])
+    | Singleton (Record fields) ->
+      let fields =
+        Sql.Fields
+          (List.rev
+            (StringMap.fold
+              (fun name v fields ->
+                (base index v, name)::fields)
+              fields
+              []))
+      in
+        (Sql.All, fields, [], Sql.Constant (Constant.Bool true), [])
+    | _ -> assert false
+and clause : Sql.index -> bool -> t -> Sql.query =
+  fun index unit_query v -> Sql.Select(select_clause index unit_query v)
+and base : Sql.index -> t -> Sql.base = fun index ->
+  function
+    | If (c, t, e) ->
+      Sql.Case (base index c, base index t, base index e)
+    | Apply (Primitive "tilde", [s; r]) ->
+      begin
+        match likeify r with
+          | Some r ->
+            Sql.Apply ("LIKE", [base index s; base index r])
+          | None ->
+              begin
+                let r =
+                  (* HACK:
+                     this only works if the regexp doesn't include any variables bound by the query
+                  *)
+                  Sql.Constant (Constant.String (Regex.string_of_regex (Linksregex.Regex.ofLinks (value_of_expression r))))
+                in
+                  Sql.Apply ("RLIKE", [base index s; r])
+              end
+        end
+    | Apply (Primitive "Empty", [v]) ->
+        Sql.Empty (unit_query v)
+    | Apply (Primitive "length", [v]) ->
+        Sql.Length (unit_query v)
+    | Apply (Primitive f, vs) ->
+        Sql.Apply (f, List.map (base index) vs)
+    | Project (Var (x, _tyx), name) ->
+        Sql.Project (x, name)
+    | Constant c -> Sql.Constant c
+    | Primitive "index" ->
+        (* This is the only place the index parameter is ever materially used. *)
+        Sql.RowNumber index
+    | e ->
+      Debug.print ("Not a base expression: " ^ show e);
+      assert false
 
-  (* The following code is specific to nested queries *)
-  (* The index parameter is essentially a free variable in the query
-     that can only be replaced by Sql.RowNumber index.
-     It would be nice to be able to remove this parameter and just
-     substitute the SQL RowNumber expression when we generate SQL.
-     Then the following nesting-specific code could live somewhere else, such as
-     evalNestedQuery. *)
-
-  type let_clause = Var.var * t * Var.var * t
-  type let_query = let_clause list
-
-
-  let gens_index (gs : (Var.var * t) list)   =
-    let open Value in
-    let all_fields t =
-      let field_types = table_field_types t in
-      labels_of_field_types field_types
-    in
-   (* Use keys if available *)
-    let key_fields t =
-      match t.keys with
-        | (ks::_) -> StringSet.from_list ks
-        | _ -> all_fields t
-    in
-    let table_index (x, source) =
-      let t = match source with Table t -> t | _ -> assert false in
-      let labels = key_fields t in
-        List.rev
-          (StringSet.fold
-             (fun name ps -> (x, name) :: ps)
-             labels
-             [])
-    in concat_map (table_index) gs
-
-  let outer_index gs_out = gens_index gs_out
-  let inner_index z gs_in =
-    (* it's just a dynamic index! *)
-    (z, "2") :: gens_index gs_in
-
-  let extract_gens =
+and unit_query v =
+  let prepare_clauses : t -> t list =
     function
-      | For (_, gs, _, _) -> gs
-      | _ -> assert false
+      | Concat vs -> vs
+      | v -> [v]
+  in
+  (* queries passed to Empty and Length
+     (where we don't care about what data they return)
+  *)
+  Sql.Union (Sql.All, List.map (clause [] true) (prepare_clauses v), 0)
+and sql_of_query v =
+  clause [] false v
 
-  let let_clause : let_clause -> Sql.query =
-    fun (q, outer, t, inner) ->
-      let gs_out = extract_gens outer in
-      let gs_in = extract_gens inner in
-      let q_outer = clause (outer_index gs_out) false outer in
-      let (_fDist, result,tables,where,os) = select_clause (inner_index t gs_in) false inner in
-      let tablename = Sql.string_of_subquery_var q in
-      let q_inner = Sql.Select(Sql.All,result,Sql.TableRef(tablename,t)::tables,where,os) in
-      Sql.With (tablename, q_outer, q_inner)
+(* The following code is specific to nested queries *)
+(* The index parameter is essentially a free variable in the query
+   that can only be replaced by Sql.RowNumber index.
+   It would be nice to be able to remove this parameter and just
+   substitute the SQL RowNumber expression when we generate SQL.
+   Then the following nesting-specific code could live somewhere else, such as
+   evalNestedQuery. *)
 
-  let sql_of_let_query : let_query -> Sql.query =
-    fun cs ->
-      Sql.Union (Sql.All, List.map (let_clause) cs, 0)
+type let_clause = Var.var * t * Var.var * t
+type let_query = let_clause list
 
-  let update : ((Ir.var * string) * t option * t) -> Sql.query =
-    fun ((_, table), where, body) ->
-      let open Sql in
-      let upd_where =
-        OptionUtils.opt_map (base []) where in
-      let upd_fields =
-        unbox_record body
-        |> StringMap.map (base [])
-        |> StringMap.to_alist in
-      Update { upd_table = table; upd_fields; upd_where }
 
-  let delete : ((Ir.var * string) * t option) -> Sql.query =
-    fun ((_, table), where) ->
-      let open Sql in
-      let del_where = OptionUtils.opt_map (base []) where in
-      Delete { del_table = table; del_where }
+let gens_index (gs : (Var.var * t) list)   =
+  let open Value in
+  let all_fields t =
+    let field_types = table_field_types t in
+    labels_of_field_types field_types
+  in
+ (* Use keys if available *)
+  let key_fields t =
+    match t.keys with
+      | (ks::_) -> StringSet.from_list ks
+      | _ -> all_fields t
+  in
+  let table_index (x, source) =
+    let t = match source with Table t -> t | _ -> assert false in
+    let labels = key_fields t in
+      List.rev
+        (StringSet.fold
+           (fun name ps -> (x, name) :: ps)
+           labels
+           [])
+  in concat_map (table_index) gs
 
-  let insert table_name field_names rows =
-    let rows = List.map (List.map (expression_of_base_value ->- base [])) rows in
-    Sql.(Insert {
-        ins_table = table_name;
-        ins_fields = field_names;
-        ins_records = rows })
+let outer_index gs_out = gens_index gs_out
+let inner_index z gs_in =
+  (* it's just a dynamic index! *)
+  (z, "2") :: gens_index gs_in
+
+let extract_gens =
+  function
+    | For (_, gs, _, _) -> gs
+    | _ -> assert false
+
+let let_clause : let_clause -> Sql.query =
+  fun (q, outer, t, inner) ->
+    let gs_out = extract_gens outer in
+    let gs_in = extract_gens inner in
+    let q_outer = clause (outer_index gs_out) false outer in
+    let (_fDist, result,tables,where,os) = select_clause (inner_index t gs_in) false inner in
+    let tablename = Sql.string_of_subquery_var q in
+    let q_inner = Sql.Select(Sql.All,result,Sql.TableRef(tablename,t)::tables,where,os) in
+    Sql.With (tablename, q_outer, q_inner)
+
+let sql_of_let_query : let_query -> Sql.query =
+  fun cs ->
+    Sql.Union (Sql.All, List.map (let_clause) cs, 0)
+
+let update : ((Ir.var * string) * t option * t) -> Sql.query =
+  fun ((_, table), where, body) ->
+    let open Sql in
+    let upd_where =
+      OptionUtils.opt_map (base []) where in
+    let upd_fields =
+      unbox_record body
+      |> StringMap.map (base [])
+      |> StringMap.to_alist in
+    Update { upd_table = table; upd_fields; upd_where }
+
+let delete : ((Ir.var * string) * t option) -> Sql.query =
+  fun ((_, table), where) ->
+    let open Sql in
+    let del_where = OptionUtils.opt_map (base []) where in
+    Delete { del_table = table; del_where }
+
+let insert table_name field_names rows =
+  let rows = List.map (List.map (expression_of_base_value ->- base [])) rows in
+  Sql.(Insert {
+      ins_table = table_name;
+      ins_fields = field_names;
+      ins_records = rows })
