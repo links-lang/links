@@ -61,6 +61,10 @@ let lens_db_of_db cstr (db : Value.database) =
   }
 
 let lens_table_of_table (table : Value.table) =
-  let _, table, keys, _ = table in
-  let open Lens.Database.Table in
-  { name = table; keys }
+  let open Value in
+  if table.temporality <> CommonTypes.Temporality.current then
+    raise (Errors.runtime_error "Cannot use lenses with temporal tables.")
+  else
+    let { name = tbl_name; keys; _ } = table in
+    let open Lens.Database.Table in
+    { name = tbl_name; keys }
