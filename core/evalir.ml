@@ -689,7 +689,7 @@ struct
         Lens.Eval.put ~behaviour ~db lens data |> Lens_errors.unpack_eval_error ~die:(eval_error "%s");
         Value.box_unit () |> apply_cont cont env
     | Table { database; name; keys; temporal_fields;
-                tbl_type = (tmp, readtype, _, _) } ->
+                tbl_type = (temporality, readtype, _, _) } ->
       begin
         (* OPTIMISATION: we could arrange for concrete_type to have
            already been applied here *)
@@ -705,7 +705,8 @@ struct
                 (Value.unbox_list keys)
             in
             let tbl =
-                Value.make_table ~database:(db, params) ~name ~keys ~temporal_fields ~row
+                Value.make_table ~database:(db, params) ~name
+                    ~keys ~temporality ~temporal_fields ~row
             in
             apply_cont cont env (`Table tbl)
           | _ -> eval_error "Error evaluating table handle"
