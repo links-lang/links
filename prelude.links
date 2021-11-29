@@ -530,6 +530,40 @@ fun distinct(t) server {
 	dedup(asList(t))
 }
 
+# aggregations for integers
+
+fun intSum(l) server {
+  unsafe sig aux : ([Int],Int) -> Int
+  fun aux(vl, acc) {
+    switch (vl) {
+      case [] -> acc
+      case x::xs -> aux(xs,x+acc)
+    }
+  }
+  aux(l,0) 
+}
+
+# aggregations for floats
+
+fun floatSum(l) server {
+  unsafe sig aux : ([Float],Float) -> Float
+  fun aux(vl, acc) {
+    switch (vl) {
+      case [] -> acc
+      case x::xs -> aux(xs,x+.acc)
+    }
+  }
+  aux(l,0.0) 
+}
+
+fun floatAvg(l) server {
+  floatSum(l) /. intToFloat(length(l))
+}
+
+
+
+
+
 # Gets children of elements in an XML forest, concatenated in order
 # @param {Xml} xml
 # @returns {Xml}
