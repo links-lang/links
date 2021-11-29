@@ -688,7 +688,8 @@ struct
           else Lens.Eval.Incremental in
         Lens.Eval.put ~behaviour ~db lens data |> Lens_errors.unpack_eval_error ~die:(eval_error "%s");
         Value.box_unit () |> apply_cont cont env
-    | Table (db, name, keys, (readtype, _, _)) ->
+    | Table { database; name; keys; temporal_fields;
+                tbl_type = (tmp, readtype, _, _) } ->
       begin
         (* OPTIMISATION: we could arrange for concrete_type to have
            already been applied here *)
@@ -702,7 +703,11 @@ struct
                 (fun key ->
                   List.map Value.unbox_string (Value.unbox_list key))
                 (Value.unbox_list keys)
-            in apply_cont cont env (`Table ((db, params), Value.unbox_string name, unboxed_keys, row))
+            in
+            let tbl =
+                Value.make_table ~database:(db, params) ~name ~keys ~temporal_fields ~row
+            in
+            apply_cont cont env (`Table tbl)
           | _ -> eval_error "Error evaluating table handle"
       end
     | Query (range, policy, e, _t) ->
