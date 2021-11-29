@@ -94,7 +94,7 @@ module Compressible = struct
     (* include V *)
 
     type compressed_timestamp = [
-      |`Infinity
+      | `Infinity
       | `MinusInfinity
       | `Timestamp of float (* UTC UNIX timestamp *)
     ]
@@ -108,7 +108,13 @@ module Compressible = struct
       | `Int of int
       | `XML of xmlitem
       | `String of string
-      | `Table of string * string * string list list * string
+      | `Table of
+          string (* database name *) *
+          string (* table name *) *
+          string list list (* keys *) *
+          Temporality.t (* temporality *) *
+          (string * string) option (* temporal fields *) *
+          string (* serialised datatype *)
       | `Database of string
       | `DateTime of compressed_timestamp
       ]
@@ -137,8 +143,11 @@ module Compressible = struct
       | `Int i -> `Int i
       | `XML x -> `XML x
       | `String s -> `String s
-      | `Table ((_database, db), table, keys, row) ->
-         `Table (db, table, keys, Types.string_of_datatype (Types.Record (Types.Row row)))
+      | `Table { database = (_, db); name; keys; temporality; temporal_fields; row } ->
+          let type_str =
+            Types.string_of_datatype (Types.Record (Types.Row row))
+          in
+          `Table (db, name, keys, temporality, temporal_fields, type_str)
       | `Database (_database, s) -> `Database s
       | `DateTime Timestamp.Infinity -> `DateTime `Infinity
       | `DateTime Timestamp.MinusInfinity -> `DateTime `MinusInfinity
@@ -169,14 +178,18 @@ module Compressible = struct
 
     let decompress_primitive : compressed_primitive_value -> [> primitive_value] = function
       | #primitive_value_basis as v -> v
-      | `Table (db_name, table_name, keys, t) ->
+      | `Table (db_name, table_name, keys, temporality, temporal_fields, t) ->
          let row =
            match DesugarDatatypes.read ~aliases:DefaultAliases.alias_env t with
            | Types.Record (Types.Row row) -> row
            | _ -> assert false in
          let driver, params = parse_db_string db_name in
          let database = db_connect driver params in
-         `Table (database, table_name, keys, row)
+         let tbl =
+           Value.make_table ~database ~name:table_name ~keys
+             ~temporality ~temporal_fields ~row
+         in
+         `Table tbl
       | `Database s ->
          let driver, params = parse_db_string s in
          let database = db_connect driver params in
@@ -347,7 +360,7 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
     let error err = Errors.runtime_error err
     (* The JSON spec says that the fields in an object must be unordered.
      * Therefore, for objects with more than one field, it's best to do
-     * individual field lookups. We can be match directly on ones with single
+     * individual field lookups. We can match directly on ones with single
      * fields though. *)
     let rec value_of_json (json: Yojson.Basic.t) : Value.t =
       let from_json = value_of_json in
