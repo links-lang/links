@@ -93,7 +93,6 @@ let temporality_of_string p =
   | "valid"       -> Temporality.valid
   | "transaction" -> Temporality.transaction
   | "current"     -> Temporality.current
-  | "bitemporal"  -> Temporality.bitemporal
   | rest          ->
      raise (ConcreteSyntaxError (pos p, "Invalid temporality: " ^ rest))
 
@@ -339,7 +338,7 @@ let parse_foreign_language pos lang =
 %token TRY OTHERWISE RAISE
 %token <string> OPERATOR
 %token USING
-%token LTLARROW LBLARROW LVLARROW
+%token LTLARROW LVLARROW
 %token SEQUENCED CURRENT NONSEQUENCED TO BETWEEN
 %token TTINSERT VTINSERT
 
@@ -680,7 +679,6 @@ typed_expression:
 mode_not_valid:
 | LLARROW                                                      { Temporality.current }
 | LTLARROW                                                     { Temporality.transaction }
-| LBLARROW                                                     { Temporality.bitemporal }
 
 valid_time_exps:
 | labeled_exps { $1, None, None }
@@ -708,7 +706,7 @@ update_expression:
                                                                      | Temporality.Current -> None
                                                                      | Temporality.Transaction -> Some TransactionTimeUpdate
                                                                      | Temporality.Valid -> assert false
-                                                                     | Temporality.Bitemporal -> assert false (* not yet supported *) in
+                                                                 in
                                                                  with_pos $loc (DBUpdate (upd, $3, $5, $7, $10)) }
 
 delete_expression:
@@ -728,7 +726,7 @@ delete_expression:
                                                                      | Temporality.Current -> None
                                                                      | Temporality.Transaction -> Some TransactionTimeDeletion
                                                                      | Temporality.Valid -> assert false
-                                                                     | Temporality.Bitemporal -> assert false (* unsupported *) in
+                                                                 in
                                                                  with_pos $loc (DBDelete (upd, $3, $5, $7)) }
 
 db_expression:
@@ -822,7 +820,6 @@ table_generator:
 | pattern LLARROW exp                                          { (Temporality.current, $1, $3) }
 | pattern LTLARROW exp                                         { (Temporality.transaction, $1, $3) }
 | pattern LVLARROW exp                                         { (Temporality.valid, $1, $3) }
-| pattern LBLARROW exp                                         { (Temporality.bitemporal, $1, $3) }
 
 perhaps_where:
 | /* empty */                                                  { None    }

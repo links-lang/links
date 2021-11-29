@@ -205,7 +205,6 @@ rule lex ctxt nl = parse
   | "<--"                               { LLARROW }
   | "<-t-"                              { LTLARROW }
   | "<-v-"                              { LVLARROW }
-  | "<-b-"                              { LBLARROW }
   | "<-"                                { LARROW }
   | "<|"                                { LEFTTRIANGLE }
   | "|>"                                { RIGHTTRIANGLE }
