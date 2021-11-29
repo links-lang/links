@@ -160,7 +160,7 @@ let rec reduce_for_source : Q.t * (Q.t -> Q.t) -> Q.t =
 
           *)
           reduce_for_body (gs, os, rs v)
-        | Q.Table (_,_,_, row) ->
+        | Q.Table Value.{ row; _ } ->
           (* we need to generate a fresh variable in order to
               correctly handle self joins *)
           let x = Var.fresh_raw_var () in
@@ -348,12 +348,13 @@ struct
         let open Q in
         check_policies_compatible env.policy policy;
         computation env e
-    | Special (Ir.Table (db, name, keys, (readtype, _, _))) as _s ->
+    | Special (Ir.Table { database; table = name; keys; temporal_fields;
+                table_type = (temporality, readtype, _, _) }) ->
        (*  WR: this case is because shredding needs to access the keys of tables
            but can we avoid it (issue #432)? *)
        (* Copied almost verbatim from evalir.ml, which seems wrong, we should probably call into that. *)
        begin
-         match xlate env db, xlate env name, xlate env keys, (TypeUtils.concrete_type readtype) with
+         match xlate env database, xlate env name, xlate env keys, (TypeUtils.concrete_type readtype) with
          | Q.Database (db, params), name, keys, Types.Record (Types.Row row) ->
             let unboxed_keys =
               List.map
@@ -361,7 +362,12 @@ struct
                   List.map Q.unbox_string (Q.unbox_list key))
                 (Q.unbox_list keys)
             in
-            Q.Table ((db, params), Q.unbox_string name, unboxed_keys, row)
+            let tbl =
+                Value.make_table ~database:(db, params)
+                    ~name:(Q.unbox_string name) ~keys:unboxed_keys
+                    ~temporality ~temporal_fields ~row
+            in
+            Q.Table tbl
          | _ -> Q.query_error "Error evaluating table handle"
        end
     | Special _s ->

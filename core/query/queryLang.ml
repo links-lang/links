@@ -173,7 +173,7 @@ let field_types_of_row r =
         let (field_spec_map,_,_) = TypeUtils.extract_row_parts r in
           field_types_of_spec_map field_spec_map
 
-let table_field_types (_, _, _, (field_spec_map, _, _)) =
+let table_field_types Value.{ row = (field_spec_map, _, _); _ } =
         field_types_of_spec_map field_spec_map
 
 let unbox_xml =
@@ -301,7 +301,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
   | Singleton t -> Types.make_list_type (te t)
   | Record fields -> record fields
   | If (_, t, _) -> te t
-  | Table (_, _, _, row) -> Types.make_list_type (Types.Record (Types.Row row))
+  | Table Value.{ row; _ } -> Types.make_list_type (Types.Record (Types.Row row))
   | Dedup u
   | Prom u -> te u
   | Constant (Constant.Bool   _) -> Types.bool_type
@@ -373,7 +373,7 @@ let used_database v : Value.database option =
         end
   and used =
     function
-      | Table ((db, _), _, _, _) -> Some db
+      | Table Value.{ database = (db, _); _ } -> Some db
       | For (_, gs, _, _body) -> List.map snd gs |> traverse
       | Singleton v -> used v
       | Record v ->
@@ -609,13 +609,13 @@ let check_policies_compatible env_policy block_policy =
       | Concat _ -> assert false
       | For (_, [], _, body) ->
           select_clause index unit_query body
-      | For (_, (x, Table (_db, table, _keys, _row))::gs, os, body) ->
+      | For (_, (x, Table Value.{ name; _ })::gs, os, body) ->
           let body = select_clause index unit_query (For (None, gs, [], body)) in
           let os = List.map (base index) os in
             begin
               match body with
                 | (_, fields, tables, condition, []) ->
-                    (Sql.All, fields, Sql.TableRef(table, x)::tables, condition, os)
+                    (Sql.All, fields, Sql.TableRef(name, x)::tables, condition, os)
                 | _ -> assert false
             end
       | If (c, body, Concat []) ->
@@ -625,7 +625,7 @@ let check_policies_compatible env_policy block_policy =
         let (_, fields, tables, c', os) = select_clause index unit_query body in
         let c = Sql.smart_and c c' in
         (Sql.All, fields, tables, c, os)
-      | Table (_db, table, _keys, (fields, _, _)) ->
+      | Table Value.{ name = table; row = (fields, _, _); _ } ->
         (* eta expand tables. We might want to do this earlier on.  *)
         (* In fact this should never be necessary as it is impossible
            to produce non-eta expanded tables. *)
@@ -722,25 +722,26 @@ let check_policies_compatible env_policy block_policy =
 
 
   let gens_index (gs : (Var.var * t) list)   =
+    let open Value in
     let all_fields t =
       let field_types = table_field_types t in
       labels_of_field_types field_types
     in
    (* Use keys if available *)
     let key_fields t =
-      match t with
-        (_, _, (ks::_), _) -> StringSet.from_list ks
-      |    _ -> all_fields t
+      match t.keys with
+        | (ks::_) -> StringSet.from_list ks
+        | _ -> all_fields t
     in
-    let table_index get_fields (x, source) =
+    let table_index (x, source) =
       let t = match source with Table t -> t | _ -> assert false in
-      let labels = get_fields t in
+      let labels = key_fields t in
         List.rev
           (StringSet.fold
              (fun name ps -> (x, name) :: ps)
              labels
              [])
-    in concat_map (table_index key_fields) gs
+    in concat_map (table_index) gs
 
   let outer_index gs_out = gens_index gs_out
   let inner_index z gs_in =
