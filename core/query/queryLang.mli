@@ -96,6 +96,7 @@ val is_list : t -> bool
 
 val likeify : t -> t option
 val sql_of_query : t -> Sql.query
+val base : Sql.index -> t -> Sql.base
 
 (* Specific to nested queries *)
 type let_clause = Var.var * t * Var.var * t

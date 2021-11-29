@@ -397,10 +397,14 @@ module TemporalOperation = struct
             | To -> "vtTo"
             | Data -> "vtData"
         end
-    | _ -> assert false (* Not possible, yet. *)
+    | _ -> assert false (* No accessors for Current time tables. *)
 
   let field = function
     | Data -> "!data"
     | From -> "!from"
     | To -> "!to"
+
+  let data_field = field Data
+  let from_field = field From
+  let to_field = field To
 end

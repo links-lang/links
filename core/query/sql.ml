@@ -13,7 +13,7 @@ type query =
   | Insert    of {
       ins_table: table_name;
       ins_fields: string list;
-      ins_records: base list list
+      ins_records: insert_records
     }
   | Update    of {
       upd_table: table_name;
@@ -22,6 +22,12 @@ type query =
     }
   | Delete    of { del_table: table_name; del_where: base option }
   | With      of table_name * query * query
+  | Transaction of query list (* SQL Transaction: Complete atomically*)
+(* Values: list of values to insert.
+   Query: allows us to insert result of previous query, bound to a variable. *)
+and insert_records =
+  | Values of (base list list)
+  | Query of Var.var
 and select_clause =
     multiplicity * select_fields * from_clause list * base * base list
 and select_fields =
@@ -154,6 +160,11 @@ class virtual printer =
       let pp_comma ppf () = Format.pp_print_string ppf "," in
       Format.pp_print_list ~pp_sep:(pp_comma) pp_item
 
+  method private pp_semicolon_separated : 'a . (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a list -> unit =
+    fun pp_item ->
+      let pp_semicolon ppf () = Format.pp_print_string ppf ";" in
+      Format.pp_print_list ~pp_sep:(pp_semicolon) pp_item
+
   method private pp_quote : Format.formatter -> string -> unit = fun ppf q ->
     (* Copied from the pg_database.ml, which seems to be the default,
      * I guess? *)
@@ -224,14 +235,22 @@ class virtual printer =
         | Fields [] -> self#pp_empty_record ppf
         | Fields fields -> (self#pp_comma_separated pp_field) ppf fields
 
-  method pp_insert ppf table fields values =
-    let pp_value ppf x =
-      Format.fprintf ppf "(%a)"
-        (self#pp_comma_separated self#pr_b_ignore_fields) x in
-    Format.fprintf ppf "insert into %a (%a)\nvalues %a"
-      Format.pp_print_string table
-      (self#pp_comma_separated Format.pp_print_string) fields
-      (self#pp_comma_separated pp_value) values
+  method pp_insert ppf table fields body =
+    match body with
+      | Values values ->
+          let pp_value ppf x =
+            Format.fprintf ppf "(%a)"
+              (self#pp_comma_separated self#pr_b_ignore_fields) x in
+          Format.fprintf ppf "insert into %s (%a)\nvalues %a"
+            table
+            (self#pp_comma_separated Format.pp_print_string) fields
+            (self#pp_comma_separated pp_value) values
+      | Query var ->
+          Format.fprintf ppf
+            "insert into %s (%a) (select * from %s)"
+            table
+            (self#pp_comma_separated Format.pp_print_string) fields
+            (string_of_table_var var)
 
   method pp_sql_arithmetic ppf one_table (l, op, r) =
     let pr_b_one_table = self#pp_base one_table in
@@ -298,6 +317,12 @@ class virtual printer =
             z
             pr_q q
             pr_q q'
+      | Transaction qs ->
+          (* Add trailing semicolon if list nonempty *)
+          let semi = if qs = [] then ";" else "" in
+          Format.fprintf ppf "BEGIN; %a%s COMMIT;"
+            (self#pp_semicolon_separated pr_q) qs
+            semi
 
   method pp_projection one_table ppf (var, label) =
       if one_table then
