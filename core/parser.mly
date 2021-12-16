@@ -96,6 +96,14 @@ let temporality_of_string p =
   | rest          ->
      raise (ConcreteSyntaxError (pos p, "Invalid temporality: " ^ rest))
 
+let temporality_type_of_string p =
+  function
+  | "Valid"       -> Temporality.valid
+  | "Transaction" -> Temporality.transaction
+  | "Current"     -> Temporality.current
+  | rest          ->
+     raise (ConcreteSyntaxError (pos p, "Invalid temporality: " ^ rest))
+
 let full_kind_of pos prim lin rest =
   let p = primary_kind_of_string pos prim in
   let l = linearity_of_string    pos lin  in
@@ -341,6 +349,8 @@ let parse_foreign_language pos lang =
 %token LTLARROW LVLARROW
 %token SEQUENCED CURRENT NONSEQUENCED TO BETWEEN
 %token TTINSERT VTINSERT
+%token TTDATA TTFROM TTTO
+%token VTDATA VTFROM VTTO
 
 %start just_datatype
 %start interactive
@@ -630,11 +640,20 @@ postfix_expression:
 | QUERY query_policy block                                     { query ~ppos:$loc None $2 $3 }
 | QUERY LBRACKET exp RBRACKET query_policy block               { query ~ppos:$loc (Some ($3, with_pos $loc (Constant (Constant.Int 0)))) $5 $6 }
 | QUERY LBRACKET exp COMMA exp RBRACKET query_policy block     { query ~ppos:$loc (Some ($3, $5)) $7 $8 }
+| temporal_operation                                           { $1 }
 | postfix_expression arg_spec                                  { with_pos $loc (FnAppl ($1, $2)) }
 | postfix_expression targ_spec                                 { with_pos $loc (TAppl ($1, $2)) }
 | postfix_expression DOT record_label                          { with_pos $loc (Projection ($1, $3)) }
 | postfix_expression AT                                        { with_pos $loc (Instantiate $1) }
 
+
+temporal_operation:
+| TTDATA LPAREN exp RPAREN                                     { with_pos $loc (TemporalOp (TemporalOperation.(Accessor (Temporality.Transaction, Data)), $3, [])) }
+| TTFROM LPAREN exp RPAREN                                     { with_pos $loc (TemporalOp (TemporalOperation.(Accessor (Temporality.Transaction, From)), $3, [])) }
+| TTTO   LPAREN exp RPAREN                                     { with_pos $loc (TemporalOp (TemporalOperation.(Accessor (Temporality.Transaction, To)),   $3, [])) }
+| VTDATA LPAREN exp RPAREN                                     { with_pos $loc (TemporalOp (TemporalOperation.(Accessor (Temporality.Valid, Data)), $3, [])) }
+| VTFROM LPAREN exp RPAREN                                     { with_pos $loc (TemporalOp (TemporalOperation.(Accessor (Temporality.Valid, From)), $3, [])) }
+| VTTO   LPAREN exp RPAREN                                     { with_pos $loc (TemporalOp (TemporalOperation.(Accessor (Temporality.Valid, To)),   $3, [])) }
 
 arg_spec:
 | LPAREN perhaps_exps RPAREN                                   { $2 }
@@ -838,6 +857,9 @@ formlet_expression:
 
 temporality:
 | VARIABLE                                                     { temporality_of_string $loc $1 }
+
+temporality_type:
+| CONSTRUCTOR                                                  { temporality_type_of_string $loc $1 }
 
 temporal:
 | USING temporality LPAREN field_label COMMA field_label RPAREN  { ($2, ($4, $6)) }
@@ -1065,7 +1087,7 @@ primary_datatype:
                                                                    | ts  -> Datatype.Tuple ts }
 | LPAREN rfields RPAREN                                        { Datatype.Record $2 }
 | TABLEHANDLE
-     LPAREN temporality COMMA datatype COMMA datatype COMMA datatype RPAREN
+     LPAREN temporality_type COMMA datatype COMMA datatype COMMA datatype RPAREN
                                                                { Datatype.Table ($3, $5, $7, $9) }
 | LBRACKETBAR vrow BARRBRACKET                                 { Datatype.Variant $2 }
 | LBRACKET datatype RBRACKET                                   { Datatype.List $2 }

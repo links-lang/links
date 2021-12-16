@@ -3629,11 +3629,22 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                          let a = T.Record (Types.make_empty_open_row (lin_unl, res_base)) in
                          let b = T.Record (Types.make_empty_open_row (lin_unl, res_base)) in
                          let c = T.Record (Types.make_empty_open_row (lin_unl, res_base)) in
+                         let pattern_type =
+                             let open Temporality in
+                             match tmp with
+                                | Current     -> a
+                                | Transaction ->
+                                    Types.make_transaction_time_data_type a
+                                | Valid       ->
+                                    Types.make_valid_time_data_type a
+                         in
                          let tt = Types.make_table_type (tmp, a, b, c) in
                          let pattern = tpc pattern in
                          let e = tc e in
                          let () = unify ~handle:Gripers.iteration_table_body (pos_and_typ e, no_pos tt) in
-                         let () = unify ~handle:(Gripers.iteration_table_pattern tmp) (ppos_and_typ pattern, (exp_pos e, a)) in
+                         let () = unify ~handle:(Gripers.iteration_table_pattern tmp)
+                            (ppos_and_typ pattern, (exp_pos e, pattern_type))
+                         in
                            (Table (tmp, erase_pat pattern, erase e) :: generators,
                             usages e :: generator_usages,
                             pattern_env pattern:: environments))
