@@ -601,7 +601,11 @@ struct
           let sort = Type.sort t in
           value env table >>= fun table ->
           match table with
-            | `Table (((db,cstr), table, _, _) as tinfo) ->
+            | `Table tinfo ->
+              (* I can't get this to work without turning the warning off, even
+                 with "Value" in scope. *)
+              let [@warning "-40"] (db, cstr) = tinfo.database in
+              let [@warning "-40"] table = tinfo.name in
               let database = Lens_database_conv.lens_db_of_db cstr db in
               let sort = Sort.update_table_name sort ~table in
               let table = Lens_database_conv.lens_table_of_table tinfo in
@@ -688,7 +692,7 @@ struct
           else Lens.Eval.Incremental in
         Lens.Eval.put ~behaviour ~db lens data |> Lens_errors.unpack_eval_error ~die:(eval_error "%s");
         Value.box_unit () |> apply_cont cont env
-    | Table { database; table = name; keys; temporal_fields;
+    | Table { database = db; table = name; keys; temporal_fields;
                 table_type = (temporality, readtype, _, _) } ->
       begin
         (* OPTIMISATION: we could arrange for concrete_type to have
@@ -705,8 +709,8 @@ struct
                 (Value.unbox_list keys)
             in
             let tbl =
-                Value.make_table ~database:(db, params) ~name
-                    ~keys ~temporality ~temporal_fields ~row
+                Value.make_table ~database:(db, params) ~name:(Value.unbox_string name)
+                    ~keys:unboxed_keys ~temporality ~temporal_fields ~row
             in
             apply_cont cont env (`Table tbl)
           | _ -> eval_error "Error evaluating table handle"
@@ -781,14 +785,15 @@ struct
                       apply_cont cont env (Database.execute_select fields q db)
                end
          end
-
+    | TemporalJoin (_mode, _e, _t) -> failwith "TODO: PORT ACROSS"
     | InsertRows (source, rows) ->
         begin
+          [@warning "-40"]
           value env source >>= fun source ->
           value env rows >>= fun rows ->
           match source, rows with
           | `Table _, `List [] ->  apply_cont cont env (`Record [])
-          | `Table ((db, _params), table_name, _, _), rows ->
+          | `Table { database = (db, _) ; name = table_name; _ }, rows ->
               let (field_names,rows) = Value.row_columns_values rows in
               let q =
                 QueryLang.insert table_name field_names rows
@@ -816,7 +821,7 @@ struct
           match source, rows, returning with
           | `Table _, `List [], _ ->
               raise (internal_error "InsertReturning: undefined for empty list of rows")
-          | `Table ((db, _params), table_name, _, _), rows, returning ->
+          | `Table Value.{ database = (db, _); name = table_name; _ }, rows, returning ->
               let (field_names,vss) = Value.row_columns_values rows in
               let returning = Value.unbox_string returning in
               let q = QueryLang.insert table_name field_names vss in
@@ -830,7 +835,8 @@ struct
       begin
         value env source >>= fun source ->
         match source with
-          | `Table { database = db; name = table; row = (fields, _, _); temporal_fields } ->
+          | `Table { Value.database = (db, _); name = table;
+                     row = (fields, _, _); temporal_fields; _ } ->
               let field_types =
                 StringMap.map
                     (function
@@ -853,7 +859,7 @@ struct
                 | Some TransactionTimeUpdate ->
                     (* 'get' safe as TT updates only possible on TT tables *)
                     let (from_field, to_field) = Option.get temporal_fields in
-                    TemporalQuery.TransactionTime.compile_update upd db env
+                    TemporalQuery.TransactionTime.compile_update env
                       ((Var.var_of_binder xb, table, field_types), where, body)
                       from_field to_field
                 | None ->
@@ -865,9 +871,10 @@ struct
         apply_cont cont env (`Record [])
     | Delete (del, (xb, source), where) ->
         value env source >>= fun source ->
+        let open Value in
         begin
             match source with
-              | `Table { database = db; name = table; row = (fields, _, _); temporal_fields } ->
+              | `Table { database = (db, _); name = table; row = (fields, _, _); temporal_fields; _ } ->
                   let field_types =
                     StringMap.map
                         (function
@@ -885,7 +892,7 @@ struct
             | Some (ValidTimeDeletion del) ->
                 let (from_field, to_field) = Option.get temporal_fields in
                 TemporalQuery.ValidTime.compile_delete
-                    db env
+                    del db env
                     ((Var.var_of_binder xb, table, field_types), where)
                     from_field to_field
             | Some TransactionTimeDeletion ->
