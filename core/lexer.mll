@@ -133,6 +133,10 @@ let keywords = [
  "true"     , TRUE;
  "try"     , TRY;
  "tt_insert" , TTINSERT;
+ "ttData"    , TTDATA;
+ "ttFrom"    , TTFROM;
+ "ttTo"      , TTTO;
+ "tt_insert" , TTINSERT;
  "typename" , TYPENAME;
  "update"   , UPDATE;
  "unsafe"   , UNSAFE;
@@ -140,6 +144,9 @@ let keywords = [
  "values"   , VALUES;
  "var"      , VAR;
  "vt_insert", VTINSERT;
+ "vtData"   , TTDATA;
+ "vtFrom"   , TTFROM;
+ "vtTo"     , TTTO;
  "where"    , WHERE;
  "with"     , WITH;
 (* SAND *)

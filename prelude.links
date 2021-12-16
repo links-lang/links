@@ -497,7 +497,7 @@ fun isInt (x) { x =~ /-?[0-9]+$/ }
 sig isFloat : (String) -> Bool
 fun isFloat (x) { x =~ /-?[0-9]+(\.[0-9]+)?$/ }
 
-sig asList : (TableHandle((|a::Base),(|_::Base),(|_::Base))) {}-> [(|a::Base)]
+sig asList : (TableHandle(Current, (|a::Base),(|_::Base),(|_::Base))) {}-> [(|a::Base)]
 fun asList(t) server {
   for (x <-- t) [x]
 }
@@ -519,11 +519,11 @@ fun dedup(l) server {
       case r::rl0 ->
         if (r `elem` vl)
           aux(vl, rl0)
-        else 
+        else
           r::aux(r::vl, rl0)
     }
   }
-  aux([]:[a], l) 
+  aux([]:[a], l)
 }
 
 fun distinct(t) server {
@@ -1609,4 +1609,14 @@ fun localMilliseconds(dt) { dateMilliseconds(dt) }
 sig showLocal : (DateTime) ~> String
 fun showLocal(dt) {
     show(dt)
+}
+
+### Temporal DB functions
+
+fun ttCurrent(tbl) {
+    query nested {
+        for (x <-t- tbl)
+            where (ttFrom(x) == forever)
+            [ ttData(x) ]
+    }
 }
