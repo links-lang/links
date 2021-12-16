@@ -840,7 +840,7 @@ struct
               Lwt.return
                 (db, table, field_types, temporal_fields)
           | _ -> assert false
-      end >>= fun (db, table, field_types, fields) ->
+      end >>= fun (db, table, field_types, temporal_fields) ->
       let update_query =
         begin
             match upd with
@@ -863,19 +863,41 @@ struct
       in
       let () = ignore (Database.execute_command (db#string_of_query update_query) db) in
         apply_cont cont env (`Record [])
-    | Delete ((xb, source), where) ->
+    | Delete (del, (xb, source), where) ->
         value env source >>= fun source ->
         begin
-        match source with
-          | `Table ((db, _), table, _, (fields, _, _)) ->
-             Lwt.return
-               (db, table, (StringMap.map (function
-                                | Types.Present t -> t
-                                | _ -> assert false) fields))
-          | _ -> assert false
-        end >>= fun (db, table, field_types) ->
+            match source with
+              | `Table { database = db; name = table; row = (fields, _, _); temporal_fields } ->
+                  let field_types =
+                    StringMap.map
+                        (function
+                           | Types.Present t -> t
+                           | _ -> assert false) fields
+                  in
+                  Lwt.return
+                    (db, table, field_types, temporal_fields)
+              | _ -> assert false
+        end
+      >>= fun (db, table, field_types, temporal_fields) ->
       let delete_query =
-        Query.compile_delete db env ((Var.var_of_binder xb, table, field_types), where) in
+          (* Same justifications apply for Option.get here *)
+          match del with
+            | Some (ValidTimeDeletion del) ->
+                let (from_field, to_field) = Option.get temporal_fields in
+                TemporalQuery.ValidTime.compile_delete
+                    db env
+                    ((Var.var_of_binder xb, table, field_types), where)
+                    from_field to_field
+            | Some TransactionTimeDeletion ->
+                let to_field = Option.get temporal_fields |> snd in
+                TemporalQuery.TransactionTime.compile_delete
+                    db env
+                    ((Var.var_of_binder xb, table, field_types), where)
+                    to_field
+            | None ->
+                Query.compile_delete db env
+                    ((Var.var_of_binder xb, table, field_types), where)
+      in
       let () = ignore (Database.execute_command (db#string_of_query delete_query) db) in
         apply_cont cont env (`Record [])
     | CallCC f ->
