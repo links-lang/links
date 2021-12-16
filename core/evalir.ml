@@ -826,19 +826,41 @@ struct
               apply_cont cont env (Database.execute_insert_returning returning q db)
           | _ -> raise (internal_error "insert row into non-database")
         end
-    | Update ((xb, source), where, body) ->
+    | Update (upd, (xb, source), where, body) ->
       begin
         value env source >>= fun source ->
         match source with
-          | `Table ((db, _), table, _, (fields, _, _)) ->
+          | `Table { database = db; name = table; row = (fields, _, _); temporal_fields } ->
+              let field_types =
+                StringMap.map
+                    (function
+                       | Types.Present t -> t
+                       | _ -> assert false) fields
+              in
               Lwt.return
-            (db, table, (StringMap.map (function
-                                        | Types.Present t -> t
-                                        | _ -> assert false) fields))
+                (db, table, field_types, temporal_fields)
           | _ -> assert false
-      end >>= fun (db, table, field_types) ->
+      end >>= fun (db, table, field_types, fields) ->
       let update_query =
-        Query.compile_update db env ((Var.var_of_binder xb, table, field_types), where, body) in
+        begin
+            match upd with
+                | Some (ValidTimeUpdate upd) ->
+                    (* 'get' safe as VT updates only possible on VT tables *)
+                    let (from_field, to_field) = Option.get temporal_fields in
+                    TemporalQuery.ValidTime.compile_update upd db env
+                      ((Var.var_of_binder xb, table, field_types), where, body)
+                      from_field to_field
+                | Some TransactionTimeUpdate ->
+                    (* 'get' safe as TT updates only possible on TT tables *)
+                    let (from_field, to_field) = Option.get temporal_fields in
+                    TemporalQuery.TransactionTime.compile_update upd db env
+                      ((Var.var_of_binder xb, table, field_types), where, body)
+                      from_field to_field
+                | None ->
+                    Query.compile_update db env
+                        ((Var.var_of_binder xb, table, field_types), where, body)
+        end
+      in
       let () = ignore (Database.execute_command (db#string_of_query update_query) db) in
         apply_cont cont env (`Record [])
     | Delete ((xb, source), where) ->
