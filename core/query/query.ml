@@ -160,12 +160,44 @@ let rec reduce_for_source : Q.t * (Q.t -> Q.t) -> Q.t =
 
           *)
           reduce_for_body (gs, os, rs v)
-        | Q.Table Value.{ row; _ } ->
-          (* we need to generate a fresh variable in order to
-              correctly handle self joins *)
-          let x = Var.fresh_raw_var () in
-          let ty_elem = Types.Record (Types.Row row) in
-            reduce_for_body ([(x, source)], [], body (Q.Var (x, ty_elem)))
+        | Q.Table (Value.{ row; temporality; temporal_fields; _ } as table) ->
+
+          begin
+              let open Temporality in
+              match temporality with
+                | Current ->
+                  let x = Var.fresh_raw_var () in
+                  let ty_elem = Types.Record (Types.Row row) in
+                    reduce_for_body ([(x, source)], [], body (Q.Var (x, ty_elem)))
+                | Temporality.Transaction | Temporality.Valid ->
+                  let (from_field, to_field) = OptionUtils.val_of temporal_fields in
+                  (* Transaction / Valid-time tables: Need to wrap as metadata *)
+                  (* First, generate a fresh variable for the table *)
+                  let field_types = Q.table_field_types table in
+                  let base_field_types =
+                    StringMap.filter
+                      (fun x _ -> x <> from_field && x <> to_field)
+                      field_types in
+
+                  let table_raw_var = Var.fresh_raw_var () in
+                  let (_, row_var, dual) = row in
+                  let ty_elem = Types.(Record (Row (field_types, row_var, dual))) in
+                  let base_ty_elem = Types.(Record (Row (base_field_types, row_var, dual))) in
+                  let table_var = Q.Var (table_raw_var, ty_elem) in
+
+                  (* Second, generate a fresh variable for the metadata *)
+                  let metadata_record =
+                    StringMap.from_alist [
+                      (TemporalOperation.data_field,
+                        Q.eta_expand_var (table_raw_var, base_ty_elem));
+                      (TemporalOperation.from_field,
+                        Q.Project (table_var, from_field));
+                      (TemporalOperation.to_field,
+                        Q.Project (table_var, to_field))
+                    ] in
+                  let generators = [ (table_raw_var, source) ] in
+                  reduce_for_body (generators, [], body (Q.Record metadata_record))
+          end
       | v -> Q.query_error "Bad source in for comprehension: %s" (Q.string_of_t v)
 
 let rec reduce_if_body (c, t, e) =

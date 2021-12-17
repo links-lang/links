@@ -173,8 +173,18 @@ let field_types_of_row r =
         let (field_spec_map,_,_) = TypeUtils.extract_row_parts r in
           field_types_of_spec_map field_spec_map
 
-let table_field_types Value.{ row = (field_spec_map, _, _); _ } =
-        field_types_of_spec_map field_spec_map
+let table_field_types Value.{ row = (fields, _, _); temporal_fields; _ } =
+    (* As well as the declared fields in the table, we must also include
+     * the period-stamping fields included in the temporal metadata. *)
+    let dt x = (x, Types.Primitive Primitive.DateTime) in
+    let metadata_fields =
+        OptionUtils.opt_app (fun (x, y) -> [dt x; dt y]) [] temporal_fields
+    in
+    let declared_fields = field_types_of_spec_map fields in
+    (* Add metadata fields *)
+    List.fold_left
+      (fun acc (k, v) -> StringMap.add k v acc)
+      declared_fields metadata_fields
 
 let unbox_xml =
   function
