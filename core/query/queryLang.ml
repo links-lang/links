@@ -373,6 +373,7 @@ let used_database v : Value.database option =
         end
   and used =
     function
+      | Prom q | Dedup q -> used q
       | Table ((db, _), _, _, _) -> Some db
       | For (_, gs, _, _body) -> List.map snd gs |> traverse
       | Singleton v -> used v
@@ -439,8 +440,7 @@ let lookup_fun env (f, fvs) =
         (* TODO(dhil): This is a bit of a round-about way to obtain
             the binder name. *)
       match Var.(name_of_binder (make_binder f finfo)) with
-      | "dedup"
-      | "distinct" ->
+      | "dedup" ->
         Primitive "Distinct"
       | "concatMap" ->
         Primitive "ConcatMap"
