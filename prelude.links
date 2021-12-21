@@ -1613,10 +1613,40 @@ fun showLocal(dt) {
 
 ### Temporal DB functions
 
+
+# Transaction-time timeslice for current DB
 fun ttCurrent(tbl) {
     query nested {
         for (x <-t- tbl)
             where (ttFrom(x) == forever)
             [ ttData(x) ]
+    }
+}
+
+# Transaction-time timeslice for DB at a given time
+fun ttAt(tbl, timestamp) {
+    query nested {
+        for (x <-t- tbl)
+            where (ttFrom(x) <= timestamp && timestamp < ttTo(x))
+            [ ttData(x) ]
+    }
+}
+
+
+# Valid-time timeslice for current DB
+fun vtCurrent(tbl) {
+    query nested {
+        for (x <-v- tbl)
+            where (vtFrom(x) > now())
+            [ vtData(x) ]
+    }
+}
+
+# Valid-time timeslice for DB at a given time
+fun vtAt(tbl, timestamp) {
+    query nested {
+        for (x <-v- tbl)
+            where (vtFrom(x) <= timestamp && timestamp < vtTo(x))
+            [ vtData(x) ]
     }
 }

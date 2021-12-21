@@ -416,6 +416,9 @@ sig
   val temporal_join_effects : griper
   val temporal_join_body : griper
   val temporal_accessor : TemporalOperation.t -> griper
+  val valid_update_pattern : griper
+  val sequenced_update_datetime : griper
+  val nonsequenced_update_datetime : griper
 
 end
   = struct
@@ -1599,6 +1602,25 @@ end
                "but has type"                     ^ nli () ^
                 code ppr_actual                   ^ nl  () ^
                "instead.")
+
+    let valid_update_pattern ~pos ~t1:l ~t2:r ~error:_ =
+      build_tyvar_names [snd l; snd r];
+      with_but2things pos
+        "The binding must match the table in a valid-time update expression"
+        ("pattern", l) ("row", r)
+
+    let sequenced_update_datetime ~pos ~t1:(_, l) ~t2:_ ~error:_ =
+        build_tyvar_names [l];
+      with_but pos
+        "The periods of validity for a valid-time sequenced update must have time DateTime"
+        ("expression", l)
+
+    let nonsequenced_update_datetime ~pos ~t1:(_, l) ~t2:_ ~error:_ =
+        build_tyvar_names [l];
+      with_but pos
+        "The new validity fields for a valid-time nonsequenced update must have time DateTime"
+        ("expression", l)
+
 end
 
 type context = Types.typing_environment = {
@@ -3068,38 +3090,17 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               DBInsert (tmp, erase into, labels, erase values, opt_map erase id), return_type,
               Usage.combine_many [usages into; usages values; from_option Usage.empty (opt_map usages id)]
         | DBUpdate (tmp_upd, pat, from, where, set) ->
-            let (tmp, tmp_upd, tmp_usages) =
+            (* Need temporality to be able to deduce pattern type *)
+
+            let tmp =
                 match tmp_upd with
-                    | None ->
-                        (Temporality.current, tmp_upd, Usage.empty)
-                    | Some (ValidTimeUpdate (CurrentUpdate)) ->
-                        (Temporality.valid, tmp_upd, Usage.empty)
-                    | Some (ValidTimeUpdate (SequencedUpdate { validity_from; validity_to })) ->
-                        let validity_from = tc validity_from in
-                        let validity_to = tc validity_to in
-                        let usages = Usage.combine (usages validity_from) (usages validity_to) in
-                        let tmp_upd = Some (ValidTimeUpdate (SequencedUpdate {
-                            validity_from = erase validity_from;
-                            validity_to = erase validity_to
-                        })) in
-                        (Temporality.valid, tmp_upd, usages)
-                    | Some (ValidTimeUpdate (NonsequencedUpdate { from_time; to_time })) ->
-                        let from_time = OptionUtils.opt_map tc from_time in
-                        let to_time = OptionUtils.opt_map tc to_time in
-                        let usages =
-                            List.map (OptionUtils.opt_as_list) [from_time; to_time]
-                            |> List.concat
-                            |> List.map usages
-                            |> Usage.combine_many
-                        in
-                        let from_time = OptionUtils.opt_map erase from_time in
-                        let to_time = OptionUtils.opt_map erase to_time in
-                        (Temporality.valid,
-                            (Some (ValidTimeUpdate (NonsequencedUpdate { from_time; to_time }))),
-                            usages)
-                    | Some TransactionTimeUpdate ->
-                        (Temporality.transaction, tmp_upd, Usage.empty)
+                    | None -> Temporality.current
+                    | Some (ValidTimeUpdate _) -> Temporality.valid
+                    | Some TransactionTimeUpdate -> Temporality.transaction
             in
+            (*
+
+            *)
             let pat  = tpc pat in
             let from = tc from in
             let read =  T.Record (Types.make_empty_open_row (lin_any, res_base)) in
@@ -3114,7 +3115,15 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             in
 
             (* the pattern should match the read type *)
-            let () = unify ~handle:Gripers.update_pattern (ppos_and_typ pat, no_pos read) in
+            (* In the case of a valid time update, it should be VT metadata *)
+            let () =
+                match tmp with
+                    | Temporality.Valid ->
+                        let ty = Types.make_valid_time_data_type read in
+                        unify ~handle:Gripers.valid_update_pattern (ppos_and_typ pat, no_pos ty)
+                    | _ ->
+                        unify ~handle:Gripers.update_pattern (ppos_and_typ pat, no_pos read)
+            in
 
             let inner_effects = Types.make_empty_closed_row () in
             let context' = bind_effects (context ++ pattern_env pat) inner_effects in
@@ -3152,6 +3161,52 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             (* all fields being updated must be consistent with the needed row *)
             let () = unify ~handle:Gripers.update_needed
               (no_pos needed, no_pos (T.Record (T.Row (needed_env, Types.fresh_row_variable (lin_any, res_base), false)))) in
+
+            (* Typecheck any valid-time fields and calculate usages *)
+            let (tmp_upd, tmp_usages) =
+                match tmp_upd with
+                    (* No extra info or TCing needed *)
+                    | None
+                    | Some TransactionTimeUpdate
+                    | Some (ValidTimeUpdate (CurrentUpdate)) ->
+                        (tmp_upd, Usage.empty)
+                    | Some (ValidTimeUpdate (SequencedUpdate { validity_from; validity_to })) ->
+                        let validity_from = tc validity_from in
+                        let validity_to = tc validity_to in
+                        (* Ensure validity from / validity to are DateTimes *)
+                        let () = unify ~handle:Gripers.sequenced_update_datetime
+                          (pos_and_typ validity_from, no_pos (T.Primitive Primitive.DateTime))
+                        in
+                        let () = unify ~handle:Gripers.sequenced_update_datetime
+                          (pos_and_typ validity_to, no_pos (T.Primitive Primitive.DateTime))
+                        in
+                        let usages = Usage.combine (usages validity_from) (usages validity_to) in
+                        let tmp_upd = Some (ValidTimeUpdate (SequencedUpdate {
+                            validity_from = erase validity_from;
+                            validity_to = erase validity_to
+                        })) in
+                        (tmp_upd, usages)
+                    | Some (ValidTimeUpdate (NonsequencedUpdate { from_time; to_time })) ->
+                        let tc_date x =
+                            let x = tc x in
+                            let () =
+                                unify ~handle:Gripers.nonsequenced_update_datetime
+                                  (pos_and_typ x, no_pos (T.Primitive Primitive.DateTime))
+                            in
+                            x
+                        in
+                        let from_time = OptionUtils.opt_map tc_date from_time in
+                        let to_time = OptionUtils.opt_map tc_date to_time in
+                        let usages =
+                            List.map (OptionUtils.opt_as_list) [from_time; to_time]
+                            |> List.concat
+                            |> List.map usages
+                            |> Usage.combine_many
+                        in
+                        let from_time = OptionUtils.opt_map erase from_time in
+                        let to_time = OptionUtils.opt_map erase to_time in
+                        (Some (ValidTimeUpdate (NonsequencedUpdate { from_time; to_time })), usages)
+            in
 
             (* update is wild *)
             let () =
