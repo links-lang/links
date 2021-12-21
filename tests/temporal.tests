@@ -1,0 +1,255 @@
+---
+config: tests/temporal.tests.config
+---
+
+Consistent annotations
+tests/temporal/consistent-annotations.links
+filemode : true
+exit : 0
+
+Inconsistent annotations
+tests/temporal/inconsistent-annotations.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+
+Plain iteration over temporal table
+tests/temporal/plain-iteration-bad.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+
+Temporal iteration over plain table
+tests/temporal/temporal-iteration-bad.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+
+Valid-time iteration over transaction-time table
+tests/temporal/temporal-iteration-bad-2.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+
+Transaction-time iteration over transaction-time table
+tests/temporal/temporal-iteration-good.links
+filemode : true
+exit : 0
+
+Current-time insertion into transaction-time table
+tests/temporal/tt-insert-bad.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+
+Transaction-time insert into transaction-time table (bad)
+tests/temporal/tt-insert-bad.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+
+Transaction-time insert into transaction-time table (good)
+tests/temporal/tt-insert-good.links
+filemode : true
+exit : 0
+
+Transaction-time deletion (good)
+tests/temporal/tt-delete-good.links
+filemode : true
+exit : 0
+
+Transaction-time delete (bad)
+tests/temporal/tt-delete-bad.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+
+Transaction-time delete (bad #2)
+tests/temporal/tt-delete-bad-2.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+
+Transaction-time update (good)
+tests/temporal/tt-update-good.links
+filemode : true
+exit : 0
+
+Transaction-time update (bad)
+tests/temporal/tt-update-bad.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+
+Transaction-time update (bad #2)
+tests/temporal/tt-update-bad-2.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+
+Transaction time -> current time demotion (good)
+tests/temporal/tt-current-demotion.links
+filemode : true
+exit : 0
+
+Transaction time -> current time demotion (bad iterator)
+tests/temporal/tt-current-demotion-bad.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+
+Transaction time -> given time demotion (good)
+tests/temporal/tt-at-demotion.links
+filemode : true
+exit : 0
+
+Valid time iteration
+tests/temporal/vt-iteration-good.links
+filemode : true
+exit : 0
+
+Current-time iteration over valid-time table
+tests/temporal/vt-iteration-bad.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+
+Valid time "from" timestamp access
+tests/temporal/vt-from.links
+filemode : true
+exit : 0
+
+Valid time "to" timestamp access
+tests/temporal/vt-to.links
+filemode : true
+exit : 0
+
+Valid time data access
+tests/temporal/vt-data.links
+filemode : true
+exit : 0
+
+Valid time insertion
+tests/temporal/vt-insertion.links
+filemode : true
+exit : 0
+
+Valid time nonsequenced update (1)
+tests/temporal/vt-nonsequenced-update.links
+filemode : true
+exit : 0
+
+Valid time nonsequenced update (2)
+tests/temporal/vt-nonsequenced-update-2.links
+filemode : true
+exit : 0
+
+Valid time nonsequenced update (3)
+tests/temporal/vt-nonsequenced-update-3.links
+filemode : true
+exit : 0
+
+Valid time nonsequenced update (4)
+tests/temporal/vt-nonsequenced-update-4.links
+filemode : true
+exit : 0
+
+Valid time nonsequenced update (5)
+tests/temporal/vt-nonsequenced-update-5.links
+filemode : true
+exit : 0
+
+Valid time nonsequenced update (6)
+tests/temporal/vt-nonsequenced-update-6.links
+filemode : true
+exit : 0
+
+Valid time nonsequenced update (7)
+tests/temporal/vt-nonsequenced-update-7.links
+filemode : true
+exit : 0
+
+Valid time current update (1)
+tests/temporal/vt-current-update.links
+filemode : true
+exit : 0
+
+Valid time current update (2)
+tests/temporal/vt-current-update-2.links
+filemode : true
+exit : 0
+
+Valid time nonsequenced update (bad #1)
+tests/temporal/vt-nonsequenced-update-bad-1.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+
+Valid time nonsequenced update (bad #2)
+tests/temporal/vt-nonsequenced-update-bad-2.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+
+Valid time nonsequenced update (bad #3)
+tests/temporal/vt-nonsequenced-update-bad-3.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+
+Valid time nonsequenced update (bad #4)
+tests/temporal/vt-nonsequenced-update-bad-4.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+
+Valid time nonsequenced update (bad #5)
+tests/temporal/vt-nonsequenced-update-bad-5.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+
+Valid time nonsequenced update (bad #6)
+tests/temporal/vt-nonsequenced-update-bad-6.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+
+Valid time current update (bad #1)
+tests/temporal/vt-current-update-bad.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+
+Valid time current update (bad #2)
+tests/temporal/vt-current-update-bad-2.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+
+Valid time current deletion
+tests/temporal/vt-current-deletion.links
+filemode : true
+exit : 0
+
+Valid time current deletion (bad #1)
+tests/temporal/vt-current-deletion-bad.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+
+Valid time current deletion (bad #2)
+tests/temporal/vt-current-deletion-bad-2.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+
+Valid time join
+tests/temporal/vt-join-ok.links
+filemode : true
+exit : 0
+
+Transaction time join
+tests/temporal/tt-join-ok.links
+filemode : true
+exit : 0
