@@ -1535,7 +1535,9 @@ and unwrap_row : row -> (row * row_var option) = function
      in
      let field_env = concrete_fields field_env in
      Row (field_env, row_var, dual), rec_row
-  | _ -> raise tag_expectation_mismatch
+  | ty ->
+    Format.printf "ERRONEOUS TYPE: %a\n" pp ty;
+    raise tag_expectation_mismatch
 
 
 

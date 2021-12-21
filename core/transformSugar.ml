@@ -650,9 +650,9 @@ class transform (env : Types.typing_environment) =
           let (o, id, _) = option o (fun o -> o#phrase) id in
             (o, DBInsert (tmp, into, labels, values, id), Types.unit_type)
       | DBUpdate (upd, p, from, where, set) ->
-          let (o, upd) = optionu o (fun o -> o#temporal_update) upd in
           let (o, from, _) = o#phrase from in
           let (o, p) = o#pattern p in
+          let (o, upd) = optionu o (fun o -> o#temporal_update) upd in
           let (o, where, _) = option o (fun o -> o#phrase) where in
           let (o, set) =
             listu o
