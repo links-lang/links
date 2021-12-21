@@ -3091,16 +3091,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               Usage.combine_many [usages into; usages values; from_option Usage.empty (opt_map usages id)]
         | DBUpdate (tmp_upd, pat, from, where, set) ->
             (* Need temporality to be able to deduce pattern type *)
-
             let tmp =
                 match tmp_upd with
                     | None -> Temporality.current
                     | Some (ValidTimeUpdate _) -> Temporality.valid
                     | Some TransactionTimeUpdate -> Temporality.transaction
             in
-            (*
-
-            *)
             let pat  = tpc pat in
             let from = tc from in
             let read =  T.Record (Types.make_empty_open_row (lin_any, res_base)) in
@@ -3115,10 +3111,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             in
 
             (* the pattern should match the read type *)
-            (* In the case of a valid time update, it should be VT metadata *)
+            (* Nonsequenced valid-time queries get VT metadata *)
             let () =
-                match tmp with
-                    | Temporality.Valid ->
+                match tmp_upd with
+                    | Some (ValidTimeUpdate (NonsequencedUpdate _)) ->
                         let ty = Types.make_valid_time_data_type read in
                         unify ~handle:Gripers.valid_update_pattern (ppos_and_typ pat, no_pos ty)
                     | _ ->
@@ -3127,8 +3123,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
 
             let inner_effects = Types.make_empty_closed_row () in
             let context' = bind_effects (context ++ pattern_env pat) inner_effects in
+            let tc' = type_check context' in
 
-            let where = opt_map (type_check context') where in
+            let where = opt_map tc' where in
 
             (* check that the where clause is boolean *)
             let () =
@@ -3171,8 +3168,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                     | Some (ValidTimeUpdate (CurrentUpdate)) ->
                         (tmp_upd, Usage.empty)
                     | Some (ValidTimeUpdate (SequencedUpdate { validity_from; validity_to })) ->
-                        let validity_from = tc validity_from in
-                        let validity_to = tc validity_to in
+                        let validity_from = tc' validity_from in
+                        let validity_to = tc' validity_to in
                         (* Ensure validity from / validity to are DateTimes *)
                         let () = unify ~handle:Gripers.sequenced_update_datetime
                           (pos_and_typ validity_from, no_pos (T.Primitive Primitive.DateTime))
@@ -3188,7 +3185,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                         (tmp_upd, usages)
                     | Some (ValidTimeUpdate (NonsequencedUpdate { from_time; to_time })) ->
                         let tc_date x =
-                            let x = tc x in
+                            let x = tc' x in
                             let () =
                                 unify ~handle:Gripers.nonsequenced_update_datetime
                                   (pos_and_typ x, no_pos (T.Primitive Primitive.DateTime))

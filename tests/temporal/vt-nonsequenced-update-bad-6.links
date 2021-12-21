@@ -5,4 +5,4 @@ var timetbl = table "timetbl"
 
 update nonsequenced (x <-v- timetbl)
   where (x.foo == "foo")
-  set (foo = "foo" valid from beginning_of_time() to now())
+  set (foo = "foo" valid from beginningOfTime to now())
