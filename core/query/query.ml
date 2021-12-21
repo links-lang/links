@@ -214,7 +214,7 @@ let rec reduce_if_body (c, t, e) =
                 then_fields
                 StringMap.empty)
         (* NOTE: this relies on any record variables having
-s            been eta-expanded by this point *)
+             been eta-expanded by this point *)
         | _ -> Q.query_error "Mismatched fields"
       end
     | _ ->

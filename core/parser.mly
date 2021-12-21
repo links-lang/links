@@ -90,10 +90,10 @@ let query_policy_of_string p =
 
 let temporality_of_string p =
   function
-  | "valid"       -> Temporality.valid
-  | "transaction" -> Temporality.transaction
-  | "current"     -> Temporality.current
-  | rest          ->
+  | "valid_time"       -> Temporality.valid
+  | "transaction_time" -> Temporality.transaction
+  | "current_time"     -> Temporality.current
+  | rest               ->
      raise (ConcreteSyntaxError (pos p, "Invalid temporality: " ^ rest))
 
 let temporality_type_of_string p =
@@ -350,7 +350,7 @@ let parse_foreign_language pos lang =
 %token SEQUENCED CURRENT NONSEQUENCED TO BETWEEN
 %token TTINSERT VTINSERT
 %token TTDATA TTFROM TTTO
-%token VTDATA VTFROM VTTO
+%token VTDATA VTFROM VTTO VALID
 
 %start just_datatype
 %start interactive
@@ -701,10 +701,10 @@ mode_not_valid:
 
 valid_time_exps:
 | labeled_exps { $1, None, None }
-| labeled_exps WITH FROM EQ exp COMMA TO EQ exp { $1, Some $5, Some $9 }
-| labeled_exps WITH TO EQ exp COMMA FROM EQ exp { $1, Some $9, Some $5 }
-| labeled_exps WITH FROM EQ exp { $1, Some $5, None }
-| labeled_exps WITH TO EQ exp { $1, None, Some $5 }
+| labeled_exps VALID FROM exp TO exp { $1, Some $4, Some $6 }
+| labeled_exps VALID TO exp FROM exp { $1, Some $4, Some $6 }
+| labeled_exps VALID FROM exp { $1, Some $4, None }
+| labeled_exps VALID TO exp { $1, None, Some $4 }
 
 update_expression:
 | UPDATE CURRENT LPAREN pattern LVLARROW exp RPAREN

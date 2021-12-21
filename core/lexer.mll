@@ -141,12 +141,13 @@ let keywords = [
  "update"   , UPDATE;
  "unsafe"   , UNSAFE;
  "using"    , USING;
+ "valid"    , VALID;
  "values"   , VALUES;
  "var"      , VAR;
  "vt_insert", VTINSERT;
- "vtData"   , TTDATA;
- "vtFrom"   , TTFROM;
- "vtTo"     , TTTO;
+ "vtData"   , VTDATA;
+ "vtFrom"   , VTFROM;
+ "vtTo"     , VTTO;
  "where"    , WHERE;
  "with"     , WITH;
 (* SAND *)
