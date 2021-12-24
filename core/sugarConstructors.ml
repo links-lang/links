@@ -233,6 +233,10 @@ module SugarConstructors (Position : Pos)
   let query ?(ppos=dp) phrases_opt policy blk =
     with_pos ppos (Query (phrases_opt, policy, blk, None))
 
+  (* Create a temporal join block. *)
+  let temporal_join ?(ppos=dp) mode blk =
+    with_pos ppos (DBTemporalJoin (mode, blk, None))
+
   (** Operator applications *)
   (* Apply a binary infix operator. *)
   let infix_appl' ?(ppos=dp) arg1 op arg2 =

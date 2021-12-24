@@ -137,12 +137,14 @@ let keywords = [
  "ttFrom"    , TTFROM;
  "ttTo"      , TTTO;
  "tt_insert" , TTINSERT;
+ "tt_join"   , TTJOIN;
  "typename" , TYPENAME;
  "update"   , UPDATE;
  "unsafe"   , UNSAFE;
  "using"    , USING;
  "valid"    , VALID;
  "values"   , VALUES;
+ "vt_join"  , VTJOIN;
  "var"      , VAR;
  "vt_insert", VTINSERT;
  "vtData"   , VTDATA;

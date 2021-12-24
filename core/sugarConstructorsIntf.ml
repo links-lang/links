@@ -142,6 +142,8 @@ module type SugarConstructorsSig = sig
      -> phrase
   val query
       : ?ppos:t -> (phrase * phrase) option -> QueryPolicy.t -> phrase -> phrase
+  val temporal_join
+      : ?ppos:t -> Temporality.t -> phrase -> phrase
 
   (* Operator applications *)
   val infix_appl' : ?ppos:t -> phrase -> BinaryOp.t -> phrase -> phrase
