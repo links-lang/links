@@ -424,6 +424,6 @@ let temporal_op_return_type op t =
   let open TemporalOperation in
   match op with
     | Accessor (_, Data) ->
-        Record (temporal_metadata_type t)
+        temporal_metadata_type t
     | Accessor (_, From) | Accessor (_, To) ->
         Primitive (Primitive.DateTime)
