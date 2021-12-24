@@ -708,7 +708,7 @@ valid_time_exps:
 
 update_expression:
 | UPDATE CURRENT LPAREN pattern LVLARROW exp RPAREN
-         perhaps_where SET LPAREN labeled_exps RPAREN          { with_pos $loc (DBUpdate (None, $4, $6, $8, $11)) }
+         perhaps_where SET LPAREN labeled_exps RPAREN          { with_pos $loc (DBUpdate (Some (ValidTimeUpdate CurrentUpdate), $4, $6, $8, $11)) }
 
 | UPDATE NONSEQUENCED LPAREN pattern LVLARROW exp RPAREN
          perhaps_where SET LPAREN valid_time_exps RPAREN       { let exps, from_time, to_time = $11 in
