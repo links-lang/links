@@ -786,7 +786,7 @@ struct
                end
          end
     | TemporalJoin (_mode, _e, _t) -> failwith "TODO: PORT ACROSS"
-    | InsertRows (source, rows) ->
+    | InsertRows (_tmp, source, rows) ->
         begin
           [@warning "-40"]
           value env source >>= fun source ->
@@ -813,7 +813,7 @@ struct
      Perhaps the easiest course of action is to restrict it to the
      case of inserting a single row.
   *)
-    | InsertReturning (source, rows, returning) ->
+    | InsertReturning (_tmp, source, rows, returning) ->
         begin
           value env source >>= fun source ->
           value env rows >>= fun rows ->

@@ -852,8 +852,8 @@ struct
 
               o, Query (range, policy, e, t), t
 
-        | InsertRows (source, rows)
-        | InsertReturning (source, rows, _) ->
+        | InsertRows (_, source, rows)
+        | InsertReturning (_, source, rows, _) ->
             (* Most logic is shared between InsertRow and InsetReturning.
                We disambiguate between the two later on. *)
 
@@ -899,15 +899,15 @@ struct
               ) table_needed_r;
 
             begin match special with
-                | InsertRows (_, _) ->
-                   o, InsertRows(source, rows), Types.unit_type
-                | InsertReturning (_, _, (Constant (Constant.String id) as ret)) ->
+                | InsertRows (tmp, _, _) ->
+                   o, InsertRows(tmp, source, rows), Types.unit_type
+                | InsertReturning (tmp, _, _, (Constant (Constant.String id) as ret)) ->
                    (* The return value must be encoded as a string literal,
                       denoting a column *)
                    let ret_type = TypeUtils.project_type id table_read in
                    o#check_eq_types Types.int_type ret_type (SSpec special);
-                   o, InsertReturning (source, rows, ret), Types.int_type
-                | InsertReturning (_, _, _) ->
+                   o, InsertReturning (tmp, source, rows, ret), Types.int_type
+                | InsertReturning (_, _, _, _) ->
                    raise_ir_type_error "Return value in InsertReturning was not a string literal" (SSpec special)
                 | _ -> assert false (* impossible at this point *)
             end

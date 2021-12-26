@@ -139,8 +139,8 @@ sig
 
   val query : (value sem * value sem) option * QueryPolicy.t * tail_computation sem -> tail_computation sem
 
-  val db_insert : env -> (value sem * value sem) -> tail_computation sem
-  val db_insert_returning : env -> (value sem * value sem * value sem) -> tail_computation sem
+  val db_insert : env -> (Temporality.t * value sem * value sem) -> tail_computation sem
+  val db_insert_returning : env -> (Temporality.t * value sem * value sem * value sem) -> tail_computation sem
   val db_update : env ->
     ([   `TransactionUpdate | `ValidCurrentUpdate
        | `ValidSequencedUpdate of (value sem * value sem)
@@ -590,21 +590,21 @@ struct
                 let (bs, tc) = CompilePatterns.compile_choices (nenv, tenv, eff) (t, var, cases) in
                   reflect (bs, (tc, t))))
 
-  let db_insert _env (source, rows) =
+  let db_insert _env (tmp, source, rows) =
     bind source
       (fun source ->
         bind rows
           (fun rows ->
-            lift (Special (InsertRows (source, rows)), Types.unit_type)))
+            lift (Special (InsertRows (tmp, source, rows)), Types.unit_type)))
 
-  let db_insert_returning _env (source, rows, returning) =
+  let db_insert_returning _env (tmp, source, rows, returning) =
     bind source
       (fun source ->
         bind rows
           (fun rows ->
             bind returning
               (fun returning ->
-                lift (Special (InsertReturning (source, rows, returning)), Types.int_type))))
+                lift (Special (InsertReturning (tmp, source, rows, returning)), Types.int_type))))
 
   let db_update env (upd, p, source, where, body) =
     let source_type = sem_type source in
@@ -1100,15 +1100,15 @@ struct
           | Block (bs, e) -> eval_bindings Scope.Local env bs e
           | Query (range, policy, e, _) ->
               I.query (opt_map (fun (limit, offset) -> (ev limit, ev offset)) range, policy, ec e)
-          | DBInsert (_, source, _fields, rows, None) ->
+          | DBInsert (tmp, source, _fields, rows, None) ->
               let source = ev source in
               let rows = ev rows in
-              I.db_insert env (source, rows)
-          | DBInsert (_, source, _fields, rows, Some returning) ->
+              I.db_insert env (tmp, source, rows)
+          | DBInsert (tmp, source, _fields, rows, Some returning) ->
               let source = ev source in
               let rows = ev rows in
               let returning = ev returning in
-              I.db_insert_returning env (source, rows, returning)
+              I.db_insert_returning env (tmp, source, rows, returning)
           | DBUpdate (upd, p, source, where, fields) ->
               let p, penv = CompilePatterns.desugar_pattern (lookup_effects env) p in
               let env' = env ++ penv in

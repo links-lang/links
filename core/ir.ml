@@ -103,8 +103,8 @@ and special =
   | Table      of table
   | Query      of (value * value) option * QueryPolicy.t * computation * Types.t
   | TemporalJoin of Temporality.t * computation * Types.datatype
-  | InsertRows of value * value
-  | InsertReturning of value * value * value
+  | InsertRows of Temporality.t * value * value
+  | InsertReturning of Temporality.t * value * value * value
   | Update     of temporal_update option * (binder * value) * computation option * computation
   | Delete     of temporal_deletion option * (binder * value) * computation option
   | CallCC     of value

@@ -5,7 +5,10 @@
    "factorials",
    "jrules",
    "organisation",
-   "travel_portal" ],
+   "travel_portal",
+   "transactiontime",
+   "validtime"
+ ],
  "tests" :
  [ "dates",
    "empty",
@@ -14,5 +17,8 @@
    "unit",
    "jrules",
    "organisation",
-   "travel_portal" ]
+   "travel_portal",
+   "transactiontime",
+   "validtime"
+ ]
 }

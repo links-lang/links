@@ -354,15 +354,15 @@ struct
                 range in
             let o, e, t = o#computation e in
               o, Query (range, policy, e, t), t
-        | InsertRows (source, rows) ->
+        | InsertRows (tmp, source, rows) ->
             let o, source, _ = o#value source in
             let o, rows, _ = o#value rows in
-              o, InsertRows(source, rows), Types.unit_type
-        | InsertReturning (source, rows, returning) ->
+              o, InsertRows (tmp, source, rows), Types.unit_type
+        | InsertReturning (tmp, source, rows, returning) ->
             let o, source, _ = o#value source in
             let o, rows, _ = o#value rows in
             let o, returning, _ = o#value returning in
-              o, InsertReturning(source, rows, returning), Types.unit_type
+              o, InsertReturning (tmp, source, rows, returning), Types.unit_type
         | Update (upd, (x, source), where, body) ->
             let o, upd = o#optionu (fun o -> o#temporal_update) upd in
             let o, source, _ = o#value source in
