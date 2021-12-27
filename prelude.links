@@ -1618,7 +1618,7 @@ fun showLocal(dt) {
 fun ttCurrent(tbl) {
     query nested {
         for (x <-t- tbl)
-            where (ttFrom(x) == forever)
+            where (ttTo(x) == forever)
             [ ttData(x) ]
     }
 }
@@ -1637,7 +1637,7 @@ fun ttAt(tbl, timestamp) {
 fun vtCurrent(tbl) {
     query nested {
         for (x <-v- tbl)
-            where (vtFrom(x) > now())
+            where (vtFrom(x) >= now())
             [ vtData(x) ]
     }
 }

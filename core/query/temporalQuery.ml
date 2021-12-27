@@ -132,11 +132,10 @@ module TransactionTime = struct
 
     (* Finally, construct the transaction. *)
     Sql.Transaction ([
-      (* First variable of "with" is unused? *)
       (* Note: Modified this to treat child queries as a transaction, for
          consistency. *)
-      Sql.With (Sql.string_of_subquery_var sel_var,
-        sel_query, Sql.Transaction [ins_query; upd_query])
+      Sql.With (Sql.string_of_table_var sel_var,
+        sel_query, [ins_query; upd_query])
     ])
 
 
@@ -168,11 +167,9 @@ module TransactionTime = struct
     string -> (* transaction time to field *)
     Sql.query =
     fun env ((x, table, field_types), where, body) tt_from tt_to ->
-      (* SJF: Note that I've changed this from QueryPolicy.Default to
-         QueryPolicy.Flat. *)
       let env =
         Q.bind
-          (Q.env_of_value_env QueryPolicy.Flat env)
+          (Q.env_of_value_env QueryPolicy.Nested env)
           (x, Q.Var (x, Types.make_record_type field_types))
       in
       let where = opt_map (Query.Eval.norm_comp env) where in
@@ -188,7 +185,7 @@ module TransactionTime = struct
       fun db env ((x, table, field_types), where) to_field ->
     let env =
       Q.bind
-        (Q.env_of_value_env QueryPolicy.Flat env)
+        (Q.env_of_value_env QueryPolicy.Nested env)
         (x, Q.Var (x, Types.make_record_type field_types)) in
     let where = opt_map (Query.Eval.norm_comp env) where in
     let q = delete ((x, table), where) to_field in
@@ -316,7 +313,7 @@ module ValidTime = struct
         (* Finally, construct the transaction. *)
         Transaction ([
           Sql.With (Sql.string_of_subquery_var sel_var,
-            select, Sql.Transaction [insert; upd_current; upd_future])
+            select, [insert; upd_current; upd_future])
         ])
 
     let nonsequenced :
@@ -394,7 +391,7 @@ module ValidTime = struct
                 ins_fields = field_names;
                 ins_records = Query var
               } in
-            Sql.With (Sql.string_of_subquery_var var, sel, ins) in
+            Sql.With (Sql.string_of_subquery_var var, sel, [ins]) in
 
           (*  - Selection / insert #1: Old values at beginning of PA *)
           let sel1 =
@@ -601,8 +598,10 @@ module ValidTime = struct
             } in
 
           (* Package everything up in a transaction *)
-          Sql.With (Sql.string_of_subquery_var sel_var, sel_query,
-            Sql.Transaction [ins_query; upd1; upd2; del])
+          Sql.Transaction [
+              Sql.With (Sql.string_of_subquery_var sel_var, sel_query,
+                [ins_query; upd1; upd2; del])
+          ]
   end
 
   let compile_update :
@@ -625,7 +624,7 @@ module ValidTime = struct
 
       let env =
         Q.bind
-          (Q.env_of_value_env QueryPolicy.Flat env)
+          (Q.env_of_value_env QueryPolicy.Nested env)
           (x, to_bind) in
 
       let where = opt_map (Query.Eval.norm_comp env) where in
@@ -665,7 +664,7 @@ module ValidTime = struct
       fun del db env ((x, table, field_types), where) from_field to_field ->
         let env to_bind =
           Q.bind
-            (Q.env_of_value_env QueryPolicy.Flat env)
+            (Q.env_of_value_env QueryPolicy.Nested env)
             (x, to_bind) in
         let open Ir in
         let q =

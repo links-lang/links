@@ -806,7 +806,9 @@ struct
                         TemporalQuery.TransactionTime.insert
                             table_name field_names from_field to_field rows
                         |> db#string_of_query
-                    | Valid -> failwith "TODO"
+                    | Valid ->
+                        (* Valid time inserts were quite a mess -- need to rewrite *)
+                        failwith "TODO"
               in
               Debug.print ("RUNNING INSERT QUERY:\n" ^ q);
               let () = ignore (Database.execute_command q db) in

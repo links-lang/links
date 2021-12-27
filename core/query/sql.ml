@@ -21,7 +21,7 @@ type query =
       upd_where: base option
     }
   | Delete    of { del_table: table_name; del_where: base option }
-  | With      of table_name * query * query
+  | With      of table_name * query * query list
   | Transaction of query list (* SQL Transaction: Complete atomically*)
 (* Values: list of values to insert.
    Query: allows us to insert result of previous query, bound to a variable. *)
@@ -283,6 +283,12 @@ class virtual printer =
       | All -> Format.pp_print_string ppf "all"
       | Distinct -> ()
     in
+    let pp_qs ppf qs =
+      let semi = if qs = [] then "" else ";" in
+      Format.fprintf ppf "%a%s"
+          (self#pp_semicolon_separated pr_q) qs
+          semi
+    in
     match q with
       | Union (_, [], _) ->
           Format.pp_print_string ppf
@@ -312,17 +318,13 @@ class virtual printer =
           self#pp_update ppf upd_table upd_fields upd_where
       | Insert { ins_table; ins_fields; ins_records } ->
           self#pp_insert ppf ins_table ins_fields ins_records
-      | With (z, q, q') ->
+      | With (z, q, qs) ->
           Format.fprintf ppf "with %s as (@[<v>%a@])\n%a"
             z
             pr_q q
-            pr_q q'
+            pp_qs qs
       | Transaction qs ->
-          (* Add trailing semicolon if list nonempty *)
-          let semi = if qs = [] then ";" else "" in
-          Format.fprintf ppf "BEGIN; %a%s COMMIT;"
-            (self#pp_semicolon_separated pr_q) qs
-            semi
+          Format.fprintf ppf "BEGIN; %a COMMIT;" pp_qs qs
 
   method pp_projection one_table ppf (var, label) =
       if one_table then
@@ -442,7 +444,7 @@ let rec inline_outer_with q =
     | fromclause -> fromclause
   in
   match q with
-    | With (z, q, Select (fSet, fields, tables, condition, os)) ->
+    | With (z, q, [Select (fSet, fields, tables, condition, os)]) ->
         Select(fSet, fields, List.map (replace_subquery z q) tables, condition, os)
     | Union (fSet, qs,n) -> Union (fSet, List.map inline_outer_with qs,n)
     | q -> q

@@ -74,7 +74,7 @@ fun currentLookupName(name) {
 }
 
 fun demotedLookupAt(p, timestamp) {
-  query {
+  query nested {
     for (x <- ttAt(transactiontime, timestamp))
       where (p(x))
       [x]
@@ -82,7 +82,7 @@ fun demotedLookupAt(p, timestamp) {
 }
 
 fun lookupAt(p, timestamp) {
-  query {
+  query nested {
     for (x <-t- transactiontime)
       where (timestamp >= ttFrom(x) && timestamp < ttTo(x) && p(x))
       [ttData(x)]

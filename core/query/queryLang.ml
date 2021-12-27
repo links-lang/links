@@ -771,7 +771,7 @@ let let_clause : let_clause -> Sql.query =
     let (_fDist, result,tables,where,os) = select_clause (inner_index t gs_in) false inner in
     let tablename = Sql.string_of_subquery_var q in
     let q_inner = Sql.Select(Sql.All,result,Sql.TableRef(tablename,t)::tables,where,os) in
-    Sql.With (tablename, q_outer, q_inner)
+    Sql.With (tablename, q_outer, [q_inner])
 
 let sql_of_let_query : let_query -> Sql.query =
   fun cs ->
