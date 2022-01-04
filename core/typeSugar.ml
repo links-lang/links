@@ -278,6 +278,7 @@ sig
 
   val insert_table : griper
   val insert_values : griper
+  val sequenced_insert_values : griper
   val insert_read : griper
   val insert_write : griper
   val insert_needed : griper
@@ -805,6 +806,23 @@ end
     let insert_table ~pos ~t1:l ~t2:(_,t) ~error:_ =
       build_tyvar_names [snd l; t];
       fixed_type pos "Tables" t l
+
+
+    let sequenced_insert_values ~pos ~t1:(lexpr, lt) ~t2:(_,rt) ~error:_ =
+      build_tyvar_names [lt; rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("Valid time insertions require values matching the table " ^
+               "in an insert expression, associated with validity periods," ^
+               "but the values"               ^ nli () ^
+                code lexpr                    ^ nl  () ^
+               "have type"                    ^ nli () ^
+                code ppr_lt                   ^ nl  () ^
+               "while values of type"         ^ nli () ^
+                code ppr_rt                   ^ nl  () ^
+               "were expected."               ^ nl  () ^
+                "Hint: try using"             ^ nli () ^
+                "withValidity(x, from, to)")
 
     let insert_values ~pos ~t1:(lexpr, lt) ~t2:(_,rt) ~error:_ =
       build_tyvar_names [lt; rt];
@@ -3034,7 +3052,24 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                      Gripers.die pos "Duplicate labels in insert expression."
                    else
                      StringMap.add name (T.Present (Types.fresh_type_variable (lin_any, res_base))) field_env)
-                labels StringMap.empty in
+                labels StringMap.empty
+            in
+
+            (* Check that the fields in the type of values match the declared labels *)
+            (* In the case of a valid-time sequenced insert, we need to be inserting valid-time metadata *)
+            let () =
+              match tmp_ins with
+                | Some (ValidTimeInsertion SequencedInsertion) ->
+                    let ty =
+                      T.Record (T.Row (field_env, Unionfind.fresh T.Closed, false))
+                        |> Types.make_valid_time_data_type
+                        |> Types.make_list_type in
+                    unify ~handle:Gripers.sequenced_insert_values (pos_and_typ values, no_pos ty)
+                | _ ->
+                    unify ~handle:Gripers.insert_values
+                      (pos_and_typ values,
+                       no_pos (Types.make_list_type (T.Record (T.Row (field_env, Unionfind.fresh T.Closed, false)))))
+            in
 
             (* check that the fields in the type of values match the declared labels *)
             let () =
@@ -3076,7 +3111,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                                the table.
                             *)
                            let row =
-                             T.Row (StringMap.singleton id (T.Present Types.int_type), Types.fresh_row_variable (lin_any, res_base), false) in
+                             T.Row (StringMap.singleton id (T.Present Types.int_type),
+                               Types.fresh_row_variable (lin_any, res_base), false) in
                             unify
                               ~handle:Gripers.insert_id
                               (no_pos read,

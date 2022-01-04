@@ -1205,6 +1205,15 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     datatype "DateTime",
     PURE);
 
+  "withValidity",
+  (p3 (fun x v_from v_to ->
+    Value.box_record
+      [(TemporalOperation.data_field, x);
+       (TemporalOperation.from_field, v_from);
+       (TemporalOperation.to_field, v_to)]),
+    datatype "((|r), DateTime, DateTime) -> ValidTime((|r))",
+    PURE);
+
   (* Database functions *)
   "AsList",
   (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
