@@ -10,11 +10,18 @@ var positions =
 
 # SJF: We really should have sugar for this.
 fun hire(name, salary, positionID, startDate, endDate) {
-  vt_insert employees
+  vt_insert sequenced employees
     values
     (name, salary, position_id)
     [withValidity(
         (=name, =salary, position_id = positionID), startDate, endDate)]
+}
+
+fun hire_permanent(name, salary, positionID) {
+  vt_insert current employees
+    values
+    (name, salary, position_id)
+    [(=name, =salary, position_id = positionID)]
 }
 
 fun fire(name) {
@@ -116,8 +123,8 @@ fun test() {
   }
 
   var t1 = now();
-  hire("Alice", 15000, positionID("PhD student"), now(), forever());
-  hire("Bob", 40000, positionID("Lecturer"), now(), forever());
+  hire_permanent("Alice", 15000, positionID("PhD student"));
+  hire_permanent("Bob", 40000, positionID("Lecturer"));
   var t2 = now();
   assertEq(lookupAt(fun(x) { true }, t1), []);
   assertEq(sortBy(fun(x) { x.name }, currentLookup(fun(x) { true })),
@@ -131,7 +138,7 @@ fun test() {
       [
         (name = "Alice", salary = 15000, position_id = positionID("PhD student")),
         (name = "Bob", salary = 40000, position_id = positionID("Lecturer"))
-      ]); 
+      ]);
   assertEq(sortBy(fun(x) { x.name }, currentLookup(fun(x) { true })),
       [
         (name = "Alice", salary = 30000, position_id = positionID("Postdoc")),
@@ -269,7 +276,7 @@ fun test() {
       withValidity((name = "Izzie", salary = 35000, position_id = positionID("Postdoc")), pa_to, pv_to)
       ]);
 
-  ### Case 3: PA overlaps PV to the right 
+  ### Case 3: PA overlaps PV to the right
   ### PV: 2018 --> 2023
   ### PA: 2022 --> 2025
   var pv_from = parseDate("2018-01-01 00:00:00");
