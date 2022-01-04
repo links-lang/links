@@ -790,11 +790,11 @@ struct
         begin
           [@warning "-40"]
           value env source >>= fun source ->
-          value env rows >>= fun rows ->
-          match source, rows with
+          value env rows >>= fun raw_rows ->
+          match source, raw_rows with
           | `Table _, `List [] ->  apply_cont cont env (`Record [])
-          | `Table { database = (db, _) ; name = table_name; temporal_fields; _ }, rows ->
-              let (field_names,rows) = Value.row_columns_values rows in
+          | `Table { database = (db, _) ; name = table_name; temporal_fields; _ }, raw_rows ->
+              let (field_names,rows) = Value.row_columns_values raw_rows in
               let q =
                   match tmp with
                     (* None: Current time insertion *)
@@ -812,7 +812,10 @@ struct
                             table_name field_names from_field to_field rows
                         |> db#string_of_query
                     | Some (ValidTimeInsertion SequencedInsertion)  ->
-                        failwith "TODO"
+                        let (from_field, to_field) = Option.get temporal_fields in
+                        TemporalQuery.ValidTime.Insert.sequenced
+                            table_name from_field to_field raw_rows
+                        |> db#string_of_query
               in
               Debug.print ("RUNNING INSERT QUERY:\n" ^ q);
               let () = ignore (Database.execute_command q db) in

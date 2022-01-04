@@ -220,6 +220,48 @@ module ValidTime = struct
 
   module Insert = struct
     let current = current_insertion
+
+    (* Massages VT metadata into records to be inserted *)
+    let valid_time_row_columns_values from_field to_field v =
+      (* v should be a non-empty list of valid-time metadata. *)
+      let records = Value.unbox_list v in
+      assert (records <> []);
+      let md_from = TemporalOperation.from_field in
+      let md_to = TemporalOperation.to_field in
+      let md_data = TemporalOperation.data_field in
+
+      let fields =
+        List.hd records
+        |> Value.unbox_record
+        |> List.assoc md_data
+        |> Value.unbox_record
+        |> List.map fst in
+      let fields = fields @ [from_field; to_field] in
+
+      let vss =
+        List.map (fun md ->
+          let md = Value.unbox_record md in
+          let from_val = List.assoc md_from md in
+          let to_val = List.assoc md_to md in
+
+          let data =
+            List.assoc md_data md
+              |> Value.unbox_record
+              |> List.map snd in
+          let data = data @ [from_val; to_val] in
+          List.map (Q.expression_of_base_value ->- base []) data
+        ) records in
+
+      (fields, vss)
+
+    let sequenced table_name from_field to_field raw_rows =
+      let (field_names, rows) =
+        valid_time_row_columns_values from_field to_field raw_rows
+      in
+      Sql.(Insert {
+        ins_table = table_name;
+        ins_fields = field_names;
+        ins_records = Values rows })
   end
 
   module Update = struct
