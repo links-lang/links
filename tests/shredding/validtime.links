@@ -175,7 +175,7 @@ fun test() {
   ## Sequenced update
 
   ### Case 1: PA contained within PV
-  var debbie_hire_date = now();
+  var debbie_hire_date = parseDate("2020-01-01 12:00:00");
   hire("Debbie", 70000, positionID("Professor"), debbie_hire_date, forever);
   sequencedUpdate("Debbie", parseDate("2022-01-01 12:00:00"), parseDate("2025-01-01 12:00:00"),  positionID("Head of School"));
   var sortedLookup = sortBy(fun(x) { vtFrom(x) }, nonsequencedLookup(fun(x) { vtData(x).name == "Debbie" }));

@@ -362,7 +362,7 @@ module ValidTime = struct
 
         (* Finally, construct the transaction. *)
         Transaction ([
-          Sql.With (Sql.string_of_subquery_var sel_var,
+          Sql.With (Sql.string_of_table_var sel_var,
             select, [insert; upd_current; upd_future])
         ])
 
@@ -441,7 +441,7 @@ module ValidTime = struct
                 ins_fields = field_names;
                 ins_records = Query var
               } in
-            Sql.With (Sql.string_of_subquery_var var, sel, [ins]) in
+            Sql.With (Sql.string_of_table_var var, sel, [ins]) in
 
           (*  - Selection / insert #1: Old values at beginning of PA *)
           let sel1 =
@@ -649,7 +649,7 @@ module ValidTime = struct
 
           (* Package everything up in a transaction *)
           Sql.Transaction [
-              Sql.With (Sql.string_of_subquery_var sel_var, sel_query,
+              Sql.With (Sql.string_of_table_var sel_var, sel_query,
                 [ins_query; upd1; upd2; del])
           ]
   end
