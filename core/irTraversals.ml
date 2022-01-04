@@ -364,16 +364,16 @@ struct
             let o, returning, _ = o#value returning in
               o, InsertReturning (tmp, source, rows, returning), Types.unit_type
         | Update (upd, (x, source), where, body) ->
-            let o, upd = o#optionu (fun o -> o#temporal_update) upd in
             let o, source, _ = o#value source in
             let o, x = o#binder x in
+            let o, upd = o#optionu (fun o -> o#temporal_update) upd in
             let o, where, _ = o#option (fun o -> o#computation) where in
             let o, body, _ = o#computation body in
               o, Update (upd, (x, source), where, body), Types.unit_type
         | Delete (del, (x, source), where) ->
-            let o, del = o#optionu (fun o -> o#temporal_deletion) del in
             let o, source, _ = o#value source in
             let o, x = o#binder x in
+            let o, del = o#optionu (fun o -> o#temporal_deletion) del in
             let o, where, _ = o#option (fun o -> o#computation) where in
               o, Delete (del, (x, source), where), Types.unit_type
         | CallCC v ->

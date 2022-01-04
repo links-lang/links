@@ -1636,17 +1636,18 @@ fun ttAt(tbl, timestamp) {
 # Valid-time timeslice for current DB
 fun vtCurrent(tbl) {
     query nested {
+        var time = now();
         for (x <-v- tbl)
-            where (vtFrom(x) >= now())
+            where (time >= vtFrom(x) && time < vtTo(x))
             [ vtData(x) ]
     }
 }
 
 # Valid-time timeslice for DB at a given time
-fun vtAt(tbl, timestamp) {
+fun vtAt(tbl, time) {
     query nested {
         for (x <-v- tbl)
-            where (vtFrom(x) <= timestamp && timestamp < vtTo(x))
+            where (time >= vtFrom(x) && time < vtTo(x))
             [ vtData(x) ]
     }
 }

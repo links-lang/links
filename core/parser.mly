@@ -704,10 +704,10 @@ mode_not_valid:
 
 valid_time_exps:
 | labeled_exps { $1, None, None }
-| labeled_exps VALID FROM exp TO exp { $1, Some $4, Some $6 }
-| labeled_exps VALID TO exp FROM exp { $1, Some $4, Some $6 }
-| labeled_exps VALID FROM exp { $1, Some $4, None }
-| labeled_exps VALID TO exp { $1, None, Some $4 }
+| maybe_labeled_exps VALID FROM exp TO exp { $1, Some $4, Some $6 }
+| maybe_labeled_exps VALID TO exp FROM exp { $1, Some $4, Some $6 }
+| maybe_labeled_exps VALID FROM exp { $1, Some $4, None }
+| maybe_labeled_exps VALID TO exp { $1, None, Some $4 }
 
 update_expression:
 | UPDATE CURRENT LPAREN pattern LVLARROW exp RPAREN
@@ -1003,6 +1003,9 @@ labeled_exp:
 
 labeled_exps:
 | separated_nonempty_list(COMMA, labeled_exp)                  { $1 }
+
+maybe_labeled_exps:
+| separated_list(COMMA, labeled_exp)                           { $1 }
 
 /*
  * Datatype grammar

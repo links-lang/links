@@ -3001,7 +3001,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             let needed = T.Record (Types.make_empty_open_row (lin_any, res_base)) in
             let () = unify ~handle:Gripers.delete_table
               (pos_and_typ from, no_pos (T.Table (tmp, read, write, needed))) in
-            let () = unify ~handle:Gripers.delete_pattern (ppos_and_typ pat, no_pos read) in
+
+            let () =
+              let expected =
+                match tdel with
+                  | Some (ValidTimeDeletion NonsequencedDeletion) ->
+                      Types.make_valid_time_data_type read
+                  | _ -> read in
+              unify ~handle:Gripers.delete_pattern (ppos_and_typ pat, no_pos expected) in
 
             let hide =
               let bs = Env.domain (pattern_env pat) in
@@ -3027,7 +3034,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               Usage.combine_many [
                   usages from;
                   hide (from_option Usage.empty (opt_map usages where));
-                  tmp_usages
+                  hide tmp_usages
               ]
         | DBInsert (tmp_ins, into, labels, values, id) ->
             let temporality =
@@ -3070,12 +3077,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                       (pos_and_typ values,
                        no_pos (Types.make_list_type (T.Record (T.Row (field_env, Unionfind.fresh T.Closed, false)))))
             in
-
-            (* check that the fields in the type of values match the declared labels *)
-            let () =
-              unify ~handle:Gripers.insert_values
-                (pos_and_typ values,
-                 no_pos (Types.make_list_type (T.Record (T.Row (field_env, Unionfind.fresh T.Closed, false))))) in
 
             let needed_env =
               StringMap.map
@@ -3260,7 +3261,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               Types.unit_type,
               Usage.combine_many
                 ([ usages from;
-                   tmp_usages;
+                   hide tmp_usages;
                    hide (from_option Usage.empty (opt_map usages where))]
                   @
                   (List.map hide (List.map (usages -<- snd) set)))

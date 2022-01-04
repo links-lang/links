@@ -8,7 +8,6 @@ var positions =
   table "positions" with (position_id: Int, position: String)
   where position_id readonly from db;
 
-# SJF: We really should have sugar for this.
 fun hire(name, salary, positionID, startDate, endDate) {
   vt_insert sequenced employees
     values
@@ -17,7 +16,7 @@ fun hire(name, salary, positionID, startDate, endDate) {
         (=name, =salary, position_id = positionID), startDate, endDate)]
 }
 
-fun hire_permanent(name, salary, positionID) {
+fun hirePermanent(name, salary, positionID) {
   vt_insert current employees
     values
     (name, salary, position_id)
@@ -43,7 +42,7 @@ fun promote(name, salary, positionID) {
 }
 
 fun lookupAt(pred, time) {
-  query {
+  query nested {
     for (x <-v- employees)
       where (pred(x) && time >= vtFrom(x) && time < vtTo(x))
       [vtData(x)]
@@ -60,16 +59,15 @@ fun currentLookupWithTime(pred) {
 }
 
 fun currentLookup(pred) {
-  var tbl = vtCurrent(employees);
   query nested {
-      for (x <-- tbl)
+      for (x <- vtCurrent(employees))
         where (pred(x))
         [x]
   }
 }
 
 fun nonsequencedLookup(pred) {
-  query {
+  query nested {
     for (x <-v- employees)
       where (pred(x))
       [x]
@@ -77,16 +75,18 @@ fun nonsequencedLookup(pred) {
 }
 
 fun insertPositions() {
-  insert positions values [(position = "PhD student")];
-  insert positions values [(position = "Postdoc")];
-  insert positions values [(position = "Lecturer")];
-  insert positions values [(position = "Reader")];
-  insert positions values [(position = "Professor")];
-  insert positions values [(position = "Head of School")];
+  insert positions values
+    (position)
+    [(position = "PhD student"),
+     (position = "Postdoc"),
+     (position = "Lecturer"),
+     (position = "Reader"),
+     (position = "Professor"),
+     (position = "Head of School")]
 }
 
 fun getPositions() {
-  query {
+  query flat {
     for (x <-- positions) [(x.position, x.position_id)]
   }
 }
@@ -123,8 +123,8 @@ fun test() {
   }
 
   var t1 = now();
-  hire_permanent("Alice", 15000, positionID("PhD student"));
-  hire_permanent("Bob", 40000, positionID("Lecturer"));
+  hirePermanent("Alice", 15000, positionID("PhD student"));
+  hirePermanent("Bob", 40000, positionID("Lecturer"));
   var t2 = now();
   assertEq(lookupAt(fun(x) { true }, t1), []);
   assertEq(sortBy(fun(x) { x.name }, currentLookup(fun(x) { true })),
@@ -176,14 +176,14 @@ fun test() {
 
   ### Case 1: PA contained within PV
   var debbie_hire_date = now();
-  hire("Debbie", 70000, positionID("Professor"), debbie_hire_date, forever());
+  hire("Debbie", 70000, positionID("Professor"), debbie_hire_date, forever);
   sequencedUpdate("Debbie", parseDate("2022-01-01 12:00:00"), parseDate("2025-01-01 12:00:00"),  positionID("Head of School"));
   var sortedLookup = sortBy(fun(x) { vtFrom(x) }, nonsequencedLookup(fun(x) { vtData(x).name == "Debbie" }));
   assertEq(sortedLookup,
       [
       withValidity((name = "Debbie", salary = 70000, position_id = positionID("Professor")), debbie_hire_date, parseDate("2022-01-01 12:00:00")),
       withValidity((name = "Debbie", salary = 70000, position_id = positionID("Head of School")), parseDate("2022-01-01 12:00:00"), parseDate("2025-01-01 12:00:00")),
-      withValidity((name = "Debbie", salary = 70000, position_id = positionID("Professor")), parseDate("2025-01-01 12:00:00"), forever())
+      withValidity((name = "Debbie", salary = 70000, position_id = positionID("Professor")), parseDate("2025-01-01 12:00:00"), forever)
       ]);
 
   ### Case 2: PA overlaps PV to the left
