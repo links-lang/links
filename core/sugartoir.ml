@@ -139,8 +139,8 @@ sig
 
   val query : (value sem * value sem) option * QueryPolicy.t * tail_computation sem -> tail_computation sem
 
-  val db_insert : env -> (Temporality.t * value sem * value sem) -> tail_computation sem
-  val db_insert_returning : env -> (Temporality.t * value sem * value sem * value sem) -> tail_computation sem
+  val db_insert : env -> (temporal_insertion option * value sem * value sem) -> tail_computation sem
+  val db_insert_returning : env -> (temporal_insertion option * value sem * value sem * value sem) -> tail_computation sem
   val db_update : env ->
     ([   `TransactionUpdate | `ValidCurrentUpdate
        | `ValidSequencedUpdate of (value sem * value sem)
@@ -866,6 +866,16 @@ struct
       let ec = eval env in
       let ev = evalv env in
       let evs = List.map ev in
+      let ir_temporal_insert tmp =
+        match tmp with
+          | None -> None
+          | Some (Sugartypes.ValidTimeInsertion Sugartypes.CurrentInsertion) ->
+              Some (Ir.ValidTimeInsertion Ir.CurrentInsertion)
+          | Some (Sugartypes.ValidTimeInsertion Sugartypes.SequencedInsertion) ->
+              Some (Ir.ValidTimeInsertion Ir.SequencedInsertion)
+          | Some (Sugartypes.TransactionTimeInsertion) ->
+              Some Ir.TransactionTimeInsertion
+      in
         let open Sugartypes in
         match e with
           | Constant c -> cofv (I.constant c)
@@ -1101,10 +1111,12 @@ struct
           | Query (range, policy, e, _) ->
               I.query (opt_map (fun (limit, offset) -> (ev limit, ev offset)) range, policy, ec e)
           | DBInsert (tmp, source, _fields, rows, None) ->
+              let tmp = ir_temporal_insert tmp in
               let source = ev source in
               let rows = ev rows in
               I.db_insert env (tmp, source, rows)
           | DBInsert (tmp, source, _fields, rows, Some returning) ->
+              let tmp = ir_temporal_insert tmp in
               let source = ev source in
               let rows = ev rows in
               let returning = ev returning in

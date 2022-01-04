@@ -908,10 +908,15 @@ exp:
 | table_expression
 | typed_expression                                             { $1 }
 
+valid_time_insert_kind:
+| SEQUENCED                                                    { SequencedInsertion }
+| CURRENT                                                      { CurrentInsertion }
+| /* empty */                                                  { CurrentInsertion }
+
 insert_keyword:
-| TTINSERT                                                     { Temporality.transaction }
-| VTINSERT                                                     { Temporality.valid }
-| INSERT                                                       { Temporality.current }
+| TTINSERT                                                     { Some TransactionTimeInsertion }
+| VTINSERT valid_time_insert_kind                              { Some (ValidTimeInsertion $2) }
+| INSERT                                                       { None }
 
 database_expression:
 | insert_keyword exp VALUES LPAREN record_labels RPAREN exp    { db_insert ~ppos:$loc $1 $2 $5 $7 None }

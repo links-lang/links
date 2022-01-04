@@ -81,6 +81,12 @@ and valid_time_deletion =
   | CurrentDeletion
   | SequencedDeletion of { validity_from: value; validity_to: value }
   | NonsequencedDeletion
+and valid_time_insertion =
+  | CurrentInsertion
+  | SequencedInsertion
+and temporal_insertion =
+  | ValidTimeInsertion of valid_time_insertion
+  | TransactionTimeInsertion
 and binding =
   | Let        of binder * (tyvar list * tail_computation)
   | Fun        of fun_def
@@ -103,8 +109,8 @@ and special =
   | Table      of table
   | Query      of (value * value) option * QueryPolicy.t * computation * Types.t
   | TemporalJoin of Temporality.t * computation * Types.datatype
-  | InsertRows of Temporality.t * value * value
-  | InsertReturning of Temporality.t * value * value * value
+  | InsertRows of temporal_insertion option * value * value
+  | InsertReturning of temporal_insertion option * value * value * value
   | Update     of temporal_update option * (binder * value) * computation option * computation
   | Delete     of temporal_deletion option * (binder * value) * computation option
   | CallCC     of value

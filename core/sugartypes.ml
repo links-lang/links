@@ -423,6 +423,12 @@ and valid_time_deletion =
 and temporal_deletion =
   | ValidTimeDeletion of valid_time_deletion
   | TransactionTimeDeletion
+and valid_time_insertion =
+  | CurrentInsertion
+  | SequencedInsertion
+and temporal_insertion =
+  | ValidTimeInsertion of valid_time_insertion
+  | TransactionTimeInsertion
 and phrasenode =
   | Constant         of Constant.t
   | Var              of Name.t
@@ -469,7 +475,7 @@ and phrasenode =
   | DatabaseLit      of phrase * (phrase option * phrase option)
   | TableLit         of table_lit
   | DBDelete         of temporal_deletion option * Pattern.with_pos * phrase * phrase option
-  | DBInsert         of Temporality.t * phrase * Name.t list * phrase * phrase option
+  | DBInsert         of temporal_insertion option * phrase * Name.t list * phrase * phrase option
   | DBUpdate         of temporal_update option * Pattern.with_pos * phrase *
                           phrase option * (Name.t * phrase) list
   | DBTemporalJoin   of Temporality.t * phrase * Types.datatype option

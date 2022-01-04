@@ -796,18 +796,19 @@ struct
           | `Table { database = (db, _) ; name = table_name; temporal_fields; _ }, rows ->
               let (field_names,rows) = Value.row_columns_values rows in
               let q =
-                  let open Temporality in
                   match tmp with
-                    | Current ->
+                    (* None: Current time insertion *)
+                    | None ->
                         QueryLang.insert table_name field_names rows
                         |> db#string_of_query
-                    | Transaction ->
+                    | Some TransactionTimeInsertion ->
                         let (from_field, to_field) = Option.get temporal_fields in
                         TemporalQuery.TransactionTime.insert
                             table_name field_names from_field to_field rows
                         |> db#string_of_query
-                    | Valid ->
-                        (* Valid time inserts were quite a mess -- need to rewrite *)
+                    | Some (ValidTimeInsertion CurrentInsertion)  ->
+                        failwith "TODO"
+                    | Some (ValidTimeInsertion SequencedInsertion)  ->
                         failwith "TODO"
               in
               Debug.print ("RUNNING INSERT QUERY:\n" ^ q);

@@ -3011,7 +3011,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                   hide (from_option Usage.empty (opt_map usages where));
                   tmp_usages
               ]
-        | DBInsert (tmp, into, labels, values, id) ->
+        | DBInsert (tmp_ins, into, labels, values, id) ->
+            let temporality =
+                match tmp_ins with
+                  | None -> Temporality.current
+                  | Some (ValidTimeInsertion _) -> Temporality.valid
+                  | Some (TransactionTimeInsertion) -> Temporality.transaction
+            in
             let into   = tc into in
             let values = tc values in
             let id = opt_map tc id in
@@ -3019,7 +3025,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             let write = T.Record (Types.make_empty_open_row (lin_any, res_base)) in
             let needed = T.Record (Types.make_empty_open_row (lin_any, res_base)) in
             let () = unify ~handle:Gripers.insert_table
-              (pos_and_typ into, no_pos (T.Table (tmp, read, write, needed))) in
+              (pos_and_typ into, no_pos (T.Table (temporality, read, write, needed))) in
 
             let field_env =
               List.fold_right
@@ -3087,7 +3093,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                 unify ~handle:Gripers.insert_outer
                   (no_pos (T.Record context.effect_row), no_pos (T.Record outer_effects))
             in
-              DBInsert (tmp, erase into, labels, erase values, opt_map erase id), return_type,
+              DBInsert (tmp_ins, erase into, labels, erase values, opt_map erase id), return_type,
               Usage.combine_many [usages into; usages values; from_option Usage.empty (opt_map usages id)]
         | DBUpdate (tmp_upd, pat, from, where, set) ->
             (* Need temporality to be able to deduce pattern type *)
