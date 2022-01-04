@@ -745,3 +745,113 @@ module ValidTime = struct
         Debug.print ("Generated valid time deletion query: " ^ (db#string_of_query q));
         q
 end
+
+module TemporalJoin = struct
+
+  (* By virtue of normal forms, we can do a straightforward transformation
+   * to rewrite into a temporally-joined normal form (i.e., a join where the
+   * period of validity of the returned value is the intersection of the periods
+   * of validity of all joined records).
+   *
+   * There is one restriction: temporally-joined tables must be of the same time
+   * dimension, meaning that we can't have both transaction-time and valid-time
+   * tables in the same query. This will be checked dynamically at present,
+   * however it might be possible to do so statically in future. *)
+  class visitor temporality =
+    object(o)
+      inherit QueryLang.Transform.visitor as super
+      (* The `for` comprehension of a normalised queries will
+       * contain a list of all generators used within the query.
+       * The traversal object needs to record a list of pairs
+       * [(table name, start column, end column)] in order to generate
+       * the correct projections for the predicate. *)
+      val tables = []
+
+      method private set_tables tbls = {< tables = tbls >}
+
+      (* Start time: maximum of all start times *)
+      method start_time =
+        let open Q in
+        List.fold_right (fun (tbl_var, start_time, _) expr ->
+          Apply (Primitive "greatest", [Project (tbl_var, start_time); expr])
+        ) tables (Constant Constant.DateTime.beginning_of_time)
+
+      (* End time: minimum of all end times *)
+      method end_time =
+        let open Q in
+        List.fold_right (fun (tbl_var, _, end_time) expr ->
+          Apply (Primitive "least", [Project (tbl_var, end_time); expr])
+        ) tables (Constant Constant.DateTime.forever)
+
+      method! query =
+        let open Q in
+        let open Value in
+        let app prim args = Apply (Primitive prim, args) in
+        function
+          | For (tag, gens, os, body) ->
+              let tables =
+                (* Restrict attention to ValidTime or TransactionTime tables *)
+                List.filter_map (function
+                  | (v, Q.Table ({ temporality; _ } as t))
+                      when temporality = Temporality.Valid ||
+                           temporality = Temporality.Transaction ->
+                      Some (v, t)
+                  | _ -> None) gens
+              in
+
+              (* Ensure that all tables correspond to the given temporality *)
+              let matches_mode x = x.temporality = temporality in
+              let () = List.iter (fun x ->
+                if matches_mode (snd x) then () else
+                  raise
+                    (Errors.runtime_error
+                      ("All tables in a temporal join must match the " ^
+                      "mode of the join."))) tables
+              in
+
+              (* Create a Var for each variable -- requires creating a type
+                 from the row and field names. *)
+              let tables =
+                List.map (fun (v, x) ->
+                  (* Always defined for Valid / Transaction time *)
+                  (* Might want a better representation -- this screams bad design. *)
+                  let (from_field, to_field) =
+                    OptionUtils.val_of x.temporal_fields
+                  in
+                  let ty =
+                    List.fold_left
+                      (fun acc (k, x) ->
+                        match x with
+                          | Present t -> StringMap.add k t acc
+                          | _ -> assert false)
+                      (StringMap.empty)
+                      (fst3 x.row |> StringMap.to_alist) in
+                  (Q.Var (v, Types.make_record_type ty), from_field, to_field)
+                ) tables
+              in
+
+              let o = o#set_tables tables in
+              let (o, body) = o#query body in
+              (o, For (tag, gens, os, body))
+          | If (i, t, e) ->
+              let (o, i) = o#query i in
+              let (o, t) = o#query t in
+              let (o, e) = o#query e in
+              let i =
+                app "&&" [
+                  i; app "<" [o#start_time; o#end_time] ] in
+              (o, If (i, t, e))
+          | Singleton data ->
+              let record_fields =
+                [(TemporalOperation.data_field, data);
+                 (TemporalOperation.from_field, o#start_time);
+                 (TemporalOperation.to_field, o#end_time)]
+              in
+              (o, Singleton (Record (StringMap.from_alist record_fields)))
+          | q -> super#query q
+    end
+
+    (* External function *)
+    let rewrite_temporal_join mode q =
+      snd ((new visitor mode)#query q)
+end

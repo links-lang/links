@@ -800,3 +800,121 @@ let insert table_name field_names rows =
       ins_table = table_name;
       ins_fields = field_names;
       ins_records = Values rows })
+
+
+module type QUERY_VISITOR =
+sig
+  class visitor :
+  object ('self_type)
+    method query : t -> ('self_type * t)
+    method tag : tag -> ('self_type * tag)
+    method binder : binder -> ('self_type * binder)
+
+    method option :
+      'a.
+        ('self_type -> 'a -> ('self_type * 'a)) ->
+        'a option ->
+        ('self_type * ('a option))
+
+    method list :
+      'a.
+        ('self_type -> 'a -> ('self_type * 'a)) ->
+        'a list ->
+        ('self_type * ('a list))
+  end
+end
+
+
+module Transform : QUERY_VISITOR =
+struct
+  class visitor =
+  object ((o : 'self_type))
+    method tag x = (o, x)
+
+    method binder x = (o, x)
+
+    method option :
+      'a.
+        ('self_type -> 'a -> ('self_type * 'a)) ->
+        'a option ->
+        ('self_type * ('a option)) =
+      fun f x ->
+        match x with
+          | Some x ->
+              let (o, x) = f o x in
+              (o, Some x)
+          | None -> (o, None)
+
+    method list :
+        'a.
+        ('self_type -> 'a -> ('self_type * 'a)) ->
+        'a list ->
+        ('self_type * ('a list))
+      = fun f xs ->
+      List.fold_right (fun x (o, acc) ->
+        let (o, x) = f o x in
+        (o, x :: acc)) xs (o, [])
+
+    method query =
+      function
+      | For (tag_opt, gs, os, body) ->
+          let (o, tag_opt) = o#option (fun o -> o#tag) tag_opt in
+          let (o, gs) =
+            o#list (fun o (v, t) ->
+              let (o, t) = o#query t in
+              (o, (v, t))) gs in
+          let (o, os) = o#list (fun o -> o#query) os in
+          let (o, body) = o#query body in
+          (o, For (tag_opt, gs, os, body))
+      | If (i, t, e) ->
+          let (o, i) = o#query i in
+          let (o, t) = o#query t in
+          let (o, e) = o#query e in
+          (o, If (i, t, e))
+      | Table t -> (o, Table t)
+      | Database  (dt, s) -> (o, Database (dt, s))
+      | Singleton x -> let (o, x) = o#query x in (o, Singleton x)
+      | Concat xs -> let (o, xs) = o#list (fun o -> o#query) xs in (o, Concat xs)
+      | Dedup q ->
+          let (o, q) = o#query q in
+          (o, Dedup q)
+      | Prom q ->
+          let (o, q) = o#query q in
+          (o, Prom q)
+      | Record fields ->
+        let (o, fields) =
+          StringMap.fold (fun k v (o, acc)->
+            let (o, v) = o#query v in
+            (o, StringMap.add k v acc)) fields (o, StringMap.empty) in
+        (o, Record fields)
+      | Project (x, field) -> let (o, x) = o#query x in (o, Project (x, field))
+      | Erase  (x, fields) ->
+        let (o, x) = o#query x in
+        (o, Erase (x, fields))
+      | Variant (v, x) ->
+          let (o, x) = o#query x in
+          (o, Variant (v, x))
+      | XML x -> (o, XML x)
+      | Apply (f, args) ->
+          let (o, f) = o#query f in
+          let (o, args) = o#list (fun o -> o#query) args in
+          (o, Apply (f, args))
+      | Closure ((var, comp), env) -> (o, Closure ((var, comp), env))
+      | Case (x, cases, default) ->
+          let (o, x) = o#query x in
+          let (o, cases) =
+            StringMap.fold (fun k (bnd, body) (o, acc) ->
+              let (o, bnd) = o#binder bnd in
+              let (o, body) = o#query body in
+              (o, StringMap.add k (bnd, body) acc)) cases (o, StringMap.empty) in
+          let (o, default) =
+            o#option (fun o (bnd, x) ->
+              let (o, bnd) = o#binder bnd in
+              let (o, x) = o#query x in
+              (o, (bnd, x))) default in
+          (o, Case (x, cases, default))
+      | Primitive x -> (o, Primitive x)
+      | Var (v, dts) -> (o, Var (v, dts))
+      | Constant c -> (o, Constant c)
+  end
+end
