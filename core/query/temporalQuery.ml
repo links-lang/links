@@ -214,6 +214,24 @@ module ValidTime = struct
       ] in
     Q.Record metadata_record
 
+  module Insert = struct
+
+    let current table_name field_names from_field to_field rows =
+      let compile_rows =
+          List.map (List.map (Q.expression_of_base_value ->- base [])) in
+
+      let rows = compile_rows rows in
+      let field_names = field_names @ [from_field; to_field] in
+      let now = Sql.Constant (Constant.DateTime.now ()) in
+      let forever = Sql.Constant (Constant.DateTime.forever) in
+      let rows = List.map (fun vs -> vs @ [now; forever]) rows in
+      Sql.(Insert {
+        ins_table = table_name;
+        ins_fields = field_names;
+        ins_records = Values rows })
+
+  end
+
   module Update = struct
     let current :
       Types.datatype StringMap.t ->

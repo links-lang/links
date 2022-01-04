@@ -807,7 +807,10 @@ struct
                             table_name field_names from_field to_field rows
                         |> db#string_of_query
                     | Some (ValidTimeInsertion CurrentInsertion)  ->
-                        failwith "TODO"
+                        let (from_field, to_field) = Option.get temporal_fields in
+                        TemporalQuery.ValidTime.Insert.current
+                            table_name field_names from_field to_field rows
+                        |> db#string_of_query
                     | Some (ValidTimeInsertion SequencedInsertion)  ->
                         failwith "TODO"
               in
