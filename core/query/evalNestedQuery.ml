@@ -844,3 +844,21 @@ let compile_shredded : Value.env -> Ir.computation
           let t = QL.type_of_expression v in
           let p = unordered_query_package t v in
             Some (db, p)
+
+  let compile_temporal_join :
+      Temporality.t ->
+      Value.env ->
+      Ir.computation ->
+        (Value.database * (Sql.query * Shred.flat_type) Shred.package) =
+  fun tmp env e ->
+    let v =
+      Q.Eval.eval QueryPolicy.Nested env e
+        |> TemporalQuery.TemporalJoin.rewrite_temporal_join tmp in
+      match QL.used_database v with
+        | None    ->
+            raise (Errors.runtime_error "Unable to compile temporal join (No DB found).")
+        | Some db ->
+          Debug.print ("Temporal Join Query: " ^ QL.show v ^ "\n");
+          let t = QL.type_of_expression v in
+          let p = unordered_query_package t v in
+            (db, p)

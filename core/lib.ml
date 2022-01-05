@@ -616,6 +616,18 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "([a]) ~> [|Some:a | None:()|]",
   PURE);
 
+  (* We need to have these here in order to patch through to the underlying SQL functions. *)
+  (* The over-specific type is there because part of evalNestedQuery is type-directed. *)
+  "least",
+  (p2 (fun x y -> if less x y then x else y),
+   datatype "(DateTime, DateTime) ~> DateTime",
+  PURE);
+
+  "greatest",
+  (p2 (fun x y -> if less x y then y else x),
+   datatype "(DateTime, DateTime) ~> DateTime",
+  PURE);
+
   (* XML *)
   "itemChildNodes",
   (p1 (function

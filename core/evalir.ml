@@ -585,6 +585,25 @@ struct
              | `Bool true     -> t
              | `Bool false    -> e
              | _              -> eval_error "Conditional was not a boolean")
+
+  and eval_nested_query env cont (db: Value.database) pkg =
+    let get_fields t =
+      match t with
+        | `Record fields ->
+            StringMap.to_list (fun name p -> (name, Types.Primitive p)) fields
+        | _ -> assert false
+    in
+    let execute_shredded_raw (q, t) =
+      let q = Sql.inline_outer_with q in
+      let q = db#string_of_query q in
+      Database.execute_select_result (get_fields t) q db, t in
+    let raw_results =
+      EvalNestedQuery.Shred.pmap execute_shredded_raw pkg in
+    let mapped_results =
+      EvalNestedQuery.Shred.pmap EvalNestedQuery.Stitch.build_stitch_map raw_results in
+    apply_cont cont env
+      (EvalNestedQuery.Stitch.stitch_mapped_query mapped_results)
+
   and special env (cont : continuation) : Ir.special -> result =
     let unpack_lens l = match l with | `Lens l -> l | _ -> raise (internal_error "Expected a lens.") in
     let invoke_session_exception () =
@@ -733,23 +752,8 @@ struct
                  if range != None then eval_error "Range is not supported for nested queries";
                  match EvalNestedQuery.compile_shredded env e with
                    | None -> computation env cont e
-                   | Some (db, p) when db#supports_shredding () ->
-                       let get_fields t =
-                         match t with
-                           | `Record fields ->
-                               StringMap.to_list (fun name p -> (name, Types.Primitive p)) fields
-                           | _ -> assert false
-                       in
-                       let execute_shredded_raw (q, t) =
-                         let q = Sql.inline_outer_with q in
-                         let q = db#string_of_query ~range q in
-                         Database.execute_select_result (get_fields t) q db, t in
-                       let raw_results =
-                         EvalNestedQuery.Shred.pmap execute_shredded_raw p in
-                       let mapped_results =
-                         EvalNestedQuery.Shred.pmap EvalNestedQuery.Stitch.build_stitch_map raw_results in
-                       apply_cont cont env
-                         (EvalNestedQuery.Stitch.stitch_mapped_query mapped_results)
+                   | Some (db, pkg) when db#supports_shredding () ->
+                       eval_nested_query env cont db pkg
                    | Some(db,_) ->
                        let error_msg =
                          Printf.sprintf
@@ -785,7 +789,19 @@ struct
                       apply_cont cont env (Database.execute_select fields q db)
                end
          end
-    | TemporalJoin (_mode, _e, _t) -> failwith "TODO: PORT ACROSS"
+    | TemporalJoin (tmp, e, _t) ->
+        begin
+          match EvalNestedQuery.compile_temporal_join tmp env e with
+            | (db, pkg) when db#supports_shredding () ->
+                eval_nested_query env cont db pkg
+            | (db, _) ->
+                let error_msg =
+                  Printf.sprintf
+                    "The database driver '%s' does not support nested query results."
+                    (db#driver_name ())
+                in
+                raise (Errors.runtime_error error_msg)
+        end
     | InsertRows (tmp, source, rows) ->
         begin
           [@warning "-40"]
