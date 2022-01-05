@@ -7,7 +7,8 @@
    "organisation",
    "travel_portal",
    "transactiontime",
-   "validtime"
+   "validtime",
+   "vt-join"
  ],
  "tests" :
  [ "dates",
@@ -19,6 +20,7 @@
    "organisation",
    "travel_portal",
    "transactiontime",
-   "validtime"
+   "validtime",
+   "vt-join"
  ]
 }

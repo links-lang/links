@@ -58,7 +58,10 @@ fun setup() {
   }
 
   var depts = setupDepartments();
+  # Salaries: UE07 = 30k between 0 and 2012; 32k between 2012 and forever
+  # UE08 = 40k forever
   setupSalaries();
+  # People: Alice UE08 forever. Bob UE07 between 2010 and 2013, and UE08 between 2013 and 2017.
   setupPeople(depts)
 }
 
@@ -76,12 +79,25 @@ fun lookupEmployee(name) {
 
 fun main() {
   setup();
+  # Alice is fairly straightforward: 40k forever.
   assertEq(lookupEmployee("Alice"),
       [withValidity((name = "Alice", salary = 40000, department = "Classics"),
-        beginningOfTime, forever)])
-  # TODO: Bob
-  # lookupEmployee("Bob")
-  # assertEq...
+        beginningOfTime, forever)]);
+  var bobResults = sortBy(fun(x) { vtData(x).salary }, lookupEmployee("Bob"));
+  # Bob should have:
+  # 30k between 2010 and 2012
+  # 32k between 2012 and 2013
+  # 40k between 2013 and 2017
+  assertEq(bobResults,
+          [
+            withValidity((name = "Bob", salary = 30000, department = "Informatics"),
+                parseDate("2010-01-01 00:00:00"), parseDate("2012-01-01 00:00:00")),
+            withValidity((name = "Bob", salary = 32000, department = "Informatics"),
+                parseDate("2012-01-01 00:00:00"), parseDate("2013-01-01 00:00:00")),
+            withValidity((name = "Bob", salary = 40000, department = "Informatics"),
+                parseDate("2013-01-01 00:00:00"), parseDate("2017-01-01 00:00:00"))
+          ]
+  )
 }
 
 main()
