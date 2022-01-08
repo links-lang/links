@@ -8,6 +8,10 @@ open Lens.Utility
 open Lens.Utility.O
 open Lens.Phrase.Value
 
+open TestUtility
+
+module R = Lens.Phrase.Value.Record
+
 (* define composition operator *)
 let ( <| ) f x = f x
 
@@ -78,6 +82,9 @@ module Query = struct
   let filter fn recs = List.filter fn recs
 end
 
+let get_int r c = R.get_exn ~key:c r |> unbox_int
+let set_int r c v = R.set ~key:c ~value:(box_int v) r
+
 (* let _ = Settings.set_value Debug.debugging_enabled true *)
 
 (* can be replaced with List.init after 4.06 *)
@@ -86,14 +93,14 @@ let initlist n fn =
   f 0
 
 let test_put test_ctx ~db lens res =
+  let module V = (val Debug.verbose_printer test_ctx) in
   let classic_opt = UnitTestsLensCommon.classic_opt test_ctx in
   let benchmark_opt = UnitTestsLensCommon.benchmark_opt test_ctx in
   let step cb =
     if classic_opt then Lens.Eval.Classic.lens_put_step ~db lens res cb
     else
       let data = Lens.Eval.Incremental.lens_get_delta ~db lens res in
-      H.print_verbose test_ctx
-        ("Delta Size: " ^ string_of_int (Lens.Sorted_records.total_size data));
+      V.printf "Delta size: %i" (Lens.Sorted_records.total_size data);
       let env = Int.Map.empty in
       let cb ~env:_ lens data =
         cb lens data;
@@ -103,9 +110,8 @@ let test_put test_ctx ~db lens res =
   in
   let run () =
     step (fun _ res ->
-        H.print_verbose test_ctx
-          ("Delta Size (output): " ^ string_of_int (Sorted.total_size res));
-        H.print_verbose test_ctx (Format.asprintf "%a" Sorted.pp_tabular res))
+        V.printf "Delta Size (output): %i" (Sorted.total_size res);
+        V.printf "%a" Sorted.pp_tabular res)
   in
   if benchmark_opt then (
     let runs = initlist 20 (fun _i -> H.time_op run) in
@@ -129,10 +135,9 @@ let test_put test_ctx ~db lens res =
     Lens.Eval.put ~behaviour ~db lens res |> Result.ok_exn;
     (* double check results *)
     let upd = Lens.Value.lens_get ~db lens in
-    H.print_verbose test_ctx (Phrase.Value.show_values upd);
-    H.print_verbose test_ctx (Phrase.Value.show_values res);
-    H.assert_rec_list_eq upd res;
-    ()
+    V.printf "%a" Phrase.Value.pp_values upd;
+    V.printf "%a" Phrase.Value.pp_values res;
+    H.assert_rec_list_eq upd res
 
 let override_n n test_ctx =
   let v = UnitTestsLensCommon.set_n_opt test_ctx in
@@ -140,71 +145,83 @@ let override_n n test_ctx =
 
 let test_select_lens_1 n test_ctx =
   let n = override_n n test_ctx in
-  let db = H.get_db test_ctx in
-  let l1 =
-    H.drop_create_populate_table test_ctx db "t1" "a -> b c" "a b c"
-      [ `Seq; `RandTo (n / 15); `Rand ]
-      n
+  let module DB = (val Table.create test_ctx) in
+  let module T1 =
+  (val DB.drop_create_easy_populate ~table:"t1" ~fd:"a -> b c" ~n
+         [ `Seq; `RandTo (n / 15); `Rand ])
   in
+  let db = DB.db in
+  let l1 = T1.lens () in
   let l2 =
-    H.select_lens l1 (Phrase.equal (Phrase.var "b") (Phrase.Constant.int 5))
+    Mk_lens.select
+      ~predicate:(Phrase.equal (Phrase.var "b") (Phrase.Constant.int 5))
+      l1
   in
   let res = Lens.Value.lens_get ~db l2 in
-  let _res =
-    Query.map_records
-      (Query.set "c"
-         (Query.ifcol "a" (Query.band (Query.gt 60) (Query.lt 80)) (box_int 5)))
-      (Lens.Value.lens_get ~db l2)
+  let res =
+    List.map
+      ~f:(fun r ->
+        let a = get_int r "a" in
+        if a > 60 && a <= 80 then set_int r "c" 5 else r)
+      res
   in
   test_put ~db test_ctx l2 res;
-  H.drop_if_cleanup test_ctx db "t1"
+  T1.drop_if_cleanup ()
 
 let test_drop_lens_1 n test_ctx =
   let n = override_n n test_ctx in
-  let db = H.get_db test_ctx in
-  let l1 =
-    H.drop_create_populate_table test_ctx db "t1" "a -> b c" "a b c"
-      [ `Seq; `RandTo (n / UnitTestsLensCommon.set_upto_opt test_ctx); `Rand ]
-      n
+  let gen =
+    [ `Seq; `RandTo (n / UnitTestsLensCommon.set_upto_opt test_ctx); `Rand ]
   in
-  let l2 = H.drop_lens l1 "c" "a" (box_int 1) in
-  let _res = Lens.Value.lens_get l2 in
+  let module DB = (val Table.create test_ctx) in
+  let module T1 =
+  (val DB.drop_create_easy_populate ~table:"t1" ~fd:"a -> b c" ~n gen)
+  in
+  let db = DB.db in
+  let l1 = T1.lens () in
+  let l2 = Mk_lens.drop l1 "c" "a" (box_int 1) in
+  let res = Lens.Value.lens_get ~db l2 in
   let res =
-    Query.map_records
-      (Query.set "b"
-         (Query.ifcol "a" (Query.band (Query.gt 60) (Query.lt 80)) (box_int 5)))
-      (Lens.Value.lens_get ~db l2)
+    List.map
+      ~f:(fun r ->
+        let a = get_int r "a" in
+        if a > 60 && a <= 80 then set_int r "b" 5 else r)
+      res
   in
   test_put ~db test_ctx l2 res;
-  H.drop_if_cleanup test_ctx db "t1"
+  T1.drop_if_cleanup ()
 
 let test_select_lens_2 n test_ctx =
   let n = override_n n test_ctx in
-  let db = H.get_db test_ctx in
   let upto = n / 10 in
-  let l1 =
-    H.drop_create_populate_table test_ctx db "t1" "a -> b c" "a b c"
-      [ `Seq; `RandTo upto; `RandTo 100 ]
-      n
+  let module DB = (val Table.create test_ctx) in
+  let db = DB.db in
+  let gen1 = [ `Seq; `RandTo upto; `RandTo 100 ] in
+  let module T1 =
+  (val DB.drop_create_easy_populate ~table:"t1" ~fd:"a -> b c" ~n gen1)
   in
-  let l2 =
-    H.drop_create_populate_table test_ctx db "t2" "b -> d" "b d"
-      [ `Seq; `RandTo upto ] upto
+  let gen2 = [ `Seq; `RandTo upto ] in
+  let module T2 =
+  (val DB.drop_create_easy_populate ~table:"t2" ~fd:"b -> d" ~n:upto gen2)
   in
-  let l3 = H.join_lens_dl l1 l2 [ ("b", "b", "b") ] in
+  let l1 = T1.lens () in
+  let l2 = T2.lens () in
+  let l3 = Mk_lens.join_dl l1 l2 in
   let l4 =
-    H.select_lens l3 (Phrase.equal (Phrase.var "c") (Phrase.Constant.int 3))
+    Mk_lens.select
+      ~predicate:(Phrase.equal (Phrase.var "c") (Phrase.Constant.int 3))
+      l3
   in
   let res =
-    Query.map_records
-      (Query.set "d"
-         (Query.ifcol "b" (Query.band (Query.gt 0) (Query.lt 100)) (box_int 5)))
+    List.map
+      ~f:(fun r ->
+        let b = get_int r "b" in
+        if b > 0 && b <= 100 then set_int r "d" 5 else r)
       (Lens.Value.lens_get ~db l4)
   in
   test_put ~db test_ctx l4 res;
-  H.drop_if_cleanup test_ctx db "t1";
-  H.drop_if_cleanup test_ctx db "t2";
-  ()
+  T1.drop_if_cleanup ();
+  T2.drop_if_cleanup ()
 
 let test_select_lens_3 n test_ctx =
   let n = override_n n test_ctx in

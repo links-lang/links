@@ -67,18 +67,27 @@ let create_table test_ctx db table =
       print_and_execute insert
 
     let insert_ints data =
-      let pp_row f v =
-        Format.fprintf f "(%a)" (Format.pp_comma_list Format.pp_print_int) v
-      in
-      let insert =
-        Format.asprintf "INSERT INTO %a VALUES %a" pp_print_quoted table
-          (Format.pp_comma_list pp_row)
-          data
-      in
-      print_and_execute insert
+      match data with
+      | [] -> ()
+      | _ ->
+          let pp_row f v =
+            Format.fprintf f "(%a)" (Format.pp_comma_list Format.pp_print_int) v
+          in
+          let insert =
+            Format.asprintf "INSERT INTO %a VALUES %a" pp_print_quoted table
+              (Format.pp_comma_list pp_row)
+              data
+          in
+          print_and_execute insert
 
     let drop () =
       print_and_execute (Format.asprintf "DROP TABLE %a" pp_print_quoted table)
+
+    let drop_if_cleanup () =
+      if Options.leave_tables_opt test_ctx then ()
+      else
+        print_and_execute
+          (Format.asprintf "DROP TABLE %a" pp_print_quoted table)
 
     let drop_if_exists () =
       print_and_execute
