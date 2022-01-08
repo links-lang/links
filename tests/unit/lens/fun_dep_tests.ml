@@ -7,17 +7,19 @@ open Phrase.Value
 module Fun_dep = Lens.Fun_dep
 module H = LensTestHelpers
 
-let dat_fd_set = H.fundepset_of_string "A B -> C D; C D -> E; E -> F G"
+module U = TestUtility
 
-let dat_cols = H.colset_of_string "C D"
+let dat_fd_set = U.Fun_dep.Set.of_string "A B -> C D; C D -> E; E -> F G"
 
-let dat_closure = H.colset_of_string "C D E F G"
+let dat_cols = U.Fun_dep.colset_of_string "C D"
 
-let dat_fd_set_2 = H.fundepset_of_string "A -> B; B -> C"
+let dat_closure = U.Fun_dep.colset_of_string "C D E F G"
 
-let cols s = H.colset_of_string s
+let dat_fd_set_2 = U.Fun_dep.Set.of_string "A -> B; B -> C"
 
-let fds s = H.fundepset_of_string s
+let cols s = U.Fun_dep.colset_of_string s
+
+let fds s = U.Fun_dep.Set.of_string s
 
 let rec_constr (cols : string list) (vals : int list) =
   box_record (List.map2 (fun c v -> (c, box_int v)) cols vals)
@@ -28,7 +30,7 @@ let delt_constr (cols : string list) ((vals, m) : int list * int) =
 (* Tests *)
 
 let test_show_fd_set test_ctx =
-  let show = Fun_dep.Set.show dat_fd_set in
+  let show = U.Fun_dep.Set.show dat_fd_set in
   H.print_verbose test_ctx show;
   let cmp = "{({A; B; }, {C; D; }); ({C; D; }, {E; }); ({E; }, {F; G; }); }" in
   assert_equal show cmp
@@ -38,13 +40,7 @@ let test_transitive_closure _test_ctx =
   assert_equal true (Lens.Alias.Set.equal outp dat_closure)
 
 let construct_join_lens fd_set name data =
-  let cols =
-    Fun_dep.Set.fold
-      (fun fd fld ->
-        Lens.Alias.Set.union_all [ Fun_dep.left fd; Fun_dep.right fd; fld ])
-      fd_set Lens.Alias.Set.empty
-  in
-  let cols = Lens.Alias.Set.elements cols in
+  let cols = Fun_dep.Set.all_columns fd_set |> Lens.Alias.Set.elements in
   let colFn table name =
     Lens.Column.make ~alias:name ~name ~table ~typ:Lens.Phrase.Type.Int
       ~present:true

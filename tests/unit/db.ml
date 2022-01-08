@@ -9,14 +9,14 @@ let suites =
          [
            UnitTestsLensLang.suite;
            UnitTestsLensCommon.suite;
-           UnitTestsLensFDHelpers.suite;
+           Fun_dep_tests.suite;
            UnitTestsLensDatabase.suite;
            UnitTestsLensSetOperations.suite;
            UnitTestsLensPerformance.suite;
            UnitTestsLensPrimitives.suite;
            UnitTestsLensLang.suite;
            UnitTestsLensSort.suite;
-           UnitTestsLensAlias.suite;
+           Alias_tests.suite;
          ]);
        ]
 
