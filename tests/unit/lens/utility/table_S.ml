@@ -8,4 +8,8 @@ module type S = sig
   val drop : unit -> unit
 
   val drop_if_exists : unit -> unit
+
+  val set_lens : Lens.Value.t -> unit
+
+  val lens : unit -> Lens.Value.t
 end

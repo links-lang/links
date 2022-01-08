@@ -31,6 +31,12 @@ let create_table test_ctx db table =
   (module struct
     include (val database_common test_ctx db)
 
+    let lens_ref = ref None
+
+    let set_lens l = lens_ref := Some l
+
+    let lens () = Option.value_exn !lens_ref
+
     let row_columns data =
       let r = List.hd data in
       List.map ~f:fst (Lens.Phrase.Value.unbox_record r)
@@ -83,6 +89,8 @@ let create_db test_ctx db =
   (module struct
     include (val database_common test_ctx db)
 
+    let db = db
+
     let table_reference table = create_table test_ctx db table
 
     let create ~table ~primary_key ~fields =
@@ -116,10 +124,29 @@ let create_db test_ctx db =
       in
       print_and_execute query
 
+    let easy_lens ~table ~fd ~key ~cols =
+      let colFn name =
+        Lens.Column.make ~alias:name ~name ~table ~typ:Lens.Phrase.Type.Int
+          ~present:true
+      in
+      let table = Lens.Database.Table.{ name = table; keys = [ key ] } in
+      let fds = Lens.Fun_dep.Set.singleton fd in
+      let cols = List.map ~f:colFn cols in
+      let sort = Lens.Sort.make ~fds cols in
+      let l1 = Lens.Value.Lens { table; sort } in
+      l1
+
     let create_easy ~table fd =
       let fd = Fun_dep.of_string fd in
-      create ~table ~primary_key:(Fun_dep.left_list fd)
-        ~fields:(Fun_dep.all_columns_list fd)
+      let m =
+        create ~table ~primary_key:(Fun_dep.left_list fd)
+          ~fields:(Fun_dep.all_columns_list fd)
+      in
+      let module Table = (val m) in
+      Table.set_lens
+        (easy_lens ~table ~fd ~key:(Fun_dep.left_list fd)
+           ~cols:(Fun_dep.all_columns_list fd));
+      m
 
     let drop_create_easy ~table fd =
       let module M = (val table_reference table) in

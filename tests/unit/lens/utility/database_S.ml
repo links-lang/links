@@ -1,4 +1,6 @@
 module type S = sig
+  val db : Lens.Database.t
+
   (** Create a table with the provided table name and primary key and fields.
      All of the fields are created as integers. *)
   val create :
