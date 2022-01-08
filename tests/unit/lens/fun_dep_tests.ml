@@ -6,7 +6,6 @@ open Utility
 open Phrase.Value
 module Fun_dep = Lens.Fun_dep
 module H = LensTestHelpers
-
 module U = TestUtility
 
 let dat_fd_set = U.Fun_dep.Set.of_string "A B -> C D; C D -> E; E -> F G"
@@ -38,24 +37,6 @@ let test_show_fd_set test_ctx =
 let test_transitive_closure _test_ctx =
   let outp = Fun_dep.Set.transitive_closure ~cols:dat_cols dat_fd_set in
   assert_equal true (Lens.Alias.Set.equal outp dat_closure)
-
-let construct_join_lens fd_set name data =
-  let cols = Fun_dep.Set.all_columns fd_set |> Lens.Alias.Set.elements in
-  let colFn table name =
-    Lens.Column.make ~alias:name ~name ~table ~typ:Lens.Phrase.Type.Int
-      ~present:true
-  in
-  let l1 =
-    `LensMem (`List data, (fd_set, None, List.map ~f:(colFn name) cols))
-  in
-  l1
-
-let construct_join_lens_2 l1 l2 on =
-  let sort, on =
-    Lens.Sort.join_lens_sort (Lens.Value.sort l1) (Lens.Value.sort l2) ~on
-    |> Result.ok_exn
-  in
-  `LensJoin (l1, l2, on, `Constant (`Bool true), `Constant (`Bool false), sort)
 
 let cat_tex cols name delta =
   let cs = List.fold_right (fun _a b -> b ^ "c") cols "" in
