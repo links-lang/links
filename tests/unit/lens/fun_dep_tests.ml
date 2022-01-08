@@ -4,6 +4,7 @@ open Links_core
 open Links_lens
 open Utility
 open Phrase.Value
+open Utility.O
 module Fun_dep = Lens.Fun_dep
 module H = LensTestHelpers
 module U = TestUtility
@@ -38,32 +39,33 @@ let test_transitive_closure _test_ctx =
   let outp = Fun_dep.Set.transitive_closure ~cols:dat_cols dat_fd_set in
   assert_equal true (Lens.Alias.Set.equal outp dat_closure)
 
-let cat_tex cols name delta =
-  let cs = List.fold_right (fun _a b -> b ^ "c") cols "" in
-  let _ = Debug.print ("\\begin{array}{c|" ^ cs ^ "}") in
-  let _ =
-    Debug.print
-      ("\t" ^ name ^ List.fold_left (fun a b -> a ^ " & " ^ b) "" cols ^ "\\\\")
+let fmt_tex_table ~cols f delta =
+  let fmt_cols f cols =
+    Format.pp_print_list ~pp_sep:(Format.pp_constant "")
+      (Format.pp_constant_poly "c")
+      f cols
   in
-  let _ = Debug.print "\t\\hline" in
-  let _ =
-    if List.length delta = 0 then Debug.print "\\\\"
-    else
-      let _ =
-        List.map
-          ~f:(fun (row, m) ->
-            Debug.print
-              (List.fold_left
-                 (fun a (_, b) -> a ^ "& " ^ string_of_int (unbox_int b) ^ " ")
-                 ("\t" ^ string_of_int m)
-                 (unbox_record row)
-              ^ "\\\\"))
-          delta
-      in
-      ()
+  let fmt_line pp f cols =
+    Format.fprintf f "\t%a\\\\"
+      (Format.pp_print_list ~pp_sep:(Format.pp_constant " & ") pp)
+      cols
   in
-  let _ = Debug.print "\\end{array}" in
-  ()
+  let fmt_record f r =
+    let r = unbox_record r in
+    Format.fprintf f "%a"
+      (fmt_line (Format.pp_map ~f:(snd >> unbox_int) Format.pp_print_int))
+      r
+  in
+  Format.fprintf f {|\\begin{array}{c|%a}
+%a
+%a
+\\end{array}|} fmt_cols cols
+    (fmt_line Format.pp_print_string)
+    cols
+    (Format.pp_print_list ~pp_sep:Format.pp_print_newline fmt_record)
+    delta
+
+let cat_tex cols name delta = Format.asprintf "%a" (fmt_tex_table ~cols) delta
 
 let test_calculate_fd_changelist test_ctx =
   let data = UnitTestsLensSetOperations.test_data_3 in
