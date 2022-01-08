@@ -13,7 +13,7 @@ let suites =
            Database_utility_test.suite;
            UnitTestsLensSetOperations.suite;
            UnitTestsLensPerformance.suite;
-           UnitTestsLensPrimitives.suite;
+           Lens_primitives_tests.suite;
            UnitTestsLensLang.suite;
            UnitTestsLensSort.suite;
            Alias_tests.suite;

@@ -48,6 +48,10 @@ let query_project_records ~db lens set key drop =
   in
   Sorted.project_onto records ~columns:(List.append key drop)
 
+let matches_any predicate s =
+  let s = Sorted.filter s ~predicate in
+  Sorted.plus_rows s |> Array.length > 0
+
 let lens_put_set_step ~db ~env lens delt
     (fn : env:env -> Value.t -> Sorted.t -> env) =
   match lens with
@@ -85,9 +89,11 @@ let lens_put_set_step ~db ~env lens delt
           (Sorted.negate delt)
       in
       let j =
-        Sorted.project_onto
-          (Sorted.merge (query_join_records ~db lens delta_l cols_simp) delt)
-          ~columns:cols_simp
+        if matches_any del_right delta_l then
+          Sorted.project_onto
+            (Sorted.merge (query_join_records ~db lens delta_l cols_simp) delt)
+            ~columns:cols_simp
+        else Sorted.construct_cols ~columns:cols_simp ~records:[]
       in
       let delta_l_l = Sorted.join_exn delta_l j ~on:on' in
       let delta_l_a = Sorted.merge delta_l (Sorted.negate delta_l_l) in
