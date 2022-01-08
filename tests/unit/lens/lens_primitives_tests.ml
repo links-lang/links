@@ -280,7 +280,7 @@ let test_select_lens_3 n test_ctx =
   let behaviour = behaviour test_ctx in
   template_select_lens_2 ~n ~put:(test_put test_ctx ~behaviour) test_ctx
 
-let test_get_delta test_ctx =
+let template_get_delta test_ctx ~get_delta =
   let n = set_upto_opt test_ctx in
   let module DB = (val Table.create test_ctx) in
   let db = DB.db in
@@ -297,11 +297,13 @@ let test_get_delta test_ctx =
   let l2 = T2.lens () in
   let l3 = Mk_lens.join_dl l1 l2 in
   let res =
-    Query.map_records
-      (Query.set "d"
-         (Query.ifcol "b" (Query.band (Query.gt 0) (Query.lt 10)) (box_int 5)))
+    List.map
+      ~f:(fun r ->
+        let b = get_int r "b" in
+        if b > 0 && b <= 10 then set_int r "d" 5 else r)
       (Lens.Value.lens_get ~db l3)
   in
+  get_delta ~db l3 res |> ignore;
   let run () =
     let _data = Lens.Eval.Incremental.lens_get_delta ~db l3 res in
     ()
@@ -316,6 +318,9 @@ let test_get_delta test_ctx =
   prlist tts;
   T1.drop_if_cleanup ();
   T2.drop_if_cleanup ()
+
+let test_get_delta test_ctx =
+  template_get_delta ~get_delta:Lens.Eval.Incremental.lens_get_delta test_ctx
 
 (* let () = Lens.Debug.set_debug true *)
 

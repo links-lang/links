@@ -10,12 +10,20 @@ let csv_name str =
   let dir = Filename.dirname Sys.argv.(0) in
   Format.sprintf "%s/%s.csv" dir str
 
-let print_csv ~file data =
+let print_csv_4 ~file data =
   let channel = open_out (csv_name file) in
   Printf.fprintf channel "n, iqtime, ittime, cqtime, cttime\n";
   List.iter
     ~f:(fun (a, b, c, d, e) ->
       Printf.fprintf channel "%i, %f, %f, %f, %f\n" a b c d e)
+    data;
+  close_out channel
+
+let print_csv_2 ~file data =
+  let channel = open_out (csv_name file) in
+  Printf.fprintf channel "n, qtime, ttime\n";
+  List.iter
+    ~f:(fun (a, b, c) -> Printf.fprintf channel "%i, %f, %f\n" a b c)
     data;
   close_out channel
 
@@ -71,7 +79,7 @@ let benchmark_select test_ctx =
       ~f:(fun n -> benchmark_both ~n test_ctx Prim.template_select_lens_2)
       rowcounts
   in
-  print_csv ~file:"select_benchmark" results
+  print_csv_4 ~file:"select_benchmark" results
 
 let benchmark_join test_ctx =
   let rowcounts =
@@ -82,7 +90,7 @@ let benchmark_join test_ctx =
       ~f:(fun n -> benchmark_both ~n test_ctx Prim.template_join_lens_1)
       rowcounts
   in
-  print_csv ~file:"join_benchmark" results
+  print_csv_4 ~file:"join_benchmark" results
 
 let benchmark_drop test_ctx =
   let rowcounts =
@@ -93,7 +101,7 @@ let benchmark_drop test_ctx =
       ~f:(fun n -> benchmark_both ~n test_ctx Prim.template_drop_lens_1)
       rowcounts
   in
-  print_csv ~file:"drop_benchmark" results
+  print_csv_4 ~file:"drop_benchmark" results
 
 let benchmark_select_delta_size test_ctx =
   let rowcounts =
@@ -104,7 +112,41 @@ let benchmark_select_delta_size test_ctx =
       ~f:(fun n -> benchmark_both ~n test_ctx Prim.template_select_lens_2)
       rowcounts
   in
-  print_csv ~file:"select_delta_size_benchmark" results
+  print_csv_4 ~file:"select_delta_size_benchmark" results
+
+let test_get_delta_step ~db lens res =
+  let step () = Lens.Eval.Incremental.lens_get_delta ~db lens res |> ignore in
+  List.init 20 (fun _i -> Timing.time step)
+
+let benchmark_get_delta test_ctx =
+  let rowcounts =
+    [
+      100;
+      20000;
+      40000;
+      60000;
+      80000;
+      100000;
+      120000;
+      140000;
+      160000;
+      180000;
+      200000;
+    ]
+  in
+  let results =
+    List.map
+      ~f:(fun n ->
+        let timings = ref [] in
+        let get_delta ~db lens view =
+          timings := test_get_delta_step ~db lens view
+        in
+        Prim.template_get_delta test_ctx ~get_delta;
+        let qtime, ttime = List.split !timings in
+        (n, skip_median qtime, skip_median ttime))
+      rowcounts
+  in
+  print_csv_2 ~file:"get_delta_benchmark" results
 
 let suites =
   "benchmark"
@@ -113,6 +155,7 @@ let suites =
          "join" >:: benchmark_join;
          "drop" >:: benchmark_drop;
          "select_delta_size" >:: benchmark_select_delta_size;
+         "get_delta" >:: benchmark_select_delta_size;
        ]
 
 let () = run_test_tt_main suites
