@@ -9,6 +9,8 @@ type t =
   | Record of (string * t) list
 [@@deriving show, sexp]
 
+val pp_pretty : t Lens_format.fmt_fn
+
 module Unbox_error : sig
   exception E of { value : t; expected : string }
 end

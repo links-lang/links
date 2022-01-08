@@ -65,7 +65,8 @@ let fmt_tex_table ~cols f delta =
     (Format.pp_print_list ~pp_sep:Format.pp_print_newline fmt_record)
     delta
 
-let cat_tex cols name delta = Format.asprintf "%a" (fmt_tex_table ~cols) delta
+let cat_tex cols name delta =
+  Format.asprintf "%a" (fmt_tex_table ~cols) delta |> Debug.print
 
 let test_calculate_fd_changelist test_ctx =
   let data = UnitTestsLensSetOperations.test_data_3 in
@@ -73,36 +74,8 @@ let test_calculate_fd_changelist test_ctx =
   let changeset =
     Lens.Sorted_records.calculate_fd_changelist ~fun_deps:fds data
   in
-  let _ =
-    List.map
-      ~f:(fun ((cols_l, cols_r), changes) ->
-        let _ =
-          H.print_verbose test_ctx
-            (H.col_list_to_string cols_l " "
-            ^ " -> "
-            ^ H.col_list_to_string cols_r " ")
-        in
-        let strfn dat =
-          if dat = [] then ""
-          else
-            List.fold_left
-              (fun a b -> a ^ ", " ^ show b)
-              (show (List.hd dat))
-              (List.tl dat)
-        in
-        let _ =
-          List.map
-            ~f:(fun (chl, chr) ->
-              H.print_verbose test_ctx ("  " ^ strfn chl ^ " -> " ^ strfn chr))
-            changes
-        in
-        ())
-      changeset
-  in
-  (* let phrase = Lens.Helpers.Incremental.matches_change changeset in
-     let str = match phrase with None -> "None" | Some phrase -> Format.asprintf "%a" Lens.Database.fmt_phrase_dummy phrase in
-        H.print_verbose test_ctx str; *)
-  ()
+  let module V = (val U.Debug.verbose_printer test_ctx) in
+  V.printf "%a" Lens.Sorted_records.pp_changelist_pretty changeset
 
 let assert_equal_cols ~ctxt v1 v2 =
   assert_equal ~ctxt ~cmp:Alias.Set.equal ~printer:Alias.Set.show v1 v2

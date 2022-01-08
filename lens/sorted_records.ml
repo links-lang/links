@@ -445,6 +445,9 @@ let project_fun_dep ts ~fun_dep =
   let map r = (fdl_map r, fdr_map r) in
   ((cols_l, cols_r), Array.map map ts.plus_rows, Array.map map ts.neg_rows)
 
+type changelist =
+  ((string list * string list) * (Simple_record.t * Simple_record.t) list) list
+
 let calculate_fd_changelist data ~fun_deps =
   (* get the key of the row for finding complements *)
   let rec loop fds =
@@ -465,6 +468,20 @@ let calculate_fd_changelist data ~fun_deps =
   let res = loop fun_deps in
   (* reverse the list, so that the FD roots appear first *)
   List.rev res
+
+let pp_changelist_entry f ((cols_l, cols_r), entries) =
+  let pp_cols =
+    Format.pp_print_list ~pp_sep:(Format.pp_constant " ") Format.pp_print_string
+  in
+  let pp_vals = Format.pp_comma_list Phrase_value.pp_pretty in
+  let pp_entry f (chl, chr) =
+    Format.fprintf f "(%a -> %a)" pp_vals chl pp_vals chr
+  in
+  Format.fprintf f "%a -> %a\n%a" pp_cols cols_l pp_cols cols_r
+    (Format.pp_newline_list pp_entry)
+    entries
+
+let pp_changelist_pretty = Format.pp_newline_list pp_changelist_entry
 
 let relational_update t ~fun_deps ~update_with =
   let changelist = calculate_fd_changelist ~fun_deps update_with in

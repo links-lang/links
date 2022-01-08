@@ -138,10 +138,12 @@ val project_fun_dep :
   * (Simple_record.t * Simple_record.t) array
   * (Simple_record.t * Simple_record.t) array
 
-val calculate_fd_changelist :
-  t ->
-  fun_deps:Fun_dep.Set.t ->
+type changelist =
   ((string list * string list) * (Simple_record.t * Simple_record.t) list) list
+
+val calculate_fd_changelist : t -> fun_deps:Fun_dep.Set.t -> changelist
+
+val pp_changelist_pretty : changelist Format.fmt_fn
 
 val relational_update : t -> fun_deps:Fun_dep.Set.t -> update_with:t -> t
 
