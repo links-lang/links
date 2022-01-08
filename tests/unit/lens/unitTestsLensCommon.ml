@@ -112,29 +112,10 @@ module LensTestHelpers = struct
     let predicate = Some predicate in
     Lens.Value.lens_get_select_opt l ~predicate
 
-  let create_table test_ctx db tablename (primary_key : string list)
+  let create_table test_ctx db table (primary_key : string list)
       (fields : string list) =
-    let colfn col =
-      let open Database in
-      db.quote_field col ^ " INTEGER NOT NULL"
-    in
-    let query =
-      let open Database in
-      "CREATE TABLE "
-      ^ db.quote_field tablename
-      ^ " ( "
-      ^ List.fold_left (fun a b -> a ^ colfn b ^ ", ") "" fields
-      ^ "CONSTRAINT "
-      ^ db.quote_field ("PK_" ^ tablename)
-      ^ " PRIMARY KEY ("
-      ^ List.fold_left
-          (fun a b -> a ^ ", " ^ b)
-          (List.hd primary_key) (List.tl primary_key)
-      ^ "));"
-    in
-    print_table_query test_ctx query;
-    let open Database in
-    db.execute query
+    let open (val TestUtility.Table.create_db test_ctx db) in
+    create ~table ~primary_key ~fields
 
   let create_table_easy test_ctx db tablename str =
     let fd = fundep_of_string str in
@@ -144,6 +125,7 @@ module LensTestHelpers = struct
     create_table test_ctx db tablename
       (Lens.Alias.Set.elements left)
       (Lens.Alias.Set.elements cols)
+    |> ignore
 
   let value_as_string db = function
     | `String s -> "\'" ^ db#escape_string s ^ "\'"
