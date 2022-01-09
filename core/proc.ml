@@ -177,7 +177,7 @@ struct
       begin
         (* Debug.print ("yielding"); *)
         reset_step_counter ();
-        Lwt_main.yield () >>= pstate
+        Lwt.pause () >>= pstate
       end
     else
       pstate ()
