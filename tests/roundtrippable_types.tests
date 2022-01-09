@@ -1,6 +1,6 @@
 Row types
 fun (tbl) { for (x <-- tbl) where (x.id == 42) [x] }
-stdout : fun : (TableHandle((id:Int|a::Base),(|_::Base),(|_::Base))) {}-> [(id:Int|a::Base)]
+stdout : fun : (TableHandle(Current,(id:Int|a::Base),(|_::Base),(|_::Base))) {}-> [(id:Int|a::Base)]
 
 Onetuple with unit
 (1=())
