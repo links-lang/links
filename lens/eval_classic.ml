@@ -27,6 +27,8 @@ let lens_put_set_step ~db lens data (fn : Value.t -> Sorted.t -> unit) =
       in
       fn l res
   | LensJoin { left; right; on; del_left; del_right; _ } ->
+      let cols_simp = List.map (fun (a, _, _) -> a) on in
+      let on' = List.map (fun a -> (a, a, a)) cols_simp in
       let getfds l = Value.fundeps l in
       let cols l = Value.cols_present_aliases l in
       let r = get left in
@@ -41,9 +43,8 @@ let lens_put_set_step ~db lens data (fn : Value.t -> Sorted.t -> unit) =
           ~update_with:(Sorted.project_onto data ~columns:(cols right))
           s
       in
-      let l = Sorted.minus (Sorted.join_exn m0 n0 ~on) data in
-      let join_cols = cols lens |> List.map (fun v -> (v, v, v)) in
-      let ll = Sorted.join_exn l data ~on:join_cols in
+      let l = Sorted.minus (Sorted.join_exn m0 n0 ~on:on') data in
+      let ll = Sorted.join_exn l data ~on:on' in
       let la = Sorted.minus l ll in
       let m =
         Sorted.minus

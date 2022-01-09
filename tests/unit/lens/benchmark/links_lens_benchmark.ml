@@ -6,6 +6,8 @@ module Prim = Links_lens_unit_tests.Lens_primitives_tests
 
 open Lens.Utility
 
+let () = Links_core.Settings.set Links_core.Debug.enabled false
+
 let csv_name str =
   let dir = Filename.dirname Sys.argv.(0) in
   Format.sprintf "%s/%s.csv" dir str
@@ -72,7 +74,7 @@ let benchmark_both ~n test_ctx benchmark =
 
 let benchmark_select test_ctx =
   let rowcounts =
-    [ 1000; 2000; 3000; 4000; 5000; 6000; 7000; 8000; 9000; 10000 ]
+    [ 500; 1000; 5000; 10000; 25000; 50000; 100000; 150000; 200000 ]
   in
   let results =
     List.map
@@ -94,7 +96,7 @@ let benchmark_join test_ctx =
 
 let benchmark_drop test_ctx =
   let rowcounts =
-    [ 500; 1000; 5000; 10000; 25000; 50000; 100000; 150000; 200000 ]
+    [ 1000; 2000; 3000; 4000; 5000; 6000; 7000; 8000; 9000; 10000 ]
   in
   let results =
     List.map
@@ -104,12 +106,12 @@ let benchmark_drop test_ctx =
   print_csv_4 ~file:"drop_benchmark" results
 
 let benchmark_select_delta_size test_ctx =
-  let rowcounts =
-    [ 1000; 2000; 3000; 4000; 5000; 6000; 7000; 8000; 9000; 10000 ]
-  in
+  let rowcounts = [ 10; 100; 200; 300; 400; 500; 600; 700; 800; 900; 1000 ] in
   let results =
     List.map
-      ~f:(fun n -> benchmark_both ~n test_ctx Prim.template_select_lens_2)
+      ~f:(fun n ->
+        benchmark_both ~n test_ctx (fun ~n ->
+            Prim.template_select_lens_3 ~n:100000 ~upto:n))
       rowcounts
   in
   print_csv_4 ~file:"select_delta_size_benchmark" results
@@ -148,16 +150,98 @@ let benchmark_get_delta test_ctx =
   in
   print_csv_2 ~file:"get_delta_benchmark" results
 
+let put_delta_behaviour ~behaviour ~db l res =
+  let table = Prim.prim_lens_table l in
+  let delta = Lens.Eval.Incremental.lens_get_delta ~db l res in
+  let cols = Lens.Value.cols_present_aliases l in
+  let data = Lens.Sorted_records.construct_cols ~columns:cols ~records:res in
+  let neg = Lens.Sorted_records.negate delta in
+  let sort = Lens.Value.sort l in
+  let env = Int.Map.empty in
+  let step =
+    match behaviour with
+    | Lens.Eval.Incremental ->
+        fun () ->
+          Lens.Eval.Incremental.apply_delta ~db ~table ~sort ~env delta
+          |> ignore
+    | Lens.Eval.Classic ->
+        fun () -> Lens.Eval.Classic.apply_table_data ~table ~db data
+  in
+  let revert () =
+    Lens.Eval.Incremental.apply_delta ~db ~table ~sort ~env neg |> ignore
+  in
+  List.init 20 (fun _ ->
+      let res = Timing.time step in
+      revert ();
+      res)
+
+let benchmark_put_delta test_ctx =
+  let rowcounts =
+    [ 1000; 2000; 3000; 4000; 5000; 6000; 7000; 8000; 9000; 10000 ]
+  in
+  let results =
+    List.map
+      ~f:(fun n ->
+        let timings = ref [] in
+        Prim.template_put_delta ~n
+          ~put:(fun ~db l res ->
+            timings :=
+              put_delta_behaviour ~behaviour:Lens.Eval.Incremental ~db l res)
+          test_ctx;
+        let iqtime, ittime = List.split !timings in
+        Prim.template_put_delta ~n
+          ~put:(fun ~db l res ->
+            timings :=
+              put_delta_behaviour ~behaviour:Lens.Eval.Classic ~db l res)
+          test_ctx;
+        let cqtime, cttime = List.split !timings in
+        ( n,
+          skip_median iqtime,
+          skip_median ittime,
+          skip_median cqtime,
+          skip_median cttime ))
+      rowcounts
+  in
+  print_csv_4 ~file:"put_delta_benchmark" results
+
+let benchmark_put_delta test_ctx =
+  let rowcounts =
+    [ 1000; 2000; 3000; 4000; 5000; 6000; 7000; 8000; 9000; 10000 ]
+  in
+  let results =
+    List.map
+      ~f:(fun n ->
+        let timings = ref [] in
+        Prim.template_put_delta ~n
+          ~put:(fun ~db l res ->
+            timings :=
+              put_delta_behaviour ~behaviour:Lens.Eval.Incremental ~db l res)
+          test_ctx;
+        let iqtime, ittime = List.split !timings in
+        Prim.template_put_delta ~n
+          ~put:(fun ~db l res ->
+            timings :=
+              put_delta_behaviour ~behaviour:Lens.Eval.Classic ~db l res)
+          test_ctx;
+        let cqtime, cttime = List.split !timings in
+        ( n,
+          skip_median iqtime,
+          skip_median ittime,
+          skip_median cqtime,
+          skip_median cttime ))
+      rowcounts
+  in
+  print_csv_4 ~file:"put_delta_benchmark" results
+
 let suites =
   "benchmark"
   >::: [
+         "select_delta_size" >:: benchmark_select_delta_size;
+         "get_delta" >:: benchmark_select_delta_size;
+         "put_delta" >:: benchmark_put_delta;
          "select" >:: benchmark_select;
          "join" >:: benchmark_join;
          "drop" >:: benchmark_drop;
-         "select_delta_size" >:: benchmark_select_delta_size;
-         "get_delta" >:: benchmark_select_delta_size;
        ]
 
 let () = run_test_tt_main suites
-
-let () = Format.printf "%s" (Filename.dirname Sys.argv.(0))

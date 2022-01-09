@@ -65,7 +65,7 @@ let fmt_tex_table ~cols f delta =
     (Format.pp_print_list ~pp_sep:Format.pp_print_newline fmt_record)
     delta
 
-let cat_tex cols name delta =
+let cat_tex cols _name delta =
   Format.asprintf "%a" (fmt_tex_table ~cols) delta |> Debug.print
 
 let test_calculate_fd_changelist test_ctx =

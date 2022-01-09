@@ -49,7 +49,9 @@ let create_table test_ctx db table =
       let query =
         Format.asprintf "SELECT COUNT(*) AS count FROM %a" pp_print_quoted table
       in
-      let res = db.execute_select query [ ("count", Lens.Phrase.Type.Int) ] in
+      let res =
+        db.execute_select query ~field_types:[ ("count", Lens.Phrase.Type.Int) ]
+      in
       List.hd res
       |> Lens.Phrase.Value.unbox_record
       |> List.hd
@@ -126,12 +128,6 @@ let create_db test_ctx db =
       let module M = (val table_reference table) in
       M.drop_if_exists ();
       create ~table ~primary_key ~fields
-
-    let drop_if_exists table =
-      let query =
-        Format.asprintf "DROP TABLE IF EXISTS %a" pp_print_quoted table
-      in
-      print_and_execute query
 
     let easy_lens ~table ~fd ~key ~cols =
       let colFn name =

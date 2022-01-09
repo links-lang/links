@@ -1,4 +1,3 @@
-open Lens
 open Lens.Utility
 
 module type Printer = sig

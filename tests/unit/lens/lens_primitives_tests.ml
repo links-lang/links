@@ -85,6 +85,18 @@ end
 let get_int r c = R.get_exn ~key:c r |> unbox_int
 let set_int r c v = R.set ~key:c ~value:(box_int v) r
 
+let table_template_1 ~n db =
+  let module DB = (val db : Database_S.S) in
+  let upto = n / 10 in
+  DB.drop_create_easy_populate ~table:"t1" ~fd:"a -> b c" ~n
+    [ `Seq; `RandTo upto; `RandTo 100 ]
+
+let table_template_2 ~n db =
+  let module DB = (val db : Database_S.S) in
+  let upto = n / 10 in
+  DB.drop_create_easy_populate ~table:"t2" ~fd:"b -> d" ~n:upto
+    [ `Seq; `RandTo upto ]
+
 let test_put test_ctx ~db ~behaviour lens view =
   let module V = (val Debug.verbose_printer test_ctx) in
   Lens.Eval.put ~behaviour ~db lens view |> Result.ok_exn;
@@ -176,13 +188,8 @@ let test_select_lens_1 n test_ctx =
 
 let template_drop_lens_1 ~n ~put test_ctx =
   let n = override_n n test_ctx in
-  let gen =
-    [ `Seq; `RandTo (n / UnitTestsLensCommon.set_upto_opt test_ctx); `Rand ]
-  in
   let module DB = (val Table.create test_ctx) in
-  let module T1 =
-  (val DB.drop_create_easy_populate ~table:"t1" ~fd:"a -> b c" ~n gen)
-  in
+  let module T1 = (val table_template_1 ~n (module DB)) in
   let db = DB.db in
   let l1 = T1.lens () in
   let l2 = Mk_lens.drop l1 "c" "a" (box_int 1) in
@@ -203,17 +210,10 @@ let test_drop_lens_1 n test_ctx =
 
 let template_select_lens_2 ~n ~put test_ctx =
   let n = override_n n test_ctx in
-  let upto = n / 10 in
   let module DB = (val Table.create test_ctx) in
   let db = DB.db in
-  let gen1 = [ `Seq; `RandTo upto; `RandTo 100 ] in
-  let module T1 =
-  (val DB.drop_create_easy_populate ~table:"t1" ~fd:"a -> b c" ~n gen1)
-  in
-  let gen2 = [ `Seq; `RandTo upto ] in
-  let module T2 =
-  (val DB.drop_create_easy_populate ~table:"t2" ~fd:"b -> d" ~n:upto gen2)
-  in
+  let module T1 = (val table_template_1 ~n (module DB)) in
+  let module T2 = (val table_template_2 ~n (module DB)) in
   let l1 = T1.lens () in
   let l2 = T2.lens () in
   let l3 = Mk_lens.join_dl l1 l2 in
@@ -237,19 +237,13 @@ let test_select_lens_2 n test_ctx =
   let behaviour = behaviour test_ctx in
   template_select_lens_2 ~n ~put:(test_put test_ctx ~behaviour) test_ctx
 
-let template_select_lens_3 ~n ~put test_ctx =
+let template_select_lens_3 ~n ~upto ~put test_ctx =
   let n = override_n n test_ctx in
-  let upto = n / 10 in
+  let upto_max = n / 10 in
   let module DB = (val Table.create test_ctx) in
   let db = DB.db in
-  let gen1 = [ `Seq; `RandTo upto; `RandTo 100 ] in
-  let module T1 =
-  (val DB.drop_create_easy_populate ~table:"t1" ~fd:"a -> b c" ~n gen1)
-  in
-  let gen2 = [ `Seq; `RandTo upto ] in
-  let module T2 =
-  (val DB.drop_create_easy_populate ~table:"t2" ~fd:"b -> d" ~n:upto gen2)
-  in
+  let module T1 = (val table_template_1 ~n (module DB)) in
+  let module T2 = (val table_template_2 ~n (module DB)) in
   let l1 = T1.lens () in
   let l2 = T2.lens () in
   let l3 = Mk_lens.join_dl l1 l2 in
@@ -264,7 +258,7 @@ let template_select_lens_3 ~n ~put test_ctx =
     let del = Lens.Eval.Incremental.lens_get_delta ~db l4 !res in
     Sorted.total_size del
   in
-  while changed () < UnitTestsLensCommon.set_upto_opt test_ctx && !n < upto do
+  while changed () < upto && !n < upto_max do
     n := !n + 100;
     res :=
       Query.map_records
@@ -278,21 +272,15 @@ let template_select_lens_3 ~n ~put test_ctx =
 
 let test_select_lens_3 n test_ctx =
   let behaviour = behaviour test_ctx in
-  template_select_lens_2 ~n ~put:(test_put test_ctx ~behaviour) test_ctx
+  let upto = UnitTestsLensCommon.set_upto_opt test_ctx in
+  template_select_lens_3 ~n ~upto ~put:(test_put test_ctx ~behaviour) test_ctx
 
 let template_get_delta test_ctx ~get_delta =
   let n = set_upto_opt test_ctx in
   let module DB = (val Table.create test_ctx) in
   let db = DB.db in
-  let upto = n / 10 in
-  let gen1 = [ `Seq; `RandTo upto; `RandTo 100 ] in
-  let module T1 =
-  (val DB.drop_create_easy_populate ~table:"t1" ~fd:"a -> b c" ~n gen1)
-  in
-  let gen2 = [ `Seq; `RandTo upto ] in
-  let module T2 =
-  (val DB.drop_create_easy_populate ~table:"t2" ~fd:"b -> d" ~n:upto gen2)
-  in
+  let module T1 = (val table_template_1 ~n (module DB)) in
+  let module T2 = (val table_template_2 ~n (module DB)) in
   let l1 = T1.lens () in
   let l2 = T2.lens () in
   let l3 = Mk_lens.join_dl l1 l2 in
@@ -324,93 +312,92 @@ let test_get_delta test_ctx =
 
 (* let () = Lens.Debug.set_debug true *)
 
-let test_put_delta test_ctx =
-  let n = override_n 10000 test_ctx in
-  let classic_opt = UnitTestsLensCommon.classic_opt test_ctx in
+let template_put_delta ~n ~put test_ctx =
   let upto = UnitTestsLensCommon.set_upto_opt test_ctx in
-  let db = H.get_db test_ctx in
-  let l1 =
-    H.drop_create_populate_table test_ctx db "t1" "a -> b c" "a b c"
-      [ `Seq; `RandTo (n / 10); `RandTo 100 ]
-      n
+  let module DB = (val Table.create test_ctx) in
+  let db = DB.db in
+  let module T1 =
+  (val DB.drop_create_easy_populate ~table:"t1" ~fd:"a -> b c" ~n
+         [ `Seq; `RandTo (n / 10); `RandTo 100 ])
   in
+  let l1 = T1.lens () in
   let res = Lens.Value.lens_get ~db l1 in
   (* updates count twice, deletes once, inserts once *)
   let upto = upto / 4 in
   (* remove first columns *)
-  let res = Query.filter (Query.gt upto << Query.col "a") res in
+  let res = List.filter (fun r -> get_int r "a" > upto) res in
   (* make updates to next set *)
   let res =
-    Query.map_records
-      (Query.ifelse
-         (Query.band (Query.gt upto) (Query.le (upto * 2)) << Query.col "a")
-         (Query.setcolcst "c" 5) Query.id)
+    List.map
+      ~f:(fun r ->
+        let a = get_int r "a" in
+        if a > upto && a <= upto * 2 then set_int r "c" 5 else r)
       res
   in
   (* insert new rows copied from rest of table *)
   let res =
-    Query.append res
-      (Query.map
-         (Query.setcol "a" (Query.iadd n << Query.col "a"))
-         (Query.filter
-            (Query.band (Query.gt (upto * 2)) (Query.le (upto * 3))
-            << Query.col "a")
-            res))
+    List.filter
+      (fun r ->
+        let a = get_int r "a" in
+        a > upto * 2 && a <= upto * 3)
+      res
+    |> List.map ~f:(fun r -> set_int r "a" (get_int r "a" + n))
+    |> List.append res
   in
-  let table =
-    match l1 with
-    | Lens.Value.Lens { table; _ } -> table
-    | _ -> assert false
+  put ~db l1 res;
+  T1.drop_if_cleanup ()
+
+let prim_lens_table l =
+  match l with
+  | Lens.Value.Lens { table; _ } -> table
+  | _ -> assert false
+
+let put_delta_classic ~db l res =
+  let table = prim_lens_table l in
+  let cols = Lens.Value.cols_present_aliases l in
+  let data = Sorted.construct_cols ~columns:cols ~records:res in
+  Lens.Eval.Classic.apply_table_data ~table ~db data
+
+(*
+  let run () = Lens.Eval.Classic.apply_table_data ~table ~db data in
+  (run, fun () -> ()) *)
+
+let put_delta_incremental test_ctx ~db l res =
+  let module V = (val TestUtility.Debug.verbose_printer test_ctx) in
+  let table = prim_lens_table l in
+  let delta = Lens.Eval.Incremental.lens_get_delta ~db l res in
+  V.printf "Delta Size: %i" (Sorted.total_size delta);
+  let sort = Lens.Value.sort l in
+  let env = Int.Map.empty in
+  Lens.Eval.Incremental.apply_delta ~db ~table ~sort ~env delta |> ignore
+
+(*
+   old code: used to have revert function
+  let run () =
+    Lens.Eval.Incremental.apply_delta ~db ~table ~sort ~env delta |> ignore
   in
-  let run, revert =
-    if classic_opt then
-      let cols = Lens.Value.cols_present_aliases l1 in
-      let data = Sorted.construct_cols ~columns:cols ~records:res in
-      let run () = Lens.Eval.Classic.apply_table_data ~table ~db data in
-      (run, fun () -> ())
-    else
-      let delta = Lens.Eval.Incremental.lens_get_delta ~db l1 res in
-      let neg = Lens.Sorted_records.negate delta in
-      H.print_verbose test_ctx
-        ("Delta Size: " ^ string_of_int (Sorted.total_size delta));
-      let sort = Lens.Value.sort l1 in
-      let env = Int.Map.empty in
-      let run () =
-        Lens.Eval.Incremental.apply_delta ~db ~table ~sort ~env delta |> ignore
-      in
-      let revert () =
-        Lens.Eval.Incremental.apply_delta ~db ~table ~sort ~env neg |> ignore
-      in
-      (run, revert)
+  let neg = Lens.Sorted_records.negate delta in
+  let revert () =
+    Lens.Eval.Incremental.apply_delta ~db ~table ~sort ~env neg |> ignore
   in
-  let runs =
-    List.init 20 (fun _i ->
-        let r = H.time_op run in
-        revert ();
-        r)
-  in
-  let qts, tts = List.split runs in
-  print_endline "query times";
-  let prlist =
-    print_endline << Phrase.Value.show_values << List.map ~f:box_int
-  in
-  prlist qts;
-  prlist tts;
-  ()
+  (run, revert) *)
+
+let put_delta_behaviour test_ctx ~behaviour =
+  match behaviour with
+  | Lens.Eval.Incremental -> put_delta_incremental test_ctx
+  | Lens.Eval.Classic -> put_delta_classic
+
+let test_put_delta test_ctx =
+  let n = override_n 10000 test_ctx in
+  let behaviour = behaviour test_ctx in
+  template_put_delta ~n ~put:(put_delta_behaviour test_ctx ~behaviour) test_ctx
 
 let template_join_lens_1 ~n ~put test_ctx =
   let n = override_n n test_ctx in
-  let upto = n / 10 in
   let module DB = (val Table.create test_ctx) in
   let db = DB.db in
-  let gen1 = [ `Seq; `RandTo upto; `RandTo 100 ] in
-  let module T1 =
-  (val DB.drop_create_easy_populate ~table:"t1" ~fd:"a -> b c" ~n gen1)
-  in
-  let gen2 = [ `Seq; `RandTo upto ] in
-  let module T2 =
-  (val DB.drop_create_easy_populate ~table:"t1" ~fd:"a -> b c" ~n:upto gen2)
-  in
+  let module T1 = (val table_template_1 ~n (module DB)) in
+  let module T2 = (val table_template_2 ~n (module DB)) in
   let l1 = T1.lens () in
   let l2 = T2.lens () in
   let l3 = Mk_lens.join_dl l1 l2 in
@@ -430,37 +417,35 @@ let test_join_lens_1 n test_ctx =
   template_join_lens_1 ~n ~put:(test_put test_ctx ~behaviour) test_ctx
 
 let test_join_lens_2 n test_ctx =
-  let db = H.get_db test_ctx in
-  let upto = n / 10 in
-  let l1 =
-    H.drop_create_populate_table test_ctx db "t1" "a -> b c" "a b c"
-      [ `Seq; `RandTo upto; `RandTo 30 ]
-      n
-  in
-  let l2 =
-    H.drop_create_populate_table test_ctx db "t2" "b -> d" "b d"
-      [ `Seq; `RandTo 40 ] upto
-  in
+  let module V = (val Debug.verbose_printer test_ctx) in
+  let module DB = (val Table.create test_ctx) in
+  let db = DB.db in
+  let module T1 = (val table_template_1 ~n (module DB)) in
+  let module T2 = (val table_template_2 ~n (module DB)) in
+  let l1 = T1.lens () in
+  let l2 = T2.lens () in
   let l3 = H.join_lens_dl l1 l2 [ ("b", "b", "b") ] in
   let res =
-    Query.filter (Query.lt 40 << Query.col "b") (Lens.Value.lens_get ~db l3)
+    List.filter
+      (fun r ->
+        let b = get_int r "b" in
+        b < 40)
+      (Lens.Value.lens_get ~db l3)
   in
-  H.print_verbose test_ctx
-    (Phrase.Value.show_values (Lens.Value.lens_get ~db l3));
-  H.print_verbose test_ctx (Phrase.Value.show_values res);
+  V.printf "%a" Phrase.Value.pp_values (Lens.Value.lens_get ~db l3);
+  V.printf "%a" Phrase.Value.pp_values res;
   let env = Int.Map.empty in
   Lens.Eval.Incremental.lens_put_step l3 res ~env (fun ~env _ res ->
-      H.print_verbose test_ctx (Format.asprintf "%a" Sorted.pp_tabular res);
+      V.printf "%a" Sorted.pp_tabular res;
       env)
   |> ignore;
   Lens.Eval.Incremental.lens_put ~db l3 res;
   let upd = Lens.Value.lens_get ~db l3 in
-  H.print_verbose test_ctx (Phrase.Value.show_values upd);
-  H.print_verbose test_ctx (Phrase.Value.show_values res);
+  V.printf "%a" Phrase.Value.pp_values upd;
+  V.printf "%a" Phrase.Value.pp_values res;
   H.assert_rec_list_eq upd res;
-  H.drop_if_cleanup test_ctx db "t1";
-  H.drop_if_cleanup test_ctx db "t2";
-  ()
+  T1.drop_if_cleanup ();
+  T2.drop_if_cleanup ()
 
 let test_join_lens_dr_2 n test_ctx =
   let db = H.get_db test_ctx in
