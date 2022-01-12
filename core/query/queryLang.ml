@@ -393,21 +393,10 @@ let used_database : t -> Value.database option =
       | Erase (x, _) -> used x
       | Variant (_, x) -> used x
       | _ -> None
-  and used = 
+  and used =
     function
       | Concat vs -> traverse vs
       | v -> used_item v
-(* just use traverse! 
-  let rec comprehensions =
-    function
-      | [] -> None
-      | v::vs ->
-          begin
-            match used v with
-              | None -> comprehensions vs
-              | Some db -> Some db
-          end
-*)
   in used
 
 let string_of_t = string_of_t
