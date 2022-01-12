@@ -56,8 +56,8 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> Q.t -> Q.t =
     | Q.Singleton v -> Q.Singleton (ffb v)
     | Q.Database db -> Q.Database db
     | Q.Concat vs -> Q.Concat (List.map ffb vs)
-    | Q.Dedup q -> ffb q
-    | Q.Prom q -> ffb q
+    | Q.Dedup q -> Q.Dedup (ffb q)
+    | Q.Prom q -> Q.Prom (ffb q)
     | Q.Record fields -> Q.Record (StringMap.map ffb fields)
     | Q.Variant (name, v) -> Q.Variant (name, ffb v)
     | Q.XML xmlitem -> Q.XML xmlitem
