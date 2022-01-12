@@ -362,18 +362,19 @@ let is_list =
 
    Currently this assumes that at most one database is used.
 *)
-let used_database v : Value.database option =
+let used_database : t -> Value.database option =
   let rec traverse = function
     | [] -> None
     | x :: xs ->
         begin
-          match used x with
+          match used_item x with
             | None -> traverse xs
             | Some db -> Some db
         end
-  and used =
+  and used_item =
     function
-      | Prom q | Dedup q -> used q
+      | Prom q -> used q
+      | Dedup q -> used_item q
       | Table ((db, _), _, _, _) -> Some db
       | For (_, gs, _, _body) -> List.map snd gs |> traverse
       | Singleton v -> used v
@@ -391,7 +392,12 @@ let used_database v : Value.database option =
           traverse (scrutinee :: (cases @ default))
       | Erase (x, _) -> used x
       | Variant (_, x) -> used x
-      | _ -> None in
+      | _ -> None
+  and used = 
+    function
+      | Concat vs -> traverse vs
+      | v -> used_item v
+(* just use traverse! 
   let rec comprehensions =
     function
       | [] -> None
@@ -401,10 +407,8 @@ let used_database v : Value.database option =
               | None -> comprehensions vs
               | Some db -> Some db
           end
-  in
-    match v with
-      | Concat vs -> comprehensions vs
-      | v -> used v
+*)
+  in used
 
 let string_of_t = string_of_t
 
