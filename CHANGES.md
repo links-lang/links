@@ -3,7 +3,6 @@
 This is a minor hotfix release.
 
 * The database query deduplication now correctly handles subexpressions recursively.
-* The mixing normaliser for database queries now correctly split comprehensions along concatenation
 * Fixed a bug whereby messages received on the client-side would not
   be deserialised correctly.
 * The Links runtime, now internally, uses `Lwt.pause` rather than the
