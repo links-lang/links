@@ -1,6 +1,14 @@
 # 0.9.5
 
-WIP
+This is a minor hotfix release.
+
+* The database query deduplication now correctly handles subexpressions recursively.
+* The mixing normaliser for database queries now correctly split comprehensions along concatenation
+* Fixed a bug whereby messages received on the client-side would not
+  be deserialised correctly.
+* The Links runtime, now internally, uses `Lwt.pause` rather than the
+  deprecated `Lwt_main.yield`. As a side effect we have updated the
+  Lwt version constraint to be greater or equal to `5.0.0`.
 
 # 0.9.4
 
