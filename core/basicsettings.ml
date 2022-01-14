@@ -7,7 +7,7 @@ let interactive_mode =
             |> sync)
 
 (** The banner *)
-let version = "0.9.5 (Burghmuirhead)"
+let version = "0.9.6 (Burghmuirhead)"
 let version = Settings.(option ~default:(Some version) ~readonly:true "version"
                         |> privilege `System
                         |> synopsis "Print version and exit"
