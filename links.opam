@@ -1,5 +1,5 @@
 opam-version: "2.0"
-maintainer: "Simon Fowler <simon.fowler@ed.ac.uk>"
+maintainer: "Daniel Hillerström <daniel.hillerstrom@ed.ac.uk>"
 authors: "The Links Team <links-dev@inf.ed.ac.uk>"
 synopsis: "The Links Programming Language"
 description: "Links is a functional programming language designed to make web programming easier."
