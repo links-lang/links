@@ -12,14 +12,16 @@ var departments = table "departments"
   with (department_id: Int, name: String) from db;
 
 var res =
-  tt_join {
-    for (e <-t- employees)
-    where (ttData(e).name == "Robert")
-        for (s <-t- salaries)
-        where (ttData(e).salary_band == ttData(s).salary_band)
-          for (d <-- departments)
-          where (d.department_id == ttData(e).department_id)
-            [(name = ttData(e).name, salary = ttData(s).salary, department = d.name)]
+  query nested {
+      tt_join {
+        for (e <-t- employees)
+        where (ttData(e).name == "Robert")
+            for (s <-t- salaries)
+            where (ttData(e).salary_band == ttData(s).salary_band)
+              for (d <-- departments)
+              where (d.department_id == ttData(e).department_id)
+                [(name = ttData(e).name, salary = ttData(s).salary, department = d.name)]
+      }
   };
 
 switch(res) {

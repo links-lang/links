@@ -205,7 +205,6 @@ module Typeability_preserving = struct
        ; only_if
            Basicsettings.Sessions.exceptions_enabled
            (module DesugarSessionExceptions)
-       ; (module DesugarTemporalOperations)
        ; (module DesugarProcesses)
        ; (module DesugarFors)
        ; (module DesugarRegexes)

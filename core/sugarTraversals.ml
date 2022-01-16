@@ -404,10 +404,6 @@ class map =
           let _x = o#phrase _x in
           let _x_i1 = o#option (fun o -> o#unknown) _x_i1 in
           LensLit (_x, _x_i1)
-      | TemporalOp (op, p, args) ->
-          let p = o#phrase p in
-          let args = o#list (fun o -> o#phrase) args in
-          TemporalOp (op, p, args)
       | LensSerialLit ((_x, _x_i1, _x_i2)) ->
           let _x = o#phrase _x in
           LensSerialLit(_x, _x_i1, _x_i2)
@@ -1190,10 +1186,6 @@ class fold =
               tbl_field_constraints in
           let o = o#phrase tbl_keys in
           let o = o#phrase tbl_database in
-          o
-      | TemporalOp (_op, p, args) ->
-          let o = o#phrase p in
-          let o = o#list (fun o -> o#phrase) args in
           o
       | LensLit ((_x, _x_i1)) ->
           let o = o#phrase _x in
@@ -2017,10 +2009,6 @@ class fold_map =
             tbl_keys; tbl_temporal_fields; tbl_database }
           in
           (o, tbl)
-      | TemporalOp (op, p, args) ->
-          let (o, p) = o#phrase p in
-          let (o, args) = o#list (fun o -> o#phrase) args in
-          (o, TemporalOp (op, p, args))
       | LensLit ((_x, _x_i1)) ->
           let (o, _x) = o#phrase _x in
           let (o, _x_i1) = o#option (fun o -> o#unknown) _x_i1 in

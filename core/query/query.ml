@@ -255,7 +255,19 @@ struct
   let reduce_artifacts = function
   | Q.Apply (Q.Primitive "stringToXml", [u]) ->
     Q.Singleton (Q.XML (Value.Text (Q.unbox_string u)))
-  | Q.Apply (Q.Primitive "AsList", [xs]) -> xs
+  | Q.Apply (Q.Primitive "AsList", [xs])
+  | Q.Apply (Q.Primitive "AsListT", [xs])
+  | Q.Apply (Q.Primitive "AsListV", [xs]) -> xs
+  (* Temporal projection operations *)
+  | Q.Apply (Q.Primitive "ttData", [x])
+  | Q.Apply (Q.Primitive "vtData", [x]) ->
+    Q.Project (x, TemporalOperation.data_field)
+  | Q.Apply (Q.Primitive "ttFrom", [x])
+  | Q.Apply (Q.Primitive "vtFrom", [x]) ->
+    Q.Project (x, TemporalOperation.from_field)
+  | Q.Apply (Q.Primitive "ttTo", [x])
+  | Q.Apply (Q.Primitive "vtTo", [x]) ->
+    Q.Project (x, TemporalOperation.to_field)
   | u -> u
 
   let rec xlate env : Ir.value -> Q.t = let open Ir in function

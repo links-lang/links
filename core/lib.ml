@@ -1226,10 +1226,55 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     datatype "((|r), DateTime, DateTime) -> ValidTime((|r))",
     PURE);
 
+  "ttData",
+  (p1 (Value.unbox_record
+       ->- List.assoc (TemporalOperation.data_field)),
+   datatype "(TransactionTime((|r))) -> (|r)",
+  PURE);
+
+  "ttFrom",
+  (p1 (Value.unbox_record
+       ->- List.assoc (TemporalOperation.from_field)),
+   datatype "(TransactionTime(a)) -> DateTime",
+  PURE);
+
+  "ttTo",
+  (p1 (Value.unbox_record
+       ->- List.assoc (TemporalOperation.to_field)),
+   datatype "(TransactionTime(a)) -> DateTime",
+  PURE);
+
+  "vtData",
+  (p1 (Value.unbox_record
+       ->- List.assoc (TemporalOperation.data_field)),
+   datatype "(ValidTime((|r))) -> (|r)",
+  PURE);
+
+  "vtFrom",
+  (p1 (Value.unbox_record
+       ->- List.assoc (TemporalOperation.from_field)),
+   datatype "(ValidTime(a)) -> DateTime",
+  PURE);
+
+  "vtTo",
+  (p1 (Value.unbox_record
+       ->- List.assoc (TemporalOperation.to_field)),
+   datatype "(ValidTime(a)) -> DateTime",
+  PURE);
   (* Database functions *)
   "AsList",
   (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
    datatype "(TableHandle(Current, r, w, n)) {}-> [r]",
+  IMPURE);
+
+  "AsListT",
+  (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
+   datatype "(TableHandle(Transaction, r, w, n)) {}-> [TransactionTime(r)]",
+  IMPURE);
+
+  "AsListV",
+  (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
+   datatype "(TableHandle(Valid, r, w, n)) {}-> [ValidTime(r)]",
   IMPURE);
 
   "Distinct",

@@ -661,11 +661,6 @@ class transform (env : Types.typing_environment) =
               set
           in
             (o, DBUpdate (upd, p, from, where, set), Types.unit_type)
-      | TemporalOp (op, target, args) ->
-          let (o, target, target_ty) = o#phrase target in
-          let (o, args, _) = list o (fun o -> o#phrase) args in
-          let ty = TypeUtils.temporal_op_return_type op target_ty in
-          (o, TemporalOp (op, target, args), ty)
       | DBTemporalJoin (mode, body, Some t) ->
           let (o, body, _) =
               on_effects o (Types.make_empty_closed_row ()) (fun o -> o#phrase) body in

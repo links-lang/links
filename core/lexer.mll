@@ -133,10 +133,6 @@ let keywords = [
  "true"     , TRUE;
  "try"     , TRY;
  "tt_insert" , TTINSERT;
- "ttData"    , TTDATA;
- "ttFrom"    , TTFROM;
- "ttTo"      , TTTO;
- "tt_insert" , TTINSERT;
  "tt_join"   , TTJOIN;
  "typename" , TYPENAME;
  "update"   , UPDATE;
@@ -147,9 +143,6 @@ let keywords = [
  "vt_join"  , VTJOIN;
  "var"      , VAR;
  "vt_insert", VTINSERT;
- "vtData"   , VTDATA;
- "vtFrom"   , VTFROM;
- "vtTo"     , VTTO;
  "where"    , WHERE;
  "with"     , WITH;
 (* SAND *)

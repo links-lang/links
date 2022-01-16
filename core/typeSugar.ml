@@ -144,7 +144,6 @@ struct
     | TryInOtherwise _
     | Raise
     | DBTemporalJoin _
-    | TemporalOp _
     | DBUpdate _ -> false
   and is_pure_binding ({node ; _ }: binding) = match node with
       (* need to check that pattern matching cannot fail *)
@@ -416,7 +415,6 @@ sig
 
   val temporal_join_effects : griper
   val temporal_join_body : griper
-  val temporal_accessor : TemporalOperation.t -> griper
   val valid_update_pattern : griper
   val sequenced_update_datetime : griper
   val nonsequenced_update_datetime : griper
@@ -1609,17 +1607,6 @@ end
       with_but pos
         ("The body of a temporal join must return a list")
         (expr, t)
-
-    let temporal_accessor op ~pos ~t1:(_, actual) ~t2:(_, expected) ~error:_ =
-      build_tyvar_names [actual; expected];
-      let ppr_actual   = show_type actual   in
-      let ppr_expected = show_type expected in
-      die pos ("The argument of " ^ (TemporalOperation.name op) ^ " " ^
-               "was expected to have type "       ^ nli () ^
-                code ppr_expected                 ^ nl  () ^
-               "but has type"                     ^ nli () ^
-                code ppr_actual                   ^ nl  () ^
-               "instead.")
 
     let valid_update_pattern ~pos ~t1:l ~t2:r ~error:_ =
       build_tyvar_names [snd l; snd r];
@@ -3292,37 +3279,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                 | _ -> assert false (* Impossible to construct *) in
             DBTemporalJoin (tmp, erase body, Some result_type), result_type,
             (usages body)
-        | TemporalOp (op, target, arguments) ->
-            let open TemporalOperation in
-            let data_ty = T.Record (Types.make_empty_open_row (lin_any, res_base)) in
-            let target = tc target in
-
-            let arguments = List.map tc arguments in
-
-            let accessor_ty tbl field =
-              let expected =
-                let open Temporality in
-                match tbl with
-                  | Transaction -> Types.make_transaction_time_data_type data_ty
-                  | Valid -> Types.make_valid_time_data_type data_ty
-                  | _ -> assert false
-              in
-              let () = unify ~handle:(Gripers.temporal_accessor op)
-                (pos_and_typ target, no_pos expected) in
-              match field with
-                | Data -> data_ty
-                | From | To -> T.Primitive (Primitive.DateTime)
-            in
-
-            let result_ty =
-              match op with
-                | Accessor (tbl, field) -> accessor_ty tbl field
-            in
-            let replacement_usages =
-              List.map usages arguments
-                |> Usage.combine_many in
-            TemporalOp (op, erase target, List.map erase arguments), result_ty,
-            (Usage.combine (usages target) replacement_usages)
         | Query (range, policy, p, _) ->
             let open QueryPolicy in
             let range, outer_effects, range_usages =

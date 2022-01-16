@@ -643,20 +643,10 @@ postfix_expression:
 | QUERY query_policy block                                     { query ~ppos:$loc None $2 $3 }
 | QUERY LBRACKET exp RBRACKET query_policy block               { query ~ppos:$loc (Some ($3, with_pos $loc (Constant (Constant.Int 0)))) $5 $6 }
 | QUERY LBRACKET exp COMMA exp RBRACKET query_policy block     { query ~ppos:$loc (Some ($3, $5)) $7 $8 }
-| temporal_operation                                           { $1 }
 | postfix_expression arg_spec                                  { with_pos $loc (FnAppl ($1, $2)) }
 | postfix_expression targ_spec                                 { with_pos $loc (TAppl ($1, $2)) }
 | postfix_expression DOT record_label                          { with_pos $loc (Projection ($1, $3)) }
 | postfix_expression AT                                        { with_pos $loc (Instantiate $1) }
-
-
-temporal_operation:
-| TTDATA LPAREN exp RPAREN                                     { with_pos $loc (TemporalOp (TemporalOperation.(Accessor (Temporality.Transaction, Data)), $3, [])) }
-| TTFROM LPAREN exp RPAREN                                     { with_pos $loc (TemporalOp (TemporalOperation.(Accessor (Temporality.Transaction, From)), $3, [])) }
-| TTTO   LPAREN exp RPAREN                                     { with_pos $loc (TemporalOp (TemporalOperation.(Accessor (Temporality.Transaction, To)),   $3, [])) }
-| VTDATA LPAREN exp RPAREN                                     { with_pos $loc (TemporalOp (TemporalOperation.(Accessor (Temporality.Valid, Data)), $3, [])) }
-| VTFROM LPAREN exp RPAREN                                     { with_pos $loc (TemporalOp (TemporalOperation.(Accessor (Temporality.Valid, From)), $3, [])) }
-| VTTO   LPAREN exp RPAREN                                     { with_pos $loc (TemporalOp (TemporalOperation.(Accessor (Temporality.Valid, To)),   $3, [])) }
 
 arg_spec:
 | LPAREN perhaps_exps RPAREN                                   { $2 }

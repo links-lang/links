@@ -1217,7 +1217,6 @@ struct
           | TryInOtherwise _
           | Raise
           | Instantiate _ | Generalise _
-          | TemporalOp _
           | CP _ ->
               Debug.print ("oops: " ^ show_phrasenode e);
               assert false

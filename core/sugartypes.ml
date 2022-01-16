@@ -479,7 +479,6 @@ and phrasenode =
   | DBUpdate         of temporal_update option * Pattern.with_pos * phrase *
                           phrase option * (Name.t * phrase) list
   | DBTemporalJoin   of Temporality.t * phrase * Types.datatype option
-  | TemporalOp       of TemporalOperation.t * phrase (* Target *) * phrase list  (* Arguments *)
   | LensLit          of phrase * Lens.Type.t option
   | LensSerialLit    of phrase * string list * Lens.Type.t option
   (* the lens keys lit is a literal that takes an expression and is converted
@@ -782,8 +781,6 @@ struct
                      diff (option_map phrase where) pat_bound;
                      diff (union_map (snd ->- phrase) fields) pat_bound]
     | DBTemporalJoin (_, p, _) -> phrase p
-    | TemporalOp (_, p, p_opt) ->
-        union_all [phrase p; union_map phrase p_opt]
     | DoOperation (_, ps, _) -> union_map phrase ps
     | QualifiedVar _ -> empty
     | TryInOtherwise (p1, pat, p2, p3, _ty) ->
