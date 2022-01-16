@@ -167,10 +167,7 @@ let get_query ~db lens =
     List.map ~f:(fun c -> (Column.alias c, Column.typ c)) cols
   in
   let _ = Debug.print sql in
-  let res =
-    Statistics.time_query (fun () ->
-        Database.Select.execute query ~field_types ~db)
-  in
+  let res = Database.Select.execute query ~field_types ~db in
   res
 
 let lens_get ~db lens =
@@ -207,9 +204,7 @@ let query_exists ~db lens predicate =
     res <> []
   else
     let query = Database.Select.of_sort ~sort in
-    let res =
-      Statistics.time_query (fun () -> Database.Select.query_exists query ~db)
-    in
+    let res = Database.Select.query_exists query ~db in
     res
 
 let set_serial lens ~columns =

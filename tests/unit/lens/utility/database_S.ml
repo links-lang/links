@@ -40,4 +40,6 @@ module type S = sig
     fd:string ->
     col_gen_type list ->
     (module Table_S.S)
+
+  val print_and_execute : string -> unit
 end

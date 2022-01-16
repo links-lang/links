@@ -229,16 +229,16 @@ module LensTestHelpers = struct
     Lens.Statistics.reset ();
     let res =
       Lens.Statistics.debug_time_out fn (fun time ->
-          print_endline ("Total Time: " ^ string_of_int time))
+          print_endline ("Total Time: " ^ string_of_int (int_of_float time)))
     in
     print_query_time ();
     res
 
   let time_op fn =
     Lens.Statistics.reset ();
-    let ttime = ref 0 in
+    let ttime = ref 0.0 in
     let _ = Lens.Statistics.debug_time_out fn (fun time -> ttime := time) in
-    (Lens.Statistics.get_query_time (), !ttime)
+    (Lens.Statistics.get_query_time (), int_of_float !ttime)
 
   let time_query_both fn =
     let res = time_query false fn in

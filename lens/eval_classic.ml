@@ -34,12 +34,12 @@ let lens_put_set_step ~db lens data (fn : Value.t -> Sorted.t -> unit) =
       let r = get left in
       let s = get right in
       let m0 =
-        Sorted.relational_update ~fun_deps:(getfds left)
+        Sorted.relational_merge ~fun_deps:(getfds left)
           ~update_with:(Sorted.project_onto data ~columns:(cols left))
           r
       in
       let n0 =
-        Sorted.relational_update ~fun_deps:(getfds right)
+        Sorted.relational_merge ~fun_deps:(getfds right)
           ~update_with:(Sorted.project_onto data ~columns:(cols right))
           s
       in
@@ -66,8 +66,8 @@ let lens_put_set_step ~db lens data (fn : Value.t -> Sorted.t -> unit) =
       let sort = Value.sort l in
       let r = get l in
       let m1 =
-        Sorted.relational_update ~fun_deps:(Sort.fds sort) ~update_with:data
-          (Sorted.filter r ~predicate)
+        Sorted.relational_merge ~fun_deps:(Sort.fds sort) ~update_with:data
+          (Sorted.filter r ~predicate:(Phrase.not' predicate))
       in
       let nh = Sorted.minus (Sorted.filter m1 ~predicate) data in
       let r = Sorted.minus m1 nh in

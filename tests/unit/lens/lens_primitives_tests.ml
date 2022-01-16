@@ -275,8 +275,7 @@ let test_select_lens_3 n test_ctx =
   let upto = UnitTestsLensCommon.set_upto_opt test_ctx in
   template_select_lens_3 ~n ~upto ~put:(test_put test_ctx ~behaviour) test_ctx
 
-let template_get_delta test_ctx ~get_delta =
-  let n = set_upto_opt test_ctx in
+let template_get_delta ~n ~get_delta test_ctx =
   let module DB = (val Table.create test_ctx) in
   let db = DB.db in
   let module T1 = (val table_template_1 ~n (module DB)) in
@@ -292,28 +291,16 @@ let template_get_delta test_ctx ~get_delta =
       (Lens.Value.lens_get ~db l3)
   in
   get_delta ~db l3 res |> ignore;
-  let run () =
-    let _data = Lens.Eval.Incremental.lens_get_delta ~db l3 res in
-    ()
-  in
-  let runs = List.init 20 (fun _i -> H.time_op run) in
-  let qts, tts = List.split runs in
-  print_endline "query times";
-  let prlist =
-    print_endline << Phrase.Value.show_values << List.map ~f:box_int
-  in
-  prlist qts;
-  prlist tts;
   T1.drop_if_cleanup ();
   T2.drop_if_cleanup ()
 
 let test_get_delta test_ctx =
-  template_get_delta ~get_delta:Lens.Eval.Incremental.lens_get_delta test_ctx
+  let n = set_upto_opt test_ctx in
+  template_get_delta ~n ~get_delta:Lens.Eval.Incremental.lens_get_delta test_ctx
 
 (* let () = Lens.Debug.set_debug true *)
 
-let template_put_delta ~n ~put test_ctx =
-  let upto = UnitTestsLensCommon.set_upto_opt test_ctx in
+let template_put_delta ~n ~upto ~put test_ctx =
   let module DB = (val Table.create test_ctx) in
   let db = DB.db in
   let module T1 =
@@ -389,10 +376,13 @@ let put_delta_behaviour test_ctx ~behaviour =
 
 let test_put_delta test_ctx =
   let n = override_n 10000 test_ctx in
+  let upto = UnitTestsLensCommon.set_upto_opt test_ctx in
   let behaviour = behaviour test_ctx in
-  template_put_delta ~n ~put:(put_delta_behaviour test_ctx ~behaviour) test_ctx
+  template_put_delta ~n ~upto
+    ~put:(put_delta_behaviour test_ctx ~behaviour)
+    test_ctx
 
-let template_join_lens_1 ~n ~put test_ctx =
+let template_join_lens_1 ?(mk_join = Mk_lens.join_dl) ~n ~put test_ctx =
   let n = override_n n test_ctx in
   let module DB = (val Table.create test_ctx) in
   let db = DB.db in
@@ -400,7 +390,7 @@ let template_join_lens_1 ~n ~put test_ctx =
   let module T2 = (val table_template_2 ~n (module DB)) in
   let l1 = T1.lens () in
   let l2 = T2.lens () in
-  let l3 = Mk_lens.join_dl l1 l2 in
+  let l3 = mk_join l1 l2 in
   let res =
     List.map
       ~f:(fun r ->

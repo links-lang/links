@@ -29,6 +29,16 @@ let join_dl ?on left right =
   let del_right = Lens.Phrase.Constant.bool false in
   Value.LensJoin { left; right; on; del_left; del_right; sort }
 
+let join_db ?on left right =
+  let on = default_join_cols ?on left right in
+  let sort, on =
+    Lens.Sort.join_lens_sort (Lens.Value.sort left) (Lens.Value.sort right) ~on
+    |> Result.ok_exn
+  in
+  let del_left = Lens.Phrase.Constant.bool true in
+  let del_right = Lens.Phrase.Constant.bool true in
+  Value.LensJoin { left; right; on; del_left; del_right; sort }
+
 let join_dr ?on left right =
   let on = default_join_cols ?on left right in
   let sort, on =

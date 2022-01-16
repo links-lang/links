@@ -322,7 +322,7 @@ let minus rs1 rs2 =
     let proj = project_onto_set rs2 ~onto:rs1 in
     let map = get_cols_map rs1 ~columns:proj.columns in
     let plus_rows =
-      List.filter (fun r -> find proj ~record:(map r))
+      List.filter (fun r -> find proj ~record:(map r) |> not)
       @@ Array.to_list rs1.plus_rows
       |> Array.of_list
     in
