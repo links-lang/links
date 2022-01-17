@@ -189,11 +189,11 @@ let rec reduce_for_source : Q.t * (Q.t -> Q.t) -> Q.t =
                   (* Second, generate a fresh variable for the metadata *)
                   let metadata_record =
                     StringMap.from_alist [
-                      (TemporalOperation.data_field,
+                      (TemporalField.data_field,
                         Q.eta_expand_var (table_raw_var, base_ty_elem));
-                      (TemporalOperation.from_field,
+                      (TemporalField.from_field,
                         Q.Project (table_var, from_field));
-                      (TemporalOperation.to_field,
+                      (TemporalField.to_field,
                         Q.Project (table_var, to_field))
                     ] in
                   let generators = [ (table_raw_var, source) ] in
@@ -261,13 +261,13 @@ struct
   (* Temporal projection operations *)
   | Q.Apply (Q.Primitive "ttData", [x])
   | Q.Apply (Q.Primitive "vtData", [x]) ->
-    Q.Project (x, TemporalOperation.data_field)
+    Q.Project (x, TemporalField.data_field)
   | Q.Apply (Q.Primitive "ttFrom", [x])
   | Q.Apply (Q.Primitive "vtFrom", [x]) ->
-    Q.Project (x, TemporalOperation.from_field)
+    Q.Project (x, TemporalField.from_field)
   | Q.Apply (Q.Primitive "ttTo", [x])
   | Q.Apply (Q.Primitive "vtTo", [x]) ->
-    Q.Project (x, TemporalOperation.to_field)
+    Q.Project (x, TemporalField.to_field)
   | u -> u
 
   let rec xlate env : Ir.value -> Q.t = let open Ir in function

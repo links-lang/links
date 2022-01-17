@@ -209,11 +209,11 @@ module ValidTime = struct
     let table_var = Q.Var (x, Types.make_record_type extended_field_types) in
     let metadata_record =
       StringMap.from_alist [
-        (TemporalOperation.data_field,
+        (TemporalField.data_field,
           Q.eta_expand_var (x, Types.make_record_type field_types));
-        (TemporalOperation.from_field,
+        (TemporalField.from_field,
           Q.Project (table_var, from_field) );
-        (TemporalOperation.to_field,
+        (TemporalField.to_field,
           Q.Project (table_var, to_field))
       ] in
     Q.Record metadata_record
@@ -226,9 +226,9 @@ module ValidTime = struct
       (* v should be a non-empty list of valid-time metadata. *)
       let records = Value.unbox_list v in
       assert (records <> []);
-      let md_from = TemporalOperation.from_field in
-      let md_to = TemporalOperation.to_field in
-      let md_data = TemporalOperation.data_field in
+      let md_from = TemporalField.from_field in
+      let md_to = TemporalField.to_field in
+      let md_data = TemporalField.data_field in
 
       let fields =
         List.hd records
@@ -843,9 +843,9 @@ module TemporalJoin = struct
               (o, If (i, t, e))
           | Singleton data ->
               let record_fields =
-                [(TemporalOperation.data_field, data);
-                 (TemporalOperation.from_field, o#start_time);
-                 (TemporalOperation.to_field, o#end_time)]
+                [(TemporalField.data_field, data);
+                 (TemporalField.from_field, o#start_time);
+                 (TemporalField.to_field, o#end_time)]
               in
               (o, Singleton (Record (StringMap.from_alist record_fields)))
           | q -> super#query q

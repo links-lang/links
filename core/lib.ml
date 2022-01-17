@@ -1220,45 +1220,45 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "withValidity",
   (p3 (fun x v_from v_to ->
     Value.box_record
-      [(TemporalOperation.data_field, x);
-       (TemporalOperation.from_field, v_from);
-       (TemporalOperation.to_field, v_to)]),
+      [(TemporalField.data_field, x);
+       (TemporalField.from_field, v_from);
+       (TemporalField.to_field, v_to)]),
     datatype "((|r), DateTime, DateTime) -> ValidTime((|r))",
     PURE);
 
   "ttData",
   (p1 (Value.unbox_record
-       ->- List.assoc (TemporalOperation.data_field)),
+       ->- List.assoc (TemporalField.data_field)),
    datatype "(TransactionTime((|r))) -> (|r)",
   PURE);
 
   "ttFrom",
   (p1 (Value.unbox_record
-       ->- List.assoc (TemporalOperation.from_field)),
+       ->- List.assoc (TemporalField.from_field)),
    datatype "(TransactionTime(a)) -> DateTime",
   PURE);
 
   "ttTo",
   (p1 (Value.unbox_record
-       ->- List.assoc (TemporalOperation.to_field)),
+       ->- List.assoc (TemporalField.to_field)),
    datatype "(TransactionTime(a)) -> DateTime",
   PURE);
 
   "vtData",
   (p1 (Value.unbox_record
-       ->- List.assoc (TemporalOperation.data_field)),
+       ->- List.assoc (TemporalField.data_field)),
    datatype "(ValidTime((|r))) -> (|r)",
   PURE);
 
   "vtFrom",
   (p1 (Value.unbox_record
-       ->- List.assoc (TemporalOperation.from_field)),
+       ->- List.assoc (TemporalField.from_field)),
    datatype "(ValidTime(a)) -> DateTime",
   PURE);
 
   "vtTo",
   (p1 (Value.unbox_record
-       ->- List.assoc (TemporalOperation.to_field)),
+       ->- List.assoc (TemporalField.to_field)),
    datatype "(ValidTime(a)) -> DateTime",
   PURE);
   (* Database functions *)

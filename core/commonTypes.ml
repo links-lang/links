@@ -378,42 +378,8 @@ module Temporality = struct
   let show x = Format.asprintf "%a" pp x
 end
 
-(* Accessor / Mutation operations *)
-module TemporalOperation = struct
-  type field = Data | From | To
-    [@@deriving show]
-
-  (* TODO: We might only need accessors. If that's the case,
-     then we might be able to simplify this further.
-     Conversely, we might need it for things like grabbing the to/from
-     times in a nonsequenced update. *)
-  type t =
-    | Accessor of Temporality.t * field
-    [@@deriving show]
-
-  let name = function
-    | Accessor (Temporality.Transaction, field) ->
-        begin
-          match field with
-            | From -> "ttFrom"
-            | To -> "ttTo"
-            | Data -> "ttData"
-        end
-    | Accessor (Temporality.Valid, field) ->
-        begin
-          match field with
-            | From -> "vtFrom"
-            | To -> "vtTo"
-            | Data -> "vtData"
-        end
-    | _ -> assert false (* No accessors for Current time tables. *)
-
-  let field = function
-    | Data -> "!data"
-    | From -> "!from"
-    | To -> "!to"
-
-  let data_field = field Data
-  let from_field = field From
-  let to_field = field To
+module TemporalField = struct
+  let data_field = "!data"
+  let from_field = "!from"
+  let to_field = "!to"
 end

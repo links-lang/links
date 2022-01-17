@@ -346,13 +346,13 @@ struct
   (* Temporal projection operations *)
   | Q.Apply (Q.Primitive "ttData", [x])
   | Q.Apply (Q.Primitive "vtData", [x]) ->
-    Q.Project (x, TemporalOperation.data_field)
+    Q.Project (x, TemporalField.data_field)
   | Q.Apply (Q.Primitive "ttFrom", [x])
   | Q.Apply (Q.Primitive "vtFrom", [x]) ->
-    Q.Project (x, TemporalOperation.from_field)
+    Q.Project (x, TemporalField.from_field)
   | Q.Apply (Q.Primitive "ttTo", [x])
   | Q.Apply (Q.Primitive "vtTo", [x]) ->
-    Q.Project (x, TemporalOperation.to_field)
+    Q.Project (x, TemporalField.to_field)
   | Q.Apply (Q.Primitive "Distinct", [u]) -> Q.Prom (Q.Dedup u)
   | u -> u
 

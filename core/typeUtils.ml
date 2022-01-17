@@ -56,10 +56,10 @@ let rec project_type ?(overstep_quantifiers=true) name t = match (concrete_type 
         t
   | (Application (absty, [PrimaryKind.Type, typ]), _) when
       (Abstype.name absty) = "TransactionTime" || (Abstype.name absty = "ValidTime") ->
-        if name = TemporalOperation.data_field then typ
+        if name = TemporalField.data_field then typ
         else if
-          name = TemporalOperation.from_field ||
-          name = TemporalOperation.to_field then
+          name = TemporalField.from_field ||
+          name = TemporalField.to_field then
           Primitive (Primitive.DateTime)
         else
           error ("Trying to project " ^ name ^ " from temporal metadata: " ^ string_of_datatype t)
@@ -402,28 +402,3 @@ let pack_types : Types.datatype list -> Types.datatype = function
 let from_present : Types.field_spec -> Types.datatype = function
   | Present t -> t
   | _ -> raise Types.tag_expectation_mismatch
-
-(*
-let table_temporality : Types.t -> Temporality.t = fun x ->
-  match concrete_type x with
-      | Table (temp, _r, _w, _n) -> temp
-      | _ -> error ("Attempt to get temporality of non-table type " ^ string_of_datatype x)
-      *)
-
-let rec temporal_metadata_type t =
-  match concrete_type t with
-      | ForAll (_, t) -> temporal_metadata_type t
-      | Application (abstype, [PrimaryKind.Type, typ]) when Abstype.name abstype =
-          "ValidTime" || Abstype.name abstype = "TransactionTime" -> typ
-      | t ->
-          error ("Attempt to take payload type of non-metadata: " ^ string_of_datatype t)
-
-
-(* Returns the result type of a temporal operation, given the table type. *)
-let temporal_op_return_type op t =
-  let open TemporalOperation in
-  match op with
-    | Accessor (_, Data) ->
-        temporal_metadata_type t
-    | Accessor (_, From) | Accessor (_, To) ->
-        Primitive (Primitive.DateTime)
