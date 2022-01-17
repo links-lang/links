@@ -1,14 +1,14 @@
 var db = database "links";
 
-var employees = table "employees"
+var employees = table "vtj_employees"
   with (name: String, salary_band: String, department_id: Int)
   using valid_time(valid_from, valid_to) from db;
 
-var salaries = table "salaries"
+var salaries = table "vtj_salaries"
   with (salary_band: String, salary: Int)
   using valid_time(valid_from, valid_to) from db;
 
-var departments = table "departments"
+var departments = table "vtj_departments"
   with (department_id: Int, name: String) where department_id readonly from db;
 
 

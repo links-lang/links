@@ -1,7 +1,7 @@
-DROP TABLE IF EXISTS employees;
-DROP TABLE IF EXISTS positions;
+DROP TABLE IF EXISTS vt_employees;
+DROP TABLE IF EXISTS vt_positions;
 
-CREATE TABLE employees (
+CREATE TABLE vt_employees (
     "name" text NOT NULL,
     "salary" integer NOT NULL,
     "position_id" integer NOT NULL,
@@ -9,7 +9,7 @@ CREATE TABLE employees (
     "valid_to" timestamp with time zone NOT NULL
 );
 
-CREATE TABLE positions (
+CREATE TABLE vt_positions (
   "position_id" SERIAL,
   "position" text
 );

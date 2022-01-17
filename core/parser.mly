@@ -349,8 +349,7 @@ let parse_foreign_language pos lang =
 %token LTLARROW LVLARROW
 %token SEQUENCED CURRENT NONSEQUENCED TO BETWEEN
 %token TTINSERT VTINSERT
-%token TTDATA TTFROM TTTO
-%token VTDATA VTFROM VTTO VALID
+%token VALID
 %token VTJOIN TTJOIN
 
 %start just_datatype

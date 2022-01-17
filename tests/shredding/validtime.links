@@ -1,11 +1,11 @@
 var db = database "links";
 
 var employees =
-  table "employees" with (name: String, salary: Int, position_id: Int)
+  table "vt_employees" with (name: String, salary: Int, position_id: Int)
   using valid_time(valid_from, valid_to) from db;
 
 var positions =
-  table "positions" with (position_id: Int, position: String)
+  table "vt_positions" with (position_id: Int, position: String)
   where position_id readonly from db;
 
 fun hire(name, salary, positionID, startDate, endDate) {
