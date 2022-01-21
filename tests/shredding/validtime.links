@@ -17,7 +17,7 @@ fun hire(name, salary, positionID, startDate, endDate) {
 }
 
 fun hirePermanent(name, salary, positionID) {
-  vt_insert current employees
+  vt_insert employees
     values
     (name, salary, position_id)
     [(=name, =salary, position_id = positionID)]

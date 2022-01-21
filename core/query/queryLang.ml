@@ -182,9 +182,7 @@ let table_field_types Value.{ row = (fields, _, _); temporal_fields; _ } =
     in
     let declared_fields = field_types_of_spec_map fields in
     (* Add metadata fields *)
-    List.fold_left
-      (fun acc (k, v) -> StringMap.add k v acc)
-      declared_fields metadata_fields
+    StringMap.superimpose (StringMap.from_alist metadata_fields) declared_fields
 
 let unbox_xml =
   function
