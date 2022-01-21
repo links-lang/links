@@ -3978,17 +3978,6 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           in
           StringBuffer.write buf ret)
 
-(*
-    let full_name : unit printer
-      = Printer (fun _ctx () buf ->
-            StringBuffer.write buf "(";
-            StringBuffer.write buf (Linearity.to_string lin);
-            StringBuffer.write buf ",";
-            StringBuffer.write buf (Restriction.to_string res);
-            StringBuffer.write buf ")"
-          )
-    in
-*)
   and table : (Temporality.t * typ * typ * typ) printer
     = let open Printer in
       Printer (fun ctx (t, r, w, n) buf ->
