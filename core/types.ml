@@ -4355,7 +4355,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
     | Function (f, m, t)      -> union [make_env boundvars f; make_env boundvars m; make_env boundvars t]
     | Lolli (f, m, t)         -> union [make_env boundvars f; make_env boundvars m; make_env boundvars t]
     | Effect row | Record row | Variant row -> make_env boundvars row
-    | Table (_, r, w, n)         -> union [make_env boundvars r; make_env boundvars w; make_env boundvars n]
+    | Table (_, r, w, n)      -> union [make_env boundvars r; make_env boundvars w; make_env boundvars n]
     | Lens _                  -> empties
     | Alias ((_, _, ts, _), d) -> union (List.map (make_env_ta boundvars) ts @ [make_env boundvars d])
     | Application (_, ds)     -> union (List.map (make_env_ta boundvars) ds)
