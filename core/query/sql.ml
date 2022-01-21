@@ -24,10 +24,10 @@ type query =
   | With      of table_name * query * query list
   | Transaction of query list (* SQL Transaction: Complete atomically*)
 (* Values: list of values to insert.
-   Query: allows us to insert result of previous query, bound to a variable. *)
+   TableQuery: allows us to insert result of previous query, bound to a variable. *)
 and insert_records =
   | Values of (base list list)
-  | Query of Var.var
+  | TableQuery of Var.var
 and select_clause =
     multiplicity * select_fields * from_clause list * base * base list
 and select_fields =
@@ -245,7 +245,7 @@ class virtual printer =
             table
             (self#pp_comma_separated Format.pp_print_string) fields
             (self#pp_comma_separated pp_value) values
-      | Query var ->
+      | TableQuery var ->
           Format.fprintf ppf
             "insert into %s (%a) (select * from %s)"
             table

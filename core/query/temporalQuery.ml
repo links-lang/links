@@ -123,7 +123,7 @@ module TransactionTime = struct
     (* Next, we need to insert the results *)
     let ins_query =
       Sql.Insert { ins_table = table; ins_fields = field_names;
-        ins_records = Query sel_var } in
+        ins_records = TableQuery sel_var } in
 
     (* Next, we need an update query which closes off the previous rows. *)
     (* The update predicate is the records which satisfy the selection predicate,
@@ -343,7 +343,7 @@ module ValidTime = struct
         (* Next, we need to insert the results *)
         let insert =
           Insert { ins_table = table; ins_fields = field_names;
-            ins_records = Query sel_var } in
+            ins_records = TableQuery sel_var } in
 
         (* Next: close off the old rows *)
         let upd_current =
@@ -455,7 +455,7 @@ module ValidTime = struct
               Sql.Insert {
                 ins_table = table;
                 ins_fields = field_names;
-                ins_records = Query var
+                ins_records = TableQuery var
               } in
             Sql.With (Sql.string_of_table_var var, sel, [ins]) in
 
@@ -631,7 +631,7 @@ module ValidTime = struct
           (* Next, we need to insert the results *)
           let ins_query =
             Sql.Insert { ins_table = table; ins_fields = field_names;
-              ins_records = Sql.Query sel_var } in
+              ins_records = Sql.TableQuery sel_var } in
 
           (* Truncate 'end' date for records with PV starting before PA and ending in PA *)
           let update upd_table upd_fields where =

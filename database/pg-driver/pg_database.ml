@@ -135,7 +135,7 @@ let pg_printer = object(self)
             in
             Format.fprintf ppf
               "insert into %s %s" table_name body
-        | Query var ->
+        | TableQuery var ->
             let open Format in
             fprintf ppf
               "insert into %s (%a) (select * from %s)"
