@@ -2,8 +2,22 @@ open Utility
 open CommonTypes
 open Types
 
-(* Query compilation for temporal queries. *)
-
+(*
+ * This module contains the query rewrite logic for temporal updates.
+ * The translations mainly involve massaging the SQL DSL, following
+ * the translations in Snodgrass' book,
+ * "Developing Time-Oriented Database Applications in SQL".
+ *
+ * As an example, instead of creating an SQL Delete, a TransactionTime
+ * deletion is, roughly speaking:
+ *
+ *   [| delete (x <-t- tbl) where M |] =
+ *     update tbl set x.to = now() where [| M |]
+ *
+ * These functions are generally called directly from `evalir.ml` or entry
+ * functions in `query.ml`. This module will not be touched for current-time
+ * tables.
+ *)
 module Q = QueryLang
 let base = Q.base
 
@@ -18,6 +32,16 @@ module OpHelpers = struct
   let _op_or = binop "||"
 end
 
+(* Some shared things *)
+let forever_const = Constant.DateTime.forever
+let sql_forever = Sql.Constant forever_const
+
+let current_at from_field to_field timestamp =
+  let open OpHelpers in
+  op_and
+    (lte from_field timestamp)
+    (gt to_field timestamp)
+
 (* Shared between valid and transaction time *)
 let current_insertion table_name field_names from_field to_field rows =
   let compile_rows =
@@ -26,13 +50,11 @@ let current_insertion table_name field_names from_field to_field rows =
   let rows = compile_rows rows in
   let field_names = field_names @ [from_field; to_field] in
   let now = Sql.Constant (Constant.DateTime.now ()) in
-  let forever = Sql.Constant (Constant.DateTime.forever) in
-  let rows = List.map (fun vs -> vs @ [now; forever]) rows in
+  let rows = List.map (fun vs -> vs @ [now; sql_forever]) rows in
   Sql.(Insert {
     ins_table = table_name;
     ins_fields = field_names;
     ins_records = Values rows })
-
 
 module TransactionTime = struct
 
@@ -45,13 +67,9 @@ module TransactionTime = struct
     string ->
     Sql.query =
   fun table_types ((tbl_var, table), where, body) tt_from tt_to ->
-
-    let now_const = Constant.DateTime.now () in
-    let sql_now = Sql.Constant now_const in
-    let forever_const = Constant.DateTime.forever in
-    let sql_forever = Sql.Constant forever_const in
-
     let open Sql in
+    let now_const = Constant.DateTime.now () in
+    let sql_now = Constant now_const in
     let is_current = Apply ("==", [Project (tbl_var, tt_to); sql_forever]) in
 
     (* Begin by constructing a select query, which gets our affected rows. *)
@@ -149,9 +167,8 @@ module TransactionTime = struct
     Sql.query =
     fun ((tbl_var, table), where) tt_to ->
       let now = Sql.Constant (Constant.DateTime.now ()) in
-      let forever = Sql.Constant (Constant.DateTime.forever) in
       let open Sql in
-      let is_current =  Apply ("==", [Project (tbl_var, tt_to); forever]) in
+      let is_current =  Apply ("==", [Project (tbl_var, tt_to); sql_forever]) in
 
       (* where x --> where (x && is_current) *)
       let upd_where =
@@ -278,14 +295,12 @@ module ValidTime = struct
          * There's an extra step, though: ensure any future rows are also
          * updated. *)
         let open Sql in
+        let open OpHelpers in
         let now_const = Constant.DateTime.now () in
         let sql_now = Constant now_const in
         let sql_proj field = Project (tbl_var, field) in
-        let sql_binop op x1 x2 = Apply (op, [x1; x2]) in
-        let current_at =
-          sql_binop "&&"
-            (sql_binop "<=" (sql_proj from_field) sql_now)
-            (sql_binop ">" (sql_proj to_field) sql_now) in
+        let current_now =
+          current_at (sql_proj from_field) (sql_proj to_field) sql_now in
 
         (* Construct select query. Currently a lot is C&P; would be better to
          * abstract it (in some nice way) *)
@@ -315,8 +330,9 @@ module ValidTime = struct
         (* Add "current at" clause to predicate *)
         let sel_where =
           match where with
-            | Some where -> Sql.Apply ("&&", [base [] where; current_at])
-            | None -> current_at in
+            | Some where -> OpHelpers.op_and (base [] where) current_now
+            | None -> current_now
+        in
 
         let select =
           Sql.Select (All, Fields select_fields, [TableRef (table, tbl_var)], sel_where, []) in
@@ -333,9 +349,9 @@ module ValidTime = struct
         let upd_current =
           let pred =
             let starts_before_now =
-              sql_binop "<" (sql_proj from_field) sql_now in
+              lt (sql_proj from_field) sql_now in
             match where with
-              | Some where -> sql_binop "&&" (base [] where) starts_before_now
+              | Some where -> op_and (base [] where) starts_before_now
               | _ -> starts_before_now in
           Update {
             upd_table = table;
@@ -347,9 +363,9 @@ module ValidTime = struct
         let upd_future =
           let pred =
             let in_future =
-              sql_binop ">=" (sql_proj from_field) sql_now in
+              gte (sql_proj from_field) sql_now in
             match where with
-              | Some where -> sql_binop "&&" (base [] where) in_future
+              | Some where -> op_and (base [] where) in_future
               | _ -> in_future in
 
           Update {
@@ -443,7 +459,8 @@ module ValidTime = struct
               } in
             Sql.With (Sql.string_of_table_var var, sel, [ins]) in
 
-          (*  - Selection / insert #1: Old values at beginning of PA *)
+          (*  - Selection / insert #1: Old values at beginning of period of
+                applicability *)
           let sel1 =
             let where =
               let open OpHelpers in
@@ -453,7 +470,7 @@ module ValidTime = struct
               |> and_where in
             make_select [(to_field, app_from)] where |> insert_select in
 
-          (* Selection / insert #2: Old values at end of PA *)
+          (* Selection / insert #2: Old values at end of period of applicability *)
           let sel2 =
             let where =
               let open OpHelpers in
@@ -529,27 +546,25 @@ module ValidTime = struct
       Sql.query =
       fun ((tbl_var, table), where) from_field to_field ->
         let open Sql in
+        let open OpHelpers in
         let now_const = Constant.DateTime.now () in
         let sql_now = Constant now_const in
-        let sql_binop op x1 x2 = Apply (op, [x1; x2]) in
         let sql_proj field = Project (tbl_var, field) in
-
-        let current_at =
-          sql_binop "&&"
-            (sql_binop "<=" (sql_proj from_field) sql_now)
-            (sql_binop ">" (sql_proj to_field) sql_now) in
+        let current_now =
+          current_at (sql_proj from_field) (sql_proj to_field) sql_now
+        in
 
         let upd_where =
           Some (OptionUtils.opt_app
-            (fun q -> sql_binop "&&" (base [] q) current_at)
-            current_at
+            (fun q -> op_and (base [] q) current_now)
+            current_now
             where) in
 
         let del_where =
           let valid_in_future =
-            sql_binop ">=" (sql_proj from_field) sql_now in
+            gte (sql_proj from_field) sql_now in
           Some (OptionUtils.opt_app
-            (fun q -> sql_binop "&&" (base [] q) valid_in_future)
+            (fun q -> op_and (base [] q) valid_in_future)
             valid_in_future
             where) in
 
@@ -781,7 +796,7 @@ module TemporalJoin = struct
         let open Q in
         List.fold_right (fun (tbl_var, _, end_time) expr ->
           Apply (Primitive "least", [Project (tbl_var, end_time); expr])
-        ) tables (Constant Constant.DateTime.forever)
+        ) tables (Q.Constant forever_const)
 
       method! query =
         let open Q in
