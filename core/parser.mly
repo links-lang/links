@@ -96,6 +96,7 @@ let temporality_of_string p =
   | rest               ->
      raise (ConcreteSyntaxError (pos p, "Invalid temporality: " ^ rest))
 
+
 let temporality_type_of_string p =
   function
   | "Valid"       -> Temporality.valid

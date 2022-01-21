@@ -67,10 +67,9 @@ let keywords = [
  "by"       , BY;
  "case"     , CASE;
  "client"   , CLIENT;
- "current"  , CURRENT;
  "database" , DATABASE;
  "default"  , DEFAULT;
- "delete"   , DELETE;
+ (*"delete"   , DELETE;*)
  "delete_left", DELETE_LEFT;
  "determined", DETERMINED;
  "do"       , DOOP;
@@ -100,7 +99,6 @@ let keywords = [
  "module"   , MODULE;
  "mu"       , MU;
  "mutual"   , MUTUAL;
- "nonsequenced", NONSEQUENCED;
  "nu"       , NU;
  "offer"    , OFFER;
  "on"       , ON;
@@ -116,7 +114,6 @@ let keywords = [
  "returning", RETURNING;
  "select"   , SELECT;
  "server"   , SERVER;
- "sequenced", SEQUENCED;
  "set"      , SET;
  "shallowhandle", SHALLOWHANDLE;
  "sig"      , SIG;
@@ -135,7 +132,7 @@ let keywords = [
  "tt_insert" , TTINSERT;
  "tt_join"   , TTJOIN;
  "typename" , TYPENAME;
- "update"   , UPDATE;
+ (* "update"   , UPDATE; *)
  "unsafe"   , UNSAFE;
  "using"    , USING;
  "valid"    , VALID;
@@ -255,11 +252,34 @@ rule lex ctxt nl = parse
   | "postfix"                           { FIXITY Associativity.Left }
   | "~fun"                              { FROZEN_FUN }
   | "~linfun"                           { FROZEN_LINFUN }
+  | "update"                            { ctxt#push_lexer (upd_qual ctxt nl); UPDATE }
+  | "vt_insert"                         { ctxt#push_lexer (ins_qual ctxt nl); VTINSERT }
+  | "tt_insert"                         { ctxt#push_lexer (ins_qual ctxt nl); TTINSERT }
+  | "delete"                            { ctxt#push_lexer (upd_qual ctxt nl); DELETE }
   | def_id as var                       { try List.assoc var keywords
                                           with Not_found | NotFound _ ->
                                             if Char.isUpper var.[0] then CONSTRUCTOR var
                                             else VARIABLE var }
   | def_blank                           { lex ctxt nl lexbuf }
+  | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
+and upd_qual ctxt nl = parse
+  | def_blank                           { upd_qual ctxt nl lexbuf }
+  | '\n'                                { nl (); bump_lines lexbuf 1; upd_qual ctxt nl lexbuf }
+  | '('                                 { (* Switch back -- current update *) ctxt#pop_lexer; LPAREN }
+  | "sequenced"                         { ctxt#pop_lexer; SEQUENCED }
+  | "nonsequenced"                      { ctxt#pop_lexer; NONSEQUENCED }
+  | "current"                           { ctxt#pop_lexer; CURRENT }
+  | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
+and ins_qual ctxt nl = parse
+  | def_blank                           { ins_qual ctxt nl lexbuf }
+  | '\n'                                { nl (); bump_lines lexbuf 1; ins_qual ctxt nl lexbuf }
+  | "sequenced"                         { ctxt#pop_lexer; SEQUENCED }
+  | "current"                           { ctxt#pop_lexer; CURRENT }
+  | def_id as var                       { ctxt#pop_lexer;
+                                          try List.assoc var keywords
+                                          with Not_found | NotFound _ ->
+                                            if Char.isUpper var.[0] then CONSTRUCTOR var
+                                            else VARIABLE var }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
 and starttag ctxt nl = parse
   | eof                                 { EOF }
