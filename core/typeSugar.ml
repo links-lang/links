@@ -404,7 +404,7 @@ sig
   val inconsistent_quantifiers :
     pos:Position.t -> t1:Types.datatype -> t2:Types.datatype -> unit
 
-  val tabstr_ambiguos_type : pos:Position.t -> Types.datatype -> unit
+  val tabstr_ambiguous_type : pos:Position.t -> Types.datatype -> unit
 
   val escaped_quantifier :
     pos:Position.t ->
@@ -1544,7 +1544,7 @@ end
                 "actual: "                             ^ nli () ^
                 typ r                                  ^ nl ())
 
-    let tabstr_ambiguos_type ~pos t =
+    let tabstr_ambiguous_type ~pos t =
       let policy () = Types.Policy.set_quantifiers true (Types.Policy.default_policy ()) in
       let typ = Types.string_of_datatype ~policy t in
       die pos ("The phrase under a type abstraction must have a unique type."     ^ nl ()  ^
@@ -3347,7 +3347,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
 
             let free_flexible_vars = Types.free_flexible_type_vars t in
             if not (Types.TypeVarSet.is_empty free_flexible_vars) then
-              Gripers.tabstr_ambiguos_type ~pos t;
+              Gripers.tabstr_ambiguous_type ~pos t;
 
             let t = Types.for_all(qs, t) in
               tabstr (sugar_qs, e.node), t, u
