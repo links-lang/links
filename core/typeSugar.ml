@@ -3332,6 +3332,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                       FnAppl (erase f, List.map erase ps), rettyp, Usage.combine_many (usages f :: List.map usages ps)
               end
         | TAbstr (sugar_qs, e) ->
+          if Utils.is_generalisable e then
+
             let qs = List.map SugarQuantifier.get_resolved_exn sugar_qs in
 
             (* Links being Links, the only way to ensure that we don't
@@ -3350,7 +3352,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               Gripers.tabstr_ambiguous_type ~pos t;
 
             let t = Types.for_all(qs, t) in
-              tabstr (sugar_qs, e.node), t, u
+            tabstr (sugar_qs, e.node), t, u
+          else
+            Gripers.generalise_value_restriction pos (uexp_pos e)
         | TAppl (e, tyargs) ->
            let e, t, u = tc e in
 

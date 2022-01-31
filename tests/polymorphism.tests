@@ -258,3 +258,8 @@ Type abstraction: correct, shadowing (3)
 exit : 0
 stdout : fun : forall a::Row.(Int) -a-> Int
 args : --set=show_quantifiers=true
+
+Type abstraction: incorrect, violates value restriction
+/\ [e::Row]. {  id(id : ( (Int) -e-> Int )) }
+exit : 1
+stderr : @.*Type error:.*Because of the value restriction, the expression .*cannot be generalised.*
