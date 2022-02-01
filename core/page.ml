@@ -20,41 +20,10 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
   let ext_script_tag ?(base=get_js_lib_url()) file =
     "  <script type='text/javascript' src=\""^base^file^"\"></script>"
 
-  let initialise_envs (nenv, tyenv) =
-    let dt = DesugarDatatypes.read ~aliases:tyenv.Types.tycon_env in
-
-    (* TODO:
-
-       - add stringifyB64 to lib.ml as a built-in function?
-       - get rid of ConcatMap here?
-     *)
-    let tyenv =
-      {Types.var_env =
-         (Env.String.bind "stringifyB64" (dt "(a) -> String") tyenv.Types.var_env
-          |> Env.String.bind "ConcatMap" (dt "((a) -> [b], [a]) -> [b]"));
-       Types.rec_vars = StringSet.empty;
-       Types.tycon_env = tyenv.Types.tycon_env;
-       Types.effect_row = tyenv.Types.effect_row;
-       Types.desugared = tyenv.Types.desugared } in
-    let nenv =
-      Env.String.bind "ConcatMap" (Var.fresh_raw_var ()) nenv
-      |>  Env.String.bind "stringifyB64" (Var.fresh_raw_var ())
-
-    in
-
-    let venv =
-      Env.String.fold
-        (fun name v venv -> VEnv.bind v name venv)
-        nenv
-        VEnv.empty
-    in
-    let tenv = Var.varify_env (nenv, tyenv.Types.var_env) in
-    (nenv, venv, tenv)
-
   let script_tag body =
-    "<script type='text/javascript'><!--\n'use strict';\n" ^ body ^ "\n--> </script>\n"
+    "<script type='text/javascript'>\n'use strict';\n" ^ body ^ "\n</script>\n"
 
-  let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(html="") ?(head="") ?(external_files=[]) defs =
+  let make_boiler_page ?(cgi_env=[]) ?(onload="") ?(body="") ?(html="") ?(head="") ?(external_files=[]) () =
     let in_tag tag str = "<" ^ tag ^ ">\n" ^ str ^ "\n</" ^ tag ^ ">" in
     let custom_ext_script_tag str = "<script type='text/javascript' src='" ^ str ^ "'></script>" in
     let ffiLibs = String.concat "\n" (List.map custom_ext_script_tag external_files) in
@@ -85,14 +54,13 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
                         ^ db_config_script
                         ^ env
                         ^ head
-                        ^ script_tag (String.concat "\n" defs)
                         ^ "<script type=\"text/javascript\">
                              'use strict';
                              function _isRuntimeReady() {
                                 if (window._JSLIB === void 0 || window._JSLIB !== true) {
                                    const msg = \"<h1>Startup error: Runtime dependency `jslib.js' is not loaded.</h1>\";
                                    document.body.innerHTML = msg;
-                                   document.head.innerHTML = msg;
+                                   document.head.innerHTML = \"\";
                                    return false;
                                 }
                                 return true;
@@ -116,7 +84,7 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
              wsconn_url:(Webserver_types.websocket_url option) ->
              (Var.var Env.String.t * Types.typing_environment) ->
              Ir.binding list -> (Value.env * Value.t) -> string list -> string
-    = fun ?(cgi_env=[]) ~wsconn_url (nenv, tyenv) defs (valenv, v) deps ->
+    = fun ?(cgi_env=[]) ~wsconn_url (nenv, _tyenv) defs (valenv, v) deps ->
     let open Json in
     let req_data = Value.Env.request_data valenv in
     let client_id = RequestData.get_client_id req_data in
@@ -128,7 +96,12 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
 
     (* divide HTML into head and body secitions (as we need to augment the head) *)
     let hs, bs = Value.split_html (List.map Value.unbox_xml (Value.unbox_list v)) in
-    let _nenv, venv, _tenv = initialise_envs (nenv, tyenv) in
+    let venv =
+      Env.String.fold
+        (fun name v venv -> VEnv.bind v name venv)
+        nenv
+        VEnv.empty
+    in
 
     let json_state, venv, let_names, f = C.generate_toplevel_bindings valenv json_state venv defs in
     let init_vars = "  function _initVars(state) {\n" ^ resolve_toplevel_values let_names ^ "  }" in
@@ -164,7 +137,7 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
              ^ Value.string_of_xml ~close_tags:true hs)
       ~onload:"_isRuntimeReady() && _startRealPage()"
       ~external_files:deps
-      []
+      ()
 end
 
 module RealPage = Make_RealPage(Compiler)(Js_CodeGen)
