@@ -1,5 +1,5 @@
 opam-version: "2.0"
-maintainer: "Simon Fowler <simon.fowler@ed.ac.uk>"
+maintainer: "Daniel Hillerström <daniel.hillerstrom@ed.ac.uk>"
 authors: "The Links Team <links-dev@inf.ed.ac.uk>"
 synopsis: "The Links Programming Language"
 description: "Links is a functional programming language designed to make web programming easier."
@@ -7,7 +7,7 @@ homepage: "https://github.com/links-lang/links"
 dev-repo: "git+https://github.com/links-lang/links.git"
 bug-reports: "https://github.com/links-lang/links/issues"
 license: "GPL-3.0-only"
-version: "0.9.4"
+version: "0.9.6"
 
 
 build: [
@@ -18,13 +18,13 @@ build: [
 
 depends: [
   "ocaml" {>= "4.08.0"}
-  "dune" {>= "1.10.0"}
+  "dune" {>= "2.7"}
   "ppx_deriving"
   "ppx_deriving_yojson" {>= "3.3"}
   "base64"
   "linenoise"
   "ANSITerminal"
-  "lwt" {>= "3.1.0"}
+  "lwt" {>= "5.0.0"}
   "cohttp"
   "cohttp-lwt"
   "cohttp-lwt-unix"

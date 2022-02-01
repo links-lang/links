@@ -362,17 +362,19 @@ let is_list =
 
    Currently this assumes that at most one database is used.
 *)
-let used_database v : Value.database option =
+let used_database : t -> Value.database option =
   let rec traverse = function
     | [] -> None
     | x :: xs ->
         begin
-          match used x with
+          match used_item x with
             | None -> traverse xs
             | Some db -> Some db
         end
-  and used =
+  and used_item =
     function
+      | Prom q -> used q
+      | Dedup q -> used_item q
       | Table ((db, _), _, _, _) -> Some db
       | For (_, gs, _, _body) -> List.map snd gs |> traverse
       | Singleton v -> used v
@@ -390,20 +392,12 @@ let used_database v : Value.database option =
           traverse (scrutinee :: (cases @ default))
       | Erase (x, _) -> used x
       | Variant (_, x) -> used x
-      | _ -> None in
-  let rec comprehensions =
+      | _ -> None
+  and used =
     function
-      | [] -> None
-      | v::vs ->
-          begin
-            match used v with
-              | None -> comprehensions vs
-              | Some db -> Some db
-          end
-  in
-    match v with
-      | Concat vs -> comprehensions vs
-      | v -> used v
+      | Concat vs -> traverse vs
+      | v -> used_item v
+  in used
 
 let string_of_t = string_of_t
 
@@ -439,8 +433,7 @@ let lookup_fun env (f, fvs) =
         (* TODO(dhil): This is a bit of a round-about way to obtain
             the binder name. *)
       match Var.(name_of_binder (make_binder f finfo)) with
-      | "dedup"
-      | "distinct" ->
+      | "dedup" ->
         Primitive "Distinct"
       | "concatMap" ->
         Primitive "ConcatMap"

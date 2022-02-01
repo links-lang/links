@@ -65,14 +65,14 @@ let is_static _typ p =
       let var = WithPos.node var in
       match var with
       | S.Pattern.Variable x -> no_ext_deps x body
-      | _ -> false )
+      | _ -> false)
   | _ -> false
 
 let rec lens_sugar_phrase_of_body v p =
   let open Result.O in
   let conv p = lens_sugar_phrase_of_body v p in
   let pos = WithPos.pos p in
-  ( match WithPos.node p with
+  (match WithPos.node p with
   | S.InfixAppl ((_, op), p, q) ->
       let op = binary_of_sugartype_op op |> fun v -> Option.value_exn v in
       conv p >>= fun p ->
@@ -85,7 +85,7 @@ let rec lens_sugar_phrase_of_body v p =
       |> Result.return
   | S.Block ([], body) -> conv body >>| LPS.node
   | S.Projection (var, field) ->
-      ( match var |> WithPos.node with
+      (match var |> WithPos.node with
       | S.Var v' ->
           if v = v' then Result.return ()
           else
@@ -94,17 +94,17 @@ let rec lens_sugar_phrase_of_body v p =
       | _ ->
           Format.asprintf "Unexpected expression to project on: %a" S.pp_phrase
             var
-          |> Error.internal_error_res )
+          |> Error.internal_error_res)
       >>| fun () -> LPS.Var field
   | _ ->
       Format.asprintf
         "Unsupported sugar phrase in lens sugar phrase of body: %a" S.pp_phrase
         p
-      |> Error.internal_error_res )
+      |> Error.internal_error_res)
   >>| fun v -> (pos, v)
 
 let lens_sugar_phrase_of_sugar p =
-  ( match WithPos.node p with
+  (match WithPos.node p with
   | S.FunLit (_, _, Sugartypes.NormalFunlit ([ [ var ] ], body), _) -> (
       let var = WithPos.node var in
       match var with
@@ -112,7 +112,7 @@ let lens_sugar_phrase_of_sugar p =
           lens_sugar_phrase_of_body (S.Binder.to_name x) body
       | _ ->
           Format.asprintf "Unsupported binder: %a" S.pp_phrase p
-          |> Error.internal_error_res )
+          |> Error.internal_error_res)
   | S.FunLit (_, _, Sugartypes.SwitchFunlit (_, _), _) -> assert false
-  | _ -> lens_sugar_phrase_of_body "" p )
+  | _ -> lens_sugar_phrase_of_body "" p)
   |> Result.ok_exn

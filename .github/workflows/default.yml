@@ -33,7 +33,7 @@ jobs:
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
-      - run: opam install -y ocamlformat.0.14.2
+      - run: opam install -y ocamlformat.0.19.0
 
       - name: Ad-hoc rule check
         run: |
@@ -343,94 +343,95 @@ jobs:
           LINKS_MYSQL_PORT: ${{ job.services.mysql.ports[3306] }}
         shell: bash
 
-  webbrowser:
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-20.04
-        ocaml-compiler:
-          - 4.08.0
-        browser:
-          - firefox
-          - chrome
+  # webbrowser:
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       os:
+  #         - ubuntu-20.04
+  #       ocaml-compiler:
+  #         - 4.08.0
+  #       browser:
+  #         - firefox
+  #         # - chrome # The Selenium Chrome driver does not work with
+  #         # the latest stable Chrome browser. Disabled until we have a robust solution.
 
-    env:
-      LINKS_BROWSER: ${{ matrix.browser }}
-      NPM_DIR: tests/headless
+  #   env:
+  #     LINKS_BROWSER: ${{ matrix.browser }}
+  #     NPM_DIR: tests/headless
 
-    runs-on: ${{ matrix.os }}
+  #   runs-on: ${{ matrix.os }}
 
-    services:
-      postgres:
-        image: postgres:12
-        env:
-          POSTGRES_DB: links
-          POSTGRES_PASSWORD: links
-          POSTGRES_PORT: 5432
-          POSTGRES_USER: links
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+  #   services:
+  #     postgres:
+  #       image: postgres:12
+  #       env:
+  #         POSTGRES_DB: links
+  #         POSTGRES_PASSWORD: links
+  #         POSTGRES_PORT: 5432
+  #         POSTGRES_USER: links
+  #       ports:
+  #         - 5432:5432
+  #       options: >-
+  #         --health-cmd pg_isready
+  #         --health-interval 10s
+  #         --health-timeout 5s
+  #         --health-retries 5
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v2
 
-      - name: Install system dependencies
-        run: sudo apt-get install -y libev-dev
-        shell: bash
+  #     - name: Install system dependencies
+  #       run: sudo apt-get install -y libev-dev
+  #       shell: bash
 
-      - name: Use OCaml ${{ matrix.ocaml-compiler }}
-        uses: ocaml/setup-ocaml@v2
-        with:
-          ocaml-compiler: ${{ matrix.ocaml-compiler }}
+  #     - name: Use OCaml ${{ matrix.ocaml-compiler }}
+  #       uses: ocaml/setup-ocaml@v2
+  #       with:
+  #         ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
-      - run: opam install -y conf-libev
-      - run: opam install -y ounit2
+  #     - run: opam install -y conf-libev
+  #     - run: opam install -y ounit2
 
-      - name: Install Links dependencies
-        run: >-
-          opam install
-          ./links.opam
-          ./links-postgresql.opam
-          --deps-only
-          --ignore-constraints-on=links
+  #     - name: Install Links dependencies
+  #       run: >-
+  #         opam install
+  #         ./links.opam
+  #         ./links-postgresql.opam
+  #         --deps-only
+  #         --ignore-constraints-on=links
 
-      - name: Build Links from source
-        run: |
-          eval $(opam env)
-          make all-ci
-        shell: bash
+  #     - name: Build Links from source
+  #       run: |
+  #         eval $(opam env)
+  #         make all-ci
+  #       shell: bash
 
-      - uses: actions/checkout@v2
-        with:
-          repository: dhil/links-database-setup
-          path: ./links-database-setup
+  #     - uses: actions/checkout@v2
+  #       with:
+  #         repository: dhil/links-database-setup
+  #         path: ./links-database-setup
 
-      - name: Populate database
-        run: |
-          for f in `ls *.sql`; do
-            createdb -h localhost -U links -O links ${f%.sql};
-          done
-          for f in `ls *.sql`; do psql -h localhost -U links -d ${f%.sql} < $f; done
-        working-directory: links-database-setup
-        env:
-          PGPASSWORD: links
+  #     - name: Populate database
+  #       run: |
+  #         for f in `ls *.sql`; do
+  #           createdb -h localhost -U links -O links ${f%.sql};
+  #         done
+  #         for f in `ls *.sql`; do psql -h localhost -U links -d ${f%.sql} < $f; done
+  #       working-directory: links-database-setup
+  #       env:
+  #         PGPASSWORD: links
 
-      - run: npm ci
-        working-directory: ${{ env.NPM_DIR }}
+  #     - run: npm ci
+  #       working-directory: ${{ env.NPM_DIR }}
 
-      - run: npm test
-        working-directory: ${{ env.NPM_DIR }}
-        env:
-          LINKS_POSTGRES_HOST: localhost
-          LINKS_POSTGRES_USER: links
-          LINKS_POSTGRES_PASSWORD: links
-          LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
-          POSTGRES_USER: links
-          POSTGRES_PASSWORD: links
+  #     - run: npm test
+  #       working-directory: ${{ env.NPM_DIR }}
+  #       env:
+  #         LINKS_POSTGRES_HOST: localhost
+  #         LINKS_POSTGRES_USER: links
+  #         LINKS_POSTGRES_PASSWORD: links
+  #         LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+  #         POSTGRES_USER: links
+  #         POSTGRES_PASSWORD: links

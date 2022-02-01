@@ -1,6 +1,6 @@
 # Installing Links
 
-We recommend installing Links using the OPAM tool, available from [opam.ocaml.org](https://opam.ocaml.org/).
+We recommend installing Links using the OPAM tool (version >= 2.1), available from [opam.ocaml.org](https://opam.ocaml.org/).
 
 Links requires at least OCaml 4.08.0 to build and install. Therefore
 you should first install the minimum (or greater) required version of
@@ -10,27 +10,13 @@ OCaml:
 $ opam switch install 4.08.0
 ```
 
-Next you should install the install the system dependencies for Links:
-
-```
-$ opam install depext
-$ opam depext links
-```
-
-If you wish to use Links' database functionality, you also have to install one (or all) 
-of database management systems that you wish to use on your system:
-
-```
-$ opam depext links-postgresql links-mysql links-sqlite3
-```
-
 You can then install Links and its database drivers simply by issuing the commands:
 
 ```
 $ opam install links links-postgresql links-mysql links-sqlite3
 ```
 
-Alternatively, if you don't have PostgreSQL installed then do:
+Alternatively, if you don't have PostgreSQL, MySQL, and Sqlite3 installed then do:
 
 ```
 $ opam install links

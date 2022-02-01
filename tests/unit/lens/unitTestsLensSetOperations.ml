@@ -100,12 +100,9 @@ let test_data_9 =
       ]
     ~neg:[]
 ;;
-Sorted.sort test_data_1
-;;
-Sorted.sort test_data_2
-;;
-Sorted.sort test_data_3
-;;
+Sorted.sort test_data_1;;
+Sorted.sort test_data_2;;
+Sorted.sort test_data_3;;
 Sorted.sort test_data_4
 
 let test_construct_set _test_ctx =
@@ -294,7 +291,7 @@ let test_find_all_1 test_ctx =
           [ box_int 9; box_string "0123" ];
           [ box_int 9; box_string "01234" ];
           [ box_int 9; box_string "9012" ];
-        ] )
+        ])
 
 let test_join_1 test_ctx =
   let data_l = test_data_4 in
@@ -316,7 +313,7 @@ let test_join_1 test_ctx =
           [ box_int 5; box_string "abc"; box_string "table" ];
           [ box_int 5; box_string "abc"; box_string "this" ];
           [ box_int 14; box_string "9012"; box_string "exists" ];
-        ] )
+        ])
 
 let test_join_neg_1 test_ctx =
   let data_l = test_data_6 in
@@ -330,7 +327,7 @@ let test_join_neg_1 test_ctx =
     (Format.asprintf "%a" Sorted.pp_tabular joined);
   assert (
     Sorted.plus_rows joined
-    = Array.of_list [ [ box_int 2; box_string "12"; box_string "data" ] ] );
+    = Array.of_list [ [ box_int 2; box_string "12"; box_string "data" ] ]);
   assert (
     Sorted.neg_rows joined
     = Array.of_list
@@ -338,7 +335,7 @@ let test_join_neg_1 test_ctx =
           [ box_int 3; box_string "this"; box_string "in" ];
           [ box_int 5; box_string "abc"; box_string "other" ];
           [ box_int 14; box_string "9012"; box_string "exists" ];
-        ] )
+        ])
 
 let test_relational_update_1 test_ctx =
   let data = test_data_4 in

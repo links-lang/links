@@ -24,7 +24,7 @@ let rec filter_map f v () =
   | Cons (v, r) -> (
       match f v with
       | None -> filter_map f r ()
-      | Some v -> Cons (v, filter_map f r) )
+      | Some v -> Cons (v, filter_map f r))
 
 let rec fold_left f initial seq =
   match seq () with

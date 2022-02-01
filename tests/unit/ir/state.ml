@@ -103,7 +103,7 @@ module List = struct
             let r, st = f x st in
             match r with
             | Result.Error _ -> (r, st)
-            | Result.Ok () -> iter ~f xs st )
+            | Result.Ok () -> iter ~f xs st)
   end
 end
 
