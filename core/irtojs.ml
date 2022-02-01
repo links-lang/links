@@ -101,8 +101,8 @@ module Code = struct
       let nil = Var "LINKEDLIST.Nil"
       let cons = Var "LINKEDLIST.Cons"
 
-      let hd = Var "LINKEDLIST.hd"
-      let tl = Var "LINKEDLIST.tl"
+      let hd = Var "LINKEDLIST.head"
+      let tl = Var "LINKEDLIST.tail"
 
       let append = Var "LINKEDLIST.append"
     end
@@ -114,6 +114,19 @@ module Code = struct
     module Math = struct
       let floor = Var "Math.floor"
       let pow = Var "Math.pow"
+    end
+  end
+
+  module Aux = struct
+    let call f args = Call (f, args)
+
+    module List = struct
+      let cons x xs =
+        call Runtime.List.cons [x; xs]
+      let head xs =
+        call Runtime.List.hd [xs]
+      let tail xs =
+        call Runtime.List.tl [xs]
     end
   end
 end
@@ -577,10 +590,8 @@ module Higher_Order_Continuation : CONTINUATION = struct
          | Identity
 
   (* Auxiliary functions for manipulating the continuation stack *)
+  include Code.Aux.List
   let nil = Code.Runtime.List.nil
-  let cons x xs = Code.(Call (Runtime.List.cons, [x; xs]))
-  let head xs = Code.(Call (Runtime.List.hd, [xs]))
-  let tail xs = Code.(Call (Runtime.List.tl, [xs]))
   let toplevel = Cons (Code.Var "_idk", Cons (Code.Var "_efferr", Reflect nil))
 
   let reflect x = Reflect x
@@ -634,8 +645,8 @@ module Higher_Order_Continuation : CONTINUATION = struct
   let apply ?(strategy=`Yield) k arg =
     let open Code in
     match strategy with
-    | `Direct -> Call (Var "_applyCont", [reify k; arg])
-    | _       -> Call (Var "_yieldCont", [reify k; arg])
+    | `Direct -> Aux.call (Var "_applyCont") [reify k; arg]
+    | _       -> Aux.call (Var "_yieldCont") [reify k; arg]
 
   let primitive_bindings =
     "function _makeCont(k) {\n" ^
@@ -707,6 +718,10 @@ module CPS_Compiler: functor (K : CONTINUATION) -> sig
 end = functor (K : CONTINUATION) -> struct
   type continuation = K.t
 
+  open Code.Aux.List
+
+  let call = Code.Aux.call
+
   let apply_yielding f args k =
     let open Code in
     Call (Var "_yield", f :: (args @ [K.reify k]))
@@ -769,13 +784,13 @@ end = functor (K : CONTINUATION) -> struct
          match rest with
          | None -> dict
          | Some v ->
-            Call (Runtime.LINKS.union, [gv v; dict])
+            call Runtime.LINKS.union [gv v; dict]
        end
     | Project (name, v) ->
-       Call (Runtime.LINKS.project, [gv v; strlit name])
+       call Runtime.LINKS.project [gv v; strlit name]
     | Erase (names, v) ->
-       Call (Runtime.LINKS.erase,
-             [gv v; Arr (List.map strlit (StringSet.elements names))])
+       call Runtime.LINKS.erase
+         [gv v; Arr (List.map strlit (StringSet.elements names))]
     | Inject (name, v, _t) ->
        Dict [("_label", strlit name);
              ("_value", gv v)]
@@ -807,40 +822,37 @@ end = functor (K : CONTINUATION) -> struct
                  if Lib.is_primitive f_name
                    && not (List.mem f_name cps_prims)
                    && not (Location.is_server (Lib.primitive_location f_name))
-                 then
-                   Call (Var ("_" ^ f_name), List.map gv vs)
-                 else
-                   Call (gv (Variable f), List.map gv vs)
+                 then call (Var ("_" ^ f_name)) (List.map gv vs)
+                 else call (gv (Variable f)) (List.map gv vs)
             end
-         | _ ->
-            Call (gv f, List.map gv vs)
+         | _ -> call (gv f) (List.map gv vs)
        end
     | Closure (f, _, v) ->
        if session_exceptions_enabled
-       then Call (Var "partialApplySE", [gv (Variable f); gv v])
-       else Call (Var "partialApply", [gv (Variable f); gv v])
+       then call (Var "partialApplySE") [gv (Variable f); gv v]
+       else call (Var "partialApply") [gv (Variable f); gv v]
     | Coerce (v, _) ->
        gv v
 
   and generate_xml env tag attrs children =
     let open Code in
-    Call(Runtime.LINKS.xml,
-         [Constructors.strlit tag;
-          Dict (StringMap.fold (fun name v bs ->
-            (name, generate_value env v) :: bs) attrs []);
-          Arr (List.map (generate_value env) children)])
+    call Runtime.LINKS.xml
+      [Constructors.strlit tag;
+       Dict (StringMap.fold (fun name v bs ->
+           (name, generate_value env v) :: bs) attrs []);
+       Arr (List.map (generate_value env) children)]
 
   let generate_remote_call f_var xs_names env =
     let open Code in
-    Call(Call (Runtime.LINKS.remoteCall, [Var __kappa]),
-         [Constructors.intlit f_var;
-          env;
-          Dict (
-            List.map2
-              (fun n v -> string_of_int n, Var v)
-              (Utility.fromTo 1 (1 + List.length xs_names))
-              xs_names
-          )])
+    call (call Runtime.LINKS.remoteCall [Var __kappa])
+          [Constructors.intlit f_var;
+           env;
+           Dict (
+             List.map2
+               (fun n v -> string_of_int n, Var v)
+               (Utility.fromTo 1 (1 + List.length xs_names))
+               xs_names
+           )]
 
 
 (** Generate stubs for processing functions serialised in remote calls *)
@@ -870,8 +882,8 @@ end = functor (K : CONTINUATION) -> struct
            let xs_names'' = xs_names'@[__kappa] in
            LetFun ((Js.var_name_binder fb,
                     xs_names'',
-                    Call (Var (snd (name_binder fb)),
-                          List.map (fun x -> Var x) xs_names''),
+                    call (Var (snd (name_binder fb)))
+                          (List.map (fun x -> Var x) xs_names''),
                     fn_location),
                    code)
         | Location.Server ->
@@ -972,7 +984,7 @@ end = functor (K : CONTINUATION) -> struct
               && not (List.mem f_name cps_prims)
               && not (Location.is_server (Lib.primitive_location f_name))
               then
-                let arg = Call (Var ("_" ^ f_name), List.map gv vs) in
+                let arg = call (Var ("_" ^ f_name)) (List.map gv vs) in
                 K.apply ~strategy:`Direct kappa arg
               else if f_name = "receive" && session_exceptions_enabled then
                 let code_vs = List.map gv vs in
@@ -1044,7 +1056,7 @@ end = functor (K : CONTINUATION) -> struct
          K.bind kappa
            (fun kappa -> apply_yielding (gv v) [K.reify kappa] kappa)
       | Select (l, c) ->
-         let arg = Call (Var "_send", [Dict ["_label", strlit l; "_value", Dict []]; gv c]) in
+         let arg = call (Var "_send") [Dict ["_label", strlit l; "_value", Dict []]; gv c] in
          K.apply ~strategy:`Direct kappa arg
       | Choice (c, bs) ->
          let result = gensym () in
@@ -1052,8 +1064,8 @@ end = functor (K : CONTINUATION) -> struct
          let bind, skappa, skappas = K.pop kappa in
          let skappa' =
            contify (fun kappa ->
-             let scrutinee = Call (Runtime.LINKS.project, [Var result; strlit "1"]) in
-             let channel = Call (Runtime.LINKS.project, [Var result; strlit "2"]) in
+             let scrutinee = call Runtime.LINKS.project [Var result; strlit "1"] in
+             let channel = call Runtime.LINKS.project [Var result; strlit "2"] in
              let generate_branch (cb, b) =
                let (c, cname) = name_binder cb in
                cname, Bind (cname, channel, snd (generate_computation (VEnv.bind c cname env) b K.(skappa <> kappa))) in
@@ -1063,17 +1075,15 @@ end = functor (K : CONTINUATION) -> struct
          let cont = K.(skappa' <> skappas) in
          if (session_exceptions_enabled) then
            let action cancel_stub =
-             Call (Var "receive", [gv c; cancel_stub; K.reify cont]) in
+             call (Var "receive") [gv c; cancel_stub; K.reify cont]
+           in
            bind (generate_cancel_stub env action cont)
          else
-           bind (Call (Var "receive", [gv c; K.reify cont]))
+           bind (call (Var "receive") [gv c; K.reify cont])
       | DoOperation (name, args, _) ->
          let maybe_box = function
            | [v] -> gv v
            | vs -> Dict (List.mapi (fun i v -> (string_of_int @@ i + 1, gv v)) vs)
-         in
-         let cons k ks =
-           Call (Runtime.List.cons, [k;ks])
          in
          let nil = Runtime.List.nil in
          K.bind kappa
@@ -1117,14 +1127,11 @@ end = functor (K : CONTINUATION) -> struct
          (*          (apply_yielding (K.reify seta) [op] kappas))) *)
       | Handle { Ir.ih_comp = comp; Ir.ih_cases = eff_cases; Ir.ih_return = return; Ir.ih_depth = depth } ->
          let comp_env = env in
-         let cons v vs =
-           Call (Runtime.List.cons, [v; vs])
-         in
          let project record label =
-           Call (Runtime.LINKS.project, [record; label])
+           call Runtime.LINKS.project [record; label]
          in
          let vmap r y =
-           Call (Var "_vmapOp", [r; y])
+           call (Var "_vmapOp") [r; y]
          in
          let generate_body env (x, n) body kappas =
            let env' = VEnv.bind x n env in
@@ -1168,8 +1175,8 @@ end = functor (K : CONTINUATION) -> struct
               in
               let make_resumption s =
                 if is_parameterised
-                then Call (Var "_make_parameterised_resumption", [Var (snd @@ name_binder param_ptr_binder); s])
-                else Call (Var "_make_resumption", [s])
+                then call (Var "_make_parameterised_resumption") [Var (snd @@ name_binder param_ptr_binder); s]
+                else call (Var "_make_resumption") [s]
               in
               env, comp, make_resumption, initial_parameterise, parameterise
             in
@@ -1210,7 +1217,7 @@ end = functor (K : CONTINUATION) -> struct
                            probably be apply_yielding rather than a
                            raw Call because _handleSessionException
                            makes use of the call stack. *)
-                              Bind (dummy_var_name, Call (Var "_handleSessionException", [Var x_name]),
+                              Bind (dummy_var_name, call (Var "_handleSessionException") [Var x_name],
                                     generate_body env xb (parameterise body) kappas))
               in
               let eff_cases kappas =
@@ -1362,7 +1369,7 @@ end = functor (K : CONTINUATION) -> struct
       (state,
        varenv,
        Some x_name,
-       fun code -> Bind (x_name, Call (Runtime.JSON.parse, [Constructors.strlit jsonized_val]), code))
+       fun code -> Bind (x_name, call Runtime.JSON.parse [Constructors.strlit jsonized_val], code))
     | Fun def ->
       let {fn_binder = fb; _} = def
       in
