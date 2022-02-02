@@ -4004,6 +4004,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
             | Meta pt            -> meta ctx pt
             | Present t          -> with_value presence t
+            | Absent             -> constant "-"
             | Primitive t        -> with_value primitive t
 
             | Function f         -> let ambient = if Context.is_ambient_effect ctx
