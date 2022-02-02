@@ -262,8 +262,8 @@ let rec reduce_for_source : Q.env -> var * Q.t * Types.datatype -> (Q.env -> (Q.
           (* this ensures os' is added to the right of the final comprehension, and further inner orderings to the right of os' *)
           let body' = fun env' os_f -> body env' (os_f ->- add_os os') in
           reduce_for_body (gs, [], reduce_for_source env (x,v,tyv) body')
-        | Q.Table Value.{ row; _ }
-        | Q.Dedup (Q.Table Value.{ row; _ }) ->
+        | Q.Table Value.Table.{ row; _ }
+        | Q.Dedup (Q.Table Value.Table.{ row; _ }) ->
             (* we need to generate a fresh variable in order to
               correctly handle self joins *)
             let y = Var.fresh_raw_var () in

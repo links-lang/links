@@ -54,7 +54,8 @@ type xmlitem =   Text of string
 and xml = xmlitem list
   [@@deriving show,yojson]
 
-type table = {
+module Table: sig
+  type t = {
   database: (database * string);
   name: string;
   keys: string list list;
@@ -62,7 +63,11 @@ type table = {
   temporal_fields: (string * string) option;
   row: Types.row'
   }
-  [@@deriving show]
+[@@deriving show]
+end
+
+type table = Table.t
+    [@@deriving show]
 
 val make_table :
   database:(database * string) ->

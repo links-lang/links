@@ -143,7 +143,7 @@ module Compressible = struct
       | `Int i -> `Int i
       | `XML x -> `XML x
       | `String s -> `String s
-      | `Table { database = (_, db); name; keys; temporality; temporal_fields; row } ->
+      | `Table Value.Table.({ database = (_, db); name; keys; temporality; temporal_fields; row }) ->
           let type_str =
             Types.string_of_datatype (Types.Record (Types.Row row))
           in

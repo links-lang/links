@@ -800,7 +800,7 @@ module TemporalJoin = struct
 
       method! query =
         let open Q in
-        let open Value in
+        let open Value.Table in
         let app prim args = Apply (Primitive prim, args) in
         function
           | For (tag, gens, os, body) ->

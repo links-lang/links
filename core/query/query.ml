@@ -160,7 +160,7 @@ let rec reduce_for_source : Q.t * (Q.t -> Q.t) -> Q.t =
 
           *)
           reduce_for_body (gs, os, rs v)
-        | Q.Table (Value.{ row; temporality; temporal_fields; _ } as table) ->
+        | Q.Table (Value.Table.{ row; temporality; temporal_fields; _ } as table) ->
 
           begin
               let open Temporality in

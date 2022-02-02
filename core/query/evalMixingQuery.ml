@@ -40,8 +40,8 @@ and disjunct is_set = function
 
 and generator locvars = function
 | (v, QL.Prom p) -> (S.Subquery (dependency_of_contains_free (E.contains_free locvars p), sql_of_query S.Distinct p, v))
-| (v, QL.Table Value.{ name; _}) -> (S.TableRef (name, v))
-| (v, QL.Dedup (QL.Table Value.{ name; _ })) ->
+| (v, QL.Table Value.Table.{ name; _}) -> (S.TableRef (name, v))
+| (v, QL.Dedup (QL.Table Value.Table.{ name; _ })) ->
     S.Subquery (S.Standard, S.Select (S.Distinct, S.Star, [S.TableRef (name, v)], S.Constant (Constant.Bool true), []), v)
 | (_, _arg) -> Debug.print ("error in EvalMixingQuery.disjunct: unexpected arg = " ^ QL.show _arg); failwith "generator"
 

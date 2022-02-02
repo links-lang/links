@@ -60,8 +60,8 @@ let lens_db_of_db cstr (db : Value.database) =
     serialize;
   }
 
-let lens_table_of_table (table : Value.table) =
-  let open Value in
+let lens_table_of_table (table : Value.Table.t) =
+  let open Value.Table in
   if table.temporality <> CommonTypes.Temporality.current then
     raise (Errors.runtime_error "Cannot use lenses with temporal tables.")
   else

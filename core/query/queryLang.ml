@@ -173,7 +173,7 @@ let field_types_of_row r =
         let (field_spec_map,_,_) = TypeUtils.extract_row_parts r in
           field_types_of_spec_map field_spec_map
 
-let table_field_types Value.{ row = (fields, _, _); temporal_fields; _ } =
+let table_field_types Value.Table.{ row = (fields, _, _); temporal_fields; _ } =
     (* As well as the declared fields in the table, we must also include
      * the period-stamping fields included in the temporal metadata. *)
     let dt x = (x, Types.Primitive Primitive.DateTime) in
@@ -309,7 +309,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
   | Singleton t -> Types.make_list_type (te t)
   | Record fields -> record fields
   | If (_, t, _) -> te t
-  | Table Value.{ row; _ } -> Types.make_list_type (Types.Record (Types.Row row))
+  | Table Value.Table.{ row; _ } -> Types.make_list_type (Types.Record (Types.Row row))
   | Dedup u
   | Prom u -> te u
   | Constant (Constant.Bool   _) -> Types.bool_type
@@ -383,7 +383,7 @@ let used_database : t -> Value.database option =
     function
       | Prom q -> used q
       | Dedup q -> used_item q
-      | Table Value.{ database = (db, _); _ } -> Some db
+      | Table Value.Table.{ database = (db, _); _ } -> Some db
       | For (_, gs, _, _body) -> List.map snd gs |> traverse
       | Singleton v -> used v
       | Record v ->
@@ -610,7 +610,7 @@ let rec select_clause : Sql.index -> bool -> t -> Sql.select_clause =
     | Concat _ -> assert false
     | For (_, [], _, body) ->
         select_clause index unit_query body
-    | For (_, (x, Table Value.{ name; _ })::gs, os, body) ->
+    | For (_, (x, Table Value.Table.{ name; _ })::gs, os, body) ->
         let body = select_clause index unit_query (For (None, gs, [], body)) in
         let os = List.map (base index) os in
           begin
@@ -626,7 +626,7 @@ let rec select_clause : Sql.index -> bool -> t -> Sql.select_clause =
       let (_, fields, tables, c', os) = select_clause index unit_query body in
       let c = Sql.smart_and c c' in
       (Sql.All, fields, tables, c, os)
-    | Table Value.{ name = table; row = (fields, _, _); _ } ->
+    | Table Value.Table.{ name = table; row = (fields, _, _); _ } ->
       (* eta expand tables. We might want to do this earlier on.  *)
       (* In fact this should never be necessary as it is impossible
          to produce non-eta expanded tables. *)
@@ -723,7 +723,7 @@ type let_query = let_clause list
 
 
 let gens_index (gs : (Var.var * t) list)   =
-  let open Value in
+  let open Value.Table in
   let all_fields t =
     let field_types = table_field_types t in
     labels_of_field_types field_types

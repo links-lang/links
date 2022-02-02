@@ -46,7 +46,7 @@ WARNING:
   May need to be careful about free type variables / aliases in row
 *)
 let json_of_table Value.{
-  database = (db, params); name; keys; temporality;
+  Table.database = (db, params); name; keys; temporality;
   temporal_fields; row } : Yojson.Basic.t =
 
   let json_of_key k = `List (List.map (fun x -> `String x) k) in

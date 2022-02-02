@@ -615,23 +615,21 @@ struct
         value env v >>= fun v ->
         apply_cont cont env (`Database (db_connect v))
     | Lens (table, t) ->
-      let open Lens in
       begin
-          let sort = Type.sort t in
+          let sort = Lens.Type.sort t in
           value env table >>= fun table ->
+          let open Value.Table in
           match table with
             | `Table tinfo ->
-              (* I can't get this to work without turning the warning off, even
-                 with "Value" in scope. *)
-              let [@warning "-40"] (db, cstr) = tinfo.database in
-              let [@warning "-40"] table = tinfo.name in
+              let (db, cstr) = tinfo.database in
+              let table = tinfo.name in
               let database = Lens_database_conv.lens_db_of_db cstr db in
-              let sort = Sort.update_table_name sort ~table in
+              let sort = Lens.Sort.update_table_name sort ~table in
               let table = Lens_database_conv.lens_table_of_table tinfo in
-                 apply_cont cont env (`Lens (database, Value.Lens { sort; table; }))
+                 apply_cont cont env (`Lens (database, Lens.Value.Lens { sort; table; }))
             | `List records ->
               let records = List.map Lens_value_conv.lens_phrase_value_of_value records in
-              apply_cont cont env (`Lens (Lens.Database.dummy_database, Value.LensMem { records; sort; }))
+              apply_cont cont env (`Lens (Lens.Database.dummy_database, Lens.Value.LensMem { records; sort; }))
             | _ -> raise (internal_error ("Unsupported underlying lens value."))
       end
     | LensSerial { lens; columns; _ } ->
@@ -804,9 +802,9 @@ struct
         end
     | InsertRows (tmp, source, rows) ->
         begin
-          [@warning "-40"]
           value env source >>= fun source ->
           value env rows >>= fun raw_rows ->
+          let open Value.Table in
           match source, raw_rows with
           | `Table _, `List [] ->  apply_cont cont env (`Record [])
           | `Table { database = (db, _) ; name = table_name; temporal_fields; _ }, raw_rows ->
@@ -856,7 +854,7 @@ struct
           match source, rows, returning with
           | `Table _, `List [], _ ->
               raise (internal_error "InsertReturning: undefined for empty list of rows")
-          | `Table Value.{ database = (db, _); name = table_name; _ }, rows, returning ->
+          | `Table Value.Table.{ database = (db, _); name = table_name; _ }, rows, returning ->
               let (field_names,vss) = Value.row_columns_values rows in
               let returning = Value.unbox_string returning in
               let q = QueryLang.insert table_name field_names vss in
@@ -870,7 +868,7 @@ struct
       begin
         value env source >>= fun source ->
         match source with
-          | `Table { Value.database = (db, _); name = table;
+          | `Table { Value.Table.database = (db, _); name = table;
                      row = (fields, _, _); temporal_fields; _ } ->
               let field_types =
                 StringMap.map
@@ -906,7 +904,7 @@ struct
         apply_cont cont env (`Record [])
     | Delete (del, (xb, source), where) ->
         value env source >>= fun source ->
-        let open Value in
+        let open Value.Table in
         begin
             match source with
               | `Table { database = (db, _); name = table; row = (fields, _, _); temporal_fields; _ } ->
