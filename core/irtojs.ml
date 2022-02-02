@@ -79,18 +79,18 @@ module Code = struct
 
   module Runtime = struct
 
-    module LINKS = struct
-      let project = Var "LINKS.project"
-      let erase   = Var "LINKS.erase"
-      let union   = Var "LINKS.union"
-      let remoteCall = Var "LINKS.remoteCall"
-      let xml = Var "LINKS.XML"
-      let eq = Var "LINKS.eq"
-      let neq = Var "LINKS.neq"
-      let gt = Var "LINKS.gt"
-      let lt = Var "LINKS.lt"
-      let gte = Var "LINKS.gte"
-      let lte = Var "LINKS.lte"
+    module Links = struct
+      let project = Var "_$Links.project"
+      let erase   = Var "_$Links.erase"
+      let union   = Var "_$Links.union"
+      let remoteCall = Var "_$Links.remoteCall"
+      let xml = Var "_$Links.XML"
+      let eq = Var "_$Links.eq"
+      let neq = Var "_$Links.neq"
+      let gt = Var "_$Links.gt"
+      let lt = Var "_$Links.lt"
+      let gte = Var "_$Links.gte"
+      let lte = Var "_$Links.lte"
     end
 
     module CONSTANTS = struct
@@ -98,13 +98,13 @@ module Code = struct
     end
 
     module List = struct
-      let nil = Var "LINKEDLIST.Nil"
-      let cons = Var "LINKEDLIST.Cons"
+      let nil = Var "_$List.Nil"
+      let cons = Var "_$List.Cons"
 
-      let hd = Var "LINKEDLIST.head"
-      let tl = Var "LINKEDLIST.tail"
+      let hd = Var "_$List.head"
+      let tl = Var "_$List.tail"
 
-      let append = Var "LINKEDLIST.append"
+      let append = Var "_$List.append"
     end
 
     module JSON = struct
@@ -119,6 +119,9 @@ module Code = struct
 
   module Aux = struct
     let call f args = Call (f, args)
+
+    let project record label =
+      call Runtime.Links.project [record; label]
 
     module List = struct
       let cons x xs =
@@ -191,22 +194,22 @@ let __kappa = Code.ObjectContinuation.__kappa
 (**
   Required runtime support (documenting any JavaScript functions used):
 
-  LINKS.concat(a, b)
+  _$Links.concat(a, b)
      concatenate two sequences: either strings or lists
-  LINKS.accum(f, i)
+  _$Links.accum(f, i)
     concatMap: apply f to every element of the sequence `i' and concatenate the results.
   _plus, _minus, etc.
     curried function versions of the standard arithmetic operators
-  LINKS.XML(tag, attrs, children)
+  _$Links.XML(tag, attrs, children)
     create a DOM node with name `tag'
                        and attributes `attrs' (a dictionary)
                        and children `children' (a sequence of DOM nodes and strings)
-  LINKS.union(r, s)
+  _$Links.union(r, s)
     return the union of the records r and s
     precondition: r and s have disjoint labels
-  LINKS.project(record, label)
+  _$Links.project(record, label)
     project a field of a record
-  LINKS.erase(record, label)
+  _$Links.erase(record, label)
     return a record like "record" but without the field labeled "label"
 
   _start(tree)
@@ -276,7 +279,7 @@ module Js_CodeGen : JS_CODEGEN = struct
            PP.vsep (punctuate " " (List.map (fun (name, vars, body, _loc) -> show_func name (Fn (vars, body))) defs)) ^^
              break ^^ show rest
         | Fn _ as f -> show_func "" f
-        | Call (Var "LINKS.project", [record; label]) ->
+        | Call (Var "_$Links.project", [record; label]) ->
            maybe_parenise record ^^ (brackets (show label))
         | Call (Var "hd", [list;kappa]) ->
            (maybe_parenise kappa) ^^ PP.text "hd" ^^ (parens (  maybe_parenise list))
@@ -399,19 +402,19 @@ struct
   let funs =
     let open Code in
     StringMap.from_alist
-      [ "==", Runtime.LINKS.eq ;
-        "<>", Runtime.LINKS.neq;
-        "<",  Runtime.LINKS.lt ;
-        ">",  Runtime.LINKS.gt ;
-        "<=", Runtime.LINKS.lte;
-        ">=", Runtime.LINKS.gte ]
+      [ "==", Runtime.Links.eq ;
+        "<>", Runtime.Links.neq;
+        "<",  Runtime.Links.lt ;
+        ">",  Runtime.Links.gt ;
+        "<=", Runtime.Links.lte;
+        ">=", Runtime.Links.gte ]
 
   let is x = StringMap.mem x funs
   let js_name op = StringMap.find op funs
   let gen op args =
     let open Code in
     match op, args with
-      | "<>", [l; r] -> Unop("!", Call (Runtime.LINKS.eq, [l; r]))
+      | "<>", [l; r] -> Unop("!", Call (Runtime.Links.eq, [l; r]))
           (* HACK
 
              This is technically wrong, but as we haven't implemented
@@ -721,6 +724,7 @@ end = functor (K : CONTINUATION) -> struct
   open Code.Aux.List
 
   let call = Code.Aux.call
+  let project = Code.Aux.project
 
   let apply_yielding f args k =
     let open Code in
@@ -784,12 +788,12 @@ end = functor (K : CONTINUATION) -> struct
          match rest with
          | None -> dict
          | Some v ->
-            call Runtime.LINKS.union [gv v; dict]
+            call Runtime.Links.union [gv v; dict]
        end
     | Project (name, v) ->
-       call Runtime.LINKS.project [gv v; strlit name]
+       project (gv v) (strlit name)
     | Erase (names, v) ->
-       call Runtime.LINKS.erase
+       call Runtime.Links.erase
          [gv v; Arr (List.map strlit (StringSet.elements names))]
     | Inject (name, v, _t) ->
        Dict [("_label", strlit name);
@@ -836,7 +840,7 @@ end = functor (K : CONTINUATION) -> struct
 
   and generate_xml env tag attrs children =
     let open Code in
-    call Runtime.LINKS.xml
+    call Runtime.Links.xml
       [Constructors.strlit tag;
        Dict (StringMap.fold (fun name v bs ->
            (name, generate_value env v) :: bs) attrs []);
@@ -844,7 +848,7 @@ end = functor (K : CONTINUATION) -> struct
 
   let generate_remote_call f_var xs_names env =
     let open Code in
-    call (call Runtime.LINKS.remoteCall [Var __kappa])
+    call (call Runtime.Links.remoteCall [Var __kappa])
           [Constructors.intlit f_var;
            env;
            Dict (
@@ -1064,8 +1068,8 @@ end = functor (K : CONTINUATION) -> struct
          let bind, skappa, skappas = K.pop kappa in
          let skappa' =
            contify (fun kappa ->
-             let scrutinee = call Runtime.LINKS.project [Var result; strlit "1"] in
-             let channel = call Runtime.LINKS.project [Var result; strlit "2"] in
+             let scrutinee = project (Var result) (strlit "1") in
+             let channel = project (Var result) (strlit "2") in
              let generate_branch (cb, b) =
                let (c, cname) = name_binder cb in
                cname, Bind (cname, channel, snd (generate_computation (VEnv.bind c cname env) b K.(skappa <> kappa))) in
@@ -1127,9 +1131,6 @@ end = functor (K : CONTINUATION) -> struct
          (*          (apply_yielding (K.reify seta) [op] kappas))) *)
       | Handle { Ir.ih_comp = comp; Ir.ih_cases = eff_cases; Ir.ih_return = return; Ir.ih_depth = depth } ->
          let comp_env = env in
-         let project record label =
-           call Runtime.LINKS.project [record; label]
-         in
          let vmap r y =
            call (Var "_vmapOp") [r; y]
          in

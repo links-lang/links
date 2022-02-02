@@ -35,13 +35,13 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
         script_tag("    function _getDatabaseConfig() {
      return {}
     }
-    var getDatabaseConfig = LINKS.kify(_getDatabaseConfig);\n")
+    var getDatabaseConfig = _$Links.kify(_getDatabaseConfig);\n")
       else
         script_tag("    function _getDatabaseConfig() {
       return {driver:'" ^ from_option "" (Settings.get DatabaseDriver.driver) ^
                       "', args:'" ^ from_option "" (Settings.get Database.connection_info) ^"'}
     }
-    var getDatabaseConfig = LINKS.kify(_getDatabaseConfig);\n") in
+    var getDatabaseConfig = _$Links.kify(_getDatabaseConfig);\n") in
     let env =
       script_tag("  var cgiEnv = {" ^
                     mapstrcat "," (fun (name, value) -> "'" ^ name ^ "':'" ^ value ^ "'") cgi_env ^
@@ -78,7 +78,7 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
   (* generate code to resolve JSONized toplevel let-bound values *)
   let resolve_toplevel_values : string list -> string =
     fun names ->
-      String.concat "" (List.map (fun name -> "    " ^ name ^ " = LINKS.resolveValue(state, " ^ name ^ ");\n") names)
+      String.concat "" (List.map (fun name -> "    " ^ name ^ " = _$Links.resolveValue(state, " ^ name ^ ");\n") names)
 
   let page : ?cgi_env:(string * string) list ->
              wsconn_url:(Webserver_types.websocket_url option) ->
