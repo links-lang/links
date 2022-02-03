@@ -274,13 +274,14 @@ class virtual printer =
             Format.pp_print_string (order_by_clause n)
       | Union (mult, qs, n) ->
         let pp_sep_union ppf () = Format.fprintf ppf "\nunion %a\n" pp_all mult in
-        let pp_value ppf x =
+        let pp_union_term ppf x =
           match x with  (* parenthesize safely wrt SQL standard *)
           | Select _ -> pr_q ppf x
           | _ -> Format.fprintf ppf "select * from (%a)" pr_q x
-        in
-        Format.fprintf ppf "%a%a"
-          (Format.pp_print_list ~pp_sep:pp_sep_union pp_value) qs
+        in 
+          (* defensively add a select in case there is an order by clause *)
+        Format.fprintf ppf "select * from (%a)%a"
+          (Format.pp_print_list ~pp_sep:pp_sep_union pp_union_term) qs
           Format.pp_print_string (order_by_clause n)
       | Select (_, fields, [], Constant (Constant.Bool true), _os) ->
         Format.fprintf ppf "select %a" pp_fields fields
