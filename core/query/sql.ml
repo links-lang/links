@@ -278,7 +278,7 @@ class virtual printer =
           match x with  (* parenthesize safely wrt SQL standard *)
           | Select _ -> pr_q ppf x
           | _ -> Format.fprintf ppf "select * from (%a)" pr_q x
-        in 
+        in
         Format.fprintf ppf "%a%a"
           (Format.pp_print_list ~pp_sep:pp_sep_union pp_union_term) qs
           Format.pp_print_string (order_by_clause n)
