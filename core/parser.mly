@@ -322,6 +322,7 @@ let parse_foreign_language pos lang =
 %token MU FORALL ALIEN SIG UNSAFE
 %token MODULE MUTUAL OPEN IMPORT
 %token BANG QUESTION
+%token CAPITAL_LAMBDA
 %token PERCENT EQUALSTILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR AT
 %token <char*char> RANGE
 %token <string> QUOTEDMETA
@@ -484,6 +485,10 @@ signature:
 
 typedecl:
 | TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (Typenames [with_pos $loc ($2, $3, datatype $5)]) }
+
+(* Lists of quantifiers in square brackets denote type abstractions *)
+type_abstracion_vars:
+| LBRACKET varlist RBRACKET                                    { $2 }
 
 typeargs_opt:
 | /* empty */                                                  { [] }
@@ -665,6 +670,7 @@ typed_expression:
 | logical_expression                                           { $1 }
 | typed_expression COLON datatype                              { with_pos $loc (TypeAnnotation ($1, datatype $3)) }
 | typed_expression COLON datatype LARROW datatype              { with_pos $loc (Upcast ($1, datatype $3, datatype $5)) }
+| CAPITAL_LAMBDA type_abstracion_vars DOT block                { type_abstraction ~ppos:$loc $2 $4 }
 
 db_expression:
 | DELETE LPAREN table_generator RPAREN perhaps_where           { let pat, phrase = $3 in with_pos $loc (DBDelete (pat, phrase, $5)) }
