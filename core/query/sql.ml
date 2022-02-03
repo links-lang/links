@@ -275,9 +275,9 @@ class virtual printer =
       | Union (mult, qs, n) ->
         let pp_sep_union ppf () = Format.fprintf ppf "\nunion %a\n" pp_all mult in
         let pp_value ppf x =
-          match q with  (* parenthesize safely wrt SQL standard *)
+          match x with  (* parenthesize safely wrt SQL standard *)
           | Select _ -> Format.fprintf ppf "%a" pr_q x
-          | _ -> Format.fprintf ppf "select * from (%a) where 1=1" pr_q x
+          | _ -> Format.fprintf ppf "select * from (%a)" pr_q x
         in
         Format.fprintf ppf "%a%a"
           (Format.pp_print_list ~pp_sep:pp_sep_union pp_value) qs
