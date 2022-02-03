@@ -251,6 +251,7 @@ val is_builtin_effect : string -> bool
 
 (** get type variables *)
 val free_type_vars : datatype -> TypeVarSet.t
+val free_flexible_type_vars : datatype -> TypeVarSet.t
 val free_row_type_vars : row -> TypeVarSet.t
 val free_tyarg_vars : type_arg -> TypeVarSet.t
 val free_bound_type_vars          : typ      -> Vars.vars_list
