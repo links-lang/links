@@ -211,7 +211,6 @@ let rec reduce_where_then (c, t) =
 let rec reduce_for_body (gs, os, body) =
   let rb = reduce_for_body in
   match body with
-    (* | Concat []                 -> body *)
     | Q.For (_, gs', os', body') -> rb (gs @ gs', os @ os', body')
     (* | Prom _ as u               ->
           let z = Var.fresh_raw_var () in
