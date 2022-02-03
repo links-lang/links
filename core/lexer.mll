@@ -69,7 +69,6 @@ let keywords = [
  "client"   , CLIENT;
  "database" , DATABASE;
  "default"  , DEFAULT;
- (*"delete"   , DELETE;*)
  "delete_left", DELETE_LEFT;
  "determined", DETERMINED;
  "do"       , DOOP;
@@ -132,7 +131,6 @@ let keywords = [
  "tt_insert" , TTINSERT;
  "tt_join"   , TTJOIN;
  "typename" , TYPENAME;
- (* "update"   , UPDATE; *)
  "unsafe"   , UNSAFE;
  "using"    , USING;
  "valid"    , VALID;
