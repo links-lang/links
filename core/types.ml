@@ -1962,6 +1962,17 @@ struct
   let find_spec var tbl =      Hashtbl.find tbl var
 end
 
+let free_flexible_type_vars t =
+  let free_vars = Vars.free_bound_type_vars TypeVarSet.empty t in
+  let add_if_flexible set var_entry =
+    let (id, (flavour, _kind, _scope)) = var_entry in
+    if flavour = `Flexible then
+      TypeVarSet.add id set
+    else
+      set
+  in
+  List.fold_left add_if_flexible TypeVarSet.empty free_vars
+
 (** Type printers *)
 
 module Policy = struct
@@ -3990,6 +4001,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
             | Meta pt            -> meta ctx pt
             | Present t          -> with_value presence t
+            | Absent             -> constant "-"
             | Primitive t        -> with_value primitive t
 
             | Function f         -> let ambient = if Context.is_ambient_effect ctx

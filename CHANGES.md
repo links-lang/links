@@ -1,3 +1,10 @@
+# 0.9.6
+
+* Links now supports System F-style explicit type abstractions:
+  For instance, writing `/\ [a, e::Row] { foo }` abstracts the expression `foo`
+  over type variable `a` and row variable `e`. Here, `foo` must have a unique
+  type and must be pure (to satisfy the value restriction).
+
 # 0.9.5
 
 This is a minor hotfix release.

@@ -97,7 +97,9 @@ fun test() {
   assertEq(tableLength(), 3);
   assertEq(lookupFactorials(3), [(i=1, f=1), (i=2, f=2), (f=6,i=3)]);
   assertEq(trivialNested1(),[(a=0),(a=0),(a=0)]);
-  assertEq(trivialNested2(),[(a=0),(a=0),(a=0)])
+  assertEq(trivialNested2(),[(a=0),(a=0),(a=0)]);
+  assertEq(query  { for (x <-- factorials) where (x.i == 1) [(a=x.i),(a=x.i)] },
+           [(a = 1), (a = 1)])
 }
 
 test()
