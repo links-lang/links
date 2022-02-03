@@ -43,7 +43,7 @@ to work seamlessly with timestamps in the database.
 Obtain a DateTime via:
 
   *  the `now()` function to get a timestamp for the current local time
-  *  Using `parseDate` on an ISO-formatted string (e.g., `parseDate("26-07-2021 14:26:00+1")`)
+  *  Using `parseDate` on an ISO-formatted string (e.g., `parseDate("2021-07-26 14:26:00+1")`)
   *  A `DateTime` field in the database
   *  `intToDate(X)` where `X` is a UNIX timestamp
   *  `beginningOfTime` and `forever`, which are special timestamps guaranteed to be less than (resp. greater than) all other timestamps
