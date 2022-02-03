@@ -279,8 +279,7 @@ class virtual printer =
           | Select _ -> pr_q ppf x
           | _ -> Format.fprintf ppf "select * from (%a)" pr_q x
         in 
-          (* defensively add a select in case there is an order by clause *)
-        Format.fprintf ppf "select * from (%a)%a"
+        Format.fprintf ppf "%a%a"
           (Format.pp_print_list ~pp_sep:pp_sep_union pp_union_term) qs
           Format.pp_print_string (order_by_clause n)
       | Select (_, fields, [], Constant (Constant.Bool true), _os) ->
