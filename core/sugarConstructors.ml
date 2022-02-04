@@ -207,6 +207,9 @@ module SugarConstructors (Position : Pos)
   let module_binding ?(ppos=dp) binder members =
     with_pos ppos (Module { binder; members })
 
+  let type_abstraction ?(ppos=dp) tyvars phrase =
+    with_pos ppos (TAbstr (tyvars, phrase))
+
   (** Database queries *)
 
   (* Create a list of labeled database expressions. *)
