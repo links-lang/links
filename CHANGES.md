@@ -1,3 +1,10 @@
+# 0.9.6
+
+* Links now supports System F-style explicit type abstractions:
+  For instance, writing `/\ [a, e::Row] { foo }` abstracts the expression `foo`
+  over type variable `a` and row variable `e`. Here, `foo` must have a unique
+  type and must be pure (to satisfy the value restriction).
+
 # 0.9.5
 
 This is a minor hotfix release.
@@ -36,7 +43,7 @@ to work seamlessly with timestamps in the database.
 Obtain a DateTime via:
 
   *  the `now()` function to get a timestamp for the current local time
-  *  Using `parseDate` on an ISO-formatted string (e.g., `parseDate("26-07-2021 14:26:00+1")`)
+  *  Using `parseDate` on an ISO-formatted string (e.g., `parseDate("2021-07-26 14:26:00+1")`)
   *  A `DateTime` field in the database
   *  `intToDate(X)` where `X` is a UNIX timestamp
   *  `beginningOfTime` and `forever`, which are special timestamps guaranteed to be less than (resp. greater than) all other timestamps

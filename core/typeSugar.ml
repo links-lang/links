@@ -406,6 +406,8 @@ sig
   val inconsistent_quantifiers :
     pos:Position.t -> t1:Types.datatype -> t2:Types.datatype -> unit
 
+  val tabstr_ambiguous_type : pos:Position.t -> Types.datatype -> unit
+
   val escaped_quantifier :
     pos:Position.t ->
     var:string ->
@@ -1566,6 +1568,13 @@ end
                 typ l                                  ^ nl ()  ^
                 "actual: "                             ^ nli () ^
                 typ r                                  ^ nl ())
+
+    let tabstr_ambiguous_type ~pos t =
+      let policy () = Types.Policy.set_quantifiers true (Types.Policy.default_policy ()) in
+      let typ = Types.string_of_datatype ~policy t in
+      die pos ("The phrase under a type abstraction must have a unique type."     ^ nl ()  ^
+               "We cannot guarantee this for the phrase under this /\\ with type" ^ nli () ^
+                typ                                                      )
 
     let recursive_usage ~pos ~t1:(_, lt) ~t2:(v, rt) ~error:_ =
       build_tyvar_names [lt; rt];
@@ -3542,10 +3551,29 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                       FnAppl (erase f, List.map erase ps), rettyp, Usage.combine_many (usages f :: List.map usages ps)
               end
         | TAbstr (sugar_qs, e) ->
-            let e, t, u = tc e in
+          if Utils.is_generalisable e then
+
             let qs = List.map SugarQuantifier.get_resolved_exn sugar_qs in
+
+            (* Links being Links, the only way to ensure that we don't
+               generalize any of the qs while type-checking e is to add
+               a term variable to the environment that contains all variables
+               from qs *)
+            let dummy_var = Utils.dummy_source_name () in
+            let type_of_quantifier q = Types.type_arg_of_quantifier q |> snd in
+            let dummy_type = List.map type_of_quantifier qs |> Types. make_tuple_type in
+            let context' = {context
+                            with var_env = Env.bind dummy_var dummy_type context.var_env } in
+            let e, t, u = type_check context' e in
+
+            let free_flexible_vars = Types.free_flexible_type_vars t in
+            if not (Types.TypeVarSet.is_empty free_flexible_vars) then
+              Gripers.tabstr_ambiguous_type ~pos t;
+
             let t = Types.for_all(qs, t) in
-              tabstr (sugar_qs, e.node), t, u
+            tabstr (sugar_qs, e.node), t, u
+          else
+            Gripers.generalise_value_restriction pos (uexp_pos e)
         | TAppl (e, tyargs) ->
            let e, t, u = tc e in
 
