@@ -317,7 +317,7 @@ let parse_foreign_language pos lang =
 %token FOR LARROW LLARROW WHERE FORMLET PAGE
 %token LRARROW
 %token COMMA VBAR DOT DOTDOT COLON COLONCOLON
-%token TABLE TABLEHANDLE TABLEKEYS FROM DATABASE QUERY WITH YIELDS ORDERBY
+%token TABLE TEMPORALTABLE TABLEKEYS FROM DATABASE QUERY WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET RETURNING
 %token LENS LENSDROP LENSSELECT LENSJOIN DETERMINED BY ON DELETE_LEFT
 %token LENSPUT LENSGET LENSCHECK LENSSERIAL
@@ -1087,7 +1087,7 @@ primary_datatype:
                                                                    | [n] -> WithPos.node n
                                                                    | ts  -> Datatype.Tuple ts }
 | LPAREN rfields RPAREN                                        { Datatype.Record $2 }
-| TABLEHANDLE
+| TEMPORALTABLE
      LPAREN temporality_type COMMA datatype COMMA datatype COMMA datatype RPAREN
                                                                { Datatype.Table ($3, $5, $7, $9) }
 | LBRACKETBAR vrow BARRBRACKET                                 { Datatype.Variant $2 }

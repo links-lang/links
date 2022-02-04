@@ -2571,7 +2571,7 @@ struct
          | Variant r -> "[|" ^ row "|" context p r ^ "|]"
          | Table (t, r, w, n)   ->
             (* TODO: pretty-print this using constraints? *)
-            Printf.sprintf "TableHandle(%s, %s, %s, %s)"
+            Printf.sprintf "TemporalTable(%s, %s, %s, %s)"
                 (Temporality.show t)
                 (sd r) (sd w) (sd n)
          | Lens _typ ->
@@ -3982,7 +3982,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     = let open Printer in
       Printer (fun ctx (t, r, w, n) buf ->
           let ctx = Context.toplevel ctx in
-          StringBuffer.write buf "TableHandle(";
+          StringBuffer.write buf "TemporalTable(";
           StringBuffer.write buf (Temporality.show t ^ ",");
           Printer.concat_items ~sep:"," datatype [ r ;  w ;  n ] ctx buf;
           StringBuffer.write buf ")")
@@ -4634,6 +4634,15 @@ let make_record_type ts = Record (make_closed_row ts)
 let make_variant_type ts = Variant (make_closed_row ts)
 
 let make_table_type (t, r, w, n) = Table (t, r, w, n)
+
+(* Alias of more general TemporalTable type *)
+let make_tablehandle_alias (r, w, n) =
+    let kind = (PrimaryKind.Type, (lin_unl, res_any)) in
+    let kinds = List.init 3 (fun _ -> kind) in
+    let tyargs = List.map (fun x -> (PrimaryKind.Type, x)) [r; w; n] in
+    Alias (("TableHandle", kinds, tyargs, false),
+        Table (Temporality.current, r, w, n))
+
 let make_endbang_type : datatype = Alias (("EndBang", [], [], false), Output (unit_type, End))
 
 let make_function_type : ?linear:bool -> datatype list -> row -> datatype -> datatype

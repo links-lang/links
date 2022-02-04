@@ -1264,22 +1264,22 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* Database functions *)
   "AsList",
   (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
-   datatype "(TableHandle(Current, r, w, n)) {}-> [r]",
+   datatype "(TableHandle(r, w, n)) {}-> [r]",
   IMPURE);
 
   "AsListT",
   (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
-   datatype "(TableHandle(Transaction, r, w, n)) {}-> [TransactionTime(r)]",
+   datatype "(TemporalTable(Transaction, r, w, n)) {}-> [TransactionTime(r)]",
   IMPURE);
 
   "AsListV",
   (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
-   datatype "(TableHandle(Valid, r, w, n)) {}-> [ValidTime(r)]",
+   datatype "(TemporalTable(Valid, r, w, n)) {}-> [ValidTime(r)]",
   IMPURE);
 
   "Distinct",
   (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
-   datatype "(TableHandle(Current, r, w, n)) {}-> [r]",
+   datatype "(TableHandle(r, w, n)) {}-> [r]",
   IMPURE);
 
   "getDatabaseConfig",

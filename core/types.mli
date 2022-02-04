@@ -377,6 +377,7 @@ val make_process_type : row -> datatype
 val make_record_type  : datatype field_env -> datatype
 val make_variant_type : datatype field_env -> datatype
 val make_table_type : Temporality.t * datatype * datatype * datatype -> datatype
+val make_tablehandle_alias : datatype * datatype * datatype -> datatype
 val make_endbang_type : datatype
 val make_transaction_time_data_type : datatype -> datatype
 val make_valid_time_data_type : datatype -> datatype
