@@ -1557,8 +1557,7 @@ and normalise_datatype rec_names t =
   | Record row              -> Record (nr row)
   | Variant row             -> Variant (nr row)
   | Effect row              -> Effect (nr row)
-  | Table (t, r, w, n)         ->
-     Table (t, nt r, nt w, nt n)
+  | Table (t, r, w, n)      -> Table (t, nt r, nt w, nt n)
   | Lens sort               -> Lens sort
   | Alias ((name, qs, ts, is_dual), datatype) ->
      Alias ((name, qs, ts, is_dual), nt datatype)
