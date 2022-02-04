@@ -368,10 +368,10 @@ end = struct
   let gen op args =
     let open Code in
     match op, args with
-      | "/", [l; r] -> Call (Runtime.Math.floor, [Binop (l, "/", r)])
-      | "^", [_; _] -> Call (Runtime.Math.floor, [Call (Runtime.Math.pow, args)])
-      | "^.", [_; _] -> Call (Runtime.Math.pow, args)
-      | ("negate" | "negatef"), [_] -> Call (Var "-", args)
+      | "/", [l; r] -> Aux.call Runtime.Math.floor [Binop (l, "/", r)]
+      | "^", [_; _] -> Aux.call Runtime.Math.floor [Call (Runtime.Math.pow, args)]
+      | "^.", [_; _] -> Aux.call Runtime.Math.pow args
+      | ("negate" | "negatef"), [_] -> Aux.call (Var "-") args
       | _, [l; r] -> Binop(l, js_name op, r)
       | _, _ -> raise (internal_error (Printf.sprintf "Unrecognised primitive arithmetic operation '%s' with arity %d\n" op (List.length args)))
 end
@@ -418,20 +418,8 @@ struct
   let gen op args =
     let open Code in
     match op, args with
-      | "<>", [l; r] -> Unop("!", Call (Runtime.Links.eq, [l; r]))
-          (* HACK
-
-             This is technically wrong, but as we haven't implemented
-             LINKS.lt, etc., it is enough to get the demos working.
-
-             Ideally we want to compile to the builtin operators
-             whenever we know that the argument types are primitive
-             and the general functions otherwise. This would
-             necessitate making the JS compiler type-aware.
-          *)
-      | ( "<" | ">" | "<=" | ">="), [l; r] ->
-        Binop(l, op, r)
-      | _, [l; r] ->  Call(js_name op, [l; r])
+      | "<>", [l; r] -> Unop("!", Aux.call Runtime.Links.eq [l; r])
+      | ( "<" | ">" | "<=" | ">="), [l; r] -> Aux.call (js_name op) [l; r]
       | _, _ -> raise (internal_error (Printf.sprintf "Unrecognised relational operator '%s' with arity %d\n" op (List.length args)))
 end
 
@@ -442,7 +430,6 @@ end = struct
   let names =
     let open Code.Runtime.List in
     [ "Cons", cons
-    ; "Nil", nil
     ; "$$hd", hd
     ; "$$tl", tl
     ; "hd", hd
@@ -454,10 +441,10 @@ end = struct
   let gen fname vs =
     let open Code in
     match fname with
-    | "Nil" -> List.assoc fname names
+    | "Nil" -> Code.Runtime.List.nil
     | _ ->
       let name = List.assoc fname names in
-      Call (name, vs)
+      Aux.call name vs
 end
 
 (** [cps_prims]: a list of primitive functions that need to see the
@@ -1118,21 +1105,6 @@ end = functor (K : CONTINUATION) -> struct
                       ; ("_value", Dict [("p", maybe_box args); ("s", resumption)]) ]
              in
              bind_skappa (bind_seta (apply_yielding (K.reify seta) [op] kappas)))
-         (* let singleton k = *)
-         (*   Call (Var "_singleton", [k]) *)
-         (* in *)
-         (* K.bind kappa *)
-         (*   (fun kappas -> *)
-         (*     let bind_skappa, skappa, kappas = K.pop kappas in *)
-         (*     let bind_seta, seta, kappas = K.pop kappas in *)
-         (*     let resumption = singleton (K.reify skappa) in *)
-         (*     let op = *)
-         (*       Dict [ ("_label", strlit name); *)
-         (*              ("_value", Dict [("p", maybe_box args); ("s", resumption)]) ] *)
-         (*     in *)
-         (*     bind_skappa *)
-         (*       (bind_seta *)
-         (*          (apply_yielding (K.reify seta) [op] kappas))) *)
       | Handle { Ir.ih_comp = comp; Ir.ih_cases = eff_cases; Ir.ih_return = return; Ir.ih_depth = depth } ->
          let comp_env = env in
          let vmap r y =
