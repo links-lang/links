@@ -4,6 +4,8 @@
   For instance, writing `/\ [a, e::Row] { foo }` abstracts the expression `foo`
   over type variable `a` and row variable `e`. Here, `foo` must have a unique
   type and must be pure (to satisfy the value restriction).
+* Fixed a bug in "mixing" query normalisation, which prevented certain queries using 
+  concatenation inside `for` statements from being correctly converted to SQL.
 
 # 0.9.5
 
