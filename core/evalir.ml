@@ -585,6 +585,25 @@ struct
              | `Bool true     -> t
              | `Bool false    -> e
              | _              -> eval_error "Conditional was not a boolean")
+
+  and eval_nested_query env cont (db: Value.database) pkg =
+    let get_fields t =
+      match t with
+        | `Record fields ->
+            StringMap.to_list (fun name p -> (name, Types.Primitive p)) fields
+        | _ -> assert false
+    in
+    let execute_shredded_raw (q, t) =
+      let q = Sql.inline_outer_with q in
+      let q = db#string_of_query q in
+      Database.execute_select_result (get_fields t) q db, t in
+    let raw_results =
+      EvalNestedQuery.Shred.pmap execute_shredded_raw pkg in
+    let mapped_results =
+      EvalNestedQuery.Shred.pmap EvalNestedQuery.Stitch.build_stitch_map raw_results in
+    apply_cont cont env
+      (EvalNestedQuery.Stitch.stitch_mapped_query mapped_results)
+
   and special env (cont : continuation) : Ir.special -> result =
     let unpack_lens l = match l with | `Lens l -> l | _ -> raise (internal_error "Expected a lens.") in
     let invoke_session_exception () =
@@ -596,19 +615,21 @@ struct
         value env v >>= fun v ->
         apply_cont cont env (`Database (db_connect v))
     | Lens (table, t) ->
-      let open Lens in
       begin
-          let sort = Type.sort t in
+          let sort = Lens.Type.sort t in
           value env table >>= fun table ->
+          let open Value.Table in
           match table with
-            | `Table (((db,cstr), table, _, _) as tinfo) ->
+            | `Table tinfo ->
+              let (db, cstr) = tinfo.database in
+              let table = tinfo.name in
               let database = Lens_database_conv.lens_db_of_db cstr db in
-              let sort = Sort.update_table_name sort ~table in
+              let sort = Lens.Sort.update_table_name sort ~table in
               let table = Lens_database_conv.lens_table_of_table tinfo in
-                 apply_cont cont env (`Lens (database, Value.Lens { sort; table; }))
+                 apply_cont cont env (`Lens (database, Lens.Value.Lens { sort; table; }))
             | `List records ->
               let records = List.map Lens_value_conv.lens_phrase_value_of_value records in
-              apply_cont cont env (`Lens (Lens.Database.dummy_database, Value.LensMem { records; sort; }))
+              apply_cont cont env (`Lens (Lens.Database.dummy_database, Lens.Value.LensMem { records; sort; }))
             | _ -> raise (internal_error ("Unsupported underlying lens value."))
       end
     | LensSerial { lens; columns; _ } ->
@@ -688,7 +709,8 @@ struct
           else Lens.Eval.Incremental in
         Lens.Eval.put ~behaviour ~db lens data |> Lens_errors.unpack_eval_error ~die:(eval_error "%s");
         Value.box_unit () |> apply_cont cont env
-    | Table (db, name, keys, (readtype, _, _)) ->
+    | Table { database = db; table = name; keys; temporal_fields;
+                table_type = (temporality, readtype, _, _) } ->
       begin
         (* OPTIMISATION: we could arrange for concrete_type to have
            already been applied here *)
@@ -702,7 +724,12 @@ struct
                 (fun key ->
                   List.map Value.unbox_string (Value.unbox_list key))
                 (Value.unbox_list keys)
-            in apply_cont cont env (`Table ((db, params), Value.unbox_string name, unboxed_keys, row))
+            in
+            let tbl =
+                Value.make_table ~database:(db, params) ~name:(Value.unbox_string name)
+                    ~keys:unboxed_keys ~temporality ~temporal_fields ~row
+            in
+            apply_cont cont env (`Table tbl)
           | _ -> eval_error "Error evaluating table handle"
       end
     | Query (range, policy, e, _t) ->
@@ -723,23 +750,8 @@ struct
                  if range != None then eval_error "Range is not supported for nested queries";
                  match EvalNestedQuery.compile_shredded env e with
                    | None -> computation env cont e
-                   | Some (db, p) when db#supports_shredding () ->
-                       let get_fields t =
-                         match t with
-                           | `Record fields ->
-                               StringMap.to_list (fun name p -> (name, Types.Primitive p)) fields
-                           | _ -> assert false
-                       in
-                       let execute_shredded_raw (q, t) =
-                         let q = Sql.inline_outer_with q in
-                         let q = db#string_of_query ~range q in
-                         Database.execute_select_result (get_fields t) q db, t in
-                       let raw_results =
-                         EvalNestedQuery.Shred.pmap execute_shredded_raw p in
-                       let mapped_results =
-                         EvalNestedQuery.Shred.pmap EvalNestedQuery.Stitch.build_stitch_map raw_results in
-                       apply_cont cont env
-                         (EvalNestedQuery.Stitch.stitch_mapped_query mapped_results)
+                   | Some (db, pkg) when db#supports_shredding () ->
+                       eval_nested_query env cont db pkg
                    | Some(db,_) ->
                        let error_msg =
                          Printf.sprintf
@@ -775,18 +787,50 @@ struct
                       apply_cont cont env (Database.execute_select fields q db)
                end
          end
-
-    | InsertRows (source, rows) ->
+    | TemporalJoin (tmp, e, _t) ->
+        begin
+          match EvalNestedQuery.compile_temporal_join tmp env e with
+            | (db, pkg) when db#supports_shredding () ->
+                eval_nested_query env cont db pkg
+            | (db, _) ->
+                let error_msg =
+                  Printf.sprintf
+                    "The database driver '%s' does not support nested query results."
+                    (db#driver_name ())
+                in
+                raise (Errors.runtime_error error_msg)
+        end
+    | InsertRows (tmp, source, rows) ->
         begin
           value env source >>= fun source ->
-          value env rows >>= fun rows ->
-          match source, rows with
+          value env rows >>= fun raw_rows ->
+          let open Value.Table in
+          match source, raw_rows with
           | `Table _, `List [] ->  apply_cont cont env (`Record [])
-          | `Table ((db, _params), table_name, _, _), rows ->
-              let (field_names,rows) = Value.row_columns_values rows in
+          | `Table { database = (db, _) ; name = table_name; temporal_fields; _ }, raw_rows ->
+              let (field_names,rows) = Value.row_columns_values raw_rows in
               let q =
-                QueryLang.insert table_name field_names rows
-                |> db#string_of_query in
+                  match tmp with
+                    (* None: Current time insertion *)
+                    | None ->
+                        QueryLang.insert table_name field_names rows
+                        |> db#string_of_query
+                    | Some TransactionTimeInsertion ->
+                        let (from_field, to_field) = Option.get temporal_fields in
+                        TemporalQuery.TransactionTime.insert
+                            table_name field_names from_field to_field rows
+                        |> db#string_of_query
+                    | Some (ValidTimeInsertion CurrentInsertion)  ->
+                        let (from_field, to_field) = Option.get temporal_fields in
+                        TemporalQuery.ValidTime.Insert.current
+                            table_name field_names from_field to_field rows
+                        |> db#string_of_query
+                    | Some (ValidTimeInsertion SequencedInsertion)  ->
+                        let (from_field, to_field) = Option.get temporal_fields in
+                        TemporalQuery.ValidTime.Insert.sequenced
+                            table_name from_field to_field raw_rows
+                        |> db#string_of_query
+              in
               Debug.print ("RUNNING INSERT QUERY:\n" ^ q);
               let () = ignore (Database.execute_command q db) in
               apply_cont cont env (`Record [])
@@ -802,7 +846,7 @@ struct
      Perhaps the easiest course of action is to restrict it to the
      case of inserting a single row.
   *)
-    | InsertReturning (source, rows, returning) ->
+    | InsertReturning (_tmp, source, rows, returning) ->
         begin
           value env source >>= fun source ->
           value env rows >>= fun rows ->
@@ -810,7 +854,7 @@ struct
           match source, rows, returning with
           | `Table _, `List [], _ ->
               raise (internal_error "InsertReturning: undefined for empty list of rows")
-          | `Table ((db, _params), table_name, _, _), rows, returning ->
+          | `Table Value.Table.{ database = (db, _); name = table_name; _ }, rows, returning ->
               let (field_names,vss) = Value.row_columns_values rows in
               let returning = Value.unbox_string returning in
               let q = QueryLang.insert table_name field_names vss in
@@ -820,34 +864,80 @@ struct
               apply_cont cont env (Database.execute_insert_returning returning q db)
           | _ -> raise (internal_error "insert row into non-database")
         end
-    | Update ((xb, source), where, body) ->
+    | Update (upd, (xb, source), where, body) ->
       begin
         value env source >>= fun source ->
         match source with
-          | `Table ((db, _), table, _, (fields, _, _)) ->
+          | `Table { Value.Table.database = (db, _); name = table;
+                     row = (fields, _, _); temporal_fields; _ } ->
+              let field_types =
+                StringMap.map
+                    (function
+                       | Types.Present t -> t
+                       | _ -> assert false) fields
+              in
               Lwt.return
-            (db, table, (StringMap.map (function
-                                        | Types.Present t -> t
-                                        | _ -> assert false) fields))
+                (db, table, field_types, temporal_fields)
           | _ -> assert false
-      end >>= fun (db, table, field_types) ->
+      end >>= fun (db, table, field_types, temporal_fields) ->
       let update_query =
-        Query.compile_update db env ((Var.var_of_binder xb, table, field_types), where, body) in
+        begin
+            match upd with
+                | Some (ValidTimeUpdate upd) ->
+                    (* 'get' safe as VT updates only possible on VT tables *)
+                    let (from_field, to_field) = Option.get temporal_fields in
+                    TemporalQuery.ValidTime.compile_update upd db env
+                      ((Var.var_of_binder xb, table, field_types), where, body)
+                      from_field to_field
+                | Some TransactionTimeUpdate ->
+                    (* 'get' safe as TT updates only possible on TT tables *)
+                    let (from_field, to_field) = Option.get temporal_fields in
+                    TemporalQuery.TransactionTime.compile_update env
+                      ((Var.var_of_binder xb, table, field_types), where, body)
+                      from_field to_field
+                | None ->
+                    Query.compile_update db env
+                        ((Var.var_of_binder xb, table, field_types), where, body)
+        end
+      in
       let () = ignore (Database.execute_command (db#string_of_query update_query) db) in
         apply_cont cont env (`Record [])
-    | Delete ((xb, source), where) ->
+    | Delete (del, (xb, source), where) ->
         value env source >>= fun source ->
+        let open Value.Table in
         begin
-        match source with
-          | `Table ((db, _), table, _, (fields, _, _)) ->
-             Lwt.return
-               (db, table, (StringMap.map (function
-                                | Types.Present t -> t
-                                | _ -> assert false) fields))
-          | _ -> assert false
-        end >>= fun (db, table, field_types) ->
+            match source with
+              | `Table { database = (db, _); name = table; row = (fields, _, _); temporal_fields; _ } ->
+                  let field_types =
+                    StringMap.map
+                        (function
+                           | Types.Present t -> t
+                           | _ -> assert false) fields
+                  in
+                  Lwt.return
+                    (db, table, field_types, temporal_fields)
+              | _ -> assert false
+        end
+      >>= fun (db, table, field_types, temporal_fields) ->
       let delete_query =
-        Query.compile_delete db env ((Var.var_of_binder xb, table, field_types), where) in
+          (* Same justifications apply for Option.get here *)
+          match del with
+            | Some (ValidTimeDeletion del) ->
+                let (from_field, to_field) = Option.get temporal_fields in
+                TemporalQuery.ValidTime.compile_delete
+                    del db env
+                    ((Var.var_of_binder xb, table, field_types), where)
+                    from_field to_field
+            | Some TransactionTimeDeletion ->
+                let to_field = Option.get temporal_fields |> snd in
+                TemporalQuery.TransactionTime.compile_delete
+                    db env
+                    ((Var.var_of_binder xb, table, field_types), where)
+                    to_field
+            | None ->
+                Query.compile_delete db env
+                    ((Var.var_of_binder xb, table, field_types), where)
+      in
       let () = ignore (Database.execute_command (db#string_of_query delete_query) db) in
         apply_cont cont env (`Record [])
     | CallCC f ->

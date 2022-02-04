@@ -87,6 +87,18 @@ let spawn_location = {
   arity = []
 }
 
+let transaction_time_data = {
+  Abstype.id = "TransactionTime";
+  name       = "TransactionTime";
+  arity      = [pk_type, (lin_any, res_any)]
+}
+
+let valid_time_data = {
+  Abstype.id = "ValidTime";
+  name       = "ValidTime";
+  arity      = [pk_type, (lin_any, res_any)]
+}
+
 (* When unifying, we need to keep track of both mu-bound recursive variables
  * and names of recursive type applications. The `rec_id` type allows us to
  * abstract this and keep both in the same environment. *)
@@ -136,7 +148,7 @@ and typ =
   | Lolli of (typ * row * typ)
   | Record of row
   | Variant of row
-  | Table of (typ * typ * typ)
+  | Table of (Temporality.t * typ * typ * typ)
   | Lens of Lens.Type.t
   | ForAll of (Quantifier.t list * typ)
   (* Effect *)
@@ -213,6 +225,7 @@ sig
     method type_arg : type_arg -> ('self_type * type_arg)
   end
 end
+
 
 (* FIXME: these will probably go when we relax the constraint that
    Var, Recursive, and Closed constructors can only appear inside a
@@ -352,11 +365,11 @@ struct
       | Variant row ->
          let (o, row') = o#row row in
          (o, Variant row')
-      | Table (read, write, needed) ->
+      | Table (temporality, read, write, needed) ->
          let (o, read') = o#typ read in
          let (o, write') = o#typ write in
          let (o, needed') = o#typ needed in
-         (o, Table (read', write', needed'))
+         (o, Table (temporality, read', write', needed'))
       | Lens _ -> assert false (* TODO FIXME *)
       | ForAll (names, body) ->
          let (o, names') = o#list (fun o -> o#quantifier) names in
@@ -1143,7 +1156,7 @@ let free_type_vars, free_row_type_vars, free_tyarg_vars =
     | Lolli (f, m, t)         ->
        S.union_all [free_type_vars' rec_vars f; free_row_type_vars' rec_vars m; free_type_vars' rec_vars t]
     | Effect row | Record row | Variant row -> free_row_type_vars' rec_vars row
-    | Table (r, w, n)         ->
+    | Table (_, r, w, n)         ->
        S.union_all
          [free_type_vars' rec_vars r; free_type_vars' rec_vars w; free_type_vars' rec_vars n]
     | Lens _          -> S.empty
@@ -1340,7 +1353,7 @@ and subst_dual_type : var_map -> datatype -> datatype =
   | Record row -> Record (sdr row)
   | Variant row -> Variant (sdr row)
   | Effect row -> Effect (sdr row)
-  | Table (r, w, n) -> Table (sdt r, sdt w, sdt n)
+  | Table (t, r, w, n) -> Table (t, sdt r, sdt w, sdt n)
   | Lens _sort -> t
   (* TODO: we could do a check to see if we can preserve aliases here *)
   | Alias (_, t) -> sdt t
@@ -1522,7 +1535,8 @@ and unwrap_row : row -> (row * row_var option) = function
      in
      let field_env = concrete_fields field_env in
      Row (field_env, row_var, dual), rec_row
-  | _ -> raise tag_expectation_mismatch
+  | _ ->
+    raise tag_expectation_mismatch
 
 
 
@@ -1543,8 +1557,7 @@ and normalise_datatype rec_names t =
   | Record row              -> Record (nr row)
   | Variant row             -> Variant (nr row)
   | Effect row              -> Effect (nr row)
-  | Table (r, w, n)         ->
-     Table (nt r, nt w, nt n)
+  | Table (t, r, w, n)      -> Table (t, nt r, nt w, nt n)
   | Lens sort               -> Lens sort
   | Alias ((name, qs, ts, is_dual), datatype) ->
      Alias ((name, qs, ts, is_dual), nt datatype)
@@ -1838,7 +1851,7 @@ struct
        (fbtv f) @ (free_bound_row_type_vars bound_vars m) @ (fbtv t)
     | Record row
       | Variant row -> free_bound_row_type_vars bound_vars row
-    | Table (r, w, n) -> (fbtv r) @ (fbtv w) @ (fbtv n)
+    | Table (_, r, w, n) -> (fbtv r) @ (fbtv w) @ (fbtv n)
     | Lens _ -> []
     | ForAll (tyvars, body) ->
        let bound_vars, vars =
@@ -2566,12 +2579,11 @@ struct
             (if is_tuple ur then string_of_tuple context r
              else "(" ^ row "," context p (Row r) ^ ")")
          | Variant r -> "[|" ^ row "|" context p r ^ "|]"
-         | Table (r, w, n)   ->
+         | Table (t, r, w, n)   ->
             (* TODO: pretty-print this using constraints? *)
-            "TableHandle(" ^
-              sd r ^ "," ^
-                sd w ^ "," ^
-                  sd n ^ ")"
+            Printf.sprintf "TemporalTable(%s, %s, %s, %s)"
+                (Temporality.show t)
+                (sd r) (sd w) (sd n)
          | Lens _typ ->
             let open Lens in
             let sort = Type.sort _typ in
@@ -3976,11 +3988,12 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           in
           StringBuffer.write buf ret)
 
-  and table : (typ * typ * typ) printer
+  and table : (Temporality.t * typ * typ * typ) printer
     = let open Printer in
-      Printer (fun ctx (r, w, n) buf ->
+      Printer (fun ctx (t, r, w, n) buf ->
           let ctx = Context.toplevel ctx in
-          StringBuffer.write buf "TableHandle(";
+          StringBuffer.write buf "TemporalTable(";
+          StringBuffer.write buf (Temporality.show t ^ ",");
           Printer.concat_items ~sep:"," datatype [ r ;  w ;  n ] ctx buf;
           StringBuffer.write buf ")")
 
@@ -4342,7 +4355,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
     | Function (f, m, t)      -> union [make_env boundvars f; make_env boundvars m; make_env boundvars t]
     | Lolli (f, m, t)         -> union [make_env boundvars f; make_env boundvars m; make_env boundvars t]
     | Effect row | Record row | Variant row -> make_env boundvars row
-    | Table (r, w, n)         -> union [make_env boundvars r; make_env boundvars w; make_env boundvars n]
+    | Table (_, r, w, n)      -> union [make_env boundvars r; make_env boundvars w; make_env boundvars n]
     | Lens _                  -> empties
     | Alias ((_, _, ts, _), d) -> union (List.map (make_env_ta boundvars) ts @ [make_env boundvars d])
     | Application (_, ds)     -> union (List.map (make_env_ta boundvars) ds)
@@ -4572,6 +4585,13 @@ let make_tuple_type (ts : datatype list) : datatype =
 let make_list_type t = Application (list, [PrimaryKind.Type, t])
 let make_process_type r = Application (process, [PrimaryKind.Row, r])
 
+let make_transaction_time_data_type typ =
+  Application (transaction_time_data, [PrimaryKind.Type, typ])
+
+let make_valid_time_data_type typ =
+  Application (valid_time_data, [PrimaryKind.Type, typ])
+
+
 let extend_row_check_duplicates fields row =
   match row with
   | Row (fields', row_var, dual) ->
@@ -4623,7 +4643,16 @@ let make_closed_row : datatype field_env -> row =
 let make_record_type ts = Record (make_closed_row ts)
 let make_variant_type ts = Variant (make_closed_row ts)
 
-let make_table_type (r, w, n) = Table (r, w, n)
+let make_table_type (t, r, w, n) = Table (t, r, w, n)
+
+(* Alias of more general TemporalTable type *)
+let make_tablehandle_alias (r, w, n) =
+    let kind = (PrimaryKind.Type, (lin_unl, res_any)) in
+    let kinds = List.init 3 (fun _ -> kind) in
+    let tyargs = List.map (fun x -> (PrimaryKind.Type, x)) [r; w; n] in
+    Alias (("TableHandle", kinds, tyargs, false),
+        Table (Temporality.current, r, w, n))
+
 let make_endbang_type : datatype = Alias (("EndBang", [], [], false), Output (unit_type, End))
 
 let make_function_type : ?linear:bool -> datatype list -> row -> datatype -> datatype

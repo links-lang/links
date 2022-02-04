@@ -7,6 +7,10 @@
 * Fixed a bug in "mixing" query normalisation, which prevented certain queries using 
   concatenation inside `for` statements from being correctly converted to SQL.
 
+* Links now has basic support for temporal database operations. More information
+  can be found on the [Wiki](https://github.com/links-lang/links/wiki/Temporal-Databases).
+  There are new keywords: `valid`, `to`, `vt_insert`, `tt_insert`, and `TemporalTable`.
+
 # 0.9.5
 
 This is a minor hotfix release.
@@ -21,7 +25,7 @@ This is a minor hotfix release.
 # 0.9.4
 
 ## Queries mixing set and bag semantics
-Links now provides experimental support for SQL queries mixing set and bag semantics. 
+Links now provides experimental support for SQL queries mixing set and bag semantics.
 
 When the `mixing_norm=on` flag is added to the configuration file, or when a query is defined in a `query mixing { ... }` block, Links will use a new query evaluator, allowing the programmer to call deduplication functions (`dedup` and `distinct`) within database queries. These are handled with set-based SQL statements `select distinct / union`, in addition to the usual bag-based `select / union all`.
 
@@ -89,7 +93,7 @@ It is now possible to annotate type variables with `Mono` restriction, e.g. `sig
 ### Recursive rows
 
 * Effect variables can be recursive, e.g. `{ |(mu a.F:(() { |a}-> ()) {}-> b|c)}`.
-* **Breaking change**: Recursive rows are no longer restricted to variant syntax, i.e. separating fields using `|`. Recursive record and effects rows separate fields using `,` now. 
+* **Breaking change**: Recursive rows are no longer restricted to variant syntax, i.e. separating fields using `|`. Recursive record and effects rows separate fields using `,` now.
 * Recursive variants with no directly exposed fields no longer require the vertical bar separating fields from the row variable, e.g. `[|(mu a. Foo)|]` is equivalent to `[| |(mu a . Foo)|]`.
 
 ## Roundtrip: New pretty printer for types

@@ -388,6 +388,15 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
 
   let ut = unify' rec_env in
   let ur = unify_rows' rec_env in
+  let utmp (t1, t2) =
+      if t1 <> t2 then
+        let msg =
+            Printf.sprintf "Temporal table specifications %s and %s do not match."
+              (Temporality.show t1)
+              (Temporality.show t2)
+        in
+        raise (Failure (`Msg msg))
+  in
   counter := !counter+1;
   let counter' = "(" ^ string_of_int !counter ^ ")" in
   Debug.if_set (show_unification) (fun () -> "Unifying "^string_of_datatype t1^" with "^string_of_datatype t2 ^ counter');
@@ -619,8 +628,9 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
         ut (lto, rto))
     | Record (Row l), Record (Row r) -> ur (l, r)
     | Variant (Row l), Variant (Row r) -> ur (l, r)
-    | Table (lf, ld, lr), Table (rf, rd, rr) ->
-       (ut (lf, rf);
+    | Table (lt, lf, ld, lr), Table (rt, rf, rd, rr) ->
+       (utmp (lt, rt);
+        ut (lf, rf);
         ut (ld, rd);
         ut (lr, rr))
     (* FIXME: what about Lens? *)

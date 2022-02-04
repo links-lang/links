@@ -70,7 +70,7 @@ exit : 1
 
 Tables must have table type.
 fun (t) { for (x <-- t) [(a=x.y)] }
-stdout : @fun : \(TableHandle\(.*\)\) {}-> .*
+stdout : @fun : \(TemporalTable\(.*\)\) {}-> .*
 
 Duplicate fields
 (x=3,x=3)
