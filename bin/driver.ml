@@ -189,4 +189,43 @@ module Phases = struct
     |> Compile.IR.run
     |> Transform.run
     |> Evaluate.run
+
+  let compile_js_only : Context.t -> string -> string -> unit
+    = fun initial_context source_file object_file ->
+      (* Process source file (and its dependencies. *)
+      let result =
+        Parse.run initial_context source_file
+        |> Desugar.run
+        |> (fun result -> if Settings.get typecheck_only then exit 0 else result)
+        |> Compile.IR.run
+        |> Transform.run
+      in
+      let context, program = result.Backend.context, result.Backend.program in
+      (* let _valenv    = Context.value_environment context in *)
+      let nenv      = Context.name_environment context in
+      (* let tenv      = Context.typing_environment context in *)
+      let venv =
+        Env.String.fold
+        (fun name v venv -> Env.Int.bind v name venv)
+        nenv
+        Env.Int.empty
+      in
+      (* let tenv = Var.varify_env (nenv, tenv.Types.var_env) in *)
+      let _ffi_files =
+        Context.ffi_files context (* TODO(dhil): how do we want to link FFI files? *)
+      in
+      let open Irtojs in
+      let _venv, code =
+        Compiler.generate_program venv program
+      in
+      (* Prepare object file. *)
+      let oc =
+        try open_out object_file
+        with Sys_error reason -> raise (Errors.cannot_open_file object_file reason)
+      in
+      try
+        Js_CodeGen.output oc code;
+        close_out oc
+      with Sys_error reason ->
+        close_out oc; raise (Errors.object_file_write_error object_file reason)
 end

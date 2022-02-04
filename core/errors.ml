@@ -54,6 +54,8 @@ exception DisabledExtension of Position.t option * (string * bool) option * stri
 exception PrimeAlien of Position.t
 exception ForbiddenClientCall of string * string
 exception MissingBuiltinType of string
+exception CannotOpenFile of string * string
+exception ObjectFileWriteError of string * string
 
 exception LocateFailure of string
 let driver_locate_failure driver = LocateFailure driver
@@ -189,6 +191,10 @@ let format_exception =
   | ForbiddenClientCall (fn, reason) ->
      pos_prefix (Printf.sprintf "Error: Cannot call client side function '%s' because of %s\n" fn reason)
   | MissingBuiltinType alias -> Printf.sprintf "Error: Missing builtin type with alias '%s'. Is it defined in the prelude?" alias
+  | CannotOpenFile (filename, reason) ->
+     Printf.sprintf "Error: Cannot open file '%s' (%s)\n" filename reason
+  | ObjectFileWriteError (filename, reason) ->
+    Printf.sprintf "Error: Cannot write to file '%s' (%s)\n" filename reason
   | Sys.Break -> "Caught interrupt"
   | exn -> pos_prefix ("Error: " ^ Printexc.to_string exn)
 
@@ -236,3 +242,5 @@ let disabled_extension ?pos ?setting ?flag name =
   DisabledExtension (pos, setting, flag, name)
 let prime_alien pos = PrimeAlien pos
 let forbidden_client_call fn reason = ForbiddenClientCall (fn, reason)
+let cannot_open_file filename reason = CannotOpenFile (filename, reason)
+let object_file_write_error filename reason = ObjectFileWriteError (filename, reason)
