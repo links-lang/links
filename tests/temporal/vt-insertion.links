@@ -1,0 +1,6 @@
+var db = database "timedb";
+
+var timetbl = table "timetbl"
+  with (foo: String) using valid_time(vt_from, vt_to) from db;
+
+vt_insert timetbl values [(foo = "foo")]

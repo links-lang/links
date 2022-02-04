@@ -91,6 +91,8 @@ val dom_node     : Abstype.t
 val access_point : Abstype.t
 val socket       : Abstype.t
 val spawn_location : Abstype.t
+val transaction_time_data : Abstype.t
+val valid_time_data : Abstype.t
 
 (* Type groups *)
 
@@ -137,7 +139,7 @@ and typ =
   | Lolli of (typ * row * typ)
   | Record of row
   | Variant of row
-  | Table of (typ * typ * typ)
+  | Table of (Temporality.t * typ * typ * typ)
   | Lens of Lens.Type.t
   | ForAll of (Quantifier.t list * typ)
   (* Effect *)
@@ -375,8 +377,11 @@ val make_list_type : datatype -> datatype
 val make_process_type : row -> datatype
 val make_record_type  : datatype field_env -> datatype
 val make_variant_type : datatype field_env -> datatype
-val make_table_type : datatype * datatype * datatype -> datatype
+val make_table_type : Temporality.t * datatype * datatype * datatype -> datatype
+val make_tablehandle_alias : datatype * datatype * datatype -> datatype
 val make_endbang_type : datatype
+val make_transaction_time_data_type : datatype -> datatype
+val make_valid_time_data_type : datatype -> datatype
 
 (** subtyping *)
 val is_sub_type : datatype * datatype -> bool

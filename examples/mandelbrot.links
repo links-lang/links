@@ -32,9 +32,9 @@ fun canvas (x, y, colour, id) {
   spawn{ draw(colour, id) }
 }
 
-fun range(f, to) {
-  if (f >= to) []
-  else f :: range(f+1, to)
+fun range(f, t) {
+  if (f >= t) []
+  else f :: range(f+1, t)
 }
 
 fun mandelbrot(x, y) {

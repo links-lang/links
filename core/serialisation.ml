@@ -94,7 +94,7 @@ module Compressible = struct
     (* include V *)
 
     type compressed_timestamp = [
-      |`Infinity
+      | `Infinity
       | `MinusInfinity
       | `Timestamp of float (* UTC UNIX timestamp *)
     ]
@@ -108,7 +108,13 @@ module Compressible = struct
       | `Int of int
       | `XML of xmlitem
       | `String of string
-      | `Table of string * string * string list list * string
+      | `Table of
+          string (* database name *) *
+          string (* table name *) *
+          string list list (* keys *) *
+          Temporality.t (* temporality *) *
+          (string * string) option (* temporal fields *) *
+          string (* serialised datatype *)
       | `Database of string
       | `DateTime of compressed_timestamp
       ]
@@ -137,8 +143,11 @@ module Compressible = struct
       | `Int i -> `Int i
       | `XML x -> `XML x
       | `String s -> `String s
-      | `Table ((_database, db), table, keys, row) ->
-         `Table (db, table, keys, Types.string_of_datatype (Types.Record (Types.Row row)))
+      | `Table Value.Table.({ database = (_, db); name; keys; temporality; temporal_fields; row }) ->
+          let type_str =
+            Types.string_of_datatype (Types.Record (Types.Row row))
+          in
+          `Table (db, name, keys, temporality, temporal_fields, type_str)
       | `Database (_database, s) -> `Database s
       | `DateTime Timestamp.Infinity -> `DateTime `Infinity
       | `DateTime Timestamp.MinusInfinity -> `DateTime `MinusInfinity
@@ -169,14 +178,18 @@ module Compressible = struct
 
     let decompress_primitive : compressed_primitive_value -> [> primitive_value] = function
       | #primitive_value_basis as v -> v
-      | `Table (db_name, table_name, keys, t) ->
+      | `Table (db_name, table_name, keys, temporality, temporal_fields, t) ->
          let row =
            match DesugarDatatypes.read ~aliases:DefaultAliases.alias_env t with
            | Types.Record (Types.Row row) -> row
            | _ -> assert false in
          let driver, params = parse_db_string db_name in
          let database = db_connect driver params in
-         `Table (database, table_name, keys, row)
+         let tbl =
+           Value.make_table ~database ~name:table_name ~keys
+             ~temporality ~temporal_fields ~row
+         in
+         `Table tbl
       | `Database s ->
          let driver, params = parse_db_string s in
          let database = db_connect driver params in
@@ -347,7 +360,7 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
     let error err = Errors.runtime_error err
     (* The JSON spec says that the fields in an object must be unordered.
      * Therefore, for objects with more than one field, it's best to do
-     * individual field lookups. We can be match directly on ones with single
+     * individual field lookups. We can match directly on ones with single
      * fields though. *)
     let rec value_of_json (json: Yojson.Basic.t) : Value.t =
       let from_json = value_of_json in
@@ -439,6 +452,51 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
                     |> Value.box_datetime)
             | _, _ -> None
       in
+
+      let parse_table bs =
+        let database =
+          begin
+            match List.assoc "db" bs |> from_json with
+            | `Database db -> db
+            | _ -> raise (error ("first argument to a table must be a database"))
+          end in
+        let name = assoc_string "name" bs in
+        let keys = List.assoc "keys" bs |> unwrap_list in
+        let keys =
+          List.map (function
+              | `List part_keys -> List.map unwrap_string part_keys
+              | _ -> raise (error "keys must be lists of strings")) keys in
+        let temporality =
+          match assoc_string "temporality" bs with
+            | "current" -> Temporality.current
+            | "transaction_time" -> Temporality.transaction
+            | "valid_time" -> Temporality.valid
+            | _ -> raise (error "Temporality must be one of current, transaction_time, or valid_time")
+        in
+        let temporal_fields =
+          match List.assoc_opt "temporal_fields" bs with
+            | Some (`Assoc temporal_fields) ->
+                Some (
+                  assoc_string "from_field" temporal_fields,
+                  assoc_string "to_field" temporal_fields)
+            | Some _ ->
+                raise (error "Temporal fields must be an association list")
+            | _ -> None
+        in
+        let row_type =
+          DesugarDatatypes.read
+            ~aliases:E.String.empty
+            (assoc_string "row" bs) in
+        let row =
+          begin
+            match row_type with
+            | Types.Record (Types.Row row) -> row
+            | _ -> raise (error ("tables must have record type"))
+          end
+        in
+        Value.make_table ~database ~name ~keys ~temporality ~temporal_fields ~row
+      in
+
       let (<|>) (o1: unit -> t option) (o2: unit -> t option) : unit -> t option =
         match o1 () with
         | Some x -> (fun () -> Some x)
@@ -493,29 +551,7 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
          raise (error (
                     "db should be an assoc list. Got: " ^ (Yojson.Basic.to_string nonsense)))
       | `Assoc [("_table", `Assoc bs)] ->
-         let db =
-           begin
-             match List.assoc "db" bs |> from_json with
-             | `Database db -> db
-             | _ -> raise (error ("first argument to a table must be a database"))
-           end in
-         let name = assoc_string "name" bs in
-         let row_type =
-           DesugarDatatypes.read
-             ~aliases:E.String.empty
-             (assoc_string "row" bs) in
-         let row =
-           begin
-             match row_type with
-             | Types.Record (Types.Row row) -> row
-             | _ -> raise (error ("tables must have record type"))
-           end in
-         let keys = List.assoc "keys" bs |> unwrap_list in
-         let keys =
-           List.map (function
-               | `List part_keys -> List.map unwrap_string part_keys
-               | _ -> raise (error "keys must be lists of strings")) keys in
-         `Table (db, name, keys, row)
+         `Table (parse_table bs)
       | `Assoc [("_table", nonsense)] ->
          raise (error (
                     "table should be an assoc list. Got: " ^ (Yojson.Basic.to_string nonsense)))

@@ -54,6 +54,15 @@ let rec project_type ?(overstep_quantifiers=true) name t = match (concrete_type 
   | (Record row, _) ->
       let t, _ = split_row name row in
         t
+  | (Application (absty, [PrimaryKind.Type, typ]), _) when
+      (Abstype.name absty) = "TransactionTime" || (Abstype.name absty = "ValidTime") ->
+        if name = TemporalField.data_field then typ
+        else if
+          name = TemporalField.from_field ||
+          name = TemporalField.to_field then
+          Primitive (Primitive.DateTime)
+        else
+          error ("Trying to project " ^ name ^ " from temporal metadata: " ^ string_of_datatype t)
   | (t, _) ->
       error ("Attempt to project non-record type "^string_of_datatype t)
 
@@ -165,19 +174,19 @@ let rec element_type ?(overstep_quantifiers=true) t = match (concrete_type t, ov
 
 let rec table_read_type t = match concrete_type t with
   | ForAll (_, t) -> table_read_type t
-  | Table (r, _, _) -> r
+  | Table (_, r, _, _) -> r
   | t ->
       error ("Attempt to take read type of non-table: " ^ string_of_datatype t)
 
 let rec table_write_type t = match concrete_type t with
   | ForAll (_, t) -> table_write_type t
-  | Table (_, w, _) -> w
+  | Table (_, _, w, _) -> w
   | t ->
       error ("Attempt to take write type of non-table: " ^ string_of_datatype t)
 
 let rec table_needed_type t = match concrete_type t with
   | ForAll (_, t) -> table_needed_type t
-  | Table (_, _, n) -> n
+  | Table (_, _, _, n) -> n
   | t ->
       error ("Attempt to take needed type of non-table: " ^ string_of_datatype t)
 
@@ -335,7 +344,7 @@ let check_type_wellformedness primary_kind t : unit =
     | Variant row ->
        irow row;
        pk_type
-    | Table (f, d, r) ->
+    | Table (_, f, d, r) ->
        idatatype f; idatatype d; idatatype r;
        pk_type
     | Lens _s ->
@@ -393,4 +402,3 @@ let pack_types : Types.datatype list -> Types.datatype = function
 let from_present : Types.field_spec -> Types.datatype = function
   | Present t -> t
   | _ -> raise Types.tag_expectation_mismatch
-

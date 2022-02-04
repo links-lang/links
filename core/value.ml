@@ -180,8 +180,23 @@ let split_html : xml -> xml * xml =
   | [Node ("body", xs)] -> [], xs
   | xs -> [], xs
 
-type table = (database * string) * string * string list list * Types.row'
-  [@@deriving show]
+module Table = struct
+  type t = {
+  database: (database * string);
+  name: string;
+  keys: string list list;
+  temporality: Temporality.t;
+  temporal_fields: (string * string) option;
+  row: Types.row'
+  }
+[@@deriving show]
+end
+
+type table = Table.t
+    [@@deriving show]
+
+let make_table ~database ~name ~keys ~temporality ~temporal_fields ~row =
+  Table.({ database; name; keys; temporality; temporal_fields; row })
 
 type primitive_value_basis =  [
 | `Bool of bool
@@ -784,7 +799,7 @@ let rec p_value (ppf : formatter) : t -> 'a = function
                                fprintf ppf "fun"
   | `Socket _ -> fprintf ppf "<socket>"
   | `Lens (_,l) -> fprintf ppf "(%a)" Lens.Value.pp l
-  | `Table (_, name, _, _) -> fprintf ppf "(table %s)" name
+  | `Table { Table.name; _}  -> fprintf ppf "(table %s)" name
   | `Database (_, params) -> fprintf ppf "(database %s" params
   | `SessionChannel (ep1, ep2) ->
      fprintf ppf "Session channel. EP1: %s, EP2: %s"

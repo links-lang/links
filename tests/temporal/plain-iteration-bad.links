@@ -1,0 +1,9 @@
+var db = database "timedb";
+
+var timetbl = table "timetbl"
+  with (foo: String) using transaction_time(tt_from, tt_to) from db;
+
+query {
+  for (x <-- timetbl)
+    [x]
+}

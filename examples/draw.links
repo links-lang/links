@@ -29,9 +29,9 @@ fun canvas (x, y, id) {
 }
 
 # [a..b]
-fun range(f, to) {
-  if (f >= to) []
-  else f :: range(f+1, to)
+fun range(f, t) {
+  if (f >= t) []
+  else f :: range(f+1, t)
 }
 
 fun scribble() {
