@@ -126,6 +126,7 @@ let __kappa = "__kappa"
 
 module type JS_CODEGEN = sig
   val string_of_js : code -> string
+  val output : out_channel -> code -> unit
 end
 
 module Js_CodeGen : JS_CODEGEN = struct
@@ -133,6 +134,7 @@ module Js_CodeGen : JS_CODEGEN = struct
   module PP :
   sig
     val show : code -> string
+    val output : out_channel -> code -> unit
   end =
     struct
       open PP
@@ -222,10 +224,12 @@ module Js_CodeGen : JS_CODEGEN = struct
         | Return expr ->
            PP.text "return " ^^ (show expr) ^^ PP.text ";"
 
+      let output oc = show ->- PP.out_pretty oc 144
       let show = show ->- PP.pretty 144
     end
 
   let string_of_js x = PP.show x
+  let output oc code = PP.output oc code
 end
 
 (** Create a JS string literal, quoting special characters *)
