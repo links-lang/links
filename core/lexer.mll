@@ -124,7 +124,6 @@ let keywords = [
  "spawnWait", SPAWNWAIT;
  "switch"   , SWITCH;
  "table"    , TABLE;
- (* "TableHandle", TABLEHANDLE; *)
  "TemporalTable", TEMPORALTABLE;
  "to"       , TO;
  "true"     , TRUE;
