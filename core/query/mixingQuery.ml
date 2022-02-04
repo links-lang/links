@@ -208,10 +208,10 @@ let rec reduce_where_then (c, t) =
   | _ ->
     Q.If (c, t, Q.Concat [])
 
-let reduce_for_body (gs, os, body) =
+let rec reduce_for_body (gs, os, body) =
+  let rb = reduce_for_body in
   match body with
-    (* | Concat []                 -> body *)
-    | Q.For (_, gs', os', body') -> Q.For (None, gs @ gs', os @ os', body')
+    | Q.For (_, gs', os', body') -> rb (gs @ gs', os @ os', body')
     (* | Prom _ as u               ->
           let z = Var.fresh_raw_var () in
           let tyz = type_of_expression u in
@@ -220,6 +220,7 @@ let reduce_for_body (gs, os, body) =
           For (None, gs @ [(z, u)], [] (* os *), (Singleton vz)) *)
     (* make sure when we reach this place, gs can NEVER be empty
       | _ when gs = [] (* && _os = [] *) -> body *)
+    | Q.Concat vs -> reduce_concat (List.map (fun v -> rb (gs, os, v)) vs)
     | _                         -> Q.For (None, gs, os, body)
 
 let rec reduce_for_source : Q.env -> var * Q.t * Types.datatype -> (Q.env -> (Q.t list -> Q.t list) -> Q.t) -> Q.t =
