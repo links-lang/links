@@ -63,12 +63,12 @@ let count_newlines = StringUtils.count '\n'
 let keywords = [
  "alien"    , ALIEN;
  "as"       , AS;
+ "between"  , BETWEEN;
  "by"       , BY;
  "case"     , CASE;
  "client"   , CLIENT;
  "database" , DATABASE;
  "default"  , DEFAULT;
- "delete"   , DELETE;
  "delete_left", DELETE_LEFT;
  "determined", DETERMINED;
  "do"       , DOOP;
@@ -124,14 +124,20 @@ let keywords = [
  "spawnWait", SPAWNWAIT;
  "switch"   , SWITCH;
  "table"    , TABLE;
- "TableHandle", TABLEHANDLE;
+ "TemporalTable", TEMPORALTABLE;
+ "to"       , TO;
  "true"     , TRUE;
  "try"     , TRY;
+ "tt_insert" , TTINSERT;
+ "tt_join"   , TTJOIN;
  "typename" , TYPENAME;
- "update"   , UPDATE;
  "unsafe"   , UNSAFE;
+ "using"    , USING;
+ "valid"    , VALID;
  "values"   , VALUES;
+ "vt_join"  , VTJOIN;
  "var"      , VAR;
+ "vt_insert", VTINSERT;
  "where"    , WHERE;
  "with"     , WITH;
 (* SAND *)
@@ -195,6 +201,8 @@ rule lex ctxt nl = parse
   | '}'                                 { ctxt#pop_lexer (* fall back *); RBRACE }
   | "<->"                               { LRARROW }
   | "<--"                               { LLARROW }
+  | "<-t-"                              { LTLARROW }
+  | "<-v-"                              { LVLARROW }
   | "<-"                                { LARROW }
   | "<|"                                { LEFTTRIANGLE }
   | "|>"                                { RIGHTTRIANGLE }
@@ -243,11 +251,34 @@ rule lex ctxt nl = parse
   | "postfix"                           { FIXITY Associativity.Left }
   | "~fun"                              { FROZEN_FUN }
   | "~linfun"                           { FROZEN_LINFUN }
+  | "update"                            { ctxt#push_lexer (upd_qual ctxt nl); UPDATE }
+  | "vt_insert"                         { ctxt#push_lexer (ins_qual ctxt nl); VTINSERT }
+  | "tt_insert"                         { ctxt#push_lexer (ins_qual ctxt nl); TTINSERT }
+  | "delete"                            { ctxt#push_lexer (upd_qual ctxt nl); DELETE }
   | def_id as var                       { try List.assoc var keywords
                                           with Not_found | NotFound _ ->
                                             if Char.isUpper var.[0] then CONSTRUCTOR var
                                             else VARIABLE var }
   | def_blank                           { lex ctxt nl lexbuf }
+  | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
+and upd_qual ctxt nl = parse
+  | def_blank                           { upd_qual ctxt nl lexbuf }
+  | '\n'                                { nl (); bump_lines lexbuf 1; upd_qual ctxt nl lexbuf }
+  | '('                                 { (* Switch back -- current update *) ctxt#pop_lexer; LPAREN }
+  | "sequenced"                         { ctxt#pop_lexer; SEQUENCED }
+  | "nonsequenced"                      { ctxt#pop_lexer; NONSEQUENCED }
+  | "current"                           { ctxt#pop_lexer; CURRENT }
+  | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
+and ins_qual ctxt nl = parse
+  | def_blank                           { ins_qual ctxt nl lexbuf }
+  | '\n'                                { nl (); bump_lines lexbuf 1; ins_qual ctxt nl lexbuf }
+  | "sequenced"                         { ctxt#pop_lexer; SEQUENCED }
+  | "current"                           { ctxt#pop_lexer; CURRENT }
+  | def_id as var                       { ctxt#pop_lexer;
+                                          try List.assoc var keywords
+                                          with Not_found | NotFound _ ->
+                                            if Char.isUpper var.[0] then CONSTRUCTOR var
+                                            else VARIABLE var }
   | _                                   { raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf)) }
 and starttag ctxt nl = parse
   | eof                                 { EOF }

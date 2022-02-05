@@ -1,0 +1,5 @@
+var db = database "timedb";
+
+var timetbl = table "timetbl" with (foo: String) from db;
+
+delete (x <-t- timetbl)

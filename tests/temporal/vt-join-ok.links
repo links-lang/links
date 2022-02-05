@@ -1,0 +1,30 @@
+var db = database "timedb";
+
+var employees = table "employees"
+  with (name: String, salary_band: String, department_id: Int)
+  using valid_time(vt_from, vt_to) from db;
+
+var salaries = table "salaries"
+  with (salary_band: String, salary: Int)
+  using valid_time(vt_from, vt_to) from db;
+
+var departments = table "departments"
+  with (department_id: Int, name: String) from db;
+
+var res =
+  query nested {
+      vt_join {
+        for (e <-v- employees)
+        where (vtData(e).name == "Robert")
+            for (s <-v- salaries)
+            where (vtData(e).salary_band == vtData(s).salary_band)
+              for (d <-- departments)
+              where (d.department_id == vtData(e).department_id)
+                [(name = vtData(e).name, salary = vtData(s).salary, department = d.name)]
+      }
+  };
+
+switch(res) {
+  case [] -> 0
+  case res :: _ -> vtData(res).salary
+}

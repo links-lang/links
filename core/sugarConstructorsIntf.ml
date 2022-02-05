@@ -140,10 +140,12 @@ module type SugarConstructorsSig = sig
   val db_exps
       : ?ppos:t -> (Name.t * phrase) list -> phrase
   val db_insert
-      : ?ppos:t -> phrase -> Name.t list -> phrase -> string option
+      : ?ppos:t -> temporal_insertion option -> phrase -> Name.t list -> phrase -> string option
      -> phrase
   val query
       : ?ppos:t -> (phrase * phrase) option -> QueryPolicy.t -> phrase -> phrase
+  val temporal_join
+      : ?ppos:t -> Temporality.t -> phrase -> phrase
 
   (* Operator applications *)
   val infix_appl' : ?ppos:t -> phrase -> BinaryOp.t -> phrase -> phrase
@@ -164,4 +166,14 @@ module type SugarConstructorsSig = sig
      -> ?parameters:((Pattern.with_pos * phrase) list)
      -> phrase -> clause list -> handler_depth
      -> handler
+
+  val table
+      : ?ppos:t
+     -> tbl_keys:(phrase option)
+     -> phrase (* Name *)
+     -> Datatype.with_pos (* Type *)
+     -> (Name.t * fieldconstraint list) list (* Field constraints *)
+     -> (Temporality.t * (string * string)) option (* Temporal to/from fields *)
+     -> phrase (* Database *)
+     -> phrase (* TableLit *)
 end

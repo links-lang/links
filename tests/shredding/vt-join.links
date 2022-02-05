@@ -1,0 +1,103 @@
+var db = database "links";
+
+var employees = table "vtj_employees"
+  with (name: String, salary_band: String, department_id: Int)
+  using valid_time(valid_from, valid_to) from db;
+
+var salaries = table "vtj_salaries"
+  with (salary_band: String, salary: Int)
+  using valid_time(valid_from, valid_to) from db;
+
+var departments = table "vtj_departments"
+  with (department_id: Int, name: String) where department_id readonly from db;
+
+
+fun setup() {
+
+  fun setupDepartments() {
+    map(fun(x) {
+      var id = insert departments values [(name = x)] returning department_id;
+      (x, id)
+    }, ["Classics", "Medicine", "Informatics"])
+  }
+
+  fun setupSalaries() {
+    vt_insert sequenced salaries values (salary_band, salary)
+      [
+        withValidity(
+          (salary_band = "UE07", salary = 30000),
+          beginningOfTime, parseDate("2012-01-01 00:00:00")),
+        withValidity(
+          (salary_band = "UE07", salary = 32000),
+          parseDate("2012-01-01 00:00:00"), forever),
+        withValidity(
+          (salary_band = "UE08", salary = 40000),
+          beginningOfTime, forever)
+      ]
+  }
+
+  fun setupPeople(depts) {
+    fun lookupDept(name) {
+      fromJust(lookup(name, depts))
+    }
+
+    # Alice has been working here a *long* time.
+    vt_insert sequenced employees values (name, salary_band, department_id) [
+      withValidity((name = "Alice", salary_band = "UE08",
+            department_id = lookupDept("Classics")), beginningOfTime, forever),
+
+      withValidity((name = "Bob", salary_band = "UE07",
+            department_id = lookupDept("Informatics")),
+          parseDate("2010-01-01 00:00:00"),
+          parseDate("2013-01-01 00:00:00")),
+
+      withValidity((name = "Bob", salary_band = "UE08",
+            department_id = lookupDept("Informatics")),
+          parseDate("2013-01-01 00:00:00"),
+          parseDate("2017-01-01 00:00:00"))]
+  }
+
+  var depts = setupDepartments();
+  # Salaries: UE07 = 30k between 0 and 2012; 32k between 2012 and forever
+  # UE08 = 40k forever
+  setupSalaries();
+  # People: Alice UE08 forever. Bob UE07 between 2010 and 2013, and UE08 between 2013 and 2017.
+  setupPeople(depts)
+}
+
+fun lookupEmployee(name) {
+  vt_join {
+    for (e <-v- employees)
+    where (vtData(e).name == name)
+        for (s <-v- salaries)
+        where (vtData(e).salary_band == vtData(s).salary_band)
+          for (d <-- departments)
+          where (d.department_id == vtData(e).department_id)
+            [(name = vtData(e).name, salary = vtData(s).salary, department = d.name)]
+  }
+}
+
+fun main() {
+  setup();
+  # Alice is fairly straightforward: 40k forever.
+  assertEq(lookupEmployee("Alice"),
+      [withValidity((name = "Alice", salary = 40000, department = "Classics"),
+        beginningOfTime, forever)]);
+  var bobResults = sortBy(fun(x) { vtData(x).salary }, lookupEmployee("Bob"));
+  # Bob should have:
+  # 30k between 2010 and 2012
+  # 32k between 2012 and 2013
+  # 40k between 2013 and 2017
+  assertEq(bobResults,
+          [
+            withValidity((name = "Bob", salary = 30000, department = "Informatics"),
+                parseDate("2010-01-01 00:00:00"), parseDate("2012-01-01 00:00:00")),
+            withValidity((name = "Bob", salary = 32000, department = "Informatics"),
+                parseDate("2012-01-01 00:00:00"), parseDate("2013-01-01 00:00:00")),
+            withValidity((name = "Bob", salary = 40000, department = "Informatics"),
+                parseDate("2013-01-01 00:00:00"), parseDate("2017-01-01 00:00:00"))
+          ]
+  )
+}
+
+main()

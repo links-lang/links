@@ -1,7 +1,7 @@
-DROP TABLE IF EXISTS contacts;
-DROP TABLE IF EXISTS departments;
-DROP TABLE IF EXISTS employees;
-DROP TABLE IF EXISTS tasks;
+DROP TABLE IF EXISTS contacts CASCADE;
+DROP TABLE IF EXISTS departments CASCADE;
+DROP TABLE IF EXISTS employees CASCADE;
+DROP TABLE IF EXISTS tasks CASCADE;
 
 CREATE TABLE contacts (
     id     integer primary key,

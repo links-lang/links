@@ -358,3 +358,28 @@ module QueryPolicy = struct
   type t = Flat | Nested | Mixing | Delat
     [@@deriving show]
 end
+
+(* Temporality of queries, inserts, and temporal joins *)
+module Temporality = struct
+  type t = Current | Transaction | Valid
+  [@@deriving yojson]
+
+  let current = Current
+  let transaction = Transaction
+  let valid = Valid
+
+  let pp ppf =
+      let open Format in
+      function
+        | Current -> pp_print_string ppf "Current"
+        | Transaction -> pp_print_string ppf "Transaction"
+        | Valid -> pp_print_string ppf "Valid"
+
+  let show x = Format.asprintf "%a" pp x
+end
+
+module TemporalField = struct
+  let data_field = "!data"
+  let from_field = "!from"
+  let to_field = "!to"
+end

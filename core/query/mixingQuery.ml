@@ -208,10 +208,10 @@ let rec reduce_where_then (c, t) =
   | _ ->
     Q.If (c, t, Q.Concat [])
 
-let reduce_for_body (gs, os, body) =
+let rec reduce_for_body (gs, os, body) =
+  let rb = reduce_for_body in
   match body with
-    (* | Concat []                 -> body *)
-    | Q.For (_, gs', os', body') -> Q.For (None, gs @ gs', os @ os', body')
+    | Q.For (_, gs', os', body') -> rb (gs @ gs', os @ os', body')
     (* | Prom _ as u               ->
           let z = Var.fresh_raw_var () in
           let tyz = type_of_expression u in
@@ -220,6 +220,7 @@ let reduce_for_body (gs, os, body) =
           For (None, gs @ [(z, u)], [] (* os *), (Singleton vz)) *)
     (* make sure when we reach this place, gs can NEVER be empty
       | _ when gs = [] (* && _os = [] *) -> body *)
+    | Q.Concat vs -> reduce_concat (List.map (fun v -> rb (gs, os, v)) vs)
     | _                         -> Q.For (None, gs, os, body)
 
 let rec reduce_for_source : Q.env -> var * Q.t * Types.datatype -> (Q.env -> (Q.t list -> Q.t list) -> Q.t) -> Q.t =
@@ -262,8 +263,8 @@ let rec reduce_for_source : Q.env -> var * Q.t * Types.datatype -> (Q.env -> (Q.
           (* this ensures os' is added to the right of the final comprehension, and further inner orderings to the right of os' *)
           let body' = fun env' os_f -> body env' (os_f ->- add_os os') in
           reduce_for_body (gs, [], reduce_for_source env (x,v,tyv) body')
-        | Q.Table (_, _, _, row)
-        | Q.Dedup (Q.Table (_, _, _, row)) ->
+        | Q.Table Value.Table.{ row; _ }
+        | Q.Dedup (Q.Table Value.Table.{ row; _ }) ->
             (* we need to generate a fresh variable in order to
               correctly handle self joins *)
             let y = Var.fresh_raw_var () in
@@ -340,7 +341,19 @@ struct
   let reduce_artifacts = function
   | Q.Apply (Q.Primitive "stringToXml", [u]) ->
     Q.Singleton (Q.XML (Value.Text (Q.unbox_string u)))
-  | Q.Apply (Q.Primitive "AsList", [xs]) -> xs
+  | Q.Apply (Q.Primitive "AsList", [xs])
+  | Q.Apply (Q.Primitive "AsListT", [xs])
+  | Q.Apply (Q.Primitive "AsListV", [xs]) -> xs
+  (* Temporal projection operations *)
+  | Q.Apply (Q.Primitive "ttData", [x])
+  | Q.Apply (Q.Primitive "vtData", [x]) ->
+    Q.Project (x, TemporalField.data_field)
+  | Q.Apply (Q.Primitive "ttFrom", [x])
+  | Q.Apply (Q.Primitive "vtFrom", [x]) ->
+    Q.Project (x, TemporalField.from_field)
+  | Q.Apply (Q.Primitive "ttTo", [x])
+  | Q.Apply (Q.Primitive "vtTo", [x]) ->
+    Q.Project (x, TemporalField.to_field)
   | Q.Apply (Q.Primitive "Distinct", [u]) -> Q.Prom (Q.Dedup u)
   | u -> u
 
@@ -467,12 +480,13 @@ struct
         let open Q in
         check_policies_compatible env.policy policy;
         computation env e
-    | Special (Ir.Table (db, name, keys, (readtype, _, _))) as _s ->
-       (* WR: this case is because shredding needs to access the keys of tables
-          but can we avoid it (issue #432)? *)
+    | Special (Ir.Table { database; table = name; keys; temporal_fields;
+                table_type = (temporality, readtype, _, _) }) ->
+       (*  WR: this case is because shredding needs to access the keys of tables
+           but can we avoid it (issue #432)? *)
        (* Copied almost verbatim from evalir.ml, which seems wrong, we should probably call into that. *)
        begin
-         match xlate env db, xlate env name, xlate env keys, (TypeUtils.concrete_type readtype) with
+         match xlate env database, xlate env name, xlate env keys, (TypeUtils.concrete_type readtype) with
          | Q.Database (db, params), name, keys, Types.Record (Types.Row row) ->
             let unboxed_keys =
               List.map
@@ -480,7 +494,12 @@ struct
                   List.map Q.unbox_string (Q.unbox_list key))
                 (Q.unbox_list keys)
             in
-            Q.Table ((db, params), Q.unbox_string name, unboxed_keys, row)
+            let tbl =
+                Value.make_table ~database:(db, params)
+                    ~name:(Q.unbox_string name) ~keys:unboxed_keys
+                    ~temporality ~temporal_fields ~row
+            in
+            Q.Table tbl
          | _ -> Q.query_error "Error evaluating table handle"
        end
     | Special _s ->

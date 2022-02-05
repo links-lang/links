@@ -50,7 +50,8 @@ object (self)
     | _ -> self
 
   method! phrasenode = function
-    | TableLit (_, (_, None), _, _, _) -> {< all_desugared = false >}
+    | TableLit { tbl_type = (_, _, None); _ } ->
+        {< all_desugared = false >}
     | p -> super#phrasenode p
 end
 
@@ -108,7 +109,7 @@ module Desugar = struct
         | Record r -> Types.Record (row alias_env r t')
         | Variant r -> Types.Variant (row alias_env r t')
         | Effect r -> Types.Effect (row alias_env r t')
-        | Table (r, w, n) -> Types.Table (datatype r, datatype w, datatype n)
+        | Table (tmp, r, w, n) -> Types.Table (tmp, datatype r, datatype w, datatype n)
         | List k -> Types.Application (Types.list, [(PrimaryKind.Type, datatype k)])
         | TypeApplication (tycon, ts) ->
             (* Matches kinds of the quantifiers against the type arguments.
@@ -300,12 +301,24 @@ object (self)
              to the outer scope; any aliases bound in _o are
              unreachable from outside the block *)
           self, Block (bs, p)
-    | TableLit (t, (dt, _), cs, keys, p) ->
+    | TableLit {
+        tbl_name;
+        tbl_type = (tmp, dt, _);
+        tbl_field_constraints = cs;
+        tbl_keys;
+        tbl_temporal_fields; tbl_database } ->
+
         let read, write, needed = Desugar.table_lit alias_env cs dt in
-        let o, t = self#phrase t in
-        let o, keys = o#phrase keys in
-        let o, p = o#phrase p in
-          o, TableLit (t, (dt, Some (read, write, needed)), cs, keys, p)
+        let o, tbl_name = self#phrase tbl_name in
+        let o, tbl_keys = o#phrase tbl_keys in
+        let o, tbl_database = o#phrase tbl_database in
+        let lit = TableLit {
+            tbl_name;
+            tbl_type = (tmp, dt, Some (read, write, needed));
+            tbl_field_constraints = cs;
+            tbl_keys; tbl_temporal_fields; tbl_database }
+        in
+          o, lit
     (* Switch and receive type annotations are never filled in by
        this point, so we ignore them.  *)
     | p -> super#phrasenode p

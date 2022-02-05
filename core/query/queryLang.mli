@@ -96,6 +96,7 @@ val is_list : t -> bool
 
 val likeify : t -> t option
 val sql_of_query : t -> Sql.query
+val base : Sql.index -> t -> Sql.base
 
 (* Specific to nested queries *)
 type let_clause = Var.var * t * Var.var * t
@@ -105,3 +106,28 @@ val sql_of_let_query : let_query -> Sql.query
 val update : (Var.var * string) * t option * t -> Sql.query
 val delete : (Var.var * string) * t option -> Sql.query
 val insert : string -> string list -> Value.t list list -> Sql.query
+
+(* Query language visitor *)
+module type QUERY_VISITOR =
+sig
+  class visitor :
+  object ('self_type)
+    method query : t -> ('self_type * t)
+    method tag   : tag -> ('self_type * tag)
+    method binder : Var.binder -> ('self_type * Var.binder)
+
+    method option :
+      'a.
+        ('self_type -> 'a -> ('self_type * 'a)) ->
+        'a option ->
+        ('self_type * ('a option))
+
+    method list :
+      'a.
+        ('self_type -> 'a -> ('self_type * 'a)) ->
+        'a list ->
+        ('self_type * ('a list))
+  end
+end
+
+module Transform : QUERY_VISITOR
