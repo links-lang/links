@@ -398,7 +398,6 @@ end
 module Comparison :
 sig
   val is : string -> bool
-  val js_name : string -> Code.t
   val gen : string -> Code.t list -> Code.t
 end =
 struct
@@ -414,12 +413,11 @@ struct
         ">=", Runtime.Links.gte ]
 
   let is x = StringMap.mem x funs
-  let js_name op = StringMap.find op funs
   let gen op args =
     let open Code in
     match op, args with
       | "<>", [l; r] -> Unop("!", Aux.call Runtime.Links.eq [l; r])
-      | ( "<" | ">" | "<=" | ">="), [l; r] -> Aux.call (js_name op) [l; r]
+      | ( "==" | "<" | ">" | "<=" | ">="), [l; r] -> Aux.call (js_name op) [l; r]
       | _, _ -> raise (internal_error (Printf.sprintf "Unrecognised relational operator '%s' with arity %d\n" op (List.length args)))
 end
 
@@ -764,7 +762,9 @@ end = functor (K : CONTINUATION) -> struct
              K.apply (K.reflect (Var __kappa))
                (StringOp.gen name [Var "x"; Var "y"]))
        else if Comparison.is name then
-         Comparison.js_name name
+         Fn (["x"; "y"; __kappa],
+             K.apply (K.reflect (Var __kappa))
+               (Comparison.gen name [Var "x"; Var "y"]))
        else
          Var name
     | Extend (field_map, rest) ->
