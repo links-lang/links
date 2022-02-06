@@ -413,6 +413,7 @@ struct
         ">=", Runtime.Links.gte ]
 
   let is x = StringMap.mem x funs
+  let js_name op = StringMap.find op funs
   let gen op args =
     let open Code in
     match op, args with
