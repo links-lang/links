@@ -30,6 +30,7 @@ depends: [
   "cohttp-lwt-unix"
   "conduit-lwt-unix"
   "uri"
+  "tls"
   "websocket"
   "websocket-lwt-unix"
   "safepass"
