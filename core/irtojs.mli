@@ -9,21 +9,31 @@ type venv = string VEnv.t
 
 (** Intermediate language *)
 module Code: sig
-  type t = Var of string
-         | Lit    of string
-         | Fn     of string list * t
+  module Var: sig
+    type t = string
+    [@@deriving show]
+  end
 
-         | LetFun of (string * string list * t * Ir.location) * t
-         | LetRec of (string * string list * t * Ir.location) list * t
+  module Label: sig
+    type t = string
+    [@@deriving show]
+  end
+
+  type t = Var    of Var.t
+         | Lit    of string
+         | Fn     of Var.t list * t
+
+         | LetFun of (Var.t * Var.t list * t * Ir.location) * t
+         | LetRec of (Var.t * Var.t list * t * Ir.location) list * t
          | Call   of t * t list
-         | Unop   of string * t
-         | Binop  of t * string * t
+         | Unop   of Var.t * t
+         | Binop  of t * Var.t * t
          | If     of t * t * t
-         | Case   of string * (string * t) stringmap * (string * t) option
-         | Dict   of (string * t) list
+         | Case   of Var.t * (Var.t * t) stringmap * (Var.t * t) option
+         | Dict   of (Label.t * t) list
          | Arr    of t list
 
-         | Bind   of string * t * t
+         | Bind   of Var.t * t * t
          | Return of t
 
          | Die    of string
