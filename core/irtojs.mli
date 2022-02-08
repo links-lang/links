@@ -32,6 +32,7 @@ module Code: sig
          | Case   of Var.t * (Var.t * t) stringmap * (Var.t * t) option
          | Dict   of (Label.t * t) list
          | Arr    of t list
+         | Select of t * Label.t
 
          | Bind   of Var.t * t * t
          | Return of t

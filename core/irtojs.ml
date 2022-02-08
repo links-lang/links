@@ -42,6 +42,7 @@ module Code = struct
          | Case   of Var.t * (Var.t * t) stringmap * (Var.t * t) option
          | Dict   of (Label.t * t) list
          | Arr    of t list
+         | Select of t * Label.t
 
          | Bind   of Var.t * t * t
          | Return of t
@@ -173,6 +174,7 @@ module VariableInspection = struct
         | If (i, t, e) -> List.iter (go) [i;t;e]
         | Dict xs -> List.iter (go -<- snd) xs
         | Arr xs -> List.iter (go) xs
+        | Select (e, _l) -> go e
         | Bind (bnd, c1, c2) -> add_binder bnd; go c1; go c2
         | Return c -> go c
         | Case (bnd, sm, sc_opt) ->
@@ -247,7 +249,7 @@ module Js_CodeGen : JS_CODEGEN = struct
           | _ -> assert false in
         let show_case v l (x, e) =
           PP.text "case" ^+^ PP.text("'"^l^"'") ^^
-            PP.text ":" ^+^ braces (PP.text"var" ^+^ PP.text x ^+^ PP.text "=" ^+^ PP.text (v^"._value;") ^+^
+            PP.text ":" ^+^ braces (PP.text "let" ^+^ PP.text x ^+^ PP.text "=" ^+^ PP.text (v^"._value;") ^+^
                                       show e ^^ PP.text ";" ^+^ PP.text "break;") ^^ break in
         let show_cases v =
           fun cases ->
@@ -256,7 +258,7 @@ module Js_CodeGen : JS_CODEGEN = struct
             cases DocNil in
         let show_default v = opt_app
                                (fun (x, e) ->
-                                 PP.text "default:" ^+^ braces (PP.text "var" ^+^ PP.text x ^+^ PP.text "=" ^+^ PP.text (v^";") ^+^
+                                 PP.text "default:" ^+^ braces (PP.text "let" ^+^ PP.text x ^+^ PP.text "=" ^+^ PP.text (v^";") ^+^
                                                                   show e ^^ PP.text ";" ^+^ PP.text "break;") ^^ break) PP.DocNil in
         let maybe_parenise = function
           | Var _
@@ -267,6 +269,7 @@ module Js_CodeGen : JS_CODEGEN = struct
             | Bind _
             | Die _
             | Return _
+            | Select _
             | Nothing as c -> show c
           | c -> parens (show c)
         in
@@ -315,8 +318,10 @@ module Js_CodeGen : JS_CODEGEN = struct
              | [] -> PP.text (Json.nil_literal |> Json.json_to_string)
              | x :: xs -> PP.braces (PP.text "\"_head\":" ^+^ (show x) ^^ (PP.text ",") ^|  PP.nest 1 (PP.text "\"_tail\":" ^+^  (show_list xs))) in
            show_list elems
+        | Select (e, l) ->
+           maybe_parenise e ^^ PP.text "." ^^ PP.text l
         | Bind (name, value, body) ->
-           PP.text "var" ^+^ PP.text name ^+^ PP.text "=" ^+^ show value ^^ PP.text ";" ^^
+           PP.text "let" ^+^ PP.text name ^+^ PP.text "=" ^+^ show value ^^ PP.text ";" ^^
              break ^^ show body
         | Return expr ->
            PP.text "return " ^^ (show expr) ^^ PP.text ";"
@@ -818,9 +823,15 @@ end = functor (K : CONTINUATION) -> struct
          | _ -> call (gv f) (List.map gv vs)
        end
     | Closure (f, _, v) ->
-       if session_exceptions_enabled
-       then call (Var "partialApplySE") [gv (Variable f); gv v]
-       else call (Var "partialApply") [gv (Variable f); gv v]
+      let f' = gv (Variable f) in
+      let env = gv v in
+      let closure = call (Select (f', "bind")) [Var "null"; env] in
+      if session_exceptions_enabled
+      then call (Select (Var "Object", "defineProperty")) [closure; strlit "__closureEnv"; Dict [("value", env)]]
+      else closure
+       (* if session_exceptions_enabled
+        * then call (Var "partialApplySE") [gv (Variable f); gv v]
+        * else call (Select (gv (Variable f), "bind")) [Var "null"; gv v] (\*call (Var "partialApply") [gv (Variable f); gv v]*\) *)
     | Coerce (v, _) ->
        gv v
 
@@ -1001,9 +1012,9 @@ end = functor (K : CONTINUATION) -> struct
       in
       K.bind kappa
         (fun kappa ->
-           let gen_cont (xb, c) =
+           let gen_cont (xb, comp) =
              let (x, x_name) = name_binder xb in
-             x_name, (snd (generate_computation (VEnv.bind x x_name env) c kappa)) in
+             x_name, (snd (generate_computation (VEnv.bind x x_name env) comp kappa)) in
            let cases = StringMap.map gen_cont cases in
            let default = opt_map gen_cont default in
            k (Case (x, cases, default)))
@@ -1059,19 +1070,21 @@ end = functor (K : CONTINUATION) -> struct
          let arg = call (Var "_send") [Dict ["_label", strlit l; "_value", Dict []]; gv c] in
          K.apply ~strategy:`Direct kappa arg
       | Choice (c, bs) ->
-         let result = gensym () in
-         let received = gensym () in
+         let result = gensym ~prefix:"result" () in
+         let received = gensym ~prefix:"received" () in
          let bind, skappa, skappas = K.pop kappa in
          let skappa' =
            contify (fun kappa ->
              let scrutinee = project (Var result) (strlit "1") in
              let channel = project (Var result) (strlit "2") in
-             let generate_branch (cb, b) =
-               let (c, cname) = name_binder cb in
-               cname, Bind (cname, channel, snd (generate_computation (VEnv.bind c cname env) b K.(skappa <> kappa))) in
+             let generate_branch (cb, comp) =
+               let (ch, chname) = name_binder cb in
+               let payload = gensym ~prefix:"payload" () in
+               payload, Bind (chname, channel, snd (generate_computation (VEnv.bind ch chname env) comp K.(skappa <> kappa)))
+             in
              let branches = StringMap.map generate_branch bs in
-             Fn ([result], (Bind (received, scrutinee, (Case (received, branches, None)))))) in
-
+             Fn ([result], (Bind (received, scrutinee, (Case (received, branches, None))))))
+         in
          let cont = K.(skappa' <> skappas) in
          if (session_exceptions_enabled) then
            let action cancel_stub =
@@ -1176,9 +1189,10 @@ end = functor (K : CONTINUATION) -> struct
               let translate_eff_case env (xb, resume, body) kappas =
                 let xb = name_binder xb in
                 let resume = name_binder resume in
-                let p = project (Var (snd xb)) (strlit "p") in
+                let payload = gensym ~prefix:"payload" () in
+                let p = project (Var payload) (strlit "p") in
                 let r =
-                  let s = project (Var (snd xb)) (strlit "s") in
+                  let s = project (Var payload) (strlit "s") in
                   make_resumption s
                 in
                 let env' =
@@ -1186,15 +1200,16 @@ end = functor (K : CONTINUATION) -> struct
                   VEnv.bind x n env
                 in
                 let body = generate_body env' xb (parameterise body) kappas in
-                snd xb, Bind (snd resume, r,
-                              Bind (snd xb, p, body))
+                payload, Bind (snd resume, r,
+                               Bind (snd xb, p, body))
               in
               let translate_exn_case env (xb, body) kappas =
                 let xb = name_binder xb in
                 let dummy_var_name = gensym ~prefix:"dummy" () in
+                let payload = gensym ~prefix:"payload" () in
                 let x_name = snd xb in
                 let p = project (Var x_name) (strlit "p") in
-                snd xb, Bind (x_name, project p (strlit "1"),
+                payload, Bind (x_name, project p (strlit "1"),
                         (* FIXME: the following call should
                            probably be apply_yielding rather than a
                            raw Call because _handleSessionException
@@ -1207,7 +1222,8 @@ end = functor (K : CONTINUATION) -> struct
                   (fun operation_name clause cases ->
                     StringMap.add operation_name
                       (if session_exceptions_enabled && operation_name = Value.session_exception_operation
-                       then let (xb,_,body) = clause in translate_exn_case env (xb, body) kappas
+                       then let (xb,_,body) = clause in
+                            translate_exn_case env (xb, body) kappas
                        else translate_eff_case env clause kappas)
                       cases)
                   eff_cases StringMap.empty
