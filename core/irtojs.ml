@@ -47,6 +47,8 @@ module Code = struct
          | Bind   of Var.t * t * t
          | Return of t
 
+         | InlineJS of string
+
          | Die    of string
          | Nothing
          [@@deriving show]
@@ -181,7 +183,7 @@ module VariableInspection = struct
             add_var bnd;
             StringMap.iter (fun _ (s, code) -> add_binder s; go code) sm;
             OptionUtils.opt_iter (fun (bnd, c) -> add_binder bnd; go c) sc_opt
-        | Lit _ | Die _ | Nothing -> () in
+        | Lit _ | Die _ | InlineJS _ | Nothing -> () in
     go code;
     get_vars ()
 
@@ -325,6 +327,8 @@ module Js_CodeGen : JS_CODEGEN = struct
              break ^^ show body
         | Return expr ->
            PP.text "return " ^^ (show expr) ^^ PP.text ";"
+        | InlineJS raw_code ->
+           PP.text raw_code
 
       let output oc = show ->- PP.out_pretty oc 144
       let show = show ->- PP.pretty 144
@@ -501,7 +505,7 @@ module type CONTINUATION = sig
   val contify_with_env : (t -> venv * Code.t) -> venv * t
 
   (* Generates appropriate bindings for primitives *)
-  val primitive_bindings : string
+  val primitive_bindings : Code.t
 
   (* Generates a string dump of the continuation, for debugging purposes. *)
   val to_string : t -> string
@@ -552,16 +556,27 @@ module Default_Continuation : CONTINUATION = struct
   let apply ?(strategy=`Yield) k arg =
     let open Code in
     match strategy with
-    | `Direct -> Call (Var "_applyCont", [reify k; arg])
-    | _       -> Call (Var "_yieldCont", [reify k; arg])
+    | `Direct -> Call (Var "_$K.apply", [reify k; arg])
+    | _       -> Call (Var "_$K.yield", [reify k; arg])
 
   let primitive_bindings =
-    "function _makeCont(k) { return k; }\n" ^
-      "var _idy = function(x) { return; };\n" ^
-      "var _applyCont = _applyCont_Default; var _yieldCont = _yieldCont_Default;\n" ^
-      "var _cont_kind = \"Default_Continuation\";\n" ^
-        "function is_continuation(value) {return value != undefined && (typeof value == 'function' || value instanceof Object && value.constructor == Function); }\n" ^
-      "var receive = _default_receive;"
+    Code.InlineJS {|
+/* First-order continuation module */
+const _$K = (function() {
+  return Object.freeze({
+     'kind': 'Default_Continuation',
+     'apply': function(k, arg) {
+        return k(arg);
+     },
+     'yield': function(k, arg) {
+       return _yield(function() { return _$K.apply(k, arg); });
+     },
+     'idy': function(x) { return; },
+     'make': function(k) { return k; }
+  });
+})();
+var receive = _default_receive;
+|}
 
   let contify_with_env fn =
     match fn Identity with
@@ -590,7 +605,7 @@ module Higher_Order_Continuation : CONTINUATION = struct
   (* Auxiliary functions for manipulating the continuation stack *)
   include Code.Aux.List
   let nil = Code.Runtime.List.nil
-  let toplevel = Cons (Code.Var "_idk", Cons (Code.Var "_efferr", Reflect nil))
+  let toplevel = Cons (Code.Var "_$K.idk", Cons (Code.Var "_efferr", Reflect nil))
 
   let reflect x = Reflect x
   let rec reify = function
@@ -643,23 +658,36 @@ module Higher_Order_Continuation : CONTINUATION = struct
   let apply ?(strategy=`Yield) k arg =
     let open Code in
     match strategy with
-    | `Direct -> Aux.call (Var "_applyCont") [reify k; arg]
-    | _       -> Aux.call (Var "_yieldCont") [reify k; arg]
+    | `Direct -> Aux.call (Var "_$K.apply") [reify k; arg]
+    | _       -> Aux.call (Var "_$K.yield") [reify k; arg]
 
   let primitive_bindings =
-    "function _makeCont(k) {\n" ^
-      "  return _Cons(k, _singleton(_efferr));\n" ^
-      "}\n" ^
-      "var _idy = _makeCont(function(x, ks) { return; }); var _idk = function(x,ks) { };\n" ^
-      "var _applyCont = _applyCont_HO; var _yieldCont = _yieldCont_HO;\n" ^
-      "var _cont_kind = \"Higher_Order_Continuation\";\n" ^
-      "function is_continuation(kappa) {\n" ^
-        "return kappa !== null && typeof kappa === 'object' && _hd(kappa) !== undefined && _tl(kappa) !== undefined;\n" ^
-      "}\n" ^
-      if session_exceptions_enabled then
-        "var receive = _exn_receive;"
-      else
-        "var receive = _default_receive;"
+    Code.InlineJS ({|
+/* Higher-order continuation module. */
+const _$K = (function() {
+  function make(k) {
+    return _$List.cons(k, _$List.singleton(function(z, ks) {
+      return _error("Unhandled operation `" + z._label + "'.");
+    }));
+  }
+  return Object.freeze({
+    'kind': 'Higher_Order_Continuation',
+    'apply': function(ks, arg) {
+       const k = _$List.head(ks);
+       ks = _$List.tail(ks);
+       return k(arg, ks);
+    },
+    'yield': function(ks, arg) {
+       return _yield(function() { return _$K.apply(ks, arg) });
+    },
+    'idy': make(function(x, ks) { return; }),
+    'idk': function(x, ks) { },
+    'make': make
+  });
+})();
+|} ^ (if session_exceptions_enabled
+      then "var receive = _exn_receive;"
+      else "var receive = _default_receive;"))
 
   let contify_with_env fn =
     let open Code in
@@ -703,7 +731,7 @@ module type JS_PAGE_COMPILER = sig
   val generate_stubs : Value.env -> Ir.binding list -> Code.MetaContinuation.t
   val generate_toplevel_bindings : Value.env -> Json.json_state -> venv -> Ir.binding list -> Json.json_state * venv * string list * Code.MetaContinuation.t
   val wrap_with_server_lib_stubs : Code.MetaContinuation.t
-  val primitive_bindings : string
+  val primitive_bindings : Code.t
 end
 
 (** [generate]
@@ -723,7 +751,7 @@ end = functor (K : CONTINUATION) -> struct
 
   let apply_yielding f args k =
     let open Code in
-    Call (Var "_yield", f :: (args @ [K.reify k]))
+    call (Var "_yield") (f :: (args @ [K.reify k]))
 
   let contify fn =
     snd @@ K.contify_with_env (fun k -> VEnv.empty, fn k)
