@@ -1056,13 +1056,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "(String) ~> String",
   IMPURE);
 
-  (* getCommandOutput disabled for now; possible security risk. *)
-  (*
-    "getCommandOutput",
-    (p1 ((Value.unbox_string ->- Utility.process_output ->- Value.box_string) :> result -> primitive),
-    datatype "(String) -> String");
-  *)
-
   "redirect",
   (p1D (fun url req_data ->
          let url = Value.unbox_string url in
@@ -1589,42 +1582,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
     (* END OF LINKS GAME LIBRARY *)
 
-    (* FOR DEBUGGING *)
-
-    "debugGetStats",
-    (`Client, datatype "(String) ~> a", IMPURE);
-
-    "debugChromiumGC",
-    (`Client, datatype "() ~> ()", IMPURE);
-
-    (* END OF DEBUGGING FUNCTIONS *)
-
-
-    (* EQUALITY *)
-
-    "stringEq",
-    (`Client, datatype "(String, String) -> Bool", PURE);
-
-    "intEq",
-    (`Client, datatype "(Int, Int) -> Bool", PURE);
-
-    "floatEq",
-    (`Client, datatype "(Float, Float) -> Bool", PURE);
-
-    "floatNotEq",
-    (`Client, datatype "(Float, Float) -> Bool", PURE);
-
-    "objectEq",
-    (`Client, datatype "(a, a) -> Bool", PURE);
-
-
-    (* END OF EQUALITY FUNCTIONS *)
-
-        "gensym",
-        (let idx = ref 0 in
-         `PFun (fun _ _ -> let i = !idx in idx := i+1; (Value.box_int i)),
-         datatype "() -> Int",
-         IMPURE);
+    "gensym",
+    (let idx = ref 0 in
+     `PFun (fun _ _ -> let i = !idx in idx := i+1; (Value.box_int i)),
+      datatype "() -> Int",
+      IMPURE);
 
     "connectSocket",
     (`Server (p2 (fun serverv portv ->

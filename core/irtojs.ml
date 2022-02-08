@@ -98,8 +98,8 @@ module Code = struct
     end
 
     module List = struct
-      let nil = Var "_$List.Nil"
-      let cons = Var "_$List.Cons"
+      let nil = Var "_$List.nil"
+      let cons = Var "_$List.cons"
 
       let hd = Var "_$List.head"
       let tl = Var "_$List.tail"
@@ -729,26 +729,20 @@ end = functor (K : CONTINUATION) -> struct
     let gv v = generate_value env v in
     function
     | Constant c ->
-       begin
-         match c with
-         | Constant.Int v  -> Lit (string_of_int v)
-         | Constant.Float v    ->
-            let s = string_of_float' v in
-            let n = String.length s in
-                    (* strip any trailing '.' *)
-            if n > 1 && (s.[n-1] = '.') then
-              Lit (String.sub s 0 (n-1))
-            else
-              Lit s
-         | Constant.Bool v   -> Lit (string_of_bool v)
-         | Constant.Char v   -> chrlit v
-         | Constant.String v -> chrlistlit v
-         | Constant.DateTime (Timestamp.Timestamp ts) ->
-             Dict [("_type", strlit "timestamp");
-                   ("_value", Lit (UnixTimestamp.of_calendar ts |> string_of_float))]
-         | Constant.DateTime Timestamp.Infinity ->
-             Dict [("_type", strlit "infinity")]
-         | Constant.DateTime Timestamp.MinusInfinity ->
+      begin
+        let open Constant in
+        match c with
+        | Constant.Int v   -> Lit (string_of_int v)
+        | Constant.Float v -> Lit (string_of_float' v)
+        | Bool v   -> Lit (string_of_bool v)
+        | Char v   -> chrlit v
+        | String v -> chrlistlit v
+        | DateTime (Timestamp.Timestamp ts) ->
+          Dict [("_type", strlit "timestamp");
+                ("_value", Lit (UnixTimestamp.of_calendar ts |> string_of_float))]
+        | DateTime Timestamp.Infinity ->
+          Dict [("_type", strlit "infinity")]
+        | DateTime Timestamp.MinusInfinity ->
              Dict [("_type", strlit "-infinity")]
        end
     | Variable var ->
