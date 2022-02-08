@@ -41,5 +41,6 @@ module Compiler : JS_PAGE_COMPILER
 
 module type JS_CODEGEN = sig
   val string_of_js : code -> string
+  val output : out_channel -> code -> unit
 end
 module Js_CodeGen : JS_CODEGEN

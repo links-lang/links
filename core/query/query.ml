@@ -160,12 +160,45 @@ let rec reduce_for_source : Q.t * (Q.t -> Q.t) -> Q.t =
 
           *)
           reduce_for_body (gs, os, rs v)
-        | Q.Table (_,_,_, row) ->
-          (* we need to generate a fresh variable in order to
-              correctly handle self joins *)
-          let x = Var.fresh_raw_var () in
-          let ty_elem = Types.Record (Types.Row row) in
-            reduce_for_body ([(x, source)], [], body (Q.Var (x, ty_elem)))
+        | Q.Table (Value.Table.{ row; temporality; temporal_fields; _ } as table) ->
+
+          begin
+              let open Temporality in
+              match temporality with
+                | Current ->
+                  let x = Var.fresh_raw_var () in
+                  let ty_elem = Types.Record (Types.Row row) in
+                    reduce_for_body ([(x, source)], [], body (Q.Var (x, ty_elem)))
+                | Temporality.Transaction | Temporality.Valid ->
+                  let (from_field, to_field) = OptionUtils.val_of temporal_fields in
+                  (* Transaction / Valid-time tables: Need to wrap as metadata *)
+                  (* First, generate a fresh variable for the table *)
+                  let make_spec_map = StringMap.map (fun x -> Types.Present x) in
+                  let field_types = Q.table_field_types table in
+                  let base_field_types =
+                    StringMap.filter
+                      (fun x _ -> x <> from_field && x <> to_field)
+                      field_types in
+
+                  let table_raw_var = Var.fresh_raw_var () in
+                  let (_, row_var, dual) = row in
+                  let ty_elem = Types.(Record (Row (make_spec_map field_types, row_var, dual))) in
+                  let base_ty_elem = Types.(Record (Row (make_spec_map base_field_types, row_var, dual))) in
+                  let table_var = Q.Var (table_raw_var, ty_elem) in
+
+                  (* Second, generate a fresh variable for the metadata *)
+                  let metadata_record =
+                    StringMap.from_alist [
+                      (TemporalField.data_field,
+                        Q.eta_expand_var (table_raw_var, base_ty_elem));
+                      (TemporalField.from_field,
+                        Q.Project (table_var, from_field));
+                      (TemporalField.to_field,
+                        Q.Project (table_var, to_field))
+                    ] in
+                  let generators = [ (table_raw_var, source) ] in
+                  reduce_for_body (generators, [], body (Q.Record metadata_record))
+          end
       | v -> Q.query_error "Bad source in for comprehension: %s" (Q.string_of_t v)
 
 let rec reduce_if_body (c, t, e) =
@@ -182,7 +215,7 @@ let rec reduce_if_body (c, t, e) =
                 then_fields
                 StringMap.empty)
         (* NOTE: this relies on any record variables having
-s            been eta-expanded by this point *)
+             been eta-expanded by this point *)
         | _ -> Q.query_error "Mismatched fields"
       end
     | _ ->
@@ -222,7 +255,19 @@ struct
   let reduce_artifacts = function
   | Q.Apply (Q.Primitive "stringToXml", [u]) ->
     Q.Singleton (Q.XML (Value.Text (Q.unbox_string u)))
-  | Q.Apply (Q.Primitive "AsList", [xs]) -> xs
+  | Q.Apply (Q.Primitive "AsList", [xs])
+  | Q.Apply (Q.Primitive "AsListT", [xs])
+  | Q.Apply (Q.Primitive "AsListV", [xs]) -> xs
+  (* Temporal projection operations *)
+  | Q.Apply (Q.Primitive "ttData", [x])
+  | Q.Apply (Q.Primitive "vtData", [x]) ->
+    Q.Project (x, TemporalField.data_field)
+  | Q.Apply (Q.Primitive "ttFrom", [x])
+  | Q.Apply (Q.Primitive "vtFrom", [x]) ->
+    Q.Project (x, TemporalField.from_field)
+  | Q.Apply (Q.Primitive "ttTo", [x])
+  | Q.Apply (Q.Primitive "vtTo", [x]) ->
+    Q.Project (x, TemporalField.to_field)
   | u -> u
 
   let rec xlate env : Ir.value -> Q.t = let open Ir in function
@@ -348,12 +393,13 @@ struct
         let open Q in
         check_policies_compatible env.policy policy;
         computation env e
-    | Special (Ir.Table (db, name, keys, (readtype, _, _))) as _s ->
+    | Special (Ir.Table { database; table = name; keys; temporal_fields;
+                table_type = (temporality, readtype, _, _) }) ->
        (*  WR: this case is because shredding needs to access the keys of tables
            but can we avoid it (issue #432)? *)
        (* Copied almost verbatim from evalir.ml, which seems wrong, we should probably call into that. *)
        begin
-         match xlate env db, xlate env name, xlate env keys, (TypeUtils.concrete_type readtype) with
+         match xlate env database, xlate env name, xlate env keys, (TypeUtils.concrete_type readtype) with
          | Q.Database (db, params), name, keys, Types.Record (Types.Row row) ->
             let unboxed_keys =
               List.map
@@ -361,7 +407,12 @@ struct
                   List.map Q.unbox_string (Q.unbox_list key))
                 (Q.unbox_list keys)
             in
-            Q.Table ((db, params), Q.unbox_string name, unboxed_keys, row)
+            let tbl =
+                Value.make_table ~database:(db, params)
+                    ~name:(Q.unbox_string name) ~keys:unboxed_keys
+                    ~temporality ~temporal_fields ~row
+            in
+            Q.Table tbl
          | _ -> Q.query_error "Error evaluating table handle"
        end
     | Special _s ->

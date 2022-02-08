@@ -39,6 +39,8 @@ exception DynlinkError of string
 exception ModuleError of string * Position.t option
 exception MissingBuiltinType of string
 exception MissingSSLCertificate
+exception CannotOpenFile of string * string
+exception ObjectFileWriteError of string * string
 
 val format_exception : exn -> string
 val format_exception_html : exn -> string
@@ -59,3 +61,5 @@ val dependency_load_failure : string -> Dynlink.error -> exn
 val load_failure : string -> Dynlink.error -> exn
 val forbidden_client_call : string -> string -> exn
 val rethrow_errors_if_better_position : Position.t -> ('a -> 'b) -> 'a -> 'b
+val cannot_open_file : string -> string -> exn
+val object_file_write_error : string -> string -> exn

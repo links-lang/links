@@ -33,6 +33,9 @@ sig
       ('self_type -> 'a -> ('self_type * 'a * Types.datatype)) ->
       'a var_map -> 'self_type * 'a var_map * Types.datatype var_map
     method var : var -> ('self_type * var * Types.datatype)
+    method temporal_update : temporal_update -> ('self_type * temporal_update)
+    method temporal_deletion : temporal_deletion -> ('self_type * temporal_deletion)
+
     method value : value -> ('self_type * value * Types.datatype)
 
     method tail_computation :

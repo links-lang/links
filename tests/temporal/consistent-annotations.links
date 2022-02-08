@@ -1,0 +1,4 @@
+var db = database "timedb";
+
+sig timetbl : TemporalTable(Transaction, (foo: String), (foo: String), (foo: String))
+var timetbl = table "timetbl" with (foo: String) using transaction_time(tt_from, tt_to) from db;

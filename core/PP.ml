@@ -45,6 +45,17 @@ let sdocToString d =
     sdocToString buf d;
     Buffer.contents buf
 
+let rec output : out_channel -> sdoc -> unit
+  = fun oc doc ->
+    match doc with
+    | SNil -> ()
+    | SText(s,d) -> output_string oc s; output oc d
+    | SLine(i,d) ->
+      let prefix = String.make i ' ' in
+      output_string oc nl;
+      output_string oc prefix;
+      output oc d
+
 type mode =
   | Flat
   | Break
@@ -152,3 +163,8 @@ let pretty w doc =
   let sdoc = format w 0 [0,Flat, DocGroup doc] (fun d -> d) in
   let str = sdocToString sdoc in
   str
+
+let out_pretty : out_channel -> int -> doc -> unit
+  = fun oc w doc ->
+    let sdoc = format w 0 [0, Flat, DocGroup doc] (fun d -> d) in
+    output oc sdoc; flush oc

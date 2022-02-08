@@ -103,35 +103,46 @@ let pg_printer = object(self)
   method quote_field x =
     "\"" ^ Str.global_replace (Str.regexp "\"") "\"\"" x ^ "\""
 
-  method! pp_insert ppf table_name field_names vss =
+  method! pp_insert ppf table_name field_names body =
+    let open Sql in
     let quoted_field_names = (List.map self#quote_field field_names) in
-    let vss = List.map (List.map (self#string_of_base false)) vss in
-    let body =
-      match field_names, vss with
-        | _, [] -> failwith("We should not even generate code for empty inserts.")
-        | [],    [_] ->
-            (* HACK:
+    match body with
+        | Values vss ->
+            let vss = List.map (List.map (self#string_of_base false)) vss in
+            let body =
+              match field_names, vss with
+                | _, [] -> failwith("We should not even generate code for empty inserts.")
+                | [],    [_] ->
+                    (* HACK:
 
-               PostgreSQL doesn't allow an empty tuple of columns to
-               be specified for an insert. *)
-            " default values"
-        | [],    _::_::_ ->
-            (* In order to handle this case we need support for the
-               standard mult-row insert syntax (Postgres version 8.2
-               and later), and we will need access to the type of the
-               table. In fact, we only really need the name of one of
-               the columns, c. Then we can do:
+                       PostgreSQL doesn't allow an empty tuple of columns to
+                       be specified for an insert. *)
+                    " default values"
+                | [],    _::_::_ ->
+                    (* In order to handle this case we need support for the
+                       standard mult-row insert syntax (Postgres version 8.2
+                       and later), and we will need access to the type of the
+                       table. In fact, we only really need the name of one of
+                       the columns, c. Then we can do:
 
-               insert into table(c) values (c),...,(c)
-            *)
-            failwith("Unable to translate a multi-row insert with empty rows to PostgreSQL")
-        | _::_,  _ ->
-           let values =
-             String.concat "), (" (List.map (String.concat ",") vss)
-           in "(" ^ String.concat "," quoted_field_names ^") VALUES (" ^ values ^ ")"
-    in
-    Format.fprintf ppf
-      "insert into %s %s" table_name body
+                       insert into table(c) values (c),...,(c)
+                    *)
+                    failwith("Unable to translate a multi-row insert with empty rows to PostgreSQL")
+                | _::_,  _ ->
+                   let values =
+                     String.concat "), (" (List.map (String.concat ",") vss)
+                   in "(" ^ String.concat "," quoted_field_names ^") VALUES (" ^ values ^ ")"
+            in
+            Format.fprintf ppf
+              "insert into %s %s" table_name body
+        | TableQuery var ->
+            let open Format in
+            fprintf ppf
+              "insert into %s (%a) (select * from %s)"
+              table_name
+              (pp_print_list
+                ~pp_sep:(fun ppf () -> pp_print_string ppf ",") pp_print_string) quoted_field_names
+              (string_of_table_var var)
 
     method! pp_base one_table ppf = function
       | Sql.Constant (CommonTypes.Constant.DateTime (CommonTypes.Timestamp.Infinity)) ->

@@ -126,6 +126,7 @@ let __kappa = "__kappa"
 
 module type JS_CODEGEN = sig
   val string_of_js : code -> string
+  val output : out_channel -> code -> unit
 end
 
 module Js_CodeGen : JS_CODEGEN = struct
@@ -133,6 +134,7 @@ module Js_CodeGen : JS_CODEGEN = struct
   module PP :
   sig
     val show : code -> string
+    val output : out_channel -> code -> unit
   end =
     struct
       open PP
@@ -222,10 +224,12 @@ module Js_CodeGen : JS_CODEGEN = struct
         | Return expr ->
            PP.text "return " ^^ (show expr) ^^ PP.text ";"
 
+      let output oc = show ->- PP.out_pretty oc 144
       let show = show ->- PP.pretty 144
     end
 
   let string_of_js x = PP.show x
+  let output oc code = PP.output oc code
 end
 
 (** Create a JS string literal, quoting special characters *)
@@ -902,19 +906,29 @@ end = functor (K : CONTINUATION) -> struct
          K.apply kappa (Dict [])
       | Database v ->
          K.apply kappa (Dict [("_db", gv v)])
-      | Table (db, table_name, keys, (readtype, _writetype, _needtype)) ->
-         K.apply kappa
-           (Dict [("_table",
-                   Dict [("db", gv db);
-                         ("name", gv table_name);
+      | Table { database; table; keys; temporal_fields; table_type = (_, readtype, _, _) } ->
+         let fields =
+             match temporal_fields with
+                | None -> []
+                | Some (field_from, field_to) ->
+                    [("temporal_from", strlit field_from);
+                     ("temporal_to", strlit field_to)]
+         in
+         let dict_fields =
+            [("db", gv database);
+                         ("name", gv table);
                          ("keys", gv keys);
                          ("row",
-                          strlit (Types.string_of_datatype (readtype)))])])
+                          strlit (Types.string_of_datatype (readtype)))]
+         in
+         K.apply kappa
+           (Dict [("_table", Dict (fields @ dict_fields))])
       | LensSerial _ | LensSelect _ | LensJoin _ | LensDrop _ | Lens _ | LensCheck _ ->
               (* Is there a reason to not use js_hide_database_info ? *)
               K.apply kappa (Dict [])
       | LensGet _ | LensPut _ -> Die "Attempt to run a relational lens operation on client"
       | Query _ -> Die "Attempt to run a query on the client"
+      | TemporalJoin _ -> Die "Attempt to run a temporal join on the client"
       | InsertRows _ -> Die "Attempt to run a database insert on the client"
       | InsertReturning _ -> Die "Attempt to run a database insert on the client"
       | Update _ -> Die "Attempt to run a database update on the client"

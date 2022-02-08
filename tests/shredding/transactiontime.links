@@ -1,0 +1,138 @@
+var db = database "links";
+var transactiontime =
+  table "transactiontime" with (name: String, address: String)
+  using transaction_time(from_time, to_time) from db;
+
+fun deleteAll() {
+  delete (x <-t- transactiontime)
+}
+
+fun insertNone() {
+  tt_insert transactiontime
+  values (name, address)
+    []
+}
+
+fun insertAlice() {
+  tt_insert transactiontime
+  values [(name = "Alice", address = "Crichton Street")]
+}
+
+fun insertBobCharlie() {
+  tt_insert transactiontime
+  values (name, address)
+    [(name = "Bob", address = "George Square"),
+     (name = "Charlie", address = "Infirmary Street")]
+}
+
+fun insertBob() {
+  tt_insert transactiontime
+  values [(name = "Bob", address = "George Square")]
+}
+
+fun insertDean() {
+  tt_insert transactiontime
+  values [(name = "Dean", address = "West Nicholson Street")]
+}
+
+fun updateBob() {
+  update (x <-t- transactiontime)
+    where (x.name == "Bob")
+    set (address = "Leith Walk")
+}
+
+fun updateDean() {
+  update (x <-t- transactiontime)
+    where (x.name == "Dean")
+    set (address = "Charlotte Square")
+}
+
+fun updateBobDean() {
+  updateBob(); updateDean()
+}
+
+fun isCurrent(x) { ttTo(x) == forever }
+
+fun currentLookup(p) {
+  query nested {
+    for (x <-t- transactiontime)
+      where (isCurrent(x) && p(x))
+        [ttData(x)]
+  }
+}
+
+fun demotedCurrentLookup(p) {
+  query nested {
+    for (x <- ttCurrent(transactiontime))
+      where (p(x))
+        [x]
+  }
+}
+
+fun currentLookupName(name) {
+  currentLookup(fun(x) { ttData(x).name == name })
+}
+
+fun demotedLookupAt(p, timestamp) {
+  query nested {
+    for (x <- ttAt(transactiontime, timestamp))
+      where (p(x))
+      [x]
+  }
+}
+
+fun lookupAt(p, timestamp) {
+  query nested {
+    for (x <-t- transactiontime)
+      where (timestamp >= ttFrom(x) && timestamp < ttTo(x) && p(x))
+      [ttData(x)]
+  }
+}
+
+fun lookupNameAt(name, timestamp) {
+  lookupAt(fun(x) { ttData(x).name == name }, timestamp)
+}
+
+fun test() {
+  insertAlice();
+  var t1 = now();
+  assertEq(currentLookupName("Alice"), [(name = "Alice", address = "Crichton Street")]);
+  deleteAll();
+  assertEq(currentLookupName("Alice"), []);
+  assertEq(lookupNameAt("Alice", t1), [(name = "Alice", address = "Crichton Street")]);
+  insertNone();
+  assertEq(currentLookupName("Alice"), []);
+  insertAlice();
+  assertEq(currentLookupName("Alice"), [(name = "Alice", address = "Crichton Street")]);
+  insertBobCharlie();
+  assertEq(sortBy(fun(x) { x.name }, currentLookup(fun(x) { true })), [
+    (name = "Alice", address = "Crichton Street"),
+    (name = "Bob", address = "George Square"),
+    (name = "Charlie", address = "Infirmary Street")
+  ]);
+  deleteAll();
+  assertEq(currentLookup(fun(x) { true }), []);
+  insertDean();
+  assertEq(demotedCurrentLookup(fun(x) { true }), [(name = "Dean", address = "West Nicholson Street")]);
+  insertBob();
+  assertEq(sortBy(fun(x) { x.name }, currentLookup(fun(x) { true })), [
+        (name = "Bob", address = "George Square"),
+        (name = "Dean", address = "West Nicholson Street")
+      ]);
+  insertAlice();
+  var t2 = now();
+  updateBobDean();
+  assertEq(sortBy(fun(x) { x.name },
+      demotedLookupAt(fun(x) { true }, t2)), [
+        (name = "Alice", address = "Crichton Street"),
+        (name = "Bob", address = "George Square"),
+        (name = "Dean", address = "West Nicholson Street")
+      ]);
+  assertEq(sortBy(fun(x) { x.name }, currentLookup(fun(x) { true })), [
+        (name = "Alice", address = "Crichton Street"),
+        (name = "Bob", address = "Leith Walk"),
+        (name = "Dean", address = "Charlotte Square")
+      ])
+}
+
+test()

@@ -13,7 +13,7 @@ type query =
   | Insert    of {
       ins_table: table_name;
       ins_fields: string list;
-      ins_records: base list list
+      ins_records: insert_records
     }
   | Update    of {
       upd_table: table_name;
@@ -21,7 +21,13 @@ type query =
       upd_where: base option
     }
   | Delete    of { del_table: table_name; del_where: base option }
-  | With      of table_name * query * query
+  | With      of table_name * query * query list
+  | Transaction of query list (* SQL Transaction: Complete atomically*)
+(* Values: list of values to insert.
+   TableQuery: allows us to insert result of previous query, bound to a variable. *)
+and insert_records =
+  | Values of (base list list)
+  | TableQuery of Var.var
 and select_clause =
     multiplicity * select_fields * from_clause list * base * base list
 and select_fields =
@@ -154,6 +160,11 @@ class virtual printer =
       let pp_comma ppf () = Format.pp_print_string ppf "," in
       Format.pp_print_list ~pp_sep:(pp_comma) pp_item
 
+  method private pp_semicolon_separated : 'a . (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a list -> unit =
+    fun pp_item ->
+      let pp_semicolon ppf () = Format.pp_print_string ppf ";" in
+      Format.pp_print_list ~pp_sep:(pp_semicolon) pp_item
+
   method private pp_quote : Format.formatter -> string -> unit = fun ppf q ->
     (* Copied from the pg_database.ml, which seems to be the default,
      * I guess? *)
@@ -224,14 +235,22 @@ class virtual printer =
         | Fields [] -> self#pp_empty_record ppf
         | Fields fields -> (self#pp_comma_separated pp_field) ppf fields
 
-  method pp_insert ppf table fields values =
-    let pp_value ppf x =
-      Format.fprintf ppf "(%a)"
-        (self#pp_comma_separated self#pr_b_ignore_fields) x in
-    Format.fprintf ppf "insert into %a (%a)\nvalues %a"
-      Format.pp_print_string table
-      (self#pp_comma_separated Format.pp_print_string) fields
-      (self#pp_comma_separated pp_value) values
+  method pp_insert ppf table fields body =
+    match body with
+      | Values values ->
+          let pp_value ppf x =
+            Format.fprintf ppf "(%a)"
+              (self#pp_comma_separated self#pr_b_ignore_fields) x in
+          Format.fprintf ppf "insert into %s (%a)\nvalues %a"
+            table
+            (self#pp_comma_separated Format.pp_print_string) fields
+            (self#pp_comma_separated pp_value) values
+      | TableQuery var ->
+          Format.fprintf ppf
+            "insert into %s (%a) (select * from %s)"
+            table
+            (self#pp_comma_separated Format.pp_print_string) fields
+            (string_of_table_var var)
 
   method pp_sql_arithmetic ppf one_table (l, op, r) =
     let pr_b_one_table = self#pp_base one_table in
@@ -264,6 +283,12 @@ class virtual printer =
       | All -> Format.pp_print_string ppf "all"
       | Distinct -> ()
     in
+    let pp_qs ppf qs =
+      let semi = if qs = [] then "" else ";" in
+      Format.fprintf ppf "%a%s"
+          (self#pp_semicolon_separated pr_q) qs
+          semi
+    in
     match q with
       | Union (_, [], _) ->
           Format.pp_print_string ppf
@@ -274,9 +299,13 @@ class virtual printer =
             Format.pp_print_string (order_by_clause n)
       | Union (mult, qs, n) ->
         let pp_sep_union ppf () = Format.fprintf ppf "\nunion %a\n" pp_all mult in
-        let pp_value ppf x = Format.fprintf ppf "(%a)" pr_q x in
+        let pp_union_term ppf x =
+          match x with  (* parenthesize safely wrt SQL standard *)
+          | Select _ -> pr_q ppf x
+          | _ -> Format.fprintf ppf "select * from (%a)" pr_q x
+        in
         Format.fprintf ppf "%a%a"
-          (Format.pp_print_list ~pp_sep:pp_sep_union pp_value) qs
+          (Format.pp_print_list ~pp_sep:pp_sep_union pp_union_term) qs
           Format.pp_print_string (order_by_clause n)
       | Select (_, fields, [], Constant (Constant.Bool true), _os) ->
         Format.fprintf ppf "select %a" pp_fields fields
@@ -293,11 +322,13 @@ class virtual printer =
           self#pp_update ppf upd_table upd_fields upd_where
       | Insert { ins_table; ins_fields; ins_records } ->
           self#pp_insert ppf ins_table ins_fields ins_records
-      | With (z, q, q') ->
+      | With (z, q, qs) ->
           Format.fprintf ppf "with %s as (@[<v>%a@])\n%a"
             z
             pr_q q
-            pr_q q'
+            pp_qs qs
+      | Transaction qs ->
+          Format.fprintf ppf "BEGIN; %a COMMIT;" pp_qs qs
 
   method pp_projection one_table ppf (var, label) =
       if one_table then
@@ -417,7 +448,7 @@ let rec inline_outer_with q =
     | fromclause -> fromclause
   in
   match q with
-    | With (z, q, Select (fSet, fields, tables, condition, os)) ->
+    | With (z, q, [Select (fSet, fields, tables, condition, os)]) ->
         Select(fSet, fields, List.map (replace_subquery z q) tables, condition, os)
     | Union (fSet, qs,n) -> Union (fSet, List.map inline_outer_with qs,n)
     | q -> q

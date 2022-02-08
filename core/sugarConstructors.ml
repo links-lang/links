@@ -207,6 +207,9 @@ module SugarConstructors (Position : Pos)
   let module_binding ?(ppos=dp) binder members =
     with_pos ppos (Module { binder; members })
 
+  let type_abstraction ?(ppos=dp) tyvars phrase =
+    with_pos ppos (TAbstr (tyvars, phrase))
+
   (** Database queries *)
 
   (* Create a list of labeled database expressions. *)
@@ -221,17 +224,21 @@ module SugarConstructors (Position : Pos)
   (* Create a database insertion query.  Raises an exception when the list of
      labeled expression is empty and the returning variable has not been named.
      *)
-  let db_insert ?(ppos=dp) ins_exp lbls exps var_opt =
+  let db_insert ?(ppos=dp) tmp_ins ins_exp lbls exps var_opt =
     if is_empty_db_exps exps && var_opt == None then
       raise (ConcreteSyntaxError (pos ppos, "Invalid insert statement. " ^
           "Either provide a nonempty list of labeled expression or a return " ^
           "variable."));
-    with_pos ppos (DBInsert (ins_exp, lbls, exps,
+    with_pos ppos (DBInsert (tmp_ins, ins_exp, lbls, exps,
        opt_map (fun name -> constant_str ~ppos name) var_opt))
 
   (* Create a query. *)
   let query ?(ppos=dp) phrases_opt policy blk =
     with_pos ppos (Query (phrases_opt, policy, blk, None))
+
+  (* Create a temporal join block. *)
+  let temporal_join ?(ppos=dp) mode blk =
+    with_pos ppos (DBTemporalJoin (mode, blk, None))
 
   (** Operator applications *)
   (* Apply a binary infix operator. *)
@@ -297,6 +304,26 @@ module SugarConstructors (Position : Pos)
         };
     }
 
+  (** Tables *)
+  let table ?(ppos=dp) ~tbl_keys tbl_name tbl_type
+    tbl_field_constraints temporal tbl_database =
+    let tbl_keys = OptionUtils.from_option (list ~ppos []) tbl_keys in
+    let (tmp, tbl_temporal_fields) =
+      match temporal with
+        | None -> (Temporality.current, None)
+        | Some (tmp, fields) ->
+            (tmp, Some fields)
+    in
+    let tbl_type = (tmp, tbl_type, None) in
+    with_pos ppos
+    (TableLit {
+        tbl_name;
+        tbl_type;
+        tbl_field_constraints;
+        tbl_keys;
+        tbl_temporal_fields;
+        tbl_database
+    })
 end
 
 (* Positions module based on standard Sugartypes positions. *)
