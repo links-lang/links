@@ -38,6 +38,7 @@ exception SettingsError of string
 exception DynlinkError of string
 exception ModuleError of string * Position.t option
 exception MissingBuiltinType of string
+exception MissingSSLCertificate
 exception CannotOpenFile of string * string
 exception ObjectFileWriteError of string * string
 
