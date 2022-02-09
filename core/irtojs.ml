@@ -1,4 +1,4 @@
-
+1
 (** JavaScript generation *)
 open Utility
 open CommonTypes
@@ -59,7 +59,6 @@ module Code = struct
 
   module ObjectContinuation = struct
     let __kappa = "__kappa"
-    (* let fresh () = gensym ~prefix:"kappa" () *)
   end
 
   module Constructors = struct
@@ -82,7 +81,6 @@ module Code = struct
   module Runtime = struct
 
     module Links = struct
-      let project = Var "_$Links.project"
       let erase   = Var "_$Links.erase"
       let union   = Var "_$Links.union"
       let remoteCall = Var "_$Links.remoteCall"
@@ -123,7 +121,7 @@ module Code = struct
     let call f args = Call (f, args)
 
     let project record label =
-      call Runtime.Links.project [record; label]
+      Select (record, label) (* call Runtime.Links.project [record; label] *)
 
     let return exp = Return exp
 
@@ -245,25 +243,50 @@ module Js_CodeGen : JS_CODEGEN = struct
       let rec show c : PP.doc =
         let show_func name fn =
           match fn with
-          | (Fn (vars, body)) ->
-             PP.group (PP.text "function" ^+^ PP.text name ^^ (formal_list vars)
-                       ^+^  (braces
-                               (break ^^ group(nest 2 (show body)) ^^ break)))
-          | _ -> assert false in
+          | Fn (vars, body) ->
+            PP.group
+              (PP.text "function" ^+^
+               PP.text name ^^
+               (formal_list vars) ^+^
+               (braces ((nest 2 (break ^^ show body)) ^^ break)))
+          | _ -> assert false
+        in
         let show_case v l (x, e) =
-          PP.text "case" ^+^ PP.text("'"^l^"'") ^^
-            PP.text ":" ^+^ braces (PP.text "let" ^+^ PP.text x ^+^ PP.text "=" ^+^ PP.text (v^"._value;") ^+^
-                                      show e ^^ PP.text ";" ^+^ PP.text "break;") ^^ break in
-        let show_cases v =
-          fun cases ->
-          StringMap.fold (fun l c s ->
-              s ^+^ show_case v l c)
-            cases DocNil in
-        let show_default v = opt_app
-                               (fun (x, e) ->
-                                 PP.text "default:" ^+^ braces (PP.text "let" ^+^ PP.text x ^+^ PP.text "=" ^+^ PP.text (v^";") ^+^
-                                                                  show e ^^ PP.text ";" ^+^ PP.text "break;") ^^ break) PP.DocNil in
-        let maybe_parenise = function
+          PP.text "case" ^+^
+          PP.text (Printf.sprintf "'%s'" l) ^^
+          PP.text ":" ^+^
+          braces
+            ((nest 2
+               (break ^^
+                PP.text "let" ^+^
+                PP.text x ^+^
+                PP.text "=" ^+^
+                PP.text (v ^ "._value;") ^|
+                show e ^|
+                PP.text "break;")) ^^
+             break)
+        in
+        let show_cases v cases =
+          StringMap.fold (fun l c s -> s ^| show_case v l c) cases empty
+        in
+        let show_default v case =
+          opt_app
+            (fun (x, e) ->
+               PP.text "default:" ^+^ braces
+                 (breakWith nl ^^
+                  PP.group
+                    (nest 2
+                       (PP.text "let" ^+^
+                        PP.text x ^+^
+                        PP.text "=" ^+^
+                        PP.text (v ^ ";") ^|
+                        show e ^^
+                        PP.text ";" ^+^
+                        PP.text "break;")) ^^
+                  break))
+            PP.DocNil case
+        in
+        let maybe_parenthesise = function
           | Var _
             | Lit _
             | Call _
@@ -279,7 +302,7 @@ module Js_CodeGen : JS_CODEGEN = struct
         match c with
         | Var x -> PP.text x
         | Nothing -> PP.text ""
-        | Die msg -> PP.text("error('" ^ msg ^ "', __kappa)")
+        | Die msg -> PP.text (Printf.sprintf "error('%s', %s)" msg __kappa)
         | Lit literal -> PP.text literal
         | LetFun ((name, vars, body, _location), rest) ->
            (show_func name (Fn (vars, body))) ^^ break ^^ show rest
@@ -288,28 +311,33 @@ module Js_CodeGen : JS_CODEGEN = struct
              break ^^ show rest
         | Fn _ as f -> show_func "" f
         | Call (Var "_$Links.project", [record; label]) ->
-           maybe_parenise record ^^ (brackets (show label))
-        | Call (Var "hd", [list;kappa]) ->
-           (maybe_parenise kappa) ^^ PP.text "hd" ^^ (parens (  maybe_parenise list))
-        | Call (Var "tl", [list;kappa]) ->
-           (maybe_parenise kappa) ^^ PP.text "tl" ^^ (parens (  maybe_parenise list))
+           maybe_parenthesise record ^^ (brackets (show label))
         | Call (Var "_yield", (fn :: args)) ->
-          PP.text "_yield" ^^ (parens (PP.text "function () { return " ^^ maybe_parenise fn ^^ (* TODO(dhil): this is a hack. _yield shouldn't need special support. *)
+          PP.text "_yield" ^^ (parens (PP.text "function () { return " ^^ maybe_parenthesise fn ^^ (* TODO(dhil): this is a hack. _yield shouldn't need special support. *)
                                           parens (hsep(punctuate "," (List.map show args))) ^^ PP.text "; }"))
-        | Call (fn, args) -> maybe_parenise fn ^^
-                               (PP.arglist (List.map show args))
-        | Unop (op, body) -> PP.text op ^+^ (maybe_parenise body)
-        | Binop (l, op, r) -> (maybe_parenise l) ^+^ PP.text op ^+^ (maybe_parenise r)
+        | Call (fn, args) ->
+          maybe_parenthesise fn ^^ (PP.arglist (List.map show args))
+        | Unop (op, body) -> PP.text op ^+^ (maybe_parenthesise body)
+        | Binop (l, op, r) -> (maybe_parenthesise l) ^+^ PP.text op ^+^ (maybe_parenthesise r)
         | If (cond, c1, c2) ->
-           PP.group (PP.text "if (" ^+^ show cond ^+^ PP.text ")"
-                     ^+^  (braces
-                             (break ^^ group(nest 2 (show c1)) ^^ break))
-                     ^+^ PP.text "else"
-                     ^+^  (braces
-                             (break ^^ group(nest 2 (show c2)) ^^ break)))
+          PP.group
+            (PP.text "if (" ^^ show cond ^^ PP.text ")" ^+^
+             (braces
+                ((nest 2
+                    (break ^^ group (nest 2 (show c1)))) ^^
+                 break)) ^+^
+              PP.text "else" ^+^
+              (braces
+                 ((nest 2
+                     (break ^^ PP.group (show c2))) ^^ break)))
         | Case (v, cases, default) ->
-           PP.group (PP.text "switch" ^+^ (parens (PP.text (v^"._label"))) ^+^
-                       (braces ((show_cases v cases) ^+^ (show_default v default))))
+          PP.group
+            (PP.text "switch" ^+^
+             (parens (PP.text (v^"._label"))) ^+^
+             (braces
+                ((nest 2 (break ^^ show_cases v cases) ^+^
+                  (show_default v default)) ^^
+                 break)))
         | Dict (elems) ->
            PP.braces (hsep (punctuate ","
                               (List.map (fun (name, value) ->
@@ -322,7 +350,19 @@ module Js_CodeGen : JS_CODEGEN = struct
              | x :: xs -> PP.braces (PP.text "\"_head\":" ^+^ (show x) ^^ (PP.text ",") ^|  PP.nest 1 (PP.text "\"_tail\":" ^+^  (show_list xs))) in
            show_list elems
         | Select (e, l) ->
-           maybe_parenise e ^^ PP.text "." ^^ PP.text l
+          let is_identifier s =
+            let ident_pattern = Str.regexp "^\\([$_A-Za-z][$_A-Za-z0-9]*\\)$" in
+            Str.string_match ident_pattern s 0
+          in
+          let is_integer s =
+            let int_pattern = Str.regexp "^-?\\(\\(0\\)\\|\\([1-9][0-9]*\\)\\)$" in
+            Str.string_match int_pattern s 0
+          in
+          maybe_parenthesise e ^^
+          (if is_identifier l then PP.text "." ^^ PP.text l
+           else brackets
+               (if is_integer l then PP.text l
+                else PP.text "'" ^^ PP.text l ^^ PP.text "'"))
         | Bind (name, value, body) ->
            PP.text "let" ^+^ PP.text name ^+^ PP.text "=" ^+^ show value ^^ PP.text ";" ^^
              break ^^ show body
@@ -812,7 +852,7 @@ end = functor (K : CONTINUATION) -> struct
             call Runtime.Links.union [gv v; dict]
        end
     | Ir.Project (name, v) ->
-       project (gv v) (strlit name)
+       project (gv v) name
     | Ir.Erase (names, v) ->
        call Runtime.Links.erase
          [gv v; Arr (List.map strlit (StringSet.elements names))]
@@ -1102,8 +1142,8 @@ end = functor (K : CONTINUATION) -> struct
          let bind, skappa, skappas = K.pop kappa in
          let skappa' =
            contify (fun kappa ->
-             let scrutinee = project (Var result) (strlit "1") in
-             let channel = project (Var result) (strlit "2") in
+             let scrutinee = project (Var result) "1" in
+             let channel = project (Var result) "2" in
              let generate_branch (cb, comp) =
                let (ch, chname) = name_binder cb in
                let payload = gensym ~prefix:"payload" () in
@@ -1217,9 +1257,9 @@ end = functor (K : CONTINUATION) -> struct
                 let xb = name_binder xb in
                 let resume = name_binder resume in
                 let payload = gensym ~prefix:"payload" () in
-                let p = project (Var payload) (strlit "p") in
+                let p = project (Var payload) "p" in
                 let r =
-                  let s = project (Var payload) (strlit "s") in
+                  let s = project (Var payload) "s" in
                   make_resumption s
                 in
                 let env' =
@@ -1235,8 +1275,8 @@ end = functor (K : CONTINUATION) -> struct
                 let dummy_var_name = gensym ~prefix:"dummy" () in
                 let payload = gensym ~prefix:"payload" () in
                 let x_name = snd xb in
-                let p = project (Var x_name) (strlit "p") in
-                payload, Bind (x_name, project p (strlit "1"),
+                let p = project (Var x_name) "p" in
+                payload, Bind (x_name, project p "1",
                         (* FIXME: the following call should
                            probably be apply_yielding rather than a
                            raw Call because _handleSessionException
