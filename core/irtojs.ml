@@ -38,7 +38,7 @@ module Code = struct
          | Unop   of Var.t * t
          | Binop  of t * Var.t * t
          | If     of t * t * t
-         | Case   of Var.t * (Var.t * t) stringmap * (Var.t * t) option
+         | Switch of t * t stringmap * t option
          | Dict   of (Label.t * t) list
          | Arr    of t list
          | Select of t * Label.t
@@ -48,7 +48,6 @@ module Code = struct
 
          | InlineJS of string
 
-         | Die    of string
          | Nothing
          [@@deriving show]
 
@@ -125,6 +124,9 @@ module Code = struct
 
     let return exp = Return exp
 
+    let die msg =
+      Call (Var "error", [Constructors.strlit msg; Var ObjectContinuation.__kappa])
+
     module List = struct
       let cons x xs =
         call Runtime.List.cons [x; xs]
@@ -178,11 +180,11 @@ module VariableInspection = struct
         | Select (e, _l) -> go e
         | Bind (bnd, c1, c2) -> add_binder bnd; go c1; go c2
         | Return c -> go c
-        | Case (bnd, sm, sc_opt) ->
-            add_var bnd;
-            StringMap.iter (fun _ (s, code) -> add_binder s; go code) sm;
-            OptionUtils.opt_iter (fun (bnd, c) -> add_binder bnd; go c) sc_opt
-        | Lit _ | Die _ | InlineJS _ | Nothing -> () in
+        | Switch (scrutinee, sm, sc_opt) ->
+            go scrutinee;
+            StringMap.iter (fun _ code -> go code) sm;
+            OptionUtils.opt_iter (fun c -> go c) sc_opt
+        | Lit _ | InlineJS _ | Nothing -> () in
     go code;
     get_vars ()
 
@@ -241,48 +243,45 @@ module Js_CodeGen : JS_CODEGEN = struct
 
       (** Pretty-print a Code value as a JavaScript string. *)
       let rec show c : PP.doc =
-        let show_func name fn =
-          match fn with
-          | Fn (vars, body) ->
+        let show_func : ?name:[`Anonymous | `Name of string] -> Code.t -> PP.doc
+          = fun ?(name=`Anonymous) fn ->
+          match fn, name with
+          | Fn (vars, body), `Name name ->
             PP.group
               (PP.text "function" ^+^
                PP.text name ^^
                (formal_list vars) ^+^
                (braces ((nest 2 (break ^^ show body)) ^^ break)))
+          | Fn (vars, body), `Anonymous ->
+            PP.group
+              (PP.text "function" ^^
+               (formal_list vars) ^+^
+               (braces ((nest 2 (break ^^ show body)) ^^ break)))
           | _ -> assert false
         in
-        let show_case v l (x, e) =
+        let show_case l e =
           PP.text "case" ^+^
           PP.text (Printf.sprintf "'%s'" l) ^^
           PP.text ":" ^+^
           braces
             ((nest 2
                (break ^^
-                PP.text "let" ^+^
-                PP.text x ^+^
-                PP.text "=" ^+^
-                PP.text (v ^ "._value;") ^|
                 show e ^|
                 PP.text "break;")) ^^
              break)
         in
-        let show_cases v cases =
-          StringMap.fold (fun l c s -> s ^| show_case v l c) cases empty
+        let show_cases cases =
+          StringMap.fold (fun l c s -> s ^| show_case l c) cases empty
         in
-        let show_default v case =
+        let show_default case =
           opt_app
-            (fun (x, e) ->
+            (fun e ->
                PP.text "default:" ^+^ braces
-                 (breakWith nl ^^
-                  PP.group
-                    (nest 2
-                       (PP.text "let" ^+^
-                        PP.text x ^+^
-                        PP.text "=" ^+^
-                        PP.text (v ^ ";") ^|
-                        show e ^^
-                        PP.text ";" ^+^
-                        PP.text "break;")) ^^
+                    ((nest 2
+                        (break ^^
+                         show e ^^
+                         PP.text ";" ^|
+                         PP.text "break;")) ^^
                   break))
             PP.DocNil case
         in
@@ -293,7 +292,6 @@ module Js_CodeGen : JS_CODEGEN = struct
             | Dict _
             | Arr _
             | Bind _
-            | Die _
             | Return _
             | Select _
             | Nothing as c -> show c
@@ -302,41 +300,41 @@ module Js_CodeGen : JS_CODEGEN = struct
         match c with
         | Var x -> PP.text x
         | Nothing -> PP.text ""
-        | Die msg -> PP.text (Printf.sprintf "error('%s', %s)" msg __kappa)
         | Lit literal -> PP.text literal
         | LetFun ((name, vars, body, _location), rest) ->
-           (show_func name (Fn (vars, body))) ^^ break ^^ show rest
+           (show_func ~name:(`Name name) (Fn (vars, body))) ^^ break ^^ show rest
         | LetRec (defs, rest) ->
-           PP.vsep (punctuate " " (List.map (fun (name, vars, body, _loc) -> show_func name (Fn (vars, body))) defs)) ^^
+           PP.vsep (punctuate " " (List.map (fun (name, vars, body, _loc) -> show_func ~name:(`Name name) (Fn (vars, body))) defs)) ^^
              break ^^ show rest
-        | Fn _ as f -> show_func "" f
-        | Call (Var "_$Links.project", [record; label]) ->
-           maybe_parenthesise record ^^ (brackets (show label))
-        | Call (Var "_yield", (fn :: args)) ->
-          PP.text "_yield" ^^ (parens (PP.text "function () { return " ^^ maybe_parenthesise fn ^^ (* TODO(dhil): this is a hack. _yield shouldn't need special support. *)
-                                          parens (hsep(punctuate "," (List.map show args))) ^^ PP.text "; }"))
+        | Fn _ -> show_func c
         | Call (fn, args) ->
           maybe_parenthesise fn ^^ (PP.arglist (List.map show args))
         | Unop (op, body) -> PP.text op ^+^ (maybe_parenthesise body)
         | Binop (l, op, r) -> (maybe_parenthesise l) ^+^ PP.text op ^+^ (maybe_parenthesise r)
         | If (cond, c1, c2) ->
           PP.group
-            (PP.text "if (" ^^ show cond ^^ PP.text ")" ^+^
+            (PP.text "if" ^+^
+             (parens (show cond)) ^+^
              (braces
                 ((nest 2
-                    (break ^^ group (nest 2 (show c1)))) ^^
+                    (break ^^
+                     group (nest 2 (show c1)))) ^^
                  break)) ^+^
               PP.text "else" ^+^
               (braces
                  ((nest 2
-                     (break ^^ PP.group (show c2))) ^^ break)))
-        | Case (v, cases, default) ->
+                     (break ^^
+                      group (nest 2 (show c2)))) ^^
+                  break)))
+        | Switch (scrutinee, cases, default) ->
           PP.group
             (PP.text "switch" ^+^
-             (parens (PP.text (v^"._label"))) ^+^
+             (parens (show scrutinee) ^+^
              (braces
-                ((nest 2 (break ^^ show_cases v cases) ^+^
-                  (show_default v default)) ^^
+                ((nest 2
+                    (break ^^
+                     group (show_cases cases) ^|
+                            show_default default))) ^^
                  break)))
         | Dict (elems) ->
            PP.braces (hsep (punctuate ","
@@ -347,7 +345,7 @@ module Js_CodeGen : JS_CODEGEN = struct
         | Arr elems ->
            let rec show_list = function
              | [] -> PP.text (Json.nil_literal |> Json.json_to_string)
-             | x :: xs -> PP.braces (PP.text "\"_head\":" ^+^ (show x) ^^ (PP.text ",") ^|  PP.nest 1 (PP.text "\"_tail\":" ^+^  (show_list xs))) in
+             | x :: xs -> PP.braces (PP.text "'_head':" ^+^ (show x) ^^ (PP.text ",") ^|  PP.nest 1 (PP.text "'_tail':" ^+^  (show_list xs))) in
            show_list elems
         | Select (e, l) ->
           let is_identifier s =
@@ -364,8 +362,13 @@ module Js_CodeGen : JS_CODEGEN = struct
                (if is_integer l then PP.text l
                 else PP.text "'" ^^ PP.text l ^^ PP.text "'"))
         | Bind (name, value, body) ->
-           PP.text "let" ^+^ PP.text name ^+^ PP.text "=" ^+^ show value ^^ PP.text ";" ^^
-             break ^^ show body
+          PP.text "let" ^+^
+          PP.text name ^+^
+          PP.text "=" ^+^
+          show value ^^
+          PP.text ";" ^^
+          break ^^
+          show body
         | Return expr ->
            PP.text "return " ^^ (show expr) ^^ PP.text ";"
         | InlineJS raw_code ->
@@ -793,7 +796,8 @@ end = functor (K : CONTINUATION) -> struct
 
   let apply_yielding f args k =
     let open Code in
-    call (Var "_yield") (f :: (args @ [K.reify k]))
+    call (Var "_yield")
+      [Fn ([], return (call f (args @ [K.reify k])))]
 
   let contify fn =
     snd @@ K.contify_with_env (fun k -> VEnv.empty, fn k)
@@ -1071,21 +1075,23 @@ end = functor (K : CONTINUATION) -> struct
       generate_special env special kappa
     | Ir.Case (v, cases, default) ->
       let v = gv v in
-      let k, x =
+      let k, scrutinee =
         match v with
-        | Var x -> (fun e -> e), x
+        | Var _ -> (fun e -> e), v
         | _ ->
           let x = gensym ~prefix:"x" () in
-          (fun e -> Bind (x, v, e)), x
+          (fun e -> Bind (x, v, e)), Var x
       in
       K.bind kappa
         (fun kappa ->
            let gen_cont (xb, comp) =
              let (x, x_name) = name_binder xb in
-             x_name, (snd (generate_computation (VEnv.bind x x_name env) comp kappa)) in
+             let comp = snd (generate_computation (VEnv.bind x x_name env) comp kappa) in
+             Bind (x_name, project scrutinee "_value", comp)
+           in
            let cases = StringMap.map gen_cont cases in
            let default = opt_map gen_cont default in
-           k (Case (x, cases, default)))
+           k (Switch (project scrutinee "_label", cases, default)))
     | Ir.If (v, c1, c2) ->
       K.bind kappa
         (fun kappa ->
@@ -1098,7 +1104,7 @@ end = functor (K : CONTINUATION) -> struct
       let open Code.Constructors in
       let gv v = generate_value env v in
       match sp with
-      | Ir.Wrong _ -> Die "Internal Error: Pattern matching failed" (* THIS MESSAGE SHOULD BE MORE INFORMATIVE *)
+      | Ir.Wrong _ -> return (Aux.die "Pattern matching failure") (* THIS MESSAGE SHOULD BE MORE INFORMATIVE *)
       | Ir.Database _ | Ir.Table _
           when Settings.get js_hide_database_info ->
          return (K.apply kappa Runtime.CONSTANTS.unit)
@@ -1123,13 +1129,13 @@ end = functor (K : CONTINUATION) -> struct
                    (Dict [("_table", Dict (fields @ dict_fields))]))
       | Ir.LensSerial _ | Ir.LensSelect _ | Ir.LensJoin _ | Ir.LensDrop _ | Ir.Lens _ | Ir.LensCheck _ ->
         return (K.apply kappa Runtime.CONSTANTS.unit)
-      | Ir.LensGet _ | Ir.LensPut _ -> Die "Attempt to run a relational lens operation on client"
-      | Ir.Query _ -> Die "Attempt to run a query on the client"
-      | Ir.TemporalJoin _ -> Die "Attempt to run a temporal join on the client"
-      | Ir.InsertRows _ -> Die "Attempt to run a database insert on the client"
-      | Ir.InsertReturning _ -> Die "Attempt to run a database insert on the client"
-      | Ir.Update _ -> Die "Attempt to run a database update on the client"
-      | Ir.Delete _ -> Die "Attempt to run a database delete on the client"
+      | Ir.LensGet _ | Ir.LensPut _ -> return (Aux.die "Attempt to run a relational lens operation on client")
+      | Ir.Query _                  -> return (Aux.die "Attempt to run a query on the client")
+      | Ir.TemporalJoin _           -> return (Aux.die "Attempt to run a temporal join on the client")
+      | Ir.InsertRows _             -> return (Aux.die "Attempt to run a database insert on the client")
+      | Ir.InsertReturning _        -> return (Aux.die "Attempt to run a database insert on the client")
+      | Ir.Update _                 -> return (Aux.die "Attempt to run a database update on the client")
+      | Ir.Delete _                 -> return (Aux.die "Attempt to run a database delete on the client")
       | Ir.CallCC v ->
          K.bind kappa
            (fun kappa -> return (apply_yielding (gv v) [K.reify kappa] kappa))
@@ -1142,15 +1148,14 @@ end = functor (K : CONTINUATION) -> struct
          let bind, skappa, skappas = K.pop kappa in
          let skappa' =
            contify (fun kappa ->
-             let scrutinee = project (Var result) "1" in
+             let message = project (Var result) "1" in
              let channel = project (Var result) "2" in
              let generate_branch (cb, comp) =
                let (ch, chname) = name_binder cb in
-               let payload = gensym ~prefix:"payload" () in
-               payload, Bind (chname, channel, snd (generate_computation (VEnv.bind ch chname env) comp K.(skappa <> kappa)))
+               Bind (chname, channel, snd (generate_computation (VEnv.bind ch chname env) comp K.(skappa <> kappa)))
              in
              let branches = StringMap.map generate_branch bs in
-             Fn ([result], (Bind (received, scrutinee, (Case (received, branches, None))))))
+             Fn ([result], (Bind (received, message, (Switch (project (Var received) "_label", branches, None))))))
          in
          let cont = K.(skappa' <> skappas) in
          if (session_exceptions_enabled) then
@@ -1253,45 +1258,42 @@ end = functor (K : CONTINUATION) -> struct
                      bind @@ generate_body env xb body kappa))
             in
             let eff_cases =
-              let translate_eff_case env (xb, resume, body) kappas =
-                let xb = name_binder xb in
-                let resume = name_binder resume in
-                let payload = gensym ~prefix:"payload" () in
-                let p = project (Var payload) "p" in
-                let r =
-                  let s = project (Var payload) "s" in
+              let translate_eff_case env scrutinee (xb, resume, body) kappas =
+                let (_x, x_name) as xb = name_binder xb in
+                let (r, r_name) = name_binder resume in
+                let p = project scrutinee "p" in
+                let resume =
+                  let s = project scrutinee "s" in
                   make_resumption s
                 in
                 let env' =
-                  let (x, n) = resume in
-                  VEnv.bind x n env
+                  VEnv.bind r r_name env
                 in
                 let body = generate_body env' xb (parameterise body) kappas in
-                payload, Bind (snd resume, r,
-                               Bind (snd xb, p, body))
+                Bind (r_name, resume,
+                      Bind (x_name, p, body))
               in
-              let translate_exn_case env (xb, body) kappas =
+              let translate_exn_case env scrutinee (xb, body) kappas =
                 let xb = name_binder xb in
                 let dummy_var_name = gensym ~prefix:"dummy" () in
-                let payload = gensym ~prefix:"payload" () in
                 let x_name = snd xb in
-                let p = project (Var x_name) "p" in
-                payload, Bind (x_name, project p "1",
-                        (* FIXME: the following call should
-                           probably be apply_yielding rather than a
-                           raw Call because _handleSessionException
-                           makes use of the call stack. *)
-                              Bind (dummy_var_name, call (Var "_handleSessionException") [Var x_name],
-                                    generate_body env xb (parameterise body) kappas))
+                let p = project scrutinee "p" in
+                Bind (x_name, project p "1",
+                      (* FIXME: the following call should probably be
+                         apply_yielding rather than a raw Call because
+                         _handleSessionException makes use of the call
+                         stack. *)
+                      Bind (dummy_var_name, call (Var "_handleSessionException") [Var x_name],
+                            generate_body env xb (parameterise body) kappas))
               in
-              let eff_cases kappas =
+              let eff_cases scrutinee kappas =
                 StringMap.fold
                   (fun operation_name clause cases ->
                     StringMap.add operation_name
                       (if session_exceptions_enabled && operation_name = Value.session_exception_operation
                        then let (xb,_,body) = clause in
-                            translate_exn_case env (xb, body) kappas
-                       else translate_eff_case env clause kappas)
+                            translate_exn_case env scrutinee (xb, body) kappas
+                       else translate_eff_case env scrutinee clause kappas)
                       cases)
                   eff_cases StringMap.empty
               in
@@ -1310,9 +1312,10 @@ end = functor (K : CONTINUATION) -> struct
               K.reflect
                 (Fn (["_z"; "ks"],
                      let ks = K.reflect (Var "ks") in
-                     Case ("_z",
-                           eff_cases ks,
-                           Some ("_z", forward (Var "_z") ks))))
+                     let scrutinee = Var "_z" in
+                     Switch (project scrutinee "_label",
+                             eff_cases scrutinee ks,
+                             Some (forward (Var "_z") ks))))
             in
             let kappa = K.(value_case <> eff_cases <> kappa) in
             snd (generate_computation comp_env (initial_parameterise comp) kappa)
