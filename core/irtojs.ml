@@ -124,7 +124,7 @@ module Code = struct
     let call f args = Call (f, args)
 
     let project record label =
-      Select (record, label) (* call Runtime.Links.project [record; label] *)
+      Select (record, label)
 
     let return exp = Return exp
 

@@ -135,6 +135,12 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
       ~html:(Value.string_of_xml ~close_tags:true bs)
       ~head:(script_tag welcome_msg ^ "\n"
               ^ script_tag (G.string_of_js C.primitive_bindings) ^ "\n"
+              ^ script_tag ({|
+// Deprecated continuation operations.
+const _applyCont = _$K.apply;
+const _yieldCont = _$K.yield;
+const _idy = _$K.idy;
+|})
               ^ script_tag("  var _jsonState = " ^ escaped_state_string ^ "\n" ^ init_vars)
               ^ Value.string_of_xml ~close_tags:true hs)
       ~onload:"_isRuntimeReady() && _startRealPage()"
