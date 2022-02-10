@@ -92,8 +92,12 @@ module Code = struct
       let lte = Var "_$Links.lte"
     end
 
-    module CONSTANTS = struct
-      let unit = Var "CONSTANTS.UNIT"
+    module Proc = struct
+      let yield = Var "_$Proc.yield"
+    end
+
+    module Constants = struct
+      let unit = Var "_$Constants.UNIT"
     end
 
     module List = struct
@@ -613,13 +617,13 @@ const _$K = (function() {
         return k(arg);
      },
      'yield': function(k, arg) {
-       return _yield(function() { return _$K.apply(k, arg); });
+       return _$Proc.yield(function() { return _$K.apply(k, arg); });
      },
      'idy': function(x) { return; },
      'make': function(k) { return k; }
   });
 })();
-var receive = _default_receive;
+let receive = _default_receive;
 |}
 
   let contify_with_env fn =
@@ -649,7 +653,17 @@ module Higher_Order_Continuation : CONTINUATION = struct
   (* Auxiliary functions for manipulating the continuation stack *)
   include Code.Aux.List
   let nil = Code.Runtime.List.nil
-  let toplevel = Cons (Code.Var "_$K.idk", Cons (Code.Var "_efferr", Reflect nil))
+  let toplevel =
+    let open Code in
+    let idk =
+      Fn (["x"; "ks"], Nothing)
+    in
+    let efferr =
+      Fn (["z"; "ks"],
+          Bind ("tag", Code.Aux.project (Var "z") "_label",
+                InlineJS {| _error("Unhandled operation `" + z._label + "'.") |}))
+    in
+    Cons (idk, Cons (efferr, Reflect nil))
 
   let reflect x = Reflect x
   let rec reify = function
@@ -722,16 +736,15 @@ const _$K = (function() {
        return k(arg, ks);
     },
     'yield': function(ks, arg) {
-       return _yield(function() { return _$K.apply(ks, arg) });
+       return _$Proc.yield(function() { return _$K.apply(ks, arg) });
     },
     'idy': make(function(x, ks) { return; }),
-    'idk': function(x, ks) { },
     'make': make
   });
 })();
 |} ^ (if session_exceptions_enabled
-      then "var receive = _exn_receive;"
-      else "var receive = _default_receive;"))
+      then "let receive = _exn_receive;"
+      else "let receive = _default_receive;"))
 
   let contify_with_env fn =
     let open Code in
@@ -796,7 +809,7 @@ end = functor (K : CONTINUATION) -> struct
 
   let apply_yielding f args k =
     let open Code in
-    call (Var "_yield")
+    call Runtime.Proc.yield
       [Fn ([], return (call f (args @ [K.reify k])))]
 
   let contify fn =
@@ -872,8 +885,6 @@ end = functor (K : CONTINUATION) -> struct
        generate_xml env name attributes children
 
     | Ir.ApplyPure (f, vs) ->
-      (* TODO(dhil): I think `strip_poly` is redundant here since `gv
-         f` ought to strip polymorphism (see TAbs and TApp above). *)
        let f = strip_poly f in
        begin
          match f with
@@ -1107,7 +1118,7 @@ end = functor (K : CONTINUATION) -> struct
       | Ir.Wrong _ -> return (Aux.die "Pattern matching failure") (* THIS MESSAGE SHOULD BE MORE INFORMATIVE *)
       | Ir.Database _ | Ir.Table _
           when Settings.get js_hide_database_info ->
-         return (K.apply kappa Runtime.CONSTANTS.unit)
+         return (K.apply kappa Runtime.Constants.unit)
       | Ir.Database v ->
          return (K.apply kappa (Dict [("_db", gv v)]))
       | Ir.Table Ir.{ database; table; keys; temporal_fields; table_type = (_, readtype, _, _) } ->
@@ -1128,7 +1139,7 @@ end = functor (K : CONTINUATION) -> struct
          return (K.apply kappa
                    (Dict [("_table", Dict (fields @ dict_fields))]))
       | Ir.LensSerial _ | Ir.LensSelect _ | Ir.LensJoin _ | Ir.LensDrop _ | Ir.Lens _ | Ir.LensCheck _ ->
-        return (K.apply kappa Runtime.CONSTANTS.unit)
+        return (K.apply kappa Runtime.Constants.unit)
       | Ir.LensGet _ | Ir.LensPut _ -> return (Aux.die "Attempt to run a relational lens operation on client")
       | Ir.Query _                  -> return (Aux.die "Attempt to run a query on the client")
       | Ir.TemporalJoin _           -> return (Aux.die "Attempt to run a temporal join on the client")
