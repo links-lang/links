@@ -616,6 +616,18 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "([a]) ~> [|Some:a | None:()|]",
   PURE);
 
+  (* We need to have these here in order to patch through to the underlying SQL functions. *)
+  (* The over-specific type is there because part of evalNestedQuery is type-directed. *)
+  "least",
+  (p2 (fun x y -> if less x y then x else y),
+   datatype "(DateTime, DateTime) ~> DateTime",
+  PURE);
+
+  "greatest",
+  (p2 (fun x y -> if less x y then y else x),
+   datatype "(DateTime, DateTime) ~> DateTime",
+  PURE);
+
   (* XML *)
   "itemChildNodes",
   (p1 (function
@@ -1205,10 +1217,64 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     datatype "DateTime",
     PURE);
 
+  "withValidity",
+  (p3 (fun x v_from v_to ->
+    Value.box_record
+      [(TemporalField.data_field, x);
+       (TemporalField.from_field, v_from);
+       (TemporalField.to_field, v_to)]),
+    datatype "((|r), DateTime, DateTime) -> ValidTime((|r))",
+    PURE);
+
+  "ttData",
+  (p1 (Value.unbox_record
+       ->- List.assoc (TemporalField.data_field)),
+   datatype "(TransactionTime((|r))) -> (|r)",
+  PURE);
+
+  "ttFrom",
+  (p1 (Value.unbox_record
+       ->- List.assoc (TemporalField.from_field)),
+   datatype "(TransactionTime(a)) -> DateTime",
+  PURE);
+
+  "ttTo",
+  (p1 (Value.unbox_record
+       ->- List.assoc (TemporalField.to_field)),
+   datatype "(TransactionTime(a)) -> DateTime",
+  PURE);
+
+  "vtData",
+  (p1 (Value.unbox_record
+       ->- List.assoc (TemporalField.data_field)),
+   datatype "(ValidTime((|r))) -> (|r)",
+  PURE);
+
+  "vtFrom",
+  (p1 (Value.unbox_record
+       ->- List.assoc (TemporalField.from_field)),
+   datatype "(ValidTime(a)) -> DateTime",
+  PURE);
+
+  "vtTo",
+  (p1 (Value.unbox_record
+       ->- List.assoc (TemporalField.to_field)),
+   datatype "(ValidTime(a)) -> DateTime",
+  PURE);
   (* Database functions *)
   "AsList",
   (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
    datatype "(TableHandle(r, w, n)) {}-> [r]",
+  IMPURE);
+
+  "AsListT",
+  (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
+   datatype "(TemporalTable(Transaction, r, w, n)) {}-> [TransactionTime(r)]",
+  IMPURE);
+
+  "AsListV",
+  (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
+   datatype "(TemporalTable(Valid, r, w, n)) {}-> [ValidTime(r)]",
   IMPURE);
 
   "Distinct",

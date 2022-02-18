@@ -67,25 +67,44 @@ let variables_in_computation comp =
     | CallCC value
     | Select (_, value) -> traverse_value value
     | Wrong _ -> ()
-    | Table (v1, v2, v3, _) -> List.iter (traverse_value) [v1; v2; v3]
+    | Table  { database; table; keys; _ } ->
+        List.iter (traverse_value) [database; table; keys]
     | Query (vs_opt, _, comp, _) ->
         OptionUtils.opt_iter
           (fun (v1, v2) -> List.iter (traverse_value) [v1; v2]) vs_opt;
         traverse_computation comp
-    | InsertRows (v, r) ->
+    | InsertRows (_, v, r) ->
         traverse_value v;
         traverse_value r
-    | InsertReturning (v, r, s) ->
+    | InsertReturning (_, v, r, s) ->
         traverse_value v;
         traverse_value r;
         traverse_value s
-    | Update ((_, v), c_opt, c) ->
+    | Update (upd, (_, v), c_opt, c) ->
+        begin
+          match upd with
+            | Some (Ir.ValidTimeUpdate (SequencedUpdate { validity_from; validity_to })) ->
+                traverse_value validity_from;
+                traverse_value validity_to
+            | Some (Ir.ValidTimeUpdate (NonsequencedUpdate { from_time; to_time })) ->
+                OptionUtils.opt_iter (traverse_computation) from_time;
+                OptionUtils.opt_iter (traverse_computation) to_time
+            | _ -> ()
+        end;
         traverse_value v;
         OptionUtils.opt_iter (traverse_computation) c_opt;
         traverse_computation c
-    | Delete ((_, v), c_opt) ->
+    | Delete (del, (_, v), c_opt) ->
+        begin
+          match del with
+            | Some (Ir.ValidTimeDeletion (SequencedDeletion { validity_from; validity_to })) ->
+                traverse_value validity_from;
+                traverse_value validity_to
+            | _ -> ()
+        end;
         traverse_value v;
         OptionUtils.opt_iter (traverse_computation) c_opt
+    | TemporalJoin (_, c, _) -> traverse_computation c
     | Handle h -> traverse_handler h
     | DoOperation (_, vs, _) -> List.iter (traverse_value) vs
     | Choice (v, clauses) ->

@@ -87,6 +87,36 @@ let for_each : Context.t -> (Context.t -> string -> Context.t) -> string list ->
       else context')
     context xs
 
+let run : string list -> string list -> unit
+  = fun file_list to_evaluate ->
+    let context =
+      handle_errors (lazy (Driver.Phases.initialise ()))
+    in
+    let context' =
+      for_each context process_expr to_evaluate
+    in
+    let open Basicsettings.System in
+    match Settings.get mode with
+    | None | Some Interactive ->
+      let context'' =
+        for_each context' process_file file_list
+      in
+      begin match file_list, to_evaluate with
+        | [], [] -> Repl.interact context''
+        | _, _ -> ()
+      end
+    | Some Web ->
+      ignore (for_each context' process_file file_list)
+    | Some Compile ->
+      (* TODO(dhil): The following might behave unexpectedly if
+         |file_list| > 1 as the output file is repeatedly
+         overwritten. We need a better design here. *)
+      ignore(for_each context'
+        (fun context file ->
+           let output_file = val_of (Settings.get output_file) in
+           handle_errors (lazy (Driver.Phases.compile_js_only context file output_file)); context)
+        file_list)
+
 let main () =
   (* Attempt to synchronise all settings. If any setting commands are
      left unhandled, then error and exit. *)
@@ -94,18 +124,6 @@ let main () =
 
   let file_list = Settings.get_anonymous_arguments () in
   let to_evaluate = Settings.get to_evaluate in
-
-  let context =
-    handle_errors (lazy (Driver.Phases.initialise ()))
-  in
-  let context' =
-    for_each context process_expr to_evaluate
-  in
-  let context'' =
-    for_each context' process_file file_list
-  in
-  match file_list, to_evaluate with
-  | [], [] -> Repl.interact context''
-  | _, _ -> ()
+  run file_list to_evaluate
 
 let _ = main()

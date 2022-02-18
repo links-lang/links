@@ -5,6 +5,7 @@
  "setups" :
  [ "factorials",
    "null",
+   "mixing",
    "regexes",
    "xpath-reduced",
    "xpath" ],
@@ -14,6 +15,7 @@
    "empty",
    "emptyfun",
    "null",
+   "mixing",
    "regexes",
    "unit",
    "xpath",

@@ -36,14 +36,14 @@ and disjunct is_set = function
 | QL.Prom p -> sql_of_query S.Distinct p
 | QL.Singleton _ as j -> S.Select (body is_set [] [] j)
 | QL.For (_, gs, os, j) -> S.Select (body is_set gs os j)
-| _arg -> Debug.print ("error in SimpleSqlGen.disjunct: unexpected arg = " ^ QL.show _arg); failwith "disjunct"
+| _arg -> Debug.print ("error in EvalMixingQuery.disjunct: unexpected arg = " ^ QL.show _arg); failwith "disjunct"
 
 and generator locvars = function
 | (v, QL.Prom p) -> (S.Subquery (dependency_of_contains_free (E.contains_free locvars p), sql_of_query S.Distinct p, v))
-| (v, QL.Table (_, tname, _, _)) -> (S.TableRef (tname, v))
-| (v, QL.Dedup (QL.Table (_, tname, _, _))) ->
-    S.Subquery (S.Standard, S.Select (S.Distinct, S.Star, [S.TableRef (tname, v)], S.Constant (Constant.Bool true), []), v)
-| (_, _arg) -> Debug.print ("error in SimpleSqlGen.disjunct: unexpected arg = " ^ QL.show _arg); failwith "generator"
+| (v, QL.Table Value.Table.{ name; _}) -> (S.TableRef (name, v))
+| (v, QL.Dedup (QL.Table Value.Table.{ name; _ })) ->
+    S.Subquery (S.Standard, S.Select (S.Distinct, S.Star, [S.TableRef (name, v)], S.Constant (Constant.Bool true), []), v)
+| (_, _arg) -> Debug.print ("error in EvalMixingQuery.disjunct: unexpected arg = " ^ QL.show _arg); failwith "generator"
 
 and body is_set gs os j =
     let selquery body where =
@@ -71,7 +71,7 @@ and body is_set gs os j =
 and base_exp = function
 (* XXX: Project expects a (numbered) var, but we have a table name
    so I'll make an act of faith and believe that we never project from tables, but only from variables *)
-| QL.Project (QL.Table (_, _n, _, _), _l) as q ->
+| QL.Project (QL.Table _, _) as q ->
     Debug.print ("error in EvalMixingQuery.base_exp: unexpected Project on Table: " ^ QL.show q); failwith "base_exp"
 | QL.Project (QL.Var (n,_), l) -> S.Project (n,l)
 | QL.If (c, t, e) -> S.Case (base_exp c, base_exp t, base_exp e)

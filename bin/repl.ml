@@ -348,7 +348,7 @@ let interact : Context.t -> unit
   let print_error exn =
     Printf.fprintf stderr "%s\n%!" (Errors.format_exception exn)
   in
-  Settings.set BS.interactive_mode true;
+  Settings.set BS.System.interactive_mode true;
   Printf.printf "%s%!" (val_of (Settings.get welcome_note));
   let rec loop context =
     Parse.Readline.prepare_prompt ps1;

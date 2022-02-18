@@ -79,7 +79,7 @@ let rec is_guarded : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
                 isgr row
            end
         | Variant row -> isgr row
-        | Table (f, d, r) -> isg f && isg d && isg r
+        | Table (_, f, d, r) -> isg f && isg d && isg r
         | Lens _sort -> true (* does not contain type variables *)
         | ForAll (qs, t) ->
             is_guarded
@@ -166,7 +166,7 @@ let rec is_negative : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
             isp f || isnr m || isn t
         | Record row -> isnr row
         | Variant row -> isnr row
-        | Table (f, d, r) -> isn f || isn d || isn r
+        | Table (_, f, d, r) -> isn f || isn d || isn r
         | Lens typ -> is_negative_lens_type bound_vars expanded_apps var typ
         | ForAll (qs, t) ->
             is_negative
@@ -253,7 +253,7 @@ and is_positive : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
             isn f || ispr m || isp t
         | Record row -> ispr row
         | Variant row -> ispr row
-        | Table (f, d, r) -> isp f || isp d || isp r
+        | Table (_, f, d, r) -> isp f || isp d || isp r
         | Lens typ -> is_positive_lens_type bound_vars expanded_apps var typ
         | ForAll (qs, t) ->
             is_positive

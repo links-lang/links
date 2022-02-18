@@ -54,8 +54,29 @@ type xmlitem =   Text of string
 and xml = xmlitem list
   [@@deriving show,yojson]
 
-type table = (database * string) * string * string list list * Types.row'
-  [@@deriving show]
+module Table: sig
+  type t = {
+  database: (database * string);
+  name: string;
+  keys: string list list;
+  temporality: Temporality.t;
+  temporal_fields: (string * string) option;
+  row: Types.row'
+  }
+[@@deriving show]
+end
+
+type table = Table.t
+    [@@deriving show]
+
+val make_table :
+  database:(database * string) ->
+  name:string ->
+  keys:(string list list) ->
+  temporality:Temporality.t ->
+  temporal_fields:(string * string) option ->
+  row:Types.row' ->
+  table
 
 type primitive_value_basis =  [
   | `Bool of bool

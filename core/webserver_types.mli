@@ -6,7 +6,6 @@ val jslib_url : string option Settings.setting
 val internal_base_url : string option Settings.setting
 val external_base_url : string option Settings.setting
 
-
 module type WEBSERVER =
 sig
   type request_handler_fn = { request_handler: Value.env * Value.t; error_handler: Value.env * Value.t }
