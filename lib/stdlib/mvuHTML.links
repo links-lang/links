@@ -6,6 +6,7 @@ typename HTML(a :: Type(Any, Any)) =
    | HTMLAppend: (HTML(a), HTML(a))
    | HTMLText: (String)
    | HTMLRaw: (String)
+   | HTMLWidget: (String, [(String, String)])
    | HTMLTag: (tagName: String, attrs: Attr(a), children: HTML(a))
    |];
 
@@ -17,6 +18,12 @@ fun textNode(str) {
 
 fun unescapedTextNode(str) {
   HTMLRaw(str)
+}
+
+# An HTML element not affected by the rendering loop.
+# Generally used as a placeholder.
+fun htmlWidget(name, attrs) {
+  HTMLWidget(name, attrs)
 }
 
 sig tag : forall a :: Type(Any, Any), e :: Row .
