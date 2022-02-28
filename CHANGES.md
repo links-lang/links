@@ -1,6 +1,7 @@
 # 0.9.6
 
-This release includes new syntactic and semantic extensions to Links.
+This release extends the core features of Links and resolves various
+minor bugs.
 
 * Links now supports System F-style explicit type abstractions:
   For instance, writing `/\ [a, e::Row] { foo }` abstracts the expression `foo`
