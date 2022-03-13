@@ -1407,6 +1407,7 @@ fun main() {
             }
 
             var _ = recv(); # wait for initialize()
+            println("Initialized");
             mainLoop(getInitialGameState(), 0.0, clientTimeMilliseconds(), initialFpsInfo, []);
 
             if (not(haveMail())) self() ! CarryOn else (); # restart
@@ -1510,6 +1511,15 @@ fun main() {
         </html>
 }
 
-main()
+#main()
 
+fun mainPage(_) {
+  main()
+}
 
+fun main2() {
+  addRoute("/", mainPage);
+  servePages()
+}
+
+main2()
