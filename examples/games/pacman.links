@@ -529,7 +529,7 @@ fun main() {
         fun draw(gameState: Game, lastTime, now, fpsInfo) {
             # prepare canvas
             var (mainCanvas, dispCanvas) =
-                if (stringEq(domGetStyleAttrFromRef(getNodeById(canvasId), "display"), "none") || not(doubleBuffer))
+                if (domGetStyleAttrFromRef(getNodeById(canvasId), "display") == "none" || not(doubleBuffer))
                     (canvasId, canvas2Id)
                 else (canvas2Id, canvasId);
             var ctx = jsGetContext2D(getNodeById(mainCanvas));
@@ -667,7 +667,7 @@ fun main() {
                   else (fpsInfo with upFrames = fpsInfo.upFrames + 1)
               } else (fpsInfo with hiFps = 0.0);
 
-              if (floatEq(fpsInfo.hiFps, 0.0))
+              if (fpsInfo.hiFps == 0.0)
                   jsFillText(ctx, "loading data: " ^^ intToString(fpsInfo.frameCount) ^^ "/" ^^ intToString(aFpsFrames), 100.0, 10.0)
               else
                   jsFillText(ctx, "highest FPS: " ^^ strsub(floatToString(fpsInfo.hiFps), 0, 7), 100.0, 10.0);
@@ -1084,19 +1084,19 @@ fun main() {
 
         fun handleKey(k, gameState: Game) {
             # for some reason pattern matching doesn't work (always selects the first option), so I use if-else
-            if (objectEq(k, KeyDown(restartKeyCode)))
+            if (k == KeyDown(restartKeyCode))
                 (gameState with metaState = Restart)
-            else if (objectEq(k, KeyDown(downloadKeyCode)))
+            else if (k == KeyDown(downloadKeyCode))
                 (gameState with metaState = Download)
             else if (gameState.state == On)
-                if (objectEq(k, KeyDown(spaceKeyCode))) {
+                if (k == KeyDown(spaceKeyCode)) {
                     var gameState = changePillmanPlanet(gameState);
 
                     # change direction
                     (gameState with pillman = (gameState.pillman with dir = -.gameState.pillman.dir))
-                } else if (objectEq(k, KeyDown(zKeyCode))) { # change dir
+                } else if (k == KeyDown(zKeyCode)) { # change dir
                     (gameState with pillman = (gameState.pillman with dir = -.gameState.pillman.dir))
-                } else if (objectEq(k, KeyDown(xKeyCode))) { # change planet
+                } else if (k == KeyDown(xKeyCode)) { # change planet
                     changePillmanPlanet(gameState)
                 } else gameState
             else gameState
@@ -1394,9 +1394,9 @@ fun main() {
 
                 var (gameStatePrim, dtPrim) = updateLogic(dt, gameState, i);
 
-                if (gameStatePrim.metaState == Restart) # objectEq doesn't work here -- why?
+                if (gameStatePrim.metaState == Restart)
                     ()
-                else if (floatEq(dtPrim, dt)) { # don't redraw if there were no logic updates
+                else if (dtPrim == dt) { # don't redraw if there were no logic updates
                     mainLoop(gameStatePrim, dtPrim, now, fpsInfo, i)
                 } else {
                     mainLoop(if (gameStatePrim.metaState == Download) (gameStatePrim with metaState = Run) else gameStatePrim,#(gameStatePrim with state = On), # if state == Download, reset
@@ -1407,6 +1407,7 @@ fun main() {
             }
 
             var _ = recv(); # wait for initialize()
+            println("Initialized");
             mainLoop(getInitialGameState(), 0.0, clientTimeMilliseconds(), initialFpsInfo, []);
 
             if (not(haveMail())) self() ! CarryOn else (); # restart
@@ -1510,6 +1511,15 @@ fun main() {
         </html>
 }
 
-main()
+#main()
 
+fun mainPage(_) {
+  main()
+}
 
+fun main2() {
+  addRoute("/", mainPage);
+  servePages()
+}
+
+main2()
