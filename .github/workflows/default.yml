@@ -343,6 +343,30 @@ jobs:
           LINKS_MYSQL_PORT: ${{ job.services.mysql.ports[3306] }}
         shell: bash
 
+  js-runtime-lint:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup NPM
+        uses: actions/setup-node@v2
+        with:
+          node-version: '16'
+
+      - name: Install jshint
+        run: npm install jshint
+
+      - name: Run jshint
+        run: npm-exec jshint --show-non-errors lib/js/jslib.js || 0
+
   # webbrowser:
   #   strategy:
   #     fail-fast: false
