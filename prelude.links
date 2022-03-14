@@ -173,7 +173,7 @@ fun zip(l, r) {
 }
 
 fun replicate(n, item) {
-  if (n == 0) []
+  if (n <= 0) []
   else item :: replicate(n-1, item)
 }
 
