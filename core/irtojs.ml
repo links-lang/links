@@ -28,23 +28,23 @@ module Code = struct
     [@@deriving show]
   end
 
-  type t = Var    of Var.t
-         | Lit    of string
-         | Fn     of Var.t list * t
+  type t = Var     of Var.t
+         | Lit     of string
+         | Fn      of Var.t list * t
 
-         | LetFun of (Var.t * Var.t list * t * Ir.location) * t
-         | LetRec of (Var.t * Var.t list * t * Ir.location) list * t
-         | Call   of t * t list
-         | Unop   of Var.t * t
-         | Binop  of t * Var.t * t
-         | If     of t * t * t
-         | Switch of t * t stringmap * t option
-         | Dict   of (Label.t * t) list
-         | Arr    of t list
-         | Select of t * Label.t
+         | LetFun  of (Var.t * Var.t list * t * Ir.location) * t
+         | LetRec  of (Var.t * Var.t list * t * Ir.location) list * t
+         | Call    of t * t list
+         | Unop    of Var.t * t
+         | Binop   of t * Var.t * t
+         | If      of t * t * t
+         | Switch  of t * t stringmap * t option
+         | Dict    of (Label.t * t) list
+         | Arr     of t list
+         | Project of t * Label.t
 
-         | Bind   of Var.t * t * t
-         | Return of t
+         | Bind    of Var.t * t * t
+         | Return  of t
 
          | InlineJS of string
 
@@ -124,7 +124,7 @@ module Code = struct
     let call f args = Call (f, args)
 
     let project record label =
-      Select (record, label)
+      Project (record, label)
 
     let return exp = Return exp
 
@@ -181,7 +181,7 @@ module VariableInspection = struct
         | If (i, t, e) -> List.iter (go) [i;t;e]
         | Dict xs -> List.iter (go -<- snd) xs
         | Arr xs -> List.iter (go) xs
-        | Select (e, _l) -> go e
+        | Project (e, _l) -> go e
         | Bind (bnd, c1, c2) -> add_binder bnd; go c1; go c2
         | Return c -> go c
         | Switch (scrutinee, sm, sc_opt) ->
@@ -297,7 +297,7 @@ module Js_CodeGen : JS_CODEGEN = struct
             | Arr _
             | Bind _
             | Return _
-            | Select _
+            | Project _
             | Nothing as c -> show c
           | c -> parens (show c)
         in
@@ -351,7 +351,7 @@ module Js_CodeGen : JS_CODEGEN = struct
              | [] -> PP.text (Json.nil_literal |> Json.json_to_string)
              | x :: xs -> PP.braces (PP.text "'_head':" ^+^ (show x) ^^ (PP.text ",") ^|  PP.nest 1 (PP.text "'_tail':" ^+^  (show_list xs))) in
            show_list elems
-        | Select (e, l) ->
+        | Project (e, l) ->
           let is_identifier s =
             let ident_pattern = Str.regexp "^\\([$_A-Za-z][$_A-Za-z0-9]*\\)$" in
             Str.string_match ident_pattern s 0
@@ -824,8 +824,8 @@ end = functor (K : CONTINUATION) -> struct
       begin
         let open Constant in
         match c with
-        | Constant.Int v   -> Lit (string_of_int v)
-        | Constant.Float v -> Lit (string_of_float' v)
+        | Int v   -> Lit (string_of_int v)
+        | Float v -> Lit (string_of_float' v)
         | Bool v   -> Lit (string_of_bool v)
         | Char v   -> chrlit v
         | String v -> chrlistlit v
@@ -912,9 +912,9 @@ end = functor (K : CONTINUATION) -> struct
     | Ir.Closure (f, _, v) ->
       let f' = gv (Ir.Variable f) in
       let env = gv v in
-      let closure = call (Select (f', "bind")) [Var "null"; env] in
+      let closure = call (project f' "bind") [Var "null"; env] in
       if session_exceptions_enabled
-      then call (Select (Var "Object", "defineProperty")) [closure; strlit "__closureEnv"; Dict [("value", env)]]
+      then call (project (Var "Object") "defineProperty") [closure; strlit "__closureEnv"; Dict [("value", env)]]
       else closure
     | Ir.Coerce (v, _) -> gv v
 
@@ -1054,11 +1054,13 @@ end = functor (K : CONTINUATION) -> struct
           begin
             match vs with
             | [l; r] when StringOp.is f_name ->
-              (* TODO(dhil): It'd be safer and more robust to hoist
-                 and let bind `gv l` and `gv r`. *)
-              return (K.apply kappa (StringOp.gen f_name [gv l; gv r]))
+               let l = gv l in
+               let r = gv r in
+               return (K.apply kappa (StringOp.gen f_name [l; r]))
             | [l; r] when Comparison.is f_name ->
-              return (K.apply kappa (Comparison.gen f_name [gv l; gv r]))
+               let l = gv l in
+               let r = gv r in
+               return (K.apply kappa (Comparison.gen f_name [l; r]))
             | vs when Arithmetic.is f_name ->
               return (K.apply kappa (Arithmetic.gen f_name (List.map gv vs)))
             | vs when ListPrim.is f_name ->
