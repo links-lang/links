@@ -108,6 +108,8 @@ module Code = struct
       let tl = Var "_$List.tail"
 
       let append = Var "_$List.append"
+
+      let of_array = Var "_$List.lsFromArray"
     end
 
     module JSON = struct
@@ -131,6 +133,9 @@ module Code = struct
     let die msg =
       Call (Var "error", [Constructors.strlit msg; Var ObjectContinuation.__kappa])
 
+    let set_of_array arr =
+      call (InlineJS "new Set") [arr]
+
     module List = struct
       let cons x xs =
         call Runtime.List.cons [x; xs]
@@ -138,6 +143,8 @@ module Code = struct
         call Runtime.List.hd [xs]
       let tail xs =
         call Runtime.List.tl [xs]
+      let of_array arr =
+        call Runtime.List.of_array [arr]
     end
   end
 end
@@ -298,6 +305,7 @@ module Js_CodeGen : JS_CODEGEN = struct
             | Bind _
             | Return _
             | Project _
+            | InlineJS _
             | Nothing as c -> show c
           | c -> parens (show c)
         in
@@ -346,11 +354,7 @@ module Js_CodeGen : JS_CODEGEN = struct
                                    group (PP.text "'" ^^ PP.text name ^^
                                             PP.text "':" ^^ show value))
                                  elems)))
-        | Arr elems ->
-           let rec show_list = function
-             | [] -> PP.text (Json.nil_literal |> Json.json_to_string)
-             | x :: xs -> PP.braces (PP.text "'_head':" ^+^ (show x) ^^ (PP.text ",") ^|  PP.nest 1 (PP.text "'_tail':" ^+^  (show_list xs))) in
-           show_list elems
+        | Arr xs -> PP.brackets (hsep (punctuate "," (List.map show xs)))
         | Project (e, l) ->
           let is_identifier s =
             let ident_pattern = Str.regexp "^\\([$_A-Za-z][$_A-Za-z0-9]*\\)$" in
@@ -872,7 +876,7 @@ end = functor (K : CONTINUATION) -> struct
        project (gv v) name
     | Ir.Erase (names, v) ->
        call Runtime.Links.erase
-         [gv v; Arr (List.map strlit (StringSet.elements names))]
+         [gv v; Aux.set_of_array (Arr (List.map strlit (StringSet.elements names)))]
     | Ir.Inject (name, v, _t) ->
        Dict [("_label", strlit name);
              ("_value", gv v)]
@@ -924,7 +928,7 @@ end = functor (K : CONTINUATION) -> struct
       [Constructors.strlit tag;
        Dict (StringMap.fold (fun name v bs ->
            (name, generate_value env v) :: bs) attrs []);
-       Arr (List.map (generate_value env) children)]
+       Aux.List.of_array (Arr (List.map (generate_value env) children))]
 
   let generate_remote_call f_var xs_names env =
     let open Code in
@@ -1200,7 +1204,7 @@ end = functor (K : CONTINUATION) -> struct
                    List.length args = 0) then
                  let affected_variables =
                    VariableInspection.get_affected_variables (K.reify kappa) in
-                 let affected_arr = Dict ([("1", Arr affected_variables)]) in
+                 let affected_arr = Dict ([("1", Aux.List.of_array (Arr affected_variables))]) in
                  Dict [ ("_label", strlit name)
                       ; ("_value", Dict [("p", affected_arr); ("s", resumption)]) ]
                else
@@ -1425,7 +1429,7 @@ end = functor (K : CONTINUATION) -> struct
     let cancellation_thunk = Fn ([fresh_kappa], raiseOp (K.reflect (Var fresh_kappa))) in
 
     (* Generate binding code *)
-    Bind (affected_vars_name, Arr affected_variables,
+    Bind (affected_vars_name, Aux.List.of_array (Arr affected_variables),
       Bind (cancellation_thunk_name, cancellation_thunk,
         action (Var cancellation_thunk_name)))
 
