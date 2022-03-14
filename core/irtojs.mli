@@ -81,7 +81,8 @@ module Code: sig
             where [(Label.t * t) list] is an association list/mapping
             from string literals to expressions. *)
          | Arr     of t list
-         (** [Arr] is deprecated. Don't use. *)
+         (** [Arr] denotes an array, e.g. [1,2,3,4,5]. The [t list] is
+            the elements of the array. *)
          | Project of t * Label.t
          (** [Project] denotes a component selection, e.g.
                  obj.baz, obj[1]
