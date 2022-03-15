@@ -201,8 +201,8 @@ module Phases = struct
         |> Transform.run
       in
       let context, program = result.Backend.context, result.Backend.program in
-      (* let _valenv    = Context.value_environment context in *)
-      let nenv      = Context.name_environment context in
+      (* let valenv    = Context.value_environment context in *)
+      let nenv  = Context.name_environment context in
       (* let tenv      = Context.typing_environment context in *)
       let venv =
         Env.String.fold
@@ -215,8 +215,12 @@ module Phases = struct
         Context.ffi_files context (* TODO(dhil): how do we want to link FFI files? *)
       in
       let open Irtojs in
-      let _venv, code =
-        Compiler.generate_program venv program
+      let _venv', code =
+        let program' =
+          let (bs, tc) = program in
+          (Webserver.get_prelude () @ bs, tc)
+        in
+        Compiler.generate_program venv program'
       in
       (* Prepare object file. *)
       let oc =
@@ -224,6 +228,36 @@ module Phases = struct
         with Sys_error reason -> raise (Errors.cannot_open_file object_file reason)
       in
       try
+        if Settings.get Basicsettings.System.link_js_runtime
+        then begin
+            Js_CodeGen.output oc Compiler.primitive_bindings;
+            let runtime_file =
+              match Settings.get Basicsettings.System.custom_js_runtime with
+              | None ->
+                 (* TODO(dhil): This code is copied from webserver.ml,
+                    it should be put in one common place. *)
+                 begin match Settings.get jslib_dir with
+                   | None | Some "" ->
+                      begin
+                        Filename.concat
+                          (match Utility.getenv "LINKS_LIB" with
+                           | None -> Filename.dirname Sys.executable_name
+                           | Some path -> path)
+                          (Filename.concat "js" "jslib.js")
+                      end
+                   | Some path -> Filename.concat path "jslib.js"
+                 end
+              | Some file -> file
+            in
+            let ic =
+              try open_in runtime_file
+              with Sys_error reason -> raise (Errors.cannot_open_file runtime_file reason)
+            in
+            try
+              Utility.IO.Channel.cat ic oc;
+              close_in ic
+            with e -> close_in ic; print_endline (Printexc.to_string e); raise e
+          end;
         Js_CodeGen.output oc code;
         close_out oc
       with Sys_error reason ->

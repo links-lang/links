@@ -149,6 +149,8 @@ struct
   let set_prelude bs =
     prelude := bs
 
+  let get_prelude () = !prelude
+
   let external_files : (string list) ref = ref []
 
   let init some_env some_globals some_external_files =
