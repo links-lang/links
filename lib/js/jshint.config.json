@@ -1,16 +1,23 @@
 {
+    // Environment options
     "browser": true,
     "devel": true,
 
+    // Enforcing options
     "esversion": 6,
     "forin": true,
     "freeze": true,
     "strict": "global",
     "varstmt": true,
+    "trailing": true,
 
+    // Relaxing options
+    "asi": false,
     "evil": true,
     "laxbreak": true,
+    "smarttabs": false,
 
+    // Global variables whitelist
     "globals": {
         "_$K": false,
         "_initVars": false,
