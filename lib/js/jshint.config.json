@@ -1,0 +1,26 @@
+{
+    "browser": true,
+    "devel": true,
+
+    "esversion": 6,
+    "forin": true,
+    "freeze": true,
+    "strict": "global",
+    "varstmt": true,
+
+    "evil": true,
+    "laxbreak": true,
+
+    "globals": {
+        "_$K": false,
+        "_initVars": false,
+        "_jsonState": false,
+        "cgiEnv": true,
+        "DEBUGGING": false,
+        "escape": false,
+        "event": true,
+        "length": true,
+        "print": true,
+        "unescape": false
+    }
+}
