@@ -1407,7 +1407,6 @@ fun main() {
             }
 
             var _ = recv(); # wait for initialize()
-            println("Initialized");
             mainLoop(getInitialGameState(), 0.0, clientTimeMilliseconds(), initialFpsInfo, []);
 
             if (not(haveMail())) self() ! CarryOn else (); # restart
