@@ -218,6 +218,10 @@ module Phases = struct
       let _venv', code =
         let program' =
           let (bs, tc) = program in
+          (* TODO(dhil): This is a slight hack. We shouldn't need to
+             use the webserver to retrieve the prelude, alas, the
+             current infrastructure does not let us get hold of the
+             prelude bindings by other means. *)
           (Webserver.get_prelude () @ bs, tc)
         in
         Compiler.generate_program venv program'
