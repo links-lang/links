@@ -105,4 +105,22 @@ module System = struct
     | Some Interactive -> true
     | _ -> false
 
+  let link_js_runtime =
+    Settings.(flag "link_js_runtime" ~default:true
+              |> privilege `User
+              |> synopsis "In compile mode, this flag toggles whether the JS compiler statically links the JS runtime"
+              |> convert parse_bool
+              |> hidden
+              |> CLI.(add (long "Ljs-runtime"))
+              |> sync)
+
+  let custom_js_runtime =
+    Settings.(option "custom_js_runtime"
+              |> privilege `User
+              |> synopsis "If link_js_runtime is set to true, then the JS compiler will link the provided file(s) rather than the standard Links JS runtime"
+              |> to_string from_string_option
+              |> convert (fun s -> Some s)
+              |> hidden
+              |> CLI.(add (long "Xcustom-js-runtime"))
+              |> sync)
 end

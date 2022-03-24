@@ -1623,3 +1623,16 @@ module UnixTimestamp = struct
   let to_utc_calendar t =
     Unix.gmtime t |> to_calendar
 end
+
+module IO = struct
+  module Channel = struct
+    let cat : in_channel -> out_channel -> unit
+      = fun ic oc ->
+      try
+        let rec loop () =
+          output_string oc (input_line ic ^ "\n"); loop ()
+        in
+        loop ()
+      with End_of_file -> ()
+  end
+end
