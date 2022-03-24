@@ -53,6 +53,7 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
                         ^ ffiLibs ^ "\n"
                         ^ db_config_script
                         ^ env
+                        ^ "<meta charset=\"utf-8\">"
                         ^ head
                         ^ "<script type=\"text/javascript\">
                              'use strict';
