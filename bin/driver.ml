@@ -211,8 +211,8 @@ module Phases = struct
         Env.Int.empty
       in
       (* let tenv = Var.varify_env (nenv, tenv.Types.var_env) in *)
-      let _ffi_files =
-        Context.ffi_files context (* TODO(dhil): how do we want to link FFI files? *)
+      let ffi_files =
+        Context.ffi_files context
       in
       let open Irtojs in
       let _venv', code =
@@ -234,8 +234,6 @@ module Phases = struct
             let runtime_file =
               match Settings.get Basicsettings.System.custom_js_runtime with
               | None ->
-                 (* TODO(dhil): This code is copied from webserver.ml,
-                    it should be put in one common place. *)
                  begin match Settings.get jslib_dir with
                    | None | Some "" ->
                       begin
@@ -256,8 +254,18 @@ module Phases = struct
             try
               Utility.IO.Channel.cat ic oc;
               close_in ic
-            with e -> close_in ic; print_endline (Printexc.to_string e); raise e
+            with e -> close_in ic; raise e
           end;
+        (* Copy contents of FFI files. *)
+        List.iter
+          (fun ffi_file ->
+            let ic = open_in ffi_file in
+            try
+              Utility.IO.Channel.cat ic oc;
+              close_in ic
+            with e -> close_in ic; raise e)
+          ffi_files;
+        (* Emit the JavaScript code produced by irtojs. *)
         Js_CodeGen.output oc code;
         close_out oc
       with Sys_error reason ->
