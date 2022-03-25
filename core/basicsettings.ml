@@ -89,6 +89,7 @@ module System = struct
               |> synopsis "Set output file name to <file>"
               |> hint "<file>"
               |> to_string from_string_option
+              |> convert (fun s -> Some s)
               |> CLI.(add (long "output" <&> short 'o'))
               |> sync)
 
