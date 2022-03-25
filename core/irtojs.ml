@@ -1503,11 +1503,8 @@ end = functor (K : CONTINUATION) -> struct
   let wrap_with_server_lib_stubs code = GenStubs.wrap_with_server_lib_stubs code
 
   let generate_program venv comp =
-    let env, code = generate_computation venv comp K.toplevel in
-    (* Strip top-level return statement *)
-    match code with
-    | Code.Return e -> env, e
-    | _ -> assert false
+    let (env, code) = generate_computation venv comp K.toplevel in
+    (env, Code.Aux.call (Code.Fn ([], code)) [])
 
   let primitive_bindings = K.primitive_bindings
 end

@@ -37,6 +37,7 @@ sig
 
   val init : (Value.env * Ir.var Env.String.t * Types.typing_environment) -> Ir.binding list -> string list -> unit
   val set_prelude : Ir.binding list -> unit
+  val get_prelude : unit -> Ir.binding list
   val add_route : bool -> string -> (string * (string * string) list, request_handler_fn) either -> unit
   val start : Value.env -> unit Lwt.t
 
