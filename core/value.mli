@@ -245,6 +245,7 @@ type t = [
 | `PrimitiveFunction of string * Var.var option
 | `ClientDomRef of int
 | `ClientFunction of string
+| `ClientClosure of int
 | `Continuation of continuation
 | `Resumption of resumption
 | `Pid of dist_pid

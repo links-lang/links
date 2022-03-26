@@ -115,7 +115,8 @@ let rec jsonize_value' : Value.t -> Yojson.Basic.t =
     lit ~tag:"FunctionPtr" fields'
   | `ClientDomRef i ->
      lit ~tag:"ClientDomRef" [("_domRefKey", `String (string_of_int i))]
-  | `ClientFunction name -> lit ~tag:"ClientFunction" [("func", `String name); ("_tag", `String "ClientFunction")]
+  | `ClientFunction name -> lit ~tag:"ClientFunction" [("func", `String name)]
+  | `ClientClosure index -> lit ~tag:"ClientClosure" [("index", `Int index)]
   | #Value.primitive_value as p -> jsonize_primitive p
   | `Variant (label, value) ->
      lit ~tag:"Variant" [("_label", `String label); ("_value", jsonize_value' value)]
