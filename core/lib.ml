@@ -126,6 +126,7 @@ let rec equal l r =
         let f1 = CalendarShow.to_unixfloat dt1 in
         let f2 = CalendarShow.to_unixfloat dt2 in
         f1 = f2
+    | `DateTime _, `DateTime _ -> false (* comparing timestamps with (-)infinity *)
     | l, r ->
         runtime_error
           (Printf.sprintf "Comparing %s with %s which either does not make sense or isn't implemented."
