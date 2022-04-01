@@ -259,15 +259,20 @@ struct
   | Q.Apply (Q.Primitive "AsListT", [xs])
   | Q.Apply (Q.Primitive "AsListV", [xs]) -> xs
   (* Temporal projection operations *)
+  (* Note: These should already all be eta-expanded, so we can
+     treat them as record literals. *)
   | Q.Apply (Q.Primitive "ttData", [x])
   | Q.Apply (Q.Primitive "vtData", [x]) ->
-    Q.Project (x, TemporalField.data_field)
+        Q.unbox_record x
+        |> StringMap.find TemporalField.data_field
   | Q.Apply (Q.Primitive "ttFrom", [x])
   | Q.Apply (Q.Primitive "vtFrom", [x]) ->
-    Q.Project (x, TemporalField.from_field)
+        Q.unbox_record x
+        |> StringMap.find TemporalField.from_field
   | Q.Apply (Q.Primitive "ttTo", [x])
   | Q.Apply (Q.Primitive "vtTo", [x]) ->
-    Q.Project (x, TemporalField.to_field)
+        Q.unbox_record x
+        |> StringMap.find TemporalField.to_field
   | u -> u
 
   let rec xlate env : Ir.value -> Q.t = let open Ir in function
