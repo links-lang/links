@@ -9,4 +9,4 @@ function wait(time, cb, kappa) {
     return _applyCont(kappa, {});
 }
 
-var alertBox = LINKS.kify(_alertBox);
+var alertBox = _$Links.kify(_alertBox);

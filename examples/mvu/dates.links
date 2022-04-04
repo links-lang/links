@@ -61,7 +61,25 @@ fun view(model) {
     entry("Local milliseconds", intToString(localMilliseconds(ts))) +*
     entry("Client-parsed date", show(parseDate("2021-07-26 10:10:10+1"))) +*
     entry("Infinity on client", show(forever)) +*
-    entry("-Infinity on client", show(beginningOfTime))
+    entry("Local time = Local time", show(ts == ts)) +*
+    entry("Local time < Local time", show(ts < ts)) +*
+    entry("Local time <= Local time", show(ts <= ts)) +*
+    entry("Local time >= Local time", show(ts >= ts)) +*
+    entry("Local time > Local time", show(ts > ts)) +*
+    entry("-Infinity on client", show(beginningOfTime)) +*
+    entry("-infinity == -infinity", show(beginningOfTime == beginningOfTime)) +*
+    entry("-infinity < -infinity", show(beginningOfTime < beginningOfTime)) +*
+    entry("-infinity < infinity", show(beginningOfTime < forever)) +*
+    entry("-infinity <= -infinity", show(beginningOfTime <= beginningOfTime)) +*
+    entry("-infinity < local time", show(beginningOfTime < ts)) +*
+    entry("-infinity >= local time", show(beginningOfTime >= ts)) +*
+    entry("infinity == infinity", show(forever == forever)) +*
+    entry("infinity < infinity", show(forever < forever)) +*
+    entry("infinity < -infinity", show(forever < beginningOfTime)) +*
+    entry("infinity <= -infinity", show(forever <= beginningOfTime)) +*
+    entry("infinity < local time", show(forever < ts)) +*
+    entry("infinity > local time", show(forever > ts)) +*
+    entry("infinity >= local time", show(forever >= ts))
 }
 
 sig subscriptions : (Model) ~> MvuSubscriptions.Sub(Msg)
