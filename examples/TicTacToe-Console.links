@@ -2,7 +2,9 @@
 
 typename Player = [|X|O|];
 
-var initialState = [Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing] : [Maybe(Player)];
+var initialState = [Nothing, Nothing, Nothing,
+                    Nothing, Nothing, Nothing,
+		    Nothing, Nothing, Nothing] : [Maybe(Player)];
 
 sig playerToInt : (Player) -> Int
 fun playerToInt(player) {
@@ -20,9 +22,9 @@ fun playerToString(player) {
     }
 }
 
-sig optionToString : ((a) -e-> String) -> (Maybe(a)) -e-> String
-fun optionToString(xToString)(option){
-    switch(option){
+sig maybeToString : ((a) -e-> String) -> (Maybe(a)) -e-> String
+fun maybeToString(xToString)(ma){
+    switch(ma){
         case Nothing -> "_"
         case Just(player) -> xToString(player)
     }
