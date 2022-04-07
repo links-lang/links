@@ -54,7 +54,7 @@ fun listToString(list, xToString){
 
 sig printState : ([Maybe(Player)]) ~> ()
 fun printState(state){
-    print(listToString(state, optionToString(playerToString)))
+    print(listToString(state, maybeToString(playerToString)))
 }
 
 
