@@ -4,7 +4,7 @@ typename Player = [|X|O|];
 
 var initialState = [Nothing, Nothing, Nothing,
                     Nothing, Nothing, Nothing,
-		    Nothing, Nothing, Nothing] : [Maybe(Player)];
+                    Nothing, Nothing, Nothing] : [Maybe(Player)];
 
 sig playerToInt : (Player) -> Int
 fun playerToInt(player) {
