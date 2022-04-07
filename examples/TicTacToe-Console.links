@@ -1,9 +1,10 @@
 #tictactoe console edition
 
 typename Player = [|X|O|];
-typename Option(a) = [|None|Some:a|];
 
-var initialState = [None, None, None, None, None, None, None, None, None] : [Option(Player)];
+var initialState = [Nothing, Nothing, Nothing,
+                    Nothing, Nothing, Nothing,
+                    Nothing, Nothing, Nothing] : [Maybe(Player)];
 
 sig playerToInt : (Player) -> Int
 fun playerToInt(player) {
@@ -21,11 +22,11 @@ fun playerToString(player) {
     }
 }
 
-sig optionToString : ((a) -e-> String) -> (Option(a)) -e-> String
-fun optionToString(xToString)(option){
-    switch(option){
-        case None -> "_"
-        case Some(player) -> xToString(player)
+sig maybeToString : ((a) -e-> String) -> (Maybe(a)) -e-> String
+fun maybeToString(xToString)(ma){
+    switch(ma){
+        case Nothing -> "_"
+        case Just(player) -> xToString(player)
     }
 }
 
@@ -51,25 +52,25 @@ fun listToString(list, xToString){
    "[" ^^ stringCat(intersperse(", ", map(xToString, list))) ^^ "]"
 }
 
-sig printState : ([Option(Player)]) ~> ()
+sig printState : ([Maybe(Player)]) ~> ()
 fun printState(state){
-    print(listToString(state, optionToString(playerToString)))
+    print(listToString(state, maybeToString(playerToString)))
 }
 
 
-sig addMove : (Player, Int, [Option(Player)]) ~> [Option(Player)]
+sig addMove : (Player, Int, [Maybe(Player)]) ~> [Maybe(Player)]
 fun addMove(player, index, state){
     print("Set Move");
     mapi(fun(field, i){
         if(i==index){
-            Some(player)
+            Just(player)
         } else{
             field
         }
     }, state)
 }
 
-sig checkIfWon : (Player, [Option(Player)]) ~> Bool
+sig checkIfWon : (Player, [Maybe(Player)]) ~> Bool
 fun checkIfWon(player : Player, gameState){
 
     # very stupid. Couldn't understand how to loop through by rows and columns
@@ -82,23 +83,23 @@ fun checkIfWon(player : Player, gameState){
     var six = gameState !! 6;
     var seven = gameState !! 7;
     var eight = gameState !! 8;
-    (zero == one) && (one == two) && (two == Some(player)) ||
-    (three == four) && (four == five) && (five == Some(player)) ||
-    (six == seven) && (seven == eight) && (eight == Some(player)) ||
-    (zero == three) && (three == six) && (six == Some(player)) ||
-    (one == four) && (four == seven) && (seven == Some(player)) ||
-    (two == five) && (five == eight) && (eight == Some(player)) ||
-    (zero == four) && (four == eight) && (eight == Some(player))||
-    (two == four) && (four == six) && (six == Some(player))
+    (zero == one) && (one == two) && (two == Just(player)) ||
+    (three == four) && (four == five) && (five == Just(player)) ||
+    (six == seven) && (seven == eight) && (eight == Just(player)) ||
+    (zero == three) && (three == six) && (six == Just(player)) ||
+    (one == four) && (four == seven) && (seven == Just(player)) ||
+    (two == five) && (five == eight) && (eight == Just(player)) ||
+    (zero == four) && (four == eight) && (eight == Just(player))||
+    (two == four) && (four == six) && (six == Just(player))
 
 }
 
 mutual {
-  sig x: ([Option(Player)]) {hear:Int|_} ~> ()
+  sig x: ([Maybe(Player)]) {hear:Int|_} ~> ()
   fun x(gameState){
       var index = recv();
       switch(gameState !! index){
-          case None -> {
+          case Nothing -> {
               print("Setting X.");
               var newGameState = addMove(X, index, gameState);
               printState(newGameState);
@@ -108,17 +109,17 @@ mutual {
                   o(newGameState)
 
           }
-          case Some(player) -> {
+          case Just(player) -> {
              print("Already full")
           }
       }
   }
 
-  sig o: ([Option(Player)]) {hear:Int|_} ~> ()
+  sig o: ([Maybe(Player)]) {hear:Int|_} ~> ()
   fun o(gameState){
       var index = recv();
       switch(gameState !! index){
-          case None -> {
+          case Nothing -> {
               print("Setting O.");
               var newGameState = addMove(O, index, gameState);
               printState(newGameState);
@@ -128,7 +129,7 @@ mutual {
                   x(newGameState)
 
           }
-          case Some(player) -> {
+          case Just(player) -> {
              print("Already full")
           }
       }
