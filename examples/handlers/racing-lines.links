@@ -22,7 +22,6 @@ fun system(f){
 
 typename Point = (x:Int, y:Int);
 typename Queue(a) = (rear: [a], front: [a]);
-typename Option(a) = [|Some:a|None|];
 typename PrioQueue(a) = (high: Queue(a), low: Queue(a));
 typename Priority = [|High|Low|];
 typename Co(e::Eff) = () {Fork: (Co({ |e}), Priority) -> (), Yield:() |e}~> ();
@@ -44,16 +43,16 @@ fun enqueue(x, q){
     (q with rear=x::q.rear)
 }
 
-sig dequeue: (Queue(a)) ~> (Option(a), Queue(a))
+sig dequeue: (Queue(a)) ~> (Maybe(a), Queue(a))
 fun dequeue(q){
     switch(q) {
-        case (rear=[], front=[]) -> (None, q)
+        case (rear=[], front=[]) -> (Nothing, q)
         case (rear=xs, front=[]) ->
           var q0 = (rear=[], front=reverse(xs));
           dequeue(q0)
         case (rear=ys, front=(x :: xs)) ->
           var q0 = (rear=ys, front=xs);
-          (Some(x), q0)
+          (Just(x), q0)
     }
 }
 
@@ -66,14 +65,14 @@ fun priorityEnqueue(x, prio, pq){
     }
 }
 
-sig priorityDequeue: (PrioQueue(a)) ~> (Option((a, Priority)), PrioQueue(a) )
+sig priorityDequeue: (PrioQueue(a)) ~> (Maybe((a, Priority)), PrioQueue(a) )
 fun priorityDequeue(pq){
     switch(dequeue(pq.high)){
-        case (Some(x), q) -> (Some((x, High)), (pq with high= q))
-        case (None,_) ->
+        case (Just(x), q) -> (Just((x, High)), (pq with high= q))
+        case (Nothing,_) ->
             switch(dequeue(pq.low)){
-                case (None, _) -> (None, pq)
-                case (Some(x), q) -> (Some((x, Low)), (pq with low=q))
+                case (Nothing, _) -> (Nothing, pq)
+                case (Just(x), q) -> (Just((x, Low)), (pq with low=q))
             }
     }
 }
@@ -93,7 +92,7 @@ fun fiberBulkEnqueue(fibers, q){
     }
 }
 
-sig fiberDequeue: (FiberQueue({ |e})) ~> (Option((Fiber({ |e}), Priority)), FiberQueue({ |e}))
+sig fiberDequeue: (FiberQueue({ |e})) ~> (Maybe((Fiber({ |e}), Priority)), FiberQueue({ |e}))
 fun fiberDequeue(q){
     priorityDequeue(q)
 }
@@ -144,8 +143,8 @@ fun schedule(main){
 
     fun runNext(q){
         switch(fiberDequeue(q)){
-            case (None, _) -> ()
-            case (Some((fiber, prio)), q) -> fiber.f(makeSchedulerState(prio, q))
+            case (Nothing, _) -> ()
+            case (Just((fiber, prio)), q) -> fiber.f(makeSchedulerState(prio, q))
         }
     }
 
@@ -220,12 +219,12 @@ fun absolute(n){
     }
 }
 
-sig parseInt: (String) ~> Option(Int)
+sig parseInt: (String) ~> Maybe(Int)
 fun parseInt(n){
     if (n =~ /^[0-9]+$/) {
-        Some(stringToInt(n))
+        Just(stringToInt(n))
     } else{
-        None
+        Nothing
     }
 }
 
@@ -246,15 +245,15 @@ fun updatePoints(startx, starty, endx, endy){
     setValue(endy, "end-y", intToString)
 }
 
-sig getPoints: () ~> Option((Point, Point))
+sig getPoints: () ~> Maybe((Point, Point))
 fun getPoints(){
     var startx = parseInt(getValue("start-x"));
     var starty = parseInt(getValue("start-y"));
     var endx = parseInt(getValue("end-x"));
     var endy = parseInt(getValue("end-y"));
     switch((startx, starty, endx, endy)){
-        case (Some(sx), Some(sy), Some(ex), Some(ey)) -> Some((x = sx, y = sy), (x = ex, y = ey))
-        case (_, _, _, _) -> None
+        case (Just(sx), Just(sy), Just(ex), Just(ey)) -> Just((x = sx, y = sy), (x = ex, y = ey))
+        case (_, _, _, _) -> Nothing
     }
 }
 
@@ -314,8 +313,8 @@ sig setUpLineDrawing: (String) ~> () {Yield:() |e}~> ()
 fun setUpLineDrawing(color){
     var points = getPoints();
     switch(points){
-        case None -> fun(){}
-        case Some((start, end)) -> {
+        case Nothing -> fun(){}
+        case Just((start, end)) -> {
             updatePoints(start.x, start.y + 40, end.x , end.y + 40);
             prepareDrawingFunction(start, end, color)
         }

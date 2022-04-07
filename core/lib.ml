@@ -602,19 +602,19 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "max",
   (p1 (let max2 x y = if less x y then y else x in
          function
-           | `List [] -> `Variant ("None", `Record [])
-           | `List (x::xs) -> `Variant ("Some", List.fold_left max2 x xs)
+           | `List [] -> `Variant ("Nothing", `Record [])
+           | `List (x::xs) -> `Variant ("Just", List.fold_left max2 x xs)
            | _ -> raise (runtime_type_error "Internal error: non-list passed to max")),
-   datatype "([a]) ~> [|Some:a | None:()|]",
+   datatype "([a]) ~> [|Just:a | Nothing:()|]",
   PURE);
 
   "min",
   (p1 (let min2 x y = if less x y then x else y in
          function
-           | `List [] -> `Variant ("None", `Record [])
-           | `List (x::xs) -> `Variant ("Some", List.fold_left min2 x xs)
+           | `List [] -> `Variant ("Nothing", `Record [])
+           | `List (x::xs) -> `Variant ("Just", List.fold_left min2 x xs)
            | _ -> raise (runtime_type_error "Internal error: non-list passed to min")),
-   datatype "([a]) ~> [|Some:a | None:()|]",
+   datatype "([a]) ~> [|Just:a | Nothing:()|]",
   PURE);
 
   (* We need to have these here in order to patch through to the underlying SQL functions. *)
@@ -1040,7 +1040,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      Ideally, perhaps, a malformed header from the client should
      be ignored at this level (let the HTTP agents handle it).
 
-     An absent cookie should probably be indicated by a None value in
+     An absent cookie should probably be indicated by a Nothing value in
      the Maybe(String) type.
   *)
   "getCookie",
