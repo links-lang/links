@@ -136,7 +136,6 @@ struct
         Debug.print("Doing RemoteCall for function " ^ Value.string_of_value func
           ^ ", client ID: " ^ client_id_str);
         Debug.print ("func: " ^ Value.show func);
-        Debug.print ("args: " ^ mapstrcat ", " Value.show args);
         Proc.resolve_external_processes func;
         List.iter Proc.resolve_external_processes args;
         List.iter (Proc.resolve_external_processes -<- fst -<- snd)
