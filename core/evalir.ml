@@ -245,11 +245,12 @@ struct
         with NotFound _ ->
           raise (internal_error ("Failed to find function name: " ^ (string_of_int f)))
       in
-      let env =
+      let env, xs =
         match z, fvs with
-        | Some z, Some fvs -> Value.Env.bind z (fvs, Scope.Local) env
-        | None, None -> env
-        | _, _ -> assert false
+        | Some z, Some fvs -> Value.Env.bind z (fvs, Scope.Local) env, xs
+        | None, None -> env, xs
+        | Some z, None -> env, z::xs (* kludge to deal with possible mismatch *)
+        | None, Some _ -> assert false
       in
       (* extend env with arguments *)
       let env =
