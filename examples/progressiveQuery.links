@@ -4,7 +4,7 @@ fun showProgress(wines) client {
           <li>{stringToXml(w.winery)} {stringToXml(w.name)}
               (${floatToXml(w.cost)})</li>,
         getNodeById("listing")
-  );
+  )
 }
 
 var db = database "winestore";
@@ -55,7 +55,7 @@ fun foreach(xs, f) {
 fun progressiveSearch(wineries) server {
   foreach(wineriesByRegion(wineries), fun (winery) {
     showProgress(winesByWinery(winery))
-  });
+  })
 }
 
 page

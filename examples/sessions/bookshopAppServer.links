@@ -44,7 +44,7 @@ fun mainPage(_, clientLoc) {
 
 fun main() server {
   addLocatedRouteHandler("/", mainPage);
-  servePages();
+  servePages()
 }
 
 main()

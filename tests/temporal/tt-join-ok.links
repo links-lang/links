@@ -1,0 +1,30 @@
+var db = database "timedb";
+
+var employees = table "employees"
+  with (name: String, salary_band: String, department_id: Int)
+  using transaction_time(tt_from, tt_to) from db;
+
+var salaries = table "salaries"
+  with (salary_band: String, salary: Int)
+  using transaction_time(tt_from, tt_to) from db;
+
+var departments = table "departments"
+  with (department_id: Int, name: String) from db;
+
+var res =
+  query nested {
+      tt_join {
+        for (e <-t- employees)
+        where (ttData(e).name == "Robert")
+            for (s <-t- salaries)
+            where (ttData(e).salary_band == ttData(s).salary_band)
+              for (d <-- departments)
+              where (d.department_id == ttData(e).department_id)
+                [(name = ttData(e).name, salary = ttData(s).salary, department = d.name)]
+      }
+  };
+
+switch(res) {
+  case [] -> 0
+  case res :: _ -> ttData(res).salary
+}

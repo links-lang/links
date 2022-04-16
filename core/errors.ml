@@ -16,6 +16,7 @@ type sugar_error_stage =
   | CheckXML
   | DesugarInners
   | DesugarModules
+  | DesugarSwitchFuns
 
 let string_of_stage = function
   | DesugarFormlets    -> "compiling formlets"
@@ -26,6 +27,7 @@ let string_of_stage = function
   | CheckXML           -> "checking XML"
   | DesugarInners      -> "desugaring inner types"
   | DesugarModules     -> "desugaring modules"
+  | DesugarSwitchFuns    -> "desugaring pattern-matching"
 
 exception RuntimeError of string
 exception UndefinedVariable of string
@@ -52,6 +54,9 @@ exception DisabledExtension of Position.t option * (string * bool) option * stri
 exception PrimeAlien of Position.t
 exception ForbiddenClientCall of string * string
 exception MissingBuiltinType of string
+exception MissingSSLCertificate
+exception CannotOpenFile of string * string
+exception ObjectFileWriteError of string * string
 
 exception LocateFailure of string
 let driver_locate_failure driver = LocateFailure driver
@@ -187,24 +192,32 @@ let format_exception =
   | ForbiddenClientCall (fn, reason) ->
      pos_prefix (Printf.sprintf "Error: Cannot call client side function '%s' because of %s\n" fn reason)
   | MissingBuiltinType alias -> Printf.sprintf "Error: Missing builtin type with alias '%s'. Is it defined in the prelude?" alias
+  | MissingSSLCertificate -> "Error: SSL mode requires both a valid certificate and key\n"
+  | CannotOpenFile (filename, reason) ->
+     Printf.sprintf "Error: Cannot open file '%s' (%s)\n" filename reason
+  | ObjectFileWriteError (filename, reason) ->
+    Printf.sprintf "Error: Cannot write to file '%s' (%s)\n" filename reason
   | Sys.Break -> "Caught interrupt"
   | exn -> pos_prefix ("Error: " ^ Printexc.to_string exn)
 
 let format_exception_html e =
   Printf.sprintf "<h1>Links Error</h1><p>%s</p>\n" (format_exception e)
 
+let internal_error ~filename ~message =
+  InternalError { filename; message }
+
 let display ?(default=(fun e -> raise e)) ?(stream=stderr) (e) =
   try
-    Lazy.force e
+    (try Lazy.force e with
+       Notfound.NotFound _ ->
+       let backtrace = Printexc.get_raw_backtrace () in
+       Printexc.raise_with_backtrace (internal_error ~filename:"errors.ml" ~message:"Unhandled NotFound exception") backtrace)
   with exc ->
     (if Printexc.print_backtraces
      then Printexc.print_backtrace stderr);
     output_string stream (format_exception exc ^ "\n");
     flush stream;
     default exc
-
-let internal_error ~filename ~message =
-  InternalError { filename; message }
 
 let desugaring_error ~pos ~stage ~message =
   DesugaringError { pos; stage; message }
@@ -231,3 +244,5 @@ let disabled_extension ?pos ?setting ?flag name =
   DisabledExtension (pos, setting, flag, name)
 let prime_alien pos = PrimeAlien pos
 let forbidden_client_call fn reason = ForbiddenClientCall (fn, reason)
+let cannot_open_file filename reason = CannotOpenFile (filename, reason)
+let object_file_write_error filename reason = ObjectFileWriteError (filename, reason)

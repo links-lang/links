@@ -6,17 +6,17 @@ description: "MySQL database driver for the Links Programming Language"
 homepage: "https://github.com/links-lang/links"
 dev-repo: "git+https://github.com/links-lang/links.git"
 bug-reports: "https://github.com/links-lang/links/issues"
-license: "GPL-2"
+license: "GPL-3.0-only"
 
 build: [
-  [ "dune" "subst" ] {pinned}
+  [ "dune" "subst" ] {dev}
   [ "dune" "build" "-p" name "-j" jobs ]
 ]
 
 depends: [
   "ocaml" {>= "4.08.0"}
-  "dune" {>= "1.10.0"}
+  "dune" {>= "2.7"}
   "conf-mysql"
   "mysql"
-  "links"
+  "links" {= version}
 ]

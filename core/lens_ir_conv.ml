@@ -60,9 +60,9 @@ module Env = struct
           | Location.Client ->
               raise
                 (Errors.runtime_error
-                   ( Js.var_name_binder (Var.make_binder f finfo)
+                   (Js.var_name_binder (Var.make_binder f finfo)
                    |> Format.asprintf
-                        "Attempt to use client function: %s in query" ))
+                        "Attempt to use client function: %s in query"))
         in
         Some fn
     | None -> None
@@ -100,9 +100,10 @@ module Env = struct
         | None, None -> (
             try
               expression_of_value (Lib.primitive_stub (Lib.primitive_name var))
-            with NotFound _ ->
-              raise
-                (internal_error (Format.sprintf "Variable %d not found" var)) )
+            with
+            | NotFound _ ->
+                raise
+                  (internal_error (Format.sprintf "Variable %d not found" var)))
         )
 
   let bind (val_env, exp_env) (x, v) = (val_env, Env.Int.bind x v exp_env)
@@ -251,13 +252,13 @@ let lens_sugar_phrase_of_ir p env =
             Result.bind
               ~f:(fun v -> computation (Env.bind env (x, v)) (bs, tailcomp))
               v
-        | I.Fun (_, _, _, Location.Client, _) ->
+        | I.Fun { Ir.fn_location = Location.Client; _ } ->
             Result.error Of_ir_error.Client_function
         | I.Fun _ ->
             Result.error @@ Of_ir_error.Internal_error "Unexpected function."
         | I.Rec _ -> Result.error Of_ir_error.Recursive_function
         | I.Alien _ -> computation env (bs, tailcomp)
-        | I.Module _ -> Result.error Of_ir_error.Modules_unsupported )
+        | I.Module _ -> Result.error Of_ir_error.Modules_unsupported)
   and unpack_phrase v =
     match v with
     | IrValue.Phrase p -> Result.return p
@@ -303,7 +304,7 @@ let lens_sugar_phrase_of_ir p env =
                 (Lens.Phrase.Constant (Lens.Phrase.Value.Bool true)) ->
                 unpack_phrase cf >>| fun cf ->
                 IrValue.Phrase (Lens.Phrase.or' v cf)
-            | _ -> Result.error (Of_ir_error.Unsupported_arbitrary_if comp) ) )
+            | _ -> Result.error (Of_ir_error.Unsupported_arbitrary_if comp)))
     | I.Apply (f, args) ->
         let f = value env f in
         let args = List.map_result ~f:(value env) args in
@@ -324,11 +325,11 @@ let lens_sugar_phrase_of_ir p env =
     | I.Coerce (v, _) -> value env v
     | I.Project (n, r) ->
         value env r >>= fun r ->
-        ( match r with
+        (match r with
         | IrValue.Record -> Lens.Phrase.var n |> Result.return
         | IrValue.Phrase (Lens.Phrase.Constant c) ->
             project_value c n >>| fun v -> Lens.Phrase.Constant v
-        | _ -> unexpected_ir_error r )
+        | _ -> unexpected_ir_error r)
         >>| fun p -> IrValue.Phrase p
     | I.ApplyPure (f, args) ->
         let f = value env f in
@@ -352,11 +353,11 @@ let lens_sugar_phrase_of_ir p env =
           ~f:(fun (k, v) -> links_value env v >>| fun v -> (k, v))
           fields
         >>= fun fields ->
-        ( match r with
+        (match r with
         | `Record v -> `Record (List.append fields v) |> Result.return
         | _ ->
             Of_ir_error.Internal_error "Expected a record value."
-            |> Result.error )
+            |> Result.error)
         >>| fun r -> r
     | _ ->
         Of_ir_error.Internal_error "Expected a record extension."

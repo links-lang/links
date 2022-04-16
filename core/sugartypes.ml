@@ -195,7 +195,7 @@ module Datatype = struct
     | Record          of row
     | Variant         of row
     | Effect          of row
-    | Table           of with_pos * with_pos * with_pos
+    | Table           of Temporality.t * with_pos * with_pos * with_pos
     | List            of with_pos
     | TypeApplication of string * type_arg list
     | Primitive       of Primitive.t
@@ -369,7 +369,10 @@ and regex =
   | Splice    of phrase
   | Replace   of regex * replace_rhs
 and clause = Pattern.with_pos * phrase
-and funlit = Pattern.with_pos list list * phrase
+and funlit = NormalFunlit of normal_funlit | SwitchFunlit of switch_funlit
+and switch_funlit = Pattern.with_pos list list * switch_funlit_body
+and switch_funlit_body = (Pattern.with_pos * phrase) list
+and normal_funlit = Pattern.with_pos list list * phrase
 and handler =
   { sh_expr         : phrase
   ; sh_effect_cases : clause list
@@ -386,9 +389,46 @@ and handler_parameterisation =
   { shp_bindings : (Pattern.with_pos * phrase) list
   ; shp_types    : Types.datatype list
   }
+and table_lit = {
+    tbl_name: phrase;
+    tbl_type:
+        (Temporality.t * Datatype.with_pos * (Types.datatype *
+         Types.datatype * Types.datatype) option);
+    tbl_field_constraints: (Name.t * fieldconstraint list) list;
+    tbl_keys: phrase;
+    tbl_temporal_fields: (string * string) option;
+    tbl_database: phrase
+}
 and iterpatt =
   | List  of Pattern.with_pos * phrase
-  | Table of Pattern.with_pos * phrase
+  | Table of Temporality.t * Pattern.with_pos * phrase
+and valid_time_update =
+  (* Update current row, terminating previous end period and creating new row *)
+  | CurrentUpdate
+  (* Update between two times *)
+  | SequencedUpdate of { validity_from: phrase; validity_to: phrase }
+  (* Update with direct access to to- and from- fields, potentially setting the to
+     and from fields directly (from_time, to_time) *)
+  | NonsequencedUpdate of { from_time: phrase option; to_time: phrase option }
+and temporal_update =
+  | ValidTimeUpdate of valid_time_update
+  | TransactionTimeUpdate
+and valid_time_deletion =
+  (* Remove current row by terminating end-period *)
+  | CurrentDeletion
+  (* Delete within a range, potentially creating multiple rows *)
+  | SequencedDeletion of { validity_from: phrase; validity_to: phrase }
+  (* Give direct access to to- and from- fields *)
+  | NonsequencedDeletion
+and temporal_deletion =
+  | ValidTimeDeletion of valid_time_deletion
+  | TransactionTimeDeletion
+and valid_time_insertion =
+  | CurrentInsertion
+  | SequencedInsertion
+and temporal_insertion =
+  | ValidTimeInsertion of valid_time_insertion
+  | TransactionTimeInsertion
 and phrasenode =
   | Constant         of Constant.t
   | Var              of Name.t
@@ -433,13 +473,12 @@ and phrasenode =
                           Types.datatype option
   | Receive          of (Pattern.with_pos * phrase) list * Types.datatype option
   | DatabaseLit      of phrase * (phrase option * phrase option)
-  | TableLit         of phrase * (Datatype.with_pos * (Types.datatype *
-                           Types.datatype * Types.datatype) option) *
-                          (Name.t * fieldconstraint list) list * phrase * phrase
-  | DBDelete         of Pattern.with_pos * phrase * phrase option
-  | DBInsert         of phrase * Name.t list * phrase * phrase option
-  | DBUpdate         of Pattern.with_pos * phrase * phrase option *
-                          (Name.t * phrase) list
+  | TableLit         of table_lit
+  | DBDelete         of temporal_deletion option * Pattern.with_pos * phrase * phrase option
+  | DBInsert         of temporal_insertion option * phrase * Name.t list * phrase * phrase option
+  | DBUpdate         of temporal_update option * Pattern.with_pos * phrase *
+                          phrase option * (Name.t * phrase) list
+  | DBTemporalJoin   of Temporality.t * phrase * Types.datatype option
   | LensLit          of phrase * Lens.Type.t option
   | LensSerialLit    of phrase * string list * Lens.Type.t option
   (* the lens keys lit is a literal that takes an expression and is converted
@@ -566,6 +605,11 @@ let tappl' : phrase * tyarg list -> phrasenode = fun (e, tys) ->
        in
        TAppl (e, List.map make_arg tys)
 
+let get_normal_funlit fnlit =
+  match fnlit with
+  | NormalFunlit x -> x
+  | _-> assert false
+
 module Freevars =
 struct
   open Utility
@@ -664,9 +708,10 @@ struct
     | ConstructorLit (_, popt, _) -> option_map phrase popt
     | DatabaseLit (p, (popt1, popt2)) ->
         union_all [phrase p; option_map phrase popt1; option_map phrase popt2]
-    | DBInsert (p1, _labels, p2, popt) ->
+    | DBInsert (_, p1, _labels, p2, popt) ->
         union_all [phrase p1; phrase p2; option_map phrase popt]
-    | TableLit (p1, _, _, _, p2) -> union (phrase p1) (phrase p2)
+    | TableLit { tbl_name; tbl_database; _ } ->
+        union (phrase tbl_name) (phrase tbl_database)
     | Xml (_, attrs, attrexp, children) ->
         union_all
           [union_map (snd ->- union_map phrase) attrs;
@@ -679,10 +724,10 @@ struct
     | Iteration (generators, body, where, orderby) ->
         let xs = union_map (function
                              | List (_, source)
-                             | Table (_, source) -> phrase source) generators in
+                             | Table (_, _, source) -> phrase source) generators in
         let pat_bound = union_map (function
                                   | List (pat, _)
-                                  | Table (pat, _) -> pattern pat) generators in
+                                  | Table (_, pat, _) -> pattern pat) generators in
           union_all [xs;
                      diff (phrase body) pat_bound;
                      diff (option_map phrase where) pat_bound;
@@ -704,15 +749,38 @@ struct
     | Offer (p, cases, _) -> union (phrase p) (union_map case cases)
     | CP cp -> cp_phrase cp
     | Receive (cases, _) -> union_map case cases
-    | DBDelete (pat, p, where) ->
-        union (phrase p)
-          (diff (option_map phrase where)
-             (pattern pat))
-    | DBUpdate (pat, from, where, fields) ->
+    | DBDelete (del, pat, p, where) ->
+        let del =
+          match del with
+            | Some (ValidTimeDeletion (SequencedDeletion { validity_from; validity_to })) ->
+                (* Note: validity periods cannot refer to the pattern. *)
+                union (phrase validity_from) (phrase validity_to)
+            | _ -> empty
+        in
+        union del
+          (union (phrase p)
+             (diff (option_map phrase where)
+               (pattern pat)))
+    | DBUpdate (upd, pat, from, where, fields) ->
+        let upd =
+          match upd with
+            | Some (ValidTimeUpdate (SequencedUpdate { validity_from; validity_to })) ->
+                union (phrase validity_from) (phrase validity_to)
+            | Some (ValidTimeUpdate (NonsequencedUpdate { from_time; to_time })) ->
+                (* Nonsequenced updates *can* refer to the pattern, however. *)
+                (diff
+                  (union
+                    (option_map phrase from_time)
+                    (option_map phrase to_time))
+                  (pattern pat))
+            | _ -> empty
+        in
         let pat_bound = pattern pat in
-          union_all [phrase from;
+        union_all [upd;
+                     phrase from;
                      diff (option_map phrase where) pat_bound;
                      diff (union_map (snd ->- phrase) fields) pat_bound]
+    | DBTemporalJoin (_, p, _) -> phrase p
     | DoOperation (_, ps, _) -> union_map phrase ps
     | QualifiedVar _ -> empty
     | TryInOtherwise (p1, pat, p2, p3, _ty) ->
@@ -766,8 +834,16 @@ struct
            let fvs'' = diff fvs' bnd in
            union bnd bnd', union fvs fvs'')
          (empty, empty) members
-  and funlit (args, body : funlit) : StringSet.t =
+  and funlit (fn : funlit) : StringSet.t =
+    match fn with
+    | NormalFunlit n_fn -> normal_funlit n_fn
+    | SwitchFunlit m_fn -> switch_funlit m_fn
+  and normal_funlit (args, body : normal_funlit) : StringSet.t =
     diff (phrase body) (union_map (union_map pattern) args)
+  and switch_funlit (args, body : switch_funlit) : StringSet.t =
+    diff (switch_funlit_body body) (union_map (union_map pattern) args)
+  and switch_funlit_body (body : (Pattern.with_pos * phrase) list) : StringSet.t =
+    union_map (fun (pat, phr) -> union (pattern pat) (phrase phr)) body
   and block (binds, expr : binding list * phrase) : StringSet.t =
     ListLabels.fold_right binds ~init:(phrase expr)
       ~f:(fun bind bodyfree ->

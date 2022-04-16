@@ -494,7 +494,7 @@ fun main() {
             else (fpsInfo with upFrames = fpsInfo.upFrames + 1)
         } else (fpsInfo with hiFps = 0.0);
 
-        if (floatEq(fpsInfo.hiFps, 0.0))
+        if (fpsInfo.hiFps == 0.0)
             jsFillText(ctx, "loading data: " ^^ intToString(fpsInfo.frameCount) ^^ "/" ^^ intToString(aFpsFrames), 100.0, 10.0)
         else
             jsFillText(ctx, "highest FPS: " ^^ strsub(floatToString(fpsInfo.hiFps), 0, 7), 100.0, 10.0);
@@ -515,7 +515,7 @@ fun main() {
     fun draw(gs, lastTime, now, fpsInfo) {
         # prepare canvas
         var (mainCanvas, dispCanvas) =
-            if (stringEq(domGetStyleAttrFromRef(getNodeById(canvasId), "display"), "none") || not(doubleBuffer))
+            if (domGetStyleAttrFromRef(getNodeById(canvasId), "display") == "none" || not(doubleBuffer))
                 (canvasId, canvas2Id)
             else (canvas2Id, canvasId);
         var ctx = jsGetContext2D(getNodeById(mainCanvas));
@@ -660,20 +660,20 @@ fun main() {
 
     fun handleKey(k, gs) {
         # for some reason pattern matching doesn't work (always selects the first option), so I use if-else
-        if (objectEq(k, KeyDown(restartKeyCode)))
+        if (k == KeyDown(restartKeyCode))
             (gs with state = Restart)
-        else if (objectEq(k, KeyDown(downloadKeyCode)))
+        else if (k == KeyDown(downloadKeyCode))
             (gs with state = Download)
         else if (gs.state == Run)
-            if (objectEq(k, KeyDown(spaceKeyCode)))
+            if (k == KeyDown(spaceKeyCode))
                 (gs with dropped = true, countdown = 0)
-            else if (objectEq(k, KeyDown(leftKeyCode)))
+            else if (k == KeyDown(leftKeyCode))
                 ifInControl(fun (x) { tryMove(fun (y) { movePiece((-1, 0), y) }, x) }, gs)
-            else if (objectEq(k, KeyDown(rightKeyCode)))
+            else if (k == KeyDown(rightKeyCode))
                 ifInControl(fun (x) { tryMove(fun (y) { movePiece(( 1, 0), y) }, x) }, gs)
-            else if (objectEq(k, KeyDown(upKeyCode)))
+            else if (k == KeyDown(upKeyCode))
                 ifInControl(fun (x) { tryMove(rotatePiece, x) }, gs)
-            else if (objectEq(k, KeyDown(downKeyCode)))
+            else if (k == KeyDown(downKeyCode))
                 ifInControl(pieceFall, gs)
             else gs
         else gs
@@ -722,9 +722,9 @@ fun main() {
 
             var (gameStatePrim, dtPrim) = updateLogic(dt, gameState, i);
 
-            if (gameStatePrim.state == Restart) # objectEq doesn't work here -- why?
+            if (gameStatePrim.state == Restart)
                 ()
-            else if (floatEq(dtPrim, dt)) { # don't redraw if there were no logic updates
+            else if (dtPrim == dt) { # don't redraw if there were no logic updates
                 mainLoop(gameStatePrim, dtPrim, now, fpsInfo, i)
             } else {
                 mainLoop((gameStatePrim with state = Run), # if state == Download, reset
@@ -744,11 +744,11 @@ fun main() {
 
 
     fun onKeyDown(e) {
-        updateProcId ! (KeyDown(getCharCode(e)): Input);
+        updateProcId ! (KeyDown(getCharCode(e)): Input)
     }
 
     fun onKeyUp(e) {
-        updateProcId ! (KeyUp(getCharCode(e)): Input);
+        updateProcId ! (KeyUp(getCharCode(e)): Input)
     }
 
     fun initialize() {
@@ -818,7 +818,7 @@ fun main() {
                     <h1>Tetris in Links</h1>
 
                     <div id="{containerId}" tabindex="1"
-                        l:onfocus="{initializeProcId ! 0; }">
+                        l:onfocus="{initializeProcId ! 0 }">
                         <canvas id="{canvas2Id}" width="{floatToString(canvasWidth)}" height="{floatToString(canvasHeight)}"></canvas>
                         <canvas id="{canvasId}" width="{floatToString(canvasWidth)}" height="{floatToString(canvasHeight)}"></canvas>
                         <div id="info">Click this canvas to start.</div>

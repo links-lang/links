@@ -17,7 +17,7 @@ sig yield : (a) {Yield:(a) {}-> ()|_}-> ()
 fun yield(v) {do Yield(v)}
 
 # Post-order tree traversal
-sig walkTree : (Tree(a)) -> Comp((), {Yield:(a) {}-> ()|_})
+sig walkTree : (Tree(a)) -f-> Comp((), {Yield:(a) {}-> ()|e})
 fun walkTree(tree)() {
   switch (tree) {
     case Leaf(v)   -> yield(v)

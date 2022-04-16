@@ -97,7 +97,7 @@ fun xpath(p) {
 }
 
 fun test() {
-  assertEq(xpath(xp0), [(name="b"), (name="d")]);
+  assertEq(xpath(xp0), [(name="b"), (name="d")])
 }
 
 test()

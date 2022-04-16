@@ -1,3 +1,368 @@
+# Unreleased
+
+Notable changes made to `master` since the previous release.
+
+* **Breaking change**: The Links standard library has adopted `Maybe` as it optional type. Previously, the standard library made inconsistent use of both `Option` and `Maybe` types. As a consequence of this change, every instance of `Option` has been turned into a `Maybe` type.
+
+# 0.9.6
+
+This release extends the core features of Links and resolves various
+minor bugs.
+
+* Links now supports System F-style explicit type abstractions:
+  For instance, writing `/\ [a, e::Row] { foo }` abstracts the expression `foo`
+  over type variable `a` and row variable `e`. Here, `foo` must have a unique
+  type and must be pure (to satisfy the value restriction).
+* Fixed a bug in "mixing" query normalisation, which prevented certain queries using
+  concatenation inside `for` statements from being correctly converted to SQL.
+* Links now has basic support for temporal database operations. More information
+  can be found on the [Wiki](https://github.com/links-lang/links/wiki/Temporal-Databases).
+  There are new keywords: `valid`, `to`, `vt_insert`, `tt_insert`, and `TemporalTable`.
+* A new commandline option `--compile` (shorthand `-c`) has been
+  added, which runs Links in a "compile only" mode. In this mode the
+  JavaScript compilation artefact can be saved to a file (the naming
+  of this file is controlled via the commandline option `-o`). Note
+  that the generated file may not be directly runnable without linking
+  the runtime system first. Currently, the runtime system must be
+  linked manually.
+* Fixed a bug where calling either of `newAP`, `newClientAP`, and
+  `newServerAP` on the client-side would crash the client.
+* It is now possible to dispatch an MVU message from outside of the
+  event loop. This is particularly useful, for example, when dealing
+  with a persistent, stateful thread which is receiving messages from
+  a server. New things include:
+  + A new type alias `MvuHandle(msg)`.
+  + A family of runners: `runHandle`, `runCmdHandle`,
+    `runSimpleHandle` which return an `MvuHandle(msg)` rather than the
+    unit value.
+  + A new dispatcher `Mvu.dispatch : (msg, MvuHandle(msg)) ~> ()`,
+    which directly dispatches a message to the MVU loop.
+
+* The built-in webserver now supports SSL connections.  To enable
+  secure connections, you must first obtain an adequate certificate
+  and key, e.g. via Let's Encrypt or a self-signed certificate. The
+  latter can be useful for testing, e.g. the following command starts
+  an interactive process to create a self-signed certificate (that
+  uses 4096 bits RSA encryption and is valid for 365 days):
+```shell
+openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt -days 365 -nodes
+```
+  After obtaining a valid certificate, you must tell Links to run in SSL
+  mode and you must also tell it how to locate the `key` and `crt`
+  file. This can be done via a configuration file, e.g.
+
+```
+# ssl.config
+ssl=true
+ssl_cert_file=server.crt
+ssl_key_file=server.key
+```
+  Then running `./links --config=ssl.config <file.links>` will cause
+  the webserver to only serve requests via https.
+
+  When a webpage is served via https, then the websocket layer will
+  automatically communicate via the wss protocol.
+* Other various bug fixes.
+
+# 0.9.5
+
+This is a minor hotfix release.
+
+* The database query deduplication now correctly handles subexpressions recursively.
+* Fixed a bug whereby messages received on the client-side would not
+  be deserialised correctly.
+* The Links runtime, now internally, uses `Lwt.pause` rather than the
+  deprecated `Lwt_main.yield`. As a side effect we have updated the
+  Lwt version constraint to be greater or equal to `5.0.0`.
+
+# 0.9.4
+
+## Queries mixing set and bag semantics
+Links now provides experimental support for SQL queries mixing set and bag semantics.
+
+When the `mixing_norm=on` flag is added to the configuration file, or when a query is defined in a `query mixing { ... }` block, Links will use a new query evaluator, allowing the programmer to call deduplication functions (`dedup` and `distinct`) within database queries. These are handled with set-based SQL statements `select distinct / union`, in addition to the usual bag-based `select / union all`.
+
+    # will run on the DB as "select distinct e.dept as dept from employees"
+    query mixing {
+      dedup(for (e <-- employees) [(dept = e.dept)])
+    }
+
+Queries mixing set and bag semantics may, in some cases, require the use of the SQL:1999 keyword `lateral`; Links implements an optional query transformation to produce queries that do not use `lateral` (allowing the use of older DBMSs): this behaviour is enabled by using `query delat` in place of `query mixing`.
+
+Further information on this feature is provided in the [Links GitHub wiki](https://github.com/links-lang/links/wiki/Deduplication-in-database-queries).
+
+## DateTime type
+Links now includes a primitive type, `DateTime`, for dates and times.
+This is a *breaking change* from previous versions, where `dateToInt`
+and `intToDate` operated on a record.
+
+The primitive type allows us to better timezones, and also allows us
+to work seamlessly with timestamps in the database.
+
+Obtain a DateTime via:
+
+  *  the `now()` function to get a timestamp for the current local time
+  *  Using `parseDate` on an ISO-formatted string (e.g., `parseDate("2021-07-26 14:26:00+1")`)
+  *  A `DateTime` field in the database
+  *  `intToDate(X)` where `X` is a UNIX timestamp
+  *  `beginningOfTime` and `forever`, which are special timestamps guaranteed to be less than (resp. greater than) all other timestamps
+
+Project fields out of the type:
+
+  * utcYear, utcMonth, utcDay, utcHours, utcMinutes, utcSeconds, utcMilliseconds projects the given field in the UTC time zone
+  * localYear, localMonth, localDay, localHours, localMinutes, localSeconds, localMilliseconds projects the given field in the local time zone
+  * dateYear, dateMonth, dateDay, dateHours, dateMinutes, dateSeconds, dateMilliseconds projects the given field in a given timezone (e.g., to project the hours field of a DateTime dt in BST, one would write `dateHours(dt, 1)`, where 1 is the timezone offset.
+
+You can also print out the `DateTime` using `show` (which is an alias of
+`showLocal`) and `showUTC`.
+
+`DateTime`s are comparable as normal.
+
+Due to limitations of the underlying library, the minimum timezone granularity is one hour. Unfortunately, this means we can't handle Indian timezones, for example.
+
+## New surface syntax
+
+### Presence type arguments
+
+**Breaking change**: New syntax has been added to support type arguments of kind `Presence`. Here are some example of the syntax:
+
+```links
+typename T(p::Presence) = (foo{p});
+
+(foo=4200) : T({:Int})         # Present with type Int
+()         : T({-})            # Absent
+(foo=4200) : T({%})            # Unnamed flexible variable
+(foo=true) : T({%p})           # Named flexible variable
+fun(r : T({_})) { () }         # Anonymous presence variable
+fun(r : T({p})) { r : T({p}) } # Named presence variable
+```
+
+The syntactic sugar for effect and record fields which lets one omit the `()` has been removed in order to resolve the otherwise ambiguity between the presence type argument `{wild}` from the row type argument `{wild}`. Note however that it is still possible to omit the `()` for variant fields.
+
+### Mono restriction
+
+It is now possible to annotate type variables with `Mono` restriction, e.g. `sig id : (a::(Any,Mono)) -> a::(Any,Mono)`.
+
+### Recursive rows
+
+* Effect variables can be recursive, e.g. `{ |(mu a.F:(() { |a}-> ()) {}-> b|c)}`.
+* **Breaking change**: Recursive rows are no longer restricted to variant syntax, i.e. separating fields using `|`. Recursive record and effects rows separate fields using `,` now.
+* Recursive variants with no directly exposed fields no longer require the vertical bar separating fields from the row variable, e.g. `[|(mu a. Foo)|]` is equivalent to `[| |(mu a . Foo)|]`.
+
+## Roundtrip: New pretty printer for types
+
+This version of Links introduces a new pretty printer for types, called Roundtrip. This fixes various round-tripping issues.
+
+The Roundtrip printer is now active by default. The old printer is still present.
+
+The printer(s) to be used can be selected using the setting `types_pretty_printer_engine`, with the following values:
+
+  * `roundtrip`: the new printer
+  * `old`: the original printer
+  * `derived`: no pretty printing - prints the OCaml representation of the types
+
+Note that one can select multiple printers at once, for comparison; this is done by separating printer names by commas, e.g.:
+
+```links
+@set types_pretty_printer_engine "roundtrip,old";
+```
+
+## Effect Syntactic Sugar
+
+This version implements enhanced syntactic sugar for effects. The changes influence both the Roundtrip printer (see above) and the desugaring passes (between parsing and typechecking).
+
+(*Note: Most of effect sugar, and in particular the changes introduced in this version, requires the `effect_sugar` setting to be `true`.*)
+
+There is a new setting `effect_sugar_policy` which allows one to set which components of effect sugar to use. The available options (with shortcuts for convencience) are:
+
+  * `presence_omit` [shotcut `pres`]: omit presence polymorphic operations within effect rows
+  * `alias_omit` [shortcut `alias`]: hide empty (and emptied using `pres`) shared effect rows in the last argument of aliases
+  * `arrows_show_implicit_effect_variable` [shortcut `show_implicit`]: display the imlicit shared effect on arrows
+  * `arrows_curried_hide_fresh` [shortcut `chf`]: in curried functions, argument collection arrows are assumed to have fresh effects and these are hidden
+  * `contract_operation_arrows` [shortcut `contract`]: contract operation arrows: `E:() {}-> a` to `E:a` and `E:(a) {}-> b` to `E:(a) -> b`
+  * `open_default` [shortcut `open`]: effect rows are open by default, closed with syntax `{ | .}`
+  * `final_arrow_shares_with_alias` [shortcut `final_arrow`]: final arrow and a following type alias may share implicit effects
+  * `all_implicit_arrows_share` [shortcut `all_arrows`]: all arrows with implicit effect vars will be unified, an experimental setting
+
+Multiple of these can be selected, separated by commas, e.g.:
+
+```links
+@set effect_sugar_policy "pres,alias,contract";
+```
+
+A version of the above is also available by entering `@help effect_sugar_policy;` in Links.
+
+These changes are explained in more depth and with examples in [Links GitHub Wiki/Effect Sugar](https://github.com/links-lang/links/wiki/Effect-Sugar).
+
+## Other fixes / Miscellaneous
+
+* Relational lenses are now enabled by default.
+* Fixed a bug where the REPL would unconditionally print a stacktrace for unknown directives.
+* Fixed a bug where deeply nested JSON literals would cause the client to stack overflow.
+* Fixed a bug where big server side values would cause the client to stack overflow.
+* Fixed JavaScript compilation of top-level anonymous functions.
+* Fixed a bug where the server would inadvertently respond with response `500` following the (successful) termination of a server side process.
+* The body of an escape expression has been made more permissive (grammatically) as it can now be any expression.
+
+# 0.9.3
+
+This minor release fixes a few bugs.
+
+## MVU library is now distributed as part of Links
+
+The JavaScript dependencies of the MVU library are now correctly
+installed alongside Links. As a result the MVU examples now work
+out-of-the-box following a fresh install of Links. For instance, the
+following command will now successfully run the TODO example:
+
+```
+$ linx $OPAM_SWITCH_PREFIX/share/links/examples/mvu/todomvc/todoMVC.links
+```
+
+## Limited support for regular expressions in SQL where clauses
+
+Links now support compilation of regular expressions in SQL where
+clauses, however, only for regular expressions that can be translated
+to SQL `LIKE` clauses. Consider the following example.
+
+```
+# Suppose we had configured two tables as follows
+#  insert staff values (name, dept)
+#    [(name = "Alice", dept = "math"),
+#     (name = "Bob", dept = "computer science"),
+#     (name = "Carol", dept = "dentistry")];
+#  insert depts values (name, coffee_budget)
+#    [(name = "mathematics", coffee_budget = 10000),
+#     (name = "computer science", coffee_budget = 20000),
+#     (name = "dentistry", coffee_budget = 30000)]
+
+query flat {
+  for (s <-- staff)
+    for (d <-- depts)
+       where (d.name =~ /.*{s.dept}.*/)
+         [(name = s.name, dept = d.name, coffee_budget = d.coffee_budget)]
+}
+```
+
+When `s` is bound to the record `(name = "Alice", dept = "math")` the
+regular expression `.*{s.dept}.*` will match the department record
+with `name = "mathematics"`, and thus the query yields
+
+```
+[ (coffee_budget = 10000, dept = "mathematics", name = "Alice")
+, (coffee_budget = 20000, dept = "computer science", name = "Bob")
+, (coffee_budget = 30000, dept = "dentistry", name = "Carol") ]
+```
+
+## Other fixes
+
+* Compatibility with OCaml 4.12 (thanks to @kit-ty-kate).
+* The webserver now correctly sends HTTP responses with code 500 for errors.
+* Various internal improvements.
+
+# 0.9.2
+
+This minor release contains various bug fixes, improvements, and a
+**breaking** change.
+
+## Breaking change: Trailing semicolons are no longer permitted
+The surface syntax of Links has been changed.  Up until now it was possible to
+end a block with a semicolon.  A trailing semicolon was interpreted as
+implicitly ending the block with a `()` expression.  The rationale for this
+change is to make the Links syntax more consistent, i.e. now all blocks must end
+with an explicit expression.  To sum up, previously both of the following were
+allowed
+
+```links
+fun foo(x) {
+  bar(y);
+  baz(x);
+}
+fun foo'(x) {
+  bar(y);
+  baz(x)
+}
+```
+
+Now the first form is no longer accepted. Instead you have to drop the semicolon
+and either end the block with an explicit `()` or wrap the last expression in an
+`ignore` application.
+
+```links
+fun foo(x) {
+  bar(y);
+  baz(x);
+  ()
+}
+
+fun foo(x) {
+  bar(y);
+  ignore(baz(x))
+}
+```
+
+A third option is to simply drop the trailing semicolon, though, this only works
+as intended if the type of the last expression is `()`.
+
+
+## SML-style function definitions
+
+Links now supports "switch functions", a new syntax for defining functions in
+terms of match clauses directly, similar to SML. This allows writing the
+following function
+```links
+fun ack(_,_) switch {
+  case (0, n) -> n + 1
+  case (m, 0) -> ack(m - 1, 1)
+  case (m, n) -> ack(m - 1, ack(m, n - 1))
+}
+```
+instead of the following, more verbose version:
+
+```links
+fun ack(a, b) {
+  switch(a, b) {
+    case (0, n) -> n + 1
+    case (m, 0) -> ack(m - 1, 1)
+    case (m, n) -> ack(m - 1, ack(m, n - 1))
+  }
+}
+```
+
+Switch functions can also be anonymous, allowing function like the following:
+```links
+fun(_, _) switch {
+  case (0, n) -> 0
+  case (m, n) -> m + n
+}
+```
+Note: currently switch function syntax is only supported for uncurried functions.
+As switch functions have experimental status they are disabled by default. To
+enable them you must set the option `switch_functions=true` in a
+configuration file.
+## Require OCaml 4.08
+
+The minimum required OCaml version has been raised to 4.08.
+
+
+## Miscellaneous
+
+- Fixed a bug breaking the TODO list example (#812)
+- Checkboxes and radio groups in form elements are now handled correctly (#903)
+- Links supports MySQL databases again! (#858)
+- Fixed a bug where the effect of `orderby` was inconsistent between database
+  drivers w.r.t. reversing the order of results (#858)
+- Relational lenses can now be used with MySQL and Sqlite3 databases, too (#897)
+- Remove setting `use_keys_in_shredding`, behaving as if it was always true (#892)
+- Remove setting `query`, behaving as if it was off
+  (i.e., `query` behaves like `query flat`) (#892)
+- Fixed a bug where regular expressions in nested queries did not work correctly
+  (#852)
+- Implemented support for negative patterns in let bindings (#811)
+
+
+
+
 # 0.9.1
 
 This minor release contains various bug fixes and improvements.

@@ -26,7 +26,9 @@ let of_option v ~error =
   | Some v -> return v
   | None -> error v
 
-let try_with f = try f () |> return with e -> error e
+let try_with f =
+  try f () |> return with
+  | e -> error e
 
 let map_error ~f r =
   match r with

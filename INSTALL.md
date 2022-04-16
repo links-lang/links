@@ -1,25 +1,22 @@
 # Installing Links
 
-We recommend installing Links using the OPAM tool, available from [opam.ocaml.org](https://opam.ocaml.org/).
+We recommend installing Links using the OPAM tool (version >= 2.1), available from [opam.ocaml.org](https://opam.ocaml.org/).
 
-Links requires at least OCaml 4.06.0 to build and install. Therefore
+Links requires at least OCaml 4.08.0 to build and install. Therefore
 you should first install the minimum (or greater) required version of
 OCaml:
 
 ```
-$ opam switch install 4.06.0
+$ opam switch install 4.08.0
 ```
 
-If you wish to use Links' database functionality, you should first
-install PostgreSQL, the supported DBMS.
-
-You can then install Links simply by issuing the command:
+You can then install Links and its database drivers simply by issuing the commands:
 
 ```
-$ opam install postgresql links
+$ opam install links links-postgresql links-mysql links-sqlite3
 ```
 
-Alternatively, if you don't have PostgreSQL installed then do:
+Alternatively, if you don't have PostgreSQL, MySQL, and Sqlite3 installed then do:
 
 ```
 $ opam install links
@@ -53,15 +50,15 @@ database.)
 The default port is 8080, so you should now be able to access the
 examples by pointing your browser at:
 
-  http://localhost:8080/examples/
+  http://localhost:8080/
 
-## Examples (with a database)
+## Examples (with a Postgres database)
 
 To run the examples using the Links application server issue the
 following command:
 
 ```
-$ linx -m --path=$OPAM_SWITCH_PREFIX/share/links/examples --path=$OPAM_SWITCH_PREFIX/share/links/examples/games --path=$OPAM_SWITCH_PREFIX/share/links/examples/dictionary $OPAM_SWITCH_PREFIX/share/links/examples/webserver/examples.links
+$ linx --path=$OPAM_SWITCH_PREFIX/share/links/examples --path=$OPAM_SWITCH_PREFIX/share/links/examples/games --path=$OPAM_SWITCH_PREFIX/share/links/examples/dictionary $OPAM_SWITCH_PREFIX/share/links/examples/webserver/examples.links
 ```
 
 * The `--path` option tells Links to look for source files in the following
@@ -79,14 +76,14 @@ But first you need to do a few things.
 
   2) The default config file should contain paths to JavaScript libraries:
 
-         jsliburl=/lib/
+         jsliburl=/lib/js
          jslibdir=$OPAM_SWITCH_PREFIX/lib/links/js
 
      To use database examples you need to add a database configuration
      to the config file:
 
          database_driver=postgresql
-         database_args=:5432:fred:
+         database_args=localhost:5432:fred:
 
      The database user fred should exist. With postgres, perhaps the
      easiest way to do this is to tie fred to your unix username and

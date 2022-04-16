@@ -307,16 +307,19 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
         raise (Errors.module_error ~pos (Printf.sprintf "Unbound module %s" (Scope.Resolve.best_guess path)))
 
     method! funlit : funlit -> funlit
-      = fun (paramss, body) ->
-      let visitor = self#clone in
-      let paramss' =
-        List.map
-          (fun params ->
-            List.map (fun param -> visitor#pattern param) params)
-          paramss
-      in
-      let body' = visitor#phrase body in
-      (paramss', body')
+      = fun f ->
+      match f with
+        | NormalFunlit (paramss, body) ->
+          let visitor = self#clone in
+          let paramss' =
+            List.map
+              (fun params ->
+                List.map (fun param -> visitor#pattern param) params)
+              paramss
+          in
+          let body' = visitor#phrase body in
+          NormalFunlit (paramss', body')
+        | _ -> assert false
 
     method cases : (Pattern.with_pos * phrase) list -> (Pattern.with_pos * phrase) list
       = fun cases ->
@@ -531,7 +534,7 @@ let renamer : Epithet.t ref = ref Epithet.empty
 
 let desugar_program : Sugartypes.program -> Sugartypes.program
   = fun program ->
-  let interacting = Settings.get Basicsettings.interactive_mode in
+  let interacting = Basicsettings.System.is_interacting () in
   (* TODO move to this logic to the loader. *)
   let program = Chaser.add_dependencies program in
   let program = DesugarAlienBlocks.transform_alien_blocks program in

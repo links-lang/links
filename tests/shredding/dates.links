@@ -1,0 +1,81 @@
+var db = database "links";
+var conferences = table "conferences" with
+    (name: String,
+     start_date: DateTime,
+     end_date: DateTime) from db;
+
+fun insertConferences() {
+    insert conferences
+    values (name, start_date, end_date)
+        [(name = "ECOOP", start_date = parseDate("2021-07-11 00:00:00+0"),
+            end_date = parseDate("2021-07-17 23:59:59+0")),
+         (name = "CONCUR", start_date = parseDate("2021-08-23 00:00:00+0"),
+            end_date = parseDate("2021-08-27 23:59:59+0")),
+         (name = "INFINITY", start_date = beginningOfTime, end_date = forever)
+        ]
+}
+
+fun deleteIfStartsBefore(date) {
+    delete (x <-- conferences)
+    where (x.start_date < date)
+}
+
+fun getStartsAfter(date) {
+    var res = query {
+        for (x <-- conferences)
+        where (x.start_date > date)
+        [x]
+    };
+    sortBy(fun(x) { x.name }, res)
+}
+
+fun getByName(name) {
+    var res = query {
+        for (x <-- conferences)
+        where (x.name == name)
+        [x]
+    };
+    sortBy(fun(x) { x.name }, res)
+}
+
+fun getAll() {
+    var res =
+        query {
+            for (x <-- conferences) [x]
+        };
+    sortBy(fun(x) { x.name }, res)
+}
+
+fun main() {
+    print("INSERT\n");
+    insertConferences();
+    print("GET ECOOP\n");
+    assertEq(getByName("ECOOP"),
+        [(name = "ECOOP", start_date = parseDate("2021-07-11 00:00:00+0"),
+            end_date = parseDate("2021-07-17 23:59:59+0"))]);
+    print("GET ALL (1)\n");
+    assertEq(getAll(),
+           [
+             (name = "CONCUR", start_date = parseDate("2021-08-23 00:00:00+0"),
+                end_date = parseDate("2021-08-27 23:59:59+0")),
+               (name = "ECOOP", start_date = parseDate("2021-07-11 00:00:00+0"),
+                end_date = parseDate("2021-07-17 23:59:59+0")),
+             (name = "INFINITY", start_date = beginningOfTime, end_date = forever)
+            ]
+    );
+    print("GET CONCUR & INFINTY\n");
+    assertEq(getStartsAfter(parseDate("2021-07-25 00:00:00+0")),
+        [(name = "CONCUR", start_date = parseDate("2021-08-23 00:00:00+0"),
+          end_date = parseDate("2021-08-27 23:59:59+0"))
+        ]
+    );
+    print("DELETE IF STARTS BEFORE");
+    deleteIfStartsBefore(parseDate("2021-07-25 01:01:01+0"));
+    print("GET ALL (2)\n");
+    assertEq(getAll(),
+        [(name = "CONCUR", start_date = parseDate("2021-08-23 00:00:00+0"),
+          end_date = parseDate("2021-08-27 23:59:59+0"))])
+}
+
+main()
+

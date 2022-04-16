@@ -57,7 +57,36 @@ and tail_computation =
 
   | Case       of value * (binder * computation) name_map * (binder * computation) option
   | If         of value * computation * computation
-and fun_def = binder * (tyvar list * binder list * computation) * binder option * location * bool
+and fun_def =
+  {
+    fn_binder   : binder;
+    fn_tyvars   : tyvar list;
+    fn_params   : binder list;
+    fn_body     : computation;
+    fn_closure  : binder option;
+    fn_location : location;
+    fn_unsafe   : bool
+  }
+and temporal_update =
+  | ValidTimeUpdate of valid_time_update
+  | TransactionTimeUpdate
+and valid_time_update =
+  | CurrentUpdate
+  | SequencedUpdate of { validity_from: value; validity_to: value }
+  | NonsequencedUpdate of { from_time: computation option; to_time: computation option }
+and temporal_deletion =
+  | ValidTimeDeletion of valid_time_deletion
+  | TransactionTimeDeletion
+and valid_time_deletion =
+  | CurrentDeletion
+  | SequencedDeletion of { validity_from: value; validity_to: value }
+  | NonsequencedDeletion
+and valid_time_insertion =
+  | CurrentInsertion
+  | SequencedInsertion
+and temporal_insertion =
+  | ValidTimeInsertion of valid_time_insertion
+  | TransactionTimeInsertion
 and binding =
   | Let        of binder * (tyvar list * tail_computation)
   | Fun        of fun_def
@@ -77,12 +106,13 @@ and special =
   | LensCheck  of value * Lens.Type.t
   | LensGet    of value * Types.t
   | LensPut    of value * value * Types.t
-  | Table      of value * value * value * (Types.t * Types.t * Types.t)
+  | Table      of table
   | Query      of (value * value) option * QueryPolicy.t * computation * Types.t
-  | InsertRows of value * value
-  | InsertReturning of value * value * value
-  | Update     of (binder * value) * computation option * computation
-  | Delete     of (binder * value) * computation option
+  | TemporalJoin of Temporality.t * computation * Types.datatype
+  | InsertRows of temporal_insertion option * value * value
+  | InsertReturning of temporal_insertion option * value * value * value
+  | Update     of temporal_update option * (binder * value) * computation option * computation
+  | Delete     of temporal_deletion option * (binder * value) * computation option
   | CallCC     of value
   | Select     of Name.t * value
   | Choice     of value * (binder * computation) name_map
@@ -98,18 +128,25 @@ and handler = {
 }
 and handler_depth = | Deep of (binder * value) list | Shallow
 and lens_predicate = Static of Lens.Phrase.t | Dynamic of value
+and table = {
+  database: value;
+  table: value;
+  keys: value;
+  temporal_fields: (string * string) option;
+  table_type: (Temporality.t * Types.datatype * Types.datatype * Types.datatype)
+}
   [@@deriving show]
 
 let binding_scope : binding -> scope =
   function
-  | Let (b, _)
-  | Fun (b, _, _, _, _)
-  | Rec ((b, _, _, _, _)::_)
-  | Alien { binder = b; _ } -> Var.scope_of_binder b
+  | Let (binder, _)
+  | Fun {fn_binder = binder; _}
+  | Rec ({fn_binder = binder; _}::_)
+  | Alien {binder; _ } -> Var.scope_of_binder binder
   | Rec []
   | Module _ -> assert false
 
-let binder_of_fun_def (fb, _, _, _,_) = fb
+let binder_of_fun_def fb = fb.fn_binder
 
 let tapp (v, tyargs) =
   match tyargs with

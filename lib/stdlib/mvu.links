@@ -5,16 +5,25 @@ open import MvuHTML;
 open import MvuSubscriptions;
 open import MvuCommands;
 
+typename MvuHandle(msg) = AP(?msg.End);
+
+# Directly dispatches a message to the MVU event loop
+fun dispatch(msg, hndl) {
+  var s = request(hndl);
+  var s = send(msg, s);
+  close(s)
+}
+
 # Needed to ensure that virtual-dom is open
 module VirtualDom {
-  alien javascript "/lib/virtual-dom.js" {
+  alien javascript "/lib/js/virtual-dom.js" {
     dummy : ();
   }
 }
 
 # Loads the "vdom.js" file, exposes runDom and updateDom.
 module VDom {
-  alien javascript "/lib/vdom.js" {
+  alien javascript "/lib/js/vdom.js" {
     runDom : forall a :: Type(Any, Any), e :: Row .
       (String, HTML(a), AP(?a.End), Sub(a)) ~e~> ();
     updateDom : forall a :: Type(Any, Any), e :: Row . (HTML(a), Sub(a)) ~e~> ();
@@ -46,7 +55,25 @@ fun evtLoop(ap, model, view, updt, subscriptionsFn, prevSubscriptions) {
 }
 
 # User-facing function (assuming an unrestricted model)
-sig run:
+sig runHandle:
+  forall msg, model, e :: Row, f :: Row.
+  (String,
+    model,
+    (model) ~e~> HTML(msg),
+    (msg, model) ~e~> (model, Command(msg)),
+    (model) ~e~> Sub(msg),
+    Command(msg)) ~f~> MvuHandle(msg)
+fun runHandle(placeholder, model, view, updt, subscriptions, cmd) {
+  var ap = newClientAP();
+  var evtHandler = spawnClient {
+    processCommand(cmd, ap);
+    VDom.runDom(placeholder, view(model), ap, subscriptions(model));
+    evtLoop(ap, model, view, updt, subscriptions, subscriptions(model))
+  };
+  ap
+}
+
+sig run :
   forall msg, model, e :: Row, f :: Row.
   (String,
     model,
@@ -54,24 +81,39 @@ sig run:
     (msg, model) ~e~> (model, Command(msg)),
     (model) ~e~> Sub(msg),
     Command(msg)) ~f~> ()
-fun run(placeholder, model, view, updt, subscriptions, cmd) {
-  var evtHandler = spawnClient {
-    var ap = new();
-    processCommand(cmd, ap);
-    VDom.runDom(placeholder, view(model), ap, subscriptions(model));
-    evtLoop(ap, model, view, updt, subscriptions, subscriptions(model))
-  };
-  ()
+fun run(placeholder, model, view, updt, sub, cmd) {
+    ignore(runHandle(placeholder, model, view, updt, sub, cmd))
 }
 
-sig runCmd: forall msg, model, e :: Row, f :: Row.
+sig runCmdHandle: forall msg, model, e :: Row, f :: Row.
+  (String,
+    model,
+    (model) ~e~> HTML(msg),
+    (msg, model) ~e~> (model, Command(msg)),
+    Command(msg)) ~f~> MvuHandle(msg)
+fun runCmdHandle(placeholder, model, view, updt, cmd) {
+  runHandle(placeholder, model, view, updt, fun(_) { SubEmpty }, cmd )
+}
+
+sig runCmd : forall msg, model, e :: Row, f :: Row.
   (String,
     model,
     (model) ~e~> HTML(msg),
     (msg, model) ~e~> (model, Command(msg)),
     Command(msg)) ~f~> ()
 fun runCmd(placeholder, model, view, updt, cmd) {
-  run(placeholder, model, view, updt, fun(_) { SubEmpty }, cmd )
+  ignore(runCmdHandle(placeholder, model, view, updt, cmd))
+}
+
+sig runSimpleHandle : forall msg, model, e :: Row, f :: Row.
+  (String,
+    model,
+    (model) ~e~> HTML(msg),
+    (msg, model) ~e~> model) ~f~> MvuHandle(msg)
+fun runSimpleHandle(placeholder, model, view, updt) {
+  runHandle(placeholder, model, view,
+      fun(msg, model) { (updt(msg, model), MvuCommands.empty) },
+      fun(_) { SubEmpty }, MvuCommands.empty )
 }
 
 sig runSimple : forall msg, model, e :: Row, f :: Row.
@@ -80,9 +122,7 @@ sig runSimple : forall msg, model, e :: Row, f :: Row.
     (model) ~e~> HTML(msg),
     (msg, model) ~e~> model) ~f~> ()
 fun runSimple(placeholder, model, view, updt) {
-  run(placeholder, model, view,
-      fun(msg, model) { (updt(msg, model), MvuCommands.empty) },
-      fun(_) { SubEmpty }, MvuCommands.empty )
+  ignore(runSimpleHandle(placeholder, model, view, updt))
 }
 
 sig runStatic :

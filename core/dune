@@ -1,8 +1,8 @@
 (ocamllex
-  (modules lexer xmlLexer))
+  (modules lexer xmlLexer timestampLexer))
 
 (menhir
-  (modules parser xmlParser)
+  (modules parser xmlParser timestampParser)
   (flags "--table") ;; slower parser, but compilation *much* faster
 )
 
@@ -17,7 +17,7 @@
              cohttp cohttp-lwt-unix cohttp-lwt
              conduit-lwt-unix uri
              websocket websocket-lwt-unix.cohttp
-             findlib menhirLib links.lens)
+             findlib menhirLib links.lens calendar)
   (preprocess (pps ppx_deriving.std ppx_deriving_yojson)))
 
 ;; Make Query modules available.

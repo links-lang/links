@@ -21,8 +21,9 @@ module Scanner (Lex : LexerSig) = struct
           -> parse:('result Lex.grammar)
           -> infun:(bytes -> int -> int)
           -> name:string
+          -> unit
           -> 'result * source_code =
-  fun ~context ?nlhook ~parse ~infun ~name ->
+  fun ~context ?nlhook ~parse ~infun ~name () ->
     let code = new source_code in
     let lexbuf = {(from_function (code#parse_into infun))
                  with lex_curr_p={pos_fname=name; pos_lnum=1; pos_bol=0; pos_cnum=0}} in

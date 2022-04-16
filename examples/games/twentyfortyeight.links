@@ -304,8 +304,8 @@ fun main() {
                 <div id="ultracontainer"
                     tabindex="1"
                     l:onkeydown="{ gameProc ! getCharCode(event) }"
-                    l:onfocus="{mesg("Game on. Use arrow keys.");}"
-                    l:onblur="{mesg("Click on the board to play.");}">
+                    l:onfocus="{mesg("Game on. Use arrow keys.")}"
+                    l:onblur="{mesg("Click on the board to play.")}">
                     <h1>2048 in Links</h1>
                     <div id="msg">Click on the board to play.</div>
                     <div>The board must be focused for the input to work.</div>

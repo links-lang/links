@@ -39,7 +39,7 @@ object (o : 'self_type)
         (* bring the inner effects into scope, then restore the
            outer effects afterwards *)
         let process_type = Types.Application (Types.process, [(PrimaryKind.Row, inner_eff)]) in
-        let fun_effects = Types.row_with ("wild", Types.Present Types.unit_type) inner_eff in
+        let fun_effects = Types.row_with Types.wild_present inner_eff in
         let fun_effects =
           if Settings.get Basicsettings.Sessions.exceptions_enabled then
             let ty = Types.make_pure_function_type [] (Types.empty_type) in
@@ -76,16 +76,18 @@ object (o : 'self_type)
         in
           (o, e, process_type)
     | Receive (cases, Some t) ->
-        let (fields, rho, _) = TypeUtils.extract_row_parts (o#lookup_effects) in
-        let other_effects = Types.Row (StringMap.remove "hear" (StringMap.remove "wild" fields), rho, false) in
-          begin
-            match StringMap.find "hear" fields with
-              | (Types.Present mbt) ->
-                  o#phrasenode
-                    (Switch (fn_appl "recv" [(Type, mbt); (Row, other_effects)] [],
-                             cases,
-                             Some t))
-              | _ -> assert false
+        let (fieldenv, rho, _) = TypeUtils.extract_row_parts (o#lookup_effects) in
+        let other_effects =
+          Types.(remove_field hear (remove_field wild (Row (fieldenv, rho, false))))
+        in
+        begin
+          match StringMap.find Types.hear fieldenv with
+          | (Types.Present mbt) ->
+             o#phrasenode
+               (Switch (fn_appl "recv" [(Type, mbt); (Row, other_effects)] [],
+                        cases,
+                        Some t))
+          | _ -> assert false
         end
     | e -> super#phrasenode e
 end

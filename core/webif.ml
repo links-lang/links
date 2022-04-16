@@ -31,16 +31,25 @@ struct
   let parse_remote_call (valenv, _, _) cgi_args =
     let fname = Utility.base64decode (assoc "__name" cgi_args) in
     let args = Utility.base64decode (assoc "__args" cgi_args) in
-    (* Debug.print ("args: " ^ Value.show (Json.parse_json args)); *)
     let args = Value.untuple (U.Value.load (Yojson.Basic.from_string args)) in
 
     let fvs = U.Value.load (Yojson.Basic.from_string (Utility.base64decode (assoc "__env" cgi_args))) in
 
+    (* There is an artificial distinction between primitive
+       functions (builtin functions) and function pointers (functions
+       defined as part of a Links program). This is the point where we
+       have to do something about it in order for attempts to remotely
+       call primitive functions to work properly. *)
+
     let func =
       match fvs with
-      | `Record [] -> `FunctionPtr (int_of_string fname, None)
-      | _          -> `FunctionPtr (int_of_string fname, Some fvs) in
-    RemoteCall(func, valenv, args)
+      | `Record [] -> let i_fname = int_of_string fname in
+          if Lib.is_primitive_var i_fname
+          then `PrimitiveFunction (Lib.primitive_name i_fname, Some i_fname)
+          else `FunctionPtr (int_of_string fname, None)
+      | _ -> `FunctionPtr (int_of_string fname, Some fvs)
+    in
+    RemoteCall (func, valenv, args)
 
   (** Boolean tests for cgi parameters *)
 
@@ -115,7 +124,7 @@ struct
         Eval.apply render_cont valenv (t, []) >>= fun (_, v) ->
         let res = render_servercont_cont v in
         Lwt.return ("text/html", res)
-      | ClientReturn(cont, arg) ->
+      | ClientReturn (cont, arg) ->
         Debug.print("Doing ClientReturn for client ID " ^ client_id_str);
         Proc.resolve_external_processes arg;
         Eval.apply_cont cont valenv arg >>= fun (_, result) ->
@@ -123,11 +132,9 @@ struct
         let result_json =
           Json.jsonize_value_with_state result json_state |> Json.json_to_string in
         Lwt.return ("text/plain", Utility.base64encode result_json)
-      | RemoteCall(func, env, args) ->
+      | RemoteCall (func, env, args) ->
         Debug.print("Doing RemoteCall for function " ^ Value.string_of_value func
           ^ ", client ID: " ^ client_id_str);
-        (* Debug.print ("func: " ^ Value.show func); *)
-        (* Debug.print ("args: " ^ mapstrcat ", " Value.show args); *)
         Proc.resolve_external_processes func;
         List.iter Proc.resolve_external_processes args;
         List.iter (Proc.resolve_external_processes -<- fst -<- snd)
@@ -156,34 +163,35 @@ struct
     (* We need to be a bit careful about what we respond here. If we are evaluating
      * a ServerCont or EvalMain, that is fine -- but we need to construct a b64-encoded
      * JSON object if we're responding to a ClientReturn or RemoteCall. *)
-
-    let handle_ajax_error = function
-      | Aborted r -> Lwt.return r
-      | e ->
-          let json =
-            `Assoc [("error", `String (Errors.format_exception e))] in
-         Lwt.return
-           ("text/plain", Utility.base64encode (Yojson.Basic.to_string json)) in
-
+    let handle_ajax_error e =
+      let json =
+        `Assoc [("error", `String (Errors.format_exception e))] in
+      Lwt.return
+        ("text/plain", Utility.base64encode (Yojson.Basic.to_string json))
+    in
     let handle_html_error e =
       let mime_type = "text/html; charset=utf-8" in
       match e with
-       | Aborted r -> Lwt.return r
        | Failure msg as e ->
-          prerr_endline msg;
+          Debug.print (Printf.sprintf "Failure(%s)" msg);
           Lwt.return (mime_type, error_page (Errors.format_exception_html e))
        | exc ->
-           Lwt.return (mime_type, error_page (Errors.format_exception_html exc)) in
-
-    let handle_error e =
-      if (RequestData.is_ajax_call cgi_args) then
-        handle_ajax_error e
-      else
-        handle_html_error e in
-
+          Lwt.return (mime_type, error_page (Errors.format_exception_html exc))
+    in
+    let handle_exception = function
+      | Aborted r -> Lwt.return r (* Aborts are not "real" errors, as
+                                     every client call throws a
+                                     Proc.Aborted. *)
+      | e ->
+         let req_data = Value.Env.request_data valenv in
+         RequestData.set_http_response_code req_data 500;
+         if (RequestData.is_ajax_call cgi_args)
+         then handle_ajax_error e
+         else handle_html_error e
+    in
     Lwt.catch
-      (fun () -> perform_request valenv run render_cont render_servercont_cont request )
-      (handle_error) >>=
-    fun (content_type, content) ->
+      (fun () -> perform_request valenv run render_cont render_servercont_cont request)
+      handle_exception >>=
+      fun (content_type, content) ->
       response_printer [("Content-type", content_type)] content
 end

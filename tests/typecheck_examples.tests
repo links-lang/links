@@ -198,7 +198,7 @@ filemode : true
 Typecheck example file examples/handlers/choose.links
 examples/handlers/choose.links
 filemode : true
-ignore : broken example
+args : --set=enable_handlers=true
 
 Typecheck example file examples/handlers/coins.links
 examples/handlers/coins.links
@@ -208,7 +208,7 @@ args : --set=effect_sugar=true
 Typecheck example file examples/handlers/concurrency.links
 examples/handlers/concurrency.links
 filemode : true
-ignore : broken example
+args : --set=enable_handlers=true
 
 Typecheck example file examples/handlers/count_web.links
 examples/handlers/count_web.links
@@ -227,7 +227,7 @@ args : --set=effect_sugar=true
 Typecheck example file examples/handlers/fringe.links
 examples/handlers/fringe.links
 filemode : true
-args : --set=effect_sugar=true
+args : --set=effect_sugar=true --set=effect_sugar_policy=final_arrow
 
 Typecheck example file examples/handlers/identity.links
 examples/handlers/identity.links
@@ -245,12 +245,12 @@ filemode : true
 Typecheck example file examples/handlers/monadic_reflection.links
 examples/handlers/monadic_reflection.links
 filemode : true
-args : --set=effect_sugar=true
+args : --set=effect_sugar=true --set=effect_sugar_policy=final_arrow
 
 Typecheck example file examples/handlers/nim.links
 examples/handlers/nim.links
 filemode : true
-ignore : broken example
+args : --set=enable_handlers=true
 
 Typecheck example file examples/handlers/nim-webversion.links
 examples/handlers/nim-webversion.links
@@ -750,4 +750,12 @@ filemode : true
 
 Typecheck example file examples/mvu/commands.links
 examples/mvu/commands.links
+filemode : true
+
+Typecheck example file examples/mvu/dates.links
+examples/mvu/dates.links
+filemode : true
+
+Typecheck example file examples/mvu/dispatch.links
+examples/mvu/dispatch.links
 filemode : true

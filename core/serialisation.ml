@@ -1,6 +1,8 @@
 (* Serialisation of Value.t inhabitants. *)
 module E = Env
 open Value
+open CommonTypes
+open Utility
 
 let internal_error message =
   Errors.internal_error ~filename:"serialisation.ml" ~message
@@ -91,6 +93,13 @@ module Compressible = struct
     (* module V = Value *)
     (* include V *)
 
+    type compressed_timestamp = [
+      | `Infinity
+      | `MinusInfinity
+      | `Timestamp of float (* UTC UNIX timestamp *)
+    ]
+    [@@deriving yojson]
+
     (** {1 Compressed values for more efficient pickling} *)
     type compressed_primitive_value = [
       | `Bool of bool
@@ -99,8 +108,16 @@ module Compressible = struct
       | `Int of int
       | `XML of xmlitem
       | `String of string
-      | `Table of string * string * string list list * string
-      | `Database of string ]
+      | `Table of
+          string (* database name *) *
+          string (* table name *) *
+          string list list (* keys *) *
+          Temporality.t (* temporality *) *
+          (string * string) option (* temporal fields *) *
+          string (* serialised datatype *)
+      | `Database of string
+      | `DateTime of compressed_timestamp
+      ]
       [@@deriving yojson]
 
     type compressed_t = [
@@ -113,6 +130,7 @@ module Compressible = struct
       | `PrimitiveFunction of string
       | `ClientDomRef of int
       | `ClientFunction of string
+      | `ClientClosure of int
       | `Continuation of K.compressed_t
       | `Resumption of K.compressed_r
       | `Alien ]
@@ -126,9 +144,16 @@ module Compressible = struct
       | `Int i -> `Int i
       | `XML x -> `XML x
       | `String s -> `String s
-      | `Table ((_database, db), table, keys, row) ->
-         `Table (db, table, keys, Types.string_of_datatype (Types.Record (Types.Row row)))
+      | `Table Value.Table.({ database = (_, db); name; keys; temporality; temporal_fields; row }) ->
+          let type_str =
+            Types.string_of_datatype (Types.Record (Types.Row row))
+          in
+          `Table (db, name, keys, temporality, temporal_fields, type_str)
       | `Database (_database, s) -> `Database s
+      | `DateTime Timestamp.Infinity -> `DateTime `Infinity
+      | `DateTime Timestamp.MinusInfinity -> `DateTime `MinusInfinity
+      | `DateTime (Timestamp.Timestamp ts) ->
+          `DateTime (`Timestamp (CalendarShow.to_unixfloat ts))
 
     let rec compress : t -> compressed_t = function
       | #primitive_value as v -> compress_primitive_value v
@@ -143,6 +168,7 @@ module Compressible = struct
       | `PrimitiveFunction (f, _op) -> `PrimitiveFunction f
       | `ClientDomRef i -> `ClientDomRef i
       | `ClientFunction f -> `ClientFunction f
+      | `ClientClosure i  -> `ClientClosure i
       | `Continuation cont -> `Continuation (K.compress cont)
       | `Resumption r -> `Resumption (K.compress_r r)
       | `Pid _ -> assert false (* mmmmm *)
@@ -154,18 +180,26 @@ module Compressible = struct
 
     let decompress_primitive : compressed_primitive_value -> [> primitive_value] = function
       | #primitive_value_basis as v -> v
-      | `Table (db_name, table_name, keys, t) ->
+      | `Table (db_name, table_name, keys, temporality, temporal_fields, t) ->
          let row =
            match DesugarDatatypes.read ~aliases:DefaultAliases.alias_env t with
            | Types.Record (Types.Row row) -> row
            | _ -> assert false in
          let driver, params = parse_db_string db_name in
          let database = db_connect driver params in
-         `Table (database, table_name, keys, row)
+         let tbl =
+           Value.make_table ~database ~name:table_name ~keys
+             ~temporality ~temporal_fields ~row
+         in
+         `Table tbl
       | `Database s ->
          let driver, params = parse_db_string s in
          let database = db_connect driver params in
          `Database database
+      | `DateTime `Infinity -> `DateTime Timestamp.Infinity
+      | `DateTime `MinusInfinity -> `DateTime Timestamp.MinusInfinity
+      | `DateTime (`Timestamp ts) ->
+          `DateTime (Timestamp.timestamp (CalendarShow.from_unixfloat ts))
 
     let rec decompress ?(globals=Env.empty) (compressed : compressed_t) : Value.t =
       let decompress x = decompress ~globals x in
@@ -178,6 +212,7 @@ module Compressible = struct
       | `PrimitiveFunction f -> `PrimitiveFunction (f,None)
       | `ClientDomRef i -> `ClientDomRef i
       | `ClientFunction f -> `ClientFunction f
+      | `ClientClosure i -> `ClientClosure i
       | `Continuation cont -> `Continuation (K.decompress ~globals cont)
       | `Resumption res -> `Resumption (K.decompress_r ~globals res)
       | `Alien -> `Alien
@@ -328,7 +363,7 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
     let error err = Errors.runtime_error err
     (* The JSON spec says that the fields in an object must be unordered.
      * Therefore, for objects with more than one field, it's best to do
-     * individual field lookups. We can be match directly on ones with single
+     * individual field lookups. We can match directly on ones with single
      * fields though. *)
     let rec value_of_json (json: Yojson.Basic.t) : Value.t =
       let from_json = value_of_json in
@@ -404,10 +439,78 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
         | _ -> None in
 
       let parse_record xs = `Record (List.map (fun (k, v) -> (k, from_json v)) xs) in
+
+      let parse_date xs () =
+          match (List.assoc_opt "_type" xs, List.assoc_opt "_value" xs) with
+            | (Some (`String "infinity"), _) ->
+                Some (Timestamp.infinity |> Value.box_datetime)
+            | (Some (`String "-infinity"), _) ->
+                Some (Timestamp.minus_infinity |> Value.box_datetime)
+            | (Some (`String "timestamp"), Some (`Int utc_time)) ->
+                Some
+                  (utc_time
+                    |> float_of_int
+                    |> UnixTimestamp.to_utc_calendar
+                    |> Timestamp.timestamp
+                    |> Value.box_datetime)
+            | _, _ -> None
+      in
+
+      let parse_table bs =
+        let database =
+          begin
+            match List.assoc "db" bs |> from_json with
+            | `Database db -> db
+            | _ -> raise (error ("first argument to a table must be a database"))
+          end
+        in
+        let name = assoc_string "name" bs in
+        let keys = List.assoc "keys" bs |> unwrap_list in
+        let keys =
+          List.map (function
+              | `List part_keys -> List.map unwrap_string part_keys
+              | _ -> raise (error "keys must be lists of strings")) keys in
+        let temporality =
+          match assoc_string "temporality" bs with
+            | "current" -> Temporality.current
+            | "transaction_time" -> Temporality.transaction
+            | "valid_time" -> Temporality.valid
+            | _ -> raise (error "Temporality must be one of current, transaction_time, or valid_time")
+        in
+        let temporal_fields =
+          match List.assoc_opt "temporal_fields" bs with
+            | Some (`Assoc temporal_fields) ->
+                Some (
+                  assoc_string "from_field" temporal_fields,
+                  assoc_string "to_field" temporal_fields)
+            | Some _ ->
+                raise (error "Temporal fields must be an association list")
+            | _ -> None
+        in
+        let row_type =
+          DesugarDatatypes.read
+            ~aliases:E.String.empty
+            (assoc_string "row" bs) in
+        let row =
+          begin
+            match row_type with
+            | Types.Record (Types.Row row) -> row
+            | _ -> raise (error ("tables must have record type"))
+          end
+        in
+        Value.make_table ~database ~name ~keys ~temporality ~temporal_fields ~row
+      in
+      let parse_client_closure xs () =
+        match List.assoc_opt "_closureTable" xs with
+        | Some index -> Some (`ClientClosure (unwrap_int index))
+        | None -> None
+      in
+
       let (<|>) (o1: unit -> t option) (o2: unit -> t option) : unit -> t option =
         match o1 () with
         | Some x -> (fun () -> Some x)
         | None -> o2 in
+
       match json with
       | `Null -> `List []
       | `Int i -> box_int i
@@ -457,29 +560,7 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
          raise (error (
                     "db should be an assoc list. Got: " ^ (Yojson.Basic.to_string nonsense)))
       | `Assoc [("_table", `Assoc bs)] ->
-         let db =
-           begin
-             match List.assoc "db" bs |> from_json with
-             | `Database db -> db
-             | _ -> raise (error ("first argument to a table must be a database"))
-           end in
-         let name = assoc_string "name" bs in
-         let row_type =
-           DesugarDatatypes.read
-             ~aliases:E.String.empty
-             (assoc_string "row" bs) in
-         let row =
-           begin
-             match row_type with
-             | Types.Record (Types.Row row) -> row
-             | _ -> raise (error ("tables must have record type"))
-           end in
-         let keys = List.assoc "keys" bs |> unwrap_list in
-         let keys =
-           List.map (function
-               | `List part_keys -> List.map unwrap_string part_keys
-               | _ -> raise (error "keys must be lists of strings")) keys in
-         `Table (db, name, keys, row)
+         `Table (parse_table bs)
       | `Assoc [("_table", nonsense)] ->
          raise (error (
                     "table should be an assoc list. Got: " ^ (Yojson.Basic.to_string nonsense)))
@@ -516,7 +597,7 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
          raise (error (
                     "dom ref key should be an integer. Got: " ^ (Yojson.Basic.to_string nonsense)))
       | `Assoc xs ->
-         (* For non-singleton assoc lists, try each () of these in turn.
+         (* For non-singleton assoc lists, try each of these in turn.
           * If all else fails, parse as a record. *)
          let result =
            (parse_list xs)
@@ -524,7 +605,10 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
            <|> (parse_client_ap xs)
            <|> (parse_client_pid xs)
            <|> (parse_session_channel xs)
-           <|> (parse_server_func xs) in
+           <|> (parse_server_func xs)
+           <|> (parse_date xs)
+           <|> (parse_client_closure xs)
+         in
          begin
            match result () with
            | Some v -> v

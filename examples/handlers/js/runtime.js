@@ -1,55 +1,55 @@
 function systemYield(f, kappa){
     window.requestAnimationFrame(function(){
-        return f(CONSTANTS.UNIT, _idy);
+        return f(_$Constants.UNIT, _idy);
     });
-    return CONSTANTS.UNIT;
+    return _$Constants.UNIT;
 }
 
 function delayExecution(delay, kappa){
-    window.setTimeout(function(){return _yieldCont(kappa, CONSTANTS.UNIT);}, delay);
-    return CONSTANTS.UNIT;
+    window.setTimeout(function(){return _yieldCont(kappa, _$Constants.UNIT);}, delay);
+    return _$Constants.UNIT;
 }
 
 function delayExecutionOfF(delay, f, kappa){
     window.setTimeout(function(){f()}, delay);
-    return _yieldCont(kappa, CONSTANTS.UNIT);
+    return _yieldCont(kappa, _$Constants.UNIT);
 }
 
 function requestAnimationFrame(f, delay, kappa){
     window.requestAnimationFrame(f);
-    return _yieldCont(kappa, CONSTANTS.UNIT);
+    return _yieldCont(kappa, _$Constants.UNIT);
 }
 
 function setIntervalForF(interval, f, kappa){
     var id = setInterval(function() {
         return f(_idy);
     }, interval);
-    return _yieldCont(kappa, CONSTANTS.UNIT);
+    return _yieldCont(kappa, _$Constants.UNIT);
 }
 
 const SystemQueue = (function(){
 
-    let queue = LINKEDLIST.Nil;
+    let queue = _$List.Nil;
 
     function enqueue(fiber){
-        queue = LINKEDLIST.Cons(fiber, queue);
-        return CONSTANTS.UNIT;
+        queue = _$List.Cons(fiber, queue);
+        return _$Constants.UNIT;
     }
 
     function dequeue(){
         let temp = queue;
-        queue = LINKEDLIST.Nil;
+        queue = _$List.Nil;
         return temp;
     }
 
     function length(){
-        return LINKEDLIST.length(queue);
+        return _$List.length(queue);
     }
 
     return {"enqueue": enqueue, "dequeue": dequeue, "length" : length}
 
 }());
 
-const sysEnqueue = LINKS.kify(SystemQueue.enqueue);
-const sysDequeue = LINKS.kify(SystemQueue.dequeue);
-const sysQueueLength = LINKS.kify(SystemQueue.length);
+const sysEnqueue = _$Links.kify(SystemQueue.enqueue);
+const sysDequeue = _$Links.kify(SystemQueue.dequeue);
+const sysQueueLength = _$Links.kify(SystemQueue.length);

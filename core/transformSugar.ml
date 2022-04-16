@@ -257,6 +257,26 @@ class transform (env : Types.typing_environment) =
             (o, ExplicitSpawnLocation phr)
         | l -> (o, l)
 
+    method temporal_update : temporal_update -> ('self_type * temporal_update) =
+        function
+            | ValidTimeUpdate (SequencedUpdate { validity_from; validity_to }) ->
+                let (o, validity_from, _) = o#phrase validity_from in
+                let (o, validity_to, _) = o#phrase validity_to in
+                (o, ValidTimeUpdate (SequencedUpdate { validity_from; validity_to }))
+            | ValidTimeUpdate (NonsequencedUpdate { from_time; to_time }) ->
+                let (o, from_time, _) = option o (fun o -> o#phrase) from_time in
+                let (o, to_time, _) = option o (fun o -> o#phrase) to_time in
+                (o, ValidTimeUpdate (NonsequencedUpdate { from_time; to_time }))
+            | upd -> (o, upd)
+
+    method temporal_deletion : temporal_deletion -> ('self_type * temporal_deletion) =
+        function
+            | ValidTimeDeletion (SequencedDeletion { validity_from; validity_to }) ->
+                let (o, validity_from, _) = o#phrase validity_from in
+                let (o, validity_to, _) = o#phrase validity_to in
+                (o, ValidTimeDeletion (SequencedDeletion { validity_from; validity_to }))
+            | del -> (o, del)
+
     method phrasenode : phrasenode -> ('self_type * phrasenode * Types.datatype) =
       function
       | Constant c -> let (o, c, t) = o#constant c in (o, Constant c, t)
@@ -588,15 +608,31 @@ class transform (env : Types.typing_environment) =
           let (o, data, _) = o#phrase data in
           let (o, t) = o#datatype t in
             (o, LensPutLit (lens, data, Some t), Types.make_list_type t)
-      | TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db) ->
-          let (o, name, _) = o#phrase name in
-          let (o, db, _) = o#phrase db in
+      | TableLit {
+            tbl_name;
+            tbl_type = (tmp, dtype, Some (read_row, write_row, needed_row));
+            tbl_field_constraints;
+            tbl_keys; tbl_temporal_fields; tbl_database
+         } ->
+          let (o, tbl_name, _) = o#phrase tbl_name in
+          let (o, tbl_database, _) = o#phrase tbl_database in
           let (o, dtype) = o#sugar_datatype dtype in
           let (o, read_row) = o#datatype read_row in
           let (o, write_row) = o#datatype write_row in
           let (o, needed_row) = o#datatype needed_row in
-            (o, TableLit (name, (dtype, Some (read_row, write_row, needed_row)), constraints, keys, db), Table (read_row, write_row, needed_row))
-      | DBDelete (p, from, where) ->
+          let tbl =
+              TableLit {
+                  tbl_name;
+                  tbl_type = (tmp, dtype, Some (read_row, write_row, needed_row));
+                  tbl_field_constraints;
+                  tbl_keys;
+                  tbl_temporal_fields;
+                  tbl_database
+              }
+          in
+          (o, tbl, Table (tmp, read_row, write_row, needed_row))
+      | DBDelete (del, p, from, where) ->
+          let (o, del) = optionu o (fun o -> o#temporal_deletion) del in
           let (o, from, _) = o#phrase from in
           let (o, p) = o#pattern p in
             (* BUG:
@@ -607,15 +643,16 @@ class transform (env : Types.typing_environment) =
                The same applies to DBUpdate and Iteration.
             *)
           let (o, where, _) = option o (fun o -> o#phrase) where in
-            (o, DBDelete (p, from, where), Types.unit_type)
-      | DBInsert (into, labels, values, id) ->
+            (o, DBDelete (del, p, from, where), Types.unit_type)
+      | DBInsert (tmp, into, labels, values, id) ->
           let (o, into, _) = o#phrase into in
           let (o, values, _) = o#phrase values in
           let (o, id, _) = option o (fun o -> o#phrase) id in
-            (o, DBInsert (into, labels, values, id), Types.unit_type)
-      | DBUpdate (p, from, where, set) ->
+            (o, DBInsert (tmp, into, labels, values, id), Types.unit_type)
+      | DBUpdate (upd, p, from, where, set) ->
           let (o, from, _) = o#phrase from in
           let (o, p) = o#pattern p in
+          let (o, upd) = optionu o (fun o -> o#temporal_update) upd in
           let (o, where, _) = option o (fun o -> o#phrase) where in
           let (o, set) =
             listu o
@@ -623,7 +660,13 @@ class transform (env : Types.typing_environment) =
                  let (o, value, _) = o#phrase value in (o, (name, value)))
               set
           in
-            (o, DBUpdate (p, from, where, set), Types.unit_type)
+            (o, DBUpdate (upd, p, from, where, set), Types.unit_type)
+      | DBTemporalJoin (mode, body, Some t) ->
+          let (o, body, _) =
+              on_effects o (Types.make_empty_closed_row ()) (fun o -> o#phrase) body in
+          let (o, body, _) = o#phrase body in
+          let (o, t) = o#datatype t in
+            (o, DBTemporalJoin (mode, body, Some t), t)
       | Xml (tag, attrs, attrexp, children) ->
           let (o, attrs) =
             listu o
@@ -718,19 +761,32 @@ class transform (env : Types.typing_environment) =
           let (o, e, _) = o#phrase e in
           let (o, p) = o#pattern p in
           (o, List (p, e))
-      | Sugartypes.Table (p, e) ->
+      | Sugartypes.Table (t, p, e) ->
           let (o, e, _) = o#phrase e in
           let (o, p) = o#pattern p in
-          (o, Sugartypes.Table (p, e))
+          (o, Sugartypes.Table (t, p, e))
 
     method funlit : Types.row -> funlit -> ('self_type * funlit * Types.datatype) =
-      fun inner_eff (pss, e) ->
-        let envs = o#backup_envs in
-        let (o, pss) = listu o (fun o -> listu o (fun o -> o#pattern)) pss in
-        let o = o#with_effects inner_eff in
-        let (o, e, t) = o#phrase e in
-        let o = o#restore_envs envs in
-        (o, (pss, e), t)
+      fun inner_eff f ->
+        match f with
+          | NormalFunlit (pss, e) ->
+            let envs = o#backup_envs in
+            let (o, pss) = listu o (fun o -> listu o (fun o -> o#pattern)) pss in
+            let o = o#with_effects inner_eff in
+            let (o, e, t) = o#phrase e in
+            let o = o#restore_envs envs in
+            (o, NormalFunlit (pss, e), t)
+          | SwitchFunlit (pss, body) ->
+            let envs = o#backup_envs in
+            let (o, pss) = listu o (fun o -> listu o (fun o -> o#pattern)) pss in
+            let o = o#with_effects inner_eff in
+            let (o, body) =
+              listu o (fun o (p, c) ->
+                let (o, p) = o#pattern p in
+                let (o, c, _) = o#phrase c in
+                (o, (p, c))) body in
+            let o = o#restore_envs envs in
+            (o, SwitchFunlit (pss, body), Types.unit_type)
 
     method constant : Constant.t -> ('self_type * Constant.t * Types.datatype) =
       function
@@ -739,6 +795,7 @@ class transform (env : Types.typing_environment) =
         | Constant.String v -> (o, Constant.String v, Types.string_type)
         | Constant.Bool v   -> (o, Constant.Bool v  , Types.bool_type  )
         | Constant.Char v   -> (o, Constant.Char v  , Types.char_type  )
+        | Constant.DateTime v -> (o, Constant.DateTime v  , Types.datetime_type  )
 
     method quantifiers : SugarQuantifier.t list -> ('self_type * SugarQuantifier.t list) =
       fun qs -> (o, qs)
@@ -753,7 +810,8 @@ class transform (env : Types.typing_environment) =
           | {node={ rec_definition = ((tyvars, Some (inner, extras)), lam); _ } as fn; pos} :: defs ->
               let (o, tyvars) = o#quantifiers tyvars in
               let (o, inner) = o#datatype inner in
-              let inner_effects = fun_effects inner (fst lam) in
+              let lam_in = Sugartypes.get_normal_funlit lam in
+              let inner_effects = fun_effects inner (fst lam_in) in
               let (o, lam, _) = o#funlit inner_effects lam in
               let o = o#restore_quantifiers outer_tyvars in
               let (o, defs) = list o defs in
@@ -800,7 +858,8 @@ class transform (env : Types.typing_environment) =
            when Binder.has_type fun_binder ->
          let outer_tyvars = o#backup_quantifiers in
          let (o, tyvars) = o#quantifiers tyvars in
-         let inner_effects = fun_effects (Binder.to_type fun_binder) (fst lam) in
+         let lam_in = Sugartypes.get_normal_funlit lam in
+         let inner_effects = fun_effects (Binder.to_type fun_binder) (fst lam_in) in
          let (o, lam, _) = o#funlit inner_effects lam in
          let o = o#restore_quantifiers outer_tyvars in
          let (o, fun_binder) = o#binder fun_binder in

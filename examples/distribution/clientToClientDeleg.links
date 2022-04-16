@@ -50,7 +50,7 @@ fun main() {
   addRoute("/c1", fun(_) { Client1.mainPage(ap) });
   addRoute("/c2", fun(_) { Client2.mainPage(ap) });
   serveWebsockets();
-  servePages();
+  servePages()
 }
 
 main()

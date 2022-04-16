@@ -63,6 +63,8 @@ module type SugarConstructorsSig = sig
     ?ppos:t -> ?ty:Types.datatype -> phrase list -> phrase
   val constructor :
     ?ppos:t -> ?body:phrase -> ?ty:Types.datatype -> Name.t -> phrase
+  val type_abstraction : ?ppos:t -> SugarQuantifier.t list -> phrase -> phrase
+
 
   (* Constants *)
   val constant      : ?ppos:t -> Constant.t -> phrase
@@ -93,6 +95,11 @@ module type SugarConstructorsSig = sig
      -> ?location:Location.t -> DeclaredLinearity.t
      -> Pattern.with_pos list list -> phrase
      -> phrase
+  val switch_fun_lit
+      : ?ppos:t -> ?args:((Types.datatype * Types.row) list)
+     -> ?location:Location.t -> DeclaredLinearity.t
+     -> Pattern.with_pos list list -> switch_funlit_body
+     -> phrase
   val spawn
       : ?ppos:t
      -> ?row:Types.row -> spawn_kind -> given_spawn_location -> phrase
@@ -114,6 +121,10 @@ module type SugarConstructorsSig = sig
      -> ?location:Location.t -> ?annotation:datatype'
      -> Binder.with_pos -> funlit
      -> binding
+  val switch_fun_binding
+      : ?ppos:t -> signature -> ?unsafe_sig:bool
+     -> ((DeclaredLinearity.t * bool) * Name.t * Pattern.with_pos list list * Location.t * switch_funlit_body)
+     -> binding
   val val_binding'
       : ?ppos:t -> signature -> (name_or_pat * phrase * Location.t)
      -> binding
@@ -129,10 +140,12 @@ module type SugarConstructorsSig = sig
   val db_exps
       : ?ppos:t -> (Name.t * phrase) list -> phrase
   val db_insert
-      : ?ppos:t -> phrase -> Name.t list -> phrase -> string option
+      : ?ppos:t -> temporal_insertion option -> phrase -> Name.t list -> phrase -> string option
      -> phrase
   val query
       : ?ppos:t -> (phrase * phrase) option -> QueryPolicy.t -> phrase -> phrase
+  val temporal_join
+      : ?ppos:t -> Temporality.t -> phrase -> phrase
 
   (* Operator applications *)
   val infix_appl' : ?ppos:t -> phrase -> BinaryOp.t -> phrase -> phrase
@@ -153,4 +166,14 @@ module type SugarConstructorsSig = sig
      -> ?parameters:((Pattern.with_pos * phrase) list)
      -> phrase -> clause list -> handler_depth
      -> handler
+
+  val table
+      : ?ppos:t
+     -> tbl_keys:(phrase option)
+     -> phrase (* Name *)
+     -> Datatype.with_pos (* Type *)
+     -> (Name.t * fieldconstraint list) list (* Field constraints *)
+     -> (Temporality.t * (string * string)) option (* Temporal to/from fields *)
+     -> phrase (* Database *)
+     -> phrase (* TableLit *)
 end

@@ -1,7 +1,7 @@
 Links: Linking Theory to Practice for the Web
 ---------------------------------------------
 
-[![Build Status](https://dev.azure.com/links-lang/links/_apis/build/status/links-lang.links?branchName=master)](https://dev.azure.com/links-lang/links/_build/latest?definitionId=1&branchName=master) [![Build Status](https://travis-ci.org/links-lang/links.svg?branch=master)](https://travis-ci.org/links-lang/links)
+![Build status](https://github.com/links-lang/links/actions/workflows/default.yml/badge.svg?branch=master)
 
 Links helps to build modern Ajax-style applications: those with
 significant client- and server-side components.

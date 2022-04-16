@@ -1,16 +1,26 @@
 {"databases" :
  [ "pgsql" ],
  "setups" :
- [ "factorials",
+ [ "dates",
+   "factorials",
    "jrules",
    "organisation",
-   "travel_portal" ],
+   "travel_portal",
+   "transactiontime",
+   "validtime",
+   "vt-join"
+ ],
  "tests" :
- [ "empty",
+ [ "dates",
+   "empty",
    "emptyfun",
    "factorials",
    "unit",
    "jrules",
    "organisation",
-   "travel_portal" ]
+   "travel_portal",
+   "transactiontime",
+   "validtime",
+   "vt-join"
+ ]
 }

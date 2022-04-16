@@ -21,11 +21,10 @@ class virtual dbvalue :
     method virtual status : db_status
   end
 
-class virtual database :
+class virtual database : Sql.printer ->
   object
     method virtual driver_name : unit -> string
     method virtual escape_string : string -> string
-    method virtual quote_field : string -> string
     method virtual exec : string -> dbvalue
     method make_insert_returning_query :
       string (* "returning" field *) ->
@@ -33,6 +32,7 @@ class virtual database :
       string list
     method virtual supports_shredding : unit -> bool
     method string_of_query : ?range:(Sql.range option) -> Sql.query -> string
+    method sql_printer : Sql.printer
   end
 
 
@@ -54,8 +54,29 @@ type xmlitem =   Text of string
 and xml = xmlitem list
   [@@deriving show,yojson]
 
-type table = (database * string) * string * string list list * Types.row'
-  [@@deriving show]
+module Table: sig
+  type t = {
+  database: (database * string);
+  name: string;
+  keys: string list list;
+  temporality: Temporality.t;
+  temporal_fields: (string * string) option;
+  row: Types.row'
+  }
+[@@deriving show]
+end
+
+type table = Table.t
+    [@@deriving show]
+
+val make_table :
+  database:(database * string) ->
+  name:string ->
+  keys:(string list list) ->
+  temporality:Temporality.t ->
+  temporal_fields:(string * string) option ->
+  row:Types.row' ->
+  table
 
 type primitive_value_basis =  [
   | `Bool of bool
@@ -69,7 +90,8 @@ type primitive_value_basis =  [
 type primitive_value = [
   | primitive_value_basis
   | `Database of (database * string)
-  | `Table of table ]
+  | `Table of table
+  | `DateTime of Timestamp.t ]
   [@@deriving show]
 
 type spawn_location = [
@@ -223,6 +245,7 @@ type t = [
 | `PrimitiveFunction of string * Var.var option
 | `ClientDomRef of int
 | `ClientFunction of string
+| `ClientClosure of int
 | `Continuation of continuation
 | `Resumption of resumption
 | `Pid of dist_pid
@@ -276,11 +299,15 @@ val box_channel : chan -> t
 val unbox_channel : t -> chan
 val box_access_point : access_point -> t
 val unbox_access_point : t -> access_point
+val box_datetime : Timestamp.t -> t
+val unbox_datetime : t -> Timestamp.t
 
 val intmap_of_record : t -> t Utility.intmap option
 
 val string_of_value : t -> string
 val string_of_xml : ?close_tags:bool -> xml -> string
+val string_of_calendar_utc : Utility.CalendarShow.t -> string
+
 val p_value: Format.formatter -> t -> unit
 
 (* Given a value, retreives a list of channels that are contained inside *)
@@ -290,6 +317,9 @@ val value_of_xmlitem : xmlitem -> t
 val value_of_xml : xml -> t
 val xml_of_variants : t -> xml
 val xmlitem_of_variant : t -> xmlitem
+
+val is_attr : xmlitem -> bool
+val is_node : xmlitem -> bool
 
 val split_html : xml -> xml * xml
 

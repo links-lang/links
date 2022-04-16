@@ -1,21 +1,21 @@
 opam-version: "2.0"
-maintainer: "Jan Stolarek <jan.stolarek@ed.ac.uk>"
+maintainer: "Daniel Hillerström <daniel.hillerstrom@ed.ac.uk>"
 authors: "The Links Team <links-dev@inf.ed.ac.uk>"
 synopsis: "SQLite database driver for the Links Programming Language"
 description: "SQLite database driver for the Links Programming Language"
 homepage: "https://github.com/links-lang/links"
 dev-repo: "git+https://github.com/links-lang/links.git"
 bug-reports: "https://github.com/links-lang/links/issues"
-license: "GPL-2"
+license: "GPL-3.0-only"
 
 build: [
-  [ "dune" "subst" ] {pinned}
+  [ "dune" "subst" ] {dev}
   [ "dune" "build" "-p" name "-j" jobs ]
 ]
 
 depends: [
   "ocaml" {>= "4.08.0"}
-  "dune" {>= "1.10.0"}
+  "dune" {>= "2.7"}
   "sqlite3"
-  "links"
+  "links" {= version}
 ]

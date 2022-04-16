@@ -213,13 +213,13 @@ let iterUntilNone (fn : unit -> 'b option) (g : 'b -> unit) : unit =
 
 class mysql_result (result : result) db = object
   inherit Value.dbvalue
-  val result_buf = 
+  val result_buf =
     if size result > Int64.of_int(0)
     then let buf = PolyBuffer.init 1 1024 (Array.init 0 (fun _ -> None)) in
          iterUntilNone (fun () -> fetch result) (PolyBuffer.append buf);
          buf
     else  PolyBuffer.init 0 1 (Array.init 0 (fun _ -> None))
-  method status : Value.db_status = 
+  method status : Value.db_status =
     match status db with
       | StatusOK | StatusEmpty -> `QueryOk
       | StatusError c          -> `QueryError (string_of_error_code c)
@@ -240,8 +240,26 @@ class mysql_result (result : result) db = object
     Utility.val_of (errmsg db)
 end
 
+let mysql_printer = object (self)
+  inherit Sql.printer as super
+
+  method quote_field x =
+    "`" ^ Str.global_replace (Str.regexp "`") "``" x ^ "`"
+
+  (* Infix concatenation is not supported in MySQL; ensure that Links ^^
+   * is translated to MySQL concat(-, -) *)
+  method! pp_sql_arithmetic ppf one_table (l, op, r) =
+    let pr_b_one_table = self#pp_base one_table in
+    match op with
+      | "^^" ->
+          Format.fprintf ppf "concat(%a, %a)"
+            pr_b_one_table l
+            pr_b_one_table r
+      | x -> super#pp_sql_arithmetic ppf one_table (l, x, r)
+end
+
 class mysql_database spec = object(self)
-  inherit Value.database
+  inherit Value.database mysql_printer
   val connection = connect spec
   method driver_name () = "mysql"
   method exec query : Value.dbvalue =
@@ -250,9 +268,8 @@ class mysql_database spec = object(self)
     with
         Mysql.Error msg ->
           failwith("Mysql returned error: " ^ msg)
+
   method escape_string = Mysql.escape
-  method quote_field f =
-    "`" ^ Str.global_replace (Str.regexp "`") "``" f ^ "`"
 
   method! make_insert_returning_query : string -> Sql.query -> string list =
     fun returning q ->

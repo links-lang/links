@@ -22,8 +22,8 @@ typename SMTPServer =
 
 # Returns true, if the given String is a valid e-mail address.
 # The bit before @ has to be a single word!
-sig valid : (String) ~> Bool
-fun valid(address) {
+sig isValid : (String) ~> Bool
+fun isValid(address) {
   address =~ /.[a-z0-9]+.@.[a-z]+.[a-z]+/ # Regex to match 1+characters/numbers @ 1+characters . 1+characters
 }
 
@@ -34,7 +34,7 @@ mutual {
       case MAIL(s) ->
         var (address, s) = receive(s);
         println("S: received address as FROM: " ^^ address);
-        if (valid(address)) {
+        if (isValid(address)) {
           var s = send("250 OK", select ACCEPT s);
           rcpt(s)
         } else {
@@ -50,7 +50,7 @@ mutual {
       case RCPT(s) ->
         var (address, s) = receive(s);
         println("S: received address as TO: " ^^ address);
-        if (valid(address)) {
+        if (isValid(address)) {
           var s = send("250 OK", select ACCEPT s);
           rcpt(s)
         } else {

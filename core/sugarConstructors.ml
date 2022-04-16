@@ -118,8 +118,8 @@ module SugarConstructors (Position : Pos)
   (** Fieldspec *)
 
   let present        = Datatype.Present (WithPos.dummy Datatype.Unit)
-  let wild_present   = ("wild", present)
-  let hear_present p = ("hear", Datatype.Present p)
+  let wild_present   = (Types.wild, present)
+  let hear_present p = (Types.hear, Datatype.Present p)
 
 
   (** Rows *)
@@ -132,9 +132,12 @@ module SugarConstructors (Position : Pos)
 
   (** Various phrases *)
 
-  (* Create a FunLit. *)
+  (* Create a Normal FunLit. *)
   let fun_lit ?(ppos=dp) ?args ?(location=loc_unknown) linearity pats blk =
-    with_pos ppos (FunLit (args, linearity, (pats, blk), location))
+    with_pos ppos (FunLit (args, linearity, NormalFunlit (pats, blk), location))
+
+  let switch_fun_lit ?(ppos=dp) ?args ?(location=loc_unknown) linearity pats switch_funlit_body =
+    with_pos ppos (FunLit (args, linearity, SwitchFunlit (pats, switch_funlit_body), location))
 
   (* Create a Spawn. *)
   let spawn ?(ppos=dp) ?row spawn_kind location blk =
@@ -154,13 +157,13 @@ module SugarConstructors (Position : Pos)
   (* Create a function binding. *)
   let fun_binding ?(ppos=dp) sig_opt ?(unsafe_sig=false) ((linearity, frozen), bndr, args, location, blk) =
     let fun_signature = datatype_opt_of_sig_opt sig_opt bndr in
-    with_pos ppos (Fun { fun_binder = binder bndr;
-                         fun_linearity = linearity;
-                         fun_definition = ([], (args, blk));
-                         fun_location = location;
-                         fun_signature;
-                         fun_frozen = frozen;
-                         fun_unsafe_signature = unsafe_sig })
+      with_pos ppos (Fun { fun_binder = binder bndr;
+                           fun_linearity = linearity;
+                           fun_definition = ([], NormalFunlit (args, blk));
+                           fun_location = location;
+                           fun_signature;
+                           fun_frozen = frozen;
+                           fun_unsafe_signature = unsafe_sig })
 
   let fun_binding' ?(ppos=dp) ?(linearity=dl_unl) ?(tyvars=[])
         ?(location=loc_unknown) ?annotation bndr fnlit =
@@ -172,6 +175,15 @@ module SugarConstructors (Position : Pos)
                          fun_frozen = false;
                          fun_unsafe_signature = false })
 
+  let switch_fun_binding ?(ppos=dp) sig_opt ?(unsafe_sig=false) ((linearity, frozen), bndr, args, location, blk) =
+    let fun_signature = datatype_opt_of_sig_opt sig_opt bndr in
+      with_pos ppos (Fun { fun_binder = binder bndr;
+                           fun_linearity = linearity;
+                           fun_definition = ([], SwitchFunlit (args, blk));
+                           fun_location = location;
+                           fun_signature;
+                           fun_frozen = frozen;
+                           fun_unsafe_signature = unsafe_sig })
 
   (* Create a Val binding.  This function takes either a name for a variable
      pattern or an already constructed pattern.  In the latter case no signature
@@ -195,6 +207,9 @@ module SugarConstructors (Position : Pos)
   let module_binding ?(ppos=dp) binder members =
     with_pos ppos (Module { binder; members })
 
+  let type_abstraction ?(ppos=dp) tyvars phrase =
+    with_pos ppos (TAbstr (tyvars, phrase))
+
   (** Database queries *)
 
   (* Create a list of labeled database expressions. *)
@@ -209,17 +224,21 @@ module SugarConstructors (Position : Pos)
   (* Create a database insertion query.  Raises an exception when the list of
      labeled expression is empty and the returning variable has not been named.
      *)
-  let db_insert ?(ppos=dp) ins_exp lbls exps var_opt =
+  let db_insert ?(ppos=dp) tmp_ins ins_exp lbls exps var_opt =
     if is_empty_db_exps exps && var_opt == None then
       raise (ConcreteSyntaxError (pos ppos, "Invalid insert statement. " ^
           "Either provide a nonempty list of labeled expression or a return " ^
           "variable."));
-    with_pos ppos (DBInsert (ins_exp, lbls, exps,
+    with_pos ppos (DBInsert (tmp_ins, ins_exp, lbls, exps,
        opt_map (fun name -> constant_str ~ppos name) var_opt))
 
   (* Create a query. *)
   let query ?(ppos=dp) phrases_opt policy blk =
     with_pos ppos (Query (phrases_opt, policy, blk, None))
+
+  (* Create a temporal join block. *)
+  let temporal_join ?(ppos=dp) mode blk =
+    with_pos ppos (DBTemporalJoin (mode, blk, None))
 
   (** Operator applications *)
   (* Apply a binary infix operator. *)
@@ -285,6 +304,26 @@ module SugarConstructors (Position : Pos)
         };
     }
 
+  (** Tables *)
+  let table ?(ppos=dp) ~tbl_keys tbl_name tbl_type
+    tbl_field_constraints temporal tbl_database =
+    let tbl_keys = OptionUtils.from_option (list ~ppos []) tbl_keys in
+    let (tmp, tbl_temporal_fields) =
+      match temporal with
+        | None -> (Temporality.current, None)
+        | Some (tmp, fields) ->
+            (tmp, Some fields)
+    in
+    let tbl_type = (tmp, tbl_type, None) in
+    with_pos ppos
+    (TableLit {
+        tbl_name;
+        tbl_type;
+        tbl_field_constraints;
+        tbl_keys;
+        tbl_temporal_fields;
+        tbl_database
+    })
 end
 
 (* Positions module based on standard Sugartypes positions. *)

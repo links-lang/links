@@ -29,16 +29,16 @@ fun canvas (x, y, id) {
 }
 
 # [a..b]
-fun range(f, to) {
-  if (f >= to) []
-  else f :: range(f+1, to)
+fun range(f, t) {
+  if (f >= t) []
+  else f :: range(f+1, t)
 }
 
 fun scribble() {
   var c = canvas (100,100, "pad");
   ignore(for (i <- range(0,50))
     for (j <- range(0,50))
-      [c ! Point(i*2,j*2)]);
+      [c ! Point(i*2,j*2)])
 }
 
 page

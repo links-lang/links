@@ -52,37 +52,37 @@ let renaming_type_visitor instantiation_map =
     method set_maps new_inst_map =
       {< inst_map = new_inst_map >}
 
-    method! typ : datatype -> (datatype * 'self_type) = function
+    method! typ : datatype -> ('self_type * datatype) = function
       | ForAll (qs, t) ->
-         let qs', _ = List.split (List.map {< inst_map >}#quantifier qs) in
-         let t' , _ = {< inst_map >}#typ t in
-         ForAll (qs', t'), o
+         let _ , qs' = List.split (List.map {< inst_map >}#quantifier qs) in
+         let _ , t' = {< inst_map >}#typ t in
+         o, ForAll (qs', t')
       | t -> super#typ t
 
-    method! quantifier : Quantifier.t -> (Quantifier.t * 'self_type) =
+    method! quantifier : Quantifier.t -> ('self_type * Quantifier.t) =
       fun (var, kind) ->
       begin match IntMap.lookup var inst_map with
       | Some t -> begin match Unionfind.find (unwrap_meta t) with
-                  | Var (var', _, _) -> (var', kind), o
+                  | Var (var', _, _) -> o, (var', kind)
                   | _ -> assert false
                   end
-      | None -> (var, kind), o
+      | None -> o, (var, kind)
       end
 
-    method! meta_type_var : meta_type_var -> (meta_type_var * 'self_type) =
+    method! meta_type_var : meta_type_var -> ('self_type * meta_type_var) =
       fun point ->
       match Unionfind.find point with
         | Var (var, _, _) ->
            begin match IntMap.lookup var inst_map with
-             | Some t -> unwrap_meta t, o
-             | None -> point, o
+             | Some t -> o, unwrap_meta t
+             | None -> o, point
            end
         | _ -> super#meta_type_var point
 
-    method! meta_row_var : meta_row_var -> (meta_row_var * 'self_type) = o#meta_type_var
+    method! meta_row_var : meta_row_var -> ('self_type * meta_row_var) = o#meta_type_var
 
     method! meta_presence_var :
-            meta_presence_var -> (meta_presence_var * 'self_type) = o#meta_type_var
+            meta_presence_var -> ('self_type * meta_presence_var) = o#meta_type_var
 
   end
 
@@ -102,13 +102,13 @@ let renamer qs_from qs_to =
       {< maps = new_inst_map >}, maps
 
     method! typ = fun t ->
-      o, fst ((renaming_type_visitor maps)#typ t)
+      o, snd ((renaming_type_visitor maps)#typ t)
 
     method! type_row = fun r ->
-      o, fst ((renaming_type_visitor maps)#row r)
+      o, snd ((renaming_type_visitor maps)#row r)
 
     method! type_field_spec = fun fs ->
-      o, fst ((renaming_type_visitor maps)#field_spec fs)
+      o, snd ((renaming_type_visitor maps)#field_spec fs)
 
     method! quantifier = fun q -> (o,q)
 
@@ -135,18 +135,19 @@ let renamer qs_from qs_to =
            function_definition -> 'self * function_definition
      = fun { fun_binder
            ; fun_linearity
-           ; fun_definition = (tyvars, (pats, body))
+           ; fun_definition = (tyvars, f)
            ; fun_location
            ; fun_signature
            ; fun_frozen
            ; fun_unsafe_signature } ->
      let o, (pats', tyvars', typ', _, signature', body') =
-       o#handle_function pats tyvars (Binder.to_type fun_binder) None
-                         fun_signature body in
+       match f with
+        | NormalFunlit (pats, body) -> o#handle_function pats tyvars (Binder.to_type fun_binder) None fun_signature body
+        | _ -> assert false in
      let function_definition' =
        { fun_binder = Binder.set_type fun_binder typ'
        ; fun_linearity
-       ; fun_definition = (tyvars', (pats', body'))
+       ; fun_definition = (tyvars', NormalFunlit (pats', body'))
        ; fun_location
        ; fun_signature = signature'
        ; fun_frozen
@@ -158,18 +159,19 @@ let renamer qs_from qs_to =
              recursive_functionnode -> 'self * recursive_functionnode
        = fun { rec_binder
              ; rec_linearity
-             ; rec_definition = ((tyvars, ty), (pats, body))
+             ; rec_definition = ((tyvars, ty), f)
              ; rec_location
              ; rec_signature
              ; rec_unsafe_signature
              ; rec_frozen } ->
        let o, (pats', tyvars', typ', ty', signature', body') =
-         o#handle_function pats tyvars (Binder.to_type rec_binder) ty
-                           rec_signature body in
+         match f with
+          | NormalFunlit (pats, body) -> o#handle_function pats tyvars (Binder.to_type rec_binder) ty rec_signature body
+          | _ -> assert false in
        let recursive_definition' =
          { rec_binder = Binder.set_type rec_binder typ'
          ; rec_linearity
-         ; rec_definition = ((tyvars', ty'), (pats', body'))
+         ; rec_definition = ((tyvars', ty'), NormalFunlit (pats', body'))
          ; rec_location
          ; rec_signature = signature'
          ; rec_unsafe_signature
@@ -190,7 +192,7 @@ let renamer qs_from qs_to =
       let maps = shadow_vars maps quantifiers in
       let o, old_maps    = o#with_maps maps in
       let _, param_pats' = o#list o#pattern_list param_pats in
-      let typ', _        = (renaming_type_visitor maps)#typ typ in
+      let _, typ'        = (renaming_type_visitor maps)#typ typ in
       let o, ty'         = o#option (fun o (ty, x) -> o, (snd (o#typ ty), x)) ty in
       let o, phrase'     = o#phrase phrase in
       let o, signature'  = o#option (fun o -> o#datatype') signature in
@@ -213,11 +215,12 @@ let renamer qs_from qs_to =
 let rename_function_definition : function_definition -> function_definition =
   fun { fun_binder
       ; fun_linearity
-      ; fun_definition = (tyvars_from, (pats, body))
+      ; fun_definition = (tyvars_from, f)
       ; fun_location
       ; fun_signature
       ; fun_frozen
       ; fun_unsafe_signature } ->
+  let (pats, body) = Sugartypes.get_normal_funlit f in
   let qs_from = List.map SugarQuantifier.get_resolved_exn tyvars_from in
   let qs_to, _      = Instantiate.build_fresh_quantifiers qs_from in
   let tyvars_to     = List.map SugarQuantifier.mk_resolved qs_to in
@@ -228,7 +231,7 @@ let rename_function_definition : function_definition -> function_definition =
   let _, signature' = o#option (fun o -> o#datatype') fun_signature in
   { fun_binder =  Binder.set_type fun_binder typ'
   ; fun_linearity
-  ; fun_definition = (tyvars_to, (pats', body'))
+  ; fun_definition = (tyvars_to, NormalFunlit (pats', body'))
   ; fun_location
   ; fun_signature = signature'
   ; fun_frozen
@@ -239,11 +242,12 @@ let rename_recursive_functionnode :
       recursive_functionnode -> recursive_functionnode =
   fun { rec_binder
       ; rec_linearity
-      ; rec_definition = ((tyvars_from, ty), (pats, body))
+      ; rec_definition = ((tyvars_from, ty), f)
       ; rec_location
       ; rec_signature
       ; rec_frozen
       ; rec_unsafe_signature } ->
+  let (pats, body) = Sugartypes.get_normal_funlit f in
   let qs_from = List.map SugarQuantifier.get_resolved_exn tyvars_from in
   let qs_to, _      = Instantiate.build_fresh_quantifiers qs_from in
   let tyvars_to     = List.map SugarQuantifier.mk_resolved qs_to in
@@ -255,7 +259,7 @@ let rename_recursive_functionnode :
   let _, signature' = o#option (fun o -> o#datatype') rec_signature in
   { rec_binder =  Binder.set_type rec_binder typ'
   ; rec_linearity
-  ; rec_definition = ((tyvars_to, ty'), (pats', body'))
+  ; rec_definition = ((tyvars_to, ty'), NormalFunlit (pats', body'))
   ; rec_location
   ; rec_signature = signature'
   ; rec_frozen

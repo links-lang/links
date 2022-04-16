@@ -177,7 +177,7 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
           Env.String.fold
             (fun name var () ->
               if not (Lib.is_primitive name) then
-                let ty = (Types.string_of_datatype ~policy:Types.Print.default_policy ~refresh_tyvar_names:true
+                let ty = (Types.string_of_datatype ~policy:Types.Policy.default_policy ~refresh_tyvar_names:true
                           -<- (fun name -> Env.String.find name tyenv.Types.var_env)) name in
                 let name =
                   if Settings.get Debug.enabled
@@ -194,10 +194,13 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
         ((fun context args ->
           match args with
           | [filename] ->
-             let (context', datatype, value) =
-               Driver.Phases.whole_program context filename
-             in
-             print_value datatype value; context'
+             Errors.display
+               ~default:(fun _ -> context)
+               (lazy
+                  (let (context', datatype, value) =
+                     Driver.Phases.whole_program context filename
+                   in
+                   print_value datatype value; context'))
           | _ -> prerr_endline "syntax: @load \"filename\""; context),
          "load in a Links source file, extending the current environment");
 
@@ -345,7 +348,7 @@ let interact : Context.t -> unit
   let print_error exn =
     Printf.fprintf stderr "%s\n%!" (Errors.format_exception exn)
   in
-  Settings.set BS.interactive_mode true;
+  Settings.set BS.System.interactive_mode true;
   Printf.printf "%s%!" (val_of (Settings.get welcome_note));
   let rec loop context =
     Parse.Readline.prepare_prompt ps1;
@@ -361,4 +364,3 @@ let interact : Context.t -> unit
   in
   Sys.set_signal Sys.sigint (Sys.Signal_handle (fun _ -> raise Sys.Break));
   loop context
-

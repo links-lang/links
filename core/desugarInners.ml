@@ -90,9 +90,8 @@ object (o : 'self_type)
 
   method! phrasenode = function
     | (Var name as e)
-    | (FreezeVar name as e)
     | (Section (Section.Name name) as e)
-    | (FreezeSection (Section.Name name) as e)
+
          when StringMap.mem name extra_env ->
        let tyargs = o#add_extras name [] in
        let o = o#unbind name in
@@ -172,7 +171,8 @@ object (o : 'self_type)
                let o = o#with_visiting (StringSet.add (Binder.to_name rec_binder) visiting_funs) in
                let (o, tyvars) = o#quantifiers tyvars in
                let (o, inner) = o#datatype inner in
-               let inner_effects = TransformSugar.fun_effects inner (fst lam) in
+               let lam_in = Sugartypes.get_normal_funlit lam in
+               let inner_effects = TransformSugar.fun_effects inner (fst lam_in) in
                let (o, lam, _) = o#funlit inner_effects lam in
                let o = o#restore_quantifiers outer_tyvars in
                let o = o#with_visiting visiting_funs in

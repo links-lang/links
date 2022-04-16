@@ -35,10 +35,53 @@ module Vars : sig
   type vars_list = (int * (flavour * kind * scope)) list
 end
 
-module Print : sig
-  type policy = {quantifiers:bool; flavours:bool; hide_fresh:bool; kinds:string; effect_sugar:bool}
+module Policy : sig
+  type kind_policy = Default | Full | Hide
 
-  val default_policy : unit -> policy
+  module EffectSugar : sig
+    type opt = PresenceOmit
+             | AliasOmit
+             | ArrowsShowImplicitEffectVariable
+             | ArrowsCurriedHideFresh
+             | ContractOperationArrows
+             | OpenDefault
+             | FinalArrowSharesWithAlias
+             | AllImplicitArrowsShare
+    type t = opt list
+    val default : unit -> t
+
+    val presence_omit             : t -> bool
+    val alias_omit                : t -> bool
+    val arrows_show_implicit      : t -> bool
+    val arrows_curried_hide_fresh : t -> bool
+    val contract_operation_arrows : t -> bool
+    val open_default              : t -> bool
+    val final_arrow_shares_with_alias : t -> bool
+    val all_implicit_arrows_share : t -> bool
+  end
+
+  type t = {
+    quantifiers : bool;
+    flavours : bool;
+    hide_fresh : bool;
+    kinds : kind_policy;
+    effect_sugar : bool;
+    es_policy : EffectSugar.t;
+  }
+  val default_policy : unit -> t
+
+  val quantifiers : t -> bool
+  val flavours : t -> bool
+  val hide_fresh : t -> bool
+  val kinds : t -> kind_policy
+  val effect_sugar : t -> bool
+  val es_policy : t -> EffectSugar.t
+
+  val set_quantifiers : bool -> t -> t
+  val set_flavours : bool -> t -> t
+  val set_hide_fresh : bool -> t -> t
+  val set_kinds : kind_policy -> t -> t
+  val set_effect_sugar : bool -> t -> t
 end
 
 val process      : Abstype.t
@@ -48,6 +91,8 @@ val dom_node     : Abstype.t
 val access_point : Abstype.t
 val socket       : Abstype.t
 val spawn_location : Abstype.t
+val transaction_time_data : Abstype.t
+val valid_time_data : Abstype.t
 
 (* Type groups *)
 
@@ -94,7 +139,7 @@ and typ =
   | Lolli of (typ * row * typ)
   | Record of row
   | Variant of row
-  | Table of (typ * typ * typ)
+  | Table of (Temporality.t * typ * typ * typ)
   | Lens of Lens.Type.t
   | ForAll of (Quantifier.t list * typ)
   (* Effect *)
@@ -196,12 +241,19 @@ val char_type : datatype
 val bool_type : datatype
 val int_type : datatype
 val float_type : datatype
+val datetime_type : datatype
 val database_type : datatype
 val xml_type : datatype
 val empty_type : datatype
+val wild : Label.t
+val hear : Label.t
+val wild_present : Label.t * datatype
+val hear_present : datatype -> (Label.t * datatype)
+val is_builtin_effect : string -> bool
 
 (** get type variables *)
 val free_type_vars : datatype -> TypeVarSet.t
+val free_flexible_type_vars : datatype -> TypeVarSet.t
 val free_row_type_vars : row -> TypeVarSet.t
 val free_tyarg_vars : type_arg -> TypeVarSet.t
 val free_bound_type_vars          : typ      -> Vars.vars_list
@@ -267,6 +319,17 @@ val make_closed_row : datatype field_env -> row
 val row_with : (string * field_spec) -> row -> row
 val extend_row : datatype field_env -> row -> row
 val extend_row_safe : datatype field_env -> row -> row option
+val open_row : Subkind.t -> row -> row
+val close_row : row -> row
+val closed_wild_row : row
+val remove_field : ?idempotent:bool -> Label.t -> row -> row
+
+(** removing top-level meta typevars and aliases; imported from typeUtils.ml *)
+val concrete_type' : datatype -> datatype
+
+(** deconstructing rows *)
+val extract_row : datatype -> row
+val extract_row_parts : datatype -> row'
 
 (** constants *)
 val empty_field_env : field_spec_map
@@ -314,8 +377,11 @@ val make_list_type : datatype -> datatype
 val make_process_type : row -> datatype
 val make_record_type  : datatype field_env -> datatype
 val make_variant_type : datatype field_env -> datatype
-val make_table_type : datatype * datatype * datatype -> datatype
+val make_table_type : Temporality.t * datatype * datatype * datatype -> datatype
+val make_tablehandle_alias : datatype * datatype * datatype -> datatype
 val make_endbang_type : datatype
+val make_transaction_time_data_type : datatype -> datatype
+val make_valid_time_data_type : datatype -> datatype
 
 (** subtyping *)
 val is_sub_type : datatype * datatype -> bool
@@ -334,20 +400,20 @@ val make_wobbly_envs : datatype -> datatype Utility.IntMap.t * row Utility.IntMa
 
 val combine_per_kind_envs : datatype Utility.IntMap.t * row Utility.IntMap.t * field_spec Utility.IntMap.t -> type_arg Utility.IntMap.t
 
-val effect_sugar : bool Settings.setting
-
 (** pretty printing *)
-val string_of_datatype   : ?policy:(unit -> Print.policy)
+val print_types_pretty : bool Settings.setting
+
+val string_of_datatype   : ?policy:(unit -> Policy.t)
                         -> ?refresh_tyvar_names:bool -> datatype   -> string
-val string_of_row        : ?policy:(unit -> Print.policy)
+val string_of_row        : ?policy:(unit -> Policy.t)
                         -> ?refresh_tyvar_names:bool -> row        -> string
-val string_of_presence   : ?policy:(unit -> Print.policy)
+val string_of_presence   : ?policy:(unit -> Policy.t)
                         -> ?refresh_tyvar_names:bool -> field_spec -> string
-val string_of_type_arg   : ?policy:(unit -> Print.policy)
+val string_of_type_arg   : ?policy:(unit -> Policy.t)
                         -> ?refresh_tyvar_names:bool -> type_arg   -> string
-val string_of_row_var    : ?policy:(unit -> Print.policy)
+val string_of_row_var    : ?policy:(unit -> Policy.t)
                         -> ?refresh_tyvar_names:bool -> row_var    -> string
-val string_of_tycon_spec : ?policy:(unit -> Print.policy)
+val string_of_tycon_spec : ?policy:(unit -> Policy.t)
                         -> ?refresh_tyvar_names:bool -> tycon_spec -> string
 val string_of_environment        : environment -> string
 val string_of_typing_environment : typing_environment -> string
@@ -388,21 +454,22 @@ module type TYPE_VISITOR =
 sig
   class visitor :
   object ('self_type)
+    method set_refresh_tyvars : bool -> 'self_type
     method set_rec_vars : (meta_type_var) Utility.IntMap.t -> 'self_type
 
-    method primitive : Primitive.t -> (Primitive.t * 'self_type)
-    method list : ('self_type -> 'a -> 'b * 'self_type) -> 'a list -> ('b list * 'self_type)
-    method type_args : type_arg list -> (type_arg list * 'self_type)
-    method typ : typ -> (typ * 'self_type)
-    method row : row -> (row * 'self_type)
-    method row_var : row_var -> (row_var * 'self_type)
-    method meta_type_var : meta_type_var -> (meta_type_var * 'self_type)
-    method meta_row_var : meta_row_var -> (meta_row_var * 'self_type)
-    method meta_presence_var : meta_presence_var -> (meta_presence_var * 'self_type)
-    method field_spec : field_spec -> (field_spec * 'self_type)
-    method field_spec_map : field_spec_map -> (field_spec_map * 'self_type)
-    method quantifier : Quantifier.t -> (Quantifier.t * 'self_type)
-    method type_arg : type_arg -> (type_arg * 'self_type)
+    method primitive : Primitive.t -> ('self_type * Primitive.t)
+    method list : ('self_type -> 'a -> 'self_type * 'b ) -> 'a list -> ('self_type * 'b list)
+    method type_args : type_arg list -> ('self_type * type_arg list)
+    method typ : typ -> ('self_type * typ)
+    method row : row -> ('self_type * row)
+    method row_var : row_var -> ('self_type * row_var)
+    method meta_type_var : meta_type_var -> ('self_type * meta_type_var)
+    method meta_row_var : meta_row_var -> ('self_type * meta_row_var)
+    method meta_presence_var : meta_presence_var -> ('self_type * meta_presence_var)
+    method field_spec : field_spec -> ('self_type * field_spec)
+    method field_spec_map : field_spec_map -> ('self_type * field_spec_map)
+    method quantifier : Quantifier.t -> ('self_type * Quantifier.t)
+    method type_arg : type_arg -> ('self_type * type_arg)
   end
 end
 

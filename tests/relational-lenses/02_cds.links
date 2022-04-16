@@ -61,7 +61,7 @@ fun test() {
     (album = "Disintegration", quantity = 7)
   ]);
 
-  lensput filteredLens with filtered;
+  lensput filteredLens with filtered
 }
 
 test()

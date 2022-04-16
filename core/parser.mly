@@ -75,6 +75,7 @@ let restriction_of_string p =
   | "Any"     -> res_any
   | "Base"    -> res_base
   | "Session" -> res_session
+  | "Mono"    -> res_mono
   | rest      ->
      raise (ConcreteSyntaxError (pos p, "Invalid kind restriction: " ^ rest))
 
@@ -82,10 +83,27 @@ let query_policy_of_string p =
   function
   | "flat" -> QueryPolicy.Flat
   | "nested" -> QueryPolicy.Nested
+  | "mixing" -> QueryPolicy.Mixing
+  | "delat" -> QueryPolicy.Delat
   | rest      ->
      raise (ConcreteSyntaxError (pos p, "Invalid query policy: " ^ rest ^ ", expected 'flat' or 'nested'"))
 
+let temporality_of_string p =
+  function
+  | "valid_time"       -> Temporality.valid
+  | "transaction_time" -> Temporality.transaction
+  | "current_time"     -> Temporality.current
+  | rest               ->
+     raise (ConcreteSyntaxError (pos p, "Invalid temporality: " ^ rest))
 
+
+let temporality_type_of_string p =
+  function
+  | "Valid"       -> Temporality.valid
+  | "Transaction" -> Temporality.transaction
+  | "Current"     -> Temporality.current
+  | rest          ->
+     raise (ConcreteSyntaxError (pos p, "Invalid temporality: " ^ rest))
 
 let full_kind_of pos prim lin rest =
   let p = primary_kind_of_string pos prim in
@@ -180,6 +198,24 @@ let fresh_typevar freedom : SugarTypeVar.t =
 let fresh_effects =
   let stv = SugarTypeVar.mk_unresolved "$eff" None `Rigid in
   ([], Datatype.Open stv)
+
+let make_effect_var : is_dot:bool -> ParserPosition.t -> Datatype.row_var
+  = fun ~is_dot loc ->
+  let open Types.Policy in
+  let pol = default_policy () in
+  let effect_sugar = effect_sugar pol in
+  let open_default = EffectSugar.open_default (es_policy pol) in
+
+  if effect_sugar && open_default
+  then begin
+      if is_dot
+      then Datatype.Closed
+      else Datatype.Open (SugarTypeVar.mk_unresolved "$eff" None `Rigid)
+    end else begin
+      if is_dot
+      then raise (ConcreteSyntaxError (pos loc, "Dot syntax in effect row variables is only supported when effect_sugar and effect_sugar_policy.open_default are enabled."))
+      else Datatype.Closed
+    end
 
 module MutualBindings = struct
 
@@ -281,7 +317,7 @@ let parse_foreign_language pos lang =
 %token FOR LARROW LLARROW WHERE FORMLET PAGE
 %token LRARROW
 %token COMMA VBAR DOT DOTDOT COLON COLONCOLON
-%token TABLE TABLEHANDLE TABLEKEYS FROM DATABASE QUERY WITH YIELDS ORDERBY
+%token TABLE TEMPORALTABLE TABLEKEYS FROM DATABASE QUERY WITH YIELDS ORDERBY
 %token UPDATE DELETE INSERT VALUES SET RETURNING
 %token LENS LENSDROP LENSSELECT LENSJOIN DETERMINED BY ON DELETE_LEFT
 %token LENSPUT LENSGET LENSCHECK LENSSERIAL
@@ -301,6 +337,7 @@ let parse_foreign_language pos lang =
 %token MU FORALL ALIEN SIG UNSAFE
 %token MODULE MUTUAL OPEN IMPORT
 %token BANG QUESTION
+%token CAPITAL_LAMBDA
 %token PERCENT EQUALSTILDE PLUS STAR ALTERNATE SLASH SSLASH CARET DOLLAR AT
 %token <char*char> RANGE
 %token <string> QUOTEDMETA
@@ -308,9 +345,14 @@ let parse_foreign_language pos lang =
 %token UNDERSCORE AS
 %token <Operators.Associativity.t> FIXITY
 %token TYPENAME
-%token TYPE ROW PRESENCE
 %token TRY OTHERWISE RAISE
 %token <string> OPERATOR
+%token USING
+%token LTLARROW LVLARROW
+%token SEQUENCED CURRENT NONSEQUENCED TO BETWEEN
+%token TTINSERT VTINSERT
+%token VALID
+%token VTJOIN TTJOIN
 
 %start just_datatype
 %start interactive
@@ -426,6 +468,8 @@ fun_declarations:
 fun_declaration:
 | tlfunbinding                                                 { fun_binding ~ppos:$loc($1) None $1 }
 | signatures tlfunbinding                                      { fun_binding ~ppos:$loc($2) (fst $1) ~unsafe_sig:(snd $1) $2 }
+| switch_tlfunbinding                                          { switch_fun_binding ~ppos:$loc($1) None $1 }
+| signatures switch_tlfunbinding                               { switch_fun_binding ~ppos:$loc($2) (fst $1) ~unsafe_sig:(snd $1) $2 }
 
 linearity:
 | FUN                                                          { dl_unl }
@@ -443,6 +487,12 @@ tlfunbinding:
 | OP OPERATOR pattern perhaps_location block                   { ((dl_unl, false), $2, [[$3]], $4, $5)          }
 | OP pattern OPERATOR perhaps_location block                   { ((dl_unl, false), $3, [[$2]], $4, $5)          }
 
+switch_tlfunbinding:
+| fun_kind VARIABLE arg_lists perhaps_location switch_funlit_body     { ($1, $2, $3, $4, $5)   }
+
+switch_funlit_body:
+| SWITCH LBRACE case+ RBRACE                                   { $3 }
+
 tlvarbinding:
 | VAR VARIABLE perhaps_location EQ exp                         { (PatName $2, $5, $3) }
 
@@ -456,6 +506,10 @@ signature:
 
 typedecl:
 | TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (Typenames [with_pos $loc ($2, $3, datatype $5)]) }
+
+(* Lists of quantifiers in square brackets denote type abstractions *)
+type_abstracion_vars:
+| LBRACKET varlist RBRACKET                                    { $2 }
 
 typeargs_opt:
 | /* empty */                                                  { [] }
@@ -547,6 +601,7 @@ primary_expression:
 | LBRACKET exp DOTDOT exp RBRACKET                             { with_pos $loc (RangeLit($2, $4))   }
 | xml                                                          { $1 }
 | linearity arg_lists block                                    { fun_lit ~ppos:$loc $1 $2 $3 }
+| linearity arg_lists switch_funlit_body                       { switch_fun_lit ~ppos:$loc $1 $2 $3 }
 | LEFTTRIANGLE cp_expression RIGHTTRIANGLE                     { with_pos $loc (CP $2) }
 | DOLLAR primary_expression                                    { with_pos $loc (Generalise $2) }
 
@@ -588,6 +643,8 @@ query_policy:
 postfix_expression:
 | primary_expression | spawn_expression                        { $1 }
 | block                                                        { $1 }
+| TTJOIN block                                                 { temporal_join ~ppos:$loc Temporality.transaction $2 }
+| VTJOIN block                                                 { temporal_join ~ppos:$loc Temporality.valid $2 }
 | QUERY query_policy block                                     { query ~ppos:$loc None $2 $3 }
 | QUERY LBRACKET exp RBRACKET query_policy block               { query ~ppos:$loc (Some ($3, with_pos $loc (Constant (Constant.Int 0)))) $5 $6 }
 | QUERY LBRACKET exp COMMA exp RBRACKET query_policy block     { query ~ppos:$loc (Some ($3, $5)) $7 $8 }
@@ -595,7 +652,6 @@ postfix_expression:
 | postfix_expression targ_spec                                 { with_pos $loc (TAppl ($1, $2)) }
 | postfix_expression DOT record_label                          { with_pos $loc (Projection ($1, $3)) }
 | postfix_expression AT                                        { with_pos $loc (Instantiate $1) }
-
 
 arg_spec:
 | LPAREN perhaps_exps RPAREN                                   { $2 }
@@ -636,12 +692,64 @@ typed_expression:
 | logical_expression                                           { $1 }
 | typed_expression COLON datatype                              { with_pos $loc (TypeAnnotation ($1, datatype $3)) }
 | typed_expression COLON datatype LARROW datatype              { with_pos $loc (Upcast ($1, datatype $3, datatype $5)) }
+| CAPITAL_LAMBDA type_abstracion_vars DOT block                { type_abstraction ~ppos:$loc $2 $4 }
+
+mode_not_valid:
+| LLARROW                                                      { Temporality.current }
+| LTLARROW                                                     { Temporality.transaction }
+
+valid_time_exps:
+| labeled_exps { $1, None, None }
+| maybe_labeled_exps VALID FROM exp TO exp { $1, Some $4, Some $6 }
+| maybe_labeled_exps VALID TO exp FROM exp { $1, Some $4, Some $6 }
+| maybe_labeled_exps VALID FROM exp { $1, Some $4, None }
+| maybe_labeled_exps VALID TO exp { $1, None, Some $4 }
+
+update_expression:
+| UPDATE CURRENT LPAREN pattern LVLARROW exp RPAREN
+         perhaps_where SET LPAREN labeled_exps RPAREN          { with_pos $loc (DBUpdate (Some (ValidTimeUpdate CurrentUpdate), $4, $6, $8, $11)) }
+
+| UPDATE NONSEQUENCED LPAREN pattern LVLARROW exp RPAREN
+         perhaps_where SET LPAREN valid_time_exps RPAREN       { let exps, from_time, to_time = $11 in
+                                                                 let upd = ValidTimeUpdate (NonsequencedUpdate { from_time; to_time }) in
+                                                                 with_pos $loc (DBUpdate (Some upd, $4, $6, $8, exps)) }
+| UPDATE SEQUENCED LPAREN pattern LVLARROW exp RPAREN
+         BETWEEN LPAREN exp COMMA exp RPAREN perhaps_where
+         SET LPAREN labeled_exps RPAREN                        { let upd = ValidTimeUpdate (SequencedUpdate { validity_from = $10; validity_to = $12 }) in
+                                                                 with_pos $loc (DBUpdate (Some upd, $4, $6, $14, $17)) }
+| UPDATE LPAREN pattern mode_not_valid exp RPAREN
+         perhaps_where
+         SET LPAREN labeled_exps RPAREN                        { let upd =
+                                                                   match $4 with
+                                                                     | Temporality.Current -> None
+                                                                     | Temporality.Transaction -> Some TransactionTimeUpdate
+                                                                     | Temporality.Valid -> assert false
+                                                                 in
+                                                                 with_pos $loc (DBUpdate (upd, $3, $5, $7, $10)) }
+
+delete_expression:
+| DELETE CURRENT LPAREN pattern LVLARROW exp RPAREN
+         perhaps_where                                         { let upd = ValidTimeDeletion CurrentDeletion in
+                                                                 with_pos $loc (DBDelete (Some upd, $4, $6, $8)) }
+| DELETE NONSEQUENCED LPAREN pattern LVLARROW exp RPAREN
+         perhaps_where                                         { let upd = ValidTimeDeletion NonsequencedDeletion in
+                                                                 with_pos $loc (DBDelete (Some upd, $4, $6, $8)) }
+| DELETE SEQUENCED LPAREN pattern LVLARROW exp RPAREN
+         BETWEEN LPAREN exp COMMA exp RPAREN perhaps_where     { let upd = ValidTimeDeletion (SequencedDeletion { validity_from = $10; validity_to = $12 }) in
+                                                                 with_pos $loc (DBDelete (Some upd, $4, $6, $14)) }
+
+| DELETE LPAREN pattern mode_not_valid exp RPAREN
+    perhaps_where                                              { let upd =
+                                                                   match $4 with
+                                                                     | Temporality.Current -> None
+                                                                     | Temporality.Transaction -> Some TransactionTimeDeletion
+                                                                     | Temporality.Valid -> assert false
+                                                                 in
+                                                                 with_pos $loc (DBDelete (upd, $3, $5, $7)) }
 
 db_expression:
-| DELETE LPAREN table_generator RPAREN perhaps_where           { let pat, phrase = $3 in with_pos $loc (DBDelete (pat, phrase, $5)) }
-| UPDATE LPAREN table_generator RPAREN
-         perhaps_where
-         SET LPAREN labeled_exps RPAREN                        { let pat, phrase = $3 in with_pos $loc (DBUpdate(pat, phrase, $5, $8)) }
+| delete_expression                                            { $1 }
+| update_expression                                            { $1 }
 
 /* XML */
 xmlid:
@@ -693,7 +801,7 @@ conditional_expression:
 | IF LPAREN exp RPAREN exp ELSE exp                            { with_pos $loc (Conditional ($3, $5, $7)) }
 
 case:
-| CASE pattern RARROW block_contents                           { $2, block ~ppos:$loc($4) $4 }
+| CASE pattern RARROW case_contents                           { $2, block ~ppos:$loc($4) $4 }
 
 case_expression:
 | SWITCH LPAREN exp RPAREN LBRACE case* RBRACE                 { with_pos $loc (Switch ($3, $6, None)) }
@@ -720,13 +828,16 @@ perhaps_generators:
 
 generator:
 | list_generator                                               { List  (fst $1, snd $1) }
-| table_generator                                              { Table (fst $1, snd $1) }
+| table_generator                                              { let (temp, pat, phr) = $1 in Table (temp, pat, phr) }
 
 list_generator:
 | pattern LARROW exp                                           { ($1, $3) }
 
+
 table_generator:
-| pattern LLARROW exp                                          { ($1, $3) }
+| pattern LLARROW exp                                          { (Temporality.current, $1, $3) }
+| pattern LTLARROW exp                                         { (Temporality.transaction, $1, $3) }
+| pattern LVLARROW exp                                         { (Temporality.valid, $1, $3) }
 
 perhaps_where:
 | /* empty */                                                  { None    }
@@ -737,18 +848,27 @@ perhaps_orderby:
 | ORDERBY LPAREN exps RPAREN                                   { Some (orderby_tuple ~ppos:$loc($3) $3) }
 
 escape_expression:
-| ESCAPE VARIABLE IN postfix_expression                        { with_pos $loc (Escape (binder ~ppos:$loc($2) $2, $4)) }
+| ESCAPE VARIABLE IN exp                                       { with_pos $loc (Escape (binder ~ppos:$loc($2) $2, $4)) }
 
 formlet_expression:
 | FORMLET xml YIELDS exp                                       { with_pos $loc (Formlet ($2, $4)) }
 | PAGE xml                                                     { with_pos $loc (Page $2)          }
 
+temporality:
+| VARIABLE                                                     { temporality_of_string $loc $1 }
+
+temporality_type:
+| CONSTRUCTOR                                                  { temporality_type_of_string $loc $1 }
+
+temporal:
+| USING temporality LPAREN field_label COMMA field_label RPAREN  { ($2, ($4, $6)) }
+
+table_keys:
+| TABLEKEYS exp                                                { $2 }
+
 table_expression:
-| TABLE exp WITH datatype perhaps_table_constraints FROM exp   { with_pos $loc (TableLit ($2, datatype $4, $5,
-                                                                                          list ~ppos:$loc [], $7)) }
-/* SAND */
 | TABLE exp WITH datatype perhaps_table_constraints
-            TABLEKEYS exp FROM exp                             { with_pos $loc (TableLit ($2, datatype $4, $5, $7, $9))}
+    option(table_keys) option(temporal) FROM exp               { table ~ppos:$loc ~tbl_keys:$6 $2 $4 $5 $7 $9}
 
 perhaps_table_constraints:
 | loption(preceded(WHERE, table_constraints))                  { $1 }
@@ -784,12 +904,22 @@ exp:
 | table_expression
 | typed_expression                                             { $1 }
 
+valid_time_insert_kind:
+| SEQUENCED                                                    { SequencedInsertion }
+| CURRENT                                                      { CurrentInsertion }
+| /* empty */                                                  { CurrentInsertion }
+
+insert_keyword:
+| TTINSERT                                                     { Some TransactionTimeInsertion }
+| VTINSERT valid_time_insert_kind                              { Some (ValidTimeInsertion $2) }
+| INSERT                                                       { None }
+
 database_expression:
-| INSERT exp VALUES LPAREN record_labels RPAREN exp            { db_insert ~ppos:$loc $2 $5 $7 None }
-| INSERT exp VALUES LBRACKET LPAREN loption(labeled_exps)
-  RPAREN RBRACKET preceded(RETURNING, VARIABLE)?               { db_insert ~ppos:$loc $2 (labels $6) (db_exps ~ppos:$loc($6) $6) $9  }
-| INSERT exp VALUES LPAREN record_labels RPAREN typed_expression
-  RETURNING VARIABLE                                           { db_insert ~ppos:$loc $2 $5 $7 (Some $9) }
+| insert_keyword exp VALUES LPAREN record_labels RPAREN exp    { db_insert ~ppos:$loc $1 $2 $5 $7 None }
+| insert_keyword exp VALUES LBRACKET LPAREN loption(labeled_exps)
+  RPAREN RBRACKET preceded(RETURNING, VARIABLE)?               { db_insert ~ppos:$loc $1 $2 (labels $6) (db_exps ~ppos:$loc($6) $6) $9  }
+| insert_keyword exp VALUES LPAREN record_labels RPAREN typed_expression
+  RETURNING VARIABLE                                           { db_insert ~ppos:$loc $1 $2 $5 $7 (Some $9) }
 | DATABASE atomic_expression perhaps_db_driver                 { with_pos $loc (DatabaseLit ($2, $3))           }
 
 fn_dep_cols:
@@ -829,6 +959,8 @@ binding:
 | exp SEMICOLON                                                { with_pos $loc (Exp $1) }
 | signatures fun_kind VARIABLE arg_lists block                 { fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, loc_unknown, $5) }
 | fun_kind VARIABLE arg_lists block                            { fun_binding ~ppos:$loc None ($1, $2, $3, loc_unknown, $4) }
+| signatures fun_kind VARIABLE arg_lists switch_funlit_body    { switch_fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, loc_unknown, $5) }
+| fun_kind VARIABLE arg_lists switch_funlit_body               { switch_fun_binding ~ppos:$loc None ($1, $2, $3, loc_unknown, $4) }
 | typedecl SEMICOLON | links_module
 | links_open SEMICOLON                                         { $1 }
 
@@ -839,11 +971,13 @@ mutual_bindings:
 | binding                                                      { MutualBindings.(add (empty (pos $loc)) $1) }
 | mutual_bindings binding                                      { MutualBindings.add $1 $2 }
 
-bindings:
+binding_or_mutual:
 | binding                                                      { [$1]      }
 | mutual_binding_block                                         { $1        }
-| bindings mutual_binding_block                                { $1 @ $2   }
-| bindings binding                                             { $1 @ [$2] }
+
+bindings:
+| binding_or_mutual                                            { $1 } /* See #441 and #900 */
+| bindings binding_or_mutual                                   { $1 @ $2 }
 
 moduleblock:
 | LBRACE declarations RBRACE                                   { $2 }
@@ -851,14 +985,13 @@ moduleblock:
 block:
 | LBRACE block_contents RBRACE                                 { block ~ppos:$loc $2 }
 
-block_contents:
-| bindings exp SEMICOLON                                       { ($1 @ [with_pos $loc($2) (Exp $2)],
-                                                                  record ~ppos:$loc []) }
+case_contents:
 | bindings exp                                                 { ($1, $2) }
-| exp SEMICOLON                                                { ([with_pos $loc($1) (Exp $1)],
-                                                                  record ~ppos:$loc []) }
 | exp                                                          { ([], $1) }
-| SEMICOLON | /* empty */                                      { ([], with_pos $loc (TupleLit [])) }
+
+block_contents:
+| case_contents                                                { $1 }
+| /* empty */                                                  { ([], with_pos $loc (TupleLit [])) }
 
 labeled_exp:
 | preceded(EQ, VARIABLE)                                       { ($1, with_pos $loc (Var $1)) }
@@ -866,6 +999,9 @@ labeled_exp:
 
 labeled_exps:
 | separated_nonempty_list(COMMA, labeled_exp)                  { $1 }
+
+maybe_labeled_exps:
+| separated_list(COMMA, labeled_exp)                           { $1 }
 
 /*
  * Datatype grammar
@@ -957,8 +1093,9 @@ primary_datatype:
                                                                    | [n] -> WithPos.node n
                                                                    | ts  -> Datatype.Tuple ts }
 | LPAREN rfields RPAREN                                        { Datatype.Record $2 }
-| TABLEHANDLE
-     LPAREN datatype COMMA datatype COMMA datatype RPAREN      { Datatype.Table ($3, $5, $7) }
+| TEMPORALTABLE
+     LPAREN temporality_type COMMA datatype COMMA datatype COMMA datatype RPAREN
+                                                               { Datatype.Table ($3, $5, $7, $9) }
 | LBRACKETBAR vrow BARRBRACKET                                 { Datatype.Variant $2 }
 | LBRACKET datatype RBRACKET                                   { Datatype.List $2 }
 | type_var                                                     { $1 }
@@ -971,6 +1108,7 @@ primary_datatype:
                                                                    | "Float"   -> Primitive Primitive.Float
                                                                    | "XmlItem" -> Primitive Primitive.XmlItem
                                                                    | "String"  -> Primitive Primitive.String
+                                                                   | "DateTime" -> Primitive Primitive.DateTime
                                                                    | "Database"-> DB
                                                                    | "End"     -> Datatype.End
                                                                    | t         -> TypeApplication (t, [])
@@ -989,14 +1127,9 @@ kinded_type_var:
 type_arg_list:
 | separated_nonempty_list(COMMA, type_arg)                     { $1 }
 
-/* TODO: fix the syntax for type arguments
-   (TYPE, ROW, and PRESENCE are no longer tokens...)
-*/
 type_arg:
 | datatype                                                     { Datatype.Type $1     }
-| TYPE LPAREN datatype RPAREN                                  { Datatype.Type $3     }
-| ROW LPAREN row RPAREN                                        { Datatype.Row $3      }
-| PRESENCE LPAREN fieldspec RPAREN                             { Datatype.Presence $3 }
+| braced_fieldspec                                             { Datatype.Presence $1 }
 | LBRACE row RBRACE                                            { Datatype.Row $2      }
 
 datatypes:
@@ -1010,18 +1143,18 @@ row:
 | fields                                                       { $1                    }
 | /* empty */                                                  { ([], Datatype.Closed) }
 
-fields_def(field_prod, row_var_prod, kinded_row_var_prod):
+fields_def(field_prod, sep, row_var_prod, kinded_row_var_prod):
 | field_prod                                                   { ([$1], Datatype.Closed) }
 | soption(field_prod) VBAR row_var_prod                        { ( $1 , $3             ) }
 | soption(field_prod) VBAR kinded_row_var_prod                 { ( $1 , $3             ) }
-| field_prod COMMA
-    fields_def(field_prod, row_var_prod, kinded_row_var_prod)  { ( $1::fst $3, snd $3 ) }
+| field_prod sep
+    fields_def(field_prod, sep, row_var_prod, kinded_row_var_prod) { ( $1::fst $3, snd $3 ) }
 
 fields:
-| fields_def(field, row_var, kinded_row_var)                   { $1 }
+| fields_def(field, COMMA, row_var, kinded_row_var)                   { $1 }
 
 field:
-| field_label                                                  { ($1, present) }
+| CONSTRUCTOR /* allows nullary variant labels */              { ($1, present) }
 | field_label fieldspec                                        { ($1, $2) }
 
 field_label:
@@ -1031,7 +1164,7 @@ field_label:
 | UINTEGER                                                     { string_of_int $1 }
 
 rfields:
-| fields_def(rfield, row_var, kinded_row_var)                  { $1 }
+| fields_def(rfield, COMMA, row_var, kinded_row_var)                  { $1 }
 
 rfield:
 /* The following sugar is tempting, but it leads to a conflict. Is
@@ -1044,20 +1177,23 @@ record_label:
 | field_label                                                  { $1 }
 
 vfields:
-| vfield                                                       { ([$1], Datatype.Closed) }
-| row_var                                                      { ([]  , $1             ) }
-| kinded_row_var                                               { ([]  , $1             ) }
-| vfield VBAR vfields                                          { ($1::fst $3, snd $3   ) }
+| fields_def(vfield, VBAR, vrow_var, kinded_vrow_var)          { $1 }
+| vrow_var                                                     { ([]  , $1             ) }
+| kinded_vrow_var                                              { ([]  , $1             ) }
 
 vfield:
 | CONSTRUCTOR                                                  { ($1, present) }
 | CONSTRUCTOR fieldspec                                        { ($1, $2)      }
 
 efields:
-| fields_def(efield, nonrec_row_var, kinded_nonrec_row_var)    { $1 }
+| efield                                                       { ([$1], make_effect_var ~is_dot:false $loc) }
+| soption(efield) VBAR DOT                                     { ( $1 , make_effect_var ~is_dot:true  $loc) }
+| soption(efield) VBAR row_var                                 { ( $1 , $3                                ) }
+| soption(efield) VBAR kinded_row_var                          { ( $1 , $3                                ) }
+| efield COMMA efields                                         { ( $1::fst $3, snd $3                     ) }
+
 
 efield:
-| effect_label                                                 { ($1, present) }
 | effect_label fieldspec                                       { ($1, $2)      }
 
 effect_label:
@@ -1065,9 +1201,12 @@ effect_label:
 | VARIABLE                                                     { $1 }
 
 fieldspec:
+| braced_fieldspec                                             { $1 }
 | COLON datatype                                               { Datatype.Present $2 }
-| LBRACE COLON datatype RBRACE                                 { Datatype.Present $3 }
 | MINUS                                                        { Datatype.Absent }
+
+braced_fieldspec:
+| LBRACE COLON datatype RBRACE                                 { Datatype.Present $3 }
 | LBRACE MINUS RBRACE                                          { Datatype.Absent }
 | LBRACE VARIABLE RBRACE                                       { Datatype.Var (named_typevar $2 `Rigid) }
 | LBRACE PERCENTVAR RBRACE                                     { Datatype.Var (named_typevar $2 `Flexible) }
@@ -1080,19 +1219,25 @@ nonrec_row_var:
 | UNDERSCORE                                                   { Datatype.Open (fresh_typevar `Rigid)    }
 | PERCENT                                                      { Datatype.Open (fresh_typevar `Flexible) }
 
-/* FIXME:
- *
- * recursive row vars shouldn't be restricted to vfields.
- */
 row_var:
 | nonrec_row_var                                               { $1 }
-| LPAREN MU VARIABLE DOT vfields RPAREN                        { Datatype.Recursive (named_typevar $3 `Rigid, $5) }
+| LPAREN MU VARIABLE DOT fields RPAREN                         { Datatype.Recursive (named_typevar $3 `Rigid, $5) }
 
 kinded_nonrec_row_var:
 | nonrec_row_var subkind                                       { attach_row_subkind ($1, $2) }
 
 kinded_row_var:
 | row_var subkind                                              { attach_row_subkind ($1, $2) }
+
+
+vrow_var:
+/* This uses the usual nonrec_row_var, because a variant version would be exactly the same. */
+| nonrec_row_var                                               { $1 }
+| LPAREN MU VARIABLE DOT vfields RPAREN                        { Datatype.Recursive (named_typevar $3 `Rigid, $5) }
+
+kinded_vrow_var:
+| vrow_var subkind                                             { attach_row_subkind ($1, $2) }
+
 
 /*
  * Regular expression grammar
