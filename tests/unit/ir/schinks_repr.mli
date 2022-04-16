@@ -37,3 +37,5 @@ val add_name : name:string -> unit stage1
 val add_tid : tid:int -> unit stage1
 
 val add_id : id:int -> unit stage1
+
+val fresh_id : int stage1

@@ -97,7 +97,7 @@ let apply_table_data ~table ~db data =
   let cmds = Format.asprintf "%a" fmt_all () in
   if String.equal "" cmds |> not then (
     if show_query then print_endline cmds;
-    exec cmds |> ignore )
+    exec cmds |> ignore)
 
 let lens_put_step lens data (fn : Value.t -> Sorted.t -> unit) =
   let data =

@@ -1,0 +1,461 @@
+name: Links main workflow
+
+on:
+  pull_request:
+    branches: master
+  push:
+    branches: [master]
+  schedule:
+    # Prime the caches every Monday
+    - cron: 0 1 * * MON
+
+jobs:
+  rule-check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-20.04
+        ocaml-compiler:
+          - 4.08.0
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - run: git diff-index --quiet HEAD --
+        shell: bash
+
+      - name: Use OCaml ${{ matrix.ocaml-compiler }}
+        uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: ${{ matrix.ocaml-compiler }}
+
+      - run: opam install -y ocamlformat.0.19.0
+
+      - name: Ad-hoc rule check
+        run: |
+          eval $(opam config env)
+          make rule-check
+        shell: bash
+
+  build-doc:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-20.04
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get install -y python3-setuptools python3-pip
+          pip3 install -U Sphinx
+        shell: bash
+
+      - name: Compile documentation
+        run: make doc
+        shell: bash
+
+  interpreter:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-20.04
+        ocaml-compiler:
+          - 4.08.0
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Use OCaml ${{ matrix.ocaml-compiler }}
+        uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: ${{ matrix.ocaml-compiler }}
+
+      - run: opam install -y ounit2
+
+      - name: Install Links dependencies
+        run: >-
+          opam install
+          ./links.opam
+          --deps-only
+
+      - name: Build Links from source
+        run: |
+          eval $(opam env)
+          make all-ci
+        shell: bash
+
+      - name: Run interpreter testsuite
+        run: |
+          eval $(opam env)
+          make tests
+          ./run-tests nodb-unit-tests
+        shell: bash
+
+  postgres-mysql8-sqlite3:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-20.04
+        ocaml-compiler:
+          - 4.08.0
+
+    runs-on: ${{ matrix.os }}
+
+    services:
+      postgres:
+        image: postgres:12
+        env:
+          POSTGRES_USER: links
+          POSTGRES_PASSWORD: links
+        ports:
+          - 5433:5432
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_USER: links
+          MYSQL_PASSWORD: links
+          MYSQL_ROOT_PASSWORD: links
+          MYSQL_DATABASE: links
+          MYSQL_ROOT_HOST: "%"
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install system dependencies
+        run: sudo apt-get install -y libev-dev
+        shell: bash
+
+      - name: Use OCaml ${{ matrix.ocaml-compiler }}
+        uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: ${{ matrix.ocaml-compiler }}
+
+      - run: opam install -y conf-libev
+      - run: opam install -y ounit2
+
+      - name: Install Links dependencies
+        run: >-
+          opam install
+          ./links.opam
+          ./links-postgresql.opam
+          ./links-mysql8.opam
+          ./links-sqlite3.opam
+          --deps-only
+          --ignore-constraints-on=links
+
+      - name: Build Links from source
+        run: |
+          eval $(opam env)
+          make all-ci
+        shell: bash
+
+      - name: Run database testsuite
+        run: |
+          eval $(opam env)
+          ./run-database-tests tests/database -d all
+          ./run-database-tests tests/shredding -d all
+          ./run-database-tests tests/relational-lenses -d all
+          ./run-tests db-unit-tests
+        env:
+          # TODO(dhil): I do not know how to index into the
+          # environments of either service. Until we figure out how to
+          # do it, we will just duplicate information here.
+          LINKS_POSTGRES_HOST: localhost
+          LINKS_POSTGRES_USER: links
+          LINKS_POSTGRES_PASSWORD: links
+          LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+          LINKS_MYSQL8_HOST: 127.0.0.1
+          LINKS_MYSQL8_USER: links
+          LINKS_MYSQL8_PASSWORD: links
+          LINKS_MYSQL8_PORT: ${{ job.services.mysql.ports[3306] }}
+        shell: bash
+
+  links-mysql8_mysql57:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-20.04
+        ocaml-compiler:
+          - 4.08.0
+
+    runs-on: ${{ matrix.os }}
+
+    services:
+      mysql:
+        image: mysql:5.7
+        env:
+          MYSQL_USER: links
+          MYSQL_PASSWORD: links
+          MYSQL_ROOT_PASSWORD: links
+          MYSQL_DATABASE: links
+          MYSQL_ROOT_HOST: "%"
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    steps:
+      - name: Show MySQL client and server versions
+        run: |
+          mysql --version
+          mysql -h 127.0.0.1 -P 3306 -uroot -plinks -e "SHOW VARIABLES LIKE '%version%';"
+        shell: bash
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install system dependencies
+        run: sudo apt-get install -y libev-dev
+        shell: bash
+
+      - name: Use OCaml ${{ matrix.ocaml-compiler }}
+        uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: ${{ matrix.ocaml-compiler }}
+
+      - run: opam install -y conf-libev
+
+      - name: Install Links dependencies
+        run: >-
+          opam install
+          ./links.opam
+          ./links-mysql8.opam
+          --deps-only
+          --ignore-constraints-on=links
+
+      - name: Build Links from source
+        run: |
+          eval $(opam env)
+          make all-ci
+        shell: bash
+
+      - name: Run database testsuite
+        run: |
+          eval $(opam env)
+          ./run-database-tests tests/database -d mysql8
+          ./run-database-tests tests/relational-lenses -d mysql8
+        env:
+          # TODO(dhil): I do not know how to index into the
+          # environments of either service. Until we figure out how to
+          # do it, we will just duplicate information here.
+          LINKS_MYSQL8_HOST: 127.0.0.1
+          LINKS_MYSQL8_USER: links
+          LINKS_MYSQL8_PASSWORD: links
+          LINKS_MYSQL8_PORT: ${{ job.services.mysql.ports[3306] }}
+        shell: bash
+
+  links-mysql_mysql57:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-18.04
+        ocaml-compiler:
+          - 4.08.0
+
+    runs-on: ${{ matrix.os }}
+
+    services:
+      mysql:
+        image: mysql:5.7
+        env:
+          MYSQL_USER: links
+          MYSQL_PASSWORD: links
+          MYSQL_ROOT_PASSWORD: links
+          MYSQL_DATABASE: links
+          MYSQL_ROOT_HOST: "%"
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install system dependencies
+        run: sudo apt-get install -y libev-dev
+        shell: bash
+
+      - name: Use OCaml ${{ matrix.ocaml-compiler }}
+        uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: ${{ matrix.ocaml-compiler }}
+
+      - run: opam install -y conf-libev
+
+      - name: Install Links dependencies
+        run: >-
+          opam install
+          ./links.opam
+          ./links-mysql.opam
+          --deps-only
+          --ignore-constraints-on=links
+
+      - name: Build Links from source
+        run: |
+          eval $(opam env)
+          make all-ci
+        shell: bash
+
+      - name: Run MySQL5.7 database testsuite
+        run: |
+          eval $(opam env)
+          ./run-database-tests tests/database -d mysql
+          ./run-database-tests tests/relational-lenses -d mysql
+        env:
+          # TODO(dhil): I do not know how to index into the
+          # environments of either service. Until we figure out how to
+          # do it, we will just duplicate information here.
+          LINKS_MYSQL_HOST: 127.0.0.1
+          LINKS_MYSQL_USER: links
+          LINKS_MYSQL_PASSWORD: links
+          LINKS_MYSQL_PORT: ${{ job.services.mysql.ports[3306] }}
+        shell: bash
+
+  js-runtime-lint:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup NPM
+        uses: actions/setup-node@v2
+        with:
+          node-version: '16'
+
+      - name: Install jshint
+        run: npm install jshint
+
+      - name: Run jshint
+        run: npm exec jshint -- --config lib/js/jshint.config.json --show-non-errors lib/js/jslib.js
+
+  # webbrowser:
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       os:
+  #         - ubuntu-20.04
+  #       ocaml-compiler:
+  #         - 4.08.0
+  #       browser:
+  #         - firefox
+  #         # - chrome # The Selenium Chrome driver does not work with
+  #         # the latest stable Chrome browser. Disabled until we have a robust solution.
+
+  #   env:
+  #     LINKS_BROWSER: ${{ matrix.browser }}
+  #     NPM_DIR: tests/headless
+
+  #   runs-on: ${{ matrix.os }}
+
+  #   services:
+  #     postgres:
+  #       image: postgres:12
+  #       env:
+  #         POSTGRES_DB: links
+  #         POSTGRES_PASSWORD: links
+  #         POSTGRES_PORT: 5432
+  #         POSTGRES_USER: links
+  #       ports:
+  #         - 5432:5432
+  #       options: >-
+  #         --health-cmd pg_isready
+  #         --health-interval 10s
+  #         --health-timeout 5s
+  #         --health-retries 5
+
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v2
+
+  #     - name: Install system dependencies
+  #       run: sudo apt-get install -y libev-dev
+  #       shell: bash
+
+  #     - name: Use OCaml ${{ matrix.ocaml-compiler }}
+  #       uses: ocaml/setup-ocaml@v2
+  #       with:
+  #         ocaml-compiler: ${{ matrix.ocaml-compiler }}
+
+  #     - run: opam install -y conf-libev
+  #     - run: opam install -y ounit2
+
+  #     - name: Install Links dependencies
+  #       run: >-
+  #         opam install
+  #         ./links.opam
+  #         ./links-postgresql.opam
+  #         --deps-only
+  #         --ignore-constraints-on=links
+
+  #     - name: Build Links from source
+  #       run: |
+  #         eval $(opam env)
+  #         make all-ci
+  #       shell: bash
+
+  #     - uses: actions/checkout@v2
+  #       with:
+  #         repository: dhil/links-database-setup
+  #         path: ./links-database-setup
+
+  #     - name: Populate database
+  #       run: |
+  #         for f in `ls *.sql`; do
+  #           createdb -h localhost -U links -O links ${f%.sql};
+  #         done
+  #         for f in `ls *.sql`; do psql -h localhost -U links -d ${f%.sql} < $f; done
+  #       working-directory: links-database-setup
+  #       env:
+  #         PGPASSWORD: links
+
+  #     - run: npm ci
+  #       working-directory: ${{ env.NPM_DIR }}
+
+  #     - run: npm test
+  #       working-directory: ${{ env.NPM_DIR }}
+  #       env:
+  #         LINKS_POSTGRES_HOST: localhost
+  #         LINKS_POSTGRES_USER: links
+  #         LINKS_POSTGRES_PASSWORD: links
+  #         LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
+  #         POSTGRES_USER: links
+  #         POSTGRES_PASSWORD: links

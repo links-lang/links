@@ -121,6 +121,12 @@ let rec equal l r =
           List.for_all (one_equal_all rfields) lfields && List.for_all (one_equal_all lfields) rfields
     | `Variant (llabel, lvalue), `Variant (rlabel, rvalue) -> llabel = rlabel && equal lvalue rvalue
     | `List (l), `List (r) -> equal_lists l r
+    | `DateTime dt1, `DateTime dt2 when dt1 = dt2 -> true
+    | `DateTime (Timestamp.Timestamp dt1), `DateTime (Timestamp.Timestamp dt2) ->
+        let f1 = CalendarShow.to_unixfloat dt1 in
+        let f2 = CalendarShow.to_unixfloat dt2 in
+        f1 = f2
+    | `DateTime _, `DateTime _ -> false (* comparing timestamps with (-)infinity *)
     | l, r ->
         runtime_error
           (Printf.sprintf "Comparing %s with %s which either does not make sense or isn't implemented."
@@ -150,6 +156,13 @@ let rec less l r =
           | _::rest                -> compare_list rest in
           compare_list (List.combine lv rv)
     | `List (l), `List (r) -> less_lists (l,r)
+    | `DateTime _, `DateTime (Timestamp.Infinity) -> true
+    | `DateTime (Timestamp.Infinity), `DateTime _ -> false
+    | `DateTime (Timestamp.MinusInfinity), _ -> true
+    | `DateTime (Timestamp.Timestamp dt1), `DateTime (Timestamp.Timestamp dt2) ->
+        let f1 = CalendarShow.to_unixfloat dt1 in
+        let f2 = CalendarShow.to_unixfloat dt2 in
+        f1 < f2
     | l, r ->  runtime_error ("Cannot yet compare "^ Value.string_of_value l ^" with "^ Value.string_of_value r)
 and less_lists = function
   | _, [] -> false
@@ -181,6 +194,34 @@ let add_attribute : Value.t * Value.t -> Value.t -> Value.t =
 
 let add_attributes : (Value.t * Value.t) list -> Value.t -> Value.t =
   List.fold_right add_attribute
+
+(* Applies a projection function to a boxed timestamp, after converting via a given UTC offset. *)
+let project_datetime_conv (f: CalendarShow.t -> int) : located_primitive * Types.datatype * pure =
+  (p2 (fun dt offset ->
+    match Value.unbox_datetime dt with
+      | Timestamp.Infinity -> raise (runtime_error "Cannot project from 'forever'")
+      | Timestamp.MinusInfinity -> raise (runtime_error "Cannot project from beginningOfTime")
+      | Timestamp.Timestamp ts ->
+              let open CalendarLib in
+              (* Convert according to offset, and then apply projection function. *)
+              let offset = Value.unbox_int offset in
+              let ts = CalendarShow.convert ts Time_Zone.UTC (Time_Zone.UTC_Plus offset) in
+              Value.box_int (f ts)),
+  datatype "(DateTime, Int) -> Int",
+  PURE)
+
+(* Similar to the above, but for accessors  which do not need conversion offsets
+   (i.e., minutes / seconds, which are below the level of UTC offset
+   granularity. *)
+let project_datetime (f: CalendarShow.t -> int) : located_primitive * Types.datatype * pure =
+  (p1 (fun dt ->
+    match Value.unbox_datetime dt with
+      | Timestamp.Infinity -> raise (runtime_error "Cannot project from 'forever'")
+      | Timestamp.MinusInfinity -> raise (runtime_error "Cannot project from beginningOfTime")
+      | Timestamp.Timestamp ts -> Value.box_int (f ts)),
+  datatype "(DateTime) -> Int",
+  PURE)
+
 
 let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "+", int_op (+) PURE;
@@ -561,38 +602,45 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "max",
   (p1 (let max2 x y = if less x y then y else x in
          function
-           | `List [] -> `Variant ("None", `Record [])
-           | `List (x::xs) -> `Variant ("Some", List.fold_left max2 x xs)
+           | `List [] -> `Variant ("Nothing", `Record [])
+           | `List (x::xs) -> `Variant ("Just", List.fold_left max2 x xs)
            | _ -> raise (runtime_type_error "Internal error: non-list passed to max")),
-   datatype "([a]) ~> [|Some:a | None:()|]",
+   datatype "([a]) ~> [|Just:a | Nothing:()|]",
   PURE);
 
   "min",
   (p1 (let min2 x y = if less x y then x else y in
          function
-           | `List [] -> `Variant ("None", `Record [])
-           | `List (x::xs) -> `Variant ("Some", List.fold_left min2 x xs)
+           | `List [] -> `Variant ("Nothing", `Record [])
+           | `List (x::xs) -> `Variant ("Just", List.fold_left min2 x xs)
            | _ -> raise (runtime_type_error "Internal error: non-list passed to min")),
-   datatype "([a]) ~> [|Some:a | None:()|]",
+   datatype "([a]) ~> [|Just:a | Nothing:()|]",
+  PURE);
+
+  (* We need to have these here in order to patch through to the underlying SQL functions. *)
+  (* The over-specific type is there because part of evalNestedQuery is type-directed. *)
+  "least",
+  (p2 (fun x y -> if less x y then x else y),
+   datatype "(DateTime, DateTime) ~> DateTime",
+  PURE);
+
+  "greatest",
+  (p2 (fun x y -> if less x y then y else x),
+   datatype "(DateTime, DateTime) ~> DateTime",
   PURE);
 
   (* XML *)
-  "childNodes",
+  "itemChildNodes",
   (p1 (function
-         | `List [`XML (Value.Node (_, children))] ->
-           let children = List.filter (function
-             | (Value.Node _) -> true
-             | (Value.NsNode _) -> true
-             | _ -> false) children in
+         | `XML (Value.Node (_, children)) ->
+           let children = List.filter Value.is_node children in
            `List (List.map (fun x -> `XML x) children)
-         | `List [ `XML (Value.NsNode (_, _, children)) ] ->
-           let children = List.filter (function
-             | (Value.Node _) -> true
-             | (Value.NsNode _) -> true
-             | _ -> false) children in
+         | `XML (Value.NsNode (_, _, children)) ->
+           let children = List.filter Value.is_node children in
            `List (List.map (fun x -> `XML x) children)
-         | _ -> raise (runtime_type_error "non-XML given to childNodes")),
-   datatype "(Xml) -> Xml",
+         | `XML (_) -> `List []
+         | _ -> raise (runtime_type_error "non-XML given to itemChildNodes")),
+   datatype "(XmlItem) -> Xml",
   IMPURE);
 
   "objectType",
@@ -803,8 +851,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   IMPURE);
 
 
-  "getTextContent",
-  (`Client, datatype "(Xml) ~> String",
+  "itemTextContent",
+  (p1 (function
+         | `XML (Value.Text str) -> Value.box_string str
+         | _ -> raise (runtime_type_error "non-text node given to textContent")),
+   datatype "(XmlItem) ~> String",
   IMPURE);
 
   "getAttributes",
@@ -813,13 +864,9 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
       | (Value.Attr (name, value)) -> `Record [("1", Value.box_string name); ("2", Value.box_string value)]
       | (Value.NsAttr (ns, name, value)) -> `Record [ ("1", Value.box_string (ns ^ ":" ^ name)); ("2", Value.box_string value) ]
       | _ -> assert false
-    and is_attr = function
-      | Value.Attr _ -> true
-      | Value.NsAttr _ -> true
-      | _ -> false
     in match v with
-      | `List [ `XML (Value.Node (_, children)) ]      -> `List (List.map attr_to_record (List.filter is_attr children))
-      | `List [ `XML (Value.NsNode (_, _, children)) ] -> `List (List.map attr_to_record (List.filter is_attr children))
+      | `List [ `XML (Value.Node (_, children)) ]      -> `List (List.map attr_to_record (List.filter Value.is_attr children))
+      | `List [ `XML (Value.NsNode (_, _, children)) ] -> `List (List.map attr_to_record (List.filter Value.is_attr children))
       | _ -> raise (runtime_type_error "non-element given to getAttributes")),
   datatype "(Xml) ~> [(String,String)]",
   IMPURE);
@@ -830,18 +877,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "getAttribute",
   (`Client, datatype "(Xml, String) ~> String",
-  IMPURE);
-
-  (* Section: Navigation for XML *)
-  "getChildNodes",
-  (p1 (fun v ->
-         match v with
-           | `List [`XML(Value.Node(_, children))] ->
-               `List (List.map (fun x -> `XML(x)) (List.filter (function (Value.Node _) -> true | (Value.NsNode _) -> true | _ -> false) children))
-           | `List [`XML(Value.NsNode(_, _, children))] ->
-               `List (List.map (fun x -> `XML(x)) (List.filter (function (Value.Node _) -> true | (Value.NsNode _) -> true | _ -> false) children))
-           | _ -> raise (runtime_type_error "non-element given to getChildNodes")),
-   datatype "(Xml) ~> Xml",
   IMPURE);
 
   "not",
@@ -1005,7 +1040,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
      Ideally, perhaps, a malformed header from the client should
      be ignored at this level (let the HTTP agents handle it).
 
-     An absent cookie should probably be indicated by a None value in
+     An absent cookie should probably be indicated by a Nothing value in
      the Maybe(String) type.
   *)
   "getCookie",
@@ -1021,13 +1056,6 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
            Value.box_string value),
    datatype "(String) ~> String",
   IMPURE);
-
-  (* getCommandOutput disabled for now; possible security risk. *)
-  (*
-    "getCommandOutput",
-    (p1 ((Value.unbox_string ->- Utility.process_output ->- Value.box_string) :> result -> primitive),
-    datatype "(String) -> String");
-  *)
 
   "redirect",
   (p1D (fun url req_data ->
@@ -1051,6 +1079,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
       ),
    datatype "(Int) ~> ()",
   IMPURE);
+
+  (* Date / time functions *)
 
   "clientTime",
   (`Client,
@@ -1076,45 +1106,172 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    datatype "() ~> Int",
    IMPURE);
 
+
   "dateToInt",
   (p1 (fun r ->
          match r with
-           | `Record r ->
-               let lookup s =
-                 Value.unbox_int (List.assoc s r) in
-               let tm = {
-                 Unix.tm_sec = lookup "seconds";
-                Unix.tm_min = lookup "minutes";
-                Unix.tm_hour = lookup "hours";
-                Unix.tm_mday = lookup "day";
-                Unix.tm_mon = lookup "month";
-                Unix.tm_year = (lookup "year" - 1900);
-                Unix.tm_wday = 0; (* ignored *)
-                Unix.tm_yday =  0; (* ignored *)
-                Unix.tm_isdst = false} in
-
-               let t, _ = Unix.mktime tm in
-                 Value.box_int (int_of_float t)
+           | `DateTime (Timestamp.Infinity) | `DateTime (Timestamp.MinusInfinity) ->
+               (* SJF: Not sure what the semantics should be here...
+                * For now, just throwing a runtime exception. *)
+               raise (runtime_error "Cannot convert 'forever' or beginningOfTime into an integer")
+           | `DateTime (Timestamp.Timestamp dt) ->
+               UnixTimestamp.of_calendar dt
+                   |> int_of_float
+                   |> Value.box_int
            | _ -> assert false),
-   datatype "((year:Int, month:Int, day:Int, hours:Int, minutes:Int, seconds:Int)) ~> Int",
+   datatype "(DateTime) ~> Int",
    IMPURE);
 
   "intToDate",
   (p1 (fun t ->
-         let tm = Unix.localtime(float_of_int (Value.unbox_int t)) in
-           `Record [
-             "year", Value.box_int (tm.Unix.tm_year + 1900);
-             "month", Value.box_int tm.Unix.tm_mon;
-             "day", Value.box_int tm.Unix.tm_mday;
-             "hours", Value.box_int tm.Unix.tm_hour;
-             "minutes", Value.box_int tm.Unix.tm_min;
-             "seconds", Value.box_int tm.Unix.tm_sec;
-           ]),
-  datatype "(Int) ~> (year:Int, month:Int, day:Int, hours:Int, minutes:Int, seconds:Int)",
+       Value.unbox_int t
+       |> float_of_int
+       |> UnixTimestamp.to_utc_calendar
+       |> Timestamp.timestamp
+       |> Value.box_datetime),
+  datatype "(Int) ~> DateTime",
   IMPURE);
 
+  "dateYear", (project_datetime_conv CalendarShow.year);
+  "dateDay", project_datetime_conv CalendarShow.day_of_month;
+  "dateMonth", project_datetime_conv (CalendarShow.month ->- CalendarLib.Date.int_of_month);
+  "dateHours", project_datetime_conv CalendarShow.hour;
+  "dateMinutes", project_datetime CalendarShow.minute;
+  "dateSeconds",
+  (p1 (fun dt ->
+    match Value.unbox_datetime dt with
+      | Timestamp.Infinity -> raise (runtime_error "Cannot project from 'forever'")
+      | Timestamp.MinusInfinity -> raise (runtime_error "Cannot project from beginningOfTime")
+      | Timestamp.Timestamp ts ->
+          CalendarShow.second ts
+          |> floor
+          |> int_of_float
+          |> Value.box_int),
+  datatype "(DateTime) -> Int",
+  PURE);
+
+  (* We are precise to three decimal places. *)
+  "dateMilliseconds",
+    (p1 (fun dt ->
+    match Value.unbox_datetime dt with
+      | Timestamp.Infinity -> raise (runtime_error "Cannot project from 'forever'")
+      | Timestamp.MinusInfinity -> raise (runtime_error "Cannot project from beginningOfTime")
+      | Timestamp.Timestamp ts ->
+          mod_float ((CalendarShow.second ts) *. 1000.0) 1000.0
+          |> int_of_float
+          |> Value.box_int
+    ),
+  datatype "(DateTime) -> Int",
+  PURE);
+
+
+  "parseDate",
+  (p1 (fun str ->
+      Value.unbox_string str
+       |> Timestamp.parse_user_string
+       |> Value.box_datetime),
+  datatype "(String) ~> DateTime",
+  IMPURE);
+
+  "now",
+  (`PFun (fun _ _ -> Value.box_datetime (Timestamp.now ())),
+    datatype "() -> DateTime",
+    IMPURE);
+
+  (* Returns UTC offset of local time. For example, if local time is British
+     Summer Time, then utcOffset() would return 1. *)
+  "utcOffset",
+  (`PFun (fun _ _ ->
+      CalendarLib.Time_Zone.(gap UTC Local)
+      |> Value.box_int),
+    datatype "() ~> Int",
+    IMPURE);
+
+  "showUTC",
+  (p1 (fun dt ->
+      let dt = Value.unbox_datetime dt in
+      let str =
+      match dt with
+        | Timestamp.Timestamp cal ->
+            Value.string_of_calendar_utc cal
+        | Timestamp.Infinity -> "infinity"
+        | Timestamp.MinusInfinity -> "-infinity"
+      in
+      Value.box_string str),
+  datatype "(DateTime) ~> String",
+  IMPURE);
+
+  "forever",
+  (`DateTime Timestamp.infinity,
+    datatype "DateTime",
+    PURE);
+
+  "beginningOfTime",
+  (`DateTime Timestamp.minus_infinity,
+    datatype "DateTime",
+    PURE);
+
+  "withValidity",
+  (p3 (fun x v_from v_to ->
+    Value.box_record
+      [(TemporalField.data_field, x);
+       (TemporalField.from_field, v_from);
+       (TemporalField.to_field, v_to)]),
+    datatype "((|r), DateTime, DateTime) -> ValidTime((|r))",
+    PURE);
+
+  "ttData",
+  (p1 (Value.unbox_record
+       ->- List.assoc (TemporalField.data_field)),
+   datatype "(TransactionTime((|r))) -> (|r)",
+  PURE);
+
+  "ttFrom",
+  (p1 (Value.unbox_record
+       ->- List.assoc (TemporalField.from_field)),
+   datatype "(TransactionTime(a)) -> DateTime",
+  PURE);
+
+  "ttTo",
+  (p1 (Value.unbox_record
+       ->- List.assoc (TemporalField.to_field)),
+   datatype "(TransactionTime(a)) -> DateTime",
+  PURE);
+
+  "vtData",
+  (p1 (Value.unbox_record
+       ->- List.assoc (TemporalField.data_field)),
+   datatype "(ValidTime((|r))) -> (|r)",
+  PURE);
+
+  "vtFrom",
+  (p1 (Value.unbox_record
+       ->- List.assoc (TemporalField.from_field)),
+   datatype "(ValidTime(a)) -> DateTime",
+  PURE);
+
+  "vtTo",
+  (p1 (Value.unbox_record
+       ->- List.assoc (TemporalField.to_field)),
+   datatype "(ValidTime(a)) -> DateTime",
+  PURE);
   (* Database functions *)
   "AsList",
+  (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
+   datatype "(TableHandle(r, w, n)) {}-> [r]",
+  IMPURE);
+
+  "AsListT",
+  (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
+   datatype "(TemporalTable(Transaction, r, w, n)) {}-> [TransactionTime(r)]",
+  IMPURE);
+
+  "AsListV",
+  (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
+   datatype "(TemporalTable(Valid, r, w, n)) {}-> [ValidTime(r)]",
+  IMPURE);
+
+  "Distinct",
   (p1 (fun _ -> raise (internal_error "Unoptimized table access!!!")),
    datatype "(TableHandle(r, w, n)) {}-> [r]",
   IMPURE);
@@ -1426,42 +1583,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
     (* END OF LINKS GAME LIBRARY *)
 
-    (* FOR DEBUGGING *)
-
-    "debugGetStats",
-    (`Client, datatype "(String) ~> a", IMPURE);
-
-    "debugChromiumGC",
-    (`Client, datatype "() ~> ()", IMPURE);
-
-    (* END OF DEBUGGING FUNCTIONS *)
-
-
-    (* EQUALITY *)
-
-    "stringEq",
-    (`Client, datatype "(String, String) -> Bool", PURE);
-
-    "intEq",
-    (`Client, datatype "(Int, Int) -> Bool", PURE);
-
-    "floatEq",
-    (`Client, datatype "(Float, Float) -> Bool", PURE);
-
-    "floatNotEq",
-    (`Client, datatype "(Float, Float) -> Bool", PURE);
-
-    "objectEq",
-    (`Client, datatype "(a, a) -> Bool", PURE);
-
-
-    (* END OF EQUALITY FUNCTIONS *)
-
-        "gensym",
-        (let idx = ref 0 in
-         `PFun (fun _ _ -> let i = !idx in idx := i+1; (Value.box_int i)),
-         datatype "() -> Int",
-         IMPURE);
+    "gensym",
+    (let idx = ref 0 in
+     `PFun (fun _ _ -> let i = !idx in idx := i+1; (Value.box_int i)),
+      datatype "() -> Int",
+      IMPURE);
 
     "connectSocket",
     (`Server (p2 (fun serverv portv ->
@@ -1600,7 +1726,7 @@ let type_env : Types.environment =
 let typing_env = {Types.var_env = type_env;
                   Types.rec_vars = StringSet.empty;
                   tycon_env = alias_env;
-                  Types.effect_row = Types.make_singleton_closed_row ("wild", Types.(Present unit_type));
+                  Types.effect_row = Types.closed_wild_row;
                   Types.desugared = false }
 
 let primitive_names = StringSet.elements (Env.String.domain type_env)

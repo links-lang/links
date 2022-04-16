@@ -79,6 +79,8 @@ object ('self)
   method pattern         : Pattern.with_pos -> 'self * Pattern.with_pos
   method phrase          : phrase -> 'self * phrase * Types.datatype
   method given_spawn_location : given_spawn_location -> 'self * given_spawn_location
+  method temporal_update : temporal_update -> ('self * temporal_update)
+  method temporal_deletion : temporal_deletion -> ('self * temporal_deletion)
   method phrasenode      : phrasenode -> 'self * phrasenode * Types.datatype
   method cp_phrase       : cp_phrase -> 'self * cp_phrase * Types.datatype
   method cp_phrasenode   : cp_phrasenode -> 'self * cp_phrasenode * Types.datatype

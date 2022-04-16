@@ -46,7 +46,7 @@ let rec lens_phrase_type_of_type t =
           failwith
           @@ Format.asprintf
                "Unsupported primitive type %a in lens_phrase_type_of_type." T.pp
-               t )
+               t)
   | T.Record r -> lens_phrase_type_of_type r
   | T.Row (fields, _, _) ->
       let fields =
@@ -93,7 +93,7 @@ let sort_cols_of_table t ~table =
     match TypeUtils.concrete_type t with
     | T.Application (_, (* args *) [ (_pk, r) ]) ->
         r (* get the first argument of a type application *)
-    | T.Table (read, _, _) -> read (* use the read type of a table *)
+    | T.Table (_, read, _, _) -> read (* use the read type of a table *)
     | T.Record r -> r (* Use the row of a record type. *)
     | _ -> failwith "LensTypes does not type."
   in

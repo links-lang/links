@@ -63,7 +63,7 @@ Arithmetic [4]
 stdout : 3 : Int
 
 Arithmetic and function calls.
-sin((switch (max([2.0,3.0])) { case Some(f) -> f case None -> 0.0 }) /. 3.0 *. 3.14)
+sin((switch (max([2.0,3.0])) { case Just(f) -> f case Nothing -> 0.0 }) /. 3.0 *. 3.14)
 stdout : 0.00159265291649 : Float
 
 Infix application

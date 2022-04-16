@@ -315,9 +315,10 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
            Variant r -> eq_rows (context, l, r)
          | _          -> false
          end
-      | Table (lt1, lt2, lt3) ->
+      | Table (tmp1, lt1, lt2, lt3) ->
          begin match t2 with
-         | Table (rt1, rt2, rt3) ->
+         | Table (tmp2, rt1, rt2, rt3) ->
+            tmp1 = tmp2 &&
             eqt (context, lt1, rt1) &&
             eqt (context, lt2, rt2) &&
             eqt (context, lt3, rt3)
@@ -529,7 +530,8 @@ struct
 
     method set_allowed_effects eff_row = {< allowed_effects = eff_row >}, allowed_effects
 
-    method impose_presence_of_effect effect_name effect_typ occurrence : unit =
+    method impose_presence_of_effect (effect_name, effect_pre) occurrence : unit =
+      let effect_typ = TypeUtils.from_present effect_pre in
       ensure_effect_present_in_row (o#extract_type_equality_context ()) allowed_effects effect_name effect_typ occurrence
 
     method add_typevar_to_context id kind = {< type_var_env = Env.bind id kind type_var_env  >}
@@ -722,10 +724,10 @@ struct
             begin match TypeUtils.concrete_type vt with
             | Variant row as variant ->
                let unwrapped_row = fst (unwrap_row row) |> TypeUtils.extract_row_parts in
-               let present_fields, has_presence_polymorphism  =
+               let present_fields, has_bad_presence_polymorphism  =
                  StringMap.fold (fun field field_spec (fields, poly) -> match field_spec with
                                            | Present _  -> (StringSet.add field fields), poly
-                                           | Meta _ -> fields, true
+                                           | Meta _ -> fields, StringMap.mem field cases
                                            | Absent -> fields, poly
                                            | _ -> raise Types.tag_expectation_mismatch)
                    (fst3 unwrapped_row) (StringSet.empty, false) in
@@ -733,14 +735,16 @@ struct
                let has_default = OptionUtils.is_some default in
                let case_fields = StringMap.fold (fun field _ fields -> StringSet.add field fields) cases StringSet.empty in
 
+               ensure (not has_bad_presence_polymorphism)
+                 "row contains presence-polymorphic labels with corresponding \
+                  match clauses. These can only be handled by a default case."  (STC orig);
                if has_default then
                  ensure (StringSet.subset case_fields present_fields) "superfluous case" (STC orig)
                else
                  begin
                    ensure (not (StringSet.is_empty present_fields)) "Case with neither cases nor default" (STC orig);
                    ensure (is_closed) "case without default over open row"  (STC orig);
-                   ensure (not has_presence_polymorphism)
-                     "case without default over variant with presence polymorphism in some field"  (STC orig);
+
                    ensure (StringSet.equal case_fields present_fields)
                      "cases not identical to present fields in closed row, no default case" (STC orig)
                  end;
@@ -759,6 +763,14 @@ struct
                let o, default, default_type =
                  o#option (fun o (b, c) ->
                      let o, b = o#binder b in
+                     let actual_default_type = Var.type_of_binder b in
+                     let expected_default_t =
+                       StringMap.fold
+                         (fun case _ v -> TypeUtils.split_variant_type case v |> snd)
+                         cases
+                         variant
+                     in
+                     o#check_eq_types expected_default_t actual_default_type (STC orig);
                      let o, c, t = o#computation c in
                      let o = o#remove_binder b in
                      o, (b, c), t) default in
@@ -793,7 +805,7 @@ struct
               ) ["name"; "args"; "driver"];
             o, Database v, Primitive Primitive.DB
 
-        | Table (db, table_name, keys, tt) ->
+        | Table { database = db; table = table_name; keys; temporal_fields; table_type = tt } ->
             let o, db, db_type = o#value db in
             o#check_eq_types db_type Types.database_type (SSpec special);
             let o, table_name, table_name_type = o#value table_name in
@@ -802,14 +814,20 @@ struct
             o#check_eq_types keys_type Types.keys_type (SSpec special);
             (* TODO: tt is a tuple of three records. Discussion pending about what kind of checks we should do here
                From an implementation perspective, we should check the consistency of the read, write, needed info here *)
-              o, Table (db, table_name, keys, tt), Table tt
+            o, Table { table = table_name; database = db; keys; temporal_fields; table_type = tt }, Table tt
 
+        | TemporalJoin (tmp, comp, dt) ->
+            (* Note: This is fairly bare-bones at the moment: checks that the type of the computation matches
+               recorded type. May want to do more later. *)
+            let o, comp, comp_dt = o#computation comp in
+            o#check_eq_types dt comp_dt (SSpec special);
+            o, TemporalJoin (tmp, comp, dt), dt
         | Query (range, policy, e, original_t) ->
             let o, range =
               o#optionu
                 (fun o (limit, offset) ->
                    (* Query blocks themselves only have the wild effect when they have a range *)
-                   o#impose_presence_of_effect "wild" Types.unit_type (SSpec special);
+                   o#impose_presence_of_effect Types.wild_present (SSpec special);
 
                    let o, limit, ltype = o#value limit in
                    let o, offset, otype = o#value offset in
@@ -834,13 +852,13 @@ struct
 
               o, Query (range, policy, e, t), t
 
-        | InsertRows (source, rows)
-        | InsertReturning (source, rows, _) ->
+        | InsertRows (_, source, rows)
+        | InsertReturning (_, source, rows, _) ->
             (* Most logic is shared between InsertRow and InsetReturning.
                We disambiguate between the two later on. *)
 
             (* The insert itself is wild *)
-            o#impose_presence_of_effect "wild" Types.unit_type (SSpec special);
+            o#impose_presence_of_effect Types.wild_present (SSpec special);
             let o, source, source_t = o#value source in
             (* this implicitly checks that source is a table *)
             let table_read = TypeUtils.table_read_type source_t in
@@ -881,21 +899,21 @@ struct
               ) table_needed_r;
 
             begin match special with
-                | InsertRows (_, _) ->
-                   o, InsertRows(source, rows), Types.unit_type
-                | InsertReturning (_, _, (Constant (Constant.String id) as ret)) ->
+                | InsertRows (tmp, _, _) ->
+                   o, InsertRows(tmp, source, rows), Types.unit_type
+                | InsertReturning (tmp, _, _, (Constant (Constant.String id) as ret)) ->
                    (* The return value must be encoded as a string literal,
                       denoting a column *)
                    let ret_type = TypeUtils.project_type id table_read in
                    o#check_eq_types Types.int_type ret_type (SSpec special);
-                   o, InsertReturning (source, rows, ret), Types.int_type
-                | InsertReturning (_, _, _) ->
+                   o, InsertReturning (tmp, source, rows, ret), Types.int_type
+                | InsertReturning (_, _, _, _) ->
                    raise_ir_type_error "Return value in InsertReturning was not a string literal" (SSpec special)
                 | _ -> assert false (* impossible at this point *)
             end
 
-        | Update ((x, source), where, body) ->
-            o#impose_presence_of_effect "wild" Types.unit_type (SSpec special);
+        | Update (upd, (x, source), where, body) ->
+            o#impose_presence_of_effect Types.wild_present (SSpec special);
             let o, source, source_t = o#value source in
             (* this implicitly checks that source is a table *)
             let table_read = TypeUtils.table_read_type source_t in
@@ -925,10 +943,10 @@ struct
               ) body_record_row;
             let o = o#remove_binder x in
             let o, _ = o#set_allowed_effects outer_effects in
-              o, Update ((x, source), where, body), Types.unit_type
+              o, Update (upd, (x, source), where, body), Types.unit_type
 
-        | Delete ((x, source), where) ->
-            o#impose_presence_of_effect "wild" Types.unit_type (SSpec special);
+        | Delete (del, (x, source), where) ->
+            o#impose_presence_of_effect Types.wild_present (SSpec special);
             let o, source, source_t = o#value source in
             (* this implicitly checks that source is a table *)
             let table_read = TypeUtils.table_read_type source_t in
@@ -944,18 +962,18 @@ struct
                where in
             let o = o#remove_binder x in
             let o, _ = o#set_allowed_effects outer_effects in
-              o, Delete ((x, source), where), Types.unit_type
+              o, Delete (del, (x, source), where), Types.unit_type
 
         | CallCC v ->
             let o, v, t = o#value v in
             (* TODO: What is the correct argument type for v, since it expects a continuation? *)
               o, CallCC v, return_type ~overstep_quantifiers:false t
         | Select (l, v) -> (* TODO perform checks specific to this constructor *)
-           o#impose_presence_of_effect "wild" Types.unit_type (SSpec special);
+           o#impose_presence_of_effect Types.wild_present (SSpec special);
            let o, v, t = o#value v in
            o, Select (l, v), t
         | Choice (v, bs) -> (* TODO perform checks specific to this constructor *)
-           o#impose_presence_of_effect "wild" Types.unit_type (SSpec special);
+           o#impose_presence_of_effect Types.wild_present (SSpec special);
            let o, v, _ = o#value v in
            let o, bs, branch_types =
              o#name_map (fun o (b, c) ->
@@ -1189,7 +1207,7 @@ struct
             | None -> o
         in
 
-        (if is_recursive then o#impose_presence_of_effect "wild" Types.unit_type occurrence);
+        (if is_recursive then o#impose_presence_of_effect Types.wild_present occurrence);
 
         let previous_tyenv = o#get_type_var_env in
         let o = List.fold_left

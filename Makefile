@@ -44,13 +44,18 @@ BUILD_DIR:=$(ROOT)/_build
 
 # The build command and some standard build system flags
 BUILD=dune build
-SOURCES=links
-DB_SOURCES=links-postgresql,links-sqlite3,links-mysql
+MAIN=links
+SOURCES=$(MAIN)
+DB_STABLE=links-postgresql,links-sqlite3,links-mysql
+DB_EXPERIMENTAL=links-mysql8
+DB_SOURCES=$(DB_STABLE),$(DB_EXPERIMENTAL)
 # Note: this relies on lazy expansion of `SOURCES'.
 COMMON_FLAGS=--only-packages $(SOURCES) --build-dir=$(BUILD_DIR)
 DEV_FLAGS=$(COMMON_FLAGS) --profile=dev
 REL_FLAGS=$(COMMON_FLAGS) --profile=release
 CI_FLAGS=$(COMMON_FLAGS) --profile=ci
+# List of packages that we currently release
+RELEASE_PKGS:=$(MAIN),$(DB_STABLE)
 
 # Build rules.
 
@@ -164,23 +169,10 @@ doc : doc/_build/html
 open-doc: doc/_build/html
 	xdg-open doc/_build/html/index.html
 
-# The below machinery is used to prepare a release using dune-release.
-REPO=../opam-repository
-PACKAGES=$(REPO)/packages
-
-TAG_NAME = $(shell git describe --tags)
-
-link-url-%:
-	if [ "$*" != "links" ]; then ln -f -s $(BUILD_DIR)/links-$(TAG_NAME).url $(BUILD_DIR)/$*-$(TAG_NAME).url; fi
-
-pkg-%:
-	mkdir -p $(PACKAGES)/$*
-	cp -r $(BUILD_DIR)/$*.* $(PACKAGES)/$*/
-	rm -f $(PACKAGES)/$*/$*.opam
-	cd $(PACKAGES) && git add $*
-
-PKGS=$(basename $(wildcard *.opam))
-opam-pkg:
-	$(MAKE) $(PKGS:%=link-url-%)
-	dune-release opam pkg --dist-file=$(BUILD_DIR)/links-$(TAG_NAME).tbz
-	$(MAKE) $(PKGS:%=pkg-%)
+# Release Links
+opam-release:
+	dune-release tag
+	dune-release distrib -p $(RELEASE_PKGS)
+	dune-release publish -p $(RELEASE_PKGS) distrib
+	dune-release opam -p $(RELEASE_PKGS) pkg
+	dune-release opam -p $(RELEASE_PKGS) submit

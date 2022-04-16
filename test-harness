@@ -12,6 +12,57 @@ TIMEOUT = 15 # seconds before a test is timed out.
 
 the_lock = threading.Lock()
 
+
+class TestFileStream:
+  """Custom stream for reading test files.
+
+  Skips any line starting with # and turns any sequence of empty lines into a
+  single empty line.
+  Implements the relevant subset of the interface of the object you get back
+  from open(file, 'r')
+  """
+
+  EOF_MARKER = ""
+
+  def __init__(self, stream):
+    self.stream = stream
+    self.prev_readline_was_empty = False
+
+  def __iter__(self):
+    return self
+
+  def  __next__(self):
+    line = self.readline()
+    if line == TestFileStream.EOF_MARKER:
+      raise StopIteration
+    return line
+
+  def open_test_file(path):
+    return TestFileStream(open(path, 'r'))
+
+  def readline(self):
+    is_comment = True
+    is_empty = False
+    line = None
+    while is_comment or (self.prev_readline_was_empty and is_empty):
+      line = self.stream.readline()
+
+      if line == TestFileStream.EOF_MARKER:
+        return line
+
+      is_comment = re.match("^\\s*#", line) is not None
+      is_empty = re.match("^\\s*$", line) is not None
+
+    self.prev_readline_was_empty = is_empty
+    return line
+
+  def peek_line(self):
+    pos = self.stream.tell()
+    line = self.readline()
+    self.stream.seek(pos)
+    return line
+
+
 def FAIL(name, msg):
     return ('  error: %s' % name,'      (%s)' % msg)
 
@@ -110,7 +161,7 @@ def evaluate(name, code, config_file, stdout='', stderr='', exit = '0', env = No
                 failures += 1
                 return
 
-        arg_array += ["--config=" + config_file]
+        arg_array = ["--config=" + config_file] + arg_array
 
     if not filemode.startswith('true'):
         arg_array += ["-e"]
@@ -154,18 +205,13 @@ def evaluate(name, code, config_file, stdout='', stderr='', exit = '0', env = No
         failures += 1
         print('!FAILURE: %s [TIMED OUT]' % name)
 
-def peek_line(f):
-    pos = f.tell()
-    line = f.readline()
-    f.seek(pos)
-    return line
 
 def parseTestScript(stream):
     header = dict()
-    if peek_line(stream) == "---\n":
+    if stream.peek_line() == "---\n":
         stream.readline()
         line_num = 1
-        line = peek_line(stream)
+        line = stream.peek_line()
         while not (line == "---\n"):
             raw_line = stream.readline()
             line_num += 1
@@ -175,7 +221,7 @@ def parseTestScript(stream):
                 header[keyvalue[0]] = keyvalue[1]
             else:
                 raise SystemExit("Syntax error on line " + str(line_num) + ": " + raw_line)
-            line = peek_line(stream)
+            line = stream.peek_line()
         stream.readline()
         stream.readline()
     yield header
@@ -196,21 +242,37 @@ def main():
     cpus=multiprocessing.cpu_count()
     tp = concurrent.futures.ThreadPoolExecutor(max_workers=cpus)
 
-    stream = parseTestScript(open(filename, 'r'))
+    stream = parseTestScript(TestFileStream.open_test_file(filename))
     # Process the header, if any.
     header = next(stream)
     if config_file == None and "config" in header:
         config_file = header["config"]
+        # Must remove the "config" key because we combine the header-provided
+        # options with the per-file ones later on. However, the global config
+        # file must be provided via the config_file parameter of evaluate only.
+        del header["config"]
 
+    jobs = []
     # Process the body.
     for name, code, opts in stream:
+        # Combines the options set in the header with the ones specific to this
+        # test case. The latter ones overwrite the ones from the header.
+        opts = {**header, **opts}
+
         # enqueues execution of
         # evaluate(name, code, config_file, **opts)
         # in the thread pool
-        tp.submit(evaluate, name, code, config_file, **opts)
+        jobs.append((name, tp.submit(evaluate, name, code, config_file, **opts)))
 
     # Wait for all jobs to finish
     tp.shutdown(wait=True)
+
+    # Check that none of the jobs raised an exception:
+    for (job_name, result) in jobs:
+        if result.exception():
+            raise SystemExit(("Error: Test \"%s\" failed to execute, producing "
+                              "the following exception:\n%s")
+                             % (job_name, result.exception()))
 
     print("%d failures (+%d ignored)\n%d successes\n" % (failures, ignored, successes))
     if failures > 0:

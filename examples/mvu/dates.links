@@ -1,0 +1,113 @@
+# A time example which uses the native DateTime type.
+# Showcases that DateTime can be used on the client.
+
+import Mvu;
+import MvuHTML;
+import MvuCommands;
+open import MvuSubscriptions;
+
+typename Model = (initial: DateTime, timestamp: DateTime);
+
+typename Msg = [| Tick | NoOp |];
+
+fun printClientTimeOnServer(time) server {
+    print("Client local time: " ^^ showLocal(time) ^^ "\n");
+    print("Client UTC time: " ^^ showUTC(time) ^^ "\n")
+}
+
+sig updt : (Msg, Model) {}~> (Model, MvuCommands.Command(Msg))
+fun updt(msg, model) {
+    switch (msg) {
+        case Tick ->
+            var dt = now();
+
+            # Print the time out on the server every 10 seconds.
+            var cmd =
+                if (mod(localSeconds(dt), 10) == 0) {
+                    MvuCommands.spawnProc(fun() { printClientTimeOnServer(dt); NoOp })
+                } else {
+                    MvuCommands.empty
+                };
+
+            # Update timestamp on every tick
+            ((model with timestamp = now()), cmd)
+        case NoOp -> (model, MvuCommands.empty)
+    }
+}
+
+sig view : (Model) ~> MvuHTML.HTML(Msg)
+fun view(model) {
+    open MvuHTML;
+    open MvuAttrs;
+
+    var a0 = MvuAttrs.empty;
+    fun entry(title, text) {
+        p(a0,
+            b(a0, textNode(title ^^ ": ")) +*
+            textNode(text))
+    }
+
+    var ts = model.timestamp;
+
+    entry("Initial time", showLocal(model.initial)) +*
+    entry("Initial time (UTC)", showUTC(model.initial)) +*
+    entry("Local time", showLocal(ts)) +*
+    entry("UTC time", showUTC(ts)) +*
+    entry("Local year", intToString(localYear(ts))) +*
+    entry("Local month", intToString(localMonth(ts))) +*
+    entry("Local hour", intToString(localHours(ts))) +*
+    entry("Local minute", intToString(localMinutes(ts))) +*
+    entry("Local seconds", intToString(localSeconds(ts))) +*
+    entry("Local milliseconds", intToString(localMilliseconds(ts))) +*
+    entry("Client-parsed date", show(parseDate("2021-07-26 10:10:10+1"))) +*
+    entry("Infinity on client", show(forever)) +*
+    entry("Local time = Local time", show(ts == ts)) +*
+    entry("Local time < Local time", show(ts < ts)) +*
+    entry("Local time <= Local time", show(ts <= ts)) +*
+    entry("Local time >= Local time", show(ts >= ts)) +*
+    entry("Local time > Local time", show(ts > ts)) +*
+    entry("-Infinity on client", show(beginningOfTime)) +*
+    entry("-infinity == -infinity", show(beginningOfTime == beginningOfTime)) +*
+    entry("-infinity < -infinity", show(beginningOfTime < beginningOfTime)) +*
+    entry("-infinity < infinity", show(beginningOfTime < forever)) +*
+    entry("-infinity <= -infinity", show(beginningOfTime <= beginningOfTime)) +*
+    entry("-infinity < local time", show(beginningOfTime < ts)) +*
+    entry("-infinity >= local time", show(beginningOfTime >= ts)) +*
+    entry("infinity == infinity", show(forever == forever)) +*
+    entry("infinity < infinity", show(forever < forever)) +*
+    entry("infinity < -infinity", show(forever < beginningOfTime)) +*
+    entry("infinity <= -infinity", show(forever <= beginningOfTime)) +*
+    entry("infinity < local time", show(forever < ts)) +*
+    entry("infinity > local time", show(forever > ts)) +*
+    entry("infinity >= local time", show(forever >= ts))
+}
+
+sig subscriptions : (Model) ~> MvuSubscriptions.Sub(Msg)
+fun subscriptions(model) {
+    getEvery(125, fun() {
+      Tick
+    })
+}
+
+fun mainPage(_) {
+  var initialModel = (initial = now(), timestamp = now());
+  Mvu.run("placeholder", initialModel, view, updt,
+      subscriptions, MvuCommands.empty);
+  page
+  <html>
+    <head>
+      <title>Stopwatch</title>
+    </head>
+    <body>
+      <div id="placeholder"></div>
+    </body>
+  </html>
+}
+
+fun main() {
+  addRoute("/", mainPage);
+  servePages()
+}
+
+main()
+

@@ -1,0 +1,103 @@
+Epoch time
+intToDate(0)
+stdout : @1970-01-01 0.:00:00\.0+\+. : DateTime
+
+Epoch year
+utcYear(intToDate(0))
+stdout : 1970 : Int
+
+Epoch month
+utcMonth(intToDate(1))
+stdout : 1 : Int
+
+Epoch day
+utcDay(intToDate(0))
+stdout : 1 : Int
+
+Epoch hours
+utcHours(intToDate(0))
+stdout : 0 : Int
+
+Epoch minutes
+utcMinutes(intToDate(0))
+stdout : 0 : Int
+
+Epoch seconds
+dateSeconds(intToDate(0))
+stdout : 0 : Int
+
+Epoch milliseconds
+dateMilliseconds(intToDate(0))
+stdout : 0 : Int
+
+Parse UTC
+parseDate("1970-01-01 00:00:00+0") == intToDate(0)
+stdout : true : Bool
+
+Parse BST
+parseDate("2021-07-26 11:14:57+1") == intToDate(1627294497)
+stdout : true : Bool
+
+Dates (eq)
+intToDate(1627294497) == intToDate(1627294497)
+stdout : true : Bool
+
+Dates (leq)
+intToDate(1627294497) <= intToDate(1627294497)
+stdout : true : Bool
+
+Dates (geq)
+intToDate(1627294497) >= intToDate(1627294497)
+stdout : true : Bool
+
+-infinity lowest value
+beginningOfTime < intToDate(0)
+stdout : true : Bool
+
++infinity highest value
+forever > intToDate(2147483647)
+stdout : true : Bool
+
++infinity highest value (eq)
+forever >= intToDate(2147483647)
+stdout : true : Bool
+
+-infinity = -infinity
+beginningOfTime == beginningOfTime
+stdout : true : Bool
+
++infinity = +infinity
+forever == forever
+stdout : true : Bool
+
+-infinity < -infinity
+beginningOfTime < beginningOfTime
+stdout : true : Bool
+
+-infinity <= -infinity
+beginningOfTime <= beginningOfTime
+stdout : true : Bool
+
+infinity >= -infinity
+forever >= beginningOfTime
+stdout : true : Bool
+
+-infinity lowest value (eq)
+beginningOfTime <= intToDate(2147483647)
+stdout : true : Bool
+
+Issue 1126 (1)
+forever == parseDate("2022-08-04 12:03:12")
+stdout : false : Bool
+
+Issue 1126 (2)
+forever <> parseDate("2022-08-04 12:03:12")
+stdout : true : Bool
+
+Issue 1126 (3)
+forever <= parseDate("2022-08-04 12:03:12")
+stdout : false : Bool
+
+Date parser roundtrips
+var bday = parseDate("1992-04-24 06:00:00+0"); bday == parseDate(show(bday))
+stdout : true : Bool

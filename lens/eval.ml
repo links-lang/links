@@ -17,8 +17,8 @@ let satisfies_predicate sort data =
   let predicate = Sort.predicate sort in
   let f record =
     let record =
-      try Phrase.Value.unbox_record record
-      with Phrase.Value.Unbox_error.E _ -> Error.raise Error.InvalidDataType
+      try Phrase.Value.unbox_record record with
+      | Phrase.Value.Unbox_error.E _ -> Error.raise Error.InvalidDataType
     in
     let map = Alias.Map.from_alist record in
     let lookup key =
@@ -33,7 +33,8 @@ let satisfies_predicate sort data =
   try
     let res = List.for_all ~f data in
     if res then Result.return () else Error.raise Error.InvalidData
-  with Error.E e -> Result.error e
+  with
+  | Error.E e -> Result.error e
 
 let satisfies_fds sort records =
   let columns = Sort.cols_present_aliases sort in
@@ -53,8 +54,8 @@ let satisfies_fds sort records =
     if Sorted_records.total_size proj_both > Sorted_records.total_size proj_left
     then Error.raise (Error.ViolatesFunDepConstraint fd)
   in
-  try Fun_dep.Set.iter check_fd fds |> Result.return
-  with Error.E e -> Result.error e
+  try Fun_dep.Set.iter check_fd fds |> Result.return with
+  | Error.E e -> Result.error e
 
 let put ?(behaviour = Incremental) ~db lens data =
   let open Result.O in

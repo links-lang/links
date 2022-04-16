@@ -1,7 +1,7 @@
 open Utility
 open CommonTypes
 module Q = Query
-module QL = Query.Lang
+module QL = QueryLang
 
 (* generate a unique tag for each comprehension in
    a normalised query
@@ -15,7 +15,7 @@ let tag_query : QL.t -> QL.t =
         r := v+1;
         v in
     let rec tag =
-    let open Q.Lang in
+    let open QL in
       function
         | For (_, gs, os, body) ->
           For (Some (next()), gs, os, tag body)
@@ -25,6 +25,8 @@ let tag_query : QL.t -> QL.t =
         | Singleton e -> Singleton (tag e)
         | Concat es ->
           Concat (List.map tag es)
+        | Dedup t -> Dedup (tag t)
+        | Prom t -> Prom (tag t)
         | Record fields -> Record (StringMap.map tag fields)
         | Project (e, l) -> Project (tag e, l)
         | Erase (e, fields) -> Erase (tag e, fields)
@@ -165,7 +167,7 @@ struct
 
   (* inner shredding function *)
   let rec shinner a =
-    let open Q.Lang in
+    let open QL in
     function
       | Project (v,l) -> Project (v,l)
       | Apply (Primitive "Empty", [e]) -> Apply (Primitive "Empty", [shred_outer e []])
@@ -173,7 +175,7 @@ struct
       | Apply (f, vs) -> Apply (f, List.map (shinner a) vs)
       | Record fields ->
         Record (StringMap.map (shinner a) fields)
-      | e when Q.is_list e ->
+      | e when QL.is_list e ->
         in_index a
       | e -> e
 
@@ -265,11 +267,11 @@ struct
       let open QL in
       function
         | Singleton r ->
-          [For (None, gs, os, reduce_where_then (cond, Singleton (inner r)))]
+          [For (None, gs, os, Q.reduce_where_then (cond, Singleton (inner r)))]
         | Concat vs ->
           concat_map (query gs os cond) vs
         | If (cond', v, Concat []) ->
-          query gs os (reduce_and (cond, cond')) v
+          query gs os (Q.reduce_and (cond, cond')) v
         | For (_, gs', os', body) ->
           query (gs @ gs') (os @ os') cond body
         | _ -> assert false
@@ -285,7 +287,7 @@ struct
       | Primitive p -> Primitive p
       | Var (x, t) -> Var (x, t)
       | Constant c -> Constant c
-      | e when Q.is_list e ->
+      | e when QL.is_list e ->
         Concat (query [] [] (Constant (Constant.Bool true)) e)
       | _ -> assert false
 
@@ -452,7 +454,7 @@ struct
           match x, y with
             | None,   _       -> y
             | _   ,   None    -> x
-            | Some c, Some c' -> Some (QL.reduce_and (c, c')))
+            | Some c, Some c' -> Some (Q.reduce_and (c, c')))
         (init (conds c))
         None in
 
@@ -461,7 +463,8 @@ struct
                (fun (x, source) ->
                  match source with
                    | QL.Table t ->
-                     Q.Eval.eta_expand_var (x, Q.table_field_types t)
+                     let tyx = Types.make_record_type (QL.table_field_types t) in
+                     QL.eta_expand_var (x, tyx)
                    | _ -> assert false)
                gs_out) in
     let r_out_type =
@@ -469,7 +472,7 @@ struct
         (List.map
            (fun (_, source) ->
              match source with
-               | QL.Table (_, _, _, row) ->
+               | QL.Table Value.Table.{ row; _ } ->
                  Types.Record (Types.Row row)
                | _ -> assert false)
            gs_out) in
@@ -480,16 +483,17 @@ struct
     let os = List.concat (orders c) in
     let q = Var.fresh_raw_var () in
     let z = Var.fresh_raw_var () in
-    let z_fields =
-      Q.record_field_types
+    let tyz =
+      QL.recdty_field_types
         (Types.make_tuple_type
            [r_out_type; index_type])
+      |> Types.make_record_type
     in
       (q, QL.For (None, gs_out, [], where x_out (QL.Singleton (pair r_out index))),
        z, QL.For (None, gs_in, os,
                 where
-                  (opt_map (lins_inner (z, z_fields) ys) x_in)
-                  (QL.Singleton (lins_inner (z, z_fields) ys (body c)))))
+                  (opt_map (lins_inner (z, tyz) ys) x_in)
+                  (QL.Singleton (lins_inner (z, tyz) ys (body c)))))
 
   and lins_query : QL.t -> query =
     function
@@ -822,7 +826,7 @@ let unordered_query_package t v =
   let lins_w = Shred.pmap (LetInsertion.lins_query) shredded_w in
   let flat_w = Shred.pmap (FlattenRecords.flatten_query) lins_w in
   let query_package =
-    Shred.pmap Q.sql_of_let_query flat_w in
+    Shred.pmap QL.sql_of_let_query flat_w in
   let shredded_t = Shred.shred_query_type t in
   let query_type_package =
     Shred.pmap (FlattenRecords.flatten_query_type) shredded_t in
@@ -834,9 +838,27 @@ let compile_shredded : Value.env -> Ir.computation
                        -> (Value.database * (Sql.query * Shred.flat_type) Shred.package) option =
   fun env e ->
     let v = Q.Eval.eval QueryPolicy.Nested env e in
-      match Q.used_database v with
+      match QL.used_database v with
         | None    -> None
         | Some db ->
-          let t = Q.type_of_expression v in
+          let t = QL.type_of_expression v in
           let p = unordered_query_package t v in
             Some (db, p)
+
+  let compile_temporal_join :
+      Temporality.t ->
+      Value.env ->
+      Ir.computation ->
+        (Value.database * (Sql.query * Shred.flat_type) Shred.package) =
+  fun tmp env e ->
+    let v =
+      Q.Eval.eval QueryPolicy.Nested env e
+        |> TemporalQuery.TemporalJoin.rewrite_temporal_join tmp in
+      match QL.used_database v with
+        | None    ->
+            raise (Errors.runtime_error "Unable to compile temporal join (No DB found).")
+        | Some db ->
+          Debug.print ("Temporal Join Query: " ^ QL.show v ^ "\n");
+          let t = QL.type_of_expression v in
+          let p = unordered_query_package t v in
+            (db, p)

@@ -33,6 +33,17 @@ module ReprState = struct
   let add_ids ~ids st =
     let reserved_ids = IntSet.union (IntSet.from_list ids) st.reserved_ids in
     { st with reserved_ids }
+
+  let fresh_id =
+    let* st = State.get in
+    let id =
+      match IntSet.max_elt_opt st.reserved_ids with
+      | None -> 0
+      | Some i -> i + 1
+    in
+    let reserved_ids = IntSet.add id st.reserved_ids in
+    let+ () = State.put { st with reserved_ids } in
+    id
 end
 
 module Stage2 = struct
@@ -97,3 +108,5 @@ let add_name ~name = add_names ~names:[ name ]
 let add_tid ~tid = add_tids ~tids:[ tid ]
 
 let add_id ~id = add_ids ~ids:[ id ]
+
+let fresh_id = ReprState.fresh_id

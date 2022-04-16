@@ -1,13 +1,5 @@
-(** [true] if we're in interactive mode *)
-let interactive_mode =
-  Settings.(flag "interactive_mode"
-            |> synopsis "Signifies whether Links is running in REPL mode"
-            |> privilege `System
-            |> convert parse_bool
-            |> sync)
-
 (** The banner *)
-let version = "0.9.3 (Burghmuirhead)"
+let version = "0.9.7 (Burghmuirhead)"
 let version = Settings.(option ~default:(Some version) ~readonly:true "version"
                         |> privilege `System
                         |> synopsis "Print version and exit"
@@ -48,5 +40,88 @@ module Sessions = struct
               |> privilege `System
               |> convert parse_bool
               |> CLI.(add (long "session-exceptions"))
+              |> sync)
+end
+
+module System = struct
+  type mode = Interactive
+            | Compile
+            | Web
+  let mode =
+    let parse_mode s =
+      match String.lowercase_ascii s with
+      | "interact"    -> Some Interactive
+      | "compile"     -> Some Compile
+      | "web"         -> Some Web
+      | _ -> raise (Invalid_argument (Printf.sprintf "Unrecognised mode '%s'" s))
+    in
+    let string_of_mode = function
+      | Some Interactive -> "interact"
+      | Some Compile -> "compile"
+      | Some Web -> "web"
+      | None -> "<none>"
+    in
+    Settings.(option "mode"
+              |> privilege `System
+              |> synopsis "Instructs Links to run in interactive, compilation, or web mode"
+              |> convert parse_mode
+              |> hidden
+              |> to_string string_of_mode
+              |> hint "<compile|interact|web>"
+              |> CLI.(add (long "mode"))
+              |> sync)
+
+  let compile_mode =
+    Settings.(flag "compile" ~default:false
+              |> privilege `System
+              |> synopsis "Toggles compilation mode"
+              |> action (fun _ -> set mode (Some Compile))
+              |> hidden
+              |> CLI.(add (long "compile" <&> short 'c'))
+              |> sync)
+
+  (* TODO(dhil): The notion of output file might need to be
+     generalised as we add more backends to Links or decide to add
+     support for dumping other compilation artefacts. *)
+  let output_file =
+    Settings.(option "output_file" ~default:(Some "a.js")
+              |> privilege `User
+              |> synopsis "Set output file name to <file>"
+              |> hint "<file>"
+              |> to_string from_string_option
+              |> convert (fun s -> Some s)
+              |> CLI.(add (long "output" <&> short 'o'))
+              |> sync)
+
+  let interactive_mode =
+    Settings.(flag "interactive_mode"
+              |> synopsis "Toggles interactive mode"
+              |> privilege `System
+              |> action (fun _ -> set mode (Some Interactive))
+              |> hidden
+              |> sync)
+
+  let is_interacting () =
+    match Settings.get mode with
+    | Some Interactive -> true
+    | _ -> false
+
+  let link_js_runtime =
+    Settings.(flag "link_js_runtime" ~default:true
+              |> privilege `User
+              |> synopsis "In compile mode, this flag toggles whether the JS compiler statically links the JS runtime"
+              |> convert parse_bool
+              |> hidden
+              |> CLI.(add (long "Ljs-runtime"))
+              |> sync)
+
+  let custom_js_runtime =
+    Settings.(option "custom_js_runtime"
+              |> privilege `User
+              |> synopsis "If link_js_runtime is set to true, then the JS compiler will link the provided file(s) rather than the standard Links JS runtime"
+              |> to_string from_string_option
+              |> convert (fun s -> Some s)
+              |> hidden
+              |> CLI.(add (long "Xcustom-js-runtime"))
               |> sync)
 end

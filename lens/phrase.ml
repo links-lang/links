@@ -151,15 +151,15 @@ let eval_unary op arg =
           failwith
             (Format.asprintf
                "Value '%a' does not support the unary minus operator." Value.pp
-               arg) )
+               arg))
 
 let rec eval expr get_val =
   let open Value in
   match expr with
   | Constant c -> c
   | Var v -> (
-      try get_val v
-      with Not_found -> failwith ("Could not find column " ^ v ^ ".") )
+      try get_val v with
+      | Not_found -> failwith ("Could not find column " ^ v ^ "."))
   | InfixAppl (op, a1, a2) ->
       let a1 = eval a1 get_val in
       let a2 = eval a2 get_val in
@@ -181,7 +181,7 @@ let rec eval expr get_val =
       in
       match List.find ~f:(fun (k, _v) -> eval k get_val = inp) cases with
       | Some (_, v) -> eval v get_val
-      | None -> eval otherwise get_val )
+      | None -> eval otherwise get_val)
 
 let rec partial_eval expr ~lookup =
   match expr with
@@ -201,13 +201,13 @@ let rec partial_eval expr ~lookup =
        |Binary.LogicalAnd, _, Constant (Value.Bool false) ->
           Constant (Value.Bool false)
       | _, Constant v1, Constant v2 -> eval_infix op v1 v2 |> Constant.of_value
-      | _ -> InfixAppl (op, a1, a2) )
+      | _ -> InfixAppl (op, a1, a2))
   | TupleLit l -> partial_eval (List.hd l) ~lookup
   | UnaryAppl (op, arg) -> (
       let arg = partial_eval arg ~lookup in
       match arg with
       | Constant c1 -> Constant (eval_unary op c1)
-      | _ -> UnaryAppl (op, arg) )
+      | _ -> UnaryAppl (op, arg))
   | In _ -> expr (* do not support in *)
   | Case _ -> expr
 

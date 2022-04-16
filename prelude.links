@@ -173,7 +173,7 @@ fun zip(l, r) {
 }
 
 fun replicate(n, item) {
-  if (n == 0) []
+  if (n <= 0) []
   else item :: replicate(n-1, item)
 }
 
@@ -500,6 +500,50 @@ fun isFloat (x) { x =~ /-?[0-9]+(\.[0-9]+)?$/ }
 sig asList : (TableHandle((|a::Base),(|_::Base),(|_::Base))) {}-> [(|a::Base)]
 fun asList(t) server {
   for (x <-- t) [x]
+}
+
+fun dedup(l) server {
+  # an unsafe local definition of elem, only for use within dedup!
+  # (ensures dedup is tame, while keeping the global def of elem wild)
+  unsafe sig elem : (a,[a]) -b-> Bool
+  fun elem(x, l) {
+    switch (l) {
+      case [] -> false
+      case hd::tl -> x == hd || x `elem` tl
+    }
+  }
+  unsafe sig aux : ([a],[a]) -> [a]
+  fun aux(vl, rl) {
+    switch (rl) {
+      case [] -> []
+      case r::rl0 ->
+        if (r `elem` vl)
+          aux(vl, rl0)
+        else
+          r::aux(r::vl, rl0)
+    }
+  }
+  aux([]:[a], l)
+}
+
+fun distinct(t) server {
+	dedup(asList(t))
+}
+
+# Gets children of elements in an XML forest, concatenated in order
+# @param {Xml} xml
+# @returns {Xml}
+sig childNodes : (Xml) ~> Xml
+fun childNodes(xml) {
+  for (x <- xml) itemChildNodes(x)
+}
+
+# Gets text content of an XML forest, concatenated in order
+# @param {Xml} xml
+# @returns {String}
+sig getTextContent : (Xml) ~> String
+fun getTextContent(xml) {
+  fold_left((^^),"",for (x <- xml) [itemTextContent(x)])
 }
 
 # Appends a XML forest to an XmlItems children
@@ -1395,9 +1439,9 @@ fun assertEq (actual, expected) server {
       ()
   else {
       print("Assertion failed.");
-      print("Expected:");
-      print(show(expected));
-      print("but got:");
+      println("Expected:");
+      println(show(expected));
+      println("but got:");
       print(show(actual));
       sysexit(2)
   }
@@ -1507,4 +1551,102 @@ fun isNew(x) {
     case NewKeyMapped (x) -> true
     case Key (x) -> false
   }
+}
+
+
+### Date / Time functions
+
+# UTC Time Accessors
+
+sig utcYear : (DateTime) -> Int
+fun utcYear(dt) { dateYear(dt, 0) }
+
+sig utcDay : (DateTime) -> Int
+fun utcDay(dt) { dateDay(dt, 0) }
+
+sig utcMonth : (DateTime) -> Int
+fun utcMonth(dt) { dateMonth(dt, 0) }
+
+sig utcHours : (DateTime) -> Int
+fun utcHours(dt) { dateHours(dt, 0) }
+
+sig utcMinutes : (DateTime) -> Int
+fun utcMinutes(dt) { dateMinutes(dt) }
+
+sig utcSeconds : (DateTime) -> Int
+fun utcSeconds(dt) { dateSeconds(dt) }
+
+sig utcMilliseconds : (DateTime) -> Int
+fun utcMilliseconds(dt) { dateMilliseconds(dt) }
+
+# Local time accessors (Note that these are impure since we use utcOffset() to
+# get the currently-set UTC offset to convert from UTC to local time)
+
+sig localYear : (DateTime) ~> Int
+fun localYear(dt) { dateYear(dt, utcOffset()) }
+
+sig localDay : (DateTime) ~> Int
+fun localDay(dt) { dateDay(dt, utcOffset()) }
+
+sig localMonth : (DateTime) ~> Int
+fun localMonth(dt) { dateMonth(dt, utcOffset()) }
+
+sig localHours : (DateTime) ~> Int
+fun localHours(dt) { dateHours(dt, utcOffset()) }
+
+sig localMinutes : (DateTime) ~> Int
+fun localMinutes(dt) { dateMinutes(dt) }
+
+sig localSeconds : (DateTime) ~> Int
+fun localSeconds(dt) { dateSeconds(dt) }
+
+sig localMilliseconds : (DateTime) -> Int
+fun localMilliseconds(dt) { dateMilliseconds(dt) }
+
+# Default serialisation of DTs at the moment is in local time,
+# so `showLocal` is just a specialisation of the default `show`
+# function.
+sig showLocal : (DateTime) ~> String
+fun showLocal(dt) {
+    show(dt)
+}
+
+### Temporal DB functions
+
+# Transaction-time timeslice for current DB
+fun ttCurrent(tbl) {
+    query nested {
+        for (x <-t- tbl)
+            where (ttTo(x) == forever)
+            [ ttData(x) ]
+    }
+}
+
+# Transaction-time timeslice for DB at a given time
+fun ttAt(tbl, timestamp) {
+    query nested {
+        for (x <-t- tbl)
+            where (ttFrom(x) <= timestamp && timestamp < ttTo(x))
+            [ ttData(x) ]
+    }
+}
+
+
+# Valid-time timeslice for current DB
+fun vtCurrent(tbl) {
+    query nested {
+        var time = now();
+        for (x <-v- tbl)
+            where (time >= vtFrom(x) && time < vtTo(x))
+            [ vtData(x) ]
+    }
+}
+
+# Valid-time timeslice for DB at a given time
+fun vtAt(tbl, time) {
+    query nested {
+        for (x <-v- tbl)
+            where (time >= vtFrom(x) && time < vtTo(x))
+            [ vtData(x) ]
+    }
 }

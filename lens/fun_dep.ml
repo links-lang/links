@@ -223,10 +223,10 @@ module Tree = struct
     let rec traverse (FDNode (c, subnodes)) =
       if Alias.Set.subset c !columns then (
         columns := Alias.Set.diff !columns c;
-        List.for_all ~f:traverse subnodes )
+        List.for_all ~f:traverse subnodes)
       else (
         joint := c;
-        false )
+        false)
     in
     List.for_all ~f:traverse tree
     |> Result.of_bool ~error:(Check_error.FunDepNotTreeForm !joint)
@@ -293,8 +293,8 @@ module Tree = struct
         Tree_form_error.E (Tree_form_error.ContainsCycle cycle) |> raise
       else List.iter ~f:(f bt acc) fds
     in
-    try Set.iter (f [] Alias.Set.empty) fds |> Result.return
-    with Tree_form_error.E e -> Result.error e
+    try Set.iter (f [] Alias.Set.empty) fds |> Result.return with
+    | Tree_form_error.E e -> Result.error e
 
   let in_tree_form fds =
     let open Result.O in

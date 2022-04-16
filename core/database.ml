@@ -2,11 +2,13 @@ open CommonTypes
 open Utility
 
 let connection_info
-  = Settings.(option "database_args"
-              |> synopsis "Database host, name, user, and password"
+  = let setting =
+      Settings.(option "database_args"
+              |> synopsis "Database host, port, user, and password"
               |> to_string from_string_option
-              |> convert Utility.some
+              |> convert (fun s -> Utility.some (Sys.expand s))
               |> sync)
+    in setting
 
 (* Hacky database query result manipulation settings. *)
 let coerce_null_integers
@@ -18,6 +20,12 @@ let null_integer
   = Settings.(option ~default:(Some (-1)) "null_integer"
               |> to_string (function Some i -> string_of_int i | None -> "<none>")
               |> convert (fun s -> Some (int_of_string s))
+              |> sync)
+
+let mixing_norm
+  = Settings.(flag "mixing_norm"
+              |> synopsis "Enables the new mixing normaliser for all queries"
+              |> convert parse_bool
               |> sync)
 
 type database = Value.database
@@ -60,6 +68,8 @@ let value_of_db_string (value:string) t =
     | Types.Primitive Primitive.Float ->
        if value = "" then Value.box_float 0.00      (* HACK HACK *)
        else Value.box_float (float_of_string value)
+    | Types.Primitive Primitive.DateTime ->
+       Value.box_datetime (Timestamp.parse_db_string value)
     | t -> raise (runtime_error
       ("value_of_db_string: unsupported datatype: '" ^
         Types.string_of_datatype t ^"'"))

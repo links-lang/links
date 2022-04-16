@@ -8,63 +8,9 @@ exception TypeDestructionError of string
 let error t = raise (TypeDestructionError t)
 
 
-(** remove any top-level meta typevars and aliases from a type
-    (perhaps we can use this version of concrete_type everywhere)
-*)
-let concrete_type t =
-  let rec ct rec_names t : datatype =
-    match t with
-      | Alias (_, t) -> ct rec_names t
-      | Meta point ->
-          begin
-            match Unionfind.find point with
-            | Var _ -> t
-            | Recursive (var, _kind, t) ->
-             if RecIdSet.mem (MuBoundId var) rec_names then
-               Meta point
-             else
-               ct (RecIdSet.add (MuBoundId var) rec_names) t
-            | t -> ct rec_names t
-          end
-      | ForAll (qs, t) ->
-          begin
-            match ct rec_names t with
-              | ForAll (qs', t') ->
-                  ForAll (qs @ qs', t')
-              | t ->
-                  begin
-                    match qs with
-                      | [] -> t
-                      | _ -> ForAll (qs, t)
-                  end
-          end
-      | Dual s -> dual_type (ct rec_names s)
-      | RecursiveApplication ({ r_unique_name; r_dual; r_args; r_unwind ; _ } as appl) ->
-          if (RecIdSet.mem (NominalId r_unique_name) rec_names) then
-            RecursiveApplication appl
-          else
-            let body = r_unwind r_args r_dual in
-            ct (RecIdSet.add (NominalId r_unique_name) rec_names) body
-      | _ -> t
-  in
-    ct RecIdSet.empty t
-
-let extract_row t = match concrete_type t with
-  | Effect row
-  | Record row -> row
-  | Variant row -> row
-  | t ->
-      error
-        ("Internal error: attempt to extract a row from a datatype that is not a record or a variant: "
-         ^ string_of_datatype t)
-
-
-let extract_row_parts : Types.t -> Types.row' = function
-    | Row parts -> parts
-    | t -> error
-             ("Internal error: attempt to extract row parts from a datatype that is not a row "
-              ^ string_of_datatype t)
-
+let concrete_type = Types.concrete_type'
+let extract_row = Types.extract_row
+let extract_row_parts = Types.extract_row_parts
 
 let split_row name row =
   let (field_env, row_var, dual) = fst (unwrap_row row) |> extract_row_parts in
@@ -80,7 +26,13 @@ let split_row name row =
     else
       error ("Attempt to split row "^string_of_row row ^" on absent field " ^ name)
   in
-    t, Row (StringMap.remove name field_env, row_var, dual)
+  let new_field_env =
+    if is_closed_row row then
+      StringMap.remove name field_env
+    else
+      StringMap.add name Absent field_env
+   in
+    t, Row (new_field_env, row_var, dual)
 
 let rec variant_at ?(overstep_quantifiers=true) name t = match (concrete_type t, overstep_quantifiers) with
   | (ForAll (_, t), true) -> variant_at name t
@@ -102,6 +54,15 @@ let rec project_type ?(overstep_quantifiers=true) name t = match (concrete_type 
   | (Record row, _) ->
       let t, _ = split_row name row in
         t
+  | (Application (absty, [PrimaryKind.Type, typ]), _) when
+      (Abstype.name absty) = "TransactionTime" || (Abstype.name absty = "ValidTime") ->
+        if name = TemporalField.data_field then typ
+        else if
+          name = TemporalField.from_field ||
+          name = TemporalField.to_field then
+          Primitive (Primitive.DateTime)
+        else
+          error ("Trying to project " ^ name ^ " from temporal metadata: " ^ string_of_datatype t)
   | (t, _) ->
       error ("Attempt to project non-record type "^string_of_datatype t)
 
@@ -202,9 +163,7 @@ let is_function_type t = match concrete_type t with
 let is_thunk_type t =
   is_function_type t && arg_types t = []
 
-let is_builtin_effect = function
-  | "wild" | "hear" -> true
-  | _ -> false
+let is_builtin_effect = Types.is_builtin_effect
 
 let rec element_type ?(overstep_quantifiers=true) t = match (concrete_type t, overstep_quantifiers) with
   | (ForAll (_, t), true) -> element_type t
@@ -215,19 +174,19 @@ let rec element_type ?(overstep_quantifiers=true) t = match (concrete_type t, ov
 
 let rec table_read_type t = match concrete_type t with
   | ForAll (_, t) -> table_read_type t
-  | Table (r, _, _) -> r
+  | Table (_, r, _, _) -> r
   | t ->
       error ("Attempt to take read type of non-table: " ^ string_of_datatype t)
 
 let rec table_write_type t = match concrete_type t with
   | ForAll (_, t) -> table_write_type t
-  | Table (_, w, _) -> w
+  | Table (_, _, w, _) -> w
   | t ->
       error ("Attempt to take write type of non-table: " ^ string_of_datatype t)
 
 let rec table_needed_type t = match concrete_type t with
   | ForAll (_, t) -> table_needed_type t
-  | Table (_, _, n) -> n
+  | Table (_, _, _, n) -> n
   | t ->
       error ("Attempt to take needed type of non-table: " ^ string_of_datatype t)
 
@@ -385,7 +344,7 @@ let check_type_wellformedness primary_kind t : unit =
     | Variant row ->
        irow row;
        pk_type
-    | Table (f, d, r) ->
+    | Table (_, f, d, r) ->
        idatatype f; idatatype d; idatatype r;
        pk_type
     | Lens _s ->
@@ -435,3 +394,11 @@ let row_present_types t =
         match v with
           | Present t -> Some t
           | _ -> None)
+
+let pack_types : Types.datatype list -> Types.datatype = function
+  | [t] -> t
+  | ts -> Types.make_tuple_type ts
+
+let from_present : Types.field_spec -> Types.datatype = function
+  | Present t -> t
+  | _ -> raise Types.tag_expectation_mismatch

@@ -17,7 +17,7 @@ function _mandelbrot(x, y) {
   }
   return 0;
 }
-var jsmandelbrot =LINKS.kify(_mandelbrot);
+var jsmandelbrot = _$Links.kify(_mandelbrot);
 
 function _getCanvasById(id) {
   var node =_getNodeById(id);
@@ -29,9 +29,9 @@ function _canvasSetFillStyle(context, colour) {
 function _canvasFillRect(context, x, y, width, height) {
   context.fillRect(x, y, width, height);
 }
-var getCanvasById = LINKS.kify(_getCanvasById);
-var canvasSetFillStyle = LINKS.kify(_canvasSetFillStyle);
-var canvasFillRect = LINKS.kify(_canvasFillRect);
+var getCanvasById = _$Links.kify(_getCanvasById);
+var canvasSetFillStyle = _$Links.kify(_canvasSetFillStyle);
+var canvasFillRect = _$Links.kify(_canvasFillRect);
 
 
 function _plot(context, x, y) {
@@ -85,4 +85,4 @@ function _fullyNativeMandelbrot() {
   //domInsertBefore(enxml(string_of_int(totalTime)++"ms"), getNodeById(id));
   //debug("Time to draw "++id++": "++string_of_int(totalTime)++"ms")
 }
-var fullyNativeMandelbrot = LINKS.kify(_fullyNativeMandelbrot);
+var fullyNativeMandelbrot = _$Links.kify(_fullyNativeMandelbrot);

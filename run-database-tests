@@ -14,8 +14,8 @@ parser.add_argument("working_dir", type=str,
 parser.add_argument("-c","--config_file", type=str,
                     help="Test configuration file (default: testsuite.json)",
                     default="testsuite.json")
-parser.add_argument("-d", "--database", type=str,choices=["all","mysql","pgsql","sqlite3"],
-                    help="Run tests for specific database (all, mysql, pgsql, sqlite3).  \"all\" selects all databases listed in the testsuite configuration file. Default: \"pgsql\"",
+parser.add_argument("-d", "--database", type=str,choices=["all","mysql","mysql8","pgsql","sqlite3"],
+                    help="Run tests for specific database (all, mysql8, pgsql, sqlite3).  \"all\" selects all databases listed in the testsuite configuration file. Default: \"pgsql\"",
                     default="pgsql")
 parser.add_argument("-l", "--local", action="store_true",
                     help="Test local database configuration (<working_dir>/config) if present; otherwise, the database(s) specified by the --database parameter are tested.",
@@ -54,7 +54,10 @@ def main():
             for line in fp:
                 m = matcher.match(line)
                 if m != None:
-                    return (m.group(1),m.group(2),m.group(3),m.group(4))
+                    return ( os.path.expandvars(m.group(1))
+                           , os.path.expandvars(m.group(2))
+                           , os.path.expandvars(m.group(3))
+                           , os.path.expandvars(m.group(4)) )
         return (None,None,None,None)
 
     driver_matcher = re.compile("database_driver=([^\n]*)")
@@ -82,7 +85,7 @@ def main():
         debug("setting up %s with %s" % (db,sql_file))
         if db == 'pgsql':
             cmnd = "PGPASSWORD=%s psql -h %s -p %s %s -v ON_ERROR_STOP=1 -q -d links -f %s" % (passwd, host, port, user, sql_file)
-        elif db == 'mysql':
+        elif db == 'mysql8' or db == 'mysql':
             cmnd = "mysql links -h %s -P %s -u %s -p%s  < %s" % (host, port, user, passwd, sql_file)
         elif db == 'sqlite3':
             cmnd = "sqlite3 links < %s" % sql_file

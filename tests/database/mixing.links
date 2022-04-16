@@ -1,0 +1,11 @@
+var db = database "links";
+var bagtable = table "bagtable" with (i : Int) from db;
+
+fun test() {
+    assertEq(query mixing { distinct(bagtable) }, [(i=0)]);
+    assertEq(query mixing { dedup(for (x <-- bagtable) [x]) }, [(i=0)]);
+    assertEq(query mixing { for (x <- distinct(bagtable)) [x] }, [(i=0)]);
+    assertEq(query mixing { for (x <-- bagtable) [(a=x.i),(a=x.i)] }, [(a=0),(a=0),(a=0),(a=0)])
+}
+
+test()

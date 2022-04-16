@@ -1,0 +1,8 @@
+var db = database "timedb";
+
+var timetbl = table "timetbl" with (foo: String) from db;
+
+query {
+  for (x <-t- timetbl)
+    [x]
+}

@@ -94,11 +94,11 @@ let fmt_cols ~db f cols =
 
 let fmt_phrase_value ~db f v =
   Format.fprintf f "%s"
-    ( match v with
+    (match v with
     | LPV.Bool b -> (
         match b with
         | true -> "(1=1)"
-        | false -> "(0=1)" )
+        | false -> "(0=1)")
     | LPV.Int v -> string_of_int v
     | LPV.String v -> db.escape_string v
     | LPV.Char c -> db.escape_string (String.make 1 c)
@@ -109,7 +109,7 @@ let fmt_phrase_value ~db f v =
         string_of_int k (* only support converting known keys. *)
     | LPV.Serial (`NewKeyMapped k) ->
         string_of_int k (* only support converting known keys. *)
-    | _ -> E.Unsupported_phrase_value { value = v } |> E.raise )
+    | _ -> E.Unsupported_phrase_value { value = v } |> E.raise)
 
 module Precedence = struct
   type t = Or | And | Not | Add | Sub | Mult | Divide | Cmp
@@ -184,7 +184,7 @@ let rec fmt_phrase_ex ?(precedence = Precedence.And) ~db ~map f expr =
             (Format.pp_print_list ~pp_sep fmt_name)
             names
             (Format.pp_print_list ~pp_sep fmt_val)
-            vals )
+            vals)
   | Phrase.Case (inp, cases, otherwise) ->
       if cases = [] then Format.fprintf f "%a" (fmt precedence) otherwise
       else
@@ -350,7 +350,9 @@ module Insert = struct
     let last_id_fun =
       let driver = db.driver_name () in
       match driver with
-      | "mysql" -> "last_insert_id()"
+      | "mysql"
+       |"mysql8" ->
+          "last_insert_id()"
       | "sqlite3" -> "last_insert_rowid()"
       | _ ->
           let fn = "exec_insert_returning_hack" in
@@ -370,7 +372,8 @@ module Insert = struct
   let exec_insert_returning ~db ~field_types data =
     match db.driver_name () with
     | "sqlite3"
-     |"mysql" ->
+     |"mysql"
+     |"mysql8" ->
         exec_insert_returning_hack ~db data
     | _ ->
         let cmd = Format.asprintf "%a" (fmt ~db) data in
@@ -404,7 +407,9 @@ module Change = struct
 
   let exec_multi ~db data =
     match db.driver_name () with
-    | "mysql" -> exec_multi_slow ~db data
+    | "mysql"
+     |"mysql8" ->
+        exec_multi_slow ~db data
     | _ ->
         let fmt_cmd_sep f () = Format.pp_print_string f ";\n" in
         let fmt_cmd_list = Format.pp_print_list ~pp_sep:fmt_cmd_sep (fmt ~db) in

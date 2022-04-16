@@ -25,6 +25,29 @@ let port =
             |> convert (fun n -> Some (int_of_string n))
             |> sync)
 
+(* SSL settings *)
+let ssl_cert_file =
+  Settings.(option "ssl_cert_file"
+            |> privilege `System
+            |> synopsis "The SSL certificate"
+            |> convert Utility.(Sys.expand ->- some)
+            |> to_string from_string_option
+            |> sync)
+
+let ssl_key_file =
+  Settings.(option "ssl_key_file"
+            |> privilege `System
+            |> synopsis "The SSL key file"
+            |> convert Utility.(Sys.expand ->- some)
+            |> to_string from_string_option
+            |> sync)
+
+let ssl =
+  Settings.(flag ~default:false "ssl"
+            |> synopsis "Toggles secure mode for all connections"
+            |> convert parse_bool
+            |> sync)
+
 (* Base URL for websocket connections *)
 let websocket_url
   = let parse_ws_url url =
@@ -125,6 +148,8 @@ struct
 
   let set_prelude bs =
     prelude := bs
+
+  let get_prelude () = !prelude
 
   let external_files : (string list) ref = ref []
 
@@ -352,7 +377,15 @@ struct
       Conduit_lwt_unix.init ~src:host () >>= fun ctx ->
       let ctx = Cohttp_lwt_unix.Net.init ~ctx () in
       Debug.print ("Starting server (2)?\n");
-      Cohttp_lwt_unix.Server.create ~ctx ~mode:(`TCP (`Port port))
+      let mode =
+        if Settings.get ssl
+        then match Settings.get ssl_cert_file, Settings.get ssl_key_file with
+          | Some cert, Some key ->
+                `TLS ((`Crt_file_path cert), (`Key_file_path key), `No_password, (`Port port))
+          | _, _ -> raise Errors.MissingSSLCertificate
+        else `TCP (`Port port)
+      in
+      Cohttp_lwt_unix.Server.create ~ctx ~mode
         (Cohttp_lwt_unix.Server.make_response_action ~callback:(callback rt render_cont) ()) in
 
     Debug.print ("Starting server?\n");

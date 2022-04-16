@@ -156,6 +156,11 @@ let is_attr = function
   | NsAttr _ -> true
   | _        -> false
 
+let is_node = function
+  | Node _   -> true
+  | NsNode _ -> true
+  | _        -> false
+
 let attrs = List.filter is_attr
 and nodes = List.filter (not -<- is_attr)
 
@@ -175,8 +180,23 @@ let split_html : xml -> xml * xml =
   | [Node ("body", xs)] -> [], xs
   | xs -> [], xs
 
-type table = (database * string) * string * string list list * Types.row'
-  [@@deriving show]
+module Table = struct
+  type t = {
+  database: (database * string);
+  name: string;
+  keys: string list list;
+  temporality: Temporality.t;
+  temporal_fields: (string * string) option;
+  row: Types.row'
+  }
+[@@deriving show]
+end
+
+type table = Table.t
+    [@@deriving show]
+
+let make_table ~database ~name ~keys ~temporality ~temporal_fields ~row =
+  Table.({ database; name; keys; temporality; temporal_fields; row })
 
 type primitive_value_basis =  [
 | `Bool of bool
@@ -193,6 +213,7 @@ type primitive_value = [
 | primitive_value_basis
 | `Database of (database * string)
 | `Table of table
+| `DateTime of Timestamp.t
 ]
   [@@deriving show]
 
@@ -720,6 +741,7 @@ type t = [
 | `PrimitiveFunction of string * Var.var option
 | `ClientDomRef of int
 | `ClientFunction of string
+| `ClientClosure of int
 | `Continuation of continuation
 | `Resumption of resumption
 | `Pid of dist_pid
@@ -764,7 +786,8 @@ let rec p_value (ppf : formatter) : t -> 'a = function
   | `List l -> fprintf ppf "[@[<hov 0>";
                p_list_elements ppf l
   | `ClientDomRef i -> fprintf ppf "%i" i
-  | `ClientFunction _n -> fprintf ppf "fun"
+  | `ClientClosure _
+  | `ClientFunction _ -> fprintf ppf "fun"
   | `PrimitiveFunction (name, _op) -> fprintf ppf "%s" name
   | `Variant (label, `Record []) -> fprintf ppf "@{<constructor>%s@}" label
   (* avoid duplicate parenthesis for Foo(a = 5, b = 3) *)
@@ -778,7 +801,7 @@ let rec p_value (ppf : formatter) : t -> 'a = function
                                fprintf ppf "fun"
   | `Socket _ -> fprintf ppf "<socket>"
   | `Lens (_,l) -> fprintf ppf "(%a)" Lens.Value.pp l
-  | `Table (_, name, _, _) -> fprintf ppf "(table %s)" name
+  | `Table { Table.name; _}  -> fprintf ppf "(table %s)" name
   | `Database (_, params) -> fprintf ppf "(database %s" params
   | `SessionChannel (ep1, ep2) ->
      fprintf ppf "Session channel. EP1: %s, EP2: %s"
@@ -798,6 +821,30 @@ let rec p_value (ppf : formatter) : t -> 'a = function
   | `Pid (`ServerPid i) -> fprintf ppf "Pid Server (%s)" (ProcessID.to_string i)
   | `Pid (`ClientPid (cid, i)) -> fprintf ppf "Pid Client num %s, process %s" (ClientID.to_string cid) (ProcessID.to_string i)
   | `Alien -> fprintf ppf "alien"
+  | `DateTime (Timestamp.Timestamp ts) ->
+      (* Default to showing local time representation *)
+      p_local_datetime ppf ts
+  | `DateTime (Timestamp.Infinity) -> fprintf ppf "infinity"
+  | `DateTime (Timestamp.MinusInfinity) -> fprintf ppf "-infinity"
+and p_local_datetime ppf ts =
+  let open CalendarLib in
+  let offset = Time_Zone.(gap UTC Local) in
+  let offset_str =
+      if offset < 0 then
+          Printf.sprintf "-%d" offset
+      else
+          Printf.sprintf "+%d" offset
+  in
+  (* Internal representation is UTC; print as local time *)
+  let cal =
+      CalendarShow.convert ts (CalendarLib.Time_Zone.UTC)
+        (CalendarLib.Time_Zone.Local)
+      |> CalendarShow.show
+  in
+  fprintf ppf "%s%s" cal offset_str
+and p_utc_datetime ppf ts =
+  fprintf ppf "%s+0"
+  (CalendarShow.show ts)
 and p_record_fields ppf = function
   | [] -> fprintf ppf ""
   | [(l, v)] -> fprintf ppf "@[@{<recordlabel>%a@} = %a@]"
@@ -889,6 +936,9 @@ let string_of_pretty pretty_fun arg : string =
   pretty_fun f arg;
   pp_print_flush f ();
   Buffer.contents b
+
+let string_of_calendar_utc cal =
+    string_of_pretty p_utc_datetime cal
 
 (** Get a string representation of a value
 
@@ -984,6 +1034,10 @@ and box_unit : unit -> t
 and unbox_unit : t -> unit = function
   | `Record [] -> ()
   | v -> raise (type_error "unit" v)
+and box_datetime datetime = `DateTime datetime
+and unbox_datetime = function
+  | `DateTime dt -> dt
+  | v -> raise (type_error "datetime" v)
 
 let box_op : t list -> t -> t =
   fun ps k -> let box = List.fold_left
