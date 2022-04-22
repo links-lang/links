@@ -39,17 +39,19 @@ and disjunct is_set = function
 | _arg -> Debug.print ("error in EvalMixingQuery.disjunct: unexpected arg = " ^ QL.show _arg); failwith "disjunct"
 
 and generator locvars = function
-| (v, QL.Prom p) -> (S.Subquery (dependency_of_contains_free (E.contains_free locvars p), sql_of_query S.Distinct p, v))
-| (v, QL.Table Value.Table.{ name; _}) -> (S.TableRef (name, v))
-| (v, QL.Dedup (QL.Table Value.Table.{ name; _ })) ->
+(* XXX: grouping generators *)
+| (_genkind, v, QL.Prom p) -> (S.Subquery (dependency_of_contains_free (E.contains_free locvars p), sql_of_query S.Distinct p, v))
+| (_genkind, v, QL.Table Value.Table.{ name; _}) -> (S.TableRef (name, v))
+| (_genkind, v, QL.Dedup (QL.Table Value.Table.{ name; _ })) ->
     S.Subquery (S.Standard, S.Select (S.Distinct, S.Star, [S.TableRef (name, v)], S.Constant (Constant.Bool true), []), v)
-| (_, _arg) -> Debug.print ("error in EvalMixingQuery.disjunct: unexpected arg = " ^ QL.show _arg); failwith "generator"
+| (_genkind, _, _arg) -> Debug.print ("error in EvalMixingQuery.disjunct: unexpected arg = " ^ QL.show _arg); failwith "generator"
 
 and body is_set gs os j =
     let selquery body where =
         let froms =
             gs
-            |> List.fold_left (fun (locvars,acc) (v,_q as g) -> (v::locvars, generator locvars g::acc)) ([],[])
+            (* XXX: grouping generators *)
+            |> List.fold_left (fun (locvars,acc) (_genkind, v,_q as g) -> (v::locvars, generator locvars g::acc)) ([],[])
             |> snd
             |> List.rev
         in

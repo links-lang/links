@@ -22,7 +22,8 @@ let graph_query (q1,ty1) x (q2,ty2) =
     let y = Var.fresh_raw_var () in
     let p = Q.flattened_pair (QL.Var (x,ty1)) (QL.Var (y,ty2)) in
     let ftys = Q.flattened_pair_ft (QL.Var (x,ty1)) (QL.Var (y,ty2)) in
-    QL.For (None, [(x, q1); (y, q2)], [], QL.Singleton p), ftys
+    (* XXX: grouping generators *)
+    QL.For (None, [(QL.Values, x, q1); (QL.Values, y, q2)], [], QL.Singleton p), ftys
 
 (*
     DELATERALIZING REWRITE for Prom:
@@ -58,7 +59,8 @@ let prom_delateralize gs q1 x (q2,ty2) y (q3,ty3) =
     let q1_rp = QL.subst q1 y rp
     in
     QL.For (None,
-        gs @ [(p, QL.Prom graph)],
+        (* XXX: grouping generators *)
+        gs @ [(QL.Values, p, QL.Prom graph)],
         [],
         QL.If (eq_query, q1_rp, QL.nil))
 
@@ -70,7 +72,8 @@ let rec delateralize_step q =
     match q with
     | QL.For (_tag, gs, os, q) ->
         let rec findgs gsx = function
-        | (y,QL.Prom qy as gy)::gsy ->
+        (* XXX: grouping generators *)
+        | (_genkind, y,QL.Prom qy as gy)::gsy ->
             begin
                 match QL.occurs_free_gens gsx qy with
                 (* tail-consing is annoying, but occurs_free_list needs arguments in this order *)
@@ -86,7 +89,7 @@ let rec delateralize_step q =
                 let tyy = Q.type_of_for_var qy in
                 Some (prom_delateralize gsx qf x (qx,tyx) y (qy,tyy))
             | None ->
-                let ogs = gs >>==? (fun (z,qz) -> ds qz >>=? fun qz' -> Some (z,qz')) in
+                let ogs = gs >>==? (fun (genkind, z,qz) -> ds qz >>=? fun qz' -> Some (genkind,z,qz')) in
                 let oq = ds q in
                 begin
                     match ogs, oq with

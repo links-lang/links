@@ -44,9 +44,9 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> Q.t -> Q.t =
     | Q.For (tag, gs, os, b) ->
       let gs', env' =
         List.fold_left
-          (fun (gs', env') (x, source) ->
+          (fun (gs', env') (genkind, x, source) ->
             let y = Var.fresh_raw_var () in
-            ((y, ffb source)::gs', Env.Int.bind x y env'))
+            ((genkind, y, ffb source)::gs', Env.Int.bind x y env'))
           ([], env)
           gs
       in
@@ -239,7 +239,8 @@ let rec reduce_for_source : Q.env -> var * Q.t * Types.datatype -> (Q.env -> (Q.
                 let z = Var.fresh_raw_var () in
                 let tyq = Q.type_of_expression q in
                 (* Debug.print ("reduce_for_source.Singleton fresh var: " ^ show (Var (z,tyq))); *)
-                reduce_for_body ([(z,q)], [], Q.Singleton (Q.eta_expand_var (z, tyq)))
+                (* XXX: grouping generators *)
+                reduce_for_body ([(Q.Values,z,q)], [], Q.Singleton (Q.eta_expand_var (z, tyq)))
             | q -> q
           end
         | Q.Concat vs ->
@@ -274,14 +275,16 @@ let rec reduce_for_source : Q.env -> var * Q.t * Types.datatype -> (Q.env -> (Q.
             (* Debug.print ("reduce_for_source.Table body before renaming: " ^ show (body env empty_os)); *)
             let body' = body env' empty_os in
             (* Debug.print ("reduce_for_source.Table body after renaming: " ^ show body'); *)
-            reduce_for_body ([(y, source)], [], body')
+            (* XXX: grouping generators *)
+            reduce_for_body ([(Q.Values, y, source)], [], body')
         | Q.Prom _ ->
             let y = Var.fresh_raw_var () in
             let ty_elem = type_of_for_var source in
             (* Debug.print ("reduce_for_source.Prom fresh var: " ^ string_of_int y); *)
             let env' = Q.bind env (x, Q.Var (y, ty_elem)) in
             let body' = body env' empty_os in
-            reduce_for_body ([(y,source)], [], body')
+            (* XXX: grouping generators *)
+            reduce_for_body ([(Q.Values, y,source)], [], body')
         | v -> Q.query_error "Bad source in for comprehension: %s" (Q.string_of_t v)
 
 let rec reduce_if_body (c, t, e) =
@@ -540,7 +543,7 @@ struct
     | Q.Variant (_, t) -> cfree bvs t
     | Q.Concat tl -> List.exists (cfree bvs) tl
     | Q.For (_, gs, os, b) ->
-        let bvs'', res = List.fold_left (fun (bvs',acc) (w,q) -> w::bvs', acc || cfree bvs' q) (bvs, false) gs in
+        let _, bvs'', res = List.fold_left (fun (_genkind,bvs',acc) (_, w,q) -> (), w::bvs', acc || cfree bvs' q) ((), bvs, false) gs in
         res || cfree bvs'' b || List.exists (cfree bvs) os
     | Q.Record fl -> StringMap.exists (fun _ t -> cfree bvs t) fl
     | _ -> false
@@ -555,7 +558,8 @@ struct
     let vx = Q.Var (x, ty_elem) in
     let cenv = Q.bind env (x, vx) in
     (* Debug.print ("mk_for_term: " ^ string_of_int newx ^ " for " ^ string_of_int x); *)
-    Q.For (None, [x,xs], [], body_f cenv)
+    (* XXX: grouping generators *)
+    Q.For (None, [Q.Values,x,xs], [], body_f cenv)
 
   let rec norm in_dedup env : Q.t -> Q.t =
     function
@@ -647,6 +651,62 @@ struct
     | Q.Apply (f, xs) as _orig ->
       apply in_dedup env (norm false env f, List.map (norm false env) xs)
     | Q.For (_, gs, os, u) as _orig ->
+        let reduce_for_source gsx env = function
+        | (x, Q.Singleton v) -> gsx, Q.bind env (x,v)
+        | (x, q) -> gsx@[x,q], env
+        in
+        let reduce_for_body gsx = function
+        | Q.Prom _ as u -> 
+            let z = Var.fresh_raw_var () in
+            let tyz =
+              Q.type_of_expression u
+              |> TypeUtils.element_type
+            in
+            let vz = Q.Var (z, tyz) in
+            gsx@[z,u], Q.Singleton vz
+        | u -> gsx, u
+        in
+        let pack_for (body, c, gs, os) =
+          let body' = reduce_where_then (body,c) in
+          match gs, os with
+          | [], [] -> body'
+          | _ -> Q.For (None, gs, os, body')
+        in
+        let pack_ncoll ql = reduce_concat (List.map pack_for ql)
+        in
+        let unpack_where = function
+          | Q.If (c, t, Q.Concat []) -> t, c
+          | q -> q,  Q.Constant (Constant.Bool true)
+        in
+        let unpack_for = function
+          | Q.For (_, gs, os, body) ->
+              let body', c = unpack_where body in
+              body', c, gs, os
+          | q -> 
+              let body', c = unpack_where q in
+              body', c, [], []
+        in 
+        let unpack_ncoll = function
+        | Q.Concat ql -> List.map unpack_for ql
+        | q -> [unpack_for q]
+        in       
+        let reduce_gs = 
+          let rec rgs gsx cx env os body = function
+          | (x,g)::gs' ->
+              let tyg = Q.type_of_expression g in
+              let ng = unpack_ncoll (norm in_dedup env g) in
+              List.concat (List.map (fun (gsrc, gc, ggs, gos) -> 
+                      let gsx', env' = reduce_for_source (gsx@ggs) env gsrc in
+                      rgs gsx' (reduce_and (cx, gc)) env' (os@gos) gs') ng)
+          | [] -> 
+            let nbody = unpack_ncoll (norm in_dedup env body) in
+            List.map (fun (bbody, bc, bgs, bos) ->
+                    let bgs', bbody' = reduce_for_body (gsx@bgs) bbody in
+                    let os' = List.map (fun o -> norm false env o) (os@bos) in
+                    bbody', reduce_and (cx, bc), bgs', os') nbody
+          in rgs [] (Q.Constant (Constant.Bool true))
+        in
+        (*
         let rec reduce_gs env os_f body = function
         | [] ->
           begin
@@ -672,6 +732,8 @@ struct
             reduce_for_source env (x, norm in_dedup env g, tyg) (fun env' os_f' -> reduce_gs env' (os_f -<- os_f') body gs')
         in
         reduce_gs env (fun os' -> os@os') u gs
+        *)
+        pack_ncoll (reduce_gs env os u gs)
     | Q.If (c, t, e) ->
         reduce_if_condition (norm false env c, norm in_dedup env t, norm in_dedup env e)
     | Q.Case (v, cases, default) ->

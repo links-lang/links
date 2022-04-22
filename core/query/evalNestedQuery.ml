@@ -260,7 +260,7 @@ end
 *)
 module Split =
 struct
-  type gen = Var.var * QL.t
+  type gen = QL.genkind * Var.var * QL.t
 
   let rec query : gen list -> QL.t list -> QL.t -> QL.t -> QL.t list =
     fun gs os cond ->
@@ -304,7 +304,7 @@ struct
       [@@deriving show]
 
   type cond = QL.t option
-  type gen = Var.var * QL.t
+  type gen = QL.genkind * Var.var * QL.t
 
   let where c e =
     match c with
@@ -446,7 +446,7 @@ struct
   let rec lins c : let_clause =
     let gs_out = List.concat (init (gens c)) in
 
-    let ys = List.map fst gs_out in
+    let ys = List.map (fun (_,x,_) -> x) gs_out in
 
     let x_out =
       List.fold_right
@@ -460,7 +460,7 @@ struct
 
     let r_out =
       tuple (List.map
-               (fun (x, source) ->
+               (fun (_genkind, x, source) ->
                  match source with
                    | QL.Table t ->
                      let tyx = Types.make_record_type (QL.table_field_types t) in
@@ -470,7 +470,7 @@ struct
     let r_out_type =
       Types.make_tuple_type
         (List.map
-           (fun (_, source) ->
+           (fun (_genkind,_, source) ->
              match source with
                | QL.Table Value.Table.{ row; _ } ->
                  Types.Record (Types.Row row)

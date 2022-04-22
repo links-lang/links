@@ -807,17 +807,17 @@ module TemporalJoin = struct
               let tables =
                 (* Restrict attention to ValidTime or TransactionTime tables *)
                 List.filter_map (function
-                  | (v, Q.Table ({ temporality; _ } as t))
+                  | (genkind, v, Q.Table ({ temporality; _ } as t))
                       when temporality = Temporality.Valid ||
                            temporality = Temporality.Transaction ->
-                      Some (v, t)
+                      Some (genkind, v, t)
                   | _ -> None) gens
               in
 
               (* Ensure that all tables correspond to the given temporality *)
               let matches_mode x = x.temporality = temporality in
-              let () = List.iter (fun x ->
-                if matches_mode (snd x) then () else
+              let () = List.iter (fun (_,_,src) ->
+                if matches_mode src then () else
                   raise
                     (Errors.runtime_error
                       ("All tables in a temporal join must match the " ^
@@ -827,7 +827,7 @@ module TemporalJoin = struct
               (* Create a Var for each variable -- requires creating a type
                  from the row and field names. *)
               let tables =
-                List.map (fun (v, x) ->
+                List.map (fun (_genkind, v, x) ->
                   (* Always defined for Valid / Transaction time *)
                   (* Might want a better representation -- this screams bad design. *)
                   let (from_field, to_field) =

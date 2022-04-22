@@ -7,7 +7,7 @@ module QL = QueryLang
    semantics. *)
 module Order =
 struct
-  type gen = Var.var * QL.t
+  type gen = QL.genkind * Var.var * QL.t
   type context = gen list
 
 (* TODO:
@@ -100,9 +100,9 @@ struct
   type preclause = (path * (context * QL.t)) * query_tree
   type clause = context * QL.t * orders
 
-  let gen : (Var.var * QL.t) -> QL.t list =
+  let gen : (QL.genkind * Var.var * QL.t) -> QL.t list =
     function
-      | (x, QL.Table t) ->
+      | (_genkind, x, QL.Table t) ->
         let field_types = QL.table_field_types t in
         let tyx = Types.make_record_type field_types in
         List.rev

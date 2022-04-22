@@ -33,8 +33,11 @@ type base_type = | Bool | Char | Float | Int | String | DateTime
 type tag = int
     [@@deriving show]
 
+type genkind = Values | Keys
+    [@@deriving show]
+
 type t =
-    | For       of tag option * (Var.var * t) list * t list * t
+    | For       of tag option * (genkind * Var.var * t) list * t list * t
     | If        of t * t * t
     | Table     of Value.table
     | Database  of (Value.database * string)
@@ -42,6 +45,8 @@ type t =
     | Concat    of t list
     | Dedup     of t
     | Prom      of t
+    | GroupBy   of (Var.var * t) * t
+    | Lookup    of t * t
     | Record    of t StringMap.t
     | Project   of t * string
     | Erase     of t * StringSet.t
@@ -62,7 +67,7 @@ module S =
 struct
   (** [pt]: A printable version of [t] *)
   type pt =
-    | For       of (Var.var * pt) list * pt list * pt
+    | For       of (genkind * Var.var * pt) list * pt list * pt
     | If        of pt * pt * pt
     | Table     of Value.table
     | Singleton of pt
@@ -87,7 +92,7 @@ let rec pt_of_t : 't -> S.pt = fun v ->
   let bt = pt_of_t in
     match v with
       | For (_, gs, os, b) ->
-          S.For (List.map (fun (x, source) -> (x, bt source)) gs,
+          S.For (List.map (fun (genkind, x, source) -> (genkind, x, bt source)) gs,
                 List.map bt os,
                 bt b)
       | If (c, t, e) -> S.If (bt c, bt t, bt e)
@@ -236,7 +241,7 @@ let rec subst t x u =
   | Apply (f, xs) -> Apply (srec f, List.map srec xs)
   | For (_, gs, os, u) ->
       (* XXX: assuming fresh x!*)
-      let gs' = List.map (fun (v,g) -> (v, srec g)) gs in
+      let gs' = List.map (fun (genkind, v,g) -> (genkind, v, srec g)) gs in
       let os' = List.map srec os in
       let u' = srec u in
       For (None, gs', os', u')
@@ -278,17 +283,17 @@ let occurs_free (v : Var.var) =
   | Concat tl -> list_tryPick (occf bvs) tl
   | For (_, gs, _os, b) ->
       (* FIXME: do we need to check os as well? *)
-      let bvs'', res = List.fold_left (fun (bvs',acc) (w,q) -> w::bvs', acc ||=? occf bvs' q) (bvs, None) gs in
+      let bvs'', res = List.fold_left (fun (bvs',acc) (_genkind,w,q) -> w::bvs', acc ||=? occf bvs' q) (bvs, None) gs in
       res ||=? occf bvs'' b
   | Record fl -> map_tryPick (fun _ t -> occf bvs t) fl
   | _ -> None
   in occf []
 
 (** Returns Some (x,qx,tyx) for the first generator x <- qx such that x occurs free with type tyx *)
-let rec occurs_free_gens (gs : (Var.var * t) list) q =
+let rec occurs_free_gens (gs : (genkind * Var.var * t) list) q =
   match gs with
   | [] -> None
-  | (x,qx)::gs' ->
+  | (_genkind,x,qx)::gs' ->
       match occurs_free x (For (None, gs', [], q)) with
       | Some tyx -> Some (x,qx,tyx)
       | None -> occurs_free_gens gs' q
@@ -352,7 +357,8 @@ let eta_expand_list xs =
   let x = Var.fresh_raw_var () in
   let ty = TypeUtils.element_type ~overstep_quantifiers:true (type_of_expression xs) in
     (* Debug.print ("eta_expand_list create: " ^ show (Var (x, ty))); *)
-    ([x, xs], [], Singleton (eta_expand_var (x, ty)))
+    (* XXX: grouping generators *)
+    ([Values, x, xs], [], Singleton (eta_expand_var (x, ty)))
 
 (* takes a normal form expression and returns true iff it has list type *)
 let is_list =
