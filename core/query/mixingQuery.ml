@@ -10,7 +10,6 @@
 
 open Utility
 open CommonTypes
-open Var
 open Errors
 
 module Q = QueryLang
@@ -77,6 +76,9 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> Q.t -> Q.t =
       end *)
       Q.Var (var_lookup x, ts)
     | Q.Constant c -> Q.Constant c
+    (* FIXME: grouping constructors *)
+    | Q.GroupBy (_,_)
+    | Q.Lookup (_,_ ) -> assert false
 
 let flatfield f1 f2 = f1 ^ "@" ^ f2
 
@@ -207,85 +209,6 @@ let rec reduce_where_then (c, t) =
       reduce_where_then (reduce_and (c, c'), t')
   | _ ->
     Q.If (c, t, Q.Concat [])
-
-let rec reduce_for_body (gs, os, body) =
-  let rb = reduce_for_body in
-  match body with
-    | Q.For (_, gs', os', body') -> rb (gs @ gs', os @ os', body')
-    (* | Prom _ as u               ->
-          let z = Var.fresh_raw_var () in
-          let tyz = type_of_expression u in
-          let ftz = recdty_field_types (Types.unwrap_list_type tyz) in
-          let vz = Var (z, ftz) in
-          For (None, gs @ [(z, u)], [] (* os *), (Singleton vz)) *)
-    (* make sure when we reach this place, gs can NEVER be empty
-      | _ when gs = [] (* && _os = [] *) -> body *)
-    | Q.Concat vs -> reduce_concat (List.map (fun v -> rb (gs, os, v)) vs)
-    | _                         -> Q.For (None, gs, os, body)
-
-let rec reduce_for_source : Q.env -> var * Q.t * Types.datatype -> (Q.env -> (Q.t list -> Q.t list) -> Q.t) -> Q.t =
-  fun env (x, source, ty) body ->
-      let empty_os = fun os -> os in
-      let add_os os = fun os' -> os@os' in
-      let rs = fun gen' -> reduce_for_source env gen' body in
-      match source with
-        | Q.Singleton v ->
-          begin
-            let env' = Q.bind env (x, v) in
-            match body env' empty_os with
-            (* the normal form of a For does not have Prom in its body
-                --> we hoist it to a generator *)
-            | Q.Prom _ as q ->
-                let z = Var.fresh_raw_var () in
-                let tyq = Q.type_of_expression q in
-                (* Debug.print ("reduce_for_source.Singleton fresh var: " ^ show (Var (z,tyq))); *)
-                (* XXX: grouping generators *)
-                reduce_for_body ([(Q.Values,z,q)], [], Q.Singleton (Q.eta_expand_var (z, tyq)))
-            | q -> q
-          end
-        | Q.Concat vs ->
-          reduce_concat (List.map (fun s -> rs (x,s,ty)) vs)
-        | Q.If (c, t, Q.Concat []) ->
-          reduce_for_source env (x, t, ty) (fun env' os_f -> reduce_where_then (c, body env' os_f))
-        | Q.For (_, gs, os', v) ->
-          (* NOTE:
-
-              We are relying on peculiarities of the way we manage
-              the environment in order to avoid having to
-              augment it with the generator bindings here.
-
-              In particular, we rely on the fact that if a variable
-              is not found on a lookup then we return the eta
-              expansion of that variable rather than complaining that
-              it isn't bound in the environment.
-
-          *)
-          let tyv = Q.type_of_expression v in
-          (* this ensures os' is added to the right of the final comprehension, and further inner orderings to the right of os' *)
-          let body' = fun env' os_f -> body env' (os_f ->- add_os os') in
-          reduce_for_body (gs, [], reduce_for_source env (x,v,tyv) body')
-        | Q.Table Value.Table.{ row; _ }
-        | Q.Dedup (Q.Table Value.Table.{ row; _ }) ->
-            (* we need to generate a fresh variable in order to
-              correctly handle self joins *)
-            let y = Var.fresh_raw_var () in
-            let ty_elem = Types.Record (Types.Row row) in
-            (* Debug.print ("reduce_for_source.Table fresh var: " ^ string_of_int y ^ " for " ^ string_of_int x); *)
-            let env' = Q.bind env (x, Q.Var (y, ty_elem)) in
-            (* Debug.print ("reduce_for_source.Table body before renaming: " ^ show (body env empty_os)); *)
-            let body' = body env' empty_os in
-            (* Debug.print ("reduce_for_source.Table body after renaming: " ^ show body'); *)
-            (* XXX: grouping generators *)
-            reduce_for_body ([(Q.Values, y, source)], [], body')
-        | Q.Prom _ ->
-            let y = Var.fresh_raw_var () in
-            let ty_elem = type_of_for_var source in
-            (* Debug.print ("reduce_for_source.Prom fresh var: " ^ string_of_int y); *)
-            let env' = Q.bind env (x, Q.Var (y, ty_elem)) in
-            let body' = body env' empty_os in
-            (* XXX: grouping generators *)
-            reduce_for_body ([(Q.Values, y,source)], [], body')
-        | v -> Q.query_error "Bad source in for comprehension: %s" (Q.string_of_t v)
 
 let rec reduce_if_body (c, t, e) =
   match t with
@@ -653,7 +576,8 @@ struct
     | Q.For (_, gs, os, u) as _orig ->
         let reduce_for_source gsx env = function
         | (x, Q.Singleton v) -> gsx, Q.bind env (x,v)
-        | (x, q) -> gsx@[x,q], env
+        (* XXX: grouping generators *)
+        | (x, q) -> gsx@[Q.Values,x,q], env
         in
         let reduce_for_body gsx = function
         | Q.Prom _ as u -> 
@@ -663,7 +587,8 @@ struct
               |> TypeUtils.element_type
             in
             let vz = Q.Var (z, tyz) in
-            gsx@[z,u], Q.Singleton vz
+            (* XXX: grouping generators *)
+            gsx@[Q.Values,z,u], Q.Singleton vz
         | u -> gsx, u
         in
         let pack_for (body, c, gs, os) =
@@ -692,12 +617,13 @@ struct
         in       
         let reduce_gs = 
           let rec rgs gsx cx env os body = function
-          | (x,g)::gs' ->
-              let tyg = Q.type_of_expression g in
+          (* XXX: grouping generators *)
+          | (Q.Values,x,g)::gs' ->
               let ng = unpack_ncoll (norm in_dedup env g) in
               List.concat (List.map (fun (gsrc, gc, ggs, gos) -> 
-                      let gsx', env' = reduce_for_source (gsx@ggs) env gsrc in
-                      rgs gsx' (reduce_and (cx, gc)) env' (os@gos) gs') ng)
+                      let gsx', env' = reduce_for_source (gsx@ggs) env (x,gsrc) in
+                      rgs gsx' (reduce_and (cx, gc)) env' (os@gos) body gs') ng)
+          | (Q.Keys,_,_)::_ -> assert false
           | [] -> 
             let nbody = unpack_ncoll (norm in_dedup env body) in
             List.map (fun (bbody, bc, bgs, bos) ->

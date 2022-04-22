@@ -74,6 +74,8 @@ struct
     | Concat    of pt list
     | Dedup     of pt
     | Prom      of pt
+    | GroupBy   of (Var.var * pt) * pt
+    | Lookup    of pt * pt
     | Record    of pt StringMap.t
     | Project   of pt * string
     | Erase     of pt * StringSet.t
@@ -112,6 +114,8 @@ let rec pt_of_t : 't -> S.pt = fun v ->
       | Primitive f -> S.Primitive f
       | Var (v, t) -> S.Var (v, t)
       | Constant c -> S.Constant c
+      | GroupBy ((x,k), q) -> S.GroupBy ((x, bt k), bt q)
+      | Lookup (q,k) -> S.Lookup (bt q, bt k)
       | Database _ -> assert false
 
 let string_of_t = S.show_pt -<- pt_of_t
@@ -390,7 +394,7 @@ let used_database : t -> Value.database option =
       | Prom q -> used q
       | Dedup q -> used_item q
       | Table Value.Table.{ database = (db, _); _ } -> Some db
-      | For (_, gs, _, _body) -> List.map snd gs |> traverse
+      | For (_, gs, _, _body) -> List.map (fun (_,_,src) -> src) gs |> traverse
       | Singleton v -> used v
       | Record v ->
           StringMap.to_alist v
@@ -616,7 +620,7 @@ let rec select_clause : Sql.index -> bool -> t -> Sql.select_clause =
     | Concat _ -> assert false
     | For (_, [], _, body) ->
         select_clause index unit_query body
-    | For (_, (x, Table Value.Table.{ name; _ })::gs, os, body) ->
+    | For (_, (_genkind, x, Table Value.Table.{ name; _ })::gs, os, body) ->
         let body = select_clause index unit_query (For (None, gs, [], body)) in
         let os = List.map (base index) os in
           begin
@@ -728,7 +732,7 @@ type let_clause = Var.var * t * Var.var * t
 type let_query = let_clause list
 
 
-let gens_index (gs : (Var.var * t) list)   =
+let gens_index (gs : (genkind * Var.var * t) list)   =
   let open Value.Table in
   let all_fields t =
     let field_types = table_field_types t in
@@ -740,7 +744,7 @@ let gens_index (gs : (Var.var * t) list)   =
       | (ks::_) -> StringSet.from_list ks
       | _ -> all_fields t
   in
-  let table_index (x, source) =
+  let table_index (_genkind, x, source) =
     let t = match source with Table t -> t | _ -> assert false in
     let labels = key_fields t in
       List.rev
@@ -857,9 +861,9 @@ struct
       | For (tag_opt, gs, os, body) ->
           let (o, tag_opt) = o#option (fun o -> o#tag) tag_opt in
           let (o, gs) =
-            o#list (fun o (v, t) ->
+            o#list (fun o (k, v, t) ->
               let (o, t) = o#query t in
-              (o, (v, t))) gs in
+              (o, (k, v, t))) gs in
           let (o, os) = o#list (fun o -> o#query) os in
           let (o, body) = o#query body in
           (o, For (tag_opt, gs, os, body))
@@ -913,5 +917,7 @@ struct
       | Primitive x -> (o, Primitive x)
       | Var (v, dts) -> (o, Var (v, dts))
       | Constant c -> (o, Constant c)
+      (* XXX: fix grouping operations *)
+      | GroupBy (_,_) | Lookup (_,_) -> assert false
   end
 end

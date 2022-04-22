@@ -39,6 +39,8 @@ let tag_query : QL.t -> QL.t =
         | Var (x, t) -> Var (x, t)
         | Constant c -> Constant c
         | Database db -> Database db
+        | GroupBy ((x,k), q) -> GroupBy ((x,tag k), tag q)
+        | Lookup (q,k) -> Lookup (tag q, tag k)
     in
       tag e
 
