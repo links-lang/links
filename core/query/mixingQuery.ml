@@ -592,7 +592,7 @@ struct
         | u -> gsx, u
         in
         let pack_for (body, c, gs, os) =
-          let body' = reduce_where_then (body,c) in
+          let body' = reduce_where_then (c,body) in
           match gs, os with
           | [], [] -> body'
           | _ -> Q.For (None, gs, os, body')
@@ -632,33 +632,6 @@ struct
                     bbody', reduce_and (cx, bc), bgs', os') nbody
           in rgs [] (Q.Constant (Constant.Bool true))
         in
-        (*
-        let rec reduce_gs env os_f body = function
-        | [] ->
-          begin
-            match norm in_dedup env body with
-            | Q.For (_, gs', os', u') ->
-                reduce_gs env (os_f -<- (fun os'' -> os'@os'')) u' gs'
-            (* this special case allows us to hoist a non-standard For body into a generator *)
-            | Q.Prom _ as u' ->
-                let z = Var.fresh_raw_var () in
-                let tyz =
-                  Q.type_of_expression u'
-                  |> TypeUtils.element_type
-                in
-                let vz = Q.Var (z, tyz) in
-                reduce_for_source env (z, u', tyz) (fun env' os_f' ->
-                  Q.For (None, [], List.map (norm false env') (os_f' (os_f [])),
-                    norm in_dedup env' (Q.Singleton vz)))
-            | u' ->
-                Q.For (None, [], List.map (norm false env) (os_f []), u')
-          end
-        | (x,g)::gs' -> (* equivalent to xs = For gs' u, body = g, but possibly the arguments aren't normalized *)
-            let tyg = Q.type_of_expression g in
-            reduce_for_source env (x, norm in_dedup env g, tyg) (fun env' os_f' -> reduce_gs env' (os_f -<- os_f') body gs')
-        in
-        reduce_gs env (fun os' -> os@os') u gs
-        *)
         pack_ncoll (reduce_gs env os u gs)
     | Q.If (c, t, e) ->
         reduce_if_condition (norm false env c, norm in_dedup env t, norm in_dedup env e)
