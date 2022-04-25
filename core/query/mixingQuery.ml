@@ -580,7 +580,7 @@ struct
         | (x, q) -> gsx@[Q.Values,x,q], env
         in
         let reduce_for_body gsx = function
-        | Q.Prom _ as u -> 
+        | Q.Prom _ as u ->
             let z = Var.fresh_raw_var () in
             let tyz =
               Q.type_of_expression u
@@ -607,24 +607,24 @@ struct
           | Q.For (_, gs, os, body) ->
               let body', c = unpack_where body in
               body', c, gs, os
-          | q -> 
+          | q ->
               let body', c = unpack_where q in
               body', c, [], []
-        in 
+        in
         let unpack_ncoll = function
         | Q.Concat ql -> List.map unpack_for ql
         | q -> [unpack_for q]
-        in       
-        let reduce_gs = 
+        in
+        let reduce_gs =
           let rec rgs gsx cx env os body = function
           (* XXX: grouping generators *)
           | (Q.Values,x,g)::gs' ->
               let ng = unpack_ncoll (norm in_dedup env g) in
-              List.concat (List.map (fun (gsrc, gc, ggs, gos) -> 
+              List.concat (List.map (fun (gsrc, gc, ggs, gos) ->
                       let gsx', env' = reduce_for_source (gsx@ggs) env (x,gsrc) in
                       rgs gsx' (reduce_and (cx, gc)) env' (os@gos) body gs') ng)
           | (Q.Keys,_,_)::_ -> assert false
-          | [] -> 
+          | [] ->
             let nbody = unpack_ncoll (norm in_dedup env body) in
             List.map (fun (bbody, bc, bgs, bos) ->
                     let bgs', bbody' = reduce_for_body (gsx@bgs) bbody in
