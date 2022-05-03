@@ -353,6 +353,8 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       end
   | Apply (Primitive "Empty", _) -> Types.bool_type (* HACK *)
   | Apply (Primitive "Distinct", [q]) -> type_of_expression q
+  | Apply (Primitive "GroupBy", [q;i]) -> assert false (* TODO *)
+  | Apply (Primitive "Lookup", [q;v]) -> assert false (* TODO *)
   | Apply (Primitive f, _) -> TypeUtils.return_type (Env.String.find f Lib.type_env)
   | e -> Debug.print("Can't deduce type for: " ^ show e); assert false
 
@@ -474,6 +476,10 @@ let lookup_fun env (f, fvs) =
         Primitive "Empty"
       | "sortByBase" ->
         Primitive "SortBy"
+      | "groupBy" ->
+        Primitive "GroupBy"
+      | "lookup" ->
+        Primitive "Lookup"
       | _ ->
         begin
           match location with

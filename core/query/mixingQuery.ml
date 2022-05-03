@@ -282,6 +282,7 @@ struct
   | Q.Apply (Q.Primitive "vtTo", [x]) ->
     Q.Project (x, TemporalField.to_field)
   | Q.Apply (Q.Primitive "Distinct", [u]) -> Q.Prom (Q.Dedup u)
+
   | u -> u
 
   let rec xlate env : Ir.value -> Q.t = let open Ir in function
@@ -577,6 +578,7 @@ struct
         end
     | Q.Record fl -> Q.Record (StringMap.map (norm false env) fl)
     | Q.Singleton v -> Q.Singleton (norm false env v)
+    | Q.MapEntry (k,v) -> Q.MapEntry (norm false env k, norm false env v)
     | Q.Concat xs -> reduce_concat (List.map (norm in_dedup env) xs)
     | Q.Project (r, label) ->
         let rec project (r, label) =
@@ -743,6 +745,18 @@ struct
                 |> norm in_dedup env
             | _ -> assert false
         end
+    | Q.Primitive "GroupBy", [q; f] ->
+        begin
+          match f with
+            | Q.Closure (([x], body_c), closure_env) ->
+                let tyx = TypeUtils.element_type ~overstep_quantifiers:true (Q.type_of_expression q) in
+                let vx = Q.Var (x, tyx) in
+                let body_env = Q.bind (env ++ closure_env) (x,vx) in
+                let body = computation body_env body_c in
+                norm in_dedup env (Q.GroupBy ((x, body), q))
+            | _ -> assert false
+        end
+    | Q.Primitive "Lookup", [q; v] -> norm in_dedup env (Q.Lookup (q, v))
     | Q.Primitive "SortBy", [f; xs] ->
         begin
           match xs with
