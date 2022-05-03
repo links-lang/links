@@ -238,6 +238,7 @@ module Continuation : CONTINUATION
 type t = [
 | primitive_value
 | `List of t list
+| `Entry of t * t
 | `Record of (string * t) list
 | `Lens of Lens.Database.t * Lens.Value.t
 | `Variant of string * t

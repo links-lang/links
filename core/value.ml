@@ -735,6 +735,7 @@ type t = [
 | primitive_value
 | `Lens of Lens.Database.t * Lens.Value.t
 | `List of t list
+| `Entry of t * t
 | `Record of (string * t) list
 | `Variant of string * t
 | `FunctionPtr of (Ir.var * t option)
@@ -778,6 +779,7 @@ let rec p_value (ppf : formatter) : t -> 'a = function
       try p_tuple ppf fields
       with Not_tuple ->
         fprintf ppf "(@[<hv 0>%a@])" p_record_fields (List.sort (fun (l,_) (r, _) -> compare l r) fields) end
+  | `Entry (k,v) -> fprintf ppf "@{<key>%a@}(@[%a)@]" p_value k p_value v
   | `List [] -> fprintf ppf "[]"
   | `List ((`XML _)::_ as elems) ->
      fprintf ppf "@[<hv>%a@]" (pp_print_list p_value) elems

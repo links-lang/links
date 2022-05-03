@@ -23,6 +23,7 @@ let tag_query : QL.t -> QL.t =
           If (tag c, tag t, tag e)
         | Table t -> Table t
         | Singleton e -> Singleton (tag e)
+        | MapEntry (k, v) -> MapEntry (tag k, tag v)
         | Concat es ->
           Concat (List.map tag es)
         | Dedup t -> Dedup (tag t)

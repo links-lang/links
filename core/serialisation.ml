@@ -126,6 +126,7 @@ module Compressible = struct
       | `List of compressed_t list
       | `Record of (string * compressed_t) list
       | `Variant of string * compressed_t
+      | `Entry of compressed_t * compressed_t
       | `FunctionPtr of (Ir.var * compressed_t option)
       | `PrimitiveFunction of string
       | `ClientDomRef of int
@@ -162,6 +163,7 @@ module Compressible = struct
       | `List vs -> `List (List.map compress vs)
       | `Record fields -> `Record (List.map (fun (name, v) -> (name, compress v)) fields)
       | `Variant (name, v) -> `Variant (name, compress v)
+      | `Entry (k, v) -> `Entry (compress k, compress v)
       | `FunctionPtr(x, fvs) ->
          `FunctionPtr (x, Utility.opt_map compress fvs)
       | `PrimitiveFunction (f, _op) -> `PrimitiveFunction f
@@ -206,6 +208,7 @@ module Compressible = struct
       | `List vs -> `List (List.map decompress vs)
       | `Record fields -> `Record (List.map (fun (name, v) -> (name, decompress v)) fields)
       | `Variant (name, v) -> `Variant (name, decompress v)
+      | `Entry (k, v) -> `Entry (decompress k, decompress v)
       | `FunctionPtr (x, fvs) -> `FunctionPtr (x, Utility.opt_map decompress fvs)
       | `PrimitiveFunction f -> `PrimitiveFunction (f,None)
       | `ClientDomRef i -> `ClientDomRef i

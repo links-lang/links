@@ -33,6 +33,7 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> Q.t -> Q.t =
       | Q.If (c, t, e) -> Q.If (ffb c, ffb t, ffb e)
       | Q.Table _ as t -> t
       | Q.Singleton v -> Q.Singleton (ffb v)
+      | Q.MapEntry (k,v) -> Q.MapEntry (ffb k, ffb v)
       | Q.Database db -> Q.Database db
       | Q.Concat vs -> Q.Concat (List.map ffb vs)
       | Q.Dedup t -> Q.Dedup (ffb t)

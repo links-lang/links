@@ -38,6 +38,7 @@ let rec extract_json_values : Value.t -> (handler_id_set * (Value.chan list)) =
   | `Record fields ->
     let _ls, vs = List.split fields in
     extract_from_values vs
+  | `Entry (k, v) -> (* WR: HACK for grouping *) extract_from_values [k;v]
   | `List (elems) -> extract_from_values elems
   and extract_from_primitive : Value.primitive_value -> handler_id_set = function
   (* Everything is empty except XML items *)

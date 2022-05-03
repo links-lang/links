@@ -26,6 +26,7 @@ type t =
     | Table     of Value.table
     | Database  of (Value.database * string)
     | Singleton of t
+    | MapEntry  of t * t
     | Concat    of t list
     | Dedup     of t
     | Prom      of t

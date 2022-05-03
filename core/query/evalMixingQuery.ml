@@ -118,8 +118,8 @@ let compile_mixing : delateralize:QueryPolicy.t -> Value.env -> (int * int) opti
       match QL.used_database v with
         | None -> None
         | Some db ->
+            Debug.print ("Generated NRC query: " ^ QL.show v ); 
             let t = Types.unwrap_list_type (QL.type_of_expression v) in
-            (* Debug.print ("Generated NRC query: " ^ QL.show v ); *)
             let q = sql_of_query v in
             let _range = None in
               (* Debug.print ("Generated SQL query: "^(Sql.string_of_query db _range q)); *)

@@ -53,6 +53,7 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> Q.t -> Q.t =
     | Q.If (c, t, e) -> Q.If (ffb c, ffb t, ffb e)
     | Q.Table _ as t -> t
     | Q.Singleton v -> Q.Singleton (ffb v)
+    | Q.MapEntry (k,v) -> Q.MapEntry (ffb k, ffb v)
     | Q.Database db -> Q.Database db
     | Q.Concat vs -> Q.Concat (List.map ffb vs)
     | Q.Dedup q -> Q.Dedup (ffb q)
@@ -484,6 +485,52 @@ struct
     (* XXX: grouping generators *)
     Q.For (None, [Q.Values,x,xs], [], body_f cenv)
 
+  (* this has the effect of performing beta reduction when the generaator in
+   * the main input is a Singleton *)
+  let reduce_for_source gsx env = function
+  | (x, Q.Singleton v) -> gsx, Q.bind env (x,v)
+  (* XXX: grouping generators *)
+  | (x, q) -> gsx@[Q.Values,x,q], env
+
+  (* when the head of a comprehension is a Prom, this lifts it to a generator
+   * by means of eta-expansion *)
+  let reduce_for_body gsx = function
+  | Q.Prom _ as u ->
+      let z = Var.fresh_raw_var () in
+      let tyz =
+        Q.type_of_expression u
+        |> TypeUtils.element_type
+      in
+      let vz = Q.Var (z, tyz) in
+      (* XXX: grouping generators *)
+      gsx@[Q.Values,z,u], Q.Singleton vz
+  | u -> gsx, u
+
+  (* auxiliary functions to pack/unpack normalised collections *)
+  let pack_for (body, c, gs, os) =
+    let body' = reduce_where_then (c,body) in
+    match gs, os with
+    | [], [] -> body'
+    | _ -> Q.For (None, gs, os, body')
+
+  let pack_ncoll ql = reduce_concat (List.map pack_for ql)
+
+  let unpack_where = function
+    | Q.If (c, t, Q.Concat []) -> t, c
+    | q -> q,  Q.Constant (Constant.Bool true)
+
+  let unpack_for = function
+    | Q.For (_, gs, os, body) ->
+        let body', c = unpack_where body in
+        body', c, gs, os
+    | q ->
+        let body', c = unpack_where q in
+        body', c, [], []
+
+  let unpack_ncoll = function
+  | Q.Concat ql -> List.map unpack_for ql
+  | q -> [unpack_for q]
+
   let rec norm in_dedup env : Q.t -> Q.t =
     function
     (* XXX: this is a quick and dirty fix to implement substitution into a term via normalization:
@@ -574,47 +621,6 @@ struct
     | Q.Apply (f, xs) as _orig ->
       apply in_dedup env (norm false env f, List.map (norm false env) xs)
     | Q.For (_, gs, os, u) as _orig ->
-        let reduce_for_source gsx env = function
-        | (x, Q.Singleton v) -> gsx, Q.bind env (x,v)
-        (* XXX: grouping generators *)
-        | (x, q) -> gsx@[Q.Values,x,q], env
-        in
-        let reduce_for_body gsx = function
-        | Q.Prom _ as u ->
-            let z = Var.fresh_raw_var () in
-            let tyz =
-              Q.type_of_expression u
-              |> TypeUtils.element_type
-            in
-            let vz = Q.Var (z, tyz) in
-            (* XXX: grouping generators *)
-            gsx@[Q.Values,z,u], Q.Singleton vz
-        | u -> gsx, u
-        in
-        let pack_for (body, c, gs, os) =
-          let body' = reduce_where_then (c,body) in
-          match gs, os with
-          | [], [] -> body'
-          | _ -> Q.For (None, gs, os, body')
-        in
-        let pack_ncoll ql = reduce_concat (List.map pack_for ql)
-        in
-        let unpack_where = function
-          | Q.If (c, t, Q.Concat []) -> t, c
-          | q -> q,  Q.Constant (Constant.Bool true)
-        in
-        let unpack_for = function
-          | Q.For (_, gs, os, body) ->
-              let body', c = unpack_where body in
-              body', c, gs, os
-          | q ->
-              let body', c = unpack_where q in
-              body', c, [], []
-        in
-        let unpack_ncoll = function
-        | Q.Concat ql -> List.map unpack_for ql
-        | q -> [unpack_for q]
-        in
         let reduce_gs =
           let rec rgs gsx cx env os body = function
           (* XXX: grouping generators *)
@@ -661,6 +667,44 @@ struct
     | Q.Prom v when in_dedup -> norm false env v
     | Q.Prom v (* when not in_dedup *) ->
         Q.Prom (norm false env v)
+    | Q.GroupBy ((x,qx), q) -> 
+       let ql = unpack_ncoll (norm in_dedup env q) in
+       let qx' = norm false env qx in
+       (* the following assumes normalised records are eta expanded *)
+       let rcd_combine = function
+       | Q.Record rx, Q.Record ry ->
+           begin 
+             try Q.Record (StringMap.union_disjoint rx ry)
+             with StringMap.Not_disjoint _ -> Q.query_error "rcd_combine: unnable to merge overlapping grouping criteria (buggy typechecker?)"
+           end
+       | Q.Record _, z | z, _ -> Q.query_error "rcd_combine: unexpected non-record argument (buggy normaliser?): %s" (Q.show z)
+       in
+       let gc_combine (x,qx) (y,qy) =
+         let z = Var.fresh_raw_var () in
+         let tyz = TypeUtils.element_type ~overstep_quantifiers:true (Q.type_of_expression q) in
+         let vz = Q.Var (z, tyz) in
+         let qx = norm false (Q.bind env (x, vz)) qx in
+         let qy = norm false (Q.bind env (y, vz)) qy in
+         z, rcd_combine (qx, qy)
+       in
+       let reduce_groupby = function
+       | Q.Singleton (Q.MapEntry (k, v)) -> Q.Singleton (Q.MapEntry (rcd_combine ((norm false (Q.bind env (x, v)) qx'), k), v))
+       | Q.Singleton v (* not MapEntry *) -> Q.Singleton (Q.MapEntry (norm false (Q.bind env (x, v)) qx', v))
+       | Q.GroupBy ((y, qy), q') -> Q.GroupBy (gc_combine (x,qx') (y,qy), q')
+       | qf -> Q.GroupBy ((x, qx'), qf)
+       in
+       let ql' = List.map (fun (b, c, gs, os) -> (reduce_groupby b, c, gs, os)) ql in
+       pack_ncoll ql'
+    | Q.Lookup (q, k) ->
+       let ql = unpack_ncoll (norm in_dedup env q) in
+       let k' = norm false env k in
+       let reduce_lookup = function
+       | Q.Singleton (Q.MapEntry (kv, v)) -> reduce_where_then (reduce_eq (kv, k'), Q.Singleton v)
+       | Q.Singleton _ (* not MapEntry *) as qorig -> assert (Q.type_of_expression k' = Types.unit_type); qorig
+       | qorig -> Q.Lookup (qorig, k)
+       in
+       let ql' = List.map (fun (b, c, gs, os) -> (reduce_lookup b, c, gs, os)) ql in
+       pack_ncoll ql'
     | v -> retn in_dedup v
 
   and apply in_dedup env : Q.t * Q.t list -> Q.t = function

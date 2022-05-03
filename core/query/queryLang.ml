@@ -42,6 +42,7 @@ type t =
     | Table     of Value.table
     | Database  of (Value.database * string)
     | Singleton of t
+    | MapEntry  of t * t
     | Concat    of t list
     | Dedup     of t
     | Prom      of t
@@ -71,6 +72,7 @@ struct
     | If        of pt * pt * pt
     | Table     of Value.table
     | Singleton of pt
+    | MapEntry  of pt * pt
     | Concat    of pt list
     | Dedup     of pt
     | Prom      of pt
@@ -99,6 +101,7 @@ let rec pt_of_t : 't -> S.pt = fun v ->
                 bt b)
       | If (c, t, e) -> S.If (bt c, bt t, bt e)
       | Table t -> S.Table t
+      | MapEntry (k,v) -> S.MapEntry (bt k, bt v)
       | Singleton v -> S.Singleton (bt v)
       | Concat vs -> S.Concat (List.map bt vs)
       | Dedup q -> S.Dedup (bt q)
@@ -135,10 +138,13 @@ let default_of_base_type =
 
 let rec value_of_expression = fun v ->
   let ve = value_of_expression in
-  let value_of_singleton = fun s ->
-    match s with
-      | Singleton v -> ve v
-      | _ -> assert false
+  let value_of_mapentry = function
+    | MapEntry (k, v) -> `Entry (ve k, ve v)
+    | v -> ve v
+  in
+  let value_of_singleton = function
+    | Singleton v -> value_of_mapentry v
+    | _ -> assert false
   in
     match v with
       | Constant (Constant.Bool   b) -> `Bool b
@@ -206,6 +212,7 @@ let unbox_pair =
           x, y
     | _ -> raise (runtime_type_error "failed to unbox pair")
 
+(* XXX: not updated for grouping: only lists, not maps! *)
 let rec unbox_list =
   function
     | Concat vs -> concat_map unbox_list vs
@@ -224,7 +231,8 @@ let unbox_string =
         implode
           (List.map
               (function
-                | Constant (Constant.Char c) -> c
+                (* BUG? assumes we will only unbox from plain lists, not maps *)
+                | (Constant (Constant.Char c)) -> c
                 | _ -> raise (runtime_type_error "failed to unbox string"))
               (unbox_list v))
     | _ -> raise (runtime_type_error "failed to unbox string")
@@ -237,7 +245,8 @@ let rec subst t x u =
   match t with
   | Var (var, _) when var = x -> u
   | Record fl -> Record (StringMap.map srec fl)
-  | Singleton v -> Singleton (srec v)
+  | Singleton v -> srec v
+  | MapEntry (k, v) -> MapEntry (srec k, srec v)
   | Concat xs -> Concat (List.map srec xs)
   | Project (r, label) -> Project (srec r, label)
   | Erase (r, labels) -> Erase (srec r, labels)
@@ -280,7 +289,8 @@ let occurs_free (v : Var.var) =
       occf bvs' b ||= tryPick (fun _ q -> occf bvs q) e *)
       failwith "MixingQuery.occurs_free: unexpected Closure in query"
   | Apply (t, args) -> occf bvs t ||=? list_tryPick (occf bvs) args
-  | Singleton t
+  | Singleton t -> occf bvs t
+  | MapEntry (k, t) -> occf bvs k ||=? occf bvs t
   | Dedup t
   | Prom t
   | Project (t,_) -> occf bvs t
@@ -316,6 +326,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
   | Concat (v::_) -> te v
   | For (_, _, _os, body) -> te body
   | Singleton t -> Types.make_list_type (te t)
+  | MapEntry (_,_) -> assert false (* BUGBUG: need to decide type of maps! *)
   | Record fields -> record fields
   | If (_, t, _) -> te t
   | Table Value.Table.{ row; _ } -> Types.make_list_type (Types.Record (Types.Row row))
@@ -362,6 +373,7 @@ let eta_expand_list xs =
   let ty = TypeUtils.element_type ~overstep_quantifiers:true (type_of_expression xs) in
     (* Debug.print ("eta_expand_list create: " ^ show (Var (x, ty))); *)
     (* XXX: grouping generators *)
+    (* BUG? this assumes no maps! *)
     ([Values, x, xs], [], Singleton (eta_expand_var (x, ty)))
 
 (* takes a normal form expression and returns true iff it has list type *)
@@ -395,7 +407,8 @@ let used_database : t -> Value.database option =
       | Dedup q -> used_item q
       | Table Value.Table.{ database = (db, _); _ } -> Some db
       | For (_, gs, _, _body) -> List.map (fun (_,_,src) -> src) gs |> traverse
-      | Singleton v -> used v
+      | Singleton v -> used_item v
+      | MapEntry (k,v) -> used_item v ||=? used_item k
       | Record v ->
           StringMap.to_alist v
           |> List.map snd
@@ -496,6 +509,7 @@ let rec expression_of_value : env -> Value.t -> t = fun env v ->
     | `Database db -> Database db
     | `List vs ->
         Concat (List.map (fun v -> Singleton (expression_of_value env v)) vs)
+    | `Entry (k,v) -> MapEntry (expression_of_value env k, expression_of_value env v)
     | `Record fields ->
         Record
           (List.fold_left
@@ -563,6 +577,7 @@ let check_policies_compatible env_policy block_policy =
            let rec string =
               function
                 | Constant (Constant.String s) -> Some (str (quote s))
+                (* BUGBUG: don't know how to process maps yet *)
                 | Singleton (Constant (Constant.Char c)) ->
                     Some (str (string_of_char c))
                 | Project (v, field) ->
@@ -606,6 +621,7 @@ let check_policies_compatible env_policy block_policy =
                             end
                     end
             in
+            (* grouping BUG? what happens if rs is a map? *)
               seq (unbox_list rs)
         | Variant ("StartAnchor", _) -> Some (str "")
         | Variant ("EndAnchor", _) -> Some (str "")
@@ -658,6 +674,8 @@ let rec select_clause : Sql.index -> bool -> t -> Sql.select_clause =
          is redundant. *)
       (Sql.All, Sql.Fields [], [], Sql.Constant (Constant.Bool true), [])
     | Singleton (Record fields) ->
+      (* BUGBUG: this code ignores keys because we haven't implemented
+       * the conversion of grouping queries to SQL yet *)
       let fields =
         Sql.Fields
           (List.rev
@@ -875,6 +893,10 @@ struct
       | Table t -> (o, Table t)
       | Database  (dt, s) -> (o, Database (dt, s))
       | Singleton x -> let (o, x) = o#query x in (o, Singleton x)
+      | MapEntry (k,x) ->
+          let (o, k) = o#query k in
+          let (o, x) = o#query x 
+          in (o, MapEntry (k,x))
       | Concat xs -> let (o, xs) = o#list (fun o -> o#query) xs in (o, Concat xs)
       | Dedup q ->
           let (o, q) = o#query q in
