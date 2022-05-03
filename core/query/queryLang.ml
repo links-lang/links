@@ -895,7 +895,7 @@ struct
       | Singleton x -> let (o, x) = o#query x in (o, Singleton x)
       | MapEntry (k,x) ->
           let (o, k) = o#query k in
-          let (o, x) = o#query x 
+          let (o, x) = o#query x
           in (o, MapEntry (k,x))
       | Concat xs -> let (o, xs) = o#list (fun o -> o#query) xs in (o, Concat xs)
       | Dedup q ->

@@ -667,13 +667,13 @@ struct
     | Q.Prom v when in_dedup -> norm false env v
     | Q.Prom v (* when not in_dedup *) ->
         Q.Prom (norm false env v)
-    | Q.GroupBy ((x,qx), q) -> 
+    | Q.GroupBy ((x,qx), q) ->
        let ql = unpack_ncoll (norm in_dedup env q) in
        let qx' = norm false env qx in
        (* the following assumes normalised records are eta expanded *)
        let rcd_combine = function
        | Q.Record rx, Q.Record ry ->
-           begin 
+           begin
              try Q.Record (StringMap.union_disjoint rx ry)
              with StringMap.Not_disjoint _ -> Q.query_error "rcd_combine: unnable to merge overlapping grouping criteria (buggy typechecker?)"
            end
