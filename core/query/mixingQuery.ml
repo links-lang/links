@@ -77,9 +77,11 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> Q.t -> Q.t =
       end *)
       Q.Var (var_lookup x, ts)
     | Q.Constant c -> Q.Constant c
-    (* FIXME: grouping constructors *)
-    | Q.GroupBy (_,_)
-    | Q.Lookup (_,_ ) -> assert false
+    | Q.GroupBy ((v,i),q) ->
+      let y = Var.fresh_raw_var () in
+      let env' = Env.Int.bind v y env in
+      Q.GroupBy ((y, freshen_for_bindings env' i), ffb q)
+    | Q.Lookup (q,k) -> Q.Lookup (ffb q, ffb k)
 
 let flatfield f1 f2 = f1 ^ "@" ^ f2
 
@@ -745,7 +747,7 @@ struct
                 |> norm in_dedup env
             | _ -> assert false
         end
-    | Q.Primitive "GroupBy", [q; f] ->
+    | Q.Primitive "GroupBy", [f; q] ->
         begin
           match f with
             | Q.Closure (([x], body_c), closure_env) ->
@@ -756,7 +758,7 @@ struct
                 norm in_dedup env (Q.GroupBy ((x, body), q))
             | _ -> assert false
         end
-    | Q.Primitive "Lookup", [q; v] -> norm in_dedup env (Q.Lookup (q, v))
+    | Q.Primitive "Lookup", [v; q] -> norm in_dedup env (Q.Lookup (q, v))
     | Q.Primitive "SortBy", [f; xs] ->
         begin
           match xs with

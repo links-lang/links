@@ -530,6 +530,22 @@ fun distinct(t) server {
 	dedup(asList(t))
 }
 
+# XXX: I believe the arguments are in the wrong order, but see sortBy
+sig groupBy : ((a) -b-> c, [a]) -b-> [(c, [a])]
+fun groupBy(f, l) {
+  var is = dedup(map(f, l));
+  for (i <- is) [(i, filter(fun (x) { f(x) == i }, l))]
+}
+
+unsafe sig lookupG : (a,[(a,[b])]) -> [b]
+fun lookupG(x,l) {
+  switch (l) {
+    case [] -> []
+    case (a,b)::xs -> if (a == x) b
+                      else lookupG(x,xs)
+  }
+}
+
 # Gets children of elements in an XML forest, concatenated in order
 # @param {Xml} xml
 # @returns {Xml}

@@ -325,8 +325,35 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
   | Concat [] -> Types.make_list_type(Types.unit_type)
   | Concat (v::_) -> te v
   | For (_, _, _os, body) -> te body
+  | GroupBy ((_x,i),q) ->
+      let ity = te i in
+      let elty = TypeUtils.element_type ~overstep_quantifiers:true (te q) in
+      StringMap.empty
+      |> StringMap.add "1" ity
+      |> StringMap.add "2" elty
+      |> Types.make_record_type
+      |> Types.make_list_type
+  | Lookup (q, _) ->
+      begin
+        match TypeUtils.element_type ~overstep_quantifiers:true (te q) with
+        | Types.Record _ as rty -> StringMap.find "2" (recdty_field_types rty)
+        | ty ->
+            failwith
+              (Format.asprintf ("term:\n" ^^
+                  "%s\n" ^^
+                  "has type:\n" ^^
+                  "%a\n" ^^
+                  "but it was expected to have a record type.")
+                (string_of_t q) Types.pp_datatype ty)
+      end
   | Singleton t -> Types.make_list_type (te t)
-  | MapEntry (_,_) -> assert false (* BUGBUG: need to decide type of maps! *)
+  | MapEntry (k,v) ->
+      let tyk = te k in
+      let tyv = te v in
+      StringMap.empty
+      |> StringMap.add "1" tyk
+      |> StringMap.add "2" tyv
+      |> Types.make_record_type
   | Record fields -> record fields
   | If (_, t, _) -> te t
   | Table Value.Table.{ row; _ } -> Types.make_list_type (Types.Record (Types.Row row))
@@ -352,9 +379,8 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
                 (string_of_t w) Types.pp_datatype ty)
       end
   | Apply (Primitive "Empty", _) -> Types.bool_type (* HACK *)
+  (* XXX: the following might be completely unnecessary if we call type_of_expression only on normalized query *)
   | Apply (Primitive "Distinct", [q]) -> type_of_expression q
-  | Apply (Primitive "GroupBy", [q;i]) -> assert false (* TODO *)
-  | Apply (Primitive "Lookup", [q;v]) -> assert false (* TODO *)
   | Apply (Primitive f, _) -> TypeUtils.return_type (Env.String.find f Lib.type_env)
   | e -> Debug.print("Can't deduce type for: " ^ show e); assert false
 
@@ -478,7 +504,7 @@ let lookup_fun env (f, fvs) =
         Primitive "SortBy"
       | "groupBy" ->
         Primitive "GroupBy"
-      | "lookup" ->
+      | "lookupG" ->
         Primitive "Lookup"
       | _ ->
         begin
@@ -946,6 +972,13 @@ struct
       | Var (v, dts) -> (o, Var (v, dts))
       | Constant c -> (o, Constant c)
       (* XXX: fix grouping operations *)
-      | GroupBy (_,_) | Lookup (_,_) -> assert false
+      | GroupBy ((v,i),q) ->
+          let (o,i) = o#query i in
+          let (o,q) = o#query q in
+          (o, GroupBy ((v,i),q))
+      | Lookup (q,i) ->
+          let (o,q) = o#query q in
+          let (o,i) = o#query i in
+          (o, Lookup (q,i))
   end
 end
