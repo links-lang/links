@@ -530,11 +530,23 @@ fun distinct(t) server {
 	dedup(asList(t))
 }
 
+sig concatMapKey : ((a) -b-> [c], [(a,[d])]) -b-> [c]
+fun concatMapKey(f, l) {
+  for (x <- l) f(x.1)
+}
+
 # XXX: I believe the arguments are in the wrong order, but see sortBy
 sig groupBy : ((a) -b-> c, [a]) -b-> [(c, [a])]
 fun groupBy(f, l) {
   var is = dedup(map(f, l));
   for (i <- is) [(i, filter(fun (x) { f(x) == i }, l))]
+}
+
+sig groupByMap : ((a) -b-> c, [(d,[a])]) -b-> [((c,d), [a])]
+fun groupByMap(f, xs) {
+  for (x <- xs) 
+    for (k <- dedup(map(f,x.2))) 
+      [((k,x.1), filter(fun (v) { f(v) == k }, x.2))]
 }
 
 unsafe sig lookupG : (a,[(a,[b])]) -> [b]

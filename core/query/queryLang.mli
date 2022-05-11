@@ -17,7 +17,7 @@ type base_type = | Bool | Char | Float | Int | String | DateTime
 type tag = int
     [@@deriving show]
 
-type genkind = Values | Keys
+type genkind = Entries | Keys
     [@@deriving show]
 
 type t =

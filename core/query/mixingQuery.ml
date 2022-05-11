@@ -476,7 +476,7 @@ struct
     | _ -> false
     in cfree []
 
-  let mk_for_term env (x,xs) body_f =
+  let mk_for_term env (pol,x,xs) body_f =
     let ty_elem =
       Q.type_of_expression xs
       |> TypeUtils.element_type ~overstep_quantifiers:true
@@ -486,14 +486,19 @@ struct
     let cenv = Q.bind env (x, vx) in
     (* Debug.print ("mk_for_term: " ^ string_of_int newx ^ " for " ^ string_of_int x); *)
     (* XXX: grouping generators *)
-    Q.For (None, [Q.Values,x,xs], [], body_f cenv)
+    Q.For (None, [pol,x,xs], [], body_f cenv)
 
   (* this has the effect of performing beta reduction when the generaator in
    * the main input is a Singleton *)
   let reduce_for_source gsx env = function
-  | (x, Q.Singleton v) -> gsx, Q.bind env (x,v)
-  (* XXX: grouping generators *)
-  | (x, q) -> gsx@[Q.Values,x,q], env
+  | (Q.Entries, x, Q.Singleton v) -> gsx, Q.bind env (x,v)
+  (* we are not doing value comprehension on maps
+  | (Q.Values, x, Q.Singleton (Q.MapEntry (_,v))) -> gsx, Q.bind env (x,v)
+  *)
+  | (Q.Keys, x, Q.Singleton (Q.MapEntry (k,_))) -> gsx, Q.bind env (x,k)
+  (* FIXME: this is incorrect if we are in a bag context and pol = Q.Keys *)
+  | (pol, x, q) -> gsx@[pol,x,q], env
+
 
   (* when the head of a comprehension is a Prom, this lifts it to a generator
    * by means of eta-expansion *)
@@ -506,7 +511,7 @@ struct
       in
       let vz = Q.Var (z, tyz) in
       (* XXX: grouping generators *)
-      gsx@[Q.Values,z,u], Q.Singleton vz
+      gsx@[Q.Entries,z,u], Q.Singleton vz
   | u -> gsx, u
 
   (* auxiliary functions to pack/unpack normalised collections *)
@@ -628,12 +633,11 @@ struct
         let reduce_gs =
           let rec rgs gsx cx env os body = function
           (* XXX: grouping generators *)
-          | (Q.Values,x,g)::gs' ->
+          | (pol,x,g)::gs' ->
               let ng = unpack_ncoll (norm in_dedup env g) in
               List.concat (List.map (fun (gsrc, gc, ggs, gos) ->
-                      let gsx', env' = reduce_for_source (gsx@ggs) env (x,gsrc) in
+                      let gsx', env' = reduce_for_source (gsx@ggs) env (pol,x,gsrc) in
                       rgs gsx' (reduce_and (cx, gc)) env' (os@gos) body gs') ng)
-          | (Q.Keys,_,_)::_ -> assert false
           | [] ->
             let nbody = unpack_ncoll (norm in_dedup env body) in
             List.map (fun (bbody, bc, bgs, bos) ->
@@ -711,6 +715,17 @@ struct
        pack_ncoll ql'
     | v -> retn in_dedup v
 
+  and apply_concatMap in_dedup env pol xs = function
+  | Q.Closure (([x], body), closure_env) ->
+      (* Debug.print ("Application of ConcatMap(Key)");
+      Debug.print ("pol: " ^ Q.show_genkind pol);
+      Debug.print ("f: " ^ Q.show f);
+      Debug.print ("xs: " ^ Q.show xs); *)
+      (fun cenv -> computation cenv body)
+      |> mk_for_term (env ++ closure_env) (pol,x,xs)
+      |> norm in_dedup env
+  | _ -> assert false
+
   and apply in_dedup env : Q.t * Q.t list -> Q.t = function
     | Q.Closure ((xs, body), closure_env), args ->
       (* Debug.print ("Applying closure"); *)
@@ -726,24 +741,14 @@ struct
         norm in_dedup env (Q.Concat [Q.Singleton x; xs])
     | Q.Primitive "Concat", ([_xs; _ys] as l) ->
         norm in_dedup env (Q.Concat l)
-    | Q.Primitive "ConcatMap", [f; xs] ->
-        begin
-          match f with
-            | Q.Closure (([x], body), closure_env) ->
-                (* Debug.print ("Applying ConcatMap");
-                Debug.print ("f: " ^ Q.show f);
-                Debug.print ("xs: " ^ Q.show xs); *)
-                (fun cenv -> computation cenv body)
-                |> mk_for_term (env ++ closure_env) (x,xs)
-                |> norm in_dedup env
-            | _ -> assert false
-        end
+    | Q.Primitive "ConcatMap", [f; xs] -> apply_concatMap in_dedup env Q.Entries xs f
+    | Q.Primitive "ConcatMapKey", [f; xs] -> apply_concatMap in_dedup env Q.Keys xs f
     | Q.Primitive "Map", [f; xs] ->
         begin
           match f with
             | Q.Closure (([x], body), closure_env) ->
                 (fun cenv -> Q.Singleton (computation cenv body))
-                |> mk_for_term (env ++ closure_env) (x,xs)
+                |> mk_for_term (env ++ closure_env) (Q.Entries,x,xs)
                 |> norm in_dedup env
             | _ -> assert false
         end
@@ -807,12 +812,13 @@ struct
     | t, _ -> Q.query_error "Application of non-function: %s" (Q.string_of_t t)
 
   and norm_comp in_dedup env c =
+(*    (let c' = *)
     computation env c
+(*    in Debug.print ("norm_comp: computation returned " ^ Q.show c'); c') *)
     |> norm in_dedup env
   and retn in_dedup u = if in_dedup then Q.Dedup u else u
 
   (* specialize norm_* with in_dedup = false at the start of normalization *)
-  (* (norm is currently unused outside query.ml, so we comment the following) *)
   let norm = norm false
   let norm_comp = norm_comp false
 

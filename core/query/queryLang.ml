@@ -33,7 +33,7 @@ type base_type = | Bool | Char | Float | Int | String | DateTime
 type tag = int
     [@@deriving show]
 
-type genkind = Values | Keys
+type genkind = Entries | Keys
     [@@deriving show]
 
 type t =
@@ -402,7 +402,7 @@ let eta_expand_list xs =
     (* Debug.print ("eta_expand_list create: " ^ show (Var (x, ty))); *)
     (* XXX: grouping generators *)
     (* BUG? this assumes no maps! *)
-    ([Values, x, xs], [], Singleton (eta_expand_var (x, ty)))
+    ([Entries, x, xs], [], Singleton (eta_expand_var (x, ty)))
 
 (* takes a normal form expression and returns true iff it has list type *)
 let is_list =
@@ -496,13 +496,15 @@ let lookup_fun env (f, fvs) =
         Primitive "Distinct"
       | "concatMap" ->
         Primitive "ConcatMap"
+      | "concatMapKey" ->
+        Primitive "ConcatMapKey"
       | "map" ->
         Primitive "Map"
       | "empty" ->
         Primitive "Empty"
       | "sortByBase" ->
         Primitive "SortBy"
-      | "groupBy" ->
+      | "groupBy" | "groupByMap" ->
         Primitive "GroupBy"
       | "lookupG" ->
         Primitive "Lookup"

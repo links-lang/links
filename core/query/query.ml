@@ -176,7 +176,7 @@ let rec reduce_for_source : Q.t * (Q.t -> Q.t) -> Q.t =
                   let x = Var.fresh_raw_var () in
                   let ty_elem = Types.Record (Types.Row row) in
                     (* XXX: groupinng generators *)
-                    reduce_for_body ([(Q.Values, x, source)], [], body (Q.Var (x, ty_elem)))
+                    reduce_for_body ([(Q.Entries, x, source)], [], body (Q.Var (x, ty_elem)))
                 | Temporality.Transaction | Temporality.Valid ->
                   let (from_field, to_field) = OptionUtils.val_of temporal_fields in
                   (* Transaction / Valid-time tables: Need to wrap as metadata *)
@@ -205,7 +205,7 @@ let rec reduce_for_source : Q.t * (Q.t -> Q.t) -> Q.t =
                         Q.Project (table_var, to_field))
                     ] in
                   (* XXX: grouping generators *)
-                  let generators = [ (Q.Values, table_raw_var, source) ] in
+                  let generators = [ (Q.Entries, table_raw_var, source) ] in
                   reduce_for_body (generators, [], body (Q.Record metadata_record))
           end
       | v -> Q.query_error "Bad source in for comprehension: %s" (Q.string_of_t v)
