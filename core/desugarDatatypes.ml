@@ -252,9 +252,9 @@ module Desugar = struct
               | None -> raise (UnboundTyCon (node.pos, name))
               | Some (`Alias (qs, _r)) ->
                   let ts = match_quantifiers snd qs in
-                  (* let Alias(_,body) = Instantiate.effectalias name ts alias_env.effectname in *)
-                  (* body *)
-                  Instantiate.effectalias name ts alias_env.effectname
+                  let Alias(_,body) = Instantiate.effectalias name ts alias_env.effectname in
+                  body
+                  (* Instantiate.effectalias name ts alias_env.effectname *)
               | Some (`Abstract abstype) ->
                   let ts = match_quantifiers identity (Abstype.arity abstype) in
                   Application (abstype, ts)
