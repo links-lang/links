@@ -169,6 +169,7 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
       match t with
       | Row _ -> t
       | Meta row_var -> Row (StringMap.empty, row_var, false)
+      | Alias (_,row) -> row
       | _ -> assert false in
     let instr = inst_row inst_map rec_env in
     let dual_if = if dual then dual_row else fun x -> x in
@@ -436,6 +437,31 @@ let alias name tyargs env : Types.typ =
         raise (internal_error (Printf.sprintf "Unrecognised type constructor: %s" name))
     | Some (`Abstract _)
     | Some (`Mutual _) ->
+        raise (internal_error (Printf.sprintf "The type constructor: %s is not an alias" name))
+    | Some (`Alias (vars, _)) when List.length vars <> List.length tyargs ->
+        raise (internal_error
+        (Printf.sprintf
+          "Type alias %s applied with incorrect arity (%d instead of %d). This should have been checked prior to instantiation."
+          name (List.length tyargs) (List.length vars)))
+    | Some (`Alias (vars, body)) ->
+        let inst_map = populate_instantiation_map ~name vars tyargs in
+        (* instantiate the type variables bound by the alias
+           definition with the type arguments *and* instantiate any
+           top-level quantifiers *)
+        let (_, body) = typ (instantiate_datatype inst_map body) in
+          Alias ((name, List.map snd vars, tyargs, false), body)
+
+let effectalias name tyargs env : Types.typ =
+  (* This is just type application.
+
+     (\Lambda x1 ... xn . t) (t1 ... tn) ~> t[ti/xi]
+  *)
+  let open Types in
+  match (SEnv.find_opt name env : Types.effectalias_spec option) with
+    | None ->
+        raise (internal_error (Printf.sprintf "Unrecognised type constructor: %s" name))
+    | Some (`Abstract _)
+    (* | Some (`Mutual _)  *)->
         raise (internal_error (Printf.sprintf "The type constructor: %s is not an alias" name))
     | Some (`Alias (vars, _)) when List.length vars <> List.length tyargs ->
         raise (internal_error

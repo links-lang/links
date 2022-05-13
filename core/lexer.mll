@@ -72,6 +72,7 @@ let keywords = [
  "delete_left", DELETE_LEFT;
  "determined", DETERMINED;
  "do"       , DOOP;
+ "effectname", EFFECTNAME;
  "else"     , ELSE;
  "escape"   , ESCAPE;
  "false"    , FALSE;

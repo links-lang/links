@@ -146,6 +146,7 @@ class transform (env : Types.typing_environment) =
   object (o : 'self_type)
     val var_env = env.Types.var_env
     val tycon_env = env.Types.tycon_env
+    val effect_env = env.Types.effect_env
     val formlet_env = TyEnv.empty
     val effect_row = fst (Types.unwrap_row env.Types.effect_row)
 
@@ -153,9 +154,9 @@ class transform (env : Types.typing_environment) =
     method get_tycon_env : unit -> Types.tycon_environment = fun () -> tycon_env
     method get_formlet_env : unit -> Types.environment = fun () -> formlet_env
 
-    method backup_envs = var_env, tycon_env, formlet_env, effect_row
-    method restore_envs (var_env, tycon_env, formlet_env, effect_row) =
-      {< var_env = var_env; tycon_env = tycon_env; formlet_env = formlet_env;
+    method backup_envs = var_env, tycon_env, effect_env, formlet_env, effect_row
+    method restore_envs (var_env, tycon_env, effect_env, formlet_env, effect_row) =
+      {< var_env = var_env; tycon_env = tycon_env; effect_env = effect_env; formlet_env = formlet_env;
          effect_row = effect_row >}
 
     method with_var_env var_env =
@@ -166,6 +167,9 @@ class transform (env : Types.typing_environment) =
 
     method bind_tycon name tycon =
       {< tycon_env = TyEnv.bind name tycon tycon_env >}
+
+    method bind_effect name row =
+      {< effect_env = TyEnv.bind name row effect_env >}
 
     method bind_binder bndr =
       {< var_env = TyEnv.bind (Binder.to_name bndr)  (Binder.to_type bndr) var_env >}
@@ -898,6 +902,16 @@ class transform (env : Types.typing_environment) =
                 | None -> raise (internal_error "Unannotated type alias")
             ) ts in
           (o, Typenames ts)
+      | Effectnames rs ->
+          let (o, _) = listu o (fun o {node=(name, vars, (x, r')); pos} ->
+              match r' with
+                | Some r ->
+                   let o = o#bind_effect name
+                     (`Alias (List.map (SugarQuantifier.get_resolved_exn) vars, r)) in
+                   (o, WithPos.make ~pos (name, vars, (x, r')))
+                | None -> raise (internal_error "Unannotated type alias")
+            ) rs in
+          (o, Effectnames rs)
       | (Infix _) as node ->
          (o, node)
       | Exp e -> let (o, e, _) = o#phrase e in (o, Exp e)

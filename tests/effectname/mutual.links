@@ -1,0 +1,7 @@
+mutual {
+       effectname A = B ;
+       effectname B = {} ;
+}
+
+# sig f : () -A-> ()
+# fun f () {}

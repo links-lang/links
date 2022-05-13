@@ -415,6 +415,8 @@ object (o : 'self)
 
   method! row_var =
     let open Datatype in function
+    | EffectApplication _ as ea ->
+        super#row_var ea
     | Closed -> o, Closed
     | Open srv as orig when is_anonymous srv ->
        (* This transformation pass does not check whether anonymous row variables
@@ -533,6 +535,26 @@ object (o : 'self)
     let o = o#reset_vars in
 
     let o, resolved_qs, body = o#quantified ~rigidify:true unresolved_qs (fun o' -> o'#datatype' body) in
+
+    let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
+    let o = o#set_vars tyvar_map in
+
+    o, (name, resolved_qs, body)
+
+
+  method! effectnamenode (name, unresolved_qs, body) =
+
+    (* Don't allow unbound named type variables in type definitions.
+       We do allow unbound *anoynmous* variables, because those may be
+       effect variables that the effect sugar handling will generalize the
+       type binding over.
+       Hence, we must re-check the free variables in the type definiton later on. *)
+
+    let o = o#set_allow_implictly_bound_vars false in
+    (* Typenames must never use type variables from an outer scope *)
+    let o = o#reset_vars in
+
+    let o, resolved_qs, body = o#quantified ~rigidify:true unresolved_qs (fun o' -> o'#row' body) in
 
     let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
     let o = o#set_vars tyvar_map in

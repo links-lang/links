@@ -209,6 +209,7 @@ module Datatype = struct
   and with_pos = t WithPos.t
   and row = (string * fieldspec) list * row_var
   and row_var =
+    | EffectApplication of string * type_arg list
     | Closed
     | Open of SugarTypeVar.t
     | Recursive of SugarTypeVar.t * row
@@ -225,6 +226,9 @@ end
 
 (* Store the denotation along with the notation once it's computed *)
 type datatype' = Datatype.with_pos * Types.datatype option
+    [@@deriving show]
+
+type row' = Datatype.row * Types.row option
     [@@deriving show]
 
 type type_arg' = Datatype.type_arg * Types.type_arg option
@@ -521,6 +525,7 @@ and bindingnode =
   | Import of { pollute: bool; path : Name.t list }
   | Open of Name.t list
   | Typenames of typename list
+  | Effectnames of effectname list
   | Infix   of { assoc: Associativity.t;
                  precedence: int;
                  name: string }
@@ -543,6 +548,8 @@ and cp_phrasenode =
 and cp_phrase = cp_phrasenode WithPos.t
 and typenamenode = Name.t * SugarQuantifier.t list * datatype'
 and typename = typenamenode WithPos.t
+and effectnamenode = Name.t * SugarQuantifier.t list * row'
+and effectname = effectnamenode WithPos.t
 and function_definition = {
     fun_binder: Binder.with_pos;
     fun_linearity: DeclaredLinearity.t;
@@ -804,7 +811,8 @@ struct
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
     | Import _
     | Open _
-    | Typenames _ -> empty, empty
+    | Typenames _
+    | Effectnames _ -> empty, empty
     (* This is technically a declaration, thus the name should
        probably be treated as bound rather than free. *)
     | Infix { name; _ } -> empty, singleton name
