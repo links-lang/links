@@ -173,6 +173,9 @@ let attach_row_subkind (r, subkind) =
     | _ -> assert false
   in attach_subkind_helper update subkind
 
+let alias p name args aliasbody =
+    with_pos p (Aliases [with_pos p (name, args, aliasbody)])
+
 let labels xs = fst (List.split xs)
 
 let parseRegexFlags f =
@@ -220,7 +223,7 @@ let make_effect_var : is_dot:bool -> ParserPosition.t -> Datatype.row_var
 module MutualBindings = struct
 
   type mutual_bindings =
-    { mut_types: typename list;
+    { mut_types: alias list;
       mut_funs: (function_definition * Position.t) list;
       mut_pos: Position.t }
 
@@ -232,9 +235,9 @@ module MutualBindings = struct
     match WithPos.node binding with
     | Fun f ->
         { block with mut_funs = ((f, pos) :: fs) }
-    | Typenames [t] ->
+    | Aliases [t] ->
         { block with mut_types = (t :: ts) }
-    | Typenames _ -> assert false
+    | Aliases _ -> assert false
     | _ ->
         raise (ConcreteSyntaxError
           (pos, "Only `fun` and `typename` bindings are allowed in a `mutual` block."))
@@ -285,7 +288,7 @@ module MutualBindings = struct
 
     let type_binding = function
       | [] -> []
-      | ts -> [WithPos.make ~pos:mut_pos (Typenames (List.rev ts))] in
+      | ts -> [WithPos.make ~pos:mut_pos (Aliases (List.rev ts))] in
     type_binding mut_types @ fun_binding mut_funs
 end
 
@@ -344,7 +347,7 @@ let parse_foreign_language pos lang =
 %token <string> SLASHFLAGS
 %token UNDERSCORE AS
 %token <Operators.Associativity.t> FIXITY
-%token TYPENAME
+%token TYPENAME EFFECTNAME
 %token TRY OTHERWISE RAISE
 %token <string> OPERATOR
 %token USING
@@ -413,6 +416,7 @@ arg:
 | UFLOAT                                                       { string_of_float' $1 }
 | TRUE                                                         { "true"  }
 | FALSE                                                        { "false" }
+| DEFAULT                                                      { "default" }
 
 var:
 | VARIABLE                                                     { with_pos $loc $1 }
@@ -446,7 +450,8 @@ nofun_declaration:
                                                                  let node = Infix { name = WithPos.node $3; precedence; assoc = $1 } in
                                                                  with_pos $loc node }
 | signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) $1 $2 }
-| typedecl SEMICOLON | links_module | links_open SEMICOLON     { $1 }
+| typedecl SEMICOLON                                           { $1 }
+| links_module | links_open SEMICOLON                          { $1 }
 | pollute = boption(OPEN) IMPORT CONSTRUCTOR SEMICOLON         { import ~ppos:$loc($2) ~pollute [$3] }
 
 alien_datatype:
@@ -505,7 +510,9 @@ signature:
 | SIG sigop COLON datatype                                     { with_pos $loc ($2, datatype $4) }
 
 typedecl:
-| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (Typenames [with_pos $loc ($2, $3, datatype $5)]) }
+| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                 { alias $loc $2 $3 (Typename   ( $5     , None)) }
+| EFFECTNAME CONSTRUCTOR typeargs_opt EQ LBRACE erow RBRACE     { alias $loc $2 $3 (Effectname ( $6     , None)) }
+| EFFECTNAME CONSTRUCTOR typeargs_opt EQ effect_app             { alias $loc $2 $3 (Effectname (([], $5), None)) }
 
 (* Lists of quantifiers in square brackets denote type abstractions *)
 type_abstracion_vars:
@@ -1013,16 +1020,17 @@ datatype:
 | mu_datatype | straight_arrow | squiggly_arrow                { with_pos $loc $1 }
 
 arrow_prefix:
-| LBRACE RBRACE                                                { ([], Datatype.Closed) }
-| LBRACE efields RBRACE                                        { $2            }
+| LBRACE erow RBRACE                                           { $2            }
 
 straight_arrow_prefix:
 | hear_arrow_prefix | arrow_prefix                             { $1       }
 | MINUS nonrec_row_var | MINUS kinded_nonrec_row_var           { ([], $2) }
+| MINUS effect_app                                             { ([], $2) }
 
 squig_arrow_prefix:
 | hear_arrow_prefix | arrow_prefix                             { $1       }
 | TILDE nonrec_row_var | TILDE kinded_nonrec_row_var           { ([], $2) }
+| TILDE effect_app                                             { ([], $2) }
 
 hear_arrow_prefix:
 | LBRACE COLON datatype COMMA efields RBRACE                   { hear_arrow_prefix $3 $5                    }
@@ -1130,13 +1138,17 @@ type_arg_list:
 type_arg:
 | datatype                                                     { Datatype.Type $1     }
 | braced_fieldspec                                             { Datatype.Presence $1 }
-| LBRACE row RBRACE                                            { Datatype.Row $2      }
+| LBRACE erow RBRACE                                           { Datatype.Row $2      }
 
 datatypes:
 | separated_nonempty_list(COMMA, datatype)                     { $1 }
 
 vrow:
 | vfields                                                      { $1                    }
+| /* empty */                                                  { ([], Datatype.Closed) }
+
+erow:
+| efields                                                      { $1                    }
 | /* empty */                                                  { ([], Datatype.Closed) }
 
 row:
@@ -1190,8 +1202,8 @@ efields:
 | soption(efield) VBAR DOT                                     { ( $1 , make_effect_var ~is_dot:true  $loc) }
 | soption(efield) VBAR row_var                                 { ( $1 , $3                                ) }
 | soption(efield) VBAR kinded_row_var                          { ( $1 , $3                                ) }
+| soption(efield) VBAR effect_app                              { ( $1 , $3                                ) }
 | efield COMMA efields                                         { ( $1::fst $3, snd $3                     ) }
-
 
 efield:
 | effect_label fieldspec                                       { ($1, $2)      }
@@ -1199,6 +1211,10 @@ efield:
 effect_label:
 | CONSTRUCTOR                                                  { $1 }
 | VARIABLE                                                     { $1 }
+
+effect_app:
+| CONSTRUCTOR                                                  { Datatype.EffectApplication($1, []) }
+| CONSTRUCTOR LPAREN type_arg_list RPAREN                      { Datatype.EffectApplication($1, $3) }
 
 fieldspec:
 | braced_fieldspec                                             { $1 }

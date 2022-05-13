@@ -129,7 +129,7 @@ and typ =
   | Not_typed
   | Var of (tid * Kind.t * Freedom.t)
   | Recursive of (tid * Kind.t * typ)
-  | Alias of ((string * Kind.t list * type_arg list * bool) * typ)
+  | Alias of (PrimaryKind.t * (string * Kind.t list * type_arg list * bool) * typ)
   | Application of (Abstype.t * type_arg list)
   | RecursiveApplication of rec_appl
   | Meta of typ point
@@ -206,7 +206,7 @@ val get_restriction_constraint : Restriction.t -> (module Constraint) option
 val dual_row : row -> row
 val dual_type : datatype -> datatype
 
-type alias_type = Quantifier.t list * typ [@@deriving show]
+type alias_type = PrimaryKind.t * Quantifier.t list * typ [@@deriving show]
 
 type tycon_spec = [
   | `Alias of alias_type
@@ -445,6 +445,7 @@ val pp_row : Format.formatter -> row -> unit
 val pp_row' : Format.formatter -> row' -> unit
 val pp_type_arg : Format.formatter -> type_arg -> unit
 val pp_tycon_spec: Format.formatter -> tycon_spec -> unit
+val pp_field_spec: Format.formatter -> field_spec -> unit
 
 (* Recursive type applications *)
 val recursive_applications : datatype -> string list

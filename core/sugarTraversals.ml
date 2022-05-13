@@ -105,6 +105,10 @@ class map =
     method row_var : Datatype.row_var -> Datatype.row_var =
       let open Datatype in
       function
+      | EffectApplication (_x, _x_i1) ->
+          let _x = o#name _x in
+          let _x_i1 = o#list (fun o -> o#type_arg) _x_i1
+          in EffectApplication (_x, _x_i1)
       | Closed -> Closed
       | Open _x ->
           let _x = o#type_variable _x in Open _x
@@ -163,6 +167,12 @@ class map =
     method datatype' : datatype' -> datatype' =
       fun (x, y) ->
         let x = o#datatype x in
+        let y = o#option (fun o -> o#typ) y in
+        (x,y)
+
+    method row' : row' -> row' =
+      fun (x, y) ->
+        let x = o#row x in
         let y = o#option (fun o -> o#typ) y in
         (x,y)
 
@@ -753,9 +763,9 @@ class map =
       | Open _xs ->
           let _xs = o#list (fun o -> o#name) _xs in
           Open _xs
-      | Typenames ts ->
-          let _x = o#list (fun o -> o#typename) ts in
-          Typenames _x
+      | Aliases ts ->
+          let _x = o#list (fun o -> o#alias) ts in
+          Aliases _x
       | Infix { name; assoc; precedence } ->
          Infix { name = o#name name; assoc; precedence }
       | Exp _x -> let _x = o#phrase _x in Exp _x
@@ -779,17 +789,22 @@ class map =
       fun p ->
         WithPos.map2 ~f_pos:o#position ~f_node:o#bindingnode p
 
-    method typenamenode : typenamenode -> typenamenode =
+    method aliasnode : aliasnode -> aliasnode =
       fun (_x, _x_i1, _x_i2) ->
       let _x = o#name _x in
       let _x_i1 = o#list (fun o x -> o#quantifier x)
                     _x_i1 in
-      let _x_i2 = o#datatype' _x_i2 in
+      let _x_i2 = o#aliasbody _x_i2 in
       (_x, _x_i1, _x_i2)
 
-    method typename : typename -> typename =
+    method aliasbody : aliasbody -> aliasbody =
+      function
+        | Typename _x -> Typename (o#datatype' _x)
+        | Effectname _x -> Effectname (o#row' _x)
+
+    method alias : alias -> alias =
       fun p ->
-        WithPos.map2 ~f_pos:o#position ~f_node:o#typenamenode p
+        WithPos.map2 ~f_pos:o#position ~f_node:o#aliasnode p
 
     method function_definition : function_definition -> function_definition
       = fun { fun_binder;
@@ -937,6 +952,9 @@ class fold =
 
     method row_var : Datatype.row_var -> 'self_type =
       let open Datatype in function
+      | EffectApplication (_x, _x_i1) ->
+          let o = o#name _x in
+          let o = o#list (fun o -> o#type_arg) _x_i1 in o
       | Closed -> o
       | Open _x ->
           let o = o#type_variable _x in o
@@ -989,6 +1007,12 @@ class fold =
     method datatype' : datatype' -> 'self_type =
       fun (x, y) ->
         let o = o#datatype x in
+        let o = o#unknown y in
+          o
+
+    method row' : row' -> 'self_type =
+      fun (x, y) ->
+        let o = o#row x in
         let o = o#unknown y in
           o
 
@@ -1510,8 +1534,8 @@ class fold =
       | Open _xs ->
           let o = o#list (fun o -> o#name) _xs in
           o
-      | Typenames ts ->
-          let o = o#list (fun o -> o#typename) ts in
+      | Aliases ts ->
+          let o = o#list (fun o -> o#alias) ts in
           o
       | Infix { name; _ } ->
          o#name name
@@ -1533,7 +1557,7 @@ class fold =
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#bindingnode v)
 
-    method typenamenode : typenamenode -> 'self_type =
+    method aliasnode : aliasnode -> 'self_type =
       fun (_x, _x_i1, _x_i2) ->
       let o = o#name _x in
       let o =
@@ -1541,14 +1565,19 @@ class fold =
           (fun o _x ->
             let o = o#quantifier _x
             in o) _x_i1 in
-      let o = o#datatype' _x_i2 in
+      let o = o#aliasbody _x_i2 in
       o
 
-    method typename : typename -> 'self_type =
+    method aliasbody : aliasbody -> 'self_type =
+      function
+        | Typename _x -> o#datatype' _x
+        | Effectname _x -> o#row' _x
+
+    method alias : alias -> 'self_type =
       WithPos.traverse
         ~o
         ~f_pos:(fun o v -> o#position v)
-        ~f_node:(fun o v -> o#typenamenode v)
+        ~f_node:(fun o v -> o#aliasnode v)
 
     method function_definition : function_definition -> 'self
       = fun { fun_binder;
@@ -1692,6 +1721,10 @@ class fold_map =
 
     method row_var : Datatype.row_var -> ('self_type * Datatype.row_var) =
       let open Datatype in function
+      | EffectApplication (_x, _x_i1) ->
+          let (o, _x) = o#string _x in
+          let (o, _x_i1) = o#list (fun o -> o#type_arg) _x_i1
+          in (o, EffectApplication (_x, _x_i1))
       | Closed -> (o, Closed)
       | Open _x ->
           let (o, _x) = o#type_variable _x in (o, (Open _x))
@@ -2282,6 +2315,12 @@ class fold_map =
         let (o, _x_i1) = o#option (fun o -> o#typ) _x_i1
         in (o, (_x, _x_i1))
 
+    method row' : row' -> ('self_type * row') =
+      fun (_x, _x_i1) ->
+        let (o, _x) = o#row _x in
+        let (o, _x_i1) = o#option (fun o -> o#typ) _x_i1
+        in (o, (_x, _x_i1))
+
     method datatypenode : Datatype.t -> ('self_type * Datatype.t) =
       let open Datatype in
       function
@@ -2419,9 +2458,9 @@ class fold_map =
       | Open _xs ->
           let (o, _xs) = o#list (fun o n -> o#name n) _xs in
           (o, Open _xs)
-      | Typenames ts ->
-          let (o, _x) = o#list (fun o -> o#typename) ts in
-          (o, (Typenames _x))
+      | Aliases ts ->
+          let (o, _x) = o#list (fun o -> o#alias) ts in
+          (o, (Aliases _x))
       | Infix { name; assoc; precedence } ->
          let (o, name) = o#name name in
          (o, Infix { name; assoc; precedence })
@@ -2448,7 +2487,7 @@ class fold_map =
         ~f_pos:(fun o v -> o#position v)
         ~f_node:(fun o v -> o#bindingnode v)
 
-    method typenamenode : typenamenode -> ('self_type * typenamenode) =
+    method aliasnode : aliasnode -> ('self_type * aliasnode) =
       fun (_x, _x_i1, _x_i2) ->
       let (o, _x) = o#name _x in
       let (o, _x_i1) =
@@ -2457,14 +2496,19 @@ class fold_map =
             let (o, _x) = o#quantifier _x
             in (o, _x))
           _x_i1 in
-      let (o, _x_i2) = o#datatype' _x_i2
+      let (o, _x_i2) = o#aliasbody _x_i2
       in (o, (_x, _x_i1, _x_i2))
 
-    method typename : typename -> ('self_type * typename) =
+    method alias : alias -> ('self_type * alias) =
       WithPos.traverse_map
         ~o
         ~f_pos:(fun o v -> o#position v)
-        ~f_node:(fun o v -> o#typenamenode v)
+        ~f_node:(fun o v -> o#aliasnode v)
+
+    method aliasbody : aliasbody -> ('self_type * aliasbody) =
+      function
+        | Typename   _x   -> let o, _x = o#datatype'   _x in (o, Typename     _x)
+        | Effectname _x   -> let o, _x = o#row'        _x in (o, Effectname   _x)
 
     method function_definition : function_definition -> 'self * function_definition
       = fun { fun_binder;

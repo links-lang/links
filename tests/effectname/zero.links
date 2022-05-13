@@ -1,0 +1,6 @@
+effectname A = {} ;
+
+sig f : () -A-> ()
+fun f () {}
+
+f
