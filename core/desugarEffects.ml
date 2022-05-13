@@ -978,6 +978,7 @@ class main_traversal simple_tycon_env =
       let module D = Datatype in
       let o, rv =
         match rv with
+        | D.EffectApplication (name, ts) -> (o, rv) (* TODO(rj) i may need to do something there *)
         | D.Closed -> (o, rv)
         | D.Open stv
           when (not (SugarTypeVar.is_resolved stv))

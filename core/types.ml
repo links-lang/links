@@ -196,6 +196,14 @@ type tycon_spec = [
   | `Mutual of (Quantifier.t list * tygroup ref) (* Type in same recursive group *)
 ] [@@deriving show]
 
+type effectalias_type = Quantifier.t list * row [@@deriving show]
+
+type effectalias_spec = [
+  | `Alias of effectalias_type
+  | `Abstract of Abstype.t
+  | `Mutual of (Quantifier.t list * tygroup ref) (* Type in same recursive group *)
+] [@@deriving show]
+
 
 (* Generation of fresh type variables *)
 let type_variable_counter = ref 0
@@ -1429,6 +1437,11 @@ and flatten_row : row -> row = fun row ->
     | Row _ -> row
     (* HACK: this probably shouldn't happen! *)
     | Meta row_var -> Row (StringMap.empty, row_var, false)
+    | Alias (_, row) -> row
+       (* Debug.print ("row: " ^ show_row row); *)
+       (* failwith "types.ml/flatten_row/Alias" *)
+    | RecursiveApplication { r_dual ; r_args ; r_unwind ; _ } ->
+        r_unwind r_args r_dual
     | _ -> assert false in
   let dual_if =
     match row with
@@ -2251,6 +2264,7 @@ module type PRETTY_PRINTER = sig
   val string_of_type_arg : Policy.t -> names -> type_arg -> string
   val string_of_row_var  : Policy.t -> names -> row_var -> string
   val string_of_tycon_spec : Policy.t -> names -> tycon_spec -> string
+  val string_of_effect_spec : Policy.t -> names -> effectalias_spec -> string
   val string_of_quantifier : Policy.t -> names -> Quantifier.t -> string
   val string_of_presence : Policy.t -> names -> field_spec -> string
 end
@@ -2729,6 +2743,23 @@ struct
     | `Mutual _ -> "mutual"
     | `Abstract _ -> "abstract"
 
+  let effect_spec ({ bound_vars; _ } as context) p =
+    let bound_vars tyvars =
+      List.fold_left
+        (fun bound_vars tyvar ->
+           TypeVarSet.add (Quantifier.to_var tyvar) bound_vars)
+        bound_vars tyvars
+    in function
+    | `Alias (tyvars, body) ->
+       let ctx = { context with bound_vars = bound_vars tyvars } in
+       begin
+         match tyvars with
+         | [] -> datatype ctx p body
+         | _ -> mapstrcat "," (quantifier p) tyvars ^"."^ row "," ctx p body
+       end
+    | `Mutual _ -> "mutual"
+    | `Abstract _ -> "abstract"
+
   let string_of_datatype policy names ty =
     let ctxt = context_with_shared_effect policy (fun o -> o#typ ty) in
     datatype ctxt (policy, names) ty
@@ -2744,6 +2775,9 @@ struct
 
   let string_of_tycon_spec policy names tycon =
     tycon_spec empty_context (policy, names) tycon
+
+  let string_of_effect_spec policy names tycon =
+    effect_spec empty_context (policy, names) tycon
 
   let string_of_quantifier policy names q =
     quantifier (policy, names) q
@@ -4099,10 +4133,31 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           | `Mutual _ -> StringBuffer.write buf "mutual"
           | `Abstract _ -> StringBuffer.write buf "abstract")
 
+  let effect_spec : effectalias_spec printer
+    = let open Printer in
+      Printer (fun ctx v buf ->
+          match v with
+          | `Alias (tyvars, body) ->
+             let ctx = Context.bind_tyvars (List.map Quantifier.to_var tyvars) ctx in
+             begin
+               match tyvars with
+               | [] -> Printer.apply row ctx body buf
+               | _ -> Printer.concat_items ~sep:"," quantifier tyvars ctx buf;
+                      StringBuffer.write buf ".";
+                      Printer.apply row ctx body buf
+             end
+          | `Mutual _ -> StringBuffer.write buf "mutual"
+          | `Abstract _ -> StringBuffer.write buf "abstract")
+
   let string_of_tycon_spec : Policy.t -> names -> tycon_spec -> string
     = fun policy' names tycon ->
     let ctxt = Context.(with_policy policy' (with_tyvar_names names (empty ()))) in
     Printer.generate_string tycon_spec ctxt tycon
+
+  let string_of_effect_spec : Policy.t -> names -> effectalias_spec -> string
+    = fun policy' names tycon ->
+    let ctxt = Context.(with_policy policy' (with_tyvar_names names (empty ()))) in
+    Printer.generate_string effect_spec ctxt tycon
 
   let string_of_presence : Policy.t -> names -> field_spec -> string
     = fun policy' names pre ->
@@ -4134,6 +4189,14 @@ module DerivedPrinter : PRETTY_PRINTER = struct
       | other -> other
     in
     show_tycon_spec (decycle_tycon_spec tycon)
+
+  let string_of_effect_spec : Policy.t -> names -> effectalias_spec -> string
+    = fun _policy _names tycon ->
+    let decycle_tycon_spec = function
+      | `Alias (qlist, ty) -> `Alias (List.map DecycleTypes.quantifier qlist, DecycleTypes.datatype ty)
+      | other -> other
+    in
+    show_effectalias_spec (decycle_tycon_spec tycon)
 
   let string_of_presence : Policy.t -> names -> field_spec -> string
     = fun _policy _names pre ->
@@ -4189,18 +4252,28 @@ type environment        = datatype Env.t
                             [@@deriving show]
 type tycon_environment  = tycon_spec Env.t
                             [@@deriving show]
+type effect_environment = effectalias_spec Env.t
+                            [@@deriving show]
+type alias_environment = { tycon : tycon_environment ;
+                           effectname : effect_environment }
+                            [@@derving show]
 type typing_environment = { var_env    : environment ;
                             rec_vars   : StringSet.t ;
                             tycon_env  : tycon_environment ;
+                            effect_env : effect_environment ;
                             effect_row : row;
                             desugared  : bool }
                             [@@deriving show]
 
-let empty_typing_environment = { var_env = Env.empty;
-                                 rec_vars = StringSet.empty;
-                                 tycon_env =  Env.empty;
+let empty_typing_environment = { var_env    = Env.empty;
+                                 rec_vars   = StringSet.empty;
+                                 tycon_env  = Env.empty;
+                                 effect_env = Env.empty;
                                  effect_row = make_empty_closed_row ();
-                                 desugared = false }
+                                 desugared  = false }
+
+let typing_to_alias typing_env =
+  { tycon = typing_env.tycon_env ; effectname = typing_env.effect_env }
 
 (* Which printer to use *)
 type pretty_printer_engine = Old | Roundtrip | Derived
@@ -4311,6 +4384,12 @@ let string_of_tycon_spec : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bo
   build_tyvar_names ~refresh_tyvar_names free_bound_tycon_type_vars [tycon];
   generate_string policy Vars.tyvar_name_map (fun (module Printer : PRETTY_PRINTER) -> Printer.string_of_tycon_spec) tycon
 
+let string_of_effect_spec : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool -> effectalias_spec -> string
+  = fun ?(policy=Policy.default_policy) ?(refresh_tyvar_names=true) tycon ->
+  let policy = policy () in
+  build_tyvar_names ~refresh_tyvar_names free_bound_tycon_type_vars [tycon];
+  generate_string policy Vars.tyvar_name_map (fun (module Printer : PRETTY_PRINTER) -> Printer.string_of_effect_spec) tycon
+
 let string_of_quantifier : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool -> Quantifier.t -> string
   = fun ?(policy=Policy.default_policy) ?(refresh_tyvar_names=true) q ->
   let policy = policy () in
@@ -4325,11 +4404,12 @@ let normalise_typing_environment env =
 
 (* Functions on environments *)
 let extend_typing_environment
-    {var_env = l; rec_vars = lvars; tycon_env = al; effect_row = _; desugared = _;  }
-    {var_env = r; rec_vars = rvars; tycon_env = ar; effect_row = er; desugared = dr } : typing_environment =
+    {var_env = l; rec_vars = lvars; tycon_env = al; effect_env = eal; effect_row = _; desugared = _;  }
+    {var_env = r; rec_vars = rvars; tycon_env = ar; effect_env = ear; effect_row = er; desugared = dr } : typing_environment =
   { var_env    = Env.extend l r
   ; rec_vars   = StringSet.union lvars rvars
   ; tycon_env  = Env.extend al ar
+  ; effect_env = Env.extend eal ear
   ; effect_row = er
   ; desugared  = dr }
 

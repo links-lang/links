@@ -155,6 +155,7 @@ struct
     | Funs _
     | Infix _
     | Typenames _
+    | Effectnames _
     | Foreign _ -> true
     | Exp p -> is_pure p
     | Val (pat, (_, rhs), _, _) ->
@@ -1651,6 +1652,9 @@ type context = Types.typing_environment = {
      and "Formlet". *)
   tycon_env : Types.tycon_environment;
 
+  (* mapping from effect alias names to the effect row they name *)
+  effect_env : Types.effect_environment;
+
   (* the current effects *)
   effect_row : Types.row;
 
@@ -1663,13 +1667,15 @@ let empty_context eff desugared =
   { var_env    = Env.empty;
     rec_vars   = StringSet.empty;
     tycon_env  = Env.empty;
+    effect_env = Env.empty;
     effect_row = eff;
     desugared }
 
-let bind_var context (v, t) = {context with var_env = Env.bind v t context.var_env}
-let unbind_var context v = {context with var_env = Env.unbind v context.var_env}
-let bind_tycon context (v, t) = {context with tycon_env = Env.bind v t context.tycon_env}
-let bind_effects context r = {context with effect_row = r}
+let bind_var         context (v, t) = {context with var_env    = Env.bind v t context.var_env}
+let unbind_var       context v      = {context with var_env    = Env.unbind v context.var_env}
+let bind_tycon       context (v, t) = {context with tycon_env  = Env.bind v t context.tycon_env}
+let bind_effectnames context (v, t) = {context with effect_env = Env.bind v t context.effect_env}
+let bind_effects     context r      = {context with effect_row = r}
 
 (* TODO(dhil): I have extracted the Usage abstraction from my name
    hygiene/compilation unit patch. The below module is a compatibility
@@ -4855,6 +4861,14 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                 | None -> raise (internal_error "typeSugar.ml: unannotated type")
           ) empty_context ts in
           (Typenames ts, env, Usage.empty)
+      | Effectnames es ->
+          let env = List.fold_left (fun env {node=(name, vars, (_, effrow')); _} ->
+              match effrow' with
+                | Some effrow ->
+                    bind_effectnames env (name, `Alias (List.map (SugarQuantifier.get_resolved_exn) vars, effrow))
+                | None -> raise (internal_error "typeSugar.ml: unannotated type")
+          ) empty_context es in
+          (Effectnames es, env, Usage.empty)
       | Infix def -> Infix def, empty_context, Usage.empty
       | Exp e ->
           let e = tc e in
