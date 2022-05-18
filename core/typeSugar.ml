@@ -154,8 +154,7 @@ struct
     | Fun _
     | Funs _
     | Infix _
-    | Typenames _
-    | Effectnames _
+    | Aliases _
     | Foreign _ -> true
     | Exp p -> is_pure p
     | Val (pat, (_, rhs), _, _) ->

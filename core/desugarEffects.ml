@@ -1068,7 +1068,7 @@ class main_traversal simple_tycon_env =
 
           let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
           (o, b)
-      | Typenames ts ->
+      | Aliases ts ->
           let open SourceCode.WithPos in
           let tycon_env, tycons =
             List.fold_left
@@ -1090,16 +1090,20 @@ class main_traversal simple_tycon_env =
           (* First determine which types require an implicit effect variable. *)
           let implicits, dep_graph =
             List.fold_left
-              (fun (implicits, dep_graph) { node = t, _, (d, _); _ } ->
-                let d = cleanup_effects tycon_env d in
-                let eff = gather_mutual_info tycon_env d in
-                let has_imp = eff#has_implicit in
-                let implicits = StringMap.add t has_imp implicits in
-                let used_mutuals = StringSet.inter eff#used_types tycons in
-                let dep_graph =
-                  StringMap.add t (StringSet.elements used_mutuals) dep_graph
-                in
-                (implicits, dep_graph))
+              (fun (implicits, dep_graph) { node = t, _, b; _ } ->
+                match b with
+                  | Typename (d,_) ->
+                    let d = cleanup_effects tycon_env d in
+                    let eff = gather_mutual_info tycon_env d in
+                    let has_imp = eff#has_implicit in
+                    let implicits = StringMap.add t has_imp implicits in
+                    let used_mutuals = StringSet.inter eff#used_types tycons in
+                    let dep_graph =
+                        StringMap.add t (StringSet.elements used_mutuals) dep_graph
+                    in
+                    (implicits, dep_graph)
+                  | Effectname _ -> (* do nothing ? *)
+                    (implicits, dep_graph))
               (StringMap.empty, StringMap.empty)
               ts
           in
@@ -1127,7 +1131,7 @@ class main_traversal simple_tycon_env =
           in
           (* Now patch up the types to include this effect variable. *)
           let patch_type_param_list ((tycon_env : simple_tycon_env), shared_var_env, ts)
-              ({ node = t, args, (d, _); pos } as tn) =
+              ({ node = t, args, b; pos } as tn) =
             if StringMap.find t implicits then
               let var = Types.fresh_raw_variable () in
               let q = (var, (PrimaryKind.Row, (lin_unl, res_effect))) in
@@ -1149,9 +1153,13 @@ class main_traversal simple_tycon_env =
               let shared_var_env =
                 StringMap.add t (Some shared_effect_var) shared_var_env
               in
+              let b' = match b with
+                | Typename   (d,_) -> Typename   (d, None)
+                | Effectname (r,_) -> Effectname (r,None)
+              in
               ( tycon_env,
                 shared_var_env,
-                SourceCode.WithPos.make ~pos (t, args, (d, None)) :: ts )
+                SourceCode.WithPos.make ~pos (t, args, b') :: ts )
             else
               (* Note that we initially set the has-implict flag to
                  false, so there is nothing to do here *)
@@ -1175,13 +1183,13 @@ class main_traversal simple_tycon_env =
             in
 
             (* TODO: no info to flow back out? *)
-            let _o, dt' = o#datatype' dt in
+            let _o, dt' = o#aliasbody dt in
 
             SourceCode.WithPos.make ~pos (name, args, dt')
           in
 
           let ts' = List.map traverse_body ts in
-          ({<tycon_env>}, Typenames ts')
+          ({<tycon_env>}, Aliases ts')
       | b -> super#bindingnode b
 
     method super_datatype = super#datatype
