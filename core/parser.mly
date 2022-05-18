@@ -220,25 +220,21 @@ let make_effect_var : is_dot:bool -> ParserPosition.t -> Datatype.row_var
 module MutualBindings = struct
 
   type mutual_bindings =
-    { mut_types: typename list;
-      mut_effs: effectname list;
+    { mut_types: alias list;
       mut_funs: (function_definition * Position.t) list;
       mut_pos: Position.t }
 
 
-  let empty pos = { mut_types = []; mut_effs = []; mut_funs = []; mut_pos = pos }
+  let empty pos = { mut_types = []; mut_funs = []; mut_pos = pos }
 
-  let add ({ mut_types = ts; mut_effs = rs; mut_funs = fs; _ } as block) binding =
+  let add ({ mut_types = ts; mut_funs = fs; _ } as block) binding =
     let pos = WithPos.pos binding in
     match WithPos.node binding with
     | Fun f ->
         { block with mut_funs = ((f, pos) :: fs) }
-    | Typenames [t] ->
+    | Aliases [t] ->
         { block with mut_types = (t :: ts) }
-    | Effectnames [r] ->
-        { block with mut_effs = (r :: rs) }
-    | Typenames _
-    | Effectnames _ -> assert false
+    | Aliases _ -> assert false
     | _ ->
         raise (ConcreteSyntaxError
           (pos, "Only `fun` and `typename` bindings are allowed in a `mutual` block."))
@@ -267,7 +263,7 @@ module MutualBindings = struct
   check fun_name funs; check ty_name tys_with_pos
 
 
-  let flatten { mut_types; mut_effs; mut_funs; mut_pos } =
+  let flatten { mut_types; mut_funs; mut_pos } =
     (* We need to take care not to lift non-recursive functions to
      * recursive functions accidentally. *)
     check_dups mut_funs mut_types;
@@ -289,13 +285,9 @@ module MutualBindings = struct
 
     let type_binding = function
       | [] -> []
-      | ts -> [WithPos.make ~pos:mut_pos (Typenames (List.rev ts))] in
+      | ts -> [WithPos.make ~pos:mut_pos (Aliases (List.rev ts))] in
 
-    let effect_binding = function
-      | [] -> []
-      | rs -> [WithPos.make ~pos:mut_pos (Effectnames (List.rev rs))] in
-
-    type_binding mut_types @ fun_binding mut_funs @ effect_binding mut_effs
+    type_binding mut_types @ fun_binding mut_funs
 end
 
 let parse_foreign_language pos lang =
@@ -515,11 +507,11 @@ signature:
 | SIG sigop COLON datatype                                     { with_pos $loc ($2, datatype $4) }
 
 typedecl:
-| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (Typenames [with_pos $loc ($2, $3, datatype $5)]) }
+| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (Aliases [with_pos $loc ($2, $3, Typename (datatype $5))]) }
 
 effectdecl:
-| EFFECTNAME CONSTRUCTOR typeargs_opt EQ LBRACE erow RBRACE                      { with_pos $loc (Effectnames [with_pos $loc ($2, $3, ($6,None))]) }
-| EFFECTNAME CONSTRUCTOR typeargs_opt EQ effect_app                              { with_pos $loc (Effectnames [with_pos $loc ($2, $3, (([],$5),None))]) }
+| EFFECTNAME CONSTRUCTOR typeargs_opt EQ LBRACE erow RBRACE                      { with_pos $loc (Aliases [with_pos $loc ($2, $3, Effectname ( $6    ,None))]) }
+| EFFECTNAME CONSTRUCTOR typeargs_opt EQ effect_app                              { with_pos $loc (Aliases [with_pos $loc ($2, $3, Effectname (([],$5),None))]) }
 
 (* Lists of quantifiers in square brackets denote type abstractions *)
 type_abstracion_vars:

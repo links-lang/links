@@ -524,8 +524,7 @@ and bindingnode =
   | Foreign of Alien.single Alien.t
   | Import of { pollute: bool; path : Name.t list }
   | Open of Name.t list
-  | Typenames of typename list
-  | Effectnames of effectname list
+  | Aliases of alias list
   | Infix   of { assoc: Associativity.t;
                  precedence: int;
                  name: string }
@@ -546,10 +545,11 @@ and cp_phrasenode =
   | CPLink        of Binder.with_pos * Binder.with_pos
   | CPComp        of Binder.with_pos * cp_phrase * cp_phrase
 and cp_phrase = cp_phrasenode WithPos.t
-and typenamenode = Name.t * SugarQuantifier.t list * datatype'
-and typename = typenamenode WithPos.t
-and effectnamenode = Name.t * SugarQuantifier.t list * row'
-and effectname = effectnamenode WithPos.t
+and aliasnode = Name.t * SugarQuantifier.t list * aliasbody
+and alias = aliasnode WithPos.t
+and aliasbody =
+  | Typename of datatype'
+  | Effectname of row'
 and function_definition = {
     fun_binder: Binder.with_pos;
     fun_linearity: DeclaredLinearity.t;
@@ -811,8 +811,7 @@ struct
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
     | Import _
     | Open _
-    | Typenames _
-    | Effectnames _ -> empty, empty
+    | Aliases _ -> empty, empty
     (* This is technically a declaration, thus the name should
        probably be treated as bound rather than free. *)
     | Infix { name; _ } -> empty, singleton name
