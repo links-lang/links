@@ -892,26 +892,20 @@ class transform (env : Types.typing_environment) =
          in
          let o, language = o#foreign_language (Alien.language alien) in
          (o, Foreign (Alien.modify ~language ~declarations alien))
-      | Typenames ts ->
-          let (o, _) = listu o (fun o {node=(name, vars, (x, dt')); pos} ->
-              match dt' with
-                | Some dt ->
+      | Aliases ts ->
+          let (o, _) = listu o (fun o {node=(name, vars, b); pos} ->
+              match b with
+                | Typename (x, (Some dt as dt')) ->
                    let o = o#bind_tycon name
                      (`Alias (List.map (SugarQuantifier.get_resolved_exn) vars, dt)) in
-                   (o, WithPos.make ~pos (name, vars, (x, dt')))
-                | None -> raise (internal_error "Unannotated type alias")
-            ) ts in
-          (o, Typenames ts)
-      | Effectnames rs ->
-          let (o, _) = listu o (fun o {node=(name, vars, (x, r')); pos} ->
-              match r' with
-                | Some r ->
+                   (o, WithPos.make ~pos (name, vars, Typename (x, dt')))
+                | Effectname (x, (Some r as r')) ->
                    let o = o#bind_effect name
                      (`Alias (List.map (SugarQuantifier.get_resolved_exn) vars, r)) in
-                   (o, WithPos.make ~pos (name, vars, (x, r')))
-                | None -> raise (internal_error "Unannotated type alias")
-            ) rs in
-          (o, Effectnames rs)
+                   (o, WithPos.make ~pos (name, vars, Effectname (x, r')))
+                | _ -> raise (internal_error "Unannotated type alias")
+            ) ts in
+          (o, Aliases ts)
       | (Infix _) as node ->
          (o, node)
       | Exp e -> let (o, e, _) = o#phrase e in (o, Exp e)
