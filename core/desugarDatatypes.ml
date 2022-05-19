@@ -304,13 +304,15 @@ module Desugar = struct
     | Row r      -> Row, row alias_env r node
     | Presence f -> Presence, fieldspec alias_env f node
 
-
-
   let datatype' alias_env ((dt, _) : datatype') =
     (dt, Some (datatype alias_env dt))
 
   let row' alias_env ((r, _) :row') =
     (r, Some (row alias_env r (WithPos.make (Datatype.Effect r)))) (* TODO(rj) should keep the pos *)
+
+  let aliasbody alias_env = function
+    | Typename dt' -> Typename (datatype' alias_env dt')
+    | Effectname r' -> Effectname (row' alias_env r')
 
   let type_arg' alias_env ((ta, _) : type_arg') : type_arg' =
     let unlocated = WithPos.make Datatype.Unit in
@@ -398,7 +400,7 @@ object (self)
 
 
   method! bindingnode = function
-    | Typenames ts ->
+    | Aliases ts ->
         (* Maps syntactic types in the recursive group to semantic types. *)
         (* This must be empty to start off with, because there's a cycle
          * in calculating the semantic types: we need the alias environment
@@ -414,36 +416,49 @@ object (self)
         (* Add all type declarations in the group to the alias
          * environment, as mutuals. Quantifiers need to be desugared. *)
         let ((mutual_env : Types.alias_environment), ts) =
-          List.fold_left (fun (alias_env, ts) {node=(t, args, (d, _)); pos} ->
+          List.fold_left (fun (alias_env, ts) {node=(t, args, b); pos} ->
             let qs = Desugar.desugar_quantifiers args  in
-            let alias_env = { tycon = SEnv.bind t (`Mutual (qs, tygroup_ref)) alias_env.tycon ;
-                              effectname = alias_env.effectname } in
-            (alias_env, WithPos.make ~pos (t, args, (d, None)) :: ts))
+            match b with
+              | Typename (d,_) ->
+                let alias_env = { tycon = SEnv.bind t (`Mutual (qs, tygroup_ref)) alias_env.tycon ;
+                                  effectname = alias_env.effectname } in
+                (alias_env, WithPos.make ~pos (t, args, Typename (d, None)) :: ts)
+              | Effectname (r,_) ->
+                let alias_env = { tycon = alias_env.tycon ;
+                                  effectname = SEnv.bind t (`Mutual (qs, tygroup_ref)) alias_env.effectname } in
+                (alias_env, WithPos.make ~pos (t, args, Effectname (r, None)) :: ts) )
             (alias_env, []) ts in
 
         (* Desugar all DTs, given the temporary new alias environment. *)
         let desugared_mutuals =
           List.map (fun {node=(name, args, dt); pos} ->
             (* Desugar the datatype *)
-            let dt' = Desugar.datatype' mutual_env dt in
             (* Check if the datatype has actually been desugared *)
-            let (t, dt) =
-              match dt' with
-               | (t, Some dt) -> (t, dt)
-               | _ -> assert false in
-            WithPos.make ~pos (name, args, (t, Some dt))
+            let dt' = match Desugar.aliasbody mutual_env dt with
+                | Typename   (_, Some _) as dt' -> dt'
+                | Effectname (_, Some _) as dt' -> dt'
+                | _ -> assert false
+            in
+            WithPos.make ~pos (name, args, dt')
           ) ts in
 
         (* Given the desugared datatypes, we now need to handle linearity.
            First, calculate linearity up to recursive application *)
         let (linearity_env, dep_graph) =
           List.fold_left (fun (lin_map, dep_graph) mutual   ->
-            let (name, _, (_, dt)) = SourceCode.WithPos.node mutual in
-            let dt = OptionUtils.val_of dt in
-            let lin_map = StringMap.add name (not @@ Unl.type_satisfies dt) lin_map in
-            let deps = recursive_applications dt in
-            let dep_graph = (name, deps) :: dep_graph in
-            (lin_map, dep_graph)
+            match SourceCode.WithPos.node mutual with
+            | (name, _, Typename (_, dt)) ->
+              let dt = OptionUtils.val_of dt in
+              let lin_map = StringMap.add name (not @@ Unl.type_satisfies dt) lin_map in
+              let deps = recursive_applications dt in
+              let dep_graph = (name, deps) :: dep_graph in
+              (lin_map, dep_graph)
+            | (name, _, Effectname (_, r)) ->
+              let r = OptionUtils.val_of r in
+              let lin_map = StringMap.add name (not @@ Unl.type_satisfies r) lin_map in
+              let deps = recursive_applications r in
+              let dep_graph = (name, deps) :: dep_graph in
+              (lin_map, dep_graph)
           ) (StringMap.empty, []) desugared_mutuals in
         (* Next, use the toposorted dependency graph from above. We need to
            reverse since we propagate linearity information downwards from the
@@ -474,11 +489,20 @@ object (self)
         (* NB: type aliases are scoped; we allow shadowing.
            We also allow type aliases to shadow abstract types. *)
         let alias_env =
-          List.fold_left (fun alias_env {node=(t, args, (_, dt')); _} ->
-            let dt = OptionUtils.val_of dt' in
+          List.fold_left (fun alias_env {node=(t, args, b); _} ->
             let semantic_qs = List.map SugarQuantifier.get_resolved_exn args in
-            let alias_env = { tycon = SEnv.bind t (`Alias (semantic_qs, dt)) alias_env.tycon ;
-                              effectname = alias_env.effectname } in
+            let dt, alias_env = match b with
+              | Typename (_, d') ->
+                let dt = OptionUtils.val_of d' in
+                let alias_env = { tycon = SEnv.bind t (`Alias (semantic_qs, dt)) alias_env.tycon ;
+                                  effectname = alias_env.effectname } in
+                (dt, alias_env)
+              | Effectname (_, r') ->
+                let dt = OptionUtils.val_of r' in
+                let alias_env = { tycon = alias_env.tycon ;
+                                  effectname = SEnv.bind t (`Alias (semantic_qs, dt)) alias_env.effectname } in
+                (dt, alias_env)
+            in
             tygroup_ref :=
               { !tygroup_ref with
                   type_map = (StringMap.add t (semantic_qs, dt) !tygroup_ref.type_map);
@@ -486,96 +510,8 @@ object (self)
             alias_env
         ) alias_env desugared_mutuals in
 
-        ({< alias_env = alias_env >}, Typenames desugared_mutuals)
-    | Effectnames rs ->
-        (* Maps syntactic types in the recursive group to semantic types. *)
-        (* This must be empty to start off with, because there's a cycle
-         * in calculating the semantic types: we need the alias environment
-         * populated with all types in the group in order to calculate a
-         * semantic type. We populate the reference in a later pass. *)
-        let tygroup_ref = ref {
-          id = fresh_tygroup_id ();
-          type_map = StringMap.empty;
-          linearity_map = StringMap.empty
-        } in
+        ({< alias_env = alias_env >}, Aliases desugared_mutuals)
 
-
-        (* Add all type declarations in the group to the alias
-         * environment, as mutuals. Quantifiers need to be desugared. *)
-        let ((mutual_env : Types.alias_environment), rs) =
-          List.fold_left (fun (alias_env, rs) {node=(t, args, (r, _)); pos} ->
-            let qs = Desugar.desugar_quantifiers args  in
-            let alias_env = { tycon = alias_env.tycon ;
-                              effectname = SEnv.bind t (`Mutual (qs, tygroup_ref)) alias_env.effectname } in
-            (alias_env, WithPos.make ~pos (t, args, (r, None)) :: rs))
-            (alias_env, []) rs in
-
-        (* Desugar all DTs, given the temporary new alias environment. *)
-        let desugared_mutuals =
-          List.map (fun {node=(name, args, r); pos} ->
-            (* Desugar the datatype *)
-            let r' = Desugar.row' mutual_env r in
-            (* Check if the datatype has actually been desugared *)
-            let (t, r) =
-              match r' with
-               | (t, Some r) -> (t, r)
-               | _ -> assert false in
-            WithPos.make ~pos (name, args, (t, Some r))
-          ) rs in
-
-        (* Given the desugared datatypes, we now need to handle linearity.
-           First, calculate linearity up to recursive application *)
-        let (linearity_env, dep_graph) =
-          List.fold_left (fun (lin_map, dep_graph) mutual   ->
-            let (name, _, (_, r)) = SourceCode.WithPos.node mutual in
-            let r = OptionUtils.val_of r in
-            let lin_map = StringMap.add name (not @@ Unl.type_satisfies r) lin_map in
-            let deps = recursive_applications r in
-            let dep_graph = (name, deps) :: dep_graph in
-            (lin_map, dep_graph)
-          ) (StringMap.empty, []) desugared_mutuals in
-        (* Next, use the toposorted dependency graph from above. We need to
-           reverse since we propagate linearity information downwards from the
-           SCCs which everything depends on, rather than upwards. *)
-        let sorted_graph = Graph.topo_sort_sccs dep_graph |> List.rev in
-        (* Next, propagate the linearity information through the graph,
-           in order to construct the final linearity map.
-         * Given the topo-sorted dependency graph, we propagate linearity based
-         * on the following rules:
-         * 1. If any type in a SCC is linear, then all types in that SCC must
-         *    also be linear.
-         * 2. If a type depends on a linear type, then it must also be linear.
-         * 3. Otherwise, the type is unrestricted.
-         *
-         * Given that we have a topo-sorted graph, as soon as we come across a
-         * linear SCC, we know that the remaining types are also linear. *)
-        let (linearity_map, _) =
-          List.fold_right (fun scc (acc, lin_found) ->
-            let scc_linear =
-              lin_found || List.exists (fun x -> StringMap.find x linearity_env) scc in
-            let acc =
-              List.fold_left (fun acc x -> StringMap.add x scc_linear acc) acc scc in
-            (acc, scc_linear)) sorted_graph (StringMap.empty, false) in
-
-        (* Finally, construct a new alias environment, and populate the map from
-         * strings to the desugared datatypes which in turn allows recursive type
-         * unwinding in unification. *)
-        (* NB: type aliases are scoped; we allow shadowing.
-           We also allow type aliases to shadow abstract types. *)
-        let alias_env =
-          List.fold_left (fun alias_env {node=(t, args, (_, r')); _} ->
-            let r = OptionUtils.val_of r' in
-            let semantic_qs = List.map SugarQuantifier.get_resolved_exn args in
-            let alias_env = { tycon = alias_env.tycon ;
-                              effectname = SEnv.bind t (`Alias (semantic_qs, r)) alias_env.effectname } in
-            tygroup_ref :=
-              { !tygroup_ref with
-                  type_map = (StringMap.add t (semantic_qs, r) !tygroup_ref.type_map);
-                  linearity_map };
-            alias_env
-        ) alias_env desugared_mutuals in
-
-        ({< alias_env = alias_env >}, Effectnames desugared_mutuals)
     | Foreign alien ->
        let binder, datatype = Alien.declaration alien in
        let _, binder = self#binder binder in

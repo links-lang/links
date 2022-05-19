@@ -4852,22 +4852,16 @@ and type_binding : context -> binding -> binding * context * Usage.t =
          ( Foreign (Alien.modify ~declarations:[(binder, (dt, Some datatype))] alien)
          , bind_var empty_context (Binder.to_name binder, datatype)
          , Usage.empty )
-      | Typenames ts ->
-          let env = List.fold_left (fun env {node=(name, vars, (_, dt')); _} ->
-              match dt' with
-                | Some dt ->
+      | Aliases ts ->
+          let env = List.fold_left (fun env {node=(name, vars, b); _} ->
+              match b with
+                | Typename (_, Some dt) ->
                     bind_tycon env (name, `Alias (List.map (SugarQuantifier.get_resolved_exn) vars, dt))
-                | None -> raise (internal_error "typeSugar.ml: unannotated type")
+                | Effectname (_, Some r) ->
+                    bind_effectnames env (name, `Alias (List.map (SugarQuantifier.get_resolved_exn) vars, r))
+                | _ -> raise (internal_error "typeSugar.ml: unannotated type")
           ) empty_context ts in
-          (Typenames ts, env, Usage.empty)
-      | Effectnames es ->
-          let env = List.fold_left (fun env {node=(name, vars, (_, effrow')); _} ->
-              match effrow' with
-                | Some effrow ->
-                    bind_effectnames env (name, `Alias (List.map (SugarQuantifier.get_resolved_exn) vars, effrow))
-                | None -> raise (internal_error "typeSugar.ml: unannotated type")
-          ) empty_context es in
-          (Effectnames es, env, Usage.empty)
+          (Aliases ts, env, Usage.empty)
       | Infix def -> Infix def, empty_context, Usage.empty
       | Exp e ->
           let e = tc e in

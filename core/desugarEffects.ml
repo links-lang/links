@@ -1103,6 +1103,10 @@ class main_traversal simple_tycon_env =
                     in
                     (implicits, dep_graph)
                   | Effectname _ -> (* do nothing ? *)
+                    let implicits = StringMap.add t false implicits in
+                    let dep_graph =
+                        StringMap.add t [] dep_graph
+                    in
                     (implicits, dep_graph))
               (StringMap.empty, StringMap.empty)
               ts
@@ -1155,7 +1159,7 @@ class main_traversal simple_tycon_env =
               in
               let b' = match b with
                 | Typename   (d,_) -> Typename   (d, None)
-                | Effectname (r,_) -> Effectname (r,None)
+                | Effectname (r,_) -> Effectname (r, None)
               in
               ( tycon_env,
                 shared_var_env,
