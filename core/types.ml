@@ -196,15 +196,6 @@ type tycon_spec = [
   | `Mutual of (Quantifier.t list * tygroup ref) (* Type in same recursive group *)
 ] [@@deriving show]
 
-type effectalias_type = Quantifier.t list * row [@@deriving show]
-
-type effectalias_spec = [
-  | `Alias of effectalias_type
-  | `Abstract of Abstype.t
-  | `Mutual of (Quantifier.t list * tygroup ref) (* Type in same recursive group *)
-] [@@deriving show]
-
-
 (* Generation of fresh type variables *)
 let type_variable_counter = ref 0
 let fresh_raw_variable () : int =
@@ -1019,7 +1010,7 @@ module Env = Env.String
                 | row ->
                    is_closed rec_vars row
             end
-        | _ -> raise tag_expectation_mismatch
+        | _ -> Debug.print "in 1013 :" ; raise tag_expectation_mismatch
     in
       is_closed TypeVarSet.empty
 
@@ -1027,7 +1018,7 @@ module Env = Env.String
     fun row ->
     let row_var = match row with
       | Row (_, row_var, _) -> row_var
-      | _ -> raise tag_expectation_mismatch
+      | _ -> Debug.print "in 1021 :" ; raise tag_expectation_mismatch
     in
     let rec get_row_var' rec_vars = function
       | Closed -> None
@@ -1038,7 +1029,7 @@ module Env = Env.String
          else get_row_var' (TypeVarSet.add var rec_vars) (Unionfind.find row_var')
       | Row (_, row_var', _) ->
          get_row_var' rec_vars (Unionfind.find row_var')
-      | _ -> raise tag_expectation_mismatch
+      | _ -> Debug.print "in 1032 :" ; raise tag_expectation_mismatch
     in
     get_row_var' TypeVarSet.empty (Unionfind.find row_var)
 
@@ -1090,7 +1081,7 @@ let make_singleton_open_row (label, field_spec) subkind =
 let is_absent_from_row label row (* (field_env, _, _ as row) *) =
   let field_env = match row with
     | Row (field_env, _, _) -> field_env
-    | _ -> raise tag_expectation_mismatch
+    | _ -> Debug.print "in 1084 :" ; raise tag_expectation_mismatch
   in
   if FieldEnv.mem label field_env
   then FieldEnv.find label field_env = Absent
@@ -1099,7 +1090,7 @@ let is_absent_from_row label row (* (field_env, _, _ as row) *) =
 let row_with (label, f : string * field_spec) = function
   | Row (field_env, row_var, dual) ->
      Row (FieldEnv.add label f field_env, row_var, dual)
-  | _ -> raise tag_expectation_mismatch
+  | _ -> Debug.print "in 1093 :" ; raise tag_expectation_mismatch
 
 (*** end of type_basis ***)
 
@@ -1241,7 +1232,7 @@ let is_rigid_row : row -> bool =
        | row ->
           is_rigid rec_vars row
        end
-    | _ -> raise tag_expectation_mismatch
+    | _ -> Debug.print "in 1235 :" ; raise tag_expectation_mismatch
   in
   is_rigid TypeVarSet.empty row
 
@@ -1260,7 +1251,7 @@ let is_rigid_row_with_var : int -> row -> bool =
        | row ->
           is_rigid rec_vars row
        end
-    | _ -> raise tag_expectation_mismatch
+    | _ -> Debug.print "in 1254 :" ; raise tag_expectation_mismatch
   in
   is_rigid TypeVarSet.empty row
 
@@ -1276,7 +1267,7 @@ let is_flattened_row : row -> bool =
             else is_flattened (TypeVarSet.add var rec_vars) rec_row
         | _ -> false
       end
-    | _ -> raise tag_expectation_mismatch
+    | _ -> Debug.print "in 1270 :" ; raise tag_expectation_mismatch
   in
   is_flattened TypeVarSet.empty row
 
@@ -1292,7 +1283,7 @@ let is_empty_row : row -> bool =
            | Recursive (var, _kind, rec_row) -> is_empty (TypeVarSet.add var rec_vars) rec_row
            | row -> is_empty rec_vars row
          end
-    | _ -> raise tag_expectation_mismatch
+    | _ -> Debug.print "in 1286 :" ; raise tag_expectation_mismatch
   in
   is_empty TypeVarSet.empty row
 
@@ -1342,11 +1333,11 @@ and dual_row : var_map -> row -> row =
           | Present t ->
              Present (dual_type rec_points t)
           | Meta _ -> assert false (* TODO: what should happen here? *)
-          | _ -> raise tag_expectation_mismatch)
+          | _ -> Debug.print "in 1336 :" ; raise tag_expectation_mismatch)
          fields
      in
      Row (fields', row_var, not dual)
-  | _ -> raise tag_expectation_mismatch
+  | _ -> Debug.print "in 1340 :" ; raise tag_expectation_mismatch
 
 and subst_dual_type : var_map -> datatype -> datatype =
   fun rec_points t ->
@@ -1415,14 +1406,14 @@ and subst_dual_row : var_map -> row -> row =
          fields
      in
      Row (fields', row_var, dual)
-  | _ -> raise tag_expectation_mismatch
+  | _ -> Debug.print "in 1409 :" ; raise tag_expectation_mismatch
 and subst_dual_field_spec : var_map -> field_spec -> field_spec =
   fun rec_points field_spec ->
   match field_spec with
   | Absent -> Absent
   | Present t -> Present (subst_dual_type rec_points t)
   | Meta _ -> (* TODO: what should happen here? *) assert false
-  | _ -> raise tag_expectation_mismatch
+  | _ -> Debug.print "in 1416 :" ; raise tag_expectation_mismatch
 and subst_dual_type_arg : var_map -> type_arg -> type_arg =
   fun rec_points (pk, t) ->
   let open PrimaryKind in
@@ -1440,8 +1431,12 @@ and flatten_row : row -> row = fun row ->
     | Alias (_, row) -> row
        (* Debug.print ("row: " ^ show_row row); *)
        (* failwith "types.ml/flatten_row/Alias" *)
-    | RecursiveApplication { r_dual ; r_args ; r_unwind ; _ } ->
-        r_unwind r_args r_dual
+    | RecursiveApplication { r_dual ; r_args ; r_unwind ; _ } -> (*  TODO HERE wtf à quoi sert cette fonction ? *)
+       (* Debug.print "am i there ? [types/flatten_row]" ; *)
+        (* if StringSet.mem r_unique_name rec_appl then *)
+        (*   row *)
+        (* else *)
+          r_unwind r_args r_dual
     | _ -> assert false in
   let dual_if =
     match row with
@@ -1449,7 +1444,7 @@ and flatten_row : row -> row = fun row ->
        fun r -> if dual then dual_row TypeVarMap.empty r else r
     | _ ->
        Debug.print ("row: " ^ show_row row);
-       raise tag_expectation_mismatch
+       Debug.print "in 1443 :" ; raise tag_expectation_mismatch
   in
   let rec flatten_row' : meta_row_var IntMap.t -> row -> row =
     fun rec_env row ->
@@ -1474,19 +1469,19 @@ and flatten_row : row -> row = fun row ->
             let field_env', row_var', dual =
               match flatten_row' rec_env (dual_if row') with
               | Row (field_env, row_var, dual) -> field_env, row_var, dual
-              | _ -> raise tag_expectation_mismatch
+              | _ -> Debug.print "in 1468 :" ; raise tag_expectation_mismatch
             in
             Row (field_env_union (field_env, field_env'), row_var', dual)
        in
        assert (is_flattened_row row');
        row'
-    | _ -> raise tag_expectation_mismatch
+    | _ -> Debug.print "in 1474 :" ; raise tag_expectation_mismatch
   in
   let field_env, row_var, dual =
     match flatten_row' IntMap.empty row with
     | Row (field_env, row_var, dual) ->
        field_env, row_var, dual
-    | _ -> raise tag_expectation_mismatch
+    | _ -> Debug.print "in 1480 :" ; raise tag_expectation_mismatch
   in
   let field_env = concrete_fields field_env in
   Row (field_env, row_var, dual)
@@ -1508,7 +1503,7 @@ and unwrap_row : row -> (row * row_var option) = function
          match row with
          | Row (field_env, row_var, dual) ->
             field_env, row_var, dual
-         | _ -> raise tag_expectation_mismatch
+         | _ -> Debug.print "in 1502 :" ; raise tag_expectation_mismatch
        in
        let row' =
          match Unionfind.find row_var with
@@ -1525,7 +1520,7 @@ and unwrap_row : row -> (row * row_var option) = function
                    match unwrapped_body with
                    | Row (field_env', row_var', dual') ->
                       field_env', row_var', dual'
-                   | _ -> raise tag_expectation_mismatch
+                   | _ -> Debug.print "in 1519 :" ; raise tag_expectation_mismatch
                  in
                  Row (field_env_union (field_env, field_env'), row_var', dual'), Some point
          | row' ->
@@ -1533,7 +1528,7 @@ and unwrap_row : row -> (row * row_var option) = function
               match unwrap_row' rec_env (dual_if row') with
               | Row (field_env', row_var', dual), rec_row ->
                  (field_env', row_var', dual), rec_row
-              | _ -> raise tag_expectation_mismatch
+              | _ -> Debug.print "in 1527 :" ; raise tag_expectation_mismatch
             in
             Row (field_env_union (field_env, field_env'), row_var', dual), rec_row
        in
@@ -1544,12 +1539,12 @@ and unwrap_row : row -> (row * row_var option) = function
        match unwrap_row' IntMap.empty (Row (field_env, row_var, dual)) with
        | Row (field_env, row_var, dual), rec_row ->
           (field_env, row_var, dual), rec_row
-       | _ -> raise tag_expectation_mismatch
+       | _ -> Debug.print "in 1538 :" ; raise tag_expectation_mismatch
      in
      let field_env = concrete_fields field_env in
      Row (field_env, row_var, dual), rec_row
   | _ ->
-    raise tag_expectation_mismatch
+    Debug.print "in 1543 :" ; raise tag_expectation_mismatch
 
 
 
@@ -1606,7 +1601,7 @@ and normalise_datatype rec_names t =
      let fields, row_var, dual =
        match flatten_row row with
        | Row (fields, row_var, dual) -> fields, row_var, dual
-       | _ -> raise tag_expectation_mismatch
+       | _ -> Debug.print "in 1600 :" ; raise tag_expectation_mismatch
      in
      let closed = is_closed_row (Row (fields, row_var, dual)) in
      let fields =
@@ -1703,7 +1698,7 @@ let is_tuple ?(allow_onetuples=false) row =
     match row with
     | Row (field_env, row_var, _) ->
        field_env, row_var
-    | _ -> raise tag_expectation_mismatch
+    | _ -> Debug.print "in 1697 :" ; raise tag_expectation_mismatch
   in
   match Unionfind.find row_var with
   | Closed ->
@@ -1718,7 +1713,7 @@ let is_tuple ?(allow_onetuples=false) row =
                    | Present _ -> true
                    | Absent    -> false
                    | Meta _    -> false
-                   | _ -> raise tag_expectation_mismatch))
+                   | _ -> Debug.print "in 1712 :" ; raise tag_expectation_mismatch))
              (fromTo 1 (n+1))) (* need to go up to n *)
      (* (Samo) I think there was a bug here, calling (fromTo 1 n):
         (dis)allowing one-tuples is handled below, but here we need to make sure
@@ -1735,7 +1730,7 @@ let extract_tuple = function
          | Present t -> t
          | Absent | Meta _ -> assert false
          | _ -> raise tag_expectation_mismatch) field_env
-  | _ -> raise tag_expectation_mismatch
+  | _ -> Debug.print "in 1729 :" ; raise tag_expectation_mismatch
 
 exception TypeDestructionError of string
 
@@ -2264,7 +2259,6 @@ module type PRETTY_PRINTER = sig
   val string_of_type_arg : Policy.t -> names -> type_arg -> string
   val string_of_row_var  : Policy.t -> names -> row_var -> string
   val string_of_tycon_spec : Policy.t -> names -> tycon_spec -> string
-  val string_of_effect_spec : Policy.t -> names -> effectalias_spec -> string
   val string_of_quantifier : Policy.t -> names -> Quantifier.t -> string
   val string_of_presence : Policy.t -> names -> field_spec -> string
 end
@@ -2306,7 +2300,7 @@ struct
       let r =
         match fst (unwrap_row r) with
         | Row (_, r, _) -> r
-        | _ -> raise tag_expectation_mismatch
+        | _ -> Debug.print "in 2299 :" ; raise tag_expectation_mismatch
       in
       begin match Unionfind.find r with
       | Var (var, _, _) -> Some var
@@ -2426,7 +2420,7 @@ struct
                match f with
                  | Present t        -> IntMap.add (int_of_string i) t tuple_env
                  | (Absent | Meta _) -> assert false
-                 | _ -> raise tag_expectation_mismatch)
+                 | _ -> Debug.print "in 2419 :" ; raise tag_expectation_mismatch)
             field_env
             IntMap.empty in
         let ss = List.rev (IntMap.fold (fun _ t ss -> (datatype context p t) :: ss) tuple_env []) in
@@ -2472,7 +2466,7 @@ struct
           match unwrap effects with
           | Row (fields, row_var, dual) ->
              (fields, row_var, dual)
-          | _ -> raise tag_expectation_mismatch
+          | _ -> Debug.print "in 2465 :" ; raise tag_expectation_mismatch
         in
        assert (not dual);
 
@@ -2531,7 +2525,7 @@ struct
                  let fields =
                    match fst (unwrap_row r') with
                    | Row (fields, _, _) -> fields
-                   | _ -> raise tag_expectation_mismatch
+                   | _ -> Debug.print "in 2524 :" ; raise tag_expectation_mismatch
                  in
                  if StringMap.is_empty fields then
                    ts
@@ -2588,7 +2582,7 @@ struct
             let r = match r with
               | Row (fields, row_var, dual) ->
                  fields, row_var, dual
-              | _ -> raise tag_expectation_mismatch
+              | _ -> Debug.print "in 2581 :" ; raise tag_expectation_mismatch
             in
             (if is_tuple ur then string_of_tuple context r
              else "(" ^ row "," context p (Row r) ^ ")")
@@ -2675,7 +2669,7 @@ struct
               | f ->
                   presence context p f
           end
-      | _ -> raise tag_expectation_mismatch
+      | _ -> Debug.print "in 2668 :" ; raise tag_expectation_mismatch
 
   and row ?(name=name_of_type) ?(strip_wild=false) sep context p = function
     | Row (field_env, rv, dual) ->
@@ -2703,7 +2697,7 @@ struct
        row sep context ~name:name ~strip_wild:strip_wild p (Row (StringMap.empty, rv, false))
     | t ->
        failwith ("Illformed row:"^show_datatype t)
-       (* raise tag_expectation_mismatch *)
+       (* Debug.print "in 2696 :" ; raise tag_expectation_mismatch *)
   and row_var name_of_type sep ({ bound_vars; _ } as context) ((policy, vars) as p) rv =
     match Unionfind.find rv with
       | Closed -> None
@@ -2775,9 +2769,6 @@ struct
 
   let string_of_tycon_spec policy names tycon =
     tycon_spec empty_context (policy, names) tycon
-
-  let string_of_effect_spec policy names tycon =
-    effect_spec empty_context (policy, names) tycon
 
   let string_of_quantifier policy names q =
     quantifier (policy, names) q
@@ -3751,7 +3742,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 | _ -> StringBuffer.write buf ":"
               in
               Printer.apply (meta ctx pt) ctx () buf
-           | _ -> raise tag_expectation_mismatch))
+           | _ -> Debug.print "in 3741 :" ; raise tag_expectation_mismatch))
 
   and meta : Context.t -> typ point -> unit printer
     = let open Printer in
@@ -3785,7 +3776,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
               (match r with
                | Row rp  -> Printer.apply row_parts ctx rp buf
                | Meta pt -> Printer.apply (meta ctx pt) ctx () buf
-               | _ -> raise tag_expectation_mismatch);
+               | _ -> Debug.print "in 3775 :" ; raise tag_expectation_mismatch);
               StringBuffer.write buf "}";
             end
           | P.Presence ->
@@ -3822,7 +3813,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             match FieldEnv.lookup lbl fields with
             | Some (Present _) -> true
             | None | Some Absent | Some (Meta _) -> false
-            | _ -> raise tag_expectation_mismatch
+            | _ -> Debug.print "in 3812 :" ; raise tag_expectation_mismatch
           in
           let decide_skip ctx vid =
             let anonymity = get_var_anonymity ctx vid in
@@ -3942,7 +3933,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           let t_char = match tp with
             | Input _ -> "?"
             | Output _ -> "!"
-            | _ -> raise tag_expectation_mismatch (* this will never happen, because the function session_io
+            | _ -> Debug.print "in 3932 :" ; raise tag_expectation_mismatch (* this will never happen, because the function session_io
                                                    *  will only ever be called for Input | Output *)
           in
           match tp with
@@ -4133,31 +4124,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           | `Mutual _ -> StringBuffer.write buf "mutual"
           | `Abstract _ -> StringBuffer.write buf "abstract")
 
-  let effect_spec : effectalias_spec printer
-    = let open Printer in
-      Printer (fun ctx v buf ->
-          match v with
-          | `Alias (tyvars, body) ->
-             let ctx = Context.bind_tyvars (List.map Quantifier.to_var tyvars) ctx in
-             begin
-               match tyvars with
-               | [] -> Printer.apply row ctx body buf
-               | _ -> Printer.concat_items ~sep:"," quantifier tyvars ctx buf;
-                      StringBuffer.write buf ".";
-                      Printer.apply row ctx body buf
-             end
-          | `Mutual _ -> StringBuffer.write buf "mutual"
-          | `Abstract _ -> StringBuffer.write buf "abstract")
-
   let string_of_tycon_spec : Policy.t -> names -> tycon_spec -> string
     = fun policy' names tycon ->
     let ctxt = Context.(with_policy policy' (with_tyvar_names names (empty ()))) in
     Printer.generate_string tycon_spec ctxt tycon
-
-  let string_of_effect_spec : Policy.t -> names -> effectalias_spec -> string
-    = fun policy' names tycon ->
-    let ctxt = Context.(with_policy policy' (with_tyvar_names names (empty ()))) in
-    Printer.generate_string effect_spec ctxt tycon
 
   let string_of_presence : Policy.t -> names -> field_spec -> string
     = fun policy' names pre ->
@@ -4189,14 +4159,6 @@ module DerivedPrinter : PRETTY_PRINTER = struct
       | other -> other
     in
     show_tycon_spec (decycle_tycon_spec tycon)
-
-  let string_of_effect_spec : Policy.t -> names -> effectalias_spec -> string
-    = fun _policy _names tycon ->
-    let decycle_tycon_spec = function
-      | `Alias (qlist, ty) -> `Alias (List.map DecycleTypes.quantifier qlist, DecycleTypes.datatype ty)
-      | other -> other
-    in
-    show_effectalias_spec (decycle_tycon_spec tycon)
 
   let string_of_presence : Policy.t -> names -> field_spec -> string
     = fun _policy _names pre ->
@@ -4250,30 +4212,20 @@ See Note [Variable names in error messages].
 
 type environment        = datatype Env.t
                             [@@deriving show]
-type tycon_environment  = tycon_spec Env.t
+type alias_environment = tycon_spec Env.t
                             [@@deriving show]
-type effect_environment = effectalias_spec Env.t
-                            [@@deriving show]
-type alias_environment = { tycon : tycon_environment ;
-                           effectname : effect_environment }
-                            [@@derving show]
 type typing_environment = { var_env    : environment ;
                             rec_vars   : StringSet.t ;
-                            tycon_env  : tycon_environment ;
-                            effect_env : effect_environment ;
+                            alias_env  : alias_environment ;
                             effect_row : row;
                             desugared  : bool }
                             [@@deriving show]
 
 let empty_typing_environment = { var_env    = Env.empty;
                                  rec_vars   = StringSet.empty;
-                                 tycon_env  = Env.empty;
-                                 effect_env = Env.empty;
+                                 alias_env  = Env.empty;
                                  effect_row = make_empty_closed_row ();
                                  desugared  = false }
-
-let typing_to_alias typing_env =
-  { tycon = typing_env.tycon_env ; effectname = typing_env.effect_env }
 
 (* Which printer to use *)
 type pretty_printer_engine = Old | Roundtrip | Derived
@@ -4384,12 +4336,6 @@ let string_of_tycon_spec : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bo
   build_tyvar_names ~refresh_tyvar_names free_bound_tycon_type_vars [tycon];
   generate_string policy Vars.tyvar_name_map (fun (module Printer : PRETTY_PRINTER) -> Printer.string_of_tycon_spec) tycon
 
-let string_of_effect_spec : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool -> effectalias_spec -> string
-  = fun ?(policy=Policy.default_policy) ?(refresh_tyvar_names=true) tycon ->
-  let policy = policy () in
-  build_tyvar_names ~refresh_tyvar_names free_bound_tycon_type_vars [tycon];
-  generate_string policy Vars.tyvar_name_map (fun (module Printer : PRETTY_PRINTER) -> Printer.string_of_effect_spec) tycon
-
 let string_of_quantifier : ?policy:(unit -> Policy.t) -> ?refresh_tyvar_names:bool -> Quantifier.t -> string
   = fun ?(policy=Policy.default_policy) ?(refresh_tyvar_names=true) q ->
   let policy = policy () in
@@ -4404,12 +4350,11 @@ let normalise_typing_environment env =
 
 (* Functions on environments *)
 let extend_typing_environment
-    {var_env = l; rec_vars = lvars; tycon_env = al; effect_env = eal; effect_row = _; desugared = _;  }
-    {var_env = r; rec_vars = rvars; tycon_env = ar; effect_env = ear; effect_row = er; desugared = dr } : typing_environment =
+    {var_env = l; rec_vars = lvars; alias_env = al; effect_row = _; desugared = _;  }
+    {var_env = r; rec_vars = rvars; alias_env = ar; effect_row = er; desugared = dr } : typing_environment =
   { var_env    = Env.extend l r
   ; rec_vars   = StringSet.union lvars rvars
-  ; tycon_env  = Env.extend al ar
-  ; effect_env = Env.extend eal ear
+  ; alias_env  = Env.extend al ar
   ; effect_row = er
   ; desugared  = dr }
 
@@ -4597,12 +4542,12 @@ let is_sub_type, is_sub_row =
                         is_sub_type rec_vars (t', t))
                   | Absent
                   | Meta _ -> false
-                  | _ -> raise tag_expectation_mismatch
+                  | _ -> Debug.print "in 4541 :" ; raise tag_expectation_mismatch
                 else
                   false
              | Absent -> true
              | Meta _ -> assert false (* TODO *)
-             | _ -> raise tag_expectation_mismatch
+             | _ -> Debug.print "in 4546 :" ; raise tag_expectation_mismatch
            ) lfield_env true in
        let sub_row_vars =
          match Unionfind.find lrow_var, Unionfind.find rrow_var with
@@ -4614,7 +4559,7 @@ let is_sub_type, is_sub_row =
             raise (internal_error "not implemented subtyping on recursive rows yet")
          | _, _ -> false in
        sub_fields && sub_row_vars
-    | _ -> raise tag_expectation_mismatch
+    | _ -> Debug.print "in 4558 :" ; raise tag_expectation_mismatch
   and is_sub_row =
     fun rec_vars (lrow, rrow) ->
     match lrow, rrow with
@@ -4628,12 +4573,12 @@ let is_sub_type, is_sub_row =
                                    | Present t' ->
                                        is_sub_type rec_vars (t, t')
                                    | Absent | Meta _ -> false
-                                   | _ -> raise tag_expectation_mismatch
+                                   | _ -> Debug.print "in 4572 :" ; raise tag_expectation_mismatch
                                else
                                  false
                            | Absent -> true
                            | Meta _ -> assert false (* TODO *)
-                           | _ -> raise tag_expectation_mismatch
+                           | _ -> Debug.print "in 4577 :" ; raise tag_expectation_mismatch
           ) lfield_env true
       in
       let sub_row_vars =
@@ -4648,7 +4593,7 @@ let is_sub_type, is_sub_row =
           | _, _ -> false
       in
       sub_fields && sub_row_vars
-    | _ -> raise tag_expectation_mismatch
+    | _ -> Debug.print "in 4592 :" ; raise tag_expectation_mismatch
   in
   ((fun t -> is_sub_type S.empty t),
    (fun row -> is_sub_row S.empty row))
@@ -4682,7 +4627,7 @@ let extend_row_check_duplicates fields row =
          fields
          (fields', false) in
      Row (unified_fields,row_var, dual), has_duplicates
-  | _ -> raise tag_expectation_mismatch
+  | _ -> Debug.print "in 4626 :" ; raise tag_expectation_mismatch
 
 let extend_row_safe fields row =
   match extend_row_check_duplicates fields row with
@@ -4695,13 +4640,13 @@ let open_row subkind = function
   | Row (fieldenv, rho, dual) when rho = closed_row_var ->
      Row (fieldenv, fresh_row_variable subkind, dual)
   | Row _ -> raise (internal_error "attempt to open an already open row")
-  | _ -> raise tag_expectation_mismatch
+  | _ -> Debug.print "in 4639 :" ; raise tag_expectation_mismatch
 
 let close_row = function
   | Row (fieldenv, rho, dual) when rho <> closed_row_var ->
      Row (fieldenv, closed_row_var, dual)
   | Row _ -> raise (internal_error "attempt to close an already closed row")
-  | _ -> raise tag_expectation_mismatch
+  | _ -> Debug.print "in 4645 :" ; raise tag_expectation_mismatch
 
 let closed_wild_row = make_singleton_closed_row wild_present
 
@@ -4712,7 +4657,7 @@ let remove_field : ?idempotent:bool -> Label.t -> row -> row
      if idempotent || StringMap.mem lbl fieldenv
      then Row (StringMap.remove lbl fieldenv, var, dual)
      else raise (internal_error "attempt to remove non-existent field")
-  | _ -> raise tag_expectation_mismatch
+  | _ -> Debug.print "in 4656 :" ; raise tag_expectation_mismatch
 
 
 

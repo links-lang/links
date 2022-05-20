@@ -71,10 +71,9 @@ class map :
     method tybinop         : tyarg list * BinaryOp.t -> tyarg list * BinaryOp.t
     method bindingnode     : bindingnode -> bindingnode
     method binding         : binding -> binding
-    method typenamenode    : typenamenode -> typenamenode
-    method typename        : typename -> typename
-    method effectnamenode  : effectnamenode -> effectnamenode
-    method effectname      : effectname -> effectname
+    method aliasnode       : aliasnode -> aliasnode
+    method alias           : alias -> alias
+    method aliasbody       : aliasbody -> aliasbody
     method function_definition : function_definition -> function_definition
     method recursive_function  : recursive_function -> recursive_function
     method recursive_functionnode : recursive_functionnode -> recursive_functionnode
@@ -156,10 +155,9 @@ class fold :
     method tybinop         : tyarg list * BinaryOp.t -> 'self
     method bindingnode     : bindingnode -> 'self
     method binding         : binding -> 'self
-    method typenamenode    : typenamenode -> 'self
-    method typename        : typename -> 'self
-    method effectnamenode  : effectnamenode -> 'self
-    method effectname      : effectname -> 'self
+    method aliasnode       : aliasnode -> 'self
+    method alias           : alias -> 'self
+    method aliasbody       : aliasbody -> 'self
     method function_definition : function_definition -> 'self
     method recursive_function  : recursive_function -> 'self
     method recursive_functionnode  : recursive_functionnode -> 'self
@@ -183,10 +181,9 @@ object ('self)
   method binder          : Binder.with_pos -> 'self * Binder.with_pos
   method binding         : binding -> 'self * binding
   method bindingnode     : bindingnode -> 'self * bindingnode
-  method typenamenode    : typenamenode -> 'self * typenamenode
-  method typename        : typename -> 'self * typename
-  method effectnamenode  : effectnamenode -> 'self * effectnamenode
-  method effectname      : effectname -> 'self * effectname
+  method aliasnode       : aliasnode -> 'self * aliasnode
+  method alias           : alias -> 'self * alias
+  method aliasbody       : aliasbody -> 'self * aliasbody
   method binop           : BinaryOp.t -> 'self * BinaryOp.t
   method tybinop         : tyarg list * BinaryOp.t -> 'self * (tyarg list * BinaryOp.t)
   method bool            : bool -> 'self * bool

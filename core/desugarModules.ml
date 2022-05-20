@@ -446,7 +446,7 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
             fs' []
         in
         Funs fs''
-      | Typenames ts ->
+      | Aliases ts ->
        (* Must be processed before any mutual function bindings in
           the same mutual binding group. *)
        (* Same procedure as above. *)
@@ -459,11 +459,11 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
          let ts'' =
            List.fold_right
              (fun (name, tyvars, dt, pos) ts ->
-                 let dt' = self#datatype' dt in
+                 let dt' = self#aliasbody dt in
                  SourceCode.WithPos.make ~pos (name, tyvars, dt') :: ts)
              ts' []
            in
-           Typenames ts''
+           Aliases ts''
       | Val (pat, (tvs, body), loc, dt) ->
        (* It is important to process [body] before [pat] to avoid
           inadvertently bringing the binder(s) in [pat] into the
