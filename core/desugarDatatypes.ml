@@ -309,7 +309,7 @@ module Desugar = struct
     (dt, Some (datatype alias_env dt))
 
   let row' alias_env ((r, _) :row') =
-    (r, Some (row alias_env r (WithPos.make (Datatype.Effect r)))) (* TODO(rj) should keep the pos *)
+    (r, Some (Types.Effect (row alias_env r (WithPos.make (Datatype.Effect r))))) (* TODO(rj) should keep the pos *)
 
   let aliasbody alias_env = function
     | Typename dt' -> Typename (datatype' alias_env dt')
