@@ -15,8 +15,7 @@ val typ_rigid : Types.datatype -> (Types.type_arg list * Types.datatype)
 val datatype : instantiation_maps -> Types.datatype -> Types.datatype
 val row : instantiation_maps -> Types.row -> Types.row
 val presence : instantiation_maps -> Types.field_spec -> Types.field_spec
-val alias : string -> Types.type_arg list -> Types.tycon_environment -> Types.datatype
-val effectalias : string -> Types.type_arg list -> Types.effect_environment -> Types.datatype
+val alias : string -> Types.type_arg list -> Types.alias_environment -> Types.datatype
 val recursive_application : string -> Quantifier.t list -> Types.type_arg list -> Types.datatype -> Types.datatype
 
 (* Given a quantified type and a list of type arguments, create the corresponding instantiation map *)
