@@ -123,7 +123,7 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
                (fun k s () ->
                  Printf.fprintf stderr "typename %s = %s\n" k
                    (Types.string_of_tycon_spec s))
-               (Lib.typing_env.Types.tycon_env) ();
+               (Lib.typing_env.Types.alias_env) ();
              StringSet.iter (fun n ->
                  let t = Env.String.find n Lib.type_env in
                  Printf.fprintf stderr " %-16s : %s\n"
@@ -155,14 +155,14 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
         ((fun context _ ->
           let tycon_env =
             let tenv = Context.typing_environment context in
-            tenv.Types.tycon_env
+            tenv.Types.alias_env
           in
           StringSet.iter (fun k ->
               let s = Env.String.find k tycon_env in
               Printf.fprintf stderr " %s = %s\n"
                 (Module_hacks.Name.prettify k)
                 (Types.string_of_tycon_spec s))
-            (StringSet.diff (Env.String.domain tycon_env) (Env.String.domain Lib.typing_env.Types.tycon_env));
+            (StringSet.diff (Env.String.domain tycon_env) (Env.String.domain Lib.typing_env.Types.alias_env));
           context),
          "display the current type alias environment");
 
@@ -221,7 +221,7 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
         ((fun context args ->
           let tenv, aliases =
             let tyenv = Context.typing_environment context in
-            tyenv.Types.var_env, tyenv.Types.tycon_env
+            tyenv.Types.var_env, tyenv.Types.alias_env
           in
           match args with
           | [] -> prerr_endline "syntax: @withtype type"; context
@@ -265,26 +265,19 @@ let execute_directive context (name, args) =
 
 let handle previous_context current_context = function
   | `Definitions _defs ->
-     let tycon_env', effect_env' =
+     let tycon_env' =
        let tenv  = Context.typing_environment previous_context in
        let tenv' = Context.typing_environment current_context in
-       let tycon_env, tycon_env', effect_env, effect_env' =
-         Types.(tenv.tycon_env, tenv'.tycon_env, tenv.effect_env, tenv'.effect_env)
+       let tycon_env, tycon_env'=
+         Types.(tenv.alias_env, tenv'.alias_env)
        in
-       ( Env.String.fold
+       Env.String.fold
          (fun name def new_tycons ->
            (* This is a bit of a hack, but it will have to do until names become hygienic. *)
            if not (Env.String.has name tycon_env) || not (Env.String.find name tycon_env == def)
            then Env.String.bind name def new_tycons
            else new_tycons)
-         tycon_env' Env.String.empty ,
-       Env.String.fold
-         (fun name def new_effects ->
-           (* This is a bit of a hack, but it will have to do until names become hygienic. *)
-           if not (Env.String.has name effect_env) || not (Env.String.find name effect_env == def)
-           then Env.String.bind name def new_effects
-           else new_effects)
-         effect_env' Env.String.empty )
+         tycon_env' Env.String.empty
      in
      Env.String.fold
        (fun name spec () ->
@@ -292,12 +285,6 @@ let handle previous_context current_context = function
            (Module_hacks.Name.prettify name)
            (Types.string_of_tycon_spec spec))
        tycon_env' ();
-     Env.String.fold
-       (fun name spec () ->
-         Printf.printf "%s = %s\n%!"
-           (Module_hacks.Name.prettify name)
-           (Types.string_of_effect_spec spec))
-       effect_env' ();
      let diff previous_context current_context =
        let new_vars =
          let nenv, nenv' =

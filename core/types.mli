@@ -214,29 +214,15 @@ type tycon_spec = [
   | `Mutual of (Quantifier.t list * tygroup ref) (* Type in same recursive group *)
 ]
 
-type effectalias_type = Quantifier.t list * row [@@deriving show]
-
-type effectalias_spec = [
-  | `Alias of effectalias_type
-  | `Abstract of Abstype.t
-  | `Mutual of (Quantifier.t list * tygroup ref) (* Type in same recursive group *)
-]
-
 type environment        = datatype Env.String.t
-type tycon_environment  = tycon_spec Env.String.t
-type effect_environment = effectalias_spec Env.String.t
-type alias_environment = { tycon : tycon_environment ;
-                           effectname : effect_environment }
+type alias_environment  = tycon_spec Env.String.t
 type typing_environment = { var_env    : environment ;
                             rec_vars   : Utility.StringSet.t ;
-                            tycon_env  : tycon_environment ;
-                            effect_env : effect_environment ;
+                            alias_env  : alias_environment ;
                             effect_row : row ;
                             desugared : bool }
 
 val empty_typing_environment : typing_environment
-
-val typing_to_alias : typing_environment -> alias_environment
 
 val concrete_type : datatype -> datatype
 val concrete_field_spec : field_spec -> field_spec
@@ -429,8 +415,6 @@ val string_of_row_var    : ?policy:(unit -> Policy.t)
                         -> ?refresh_tyvar_names:bool -> row_var    -> string
 val string_of_tycon_spec : ?policy:(unit -> Policy.t)
                         -> ?refresh_tyvar_names:bool -> tycon_spec -> string
-val string_of_effect_spec : ?policy:(unit -> Policy.t)
-                        -> ?refresh_tyvar_names:bool -> effectalias_spec -> string
 val string_of_environment        : environment -> string
 val string_of_typing_environment : typing_environment -> string
 

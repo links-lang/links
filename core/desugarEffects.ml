@@ -115,7 +115,7 @@ type tycon_info = Kind.t list * bool * Types.typ option
 
 type simple_tycon_env = tycon_info SEnv.t
 
-let simplify_tycon_env (tycon_env : Types.tycon_environment) : simple_tycon_env
+let simplify_tycon_env (tycon_env : Types.alias_environment) : simple_tycon_env
     =
   let simplify_tycon name tycon simpl_env =
     let param_kinds, internal_type =
@@ -1090,7 +1090,7 @@ class main_traversal simple_tycon_env =
           (* First determine which types require an implicit effect variable. *)
           let implicits, dep_graph =
             List.fold_left
-              (fun (implicits, dep_graph) { node = t, _, b; _ } ->
+              (fun (implicits, dep_graph) { node = t, _, b; pos ;_ } ->
                 match b with
                   | Typename (d,_) ->
                     let d = cleanup_effects tycon_env d in
@@ -1102,10 +1102,14 @@ class main_traversal simple_tycon_env =
                         StringMap.add t (StringSet.elements used_mutuals) dep_graph
                     in
                     (implicits, dep_graph)
-                  | Effectname _ -> (* do nothing ? *)
-                    let implicits = StringMap.add t false implicits in
+                  | Effectname (r,_) -> (* is this the right thing to do ? *)
+                    let d = cleanup_effects tycon_env (SourceCode.WithPos.make ~pos (Datatype.Effect r)) in
+                    let eff = gather_mutual_info tycon_env d in
+                    let has_imp = eff#has_implicit in
+                    let implicits = StringMap.add t has_imp implicits in
+                    let used_mutuals = StringSet.inter eff#used_types tycons in
                     let dep_graph =
-                        StringMap.add t [] dep_graph
+                        StringMap.add t (StringSet.elements used_mutuals) dep_graph
                     in
                     (implicits, dep_graph))
               (StringMap.empty, StringMap.empty)
@@ -1256,12 +1260,12 @@ class main_traversal simple_tycon_env =
         (o, rec_def)
   end
 
-let program (tycon_env : Types.tycon_environment) p =
+let program (tycon_env : Types.alias_environment) p =
   let s_env = simplify_tycon_env tycon_env in
   let v = new main_traversal s_env in
   snd (v#program p)
 
-let sentence (tycon_env : Types.tycon_environment) =
+let sentence (tycon_env : Types.alias_environment) =
   let s_env = simplify_tycon_env tycon_env in
   function
   | Definitions bs ->
@@ -1274,7 +1278,7 @@ let sentence (tycon_env : Types.tycon_environment) =
       Expression p
   | Directive d -> Directive d
 
-let standalone_signature (tycon_env : Types.tycon_environment) t =
+let standalone_signature (tycon_env : Types.alias_environment) t =
   let s_env = simplify_tycon_env tycon_env in
   let v = new main_traversal s_env in
   snd (v#datatype t)
@@ -1287,12 +1291,12 @@ module Untyped = struct
   let program state program' =
     let open Types in
     let tyenv = Context.typing_environment (context state) in
-    let program' = program tyenv.tycon_env program' in
+    let program' = program tyenv.alias_env program' in
     return state program'
 
   let sentence state sentence' =
     let open Types in
     let tyenv = Context.typing_environment (context state) in
-    let sentence'' = sentence tyenv.tycon_env sentence' in
+    let sentence'' = sentence tyenv.alias_env sentence' in
     return state sentence''
 end

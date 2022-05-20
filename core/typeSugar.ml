@@ -1649,10 +1649,7 @@ type context = Types.typing_environment = {
      type inference.  Instead, we use it to resolve references
      introduced here to aliases defined in the prelude such as "Page"
      and "Formlet". *)
-  tycon_env : Types.tycon_environment;
-
-  (* mapping from effect alias names to the effect row they name *)
-  effect_env : Types.effect_environment;
+  alias_env : Types.alias_environment;
 
   (* the current effects *)
   effect_row : Types.row;
@@ -1665,15 +1662,13 @@ type context = Types.typing_environment = {
 let empty_context eff desugared =
   { var_env    = Env.empty;
     rec_vars   = StringSet.empty;
-    tycon_env  = Env.empty;
-    effect_env = Env.empty;
+    alias_env  = Env.empty;
     effect_row = eff;
     desugared }
 
 let bind_var         context (v, t) = {context with var_env    = Env.bind v t context.var_env}
 let unbind_var       context v      = {context with var_env    = Env.unbind v context.var_env}
-let bind_tycon       context (v, t) = {context with tycon_env  = Env.bind v t context.tycon_env}
-let bind_effectnames context (v, t) = {context with effect_env = Env.bind v t context.effect_env}
+let bind_alias       context (v, t) = {context with alias_env  = Env.bind v t context.alias_env}
 let bind_effects     context r      = {context with effect_row = r}
 
 (* TODO(dhil): I have extracted the Usage abstraction from my name
@@ -1860,7 +1855,7 @@ let add_usages (p, t) m = (p, t, m)
 let add_empty_usages (p, t) = (p, t, Usage.empty)
 
 let type_unary_op pos env =
-  let datatype = datatype env.tycon_env in
+  let datatype = datatype env.alias_env in
   function
   | UnaryOp.Minus      -> add_empty_usages (datatype "(Int) -> Int")
   | UnaryOp.FloatMinus -> add_empty_usages (datatype "(Float) -> Float")
@@ -1874,7 +1869,7 @@ let type_unary_op pos env =
 let type_binary_op pos ctxt =
   let open BinaryOp in
   let open Types in
-  let datatype = datatype ctxt.tycon_env in function
+  let datatype = datatype ctxt.alias_env in function
   | Minus        -> add_empty_usages (Utils.instantiate ctxt.var_env "-")
   | FloatMinus   -> add_empty_usages (Utils.instantiate ctxt.var_env "-.")
   | RegexMatch flags ->
@@ -2919,7 +2914,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            let typ =
              let tlens = typ lens |> Lens_type_conv.lens_type_of_type ~die:(Gripers.die pos) in
              let trow = Lens.Type.sort tlens |> Lens.Sort.record_type in
-             let {tycon_env = context;_} = context in
+             let {alias_env = context;_} = context in
              let ltrow = Lens_type_conv.type_of_lens_phrase_type ~context trow in
              let tmatch = Types.make_pure_function_type [ltrow] Types.bool_type in
              unify (pos_and_typ tpredicate, (exp_pos lens, tmatch)) ~handle:Gripers.lens_predicate;
@@ -2954,7 +2949,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            let typ = typ lens |> Lens_type_conv.lens_type_of_type ~die:(Gripers.die pos) in
            Lens.Type.ensure_checked typ |> Lens_errors.unpack_lens_checked_result ~die:(Gripers.die pos);
            let sort = Lens.Type.sort typ in
-           let {tycon_env = context;_} = context in
+           let {alias_env = context;_} = context in
            let trowtype = Lens.Sort.record_type sort |> Lens_type_conv.type_of_lens_phrase_type ~context in
            LensGetLit (erase lens, Some trowtype), Types.make_list_type trowtype, usages lens
         | LensCheckLit (lens, _) ->
@@ -2971,7 +2966,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            Lens.Type.ensure_checked typ |> Lens_errors.unpack_lens_checked_result ~die:(Gripers.die pos);
            let data = tc data in
            let trow = Lens.Type.sort typ |> Lens.Sort.record_type in
-           let {tycon_env = context;_} = context in
+           let {alias_env = context;_} = context in
            let ltrow = Lens_type_conv.type_of_lens_phrase_type ~context trow in
            unify (pos_and_typ data, (exp_pos lens, Types.make_list_type ltrow)) ~handle:Gripers.lens_put_input;
            LensPutLit (erase lens, erase data, Some Types.unit_type), make_tuple_type [], Usage.combine (usages lens) (usages data)
@@ -3628,7 +3623,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                 (fun e ->
                    unify ~handle:Gripers.xml_attributes
                      (pos_and_typ e, no_pos (
-                        (Instantiate.alias "Attributes" [] context.tycon_env)))) attrexp
+                        (Instantiate.alias "Attributes" [] context.alias_env)))) attrexp
             and () =
               List.iter (fun child ->
                            unify ~handle:Gripers.xml_child (pos_and_typ child, no_pos Types.xml_type)) children in
@@ -3649,12 +3644,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            let yields = type_check context' yields in
            unify ~handle:Gripers.formlet_body (pos_and_typ body, no_pos Types.xml_type);
            (Formlet (erase body, erase yields),
-            Instantiate.alias "Formlet" [PrimaryKind.Type, typ yields] context.tycon_env,
+            Instantiate.alias "Formlet" [PrimaryKind.Type, typ yields] context.alias_env,
             Usage.combine (usages body) (Usage.restrict (usages yields) vs))
         | Page e ->
             let e = tc e in
               unify ~handle:Gripers.page_body (pos_and_typ e, no_pos Types.xml_type);
-              Page (erase e), Instantiate.alias "Page" [] context.tycon_env, usages e
+              Page (erase e), Instantiate.alias "Page" [] context.alias_env, usages e
         | FormletPlacement (f, h, attributes) ->
             let t = Types.fresh_type_variable (lin_any, res_any) in
 
@@ -3662,24 +3657,24 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             and h = tc h
             and attributes = tc attributes in
             let () = unify ~handle:Gripers.render_formlet
-              (pos_and_typ f, no_pos (Instantiate.alias "Formlet" [PrimaryKind.Type, t] context.tycon_env)) in
+              (pos_and_typ f, no_pos (Instantiate.alias "Formlet" [PrimaryKind.Type, t] context.alias_env)) in
             let () = unify ~handle:Gripers.render_handler
               (pos_and_typ h, (exp_pos f,
-                               Instantiate.alias "Handler" [PrimaryKind.Type, t] context.tycon_env)) in
+                               Instantiate.alias "Handler" [PrimaryKind.Type, t] context.alias_env)) in
             let () = unify ~handle:Gripers.render_attributes
-              (pos_and_typ attributes, no_pos (Instantiate.alias "Attributes" [] context.tycon_env))
+              (pos_and_typ attributes, no_pos (Instantiate.alias "Attributes" [] context.alias_env))
             in
               FormletPlacement (erase f, erase h, erase attributes), Types.xml_type, Usage.combine_many [usages f; usages h; usages attributes]
         | PagePlacement e ->
             let e = tc e in
-            let pt = Instantiate.alias "Page" [] context.tycon_env in
+            let pt = Instantiate.alias "Page" [] context.alias_env in
               unify ~handle:Gripers.page_placement (pos_and_typ e, no_pos pt);
               PagePlacement (erase e), Types.xml_type, usages e
         | FormBinding (e, pattern) ->
             let e = tc e
             and pattern = tpc pattern in
             let a = Types.fresh_type_variable (lin_unl, res_any) in
-            let ft = Instantiate.alias "Formlet" [PrimaryKind.Type, a] context.tycon_env in
+            let ft = Instantiate.alias "Formlet" [PrimaryKind.Type, a] context.alias_env in
               unify ~handle:Gripers.form_binding_body (pos_and_typ e, no_pos ft);
               unify ~handle:Gripers.form_binding_pattern (ppos_and_typ pattern, (exp_pos e, a));
               FormBinding (erase e, erase_pat pattern), Types.xml_type, usages e
@@ -3819,7 +3814,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             Block (bindings, erase e), typ e, usage_builder (usages e)
         | Regex r ->
             Regex (type_regex context r),
-            Instantiate.alias "Regex" [] context.tycon_env,
+            Instantiate.alias "Regex" [] context.alias_env,
             Usage.empty
         | Projection (r,l) ->
             (*
@@ -4855,10 +4850,9 @@ and type_binding : context -> binding -> binding * context * Usage.t =
       | Aliases ts ->
           let env = List.fold_left (fun env {node=(name, vars, b); _} ->
               match b with
-                | Typename (_, Some dt) ->
-                    bind_tycon env (name, `Alias (List.map (SugarQuantifier.get_resolved_exn) vars, dt))
-                | Effectname (_, Some r) ->
-                    bind_effectnames env (name, `Alias (List.map (SugarQuantifier.get_resolved_exn) vars, r))
+                | Typename   (_, Some dt)
+                | Effectname (_, Some dt) ->
+                    bind_alias env (name, `Alias (List.map (SugarQuantifier.get_resolved_exn) vars, dt))
                 | _ -> raise (internal_error "typeSugar.ml: unannotated type")
           ) empty_context ts in
           (Aliases ts, env, Usage.empty)

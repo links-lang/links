@@ -20,12 +20,12 @@ module AliasEnv = Env.String
 
 (* This is done in two stages because the datatype for regexes refers
    to the String alias *)
-let alias_env : Types.tycon_environment = DefaultAliases.alias_env
+let alias_env : Types.alias_environment = DefaultAliases.alias_env
 
-let alias_env : Types.tycon_environment =
+let alias_env : Types.alias_environment =
   AliasEnv.bind "Repeat" (`Alias ([], (DesugarDatatypes.read ~aliases:alias_env Linksregex.Repeat.datatype))) alias_env
 
-let alias_env : Types.tycon_environment =
+let alias_env : Types.alias_environment =
   AliasEnv.bind "Regex" (`Alias ([], (DesugarDatatypes.read ~aliases:alias_env Linksregex.Regex.datatype))) alias_env
 
 let datatype = DesugarDatatypes.read ~aliases:alias_env
@@ -1725,8 +1725,7 @@ let type_env : Types.environment =
 
 let typing_env = {Types.var_env = type_env;
                   Types.rec_vars = StringSet.empty;
-                  tycon_env = alias_env;
-                  effect_env = Env.String.empty;
+                  alias_env = alias_env;
                   Types.effect_row = Types.closed_wild_row;
                   Types.desugared = false }
 

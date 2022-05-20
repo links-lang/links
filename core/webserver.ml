@@ -364,7 +364,7 @@ struct
     let start_server host port rt =
 
       let render_cont () =
-        let (_, nenv, {Types.tycon_env = tycon_env; _ }) = !env in
+        let (_, nenv, {Types.alias_env = tycon_env; _ }) = !env in
         let _, x = Var.fresh_global_var_of_type (Instantiate.alias "Page" [] tycon_env) in
         let render_page = Env.String.find "renderPage" nenv in
         let tail = Ir.Apply (Ir.Variable render_page, [Ir.Variable x]) in

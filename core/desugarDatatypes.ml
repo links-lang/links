@@ -152,11 +152,11 @@ module Desugar = struct
               else
                 raise (TypeApplicationArityMismatch { pos; name = tycon; expected = qn; provided = tn })
             in
-            begin match SEnv.find_opt tycon alias_env.tycon with
+            begin match SEnv.find_opt tycon alias_env with
               | None -> raise (UnboundTyCon (pos, tycon))
               | Some (`Alias (qs, _dt)) ->
                   let ts = match_quantifiers snd qs in
-                  Instantiate.alias tycon ts alias_env.tycon
+                  Instantiate.alias tycon ts alias_env
               | Some (`Abstract abstype) ->
                   let ts = match_quantifiers identity (Abstype.arity abstype) in
                   Application (abstype, ts)
@@ -248,13 +248,13 @@ module Desugar = struct
               else
                 raise (TypeApplicationArityMismatch { pos = node.pos; name = name; expected = qn; provided = tn })
             in
-            begin match SEnv.find_opt name alias_env.effectname with
+            begin match SEnv.find_opt name alias_env with
               | None -> raise (UnboundTyCon (node.pos, name))
               | Some (`Alias (qs, _r)) ->
                   let ts = match_quantifiers snd qs in
-                  let Alias(_,body) = Instantiate.effectalias name ts alias_env.effectname in
+                  let Alias(_,body) = Instantiate.alias name ts alias_env in
                   body
-                  (* Instantiate.effectalias name ts alias_env.effectname *)
+                  (* Instantiate.alias name ts alias_env *)
               | Some (`Abstract abstype) ->
                   let ts = match_quantifiers identity (Abstype.arity abstype) in
                   Application (abstype, ts)
@@ -263,6 +263,7 @@ module Desugar = struct
                    * a `RecursiveApplication. *)
                   let r_args = match_quantifiers snd qs in
                   let r_unwind args dual =
+                    Debug.print "et ça boucel [desugarDT/r_unwind]" ;
                     let _, body = StringMap.find name !tygroup_ref.type_map in
                     let body = Instantiate.recursive_application name qs args body in
                     if dual then dual_type body else body
@@ -420,26 +421,24 @@ object (self)
             let qs = Desugar.desugar_quantifiers args  in
             match b with
               | Typename (d,_) ->
-                let alias_env = { tycon = SEnv.bind t (`Mutual (qs, tygroup_ref)) alias_env.tycon ;
-                                  effectname = alias_env.effectname } in
+                let alias_env = SEnv.bind t (`Mutual (qs, tygroup_ref)) alias_env in
                 (alias_env, WithPos.make ~pos (t, args, Typename (d, None)) :: ts)
               | Effectname (r,_) ->
-                let alias_env = { tycon = alias_env.tycon ;
-                                  effectname = SEnv.bind t (`Mutual (qs, tygroup_ref)) alias_env.effectname } in
+                let alias_env = SEnv.bind t (`Mutual (qs, tygroup_ref)) alias_env in
                 (alias_env, WithPos.make ~pos (t, args, Effectname (r, None)) :: ts) )
             (alias_env, []) ts in
 
         (* Desugar all DTs, given the temporary new alias environment. *)
         let desugared_mutuals =
-          List.map (fun {node=(name, args, dt); pos} ->
+          List.map (fun {node=(name, args, b); pos} ->
             (* Desugar the datatype *)
             (* Check if the datatype has actually been desugared *)
-            let dt' = match Desugar.aliasbody mutual_env dt with
-                | Typename   (_, Some _) as dt' -> dt'
-                | Effectname (_, Some _) as dt' -> dt'
+            let b' = match Desugar.aliasbody mutual_env b with
+                | Typename   (_, Some _) as b' -> b'
+                | Effectname (_, Some _) as b' -> b'
                 | _ -> assert false
             in
-            WithPos.make ~pos (name, args, dt')
+            WithPos.make ~pos (name, args, b')
           ) ts in
 
         (* Given the desugared datatypes, we now need to handle linearity.
@@ -447,16 +446,11 @@ object (self)
         let (linearity_env, dep_graph) =
           List.fold_left (fun (lin_map, dep_graph) mutual   ->
             match SourceCode.WithPos.node mutual with
-            | (name, _, Typename (_, dt)) ->
+            | (name, _, Typename   (_, dt))
+            | (name, _, Effectname (_, dt)) ->
               let dt = OptionUtils.val_of dt in
               let lin_map = StringMap.add name (not @@ Unl.type_satisfies dt) lin_map in
               let deps = recursive_applications dt in
-              let dep_graph = (name, deps) :: dep_graph in
-              (lin_map, dep_graph)
-            | (name, _, Effectname (_, r)) ->
-              let r = OptionUtils.val_of r in
-              let lin_map = StringMap.add name (not @@ Unl.type_satisfies r) lin_map in
-              let deps = recursive_applications r in
               let dep_graph = (name, deps) :: dep_graph in
               (lin_map, dep_graph)
           ) (StringMap.empty, []) desugared_mutuals in
@@ -492,15 +486,10 @@ object (self)
           List.fold_left (fun alias_env {node=(t, args, b); _} ->
             let semantic_qs = List.map SugarQuantifier.get_resolved_exn args in
             let dt, alias_env = match b with
-              | Typename (_, d') ->
-                let dt = OptionUtils.val_of d' in
-                let alias_env = { tycon = SEnv.bind t (`Alias (semantic_qs, dt)) alias_env.tycon ;
-                                  effectname = alias_env.effectname } in
-                (dt, alias_env)
-              | Effectname (_, r') ->
-                let dt = OptionUtils.val_of r' in
-                let alias_env = { tycon = alias_env.tycon ;
-                                  effectname = SEnv.bind t (`Alias (semantic_qs, dt)) alias_env.effectname } in
+              | Typename   (_, dt')
+              | Effectname (_, dt') ->
+                let dt = OptionUtils.val_of dt' in
+                let alias_env = SEnv.bind t (`Alias (semantic_qs, dt)) alias_env in
                 (dt, alias_env)
             in
             tygroup_ref :=
@@ -567,7 +556,7 @@ let toplevel_bindings alias_env bs =
 
 let program typing_env (bindings, p : Sugartypes.program) :
     Sugartypes.program =
-  let alias_env = Types.typing_to_alias typing_env in
+  let alias_env = typing_env.alias_env in
   let alias_env, bindings =
     toplevel_bindings alias_env bindings in
   (* let typing_env = { typing_env with tycon_env = alias_env } in *)
@@ -575,9 +564,9 @@ let program typing_env (bindings, p : Sugartypes.program) :
 
 let sentence typing_env = function
   | Definitions bs ->
-      let _alias_env, bs' = toplevel_bindings (Types.typing_to_alias typing_env) bs in
+      let _alias_env, bs' = toplevel_bindings typing_env.alias_env bs in
         Definitions bs'
-  | Expression  p  -> let _o, p = phrase (Types.typing_to_alias typing_env) p in
+  | Expression  p  -> let _o, p = phrase typing_env.alias_env p in
       Expression p
   | Directive   d  -> Directive d
 
@@ -585,7 +574,7 @@ let read ~aliases s =
   let dt, _ = parse_string ~in_context:(LinksLexer.fresh_context ()) datatype s in
   let dt = DesugarTypeVariables.standalone_signature dt in
   let dt = DesugarEffects.standalone_signature aliases dt in
-  let _, ty = Generalise.generalise Env.String.empty (Desugar.datatype {tycon = aliases ; effectname = SEnv.empty} dt) in
+  let _, ty = Generalise.generalise Env.String.empty (Desugar.datatype aliases dt) in
   ty
 
 module Untyped = struct
