@@ -58,6 +58,14 @@ let list     = {
   arity      = [pk_type, (lin_unl, res_any)] ;
 }
 
+(* WR: used by DB queries *)
+let mapentry = {
+  Abstype.id = "MapEntry" ;
+  name       = "MapEntry" ;
+  arity      = [pk_type, (lin_unl, res_any)
+               ;pk_type, (lin_unl, res_any)] ;
+}
+
 let event    = {
   Abstype.id = "Event" ;
   name       = "Event" ;
@@ -4583,6 +4591,8 @@ let make_tuple_type (ts : datatype list) : datatype =
           ts))
 
 let make_list_type t = Application (list, [PrimaryKind.Type, t])
+let make_mapentry_type t t' =
+        Application (mapentry, [PrimaryKind.Type, t; PrimaryKind.Type, t'])
 let make_process_type r = Application (process, [PrimaryKind.Row, r])
 
 let make_transaction_time_data_type typ =
@@ -4726,3 +4736,9 @@ let pp_tycon_spec : Format.formatter -> tycon_spec -> unit = fun fmt t ->
 let unwrap_list_type = function
   | Application ({Abstype.id = "List"; _}, [PrimaryKind.Type, t]) -> t
   | _ -> assert false
+
+let unwrap_mapentry_type = function
+  | Application ({Abstype.id = "MapEntry"; _}, [PrimaryKind.Type, t; PrimaryKind.Type, t']) -> t, t'
+  | _ -> assert false
+
+let unwrap_map_type = unwrap_list_type ->- unwrap_mapentry_type

@@ -137,3 +137,10 @@ sig
 end
 
 module Transform : QUERY_VISITOR
+
+module FlattenRecords :
+  sig
+    val flatten_query_type : Types.t -> Types.t
+    val flatten_query : t -> t
+    val unflatten_query : Types.t -> Value.t -> Value.t
+  end 

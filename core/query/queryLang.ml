@@ -328,32 +328,16 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
   | GroupBy ((_x,i),q) ->
       let ity = te i in
       let elty = TypeUtils.element_type ~overstep_quantifiers:true (te q) in
-      StringMap.empty
-      |> StringMap.add "1" ity
-      |> StringMap.add "2" elty
-      |> Types.make_record_type
+      Types.make_mapentry_type ity elty
       |> Types.make_list_type
   | Lookup (q, _) ->
-      begin
-        match TypeUtils.element_type ~overstep_quantifiers:true (te q) with
-        | Types.Record _ as rty -> StringMap.find "2" (recdty_field_types rty)
-        | ty ->
-            failwith
-              (Format.asprintf ("term:\n" ^^
-                  "%s\n" ^^
-                  "has type:\n" ^^
-                  "%a\n" ^^
-                  "but it was expected to have a record type.")
-                (string_of_t q) Types.pp_datatype ty)
-      end
+      Types.unwrap_map_type (te q)
+      |> snd
   | Singleton t -> Types.make_list_type (te t)
   | MapEntry (k,v) ->
       let tyk = te k in
       let tyv = te v in
-      StringMap.empty
-      |> StringMap.add "1" tyk
-      |> StringMap.add "2" tyv
-      |> Types.make_record_type
+      Types.make_mapentry_type tyk tyv
   | Record fields -> record fields
   | If (_, t, _) -> te t
   | Table Value.Table.{ row; _ } -> Types.make_list_type (Types.Record (Types.Row row))
@@ -984,3 +968,180 @@ struct
           (o, Lookup (q,i))
   end
 end
+
+module FlattenRecords =
+struct
+
+  (* this is a lightly generalised version of the flattening used by shredding
+   * TODO: verify that shredding works well with this version and remove the legacy code *)
+  let rec flatten_base_type = function
+  | Types.Primitive _ as t -> t
+  | Types.Record fields ->
+    Types.make_record_type
+      (StringMap.fold
+         (fun name t fields ->
+           match flatten_base_type t with
+             | Types.Record inner_fields ->
+               StringMap.fold
+                 (fun name' t fields ->
+                   StringMap.add (name ^ "@" ^ name') t fields)
+                 (field_types_of_row (Types.extract_row inner_fields))
+                 fields
+             | Types.Primitive _ as t ->
+               StringMap.add name t fields
+             | _ -> assert false)
+         (field_types_of_row (Types.extract_row fields))
+         StringMap.empty)
+  | t (* MapEntry *) ->
+    let kty, vty = Types.unwrap_mapentry_type t in
+    let kty' = flatten_base_type kty in
+    let vty' = flatten_base_type vty in
+    Types.make_mapentry_type kty' vty'
+
+  let flatten_query_type t =
+    Types.unwrap_list_type t
+    |> flatten_base_type
+    |> Types.make_list_type
+
+  let rec flatten_inner : t -> t =
+    function
+      | Constant c    -> Constant c
+      | Primitive p   -> Primitive p
+      | Apply (Primitive "Empty", [e]) -> Apply (Primitive "Empty", [flatten_inner_query e])
+      | Apply (Primitive "length", [e]) -> Apply (Primitive "length", [flatten_inner_query e])
+      | Apply (Primitive "tilde", [s; r]) as e ->
+          Debug.print ("Applying flatten_inner to tilde expression: " ^ show e);
+          Apply (Primitive "tilde", [flatten_inner s; flatten_inner r])
+      | Apply (Primitive f, es) -> Apply (Primitive f, List.map flatten_inner es)
+      | If (c, t, e)  ->
+        If (flatten_inner c, flatten_inner t, flatten_inner e)
+      | MapEntry (k,v) -> MapEntry (flatten_inner k, flatten_inner v)
+      | Project (_,_) as e ->
+        let rec flatten_projs acc = function
+        | Project (e', l) -> flatten_projs (l::acc) e'
+        | Var (_,_) as e' -> 
+          (* HACK: FIXME? this keeps z annotated with its original unflattened type *)
+          (* (we could use the flatten_type above, but we probably don't need the type to be accurate
+           * as all eta expansions have already happened) *)
+          let l' = acc |> List.rev |> String.concat "@"
+          in Project (e', l')
+        | _ -> assert false
+        in flatten_projs [] e
+      | Record fields ->
+        (* concatenate labels of nested records *)
+        Record
+          (StringMap.fold
+             (fun name body fields ->
+               match flatten_inner body with
+                 | Record inner_fields ->
+                   StringMap.fold
+                     (fun name' body fields ->
+                       StringMap.add (name ^ "@" ^ name') body fields)
+                     inner_fields
+                     fields
+                 | body ->
+                   StringMap.add name body fields)
+             fields
+             StringMap.empty)
+      | Variant ("Simply", x) ->
+          Variant ("Simply", flatten_inner x)
+      | Variant ("Seq", Singleton r) ->
+          Variant ("Seq", Singleton (flatten_inner r))
+      | Variant ("Seq", Concat rs) ->
+          Variant ("Seq",
+            Concat (List.map (
+              function | Singleton x -> Singleton (flatten_inner x) | _ -> assert false) rs))
+      | Variant ("Quote", Variant ("Simply", v)) ->
+          Variant ("Quote", Variant ("Simply", flatten_inner v))
+      (* Other regex variants which don't need to be traversed *)
+      | Variant (s, x) when s = "Repeat" || s = "StartAnchor" || s = "EndAnchor" ->
+          Variant (s, x)
+      | e ->
+        Debug.print ("Can't apply flatten_inner to: " ^ show e);
+        assert false
+
+  and flatten_inner_query : t -> t = fun e -> flatten_comprehension e
+
+  and flatten_comprehension : t -> t =
+    function
+      | For (tag, gs, os, body) ->
+        (* for heterogeneous and grouping, we need recursion on gs *)
+        let gs' = List.map (fun (pol,x,g) -> pol, x, flatten_comprehension g) gs in
+        let body' = flatten_comprehension body in
+        (* BUG BUG: flattening will render os useless *)
+        For (tag, gs', os, body')
+      | GroupBy ((x,kc), v) -> GroupBy ((x, flatten_inner kc), flatten_comprehension v)
+      | Prom q -> Prom (flatten_comprehension q)
+      | If (c, e, Concat []) ->
+        If (flatten_inner c, flatten_comprehension e, Concat [])
+      | Singleton e ->
+        let e' =
+          (* lift base expressions to records *)
+          match flatten_inner e with
+            | Record fields -> Record fields
+            | p -> Record (StringMap.add "@" p StringMap.empty)
+        in
+          Singleton e'
+      (* HACK: not sure if Concat is supposed to appear here...
+         but it can do inside "Empty" or "Length". *)
+      | Concat es ->
+        Concat (List.map flatten_comprehension es)
+      | Table _ | Dedup _ as e -> 
+        (* this is a (possibly deduplicated) table: it must be already flat *)
+        e
+      | e ->
+        Debug.print ("Can't apply flatten_comprehension to: " ^ show e);
+        assert false
+
+  let flatten_query = flatten_comprehension
+
+  (* unflattens a flattened record according to a given nested record type *)
+  let rec unflatten_record ?(prefix = "") nty frow : Value.t =
+    let ur = unflatten_record in
+    match nty with
+    | Types.Primitive _ -> List.assoc prefix frow
+    | Types.Record nrow ->
+        let nfields = 
+          StringMap.fold
+          <| (fun k v acc -> (k, ur ~prefix:(prefix ^ k ^ "@") v frow)::acc)
+          <| field_types_of_row (Types.extract_row nrow)
+          <| []
+        in `Record nfields
+    | _ -> assert false
+
+  let unflatten_query nty fval : Value.t = 
+    let of_list = function `List l -> l | _ -> assert false in
+    let of_record = function `Record r -> r | _ -> assert false in
+    (* under the assumption that the given type is a list *)
+    match Types.unwrap_list_type nty with
+    (* special reconstruction for finite maps of relations, resulting from grouping *)
+    (* standard reconstruction of relations over nested records of primitives *)
+    | Types.Record _ | Types.Primitive _ as vty-> `List (List.map (fun r -> unflatten_record vty (of_record r)) (of_list fval))
+    | t' (* assumed to be MapEntry *) ->
+      let kty, vty = Types.unwrap_mapentry_type t' in
+      let l = of_list fval in
+      let tbl = Hashtbl.create (List.length l) in
+      let insert (k,v) =
+        try
+          let vl = Hashtbl.find tbl k
+          in Hashtbl.replace tbl k (v::vl)
+        with Not_found -> Hashtbl.add tbl k [v]
+      in
+      let split r = 
+        unflatten_record ~prefix:"1@" kty r,
+        unflatten_record ~prefix:"2@" vty r
+      in
+      let pair x y = `Record [("1",x);("2",y)]
+      in
+      List.iter (of_record ->- split ->- insert) l;
+      `List (Hashtbl.fold (fun k v acc -> pair k (`List v)::acc) tbl [])
+
+    (* XXX: (bug?) from the shredding code, it would appear unit fields are not returned by a DB query 
+     * and need to be inferred from the nested type when unflattening -- we're not doing that here 
+     *
+     * or maybe we are? we proceed by case analysis on the nested type and, from the looks of it,
+     * the code, not finding any matching attribute in the DB result, should conjure a `Record StringMap.empty
+     * i.e. the unit value! *)
+
+end
+
