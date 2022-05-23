@@ -254,7 +254,7 @@ module Desugar = struct
                   let ts = match_quantifiers snd qs in
                   let Alias(_,body) = Instantiate.alias name ts alias_env in
                   body
-                  (* Instantiate.alias name ts alias_env *)
+                  (* Instantiate.effectalias name ts alias_env.effectname *)
               | Some (`Abstract abstype) ->
                   let ts = match_quantifiers identity (Abstype.arity abstype) in
                   Application (abstype, ts)
