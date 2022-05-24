@@ -710,6 +710,7 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
       method! row_var =
         let open Datatype in
         function
+        | EffectApplication _   (* TODO(rj) should I do semething there ? *)
         | Closed
         | Open _ ->
             self
@@ -978,7 +979,7 @@ class main_traversal simple_tycon_env =
       let module D = Datatype in
       let o, rv =
         match rv with
-        | D.EffectApplication (name, ts) -> (o, rv) (* TODO(rj) i may need to do something there *)
+        | D.EffectApplication _ -> (o, rv) (* TODO(rj) do i need to do something there ? *)
         | D.Closed -> (o, rv)
         | D.Open stv
           when (not (SugarTypeVar.is_resolved stv))

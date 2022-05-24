@@ -1429,14 +1429,9 @@ and flatten_row : row -> row = fun row ->
     (* HACK: this probably shouldn't happen! *)
     | Meta row_var -> Row (StringMap.empty, row_var, false)
     | Alias (_, row) -> row
-       (* Debug.print ("row: " ^ show_row row); *)
-       (* failwith "types.ml/flatten_row/Alias" *)
-    | RecursiveApplication { r_dual ; r_args ; r_unwind ; _ } -> (*  TODO HERE wtf à quoi sert cette fonction ? *)
-       (* Debug.print "am i there ? [types/flatten_row]" ; *)
-        (* if StringSet.mem r_unique_name rec_appl then *)
-        (*   row *)
-        (* else *)
-          r_unwind r_args r_dual
+    (* | RecursiveApplication { r_dual ; r_args ; r_unwind ; _ } -> *)
+    (* (\* TODO(rj) what should this function do ? r_unwind like this provokes a stack overflow *\) *)
+    (*       r_unwind r_args r_dual *)
     | _ -> assert false in
   let dual_if =
     match row with
@@ -4542,12 +4537,12 @@ let is_sub_type, is_sub_row =
                         is_sub_type rec_vars (t', t))
                   | Absent
                   | Meta _ -> false
-                  | _ -> Debug.print "in 4541 :" ; raise tag_expectation_mismatch
+                  | _ -> raise tag_expectation_mismatch
                 else
                   false
              | Absent -> true
              | Meta _ -> assert false (* TODO *)
-             | _ -> Debug.print "in 4546 :" ; raise tag_expectation_mismatch
+             | _ -> raise tag_expectation_mismatch
            ) lfield_env true in
        let sub_row_vars =
          match Unionfind.find lrow_var, Unionfind.find rrow_var with
@@ -4559,7 +4554,7 @@ let is_sub_type, is_sub_row =
             raise (internal_error "not implemented subtyping on recursive rows yet")
          | _, _ -> false in
        sub_fields && sub_row_vars
-    | _ -> Debug.print "in 4558 :" ; raise tag_expectation_mismatch
+    | _ -> raise tag_expectation_mismatch
   and is_sub_row =
     fun rec_vars (lrow, rrow) ->
     match lrow, rrow with
@@ -4573,12 +4568,12 @@ let is_sub_type, is_sub_row =
                                    | Present t' ->
                                        is_sub_type rec_vars (t, t')
                                    | Absent | Meta _ -> false
-                                   | _ -> Debug.print "in 4572 :" ; raise tag_expectation_mismatch
+                                   | _ -> raise tag_expectation_mismatch
                                else
                                  false
                            | Absent -> true
                            | Meta _ -> assert false (* TODO *)
-                           | _ -> Debug.print "in 4577 :" ; raise tag_expectation_mismatch
+                           | _ -> raise tag_expectation_mismatch
           ) lfield_env true
       in
       let sub_row_vars =
@@ -4593,7 +4588,7 @@ let is_sub_type, is_sub_row =
           | _, _ -> false
       in
       sub_fields && sub_row_vars
-    | _ -> Debug.print "in 4592 :" ; raise tag_expectation_mismatch
+    | _ -> raise tag_expectation_mismatch
   in
   ((fun t -> is_sub_type S.empty t),
    (fun row -> is_sub_row S.empty row))
@@ -4627,7 +4622,7 @@ let extend_row_check_duplicates fields row =
          fields
          (fields', false) in
      Row (unified_fields,row_var, dual), has_duplicates
-  | _ -> Debug.print "in 4626 :" ; raise tag_expectation_mismatch
+  | _ -> raise tag_expectation_mismatch
 
 let extend_row_safe fields row =
   match extend_row_check_duplicates fields row with
@@ -4640,13 +4635,13 @@ let open_row subkind = function
   | Row (fieldenv, rho, dual) when rho = closed_row_var ->
      Row (fieldenv, fresh_row_variable subkind, dual)
   | Row _ -> raise (internal_error "attempt to open an already open row")
-  | _ -> Debug.print "in 4639 :" ; raise tag_expectation_mismatch
+  | _ -> raise tag_expectation_mismatch
 
 let close_row = function
   | Row (fieldenv, rho, dual) when rho <> closed_row_var ->
      Row (fieldenv, closed_row_var, dual)
   | Row _ -> raise (internal_error "attempt to close an already closed row")
-  | _ -> Debug.print "in 4645 :" ; raise tag_expectation_mismatch
+  | _ -> raise tag_expectation_mismatch
 
 let closed_wild_row = make_singleton_closed_row wild_present
 
@@ -4657,7 +4652,7 @@ let remove_field : ?idempotent:bool -> Label.t -> row -> row
      if idempotent || StringMap.mem lbl fieldenv
      then Row (StringMap.remove lbl fieldenv, var, dual)
      else raise (internal_error "attempt to remove non-existent field")
-  | _ -> Debug.print "in 4656 :" ; raise tag_expectation_mismatch
+  | _ -> raise tag_expectation_mismatch
 
 
 

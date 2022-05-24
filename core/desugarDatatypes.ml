@@ -252,8 +252,10 @@ module Desugar = struct
               | None -> raise (UnboundTyCon (node.pos, name))
               | Some (`Alias (qs, _r)) ->
                   let ts = match_quantifiers snd qs in
-                  let Alias(_,body) = Instantiate.alias name ts alias_env in
-                  body
+                  begin match  Instantiate.alias name ts alias_env with
+                  | Alias(_,body) -> body
+                  | _ -> raise (internal_error "Instantiation failed")
+                  end
                   (* Instantiate.effectalias name ts alias_env.effectname *)
               | Some (`Abstract abstype) ->
                   let ts = match_quantifiers identity (Abstype.arity abstype) in
@@ -263,7 +265,6 @@ module Desugar = struct
                    * a `RecursiveApplication. *)
                   let r_args = match_quantifiers snd qs in
                   let r_unwind args dual =
-                    Debug.print "et ça boucel [desugarDT/r_unwind]" ;
                     let _, body = StringMap.find name !tygroup_ref.type_map in
                     let body = Instantiate.recursive_application name qs args body in
                     if dual then dual_type body else body
