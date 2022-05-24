@@ -54,3 +54,9 @@ Mutual declaration
 ./tests/effectname/mutual.links
 filemode : true
 stdout : () : ()
+
+Underscore in effect alias application
+./tests/effectname/underscore-not-working.links
+filemode : true
+stderr : @.*
+exit : 1

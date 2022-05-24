@@ -117,7 +117,7 @@ let get_unresolved_exn = function
 let get_unresolved_name_exn =
   get_unresolved_exn ->- fst3
 
- let get_resolved_type_exn =
+let get_resolved_type_exn =
    function
    | TResolvedType point -> point
    | _ -> raise (internal_error "requested kind does not match existing kind info")

@@ -286,7 +286,6 @@ module MutualBindings = struct
     let type_binding = function
       | [] -> []
       | ts -> [WithPos.make ~pos:mut_pos (Aliases (List.rev ts))] in
-
     type_binding mut_types @ fun_binding mut_funs
 end
 
