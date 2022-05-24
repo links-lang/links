@@ -62,6 +62,7 @@
     "do"
     "else"
     "escape"
+    "effectname"
     "false"
     "for"
     "forall"
