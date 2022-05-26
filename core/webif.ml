@@ -41,13 +41,23 @@ struct
        have to do something about it in order for attempts to remotely
        call primitive functions to work properly. *)
 
-    let func =
-      match fvs with
-      | `Record [] -> let i_fname = int_of_string fname in
-          if Lib.is_primitive_var i_fname
-          then `PrimitiveFunction (Lib.primitive_name i_fname, Some i_fname)
-          else `FunctionPtr (int_of_string fname, None)
-      | _ -> `FunctionPtr (int_of_string fname, Some fvs)
+    let i_fname = int_of_string fname in
+    let func,args =
+      match Lib.is_primitive_var i_fname, fvs with
+      | true, `Record [] -> `PrimitiveFunction (Lib.primitive_name i_fname, Some i_fname), args
+      | false, `Record [] ->
+        (* Should ideally handle failure to find function gracefully here. *)
+        let (_finfo, (_xs, _body), z, _location) =
+           Tables.find Tables.fun_defs i_fname in
+        (* This is a workaround for the fact that client-side code passes
+           the environment back as an ordinary (first) argument, while
+           the environment is expected as the second argument to the
+           FunctionPtr constructor. *)
+        begin match z with
+          None -> `FunctionPtr (i_fname, None), args
+        | Some _ -> `FunctionPtr (i_fname, Some (List.hd args)), List.tl args
+        end
+      | _ -> `FunctionPtr (i_fname, Some fvs), args
     in
     RemoteCall (func, valenv, args)
 
