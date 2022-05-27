@@ -76,7 +76,7 @@ module Desugar = struct
   let desugar_quantifiers  (sqs: SugarQuantifier.t list) :  Quantifier.t list =
     List.map SugarQuantifier.get_resolved_exn sqs
 
-  let rec datatype (alias_env : Types.alias_environment) t' =
+  let rec datatype (alias_env : Types.tycon_environment) t' =
     let datatype t' = datatype alias_env t' in
     match t' with
     | { node = t; pos } ->
