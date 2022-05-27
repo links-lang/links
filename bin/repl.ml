@@ -162,7 +162,7 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
               Printf.fprintf stderr " %s = %s\n"
                 (Module_hacks.Name.prettify k)
                 (Types.string_of_tycon_spec s))
-            (StringSet.diff (Env.String.domain tycon_env) (Env.String.domain Lib.typing_env.Types.alias_env));
+            (StringSet.diff (Env.String.domain tycon_env) (Env.String.domain Lib.typing_env.Types.tycon_env));
           context),
          "display the current type alias environment");
 
