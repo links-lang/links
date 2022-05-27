@@ -899,6 +899,10 @@ class transform (env : Types.typing_environment) =
                    let o = o#bind_alias name
                      (`Alias (List.map (SugarQuantifier.get_resolved_exn) vars, r)) in
                    (o, WithPos.make ~pos (name, vars, Effectname (x, r')))
+                | Presencename (x, (Some p as p')) ->
+                   let o = o#bind_alias name
+                     (`Alias (List.map (SugarQuantifier.get_resolved_exn) vars, p)) in
+                   (o, WithPos.make ~pos (name, vars, Presencename (x, p')))
                 | _ -> raise (internal_error "Unannotated type alias")
             ) ts in
           (o, Aliases ts)

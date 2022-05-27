@@ -49,6 +49,10 @@ object (self)
       (_, None) -> {< all_desugared = false >}
     | _ -> self
 
+  method! fieldspec' = function
+      (_, None) -> {< all_desugared = false >}
+    | _ -> self
+
   method! type_arg' = function
       (_, None) -> {< all_desugared = false >}
     | _ -> self
@@ -312,9 +316,13 @@ module Desugar = struct
   let row' alias_env ((r, _) :row') =
     (r, Some (row alias_env r (WithPos.make (Datatype.Effect r)))) (* TODO(rj) should keep the pos *)
 
+  let fieldspec' alias_env ((dt, _) : fieldspec') =
+    (dt, Some (fieldspec alias_env dt (WithPos.make (Datatype.End))))
+
   let aliasbody alias_env = function
     | Typename dt' -> Typename (datatype' alias_env dt')
     | Effectname r' -> Effectname (row' alias_env r')
+    | Presencename p' -> Presencename (fieldspec' alias_env p')
 
   let type_arg' alias_env ((ta, _) : type_arg') : type_arg' =
     let unlocated = WithPos.make Datatype.Unit in
@@ -426,7 +434,10 @@ object (self)
                 (alias_env, WithPos.make ~pos (t, args, Typename (d, None)) :: ts)
               | Effectname (r,_) ->
                 let alias_env = SEnv.bind t (`Mutual (qs, tygroup_ref)) alias_env in
-                (alias_env, WithPos.make ~pos (t, args, Effectname (r, None)) :: ts) )
+                (alias_env, WithPos.make ~pos (t, args, Effectname (r, None)) :: ts)
+              | Presencename (p,_) ->
+                let alias_env = SEnv.bind t (`Mutual (qs, tygroup_ref)) alias_env in
+                (alias_env, WithPos.make ~pos (t, args, Presencename (p, None)) :: ts) )
             (alias_env, []) ts in
 
         (* Desugar all DTs, given the temporary new alias environment. *)
@@ -435,8 +446,9 @@ object (self)
             (* Desugar the datatype *)
             (* Check if the datatype has actually been desugared *)
             let b' = match Desugar.aliasbody mutual_env b with
-                | Typename   (_, Some _) as b' -> b'
-                | Effectname (_, Some _) as b' -> b'
+                | Typename     (_, Some _) as b' -> b'
+                | Effectname   (_, Some _) as b' -> b'
+                | Presencename (_, Some _) as b' -> b'
                 | _ -> assert false
             in
             WithPos.make ~pos (name, args, b')
@@ -447,8 +459,9 @@ object (self)
         let (linearity_env, dep_graph) =
           List.fold_left (fun (lin_map, dep_graph) mutual   ->
             match SourceCode.WithPos.node mutual with
-            | (name, _, Typename   (_, dt))
-            | (name, _, Effectname (_, dt)) ->
+            | (name, _, Typename     (_, dt))
+            | (name, _, Effectname   (_, dt))
+            | (name, _, Presencename (_, dt)) ->
               let dt = OptionUtils.val_of dt in
               let lin_map = StringMap.add name (not @@ Unl.type_satisfies dt) lin_map in
               let deps = recursive_applications dt in
@@ -487,8 +500,9 @@ object (self)
           List.fold_left (fun alias_env {node=(t, args, b); _} ->
             let semantic_qs = List.map SugarQuantifier.get_resolved_exn args in
             let dt, alias_env = match b with
-              | Typename   (_, dt')
-              | Effectname (_, dt') ->
+              | Typename     (_, dt')
+              | Effectname   (_, dt')
+              | Presencename (_, dt') ->
                 let dt = OptionUtils.val_of dt' in
                 let alias_env = SEnv.bind t (`Alias (semantic_qs, dt)) alias_env in
                 (dt, alias_env)

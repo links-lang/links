@@ -445,6 +445,7 @@ val pp_row : Format.formatter -> row -> unit
 val pp_row' : Format.formatter -> row' -> unit
 val pp_type_arg : Format.formatter -> type_arg -> unit
 val pp_tycon_spec: Format.formatter -> tycon_spec -> unit
+val pp_field_spec: Format.formatter -> field_spec -> unit
 
 (* Recursive type applications *)
 val recursive_applications : datatype -> string list
