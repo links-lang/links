@@ -215,10 +215,10 @@ type tycon_spec = [
 ]
 
 type environment        = datatype Env.String.t
-type alias_environment  = tycon_spec Env.String.t
+type tycon_environment  = tycon_spec Env.String.t
 type typing_environment = { var_env    : environment ;
                             rec_vars   : Utility.StringSet.t ;
-                            alias_env  : alias_environment ;
+                            tycon_env  : tycon_environment ;
                             effect_row : row ;
                             desugared : bool }
 
