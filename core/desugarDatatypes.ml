@@ -245,7 +245,6 @@ module Desugar = struct
                        let  t = match_kinds i (q, t) in
                        type_arg alias_env t node)
               in
-
               let qn = List.length qs and tn = List.length ts in
               if qn = tn then
                 type_args qs ts
