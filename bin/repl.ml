@@ -155,7 +155,7 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
         ((fun context _ ->
           let tycon_env =
             let tenv = Context.typing_environment context in
-            tenv.Types.alias_env
+            tenv.Types.tycon_env
           in
           StringSet.iter (fun k ->
               let s = Env.String.find k tycon_env in
