@@ -268,7 +268,7 @@ let handle previous_context current_context = function
      let tycon_env' =
        let tenv  = Context.typing_environment previous_context in
        let tenv' = Context.typing_environment current_context in
-       let tycon_env, tycon_env'=
+       let tycon_env, tycon_env' =
          Types.(tenv.alias_env, tenv'.alias_env)
        in
        Env.String.fold
