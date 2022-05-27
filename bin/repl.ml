@@ -221,7 +221,7 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
         ((fun context args ->
           let tenv, aliases =
             let tyenv = Context.typing_environment context in
-            tyenv.Types.var_env, tyenv.Types.alias_env
+            tyenv.Types.var_env, tyenv.Types.tycon_env
           in
           match args with
           | [] -> prerr_endline "syntax: @withtype type"; context
