@@ -1161,10 +1161,6 @@ vrow:
 | vfields                                                      { $1                    }
 | /* empty */                                                  { ([], Datatype.Closed) }
 
-/* trow: */
-/* | tfields                                                      { $1                    } */
-/* | /\* empty *\/                                                  { ([], Datatype.Closed) } */
-
 erow:
 | efields                                                      { $1                    }
 | /* empty */                                                  { ([], Datatype.Closed) }
@@ -1214,13 +1210,6 @@ vfields:
 vfield:
 | CONSTRUCTOR                                                  { ($1, present) }
 | CONSTRUCTOR fieldspec                                        { ($1, $2)      }
-
-/* tfields: */
-/* | field                                                        { ([$1], Datatype.Closed) } */
-/* | soption(field) VBAR row_var                                  { ( $1 , $3             ) } */
-/* | soption(field) VBAR kinded_row_var                           { ( $1 , $3             ) } */
-/* | soption(field) VBAR effect_app                               { ( $1 , $3             ) } */
-/* | field COMMA tfields                                          { ( $1::fst $3, snd $3  ) } */
 
 efields:
 | efield                                                       { ([$1], make_effect_var ~is_dot:false $loc) }

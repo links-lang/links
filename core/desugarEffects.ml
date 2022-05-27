@@ -115,7 +115,7 @@ type tycon_info = Kind.t list * bool * Types.typ option
 
 type simple_tycon_env = tycon_info SEnv.t
 
-let simplify_tycon_env (tycon_env : Types.alias_environment) : simple_tycon_env
+let simplify_tycon_env (tycon_env : Types.tycon_environment) : simple_tycon_env
     =
   let simplify_tycon name tycon simpl_env =
     let param_kinds, internal_type =
@@ -1269,12 +1269,12 @@ class main_traversal simple_tycon_env =
         (o, rec_def)
   end
 
-let program (tycon_env : Types.alias_environment) p =
+let program (tycon_env : Types.tycon_environment) p =
   let s_env = simplify_tycon_env tycon_env in
   let v = new main_traversal s_env in
   snd (v#program p)
 
-let sentence (tycon_env : Types.alias_environment) =
+let sentence (tycon_env : Types.tycon_environment) =
   let s_env = simplify_tycon_env tycon_env in
   function
   | Definitions bs ->
@@ -1287,7 +1287,7 @@ let sentence (tycon_env : Types.alias_environment) =
       Expression p
   | Directive d -> Directive d
 
-let standalone_signature (tycon_env : Types.alias_environment) t =
+let standalone_signature (tycon_env : Types.tycon_environment) t =
   let s_env = simplify_tycon_env tycon_env in
   let v = new main_traversal s_env in
   snd (v#datatype t)
@@ -1300,12 +1300,12 @@ module Untyped = struct
   let program state program' =
     let open Types in
     let tyenv = Context.typing_environment (context state) in
-    let program' = program tyenv.alias_env program' in
+    let program' = program tyenv.tycon_env program' in
     return state program'
 
   let sentence state sentence' =
     let open Types in
     let tyenv = Context.typing_environment (context state) in
-    let sentence'' = sentence tyenv.alias_env sentence' in
+    let sentence'' = sentence tyenv.tycon_env sentence' in
     return state sentence''
 end

@@ -145,12 +145,12 @@ class transform (env : Types.typing_environment) =
   let open PrimaryKind in
   object (o : 'self_type)
     val var_env = env.Types.var_env
-    val tycon_env = env.Types.alias_env
+    val tycon_env = env.Types.tycon_env
     val formlet_env = TyEnv.empty
     val effect_row = fst (Types.unwrap_row env.Types.effect_row)
 
     method get_var_env : unit -> Types.environment = fun () -> var_env
-    method get_tycon_env : unit -> Types.alias_environment = fun () -> tycon_env
+    method get_tycon_env : unit -> Types.tycon_environment = fun () -> tycon_env
     method get_formlet_env : unit -> Types.environment = fun () -> formlet_env
 
     method backup_envs = var_env, tycon_env, formlet_env, effect_row
@@ -164,7 +164,7 @@ class transform (env : Types.typing_environment) =
     method with_formlet_env formlet_env =
       {< formlet_env = formlet_env >}
 
-    method bind_alias name tycon =
+    method bind_tycon name tycon =
       {< tycon_env = TyEnv.bind name tycon tycon_env >}
 
     method bind_binder bndr =
@@ -892,15 +892,15 @@ class transform (env : Types.typing_environment) =
           let (o, _) = listu o (fun o {node=(name, vars, b); pos} ->
               match b with
                 | Typename (x, (Some dt as dt')) ->
-                   let o = o#bind_alias name
+                   let o = o#bind_tycon name
                      (`Alias (List.map (SugarQuantifier.get_resolved_exn) vars, dt)) in
                    (o, WithPos.make ~pos (name, vars, Typename (x, dt')))
                 | Effectname (x, (Some r as r')) ->
-                   let o = o#bind_alias name
+                   let o = o#bind_tycon name
                      (`Alias (List.map (SugarQuantifier.get_resolved_exn) vars, r)) in
                    (o, WithPos.make ~pos (name, vars, Effectname (x, r')))
                 | Presencename (x, (Some p as p')) ->
-                   let o = o#bind_alias name
+                   let o = o#bind_tycon name
                      (`Alias (List.map (SugarQuantifier.get_resolved_exn) vars, p)) in
                    (o, WithPos.make ~pos (name, vars, Presencename (x, p')))
                 | _ -> raise (internal_error "Unannotated type alias")

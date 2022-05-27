@@ -4207,18 +4207,18 @@ See Note [Variable names in error messages].
 
 type environment        = datatype Env.t
                             [@@deriving show]
-type alias_environment = tycon_spec Env.t
+type tycon_environment = tycon_spec Env.t
                             [@@deriving show]
 type typing_environment = { var_env    : environment ;
                             rec_vars   : StringSet.t ;
-                            alias_env  : alias_environment ;
+                            tycon_env  : tycon_environment ;
                             effect_row : row;
                             desugared  : bool }
                             [@@deriving show]
 
 let empty_typing_environment = { var_env    = Env.empty;
                                  rec_vars   = StringSet.empty;
-                                 alias_env  = Env.empty;
+                                 tycon_env  = Env.empty;
                                  effect_row = make_empty_closed_row ();
                                  desugared  = false }
 
@@ -4345,11 +4345,11 @@ let normalise_typing_environment env =
 
 (* Functions on environments *)
 let extend_typing_environment
-    {var_env = l; rec_vars = lvars; alias_env = al; effect_row = _; desugared = _;  }
-    {var_env = r; rec_vars = rvars; alias_env = ar; effect_row = er; desugared = dr } : typing_environment =
+    {var_env = l; rec_vars = lvars; tycon_env = al; effect_row = _; desugared = _;  }
+    {var_env = r; rec_vars = rvars; tycon_env = ar; effect_row = er; desugared = dr } : typing_environment =
   { var_env    = Env.extend l r
   ; rec_vars   = StringSet.union lvars rvars
-  ; alias_env  = Env.extend al ar
+  ; tycon_env  = Env.extend al ar
   ; effect_row = er
   ; desugared  = dr }
 

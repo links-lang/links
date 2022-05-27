@@ -449,7 +449,7 @@ object (self)
                 | Typename     (_, Some _) as b' -> b'
                 | Effectname   (_, Some _) as b' -> b'
                 | Presencename (_, Some _) as b' -> b'
-                | _ -> assert false
+                | _ -> raise (internal_error "Datatype not desugared")
             in
             WithPos.make ~pos (name, args, b')
           ) ts in
@@ -571,7 +571,7 @@ let toplevel_bindings alias_env bs =
 
 let program typing_env (bindings, p : Sugartypes.program) :
     Sugartypes.program =
-  let alias_env = typing_env.alias_env in
+  let alias_env = typing_env.tycon_env in
   let alias_env, bindings =
     toplevel_bindings alias_env bindings in
   (* let typing_env = { typing_env with tycon_env = alias_env } in *)
@@ -579,9 +579,9 @@ let program typing_env (bindings, p : Sugartypes.program) :
 
 let sentence typing_env = function
   | Definitions bs ->
-      let _alias_env, bs' = toplevel_bindings typing_env.alias_env bs in
+      let _alias_env, bs' = toplevel_bindings typing_env.tycon_env bs in
         Definitions bs'
-  | Expression  p  -> let _o, p = phrase typing_env.alias_env p in
+  | Expression  p  -> let _o, p = phrase typing_env.tycon_env p in
       Expression p
   | Directive   d  -> Directive d
 
