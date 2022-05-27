@@ -425,7 +425,7 @@ object (self)
 
         (* Add all type declarations in the group to the alias
          * environment, as mutuals. Quantifiers need to be desugared. *)
-        let ((mutual_env : Types.alias_environment), ts) =
+        let ((mutual_env : Types.tycon_environment), ts) =
           List.fold_left (fun (alias_env, ts) {node=(t, args, b); pos} ->
             let qs = Desugar.desugar_quantifiers args  in
             match b with
