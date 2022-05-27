@@ -4850,8 +4850,9 @@ and type_binding : context -> binding -> binding * context * Usage.t =
       | Aliases ts ->
           let env = List.fold_left (fun env {node=(name, vars, b); _} ->
               match b with
-                | Typename   (_, Some dt)
-                | Effectname (_, Some dt) ->
+                | Typename     (_, Some dt)
+                | Effectname   (_, Some dt)
+                | Presencename (_, Some dt) ->
                     bind_alias env (name, `Alias (List.map (SugarQuantifier.get_resolved_exn) vars, dt))
                 | _ -> raise (internal_error "typeSugar.ml: unannotated type")
           ) empty_context ts in

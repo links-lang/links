@@ -173,6 +173,23 @@ let attach_row_subkind (r, subkind) =
     | _ -> assert false
   in attach_subkind_helper update subkind
 
+let alias p name args kind body =
+    let aliasbody =
+        match kind, body with
+        | (Some PrimaryKind.Type    , _), Datatype.Type     b ->
+            Typename (b, None)
+        | (Some PrimaryKind.Row     , _), Datatype.Row      b ->
+            Effectname (b, None)
+        | (Some PrimaryKind.Row     , _), Datatype.Type ({ WithPos.node = Datatype.TypeApplication(name, args) ; _ }) ->
+           let b = ([], Datatype.EffectApplication(name, args)) in
+           Effectname (b, None)
+        | (Some PrimaryKind.Presence, _), Datatype.Presence b ->
+           Presencename (b, None)
+           (* raise (ConcreteSyntaxError (pos p, "Presence aliases unsupported")) *)
+        | _ -> raise (ConcreteSyntaxError (pos p, "Kind mismatch"))
+    in
+    with_pos p (Aliases [with_pos p (name, args, aliasbody)])
+
 let labels xs = fst (List.split xs)
 
 let parseRegexFlags f =
@@ -413,6 +430,7 @@ arg:
 | UFLOAT                                                       { string_of_float' $1 }
 | TRUE                                                         { "true"  }
 | FALSE                                                        { "false" }
+| DEFAULT                                                      { "default" }
 
 var:
 | VARIABLE                                                     { with_pos $loc $1 }
@@ -446,7 +464,7 @@ nofun_declaration:
                                                                  let node = Infix { name = WithPos.node $3; precedence; assoc = $1 } in
                                                                  with_pos $loc node }
 | signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) $1 $2 }
-| typedecl SEMICOLON | effectdecl SEMICOLON                    { $1 }
+| typedecl SEMICOLON                                           { $1 }
 | links_module | links_open SEMICOLON                          { $1 }
 | pollute = boption(OPEN) IMPORT CONSTRUCTOR SEMICOLON         { import ~ppos:$loc($2) ~pollute [$3] }
 
@@ -506,11 +524,9 @@ signature:
 | SIG sigop COLON datatype                                     { with_pos $loc ($2, datatype $4) }
 
 typedecl:
-| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                { with_pos $loc (Aliases [with_pos $loc ($2, $3, Typename (datatype $5))]) }
-
-effectdecl:
-| EFFECTNAME CONSTRUCTOR typeargs_opt EQ LBRACE erow RBRACE                      { with_pos $loc (Aliases [with_pos $loc ($2, $3, Effectname ( $6    ,None))]) }
-| EFFECTNAME CONSTRUCTOR typeargs_opt EQ effect_app                              { with_pos $loc (Aliases [with_pos $loc ($2, $3, Effectname (([],$5),None))]) }
+| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                 { alias $loc $2 $3 (Some pk_type, None) (Datatype.Type $5) }
+| EFFECTNAME CONSTRUCTOR typeargs_opt EQ type_arg               { alias $loc $2 $3 (Some pk_row , Some (lin_unl, res_effect)) $5 }
+| TYPENAME CONSTRUCTOR typeargs_opt kind EQ type_arg            { alias $loc $2 $3 $4 $6 }
 
 (* Lists of quantifiers in square brackets denote type abstractions *)
 type_abstracion_vars:
@@ -1136,7 +1152,7 @@ type_arg_list:
 type_arg:
 | datatype                                                     { Datatype.Type $1     }
 | braced_fieldspec                                             { Datatype.Presence $1 }
-| LBRACE trow RBRACE                                           { Datatype.Row $2      }
+| LBRACE erow RBRACE                                           { Datatype.Row $2      }
 
 datatypes:
 | separated_nonempty_list(COMMA, datatype)                     { $1 }
@@ -1145,9 +1161,9 @@ vrow:
 | vfields                                                      { $1                    }
 | /* empty */                                                  { ([], Datatype.Closed) }
 
-trow:
-| tfields                                                      { $1                    }
-| /* empty */                                                  { ([], Datatype.Closed) }
+/* trow: */
+/* | tfields                                                      { $1                    } */
+/* | /\* empty *\/                                                  { ([], Datatype.Closed) } */
 
 erow:
 | efields                                                      { $1                    }
@@ -1199,12 +1215,12 @@ vfield:
 | CONSTRUCTOR                                                  { ($1, present) }
 | CONSTRUCTOR fieldspec                                        { ($1, $2)      }
 
-tfields:
-| field                                                        { ([$1], Datatype.Closed) }
-| soption(field) VBAR row_var                                  { ( $1 , $3             ) }
-| soption(field) VBAR kinded_row_var                           { ( $1 , $3             ) }
-| soption(field) VBAR effect_app                               { ( $1 , $3             ) }
-| field COMMA tfields                                          { ( $1::fst $3, snd $3  ) }
+/* tfields: */
+/* | field                                                        { ([$1], Datatype.Closed) } */
+/* | soption(field) VBAR row_var                                  { ( $1 , $3             ) } */
+/* | soption(field) VBAR kinded_row_var                           { ( $1 , $3             ) } */
+/* | soption(field) VBAR effect_app                               { ( $1 , $3             ) } */
+/* | field COMMA tfields                                          { ( $1::fst $3, snd $3  ) } */
 
 efields:
 | efield                                                       { ([$1], make_effect_var ~is_dot:false $loc) }

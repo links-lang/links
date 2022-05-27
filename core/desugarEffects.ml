@@ -1112,6 +1112,13 @@ class main_traversal simple_tycon_env =
                     let dep_graph =
                         StringMap.add t (StringSet.elements used_mutuals) dep_graph
                     in
+                    (implicits, dep_graph)
+                  | Presencename _ -> (* is this the right thing to do ? *)
+                    let implicits = StringMap.add t false implicits in
+                    let used_mutuals = StringSet.empty in
+                    let dep_graph =
+                        StringMap.add t (StringSet.elements used_mutuals) dep_graph
+                    in
                     (implicits, dep_graph))
               (StringMap.empty, StringMap.empty)
               ts
@@ -1163,8 +1170,9 @@ class main_traversal simple_tycon_env =
                 StringMap.add t (Some shared_effect_var) shared_var_env
               in
               let b' = match b with
-                | Typename   (d,_) -> Typename   (d, None)
-                | Effectname (r,_) -> Effectname (r, None)
+                | Typename     (d,_) -> Typename     (d, None)
+                | Effectname   (r,_) -> Effectname   (r, None)
+                | Presencename (p,_) -> Presencename (p, None)
               in
               ( tycon_env,
                 shared_var_env,

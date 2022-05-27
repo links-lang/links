@@ -231,6 +231,9 @@ type datatype' = Datatype.with_pos * Types.datatype option
 type row' = Datatype.row * Types.row option
     [@@deriving show]
 
+type fieldspec' = Datatype.fieldspec * Types.field_spec option
+    [@@deriving show]
+
 type type_arg' = Datatype.type_arg * Types.type_arg option
     [@@deriving show]
 
@@ -550,6 +553,7 @@ and alias = aliasnode WithPos.t
 and aliasbody =
   | Typename of datatype'
   | Effectname of row'
+  | Presencename of fieldspec'
 and function_definition = {
     fun_binder: Binder.with_pos;
     fun_linearity: DeclaredLinearity.t;
