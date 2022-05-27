@@ -123,7 +123,7 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
                (fun k s () ->
                  Printf.fprintf stderr "typename %s = %s\n" k
                    (Types.string_of_tycon_spec s))
-               (Lib.typing_env.Types.alias_env) ();
+               (Lib.typing_env.Types.tycon_env) ();
              StringSet.iter (fun n ->
                  let t = Env.String.find n Lib.type_env in
                  Printf.fprintf stderr " %-16s : %s\n"
