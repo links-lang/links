@@ -1918,7 +1918,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
   let open Types in
   let rec cpt : Pattern.with_pos list -> Types.datatype -> Types.datatype = fun pats t ->
     match t with
-      | Alias (alias, t) -> Alias (alias, cpt pats t)
+      | Alias (k, alias, t) -> Alias (k, alias, cpt pats t)
       | Record row when Types.is_tuple row->
           let fields, row_var, dual = Types.unwrap_row row |> fst |> TypeUtils.extract_row_parts in
           let rec unwrap_at i p =
@@ -4850,10 +4850,10 @@ and type_binding : context -> binding -> binding * context * Usage.t =
       | Aliases ts ->
           let env = List.fold_left (fun env {node=(name, vars, b); _} ->
               match b with
-                | Typename     (_, Some dt)
-                | Effectname   (_, Some dt)
-                | Presencename (_, Some dt) ->
-                    bind_alias env (name, `Alias (List.map (SugarQuantifier.get_resolved_exn) vars, dt))
+                | Typename     (_, Some dt) ->
+                    bind_alias env (name, `Alias (pk_type, List.map (SugarQuantifier.get_resolved_exn) vars, dt))
+                | Effectname   (_, Some dt) ->
+                    bind_alias env (name, `Alias (pk_row , List.map (SugarQuantifier.get_resolved_exn) vars, dt))
                 | _ -> raise (internal_error "typeSugar.ml: unannotated type")
           ) empty_context ts in
           (Aliases ts, env, Usage.empty)
@@ -4942,7 +4942,7 @@ and type_cp (context : context) = fun {node = p; pos} ->
          CPUnquote (bindings, e), t, usage_builder u
     | CPGrab ((c, _), None, p) ->
        let (_, t, _) = type_check context (var c) in
-       let ctype = T.Alias (("EndQuery", [], [], false), T.Input (Types.unit_type, T.End)) in
+       let ctype = T.Alias (pk_type, ("EndQuery", [], [], false), T.Input (Types.unit_type, T.End)) in
        unify ~pos:pos ~handle:(Gripers.cp_grab c) (t, ctype);
        let (p, pt, u) = type_cp (unbind_var context c) p in
        CPGrab ((c, Some (ctype, [])), None, p), pt, use c u

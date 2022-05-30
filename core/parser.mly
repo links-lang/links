@@ -173,21 +173,7 @@ let attach_row_subkind (r, subkind) =
     | _ -> assert false
   in attach_subkind_helper update subkind
 
-let alias p name args kind body =
-    let aliasbody =
-        match kind, body with
-        | (Some PrimaryKind.Type    , _), Datatype.Type     b ->
-            Typename (b, None)
-        | (Some PrimaryKind.Row     , _), Datatype.Row      b ->
-            Effectname (b, None)
-        | (Some PrimaryKind.Row     , _), Datatype.Type ({ WithPos.node = Datatype.TypeApplication(name, args) ; _ }) ->
-           let b = ([], Datatype.EffectApplication(name, args)) in
-           Effectname (b, None)
-        | (Some PrimaryKind.Presence, _), Datatype.Presence b ->
-           Presencename (b, None)
-           (* raise (ConcreteSyntaxError (pos p, "Presence aliases unsupported")) *)
-        | _ -> raise (ConcreteSyntaxError (pos p, "Kind mismatch"))
-    in
+let alias p name args aliasbody =
     with_pos p (Aliases [with_pos p (name, args, aliasbody)])
 
 let labels xs = fst (List.split xs)
@@ -430,7 +416,6 @@ arg:
 | UFLOAT                                                       { string_of_float' $1 }
 | TRUE                                                         { "true"  }
 | FALSE                                                        { "false" }
-| DEFAULT                                                      { "default" }
 
 var:
 | VARIABLE                                                     { with_pos $loc $1 }
@@ -524,9 +509,9 @@ signature:
 | SIG sigop COLON datatype                                     { with_pos $loc ($2, datatype $4) }
 
 typedecl:
-| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                 { alias $loc $2 $3 (Some pk_type, None) (Datatype.Type $5) }
-| EFFECTNAME CONSTRUCTOR typeargs_opt EQ type_arg               { alias $loc $2 $3 (Some pk_row , Some (lin_unl, res_effect)) $5 }
-| TYPENAME CONSTRUCTOR typeargs_opt kind EQ type_arg            { alias $loc $2 $3 $4 $6 }
+| TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                 { alias $loc $2 $3 (Typename   ( $5     , None)) }
+| EFFECTNAME CONSTRUCTOR typeargs_opt EQ LBRACE erow RBRACE     { alias $loc $2 $3 (Effectname ( $6     , None)) }
+| EFFECTNAME CONSTRUCTOR typeargs_opt EQ effect_app             { alias $loc $2 $3 (Effectname (([], $5), None)) }
 
 (* Lists of quantifiers in square brackets denote type abstractions *)
 type_abstracion_vars:

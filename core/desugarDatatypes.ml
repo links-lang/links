@@ -49,10 +49,6 @@ object (self)
       (_, None) -> {< all_desugared = false >}
     | _ -> self
 
-  method! fieldspec' = function
-      (_, None) -> {< all_desugared = false >}
-    | _ -> self
-
   method! type_arg' = function
       (_, None) -> {< all_desugared = false >}
     | _ -> self
@@ -158,9 +154,13 @@ module Desugar = struct
             in
             begin match SEnv.find_opt tycon alias_env with
               | None -> raise (UnboundTyCon (pos, tycon))
-              | Some (`Alias (qs, _dt)) ->
-                  let ts = match_quantifiers snd qs in
-                  Instantiate.alias tycon ts alias_env
+              | Some (`Alias (k, qs, _dt)) ->
+                  if k = pk_type then
+                    let ts = match_quantifiers snd qs in
+                    Instantiate.alias tycon ts alias_env
+                  else
+                    raise (TypeApplicationKindMismatch
+                      {pos ; name = tycon; expected = "Type"; provided = (PrimaryKind.to_string k) ;tyarg_number=0})
               | Some (`Abstract abstype) ->
                   let ts = match_quantifiers identity (Abstype.arity abstype) in
                   Application (abstype, ts)
@@ -253,13 +253,16 @@ module Desugar = struct
             in
             begin match SEnv.find_opt name alias_env with
               | None -> raise (UnboundTyCon (node.pos, name))
-              | Some (`Alias (qs, _r)) ->
-                  let ts = match_quantifiers snd qs in
-                  begin match  Instantiate.alias name ts alias_env with
-                  | Alias(_,body) -> body
-                  | _ -> raise (internal_error "Instantiation failed")
-                  end
-                  (* Instantiate.effectalias name ts alias_env.effectname *)
+              | Some (`Alias (k, qs, _r)) ->
+                  if k = pk_row then
+                    let ts = match_quantifiers snd qs in
+                    begin match Instantiate.alias name ts alias_env with
+                      | Alias(PrimaryKind.Row, _, body) -> body
+                      | _ -> raise (internal_error "Instantiation failed")
+                    end
+                  else
+                    raise (TypeApplicationKindMismatch
+                      {pos=node.pos ; name ; expected = "Row"; provided = (PrimaryKind.to_string k) ;tyarg_number=0})
               | Some (`Abstract abstype) ->
                   let ts = match_quantifiers identity (Abstype.arity abstype) in
                   Application (abstype, ts)
@@ -313,15 +316,11 @@ module Desugar = struct
     (dt, Some (datatype alias_env dt))
 
   let row' alias_env ((r, _) :row') =
-    (r, Some (row alias_env r (WithPos.make (Datatype.Effect r)))) (* TODO(rj) should keep the pos *)
-
-  let fieldspec' alias_env ((dt, _) : fieldspec') =
-    (dt, Some (fieldspec alias_env dt (WithPos.make (Datatype.End))))
+    (r, Some (row alias_env r (WithPos.make (Datatype.Effect r)))) (* should we keep the pos ? have a real node ? *)
 
   let aliasbody alias_env = function
     | Typename dt' -> Typename (datatype' alias_env dt')
     | Effectname r' -> Effectname (row' alias_env r')
-    | Presencename p' -> Presencename (fieldspec' alias_env p')
 
   let type_arg' alias_env ((ta, _) : type_arg') : type_arg' =
     let unlocated = WithPos.make Datatype.Unit in
@@ -433,10 +432,7 @@ object (self)
                 (alias_env, WithPos.make ~pos (t, args, Typename (d, None)) :: ts)
               | Effectname (r,_) ->
                 let alias_env = SEnv.bind t (`Mutual (qs, tygroup_ref)) alias_env in
-                (alias_env, WithPos.make ~pos (t, args, Effectname (r, None)) :: ts)
-              | Presencename (p,_) ->
-                let alias_env = SEnv.bind t (`Mutual (qs, tygroup_ref)) alias_env in
-                (alias_env, WithPos.make ~pos (t, args, Presencename (p, None)) :: ts) )
+                (alias_env, WithPos.make ~pos (t, args, Effectname (r, None)) :: ts))
             (alias_env, []) ts in
 
         (* Desugar all DTs, given the temporary new alias environment. *)
@@ -447,7 +443,6 @@ object (self)
             let b' = match Desugar.aliasbody mutual_env b with
                 | Typename     (_, Some _) as b' -> b'
                 | Effectname   (_, Some _) as b' -> b'
-                | Presencename (_, Some _) as b' -> b'
                 | _ -> raise (internal_error "Datatype not desugared")
             in
             WithPos.make ~pos (name, args, b')
@@ -459,8 +454,7 @@ object (self)
           List.fold_left (fun (lin_map, dep_graph) mutual   ->
             match SourceCode.WithPos.node mutual with
             | (name, _, Typename     (_, dt))
-            | (name, _, Effectname   (_, dt))
-            | (name, _, Presencename (_, dt)) ->
+            | (name, _, Effectname   (_, dt)) ->
               let dt = OptionUtils.val_of dt in
               let lin_map = StringMap.add name (not @@ Unl.type_satisfies dt) lin_map in
               let deps = recursive_applications dt in
@@ -498,14 +492,11 @@ object (self)
         let alias_env =
           List.fold_left (fun alias_env {node=(t, args, b); _} ->
             let semantic_qs = List.map SugarQuantifier.get_resolved_exn args in
-            let dt, alias_env = match b with
-              | Typename     (_, dt')
-              | Effectname   (_, dt')
-              | Presencename (_, dt') ->
-                let dt = OptionUtils.val_of dt' in
-                let alias_env = SEnv.bind t (`Alias (semantic_qs, dt)) alias_env in
-                (dt, alias_env)
+            let dt, k = match b with
+              | Typename     (_, dt') -> OptionUtils.val_of dt', pk_type
+              | Effectname   (_, dt') -> OptionUtils.val_of dt', pk_row
             in
+            let alias_env = SEnv.bind t (`Alias (k , semantic_qs, dt)) alias_env in
             tygroup_ref :=
               { !tygroup_ref with
                   type_map = (StringMap.add t (semantic_qs, dt) !tygroup_ref.type_map);

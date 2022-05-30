@@ -82,7 +82,7 @@ inside points *)
 let rec eq_types : (datatype * datatype) -> bool =
   fun (t1, t2) ->
     let rec unalias = function
-      | Alias (_, x) -> unalias x
+      | Alias (_, _, x) -> unalias x
       | x            -> x in
     match unalias t1 with
       | Not_typed ->
@@ -591,7 +591,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
             Unionfind.change point t; *)
          | t' -> ut (t, t')
        end
-    | Alias (_, t1), t2 | t1, Alias (_, t2) -> ut (t1, t2)
+    | Alias (_, _, t1), t2 | t1, Alias (_, _, t2) -> ut (t1, t2)
     | Application (l, _), Application (r, _) when l <> r ->
        raise (Failure
                 (`Msg ("Cannot unify abstract type '"^string_of_datatype t1^

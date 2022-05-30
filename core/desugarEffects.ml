@@ -120,7 +120,7 @@ let simplify_tycon_env (tycon_env : Types.tycon_environment) : simple_tycon_env
   let simplify_tycon name tycon simpl_env =
     let param_kinds, internal_type =
       match tycon with
-      | `Alias (qs, tp) -> List.map Quantifier.to_kind qs, Some tp
+      | `Alias (_, qs, tp) -> List.map Quantifier.to_kind qs, Some tp
       | `Abstract abs -> Types.Abstype.arity abs, None
       | `Mutual _ -> raise (internal_error "Found `Mutual in global tycon env")
     in
@@ -347,6 +347,9 @@ let cleanup_effects tycon_env =
                | None -> raise (Errors.UnboundTyCon (pos, name))
              in
              TypeApplication (name, ts)
+         (* | Effect r ->          (\* goal: same cleaning in the effectname declaration *\) *)
+         (*    let r = self#effect_row ~allow_shared:`Disallow r in (\* what allow_shared should be ? *\) *)
+         (*    Effect r *)
          | _ -> super#datatypenode t
        in
        SourceCode.WithPos.with_node dt res_t
@@ -569,7 +572,7 @@ let gather_operation_of_type tp
              let (o, _) = o#typ r in
              let (o, _) = o#typ d in
              (o, tp)
-          | Alias ((_,kinds,tyargs,_), inner_tp) ->
+          | Alias (_, (_,kinds,tyargs,_), inner_tp) ->
              let o = o#alias_recapp kinds tyargs in
              let (o,_) = o#typ inner_tp in
              (o, tp)
@@ -1112,13 +1115,6 @@ class main_traversal simple_tycon_env =
                     let dep_graph =
                         StringMap.add t (StringSet.elements used_mutuals) dep_graph
                     in
-                    (implicits, dep_graph)
-                  | Presencename _ -> (* is this the right thing to do ? *)
-                    let implicits = StringMap.add t false implicits in
-                    let used_mutuals = StringSet.empty in
-                    let dep_graph =
-                        StringMap.add t (StringSet.elements used_mutuals) dep_graph
-                    in
                     (implicits, dep_graph))
               (StringMap.empty, StringMap.empty)
               ts
@@ -1172,7 +1168,6 @@ class main_traversal simple_tycon_env =
               let b' = match b with
                 | Typename     (d,_) -> Typename     (d, None)
                 | Effectname   (r,_) -> Effectname   (r, None)
-                | Presencename (p,_) -> Presencename (p, None)
               in
               ( tycon_env,
                 shared_var_env,
