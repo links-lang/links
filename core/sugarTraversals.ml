@@ -176,12 +176,6 @@ class map =
         let y = o#option (fun o -> o#typ) y in
         (x,y)
 
-    method fieldspec' : fieldspec' -> fieldspec' =
-      fun (x, y) ->
-        let x = o#fieldspec x in
-        let y = o#option (fun o -> o#typ) y in
-        (x,y)
-
     method given_spawn_location : given_spawn_location -> given_spawn_location =
       function
         | ExplicitSpawnLocation p -> ExplicitSpawnLocation (o#phrase p)
@@ -807,7 +801,6 @@ class map =
       function
         | Typename _x -> Typename (o#datatype' _x)
         | Effectname _x -> Effectname (o#row' _x)
-        | Presencename _x -> Presencename (o#fieldspec' _x)
 
     method alias : alias -> alias =
       fun p ->
@@ -1020,12 +1013,6 @@ class fold =
     method row' : row' -> 'self_type =
       fun (x, y) ->
         let o = o#row x in
-        let o = o#unknown y in
-          o
-
-    method fieldspec' : fieldspec' -> 'self_type =
-      fun (x, y) ->
-        let o = o#fieldspec x in
         let o = o#unknown y in
           o
 
@@ -1585,7 +1572,6 @@ class fold =
       function
         | Typename _x -> o#datatype' _x
         | Effectname _x -> o#row' _x
-        | Presencename _x -> o#fieldspec' _x
 
     method alias : alias -> 'self_type =
       WithPos.traverse
@@ -2335,12 +2321,6 @@ class fold_map =
         let (o, _x_i1) = o#option (fun o -> o#typ) _x_i1
         in (o, (_x, _x_i1))
 
-    method fieldspec' : fieldspec' -> ('self_type * fieldspec') =
-      fun (_x, _x_i1) ->
-        let (o, _x) = o#fieldspec _x in
-        let (o, _x_i1) = o#option (fun o -> o#typ) _x_i1
-        in (o, (_x, _x_i1))
-
     method datatypenode : Datatype.t -> ('self_type * Datatype.t) =
       let open Datatype in
       function
@@ -2529,7 +2509,6 @@ class fold_map =
       function
         | Typename   _x   -> let o, _x = o#datatype'   _x in (o, Typename     _x)
         | Effectname _x   -> let o, _x = o#row'        _x in (o, Effectname   _x)
-        | Presencename _x -> let o, _x = o#fieldspec' _x in (o, Presencename _x)
 
     method function_definition : function_definition -> 'self * function_definition
       = fun { fun_binder;

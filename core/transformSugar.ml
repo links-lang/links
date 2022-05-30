@@ -893,16 +893,12 @@ class transform (env : Types.typing_environment) =
               match b with
                 | Typename (x, (Some dt as dt')) ->
                    let o = o#bind_tycon name
-                     (`Alias (List.map (SugarQuantifier.get_resolved_exn) vars, dt)) in
+                     (`Alias (pk_type, List.map (SugarQuantifier.get_resolved_exn) vars, dt)) in
                    (o, WithPos.make ~pos (name, vars, Typename (x, dt')))
                 | Effectname (x, (Some r as r')) ->
                    let o = o#bind_tycon name
-                     (`Alias (List.map (SugarQuantifier.get_resolved_exn) vars, r)) in
+                     (`Alias (pk_row, List.map (SugarQuantifier.get_resolved_exn) vars, r)) in
                    (o, WithPos.make ~pos (name, vars, Effectname (x, r')))
-                | Presencename (x, (Some p as p')) ->
-                   let o = o#bind_tycon name
-                     (`Alias (List.map (SugarQuantifier.get_resolved_exn) vars, p)) in
-                   (o, WithPos.make ~pos (name, vars, Presencename (x, p')))
                 | _ -> raise (internal_error "Unannotated type alias")
             ) ts in
           (o, Aliases ts)

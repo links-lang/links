@@ -64,7 +64,6 @@ class map :
     method datatypenode    : Datatype.t -> Datatype.t
     method datatype'       : datatype' -> datatype'
     method row'            : row' -> row'
-    method fieldspec'      : fieldspec' -> fieldspec'
     method type_arg        : Datatype.type_arg -> Datatype.type_arg
     method type_arg'       : type_arg' -> type_arg'
     method constant        : Constant.t -> Constant.t
@@ -149,7 +148,6 @@ class fold :
     method datatypenode    : Datatype.t -> 'self
     method datatype'       : datatype' -> 'self
     method row'            : row' -> 'self
-    method fieldspec'      : fieldspec' -> 'self
     method type_arg        : Datatype.type_arg -> 'self
     method type_arg'       : type_arg' -> 'self
     method constant        : Constant.t -> 'self
@@ -196,7 +194,6 @@ object ('self)
   method datatypenode    : Datatype.t -> 'self * Datatype.t
   method datatype'       : datatype' -> 'self * datatype'
   method row'            : row' -> 'self * row'
-  method fieldspec'      : fieldspec' -> 'self * fieldspec'
   method type_arg'       : type_arg' -> 'self * type_arg'
   method directive       : directive -> 'self * directive
   method fieldconstraint : fieldconstraint -> 'self * fieldconstraint

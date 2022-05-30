@@ -180,7 +180,7 @@ let rec is_toplevel_rec_type = function
        | T.Recursive _ -> true
        | _ -> false
      end
-  | T.Alias (_, t') -> is_toplevel_rec_type t'
+  | T.Alias (_, _, t') -> is_toplevel_rec_type t'
   | _ -> false
 
 let is_toplevel_rec_row  row =
@@ -254,7 +254,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
           end
       | (Var _ | Recursive _ | Closed) ->
          raise Types.tag_expectation_mismatch
-      | Alias (_, _) -> assert false
+      | Alias _ -> assert false
       | Application (s, ts) ->
          begin match t2 with
          | Application (s', ts') ->
