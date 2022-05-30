@@ -103,7 +103,7 @@ and base_exp = function
 (* external call will start with a bag query *)
 let sql_of_query = sql_of_query S.All
 
-let compile_mixing : delateralize:QueryPolicy.t -> Value.env -> (int * int) option * Ir.computation -> (Value.database * Sql.query * Types.datatype) option =
+let compile_mixing : delateralize:QueryPolicy.t -> Value.env -> (int * int) option * Ir.computation -> (Value.database * Sql.query * Types.datatype * (Value.t -> Value.t)) option =
   fun ~delateralize env (range, e) ->
     (* Debug.print ("env: "^Value.show_env env);
     Debug.print ("e: "^Ir.show_computation e); *)
@@ -118,9 +118,14 @@ let compile_mixing : delateralize:QueryPolicy.t -> Value.env -> (int * int) opti
       match QL.used_database v with
         | None -> None
         | Some db ->
-            Debug.print ("Generated NRC query: " ^ QL.show v );
-            let t = Types.unwrap_list_type (QL.type_of_expression v) in
-            let q = sql_of_query v in
+			let v_flat = QL.FlattenRecords.flatten_query v in
+            Debug.print ("Generated NRC query: " ^ QL.show v);
+            Debug.print ("Flattened NRC query: " ^ QL.show v_flat);
+            let readback = QL.FlattenRecords.unflatten_query (QL.type_of_expression v) in
+			(* the calling code expects the item type, not the list type *)
+            let t_flat = Types.unwrap_list_type (QL.type_of_expression v_flat) in
+            let q = sql_of_query v_flat in
             let _range = None in
               (* Debug.print ("Generated SQL query: "^(Sql.string_of_query db _range q)); *)
-              Some (db, q, t)
+              Some (db, q, t_flat, readback)
+	

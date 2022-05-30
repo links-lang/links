@@ -3309,9 +3309,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             let p = type_check (bind_effects context inner_effects) p in
             let () =
               match policy with
-                | Nested -> ()
+			    (* XXX: relaxed (perhaps too much!) to allow nested record flattening in the Mixing normalizer *)
                 | Mixing
                 | Delat
+                | Nested -> ()
                 | Flat  ->
                      let shape =
                        Types.make_list_type

@@ -298,7 +298,7 @@ let ordered_query v =
   (* Debug.print ("concat vs: "^Q.string_of_t (`Concat vs)); *)
   Sql.Union (Sql.All, List.map QL.sql_of_query vs, n)
 
-let compile : Value.env -> (int * int) option * Ir.computation -> (Value.database * Sql.query * Types.datatype) option =
+let compile : Value.env -> (int * int) option * Ir.computation -> (Value.database * Sql.query * Types.datatype * (Value.t -> Value.t)) option =
   fun env (range, e) ->
     (* Debug.print ("e: "^Ir.show_computation e); *)
     let v = Q.Eval.eval QueryPolicy.Flat env e in
@@ -309,4 +309,6 @@ let compile : Value.env -> (int * int) option * Ir.computation -> (Value.databas
             let t = Types.unwrap_list_type (QL.type_of_expression v) in
             let q = ordered_query v in
               Debug.print ("Generated query: "^(db#string_of_query ~range q));
-              Some (db, q, t)
+			  (* TODO: trivial readback, might be changed (see EvalMixingQuery) to allow nested records *)
+			  let readback x = x in
+              Some (db, q, t, readback)

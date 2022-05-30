@@ -999,9 +999,10 @@ struct
     Types.make_mapentry_type kty' vty'
 
   let flatten_query_type t =
-    Types.unwrap_list_type t
-    |> flatten_base_type
-    |> Types.make_list_type
+    let t' = Types.unwrap_list_type t |> flatten_base_type in
+	match t' with
+	| Types.Record _ -> Types.make_list_type t'
+	| _ -> StringMap.add "" t' StringMap.empty |> Types.make_record_type |> Types.make_list_type
 
   let rec flatten_inner : t -> t =
     function
@@ -1078,8 +1079,8 @@ struct
         let e' =
           (* lift base expressions to records *)
           match flatten_inner e with
-            | Record fields -> Record fields
-            | p -> Record (StringMap.add "@" p StringMap.empty)
+            | Record _ as p -> p
+            | p -> Record (StringMap.add "" p StringMap.empty)
         in
           Singleton e'
       (* HACK: not sure if Concat is supposed to appear here...
@@ -1098,13 +1099,14 @@ struct
   (* unflattens a flattened record according to a given nested record type *)
   let rec unflatten_record ?(prefix = "") nty frow : Value.t =
     let ur = unflatten_record in
+	let extend_label l = if prefix = "" then l else prefix ^ "@" ^ l in
     match nty with
     | Types.Primitive _ -> List.assoc prefix frow
     | Types.Record nrow ->
         let nfields = 
           StringMap.fold
-          <| (fun k v acc -> (k, ur ~prefix:(prefix ^ k ^ "@") v frow)::acc)
-          <| field_types_of_row (Types.extract_row nrow)
+          <| (fun k v acc -> (k, ur ~prefix:(extend_label k) v frow)::acc)
+          <| field_types_of_row nrow
           <| []
         in `Record nfields
     | _ -> assert false
@@ -1140,7 +1142,7 @@ struct
      * and need to be inferred from the nested type when unflattening -- we're not doing that here 
      *
      * or maybe we are? we proceed by case analysis on the nested type and, from the looks of it,
-     * the code, not finding any matching attribute in the DB result, should conjure a `Record StringMap.empty
+     * the code, not finding any matching 	attribute in the DB result, should conjure a `Record StringMap.empty
      * i.e. the unit value! *)
 
 end
