@@ -1037,11 +1037,11 @@ struct
                  | Record inner_fields ->
                    StringMap.fold
                      (fun name' body fields ->
-                       StringMap.add (name ^ "@" ^ name') body fields)
+                       StringMap.add ("@" ^ name ^ name') body fields)
                      inner_fields
                      fields
                  | body ->
-                   StringMap.add name body fields)
+                   StringMap.add ("@" ^ name) body fields)
              fields
              StringMap.empty)
       | Variant ("Simply", x) ->
@@ -1080,7 +1080,7 @@ struct
           (* lift base expressions to records *)
           match flatten_inner e with
             | Record _ as p -> p
-            | p -> Record (StringMap.add "" p StringMap.empty)
+            | p -> Record (StringMap.add "@" p StringMap.empty)
         in
           Singleton e'
       (* HACK: not sure if Concat is supposed to appear here...
@@ -1101,7 +1101,7 @@ struct
     let ur = unflatten_record in
 	let extend_label l = if prefix = "" then l else prefix ^ "@" ^ l in
     match nty with
-    | Types.Primitive _ -> List.assoc prefix frow
+    | Types.Primitive _ -> List.assoc ("@" ^ prefix) frow
     | Types.Record nrow ->
         let nfields = 
           StringMap.fold
