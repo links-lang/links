@@ -40,10 +40,20 @@ and disjunct is_set = function
 
 and generator locvars = function
 (* XXX: grouping generators *)
-| (_genkind, v, QL.Prom p) -> (S.Subquery (dependency_of_contains_free (E.contains_free locvars p), sql_of_query S.Distinct p, v))
-| (_genkind, v, QL.Table Value.Table.{ name; _}) -> (S.TableRef (name, v))
-| (_genkind, v, QL.Dedup (QL.Table Value.Table.{ name; _ })) ->
+| (QL.Entries, v, QL.Prom p) -> (S.Subquery (dependency_of_contains_free (E.contains_free locvars p), sql_of_query S.Distinct p, v))
+| (QL.Entries, v, QL.Table Value.Table.{ name; _}) -> (S.TableRef (name, v))
+| (QL.Entries, v, QL.Dedup (QL.Table Value.Table.{ name; _ })) ->
     S.Subquery (S.Standard, S.Select (S.Distinct, S.Star, [S.TableRef (name, v)], S.Constant (Constant.Bool true), []), v)
+| (QL.Keys, v, QL.GroupBy ((x, QL.Record gc), QL.Table Value.Table.{ name; _}))
+| (QL.Keys, v, QL.GroupBy ((x, QL.Record gc), QL.Dedup (QL.Table Value.Table.{ name; _}))) ->
+    let fields = List.map (fun (f,e) -> (base_exp e, f)) (StringMap.to_alist gc) in
+    S.Subquery (dependency_of_contains_free (E.contains_free locvars (QL.Record gc)), S.Select (S.Distinct, S.Fields fields, [S.TableRef (name, x)], S.Constant (Constant.Bool true), []), v)
+| (QL.Keys, v, q) -> 
+    let z = Var.fresh_raw_var () in	
+    let tyk, _ = q |> QL.type_of_expression |> Types.unwrap_map_type in
+	let fsk, _, _ = tyk |> Types.extract_row |> Types.extract_row_parts in
+	let fields 	= fsk |> StringMap.to_alist |> List.map (fun (f,_) -> S.Project (z, "@1" ^ f), f)  in
+	S.Subquery (dependency_of_contains_free (E.contains_free locvars q), S.Select (S.Distinct, S.Fields fields, [S.Subquery (S.Standard, sql_of_query S.All q, z)], S.Constant (Constant.Bool true), []), v)
 | (_genkind, _, _arg) -> Debug.print ("error in EvalMixingQuery.disjunct: unexpected arg = " ^ QL.show _arg); failwith "generator"
 
 and body is_set gs os j =
@@ -64,6 +74,11 @@ and body is_set gs os j =
         selquery
         <| List.map (fun (f,x) -> (base_exp x, f)) (StringMap.to_alist fields)
         <| Sql.Constant (Constant.Bool true)
+	| QL.Singleton (QL.MapEntry (QL.Record keys, QL.Record values)) ->
+		selquery
+		<| List.map (fun (f,x) -> (base_exp x, "@1" ^ f)) (StringMap.to_alist keys) 
+		   @ List.map (fun (f,x) -> (base_exp x, "@2" ^ f)) (StringMap.to_alist values) 
+		<| Sql.Constant (Constant.Bool true)
     | QL.If (c, QL.Singleton (QL.Record fields), QL.Concat []) ->
         selquery
         <| List.map (fun (f,x) -> (base_exp x, f)) (StringMap.to_alist fields)
@@ -118,14 +133,32 @@ let compile_mixing : delateralize:QueryPolicy.t -> Value.env -> (int * int) opti
       match QL.used_database v with
         | None -> None
         | Some db ->
+		    let strip_presence = function Types.Present t -> t | _ -> assert false in
 			let v_flat = QL.FlattenRecords.flatten_query v in
             Debug.print ("Generated NRC query: " ^ QL.show v);
             Debug.print ("Flattened NRC query: " ^ QL.show v_flat);
             let readback = QL.FlattenRecords.unflatten_query (QL.type_of_expression v) in
 			(* the calling code expects the item type, not the list type *)
             let t_flat = Types.unwrap_list_type (QL.type_of_expression v_flat) in
+			let t_flat = 
+			  try
+				let tyk, tyv = Types.unwrap_mapentry_type t_flat in
+				let rowk, _, _ = tyk |> Types.extract_row |> Types.extract_row_parts in
+				let rowv, _, _ = tyv |> Types.extract_row |> Types.extract_row_parts in
+			    let row = StringMap.fold
+                  <| (fun k v acc -> StringMap.add ("@1" ^ k) (strip_presence v) acc)
+                  <| rowk
+                  <| StringMap.empty
+			    in
+			    let row = StringMap.fold
+                  <| (fun k v acc -> StringMap.add ("@2" ^ k) (strip_presence v) acc)
+                  <| rowv
+                  <| row
+			    in
+				Types.make_record_type row
+			  with _ -> t_flat
+			in
             let q = sql_of_query v_flat in
             let _range = None in
-              (* Debug.print ("Generated SQL query: "^(Sql.string_of_query db _range q)); *)
+              (* Debug.print ("Generated SQL query: "^(db#string_of_query ~range:_range q)); *)
               Some (db, q, t_flat, readback)
-	

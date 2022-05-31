@@ -985,12 +985,12 @@ struct
                StringMap.fold
                  (fun name' t fields ->
                    StringMap.add (name ^ "@" ^ name') t fields)
-                 (field_types_of_row (Types.extract_row inner_fields))
+                 (field_types_of_row inner_fields)
                  fields
              | Types.Primitive _ as t ->
                StringMap.add name t fields
              | _ -> assert false)
-         (field_types_of_row (Types.extract_row fields))
+         (field_types_of_row fields)
          StringMap.empty)
   | t (* MapEntry *) ->
     let kty, vty = Types.unwrap_mapentry_type t in
@@ -1002,7 +1002,7 @@ struct
     let t' = Types.unwrap_list_type t |> flatten_base_type in
 	match t' with
 	| Types.Record _ -> Types.make_list_type t'
-	| _ -> StringMap.add "" t' StringMap.empty |> Types.make_record_type |> Types.make_list_type
+	| _ -> StringMap.add "@" t' StringMap.empty |> Types.make_record_type |> Types.make_list_type
 
   let rec flatten_inner : t -> t =
     function
@@ -1079,10 +1079,12 @@ struct
         let e' =
           (* lift base expressions to records *)
           match flatten_inner e with
-            | Record _ as p -> p
-            | p -> Record (StringMap.add "@" p StringMap.empty)
+          | MapEntry (Record _, Record _)
+          | Record _ as p -> p
+          | MapEntry (_, _) -> assert false (* XXX: do we want to handle the case of MapEntries not containing records? *)
+          | p -> Record (StringMap.add "@" p StringMap.empty)
         in
-          Singleton e'
+        Singleton e'
       (* HACK: not sure if Concat is supposed to appear here...
          but it can do inside "Empty" or "Length". *)
       | Concat es ->
@@ -1118,7 +1120,7 @@ struct
     match Types.unwrap_list_type nty with
     (* special reconstruction for finite maps of relations, resulting from grouping *)
     (* standard reconstruction of relations over nested records of primitives *)
-    | Types.Record _ | Types.Primitive _ as vty-> `List (List.map (fun r -> unflatten_record vty (of_record r)) (of_list fval))
+    | Types.Record _ | Types.Primitive _ as vty -> `List (List.map (fun r -> unflatten_record vty (of_record r)) (of_list fval))
     | t' (* assumed to be MapEntry *) ->
       let kty, vty = Types.unwrap_mapentry_type t' in
       let l = of_list fval in
@@ -1127,17 +1129,17 @@ struct
         try
           let vl = Hashtbl.find tbl k
           in Hashtbl.replace tbl k (v::vl)
-        with Not_found -> Hashtbl.add tbl k [v]
+        with NotFound _ -> Hashtbl.add tbl k [v]
       in
       let split r = 
-        unflatten_record ~prefix:"1@" kty r,
-        unflatten_record ~prefix:"2@" vty r
+        unflatten_record ~prefix:"1" kty r,
+        unflatten_record ~prefix:"2" vty r
       in
       let pair x y = `Record [("1",x);("2",y)]
       in
       List.iter (of_record ->- split ->- insert) l;
       `List (Hashtbl.fold (fun k v acc -> pair k (`List v)::acc) tbl [])
-
+	  
     (* XXX: (bug?) from the shredding code, it would appear unit fields are not returned by a DB query 
      * and need to be inferred from the nested type when unflattening -- we're not doing that here 
      *

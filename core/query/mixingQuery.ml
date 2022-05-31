@@ -488,7 +488,7 @@ struct
     (* XXX: grouping generators *)
     Q.For (None, [pol,x,xs], [], body_f cenv)
 
-  (* this has the effect of performing beta reduction when the generaator in
+  (* this has the effect of performing beta reduction when the generator in
    * the main input is a Singleton *)
   let reduce_for_source gsx env = function
   | (Q.Entries, x, Q.Singleton v) -> gsx, Q.bind env (x,v)
@@ -497,7 +497,15 @@ struct
   *)
   | (Q.Keys, x, Q.Singleton (Q.MapEntry (k,_))) -> gsx, Q.bind env (x,k)
   (* FIXME: this is incorrect if we are in a bag context and pol = Q.Keys *)
-  | (pol, x, q) -> gsx@[pol,x,q], env
+  | (pol, x, q) -> 
+      let z = Var.fresh_raw_var () in
+      let tyz =
+        Q.type_of_expression q
+        |> TypeUtils.element_type
+      in
+      let vz = Q.Var (z, tyz) in
+	  let env' = Q.bind env (x, vz) in
+	  gsx@[pol,z,q], env'
 
 
   (* when the head of a comprehension is a Prom, this lifts it to a generator
