@@ -47,6 +47,9 @@ exception TypeApplicationArityMismatch of
 exception TypeApplicationKindMismatch of
   { pos: Position.t; name: string; tyarg_number: int;
     expected: string; provided: string }
+exception TypeApplicationGlobalKindMismatch of
+  { pos: Position.t; name: string;
+    expected: string; provided: string }
 exception SettingsError of string
 exception DynlinkError of string
 exception ModuleError of string * Position.t option
@@ -131,6 +134,11 @@ let format_exception =
       pos_prefix ~pos
         (Printf.sprintf "Kind mismatch: Type argument %d for type constructor %s has kind %s, but an argument of kind %s was expected. \nIn:\n%s\n"
              tyarg_number name provided expected expr)
+  | TypeApplicationGlobalKindMismatch { pos; name; expected; provided } ->
+      let pos, expr = Position.resolve_start_expr pos in
+      pos_prefix ~pos
+        (Printf.sprintf "Kind mismatch: Type constructor %s has kind %s, but something of kind %s was expected. \nIn:\n%s\n"
+             name provided expected expr)
   | SettingsError message ->
       pos_prefix (Printf.sprintf "Settings Error: %s" message)
   | ModuleError (message, pos) ->
