@@ -34,6 +34,9 @@ exception TypeApplicationArityMismatch of
 exception TypeApplicationKindMismatch of
   { pos: Position.t; name: string; tyarg_number: int;
     expected: string; provided: string }
+exception TypeApplicationGlobalKindMismatch of
+  { pos: Position.t; name: string;
+    expected: string; provided: string }
 exception SettingsError of string
 exception DynlinkError of string
 exception ModuleError of string * Position.t option

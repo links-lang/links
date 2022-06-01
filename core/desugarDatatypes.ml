@@ -159,8 +159,8 @@ module Desugar = struct
                     let ts = match_quantifiers snd qs in
                     Instantiate.alias tycon ts alias_env
                   else
-                    raise (TypeApplicationKindMismatch
-                      {pos ; name = tycon; expected = "Type"; provided = (PrimaryKind.to_string k) ;tyarg_number=0})
+                    raise (TypeApplicationGlobalKindMismatch
+                      {pos ; name = tycon; expected = "Type"; provided = (PrimaryKind.to_string k)})
               | Some (`Abstract abstype) ->
                   let ts = match_quantifiers identity (Abstype.arity abstype) in
                   Application (abstype, ts)
@@ -261,8 +261,8 @@ module Desugar = struct
                       | _ -> raise (internal_error "Instantiation failed")
                     end
                   else
-                    raise (TypeApplicationKindMismatch
-                      {pos=node.pos ; name ; expected = "Row"; provided = (PrimaryKind.to_string k) ;tyarg_number=0})
+                    raise (TypeApplicationGlobalKindMismatch
+                      {pos=node.pos ; name ; expected = "Row"; provided = (PrimaryKind.to_string k)})
               | Some (`Abstract abstype) ->
                   let ts = match_quantifiers identity (Abstype.arity abstype) in
                   Application (abstype, ts)
