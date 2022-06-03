@@ -282,10 +282,10 @@ module Name = struct
     [@@deriving show]
 end
 
-module Label = struct
-  type t = string
-    [@@deriving show]
-end
+(* module Label = struct *)
+(*   type t = string *)
+(*     [@@deriving show] *)
+(* end *)
 
 module ForeignLanguage = struct
   type t =

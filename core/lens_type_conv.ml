@@ -8,8 +8,8 @@ type 'a die = string -> 'a
 
 let to_links_map m =
   String.Map.fold
-    (fun k v m -> Utility.StringMap.add k v m)
-    m Utility.StringMap.empty
+    (fun k v m -> T.FieldMap.add (Label.make k) v m)
+    m T.FieldMap.empty
 
 let lookup_alias context ~alias =
   match Env.String.find_opt alias context with

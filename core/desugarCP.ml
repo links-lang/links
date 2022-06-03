@@ -115,10 +115,10 @@ object (o : 'self_type)
             let (eff_fields, eff_row, eff_closed) =
               Types.flatten_row o#lookup_effects
               |> TypeUtils.extract_row_parts in
-            let eff_fields = StringMap.remove wild_str eff_fields in
+            let eff_fields = Types.FieldMap.remove wild_str eff_fields in
             let eff_fields =
               if Settings.get Basicsettings.Sessions.exceptions_enabled then
-                StringMap.remove Value.session_exception_operation eff_fields
+                FieldMap.remove Value.session_exception_operation eff_fields
               else
                 eff_fields in
 

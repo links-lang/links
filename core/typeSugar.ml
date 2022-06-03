@@ -155,6 +155,7 @@ struct
     | Funs _
     | Infix _
     | Aliases _
+    | FreshLabel _
     | Foreign _ -> true
     | Exp p -> is_pure p
     | Val (pat, (_, rhs), _, _) ->
@@ -1816,8 +1817,8 @@ let type_section pos context s =
        let a = Types.fresh_type_variable (lin_unl, res_any) in
        let rho = Types.fresh_row_variable (lin_unl, res_any) in
        let effects = Types.make_empty_open_row default_effect_subkind in (* projection is pure! *)
-       let r = Record (Row (StringMap.add label (Present a) StringMap.empty, rho, false)) in
-         ([(PrimaryKind.Type, a); (PrimaryKind.Row, Row (StringMap.empty, rho, false)); (PrimaryKind.Row, effects)],
+       let r = Record (Row (FieldMap.add label (Present a) FieldMap.empty, rho, false)) in
+         ([(PrimaryKind.Type, a); (PrimaryKind.Row, Row (FieldMap.empty, rho, false)); (PrimaryKind.Row, effects)],
           Function (Types.make_tuple_type [r], effects, a)),
          Usage.empty
     | Name var      ->
@@ -4863,6 +4864,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
           let () = unify pos ~handle:Gripers.bind_exp
             (pos_and_typ e, no_pos Types.unit_type) in
           Exp (erase e), empty_context, usages e
+      | FreshLabel(name, decls) -> assert false (* TODO *)
       | Import _
       | Open _
       | AlienBlock _

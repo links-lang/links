@@ -347,7 +347,7 @@ let parse_foreign_language pos lang =
 %token <string> SLASHFLAGS
 %token UNDERSCORE AS
 %token <Operators.Associativity.t> FIXITY
-%token TYPENAME EFFECTNAME
+%token TYPENAME EFFECTNAME FRESH
 %token TRY OTHERWISE RAISE
 %token <string> OPERATOR
 %token USING
@@ -452,6 +452,7 @@ nofun_declaration:
 | typedecl SEMICOLON                                           { $1 }
 | links_module | links_open SEMICOLON                          { $1 }
 | pollute = boption(OPEN) IMPORT CONSTRUCTOR SEMICOLON         { import ~ppos:$loc($2) ~pollute [$3] }
+| FRESH CONSTRUCTOR LBRACE declarations RBRACE                    { with_pos $loc (FreshLabel($2, $4))}
 
 alien_datatype:
 | VARIABLE COLON datatype SEMICOLON                            { (binder ~ppos:$loc($1) $1, datatype $3) }

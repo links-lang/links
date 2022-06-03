@@ -217,7 +217,7 @@ and eq_presence = fun (l, r) -> eq_types (l, r)
 
 and eq_field_envs (lfield_env, rfield_env) =
   let eq_specs lf rf = eq_presence (lf, rf) in
-    StringMap.equal eq_specs lfield_env rfield_env
+    FieldMap.equal eq_specs lfield_env rfield_env
 and eq_row_vars (lpoint, rpoint) =
   (* QUESTION:
      Do we need to deal with closed rows specially?
@@ -788,7 +788,7 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
 
   let is_unguarded_recursive row =
     let rec is_unguarded rec_rows (field_env, row_var, _) =
-      StringMap.is_empty field_env &&
+      FieldMap.is_empty field_env &&
         (match Unionfind.find row_var with
          | Closed
          | Var _ -> false
@@ -799,7 +799,7 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
     is_unguarded IntSet.empty row in
 
   let domain_of_env : field_spec_map -> StringSet.t =
-    fun env -> StringMap.fold (fun label _ labels -> StringSet.add label labels) env StringSet.empty in
+    fun env -> FieldMap.fold (fun label _ labels -> StringSet.add label labels) env StringSet.empty in
 
   (* unify_field_envs closed rec_env (lenv, renv)
 

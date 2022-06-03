@@ -784,6 +784,10 @@ class map =
          in
          let language = o#foreign_language (Alien.language alien) in
          AlienBlock (Alien.modify ~language ~declarations alien)
+      | FreshLabel(_x, _x_i1) ->
+        let _x = o#name _x in
+        let _x_i1 = o#list (fun o -> o#binding) _x_i1 in
+        FreshLabel(_x,_x_i1)
 
     method binding : binding -> binding =
       fun p ->
@@ -1550,6 +1554,10 @@ class fold =
              let o = o#binder b in
              o#datatype' dt)
            (Alien.declarations alien)
+      | FreshLabel(_x, _x_i1) ->
+        let o = o#name _x in
+        let o = o#list (fun o -> o#binding) _x_i1 in
+        o
 
     method binding : binding -> 'self_type =
       WithPos.traverse
@@ -2480,6 +2488,11 @@ class fold_map =
              (Alien.declarations alien)
          in
          o, AlienBlock (Alien.modify ~language:lang ~declarations alien)
+      | FreshLabel(_x, _x_i1) ->
+        let o, _x = o#name _x in
+        let o, _x_i1 = o#list (fun o -> o#binding) _x_i1 in
+        o, FreshLabel(_x,_x_i1)
+
 
     method binding : binding -> ('self_type * binding) =
       WithPos.traverse_map

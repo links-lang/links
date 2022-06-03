@@ -127,14 +127,14 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
         | Closed -> true
         | _ -> false in
 
-    let field_env' = StringMap.fold
+    let field_env' = FieldMap.fold
       (fun label f field_env' ->
          let rec add =
            function
-             | Present t -> StringMap.add label (Present (inst t)) field_env'
+             | Present t -> FieldMap.add label (Present (inst t)) field_env'
              | Absent ->
                  if is_closed then field_env'
-                 else StringMap.add label Absent field_env'
+                 else FieldMap.add label Absent field_env'
              | Meta point ->
                 begin
                  match Unionfind.find point with
@@ -145,7 +145,7 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
                          else
                            Meta point
                        in
-                         StringMap.add label f field_env'
+                         FieldMap.add label f field_env'
                    | f ->
                       add f
                 end
@@ -156,9 +156,9 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
          in
            add f)
       field_env
-      StringMap.empty in
+      FieldMap.empty in
     let field_env'', row_var', dual' = inst_row_var inst_map rec_env row_var dual |> TypeUtils.extract_row_parts in
-    Row (StringMap.fold StringMap.add field_env' field_env'', row_var', dual')
+    Row (FieldMap.fold FieldMap.add field_env' field_env'', row_var', dual')
         (* precondition: row_var has been flattened *)
   and inst_row_var : instantiation_maps -> inst_env -> row_var -> bool -> row = fun inst_map rec_env row_var dual ->
     (* HACK: fix the ill-formed rows that are introduced in the
@@ -168,28 +168,28 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
     let rowify t =
       match t with
       | Row _ -> t
-      | Meta row_var -> Row (StringMap.empty, row_var, false)
+      | Meta row_var -> Row (FieldMap.empty, row_var, false)
       | Alias (PrimaryKind.Row, _,row) -> row
       | _ -> assert false in
     let instr = inst_row inst_map rec_env in
     let dual_if = if dual then dual_row else fun x -> x in
     match Unionfind.find row_var with
-    | Closed -> Row (StringMap.empty, row_var, dual)
+    | Closed -> Row (FieldMap.empty, row_var, dual)
     | Var (var, _, _) ->
         if IntMap.mem var inst_map then
           dual_if (rowify (snd (IntMap.find var inst_map)))
         else
-          Row (StringMap.empty, row_var, dual)
+          Row (FieldMap.empty, row_var, dual)
     | Recursive (var, kind, rec_row) ->
         if IntMap.mem var rec_env then
-          Row (StringMap.empty, IntMap.find var rec_env, dual)
+          Row (FieldMap.empty, IntMap.find var rec_env, dual)
         else
           begin
             let var' = Types.fresh_raw_variable () in
             let point' = Unionfind.fresh (Var (var', kind, `Flexible)) in
             let rec_row' = inst_row inst_map (IntMap.add var point' rec_env) rec_row in
             let _ = Unionfind.change point' (Recursive (var', kind, rec_row')) in
-              Row (StringMap.empty, point', dual)
+              Row (FieldMap.empty, point', dual)
           end
     | row ->
        dual_if (instr row)
@@ -233,7 +233,7 @@ let instantiate_typ : bool -> datatype -> (type_arg list * datatype) = fun rigid
             let open PrimaryKind in
             match Kind.primary_kind kind with
             | (Type | Presence) as pk -> pk, Meta point
-            | Row -> Row, Row (StringMap.empty, point, false) in
+            | Row -> Row, Row (FieldMap.empty, point, false) in
           IntMap.add var ty inst_env, ty :: tys in
 
         let inst_map, tys =

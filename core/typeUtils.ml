@@ -15,22 +15,22 @@ let extract_row_parts = Types.extract_row_parts
 let split_row name row =
   let (field_env, row_var, dual) = fst (unwrap_row row) |> extract_row_parts in
   let t =
-    if StringMap.mem name field_env then
-      match (StringMap.find name field_env) with
+    if FieldMap.mem name field_env then
+      match (FieldMap.find name field_env) with
         | Present t -> t
         | Absent ->
-            error ("Attempt to split row "^string_of_row row ^" on absent field " ^ name)
+            error ("Attempt to split row "^string_of_row row ^" on absent field " ^ Label.show name)
         | Meta _ ->
-            error ("Attempt to split row "^string_of_row row ^" on meta field " ^ name)
+            error ("Attempt to split row "^string_of_row row ^" on meta field " ^ Label.show name)
         | _ -> raise Types.tag_expectation_mismatch
     else
-      error ("Attempt to split row "^string_of_row row ^" on absent field " ^ name)
+      error ("Attempt to split row "^string_of_row row ^" on absent field " ^ Label.show name)
   in
   let new_field_env =
     if is_closed_row row then
-      StringMap.remove name field_env
+      FieldMap.remove name field_env
     else
-      StringMap.add name Absent field_env
+      FieldMap.add name Absent field_env
    in
     t, Row (new_field_env, row_var, dual)
 
@@ -100,14 +100,14 @@ let rec erase_type ?(overstep_quantifiers=true) names t =
     let closed = is_closed_row row in
       let (field_env, row_var, duality) = fst (unwrap_row row) |> extract_row_parts in
       let field_env =
-        StringSet.fold
+        FieldSet.fold
           (fun name field_env ->
-            match StringMap.lookup name field_env with
+            match FieldMap.lookup name field_env with
             | Some (Present _) ->
               if closed then
-                StringMap.remove name field_env
+                FieldMap.remove name field_env
               else
-                StringMap.add name Absent field_env
+                FieldMap.add name Absent field_env
             | Some Absent ->
               error ("Attempt to remove absent field "^name^" from row "^string_of_row row)
             | Some (Meta _) ->

@@ -132,7 +132,7 @@ object (o : 'self_type)
         let (fields, rho, _) = TypeUtils.extract_row_parts row in
         let effb, row = fresh_row_quantifier default_effect_subkind in
 
-        let r = Record (Row (StringMap.add name (Present a) fields, rho, false)) in
+        let r = Record (Row (FieldMap.add name (Present a) fields, rho, false)) in
 
         let f = gensym ~prefix:"_fun_" () in
         let x = gensym ~prefix:"_fun_" () in

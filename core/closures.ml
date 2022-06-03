@@ -534,14 +534,14 @@ struct
             | [], [] -> o, None
             | _ ->
               let zt =
-                Types.make_record_type
+                Types.(make_record_type
                   (List.fold_left
                      (fun fields b ->
                        let x = Var.var_of_binder b in
                        let xt = Var.type_of_binder b in
-                       StringMap.add (string_of_int x) xt fields)
-                     StringMap.empty
-                     zs)
+                       FieldMap.add (Label.mk_int x) xt fields)
+                     FieldMap.empty
+                     zs))
               in
               (* fresh variable for the closure environment *)
               let zb = Var.(fresh_binder (make_local_info (zt, "env_" ^ string_of_int f))) in
@@ -610,14 +610,14 @@ struct
                      | [], [] -> o, None
                      | _ ->
                        let zt =
-                         Types.make_record_type
+                         Types.(make_record_type
                            (List.fold_left
                               (fun fields b ->
                                 let x = Var.var_of_binder b in
                                 let xt = Var.type_of_binder b in
-                                StringMap.add (string_of_int x) xt fields)
-                              StringMap.empty
-                              zs)
+                                FieldMap.add (Label.mk_int x) xt fields)
+                              FieldMap.empty
+                              zs))
                        in
                        (* fresh variable for the closure environment *)
                        let zb = Var.(fresh_binder (make_local_info (zt, "env_" ^ string_of_int f))) in

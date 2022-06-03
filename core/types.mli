@@ -2,8 +2,11 @@
 open CommonTypes
 
 (* field environments *)
+module type LABELMAP = Utility.Map with type key = Label.t
+module FieldMap : LABELMAP
+type 'a field_env = 'a FieldMap.t [@@deriving show]
+
 type 'a stringmap = 'a Utility.StringMap.t [@@deriving show]
-type 'a field_env = 'a stringmap [@@deriving show]
 
 (* type var sets *)
 module TypeVarSet : sig
@@ -162,7 +165,7 @@ and session_type = typ
 and datatype = typ
 and type_arg = PrimaryKind.t * typ
 and field_spec = typ
-and field_spec_map = field_spec Utility.StringMap.t
+and field_spec_map = field_spec FieldMap.t
 and meta_type_var = typ point
 and meta_row_var = row point
 and meta_presence_var = typ point
@@ -249,7 +252,7 @@ val wild : Label.t
 val hear : Label.t
 val wild_present : Label.t * datatype
 val hear_present : datatype -> (Label.t * datatype)
-val is_builtin_effect : string -> bool
+val is_builtin_effect : Label.t -> bool
 
 (** get type variables *)
 val free_type_vars : datatype -> TypeVarSet.t
@@ -302,12 +305,12 @@ val make_empty_closed_row : unit -> row
 val make_empty_open_row : Subkind.t -> row
 
 (** singleton row constructors *)
-val make_singleton_closed_row : (string * field_spec) -> row
-val make_singleton_open_row : (string * field_spec) -> Subkind.t -> row
+val make_singleton_closed_row : (Label.t * field_spec) -> row
+val make_singleton_open_row : (Label.t * field_spec) -> Subkind.t -> row
 
 (** row predicates *)
 val is_closed_row : row -> bool
-val is_absent_from_row : string -> row -> bool
+val is_absent_from_row : Label.t -> row -> bool
 
 val is_tuple : ?allow_onetuples:bool -> row -> bool
 
@@ -316,7 +319,7 @@ val get_row_var : row -> int option
 
 (** building rows *)
 val make_closed_row : datatype field_env -> row
-val row_with : (string * field_spec) -> row -> row
+val row_with : (Label.t * field_spec) -> row -> row
 val extend_row : datatype field_env -> row -> row
 val extend_row_safe : datatype field_env -> row -> row option
 val open_row : Subkind.t -> row -> row

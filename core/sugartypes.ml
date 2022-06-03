@@ -531,6 +531,7 @@ and bindingnode =
   | Exp     of phrase
   | Module  of { binder: Binder.with_pos; members: binding list }
   | AlienBlock of Alien.multi Alien.t
+  | FreshLabel of Name.t * binding list
 and binding = bindingnode WithPos.t
 and block_body = binding list * phrase
 and cp_phrasenode =

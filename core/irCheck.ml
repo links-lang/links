@@ -222,7 +222,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
         row |> TypeUtils.extract_row_parts in
       if Types.is_closed_row row then
         let field_env' =
-          Utility.StringMap.filter
+          Types.FieldMap.filter
             ( fun _ v -> match v with
               | T.Absent -> false
               | _ -> true )
@@ -426,12 +426,12 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       | _, _ -> false
     and eq_field_envs (context, lfield_env, rfield_env) =
       let lfields_in_rfields =
-        StringMap.for_all  (fun field lp ->
-            match StringMap.find_opt field rfield_env with
+        FieldMap.for_all  (fun field lp ->
+            match FieldMap.find_opt field rfield_env with
               | Some rp -> eq_presence (context, lp, rp)
               | None -> false
           ) lfield_env in
-      lfields_in_rfields  && StringMap.cardinal lfield_env = StringMap.cardinal rfield_env
+      lfields_in_rfields  && FieldMap.cardinal lfield_env = FieldMap.cardinal rfield_env
     and eq_row_vars (context, lpoint, rpoint) =
       match Unionfind.find lpoint, Unionfind.find rpoint with
       | Closed, Closed ->  true
@@ -469,9 +469,9 @@ let check_eq_type_lists = fun (ctx : type_eq_context) exptl actl occurrence ->
 
 let ensure_effect_present_in_row ctx allowed_effects required_effect_name required_effect_type occurrence =
   let (map, _, _) = fst (Types.unwrap_row allowed_effects) |> TypeUtils.extract_row_parts in
-  match StringMap.find_opt required_effect_name map with
+  match T.FieldMap.find_opt required_effect_name map with
     | Some (T.Present et) -> check_eq_types ctx et required_effect_type occurrence
-    | _ -> raise_ir_type_error ("Required effect " ^ required_effect_name ^ " not present in effect row " ^ Types.string_of_row allowed_effects) occurrence
+    | _ -> raise_ir_type_error ("Required effect " ^ Label.show required_effect_name ^ " not present in effect row " ^ Types.string_of_row allowed_effects) occurrence
 
 
 

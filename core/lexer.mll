@@ -78,6 +78,7 @@ let keywords = [
  "false"    , FALSE;
  "for"      , FOR;
  "forall"   , FORALL;
+ "fresh"    , FRESH;
  "from"     , FROM;
  "fun"      , FUN;
  "formlet"  , FORMLET;

@@ -9,9 +9,12 @@ let internal_error message =
 let tag_expectation_mismatch =
   internal_error "Type tag expectation mismatch"
 
-module FieldEnv = Utility.StringMap
+module type LABELMAP = Map with type key = Label.t
+module FieldMap : LABELMAP = Map.Make(Label)
+module FieldEnv = FieldMap
+type 'a field_env = 'a FieldMap.t [@@deriving show]
+
 type 'a stringmap = 'a Utility.stringmap [@@deriving show]
-type 'a field_env = 'a stringmap [@@deriving show]
 
 (* type var sets *)
 module TypeVarSet = struct
@@ -171,7 +174,7 @@ and session_type = typ
 and datatype = typ
 and type_arg = PrimaryKind.t * typ
 and field_spec = typ
-and field_spec_map = field_spec Utility.StringMap.t
+and field_spec_map = field_spec FieldMap.t
 and meta_type_var = typ point
 and meta_row_var = row point
 and meta_presence_var = typ point
@@ -291,11 +294,11 @@ struct
 
     method field_spec_map :  field_spec_map -> ('self_type * field_spec_map) =
       fun fsmap ->
-      StringMap.fold
+      FieldMap.fold
         (fun lbl fs (o, fsmap') ->
           let (o, fs) = o#field_spec fs in
-          (o, StringMap.add lbl fs fsmap'))
-        fsmap (o, StringMap.empty)
+          (o, FieldMap.add lbl fs fsmap'))
+        fsmap (o, FieldMap.empty)
 
     method quantifier : Quantifier.t -> ('self_type * Quantifier.t) =
       fun q -> (o, q)
@@ -993,7 +996,7 @@ module Env = Env.String
     let open PrimaryKind in
     match pk with
     | Type     -> (Type, make_rigid_type_variable var sk)
-    | Row      -> (Row, Row (StringMap.empty, make_rigid_row_variable var sk, false))
+    | Row      -> (Row, Row (FieldMap.empty, make_rigid_row_variable var sk, false))
     | Presence -> (Presence, make_rigid_presence_variable var sk)
 
   let is_closed_row : row -> bool =
@@ -1087,7 +1090,7 @@ let is_absent_from_row label row (* (field_env, _, _ as row) *) =
   then FieldEnv.find label field_env = Absent
   else is_closed_row row
 
-let row_with (label, f : string * field_spec) = function
+let row_with (label, f : Label.t * field_spec) = function
   | Row (field_env, row_var, dual) ->
      Row (FieldEnv.add label f field_env, row_var, dual)
   | _ -> raise tag_expectation_mismatch
@@ -1327,7 +1330,7 @@ and dual_row : var_map -> row -> row =
   match fst (unwrap_row row) with
   | Row (fields, row_var, dual) ->
      let fields' =
-       StringMap.map
+       FieldMap.map
          (function
           | Absent -> Absent
           | Present t ->
@@ -1401,7 +1404,7 @@ and subst_dual_row : var_map -> row -> row =
   match fst (unwrap_row row) with
   | Row (fields, row_var, dual) ->
      let fields' =
-       StringMap.map
+       FieldMap.map
          (subst_dual_field_spec rec_points)
          fields
      in
@@ -1427,7 +1430,7 @@ and flatten_row : row -> row = fun row ->
     match row with
     | Row _ -> row
     (* HACK: this probably shouldn't happen! *)
-    | Meta row_var -> Row (StringMap.empty, row_var, false)
+    | Meta row_var -> Row (FieldMap.empty, row_var, false)
     (* | Alias (PrimaryKind.Row, _, row) -> row *)
     (* | RecursiveApplication { r_dual ; r_args ; r_unwind ; _ } -> *)
     (* (\* TODO(rj) what should this function do ? r_unwind like this provokes a stack overflow *\) *)
@@ -1654,7 +1657,7 @@ let quantifier_of_type_arg =
   function
   | Type, Meta point -> quantifier_of_point point
   | Row, Row (fields, point, _dual) ->
-     assert (StringMap.is_empty fields);
+     assert (FieldMap.is_empty fields);
      quantifier_of_point point
   | Presence, Meta point -> quantifier_of_point point
   (* HACK: this probably shouldn't happen *)
@@ -1679,8 +1682,8 @@ let xml_type      = Alias (pk_type, ("Xml", [], [], false), Application (list, [
 let database_type = Primitive Primitive.DB
 (* Empty type, used for exceptions *)
 let empty_type    = Variant (make_empty_closed_row ())
-let wild = "wild"
-let hear = "hear"
+let wild = Label.make "wild"
+let hear = Label.make "hear"
 let wild_present   = (wild, Present unit_type)
 let hear_present t = (hear, Present t)
 
@@ -1698,14 +1701,14 @@ let is_tuple ?(allow_onetuples=false) row =
   in
   match Unionfind.find row_var with
   | Closed ->
-     let n = StringMap.size field_env in
+     let n = FieldMap.size field_env in
      let b =
        n = 0
        || (List.for_all
              (fun i ->
-               let name = string_of_int i in
+               let name = Label.mk_int i in
                FieldEnv.mem name field_env
-               && (match FieldEnv.find (string_of_int i) field_env with
+               && (match FieldEnv.find name field_env with
                    | Present _ -> true
                    | Absent    -> false
                    | Meta _    -> false
@@ -2414,7 +2417,7 @@ struct
           FieldEnv.fold
             (fun i f tuple_env ->
                match f with
-                 | Present t        -> IntMap.add (int_of_string i) t tuple_env
+                 | Present t        -> IntMap.add (Label.get_int i) t tuple_env
                  | (Absent | Meta _) -> assert false
                  | _ -> raise tag_expectation_mismatch)
             field_env
@@ -2523,7 +2526,7 @@ struct
                    | Row (fields, _, _) -> fields
                    | _ -> raise tag_expectation_mismatch
                  in
-                 if StringMap.is_empty fields then
+                 if FieldMap.is_empty fields then
                    ts
                  else
                    let r = row ~name:(fun _ _ -> name_of_eff_var ~allows_shared:true) "," context p r' in
@@ -2677,7 +2680,7 @@ struct
              if strip_wild && label = wild then
                field_strings
              else
-               (label ^ presence context p f) :: field_strings)
+               (Label.show label ^ presence context p f) :: field_strings)
            field_env []
        in
        let row_var_string = row_var name sep context p rv in
@@ -2690,7 +2693,7 @@ struct
     (* FIXME: this shouldn't happen *)
     | Meta rv ->
        Debug.print ("Row variable where row expected:"^show_datatype (Meta rv));
-       row sep context ~name:name ~strip_wild:strip_wild p (Row (StringMap.empty, rv, false))
+       row sep context ~name:name ~strip_wild:strip_wild p (Row (FieldMap.empty, rv, false))
     | t ->
        failwith ("Illformed row:"^show_datatype t)
        (* raise tag_expectation_mismatch *)
@@ -3006,10 +3009,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       o#var
 
     module OperationMap = Utility.Map.Make(struct
-                              type t = tid * string [@@deriving show]
+                              type t = tid * Label.t [@@deriving show]
                               let compare (xi,xs) (yi,ys) =
                                 if xi = yi
-                                then String.compare xs ys
+                                then Label.compare xs ys
                                 else Int.compare xi yi
                             end)
     type op_entry = tid list
@@ -3030,7 +3033,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
         method get_operations =
           OperationMap.map (fun vars -> ListUtils.collect_duplicates (=) vars) operations
 
-        method with_nonpoly_operation : tid -> string -> 'self_type
+        method with_nonpoly_operation : tid -> Label.t -> 'self_type
           = let upd =
               function
               | None      -> Some []
@@ -3040,7 +3043,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             let operations = OperationMap.update (effect_vid, label) upd operations in
             {< operations >}
 
-        method with_poly_operation : tid -> string -> tid -> 'self_type
+        method with_poly_operation : tid -> Label.t -> tid -> 'self_type
           = let upd vid =
               function
               | None      -> Some [vid]
@@ -3130,7 +3133,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                      if d = unit_type then c else tp
                   | tp -> tp
                 in
-                let decide_field : tid -> string -> field_spec -> 'self_type * field_spec_map -> 'self_type * field_spec_map
+                let decide_field : tid -> Label.t -> field_spec -> 'self_type * field_spec_map -> 'self_type * field_spec_map
                   (* Here we need to filter out the fields that are polymorphic in their
                      presence with a fresh variable.
 
@@ -3628,7 +3631,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             else if Context.is_ambient_tuple ctx
             then with_value presence pre :: printers
             else (Printer (fun ctx () buf ->
-                      StringBuffer.write buf lbl;
+                      StringBuffer.write buf (Label.show lbl);
                       let pre = match pre with
                         | Meta point -> Unionfind.find point
                         | _ -> pre
@@ -4408,10 +4411,10 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
          | Closed -> empties
          | Var (var, kind, `Flexible) ->
             let tenv, renv, penv = empties in
-            (tenv, M.add var (Row (StringMap.empty, fresh_row_variable (Kind.subkind kind), false)) renv, penv)
+            (tenv, M.add var (Row (FieldMap.empty, fresh_row_variable (Kind.subkind kind), false)) renv, penv)
          | Var (var, kind, `Rigid) ->
             let tenv, renv, penv = empties in
-            (tenv, M.add var (Row (StringMap.empty, fresh_rigid_row_variable (Kind.subkind kind), false)) renv, penv)
+            (tenv, M.add var (Row (FieldMap.empty, fresh_rigid_row_variable (Kind.subkind kind), false)) renv, penv)
          | Recursive (l, _, _) when S.mem l boundvars -> empties
          | Recursive (l, _, row) -> make_env (S.add l boundvars) row
          | row -> make_env boundvars row
@@ -4436,13 +4439,13 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
 let make_rigid_envs datatype : datatype IntMap.t * row IntMap.t * field_spec Utility.IntMap.t =
   let tenv, renv, penv = make_fresh_envs datatype in
     (IntMap.map (fun _ -> fresh_rigid_type_variable (lin_any, res_any)) tenv,
-     IntMap.map (fun _ -> Row (StringMap.empty, fresh_rigid_row_variable (lin_any, res_any), false)) renv,
+     IntMap.map (fun _ -> Row (FieldMap.empty, fresh_rigid_row_variable (lin_any, res_any), false)) renv,
      IntMap.map (fun _ -> fresh_rigid_presence_variable (lin_any, res_any)) penv)
 
 let make_wobbly_envs datatype : datatype IntMap.t * row IntMap.t * field_spec Utility.IntMap.t =
   let tenv, renv, penv = make_fresh_envs datatype in
     (IntMap.map (fun _ -> fresh_type_variable (lin_any, res_any)) tenv,
-     IntMap.map (fun _ -> Row (StringMap.empty, fresh_row_variable (lin_any, res_any), false)) renv,
+     IntMap.map (fun _ -> Row (FieldMap.empty, fresh_row_variable (lin_any, res_any), false)) renv,
      IntMap.map (fun _ -> fresh_presence_variable (lin_any, res_any)) penv)
 
 let combine_per_kind_envs : datatype IntMap.t * row IntMap.t * field_spec IntMap.t -> type_arg IntMap.t =
@@ -4599,7 +4602,7 @@ let make_tuple_type (ts : datatype list) : datatype =
   Record
     (snd
        (List.fold_left
-          (fun (n, row) t -> n+1, row_with (string_of_int n, Present t) row)
+          (fun (n, row) t -> n+1, row_with (Label.mk_int n, Present t) row)
           (1, make_empty_closed_row ())
           ts))
 
@@ -4650,8 +4653,8 @@ let remove_field : ?idempotent:bool -> Label.t -> row -> row
   = fun ?(idempotent=true) lbl row ->
   match row with
   | Row (fieldenv, var, dual) ->
-     if idempotent || StringMap.mem lbl fieldenv
-     then Row (StringMap.remove lbl fieldenv, var, dual)
+     if idempotent || FieldMap.mem lbl fieldenv
+     then Row (FieldMap.remove lbl fieldenv, var, dual)
      else raise (internal_error "attempt to remove non-existent field")
   | _ -> raise tag_expectation_mismatch
 
