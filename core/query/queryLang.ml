@@ -363,6 +363,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
                 (string_of_t w) Types.pp_datatype ty)
       end
   | Apply (Primitive "Empty", _) -> Types.bool_type (* HACK *)
+  | Apply (Primitive "Sum", _) -> Types.int_type
   (* XXX: the following might be completely unnecessary if we call type_of_expression only on normalized query *)
   | Apply (Primitive "Distinct", [q]) -> type_of_expression q
   | Apply (Primitive f, _) -> TypeUtils.return_type (Env.String.find f Lib.type_env)
@@ -484,6 +485,8 @@ let lookup_fun env (f, fvs) =
         Primitive "ConcatMapKey"
       | "map" ->
         Primitive "Map"
+      | "sum" ->
+        Primitive "Sum"
       | "empty" ->
         Primitive "Empty"
       | "sortByBase" ->
@@ -1009,6 +1012,7 @@ struct
       | Constant c    -> Constant c
       | Primitive p   -> Primitive p
       | Apply (Primitive "Empty", [e]) -> Apply (Primitive "Empty", [flatten_inner_query e])
+      | Apply (Primitive "Sum", [e]) -> Apply (Primitive "Sum", [flatten_inner_query e])
       | Apply (Primitive "length", [e]) -> Apply (Primitive "length", [flatten_inner_query e])
       | Apply (Primitive "tilde", [s; r]) as e ->
           Debug.print ("Applying flatten_inner to tilde expression: " ^ show e);

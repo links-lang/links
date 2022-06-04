@@ -434,6 +434,14 @@ fun empty(l) {
   }
 }
 
+unsafe sig sum : ([Int]) -> Int
+fun sum(l) {
+  switch (l) {
+    case [] -> 0
+    case n::ns -> n + sum(ns)
+  }
+}
+
 # association lists
 # TBD: memassoc is an old LISP word. Perhaps a more modern name would fit better?
 sig memassoc : (a,[(a,b)]) ~> Bool

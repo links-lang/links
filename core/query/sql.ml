@@ -41,6 +41,7 @@ and base =
   | Constant  of Constant.t
   | Project   of Var.var * string
   | Apply     of string * base list
+  | Aggr      of string * query
   | Empty     of query
   | Length    of query
   | RowNumber of (Var.var * string) list
@@ -128,7 +129,8 @@ struct
         "toLower",  "lower";
         "ord",      "ord";
         "chr",      "char";
-        "random",   "rand" ]
+        "random",   "rand";
+        "sum",      "sum"]
 
   let is f = StringMap.mem f funs
   let name f = StringMap.find f funs
@@ -411,6 +413,13 @@ class virtual printer =
             Format.fprintf ppf "select count(*) from (%a) as %a"
               pr_q_true q
               Format.pp_print_string (fresh_dummy_var ())
+        | Aggr (f, q) ->
+            let v = fresh_table_var () in
+            Format.fprintf ppf "select %a(%a) from (%a) as %a"
+              Format.pp_print_string (SqlFuns.name f)
+              (self#pp_projection true) (v, "@")
+              pr_q_true q
+              Format.pp_print_string (string_of_table_var v)
         | RowNumber [] ->
             Format.fprintf ppf "%a" Format.pp_print_string "1"
         | RowNumber ps ->

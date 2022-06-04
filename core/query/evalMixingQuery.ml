@@ -121,6 +121,7 @@ and base_exp = function
     end
 | QL.Apply (QL.Primitive "Empty", [v]) -> S.Empty (sql_of_query S.All v)
 | QL.Apply (QL.Primitive "length", [v]) -> S.Length (sql_of_query S.All v)
+| QL.Apply (QL.Primitive "Sum", [v]) -> S.Aggr ("sum", sql_of_query S.All v)
 | QL.Apply (QL.Primitive f, vs) -> S.Apply (f, List.map base_exp vs)
 | QL.Constant c -> S.Constant c
 | e ->
