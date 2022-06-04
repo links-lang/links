@@ -1000,9 +1000,9 @@ struct
 
   let flatten_query_type t =
     let t' = Types.unwrap_list_type t |> flatten_base_type in
-	match t' with
-	| Types.Record _ -> Types.make_list_type t'
-	| _ -> StringMap.add "@" t' StringMap.empty |> Types.make_record_type |> Types.make_list_type
+    match t' with
+    | Types.Record _ -> Types.make_list_type t'
+    | _ -> StringMap.add "@" t' StringMap.empty |> Types.make_record_type |> Types.make_list_type
 
   let rec flatten_inner : t -> t =
     function
@@ -1020,7 +1020,7 @@ struct
       | Project (_,_) as e ->
         let rec flatten_projs acc = function
         | Project (e', l) -> flatten_projs (l::acc) e'
-        | Var (_,_) as e' -> 
+        | Var (_,_) as e' ->
           (* HACK: FIXME? this keeps z annotated with its original unflattened type *)
           (* (we could use the flatten_type above, but we probably don't need the type to be accurate
            * as all eta expansions have already happened) *)
@@ -1029,6 +1029,7 @@ struct
         | _ -> assert false
         in flatten_projs [] e
       | Record fields ->
+        let extend name name' = name ^ "@" ^ name' in
         (* concatenate labels of nested records *)
         Record
           (StringMap.fold
@@ -1037,11 +1038,11 @@ struct
                  | Record inner_fields ->
                    StringMap.fold
                      (fun name' body fields ->
-                       StringMap.add ("@" ^ name ^ name') body fields)
+                       StringMap.add (extend name name') body fields)
                      inner_fields
                      fields
                  | body ->
-                   StringMap.add ("@" ^ name) body fields)
+                   StringMap.add name body fields)
              fields
              StringMap.empty)
       | Variant ("Simply", x) ->
@@ -1089,7 +1090,7 @@ struct
          but it can do inside "Empty" or "Length". *)
       | Concat es ->
         Concat (List.map flatten_comprehension es)
-      | Table _ | Dedup _ as e -> 
+      | Table _ | Dedup _ as e ->
         (* this is a (possibly deduplicated) table: it must be already flat *)
         e
       | e ->
@@ -1101,11 +1102,12 @@ struct
   (* unflattens a flattened record according to a given nested record type *)
   let rec unflatten_record ?(prefix = "") nty frow : Value.t =
     let ur = unflatten_record in
-	let extend_label l = if prefix = "" then l else prefix ^ "@" ^ l in
+    let extend_label l = if prefix = "" then l else prefix ^ "@" ^ l in
+    let base_label = if prefix = "" then "@" else prefix in
     match nty with
-    | Types.Primitive _ -> List.assoc ("@" ^ prefix) frow
+    | Types.Primitive _ -> List.assoc base_label frow
     | Types.Record nrow ->
-        let nfields = 
+        let nfields =
           StringMap.fold
           <| (fun k v acc -> (k, ur ~prefix:(extend_label k) v frow)::acc)
           <| field_types_of_row nrow
@@ -1113,7 +1115,7 @@ struct
         in `Record nfields
     | _ -> assert false
 
-  let unflatten_query nty fval : Value.t = 
+  let unflatten_query nty fval : Value.t =
     let of_list = function `List l -> l | _ -> assert false in
     let of_record = function `Record r -> r | _ -> assert false in
     (* under the assumption that the given type is a list *)
@@ -1131,7 +1133,7 @@ struct
           in Hashtbl.replace tbl k (v::vl)
         with NotFound _ -> Hashtbl.add tbl k [v]
       in
-      let split r = 
+      let split r =
         unflatten_record ~prefix:"1" kty r,
         unflatten_record ~prefix:"2" vty r
       in
@@ -1139,12 +1141,12 @@ struct
       in
       List.iter (of_record ->- split ->- insert) l;
       `List (Hashtbl.fold (fun k v acc -> pair k (`List v)::acc) tbl [])
-	  
-    (* XXX: (bug?) from the shredding code, it would appear unit fields are not returned by a DB query 
-     * and need to be inferred from the nested type when unflattening -- we're not doing that here 
+
+    (* XXX: (bug?) from the shredding code, it would appear unit fields are not returned by a DB query
+     * and need to be inferred from the nested type when unflattening -- we're not doing that here
      *
      * or maybe we are? we proceed by case analysis on the nested type and, from the looks of it,
-     * the code, not finding any matching 	attribute in the DB result, should conjure a `Record StringMap.empty
+     * the code, not finding any matching attribute in the DB result, should conjure a `Record StringMap.empty
      * i.e. the unit value! *)
 
 end

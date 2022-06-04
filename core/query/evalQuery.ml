@@ -308,7 +308,7 @@ let compile : Value.env -> (int * int) option * Ir.computation -> (Value.databas
         | Some db ->
             let t = Types.unwrap_list_type (QL.type_of_expression v) in
             let q = ordered_query v in
-              Debug.print ("Generated query: "^(db#string_of_query ~range q));
-			  (* TODO: trivial readback, might be changed (see EvalMixingQuery) to allow nested records *)
-			  let readback x = x in
-              Some (db, q, t, readback)
+            Debug.print ("Generated query: "^(db#string_of_query ~range q));
+            (* TODO: trivial readback, might be changed (see EvalMixingQuery) to allow nested records *)
+            let readback x = x in
+            Some (db, q, t, readback)

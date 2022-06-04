@@ -784,9 +784,9 @@ struct
                           fieldMap
                           []
                       in
-					  Database.execute_select fields q db
-					  |> readback (* unflattens records/finite maps *)
-					  |> apply_cont cont env
+                      Database.execute_select fields q db
+                      |> readback (* unflattens records/finite maps *)
+                      |> apply_cont cont env
                end
          end
     | TemporalJoin (tmp, e, _t) ->

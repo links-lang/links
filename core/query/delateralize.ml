@@ -86,7 +86,8 @@ let rec delateralize_step q =
             match findgs [] gs with
             | Some (gsx,x,qx,tyx,y,qy,gsy) ->
                 let qf = QL.For (None, gsy, [], q) in
-                let tyy = Q.type_of_for_var qy in
+                (* XXX: hardcoded QL.Entries here to recover behaviour before grouping was added *)
+                let tyy = Q.type_of_for_var QL.Entries qy in
                 Some (prom_delateralize gsx qf x (qx,tyx) y (qy,tyy))
             | None ->
                 let ogs = gs >>==? (fun (genkind, z,qz) -> ds qz >>=? fun qz' -> Some (genkind,z,qz')) in

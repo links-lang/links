@@ -27,9 +27,10 @@ let rec tail_of_t : Q.t -> Q.t = fun v ->
       | Q.For (_, _gs, _os, t) -> tt t
       | _ -> (* Debug.print ("v: "^string_of_t v); *) assert false
 
-let type_of_for_var gen =
-  Q.type_of_expression gen
-  |> Types.unwrap_list_type
+let type_of_for_var pol gen =
+  match pol, Q.type_of_expression gen with
+  | Q.Keys, ty -> fst <| Types.unwrap_map_type ty
+  | _, ty -> Types.unwrap_list_type ty
 
 let rec freshen_for_bindings : Var.var Env.Int.t -> Q.t -> Q.t =
   fun env v ->
@@ -477,10 +478,12 @@ struct
     in cfree []
 
   let mk_for_term env (pol,x,xs) body_f =
-    let ty_elem =
+    let ty_elem = type_of_for_var pol xs in
+    (*
       Q.type_of_expression xs
       |> TypeUtils.element_type ~overstep_quantifiers:true
     in
+    *)
     (* let newx = Var.fresh_raw_var () in *)
     let vx = Q.Var (x, ty_elem) in
     let cenv = Q.bind env (x, vx) in
@@ -497,15 +500,15 @@ struct
   *)
   | (Q.Keys, x, Q.Singleton (Q.MapEntry (k,_))) -> gsx, Q.bind env (x,k)
   (* FIXME: this is incorrect if we are in a bag context and pol = Q.Keys *)
-  | (pol, x, q) -> 
+  | (pol, x, q) ->
       let z = Var.fresh_raw_var () in
-      let tyz =
-        Q.type_of_expression q
+      let tyz = type_of_for_var pol q in
+(*        Q.type_of_expression q
         |> TypeUtils.element_type
-      in
+      in *)
       let vz = Q.Var (z, tyz) in
-	  let env' = Q.bind env (x, vz) in
-	  gsx@[pol,z,q], env'
+      let env' = Q.bind env (x, vz) in
+      gsx@[pol,z,q], env'
 
 
   (* when the head of a comprehension is a Prom, this lifts it to a generator
@@ -643,12 +646,29 @@ struct
           (* XXX: grouping generators *)
           | (pol,x,g)::gs' ->
               let ng = unpack_ncoll (norm in_dedup env g) in
-              List.concat (List.map (fun (gsrc, gc, ggs, gos) ->
-                      let gsx', env' = reduce_for_source (gsx@ggs) env (pol,x,gsrc) in
-                      rgs gsx' (reduce_and (cx, gc)) env' (os@gos) body gs') ng)
+              begin
+                match pol, in_dedup, ng with
+                (* if pol is Entries, we are in a set comprehension, or the generator is nil or a singleton, we can reduce *)
+                | Q.Entries, _, _
+                | _, true, _
+                | _, _, ([] | [(Q.Singleton _, _, [], _)]) ->
+                  List.concat (List.map (fun (gsrc, gc, ggs, gos) ->
+                        let gsx', env' = reduce_for_source (gsx@ggs) env (pol,x,gsrc) in
+                        rgs gsx' (reduce_and (cx, gc)) env' (os@gos) body gs') ng)
+                (* pol is Keys, we are in a bag comprehension, and the generator is not nil or a singleton: no unnesting or splitting of unions *)
+                | _ ->
+                  let z = Var.fresh_raw_var () in
+                  let tyz = type_of_for_var pol g in
+(*                    Q.type_of_expression g
+                    |> TypeUtils.element_type
+                  in *)
+                  let vz = Q.Var (z, tyz) in
+                  let env' = Q.bind env (x, vz) in
+                  rgs (gsx@[pol,z,pack_ncoll ng]) cx env' os body gs'
+              end
           | [] ->
-            let nbody = unpack_ncoll (norm in_dedup env body) in
-            List.map (fun (bbody, bc, bgs, bos) ->
+              let nbody = unpack_ncoll (norm in_dedup env body) in
+              List.map (fun (bbody, bc, bgs, bos) ->
                     let bgs', bbody' = reduce_for_body (gsx@bgs) bbody in
                     let os' = List.map (fun o -> norm false env o) (os@bos) in
                     bbody', reduce_and (cx, bc), bgs', os') nbody
