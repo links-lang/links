@@ -15,8 +15,8 @@ let extract_row_parts = Types.extract_row_parts
 let split_row name row =
   let (field_env, row_var, dual) = fst (unwrap_row row) |> extract_row_parts in
   let t =
-    if FieldMap.mem name field_env then
-      match (FieldMap.find name field_env) with
+    if Label.Map.mem name field_env then
+      match (Label.Map.find name field_env) with
         | Present t -> t
         | Absent ->
             error ("Attempt to split row "^string_of_row row ^" on absent field " ^ Label.show name)
@@ -28,9 +28,9 @@ let split_row name row =
   in
   let new_field_env =
     if is_closed_row row then
-      FieldMap.remove name field_env
+      Label.Map.remove name field_env
     else
-      FieldMap.add name Absent field_env
+      Label.Map.add name Absent field_env
    in
     t, Row (new_field_env, row_var, dual)
 
@@ -49,20 +49,20 @@ let rec split_variant_type name t = match concrete_type t with
   | t ->
       error ("Attempt to split non-variant type "^string_of_datatype t)
 
-let rec project_type ?(overstep_quantifiers=true) name t = match (concrete_type t, overstep_quantifiers) with
-  | (ForAll (_, t), true) -> project_type name t
+let rec project_type ?(overstep_quantifiers=true) label t = match (concrete_type t, overstep_quantifiers) with
+  | (ForAll (_, t), true) -> project_type label t
   | (Record row, _) ->
-      let t, _ = split_row name row in
+      let t, _ = split_row label row in
         t
   | (Application (absty, [PrimaryKind.Type, typ]), _) when
       (Abstype.name absty) = "TransactionTime" || (Abstype.name absty = "ValidTime") ->
-        if name = TemporalField.data_field then typ
+        if Label.eq_name label TemporalField.data_field then typ
         else if
-          name = TemporalField.from_field ||
-          name = TemporalField.to_field then
+          Label.eq_name label TemporalField.from_field ||
+          Label.eq_name label TemporalField.to_field then
           Primitive (Primitive.DateTime)
         else
-          error ("Trying to project " ^ name ^ " from temporal metadata: " ^ string_of_datatype t)
+          error ("Trying to project " ^ Label.show label ^ " from temporal metadata: " ^ string_of_datatype t)
   | (t, _) ->
       error ("Attempt to project non-record type "^string_of_datatype t)
 
@@ -100,22 +100,22 @@ let rec erase_type ?(overstep_quantifiers=true) names t =
     let closed = is_closed_row row in
       let (field_env, row_var, duality) = fst (unwrap_row row) |> extract_row_parts in
       let field_env =
-        FieldSet.fold
+        Label.Set.fold
           (fun name field_env ->
-            match FieldMap.lookup name field_env with
+            match Label.Map.lookup name field_env with
             | Some (Present _) ->
               if closed then
-                FieldMap.remove name field_env
+                Label.Map.remove name field_env
               else
-                FieldMap.add name Absent field_env
+                Label.Map.add name Absent field_env
             | Some Absent ->
-              error ("Attempt to remove absent field "^name^" from row "^string_of_row row)
+              error ("Attempt to remove absent field "^Label.show name^" from row "^string_of_row row)
             | Some (Meta _) ->
-              error ("Attempt to remove meta field "^name^" from row "^string_of_row row)
+              error ("Attempt to remove meta field "^Label.show name^" from row "^string_of_row row)
             | Some _ ->
               raise Types.tag_expectation_mismatch
             | None ->
-              error ("Attempt to remove absent field "^name^" from row "^string_of_row row))
+              error ("Attempt to remove absent field "^Label.show name^" from row "^string_of_row row))
           names
           field_env
       in
@@ -151,9 +151,9 @@ let rec effect_row ?(overstep_quantifiers=true) t = match (concrete_type t, over
       error ("Attempt to take effects of non-function: " ^ string_of_datatype t)
 
 
-let iter_row (iter_func : string -> field_spec -> unit) row  =
+let iter_row (iter_func : Label.t -> field_spec -> unit) row  =
   let (field_spec_map, _, _) = fst (unwrap_row row) |> extract_row_parts in
-  Utility.StringMap.iter iter_func field_spec_map
+  Label.Map.iter iter_func field_spec_map
 
 let is_function_type t = match concrete_type t with
   | Lolli (_, _, _)
@@ -211,13 +211,13 @@ let record_without t names =
   match concrete_type t with
     | Record (Row (fields, row_var, dual) as row) ->
         if is_closed_row row then
-          let fieldm = StringSet.fold (fun name fields -> StringMap.remove name fields) names fields in
+          let fieldm = Label.Set.fold (fun name fields -> Label.Map.remove name fields) names fields in
           Record (Row (fieldm, row_var, dual))
         else
           let fieldm =
-            StringMap.mapi
+            Label.Map.mapi
               (fun name f ->
-                if StringSet.mem name names then
+                if Label.Set.mem name names then
                   Absent
                 else
                   f)
@@ -365,7 +365,7 @@ let check_type_wellformedness primary_kind t : unit =
     (* Row *)
     | Row (field_spec_map, row_var, _dual) ->
        let handle_fs _label f = ifield_spec f in
-       StringMap.iter handle_fs field_spec_map;
+       Label.Map.iter handle_fs field_spec_map;
        meta rec_env row_var
     (* Session *)
     | Input (t, s)
@@ -389,7 +389,7 @@ let row_present_types t =
   extract_row t
    |> extract_row_parts
    |> fst3
-   |> StringMap.filter_map
+   |> Label.Map.filter_map
       (fun _ v ->
         match v with
           | Present t -> Some t

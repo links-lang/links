@@ -177,7 +177,7 @@ module type CONTINUATION_EVALUATOR = sig
 
   (* trap invocation *)
   val trap : v t ->                        (* the continuation *)
-             (Name.t * v) ->              (* operation name and its argument *)
+             (Label.t * v) ->              (* operation name and its argument *)
              trap_result
 end
 
@@ -325,6 +325,6 @@ val split_html : xml -> xml * xml
 
 val is_channel : t -> bool
 
-val session_exception_operation : string
+val session_exception_operation : Label.t
 
 val row_columns_values : t -> string list * t list list

@@ -237,6 +237,9 @@ rule lex ctxt nl = parse
   | '%'                                 { PERCENT }
   | "/\\"                               { CAPITAL_LAMBDA }
   | initopchar opchar * as op           { OPERATOR op }
+  | "`" (def_id as var)                 { if List.mem_assoc var keywords || not (Char.isUpper var.[0]) then
+                                              raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf))
+                                          else BTCONSTRUCTOR var  }
   | '`' (def_id as var) '`'             { if List.mem_assoc var keywords || Char.isUpper var.[0] then
                                               raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf))
                                           else OPERATOR var }

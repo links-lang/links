@@ -173,7 +173,7 @@ let rec reduce_for_source : Q.t * (Q.t -> Q.t) -> Q.t =
                   let (from_field, to_field) = OptionUtils.val_of temporal_fields in
                   (* Transaction / Valid-time tables: Need to wrap as metadata *)
                   (* First, generate a fresh variable for the table *)
-                  let make_spec_map = StringMap.map (fun x -> Types.Present x) in
+                  let make_spec_map m = Label.Map.map (fun x -> Types.Present x) (Label.string_to_label_map m) in
                   let field_types = Q.table_field_types table in
                   let base_field_types =
                     StringMap.filter
@@ -323,12 +323,12 @@ struct
                              label
                          else
                            StringMap.add label (xlate env v) fields)
-                       ext_fields
+                       (Label.label_to_string_map ext_fields)
                        fields)
           | _ -> Q.query_error "Error adding fields: non-record"
       end
     | Project (label, r) -> Q.Project (xlate env r, label)
-    | Erase (labels, r) -> Q.Erase (xlate env r, labels)
+    | Erase (labels, r) -> Q.Erase (xlate env r, Label.label_to_string_set labels)
     | Inject (label, v, _) -> Q.Variant (label, xlate env v)
     | TAbs (_, v) -> xlate env v
     | TApp (v, _) -> xlate env v
@@ -342,9 +342,9 @@ struct
                List.map Q.unbox_xml (Q.unbox_list v) @ children)
             children [] in
         let children =
-          StringMap.fold
+          Label.Map.fold
             (fun name v attrs ->
-               Value.Attr (name, Q.unbox_string (xlate env v)) :: attrs)
+               Value.Attr (Label.name name, Q.unbox_string (xlate env v)) :: attrs)
             attrs children
         in
           Q.Singleton (Q.XML (Value.Node (tag, children)))
@@ -426,7 +426,7 @@ struct
       raise (Errors.runtime_error "special not allowed in query block")
     | Case (v, cases, default) ->
         let v' = xlate env v in
-        let cases' = StringMap.map (fun (x,y) -> (x, computation env y)) cases in
+        let cases' = Label.Map.map (fun (x,y) -> (x, computation env y)) cases |> Label.label_to_string_map in
         let default' = opt_app (fun (x,y) -> Some (x, computation env y)) None default in
         Q.Case (v', cases', default')
     | If (c, t, e) ->
@@ -598,7 +598,7 @@ end
 let compile_update : Value.database -> Value.env ->
   ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> Sql.query =
   fun db env ((x, table, field_types), where, body) ->
-    let tyx = Types.make_record_type field_types in
+    let tyx = Types.make_record_type (Label.string_to_label_map field_types) in
     let env = Q.bind (Q.env_of_value_env QueryPolicy.Flat env) (x, Q.Var (x, tyx)) in
 (*      let () = opt_iter (fun where ->  Debug.print ("where: "^Ir.show_computation where)) where in*)
     let where = opt_map (Eval.norm_comp env) where in
@@ -611,7 +611,7 @@ let compile_update : Value.database -> Value.env ->
 let compile_delete : Value.database -> Value.env ->
   ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> Sql.query =
   fun db env ((x, table, field_types), where) ->
-    let tyx = Types.make_record_type field_types in
+    let tyx = Types.make_record_type (Label.string_to_label_map field_types) in
     let env = Q.bind (Q.env_of_value_env QueryPolicy.Flat env) (x, Q.Var (x, tyx)) in
     let where = opt_map (Eval.norm_comp env) where in
     let q = Q.delete ((x, table), where) in

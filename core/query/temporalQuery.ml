@@ -191,7 +191,7 @@ module TransactionTime = struct
       let env =
         Q.bind
           (Q.env_of_value_env QueryPolicy.Nested env)
-          (x, Q.Var (x, Types.make_record_type field_types))
+          (x, Q.Var (x, Types.make_record_type (Label.string_to_label_map field_types)))
       in
       let where = opt_map (Query.Eval.norm_comp env) where in
       let body = Query.Eval.norm_comp env body in
@@ -207,7 +207,7 @@ module TransactionTime = struct
     let env =
       Q.bind
         (Q.env_of_value_env QueryPolicy.Nested env)
-        (x, Q.Var (x, Types.make_record_type field_types)) in
+        (x, Q.Var (x, Types.make_record_type (Label.string_to_label_map field_types))) in
     let where = opt_map (Query.Eval.norm_comp env) where in
     let q = delete ((x, table), where) to_field in
     Debug.print ("Generated delete query: " ^ (db#string_of_query q));
@@ -221,8 +221,8 @@ module ValidTime = struct
   let metadata x field_types from_field to_field =
     let extended_field_types =
         field_types
-          |> StringMap.add from_field Types.datetime_type
-          |> StringMap.add to_field Types.datetime_type in
+          |> Label.Map.add (Label.make from_field) Types.datetime_type
+          |> Label.Map.add (Label.make to_field) Types.datetime_type in
     let table_var = Q.Var (x, Types.make_record_type extended_field_types) in
     let metadata_record =
       StringMap.from_alist [
@@ -681,11 +681,12 @@ module ValidTime = struct
     fun upd db env ((x, table, field_types), where, body)
       from_field to_field ->
 
+      let field_types' = Label.string_to_label_map field_types in
       let to_bind =
         match upd with
           | Ir.NonsequencedUpdate _ ->
-              metadata x field_types from_field to_field
-          | _ -> Q.Var (x, Types.make_record_type field_types) in
+              metadata x field_types' from_field to_field
+          | _ -> Q.Var (x, Types.make_record_type field_types') in
 
       let env =
         Q.bind
@@ -727,6 +728,7 @@ module ValidTime = struct
     string (* to field *) ->
     Sql.query =
       fun del db env ((x, table, field_types), where) from_field to_field ->
+        let field_types' = Label.string_to_label_map field_types in
         let env to_bind =
           Q.bind
             (Q.env_of_value_env QueryPolicy.Nested env)
@@ -736,7 +738,7 @@ module ValidTime = struct
           begin
             match del with
               | CurrentDeletion ->
-                  let env = env (Q.Var (x, Types.make_record_type field_types)) in
+                  let env = env (Q.Var (x, Types.make_record_type field_types')) in
                   let where = opt_map (Query.Eval.norm_comp env) where in
                   Delete.current
                     ((x, table), where) from_field to_field
@@ -744,11 +746,11 @@ module ValidTime = struct
                   (* Same logic as deletion -- just that the metadata
                    * we've bound will be different *)
                   let md =
-                    metadata x field_types from_field to_field in
+                    metadata x field_types' from_field to_field in
                   let where = opt_map (Query.Eval.norm_comp (env md)) where in
                   QueryLang.delete ((x, table), where)
               | SequencedDeletion { validity_from; validity_to } ->
-                  let env = env (Q.Var (x, Types.make_record_type field_types)) in
+                  let env = env (Q.Var (x, Types.make_record_type field_types')) in
                   let where = opt_map (Query.Eval.norm_comp env) where in
                   Delete.sequenced field_types
                     ((x, table), where,
@@ -837,10 +839,10 @@ module TemporalJoin = struct
                     List.fold_left
                       (fun acc (k, x) ->
                         match x with
-                          | Present t -> StringMap.add k t acc
+                          | Present t -> Label.Map.add k t acc
                           | _ -> assert false)
-                      (StringMap.empty)
-                      (fst3 x.row |> StringMap.to_alist) in
+                      (Label.Map.empty)
+                      (fst3 x.row |> Label.Map.to_alist) in
                   (Q.Var (v, Types.make_record_type ty), from_field, to_field)
                 ) tables
               in

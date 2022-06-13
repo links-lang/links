@@ -29,7 +29,7 @@ sig
 end
 
 val compile_update : Value.database -> Value.env ->
-  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> Sql.query
+  ((Ir.var * string * Types.datatype Label.Map.t) * Ir.computation option * Ir.computation) -> Sql.query
 
 val compile_delete : Value.database -> Value.env ->
-  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> Sql.query
+  ((Ir.var * string * Types.datatype Label.Map.t) * Ir.computation option) -> Sql.query

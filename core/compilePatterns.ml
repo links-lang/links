@@ -30,10 +30,10 @@ struct
     | Any
     | Nil
     | Cons     of t * t
-    | Variant  of Name.t * t
-    | Effect   of Name.t * t list * t
-    | Negative of StringSet.t
-    | Record   of t StringMap.t * t option
+    | Variant  of Label.t * t
+    | Effect   of Label.t * t list * t
+    | Negative of Label.Set.t
+    | Record   of t Label.Map.t * t option
     | Constant of Constant.t
     | Variable of binder
     | As       of binder * t
@@ -43,8 +43,8 @@ struct
   type context =
     | CNil
     | CCons
-    | CVariant   of string
-    | CNVariant  of StringSet.t
+    | CVariant   of Label.t
+    | CNVariant  of Label.Set.t
     | CConstant  of Constant.t
     | CNConstant of ConstSet.t
 
@@ -138,15 +138,15 @@ let rec desugar_pattern : Types.row -> Sugartypes.Pattern.with_pos -> Pattern.t 
            in
            let k, env' = desugar_pattern k in
            Pattern.Effect (name, ps, k), env ++ env'
-        | Negative names -> Pattern.Negative (StringSet.from_list names), empty
+        | Negative names -> Pattern.Negative (Label.Set.from_list names), empty
         | Record (bs, p) ->
             let bs, env =
               List.fold_right
                 (fun (name, p) (bs, env) ->
                    let p, env' = desugar_pattern p in
-                     StringMap.add name p bs, env ++ env')
+                     Label.Map.add name p bs, env ++ env')
                 bs
-                (StringMap.empty, empty) in
+                (Label.Map.empty, empty) in
             let p, env =
               match p with
                 | None -> None, env
@@ -156,7 +156,7 @@ let rec desugar_pattern : Types.row -> Sugartypes.Pattern.with_pos -> Pattern.t 
             in
               Pattern.Record (bs, p), env
         | Tuple ps ->
-            let bs = mapIndex (fun p i -> (string_of_int (i+1), p)) ps in
+            let bs = mapIndex (fun p i -> (Label.mk_int (i+1), p)) ps in
               desugar_pattern (WithPos.make ~pos (Record (bs, None)))
         | Constant constant ->
             Pattern.Constant constant, empty
@@ -258,7 +258,7 @@ let let_pattern : raw_env -> Pattern.t -> value * Types.datatype -> computation 
             let case_type = TypeUtils.variant_at name t in
             let case_binder, case_variable = Var.fresh_var_of_type case_type in
             let body = lp case_type patt (Variable case_variable) body in
-            let cases = StringMap.singleton name (case_binder, body) in
+            let cases = Label.Map.singleton name (case_binder, body) in
               [], Case (value, cases, None)
         | Pattern.Negative names ->
            (* The following expands the negative pattern into
@@ -273,18 +273,18 @@ let let_pattern : raw_env -> Pattern.t -> value * Types.datatype -> computation 
               }
             *)
             let negative_cases, t' =
-              StringSet.fold
+              Label.Set.fold
                 (fun label (cases, t) ->
                   let case_type = TypeUtils.variant_at label t in
                   let case_binder = Var.fresh_binder_of_type case_type in
                   let body = ([], Special (Wrong body_type)) in
-                  let cases' = StringMap.add label (case_binder, body) cases in
+                  let cases' = Label.Map.add label (case_binder, body) cases in
                   let t' =
                     let row = TypeUtils.extract_row t in
                     Types.Variant (Types.row_with (label, Types.Absent) row)
                   in
                   (cases', t'))
-                names (StringMap.empty, t)
+                names (Label.Map.empty, t)
             in
             let success_case =
               let case_binder = Var.fresh_binder_of_type t' in
@@ -297,19 +297,19 @@ let let_pattern : raw_env -> Pattern.t -> value * Types.datatype -> computation 
                 | None -> body
                 | Some p ->
                     let names =
-                      StringMap.fold
+                      Label.Map.fold
                         (fun name _ names ->
-                           StringSet.add name names)
+                           Label.Set.add name names)
                         fields
-                        StringSet.empty in
+                        Label.Set.empty in
                     let rt = TypeUtils.erase_type names t in
                       lp rt p (Erase (names, value)) body
 (*                      lp rt p (`Coerce (value, rt)) body *)
             in
-              StringMap.fold
+              Label.Map.fold
                 (fun name p body ->
                    let t' = (TypeUtils.project_type name t) in
-                     (lp t' p (Project (name, value)) body))
+                     (lp t' p (Project (Label.name name, value)) body))
                 fields
                 body
         | Pattern.Constant c ->
@@ -404,21 +404,21 @@ let arrange_list_clauses : clause list -> (annotated_clause list * annotated_cla
 
 (* arrange variant clauses by constructor *)
 let arrange_variant_clauses
-    : clause list -> (annotated_clause list) StringMap.t =
+    : clause list -> (annotated_clause list) Label.Map.t =
   fun clauses ->
     (List.fold_right
        (fun (ps, body) env ->
           match ps with
             | (annotation, Pattern.Variant (name, pattern))::ps ->
                 let annotated_clauses =
-                  if StringMap.mem name env then
-                    StringMap.find name env
+                  if Label.Map.mem name env then
+                    Label.Map.find name env
                   else
                     [] in
                 let pattern = reduce_pattern pattern in
-                  StringMap.add name ((annotation, (pattern::ps, body))::annotated_clauses) env
+                  Label.Map.add name ((annotation, (pattern::ps, body))::annotated_clauses) env
             | _ -> assert false
-       ) clauses StringMap.empty)
+       ) clauses Label.Map.empty)
 
 (* arrange constant clauses by constant value *)
 let arrange_constant_clauses
@@ -444,7 +444,7 @@ let arrange_constant_clauses
   This function flattens all the record clauses.
 *)
 let arrange_record_clauses
-    : clause list -> (annotated_pattern StringMap.t * annotated_pattern option * annotated_clause) list =
+    : clause list -> (annotated_pattern Label.Map.t * annotated_pattern option * annotated_clause) list =
   fun clauses ->
     let rec flatten =
       function
@@ -452,16 +452,16 @@ let arrange_record_clauses
             bs, None
         | Pattern.Record (bs, Some p) ->
             let bs', p' = flatten p in
-              StringMap.union_disjoint bs bs', p'
+              Label.Map.union_disjoint bs bs', p'
         | p ->
-            StringMap.empty, Some p
+            Label.Map.empty, Some p
     in
       List.fold_right
         (fun (ps, body) xs ->
            match ps with
              | (annotation, p)::ps ->
                  let bs, p = flatten p in
-                 let bs = StringMap.map reduce_pattern bs in
+                 let bs = Label.Map.map reduce_pattern bs in
                  let p = opt_map reduce_pattern p in
                    (bs, p, (annotation, (ps, body)))::xs
              | _ -> assert false
@@ -616,7 +616,7 @@ and match_list
 *)
 
 and match_variant
-    : var list -> (annotated_clause list) StringMap.t -> bound_computation -> var -> bound_computation =
+    : var list -> (annotated_clause list) Label.Map.t -> bound_computation -> var -> bound_computation =
   fun vars bs def var env ->
     let t = lookup_type var env in
 
@@ -624,14 +624,14 @@ and match_variant
       if mem_context var env then
         lookup_context var env
       else
-        Pattern.CNVariant StringSet.empty, Variable var
+        Pattern.CNVariant Label.Set.empty, Variable var
     in
       match context with
         | Pattern.CVariant name ->
-            if StringMap.mem name bs then
+            if Label.Map.mem name bs then
               match cexp with
                 | Inject (_, (Variable case_variable), _) ->
-                    let annotated_clauses = StringMap.find name bs in
+                    let annotated_clauses = Label.Map.find name bs in
                     (* let case_type = lookup_type case_variable env in *)
                       (*                    let inject_type = TypeUtils.inject_type name case_type in *)
                     let clauses = apply_annotations cexp annotated_clauses in
@@ -641,9 +641,9 @@ and match_variant
               def env
         | Pattern.CNVariant names ->
             let cases, cs =
-              StringMap.fold
+              Label.Map.fold
                 (fun name annotated_clauses (cases, cs) ->
-                   if StringSet.mem name names then
+                   if Label.Set.mem name names then
                      (cases, cs)
                    else
                      let case_type = TypeUtils.variant_at name t in
@@ -653,20 +653,20 @@ and match_variant
                      let match_env =
                        bind_context var
                          (Pattern.CVariant name,
-                          Inject (name, Variable case_variable, t)) match_env in
+                          Inject (Label.name name, Variable case_variable, t)) match_env in
                      let clauses =
                        apply_annotations
-                         (Inject (name, Variable case_variable, t)) annotated_clauses
+                         (Inject (Label.name name, Variable case_variable, t)) annotated_clauses
                      in
-                       (StringMap.add name
+                       (Label.Map.add name
                           (case_binder,
                            match_cases (case_variable::vars) clauses def match_env) cases,
-                        StringSet.add name cs))
+                        Label.Set.add name cs))
                 bs
-                (StringMap.empty, names) in
+                (Label.Map.empty, names) in
 
             let default_type =
-              StringSet.fold
+              Label.Set.fold
                 (fun name t ->
                    let _, t = TypeUtils.split_variant_type name t in t) cs t in
               begin
@@ -703,21 +703,21 @@ and match_negative
         if mem_context var env then
           lookup_context var env
         else
-          Pattern.CNVariant StringSet.empty, Variable var
+          Pattern.CNVariant Label.Set.empty, Variable var
       in
       begin
         match context with
-        | Pattern.CVariant name when StringSet.mem name names ->
+        | Pattern.CVariant name when Label.Set.mem name names ->
           def env
         | Pattern.CVariant _name ->
           let body = apply_annotation (Variable var) (annotation, body) in
           match_cases vars [(ps, body)] def env
         | Pattern.CNVariant names' ->
-          let diff = StringSet.diff names names' in
-          let cs = StringSet.union names names' in
+          let diff = Label.Set.diff names names' in
+          let cs = Label.Set.union names names' in
 
           let cases =
-            StringSet.fold
+            Label.Set.fold
               (fun name cases ->
                   let case_type = TypeUtils.variant_at name t in
 (*                             let inject_type = TypeUtils.inject_type name case_type in *)
@@ -726,13 +726,13 @@ and match_negative
                   let match_env =
                     bind_context var
                       (Pattern.CVariant name,
-                       Inject (name, Variable case_variable, t)) match_env
+                       Inject (Label.name name, Variable case_variable, t)) match_env
                   in
-                  StringMap.add name (case_binder, def match_env) cases)
+                  Label.Map.add name (case_binder, def match_env) cases)
               diff
-              StringMap.empty in
+              Label.Map.empty in
           let default_type =
-            StringSet.fold
+            Label.Set.fold
               (fun name t ->
                  let _, t = TypeUtils.split_variant_type name t in t) cs t in
           let (default_binder, default_variable) = Var.fresh_var_of_type default_type in
@@ -796,7 +796,7 @@ and match_constant
         | _ -> assert false
 
 and match_record
-    : var list -> (annotated_pattern StringMap.t * annotated_pattern option * annotated_clause) list ->
+    : var list -> (annotated_pattern Label.Map.t * annotated_pattern option * annotated_clause) list ->
     bound_computation -> var -> bound_computation =
   fun vars xs def var env ->
     let t = lookup_type var env in
@@ -804,7 +804,7 @@ and match_record
     let names =
       List.fold_right
         (fun (bs, _, _) names ->
-           StringMap.fold (fun name _ names -> StringSet.add name names) bs names) xs StringSet.empty in
+           Label.Map.fold (fun name _ names -> Label.Set.add name names) bs names) xs Label.Set.empty in
     let all_closed = List.for_all (function
                                      | (_, None, _) -> true
                                      | (_, Some _, _) -> false) xs in
@@ -822,19 +822,19 @@ and match_record
                | Some p -> p, false in
 
            let rps, fields =
-             StringSet.fold
+             Label.Set.fold
                (fun name (ps, fields) ->
-                  if StringMap.mem name bs then
-                    StringMap.find name bs :: ps, fields
+                  if Label.Map.mem name bs then
+                    Label.Map.find name bs :: ps, fields
                   else
                     if closed then
                       ([], Pattern.Any)::ps, fields
                     else
                       let xt = TypeUtils.project_type name t in
                       let xb, x = Var.fresh_var_of_type xt in
-                        ([], Pattern.Variable xb)::ps, StringMap.add name (Variable x) fields)
+                        ([], Pattern.Variable xb)::ps, Label.Map.add name (Variable x) fields)
                names
-               ([], StringMap.empty) in
+               ([], Label.Map.empty) in
            let rps, body =
              if all_closed then
                rps, body
@@ -842,11 +842,11 @@ and match_record
                ([], Pattern.Any)::List.rev rps, body
              else
                let original_names =
-                 StringMap.fold
+                 Label.Map.fold
                    (fun name _ names ->
-                      StringSet.add name names)
+                      Label.Set.add name names)
                    bs
-                   StringSet.empty in
+                   Label.Set.empty in
 
                (* type of the original record continuation *)
                let pt = TypeUtils.erase_type original_names t in
@@ -874,11 +874,11 @@ and match_record
         ) xs [] in
 
     let bindings, xs, env =
-      StringSet.fold
+      Label.Set.fold
         (fun name (bindings, xs, env) ->
            let xt = TypeUtils.project_type name t in
            let xb, x = Var.fresh_var_of_type xt in
-           let binding = letmv (xb, Project (name, Variable var)) in
+           let binding = letmv (xb, Project (Label.name name, Variable var)) in
              binding::bindings, x::xs, bind_type x xt env)
         names
         ([], [], env) in
@@ -968,13 +968,13 @@ let compile_handle_cases
   in
   let compiled_effect_cases =  (* The compiled cases *)
     if List.length raw_effect_clauses = 0 then
-      StringMap.empty
+      Label.Map.empty
     else begin
         let (comp_eff, comp_ty, _, _) = Sugartypes.(desc.shd_types) in
         let variant_type =
           let (fields,_,_) = comp_eff |> TypeUtils.extract_row_parts in
           let fields' =
-            StringMap.filter
+            Label.Map.filter
               (fun _ ->
                 function
                 | Types.Present _ -> true
@@ -982,15 +982,15 @@ let compile_handle_cases
               fields
           in
           let fields'' =
-            StringMap.map
+            Label.Map.map
               (function
               | Types.Present t ->
                  begin match TypeUtils.concrete_type t with
                  | Types.Function (domain, _, _) ->
                     let (fields, _, _) = TypeUtils.extract_row domain |> TypeUtils.extract_row_parts in
-                    let arity = StringMap.size fields in
+                    let arity = Label.Map.size fields in
                     if arity = 1 then
-                      match StringMap.find "1" fields with
+                      match Label.Map.find Label.one fields with
                       | Types.Present t -> t
                       | _ -> assert false
                     else
@@ -1015,9 +1015,9 @@ let compile_handle_cases
                   | [Pattern.Effect (name, ps, _)] ->
                      let packaged_args =
                        let fields =
-                         List.mapi (fun i p -> (string_of_int (i+1), p)) ps
+                         List.mapi (fun i p -> (Label.mk_int (i+1), p)) ps
                        in
-                       Pattern.Record (StringMap.from_alist fields, None)
+                       Pattern.Record (Label.Map.from_alist fields, None)
                      in
                      Pattern.Variant (name, packaged_args)
                   | _ -> assert false
@@ -1037,9 +1037,9 @@ let compile_handle_cases
         in
         let continuation_binders =
           let upd effname ks map =
-            match StringMap.lookup effname map with
-            | None -> StringMap.add effname ks map
-            | Some ks' -> StringMap.add effname (ks @ ks') map
+            match Label.Map.lookup effname map with
+            | None -> Label.Map.add effname ks map
+            | Some ks' -> Label.Map.add effname (ks @ ks') map
           in
           let rec gather_binders = function
             | Pattern.Any -> []
@@ -1052,14 +1052,14 @@ let compile_handle_cases
               | [Pattern.Effect (name, _, k)] ->
                  upd name (gather_binders k) acc
               | _ -> assert false)
-            StringMap.empty (List.map fst raw_effect_clauses)
+            Label.Map.empty (List.map fst raw_effect_clauses)
         in
-        StringMap.mapi
+        Label.Map.mapi
           (fun effname (x, body) ->
             let body =
               with_parameters body
             in
-            match StringMap.find effname continuation_binders with
+            match Label.Map.find effname continuation_binders with
             | [] ->
                let resume =
                  Var.(make_local_info ->- fresh_binder) (Types.Not_typed, "_resume")
@@ -1130,9 +1130,9 @@ let match_choices : var -> clause list -> bound_computation =
                                          failwith ("Only choice patterns are supported in choice compilation") in
                                     let x = Var.var_of_binder b in
                                     let body = apply_annotation (Variable x) (annotation, body) in
-                                    StringMap.add name (b, body env) cases
+                                    Label.Map.add name (b, body env) cases
                                   | _ -> assert false)
-                                StringMap.empty
+                                Label.Map.empty
                                 clauses)))
 
 let compile_choices

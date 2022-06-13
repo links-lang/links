@@ -59,6 +59,8 @@ class map :
     method handle_params   : handler_parameterisation -> handler_parameterisation
     method fieldspec       : Datatype.fieldspec -> Datatype.fieldspec
     method fieldconstraint : fieldconstraint -> fieldconstraint
+    method label           : Datatype.label -> Datatype.label
+    method uid             : Label.Uid.t -> Label.Uid.t
     method directive       : directive -> directive
     method datatype        : Datatype.with_pos -> Datatype.with_pos
     method datatypenode    : Datatype.t -> Datatype.t
@@ -143,6 +145,8 @@ class fold :
     method handle_params   : handler_parameterisation -> 'self
     method fieldspec       : Datatype.fieldspec -> 'self
     method fieldconstraint : fieldconstraint -> 'self
+    method label           : Datatype.label -> 'self
+    method uid             : Label.Uid.t -> 'self
     method directive       : directive -> 'self
     method datatype        : Datatype.with_pos -> 'self
     method datatypenode    : Datatype.t -> 'self
@@ -198,6 +202,8 @@ object ('self)
   method directive       : directive -> 'self * directive
   method fieldconstraint : fieldconstraint -> 'self * fieldconstraint
   method fieldspec       : Datatype.fieldspec -> 'self * Datatype.fieldspec
+  method label           : Datatype.label -> 'self * Datatype.label
+  method uid             : Label.Uid.t -> 'self * Label.Uid.t
   method int             : int -> 'self * int
   method float           : float -> 'self * float
   method funlit          : funlit -> 'self * funlit

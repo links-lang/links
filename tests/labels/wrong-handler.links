@@ -1,0 +1,29 @@
+fresh `Ask {
+
+    sig h_ask : (Comp(a, {`Ask:Int|e})) -> Comp(a, {`Ask{_}|e})
+    fun h_ask (m) ()  {
+        handle (m()) {
+            case `Ask(k) -> k(42)
+        }
+    }
+
+    sig f : () {`Ask:Int|_} -> Int
+    fun f () {
+        do `Ask + 1
+    }
+
+}
+
+
+fresh `Ask {
+
+    sig h_ask' : (Comp(a, {`Ask:Int|e})) -> Comp(a, {`Ask{_}|e})
+    fun h_ask' (m) () {
+        handle (m()) {
+               case `Ask(k) -> k(666)
+        }
+    }
+
+}
+
+h_ask'(f) ()

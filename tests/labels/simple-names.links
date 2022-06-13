@@ -1,0 +1,9 @@
+fresh `A {
+
+  effectname E = { `A:() {}-> () } ;
+  typename T = () -E-> () ;
+
+  sig f : T
+  fun f () { do `A }
+
+}

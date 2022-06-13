@@ -173,7 +173,7 @@ let get_data_constructors init_constrs =
 
         method! datatypenode = function
             | Datatype.Variant (xs, _) ->
-                self#list (fun o (lbl, _) -> o#add_constr lbl) xs
+                self#list (fun o (lbl, _) -> o#add_constr (Label.name lbl)) xs
             | dt -> super#datatypenode dt
     end
 

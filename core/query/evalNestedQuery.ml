@@ -90,7 +90,7 @@ struct
     match TypeUtils.concrete_type t with
     | Types.Primitive t -> `Primitive t
     | Types.Record row ->
-        let (fields, _, _) = TypeUtils.extract_row_parts row in
+        let fields = TypeUtils.extract_row_parts row |> fst3 |> Label.label_to_string_map in
         `Record (StringMap.map
           (function
              | Present t -> nested_type_of_type t
@@ -463,7 +463,7 @@ struct
                (fun (x, source) ->
                  match source with
                    | QL.Table t ->
-                     let tyx = Types.make_record_type (QL.table_field_types t) in
+                     let tyx = Types.make_record_type (QL.table_field_types t |> Label.string_to_label_map) in
                      QL.eta_expand_var (x, tyx)
                    | _ -> assert false)
                gs_out) in
@@ -487,6 +487,7 @@ struct
       QL.recdty_field_types
         (Types.make_tuple_type
            [r_out_type; index_type])
+      |> Label.string_to_label_map
       |> Types.make_record_type
     in
       (q, QL.For (None, gs_out, [], where x_out (QL.Singleton (pair r_out index))),

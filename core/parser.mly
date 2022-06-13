@@ -298,6 +298,9 @@ let parse_foreign_language pos lang =
     raise (ConcreteSyntaxError
              (pos, Printf.sprintf "Unrecognised foreign language '%s'." lang))
 
+let local_label = Label.mk_local
+let label = Label.mk_global
+
 %}
 
 %token EOF
@@ -334,7 +337,7 @@ let parse_foreign_language pos lang =
 %token <float> UFLOAT
 %token <string> STRING CDATA REGEXREPL
 %token <char> CHAR
-%token <string> VARIABLE CONSTRUCTOR KEYWORD PERCENTVAR
+%token <string> VARIABLE CONSTRUCTOR KEYWORD PERCENTVAR BTCONSTRUCTOR
 %token <string> LXML ENDTAG
 %token RXML SLASHRXML
 %token MU FORALL ALIEN SIG UNSAFE
@@ -452,7 +455,8 @@ nofun_declaration:
 | typedecl SEMICOLON                                           { $1 }
 | links_module | links_open SEMICOLON                          { $1 }
 | pollute = boption(OPEN) IMPORT CONSTRUCTOR SEMICOLON         { import ~ppos:$loc($2) ~pollute [$3] }
-| FRESH CONSTRUCTOR LBRACE declarations RBRACE                    { with_pos $loc (FreshLabel($2, $4))}
+| FRESH separated_nonempty_list(COMMA, BTCONSTRUCTOR)
+    LBRACE declarations RBRACE                                 { with_pos $loc (FreshLabel(List.map local_label $2, $4))}
 
 alien_datatype:
 | VARIABLE COLON datatype SEMICOLON                            { (binder ~ppos:$loc($1) $1, datatype $3) }
@@ -677,7 +681,7 @@ unary_expression:
 | MINUSDOT unary_expression                                    { unary_appl ~ppos:$loc UnaryOp.FloatMinus $2 }
 | OPERATOR unary_expression                                    { unary_appl ~ppos:$loc (UnaryOp.Name $1)  $2 }
 | postfix_expression | constructor_expression                  { $1 }
-| DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (DoOperation ($2, $3, None)) }
+| DOOP constructor loption(arg_spec)                           { with_pos $loc (DoOperation ($2, $3, None)) }
 
 infix_appl:
 | unary_expression                                             { $1 }
@@ -1001,7 +1005,7 @@ block_contents:
 | /* empty */                                                  { ([], with_pos $loc (TupleLit [])) }
 
 labeled_exp:
-| preceded(EQ, VARIABLE)                                       { ($1, with_pos $loc (Var $1)) }
+| preceded(EQ, VARIABLE)                                       { (label $1, with_pos $loc (Var $1)) }
 | separated_pair(record_label, EQ, exp)                        { $1 }
 
 labeled_exps:
@@ -1166,14 +1170,14 @@ fields:
 | fields_def(field, COMMA, row_var, kinded_row_var)                   { $1 }
 
 field:
-| CONSTRUCTOR /* allows nullary variant labels */              { ($1, present) }
+| CONSTRUCTOR /* allows nullary variant labels */              { (label $1, present) }
 | field_label fieldspec                                        { ($1, $2) }
 
 field_label:
-| CONSTRUCTOR                                                  { $1 }
-| VARIABLE                                                     { $1 }
-| STRING                                                       { $1 }
-| UINTEGER                                                     { string_of_int $1 }
+| CONSTRUCTOR                                                  { label $1 }
+| VARIABLE                                                     { label $1 }
+| STRING                                                       { label $1 }
+| UINTEGER                                                     { label (string_of_int $1) }
 
 rfields:
 | fields_def(rfield, COMMA, row_var, kinded_row_var)                  { $1 }
@@ -1194,8 +1198,8 @@ vfields:
 | kinded_vrow_var                                              { ([]  , $1             ) }
 
 vfield:
-| CONSTRUCTOR                                                  { ($1, present) }
-| CONSTRUCTOR fieldspec                                        { ($1, $2)      }
+| CONSTRUCTOR                                                  { (label $1, present) }
+| CONSTRUCTOR fieldspec                                        { (label $1, $2)      }
 
 efields:
 | efield                                                       { ([$1], make_effect_var ~is_dot:false $loc) }
@@ -1209,8 +1213,13 @@ efield:
 | effect_label fieldspec                                       { ($1, $2)      }
 
 effect_label:
-| CONSTRUCTOR                                                  { $1 }
-| VARIABLE                                                     { $1 }
+| constructor                                                  { $1 }
+| VARIABLE                                                     { label $1 }
+
+constructor:
+| CONSTRUCTOR                                                  { label $1 }
+| BTCONSTRUCTOR                                                { local_label  $1 }
+
 
 effect_app:
 | CONSTRUCTOR                                                  { Datatype.EffectApplication($1, []) }
@@ -1311,14 +1320,14 @@ cons_pattern:
 
 constructor_pattern:
 | negative_pattern                                             { $1 }
-| CONSTRUCTOR parenthesized_pattern?                           { with_pos $loc (Pattern.Variant ($1, $2)) }
+| constructor parenthesized_pattern?                           { with_pos $loc (Pattern.Variant ($1, $2)) }
 
 constructors:
-| separated_nonempty_list(COMMA, CONSTRUCTOR)                  { $1 }
+| separated_nonempty_list(COMMA, constructor)                  { $1 }
 
 negative_pattern:
 | primary_pattern                                              { $1 }
-| MINUS CONSTRUCTOR                                            { with_pos $loc (Pattern.Negative [$2]) }
+| MINUS constructor                                            { with_pos $loc (Pattern.Negative [$2]) }
 | MINUS LPAREN constructors RPAREN                             { with_pos $loc (Pattern.Negative $3)   }
 
 parenthesized_pattern:
@@ -1339,7 +1348,7 @@ patterns:
 | separated_nonempty_list(COMMA, pattern)                      { $1 }
 
 labeled_pattern:
-| preceded(EQ, VARIABLE)                                       { ($1, variable_pat ~ppos:$loc $1) }
+| preceded(EQ, VARIABLE)                                       { (label $1, variable_pat ~ppos:$loc $1) }
 | separated_pair(record_label, EQ,  pattern)                   { $1 }
 
 labeled_patterns:

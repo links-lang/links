@@ -1,0 +1,56 @@
+fresh `Abort {
+
+    effectname A(e::Eff) = { `Abort: () {}-> Zero | e } ;
+    fun aborting () {  switch (do `Abort) {}  }
+
+    typename Maybint = Maybe(Int) ;
+
+    sig maybe : ( Comp(a, { |A({ |e})} ) ) -> Comp (Maybe(a), {`Abort{_}|e})
+    fun maybe (h) () {
+        handle (h()) {
+            case Return(x) -> Just(x)
+            case `Abort(k)  -> Nothing
+        }
+    }
+
+    effectname R(s,e::Eff) = { Receive : () {} -> s | e } ;
+
+    sig receives : ( Comp(a, { |A({ |R(s, { |e})})}) ) -> ([s]) -> Comp(a , {Receive{_}|A({ |e})})
+    fun receives (h) (ss) () {
+        handle (h()) (ss<-ss) {
+            case Receive(k) -> switch (ss) {
+                case [] -> aborting()
+                case h::t -> k(h,t)
+            }
+        }
+    }
+
+    effectname AR(s,e::Eff) = {`Abort:() {}-> Zero, Receive:(){}->s|e} ;
+
+    sig withtwo21s : ( () ~AR(Int,{ |e})~> a ) -> Comp(Maybe(a), {Receive{_}, `Abort{_}|e})
+    fun withtwo21s (h) () { maybe( receives(h)([21,21]) ) () }
+
+}
+
+
+typename CRI(e::Eff) = Comp(Int, { |R(Int,{ |e})}) ;
+
+sig f : CRI({ |e}) fun f () { do Receive + do Receive }
+sig g : CRI({ |e}) fun g () { do Receive + do Receive + do Receive }
+
+fun h () { if (do Receive < 42) {switch (do Abort) {}} else 0 }
+
+sig res : ( Comp(Maybint, {Abort:Zero |e}) ) -> Comp(Maybint, {Abort{_}|e})
+fun res (h) () {
+    handle(h()) {
+        case Abort(_)  -> Just(-1)
+    }
+}
+
+
+# return values ###############################################################
+(
+    withtwo21s( f ) () ,
+    withtwo21s( g ) () ,
+    maybe (res(withtwo21s(h))) ()
+)

@@ -129,11 +129,11 @@ sig
   val letvar : (var_info * tail_computation sem * tyvar list *
                (var -> tail_computation sem)) -> tail_computation sem
 
-  val xml : value sem * string * (Name.t * (value sem) list) list * (value sem) list -> value sem
-  val record : (Name.t * value sem) list * (value sem) option -> value sem
+  val xml : value sem * string * (Label.t * (value sem) list) list * (value sem) list -> value sem
+  val record : (Label.t * value sem) list * (value sem) option -> value sem
 
   val project : value sem * Name.t -> value sem
-  val update : value sem * (Name.t * value sem) list -> value sem
+  val update : value sem * (Label.t * value sem) list -> value sem
 
   val coerce : value sem * datatype -> value sem
 
@@ -155,7 +155,7 @@ sig
       | `ValidSequencedDelete of (value sem * value sem) | `ValidNonsequencedDelete ] option *
     CompilePatterns.Pattern.t * value sem * tail_computation sem option) -> tail_computation sem
 
-  val do_operation : Name.t * (value sem) list * Types.datatype -> tail_computation sem
+  val do_operation : Label.t * (value sem) list * Types.datatype -> tail_computation sem
 
   val handle : env -> (tail_computation sem *
                          (CompilePatterns.Pattern.t * (env -> tail_computation sem)) list *
@@ -423,14 +423,14 @@ struct
         (fun attrs ->
            M.bind children
              (fun children ->
-                let attrs = StringMap.from_alist attrs in
+                let attrs = Label.Map.from_alist attrs in
                   lift (XmlNode (name, attrs, children), Types.xml_type)))
 
   let record (fields, r) =
     let field_types =
       List.fold_left
-        (fun field_types (name, s) -> StringMap.add name (sem_type s) field_types)
-        StringMap.empty
+        (fun field_types (name, s) -> Label.Map.add name (sem_type s) field_types)
+        Label.Map.empty
         fields in
     let s' = lift_alist fields in
       match r with
@@ -438,16 +438,16 @@ struct
             let t = Types.make_record_type field_types in
               M.bind s'
                 (fun fields ->
-                   lift (Extend (StringMap.from_alist fields, None), t))
+                   lift (Extend (Label.Map.from_alist fields, None), t))
         | Some s ->
             let t = Types.Record (Types.extend_row field_types (TypeUtils.extract_row (sem_type s))) in
               bind s
                 (fun r ->
                    M.bind s'
-                     (fun fields -> lift (Extend (StringMap.from_alist fields, Some r), t)))
+                     (fun fields -> lift (Extend (Label.Map.from_alist fields, Some r), t)))
 
   let project (s, name) =
-    let t = TypeUtils.project_type name (sem_type s) in
+    let t = TypeUtils.project_type (Label.make name) (sem_type s) in
       bind s (fun v -> lift (Project (name, v), t))
 
   let erase (s, names) =
@@ -466,8 +466,8 @@ struct
     let names =
       List.fold_left
         (fun names (name, _) ->
-           StringSet.add name names)
-        StringSet.empty
+           Label.Set.add name names)
+        Label.Set.empty
         fields in
     record (fields, Some (erase (s, names)))
 
@@ -492,7 +492,7 @@ struct
 
   let case_zero (s, t) =
     bind s (fun v ->
-              lift (Case (v, StringMap.empty, None), t))
+              lift (Case (v, Label.Map.empty, None), t))
 
   let database s =
     bind s (fun v -> lift (Special (Database v), Types.Primitive Primitive.DB))
@@ -572,7 +572,7 @@ struct
     M.bind (alien_binding (x_info, object_name, language)) rest
 
   let select (l, e) =
-    let t = TypeUtils.select_type l (sem_type e) in
+    let t = TypeUtils.select_type (Label.make l) (sem_type e) in
       bind e (fun v -> lift (Special (Select (l, v)), t))
 
   let offer env (v, cases, t) =
@@ -960,15 +960,15 @@ struct
               *)
               ec e
           | TupleLit es ->
-              let fields = mapIndex (fun e i -> (string_of_int (i+1), ev e)) es in
+              let fields = mapIndex (fun e i -> (Label.mk_int (i+1), ev e)) es in
                 cofv (I.record (fields, None))
           | RecordLit (fields, rest) ->
               cofv
                 (I.record
                    (List.map (fun (name, e) -> (name, ev e)) fields,
                     opt_map ev rest))
-          | Projection (e, name) ->
-              cofv (I.project (ev e, name))
+          | Projection (e, label) ->
+              cofv (I.project (ev e, Label.name label))
           | With (e, fields) ->
               cofv (I.update
                       (ev e,
@@ -1031,7 +1031,7 @@ struct
               in
                 I.switch env (ev e, cases, t)
           | DatabaseLit (name, (None, _)) ->
-              I.database (ev (WithPos.make ~pos (RecordLit ([("name", name)],
+              I.database (ev (WithPos.make ~pos (RecordLit ([(Label.make "name", name)],
                                           Some (WithPos.make ~pos (FnAppl (WithPos.make ~pos (Var "getDatabaseConfig"), [])))))))
           | DatabaseLit (name, (Some driver, args)) ->
               let args =
@@ -1040,7 +1040,7 @@ struct
                   | Some args -> args
               in
                 I.database
-                  (ev (WithPos.make ~pos (RecordLit ([("name", name); ("driver", driver); ("args", args)], None))))
+                  (ev (WithPos.make ~pos (RecordLit ([(Label.make "name", name); (Label.make "driver", driver); (Label.make "args", args)], None))))
           | LensLit (table, Some t) ->
               let table = ev table in
                 I.lens_handle (table, t)
@@ -1051,7 +1051,7 @@ struct
           | LensDropLit (lens, drop, key, default, Some t) ->
               let lens = ev lens in
               let default = ev default in
-                I.lens_drop_handle (lens, drop, key, default, t)
+                I.lens_drop_handle (lens, Label.name drop, Label.name key, default, t)
           | LensSelectLit (lens, pred, Some t) ->
               let lens = ev lens in
               let trow = Lens.Type.sort t |> Lens.Sort.record_type in
@@ -1082,7 +1082,7 @@ struct
               tbl_name; tbl_type = (tmp, _, Some (readtype, writetype, neededtype));
               tbl_keys; tbl_temporal_fields; tbl_database; _ } ->
               I.table_handle (ev tbl_database, ev tbl_name, ev tbl_keys,
-                (tmp, readtype, writetype, neededtype), tbl_temporal_fields)
+                (tmp, readtype, writetype, neededtype), OptionUtils.opt_map (fun (x,y) -> Label.name x, Label.name y) tbl_temporal_fields)
 (*          (name, (_, Some (readtype, writetype, neededtype)), _constraints, keys, db) -> *)
           | Xml (tag, attrs, attrexp, children) ->
                if tag = "#" then
@@ -1094,6 +1094,7 @@ struct
                                  List.map ev children))
                 else
                   let attrs    = alistmap (List.map ev) attrs in
+                  let attrs    = List.map (fun (l,v) -> Label.make l, v) attrs in
                   let children = List.map ev children in
                   let body     = I.xml (instantiate "^^" [(Row, eff)], tag, attrs,
                                         children) in
@@ -1169,7 +1170,7 @@ struct
                 I.db_delete env (del, p, source, where)
           | DBTemporalJoin (mode, e, _) -> I.temporal_join (mode, ec e)
           | Select (l, e) ->
-             I.select (l, ev e)
+             I.select (Label.name l, ev e)
           | Offer (e, cases, Some t) ->
              let eff = lookup_effects env in
              let cases =
@@ -1317,6 +1318,8 @@ struct
                    let xt = Binder.to_type binder in
                    I.alien (Var.make_info xt x scope, Alien.object_name alien, Alien.language alien,
                             fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
+                | FreshLabel (_, decls) -> (* TODO: is that right ? ignore local labels *)
+                    eval_bindings scope env (decls @ bs) e
                 | Aliases _
                 | Infix _ ->
                     (* Ignore type alias and infix declarations - they

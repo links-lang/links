@@ -74,7 +74,7 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
         (* Row *)
         | Row (field_env, row_var, _) ->
            let field_vars =
-             FieldMap.fold
+             Label.Map.fold
                (fun _ field_spec vars ->
                  vars @ get_presence_type_args kind bound_vars field_spec
                ) field_env [] in
@@ -145,7 +145,7 @@ let rigidify_type_arg : type_arg -> unit =
   | Type, Meta point -> rigidify_point point
   | Presence, Meta point -> rigidify_point point
   | Row, Row (fields, point, _dual) ->
-     assert (FieldMap.is_empty fields);
+     assert (Label.Map.is_empty fields);
      rigidify_point point
   (* HACK: probably shouldn't happen *)
   | Row, Meta point -> rigidify_point point
@@ -165,7 +165,7 @@ let mono_type_args : type_arg -> unit =
   | Type, Meta point -> check_sk point
   | Presence, Meta point -> check_sk point
   | Row, Row (fields, point, _dual) ->
-     assert (FieldMap.is_empty fields);
+     assert (Label.Map.is_empty fields);
      check_sk point
   (* HACK: probably shouldn't happen *)
   | Row, Meta point -> check_sk point

@@ -95,7 +95,7 @@ let rec lens_sugar_phrase_of_body v p =
           Format.asprintf "Unexpected expression to project on: %a" S.pp_phrase
             var
           |> Error.internal_error_res)
-      >>| fun () -> LPS.Var field
+      >>| fun () -> LPS.Var (Label.name field)
   | _ ->
       Format.asprintf
         "Unsupported sugar phrase in lens sugar phrase of body: %a" S.pp_phrase

@@ -1,7 +1,7 @@
 open Utility
 open Types
 
-module FieldEnv = FieldMap
+module FieldEnv = Label.Map
 
 (* TODO
 
@@ -91,7 +91,7 @@ let rec is_guarded : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
         | Row (fields, row_var, _dual) ->
            let check_fields = false in
            (if check_fields then
-              (FieldMap.fold
+              (Label.Map.fold
                  (fun _ f b -> b && isg f)
                  fields
                  true)

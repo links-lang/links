@@ -207,9 +207,9 @@ module Datatype = struct
     | Dual            of with_pos
     | End
   and with_pos = t WithPos.t
-  and row = (string * fieldspec) list * row_var
+  and row = (label * fieldspec) list * row_var
   and row_var =
-    | EffectApplication of string * type_arg list
+    | EffectApplication of Name.t * type_arg list
     | Closed
     | Open of SugarTypeVar.t
     | Recursive of SugarTypeVar.t * row
@@ -221,6 +221,7 @@ module Datatype = struct
     | Type of with_pos
     | Row of row
     | Presence of fieldspec
+  and label = Label.t
       [@@deriving show]
 end
 
@@ -241,10 +242,10 @@ module Pattern = struct
     | Nil
     | Cons     of with_pos * with_pos
     | List     of with_pos list
-    | Variant  of Name.t * with_pos option
-    | Effect   of Name.t * with_pos list * with_pos
-    | Negative of Name.t list
-    | Record   of (Name.t * with_pos) list * with_pos option
+    | Variant  of Label.t * with_pos option
+    | Effect   of Label.t * with_pos list * with_pos
+    | Negative of Label.t list
+    | Record   of (Label.t * with_pos) list * with_pos option
     | Tuple    of with_pos list
     | Constant of Constant.t
     | Variable of Binder.with_pos
@@ -398,9 +399,9 @@ and table_lit = {
     tbl_type:
         (Temporality.t * Datatype.with_pos * (Types.datatype *
          Types.datatype * Types.datatype) option);
-    tbl_field_constraints: (Name.t * fieldconstraint list) list;
+    tbl_field_constraints: (Label.t * fieldconstraint list) list;
     tbl_keys: phrase;
-    tbl_temporal_fields: (string * string) option;
+    tbl_temporal_fields: (Label.t * Label.t) option;
     tbl_database: phrase
 }
 and iterpatt =
@@ -463,15 +464,15 @@ and phrasenode =
   | TAbstr           of SugarQuantifier.t list * phrase
   | TAppl            of phrase * type_arg' list
   | TupleLit         of phrase list
-  | RecordLit        of (Name.t * phrase) list * phrase option
-  | Projection       of phrase * Name.t
-  | With             of phrase * (Name.t * phrase) list
+  | RecordLit        of (Label.t * phrase) list * phrase option
+  | Projection       of phrase * Label.t
+  | With             of phrase * (Label.t * phrase) list
   | TypeAnnotation   of phrase * datatype'
   | Upcast           of phrase * datatype' * datatype'
   | Instantiate      of phrase
   | Generalise       of phrase
   | ConstructorLit   of Name.t * phrase option * Types.datatype option
-  | DoOperation      of Name.t * phrase list * Types.datatype option
+  | DoOperation      of Label.t * phrase list * Types.datatype option
   | Handle           of handler
   | Switch           of phrase * (Pattern.with_pos * phrase) list *
                           Types.datatype option
@@ -479,18 +480,18 @@ and phrasenode =
   | DatabaseLit      of phrase * (phrase option * phrase option)
   | TableLit         of table_lit
   | DBDelete         of temporal_deletion option * Pattern.with_pos * phrase * phrase option
-  | DBInsert         of temporal_insertion option * phrase * Name.t list * phrase * phrase option
+  | DBInsert         of temporal_insertion option * phrase * Label.t list * phrase * phrase option
   | DBUpdate         of temporal_update option * Pattern.with_pos * phrase *
-                          phrase option * (Name.t * phrase) list
+                          phrase option * (Label.t * phrase) list
   | DBTemporalJoin   of Temporality.t * phrase * Types.datatype option
   | LensLit          of phrase * Lens.Type.t option
   | LensSerialLit    of phrase * string list * Lens.Type.t option
   (* the lens keys lit is a literal that takes an expression and is converted
      into a LensLit with the corresponding table keys marked in the lens_sort *)
   | LensKeysLit      of phrase * phrase * Lens.Type.t option
-  | LensFunDepsLit   of phrase * (string list * string list) list *
+  | LensFunDepsLit   of phrase * (Label.t list * Label.t list) list *
                           Lens.Type.t option
-  | LensDropLit      of phrase * string * string * phrase *
+  | LensDropLit      of phrase * Label.t * Label.t * phrase *
                           Lens.Type.t option
   | LensSelectLit    of phrase * phrase * Lens.Type.t option
   | LensJoinLit      of phrase * phrase * phrase * phrase * phrase *
@@ -507,7 +508,7 @@ and phrasenode =
   | PagePlacement    of phrase
   | FormBinding      of phrase * Pattern.with_pos
   (* choose *)
-  | Select           of Name.t * phrase
+  | Select           of Label.t * phrase
   (* choice *)
   | Offer            of phrase * (Pattern.with_pos * phrase) list *
                           Types.datatype option
@@ -531,7 +532,7 @@ and bindingnode =
   | Exp     of phrase
   | Module  of { binder: Binder.with_pos; members: binding list }
   | AlienBlock of Alien.multi Alien.t
-  | FreshLabel of Name.t * binding list
+  | FreshLabel of Label.t list * binding list
 and binding = bindingnode WithPos.t
 and block_body = binding list * phrase
 and cp_phrasenode =
@@ -813,6 +814,12 @@ struct
     | Import _
     | Open _
     | Aliases _ -> empty, empty
+    | FreshLabel (_, decls) ->
+        List.fold_left
+          (fun (b,f) decl -> let b', f' = binding decl in
+              StringSet.union b b', StringSet.union f f')
+          (StringSet.empty, StringSet.empty)
+          decls
     (* This is technically a declaration, thus the name should
        probably be treated as bound rather than free. *)
     | Infix { name; _ } -> empty, singleton name

@@ -222,7 +222,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
         row |> TypeUtils.extract_row_parts in
       if Types.is_closed_row row then
         let field_env' =
-          Types.FieldMap.filter
+          Label.Map.filter
             ( fun _ v -> match v with
               | T.Absent -> false
               | _ -> true )
@@ -426,12 +426,12 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       | _, _ -> false
     and eq_field_envs (context, lfield_env, rfield_env) =
       let lfields_in_rfields =
-        FieldMap.for_all  (fun field lp ->
-            match FieldMap.find_opt field rfield_env with
+        Label.Map.for_all  (fun field lp ->
+            match Label.Map.find_opt field rfield_env with
               | Some rp -> eq_presence (context, lp, rp)
               | None -> false
           ) lfield_env in
-      lfields_in_rfields  && FieldMap.cardinal lfield_env = FieldMap.cardinal rfield_env
+      lfields_in_rfields  && Label.Map.cardinal lfield_env = Label.Map.cardinal rfield_env
     and eq_row_vars (context, lpoint, rpoint) =
       match Unionfind.find lpoint, Unionfind.find rpoint with
       | Closed, Closed ->  true
@@ -469,7 +469,7 @@ let check_eq_type_lists = fun (ctx : type_eq_context) exptl actl occurrence ->
 
 let ensure_effect_present_in_row ctx allowed_effects required_effect_name required_effect_type occurrence =
   let (map, _, _) = fst (Types.unwrap_row allowed_effects) |> TypeUtils.extract_row_parts in
-  match T.FieldMap.find_opt required_effect_name map with
+  match Label.Map.find_opt required_effect_name map with
     | Some (T.Present et) -> check_eq_types ctx et required_effect_type occurrence
     | _ -> raise_ir_type_error ("Required effect " ^ Label.show required_effect_name ^ " not present in effect row " ^ Types.string_of_row allowed_effects) occurrence
 
@@ -585,7 +585,7 @@ struct
               o, Extend (fields, base), t
         | Project (name, v) ->
             let (o, v, vt) = o#value v in
-            o, Project (name, v), project_type ~overstep_quantifiers:false name vt
+            o, Project (name, v), project_type ~overstep_quantifiers:false (Label.make name) vt
 
         | Erase (names, v) ->
             let (o, v, vt) = o#value v in
@@ -595,7 +595,7 @@ struct
             let o, v, vt = o#value v in
             let _ = match TypeUtils.concrete_type t with
               | Variant _ ->
-                 o#check_eq_types  (variant_at ~overstep_quantifiers:false name t) vt (SVal orig)
+                 o#check_eq_types  (variant_at ~overstep_quantifiers:false (Label.make name) t) vt (SVal orig)
               | _ -> raise_ir_type_error "trying to inject into non-variant type" (SVal orig) in
             o, Inject (name, v, t), t
         | TAbs (tyvars, v) ->
@@ -617,7 +617,7 @@ struct
             let (o, attributes, attribute_types) = o#name_map (fun o -> o#value) attributes in
             let (o, children  , children_types) = o#list (fun o -> o#value) children in
 
-            let _ = StringMap.iter (fun _ t -> o#check_eq_types  (Primitive Primitive.String) t (SVal orig)) attribute_types in
+            let _ = Label.Map.iter (fun _ t -> o#check_eq_types  (Primitive Primitive.String) t (SVal orig)) attribute_types in
             let _ = List.iter (fun t -> o#check_eq_types  Types.xml_type t (SVal orig)) children_types in
               o, XmlNode (tag, attributes, children), Types.xml_type
 
@@ -725,32 +725,32 @@ struct
             | Variant row as variant ->
                let unwrapped_row = fst (unwrap_row row) |> TypeUtils.extract_row_parts in
                let present_fields, has_bad_presence_polymorphism  =
-                 StringMap.fold (fun field field_spec (fields, poly) -> match field_spec with
-                                           | Present _  -> (StringSet.add field fields), poly
-                                           | Meta _ -> fields, StringMap.mem field cases
+                 Label.Map.fold (fun field field_spec (fields, poly) -> match field_spec with
+                                           | Present _  -> (Label.Set.add field fields), poly
+                                           | Meta _ -> fields, Label.Map.mem field cases
                                            | Absent -> fields, poly
                                            | _ -> raise Types.tag_expectation_mismatch)
-                   (fst3 unwrapped_row) (StringSet.empty, false) in
+                   (fst3 unwrapped_row) (Label.Set.empty, false) in
                let is_closed = is_closed_row row in
                let has_default = OptionUtils.is_some default in
-               let case_fields = StringMap.fold (fun field _ fields -> StringSet.add field fields) cases StringSet.empty in
+               let case_fields = Label.Map.fold (fun field _ fields -> Label.Set.add field fields) cases Label.Set.empty in
 
                ensure (not has_bad_presence_polymorphism)
                  "row contains presence-polymorphic labels with corresponding \
                   match clauses. These can only be handled by a default case."  (STC orig);
                if has_default then
-                 ensure (StringSet.subset case_fields present_fields) "superfluous case" (STC orig)
+                 ensure (Label.Set.subset case_fields present_fields) "superfluous case" (STC orig)
                else
                  begin
-                   ensure (not (StringSet.is_empty present_fields)) "Case with neither cases nor default" (STC orig);
+                   ensure (not (Label.Set.is_empty present_fields)) "Case with neither cases nor default" (STC orig);
                    ensure (is_closed) "case without default over open row"  (STC orig);
 
-                   ensure (StringSet.equal case_fields present_fields)
+                   ensure (Label.Set.equal case_fields present_fields)
                      "cases not identical to present fields in closed row, no default case" (STC orig)
                  end;
 
                let o, cases, types =
-                 StringMap.fold
+                 Label.Map.fold
                    (fun name  (binder, comp) (o, cases, types) ->
                      let type_binder = Var.type_of_binder binder in
                      let type_variant = variant_at ~overstep_quantifiers:false name variant in
@@ -758,14 +758,14 @@ struct
                      let o, b = o#binder binder in
                      let o, c, t = o#computation comp in
                      let o = o#remove_binder binder in
-                     o, StringMap.add name (b,c) cases, t :: types)
-                   cases (o, StringMap.empty, []) in
+                     o, Label.Map.add name (b,c) cases, t :: types)
+                   cases (o, Label.Map.empty, []) in
                let o, default, default_type =
                  o#option (fun o (b, c) ->
                      let o, b = o#binder b in
                      let actual_default_type = Var.type_of_binder b in
                      let expected_default_t =
-                       StringMap.fold
+                       Label.Map.fold
                          (fun case _ v -> TypeUtils.split_variant_type case v |> snd)
                          cases
                          variant
@@ -800,7 +800,8 @@ struct
         | Database v ->
             let o, v, vt = o#value v in
             (* v must be a record containing string fields  name, args, and driver*)
-            List.iter (fun field ->
+            List.iter (fun name ->
+                let field = Label.make name in
                 o#check_eq_types (project_type field vt) Types.string_type (SSpec special)
               ) ["name"; "args"; "driver"];
             o, Database v, Primitive Primitive.DB
@@ -904,7 +905,7 @@ struct
                 | InsertReturning (tmp, _, _, (Constant (Constant.String id) as ret)) ->
                    (* The return value must be encoded as a string literal,
                       denoting a column *)
-                   let ret_type = TypeUtils.project_type id table_read in
+                   let ret_type = TypeUtils.project_type (Label.make id) table_read in
                    o#check_eq_types Types.int_type ret_type (SSpec special);
                    o, InsertReturning (tmp, source, rows, ret), Types.int_type
                 | InsertReturning (_, _, _, _) ->
@@ -980,7 +981,7 @@ struct
                          let o, b = o#binder b in
                          let o, c, t = o#computation c in
                          o, (b, c), t) bs in
-           let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
+           let t = (Label.Map.to_alist ->- List.hd ->- snd) branch_types in
            o, Choice (v, bs), t
         | Handle ({ ih_comp; ih_cases; ih_return; ih_depth }) ->
           (* outer effects is R_d in the IR formalization *)
@@ -1039,19 +1040,19 @@ struct
           (* We now construct the inner effects from the outer effects and branch_presence_spec_types *)
           let (outer_effects_map, outer_effects_var, outer_effects_dualized) = outer_effects_parts in
           (* For each case branch, the corresponding entry goes directly into the field spec map of the inner effect row *)
-          let inner_effects_map_from_branches = StringMap.map (fun x -> Present x) branch_presence_spec_types in
+          let inner_effects_map_from_branches = Label.Map.map (fun x -> Present x) branch_presence_spec_types in
           (* We now add all entries from the outer effects that were not touched by the handler to the inner effects *)
-          let inner_effects_map = StringMap.fold (fun effect outer_presence_spec map ->
-              if StringMap.mem effect inner_effects_map_from_branches then
+          let inner_effects_map = Label.Map.fold (fun effect outer_presence_spec map ->
+              if Label.Map.mem effect inner_effects_map_from_branches then
                 map
               else
-                StringMap.add effect outer_presence_spec map
+                Label.Map.add effect outer_presence_spec map
             )  inner_effects_map_from_branches outer_effects_map in
           let inner_effects = Row (inner_effects_map, outer_effects_var, outer_effects_dualized) in
 
         (if not (Types.is_closed_row outer_effects) then
-          let outer_effects_contain e = StringMap.mem e outer_effects_map in
-          ensure (StringMap.for_all (fun e _ -> outer_effects_contain e) cases) "Outer effects are open but do not mention an effect handled by handler" (SSpec special));
+          let outer_effects_contain e = Label.Map.mem e outer_effects_map in
+          ensure (Label.Map.for_all (fun e _ -> outer_effects_contain e) cases) "Outer effects are open but do not mention an effect handled by handler" (SSpec special));
 
           (* comp_t  is A_c in the IR formalization *)
           let o, _ = o#set_allowed_effects inner_effects in

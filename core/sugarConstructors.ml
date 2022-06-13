@@ -76,7 +76,7 @@ module SugarConstructors (Position : Pos)
   (* Create a tuple for orderby clauses (includes a hack to ensure
      that 1-tuples are preserved) *)
   let orderby_tuple ?(ppos=dp) = function
-    | [e] -> record ~ppos [("1", e)]
+    | [e] -> record ~ppos [(Label.one, e)]
     | es  -> with_pos ppos (TupleLit es)
 
   let cp_unit ppos = with_pos ppos (CPUnquote ([], tuple ~ppos []))

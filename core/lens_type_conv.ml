@@ -8,8 +8,14 @@ type 'a die = string -> 'a
 
 let to_links_map m =
   String.Map.fold
-    (fun k v m -> T.FieldMap.add (Label.make k) v m)
-    m T.FieldMap.empty
+    (fun k v m -> Label.Map.add (Label.make k) v m)
+    m Label.Map.empty
+
+let to_string_map m =
+  Label.Map.fold
+    (fun k v m -> String.Map.add (Label.name k) v m)
+    m String.Map.empty
+
 
 let lookup_alias context ~alias =
   match Env.String.find_opt alias context with
@@ -50,9 +56,9 @@ let rec lens_phrase_type_of_type t =
   | T.Record r -> lens_phrase_type_of_type r
   | T.Row (fields, _, _) ->
       let fields =
-        Utility.StringMap.to_alist fields
-        |> String.Map.from_alist
-        |> String.Map.map (fun v ->
+        Label.Map.to_alist fields
+        |> Label.Map.from_alist
+        |> Label.Map.map (fun v ->
                match v with
                | T.Present t -> lens_phrase_type_of_type t
                | _ ->
@@ -60,7 +66,7 @@ let rec lens_phrase_type_of_type t =
                      "lens_phrase_type_of_type only works on records with \
                       present types.")
       in
-      LPT.Record fields
+      LPT.Record (to_string_map fields)
   | _ ->
       failwith
       @@ Format.asprintf "Unsupported type %a in lens_phrase_type_of_type." T.pp

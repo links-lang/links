@@ -20,7 +20,7 @@ let printing_functions
               |> convert parse_bool
               |> sync)
 
-let session_exception_operation = "SessionFail"
+let session_exception_operation = Label.make "SessionFail"
 
 class type otherfield =
 object
@@ -373,7 +373,7 @@ module type CONTINUATION_EVALUATOR = sig
                result
 
   val trap : v t ->                        (* the continuation *)
-             (Name.t * v) ->              (* operation name and its argument *)
+             (Label.t * v) ->              (* operation name and its argument *)
              trap_result
 end
 
@@ -665,9 +665,9 @@ module Eff_Handler_Continuation = struct
         let open Trap in
         let rec handle k' = function
           | ((User_defined h, pk) :: k) ->
-             begin match StringMap.lookup opname h.cases with
+             begin match Label.Map.lookup opname h.cases with
              | Some (b, _, comp)
-                  when session_exn_enabled && opname = session_exception_operation ->
+                  when session_exn_enabled && Label.eq session_exception_operation opname ->
                 let var = Var.var_of_binder b in
                 let continuation_thunk =
                   fun () -> E.computation (Env.bind var (arg, Scope.Local) h.env) k comp
@@ -693,7 +693,7 @@ module Eff_Handler_Continuation = struct
              | None -> handle ((User_defined h, pk) :: k') k
              end
           | (identity, pk) :: k -> handle ((identity, pk) :: k') k
-          | [] when session_exn_enabled && opname = session_exception_operation ->
+          | [] when session_exn_enabled && Label.eq session_exception_operation opname ->
               (* If this is a session exception operation, we need to gather all
                * of the computations in the pure continuation stack, so we can inspect
                * their free variables. *)
@@ -705,7 +705,7 @@ module Eff_Handler_Continuation = struct
              in
              UnhandledSessionException comps
           | [] ->
-             Trap (fun () -> E.error (Printf.sprintf "no suitable handler for operation %s has been installed." opname))
+             Trap (fun () -> E.error (Printf.sprintf "no suitable handler for operation %s has been installed." (Label.show opname)))
         in handle [] k
 
     end

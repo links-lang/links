@@ -2,9 +2,8 @@
 open CommonTypes
 
 (* field environments *)
-module type LABELMAP = Utility.Map with type key = Label.t
-module FieldMap : LABELMAP
-type 'a field_env = 'a FieldMap.t [@@deriving show]
+module FieldEnv : Label.LABELMAP
+type 'a field_env = 'a Label.Map.t [@@deriving show]
 
 type 'a stringmap = 'a Utility.StringMap.t [@@deriving show]
 
@@ -165,7 +164,7 @@ and session_type = typ
 and datatype = typ
 and type_arg = PrimaryKind.t * typ
 and field_spec = typ
-and field_spec_map = field_spec FieldMap.t
+and field_spec_map = field_spec Label.Map.t
 and meta_type_var = typ point
 and meta_row_var = row point
 and meta_presence_var = typ point

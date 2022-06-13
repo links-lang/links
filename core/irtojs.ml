@@ -1,7 +1,7 @@
-1
 (** JavaScript generation *)
 open Utility
 open CommonTypes
+module L = Label
 
 let js_hide_database_info = Js.hide_database_info
 let session_exceptions_enabled = Settings.get Basicsettings.Sessions.exceptions_enabled
@@ -861,9 +861,9 @@ end = functor (K : CONTINUATION) -> struct
     | Ir.Extend (field_map, rest) ->
        let dict =
          Dict
-           (StringMap.fold
+           (L.Map.fold
               (fun name v dict ->
-                (name, gv v) :: dict)
+                (L.name name, gv v) :: dict)
               field_map [])
        in
        begin
@@ -876,7 +876,7 @@ end = functor (K : CONTINUATION) -> struct
        project (gv v) name
     | Ir.Erase (names, v) ->
        call Runtime.Links.erase
-         [gv v; Aux.set_of_array (Arr (List.map strlit (StringSet.elements names)))]
+         [gv v; Aux.set_of_array (Arr (List.map strlit (StringSet.elements (L.label_to_string_set names))))]
     | Ir.Inject (name, v, _t) ->
        Dict [("_label", strlit name);
              ("_value", gv v)]
@@ -926,8 +926,8 @@ end = functor (K : CONTINUATION) -> struct
     let open Code in
     call Runtime.Links.xml
       [Constructors.strlit tag;
-       Dict (StringMap.fold (fun name v bs ->
-           (name, generate_value env v) :: bs) attrs []);
+       Dict (L.Map.fold (fun name v bs ->
+           (L.name name, generate_value env v) :: bs) attrs []);
        Aux.List.of_array (Arr (List.map (generate_value env) children))]
 
   let generate_remote_call f_var xs_names env =
@@ -1106,7 +1106,7 @@ end = functor (K : CONTINUATION) -> struct
              let comp = snd (generate_computation (VEnv.bind x x_name env) comp kappa) in
              Bind (x_name, project scrutinee "_value", comp)
            in
-           let cases = StringMap.map gen_cont cases in
+           let cases = L.Map.map gen_cont cases |> L.label_to_string_map in
            let default = opt_map gen_cont default in
            k (Switch (project scrutinee "_label", cases, default)))
     | Ir.If (v, c1, c2) ->
@@ -1171,7 +1171,7 @@ end = functor (K : CONTINUATION) -> struct
                let (ch, chname) = name_binder cb in
                Bind (chname, channel, snd (generate_computation (VEnv.bind ch chname env) comp K.(skappa <> kappa)))
              in
-             let branches = StringMap.map generate_branch bs in
+             let branches = L.Map.map generate_branch bs |> L.label_to_string_map in
              Fn ([result], (Bind (received, message, (Switch (project (Var received) "_label", branches, None))))))
          in
          let cont = K.(skappa' <> skappas) in
@@ -1200,15 +1200,15 @@ end = functor (K : CONTINUATION) -> struct
               * environment passed as an argument already) need to be compiled specially *)
              let op =
                if (session_exceptions_enabled &&
-                     name = Value.session_exception_operation &&
+                     L.eq name Value.session_exception_operation &&
                    List.length args = 0) then
                  let affected_variables =
                    VariableInspection.get_affected_variables (K.reify kappa) in
                  let affected_arr = Dict ([("1", Aux.List.of_array (Arr affected_variables))]) in
-                 Dict [ ("_label", strlit name)
+                 Dict [ ("_label", strlit (L.name name))
                       ; ("_value", Dict [("p", affected_arr); ("s", resumption)]) ]
                else
-                 Dict [ ("_label", strlit name)
+                 Dict [ ("_label", strlit (L.name name))
                       ; ("_value", Dict [("p", maybe_box args); ("s", resumption)]) ]
              in
              bind_skappa (bind_seta (return (apply_yielding (K.reify seta) [op] kappas))))
@@ -1242,8 +1242,8 @@ end = functor (K : CONTINUATION) -> struct
                 let name_map =
                   List.fold_left
                     (fun box (i, _, initial_value) ->
-                      StringMap.add (string_of_int i) initial_value box)
-                    StringMap.empty params
+                      L.Map.add (L.mk_int i) initial_value box)
+                    L.Map.empty params
                 in
                 (Ir.Let (param_ptr_binder, ([], Ir.Return (Ir.Extend (name_map, None)))) :: bs, tc)
               in
@@ -1307,12 +1307,12 @@ end = functor (K : CONTINUATION) -> struct
                 StringMap.fold
                   (fun operation_name clause cases ->
                     StringMap.add operation_name
-                      (if session_exceptions_enabled && operation_name = Value.session_exception_operation
+                      (if session_exceptions_enabled && operation_name = L.name Value.session_exception_operation
                        then let (xb,_,body) = clause in
                             translate_exn_case env scrutinee (xb, body) kappas
                        else translate_eff_case env scrutinee clause kappas)
                       cases)
-                  eff_cases StringMap.empty
+                  (L.label_to_string_map eff_cases) StringMap.empty
               in
               let forward y ks =
                 K.bind ks

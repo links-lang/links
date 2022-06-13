@@ -132,7 +132,8 @@ object (o : 'self_type)
         let (fields, rho, _) = TypeUtils.extract_row_parts row in
         let effb, row = fresh_row_quantifier default_effect_subkind in
 
-        let r = Record (Row (FieldMap.add name (Present a) fields, rho, false)) in
+        let label = Label.make name in
+        let r = Record (Row (Label.Map.add label (Present a) fields, rho, false)) in
 
         let f = gensym ~prefix:"_fun_" () in
         let x = gensym ~prefix:"_fun_" () in
@@ -140,7 +141,7 @@ object (o : 'self_type)
                                    , Function (Types.make_tuple_type [r], row, a)) in
 
         let pss = [[variable_pat ~ty:r x]] in
-        let body = with_dummy_pos (Projection (var x, name)) in
+        let body = with_dummy_pos (Projection (var x, label)) in
         let tyvars = List.map SugarQuantifier.mk_resolved [ab; rhob; effb] in
         let e : phrasenode =
           block_node

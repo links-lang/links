@@ -56,7 +56,7 @@ module type SugarConstructorsSig = sig
   val block_node  :            block_body -> phrasenode
   val datatype    : Datatype.with_pos -> Datatype.with_pos * 'a option
   val cp_unit     : t -> cp_phrase
-  val record      : ?ppos:t -> ?exp:phrase -> (Name.t * phrase) list -> phrase
+  val record      : ?ppos:t -> ?exp:phrase -> (Label.t * phrase) list -> phrase
   val tuple       : ?ppos:t -> phrase list -> phrase
   val orderby_tuple : ?ppos:t -> phrase list -> phrase
   val list        :
@@ -138,9 +138,9 @@ module type SugarConstructorsSig = sig
 
   (* Database queries *)
   val db_exps
-      : ?ppos:t -> (Name.t * phrase) list -> phrase
+      : ?ppos:t -> (Label.t * phrase) list -> phrase
   val db_insert
-      : ?ppos:t -> temporal_insertion option -> phrase -> Name.t list -> phrase -> string option
+      : ?ppos:t -> temporal_insertion option -> phrase -> Label.t list -> phrase -> string option
      -> phrase
   val query
       : ?ppos:t -> (phrase * phrase) option -> QueryPolicy.t -> phrase -> phrase
@@ -172,8 +172,8 @@ module type SugarConstructorsSig = sig
      -> tbl_keys:(phrase option)
      -> phrase (* Name *)
      -> Datatype.with_pos (* Type *)
-     -> (Name.t * fieldconstraint list) list (* Field constraints *)
-     -> (Temporality.t * (string * string)) option (* Temporal to/from fields *)
+     -> (Label.t * fieldconstraint list) list (* Field constraints *)
+     -> (Temporality.t * (Label.t * Label.t)) option (* Temporal to/from fields *)
      -> phrase (* Database *)
      -> phrase (* TableLit *)
 end

@@ -1,0 +1,27 @@
+fresh `A {
+
+    fun h_a (m) () {
+        handle (m ()) {
+            case `A(x, k) -> k (2*x)
+        }
+    }
+
+    fresh `A {
+
+        fun h_a' (m) () {
+            handle (m()) {
+                case `A(x, k) -> k (3*x)
+            }
+        }
+
+        fun triple (x) { do `A(x) }
+
+    }
+
+    fun double (x) { do `A(x) }
+
+}
+
+fun sextuple (x) () { triple(double(x)) }
+
+h_a ( h_a' ( sextuple (7) ) ) ()

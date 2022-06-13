@@ -1746,7 +1746,7 @@ let rec function_arity =
   function
     | Function (Record row, _, _) ->
         let (l, _, _) = TypeUtils.extract_row_parts row in
-        (Some (FieldMap.size l))
+        (Some (Label.Map.size l))
     | ForAll (_, t) -> function_arity t
     | _ -> None
 
