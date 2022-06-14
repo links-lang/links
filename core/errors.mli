@@ -66,3 +66,5 @@ val forbidden_client_call : string -> string -> exn
 val rethrow_errors_if_better_position : Position.t -> ('a -> 'b) -> 'a -> 'b
 val cannot_open_file : string -> string -> exn
 val object_file_write_error : string -> string -> exn
+val type_application_kind_mismatch : Position.t -> string -> int -> string -> string -> exn
+val type_application_global_kind_mismatch : Position.t -> string -> string -> string -> exn

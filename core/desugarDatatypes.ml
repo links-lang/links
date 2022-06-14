@@ -129,13 +129,9 @@ module Desugar = struct
                 let t_kind = primary_kind_of_type_arg t in
                 if q_kind <> t_kind then
                   raise
-                    (TypeApplicationKindMismatch
-                       { pos;
-                         name = tycon;
-                         tyarg_number = i;
-                         expected = PrimaryKind.to_string q_kind;
-                         provided = PrimaryKind.to_string t_kind
-                       })
+                    (type_application_kind_mismatch pos tycon i
+                        (PrimaryKind.to_string q_kind)
+                        (PrimaryKind.to_string t_kind))
                 else t
               in
               let type_args qs ts =
@@ -159,8 +155,8 @@ module Desugar = struct
                     let ts = match_quantifiers snd qs in
                     Instantiate.alias tycon ts alias_env
                   else
-                    raise (TypeApplicationGlobalKindMismatch
-                      {pos ; name = tycon; expected = "Type"; provided = (PrimaryKind.to_string k)})
+                    raise (type_application_global_kind_mismatch pos tycon
+                        "Type" (PrimaryKind.to_string k))
               | Some (`Abstract abstype) ->
                   let ts = match_quantifiers identity (Abstype.arity abstype) in
                   Application (abstype, ts)
@@ -229,13 +225,9 @@ module Desugar = struct
                 let t_kind = primary_kind_of_type_arg t in
                 if q_kind <> t_kind then
                   raise
-                    (TypeApplicationKindMismatch
-                       { pos = node.pos;
-                         name = name;
-                         tyarg_number = i;
-                         expected = PrimaryKind.to_string q_kind;
-                         provided = PrimaryKind.to_string t_kind
-                       })
+                    (type_application_kind_mismatch node.pos name i
+                        (PrimaryKind.to_string q_kind)
+                        (PrimaryKind.to_string t_kind))
                 else t
               in
               let type_args qs ts =
@@ -261,8 +253,8 @@ module Desugar = struct
                       | _ -> raise (internal_error "Instantiation failed")
                     end
                   else
-                    raise (TypeApplicationGlobalKindMismatch
-                      {pos=node.pos ; name ; expected = "Row"; provided = (PrimaryKind.to_string k)})
+                    raise (type_application_global_kind_mismatch node.pos name
+                        "Row" (PrimaryKind.to_string k))
               | Some (`Abstract abstype) ->
                   let ts = match_quantifiers identity (Abstype.arity abstype) in
                   Application (abstype, ts)

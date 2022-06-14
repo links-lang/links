@@ -1428,11 +1428,7 @@ and flatten_row : row -> row = fun row ->
     | Row _ -> row
     (* HACK: this probably shouldn't happen! *)
     | Meta row_var -> Row (StringMap.empty, row_var, false)
-    (* | Alias (PrimaryKind.Row, _, row) -> row *)
-    (* | RecursiveApplication { r_dual ; r_args ; r_unwind ; _ } -> *)
-    (* (\* TODO(rj) what should this function do ? r_unwind like this provokes a stack overflow *\) *)
-    (*       r_unwind r_args r_dual *)
-    | _ ->  Debug.print ("row: " ^ show_row row) ; assert false
+    | _ -> raise (internal_error "attempt to flatten, row expected")
   in
   let dual_if =
     match row with
@@ -1912,7 +1908,7 @@ struct
             (TypeVarSet.add var bound_vars, (var, spec)::vars)) (bound_vars, []) tyvars in
       (bound_vars, List.rev vars) in
     match tycon_spec with
-      | `Alias (k, tyvars, body) ->
+      | `Alias (_, tyvars, body) ->
           let (bound_vars, vars) = split_vars tyvars in
           vars @ (free_bound_type_vars bound_vars body)
       | `Mutual (tyvars, _) -> snd (split_vars tyvars)
@@ -2723,7 +2719,7 @@ struct
            TypeVarSet.add (Quantifier.to_var tyvar) bound_vars)
         bound_vars tyvars
     in function
-    | `Alias (k, tyvars, body) ->
+    | `Alias (_, tyvars, body) ->
        let ctx = { context with bound_vars = bound_vars tyvars } in
        begin
          match tyvars with
@@ -2740,7 +2736,7 @@ struct
            TypeVarSet.add (Quantifier.to_var tyvar) bound_vars)
         bound_vars tyvars
     in function
-    | `Alias (k, tyvars, body) ->
+    | `Alias (_, tyvars, body) ->
        let ctx = { context with bound_vars = bound_vars tyvars } in
        begin
          match tyvars with
@@ -4108,7 +4104,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     = let open Printer in
       Printer (fun ctx v buf ->
           match v with
-          | `Alias (k, tyvars, body) ->
+          | `Alias (_, tyvars, body) ->
              let ctx = Context.bind_tyvars (List.map Quantifier.to_var tyvars) ctx in
              begin
                match tyvars with
