@@ -1824,7 +1824,7 @@ let type_section pos context s =
        let a = Types.fresh_type_variable (lin_unl, res_any) in
        let rho = Types.fresh_row_variable (lin_unl, res_any) in
        let effects = Types.make_empty_open_row default_effect_subkind in (* projection is pure! *)
-       let r = Record (Row (Label.Map.add (Label.make label) (Present a) Label.Map.empty, rho, false)) in
+       let r = Record (Row (Label.Map.add label (Present a) Label.Map.empty, rho, false)) in
          ([(PrimaryKind.Type, a); (PrimaryKind.Row, Row (Label.Map.empty, rho, false)); (PrimaryKind.Row, effects)],
           Function (Types.make_tuple_type [r], effects, a)),
          Usage.empty
@@ -1847,7 +1847,7 @@ let type_frozen_section context s =
        let a = Types.fresh_rigid_type_variable (lin_unl, res_any) in
        let rho = Types.fresh_rigid_row_variable (lin_unl, res_any) in
        let effects = Label.Map.empty, Types.fresh_rigid_row_variable default_effect_subkind, false in
-       let r = Record (Row (Label.Map.add (Label.make label) (Present a) Label.Map.empty, rho, false)) in
+       let r = Record (Row (Label.Map.add label (Present a) Label.Map.empty, rho, false)) in
        Types.for_all
          (Types.quantifiers_of_type_args [(PrimaryKind.Type, a);
                                           (PrimaryKind.Row, Row (Label.Map.empty, rho, false));

@@ -70,7 +70,7 @@ class map =
       let open Section in function
       | Minus -> Minus
       | FloatMinus -> FloatMinus
-      | Project _x -> let _x = o#name _x in Project _x
+      | Project _x -> let _x = o#label _x in Project _x
       | Name _x -> let _x = o#name _x in Name _x
 
     method subkind : Subkind.t -> Subkind.t = fun x -> x
@@ -940,7 +940,7 @@ class fold =
       let open Section in function
       | Minus -> o
       | FloatMinus -> o
-      | Project _x -> let o = o#name _x in o
+      | Project _x -> let o = o#label _x in o
       | Name _x -> let o = o#name _x in o
 
     method subkind : Subkind.t -> 'self_type = fun _ -> o
@@ -1725,7 +1725,7 @@ class fold_map =
       let open Section in function
       | Minus -> (o, Minus)
       | FloatMinus -> (o, FloatMinus)
-      | Project _x -> let (o, _x) = o#name _x in (o, Project _x)
+      | Project _x -> let (o, _x) = o#label _x in (o, Project _x)
       | Name _x -> let (o, _x) = o#name _x in (o, Name _x)
 
     method subkind : Subkind.t -> ('self_type * Subkind.t) = fun k -> (o, k)

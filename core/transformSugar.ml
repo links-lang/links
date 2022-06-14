@@ -24,7 +24,7 @@ let type_section env =
       let (fields, rho, _) = TypeUtils.extract_row_parts row in
       let eb, e = Types.fresh_row_quantifier default_effect_subkind in
 
-      let r = Record (Row (Label.Map.add (Label.make label) (Present a) fields, rho, false)) in
+      let r = Record (Row (Label.Map.add label (Present a) fields, rho, false)) in
         ForAll ([ab; rhob; eb],
                 Function (Types.make_tuple_type [r], e, a))
   | Name var -> TyEnv.find var env

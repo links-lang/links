@@ -26,9 +26,10 @@ fresh `Abort {
     }
 
     effectname AR(s,e::Eff) = {`Abort:() {}-> Zero, Receive:(){}->s|e} ;
+    effectname NAR(s,e::Eff) = {`Abort-, Receive:(){}->s|e} ;
 
-    sig withtwo21s : ( () ~AR(Int,{ |e})~> a ) -> Comp(Maybe(a), {Receive{_}, `Abort{_}|e})
-    fun withtwo21s (h) () { maybe( receives(h)([21,21]) ) () }
+    sig withtwo21s : ( () ~NAR(Int,{ |e})~> a ) -> Comp(Maybe(a), {Receive{_}, `Abort{_}|e})
+    fun withtwo21s (h) () { maybe( receives( h:( () ~AR(Int,{ |e})~> a ) <- ( () ~NAR(Int,{ |e})~> a) ) ([21,21]) ) () }
 
 }
 
