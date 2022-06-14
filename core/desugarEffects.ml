@@ -347,13 +347,13 @@ let cleanup_effects tycon_env =
                | None -> raise (Errors.UnboundTyCon (pos, name))
              in
              TypeApplication (name, ts)
-         (* | Effect r ->          (\* goal: same cleaning in the effectname declaration *\) *)
-         (*    let r = self#effect_row ~allow_shared:`Disallow r in (\* what allow_shared should be ? *\) *)
-         (*    Effect r *)
          | _ -> super#datatypenode t
        in
        SourceCode.WithPos.with_node dt res_t
 
+    method! aliasbody a = match a with
+    | Typename _ -> super#aliasbody a
+    | Effectname (r, r') -> Debug.print "bang" ; Effectname (self#effect_row ~allow_shared:`Disallow r, r')
 
      method effect_row ~allow_shared (fields, var) =
        let open Datatype in
@@ -877,14 +877,9 @@ class main_traversal simple_tycon_env =
                        distracting the user from the actual error: the kind missmatch.
                        Hence, we must report a proper error here. *)
                     raise
-                      (Errors.TypeApplicationKindMismatch
-                         {
-                           pos;
-                           name = tycon;
-                           tyarg_number = i;
-                           expected = PrimaryKind.to_string (fst k);
-                           provided = PrimaryKind.to_string pk_row;
-                         })
+                      (Errors.type_application_kind_mismatch pos tycon i
+                        (PrimaryKind.to_string (fst k))
+                        (PrimaryKind.to_string pk_row))
                 | _, ta -> snd (o#type_arg ta)
               in
               let rec match_args_to_params index = function
