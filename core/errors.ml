@@ -257,3 +257,4 @@ let type_application_kind_mismatch pos name tyarg_number expected provided =
     TypeApplicationKindMismatch { pos; name; tyarg_number; expected; provided }
 let type_application_global_kind_mismatch pos name expected provided =
     TypeApplicationGlobalKindMismatch { pos; name; expected; provided }
+let unbound_tycon pos message = UnboundTyCon (pos, message)

@@ -149,7 +149,7 @@ module Desugar = struct
                 raise (TypeApplicationArityMismatch { pos; name = tycon; expected = qn; provided = tn })
             in
             begin match SEnv.find_opt tycon alias_env with
-              | None -> raise (UnboundTyCon (pos, tycon))
+              | None -> raise (unbound_tycon pos tycon)
               | Some (`Alias (k, qs, _dt)) ->
                   if k = pk_type then
                     let ts = match_quantifiers snd qs in
@@ -244,7 +244,7 @@ module Desugar = struct
                 raise (TypeApplicationArityMismatch { pos = node.pos; name = name; expected = qn; provided = tn })
             in
             begin match SEnv.find_opt name alias_env with
-              | None -> raise (UnboundTyCon (node.pos, name))
+              | None -> raise (unbound_tycon node.pos name)
               | Some (`Alias (k, qs, _r)) ->
                   if k = pk_row then
                     let ts = match_quantifiers snd qs in
