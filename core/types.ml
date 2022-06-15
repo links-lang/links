@@ -2729,23 +2729,6 @@ struct
     | `Mutual _ -> "mutual"
     | `Abstract _ -> "abstract"
 
-  let effect_spec ({ bound_vars; _ } as context) p =
-    let bound_vars tyvars =
-      List.fold_left
-        (fun bound_vars tyvar ->
-           TypeVarSet.add (Quantifier.to_var tyvar) bound_vars)
-        bound_vars tyvars
-    in function
-    | `Alias (_, tyvars, body) ->
-       let ctx = { context with bound_vars = bound_vars tyvars } in
-       begin
-         match tyvars with
-         | [] -> datatype ctx p body
-         | _ -> mapstrcat "," (quantifier p) tyvars ^"."^ row "," ctx p body
-       end
-    | `Mutual _ -> "mutual"
-    | `Abstract _ -> "abstract"
-
   let string_of_datatype policy names ty =
     let ctxt = context_with_shared_effect policy (fun o -> o#typ ty) in
     datatype ctxt (policy, names) ty

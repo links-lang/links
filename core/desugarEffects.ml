@@ -713,7 +713,46 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
       method! row_var =
         let open Datatype in
         function
-        | EffectApplication _   (* TODO(rj) should I do semething there ? *)
+        | EffectApplication (name, ts) ->    (* TODO(rj) should I do semething there ? *)
+            let tycon_info = SEnv.find_opt name tycon_env in
+            let rec go o =
+              (* We don't know if the arities match up yet, so we handle
+                    mismatches, assuming spare rows are effects. *)
+              function
+              | _, [] -> o
+              | (PrimaryKind.Row, (_, Restriction.Effect)) :: qs, Row t :: ts ->
+                  go (o#effect_row t) (qs, ts)
+              | (([] as qs) | _ :: qs), t :: ts -> go (o#type_arg t) (qs, ts)
+            in
+            begin match tycon_info with
+            | Some (params, _has_implict_eff, internal_type) ->
+               let self = go self (params, ts) in
+               let ops = match internal_type with
+                 | None -> RowVarMap.empty
+                 | Some internal_type ->
+                    gather_operation_of_type internal_type
+               in
+               let operations =
+                 RowVarMap.fold
+                   (fun vid sset acc ->
+                     RowVarMap.update vid
+                       (function
+                        | None -> Some sset
+                        | Some opset -> Some (StringSet.union opset sset))
+                       acc)
+                   ops self#operations
+               in
+               let self = match RowVarMap.find_raw_opt (-1) ops with
+                 | None -> self
+                 | Some hide_ops ->
+                    StringSet.fold
+                      (fun label acc ->
+                        acc#add_hidden_op name label)
+                      hide_ops self
+               in
+               self#with_operations operations
+            | None -> raise (Errors.unbound_tycon SourceCode.Position.dummy name)
+            end
         | Closed
         | Open _ ->
             self
@@ -854,7 +893,7 @@ class main_traversal simple_tycon_env =
              type applications. This must be done in later passes. *)
           let pos = SourceCode.Position.dummy in
           match SEnv.find_opt tycon tycon_env with
-          | None -> raise (Errors.UnboundTyCon (pos, tycon))
+          | None -> raise (Errors.unbound_tycon pos tycon)
           | Some (params, _has_implicit_eff, _internal_type) ->
               let qn = List.length params in
               let tn = List.length ts in
@@ -977,7 +1016,7 @@ class main_traversal simple_tycon_env =
       let module D = Datatype in
       let o, rv =
         match rv with
-        | D.EffectApplication _ -> super#row_var rv (* TODO(rj) do i need to do something there ? *)
+        | D.EffectApplication _ -> super#row_var rv
         | D.Closed -> (o, rv)
         | D.Open stv
           when (not (SugarTypeVar.is_resolved stv))
