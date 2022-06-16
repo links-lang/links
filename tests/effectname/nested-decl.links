@@ -1,6 +1,6 @@
 effectname A = {} ;
 effectname B(a,e::Eff) = { E: () -e-> a | A } ;
-effectname C = { E': (Int) -A-> () | B(Int, { | A })  } ;
+effectname C = { E': (Int) -> () | B(Int, { | A })  } ;
 
 sig f : () -C-> ()
 fun f () { do E'(do E()) }
