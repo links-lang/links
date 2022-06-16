@@ -1106,7 +1106,7 @@ class main_traversal simple_tycon_env =
     let module WP = SourceCode.WithPos in
     function
       | Typename _ as t -> super#aliasbody t
-      | Effectname (r, _) ->
+      | Effectname (r, _) ->    (* hack to cleanup the row and desugar properly *)
         let wp  = cleanup_effects tycon_env (WP.dummy (Effect r)) in
         match WP.node wp with
           | Effect r -> (o, Effectname(r, None))
