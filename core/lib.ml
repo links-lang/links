@@ -601,10 +601,10 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "max",
   (p1 (let max2 x y = if less x y then y else x in
          function
-           | `List [] -> `Variant ("None", `Record [])
-           | `List (x::xs) -> `Variant ("Some", List.fold_left max2 x xs)
+           | `List [] -> `Variant ("Nothing", `Record [])
+           | `List (x::xs) -> `Variant ("Just", List.fold_left max2 x xs)
            | _ -> raise (runtime_type_error "Internal error: non-list passed to max")),
-   datatype "([a]) ~> [|Some:a | None:()|]",
+   datatype "([a]) ~> [|Just:a | Nothing:()|]",
   PURE);
 
   "min",
