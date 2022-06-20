@@ -8,7 +8,6 @@ typename Level = [|Easy|Medium|Hard|];
 typename Cmd = [| StartGame | YourMove: Int| Restart|];
 typename GameState = (player:(Player, Player), level: Level, cheat:Bool, heap:Int);
 typename ViewState = [|Game: GameState|SetUp|Winner: Player|RestartSetUp|];
-typename Option(a) = [|None|Some:a|];
 
 sig playerToString: (Player) -> String
 fun playerToString(pl){
@@ -194,17 +193,17 @@ fun buttonChosen(nodeId, data){
 
 }
 
-sig parseNat: (String) ~> Option(Int)
+sig parseNat: (String) ~> Maybe(Int)
 fun parseNat(n){
     if (n =~ /^[0-9]+$/) {
         var m = stringToInt(n);
         if(m < 0){
-            None
+            Nothing
         } else{
-            Some(m)
+            Just(m)
         }
     } else{
-        None
+        Nothing
     }
 }
 
@@ -218,12 +217,12 @@ sig start: (Process ({ hear:Cmd | e})) ~> ()
 fun start(pId){
     var num = parseNat(getInputValue("start-number"));
     switch(num){
-        case None -> {
+        case Nothing -> {
             var heap = getField("heap");
             if(heap=="") displayErrorMessage("start-error-message", "Please enter a stack size in numbers into the field.")
             else pId ! StartGame
         }
-        case Some(n) -> {
+        case Just(n) -> {
             setField(n, "heap", intToString);
             pId ! StartGame
         }
@@ -348,8 +347,8 @@ sig sendInput: (Process({ hear:Cmd |e})) {hear:Cmd |f}~> ()
 fun sendInput(pId){
     var n = getInputValue("your-move");
     switch(parseNat(n)){
-        case None -> displayErrorMessage("game-error-message", "Please enter a stack size in numbers into the field.")
-        case Some(m) -> pId ! YourMove(m)
+        case Nothing -> displayErrorMessage("game-error-message", "Please enter a stack size in numbers into the field.")
+        case Just(m) -> pId ! YourMove(m)
     }
 }
 
@@ -539,12 +538,12 @@ sig start: (Process ({ hear:Cmd | e})) ~> ()
 fun start(pId){
     var num = parseNat(getInputValue("start-number"));
     switch(num){
-        case None -> {
+        case Nothing -> {
             var heap = getField("heap");
             if(heap=="") displayErrorMessage("start-error-message", "Please enter a stack size in numbers into the field.")
             else pId ! StartGame
         }
-        case Some(n) -> {
+        case Just(n) -> {
             setField(n, "heap", intToString);
             pId ! StartGame
         }

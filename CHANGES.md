@@ -2,6 +2,8 @@
 
 Notable changes made to `master` since the previous release.
 
+* **Breaking change**: The Links standard library has adopted `Maybe` as it optional type. Previously, the standard library made inconsistent use of both `Option` and `Maybe` types. As a consequence of this change, every instance of `Option` has been turned into a `Maybe` type.
+
 # 0.9.6
 
 This release extends the core features of Links and resolves various
