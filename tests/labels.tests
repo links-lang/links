@@ -22,7 +22,7 @@ stdout : () : ()
 Handler for local effect
 ./tests/labels/handler.links
 filemode : true
-stdout : 0 : Int
+stdout : 42 : Int
 args : --enable-handlers
 
 Nested label bindings
@@ -40,7 +40,7 @@ args : --enable-handlers
 Avoiding pollution [1]
 ./tests/labels/pollution.links
 filemode : true
-stdout : (Just(42), Nothing, Just(Just(-1))) : (Maybe (Int), Maybe (Int), Maybe (Maybint))
+stdout : (Just(42), Nothing, Just(-1)) : (Maybe (Int), Maybe (Int), Maybint)
 args : --enable-handlers
 
 Avoiding pollution [2]

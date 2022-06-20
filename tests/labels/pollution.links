@@ -53,5 +53,5 @@ fun res (h) () {
 (
     withtwo21s( f ) () ,
     withtwo21s( g ) () ,
-    maybe (res(withtwo21s(h))) ()
+    res(withtwo21s(h)) ()
 )

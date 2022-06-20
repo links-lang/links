@@ -56,10 +56,10 @@ let rec project_type ?(overstep_quantifiers=true) label t = match (concrete_type
         t
   | (Application (absty, [PrimaryKind.Type, typ]), _) when
       (Abstype.name absty) = "TransactionTime" || (Abstype.name absty = "ValidTime") ->
-        if Label.eq_name label TemporalField.data_field then typ
+        if Label.name_is label TemporalField.data_field then typ
         else if
-          Label.eq_name label TemporalField.from_field ||
-          Label.eq_name label TemporalField.to_field then
+          Label.name_is label TemporalField.from_field ||
+          Label.name_is label TemporalField.to_field then
           Primitive (Primitive.DateTime)
         else
           error ("Trying to project " ^ Label.show label ^ " from temporal metadata: " ^ string_of_datatype t)

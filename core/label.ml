@@ -90,7 +90,9 @@ module Label = struct
 
     let eq lbl lbl' = compare lbl lbl' = 0
 
-    let eq_name lbl name = eq lbl (mk_global name)
+    let eq_name lbl lbl' = String.compare (name lbl) (name lbl') = 0
+
+    let name_is lbl name' = String.compare (name lbl) name' = 0
 
     let is_local = function
         | Lcl _ -> true

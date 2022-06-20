@@ -6,6 +6,8 @@ fresh `A {
         }
     }
 
+    fun double (x) { do `A(x) }
+
     fresh `A {
 
         fun h_a' (m) () {
@@ -16,12 +18,13 @@ fresh `A {
 
         fun triple (x) { do `A(x) }
 
-    }
+        fun sextuple (x) () {triple(double(x)) }
 
-    fun double (x) { do `A(x) }
+        sig times_six : (Int) ~> Int
+        fun times_six (x) { h_a (h_a' (sextuple (x))) () }
+
+    }
 
 }
 
-fun sextuple (x) () { triple(double(x)) }
-
-h_a ( h_a' ( sextuple (7) ) ) ()
+times_six (7)

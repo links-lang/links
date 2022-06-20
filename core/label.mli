@@ -26,7 +26,8 @@ val name : t -> Name.t
 
 val compare : t -> t -> int
 val eq : t -> t -> bool
-val eq_name : t -> Name.t -> bool
+val eq_name : t -> t -> bool
+val name_is : t -> Name.t -> bool
 
 val is_local : t -> bool
 val is_global : t -> bool

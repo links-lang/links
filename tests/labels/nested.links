@@ -5,6 +5,9 @@ fresh `A {
     sig f : () {`A:(), `B:Bool}-> Bool
     fun f () { do `A ; do `B }
 
+    sig f' : () {`A:Int}-> Int
+    fun f' () { do `A * 42 }
+
   }
 
   fresh `C, `B, `A {

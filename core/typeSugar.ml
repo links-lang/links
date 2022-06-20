@@ -1670,6 +1670,7 @@ let empty_context eff desugared =
 let bind_var         context (v, t) = {context with var_env    = Env.bind v t context.var_env}
 let unbind_var       context v      = {context with var_env    = Env.unbind v context.var_env}
 let bind_alias       context (v, t) = {context with tycon_env  = Env.bind v t context.tycon_env}
+let unbind_alias     context v      = {context with tycon_env  = Env.unbind v context.tycon_env}
 let bind_effects     context r      = {context with effect_row = r}
 
 let extend context context' =   (* this might not be super smart *)
@@ -2540,6 +2541,90 @@ let resolve_type_annotation : Binder.with_pos -> Sugartypes.datatype' option -> 
    has already been made explicit) or at all (because query syntax is desugared to an interface
    with sufficiently effect-polymorphic operations).
  *)
+
+(* erase the erasable occurences of local labels from the types in the context *)
+(* and remove the bindings with non erasable occurences of local labels *)
+exception CannotErase
+let erase_local_labels_from_type labels dt =
+  let open Types in
+  let rec e dt =
+    let e_arg (pk, t) = (pk, e t) in
+    let e_args = List.map e_arg in
+    let e_point p =
+      let t = Unionfind.find p in
+      Unionfind.change p (e t) ;
+      p
+    in
+    match dt with
+    | Row (fields, rv, b) ->
+      let fields = Label.Map.fold (fun k v f ->
+        if List.mem k labels then (Debug.print ("remove " ^ Label.show k) ;
+          match v with
+          | Absent | Present (Var _) -> f
+          | Meta p when (match Unionfind.find p with Var _ -> true | _ -> false) -> f
+          | _ -> Debug.print ("presence: " ^ show_field_spec v) ; raise CannotErase)
+        else (Debug.print ("not remove " ^ Label.show k ) ;
+         Label.Map.add k (e v) f)
+      ) fields Label.Map.empty in
+      Row (fields, e_point rv, b)
+    | Recursive (id, k, t) -> Recursive (id, k, e t)
+    | Alias (pk, (name, ks, targs, b) , t) -> Alias (pk, (name, ks, e_args targs, b) , e t)
+    | Application (abs, targs) -> Application (abs, e_args targs)
+    | RecursiveApplication r -> RecursiveApplication { r with r_args = e_args r.r_args }
+    | Meta p -> Meta (e_point p)
+    | Function (t, t', t'') -> Function (e t, e t', e t'')
+    | Lolli (t, t', t'') -> Lolli (e t, e t', e t'')
+    | Record t -> Record (e t)
+    | Variant t -> Variant (e t)
+    | Table (temp, t, t', t'') -> Table (temp, e t, e t', e t'')
+    | ForAll (qs, t) -> ForAll (qs, e t)
+    | Effect t -> Effect (e t)
+    | Present t -> Present (e t)
+    | Input (t,t') -> Input (e t, e t')
+    | Output (t,t') -> Output (e t, e t')
+    | Select t -> Select (e t)
+    | Choice t -> Choice (e t)
+    | Dual t -> Dual (e t)
+    | _ -> dt
+  in
+  e dt
+
+let rec erase_local_labels labels decls ctx =
+  let erase_fun ctx name =Debug.print ("pouf " ^ name) ;
+    try
+      let t = Env.find name ctx.var_env in
+      let t = erase_local_labels_from_type labels t in
+      Debug.print ("fun: " ^ Types.show t) ;
+      bind_var ctx (name, t)
+    with CannotErase -> Debug.print ("et boum " ^ name) ; unbind_var ctx name
+      | NotFound _ -> Debug.print ("déjà boumed " ^name) ; ctx
+  in
+  List.fold_left (fun ctx d -> match WithPos.node d with
+    | Fun { fun_binder ; _ } -> erase_fun ctx (Binder.to_name fun_binder)
+    | Funs rfuns -> List.fold_left
+        (fun ctx rfun ->
+          let name = Binder.to_name (WithPos.node rfun).rec_binder in
+          erase_fun ctx name
+        ) ctx rfuns
+    | Aliases ts -> List.fold_left (fun ctx { node=(name, _, _); _} ->
+        try
+          let pk, vars, dt = match Env.find name ctx.tycon_env with
+          | `Alias (pk, vars, dt) -> pk, vars, dt | _ -> assert false in
+          let dt = erase_local_labels_from_type labels dt in
+          bind_alias ctx (name, `Alias (pk, vars, dt))
+        with CannotErase -> unbind_alias ctx name
+          | NotFound _ -> ctx
+      ) ctx ts
+    | FreshLabel (labels', decls') -> erase_local_labels (labels @ labels') decls' ctx
+    | Val _
+    | Infix _
+    | Exp _
+    | Foreign _ -> ctx
+    | Import _
+    | Open _
+    | Module  _
+    | AlienBlock _ -> assert false
+  ) ctx decls
 
 let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
   fun context {node=expr; pos} ->
@@ -4863,7 +4948,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                     bind_alias env (name, `Alias (pk_type, List.map (SugarQuantifier.get_resolved_exn) vars, dt))
                 | Effectname   (_, Some dt) ->
                     bind_alias env (name, `Alias (pk_row , List.map (SugarQuantifier.get_resolved_exn) vars, dt))
-                | _ -> raise (internal_error "typeSugar.ml: unannotated type")
+                | _ -> raise (internal_error "unannotated type")
           ) empty_context ts in
           (Aliases ts, env, Usage.empty)
       | Infix def -> Infix def, empty_context, Usage.empty
@@ -4874,8 +4959,12 @@ and type_binding : context -> binding -> binding * context * Usage.t =
           Exp (erase e), empty_context, usages e
       | FreshLabel(labels, decls) ->
           let ctx, decls = List.fold_left_map
-            (fun ctx d -> let d', ctx', _ = type_binding ctx d in extend ctx ctx', d') context decls in
-          (FreshLabel(labels, decls), ctx, Usage.empty)
+            (fun ctx d ->
+              let d, ctx', _ = type_binding ctx d in
+              extend ctx ctx', d
+            ) context decls in
+          let context = erase_local_labels labels decls ctx in
+          (FreshLabel(labels, decls), context, Usage.empty)
       | Import _
       | Open _
       | AlienBlock _
