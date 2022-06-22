@@ -2545,20 +2545,31 @@ let resolve_type_annotation : Binder.with_pos -> Sugartypes.datatype' option -> 
 (* erase the erasable occurences of local labels from the types in the context *)
 (* and remove the bindings with non erasable occurences of local labels *)
 exception CannotErase
+
+(* remember which points are erased in order not to loop *)
+let erased_points = ref []
+let push_erased_point x = erased_points := x :: !erased_points
+let is_erased_point x = List.filter (Unionfind.equivalent x) !erased_points <> []
+
 let erase_local_labels_from_type ?(exact=true) pos labels dt =
   let open Types in
   let rec e dt =
     let e_arg (pk, t) = (pk, e t) in
     let e_args = List.map e_arg in
     let e_point p =
-      (* let t = Unionfind.find p in Unionfind.change p (e t) ; *) (* TODO: This causes stack overflow, is it right to not have it ? *)
-      p
+      if is_erased_point p then p
+      else begin
+        push_erased_point p ;
+        let t = Unionfind.find p in
+        Unionfind.change p (e t) ;
+        p
+      end
     in
     match dt with
     | Row (fields, rv, b) ->
       let fields = Label.Map.fold (fun k v f ->
         let keep () = Label.Map.add k (e v) f in
-        let remove () = Debug.print ("remove " ^ Label.show k) ; f in
+        let remove () = f in
         let to_remove k =
           if exact then List.mem k labels
           else List.filter (Label.eq_name k) labels <> []
@@ -2569,12 +2580,11 @@ let erase_local_labels_from_type ?(exact=true) pos labels dt =
         in
         if Label.is_global k then keep ()
         else
-          let _ = Debug.print ("field " ^ Label.show k ^ ":" ^ show_datatype v) in
           if to_remove k then
             let _ = match v with
               | Absent | Present (Var _) -> ()
               | Meta p when (match Unionfind.find p with Var _ -> true | _ -> false) -> ()
-              | _ -> Debug.print "present : cannot erase" ; raise CannotErase
+              | _ -> raise CannotErase
             in remove ()
           else if is_shadowed k then
             Gripers.die pos ("Label " ^ Label.show k ^ " is shadowed in this scope")
@@ -2607,14 +2617,12 @@ let erase_local_labels_from_type ?(exact=true) pos labels dt =
 let rec erase_local_labels pos labels decls ctx =
   let erase_binder binder ctx =
     let name  = Binder.to_name binder in
-    Debug.print ("erasing " ^ name) ;
     try
       let t = Env.find name ctx.var_env in
       let t = erase_local_labels_from_type pos labels t in
-      Debug.print ("of type: " ^ Types.show t) ;
       bind_var ctx (name, t)
-    with CannotErase -> Debug.print ("cannot erase : unbinding " ^ name) ; unbind_var ctx name
-      | NotFound _ -> Debug.print ("already unbound " ^name) ; ctx
+    with CannotErase -> unbind_var ctx name
+      | NotFound _ -> ctx
   in
   let rec erase_pat pat ctx =
     let e = erase_pat in
