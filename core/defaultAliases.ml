@@ -15,7 +15,7 @@ let alias_env : Types.tycon_environment =
   let wq, w = mk_arg () in
   let nq, n = mk_arg () in
   let th_alias_type =
-      `Alias ([rq; wq; nq], Types.make_tablehandle_alias (r, w, n))
+      `Alias (pk_type, [rq; wq; nq], Types.make_tablehandle_alias (r, w, n))
   in
 
   List.fold_left
@@ -23,13 +23,13 @@ let alias_env : Types.tycon_environment =
       AliasEnv.bind name t env)
     AliasEnv.empty
     [ (* "String"  , `Alias ([], `Application (Types.list, [`Type (`Primitive Primitive.Char)])); *)
-      "Xml"     , `Alias ([], Types.Application (Types.list, [(PrimaryKind.Type, Types.Primitive Primitive.XmlItem)]));
+      "Xml"     , `Alias (pk_type, [], Types.Application (Types.list, [(PrimaryKind.Type, Types.Primitive Primitive.XmlItem)]));
       "Event"   , `Abstract Types.event;
       "List"    , `Abstract Types.list;
       "Process" , `Abstract Types.process;
       "DomNode" , `Abstract Types.dom_node;
       "AP"      , `Abstract Types.access_point;
-      "EndBang" , `Alias ([], Types.make_endbang_type);
+      "EndBang" , `Alias (pk_type, [], Types.make_endbang_type);
       "Socket"  , `Abstract Types.socket;
       "ValidTime", `Abstract Types.valid_time_data;
       "TransactionTime", `Abstract Types.transaction_time_data;

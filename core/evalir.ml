@@ -235,23 +235,26 @@ struct
           apply_cont cont env (`AccessPointID (`ServerAccessPoint apid))
   and apply (cont : continuation) env : Value.t * Value.t list -> result =
     let invoke_session_exception () =
-      special env cont (DoOperation (Value.session_exception_operation,
-        [], Types.Not_typed)) in
+      special env cont
+        (DoOperation (Value.session_exception_operation, [], Types.Not_typed))
+    in
     function
     | `FunctionPtr (f, fvs), ps ->
       let (_finfo, (xs, body), z, _location) =
-           try find_fun f
-           with NotFound _ ->
-             raise (internal_error ("Failed to find function name: " ^ (string_of_int f)))
+        try find_fun f
+        with NotFound _ ->
+          raise (internal_error ("Failed to find function name: " ^ (string_of_int f)))
       in
       let env =
         match z, fvs with
-        | None, None            -> env
         | Some z, Some fvs -> Value.Env.bind z (fvs, Scope.Local) env
-        | _, _ -> assert false in
-
+        | None, None -> env
+        | _, _ -> assert false
+      in
       (* extend env with arguments *)
-      let env = List.fold_right2 (fun x p -> Value.Env.bind x (p, Scope.Local)) xs ps env in
+      let env =
+        List.fold_right2 (fun x p -> Value.Env.bind x (p, Scope.Local)) xs ps env
+      in
       computation_yielding env cont body
     | `PrimitiveFunction ("registerEventHandlers",_), [hs] ->
       let key = EventHandlers.register hs in
@@ -524,6 +527,9 @@ struct
     | `Resumption r, vs ->
        resume env cont r vs
     | `Alien, _ -> eval_error "Cannot make alien call on the server.";
+    | `ClientClosure index, vs ->
+       let req_data = Value.Env.request_data env in
+       client_call req_data "_$ClosureTable.apply" cont (`Int index :: vs)
     | v, _ -> type_error ~action:"apply" "function" v
   and resume env (cont : continuation) (r : resumption) vs =
     Proc.yield (fun () -> K.Eval.resume ~env cont r vs)

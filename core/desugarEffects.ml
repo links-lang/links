@@ -120,7 +120,7 @@ let simplify_tycon_env (tycon_env : Types.tycon_environment) : simple_tycon_env
   let simplify_tycon name tycon simpl_env =
     let param_kinds, internal_type =
       match tycon with
-      | `Alias (qs, tp) -> List.map Quantifier.to_kind qs, Some tp
+      | `Alias (_, qs, tp) -> List.map Quantifier.to_kind qs, Some tp
       | `Abstract abs -> Types.Abstype.arity abs, None
       | `Mutual _ -> raise (internal_error "Found `Mutual in global tycon env")
     in
@@ -256,7 +256,7 @@ let may_have_shared_eff (tycon_env : simple_tycon_env) dt =
     let param_kinds, _has_implicit_effect, _internal_type =
       try
         SEnv.find tycon tycon_env
-      with NotFound _ -> raise (Errors.UnboundTyCon (SourceCode.WithPos.pos dt, tycon))
+      with NotFound _ -> raise (Errors.unbound_tycon (SourceCode.WithPos.pos dt) tycon)
     in
     match ListUtils.last_opt param_kinds with
     | Some (PrimaryKind.Row, (_, Restriction.Effect)) -> Some `Alias
@@ -322,7 +322,7 @@ let cleanup_effects tycon_env =
             let tycon_info =
               try
                 SEnv.find_opt name tycon_env
-              with NotFound _ -> raise (Errors.UnboundTyCon (pos, name))
+              with NotFound _ -> raise (Errors.unbound_tycon pos name)
             in
             let rec go =
                (* We don't know if the arities match up yet (nor the final arities
@@ -344,13 +344,15 @@ let cleanup_effects tycon_env =
              let ts =
                match tycon_info with
                | Some (params, _, _) -> go (params, ts)
-               | None -> raise (Errors.UnboundTyCon (pos, name))
+               | None -> raise (Errors.unbound_tycon pos name)
              in
              TypeApplication (name, ts)
+         | Effect e ->
+            let e = self#effect_row ~allow_shared:`Disallow e in
+            Effect e
          | _ -> super#datatypenode t
        in
        SourceCode.WithPos.with_node dt res_t
-
 
      method effect_row ~allow_shared (fields, var) =
        let open Datatype in
@@ -482,7 +484,7 @@ let gather_mutual_info (tycon_env : simple_tycon_env) =
                in
                poss_with_implicit#with_used_type name
            | Some _ -> self#with_used_type name
-           | None -> raise (Errors.UnboundTyCon (pos, name)) )
+           | None -> raise (Errors.unbound_tycon pos name) )
        | _ -> self
   end)
     #datatype
@@ -569,7 +571,7 @@ let gather_operation_of_type tp
              let (o, _) = o#typ r in
              let (o, _) = o#typ d in
              (o, tp)
-          | Alias ((_,kinds,tyargs,_), inner_tp) ->
+          | Alias (_, (_,kinds,tyargs,_), inner_tp) ->
              let o = o#alias_recapp kinds tyargs in
              let (o,_) = o#typ inner_tp in
              (o, tp)
@@ -697,7 +699,7 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
                       hide_ops self
                in
                self#with_operations operations
-            | None -> raise (Errors.UnboundTyCon (pos, name)) )
+            | None -> raise (Errors.unbound_tycon pos name) )
         | Mu (v, t) ->
             let mtv = SugarTypeVar.get_resolved_type_exn v in
             let var, (_, sk) = unpack_var_id (Unionfind.find mtv) in
@@ -710,6 +712,46 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
       method! row_var =
         let open Datatype in
         function
+        | EffectApplication (name, ts) ->
+            let tycon_info = SEnv.find_opt name tycon_env in
+            let rec go o =
+              (* We don't know if the arities match up yet, so we handle
+                    mismatches, assuming spare rows are effects. *)
+              function
+              | _, [] -> o
+              | (PrimaryKind.Row, (_, Restriction.Effect)) :: qs, Row t :: ts ->
+                  go (o#effect_row t) (qs, ts)
+              | (([] as qs) | _ :: qs), t :: ts -> go (o#type_arg t) (qs, ts)
+            in
+            begin match tycon_info with
+            | Some (params, _has_implict_eff, internal_type) ->
+               let self = go self (params, ts) in
+               let ops = match internal_type with
+                 | None -> RowVarMap.empty
+                 | Some internal_type ->
+                    gather_operation_of_type internal_type
+               in
+               let operations =
+                 RowVarMap.fold
+                   (fun vid sset acc ->
+                     RowVarMap.update vid
+                       (function
+                        | None -> Some sset
+                        | Some opset -> Some (StringSet.union opset sset))
+                       acc)
+                   ops self#operations
+               in
+               let self = match RowVarMap.find_raw_opt (-1) ops with
+                 | None -> self
+                 | Some hide_ops ->
+                    StringSet.fold
+                      (fun label acc ->
+                        acc#add_hidden_op name label)
+                      hide_ops self
+               in
+               self#with_operations operations
+            | None -> raise (Errors.unbound_tycon SourceCode.Position.dummy name)
+            end
         | Closed
         | Open _ ->
             self
@@ -850,7 +892,7 @@ class main_traversal simple_tycon_env =
              type applications. This must be done in later passes. *)
           let pos = SourceCode.Position.dummy in
           match SEnv.find_opt tycon tycon_env with
-          | None -> raise (Errors.UnboundTyCon (pos, tycon))
+          | None -> raise (Errors.unbound_tycon pos tycon)
           | Some (params, _has_implicit_eff, _internal_type) ->
               let qn = List.length params in
               let tn = List.length ts in
@@ -873,14 +915,9 @@ class main_traversal simple_tycon_env =
                        distracting the user from the actual error: the kind missmatch.
                        Hence, we must report a proper error here. *)
                     raise
-                      (Errors.TypeApplicationKindMismatch
-                         {
-                           pos;
-                           name = tycon;
-                           tyarg_number = i;
-                           expected = PrimaryKind.to_string (fst k);
-                           provided = PrimaryKind.to_string pk_row;
-                         })
+                      (Errors.type_application_kind_mismatch pos tycon i
+                        (PrimaryKind.to_string (fst k))
+                        (PrimaryKind.to_string pk_row))
                 | _, ta -> snd (o#type_arg ta)
               in
               let rec match_args_to_params index = function
@@ -978,6 +1015,7 @@ class main_traversal simple_tycon_env =
       let module D = Datatype in
       let o, rv =
         match rv with
+        | D.EffectApplication _ -> super#row_var rv   (* maybe we should do as for TypeApplication and not just visit the node *)
         | D.Closed -> (o, rv)
         | D.Open stv
           when (not (SugarTypeVar.is_resolved stv))
@@ -1055,6 +1093,17 @@ class main_traversal simple_tycon_env =
       let o, (fields, rv) = o#row (fields, rv) in
       (o, (fields, rv))
 
+    method! aliasbody =
+    let open Sugartypes.Datatype in
+    let module WP = SourceCode.WithPos in
+    function
+      | Typename _ as t -> super#aliasbody t
+      | Effectname (r, _) ->    (* hack to cleanup the row and desugar properly *)
+        let wp  = cleanup_effects tycon_env (WP.dummy (Effect r)) in
+        match WP.node wp with
+          | Effect r -> (o, Effectname(r, None))
+          | _ -> assert false
+
     method! bindingnode =
       function
       | Val (_pat, (_qs, _body), _loc, signature) as b ->
@@ -1067,7 +1116,7 @@ class main_traversal simple_tycon_env =
 
           let o = o#set_allow_implictly_bound_vars allow_implictly_bound_vars in
           (o, b)
-      | Typenames ts ->
+      | Aliases ts ->
           let open SourceCode.WithPos in
           let tycon_env, tycons =
             List.fold_left
@@ -1089,16 +1138,28 @@ class main_traversal simple_tycon_env =
           (* First determine which types require an implicit effect variable. *)
           let implicits, dep_graph =
             List.fold_left
-              (fun (implicits, dep_graph) { node = t, _, (d, _); _ } ->
-                let d = cleanup_effects tycon_env d in
-                let eff = gather_mutual_info tycon_env d in
-                let has_imp = eff#has_implicit in
-                let implicits = StringMap.add t has_imp implicits in
-                let used_mutuals = StringSet.inter eff#used_types tycons in
-                let dep_graph =
-                  StringMap.add t (StringSet.elements used_mutuals) dep_graph
-                in
-                (implicits, dep_graph))
+              (fun (implicits, dep_graph) { node = t, _, b; pos ;_ } ->
+                match b with
+                  | Typename (d,_) ->
+                    let d = cleanup_effects tycon_env d in
+                    let eff = gather_mutual_info tycon_env d in
+                    let has_imp = eff#has_implicit in
+                    let implicits = StringMap.add t has_imp implicits in
+                    let used_mutuals = StringSet.inter eff#used_types tycons in
+                    let dep_graph =
+                        StringMap.add t (StringSet.elements used_mutuals) dep_graph
+                    in
+                    (implicits, dep_graph)
+                  | Effectname (r,_) -> (* is this the right thing to do ? *)
+                    let d = cleanup_effects tycon_env (SourceCode.WithPos.make ~pos (Datatype.Effect r)) in
+                    let eff = gather_mutual_info tycon_env d in
+                    let has_imp = eff#has_implicit in
+                    let implicits = StringMap.add t has_imp implicits in
+                    let used_mutuals = StringSet.inter eff#used_types tycons in
+                    let dep_graph =
+                        StringMap.add t (StringSet.elements used_mutuals) dep_graph
+                    in
+                    (implicits, dep_graph))
               (StringMap.empty, StringMap.empty)
               ts
           in
@@ -1126,7 +1187,7 @@ class main_traversal simple_tycon_env =
           in
           (* Now patch up the types to include this effect variable. *)
           let patch_type_param_list ((tycon_env : simple_tycon_env), shared_var_env, ts)
-              ({ node = t, args, (d, _); pos } as tn) =
+              ({ node = t, args, b; pos } as tn) =
             if StringMap.find t implicits then
               let var = Types.fresh_raw_variable () in
               let q = (var, (PrimaryKind.Row, (lin_unl, res_effect))) in
@@ -1148,9 +1209,13 @@ class main_traversal simple_tycon_env =
               let shared_var_env =
                 StringMap.add t (Some shared_effect_var) shared_var_env
               in
+              let b' = match b with
+                | Typename     (d,_) -> Typename     (d, None)
+                | Effectname   (r,_) -> Effectname   (r, None)
+              in
               ( tycon_env,
                 shared_var_env,
-                SourceCode.WithPos.make ~pos (t, args, (d, None)) :: ts )
+                SourceCode.WithPos.make ~pos (t, args, b') :: ts )
             else
               (* Note that we initially set the has-implict flag to
                  false, so there is nothing to do here *)
@@ -1174,13 +1239,13 @@ class main_traversal simple_tycon_env =
             in
 
             (* TODO: no info to flow back out? *)
-            let _o, dt' = o#datatype' dt in
+            let _o, dt' = o#aliasbody dt in
 
             SourceCode.WithPos.make ~pos (name, args, dt')
           in
 
           let ts' = List.map traverse_body ts in
-          ({<tycon_env>}, Typenames ts')
+          ({<tycon_env>}, Aliases ts')
       | b -> super#bindingnode b
 
     method super_datatype = super#datatype

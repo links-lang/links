@@ -154,7 +154,7 @@ struct
     | Fun _
     | Funs _
     | Infix _
-    | Typenames _
+    | Aliases _
     | Foreign _ -> true
     | Exp p -> is_pure p
     | Val (pat, (_, rhs), _, _) ->
@@ -1666,10 +1666,10 @@ let empty_context eff desugared =
     effect_row = eff;
     desugared }
 
-let bind_var context (v, t) = {context with var_env = Env.bind v t context.var_env}
-let unbind_var context v = {context with var_env = Env.unbind v context.var_env}
-let bind_tycon context (v, t) = {context with tycon_env = Env.bind v t context.tycon_env}
-let bind_effects context r = {context with effect_row = r}
+let bind_var         context (v, t) = {context with var_env    = Env.bind v t context.var_env}
+let unbind_var       context v      = {context with var_env    = Env.unbind v context.var_env}
+let bind_alias       context (v, t) = {context with tycon_env  = Env.bind v t context.tycon_env}
+let bind_effects     context r      = {context with effect_row = r}
 
 (* TODO(dhil): I have extracted the Usage abstraction from my name
    hygiene/compilation unit patch. The below module is a compatibility
@@ -1918,7 +1918,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
   let open Types in
   let rec cpt : Pattern.with_pos list -> Types.datatype -> Types.datatype = fun pats t ->
     match t with
-      | Alias (alias, t) -> Alias (alias, cpt pats t)
+      | Alias (k, alias, t) -> Alias (k, alias, cpt pats t)
       | Record row when Types.is_tuple row->
           let fields, row_var, dual = Types.unwrap_row row |> fst |> TypeUtils.extract_row_parts in
           let rec unwrap_at i p =
@@ -4847,14 +4847,16 @@ and type_binding : context -> binding -> binding * context * Usage.t =
          ( Foreign (Alien.modify ~declarations:[(binder, (dt, Some datatype))] alien)
          , bind_var empty_context (Binder.to_name binder, datatype)
          , Usage.empty )
-      | Typenames ts ->
-          let env = List.fold_left (fun env {node=(name, vars, (_, dt')); _} ->
-              match dt' with
-                | Some dt ->
-                    bind_tycon env (name, `Alias (List.map (SugarQuantifier.get_resolved_exn) vars, dt))
-                | None -> raise (internal_error "typeSugar.ml: unannotated type")
+      | Aliases ts ->
+          let env = List.fold_left (fun env {node=(name, vars, b); _} ->
+              match b with
+                | Typename     (_, Some dt) ->
+                    bind_alias env (name, `Alias (pk_type, List.map (SugarQuantifier.get_resolved_exn) vars, dt))
+                | Effectname   (_, Some dt) ->
+                    bind_alias env (name, `Alias (pk_row , List.map (SugarQuantifier.get_resolved_exn) vars, dt))
+                | _ -> raise (internal_error "typeSugar.ml: unannotated type")
           ) empty_context ts in
-          (Typenames ts, env, Usage.empty)
+          (Aliases ts, env, Usage.empty)
       | Infix def -> Infix def, empty_context, Usage.empty
       | Exp e ->
           let e = tc e in
@@ -4940,7 +4942,7 @@ and type_cp (context : context) = fun {node = p; pos} ->
          CPUnquote (bindings, e), t, usage_builder u
     | CPGrab ((c, _), None, p) ->
        let (_, t, _) = type_check context (var c) in
-       let ctype = T.Alias (("EndQuery", [], [], false), T.Input (Types.unit_type, T.End)) in
+       let ctype = T.Alias (pk_type, ("EndQuery", [], [], false), T.Input (Types.unit_type, T.End)) in
        unify ~pos:pos ~handle:(Gripers.cp_grab c) (t, ctype);
        let (p, pt, u) = type_cp (unbind_var context c) p in
        CPGrab ((c, Some (ctype, [])), None, p), pt, use c u

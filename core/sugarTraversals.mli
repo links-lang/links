@@ -63,6 +63,7 @@ class map :
     method datatype        : Datatype.with_pos -> Datatype.with_pos
     method datatypenode    : Datatype.t -> Datatype.t
     method datatype'       : datatype' -> datatype'
+    method row'            : row' -> row'
     method type_arg        : Datatype.type_arg -> Datatype.type_arg
     method type_arg'       : type_arg' -> type_arg'
     method constant        : Constant.t -> Constant.t
@@ -70,8 +71,9 @@ class map :
     method tybinop         : tyarg list * BinaryOp.t -> tyarg list * BinaryOp.t
     method bindingnode     : bindingnode -> bindingnode
     method binding         : binding -> binding
-    method typenamenode    : typenamenode -> typenamenode
-    method typename        : typename -> typename
+    method aliasnode       : aliasnode -> aliasnode
+    method alias           : alias -> alias
+    method aliasbody       : aliasbody -> aliasbody
     method function_definition : function_definition -> function_definition
     method recursive_function  : recursive_function -> recursive_function
     method recursive_functionnode : recursive_functionnode -> recursive_functionnode
@@ -145,6 +147,7 @@ class fold :
     method datatype        : Datatype.with_pos -> 'self
     method datatypenode    : Datatype.t -> 'self
     method datatype'       : datatype' -> 'self
+    method row'            : row' -> 'self
     method type_arg        : Datatype.type_arg -> 'self
     method type_arg'       : type_arg' -> 'self
     method constant        : Constant.t -> 'self
@@ -152,8 +155,9 @@ class fold :
     method tybinop         : tyarg list * BinaryOp.t -> 'self
     method bindingnode     : bindingnode -> 'self
     method binding         : binding -> 'self
-    method typenamenode    : typenamenode -> 'self
-    method typename        : typename -> 'self
+    method aliasnode       : aliasnode -> 'self
+    method alias           : alias -> 'self
+    method aliasbody       : aliasbody -> 'self
     method function_definition : function_definition -> 'self
     method recursive_function  : recursive_function -> 'self
     method recursive_functionnode  : recursive_functionnode -> 'self
@@ -177,8 +181,9 @@ object ('self)
   method binder          : Binder.with_pos -> 'self * Binder.with_pos
   method binding         : binding -> 'self * binding
   method bindingnode     : bindingnode -> 'self * bindingnode
-  method typenamenode    : typenamenode -> 'self * typenamenode
-  method typename        : typename -> 'self * typename
+  method aliasnode       : aliasnode -> 'self * aliasnode
+  method alias           : alias -> 'self * alias
+  method aliasbody       : aliasbody -> 'self * aliasbody
   method binop           : BinaryOp.t -> 'self * BinaryOp.t
   method tybinop         : tyarg list * BinaryOp.t -> 'self * (tyarg list * BinaryOp.t)
   method bool            : bool -> 'self * bool
@@ -188,6 +193,7 @@ object ('self)
   method datatype        : Datatype.with_pos -> 'self * Datatype.with_pos
   method datatypenode    : Datatype.t -> 'self * Datatype.t
   method datatype'       : datatype' -> 'self * datatype'
+  method row'            : row' -> 'self * row'
   method type_arg'       : type_arg' -> 'self * type_arg'
   method directive       : directive -> 'self * directive
   method fieldconstraint : fieldconstraint -> 'self * fieldconstraint

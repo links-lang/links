@@ -1317,7 +1317,7 @@ struct
                    let xt = Binder.to_type binder in
                    I.alien (Var.make_info xt x scope, Alien.object_name alien, Alien.language alien,
                             fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
-                | Typenames _
+                | Aliases _
                 | Infix _ ->
                     (* Ignore type alias and infix declarations - they
                        shouldn't be needed in the IR *)

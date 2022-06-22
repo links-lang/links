@@ -968,7 +968,7 @@ module ElimTypeAliases = struct
         inherit Types.Transform.visitor as super
 
         method! typ = function
-          | Types.Alias (_, typ) -> o#typ typ
+          | Types.Alias (_, _, typ) -> o#typ typ
           | other -> super#typ other
       end
 
