@@ -41,15 +41,16 @@ module Label = struct
         | Lcl of local
         | Gbl of global
         (* | Unr of unresolved *)
+    type label = t
 
     let show = function
-        | Lcl (name, id) -> "`" ^ name ^ "(" ^ Uid.show id ^ ")"
+        | Lcl (name, id) -> "`" ^ name ^ "<" ^ Uid.show id ^ ">"
         | Gbl name -> name
         (* | Unr name -> "`?" ^ name *)
 
     let pp f l =
       Format.pp_print_string f begin match l with
-        | Lcl (name, _) -> "`"^name
+        | Lcl (name, id) -> "`"^name ^ "<" ^ Uid.show id ^ ">"
         | Gbl name -> name
         (* | Unr name -> "`?" ^ name *)
       end
@@ -163,3 +164,33 @@ let label_to_string_set m =
   Set.fold
     (fun k m -> Utility.StringSet.add (Label.name k) m)
     m Utility.StringSet.empty
+
+
+module Env = struct
+    module M = Utility.StringMap
+
+    type t = (Label.t list) M.t
+
+    let empty = M.empty
+
+    let extend = M.superimpose
+
+    let bind env label =
+        let old_ls = match M.find_opt (name label) env with
+        | None    -> []
+        | Some ls -> ls in
+        M.add (name label) (label::old_ls) env
+
+    let unbind env label =
+        match M.find_opt (name label) env with
+        | None               -> env
+        | Some [] | Some [_] -> M.remove (name label) env
+        | Some (_::ls)        -> M.add (name label) ls env
+
+    let bind_labels labels env = List.fold_left bind env labels
+    let unbind_labels labels env  = List.fold_left unbind env labels
+
+    let find_homonyms l env = match M.find_opt (name l) env with
+        | Some ls -> ls
+        | None -> []
+end

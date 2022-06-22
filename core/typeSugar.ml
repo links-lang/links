@@ -2545,26 +2545,41 @@ let resolve_type_annotation : Binder.with_pos -> Sugartypes.datatype' option -> 
 (* erase the erasable occurences of local labels from the types in the context *)
 (* and remove the bindings with non erasable occurences of local labels *)
 exception CannotErase
-let erase_local_labels_from_type labels dt =
+let erase_local_labels_from_type ?(exact=true) pos labels dt =
   let open Types in
   let rec e dt =
     let e_arg (pk, t) = (pk, e t) in
     let e_args = List.map e_arg in
     let e_point p =
-      let t = Unionfind.find p in
-      Unionfind.change p (e t) ;
+      (* let t = Unionfind.find p in Unionfind.change p (e t) ; *) (* TODO: This causes stack overflow, is it right to not have it ? *)
       p
     in
     match dt with
     | Row (fields, rv, b) ->
       let fields = Label.Map.fold (fun k v f ->
-        if List.mem k labels then (Debug.print ("remove " ^ Label.show k) ;
-          match v with
-          | Absent | Present (Var _) -> f
-          | Meta p when (match Unionfind.find p with Var _ -> true | _ -> false) -> f
-          | _ -> Debug.print ("presence: " ^ show_field_spec v) ; raise CannotErase)
-        else (Debug.print ("not remove " ^ Label.show k ) ;
-         Label.Map.add k (e v) f)
+        let keep () = Label.Map.add k (e v) f in
+        let remove () = Debug.print ("remove " ^ Label.show k) ; f in
+        let to_remove k =
+          if exact then List.mem k labels
+          else List.filter (Label.eq_name k) labels <> []
+        in
+        let is_shadowed k =
+          if exact then List.filter (Label.eq_name k) labels <> []
+          else false
+        in
+        if Label.is_global k then keep ()
+        else
+          let _ = Debug.print ("field " ^ Label.show k ^ ":" ^ show_datatype v) in
+          if to_remove k then
+            let _ = match v with
+              | Absent | Present (Var _) -> ()
+              | Meta p when (match Unionfind.find p with Var _ -> true | _ -> false) -> ()
+              | _ -> Debug.print "present : cannot erase" ; raise CannotErase
+            in remove ()
+          else if is_shadowed k then
+            Gripers.die pos ("Label " ^ Label.show k ^ " is shadowed in this scope")
+          else
+            keep ()
       ) fields Label.Map.empty in
       Row (fields, e_point rv, b)
     | Recursive (id, k, t) -> Recursive (id, k, e t)
@@ -2589,34 +2604,52 @@ let erase_local_labels_from_type labels dt =
   in
   e dt
 
-let rec erase_local_labels labels decls ctx =
-  let erase_fun ctx name =Debug.print ("pouf " ^ name) ;
+let rec erase_local_labels pos labels decls ctx =
+  let erase_binder binder ctx =
+    let name  = Binder.to_name binder in
+    Debug.print ("erasing " ^ name) ;
     try
       let t = Env.find name ctx.var_env in
-      let t = erase_local_labels_from_type labels t in
-      Debug.print ("fun: " ^ Types.show t) ;
+      let t = erase_local_labels_from_type pos labels t in
+      Debug.print ("of type: " ^ Types.show t) ;
       bind_var ctx (name, t)
-    with CannotErase -> Debug.print ("et boum " ^ name) ; unbind_var ctx name
-      | NotFound _ -> Debug.print ("déjà boumed " ^name) ; ctx
+    with CannotErase -> Debug.print ("cannot erase : unbinding " ^ name) ; unbind_var ctx name
+      | NotFound _ -> Debug.print ("already unbound " ^name) ; ctx
+  in
+  let rec erase_pat pat ctx =
+    let e = erase_pat in
+    let e_list ps ctx = List.fold_left (fun ctx p -> e p ctx) ctx ps in
+    let e_opt p_opt ctx = match p_opt with None -> ctx | Some p -> e p ctx in
+    let open Pattern in
+    match WithPos.node pat with
+    | Cons (p,p')         -> ctx |> e p |> e p'
+    | List ps             -> ctx |> e_list ps
+    | Variant (_, p_opt)  -> ctx |> e_opt p_opt
+    | Effect (_, ps, p)   -> ctx |> e_list ps |> e p
+    | Record (lps, p_opt) -> ctx |> e_list (snd (List.split lps)) |> e_opt p_opt
+    | Tuple ps            -> ctx |> e_list ps
+    | Variable b          -> ctx |> erase_binder b
+    | As (b, p)           -> ctx |> erase_binder b |> e p
+    | HasType (p,_)       -> ctx |> e p
+    | _ -> ctx
   in
   List.fold_left (fun ctx d -> match WithPos.node d with
-    | Fun { fun_binder ; _ } -> erase_fun ctx (Binder.to_name fun_binder)
+    | Fun { fun_binder ; _ } -> erase_binder fun_binder ctx
     | Funs rfuns -> List.fold_left
         (fun ctx rfun ->
-          let name = Binder.to_name (WithPos.node rfun).rec_binder in
-          erase_fun ctx name
+          erase_binder (WithPos.node rfun).rec_binder ctx
         ) ctx rfuns
     | Aliases ts -> List.fold_left (fun ctx { node=(name, _, _); _} ->
         try
           let pk, vars, dt = match Env.find name ctx.tycon_env with
           | `Alias (pk, vars, dt) -> pk, vars, dt | _ -> assert false in
-          let dt = erase_local_labels_from_type labels dt in
+          let dt = erase_local_labels_from_type pos labels dt in
           bind_alias ctx (name, `Alias (pk, vars, dt))
         with CannotErase -> unbind_alias ctx name
           | NotFound _ -> ctx
       ) ctx ts
-    | FreshLabel (labels', decls') -> erase_local_labels (labels @ labels') decls' ctx
-    | Val _
+    | Val (pat, _, _, _) ->  erase_pat pat ctx
+    | FreshLabel (_, decls') -> erase_local_labels pos labels decls' ctx
     | Infix _
     | Exp _
     | Foreign _ -> ctx
@@ -4958,12 +4991,16 @@ and type_binding : context -> binding -> binding * context * Usage.t =
             (pos_and_typ e, no_pos Types.unit_type) in
           Exp (erase e), empty_context, usages e
       | FreshLabel(labels, decls) ->
+          let context = { context with var_env = Env.fold (fun k v env ->
+            try Env.bind k (erase_local_labels_from_type ~exact:false pos labels v) env
+            with CannotErase -> env
+          ) context.var_env Env.empty } in
           let ctx, decls = List.fold_left_map
             (fun ctx d ->
               let d, ctx', _ = type_binding ctx d in
               extend ctx ctx', d
             ) context decls in
-          let context = erase_local_labels labels decls ctx in
+          let context = erase_local_labels pos labels decls ctx in
           (FreshLabel(labels, decls), context, Usage.empty)
       | Import _
       | Open _

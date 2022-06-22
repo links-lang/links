@@ -14,6 +14,7 @@ type t =
         (* | Unr of unresolved *)
 (* type t = string *)
       [@@deriving show]
+type label = t
 
 val mk_local : Name.t -> t
 val mk_global : Name.t -> t
@@ -56,3 +57,21 @@ val string_to_label_map : 'a Utility.StringMap.t -> 'a Map.t
 val label_to_string_map : 'a Map.t -> 'a Utility.StringMap.t
 val string_to_label_set : Utility.StringSet.t -> Set.t
 val label_to_string_set : Set.t -> Utility.StringSet.t
+
+module Env : sig
+    module M = Utility.StringMap
+
+    type t = (label list) M.t
+
+    val empty : t
+
+    val extend : t -> t -> t
+
+    val bind : t -> label -> t
+    val unbind : t -> label -> t
+
+    val bind_labels : label list -> t -> t
+    val unbind_labels : label list -> t -> t
+
+    val find_homonyms : label -> t -> label list
+end
