@@ -238,7 +238,7 @@ module Phases = struct
             let runtime_files =
               match Settings.get Basicsettings.System.custom_js_runtime with
               | [] ->
-                let file = 
+                let file =
                   begin match Settings.get jslib_dir with
                     | None | Some "" ->
                       begin
