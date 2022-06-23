@@ -235,30 +235,35 @@ module Phases = struct
         if Settings.get Basicsettings.System.link_js_runtime
         then begin
             Js_CodeGen.output oc Compiler.primitive_bindings;
-            let runtime_file =
+            let runtime_files =
               match Settings.get Basicsettings.System.custom_js_runtime with
-              | None ->
-                 begin match Settings.get jslib_dir with
-                   | None | Some "" ->
-                      begin
-                        Filename.concat
-                          (match Utility.getenv "LINKS_LIB" with
-                           | None -> Filename.dirname Sys.executable_name
-                           | Some path -> path)
-                          (Filename.concat "js" "jslib.js")
-                      end
-                   | Some path -> Filename.concat path "jslib.js"
-                 end
-              | Some file -> file
+                | [] ->
+                   let file = 
+                     begin match Settings.get jslib_dir with
+                       | None | Some "" ->
+                          begin
+                            Filename.concat
+                              (match Utility.getenv "LINKS_LIB" with
+                               | None -> Filename.dirname Sys.executable_name
+                               | Some path -> path)
+                              (Filename.concat "js" "jslib.js")
+                          end
+                       | Some path -> Filename.concat path "jslib.js"
+                     end
+                   in [file]
+                | files -> files
             in
-            let ic =
-              try open_in runtime_file
-              with Sys_error reason -> raise (Errors.cannot_open_file runtime_file reason)
-            in
-            try
-              Utility.IO.Channel.cat ic oc;
-              close_in ic
-            with e -> close_in ic; raise e
+            List.iter
+              (fun runtime_file ->
+                let ic =
+                  try open_in runtime_file
+                  with Sys_error reason -> raise (Errors.cannot_open_file runtime_file reason)
+                in
+                try
+                  Utility.IO.Channel.cat ic oc;
+                  close_in ic
+                with e -> close_in ic; raise e)
+              runtime_files;
           end;
         (* Copy contents of FFI files. *)
         List.iter
