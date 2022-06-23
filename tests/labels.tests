@@ -25,10 +25,16 @@ filemode : true
 stdout : 42 : Int
 args : --enable-handlers
 
-Nested label bindings
+Nested label bindings [1]
 ./tests/labels/nested.links
 filemode : true
 stdout : () : ()
+
+Nested label bindings [2]
+./tests/labels/nested-names.links
+filemode : true
+stderr : @.*
+exit : 1
 
 Wrong local handler
 ./tests/labels/wrong-handler.links
