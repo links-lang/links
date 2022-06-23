@@ -237,21 +237,21 @@ module Phases = struct
             Js_CodeGen.output oc Compiler.primitive_bindings;
             let runtime_files =
               match Settings.get Basicsettings.System.custom_js_runtime with
-                | [] ->
-                   let file = 
-                     begin match Settings.get jslib_dir with
-                       | None | Some "" ->
-                          begin
-                            Filename.concat
-                              (match Utility.getenv "LINKS_LIB" with
-                               | None -> Filename.dirname Sys.executable_name
-                               | Some path -> path)
-                              (Filename.concat "js" "jslib.js")
-                          end
-                       | Some path -> Filename.concat path "jslib.js"
-                     end
-                   in [file]
-                | files -> files
+              | [] ->
+                let file = 
+                  begin match Settings.get jslib_dir with
+                    | None | Some "" ->
+                      begin
+                        Filename.concat
+                          (match Utility.getenv "LINKS_LIB" with
+                            | None -> Filename.dirname Sys.executable_name
+                            | Some path -> path)
+                            (Filename.concat "js" "jslib.js")
+                      end
+                    | Some path -> Filename.concat path "jslib.js"
+                  end
+                in [file]
+              | files -> files
             in
             List.iter
               (fun runtime_file ->
