@@ -119,9 +119,7 @@ module System = struct
     Settings.(multi_option "custom_js_runtime"
               |> privilege `User
               |> synopsis "If link_js_runtime is set to true, then the JS compiler will link the provided file(s) rather than the standard Links JS runtime"
-              |> to_string string_of_paths
               |> convert parse_paths
-              
               |> hidden
               |> CLI.(add (long "Xcustom-js-runtime"))
               |> sync)
