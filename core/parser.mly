@@ -416,6 +416,7 @@ arg:
 | UFLOAT                                                       { string_of_float' $1 }
 | TRUE                                                         { "true"  }
 | FALSE                                                        { "false" }
+| DEFAULT                                                      { "default" }
 
 var:
 | VARIABLE                                                     { with_pos $loc $1 }
