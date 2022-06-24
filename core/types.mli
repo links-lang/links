@@ -171,7 +171,6 @@ and meta_presence_var = typ point
 and row = typ
 and row' = field_spec_map * row_var * bool
 and row_var = meta_row_var
-[@@deriving show]
 
 val is_type_body : typ -> bool
 val is_row_body : row -> bool
@@ -221,6 +220,7 @@ type tycon_environment  = tycon_spec Env.String.t
 type typing_environment = { var_env    : environment ;
                             rec_vars   : Utility.StringSet.t ;
                             tycon_env  : tycon_environment ;
+                            label_env  : Label.Env.t;
                             effect_row : row ;
                             desugared  : bool }
 

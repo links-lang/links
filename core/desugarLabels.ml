@@ -13,11 +13,9 @@ let visitor =
         if Label.is_global lbl || not (Label.is_free lbl) then
             lbl
         else
-            let bind_with = match Env.find_homonyms lbl label_env with
-            | bw :: _ -> bw
-            | _      -> failwith ("The local label " ^ Label.show lbl ^ " is not bound")
-            in
-            Label.bind_local ~bind_with lbl
+          match Env.find_homonyms lbl label_env with
+            | bind_with :: _ -> Label.bind_local ~bind_with lbl
+            | _             -> failwith ("The local label " ^ Label.show lbl ^ " is not bound")
 
     method! bindingnode = function
         | FreshLabel (labels, decls) ->

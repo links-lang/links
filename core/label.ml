@@ -165,11 +165,12 @@ let label_to_string_set m =
     (fun k m -> Utility.StringSet.add (Label.name k) m)
     m Utility.StringSet.empty
 
-
 module Env = struct
     module M = Utility.StringMap
 
-    type t = (Label.t list) M.t
+    type t = (label list) M.t
+
+    let pp = M.pp (Format.pp_print_list Label.pp)
 
     let empty = M.empty
 

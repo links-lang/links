@@ -1,0 +1,17 @@
+fresh `A, `B {
+
+  effectname E = { `A:() {}-> Int } ;
+  typename T = () {`B:Bool | E}-> Bool ;
+
+  sig f : T
+  fun f () { do `B && (do `A > 42) }
+
+  fresh `A {
+
+      sig f' : () -E-> Bool
+      fun f' () {  (do `A > 42) }
+
+
+  }
+
+}

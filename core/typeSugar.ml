@@ -1652,6 +1652,9 @@ type context = Types.typing_environment = {
      and "Formlet". *)
   tycon_env : Types.tycon_environment;
 
+  (* local labels *)
+  label_env : Label.Env.t;
+
   (* the current effects *)
   effect_row : Types.row;
 
@@ -1664,21 +1667,19 @@ let empty_context eff desugared =
   { var_env    = Env.empty;
     rec_vars   = StringSet.empty;
     tycon_env  = Env.empty;
+    label_env  = Label.Env.empty;
     effect_row = eff;
     desugared }
 
 let bind_var         context (v, t) = {context with var_env    = Env.bind v t context.var_env}
 let unbind_var       context v      = {context with var_env    = Env.unbind v context.var_env}
 let bind_alias       context (v, t) = {context with tycon_env  = Env.bind v t context.tycon_env}
-let unbind_alias     context v      = {context with tycon_env  = Env.unbind v context.tycon_env}
+(* let unbind_alias     context v      = {context with tycon_env  = Env.unbind v context.tycon_env} *)
+let bind_labels      context ls     = {context with label_env  = Label.Env.bind_labels ls context.label_env}
+let unbind_labels    context ls     = {context with label_env  = Label.Env.unbind_labels ls context.label_env}
 let bind_effects     context r      = {context with effect_row = r}
 
-let extend context context' =   (* this might not be super smart *)
-  { var_env    = Env.extend context.var_env context'.var_env ;
-    rec_vars   = StringSet.union context.rec_vars context'.rec_vars;
-    tycon_env  = Env.extend context.tycon_env context'.tycon_env ;
-    effect_row = context.effect_row ;
-    desugared  = context.desugared && context'.desugared }
+let extend = Types.extend_typing_environment
 
 (* TODO(dhil): I have extracted the Usage abstraction from my name
    hygiene/compilation unit patch. The below module is a compatibility
@@ -2542,24 +2543,27 @@ let resolve_type_annotation : Binder.with_pos -> Sugartypes.datatype' option -> 
    with sufficiently effect-polymorphic operations).
  *)
 
-(* erase the erasable occurences of local labels from the types in the context *)
-(* and remove the bindings with non erasable occurences of local labels *)
-exception CannotErase
+(** erase the erasable occurences of local labels from the types in the context *)
+(** and remove the bindings with non erasable occurences of local labels *)
 
-(* remember which points are erased in order not to loop *)
-let erased_points = ref []
-let push_erased_point x = erased_points := x :: !erased_points
-let is_erased_point x = List.filter (Unionfind.equivalent x) !erased_points <> []
+(* remember which points are visited in order not to loop *)
+class visit_points = object
+  val points : Types.datatype Unionfind.point list ref = ref []
+  method visit x = points := x :: !points
+  method visited x = List.filter (Unionfind.equivalent x) !points <> []
+end
 
 let erase_local_labels_from_type ?(exact=true) pos labels dt =
+  let exception CannotErase in
   let open Types in
+  let erased_points = new visit_points in
   let rec e dt =
     let e_arg (pk, t) = (pk, e t) in
     let e_args = List.map e_arg in
     let e_point p =
-      if is_erased_point p then p
+      if erased_points#visited p then p
       else begin
-        push_erased_point p ;
+        erased_points#visit p ;
         let t = Unionfind.find p in
         Unionfind.change p (e t) ;
         p
@@ -2581,11 +2585,10 @@ let erase_local_labels_from_type ?(exact=true) pos labels dt =
         if Label.is_global k then keep ()
         else
           if to_remove k then
-            let _ = match v with
-              | Absent | Present (Var _) -> ()
-              | Meta p when (match Unionfind.find p with Var _ -> true | _ -> false) -> ()
+            match v with
+              | Absent | Present (Var _) -> remove ()
+              | Meta p when (match Unionfind.find p with Var _ -> true | _ -> false) -> remove ()
               | _ -> raise CannotErase
-            in remove ()
           else if is_shadowed k then
             Gripers.die pos ("Label " ^ Label.show k ^ " is shadowed in this scope")
           else
@@ -2612,42 +2615,23 @@ let erase_local_labels_from_type ?(exact=true) pos labels dt =
     | Dual t -> Dual (e t)
     | _ -> dt
   in
-  e dt
+  try Some (e dt)
+  with CannotErase -> None
 
-let erase_local_labels_from_tycon ?(exact=true) pos labels tycon =
-  match tycon with
-    | `Alias (pk, vars, dt) ->
-      let dt = erase_local_labels_from_type ~exact pos labels dt in
-      `Alias (pk, vars, dt)
-    | `Abstract abs -> `Abstract abs
-    | `Mutual (qs, tygroup) ->
-      let open Utility.StringMap in
-      let open Types in
-      tygroup := { !tygroup with
-        type_map = fold (fun k (qs,v) m ->
-          try
-            let v = erase_local_labels_from_type ~exact pos labels v in
-            add k (qs,v) m
-          with CannotErase -> m
-        ) !tygroup.type_map empty
-      } ;
-      `Mutual (qs, tygroup)
-
-let rec erase_local_labels pos labels decls ctx =
-  let erase_binder binder ctx =
+let rec erase_local_labels labels decls ctx =
+  let erase_binder pos binder ctx =
     let name  = Binder.to_name binder in
-    try
-      let t = Env.find name ctx.var_env in
-      let t = erase_local_labels_from_type pos labels t in
-      bind_var ctx (name, t)
-    with CannotErase -> unbind_var ctx name
-      | NotFound _ -> ctx
+    let t' = Env.find_opt name ctx.var_env in
+    match OptionUtils.opt_bind (erase_local_labels_from_type pos labels) t' with
+    | Some t -> bind_var ctx (name, t)
+    | None -> unbind_var ctx name
   in
   let rec erase_pat pat ctx =
     let e = erase_pat in
     let e_list ps ctx = List.fold_left (fun ctx p -> e p ctx) ctx ps in
     let e_opt p_opt ctx = match p_opt with None -> ctx | Some p -> e p ctx in
     let open Pattern in
+    let pos = WithPos.pos pat in
     match WithPos.node pat with
     | Cons (p,p')         -> ctx |> e p |> e p'
     | List ps             -> ctx |> e_list ps
@@ -2655,26 +2639,22 @@ let rec erase_local_labels pos labels decls ctx =
     | Effect (_, ps, p)   -> ctx |> e_list ps |> e p
     | Record (lps, p_opt) -> ctx |> e_list (snd (List.split lps)) |> e_opt p_opt
     | Tuple ps            -> ctx |> e_list ps
-    | Variable b          -> ctx |> erase_binder b
-    | As (b, p)           -> ctx |> erase_binder b |> e p
+    | Variable b          -> ctx |> erase_binder pos b
+    | As (b, p)           -> ctx |> erase_binder pos b |> e p
     | HasType (p,_)       -> ctx |> e p
     | _ -> ctx
   in
-  List.fold_left (fun ctx d -> match WithPos.node d with
-    | Fun { fun_binder ; _ } -> erase_binder fun_binder ctx
+  List.fold_left (fun ctx d ->
+    let pos = WithPos.pos d in
+    match WithPos.node d with
+    | Fun { fun_binder ; _ } -> erase_binder pos fun_binder ctx
     | Funs rfuns -> List.fold_left
         (fun ctx rfun ->
-          erase_binder (WithPos.node rfun).rec_binder ctx
+          erase_binder (WithPos.pos rfun) (WithPos.node rfun).rec_binder ctx
         ) ctx rfuns
-    | Aliases ts -> List.fold_left (fun ctx { node=(name, _, _); _} ->
-        try
-          let tycon = erase_local_labels_from_tycon pos labels (Env.find name ctx.tycon_env) in
-          bind_alias ctx (name, tycon)
-        with CannotErase -> unbind_alias ctx name
-          | NotFound _ -> ctx
-      ) ctx ts
     | Val (pat, _, _, _) ->  erase_pat pat ctx
-    | FreshLabel (_, decls') -> erase_local_labels pos labels decls' ctx
+    | FreshLabel (_, decls') -> erase_local_labels labels decls' ctx
+    | Aliases _
     | Infix _
     | Exp _
     | Foreign _ -> ctx
@@ -2684,10 +2664,9 @@ let rec erase_local_labels pos labels decls ctx =
     | AlienBlock _ -> assert false
   ) ctx decls
 
-let check_tycon pos dt ctx =
-  let checked_points = ref [] in
-  let push_checked_point x = checked_points := x :: !checked_points in
-  let is_checked_point x = List.filter (Unionfind.equivalent x) !checked_points <> [] in
+(** Check if all local labels in that type are bound and not shadowed **)
+let check_labels pos dt ctx =
+  let checked_points = new visit_points in
   let open Types in
   let rec ct dt =
     let ct_name name =
@@ -2695,13 +2674,26 @@ let check_tycon pos dt ctx =
     let ct_arg (_, t) = ct t in
     let ct_args = List.iter ct_arg in
     let ct_point p =
-      if not (is_checked_point p) then begin
-        push_checked_point p ;
+      if not (checked_points#visited p) then begin
+        checked_points#visit p ;
         ct (Unionfind.find p)
       end
     in
     match dt with
-    | Row (fields, rv, _) -> Label.Map.iter (fun _ v -> ct v) fields ; ct_point rv
+    | Row (fields, rv, _) ->
+      Label.Map.iter (fun k v ->
+        let ok () = () in
+        let unbound () = (*Gripers.die pos ("The local label " ^ Label.show k ^ " is not bound") *) assert false in
+        let shadowed () = Gripers.die pos ("Label " ^ Label.show k ^ " is shadowed in this scope") in
+        if Label.is_global k then ok ()
+        else
+          match Label.Env.find_homonyms k ctx.label_env with
+            | [] -> unbound ()
+            | k' :: _ when Label.eq k k' -> ok ()
+            | _ -> ignore (shadowed ())            (* without the ignore we get a warning ?? *)
+        ; ct v
+      ) fields ;
+      ct_point rv
     | Alias (_, (name, _, targs, _) , t) -> ct_name name ; ct_args targs ; ct t
     | Application (abs, targs) -> ct_name (Abstype.name abs) ; ct_args targs
     | RecursiveApplication { r_name ; r_args ; _ } -> ct_name r_name ; ct_args r_args
@@ -4609,7 +4601,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
           let bt =
             match datatype with
               | Some (_, Some t) ->
-                  let _ = check_tycon pos t context in
+                  let _ = check_labels pos t context in
                   unify pos ~handle:Gripers.bind_val_annotation (no_pos (typ body), no_pos t);
                   t
               | _ -> typ body in
@@ -4665,7 +4657,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
               | Some ft ->
                   (* Debug.print ("t: " ^ Types.string_of_datatype ft); *)
                   (* make sure the annotation has the right shape *)
-                  let _ = check_tycon pos ft context in
+                  let _ = check_labels pos ft context in
                   let shape = make_ft lin pats effects return_type in
                   let quantifiers, ft_mono = TypeUtils.split_quantified_type ft in
 
@@ -4845,7 +4837,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                          make_ft_poly_curry lin pats (fresh_tame ()) (Types.fresh_type_variable (lin_any, res_any))
                      | Some t ->
                          (* Debug.print ("t: " ^ Types.string_of_datatype t); *)
-                         let _ = check_tycon pos t context in
+                         let _ = check_labels pos t context in
                          let shape = make_ft lin pats (fresh_tame ()) (Types.fresh_type_variable (lin_any, res_any)) in
                          let ft = match t with
                            | T.ForAll _ -> t
@@ -5037,7 +5029,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
          ignore (if String.contains (Binder.to_name binder) '\''
                  then raise (Errors.prime_alien pos));
          (* Ensure that we quantify FTVs *)
-         let _ = check_tycon pos datatype context in
+         let _ = check_labels pos datatype context in
          let (_tyvars, _args), datatype = Utils.generalise context.var_env datatype in
          let datatype = Instantiate.freshen_quantifiers datatype in
          let binder = Binder.set_type binder datatype in
@@ -5048,10 +5040,10 @@ and type_binding : context -> binding -> binding * context * Usage.t =
           let env = List.fold_left (fun env {node=(name, vars, b); _} ->
               match b with
                 | Typename     (_, Some dt) ->
-                    let _ = check_tycon pos dt context in
+                    let _ = check_labels pos dt context in
                     bind_alias env (name, `Alias (pk_type, List.map (SugarQuantifier.get_resolved_exn) vars, dt))
                 | Effectname   (_, Some dt) ->
-                    let _ = check_tycon pos dt context in
+                    let _ = check_labels pos dt context in
                     bind_alias env (name, `Alias (pk_row , List.map (SugarQuantifier.get_resolved_exn) vars, dt))
                 | _ -> raise (internal_error "unannotated type")
           ) empty_context ts in
@@ -5065,20 +5057,19 @@ and type_binding : context -> binding -> binding * context * Usage.t =
       | FreshLabel(labels, decls) ->
           let context = { context with
             var_env = Env.fold (fun k v env ->
-              try Env.bind k (erase_local_labels_from_type ~exact:false pos labels v) env
-              with CannotErase -> env
-              ) context.var_env Env.empty ;
-            tycon_env = Env.fold (fun k v env ->
-              try Env.bind k (erase_local_labels_from_tycon ~exact:false pos labels v) env
-              with CannotErase -> env
-              ) context.tycon_env Env.empty
+              match erase_local_labels_from_type ~exact:false pos labels v with
+              | Some v -> Env.bind k v env
+              | None -> env
+              ) context.var_env Env.empty
           } in
-          let ctx, decls = List.fold_left_map
+          let context = bind_labels context labels in
+          let context, decls = List.fold_left_map
             (fun ctx d ->
               let d, ctx', _ = type_binding ctx d in
               extend ctx ctx', d
             ) context decls in
-          let context = erase_local_labels pos labels decls ctx in
+          let context = erase_local_labels labels decls context in
+          let context = unbind_labels context labels in
           (FreshLabel(labels, decls), context, Usage.empty)
       | Import _
       | Open _
