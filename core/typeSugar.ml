@@ -2669,8 +2669,6 @@ let check_labels pos dt ctx =
   let checked_points = new visit_points in
   let open Types in
   let rec ct dt =
-    let ct_name name =
-      if not (Env.has name ctx.tycon_env) then raise (Errors.UnboundTyCon (pos, name)) in
     let ct_arg (_, t) = ct t in
     let ct_args = List.iter ct_arg in
     let ct_point p =
@@ -2694,9 +2692,9 @@ let check_labels pos dt ctx =
         ; ct v
       ) fields ;
       ct_point rv
-    | Alias (_, (name, _, targs, _) , t) -> ct_name name ; ct_args targs ; ct t
-    | Application (abs, targs) -> ct_name (Abstype.name abs) ; ct_args targs
-    | RecursiveApplication { r_name ; r_args ; _ } -> ct_name r_name ; ct_args r_args
+    | Alias (_, (_, _, targs, _) , t) -> ct_args targs ; ct t
+    | Application (_, targs) -> ct_args targs
+    | RecursiveApplication { r_args ; _ } -> ct_args r_args
     | Meta p -> ct_point p
     | Recursive (_, _, t)
     | Record t

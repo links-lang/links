@@ -8,7 +8,7 @@ fresh `A, `B {
 
   fresh `A {
 
-      sig f' : () -E-> Bool
+      sig f' : T
       fun f' () {  (do `A > 42) }
 
 
