@@ -9,7 +9,9 @@ fresh `A, `B {
   fresh `A {
 
       sig f' : T
-      fun f' () {  (do `A > 42) }
+      fun f' () {
+          do `A > 42
+      }
 
 
   }
