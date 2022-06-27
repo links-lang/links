@@ -189,8 +189,7 @@ let test_select_lens_2 n test_ctx =
   in
   let l2 =
     H.drop_create_populate_table test_ctx db "t2" "b -> d" "b d"
-      [ `Seq; `RandTo upto ]
-      upto
+      [ `Seq; `RandTo upto ] upto
   in
   let l3 = H.join_lens_dl l1 l2 [ ("b", "b", "b") ] in
   let l4 =
@@ -218,8 +217,7 @@ let test_select_lens_3 n test_ctx =
   in
   let l2 =
     H.drop_create_populate_table test_ctx db "t2" "b -> d" "b d"
-      [ `Seq; `RandTo upto ]
-      upto
+      [ `Seq; `RandTo upto ] upto
   in
   let l3 = H.join_lens_dl l1 l2 [ ("b", "b", "b") ] in
   let l4 =
@@ -255,8 +253,7 @@ let test_get_delta test_ctx =
   in
   let l2 =
     H.drop_create_populate_table test_ctx db "t2" "b -> d" "b d"
-      [ `Seq; `RandTo upto ]
-      upto
+      [ `Seq; `RandTo upto ] upto
   in
   let l3 = H.join_lens_dl l1 l2 [ ("b", "b", "b") ] in
   let res =
@@ -366,8 +363,7 @@ let test_join_lens_1 n test_ctx =
   in
   let l2 =
     H.drop_create_populate_table test_ctx db "t2" "b -> d" "b d"
-      [ `Seq; `RandTo upto ]
-      upto
+      [ `Seq; `RandTo upto ] upto
   in
   let l3 = H.join_lens_dl l1 l2 [ ("b", "b", "b") ] in
   let res =
@@ -401,8 +397,7 @@ let test_join_lens_2 n test_ctx =
   in
   let l2 =
     H.drop_create_populate_table test_ctx db "t2" "b -> d" "b d"
-      [ `Seq; `RandTo 40 ]
-      upto
+      [ `Seq; `RandTo 40 ] upto
   in
   let l3 = H.join_lens_dl l1 l2 [ ("b", "b", "b") ] in
   let res =
@@ -434,8 +429,7 @@ let test_join_lens_dr_2 n test_ctx =
   in
   let l2 =
     H.drop_create_populate_table test_ctx db "t2" "b -> d" "b d"
-      [ `Seq; `RandTo 40 ]
-      50
+      [ `Seq; `RandTo 40 ] 50
   in
   let l3 = H.join_lens_dr l1 l2 [ ("b", "b", "b") ] in
   let res =
