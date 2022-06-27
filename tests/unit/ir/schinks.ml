@@ -211,7 +211,7 @@ let record_t ?row_var assoc =
   in
   check_assoc_list_for_duplicates assoc "record type";
   helper_tuple1 assoc row_var (fun assoc row_var ->
-      let map = StringMap.from_alist assoc in
+      let map = Label.Map.from_alist assoc in
       Types.Record (Types.Row (map, row_var, false)))
 
 let variant ?row_var assoc =
@@ -222,7 +222,7 @@ let variant ?row_var assoc =
     | None -> Unionfind.fresh Types.Closed |> State.return |> State.return
   in
   helper_tuple1 assoc row_var (fun assoc row_var ->
-      let map = StringMap.from_alist assoc in
+      let map = Label.Map.from_alist assoc in
       Types.Variant (Types.Row (map, row_var, false)))
 
 (* Rows *)
