@@ -195,7 +195,7 @@ let ( |--> ) = fun_ct
 let wild_fun_ct parameters codomain =
   let effects =
     State.return
-      (Types.make_singleton_closed_row ("wild", Types.Present Types.unit_type))
+      (Types.make_singleton_closed_row (Types.wild, Types.Present Types.unit_type))
     |> State.return
   in
   fun_t ~effects parameters codomain
