@@ -16,7 +16,6 @@ let to_string_map m =
     (fun k v m -> String.Map.add (Label.name k) v m)
     m String.Map.empty
 
-
 let lookup_alias context ~alias =
   match Env.String.find_opt alias context with
   | Some (`Alias (k, _, body)) ->

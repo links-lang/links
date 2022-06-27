@@ -348,7 +348,9 @@ let lens_sugar_phrase_of_ir p env =
     | I.Extend (ext_fields, r) ->
         let r = Option.map ~f:(links_value env) r in
         Option.value r ~default:(`Record [] |> Result.return) >>= fun r ->
-        let fields = StringMap.to_alist (Label.label_to_string_map ext_fields) in
+        let fields =
+          StringMap.to_alist (Label.label_to_string_map ext_fields)
+        in
         List.map_result
           ~f:(fun (k, v) -> links_value env v >>| fun v -> (k, v))
           fields
