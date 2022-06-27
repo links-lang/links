@@ -5095,7 +5095,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
               ) context.tycon_env Env.empty
           } in
           let context = bind_labels context labels in
-          let (context,_), decls = List.fold_left_map
+          let (context,_), decls = ListUtils.fold_left_map
             (fun (ctx, loc_ctx) d ->
               let d, ctx', _ = type_binding loc_ctx d in
               (extend ctx ctx', extend loc_ctx ctx'), d

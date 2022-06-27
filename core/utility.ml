@@ -600,6 +600,14 @@ struct
     | [] :: xss -> transpose xss
     | (x :: xs) :: xss ->
        (x :: (List.map List.hd xss)) :: transpose (xs :: List.map List.tl xss)
+
+  let fold_left_map f accu l =
+    let rec aux accu l_accu = function
+      | [] -> accu, List.rev l_accu
+      | x :: l ->
+          let accu, x = f accu x in
+          aux accu (x :: l_accu) l in
+    aux accu [] l
 end
 include ListUtils
 
