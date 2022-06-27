@@ -237,7 +237,7 @@ let rec primary_kind_of_type t =
      failwith "Top-level Recursive should have been removed by concrete_type call"
   | Meta p ->
      primary_kind_of_type (Unionfind.find p)
-  | Alias (k, _, d) ->
+  | Alias (_, _, d) ->
      primary_kind_of_type d
   | Primitive _
   | Function _

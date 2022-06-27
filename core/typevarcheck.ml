@@ -33,7 +33,7 @@ let rec is_guarded : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
         | Not_typed -> true
         | (Var _ | Recursive _) ->
            failwith ("freestanding Var / Recursive not implemented yet (must be inside Meta)")
-        | Alias (k, _, t) -> isg t
+        | Alias (_, _, t) -> isg t
         | Application (_, ts) ->
             (* don't treat abstract type constructors as guards *)
             List.for_all (is_guarded_type_arg bound_vars expanded_apps var) ts

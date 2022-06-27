@@ -42,7 +42,6 @@ exception UnboundTyCon of (Position.t * string)
 exception InternalError of { filename: string; message: string }
 exception TypeApplicationArityMismatch of
   { pos: Position.t; name: string; expected: int; provided: int}
-
 (* tyarg_number is 1-based index *)
 exception TypeApplicationKindMismatch of
   { pos: Position.t; name: string; tyarg_number: int;
@@ -254,3 +253,8 @@ let prime_alien pos = PrimeAlien pos
 let forbidden_client_call fn reason = ForbiddenClientCall (fn, reason)
 let cannot_open_file filename reason = CannotOpenFile (filename, reason)
 let object_file_write_error filename reason = ObjectFileWriteError (filename, reason)
+let type_application_kind_mismatch pos name tyarg_number expected provided =
+    TypeApplicationKindMismatch { pos; name; tyarg_number; expected; provided }
+let type_application_global_kind_mismatch pos name expected provided =
+    TypeApplicationGlobalKindMismatch { pos; name; expected; provided }
+let unbound_tycon pos message = UnboundTyCon (pos, message)

@@ -256,7 +256,7 @@ let may_have_shared_eff (tycon_env : simple_tycon_env) dt =
     let param_kinds, _has_implicit_effect, _internal_type =
       try
         SEnv.find tycon tycon_env
-      with NotFound _ -> raise (Errors.UnboundTyCon (SourceCode.WithPos.pos dt, tycon))
+      with NotFound _ -> raise (Errors.unbound_tycon (SourceCode.WithPos.pos dt) tycon)
     in
     match ListUtils.last_opt param_kinds with
     | Some (PrimaryKind.Row, (_, Restriction.Effect)) -> Some `Alias
@@ -322,7 +322,7 @@ let cleanup_effects tycon_env =
             let tycon_info =
               try
                 SEnv.find_opt name tycon_env
-              with NotFound _ -> raise (Errors.UnboundTyCon (pos, name))
+              with NotFound _ -> raise (Errors.unbound_tycon pos name)
             in
             let rec go =
                (* We don't know if the arities match up yet (nor the final arities
@@ -344,20 +344,20 @@ let cleanup_effects tycon_env =
              let ts =
                match tycon_info with
                | Some (params, _, _) -> go (params, ts)
-               | None -> raise (Errors.UnboundTyCon (pos, name))
+               | None -> raise (Errors.unbound_tycon pos name)
              in
              TypeApplication (name, ts)
-         (* | Effect r ->          (\* goal: same cleaning in the effectname declaration *\) *)
-         (*    let r = self#effect_row ~allow_shared:`Disallow r in (\* what allow_shared should be ? *\) *)
-         (*    Effect r *)
+         | Effect e ->
+            let e = self#effect_row ~allow_shared:`Disallow e in
+            Effect e
          | _ -> super#datatypenode t
        in
        SourceCode.WithPos.with_node dt res_t
 
-
      method effect_row ~allow_shared (fields, var) =
        let open Datatype in
-       let open SourceCode.WithPos in
+       let open SourceCode in
+       let open WithPos in
        let fields =
          List.map
            (function
@@ -374,7 +374,7 @@ let cleanup_effects tycon_env =
                      (* might need an extra check on recursive rows *)
                      ( label,
                        Present
-                         (SourceCode.WithPos.make ~pos
+                         (WithPos.make ~pos
                             (Function (domain, ([], Closed), codomain))) )
                  | _, _ -> raise (unexpected_effects_on_abstract_op pos (Label.name label)) )
              | label, Present node when not (TypeUtils.is_builtin_effect label) ->
@@ -485,7 +485,7 @@ let gather_mutual_info (tycon_env : simple_tycon_env) =
                in
                poss_with_implicit#with_used_type name
            | Some _ -> self#with_used_type name
-           | None -> raise (Errors.UnboundTyCon (pos, name)) )
+           | None -> raise (Errors.unbound_tycon pos name) )
        | _ -> self
   end)
     #datatype
@@ -700,7 +700,7 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
                       hide_ops self
                in
                self#with_operations operations
-            | None -> raise (Errors.UnboundTyCon (pos, name)) )
+            | None -> raise (Errors.unbound_tycon pos name) )
         | Mu (v, t) ->
             let mtv = SugarTypeVar.get_resolved_type_exn v in
             let var, (_, sk) = unpack_var_id (Unionfind.find mtv) in
@@ -713,7 +713,46 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
       method! row_var =
         let open Datatype in
         function
-        | EffectApplication _   (* TODO(rj) should I do semething there ? *)
+        | EffectApplication (name, ts) ->
+            let tycon_info = SEnv.find_opt name tycon_env in
+            let rec go o =
+              (* We don't know if the arities match up yet, so we handle
+                    mismatches, assuming spare rows are effects. *)
+              function
+              | _, [] -> o
+              | (PrimaryKind.Row, (_, Restriction.Effect)) :: qs, Row t :: ts ->
+                  go (o#effect_row t) (qs, ts)
+              | (([] as qs) | _ :: qs), t :: ts -> go (o#type_arg t) (qs, ts)
+            in
+            begin match tycon_info with
+            | Some (params, _has_implict_eff, internal_type) ->
+               let self = go self (params, ts) in
+               let ops = match internal_type with
+                 | None -> RowVarMap.empty
+                 | Some internal_type ->
+                    gather_operation_of_type internal_type
+               in
+               let operations =
+                 RowVarMap.fold
+                   (fun vid sset acc ->
+                     RowVarMap.update vid
+                       (function
+                        | None -> Some sset
+                        | Some opset -> Some (Label.Set.union opset sset))
+                       acc)
+                   ops self#operations
+               in
+               let self = match RowVarMap.find_raw_opt (-1) ops with
+                 | None -> self
+                 | Some hide_ops ->
+                    Label.Set.fold
+                      (fun label acc ->
+                        acc#add_hidden_op name label)
+                      hide_ops self
+               in
+               self#with_operations operations
+            | None -> raise (Errors.unbound_tycon SourceCode.Position.dummy name)
+            end
         | Closed
         | Open _ ->
             self
@@ -854,7 +893,7 @@ class main_traversal simple_tycon_env =
              type applications. This must be done in later passes. *)
           let pos = SourceCode.Position.dummy in
           match SEnv.find_opt tycon tycon_env with
-          | None -> raise (Errors.UnboundTyCon (pos, tycon))
+          | None -> raise (Errors.unbound_tycon pos tycon)
           | Some (params, _has_implicit_eff, _internal_type) ->
               let qn = List.length params in
               let tn = List.length ts in
@@ -877,14 +916,9 @@ class main_traversal simple_tycon_env =
                        distracting the user from the actual error: the kind missmatch.
                        Hence, we must report a proper error here. *)
                     raise
-                      (Errors.TypeApplicationKindMismatch
-                         {
-                           pos;
-                           name = tycon;
-                           tyarg_number = i;
-                           expected = PrimaryKind.to_string (fst k);
-                           provided = PrimaryKind.to_string pk_row;
-                         })
+                      (Errors.type_application_kind_mismatch pos tycon i
+                        (PrimaryKind.to_string (fst k))
+                        (PrimaryKind.to_string pk_row))
                 | _, ta -> snd (o#type_arg ta)
               in
               let rec match_args_to_params index = function
@@ -982,7 +1016,7 @@ class main_traversal simple_tycon_env =
       let module D = Datatype in
       let o, rv =
         match rv with
-        | D.EffectApplication _ -> (o, rv) (* TODO(rj) do i need to do something there ? *)
+        | D.EffectApplication _ -> super#row_var rv   (* maybe we should do as for TypeApplication and not just visit the node *)
         | D.Closed -> (o, rv)
         | D.Open stv
           when (not (SugarTypeVar.is_resolved stv))
@@ -1059,6 +1093,17 @@ class main_traversal simple_tycon_env =
          yields no info *)
       let o, (fields, rv) = o#row (fields, rv) in
       (o, (fields, rv))
+
+    method! aliasbody =
+    let open Sugartypes.Datatype in
+    let module WP = SourceCode.WithPos in
+    function
+      | Typename _ as t -> super#aliasbody t
+      | Effectname (r, _) ->    (* hack to cleanup the row and desugar properly *)
+        let wp  = cleanup_effects tycon_env (WP.dummy (Effect r)) in
+        match WP.node wp with
+          | Effect r -> (o, Effectname(r, None))
+          | _ -> assert false
 
     method! bindingnode =
       function

@@ -56,7 +56,7 @@ filemode : true
 stdout : () : ()
 
 Underscore in effect alias application
-./tests/effectname/underscore-not-working.links
+./tests/effectname/underscore.links
 filemode : true
-stderr : @.*
-exit : 1
+args : --enable-handlers
+stdout : true : Bool
