@@ -29,8 +29,8 @@ let check_assoc_list_for_duplicates assoc description =
   let has_duplicates =
     List.fold_left
       (fun (seen, dupls) (key, _) ->
-        (StringSet.add key seen, dupls && StringSet.mem key seen))
-      (StringSet.empty, [] <> assoc)
+        (Label.Set.add key seen, dupls && Label.Set.mem key seen))
+      (Label.Set.empty, [] <> assoc)
       assoc
     |> snd
   in
@@ -236,7 +236,7 @@ let row_var rv =
 
 let row assoc rv =
   let mk_row assoc rv =
-    let map = StringMap.from_alist assoc in
+    let map = Label.Map.from_alist assoc in
     Types.Row (map, rv, false)
   in
   check_assoc_list_for_duplicates assoc "row";
@@ -348,8 +348,8 @@ let build_record (extendee : Ir.value t option)
   let _, has_duplicates =
     List.fold_left
       (fun (seen, dupls) (key, _) ->
-        (StringSet.add key seen, dupls && StringSet.mem key seen))
-      (StringSet.empty, [] <> assoc)
+        (Label.Set.add key seen, dupls && Label.Set.mem key seen))
+      (Label.Set.empty, [] <> assoc)
       assoc
   in
   let stage2 (extendee : Ir.value lookup option)
@@ -361,7 +361,7 @@ let build_record (extendee : Ir.value t option)
           (x, y))
         assoc
     in
-    let map = StringMap.from_alist assoc in
+    let map = Label.Map.from_alist assoc in
     let finalize e =
       if has_duplicates then raise (SchinksError "Duplicate fields in record!")
       else Ir.Extend (map, e)
@@ -443,7 +443,7 @@ let case (v : Ir.value t) ?(default : (Ir.binder t * Ir.computation t) option)
   let+ cases = State.List.map ~f:g cases in
   let assoc = List.map (fun (a, b, c) -> (a, (b, c))) cases in
   check_assoc_list_for_duplicates assoc "variants of case";
-  let case_map = StringMap.from_alist assoc in
+  let case_map = Label.Map.from_alist assoc in
   Ir.Case (v, case_map, default)
 
 (*
