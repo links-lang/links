@@ -344,7 +344,7 @@ let wi_binder ?(scope = Var.Scope.Local) id ty =
   stage2
 
 let build_record (extendee : Ir.value t option)
-    (assoc : (string * Ir.value t) list) : Ir.value t =
+    (assoc : (Label.t * Ir.value t) list) : Ir.value t =
   let _, has_duplicates =
     List.fold_left
       (fun (seen, dupls) (key, _) ->
@@ -353,7 +353,7 @@ let build_record (extendee : Ir.value t option)
       assoc
   in
   let stage2 (extendee : Ir.value lookup option)
-      (assoc : (string * Ir.value Repr.lookup) list) : Ir.value lookup =
+      (assoc : (Label.t * Ir.value Repr.lookup) list) : Ir.value lookup =
     let* assoc =
       State.List.map
         ~f:(fun (x, y) ->
@@ -372,14 +372,14 @@ let build_record (extendee : Ir.value t option)
         let+ e = e in
         finalize (Some e)
   in
-  let assoc : (string * Ir.value lookup) list stage1 =
+  let assoc : (Label.t * Ir.value lookup) list stage1 =
     State.List.map
       ~f:(fun (x, y) ->
         let+ y = y in
         (x, y))
       assoc
   in
-  let* (assoc : (string * Ir.value lookup) list) = assoc in
+  let* (assoc : (Label.t * Ir.value lookup) list) = assoc in
   match extendee with
   | Some (e : Ir.value t) ->
       let+ (e : Ir.value lookup) = e in
@@ -423,7 +423,7 @@ let apply f args =
   stage2
 
 let case (v : Ir.value t) ?(default : (Ir.binder t * Ir.computation t) option)
-    (cases : (string * Ir.binder t * Ir.computation t) list) :
+    (cases : (Label.t * Ir.binder t * Ir.computation t) list) :
     Ir.tail_computation t =
   let* v = v in
   let f (x, y) =
