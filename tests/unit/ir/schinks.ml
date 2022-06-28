@@ -204,7 +204,7 @@ let wild_fun_ct parameters codomain =
 let ( |~~> ) = wild_fun_ct
 
 let record_t ?row_var assoc =
-  let assoc = List.map (fun (x,y) -> (Label.make x, y)) assoc in
+  let assoc = List.map (fun (x, y) -> (Label.make x, y)) assoc in
   let row_var =
     match row_var with
     | Some rv -> rv
@@ -216,7 +216,7 @@ let record_t ?row_var assoc =
       Types.Record (Types.Row (map, row_var, false)))
 
 let variant ?row_var assoc =
-  let assoc = List.map (fun (x,y) -> (Label.make x, y)) assoc in
+  let assoc = List.map (fun (x, y) -> (Label.make x, y)) assoc in
   check_assoc_list_for_duplicates assoc "variant type";
   let row_var =
     match row_var with
@@ -237,7 +237,7 @@ let row_var rv =
   Unionfind.fresh (Types.Var (id, (CT.PrimaryKind.Row, sk), `Rigid))
 
 let row assoc rv =
-  let assoc = List.map (fun (x,y) -> (Label.make x, y)) assoc in
+  let assoc = List.map (fun (x, y) -> (Label.make x, y)) assoc in
   let mk_row assoc rv =
     let map = Label.Map.from_alist assoc in
     Types.Row (map, rv, false)
@@ -348,7 +348,7 @@ let wi_binder ?(scope = Var.Scope.Local) id ty =
 
 let build_record (extendee : Ir.value t option)
     (assoc : (string * Ir.value t) list) : Ir.value t =
-  let assoc = List.map (fun (x,y) -> (Label.make x, y)) assoc in
+  let assoc = List.map (fun (x, y) -> (Label.make x, y)) assoc in
   let _, has_duplicates =
     List.fold_left
       (fun (seen, dupls) (key, _) ->
@@ -429,7 +429,7 @@ let apply f args =
 let case (v : Ir.value t) ?(default : (Ir.binder t * Ir.computation t) option)
     (cases : (string * Ir.binder t * Ir.computation t) list) :
     Ir.tail_computation t =
-  let cases = List.map (fun (x,y,y) -> (Label.make x, y, z)) cases in
+  let cases = List.map (fun (x, y, z) -> (Label.make x, y, z)) cases in
   let* v = v in
   let f (x, y) =
     let* x = x in
