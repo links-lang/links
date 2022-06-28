@@ -98,7 +98,7 @@ val closed : Types.row_var t
 
 val row_var : string -> Types.row_var t
 
-val row : (string * Types.field_spec t) list -> Types.row_var t -> Types.row t
+val row : (Label.t * Types.field_spec t) list -> Types.row_var t -> Types.row t
 
 (* Presence info *)
 
@@ -120,10 +120,10 @@ val q_row : ?sk:CT.Subkind.t -> string -> CT.Quantifier.t t
 val wi_q : ?pk:CT.PrimaryKind.t -> ?sk:CT.Subkind.t -> int -> CT.Quantifier.t t
 
 val record_t :
-  ?row_var:Types.row_var t -> (string * Types.field_spec t) list -> Types.typ t
+  ?row_var:Types.row_var t -> (Label.t * Types.field_spec t) list -> Types.typ t
 
 val variant :
-  ?row_var:Types.row_var t -> (string * Types.t t) list -> Types.typ t
+  ?row_var:Types.row_var t -> (Label.t * Types.t t) list -> Types.typ t
 
 (** Lifts a type into t, marking all quantifiers and type variable ids therein
   as reserved. *)
@@ -160,9 +160,9 @@ val wi_var : int -> Ir.value t
 
 val closure : string -> Ir.tyarg t list -> Ir.value t -> Ir.value t
 
-val record : (string * Ir.value t) list -> Ir.value t
+val record : (Label.t * Ir.value t) list -> Ir.value t
 
-val extend_record : Ir.value t -> (string * Ir.value t) list -> Ir.value t
+val extend_record : Ir.value t -> (Label.t * Ir.value t) list -> Ir.value t
 
 val unit : Ir.value t
 
@@ -188,7 +188,7 @@ val apply : Ir.value t -> Ir.value t list -> Ir.tail_computation t
 val case :
   Ir.value t ->
   ?default:Ir.binder t * Ir.computation t ->
-  (string * Ir.binder t * Ir.computation t) list ->
+  (Label.t * Ir.binder t * Ir.computation t) list ->
   Ir.tail_computation t
 
 (*
