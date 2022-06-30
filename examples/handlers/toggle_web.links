@@ -21,9 +21,9 @@ sig runState : (Comp({Get:s ,Put:(s) {}-> () |e},  a  )) -> # Stateful computati
                 Comp({Get{_},Put{_}          |e}, (a,s))    # Stateless computation
 fun runState(m)(st)() client {
   var run = handle(m()) {
-    case Return(x)      -> fun(ret_st) { (x,ret_st) }
-    case Get(resume)    -> fun(get_st) { resume(get_st)(get_st) }
-    case Put(put_st,resume) -> fun(ignored_st)  { resume(())(put_st) }
+    case x      -> fun(ret_st) { (x,ret_st) }
+    case <Get => resume>    -> fun(get_st) { resume(get_st)(get_st) }
+    case <Put(put_st) => resume> -> fun(ignored_st)  { resume(())(put_st) }
   };
   run(st)
 }

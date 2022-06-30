@@ -36,8 +36,8 @@ fun randomPoints() {
 sig take : (Int, Comp(b, {Yield: (a) -> () |e})) {Yield{_} |e}~> [a]
 fun take(n, m) {
   handle(m())(n <- n, st <- []) {
-    case Return(_) -> st
-    case Yield(x, resume) ->
+    case _ -> st
+    case <Yield(x) => resume> ->
        if (n <= 0) st
        else resume((), n-1, x :: st)
   }
@@ -117,9 +117,9 @@ typename Step(a, e::Eff, r) =
 sig step : (Comp(b, {Await:a, Yield: (a) -> () |e})) {Await{q}, Yield{p} |e}~> Step(a, { Await{q}, Yield{p} |e}, b)
 fun step(f) {
   handle(f()) {
-    case Return(x)        -> Done(x)
-    case Yield(x, resume) -> Yielded(x, resume)
-    case Await(resume)    -> Awaits(resume)
+    case x        -> Done(x)
+    case <Yield(x) => resume> -> Yielded(x, resume)
+    case <Await => resume>    -> Awaits(resume)
   }
 }
 
@@ -144,24 +144,24 @@ mutual {
   sig copipe : (Consumer(a, { Yield{q} |e}, b), Producer(a, { Await{p} |e}, _)) {Abort:Zero, Await{p}, Yield{q} |e}~> b
   fun copipe(receiver, sender) {
     shallowhandle(sender()) {
-      case Return(_) -> abort()
-      case Yield(x, resume) -> pipe(fun() { resume(()) }, fun() { receiver(x) })
+      case _ -> abort()
+      case <Yield(x) -> resume> -> pipe(fun() { resume(()) }, fun() { receiver(x) })
     }
   }
 
   sig pipe : (Producer(a, { Await{p} |e}, _), Comp(b, {Abort:Zero, Await:a, Yield{q} |e})) {Abort:Zero, Await{p}, Yield{q} |e}~> b
   fun pipe(sender, receiver) {
     shallowhandle(receiver()) {
-      case Return(x) -> x
-      case Await(resume) -> copipe(resume, sender)
+      case x -> x
+      case <Await -> resume> -> copipe(resume, sender)
     }
   }
 }
 
 fun catch(m) {
   handle(m()) {
-    case Return(x) -> x
-    case Abort     -> error("Caught abort")
+    case x -> x
+    case <Abort> -> error("Caught abort")
   }
 }
 

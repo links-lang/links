@@ -5,9 +5,9 @@ sig evalState : (Comp({Get:s ,Put:(s) {}-> ()|e}, a)) -> # Stateful computation
 fun evalState(m)(st) client {
   var run =
     handle(m) {
-      case Return(x)      -> fun(_) { x }
-      case Get(resume)    -> fun(st) { resume(st)(st) }
-      case Put(st,resume) -> fun(s) { resume(())(st) }
+      case x      -> fun(_) { x }
+      case <Get => resume>     -> fun(st) { resume(st)(st) }
+      case <Put(st) => resume> -> fun(s) { resume(())(st) }
     };
   run(st)
 }

@@ -70,8 +70,8 @@ typename Step(a) = [|Val:a
 sig step : (Expr(a)) {Lam{_}, Var:(Var) -> Expr(a)}~> Step(a)
 fun step(f) {
   shallowhandle( f() ) {
-     case Return(x)    -> Val(x)
-     case Lam(x, body) -> Lam(x, fun() { body(()) })
+     case x    -> Val(x)
+     case <Lam(x) -> body> -> Lam(x, fun() { body(()) })
   }
 }
 
@@ -79,7 +79,7 @@ fun step(f) {
 sig subst : (Expr(a), Expr(a), Var) {Var: (Var) -> Expr(a), Lam: (Var) -> ()}~> a
 fun subst(m, v, x) {
   handle( m() ) {
-    case Var(y, resume) ->
+    case <Var(y) => resume> ->
       if (x == y) resume(v)
       else resume(do Var(y))
   }
@@ -104,8 +104,8 @@ fun app(m, n)() {
 sig catchAll : (Expr(a)) {}~> a
 fun catchAll(f) {
   handle( f() ) {
-    case Var(y, _) -> error("Unbound variable " ^^ y)
-    case Lam(_, _) -> error("Escaped Lam")
+    case <Var(y)> -> error("Unbound variable " ^^ y)
+    case <Lam(_)> -> error("Escaped Lam")
   }
 }
 

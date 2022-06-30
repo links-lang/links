@@ -134,8 +134,8 @@ fun easy(pl, n){
 sig moveHandler: (() {Move: (Player, Int) -> Int, Restart: Zero, hear:Cmd|e}~> a, (Player, Int) ~%~> Int) -> () {Move-, hear:Cmd, Restart: Zero|e}~> a
 fun moveHandler(f, s)(){
     handle(f()){
-        case Return(x) -> x
-        case Move(pl, n, resume) -> {
+        case x -> x
+        case <Move(pl, n) => resume> -> {
             switch (pl) {
                 case You ->
                     switch(recv()){
@@ -462,9 +462,9 @@ fun game(){
 sig runState : (() {Get:s, Set:(s) -> () |e}~> a, s) -> () {Get-, Set- |e}~> (a, s)
 fun runState(f, st0)(){
     handle(f())(st <- st0){
-        case Return(x) -> (x, st)
-        case Set(st1, resume) -> resume((), st1)
-        case Get(resume) -> resume(st, st)
+        case x -> (x, st)
+        case <Set(st1) => resume> -> resume((), st1)
+        case <Get => resume> -> resume(st, st)
     }
 }
 
@@ -510,8 +510,8 @@ mutual {
   sig restartHandler: (() ~%~> (Player, GameState)) ~%~> (Player, GameState)
   fun restartHandler(f){
       handle(f()){
-          case Return(x) -> x
-          case Restart(k) -> restart(self()); gameProcess()
+          case x -> x
+          case <Restart => k> -> restart(self()); gameProcess()
       }
   }
 }
