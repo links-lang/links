@@ -6,8 +6,8 @@ fun callF () {  do FEct  }
 sig handlerA : ( () ~A({ |b})~> c ) {FEct{_}|b}~> c
 fun handlerA (h) {
     handle (h()) {
-           case Return(x) -> x
-           case FEct(k)   -> k(true)
+           case x -> x
+           case <FEct => k> -> k(true)
     }
 }
 

@@ -31,7 +31,7 @@ struct
     | Nil
     | Cons     of t * t
     | Variant  of Name.t * t
-    | Effect   of Name.t * t list * t
+    | Operation of Name.t * t list * t
     | Negative of StringSet.t
     | Record   of t StringMap.t * t option
     | Constant of Constant.t
@@ -55,7 +55,7 @@ struct
     | SRecord
     | SConstant
     | SVariable
-    | SEffect
+    | SOperation
 
   type annotation_element =
     | Binder of binder
@@ -128,7 +128,7 @@ let rec desugar_pattern : Types.row -> Sugartypes.Pattern.with_pos -> Pattern.t 
         | Variant (name, Some p) ->
             let p, env = desugar_pattern p in
             Pattern.Variant (name, p), env
-        | Effect (name, ps, k) ->
+        | Operation (name, ps, k) ->
            let ps, env =
              List.fold_right
                (fun p (ps, env) ->
@@ -137,7 +137,7 @@ let rec desugar_pattern : Types.row -> Sugartypes.Pattern.with_pos -> Pattern.t 
                ps ([], empty)
            in
            let k, env' = desugar_pattern k in
-           Pattern.Effect (name, ps, k), env ++ env'
+           Pattern.Operation (name, ps, k), env ++ env'
         | Negative names -> Pattern.Negative (StringSet.from_list names), empty
         | Record (bs, p) ->
             let bs, env =
@@ -327,7 +327,7 @@ let let_pattern : raw_env -> Pattern.t -> value * Types.datatype -> computation 
               (lp t pattern value body)
         | Pattern.HasType (pat, t) ->
            lp t pat (Coerce (value, t)) body
-        | Pattern.Effect _ -> assert false (* This pattern cannot appear in a let expression *)
+        | Pattern.Operation _ -> assert false (* This pattern cannot appear in a let expression *)
     in
       lp value_type pat value body
 
@@ -342,7 +342,7 @@ let rec get_pattern_sort : Pattern.t -> Pattern.sort =
     | Any | Variable _ -> SVariable
     | As (_, pattern) -> get_pattern_sort pattern
     | HasType (pattern, _) -> get_pattern_sort pattern
-    | Effect _ -> SEffect
+    | Operation _ -> SOperation
 
 let get_clause_pattern_sort : clause -> Pattern.sort =
   function
@@ -525,7 +525,7 @@ let rec match_cases : var list -> clause list -> bound_computation -> bound_comp
                        match_record vars (arrange_record_clauses clauses) comp var
                    | SConstant ->
                       match_constant vars (arrange_constant_clauses clauses) comp var
-                   | SEffect -> assert false (* TODO FIXME have proper pattern matching compilation of effect patterns *)
+                   | SOperation -> assert false (* TODO FIXME have proper pattern matching compilation of effect patterns *)
               ) clausess def env
       | _, _ -> assert false
 
@@ -1008,11 +1008,11 @@ let compile_handle_cases
               (fun (ps, body) ->
                 let variant_pat =
                   match ps with
-                  | [Pattern.Effect (name, [], _)] ->
+                  | [Pattern.Operation (name, [], _)] ->
                      Pattern.Variant (name, Pattern.Any)
-                  | [Pattern.Effect (name, [p], _)] ->
+                  | [Pattern.Operation (name, [p], _)] ->
                      Pattern.Variant (name, p)
-                  | [Pattern.Effect (name, ps, _)] ->
+                  | [Pattern.Operation (name, ps, _)] ->
                      let packaged_args =
                        let fields =
                          List.mapi (fun i p -> (string_of_int (i+1), p)) ps
@@ -1049,7 +1049,7 @@ let compile_handle_cases
           in
           List.fold_left
             (fun acc -> function
-              | [Pattern.Effect (name, _, k)] ->
+              | [Pattern.Operation (name, _, k)] ->
                  upd name (gather_binders k) acc
               | _ -> assert false)
             StringMap.empty (List.map fst raw_effect_clauses)

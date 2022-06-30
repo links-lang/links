@@ -298,6 +298,7 @@ let parse_foreign_language pos lang =
     raise (ConcreteSyntaxError
              (pos, Printf.sprintf "Unrecognised foreign language '%s'." lang))
 
+let any = any_pat dp
 %}
 
 %token EOF
@@ -813,9 +814,9 @@ case:
 case_expression:
 | SWITCH LPAREN exp RPAREN LBRACE case* RBRACE                 { with_pos $loc (Switch ($3, $6, None)) }
 | RECEIVE LBRACE case* RBRACE                                  { with_pos $loc (Receive ($3, None)) }
-/* | SHALLOWHANDLE LPAREN exp RPAREN LBRACE case* RBRACE          { with_pos $loc (Handle (untyped_handler $3 $6 Shallow)) } */
+| SHALLOWHANDLE LPAREN exp RPAREN LBRACE handle_cases RBRACE   { with_pos $loc (Handle (untyped_handler $3 $6 Shallow)) }
 | HANDLE LPAREN exp RPAREN LBRACE handle_cases RBRACE          { with_pos $loc (Handle (untyped_handler $3 $6 Deep   )) }
-| HANDLE LPAREN exp RPAREN LPAREN handle_params RPAREN LBRACE case* RBRACE
+| HANDLE LPAREN exp RPAREN LPAREN handle_params RPAREN LBRACE handle_cases RBRACE
                                                                { with_pos $loc (Handle (untyped_handler ~parameters:$6 $3 $9 Deep)) }
 | RAISE                                                        { with_pos $loc (Raise) }
 | TRY exp AS pattern IN exp OTHERWISE exp                      { with_pos $loc (TryInOtherwise ($2, $4, $6, $8, None)) }
@@ -825,12 +826,12 @@ handle_params:
     separated_pair(pattern, LARROW, exp))                      { $1 }
 
 handle_cases:
-| handle_cases effect_case { [] (* TODO *) }
-| handle_cases case { [] (* TODO *) }
-| /* empty */ { [] }
+| effect_case handle_cases                                     { (fst $2, $1 :: snd $2) }
+| case handle_cases                                            { ($1 :: fst $2, snd $2) }
+| /* empty */                                                  { ([],[]) }
 
 effect_case:
-| CASE effect_pattern RARROW case_contents { () (* TODO *) }
+| CASE effect_pattern RARROW case_contents { $2, block ~ppos:$loc($4) $4 }
 
 iteration_expression:
 | FOR LPAREN perhaps_generators RPAREN
@@ -1313,15 +1314,15 @@ effect_pattern:
 | lt = OPERATOR resumable_operation_pattern gt = OPERATOR
     { if (lt <> "<") then raise (ConcreteSyntaxError (pos $loc(lt), ""))
       else if (gt <> ">") then raise (ConcreteSyntaxError (pos $loc(gt), ""))
-      else with_pos $loc $2 }
+      else $2 }
 
 resumable_operation_pattern:
 | operation_pattern FATRARROW pattern
-    { with_pos $loc (Pattern.Operation (fst $1, snd $1, (Deep, $3))) }
+    { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3)) }
 | operation_pattern RARROW pattern
-    { with_pos $loc (Pattern.Operation (fst $1, snd $1, (Shallow, $3))) }
+    { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3)) }
 | operation_pattern
-    { with_pos $loc (Pattern.Operation (fst $1, snd $1, (Deep, any))) }
+    { with_pos $loc (Pattern.Operation (fst $1, snd $1, any)) }
 
 operation_pattern:
 | CONSTRUCTOR { ($1, []) }

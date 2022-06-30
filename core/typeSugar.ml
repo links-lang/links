@@ -177,7 +177,7 @@ struct
     | Tuple ps -> List.for_all is_safe_pattern ps
     | HasType (p, _)
     | As (_, p) -> is_safe_pattern p
-    | Effect (_, ps, k) ->
+    | Operation (_, ps, k) ->
        List.for_all is_safe_pattern ps && is_safe_pattern k
   and is_pure_regex = function
       (* don't check whether it can fail; just check whether it
@@ -1928,7 +1928,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
               | As (_, p) | HasType (p, _) -> unwrap_at i p
               | Tuple ps ->
                   List.nth ps i
-              | Nil | Cons _ | List _ | Record _ | Variant _ | Negative _ | Effect _ -> assert false in
+              | Nil | Cons _ | List _ | Record _ | Variant _ | Negative _ | Operation _ -> assert false in
           let fields =
             StringMap.fold(* true if the row variable is dualised *)
 
@@ -1957,7 +1957,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
                         | None -> assert false
                         | Some p -> unwrap_at name p
                     end
-              | Nil | Cons _ | List _ | Tuple _ | Variant _ | Negative _ | Effect _ -> assert false in
+              | Nil | Cons _ | List _ | Tuple _ | Variant _ | Negative _ | Operation _ -> assert false in
           let fields =
             StringMap.fold
               (fun name ->
@@ -1983,7 +1983,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
               | Variant _ -> []
               | Negative names when List.mem name names -> []
               | Negative _ -> [ with_pos p.pos Pattern.Any ]
-              | Nil | Cons _ | List _ | Tuple _ | Record _ | Constant _ | Effect _ -> assert false in
+              | Nil | Cons _ | List _ | Tuple _ | Record _ | Constant _ | Operation _ -> assert false in
           let rec are_open : Pattern.with_pos list -> bool =
             let open Pattern in
             function
@@ -1991,7 +1991,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
               | {node = (Variable _ | Any | Negative _); _} :: _ -> true
               | {node = (As (_, p) | HasType (p, _)); _} :: ps -> are_open (p :: ps)
               | {node = (Variant _); _} :: ps -> are_open ps
-              | {node = (Nil | Cons _ | List _ | Tuple _ | Record _ | Constant _ | Effect _); _} :: _ -> assert false in
+              | {node = (Nil | Cons _ | List _ | Tuple _ | Record _ | Constant _ | Operation _); _} :: _ -> assert false in
           let fields =
             StringMap.fold
               (fun name field_spec env ->
@@ -2026,8 +2026,8 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
           let unwrap_at : string -> Pattern.with_pos -> Pattern.with_pos list = fun name p ->
             let open Pattern in
             match p.node with
-              | Effect (name', ps, _) when name=name' -> ps
-              | Effect _ -> []
+              | Operation (name', ps, _) when name=name' -> ps
+              | Operation _ -> []
               | Variable _ | Any | As _ | HasType _ | Negative _
               | Nil | Cons _ | List _ | Tuple _ | Record _ | Variant _ | Constant _ -> assert false in
           let fields =
@@ -2098,7 +2098,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
               | Cons (p1, p2) -> p1 :: unwrap p2
               | List ps -> ps
               | As (_, p) | HasType (p, _) -> unwrap p
-              | Variant _ | Negative _ | Record _ | Tuple _ | Effect _ -> assert false in
+              | Variant _ | Negative _ | Record _ | Tuple _ | Operation _ -> assert false in
           let pats = concat_map unwrap pats in
             Application (Types.list, [cpta pats t])
       | ForAll (qs, t) -> ForAll (qs, cpt pats t)
@@ -2196,7 +2196,7 @@ let check_for_duplicate_names : Position.t -> Pattern.with_pos list -> string li
           List.fold_right (fun p binderss -> gather binderss p) ps binderss
       | Variant (_, p) ->
          opt_app (fun p -> gather binderss p) binderss p
-      | Effect (_, ps, k) ->
+      | Operation (_, ps, k) ->
          let binderss' =
            List.fold_right (fun p binderss -> gather binderss p) ps binderss
          in
@@ -2234,7 +2234,7 @@ let rec pattern_env : Pattern.with_pos -> Types.datatype Env.t =
     | HasType (p,_) -> pattern_env p
     | Variant (_, Some p) -> pattern_env p
     | Variant (_, None) -> Env.empty
-    | Effect (_, ps, k) ->
+    | Operation (_, ps, k) ->
       let env = List.fold_right (pattern_env ->- Env.extend) ps Env.empty in
       Env.extend env (pattern_env k)
     | Negative _ -> Env.empty
@@ -2325,7 +2325,7 @@ let type_pattern ?(linear_vars=true) closed
         let p = tp p in
         let vtype typ = Types.Variant (make_singleton_row (name, Present (typ p))) in
         Pattern.Variant (name, Some (erase p)), (vtype ot, vtype it)
-      | Pattern.Effect (name, ps, k) ->
+      | Pattern.Operation (name, ps, k) ->
          (* Auxiliary machinery for typing effect patterns *)
          let rec type_resumption_pat (kpat : Pattern.with_pos) : Pattern.with_pos * (Types.datatype * Types.datatype) =
            let fresh_resumption_type () =
@@ -2374,7 +2374,7 @@ let type_pattern ?(linear_vars=true) closed
            in
            Types.Effect (make_singleton_row (name, Present t))
          in
-         Pattern.Effect (name, List.map erase ps, erase k), (eff ot, eff it)
+         Pattern.Operation (name, List.map erase ps, erase k), (eff ot, eff it)
       | Negative names ->
         let row_var = Types.fresh_row_variable (lin_any, res_any) in
 
@@ -4030,16 +4030,16 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                      | { node = Variant (opname, Some pat'); _ } ->
                         begin match pat'.node with
                         | Tuple [] ->
-                           with_dummy_pos (Effect (opname, [], with_dummy_pos Pattern.Any))
+                           with_dummy_pos (Operation (opname, [], with_dummy_pos Pattern.Any))
                         | Tuple ps ->
                            let kpat, pats = pop_last ps in
-                           with_dummy_pos (Effect (opname, pats, kpat))
-                        | _ -> with_pos pos (Effect (opname, [], pat'))
+                           with_dummy_pos (Operation (opname, pats, kpat))
+                        | _ -> with_pos pos (Operation (opname, [], pat'))
                         end
                      | { node = Variant (opname, None); pos } ->
-                        with_pos pos (Effect (opname, [], with_dummy_pos Pattern.Any))
+                        with_pos pos (Operation (opname, [], with_dummy_pos Pattern.Any))
                      (* already compiled to an effect *)
-                     | { node = Effect _; pos = _ } ->
+                     | { node = Operation _; pos = _ } ->
                         pat
                      | { pos; _ } -> Gripers.die pos "Improper pattern matching" in
                    let pat = tpo pat in
@@ -4055,7 +4055,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                    let (pat, env, effrow) = pat in
                    let effname, kpat =
                      match pat.node with
-                     | Pattern.Effect (name, _, kpat) -> name, kpat
+                     | Pattern.Operation (name, _, kpat) -> name, kpat
                      | _ -> assert false
                    in
                    let pat, kpat =

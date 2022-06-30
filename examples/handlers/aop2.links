@@ -7,9 +7,9 @@ sig runState :
   (s) -> Comp ({Get{_}, Put{_}         |e}, (a, s))
 fun runState(m)(s)() {
   (handle(m()) {
-     case Return(x) -> fun (s) {(x, s)}
-     case Get(k)    -> fun (s) {k(s)(s)}
-     case Put(s, k) -> fun (_) {k(())(s)}
+     case x -> fun (s) {(x, s)}
+     case <Get => k>    -> fun (s) {k(s)(s)}
+     case <Put(s) => k> -> fun (_) {k(())(s)}
    })(s)
 }
 
@@ -18,9 +18,9 @@ sig evalState :
   (s) -> Comp ({Get{_}, Put{_}         |e}, a)
 fun evalState(m)(s)() {
   (handle(m()) {
-     case Return(x) -> fun (s) {x}
-     case Get(k)    -> fun (s) {k(s)(s)}
-     case Put(s, k) -> fun (_) {k(())(s)}
+     case x -> fun (s) {x}
+     case <Get => k>    -> fun (s) {k(s)(s)}
+     case <Put(s) => k> -> fun (_) {k(())(s)}
    })(s)
 }
 
@@ -29,8 +29,8 @@ sig runStringWriter :
   (String) -> Comp ({Tell{_}              |e}, (a, String))
 fun runStringWriter(m)(s)() {
   (handle(m()) {
-     case Return(x) -> fun (s) {(x, s)}
-     case Tell(t,k) -> fun (s) {k(())(s ^^ t)}
+     case x -> fun (s) {(x, s)}
+     case <Tell(t) => k> -> fun (s) {k(())(s ^^ t)}
    })(s)
 }
 
@@ -38,8 +38,8 @@ sig printer :
   (Comp ({Tell:(String) {}-> ()}, a)) {}~> a
 fun printer(m) {
   handle(m()) {
-     case Return(x) -> x
-     case Tell(s,k) -> println(s); k(())
+     case x -> x
+     case <Tell(s) => k> -> println(s); k(())
   }
 }
 
@@ -146,8 +146,8 @@ sig force :
   Comp({Suspend{_}|e}, a)
 fun force(m)() {
   handle(m()) {
-    case Return(x)        -> x
-    case Suspend(e, m, k) -> k (force(m)())
+    case x        -> x
+    case <Suspend(e, m) => k> -> k (force(m)())
   }
 }
 
@@ -155,8 +155,8 @@ sig logger :  (SComp ({Tell:(String) {}-> ()|e}, Int)) ->
   (String) -> (SComp ({Tell:(String) {}-> ()|e}, Int))
 fun logger(m)(name)() {
   (handle(m()) {
-     case Return(x)        -> fun (_) {x}
-     case Suspend(e, m, k) ->
+     case x        -> fun (_) {x}
+     case <Suspend(e, m) => k> ->
        fun (name) {
          tell("Entering " ^^ name ^^ " with " ^^ showExpr(e) ^^ "\n");
          var y = suspend(e)(logger(m)(name));
@@ -170,8 +170,8 @@ sig dump : (SComp ({Get:Env, Tell:(String) {}-> ()|e}, Int)) ->
            (SComp ({Get:Env, Tell:(String) {}-> ()|e}, Int))
 fun dump(m)() {
   handle(m()) {
-     case Return(x)        -> x
-     case Suspend(e, m, k) ->
+     case x        -> x
+     case <Suspend(e, m) => k> ->
        tell(showEnv(get()));
        k(suspend(e)(dump(m)))
   }

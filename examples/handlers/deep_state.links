@@ -7,7 +7,7 @@ typename Unit = [|Unit|];
 # The run handler forces evaluation of a computation
 fun run(m) {
   handle(m()) {
-    case Return(x) -> x
+    case x -> x
   }
 }
 
@@ -28,20 +28,20 @@ sig evalState : (s) ->
                  Comp({Get{_},Put{_}         |e}, a)
 fun evalState(st)(m)() {
   (handle(m()) {
-    case Return(x) -> fun(_)  { x }
-    case Get(k)    -> fun(st) { k(st)(st) }
-    case Put(p,k)  -> fun(_)  { k(())(p) }
+    case x -> fun(_)  { x }
+    case <Get => k>    -> fun(st) { k(st)(st) }
+    case <Put(p) => k>  -> fun(_)  { k(())(p) }
   })(st)
 }
 
 fun logState(m)() {
   handle(m()) {
-    case Get(k)    -> var v = get();
+    case <Get => k>    -> var v = get();
                       k(v)
-    case Put(p,k)  -> logVal(p);
+    case <Put(p) => k>  -> logVal(p);
                       var v = put(p);
                       k(v)
-    case Return(x) -> x
+    case x -> x
   }
 }
 
@@ -50,8 +50,8 @@ sig logPrinter : (Comp({Log:(Int) {}-> () |e}, a)) ->
                   Comp({Log{_}            |e}, a)
 fun logPrinter(m)() {
   handle(m()) {
-    case Return(x) -> x
-    case Log(p,k)  -> println(intToString(p));
+    case x -> x
+    case <Log(p) => k>  -> println(intToString(p));
                       k(())
   }
 }
@@ -62,8 +62,8 @@ sig logAccumulator : ([a]) ->
                       Comp({Log{_}          |e}, (b,[a]))
 fun logAccumulator(ps)(m)() {
   (handle(m()) {
-    case Return(x) -> fun(ps) { (x,ps) }
-    case Log(p,k)  -> fun(ps) { k(())(p :: ps) }
+    case x -> fun(ps) { (x,ps) }
+    case <Log(p) => k>  -> fun(ps) { k(())(p :: ps) }
   })(ps)
 }
 

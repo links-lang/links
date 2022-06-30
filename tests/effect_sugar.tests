@@ -34,23 +34,23 @@ stdout : fun : (a, S (a,{ |b})) ~b~> S (a,{ |b})
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=final_arrow,show_implicit
 
 Sugar off [1]
-sig f : (() {E:()|e}~> ()) -> () {E{_}|e}~> () fun f(g) { fun() { handle(g()) { case E(res) -> res(()) }}} f
+sig f : (() {E:()|e}~> ()) -> () {E{_}|e}~> () fun f(g) { fun() { handle(g()) { case <E => res> -> res(()) }}} f
 stdout : fun : (() {E:() {}-> ()|a}~> ()) -> () {E{_}|a}~> ()
 args : --enable-handlers --set=effect_sugar=false
 
 Sugar off [2], implicit not unifying, no propagation
-sig f : (() {E:()|_}~> ()) -> () { |_}~> () fun f(g) { fun() { handle(g()) { case E(res) -> res(()) }}} f
+sig f : (() {E:()|_}~> ()) -> () { |_}~> () fun f(g) { fun() { handle(g()) { case <E => res> -> res(()) }}} f
 stderr : @.
 exit : 1
 args : --enable-handlers --set=effect_sugar=false
 
 Printer: none [1], signature with explicit shared effect
-sig f : (() {E:()|e}~> ()) -> () {E{_}|e}~> () fun f(g) { fun() { handle(g()) { case E(res) -> res(()) }}} f
+sig f : (() {E:()|e}~> ()) -> () {E{_}|e}~> () fun f(g) { fun() { handle(g()) { case <E => res> -> res(()) }}} f
 stdout : fun : (() {E:() {}-> ()|_}~> ()) -_-> () {E{_}|_}~> ()
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=none
 
 Printer: none [2], signature with implicit shared effect
-sig f : (() {E:()|_}~> ()) -> () {E{_}|_}~> () fun f(g) { fun() { handle(g()) { case E(res) -> res(()) }}} f
+sig f : (() {E:()|_}~> ()) -> () {E{_}|_}~> () fun f(g) { fun() { handle(g()) { case <E => res> -> res(()) }}} f
 stdout : fun : (() {E:() {}-> ()|_}~> ()) -_-> () {E{_}|_}~> ()
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=none
 
@@ -96,17 +96,17 @@ exit : 1
 args : --enable-handlers --set=prelude=tests/empty_prelude.links --set=effect_sugar=true --set=effect_sugar_policy=none
 
 Printer: presence_omit [1]: signature with implicit shared effect, handler
-sig f : (() {E:()|_}~> ()) -> () {E{_}|_}~> () fun f(g) { fun() { handle(g()) { case E(res) -> res(()) }}} f
+sig f : (() {E:()|_}~> ()) -> () {E{_}|_}~> () fun f(g) { fun() { handle(g()) { case <E => res> -> res(()) }}} f
 stdout : fun : (() {E:() {}-> ()|_}~> ()) -_-> () ~> ()
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=presence_omit
 
 Printer: presence_omit [2]: signature with implicit shared effect, handler, propagation
-sig f : (() {E:()|_}~> ()) -> () { |_}~> () fun f(g) { fun() { handle(g()) { case E(res) -> res(()) }}} f
+sig f : (() {E:()|_}~> ()) -> () { |_}~> () fun f(g) { fun() { handle(g()) { case <E => res> -> res(()) }}} f
 stdout : fun : (() {E:() {}-> ()|_}~> ()) -_-> () ~> ()
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=presence_omit
 
 Printer: presence_omit [3]: multiple shared effect rows
-sig f : (() {E:() {}-> ()|e}~> (), () {F:() {}-> ()|f}~> ()) -> (() {E{_}|e}~> (), () {F{_}|f}~> ()) fun f(p,q) { var p = fun() { handle(p()) { case Return(v) -> v case E(res) -> res(()) }}; var q = fun() { handle(q()) { case Return(v) -> v case F(res) -> res(()) }}; (p,q) } f
+sig f : (() {E:() {}-> ()|e}~> (), () {F:() {}-> ()|f}~> ()) -> (() {E{_}|e}~> (), () {F{_}|f}~> ()) fun f(p,q) { var p = fun() { handle(p()) { case v -> v case <E => res> -> res(()) }}; var q = fun() { handle(q()) { case v -> v case <F => res> -> res(()) }}; (p,q) } f
 stdout : fun : (() {E:() {}-> ()|a}~> (), () {F:() {}-> ()|b}~> ()) -> (() ~a~> (), () ~b~> ())
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=presence_omit
 
@@ -126,17 +126,17 @@ stdout : fun : T (_)
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=alias_omit
 
 Printer: presence_omit, alias_omit [1], handler (TODO fix #1041 and make effect vars implicit in Comps)
-sig f : (Comp ((), {E:()|e})) -> Comp ((), {E{_}|e}) fun f(x)() { handle(x()) { case Return() -> () case E(res) -> () }} f
+sig f : (Comp ((), {E:()|e})) -> Comp ((), {E{_}|e}) fun f(x)() { handle(x()) { case () -> () case <E => res> -> () }} f
 stdout : fun : (Comp ((),{E:() {}-> ()|_})) -_-> Comp (())
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=presence_omit,alias_omit,final_arrow
 
 Printer: presence_omit, alias_omit, chf [1], handler (TODO fix #1041 and make effect vars implicit in Comps)
-sig f : (Comp ((), {E:()|e})) -> Comp ((), {E{_}|e}) fun f(x)() { handle(x()) { case Return() -> () case E(res) -> () }} f
+sig f : (Comp ((), {E:()|e})) -> Comp ((), {E{_}|e}) fun f(x)() { handle(x()) { case () -> () case <E => res> -> () }} f
 stdout : fun : (Comp ((),{E:() {}-> ()|_})) -> Comp (())
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=presence_omit,alias_omit,chf
 
 Printer: pres, alias, chf, contract [1], handler (TODO fix #1041 and make effect vars implicit in Comps)
-sig f : (Comp ((), {E:()|e})) -> Comp ((), {E{_}|e}) fun f(x)() { handle(x()) { case Return() -> () case E(res) -> () }} f
+sig f : (Comp ((), {E:()|e})) -> Comp ((), {E{_}|e}) fun f(x)() { handle(x()) { case () -> () case <E => res> -> () }} f
 stdout : fun : (Comp ((),{E:()|_})) -> Comp (())
 args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=pres,alias,chf,contract
 

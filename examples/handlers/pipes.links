@@ -60,8 +60,8 @@ fun forward() { yield(await()) }
 
 fun collect(m) {
   handle(m()) {
-    case Return(_) -> []
-    case Yield(x,_) -> [x]
+    case _ -> []
+    case <Yield(x)> -> [x]
   }
 }
 
@@ -100,8 +100,8 @@ module Deep {
     sig pipe : Pipe({ |e}, s, a)
     fun pipe(cons) {
       handle(cons()) {
-        case Return(x) -> fun(_) { x }
-        case Await(resume) ->
+        case x -> fun(_) { x }
+        case <Await => resume> ->
           fun(prod : Producer({ Await{b}, Yield{c} |e}, s, a)) {
             prod()(resume)
           }
@@ -111,8 +111,8 @@ module Deep {
     sig copipe : Copipe({ |e}, s, a)
     fun copipe(prod) {
       handle(prod()) {
-        case Return(x) -> fun(_) { x }
-        case Yield(s, resume) ->
+        case x -> fun(_) { x }
+        case <Yield(s) => resume> ->
           fun(cons : Consumer({ Await{b}, Yield{c} |e}, s, a)) {
             cons(s)(fun() { resume(()) })
           }
@@ -131,8 +131,8 @@ module Deep {
     fun pipe(cons) {
       fun h(cons) {
         shallowhandle(cons()) {
-          case Return(x) -> fun(_) { x }
-          case Await(resume) ->
+          case x -> fun(_) { x }
+          case <Await -> resume> ->
             var resume0 = fun(x) {
               h(fun() { resume(x) })
             };
@@ -148,8 +148,8 @@ module Deep {
     fun copipe(prod) {
       fun h(prod) {
         shallowhandle(prod()) {
-          case Return(x) -> fun(_) { x }
-          case Yield(s, resume) ->
+          case x -> fun(_) { x }
+          case <Yield(s) -> resume> ->
             var resume0 = fun(x) {
               h(fun() { resume(x) })
             };
@@ -179,7 +179,7 @@ module Shallow {
                   Comp({ Await:s, Yield{c}          |e}, a)) {Await{b}, Yield{c} |e}~> a
       fun pipe(prod, cons) {
         shallowhandle(cons()) {
-          case Await(resume) -> copipe(resume, prod)
+          case <Await -> resume> -> copipe(resume, prod)
         }
       }
 
@@ -187,7 +187,7 @@ module Shallow {
                     Comp({ Await{b}, Yield: (s) -> () |e}, a)) {Await{b}, Yield{c} |e}~> a
       fun copipe(cons, prod) {
         shallowhandle(prod()) {
-          case Yield(s, resume) -> pipe(fun() { resume(()) }, fun() { cons(s) })
+          case <Yield(s) -> resume> -> pipe(fun() { resume(()) }, fun() { cons(s) })
         }
       }
     }
@@ -199,8 +199,8 @@ module Shallow {
                   Comp({ Await:s, Yield{c}          |e}, a)) {Await{b}, Yield{c} |e}~> a
       fun pipe(prod, cons) {
         var (_,g) = handle(cons()) {
-          case Return(x) -> (fun() { x }, fun() { x })
-          case Await(resume) ->
+          case x -> (fun() { x }, fun() { x })
+          case <Await => resume> ->
             var resume0 = fun(x) {
               var (f,_) = resume(x);
               f()
@@ -214,8 +214,8 @@ module Shallow {
                     Comp({ Await{b}, Yield: (s) -> () |e}, a)) {Await{b}, Yield{c} |e}~> a
       fun copipe(cons, prod) {
         var (_,g) = handle(prod()) {
-          case Return(x) -> (fun() { x }, fun() { x })
-          case Yield(s, resume) ->
+          case x -> (fun() { x }, fun() { x })
+          case <Yield(s) => resume> ->
             var resume0 = fun(x) {
             var (f,_) = resume(x);
             f()

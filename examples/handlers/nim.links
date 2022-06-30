@@ -82,7 +82,7 @@ fun ns(n,k) { k(1) }
 sig naive : (Comp(a, {Move:(Player,Int) -> Int})) {Move{_}}~> a
 fun naive(m) {
   handle(m()) {
-   case Move(_,n,k) -> ns(n,k)
+   case <Move(_,n) => k> -> ns(n,k)
   }
 }
 
@@ -109,7 +109,7 @@ fun ps(n,k) {
 sig perfect : (Comp(a,{Move:(Player,Int) {}-> Int})) {Move{_}}~> a
 fun perfect(m) {
   handle(m()) {
-    case Move(_,n,k) -> ps(n,k)
+    case <Move(_,n) => k> -> ps(n,k)
   }
 }
 
@@ -148,9 +148,9 @@ fun bfs(player,n,k) {
 sig pvb : (Comp(Player,{Move:(Player,Int) {}-> Int})) {}~> Player
 fun pvb(m) {
   handle(m()) {
-    case Move(Alice,n,k) -> ps(n,k)
-    case Move(Bob,n,k)   -> bfs(Bob,n,k)
-    case Return(x)       -> x
+    case <Move(Alice,n) => k> -> ps(n,k)
+    case <Move(Bob,n) => k>   -> bfs(Bob,n,k)
+    case x       -> x
   }
 }
 
@@ -184,8 +184,8 @@ fun reifyMove(player, n, k) {
 sig gametree : (Comp(Player, {Move:(Player, Int) {}-> Int})) {}~> GameTree
 fun gametree(m) {
   handle(m()) {
-    case Return(x)          -> Winner(x)
-    case Move(player, n, k) -> reifyMove(player, n, k)
+    case x          -> Winner(x)
+    case <Move(player, n) => k> -> reifyMove(player, n, k)
   }
 }
 
@@ -208,12 +208,12 @@ sig bobStrat : (Comp(Player  ,{Move:(Player, Int) {}-> Int|e})) ->
                 Comp(GameTree,{Move:(Player, Int) {}-> Int|e})
 fun bobStrat(m)() {
   handle(m()) {
-    case Return(x)          -> Winner(x)
-    case Move(Bob, n, k)    ->
+    case x          -> Winner(x)
+    case <Move(Bob,n) => k>    ->
       var take = move(Bob,n); # Explicit forwarding of move
       var tree = k(take);
       Take(Bob, [(take, tree)])
-    case Move(player, n, k) -> reifyMove(player, n, k)
+    case <Move(player, n) => k> -> reifyMove(player, n, k)
   }
 }
 
@@ -269,7 +269,7 @@ sig check : (Comp(a,{Move:(Player,Int) {}-> Int, Cheat:(Player,Int) {}-> Zero|e}
              Comp(a,{Move:(Player,Int) {}-> Int, Cheat:(Player,Int) {}-> Zero|e})
 fun check(m)() {
   handle(m()) {
-    case Move(player, n, k) -> checkMove(player, n, k)
+    case <Move(player, n) => k> -> checkMove(player, n, k)
   }
 }
 
@@ -285,8 +285,8 @@ sig aliceCheats : (Comp(a, {Move:(Player,Int) {}-> Int|e})) ->
                    Comp(a, {Move:(Player,Int) {}-> Int|e})
 fun aliceCheats(m)() {
   handle(m()) {
-    case Move(Alice,n,k) -> cheater(n,k)
-    case Move(Bob,n,k)   -> k(move(Bob,n))     # Explicit forwarding is required if we insist on using type signatures
+    case <Move(Alice,n) => k> -> cheater(n,k)
+    case <Move(Bob,n) => k>   -> k(move(Bob,n))     # Explicit forwarding is required if we insist on using type signatures
   }
 }
 
@@ -294,8 +294,8 @@ sig aliceCheats2 : (Comp(a, {Move:(Player,Int) {}-> Int|e})) ->
                     Comp(a, {Move:(Player,Int) {}-> Int|e})
 fun aliceCheats2(m)() {
   handle(m()) {
-    case Move(Alice,n,k) -> cheater2(n,k)
-    case Move(Bob,n,k)   -> k(move(Bob,n))     # Explicit forwarding is required if we insist on using type signatures
+    case <Move(Alice,n) => k> -> cheater2(n,k)
+    case <Move(Bob,n) => k>   -> k(move(Bob,n))     # Explicit forwarding is required if we insist on using type signatures
   }
 }
 
@@ -308,7 +308,7 @@ sig cheatReport : (Comp(a, {Cheat:(Player,Int) {}-> Zero|e})) ->
                    Comp(a, {Cheat{_}|e})
 fun cheatReport(m)() {
   handle(m()) {
-    case Cheat(p,n,_) -> error("Cheater " ^^ showPlayer(p) ^^ " took " ^^ intToString(n) ^^ " sticks!")
+    case <Cheat(p,n)> -> error("Cheater " ^^ showPlayer(p) ^^ " took " ^^ intToString(n) ^^ " sticks!")
   }
 }
 
@@ -317,8 +317,8 @@ sig cheatLose : (Comp(Player, {Cheat:(Player,Int) {}-> Zero|e})) ->
                  Comp(Player, {Cheat{_}|e})
 fun cheatLose(m)() {
   handle(m()) {
-    case Cheat(Alice,_,_) -> Bob
-    case Cheat(Bob,_,_)   -> Alice
+    case <Cheat(Alice,_)> -> Bob
+    case <Cheat(Bob,_)>   -> Alice
   }
 }
 
@@ -363,7 +363,7 @@ sig mixed : (Comp(a, {Move:(Player,Int) {}-> Int,Rand:Float|e})) ->
              Comp(a, {Move{_},Rand:Float|e}                   )
 fun mixed(m)() {
   handle(m()) {
-    case Move(p,n,k) -> ms(n,k)
+    case <Move(p,n) => k> -> ms(n,k)
   }
 }
 
@@ -372,7 +372,7 @@ sig randomFloat : (Comp(a, {Rand:Float|e})) ->
                    Comp(a, {Rand{_}|e}   )
 fun randomFloat(m)() {
   handle(m()) {
-    case Rand(k)   -> k(random())
+    case <Rand => k>   -> k(random())
   }
 }
 
@@ -381,7 +381,7 @@ sig notReallyRandom : (Comp(a, {Rand:Float|e})) ->
                        Comp(a, {Rand{_}   |e})
 fun notReallyRandom(m)() {
   handle(m()) {
-    case Rand(k)   -> k(3.0)
+    case <Rand => k>   -> k(3.0)
   }
 }
 
@@ -396,8 +396,8 @@ sig strategy : ( (Int, (Int) -> a) {Move{p}|e}~> a
             -> (Comp(a, {Move:(Player, Int) -> Int|e})) {Move{p}|e}~> a
 fun strategy(s1, s2)(m) {
   handle(m ()) {
-    case Move(Alice,n,k) -> s1(n,k)
-    case Move(Bob  ,n,k) -> s2(n,k)
+    case <Move(Alice,n) => k> -> s1(n,k)
+    case <Move(Bob,n) => k> -> s2(n,k)
   }
 }
 
@@ -432,9 +432,9 @@ sig state : (Comp(a, {Get:s,Put:(s) {}-> ()|e})) ->
              Comp(a, {Get{_},Put{_}        |e})
 fun state(m)(s)() {
   var run = handle(m()) {
-     case Get(k)    -> fun(s) { k(s)(s) }
-     case Put(p,k)  -> fun(_) { k(())(p) }
-     case Return(x) -> fun(_) { x }
+     case <Get => k>    -> fun(s) { k(s)(s) }
+     case <Put(p) => k> -> fun(_) { k(())(p) }
+     case x -> fun(_) { x }
   };
   run(s)
 }
@@ -455,7 +455,7 @@ fun scorerecorder(m)() {
   }
 
   handle(m()) {
-    case Return(x) ->
+    case x ->
       var s = updateScore(x, get()); # Update the game state
       put(s)                         # Commit the change
   }
@@ -501,7 +501,7 @@ fun boardPrinter(m)() {
   }
 
   handle(m()) {
-   case Return(x) -> printBoard(get())
+   case x -> printBoard(get())
   }
 }
 
