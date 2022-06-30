@@ -3933,13 +3933,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               then raise (Errors.disabled_extension
                             ~pos ~setting:("enable_handlers", true)
                             ~flag:"--enable-handlers" "Handlers"));
-           let rec pop_last = function
-             | [] -> assert false
-             | [x] -> x, []
-             | x' :: xs ->
-                let (x, xs') = pop_last xs in
-                x, x' :: xs'
-           in
+           (* let rec pop_last = function *)
+           (*   | [] -> assert false *)
+           (*   | [x] -> x, [] *)
+           (*   | x' :: xs -> *)
+           (*      let (x, xs') = pop_last xs in *)
+           (*      x, x' :: xs' *)
+           (* in *)
            (* allow_wild adds wild : () to the given effect row *)
            let allow_wild : Types.row -> Types.row
              = fun row ->
@@ -4024,23 +4024,25 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
              let eff_cases =
                List.fold_right
                  (fun (pat, body) cases ->
-                   let pat =
+                   let pat, pat_topt =
                      let open Pattern in
                      match pat with
-                     | { node = Variant (opname, Some pat'); _ } ->
-                        begin match pat'.node with
-                        | Tuple [] ->
-                           with_dummy_pos (Operation (opname, [], with_dummy_pos Pattern.Any))
-                        | Tuple ps ->
-                           let kpat, pats = pop_last ps in
-                           with_dummy_pos (Operation (opname, pats, kpat))
-                        | _ -> with_pos pos (Operation (opname, [], pat'))
-                        end
-                     | { node = Variant (opname, None); pos } ->
-                        with_pos pos (Operation (opname, [], with_dummy_pos Pattern.Any))
+                     (* | { node = Variant (opname, Some pat'); _ } -> *)
+                     (*    begin match pat'.node with *)
+                     (*    | Tuple [] -> *)
+                     (*       with_dummy_pos (Operation (opname, [], with_dummy_pos Pattern.Any)) *)
+                     (*    | Tuple ps -> *)
+                     (*       let kpat, pats = pop_last ps in *)
+                     (*       with_dummy_pos (Operation (opname, pats, kpat)) *)
+                     (*    | _ -> with_pos pos (Operation (opname, [], pat')) *)
+                     (*    end *)
+                     (* | { node = Variant (opname, None); pos } -> *)
+                     (*    with_pos pos (Operation (opname, [], with_dummy_pos Pattern.Any)) *)
                      (* already compiled to an effect *)
                      | { node = Operation _; pos = _ } ->
-                        pat
+                        pat, None
+                     | { node = HasType (pat, dt); pos = _ } ->
+                        pat, Some dt
                      | { pos; _ } -> Gripers.die pos "Improper pattern matching" in
                    let pat = tpo pat in
                    unify ~handle:Gripers.handle_effect_patterns

@@ -1311,6 +1311,10 @@ pattern:
 | typed_pattern COLON primary_datatype_pos                     { with_pos $loc (Pattern.HasType ($1, datatype $3)) }
 
 effect_pattern:
+| typed_effect_pattern                                         { $1 }
+| typed_effect_pattern COLON primary_datatype_pos              { with_pos $loc (Pattern.HasType ($1, datatype $3)) }
+
+typed_effect_pattern:
 | lt = OPERATOR resumable_operation_pattern gt = OPERATOR
     { if (lt <> "<") then raise (ConcreteSyntaxError (pos $loc(lt), ""))
       else if (gt <> ">") then raise (ConcreteSyntaxError (pos $loc(gt), ""))
