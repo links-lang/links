@@ -813,7 +813,7 @@ case:
 case_expression:
 | SWITCH LPAREN exp RPAREN LBRACE case* RBRACE                 { with_pos $loc (Switch ($3, $6, None)) }
 | RECEIVE LBRACE case* RBRACE                                  { with_pos $loc (Receive ($3, None)) }
-| SHALLOWHANDLE LPAREN exp RPAREN LBRACE case* RBRACE          { with_pos $loc (Handle (untyped_handler $3 $6 Shallow)) }
+/* | SHALLOWHANDLE LPAREN exp RPAREN LBRACE case* RBRACE          { with_pos $loc (Handle (untyped_handler $3 $6 Shallow)) } */
 | HANDLE LPAREN exp RPAREN LBRACE handle_cases RBRACE          { with_pos $loc (Handle (untyped_handler $3 $6 Deep   )) }
 | HANDLE LPAREN exp RPAREN LPAREN handle_params RPAREN LBRACE case* RBRACE
                                                                { with_pos $loc (Handle (untyped_handler ~parameters:$6 $3 $9 Deep)) }
@@ -1310,32 +1310,18 @@ pattern:
 | typed_pattern COLON primary_datatype_pos                     { with_pos $loc (Pattern.HasType ($1, datatype $3)) }
 
 effect_pattern:
-| lt = OPERATOR operation_patterns gt = OPERATOR
+| lt = OPERATOR resumable_operation_pattern gt = OPERATOR
     { if (lt <> "<") then raise (ConcreteSyntaxError (pos $loc(lt), ""))
       else if (gt <> ">") then raise (ConcreteSyntaxError (pos $loc(gt), ""))
-      else let (pats, kpat) = $2 in with_pos $loc (Pattern.Effect2 (pats, kpat)) }
+      else with_pos $loc $2 }
 
-operation_patterns:
-| unary_operation_pattern
-    { $1 }
-| LPAREN shallow_operation_pattern COMMA separated_nonempty_list(COMMA, shallow_operation_pattern) RPAREN FATRARROW pattern
-    { $2 :: $4, Some $7 }
-| shallow_operation_pattern COMMA separated_nonempty_list(COMMA, shallow_operation_pattern)
-    { $1 :: $3, None }
-
-unary_operation_pattern:
-| shallow_operation_pattern
-    { [$1], None }
-| LPAREN shallow_operation_pattern RPAREN FATRARROW pattern
-    { [$2], Some $5 }
+resumable_operation_pattern:
 | operation_pattern FATRARROW pattern
-    { [with_pos $loc (Pattern.Operation (fst $1, snd $1, None))], Some $3 }
-
-shallow_operation_pattern:
+    { with_pos $loc (Pattern.Operation (fst $1, snd $1, (Deep, $3))) }
 | operation_pattern RARROW pattern
-    { with_pos $loc (Pattern.Operation (fst $1, snd $1, Some $3)) }
+    { with_pos $loc (Pattern.Operation (fst $1, snd $1, (Shallow, $3))) }
 | operation_pattern
-    { with_pos $loc (Pattern.Operation (fst $1, snd $1, None)) }
+    { with_pos $loc (Pattern.Operation (fst $1, snd $1, (Deep, any))) }
 
 operation_pattern:
 | CONSTRUCTOR { ($1, []) }
