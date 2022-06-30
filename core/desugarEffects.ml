@@ -380,7 +380,7 @@ let cleanup_effects tycon_env =
              | name, Present ({ node ; pos } as node') when not (TypeUtils.is_builtin_effect name) ->
                  (* Elaborates `Op : a' to `Op : () {}-> a' *)
                  let node = match node with
-                 | Forall (qs, node') -> Forall (qs, WithPos.make ~pos (Function ([], ([], Closed), node')))
+                 (* | Forall (qs, node') -> Forall (qs, WithPos.make ~pos (Function ([], ([], Closed), node'))) *)
                  | _ -> Function ([], ([], Closed), node')
                  in
                  ( name,

@@ -31,8 +31,8 @@ sig prompt : (Comp(a, {Fail:(String) {}-> Int,Input:(String) {}-> Int |e})) ->
               Comp(a, {Fail:(String) {}-> Int,Input{_}                |e})
 fun prompt(m)() {
   handle(m()) {
-    case Return(x)   -> x
-    case Input(n,k)  -> k(parseInt(n))
+    case x   -> x
+    case <Input(n) => k>  -> k(parseInt(n))
   }
 }
 
@@ -40,15 +40,15 @@ fun prompt(m)() {
 sig catchFail : (Comp(a, {Fail:(String) {}-> a |e})) -> Comp(a, {Fail{_} |e})
 fun catchFail(m)() {
   handle(m()) {
-    case Return(x) -> x
-    case Fail(s,_) -> error("Conversion failure: " ^^ s)
+    case x -> x
+    case <Fail(s)> -> error("Conversion failure: " ^^ s)
   }
 }
 
 sig printResult : (Comp(Int)) ~> ()
 fun printResult(m) {
   handle(m()) {
-    case Return(x) -> println("Sum is " ^^ intToString(x))
+    case x -> println("Sum is " ^^ intToString(x))
   }
 }
 
@@ -61,8 +61,8 @@ fun example1() {
 sig catchResume : (Comp(a, {Fail:(String) {}-> Int |e})) -> Comp(a, {Fail{_} |e})
 fun catchResume(m)() {
   handle(m()) {
-    case Return(x) -> x
-    case Fail(s,k) -> println("Conversion failure: " ^^ s); k(0)
+    case x -> x
+    case <Fail(s) => k> -> println("Conversion failure: " ^^ s); k(0)
   }
 }
 
@@ -80,7 +80,7 @@ fun sumUpSilently() {
 
 fun unitTest() {
   handle(prompt(sumUpSilently)()) {
-    case Fail(_,k) -> k(0)
-    case Return(x : Int) -> x
+    case <Fail(_) => k> -> k(0)
+    case (x : Int) -> x
   }
 }

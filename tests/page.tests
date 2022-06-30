@@ -9,6 +9,6 @@ args : --enable-handlers
 exit : 1
 
 Handled operation
-addRoute("/", fun(_) { handle({do Fail}) { case Fail -> page <#>{stringToXml("Caught")}</#> case Return(_) -> page <#>{stringToXml("Success")}</#> } })
+addRoute("/", fun(_) { handle({do Fail}) { case <Fail> -> page <#>{stringToXml("Caught")}</#> case _ -> page <#>{stringToXml("Success")}</#> } })
 stdout : () : ()
 args : --enable-handlers

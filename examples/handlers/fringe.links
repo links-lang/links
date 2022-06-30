@@ -34,8 +34,8 @@ typename Status(a) = mu r . [|Done:()
 sig step : (Comp((), { Yield:(a) {}-> () |_})) -> (()) { |_}~> Status(a)
 fun step(f)(()) {
   handle (f()) {
-    case Return(()) -> Done(())
-    case Yield(v,k) -> Yielded(v,k)
+    case () -> Done(())
+    case <Yield(v) => k> -> Yielded(v,k)
   }
 }
 
