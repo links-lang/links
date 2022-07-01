@@ -369,7 +369,12 @@ struct
          let (o, write') = o#typ write in
          let (o, needed') = o#typ needed in
          (o, Table (temporality, read', write', needed'))
-      | Lens _ -> assert false (* TODO FIXME *)
+      | Lens t ->
+         (* Lens types are substantially more complex than allowed for by a
+            visitor. If this functionality is needed, then the visitor can
+            be extended and a separate visitor can be written for lens types
+            separately. *)
+         (o, Lens t)
       | ForAll (names, body) ->
          let (o, names') = o#list (fun o -> o#quantifier) names in
          let (o, body') = o#typ body in
