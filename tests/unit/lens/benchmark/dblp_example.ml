@@ -95,7 +95,9 @@ let benchmark_links_with ~n ~classic test_ctx =
   (Tools.skip_median qtime, Tools.skip_median ttime)
 
 let benchmark_links test_ctx =
-  let counts = [ 500; 1000; 10000; 25000; 50000; 100000; 200000 ] in
+  let counts =
+    [ 500; 2000; 4000; 6000; 8000; 10000; 12000; 14000; 16000; 18000; 20000 ]
+  in
   let dat =
     List.map
       ~f:(fun n ->
@@ -107,8 +109,22 @@ let benchmark_links test_ctx =
   in
   Tools.print_csv_4 ~file:"dblp_example_local" dat
 
+let benchmark_links_incremental test_ctx =
+  let counts = [ 500; 1000; 10000; 25000; 50000; 100000; 200000 ] in
+  let dat =
+    List.map
+      ~f:(fun n ->
+        setup_dblp_database ~n test_ctx;
+        let iqtime, ittime = benchmark_links_with ~n ~classic:false test_ctx in
+        (n, iqtime, ittime))
+      counts
+  in
+  Tools.print_csv_2 ~file:"dblp_example_incr_local" dat
+
 let suite =
   "dblp"
   >::: [
-         "setup_5000" >:: setup_dblp_database ~n:200; "run" >:: benchmark_links;
+         "setup_5000" >:: setup_dblp_database ~n:200;
+         "run" >:: benchmark_links;
+         "run_incr" >:: benchmark_links_incremental;
        ]

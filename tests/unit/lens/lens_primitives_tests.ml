@@ -240,6 +240,7 @@ let test_select_lens_2 n test_ctx =
 let template_select_lens_3 ~n ~upto ~put test_ctx =
   let n = override_n n test_ctx in
   let upto_max = n / 10 in
+  let module V = (val Debug.verbose_printer test_ctx) in
   let module DB = (val Table.create test_ctx) in
   let db = DB.db in
   let module T1 = (val table_template_1 ~n (module DB)) in
@@ -261,11 +262,13 @@ let template_select_lens_3 ~n ~upto ~put test_ctx =
   while changed () < upto && !n < upto_max do
     n := !n + 100;
     res :=
-      Query.map_records
-        (Query.set "d"
-           (Query.ifcol "b" (Query.band (Query.gt 0) (Query.lt !n)) (box_int 5)))
+      List.map
+        ~f:(fun r ->
+          let b = get_int r "b" in
+          if 0 < b && b <= !n then set_int r "d" 5 else r)
         !res
   done;
+  V.printf "changed size %i for n=%i\n%!" (changed ()) !n;
   put ~db l4 !res;
   T1.drop_if_cleanup ();
   T2.drop_if_cleanup ()

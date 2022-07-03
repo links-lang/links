@@ -17,7 +17,7 @@ let database_args_opt =
     ("links:" ^ Links_core.Utility.from_option "" connection_args)
     "Database connection args."
 
-let verbose_opt = Conf.make_bool "v" false "Print verbose information."
+let verbose_opt = Conf.make_bool "V" false "Print verbose information."
 
 let classic_opt =
   Conf.make_bool "classic_lenses" false "Use non incremental relational lenses."

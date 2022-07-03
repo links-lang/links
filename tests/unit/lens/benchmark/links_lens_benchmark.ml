@@ -86,13 +86,15 @@ let benchmark_drop test_ctx =
   Tools.print_csv_4 ~file:"drop_benchmark" results
 
 let benchmark_select_delta_size test_ctx =
-  let rowcounts = [ 10; 100; 200; 300; 400; 500; 600; 700; 800; 900; 1000 ] in
+  let rowcounts =
+    [ 1000; 2000; 3000; 4000; 5000; 6000; 7000; 8000; 9000; 10000 ]
+  in
   let results =
     List.map
       ~f:(fun n ->
         benchmark_both ~n test_ctx (fun ~n ->
-            Prim.template_select_lens_3 ~n:100000 ~upto:n))
-      rowcounts
+            Prim.template_select_lens_3 ~n:50000 ~upto:n))
+      (List.map ~f:(fun n -> n / 10) rowcounts)
   in
   Tools.print_csv_4 ~file:"select_delta_size_benchmark" results
 
@@ -202,29 +204,35 @@ let benchmark_table test_ctx =
     [
       benchmark_lens_for_table ~n test_ctx "select" Prim.template_select_lens_2;
       benchmark_lens_for_table ~n test_ctx "drop" Prim.template_drop_lens_1;
-      benchmark_lens_for_table ~n test_ctx "join_dl"
+      benchmark_lens_for_table ~n test_ctx "join delete left"
         (Prim.template_join_lens_1 ~mk_join:Mk_lens.join_dl);
-      benchmark_lens_for_table ~n test_ctx "join_db"
+      benchmark_lens_for_table ~n test_ctx "join delete both"
         (Prim.template_join_lens_1 ~mk_join:Mk_lens.join_db);
-      benchmark_lens_for_table ~n test_ctx "join_dr"
+      benchmark_lens_for_table ~n test_ctx "join delete right"
         (Prim.template_join_lens_1 ~mk_join:Mk_lens.join_dr);
     ]
   in
   let pp_and_list = Format.pp_print_list ~pp_sep:(Format.pp_constant " & ") in
-  let pp_math_int f i = Format.fprintf f "$%i$" i in
-  let pp_math_float f i = Format.fprintf f "$%f$" i in
+  let pp_math_string f s = Format.fprintf f "\\text{%s}" s in
+  let pp_c f _ = Format.fprintf f "c" in
+  let pp_math_int f i = Format.fprintf f "%i" i in
+  let pp_math_float f fl =
+    let i = int_of_float fl in
+    if i < 1 then Format.fprintf f "< 1 ms" else Format.fprintf f "%d ms" i
+  in
   let channel = open_out (Tools.tex_name "table") in
   let fch = Format.formatter_of_out_channel channel in
   Format.fprintf fch
-    {|\begin{tabular}{c|ccc}
+    {|\begin{array}{c|%a}
     & %a \\
     \hline
-    query count & %a \\
-    query $n = 200k$ & %a \\
-    total $n = 200k$ & %a
-\end{tabular}|}
-    (Format.pp_map ~f:(fun (v, _, _, _) -> v) Format.pp_print_string
-    |> pp_and_list)
+    \text{query count} & %a \\
+    \text{query } n = 200k & %a \\
+    \text{total } n = 200k & %a
+\end{array}|}
+    (Format.pp_print_list ~pp_sep:(Format.pp_constant "") pp_c)
+    results
+    (Format.pp_map ~f:(fun (v, _, _, _) -> v) pp_math_string |> pp_and_list)
     results
     (Format.pp_map ~f:(fun (_, v, _, _) -> v) pp_math_int |> pp_and_list)
     results
