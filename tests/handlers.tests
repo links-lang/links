@@ -452,6 +452,21 @@ fun(m) { handle(m()) { case <Foo> -> 5 } }
 stdout : fun : (() {Foo:() {}-> _::Any|b}~> Int) {Foo{_}|b}~> Int
 args : --enable-handlers
 
+Operation annotation (1)
+fun(m) { handle(m()) { case <Foo(x) => k> : ((Int) {}-> Int) -> k (x) } }
+stdout : fun : (() {Foo:(Int) {}-> Int|a}~> b::Any) {Foo{_}|a}~> b::Any
+args : --enable-handlers
+
+Operation annotation (2)
+fun(f)(m) { handle(m()) { case <Foo(x : Bool) => k> -> k (f (x)) } }
+stdout : fun : ((Bool) {Foo{a}|b}~> c::Any) -> (() {Foo:(Bool) {}-> c::Any|b}~> e::Any) {Foo{a}|b}~> e::Any
+args : --enable-handlers
+
+Operation annotation (3)
+fun(m) { handle(m()) { case <Foo(x) => k> : ((a) {}-> (() {}-> (a,a))) -> k ( fun () { (x,x) } ) } }
+stdout : fun : (() {Foo:(a) {}-> () {}-> (a, a)|b}~> c::Any) {Foo{_}|b}~> c::Any
+args : --enable-handlers
+
 Examples
 ./examples/handlers/tests.links
 filemode : true
