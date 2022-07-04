@@ -1,5 +1,0 @@
-# hostname and port to host Links server
-port=8080
-host=0.0.0.0
-database_driver=postgresql
-database_args=localhost:5432:links:links

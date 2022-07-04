@@ -784,18 +784,23 @@ module TemporalJoin = struct
 
       method private set_tables tbls = {< tables = tbls >}
 
+      method private project tbl field =
+          match tbl with
+            | Q.Record x -> StringMap.find field x
+            | _ -> Q.Project (tbl, field)
+
       (* Start time: maximum of all start times *)
       method start_time =
         let open Q in
         List.fold_right (fun (tbl_var, start_time, _) expr ->
-          Apply (Primitive "greatest", [Project (tbl_var, start_time); expr])
+          Apply (Primitive "greatest", [o#project tbl_var start_time; expr])
         ) tables (Constant Constant.DateTime.beginning_of_time)
 
       (* End time: minimum of all end times *)
       method end_time =
         let open Q in
         List.fold_right (fun (tbl_var, _, end_time) expr ->
-          Apply (Primitive "least", [Project (tbl_var, end_time); expr])
+          Apply (Primitive "least", [o#project tbl_var end_time; expr])
         ) tables (Q.Constant forever_const)
 
       method! query =
