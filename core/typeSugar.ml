@@ -2372,7 +2372,7 @@ let type_pattern ?(linear_vars=true) closed
                 let t = ListUtils.last ts' in
                 Types.make_function_type ts (Types.make_empty_closed_row ()) t
            in
-           Types.Effect (make_singleton_row (name, Present t))
+           t
          in
          Pattern.Operation (name, List.map erase ps, erase k), (eff ot, eff it)
       | Negative names ->
@@ -3933,42 +3933,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               then raise (Errors.disabled_extension
                             ~pos ~setting:("enable_handlers", true)
                             ~flag:"--enable-handlers" "Handlers"));
-           (* let rec pop_last = function *)
-           (*   | [] -> assert false *)
-           (*   | [x] -> x, [] *)
-           (*   | x' :: xs -> *)
-           (*      let (x, xs') = pop_last xs in *)
-           (*      x, x' :: xs' *)
-           (* in *)
-           (* allow_wild adds wild : () to the given effect row *)
            let allow_wild : Types.row -> Types.row
              = fun row ->
              Types.(row_with wild_present row)
-           in
-           (* returns a pair of lists whose first component is the
-               value clauses, while the second component is the
-               operation clauses *)
-           let split_handler_cases : (Pattern.with_pos * phrase) list -> (Pattern.with_pos * phrase) list * (Pattern.with_pos * phrase) list
-             = fun cases ->
-             let ret, ops =
-               List.fold_right
-                 (fun (pat, body) (val_cases, eff_cases) ->
-                   match pat.node with
-                   | Pattern.Variant ("Return", None) ->
-                      Gripers.die pat.pos "Improper pattern-matching on return value"
-                   | Pattern.Variant ("Return", Some pat) ->
-                      (pat, body) :: val_cases, eff_cases
-                   | _ -> val_cases, (pat, body) :: eff_cases)
-                 cases ([], [])
-             in
-             let ret = match ret with
-               | [] -> (* insert a synthetic value case: x -> x. *)
-                  let x = "x" in
-                  let id = (variable_pat x, var x) in
-                  [id]
-               | _ -> ret
-             in
-             ret, ops
            in
            (* type parameters *)
            let henv = context in
@@ -4024,29 +3991,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
              let eff_cases =
                List.fold_right
                  (fun (pat, body) cases ->
-                   let pat, pat_topt =
+                   let pat =
                      let open Pattern in
                      match pat with
-                     (* | { node = Variant (opname, Some pat'); _ } -> *)
-                     (*    begin match pat'.node with *)
-                     (*    | Tuple [] -> *)
-                     (*       with_dummy_pos (Operation (opname, [], with_dummy_pos Pattern.Any)) *)
-                     (*    | Tuple ps -> *)
-                     (*       let kpat, pats = pop_last ps in *)
-                     (*       with_dummy_pos (Operation (opname, pats, kpat)) *)
-                     (*    | _ -> with_pos pos (Operation (opname, [], pat')) *)
-                     (*    end *)
-                     (* | { node = Variant (opname, None); pos } -> *)
-                     (*    with_pos pos (Operation (opname, [], with_dummy_pos Pattern.Any)) *)
-                     (* already compiled to an effect *)
-                     | { node = Operation _; pos = _ } ->
-                        pat, None
-                     | { node = HasType (pat, dt); pos = _ } ->
-                        pat, Some dt
+                     | { node = Operation _; pos = _ }
+                     | { node = HasType _; pos = _ } -> pat
                      | { pos; _ } -> Gripers.die pos "Improper pattern matching" in
                    let pat = tpo pat in
-                   unify ~handle:Gripers.handle_effect_patterns
-                         (ppos_and_typ pat, no_pos (T.Effect inner_eff));
                    (* We may have to patch up the inferred resumption
                       type as `type_pattern' cannot infer the
                       principal type for a resumption in a
@@ -4054,12 +4005,22 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                       to information which is not conveyed by
                       pattern. TODO: perhaps augment the pattern with
                       arity information. *)
-                   let (pat, env, effrow) = pat in
-                   let effname, kpat =
-                     match pat.node with
-                     | Pattern.Operation (name, _, kpat) -> name, kpat
+                   let (pat, env, efftyp) = pat in
+                   let pat =
+                     let rec erase_ann pat = match pat.node with
+                     | Pattern.Operation _ -> pat
+                     | Pattern.HasType (p, _) -> erase_ann p
+                     | _ -> assert false
+                     in
+                     erase_ann pat
+                   in
+                   let effname, kpat = match pat.node with
+                     | Pattern.Operation (name, _, k) -> name, k
                      | _ -> assert false
                    in
+                   let effrow = Types.Effect (Types.make_singleton_open_row (effname, Types.Present efftyp) (lin_any, res_any)) in
+                   unify ~handle:Gripers.handle_effect_patterns
+                         ((uexp_pos pat, effrow),  no_pos (T.Effect inner_eff));
                    let pat, kpat =
                      let rec find_effect_type eff = function
                        | (eff', t) :: _ when eff = eff' ->
@@ -4188,9 +4149,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            in
            (* make_operations_presence_polymorphic makes the operations in the given row polymorphic in their presence *)
            let make_operations_presence_polymorphic : Types.row -> Types.row
-         = fun row ->
+            = fun row ->
              let (operations, rho, dual) = TypeUtils.extract_row_parts row in
-         let operations' =
+              let operations' =
                StringMap.mapi
                  (fun name p ->
                    if TypeUtils.is_builtin_effect name
@@ -4199,19 +4160,18 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                                                                        make absent operations polymorphic in their presence. *)
                  operations
              in
-         T.Row (operations', rho, dual)
+            T.Row (operations', rho, dual)
            in
            let m_context = { context with effect_row = Types.make_empty_open_row default_effect_subkind } in
            let m = type_check m_context m in (* Type-check the input computation m under current context *)
            let m_effects = T.Effect m_context.effect_row in
            (* Most of the work is done by `type_cases'. *)
-           let (val_cases, eff_cases) =
-             (* The following is a slight hack until I get rid of the
-                 `handler' sugar. It is necessary because of "old
-                 fashioned" parameterised handlers. *)
-             match val_cases with
-             | [] -> split_handler_cases eff_cases
-             | _  -> val_cases, eff_cases
+           let val_cases = match val_cases with
+             | [] -> (* insert a synthetic value case: x -> x. *)
+                  let x = "x" in
+                  let id = (variable_pat x, var x) in
+                  [id]
+             | _  -> val_cases
            in
            let (val_cases, rt), eff_cases, body_type, inner_eff, outer_eff = type_cases val_cases eff_cases in
            (* Printf.printf "result: %s\ninner_eff: %s\nouter_eff: %s\n%!" (Types.string_of_datatype rt) (Types.string_of_row inner_eff) (Types.string_of_row outer_eff); *)
