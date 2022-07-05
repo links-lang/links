@@ -2649,7 +2649,7 @@ struct
               "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype { context with bound_vars } p body
          (* Effect *)
          | Effect r -> "{" ^ row "," context p r ^ "}"
-         | Operation (f, t) -> sd f ^ "=>" ^ sd t
+         | Operation (f, t) -> sd f ^ " => " ^ sd t
          (* Row *)
          | Row _ as t -> "{" ^ row "," context p t ^ "}"
          (* Presence *)
@@ -3124,7 +3124,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             method effect_row : row -> 'self_type * row_erasability * tid option
               = let maybe_contract : typ -> typ
                   = function
-                  | Function (d,_,c) as tp when ES.contract_operation_arrows policy ->
+                  | Operation (d,c) as tp when ES.contract_operation_arrows policy ->
                      (* we are in an operation fieldspec and it's an arrow, and we
                       want contractions: check if a contraction is possible here
                       *)

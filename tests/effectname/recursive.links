@@ -1,4 +1,4 @@
-effectname A = { E: ( () -A-> () ) {}-> () } ;
+effectname A = { E: ( () -A-> () ) => () } ;
 
 sig f : () -A-> ()
 fun f () {}

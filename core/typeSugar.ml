@@ -3367,7 +3367,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             let inner_effects = Types.row_with Types.wild_present pid_effects in
             let inner_effects =
               if Settings.get  Basicsettings.Sessions.exceptions_enabled then
-                let ty = Types.make_pure_function_type [] (Types.empty_type) in
+                let ty = Types.make_operation_type [] (Types.empty_type) in
                 Types.row_with (Value.session_exception_operation, T.Present ty) inner_effects
               else
                 inner_effects in
@@ -4249,7 +4249,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                 (T.Row (StringMap.empty, rho, false)) in
             let try_effects =
               Types.row_with
-                (Value.session_exception_operation, T.Present (Types.make_pure_function_type [] Types.empty_type))
+                (Value.session_exception_operation, T.Present (Types.make_operation_type [] Types.empty_type))
                 (T.Row (StringMap.empty, rho, false)) in
 
             unify ~handle:Gripers.try_effect
@@ -4329,7 +4329,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
         | QualifiedVar _ -> assert false
         | Raise ->
             let effects = Types.make_singleton_open_row
-                            (Value.session_exception_operation, T.Present (Types.make_pure_function_type [] Types.empty_type))
+                            (Value.session_exception_operation, T.Present (Types.make_operation_type [] Types.empty_type))
                             default_effect_subkind
             in
             unify ~handle:Gripers.raise_effect
