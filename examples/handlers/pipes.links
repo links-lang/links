@@ -11,7 +11,7 @@ typename Comp(e::Eff,a) = () ~e~> a;
 sig await : () { Await: s |e}-> s
 fun await() { do Await }
 
-sig yield : (s) { Yield: (s) -> () |e}-> ()
+sig yield : (s) { Yield: (s) => () |e}-> ()
 fun yield(s) { do Yield(s) }
 
 sig forever : (Comp({ |e}, a)) ~e~> b
@@ -20,7 +20,7 @@ fun forever(f) { ignore(f()); forever(f) }
 sig blackhole : Comp({Await:s |e}, a)
 fun blackhole() { forever(await) }
 
-sig take1 : (Int) -> Comp({Await:s, Yield:(s) -> () |e}, ())
+sig take1 : (Int) -> Comp({Await:s, Yield:(s) => () |e}, ())
 fun take1(n)() {
   fun take0(n) {
     if (n <= 0) ()
@@ -33,7 +33,7 @@ fun take1(n)() {
  take0(n)
 }
 
-sig produceFrom : (Int) -> Comp({ Yield: (Int) -> () |e}, a)
+sig produceFrom : (Int) -> Comp({ Yield: (Int) => () |e}, a)
 fun produceFrom(n)() {
   fun produceFrom0(n) {
      yield(n);
@@ -76,11 +76,11 @@ module Deep {
                       (Producer({ Await{b}, Yield{c} |e}, s, a)) { Await{b}, Yield{c} |e}~> a;
 
   typename Copipe(e::Eff, s, a) = forall b::Presence, c::Presence.
-            (Comp({ Await{b}, Yield: (s) -> () |e}, a)) { Await{b}, Yield{c} |e}~>
+            (Comp({ Await{b}, Yield: (s) => () |e}, a)) { Await{b}, Yield{c} |e}~>
                    (Consumer({ Await{b}, Yield{c} |e}, s, a)) { Await{b}, Yield{c} |e}~> a;
 
 
-  sig expoPipe1 : (Pipe({ |e}, Int, a), Copipe({ |e}, Int, a)) -> (Int) -> Comp({ Await:Int, Yield: (Int) -> () |e}, a)
+  sig expoPipe1 : (Pipe({ |e}, Int, a), Copipe({ |e}, Int, a)) -> (Int) -> Comp({ Await:Int, Yield: (Int) => () |e}, a)
   fun expoPipe1(pipe, copipe)(n)() {
     fun expoPipe0(pipe, copipe, n) {
       if (n == 0) {
@@ -170,7 +170,7 @@ module Deep {
 }
 
 module Shallow {
-  typename Prod(e::Eff,o,a) = ()   {Yield:(o) {}-> () |e}~> a;
+  typename Prod(e::Eff,o,a) = ()   {Yield:(o) => () |e}~> a;
   typename Cons(e::Eff,i,a) = (i) {Await:i |e}~> a;
 
   module Direct {
@@ -184,7 +184,7 @@ module Shallow {
       }
 
       sig copipe : (Cons({ Yield{c} |e}, s, a),
-                    Comp({ Await{b}, Yield: (s) -> () |e}, a)) {Await{b}, Yield{c} |e}~> a
+                    Comp({ Await{b}, Yield: (s) => () |e}, a)) {Await{b}, Yield{c} |e}~> a
       fun copipe(cons, prod) {
         shallowhandle(prod()) {
           case <Yield(s) -> resume> -> pipe(fun() { resume(()) }, fun() { cons(s) })
@@ -211,7 +211,7 @@ module Shallow {
       }
 
       sig copipe : (Cons({ Yield{c} |e}, s, a),
-                    Comp({ Await{b}, Yield: (s) -> () |e}, a)) {Await{b}, Yield{c} |e}~> a
+                    Comp({ Await{b}, Yield: (s) => () |e}, a)) {Await{b}, Yield{c} |e}~> a
       fun copipe(cons, prod) {
         var (_,g) = handle(prod()) {
           case x -> (fun() { x }, fun() { x })
@@ -233,7 +233,7 @@ op producer >+> consumer {
   fun() { Deep.Direct.pipe(consumer)(fun() { Deep.Direct.copipe(producer) }) }
 }
 
-sig expoPipe : (Int) -> Comp({ Await: Int, Yield: (Int) -> () |e}, a)
+sig expoPipe : (Int) -> Comp({ Await: Int, Yield: (Int) => () |e}, a)
 fun expoPipe(n)() {
   fun expoPipe0(n) {
     if (n == 0) {

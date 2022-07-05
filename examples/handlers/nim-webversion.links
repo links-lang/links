@@ -82,7 +82,7 @@ fun getField(id){
     domGetAttributeFromRef(getNodeById(id), "value")
 }
 
-sig move: (Player, Int) {Move:(Player, Int) -> Int|e}~> Int
+sig move: (Player, Int) {Move:(Player, Int) => Int|e}~> Int
 fun move(pl, n){
     do Move(pl, n)
 }
@@ -131,7 +131,7 @@ fun easy(pl, n){
 }
 # () for the suspended computation -> moveHandler returns a value so we need to thunk it. same as
 # var pId = spawnClient{runState(fun(){moveHandler(gameProcess)}, (player=(Alice,Bob), level=Easy, cheat=false))};
-sig moveHandler: (() {Move: (Player, Int) -> Int, Restart: Zero, hear:Cmd|e}~> a, (Player, Int) ~%~> Int) -> () {Move-, hear:Cmd, Restart: Zero|e}~> a
+sig moveHandler: (() {Move: (Player, Int) => Int, Restart: Zero, hear:Cmd|e}~> a, (Player, Int) ~%~> Int) -> () {Move-, hear:Cmd, Restart: Zero|e}~> a
 fun moveHandler(f, s)(){
     handle(f()){
         case x -> x
@@ -442,7 +442,7 @@ fun updateView(n, rest, cur){
     appendChildren(step, getNodeById("game-steps"))
 }
 
-sig turn: (Player, Player, Int) {Move: (Player, Int) -> Int|e}~> Player
+sig turn: (Player, Player, Int) {Move: (Player, Int) => Int|e}~> Player
 fun turn(cur, opp, n){
     if(n<= 0){
         cur                                 # Returns the winner
@@ -452,14 +452,14 @@ fun turn(cur, opp, n){
         turn(opp, cur, rest)
     }
 }
-sig game: () {Get: GameState, Move: (Player, Int) -> Int, hear: Cmd |e}~> Player
+sig game: () {Get: GameState, Move: (Player, Int) => Int, hear: Cmd |e}~> Player
 fun game(){
     var st = do Get;
     renderView(Game(st), self());
     turn(st.player.1, st.player.2, st.heap)
 }
 
-sig runState : (() {Get:s, Set:(s) -> () |e}~> a, s) -> () {Get-, Set- |e}~> (a, s)
+sig runState : (() {Get:s, Set:(s) => () |e}~> a, s) -> () {Get-, Set- |e}~> (a, s)
 fun runState(f, st0)(){
     handle(f())(st <- st0){
         case x -> (x, st)
@@ -516,19 +516,19 @@ mutual {
   }
 }
 #handler
-sig setPlayer : (Player, Player) {Get: GameState, Set: (GameState) -> () |e}~> ()
+sig setPlayer : (Player, Player) {Get: GameState, Set: (GameState) => () |e}~> ()
 fun setPlayer(pl1, pl2){
     var st = do Get;
     do Set((st with player=(pl1, pl2)))
 }
 
-sig setLevel : (Level) {Get:GameState, Set: (GameState) -> () |e}~> ()
+sig setLevel : (Level) {Get:GameState, Set: (GameState) => () |e}~> ()
 fun setLevel(lev){
     var st = do Get;
     do Set((st with level=lev))
 }
 
-sig setChecker : (Bool) {Get:GameState, Set: (GameState) -> () |e}~> ()
+sig setChecker : (Bool) {Get:GameState, Set: (GameState) => () |e}~> ()
 fun setChecker(check){
     var st = do Get;
     do Set((st with cheat=check))

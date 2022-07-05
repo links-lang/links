@@ -994,7 +994,7 @@ let compile_handle_cases
               (function
               | Types.Present t ->
                  begin match TypeUtils.concrete_type t with
-                 | Types.Function (domain, _, _) ->
+                 | Types.Operation (domain, _) ->
                     let (fields, _, _) = TypeUtils.extract_row domain |> TypeUtils.extract_row_parts in
                     let arity = StringMap.size fields in
                     if arity = 1 then

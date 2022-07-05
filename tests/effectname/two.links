@@ -1,5 +1,5 @@
 effectname A = {} ;
-effectname B(a,e::Eff) = { E: () {}-> a | e } ;
+effectname B(a,e::Eff) = { E: () => a | e } ;
 
 sig f : () -B((),{ |A})-> ()
 fun f () { do E() }

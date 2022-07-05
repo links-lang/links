@@ -6,29 +6,29 @@
 #
 
 # Simulation of input via prompt
-sig input : (String) {Input:(String) {}-> a |_}~> a
+sig input : (String) {Input:(String) => a |_}~> a
 fun input(s) {println(s); do Input(s)}
 
 # Computation summing (simulated) user supplied integers
-sig sumUp : Comp(Int, {Input:(String) {}-> Int |_})
+sig sumUp : Comp(Int, {Input:(String) => Int |_})
 fun sumUp() {
   sum([input("10"), input("20"), input("MMXVII"), input("30")])
 }
 
 # Fail operation to signal conversion failure
-sig fail : (exn) {Fail:(exn) {}-> b |_}-> b
+sig fail : (exn) {Fail:(exn) => b |_}-> b
 fun fail(e) {do Fail(e)}
 
 # String to integer conversion
-sig parseInt : (String) {Fail:(String) {}-> Int|_}-> Int
+sig parseInt : (String) {Fail:(String) => Int|_}-> Int
 fun parseInt(s) {
   if (isInt(s)) stringToInt(s)
   else fail(s)
 }
 
 # Input handling
-sig prompt : (Comp(a, {Fail:(String) {}-> Int,Input:(String) {}-> Int |e})) ->
-              Comp(a, {Fail:(String) {}-> Int,Input{_}                |e})
+sig prompt : (Comp(a, {Fail:(String) => Int,Input:(String) => Int |e})) ->
+              Comp(a, {Fail:(String) => Int,Input{_}                |e})
 fun prompt(m)() {
   handle(m()) {
     case x   -> x
@@ -37,7 +37,7 @@ fun prompt(m)() {
 }
 
 # Standard exception handling
-sig catchFail : (Comp(a, {Fail:(String) {}-> a |e})) -> Comp(a, {Fail{_} |e})
+sig catchFail : (Comp(a, {Fail:(String) => a |e})) -> Comp(a, {Fail{_} |e})
 fun catchFail(m)() {
   handle(m()) {
     case x -> x
@@ -58,7 +58,7 @@ fun example1() {
 }
 
 # Resumable exceptions
-sig catchResume : (Comp(a, {Fail:(String) {}-> Int |e})) -> Comp(a, {Fail{_} |e})
+sig catchResume : (Comp(a, {Fail:(String) => Int |e})) -> Comp(a, {Fail{_} |e})
 fun catchResume(m)() {
   handle(m()) {
     case x -> x
@@ -72,7 +72,7 @@ fun example2() {
 }
 
 # Unit test
-sig sumUpSilently : Comp(Int, {Input:(String) {}-> Int |_})
+sig sumUpSilently : Comp(Int, {Input:(String) => Int |_})
 fun sumUpSilently() {
   fun input(s) {do Input(s)}
   sum([input("10"), input("20"), input("MMXVII"), input("30")])

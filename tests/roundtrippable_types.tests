@@ -14,7 +14,7 @@ stdout : (q = [3, 1, 2]) : Q
 Recursive effect
 fun w(g) { handle(g()) { case () -> () case <F(h) => res> -> w(h) }} w
 args : --enable-handlers
-stdout : fun : (() { |(mu a.F:(() { |a}-> ()) {}-> _::Any,wild:()|c)}-> ()) {F{_}|c}~> ()
+stdout : fun : (() { |(mu a.F:(() { |a}-> ()) => _::Any,wild:()|c)}-> ()) {F{_}|c}~> ()
 
 Row with no fields, but with nested wild row in its row variable
 fun f() { error("") } f
