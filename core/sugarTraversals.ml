@@ -671,6 +671,9 @@ class map =
       | Record _x -> let _x = o#row _x in Record _x
       | Variant _x -> let _x = o#row _x in Variant _x
       | Effect r -> let r = o#row r in Effect r
+      | Operation (_x, _x_i1) ->
+        let _x = o#list (fun o -> o#datatype) _x in
+        let _x_i1 = o#datatype _x_i1 in Operation (_x, _x_i1)
       | Table (_t, _x, _x_i1, _x_i2) ->
          let _x = o#datatype _x in
          let _x_i1 = o#datatype _x_i1 in
@@ -1443,6 +1446,9 @@ class fold =
       | Record _x -> let o = o#row _x in o
       | Variant _x -> let o = o#row _x in o
       | Effect r -> let o = o#row r in o
+      | Operation (_x, _x_i1) ->
+        let o = o#list (fun o -> o#datatype) _x in
+        let o = o#datatype _x_i1 in o
       | Table (_t, _x, _x_i1, _x_i2) ->
           let o = o#datatype _x in
           let o = o#datatype _x_i1 in
@@ -2353,6 +2359,9 @@ class fold_map =
       | Record _x -> let (o, _x) = o#row _x in (o, (Record _x))
       | Variant _x -> let (o, _x) = o#row _x in (o, (Variant _x))
       | Effect r -> let (o, r) = o#row r in (o, Effect r)
+      | Operation (_x, _x_i1) ->
+        let (o, _x) = o#list (fun o -> o#datatype) _x in
+        let (o, _x_i1) = o#datatype _x_i1 in (o, Operation (_x, _x_i1))
       | Table (_t, _x, _x_i1, _x_i2) ->
           let (o, _x) = o#datatype _x in
           let (o, _x_i1) = o#datatype _x_i1 in

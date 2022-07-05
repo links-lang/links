@@ -84,14 +84,14 @@ let cannot_insert_presence_var2 pos op =
       ^ ". However, in the current context, implictly bound (presence) \
          variables are disallowed" )
 
-let unexpected_effects_on_abstract_op pos name =
-  Errors.Type_error
-    ( pos,
-      "The abstract operation "
-      ^ name
-      ^ " has unexpected effects in its signature. The effect signature on an \
-         abstract operation arrow is always supposed to be empty, since any \
-         effects it might have are ultimately conferred by its handler." )
+(* let unexpected_effects_on_abstract_op pos name = *)
+(*   Errors.Type_error *)
+(*     ( pos, *)
+(*       "The abstract operation " *)
+(*       ^ name *)
+(*       ^ " has unexpected effects in its signature. The effect signature on an \ *)
+(*          abstract operation arrow is always supposed to be empty, since any \ *)
+(*          effects it might have are ultimately conferred by its handler." ) *)
 
 let shared_effect_forbidden_here pos =
   Errors.Type_error
@@ -361,27 +361,16 @@ let cleanup_effects tycon_env =
        let fields =
          List.map
            (function
-             | ( name,
+             | ( _,
                  Present
-                   { node = Function (domain, (fields, rv), codomain); pos } )
-               as op
-               when not (TypeUtils.is_builtin_effect name) -> (
-                 (* Elaborates `Op : a -> b' to `Op : a {}-> b' *)
-                 match (rv, fields) with
-                 | Closed, [] -> op
-                 | Open _, []
-                 | Recursive _, [] ->
-                     (* might need an extra check on recursive rows *)
-                     ( name,
-                       Present
-                         (WithPos.make ~pos
-                            (Function (domain, ([], Closed), codomain))) )
-                 | _, _ -> raise (unexpected_effects_on_abstract_op pos name) )
+                   { node = Operation _; _ } )
+               as op ->
+                    op
              | name, Present ({ node ; pos } as node') when not (TypeUtils.is_builtin_effect name) ->
                  (* Elaborates `Op : a' to `Op : () {}-> a' *)
                  let node = match node with
                  (* | Forall (qs, node') -> Forall (qs, WithPos.make ~pos (Function ([], ([], Closed), node'))) *)
-                 | _ -> Function ([], ([], Closed), node')
+                 | _ -> Operation ([], node')
                  in
                  ( name,
                    Present (WithPos.make ~pos node) )

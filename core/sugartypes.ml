@@ -195,6 +195,7 @@ module Datatype = struct
     | Record          of row
     | Variant         of row
     | Effect          of row
+    | Operation       of with_pos list * with_pos
     | Table           of Temporality.t * with_pos * with_pos * with_pos
     | List            of with_pos
     | TypeApplication of string * type_arg list
