@@ -1026,7 +1026,7 @@ just_datatype:
 | datatype EOF                                                 { $1 }
 
 datatype:
-| mu_datatype | straight_arrow | squiggly_arrow                { with_pos $loc $1 }
+| mu_datatype | straight_arrow | squiggly_arrow | fat_arrow    { with_pos $loc $1 }
 
 arrow_prefix:
 | LBRACE erow RBRACE                                           { $2            }
@@ -1062,6 +1062,9 @@ squiggly_arrow:
   squig_arrow_prefix SQUIGLOLLI datatype                       { Datatype.Lolli    ($1, row_with_wp $2, $4) }
 | parenthesized_datatypes SQUIGRARROW datatype                 { Datatype.Function ($1, row_with_wp fresh_effects, $3) }
 | parenthesized_datatypes SQUIGLOLLI datatype                  { Datatype.Lolli    ($1, row_with_wp fresh_effects, $3) }
+
+fat_arrow:
+| parenthesized_datatypes FATRARROW datatype                   { Datatype.Operation ($1, $3) }
 
 mu_datatype:
 | MU VARIABLE DOT mu_datatype                                  { Datatype.Mu (named_typevar $2 `Rigid, with_pos $loc($4) $4) }
@@ -1329,8 +1332,8 @@ resumable_operation_pattern:
     { with_pos $loc (Pattern.Operation (fst $1, snd $1, any)) }
 
 operation_pattern:
-| CONSTRUCTOR { ($1, []) }
-| CONSTRUCTOR multi_args { ($1, $2) }
+| CONSTRUCTOR                                                  { ($1, []) }
+| CONSTRUCTOR multi_args                                       { ($1, $2) }
 
 typed_pattern:
 | cons_pattern                                                 { $1 }

@@ -2116,6 +2116,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
       | Primitive _
       | Function _
       | Lolli _
+      | Operation _
       | Table _
       | Lens _
       (* TODO: do we need to do something special for session types? *)
@@ -2363,14 +2364,14 @@ let type_pattern ?(linear_vars=true) closed
              (* Construct operation type, i.e. op : A -> B or op : B *)
              match domain, codomain with
              | [], [] | _, [] -> assert false (* The continuation is at least unary *)
-             | [], [t] -> Function (Types.unit_type, Types.make_empty_closed_row (), t)
+             | [], [t] -> Types.Operation (Types.unit_type, t)
              | [], ts -> Types.make_tuple_type ts
              | ts, [t] ->
-                Types.make_function_type ts (Types.make_empty_closed_row ()) t
+                Types.make_operation_type ts t
              | ts, ts' ->
                 (* parameterised continuation *)
                 let t = ListUtils.last ts' in
-                Types.make_function_type ts (Types.make_empty_closed_row ()) t
+                Types.make_operation_type ts t
            in
            t
          in
@@ -4223,7 +4224,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
              let ps     = List.map tc args in
              let inp_t  = List.map typ ps in
              let out_t  = Types.fresh_type_variable (lin_unl, res_any) in
-             let optype = Types.make_pure_function_type inp_t out_t in
+             let optype = Types.make_operation_type inp_t out_t in
              let effrow = Types.make_singleton_open_row (opname, T.Present optype) (lin_unl, res_effect) in
              (effrow, out_t, ps)
            in

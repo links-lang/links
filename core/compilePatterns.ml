@@ -255,7 +255,9 @@ let let_pattern : raw_env -> Pattern.t -> value * Types.datatype -> computation 
                 [letm (xb, list_head env xt value); letm (xsb, list_tail env xt value)]
                 (lp xt head (Variable x) (lp xst tail (Variable xs) body))
         | Pattern.Variant (name, patt) ->
+            Debug.print "3" ;
             let case_type = TypeUtils.variant_at name t in
+            Debug.print "33" ;
             let case_binder, case_variable = Var.fresh_var_of_type case_type in
             let body = lp case_type patt (Variable case_variable) body in
             let cases = StringMap.singleton name (case_binder, body) in
@@ -275,7 +277,9 @@ let let_pattern : raw_env -> Pattern.t -> value * Types.datatype -> computation 
             let negative_cases, t' =
               StringSet.fold
                 (fun label (cases, t) ->
+                  Debug.print "4" ;
                   let case_type = TypeUtils.variant_at label t in
+                  Debug.print "44" ;
                   let case_binder = Var.fresh_binder_of_type case_type in
                   let body = ([], Special (Wrong body_type)) in
                   let cases' = StringMap.add label (case_binder, body) cases in
@@ -646,7 +650,9 @@ and match_variant
                    if StringSet.mem name names then
                      (cases, cs)
                    else
+                     let _ = Debug.print ("5" ^ name) ; in
                      let case_type = TypeUtils.variant_at name t in
+                     let _ = Debug.print "55" ; in
 (*                     let inject_type = TypeUtils.inject_type name case_type in *)
                      let (case_binder, case_variable) = Var.fresh_var_of_type case_type in
                      let match_env = bind_type case_variable case_type env in
@@ -719,7 +725,9 @@ and match_negative
           let cases =
             StringSet.fold
               (fun name cases ->
+                  Debug.print "6" ;
                   let case_type = TypeUtils.variant_at name t in
+                  Debug.print "66" ;
 (*                             let inject_type = TypeUtils.inject_type name case_type in *)
                   let (case_binder, case_variable) = Var.fresh_var_of_type case_type in
                   let match_env = bind_type case_variable case_type env in
