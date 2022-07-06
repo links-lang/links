@@ -29,6 +29,7 @@
 
   *)
 
+open Linkspath
 module Printexc = Utility.Printexc
 
 type privilege = [`User | `System]
@@ -1116,6 +1117,11 @@ let _ = Settings.(option "set"
                   |> convert (fun x -> Some x)
                   |> CLI.(add (long "set")))
 
+let _ = 
+  let config_str = match config with None -> "None"
+  | Some str -> str
+  in
+  Printf.printf " jslib = %s\n examples = %s\n config = %s\n prelude = %s\n stdlib = %s\n" jslib examples config_str prelude stdlib
 
 (* The [config] setting needs special support for two reasons
 
