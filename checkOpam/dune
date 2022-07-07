@@ -1,3 +1,0 @@
-(executable
- (name checkOpam)
- (libraries dune.configurator))
