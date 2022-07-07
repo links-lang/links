@@ -383,7 +383,7 @@ stdout : () : ()
 args : --enable-handlers
 
 Operation polymorphism
-sig catch : (() {Fail:forall a.a |e}~> b) {Fail{_} |e}~> Maybe(b) fun catch(m) { handle(m()) { case <Fail => k> -> Nothing case x -> Just(x) } } catch(fun() { 42 })
+sig catch : (() {Fail:forall a.a |e}~> b) {Fail{_} |e}~> Maybe(b) fun catch(m) { handle(m()) { case <Fail => k> : (forall a. () => a) -> Nothing case x -> Just(x) } } catch(fun() { 42 })
 stdout : Just(42) : Maybe (Int)
 args : --enable-handlers
 

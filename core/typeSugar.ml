@@ -2435,8 +2435,9 @@ let type_pattern ?(linear_vars=true) closed
         As (Binder.set_type bndr (it p), erase p), (ot p, it p)
       | HasType (p, (_,Some t as t')) ->
         let p = tp p in
-        let () = unify ~handle:Gripers.pattern_annotation ((pos p, it p), (_UNKNOWN_POS_, t)) in
-        HasType (erase p, t'), (ot p, t)
+        let _, t_free = TypeUtils.split_quantified_type t in
+        let () = unify ~handle:Gripers.pattern_annotation ((pos p, it p), (_UNKNOWN_POS_, t_free)) in
+        HasType (erase p, t'), (t, t)
       | HasType _ -> assert false in
     with_pos pos' p, (outer_type, inner_type)
   in
