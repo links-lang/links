@@ -139,6 +139,7 @@ struct
     | LensGetLit _
     | LensPutLit _
     | DoOperation _
+    | Operation _
     | DBDelete _
     | DBInsert _
     | TryInOtherwise _
@@ -1669,7 +1670,15 @@ let empty_context eff desugared =
 let bind_var         context (v, t) = {context with var_env    = Env.bind v t context.var_env}
 let unbind_var       context v      = {context with var_env    = Env.unbind v context.var_env}
 let bind_alias       context (v, t) = {context with tycon_env  = Env.bind v t context.tycon_env}
-let bind_effects     context r      = {context with effect_row = r}
+let bind_effects     context r      = {context with effect_row = Types.flatten_row r}
+
+let lookup_effect    context name   =
+  match context.effect_row with
+  | Types.Row (fields, _, _) -> begin match Utility.StringMap.find_opt name fields with
+      | Some (Types.Present t) -> Some t
+      | _ -> None
+    end
+  | _ -> raise (internal_error "Effect row in the context is not a row")
 
 (* TODO(dhil): I have extracted the Usage abstraction from my name
    hygiene/compilation unit patch. The below module is a compatibility
@@ -2611,6 +2620,23 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
           let wild_open = Types.(open_row default_effect_subkind closed_wild_row) in
           unify ~handle:Gripers.recursive_usage (no_pos (Types.Effect wild_open), (uexp_pos e, Types.Effect context.effect_row));
         end;
+    in
+
+    let find_opname phrase =
+      let o = object (o)
+        inherit SugarTraversals.fold as super
+        val mutable opname = None
+
+        method opname = match opname with
+          | Some name -> name
+          | None -> failwith "Operation with no name"
+
+        method! phrasenode = function
+          | Operation name -> opname <- Some name ; o
+          | p -> super#phrasenode p
+      end in
+      let o = o#phrase phrase in
+      o#opname
     in
 
     let module T = Types in
@@ -3993,10 +4019,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                List.fold_right
                  (fun (pat, body) cases ->
                    let pat =
-                     let open Pattern in
                      match pat with
-                     | { node = Operation _; pos = _ }
-                     | { node = HasType _; pos = _ } -> pat
+                     | { node = Pattern.Operation _; pos = _ }
+                     | { node = Pattern.HasType _; pos = _ } -> pat
                      | { pos; _ } -> Gripers.die pos "Improper pattern matching" in
                    let pat = tpo pat in
                    (* We may have to patch up the inferred resumption
@@ -4208,31 +4233,69 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                     sh_effect_cases = erase_cases eff_cases;
                     sh_value_cases = erase_cases val_cases;
                     sh_descr = descr }, body_type, usages
-        | DoOperation (opname, args, _) ->
-           (* Strategy:
-              1. List.map tc args
-              2. Construct operation type
-              3. Construct effect row where the operation name gets bound to the previously constructed operation type
-              4. Unify with current effect context
-           *)
-           if String.compare opname "Return" = 0 then
-             Gripers.die pos "The implicit effect Return is not invocable"
-           else if String.compare opname Value.session_exception_operation = 0 && not context.desugared then
+        | DoOperation (op, ps, _) ->
+          let op = tc op in
+          let ps = List.map (tc) ps in
+          let doop, rettyp, usage, opt  =
+            match Types.concrete_type (typ op) with
+            | T.ForAll (_, (T.Operation _)) as t ->
+              begin
+                match Instantiate.typ t with
+                | tyargs, T.Operation (pts, rettyp) ->
+                  (* quantifiers for the return type *)
+                  let rqs =
+                    (* the free type variables in the arguments (and effects) *)
+                    let arg_vars = Types.free_type_vars pts in
+                    (* return true if this quantifier appears free in the arguments (or effects) *)
+                    let free_in_arg q = Types.TypeVarSet.mem (Quantifier.to_var q) arg_vars in
+                    if Settings.get  dodgey_type_isomorphism then
+                      let rta, rqs =
+                        List.map (fun q -> (q, Types.quantifier_of_type_arg q)) tyargs
+                        |> List.filter (fun (_, q) -> free_in_arg q)
+                        |> List.split
+                      in
+                      List.iter Generalise.rigidify_type_arg rta;
+                      rqs
+                    else
+                      []
+                  in
+
+                  let rettyp = Types.for_all (rqs, rettyp) in
+                  let opt = T.Operation (pts, rettyp) in
+                  let op' = erase op in
+                  let sugar_rqs = List.map SugarQuantifier.mk_resolved rqs in
+                  let e = tabstr (sugar_rqs, DoOperation (with_dummy_pos (tappl (op'.node, tyargs)), List.map erase ps, Some rettyp)) in
+                    e, rettyp, Usage.combine_many (usages op :: List.map usages ps), opt
+                | _ -> assert false
+              end
+            | T.Operation (_, rettyp) as opt ->
+                DoOperation (erase op, List.map erase ps, Some rettyp), rettyp, Usage.combine_many (usages op :: List.map usages ps), opt
+            | opt ->
+              let rettyp = Types.fresh_type_variable (lin_unl, res_any) in
+                DoOperation (erase op, List.map erase ps, Some rettyp), rettyp, Usage.combine_many (usages op :: List.map usages ps), opt
+          in
+
+          let opname = find_opname (erase op) in
+          let infer_opt = no_pos (Types.make_operation_type (List.map typ ps) rettyp) in
+          let term = (exp_pos op, opt) in
+          let row = Types.make_singleton_open_row (opname, T.Present (typ op)) (lin_unl, res_effect) in
+          let p = Position.resolve_expression pos in
+          let () =
+            unify ~handle:Gripers.do_operation
+              (term, infer_opt) ;
+            unify ~handle:Gripers.do_operation
+              (no_pos (T.Effect context.effect_row), (p, T.Effect row))
+          in
+            doop, rettyp, usage
+        | Operation name ->
+           if String.compare name Value.session_exception_operation = 0 && not context.desugared then
              Gripers.die pos "The session failure effect SessionFail is not directly invocable (use `raise` instead)"
            else
-           let (row, return_type, args) =
-             let ps     = List.map tc args in
-             let inp_t  = List.map typ ps in
-             let out_t  = Types.fresh_type_variable (lin_unl, res_any) in
-             let optype = Types.make_operation_type inp_t out_t in
-             let effrow = Types.make_singleton_open_row (opname, T.Present optype) (lin_unl, res_effect) in
-             (effrow, out_t, ps)
-           in
-           let p = Position.resolve_expression pos in
-           let () = unify ~handle:Gripers.do_operation
-             (no_pos (T.Effect context.effect_row), (p, T.Effect row))
-           in
-             (DoOperation (opname, List.map erase args, Some return_type), return_type, Usage.combine_many (List.map usages args))
+             let t = match lookup_effect context name with
+               | Some t -> t
+               | None   -> Types.fresh_type_variable (lin_unl, res_any)
+             in
+             (Operation name, t, Usage.empty)
         | Switch (e, binders, _) ->
             let e = tc e in
             let binders, pattern_type, body_type = type_cases binders in

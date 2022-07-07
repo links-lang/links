@@ -315,10 +315,14 @@ class map =
           let _x_i1 = o#option (fun o -> o#phrase) _x_i1 in
           let _x_i2 = o#option (fun o -> o#typ) _x_i2 in
           ConstructorLit ((_x, _x_i1, _x_i2))
-      | DoOperation (name, ps, t) ->
+      | DoOperation (op, ps, t) ->
+          let op  = o#phrase op in
           let ps  = o#list (fun o -> o#phrase) ps in
           let t   = o#option (fun o -> o#typ) t in
-          DoOperation (name, ps, t)
+          DoOperation (op, ps, t)
+      | Operation _x ->
+          let _x = o#name _x in
+          Operation _x
       | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
          let m = o#phrase sh_expr in
          let params =
@@ -1128,10 +1132,12 @@ class fold =
       | ConstructorLit ((_x, _x_i1, _x_i2)) ->
           let o = o#name _x in
           let o = o#option (fun o -> o#phrase) _x_i1 in o
-      | DoOperation (name,ps,t) ->
-         let o = o#name name in
-     let o = o#option (fun o -> o#unknown) t in
-     let o = o#list (fun o -> o#phrase) ps in o
+      | DoOperation (op,ps,t) ->
+         let o = o#phrase op in
+         let o = o#option (fun o -> o#unknown) t in
+         let o = o#list (fun o -> o#phrase) ps in o
+      | Operation (_x) ->
+          let o = o#name _x in o
       | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
          let o = o#phrase sh_expr in
          let o =
@@ -1942,10 +1948,14 @@ class fold_map =
           let (o, _x_i1) = o#option (fun o -> o#phrase) _x_i1 in
           let o, _x_i2 = o#option (fun o -> o#typ) _x_i2 in
           (o, (ConstructorLit ((_x, _x_i1, _x_i2))))
-      | DoOperation (name, ps, t) ->
+      | DoOperation (op, ps, t) ->
+          let (o, op) = o#phrase op in
           let (o, t) = o#option (fun o -> o#typ) t in
           let (o, ps) = o#list (fun o -> o#phrase) ps in
-          (o, DoOperation (name, ps, t))
+          (o, DoOperation (op, ps, t))
+      | Operation _x ->
+          let (o, _x) = o#name _x in
+          (o, Operation _x)
       | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
           let (o, m) = o#phrase sh_expr in
           let (o, params) =

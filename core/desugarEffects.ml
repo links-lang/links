@@ -358,24 +358,19 @@ let cleanup_effects tycon_env =
        let open Datatype in
        let open SourceCode in
        let open WithPos in
-       let fields =
-         List.map
-           (function
-             | ( _,
-                 Present
-                   { node = Operation _; _ } )
-               as op ->
-                    op
-             | name, Present ({ node ; pos } as node') when not (TypeUtils.is_builtin_effect name) ->
-                 (* Elaborates `Op : a' to `Op : () {}-> a' *)
-                 let node = match node with
-                 (* | Forall (qs, node') -> Forall (qs, WithPos.make ~pos (Function ([], ([], Closed), node'))) *)
-                 | _ -> Operation ([], node')
-                 in
-                 ( name,
-                   Present (WithPos.make ~pos node) )
-             | x -> x)
-           fields
+       (* Elaborates `Op : a' to `Op : () {}-> a' *)
+       let rec elaborate_op dt =
+         let { node ; pos } = dt in
+         WithPos.make ~pos (match node with
+             | Datatype.Operation _     -> node
+             | Datatype.Forall (qs, dt) -> Datatype.Forall (qs, elaborate_op dt)
+             | _                        -> Datatype.Operation ([], dt))
+       in
+       let fields = List.map (function
+           | name, Present dt when not (TypeUtils.is_builtin_effect name) ->
+             ( name, Present (elaborate_op dt) )
+           | x -> x
+         ) fields
        in
        let gue = SugarTypeVar.get_unresolved_exn in
        let var =

@@ -678,7 +678,7 @@ unary_expression:
 | MINUSDOT unary_expression                                    { unary_appl ~ppos:$loc UnaryOp.FloatMinus $2 }
 | OPERATOR unary_expression                                    { unary_appl ~ppos:$loc (UnaryOp.Name $1)  $2 }
 | postfix_expression | constructor_expression                  { $1 }
-| DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (DoOperation ($2, $3, None)) }
+| DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (DoOperation (with_pos $loc($2) (Operation $2), $3, None)) }
 
 infix_appl:
 | unary_expression                                             { $1 }
