@@ -5,12 +5,6 @@ open Utility
 
 (** Name of the file containing the prelude code. *)
 let prelude_file =
-  (* let prelude_dir =
-    match Utility.getenv "LINKS_LIB" with
-    (* If user defined LINKS_LIB then it takes the highest priority *)
-    | Some path -> path
-    | None -> locate_file "prelude.links" in
-  Settings.(option ~default:(Some (Filename.concat prelude_dir "prelude.links")) "prelude" *)
   Settings.(option ~default: (Some Linkspath.prelude) "prelude"
             |> synopsis "The Links prelude source file"
             |> to_string from_string_option
