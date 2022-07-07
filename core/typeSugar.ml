@@ -2282,7 +2282,7 @@ let type_pattern ?(linear_vars=true) closed
      using types from the inner type.
 
   *)
-  let rec type_pattern {node = pattern; pos = pos'} : Pattern.with_pos * (Types.datatype * Types.datatype) =
+  let rec type_pattern ?ann {node = pattern; pos = pos'} : Pattern.with_pos * (Types.datatype * Types.datatype) =
     let _UNKNOWN_POS_ = "<unknown>" in
     let tp = type_pattern in
     let unify (l, r) = unify_or_raise ~pos:pos' (l, r)
@@ -2384,7 +2384,16 @@ let type_pattern ?(linear_vars=true) closed
            in
            t
          in
-         Pattern.Operation (name, List.map erase ps, erase k), (eff ot, eff it)
+         let ot, it = match ann with
+         | Some t ->
+           let ot, it = eff ot, eff it in
+           let _, t_free = TypeUtils.split_quantified_type t in
+           let () = unify ~handle:Gripers.pattern_annotation ((_UNKNOWN_POS_, ot), (_UNKNOWN_POS_, t_free)) in
+           t, t
+         | None ->
+           (eff ot, eff it)
+         in
+         Pattern.Operation (name, List.map erase ps, erase k), (ot, it)
       | Negative names ->
         let row_var = Types.fresh_row_variable (lin_any, res_any) in
 
@@ -2434,10 +2443,9 @@ let type_pattern ?(linear_vars=true) closed
         let p = tp p in
         As (Binder.set_type bndr (it p), erase p), (ot p, it p)
       | HasType (p, (_,Some t as t')) ->
-        let p = tp p in
-        let _, t_free = TypeUtils.split_quantified_type t in
-        let () = unify ~handle:Gripers.pattern_annotation ((pos p, it p), (_UNKNOWN_POS_, t_free)) in
-        HasType (erase p, t'), (t, t)
+        let p = tp ~ann:t p in
+        let () = unify ~handle:Gripers.pattern_annotation ((pos p, it p), (_UNKNOWN_POS_, t)) in
+        HasType (erase p, t'), (ot p, t)
       | HasType _ -> assert false in
     with_pos pos' p, (outer_type, inner_type)
   in
