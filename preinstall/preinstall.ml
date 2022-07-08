@@ -30,7 +30,8 @@ let install_config =
 
 let write_content filename =
   let examples =
-    get_content "examples"
+    (* get_content "examples" *)
+    get_content Linkspath.examples
     |> install_examples
     |> String.split_on_char '\n'
   in
