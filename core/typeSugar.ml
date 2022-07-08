@@ -2386,7 +2386,7 @@ let type_pattern ?(linear_vars=true) closed
          in
          let ot, it = match ann with
          | Some t ->
-           let ot, it = eff ot, eff it in
+           let ot, _it = eff ot, eff it in
            let _, t_free = TypeUtils.split_quantified_type t in
            let () = unify ~handle:Gripers.pattern_annotation ((_UNKNOWN_POS_, ot), (_UNKNOWN_POS_, t_free)) in
            t, t
