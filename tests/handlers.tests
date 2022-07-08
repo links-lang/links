@@ -382,9 +382,19 @@ sig f : (() {Foo:Int|a}~> b) {Foo{_}|a}~> b fun f(m) { error("N/A") } fun g(m) {
 stdout : () : ()
 args : --enable-handlers
 
-Operation polymorphism
+Operation polymorphism (1)
 sig catch : (() {Fail:forall a.a |e}~> b) {Fail{_} |e}~> Maybe(b) fun catch(m) { handle(m()) { case <Fail => k> : (forall a. () => a) -> Nothing case x -> Just(x) } } catch(fun() { 42 })
 stdout : Just(42) : Maybe (Int)
+args : --enable-handlers
+
+Operation polymorphism (2)
+sig catch : (() {Fail:forall a.a |e}~> b) {Fail{_} |e}~> Maybe(b) fun catch(m) { handle(m()) { case <Fail => k> : (forall a. () => a) -> Nothing case x -> Just(x) } } sig f : () {Fail:forall a.a}~> Int fun f () { if (do Fail) 42 else do Fail } catch (f)
+stdout : Nothing : Maybe (Int)
+args : --enable-handlers
+
+Operation polymorphism (3)
+sig h : (() {Switch:forall a,b. (a,b) => (b,a) |e}~> c) {Switch{_} |e}~> c fun h(m) { handle(m()) { case <Switch(x,y) => k> : (forall a,b. (a,b) => (b,a)) -> k ((y,x)) } } sig f : () {Switch:forall a,b. (a,b) => (b,a)}~> Int fun f () { var (d,u) = do Switch(2,4) ; 10*d+u } h(f)
+stdout : 42 : Int
 args : --enable-handlers
 
 Generalise (1)
