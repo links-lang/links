@@ -1,14 +1,11 @@
 module C = Configurator.V1
 
-let check_opam = 
-  try
-    Sys.getenv "LINKS_BUILT_BY_OPAM"
-  with
-    Not_found -> "0"
+let check_opam : bool = 
+  try Sys.getenv "LINKS_BUILT_BY_OPAM" = "1" with _ -> false
 
 let _ =
   let oc = open_out "linkspath.ml" in 
-      if (check_opam = "1")
+      if check_opam
       then
         (* If Links is built by OPAM*)
         let lib_path = input_line (Unix.open_process_in "opam var lib") in
@@ -28,6 +25,5 @@ let _ =
           Printf.fprintf oc "let examples = \"%s/examples\"\n" git_path;
           Printf.fprintf oc "let stdlib = \"%s/lib/stdlib\"\n" git_path;
           Printf.fprintf oc "let prelude = \"%s/prelude.links\"\n" git_path;
-          close_out oc
+        close_out oc
       
-

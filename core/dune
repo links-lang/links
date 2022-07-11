@@ -22,7 +22,7 @@
 
 (rule
   (targets linkspath.ml)
-  (deps (:gen ../gen/gen.exe))
+  (deps (:gen ../gen_linkspath/gen_linkspath.exe))
   (action (run %{gen} -o %{targets})))
 
 ;; Make Query modules available.
