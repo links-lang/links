@@ -32,6 +32,19 @@ prepare_database_config () {
     fi
 }
 
+prepare_no_database_config () {
+    # Check if database configuration exists. If not the creating from
+    # a default config.sample file
+    if [[ ! -e $1/config ]]; then
+      echo -en "$STARTCOLOR"
+      echo -e  "Creating default database test configuration $1/config"
+      echo -e  "from $1/config.nodb.sample"
+      echo -e  "Please customize to match your local database setup."
+      echo -en "$ENDCOLOR"
+      cp $1/config.nodb.sample $1/config
+    fi
+}
+
 if [[ "$1" == "unit" ]]; then
     echo "The unit flag is no longer available."
     echo "Use nodb-unit-tests or db-unit-tests instead."
@@ -79,7 +92,11 @@ run_database_tests () {
 
 run_unit_tests () {
     unit_test_file="$1"
-    prepare_database_config "$UNIT_TEST_DIR"
+    if [ "$1" == "nodb" ]; then
+        prepare_no_database_config "$UNIT_TEST_DIR"
+    else
+        prepare_database_config "$UNIT_TEST_DIR"
+    fi
     export LINKS_CONFIG="$UNIT_TEST_DIR"
     dune exec --profile=development tests/unit/${unit_test_file}.exe -- -runner sequential ${@:2}
     if [ $? != 0 ]; then
