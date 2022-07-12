@@ -23,7 +23,13 @@ let use_stdlib
 
 (* Standard library path *)
 let stdlib_path =
-  Settings.(option ~default:(Some Linkspath.stdlib) "stdlib_path"
+  let dir =
+    match Utility.getenv "LINKS_LIB" with
+    | Some path -> Filename.concat path "stdlib"
+    | None -> ""
+  in
+  Settings.(option ~default:(Some dir) "stdlib_path"
+  (* Settings.(option ~default:(Some Linkspath.stdlib) "stdlib_path" *)
             |> to_string from_string_option
             |> convert Utility.(Sys.expand ->- some)
             |> sync)
