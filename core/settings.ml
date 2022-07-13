@@ -1127,10 +1127,26 @@ let _ = Settings.(option "set"
 (* The following bit flag is used to indicate whether a config has
    been loaded. *)
 let config_loaded = ref false
-
 let config =
   (* Path to the default config file. *)
-  let default_config_file = Linkspath.config
+  let default_config_file =
+    match Utility.getenv "LINKS_CONFIG" with
+    (* If user defined LINKS_CONFIG then it takes the highest priority. *)
+    | Some path -> Some (Filename.concat path "config")
+    | None ->
+       (* If LINKS_CONFIG is not defined then we search in current directory. *)
+       let executable_dir = Filename.dirname Sys.executable_name in
+       if Sys.file_exists (Filename.concat executable_dir "config")
+       then Some (Filename.concat executable_dir "config")
+       else try
+           (* If all else failed we search for OPAM installation of Links and
+            use a config that it provides. *)
+           let opam_links_etc =
+             input_line (Unix.open_process_in "opam config var links:etc 2>/dev/null") in
+           if Sys.file_exists (Filename.concat opam_links_etc "config")
+           then Some (Filename.concat opam_links_etc "config")
+           else None
+         with End_of_file -> None
   in
   (* Load default is the action attached to the [config] setting. If
      [config_loaded] is false it will try to load whatever argument it
