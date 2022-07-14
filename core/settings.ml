@@ -1135,7 +1135,7 @@ let config =
     | None -> 
        (* If LINKS_CONFIG is defined then use it as the default config. *)
        Utility.getenv "LINKS_CONFIG"
-    | Some path ->  Some path
+    | Some path -> Some path
   in
   (* Load default is the action attached to the [config] setting. If
      [config_loaded] is false it will try to load whatever argument it
