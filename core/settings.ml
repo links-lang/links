@@ -1134,7 +1134,9 @@ let config =
     match Linkspath.config with
     | None -> 
        (* If LINKS_CONFIG is defined then use it as the default config. *)
-       Utility.getenv "LINKS_CONFIG"
+       (match Utility.getenv "LINKS_CONFIG" with 
+       | Some path -> Some (Filename.concat path "config")
+       | None -> None)
     | Some path -> Some path
   in
   (* Load default is the action attached to the [config] setting. If
