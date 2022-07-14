@@ -2,7 +2,7 @@ module C = Configurator.V1
 
 let check_opam : bool = 
   match Sys.getenv_opt "LINKS_BUILT_BY_OPAM" with 
-    None -> false
+   | None -> false
    | _ -> true
 
 let _ =
