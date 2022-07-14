@@ -1130,11 +1130,12 @@ let config_loaded = ref false
 let config =
   (* Path to the default config file. *)
   let default_config_file =
-    (* If LINKS_CONFIG is defined then use it as the default config. *)
-    match Utility.getenv "LINKS_CONFIG" with
-    | Some path ->  Some (Filename.concat path "config")
-    (* If LINKS_CONFIG is not defined, then use the precomputed path for default config. *)
-    | None -> Linkspath.config
+    (* If there exists a precomputed path then use it as the default config. *)
+    match Linkspath.config with
+    | None -> 
+       (* If LINKS_CONFIG is defined then use it as the default config. *)
+       Utility.getenv "LINKS_CONFIG"
+    | Some path ->  Some path
   in
   (* Load default is the action attached to the [config] setting. If
      [config_loaded] is false it will try to load whatever argument it
