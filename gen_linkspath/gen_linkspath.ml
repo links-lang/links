@@ -1,6 +1,6 @@
 module C = Configurator.V1
 
-let check_opam = 
+let check_opam =
   Sys.getenv_opt "LINKS_BUILT_BY_OPAM" |> Option.is_some
 
 let _ =
