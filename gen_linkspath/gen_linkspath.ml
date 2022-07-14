@@ -1,9 +1,7 @@
 module C = Configurator.V1
 
-let check_opam : bool = 
-  match Sys.getenv_opt "LINKS_BUILT_BY_OPAM" with 
-   | None -> false
-   | _ -> true
+let check_opam = 
+  Sys.getenv_opt "LINKS_BUILT_BY_OPAM" |> Option.is_some
 
 let _ =
   let oc = open_out "linkspath.ml" in 
