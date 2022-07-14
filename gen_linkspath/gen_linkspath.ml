@@ -1,7 +1,9 @@
 module C = Configurator.V1
 
 let check_opam : bool = 
-  try Sys.getenv "LINKS_BUILT_BY_OPAM" = "1" with _ -> false
+  match Sys.getenv_opt "LINKS_BUILT_BY_OPAM" with 
+    None -> false
+   | _ -> true
 
 let _ =
   let oc = open_out "linkspath.ml" in 
@@ -26,4 +28,3 @@ let _ =
           Printf.fprintf oc "let stdlib = \"%s/lib/stdlib\"\n" git_path;
           Printf.fprintf oc "let prelude = \"%s/prelude.links\"\n" git_path;
         close_out oc
-      
