@@ -1132,9 +1132,9 @@ let config =
   let default_config_file =
     (* If there exists a precomputed path then use it as the default config. *)
     match Linkspath.config with
-    | None -> 
+    | None ->
        (* If LINKS_CONFIG is defined then use it as the default config. *)
-       (match Utility.getenv "LINKS_CONFIG" with 
+       (match Utility.getenv "LINKS_CONFIG" with
        | Some path -> Some (Filename.concat path "config")
        | None -> None)
     | Some path -> Some path
