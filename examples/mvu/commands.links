@@ -11,10 +11,6 @@ sig view : (Model) ~%~> MvuHTML.HTML(Message)
 fun view(model) {
   open MvuAttrs;
   open MvuHTML;
-
-  var a0 = MvuAttrs.empty;
-  var h0 = MvuHTML.empty;
-
   var disabled = MvuAttrs.attr("disabled", "disabled");
 
   var (text, buttonAttr) =

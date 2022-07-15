@@ -61,8 +61,6 @@ fun updt(msg, model) {
   }
 }
 
-var ae = MvuAttrs.empty;
-var he = MvuHTML.empty;
 fun ch(xs) { MvuHTML.concat(xs) }
 
 sig view : (Model) ~> MvuHTML.HTML(Msg)
@@ -75,13 +73,13 @@ fun view(model) {
       "Pause"
     };
     div (id ("swatch") +@ class ("swatch"), ch([
-      h1 (ae, textNode(pad(model.minutes)) +* textNode(":" ^^ pad(model.seconds))),
+      h1 (a0, textNode(pad(model.minutes)) +* textNode(":" ^^ pad(model.seconds))),
       button (id ("togglepause") +@ togglePauseHandler, textNode(toggleText)),
       button (id ("reset") +@ resetHandler, textNode("Reset")),
       button (id ("stop") +@ stopHandler, textNode("Stop")),
       div (class ("footer"), ch([
-        b (ae, textNode("Keyboard shortcuts")),
-        br (ae, he),
+        b (a0, textNode("Keyboard shortcuts")),
+        br (a0, h0),
         textNode("| p : start/pause | "),
         textNode("r : reset | "),
         textNode("s : stop |")
