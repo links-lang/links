@@ -89,21 +89,19 @@ fun keyUpHandler() {
 }
 
 # Rendering
-var ae = MvuAttrs.empty;
-var he = MvuHTML.empty;
 fun ch(xs) { MvuHTML.concat(xs) }
 
 sig drawCircle : (Float,Float) -> HTML(Msg)
 fun drawCircle(x,y) {
   div (class ("circle") +@
        style ("left:" ^^ floatToString(x) ^^ "px;top:" ^^ floatToString(y) ^^ "px;position:absolute;"),
-       he)
+       h0)
 }
 
 sig drawPaddle : (Float, Float) -> HTML(Msg)
 fun drawPaddle(x,y) {
   div (class ("paddle") +@
-       style ("left:" ^^ floatToString(x) ^^ "px;top:" ^^ floatToString(y) ^^ "px;position:absolute;"), he)
+       style ("left:" ^^ floatToString(x) ^^ "px;top:" ^^ floatToString(y) ^^ "px;position:absolute;"), h0)
 }
 
 fun physicsUpdate(ball) {
