@@ -180,6 +180,5 @@ opam-release:
 
 .PHONY: opam-build-links.opam
 opam-build-links.opam: links.opam
-	dune exec preinstall/preinstall.exe -- -libdir $(eval opam var lib)
 	$(eval LINKS_BUILT_BY_OPAM=1)
 	dune build -p links
