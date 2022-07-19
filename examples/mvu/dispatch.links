@@ -14,9 +14,6 @@ fun view(model) {
     open MvuAttrs;
     open MvuHTML;
 
-    var h0 = MvuHTML.empty;
-    var a0 = MvuAttrs.empty;
-
     h1(a0, textNode(intToString(model)))
 }
 
