@@ -180,5 +180,4 @@ opam-release:
 # Build Links
 .PHONY: opam-build-links.opam
 opam-build-links.opam: links.opam
-	$(eval LINKS_BUILT_BY_OPAM=1)
-	dune build -p links
+	$(shell LINKS_BUILT_BY_OPAM=1 dune build -p links)
