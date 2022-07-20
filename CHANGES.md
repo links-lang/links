@@ -1,8 +1,45 @@
-# Unreleased
+# 0.9.7
 
-Notable changes made to `master` since the previous release.
+This release includes minor bug fixes, improvements, and a breaking
+change.
 
-* **Breaking change**: The Links standard library has adopted `Maybe` as it optional type. Previously, the standard library made inconsistent use of both `Option` and `Maybe` types. As a consequence of this change, every instance of `Option` has been turned into a `Maybe` type.
+* **Breaking change**: The Links standard library has adopted `Maybe`
+  as it optional type. Previously, the standard library made
+  inconsistent use of both `Option` and `Maybe` types. As a
+  consequence of this change, every instance of `Option` has been
+  turned into a `Maybe` type.
+* Uniform paths: The file paths used by Links internally are now
+  uniformly computed at compile time from the base of the current OPAM
+  switch.
+* Support for record extension in the presence of temporal projections.
+* It is now to use `default` as a setting value in the REPL.
+* Fixed an assertion failure in the relational lens code base.
+* Effect aliases: It is now possible to define aliases for effect
+  signatures, e.g.
+
+```links
+effectname State(s, e::Eff) = {Get:s, Put:(s) -> () |e};
+```
+
+defines an alias named `State` for an effect row with two operations
+`Get`, and `Put`. This alias is analogous to aliases introduced via
+`typename`, except that `effectname` aliases may be used in places
+where an effect row is expected, e.g.
+
+```links
+sig f : () ~State(Int, {})~> ()
+```
+
+is equivalent to
+
+```links
+sig f : () {Get:Int, Put:(Int) -> ()}~> ()
+```
+
+* Client/server annotations are now permitted on local and anonymous
+  functions.
+* Fixed a bug where remote calls involving a client closure would
+  cause the server side to crash.
 
 # 0.9.6
 
