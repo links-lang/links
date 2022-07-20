@@ -11,9 +11,8 @@ version: "0.9.7"
 
 
 build: [
-  [ "dune" "subst" ] {dev}
-  [ "dune" "exec" "preinstall/preinstall.exe" "--" "-libdir" _:lib ]
-  [ "dune" "build" "-p" name "-j" jobs ]
+  ["dune" "exec" "preinstall/preinstall.exe" "--" "-libdir" _:lib]
+  [make "opam-build-links.opam"]
 ]
 
 depends: [

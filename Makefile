@@ -176,3 +176,8 @@ opam-release:
 	dune-release publish -p $(RELEASE_PKGS) distrib
 	dune-release opam -p $(RELEASE_PKGS) pkg
 	dune-release opam -p $(RELEASE_PKGS) submit
+
+# Build Links
+.PHONY: opam-build-links.opam
+opam-build-links.opam: links.opam
+	$(shell LINKS_BUILT_BY_OPAM=1 dune build -p links)
