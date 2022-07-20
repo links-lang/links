@@ -90,9 +90,9 @@ create-startup-script:
 	@# This path resolution scheme may depend on BASH semantics.
 	$(eval ABS_BUILD_DIR=$(shell cd $(BUILD_DIR) ; pwd -P))
 	@# This is an attempt to put in a safe guard
-	@# If the above resolution fails to yield an existent path then fall back to the relative path in BUILD_DIR.
+	@# If the above resolution fails to yield an existing path then fall back to the relative path in BUILD_DIR.
 	$(eval ABS_BUILD_DIR:=$(shell test -d $(ABS_BUILD_DIR) && echo "$(ABS_BUILD_DIR)" || echo "$(BUILD_DIR)"))
-	@echo "LINKS_LIB=\"$(ABS_BUILD_DIR)/default/lib\" $(ABS_BUILD_DIR)/default/bin/links.exe \"\$$@\"" >> links
+	@echo "$(ABS_BUILD_DIR)/default/bin/links.exe \"\$$@\"" >> links
 	@chmod +x links
 	ln -fs links linx
 
@@ -122,6 +122,11 @@ build-release-all: dune dune-project include-db-sources
 .PHONY: include-db-sources
 include-db-sources:
 	$(eval SOURCES:=$(SOURCES),$(DB_SOURCES))
+
+# Auxiliary rule used by `opam install` to build Links
+.PHONY: opam-build-links.opam
+opam-build-links.opam: links.opam
+	$(shell LINKS_BUILT_BY_OPAM=1 dune build -p links)
 
 # Runs the test suite. We reset the variables CAMLRUNPARAM and
 # OCAMLRUNPARAM, because some of the tests are sensitive to the
@@ -176,8 +181,3 @@ opam-release:
 	dune-release publish -p $(RELEASE_PKGS) distrib
 	dune-release opam -p $(RELEASE_PKGS) pkg
 	dune-release opam -p $(RELEASE_PKGS) submit
-
-# Build Links
-.PHONY: opam-build-links.opam
-opam-build-links.opam: links.opam
-	$(shell LINKS_BUILT_BY_OPAM=1 dune build -p links)

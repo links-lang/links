@@ -20,9 +20,11 @@
              findlib menhirLib links.lens calendar)
   (preprocess (pps ppx_deriving.std ppx_deriving_yojson)))
 
+
+;; Generate the Linkspath module.
 (rule
   (targets linkspath.ml)
-  (deps (:gen ../gen_linkspath/gen_linkspath.exe))
+  (deps (:gen ../linkspath/gen_linkspath.exe))
   (action (run %{gen} -o %{targets})))
 
 ;; Make Query modules available.
