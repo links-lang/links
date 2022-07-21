@@ -5,7 +5,7 @@ open Utility
 open Webserver_types
 open Var
 
-let jslib_dir = Settings.(option "jslibdir"
+let jslib_dir = Settings.(option ~default:(Some Linkspath.jslib) "jslibdir"
                           |> synopsis "Server-side (physical) location of the JavaScript runtime"
                           |> to_string from_string_option
                           |> convert Utility.(Sys.expand ->- some)
