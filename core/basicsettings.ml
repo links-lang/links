@@ -1,5 +1,5 @@
 (** The banner *)
-let version = "0.9.7 (Burghmuirhead)"
+let version = "0.9.8 (Burghmuirhead)"
 let version = Settings.(option ~default:(Some version) ~readonly:true "version"
                         |> privilege `System
                         |> synopsis "Print version and exit"
