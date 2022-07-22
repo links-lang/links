@@ -46,7 +46,7 @@ args : --enable-handlers
 Avoiding pollution [1]
 ./tests/labels/pollution.links
 filemode : true
-stdout : (Just(42), Nothing, Just(-1)) : (Maybe (Int), Maybe (Int), Maybint)
+stdout : (Just(42), Nothing, Just(-1)) : (Maybint, Maybint, Maybint)
 args : --enable-handlers
 
 Avoiding pollution [2]

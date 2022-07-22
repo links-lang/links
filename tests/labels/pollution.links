@@ -1,35 +1,52 @@
+effectname A(e::Eff) = { Abort: () {}-> Zero | e } ;
+fun aborting () {  switch (do Abort) {}  }
+
+typename Maybint = Maybe(Int) ;
+
+sig maybe : ( Comp(a, { |A({ |e})} ) ) -> Comp (Maybe(a), {Abort{_}|e})
+fun maybe (h) () {
+    handle (h()) {
+        case Return(x) -> Just(x)
+        case Abort(k)  -> Nothing
+    }
+}
+
+effectname R(s,e::Eff) = { Receive : () {} -> s | e } ;
+
+sig receives : ([s]) -> ( Comp(a, { |A({ |R(s, { |e})})}) ) -> Comp(a , {Receive{_}|A({ |e})})
+fun receives (ss) (h) () {
+    handle (h()) (ss<-ss) {
+        case Receive(k) -> switch (ss) {
+            case [] -> aborting()
+            case h::t -> k(h,t)
+        }
+    }
+}
+
 fresh `Abort {
 
-    effectname A(e::Eff) = { `Abort: () {}-> Zero | e } ;
-    fun aborting () {  switch (do `Abort) {}  }
-
-    typename Maybint = Maybe(Int) ;
-
-    sig maybe : ( Comp(a, { |A({ |e})} ) ) -> Comp (Maybe(a), {`Abort{_}|e})
-    fun maybe (h) () {
-        handle (h()) {
-            case Return(x) -> Just(x)
-            case `Abort(k)  -> Nothing
+    sig protect : (Comp(a, {`Abort:Zero, Abort:Zero | e})) -> Comp(a, {Abort{_}, `Abort:Zero|e})
+    fun protect (m) () {
+        handle (m()) {
+            case Abort(k) -> k (do `Abort)
         }
     }
 
-    effectname R(s,e::Eff) = { Receive : () {} -> s | e } ;
-
-    sig receives : ( Comp(a, { |A({ |R(s, { |e})})}) ) -> ([s]) -> Comp(a , {Receive{_}|A({ |e})})
-    fun receives (h) (ss) () {
-        handle (h()) (ss<-ss) {
-            case Receive(k) -> switch (ss) {
-                case [] -> aborting()
-                case h::t -> k(h,t)
-            }
+    sig unprotect : (Comp(a, {`Abort:Zero, Abort:Zero | e})) -> Comp(a, {`Abort{_}, Abort:Zero|e})
+    fun unprotect (m) () {
+        handle (m()) {
+            case `Abort(k) -> k (do Abort)
         }
     }
 
-    effectname AR(s,e::Eff) = {`Abort:() {}-> Zero, Receive:(){}->s|e} ;
-    effectname NAR(s,e::Eff) = {`Abort-, Receive:(){}->s|e} ;
 
-    sig withtwo21s : ( () ~NAR(Int,{ |e})~> a ) -> Comp(Maybe(a), {Receive{_}, `Abort{_}|e})
-    fun withtwo21s (h) () { maybe( receives( h:( () ~AR(Int,{ |e})~> a ) <- ( () ~NAR(Int,{ |e})~> a) ) ([21,21]) ) () }
+    typename CA(a,e::Eff) = Comp(a, {Abort:Zero|e}) ;
+    typename CNAR(a,s,e::Eff) = Comp(a, {Receive:s, Abort:Zero, `Abort- |e}) ;
+    typename CAR(a,s,e::Eff) = Comp(a, {Receive:s, Abort:Zero, `Abort:Zero|e}) ;
+
+    sig withtwo21s : (CNAR(a,Int,{ |e})) -> CA(Maybe(a), {Receive{_}, `Abort{_} |e})
+    fun withtwo21s (h) { unprotect ( maybe( receives ([21,21]) ( protect ( h : CAR(a,Int,{ |e}) <- (CNAR(a,Int,{ |e}))
+    ) ) ) ) }
 
 }
 
@@ -39,7 +56,7 @@ typename CRI(e::Eff) = Comp(Int, { |R(Int,{ |e})}) ;
 sig f : CRI({ |e}) fun f () { do Receive + do Receive }
 sig g : CRI({ |e}) fun g () { do Receive + do Receive + do Receive }
 
-fun h () { if (do Receive < 42) {switch (do Abort) {}} else 0 }
+fun h () { if (do Receive < 42) switch (do Abort) {} else 0 }
 
 sig res : ( Comp(Maybint, {Abort:Zero |e}) ) -> Comp(Maybint, {Abort{_}|e})
 fun res (h) () {
@@ -51,7 +68,7 @@ fun res (h) () {
 
 # return values ###############################################################
 (
-    withtwo21s( f ) () ,
-    withtwo21s( g ) () ,
-    res(withtwo21s(h)) ()
+    res(withtwo21s( f )) () ,
+    res(withtwo21s( g )) () ,
+    res(withtwo21s( h )) ()
 )
