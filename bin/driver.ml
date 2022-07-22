@@ -5,12 +5,7 @@ open Utility
 
 (** Name of the file containing the prelude code. *)
 let prelude_file =
-  let prelude_dir =
-    match Utility.getenv "LINKS_LIB" with
-    (* If user defined LINKS_LIB then it takes the highest priority *)
-    | Some path -> path
-    | None -> locate_file "prelude.links" in
-  Settings.(option ~default:(Some (Filename.concat prelude_dir "prelude.links")) "prelude"
+  Settings.(option ~default: (Some Linkspath.prelude) "prelude"
             |> synopsis "The Links prelude source file"
             |> to_string from_string_option
             |> convert (Sys.expand ->- some)
@@ -237,20 +232,7 @@ module Phases = struct
             Js_CodeGen.output oc Compiler.primitive_bindings;
             let runtime_files =
               match Settings.get Basicsettings.System.custom_js_runtime with
-              | [] ->
-                let file =
-                  begin match Settings.get jslib_dir with
-                    | None | Some "" ->
-                      begin
-                        Filename.concat
-                          (match Utility.getenv "LINKS_LIB" with
-                            | None -> Filename.dirname Sys.executable_name
-                            | Some path -> path)
-                            (Filename.concat "js" "jslib.js")
-                      end
-                    | Some path -> Filename.concat path "jslib.js"
-                  end
-                in [file]
+              | [] -> [Filename.concat Linkspath.jslib "jslib.js"]
               | files -> files
             in
             List.iter

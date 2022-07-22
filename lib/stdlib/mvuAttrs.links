@@ -19,6 +19,7 @@ fun attr(k, v) {
 }
 
 var empty = AttrEmpty;
+var a0 = empty;
 
 fun eventHandler(hndlr) {
   AttrEventHandler(hndlr)
