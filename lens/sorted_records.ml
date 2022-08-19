@@ -28,6 +28,20 @@ module E = struct
     Printexc.register_printer f
 end
 
+let find_index_gen ~compare rs ~record =
+  let rec pivot s e =
+    if s > e then None
+    else
+      let m = (s + e) / 2 in
+      let r = compare rs.(m) record in
+      match r with
+      | a when a > 0 -> pivot s (m - 1)
+      | a when a < 0 -> pivot (m + 1) e
+      | _ -> Some m
+  in
+  let r = pivot 0 (Array.length rs - 1) in
+  r
+
 module Simple_record = struct
   (** simplified record type drops column names for efficiency *)
   type t = Value.t list
@@ -62,19 +76,7 @@ module Simple_record = struct
 
   let map ~f v = List.map ~f v
 
-  let find_index rs ~record =
-    let rec pivot s e =
-      if s > e then None
-      else
-        let m = (s + e) / 2 in
-        let r = compare rs.(m) record in
-        match r with
-        | a when a > 0 -> pivot s (m - 1)
-        | a when a < 0 -> pivot (m + 1) e
-        | _ -> Some r
-    in
-    let r = pivot 0 (Array.length rs - 1) in
-    r
+  let find_index rs ~record = find_index_gen ~compare rs ~record
 
   let find_record rs ~record =
     find_index rs ~record |> Option.map ~f:(Array.get rs)
@@ -446,7 +448,7 @@ let project_fun_dep ts ~fun_dep =
   ((cols_l, cols_r), Array.map map ts.plus_rows, Array.map map ts.neg_rows)
 
 type changelist =
-  ((string list * string list) * (Simple_record.t * Simple_record.t) list) list
+  ((string list * string list) * (Simple_record.t * Simple_record.t) array) list
 
 let calculate_fd_changelist data ~fun_deps =
   (* get the key of the row for finding complements *)
@@ -461,6 +463,7 @@ let calculate_fd_changelist data ~fun_deps =
         List.sort_uniq
           (fun (a, _) (a', _) -> Simple_record.compare a a')
           changeset
+        |> Array.of_list
       in
       let fds = Fun_dep.Set.remove fun_dep fds in
       (cols, changeset) :: loop fds
@@ -479,7 +482,7 @@ let pp_changelist_entry f ((cols_l, cols_r), entries) =
   in
   Format.fprintf f "%a -> %a\n%a" pp_cols cols_l pp_cols cols_r
     (Format.pp_newline_list pp_entry)
-    entries
+    (Array.to_list entries)
 
 let pp_changelist_pretty = Format.pp_newline_list pp_changelist_entry
 
@@ -502,8 +505,15 @@ let relational_update t ~fun_deps ~update_with =
                col_maps)
         in
         (* get a function which compares column with change *)
-        let comp record change_key =
-          List.for_all2 (fun mp1 key -> mp1 record = key) col_maps change_key
+        let comp change_key record =
+          let rec f l1 l2 =
+            match (l1, l2) with
+            | x :: xs, mp :: ys ->
+                let res = Simple_record.compare_val x (mp record) in
+                if res = 0 then f xs ys else res
+            | _, _ -> 0
+          in
+          f change_key col_maps
         in
         comp)
       changelist
@@ -542,7 +552,10 @@ let relational_update t ~fun_deps ~update_with =
           List.fold_left
             (fun r ((check, update), (_, changes)) ->
               let upd =
-                List.find ~f:(fun (left, _right) -> check r left) changes
+                find_index_gen
+                  ~compare:(fun (l, _) r -> check l r)
+                  changes ~record:r
+                |> Option.map ~f:(fun v -> Array.get changes v)
               in
               match upd with
               | None -> r

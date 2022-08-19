@@ -7,7 +7,7 @@ type env = int Int.Map.t
 
 let matches_change changes =
   let is_changed ((cols_l, _cols_r), vals) =
-    let vals_l = List.map ~f:(fun (left, _) -> left) vals in
+    let vals_l = List.map ~f:(fun (left, _) -> left) (Array.to_list vals) in
     Phrase.Option.in_expr cols_l vals_l
   in
   List.map ~f:is_changed changes |> Phrase.List.fold_or_opt
