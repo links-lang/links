@@ -42,10 +42,13 @@ let benchmark_both ~n test_ctx benchmark =
     Tools.skip_median cqtime,
     Tools.skip_median cttime )
 
+let rowcounts_large =
+  [ 500; 1000; 5000; 10000; 25000; 50000; 100000; 150000; 200000 ]
+let rowcounts_small =
+  [ 1000; 2000; 3000; 4000; 5000; 6000; 7000; 8000; 9000; 10000 ]
+
 let benchmark_select test_ctx =
-  let rowcounts =
-    [ 500; 1000; 5000; 10000; 25000; 50000; 100000; 150000; 200000 ]
-  in
+  let rowcounts = rowcounts_large in
   let results =
     List.map
       ~f:(fun n -> benchmark_both ~n test_ctx Prim.template_select_lens_2)
@@ -54,9 +57,7 @@ let benchmark_select test_ctx =
   Tools.print_csv_4 ~file:"select_benchmark" results
 
 let benchmark_join_template variant mk_join test_ctx =
-  let rowcounts =
-    [ 1000; 2000; 3000; 4000; 5000; 6000; 7000; 8000; 9000; 10000 ]
-  in
+  let rowcounts = rowcounts_large in
   let results =
     List.map
       ~f:(fun n ->
@@ -75,9 +76,7 @@ let benchmark_join_db test_ctx =
   benchmark_join_template "db" Mk_lens.join_db test_ctx
 
 let benchmark_drop test_ctx =
-  let rowcounts =
-    [ 1000; 2000; 3000; 4000; 5000; 6000; 7000; 8000; 9000; 10000 ]
-  in
+  let rowcounts = rowcounts_large in
   let results =
     List.map
       ~f:(fun n -> benchmark_both ~n test_ctx Prim.template_drop_lens_1)

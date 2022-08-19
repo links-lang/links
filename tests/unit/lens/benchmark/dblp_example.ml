@@ -73,6 +73,7 @@ let run_links ~classic test_ctx =
        --set=relational_lenses_classic=%b"
       db_args classic
   in
+  Printf.printf "%s\n%!" process;
   let ch = Unix.open_process_in process in
   let l = input_line ch in
   let times =
@@ -94,10 +95,11 @@ let benchmark_links_with ~n ~classic test_ctx =
   in
   (Tools.skip_median qtime, Tools.skip_median ttime)
 
+let rowcounts_large =
+  [ 500; 1000; 5000; 10000; 25000; 50000; 100000; 150000; 200000 ]
+
 let benchmark_links test_ctx =
-  let counts =
-    [ 500; 2000; 4000; 6000; 8000; 10000; 12000; 14000; 16000; 18000; 20000 ]
-  in
+  let counts = rowcounts_large in
   let dat =
     List.map
       ~f:(fun n ->
@@ -110,7 +112,7 @@ let benchmark_links test_ctx =
   Tools.print_csv_4 ~file:"dblp_example_local" dat
 
 let benchmark_links_incremental test_ctx =
-  let counts = [ 500; 1000; 10000; 25000; 50000; 100000; 200000 ] in
+  let counts = rowcounts_large in
   let dat =
     List.map
       ~f:(fun n ->
