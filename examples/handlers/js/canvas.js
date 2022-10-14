@@ -1,25 +1,22 @@
-
 function drawUnit(x, y, color, ctx, kappa) {
     ctx.fillStyle= color;
     ctx.fillRect(x,y,1,1);
-    return _yieldCont(kappa, _$Constants.UNIT);
+    return _$K.yield(kappa, _$Constants.UNIT);
 }
 
 function drawCustomUnit(x, y, xheight, yheight, color, ctx, kappa) {
     ctx.fillStyle= color;
     ctx.fillRect(x, y, xheight, yheight);
-    return _yieldCont(kappa, _$Constants.UNIT);
+    return _$K.yield(kappa, _$Constants.UNIT);
 
 }
 
 function getValueFromSelection(id, kappa){
-    var e = document.getElementById(id);
-    return _yieldCont(kappa, e.value);
+    const e = document.getElementById(id);
+    return _$K.yield(kappa, e.value);
 }
 
 function setBorderOfRef(node, style, kappa){
     node.style.border = style;
-    return _yieldCont(kappa, node);
+    return _$K.yield(kappa, node);
 }
-
-_$Constants.UNIT
