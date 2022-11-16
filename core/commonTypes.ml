@@ -29,6 +29,7 @@ end
 let lin_any = Linearity.Any
 let lin_unl = Linearity.Unl
 
+(* Wenhao: what is the difference between Linearity and DeclaredLinearity? *)
 module DeclaredLinearity = struct
   type t = Lin | Unl
     [@@deriving show]
@@ -42,83 +43,12 @@ module DeclaredLinearity = struct
     | _   -> false
 end
 
-module Timestamp = struct
-    type t = Timestamp of CalendarShow.t | MinusInfinity | Infinity
-      [@@deriving ord]
-
-    let timestamp ts = Timestamp ts
-    let now () = Timestamp (CalendarShow.now ())
-    let infinity = Infinity
-    let minus_infinity = MinusInfinity
-
-    let pp ppf =
-      let open Format in
-      function
-        | Timestamp ts  -> CalendarShow.pp ppf ts
-        | Infinity      -> pp_print_string ppf "'infinity'"
-        | MinusInfinity -> pp_print_string ppf "'-infinity'"
-
-    let show x =
-        let open Format in
-        fprintf str_formatter "%a" pp x;
-        flush_str_formatter ()
-
-    let to_string = show
-
-    let parse_string str =
-      let open Lexing in
-
-      let print_position outx lexbuf =
-          let pos = lexbuf.lex_curr_p in
-          Format.fprintf outx "%s:%d:%d" pos.pos_fname
-            pos.pos_lnum (pos.pos_cnum - pos.pos_bol + 1) in
-
-      let bad_date msg =
-          Errors.RuntimeError
-            (Printf.sprintf "Ill-formed date: %s (%s)" str msg) in
-
-      let lexbuf = from_string str in
-      lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = "<string>" };
-      try TimestampParser.timestamp TimestampLexer.lex lexbuf with
-        | TimestampParser.Error ->
-            let open Format in
-            fprintf str_formatter "%a" print_position lexbuf;
-            let err = flush_str_formatter () in
-            raise (bad_date err)
-
-    (** Parses a user timestamp string. Lack of an offset is assumed to mean
-        local time. *)
-    let parse_user_string str =
-      match parse_string str with
-        | `Timestamp (cal, Some offset) ->
-              Timestamp (CalendarShow.convert cal
-                (CalendarLib.Time_Zone.UTC_Plus offset)
-                (CalendarLib.Time_Zone.UTC))
-        | `Timestamp (cal, None) ->
-              Timestamp (CalendarShow.convert cal
-                (CalendarLib.Time_Zone.Local)
-                (CalendarLib.Time_Zone.UTC))
-        | `Infinity -> Infinity
-        | `MinusInfinity -> MinusInfinity
-
-    (** Parses a database timestamp string. Lack of an offset is assumed to mean
-        UTC. *)
-    let parse_db_string str =
-      match parse_string str with
-        | `Timestamp (cal, offset) ->
-            let offset = OptionUtils.from_option 0 offset in
-            Timestamp (CalendarShow.convert cal
-                (CalendarLib.Time_Zone.UTC_Plus offset)
-                (CalendarLib.Time_Zone.UTC))
-        | `Infinity -> Infinity
-        | `MinusInfinity -> MinusInfinity
-end
-
 
 (* Convenient aliases for constructing values *)
 let dl_lin = DeclaredLinearity.Lin
 let dl_unl = DeclaredLinearity.Unl
 
+(* Wenhao: For session types. I remember Mono is DB-relevant. *)
 module Restriction = struct
   type t =
     | Any
@@ -223,6 +153,7 @@ module Kind = struct
   let primary_kind (pk, _) = pk
 end
 
+(* Wenhao: use int for quantifiers *)
 module Quantifier = struct
   type t = int * Kind.t
     [@@deriving show]
@@ -243,6 +174,79 @@ module Quantifier = struct
 
   let eq : t -> t -> bool = fun lvar rvar ->
     to_var lvar = to_var rvar
+end
+
+(* Wenhao: move Timestamp to here *)
+module Timestamp = struct
+  type t = Timestamp of CalendarShow.t | MinusInfinity | Infinity
+    [@@deriving ord]
+
+  let timestamp ts = Timestamp ts
+  let now () = Timestamp (CalendarShow.now ())
+  let infinity = Infinity
+  let minus_infinity = MinusInfinity
+
+  let pp ppf =
+    let open Format in
+    function
+      | Timestamp ts  -> CalendarShow.pp ppf ts
+      | Infinity      -> pp_print_string ppf "'infinity'"
+      | MinusInfinity -> pp_print_string ppf "'-infinity'"
+
+  let show x =
+      let open Format in
+      fprintf str_formatter "%a" pp x;
+      flush_str_formatter ()
+
+  let to_string = show
+
+  let parse_string str =
+    let open Lexing in
+
+    let print_position outx lexbuf =
+        let pos = lexbuf.lex_curr_p in
+        Format.fprintf outx "%s:%d:%d" pos.pos_fname
+          pos.pos_lnum (pos.pos_cnum - pos.pos_bol + 1) in
+
+    let bad_date msg =
+        Errors.RuntimeError
+          (Printf.sprintf "Ill-formed date: %s (%s)" str msg) in
+
+    let lexbuf = from_string str in
+    lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = "<string>" };
+    try TimestampParser.timestamp TimestampLexer.lex lexbuf with
+      | TimestampParser.Error ->
+          let open Format in
+          fprintf str_formatter "%a" print_position lexbuf;
+          let err = flush_str_formatter () in
+          raise (bad_date err)
+
+  (** Parses a user timestamp string. Lack of an offset is assumed to mean
+      local time. *)
+  let parse_user_string str =
+    match parse_string str with
+      | `Timestamp (cal, Some offset) ->
+            Timestamp (CalendarShow.convert cal
+              (CalendarLib.Time_Zone.UTC_Plus offset)
+              (CalendarLib.Time_Zone.UTC))
+      | `Timestamp (cal, None) ->
+            Timestamp (CalendarShow.convert cal
+              (CalendarLib.Time_Zone.Local)
+              (CalendarLib.Time_Zone.UTC))
+      | `Infinity -> Infinity
+      | `MinusInfinity -> MinusInfinity
+
+  (** Parses a database timestamp string. Lack of an offset is assumed to mean
+      UTC. *)
+  let parse_db_string str =
+    match parse_string str with
+      | `Timestamp (cal, offset) ->
+          let offset = OptionUtils.from_option 0 offset in
+          Timestamp (CalendarShow.convert cal
+              (CalendarLib.Time_Zone.UTC_Plus offset)
+              (CalendarLib.Time_Zone.UTC))
+      | `Infinity -> Infinity
+      | `MinusInfinity -> MinusInfinity
 end
 
 module Location = struct

@@ -2260,8 +2260,9 @@ let type_pattern ?(linear_vars=true) closed
   let fresh_var () =
     if linear_vars
     then Types.fresh_type_variable (lin_any, res_any)
-    else Types.fresh_type_variable (lin_unl, res_any) in
+    else Types.fresh_type_variable (lin_unl, res_any) in (* WHY: why give lin_unl to parameters of non-linear functions? *)
 
+  (* NOTE: outdated comments? basic idea is still correct *)
   (* type_pattern p types the pattern p returning a typed pattern, a
      type environment for the variables bound by the pattern and two
      types. The first type is the type of the pattern 'viewed from the
@@ -2735,9 +2736,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                   List.iter (fun e' -> unify ~handle:Gripers.list_lit (pos_and_typ e, pos_and_typ e')) es;
                   ListLit (List.map erase (e::es), Some (typ e)), T.Application (Types.list, [PrimaryKind.Type, typ e]), Usage.combine_many (List.map usages (e::es))
             end
+        (* Wenhao: FunLit begin *)
         | FunLit (argss_prev, lin, fnlit, location) ->
             let (pats, body) = Sugartypes.get_normal_funlit fnlit in
-            let vs = check_for_duplicate_names pos (List.flatten pats) in
+            let vs = check_for_duplicate_names pos (List.flatten pats) in (* names of all variables in the parameter patterns *)
             let (pats_init, pats_tail) = from_option ([], []) (unsnoc_opt pats) in
             let tpc' = if DeclaredLinearity.is_linear lin then tpc else tpcu in
             let pats = List.append (List.map (List.map tpc') pats_init)
@@ -3927,6 +3929,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               else
                 Gripers.upcast_subtype pos t2 t1
         | Upcast _ -> assert false
+
+        (* Wenhao: handler begin? *)
         | Handle { sh_expr = m; sh_value_cases = val_cases; sh_effect_cases = eff_cases; sh_descr = descr; } ->
            ignore
              (if not (Settings.get  Basicsettings.Handlers.enabled)
@@ -3972,8 +3976,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            in
            (* type parameters *)
            let henv = context in
+            (* Wenhao: parameterised handler ? *)
            let (henv, params, descr) =
-             match descr.shd_params with
+             match descr.shd_params with 
              | Some { shp_bindings; _ } ->
                 let _ =
                   check_for_duplicate_names pos (List.map fst shp_bindings)
@@ -3998,6 +4003,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                                                                              shp_types = pat_types } })
              | None -> (henv, [], descr)
            in
+           (* Wenhao: type_cases begin *)
            let type_cases val_cases eff_cases =
              let wild_row () =
                let fresh_row = Types.make_empty_open_row default_effect_subkind in
@@ -4157,11 +4163,40 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                               (pos_and_typ body, no_pos bt)
                    in
                    let vs = Env.domain (pattern_env pat) in
-                   let vs' = Env.domain henv.var_env in
+                   (* let vs' = Env.domain henv.var_env in *)
                    let us =
-                     let vs'' = Ident.Set.union vs vs' in
-                     Usage.restrict (usages body) vs''
+                     (* let vs'' = Ident.Set.union vs vs' in *)
+                     Usage.restrict (usages body) vs
                    in
+                    (* let () = print_string "us:\n" in
+                    let () = Usage.iter (fun s x -> print_string("  " ^ s ^ ": " ^ string_of_int x ^ "\n")) us in *)
+                   
+                   (* check the usages of linear parameters in handler clauses *)
+                   let () =
+                    Env.iter (fun v t ->
+                      let uses = Usage.uses_of v (usages body) in
+                        if uses <> 1 then
+                          if Types.Unl.can_type_be t then
+                            Types.Unl.make_type t
+                          else
+                            Gripers.non_linearity pos uses v t)
+                      (pattern_env pat) in
+
+                   (* check the usages of outside linear variables in deep handlers *)
+                   let () =
+                    if descr.shd_depth = Deep then
+                      Usage.iter
+                        (fun v _ ->
+                          if not (StringSet.mem v vs) then
+                            let t = Env.find v henv.var_env in
+                            if Types.Unl.can_type_be t then
+                              Types.Unl.make_type t
+                            else
+                              Gripers.die pos ("Variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t ^ " is used in a deep handler."))
+                        (usages body)
+                     else ()
+                    in
+
                    let () =
                      let pos' = (fst3 kpat) |> WithPos.pos |> Position.resolve_expression in
                      let kt = TypeUtils.return_type (pattern_typ kpat) in
@@ -4184,11 +4219,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
              in
              (val_cases, rt), eff_cases, bt, inner_eff, outer_eff
            in
+           (* Wenhao: type_cases end *)
            (* make_operations_presence_polymorphic makes the operations in the given row polymorphic in their presence *)
            let make_operations_presence_polymorphic : Types.row -> Types.row
          = fun row ->
              let (operations, rho, dual) = TypeUtils.extract_row_parts row in
-         let operations' =
+             let operations' =
                StringMap.mapi
                  (fun name p ->
                    if TypeUtils.is_builtin_effect name
@@ -4197,7 +4233,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                                                                        make absent operations polymorphic in their presence. *)
                  operations
              in
-         T.Row (operations', rho, dual)
+             T.Row (operations', rho, dual)
            in
            let m_context = { context with effect_row = Types.make_empty_open_row default_effect_subkind } in
            let m = type_check m_context m in (* Type-check the input computation m under current context *)
@@ -4235,6 +4271,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                          shd_types = (Types.flatten_row inner_eff, typ m, Types.flatten_row outer_eff, body_type);
                          shd_raw_row = Types.make_empty_closed_row (); }
            in
+           let () = print_string "---------------- my test begin -----------------\n" in
+           let () = print_string "usages m:\n" in
+           let () = Usage.iter (fun s x -> print_string("  " ^ s ^ ": " ^ string_of_int x ^ "\n")) (usages m) in
+           let () = print_string "usages eff_cases:\n" in
+           let () = Usage.iter (fun s x -> print_string("  " ^ s ^ ": " ^ string_of_int x ^ "\n")) (usages_cases eff_cases) in
+           let () = print_string "---------------- my test end -----------------\n" in
            let usages =
              Usage.combine_many [ Usage.align (List.map (fun (_,(_, _, m)) -> m) params)
                                 ; usages m
@@ -4442,6 +4484,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
             {empty_context with
               var_env = penv},
             usage
+      (* Wenhao: type_binding Fun begin *)
       | Fun def ->
          let { fun_binder = bndr;
                fun_linearity = lin;
@@ -4586,6 +4629,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
              {empty_context with
                 var_env = Env.singleton name ft},
              Usage.restrict (usages body) vs')
+      (* Wenhao: type_binding Rec Fun begin *)
       | Funs defs ->
           (*
             Compute initial types for the functions using
