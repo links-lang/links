@@ -1,0 +1,18 @@
+fun test() {
+  var ch = fork(fun(ch) {
+     var ch = send(42, ch);
+     close(ch)
+  });
+
+  handle({
+    ignore(do Flip(ch))
+  }) {
+    case Return(_) -> ()
+    case Flip(ch, resume) -> {
+      ignore(do Flip(ch));
+      var (i, ch) = receive(ch);
+      close(ch);
+      resume(true)
+    }
+  }
+}

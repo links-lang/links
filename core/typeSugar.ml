@@ -4271,18 +4271,21 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                          shd_types = (Types.flatten_row inner_eff, typ m, Types.flatten_row outer_eff, body_type);
                          shd_raw_row = Types.make_empty_closed_row (); }
            in
-           let () = print_string "---------------- my test begin -----------------\n" in
+           (* Wenhao: some test code to print the usages in handler clauses *)
+           (* let () = print_string "---------------- my test begin -----------------\n" in
            let () = print_string "usages m:\n" in
            let () = Usage.iter (fun s x -> print_string("  " ^ s ^ ": " ^ string_of_int x ^ "\n")) (usages m) in
            let () = print_string "usages eff_cases:\n" in
-           let () = Usage.iter (fun s x -> print_string("  " ^ s ^ ": " ^ string_of_int x ^ "\n")) (usages_cases eff_cases) in
-           let () = print_string "---------------- my test end -----------------\n" in
+           let () = Usage.iter (fun s x -> print_string("  " ^ s ^ ": " ^ string_of_int x ^ "\n")) (usages_cases eff_cases) in *)
            let usages =
              Usage.combine_many [ Usage.align (List.map (fun (_,(_, _, m)) -> m) params)
                                 ; usages m
                                 ; usages_cases eff_cases
                                 ; usages_cases val_cases ]
            in
+           (* let () = print_string "usages combined:\n" in
+           let () = Usage.iter (fun s x -> print_string("  " ^ s ^ ": " ^ string_of_int x ^ "\n")) (usages) in
+           let () = print_string "---------------- my test end -----------------\n" in *)
            Handle { sh_expr = erase m;
                     sh_effect_cases = erase_cases eff_cases;
                     sh_value_cases = erase_cases val_cases;
@@ -4942,6 +4945,7 @@ and type_bindings (globals : context)  bindings =
          let result_ctxt = Types.extend_typing_environment ctxt ctxt' in
          result_ctxt, (binding::bindings, (binding.pos,ctxt'.var_env,usage)::uinf))
       (empty_context globals.effect_row globals.desugared, ([], [])) bindings in
+  (* Wenhao: usage_builder checks the usage of variables in the bindings *)
   let usage_builder body_usage =
     List.fold_left
       (fun usages (pos,env,usage) ->
@@ -5130,6 +5134,14 @@ module Check =
 struct
   let program tyenv (bindings, body) =
     try
+        (* Wenhao: some test code to print the parsed results *)
+        (* let () = print_string "---------- parsed results begin -----------\n" in
+        let () = print_string "bindings:\n" in
+        (* let _  = List.map (print_string -<- show_binding) bindings in *)
+        let _  = if (bindings = []) then () else (print_string -<- show_binding) <| List.hd bindings in print_string "\n";
+        let () = print_string "body:\n" in
+        let _  = Option.map (print_string -<- show_phrase) body in print_string "\n";
+        let () = print_string "---------- parsed results end -----------\n" in *)
       Debug.if_set Basicsettings.show_stages (fun () -> "Type checking...");
       Debug.if_set show_pre_sugar_typing
         (fun () ->

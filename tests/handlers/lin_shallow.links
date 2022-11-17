@@ -1,0 +1,12 @@
+{
+  var lf = linfun(x) {x};
+
+  shallowhandle({
+    ignore(do Foo);
+    lf(1)
+  }) {
+    case Foo(resume) -> {
+      lf(2)
+    }
+  }
+}
