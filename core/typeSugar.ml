@@ -1789,6 +1789,9 @@ end = struct
           'sink'. *)
        empty
     | usages :: usagess  ->
+       (* let () = StringMap.iter (fun s _ -> print_string <| s ^ "  ") usages in
+       let _ = List.map (StringMap.iter (fun s _ -> print_string <| s ^ "  ")) usagess in
+       print_string "\n" ; *)
        let combine' : Ident.t -> int option -> int option -> int option
          = fun _ident x y ->
          let unlimited = max_int in
@@ -3975,6 +3978,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            in
            (* type parameters *)
            let henv = context in
+           (* deal with parameterised handlers *)
            let (henv, params, descr) =
              match descr.shd_params with 
              | Some { shp_bindings; _ } ->
@@ -4142,8 +4146,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                    let body = type_check (henv ++ pattern_env pat) body in
                    let () = unify ~handle:Gripers.handle_branches
                           (pos_and_typ body, no_pos bt) in
+                   (* see the comments in eff_cases for the meaning of vs and vs' *)
                    let vs = Env.domain (pattern_env pat) in
-                   let vs' = Env.domain henv.var_env in
+                   let vs' = Env.domain <| List.fold_left (fun env p -> Env.extend env (pattern_env p))
+                                           Env.empty (List.map fst params)
+                   in
                    let us =
                      let vs'' = Ident.Set.union vs vs' in
                      Usage.restrict (usages body) vs''
@@ -4159,14 +4166,18 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                    let () = unify ~handle:Gripers.handle_branches
                               (pos_and_typ body, no_pos bt)
                    in
+                   (* vs is the variables in the pattern of eff-clauses *)
                    let vs = Env.domain (pattern_env pat) in
-                   (* let vs' = Env.domain henv.var_env in *)
-                   let us =
-                     (* let vs'' = Ident.Set.union vs vs' in *)
-                     Usage.restrict (usages body) vs
+                   (* vs' is the variables in the params of parameterised handlers *)
+                   let vs' = Env.domain <| List.fold_left (fun env p -> Env.extend env (pattern_env p))
+                                           Env.empty (List.map fst params)
                    in
-                    (* let () = print_string "us:\n" in
-                    let () = Usage.iter (fun s x -> print_string("  " ^ s ^ ": " ^ string_of_int x ^ "\n")) us in *)
+                   (* we need to remove vs ∪ vs' from the usages counting
+                      because they are only bound in the handler *)
+                   let us =
+                     let vs'' = Ident.Set.union vs vs' in
+                     Usage.restrict (usages body) vs''
+                   in
                    
                    (* check the usages of linear parameters in handler clauses *)
                    let () =
@@ -4177,7 +4188,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                             Types.Unl.make_type t
                           else
                             Gripers.non_linearity pos uses v t)
-                      (pattern_env pat) in
+                      (pattern_env pat)
+                   in
 
                    (* check the usages of outside linear variables in deep handlers *)
                    let () =
@@ -4192,7 +4204,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                               Gripers.die pos ("Variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t ^ " is used in a deep handler."))
                         (usages body)
                      else ()
-                    in
+                   in
 
                    let () =
                      let pos' = (fst3 kpat) |> WithPos.pos |> Position.resolve_expression in
@@ -4267,6 +4279,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                          shd_types = (Types.flatten_row inner_eff, typ m, Types.flatten_row outer_eff, body_type);
                          shd_raw_row = Types.make_empty_closed_row (); }
            in
+           (* Tag: final usages counting *)
            (* some test code to print the usages in handler clauses *)
            (* let () = print_string "---------------- my test begin -----------------\n" in
            let () = print_string "usages m:\n" in
@@ -4280,6 +4293,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                                 ; usages_cases eff_cases
                                 ; usages_cases val_cases ]
            in
+           (* let () = print_string "usages:\n" in
+           let () = Usage.iter (fun s x -> print_string("  " ^ s ^ ": " ^ string_of_int x ^ "\n")) (usages) in *)
            Handle { sh_expr = erase m;
                     sh_effect_cases = erase_cases eff_cases;
                     sh_value_cases = erase_cases val_cases;
@@ -5126,6 +5141,14 @@ module Check =
 struct
   let program tyenv (bindings, body) =
     try
+      (* some test code to print the parsed results *)
+      (* let () = print_string "---------- parsed results begin -----------\n" in
+      let () = print_string "bindings:\n" in
+      (* let _  = List.map (print_string -<- show_binding) bindings in *)
+      let _  = if (bindings = []) then () else (print_string -<- show_binding) <| List.hd bindings in print_string "\n";
+      let () = print_string "body:\n" in
+      let _  = Option.map (print_string -<- show_phrase) body in print_string "\n";
+      let () = print_string "---------- parsed results end -----------\n" in *)
       Debug.if_set Basicsettings.show_stages (fun () -> "Type checking...");
       Debug.if_set show_pre_sugar_typing
         (fun () ->
