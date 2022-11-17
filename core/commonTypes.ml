@@ -29,7 +29,6 @@ end
 let lin_any = Linearity.Any
 let lin_unl = Linearity.Unl
 
-(* Wenhao: what is the difference between Linearity and DeclaredLinearity? *)
 module DeclaredLinearity = struct
   type t = Lin | Unl
     [@@deriving show]
@@ -48,7 +47,6 @@ end
 let dl_lin = DeclaredLinearity.Lin
 let dl_unl = DeclaredLinearity.Unl
 
-(* Wenhao: For session types. I remember Mono is DB-relevant. *)
 module Restriction = struct
   type t =
     | Any
@@ -153,7 +151,6 @@ module Kind = struct
   let primary_kind (pk, _) = pk
 end
 
-(* Wenhao: use int for quantifiers *)
 module Quantifier = struct
   type t = int * Kind.t
     [@@deriving show]
@@ -176,7 +173,6 @@ module Quantifier = struct
     to_var lvar = to_var rvar
 end
 
-(* Wenhao: move Timestamp to here *)
 module Timestamp = struct
   type t = Timestamp of CalendarShow.t | MinusInfinity | Infinity
     [@@deriving ord]
