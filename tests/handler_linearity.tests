@@ -19,8 +19,23 @@ exit : 1
 stderr : @.*Type error: Variable .* has linear type .* is used .* times.* 
 args : --enable-handlers
 
-Use linear variables in shallow handlers
-tests/handlers/lin_shallow.links
+Use linear variables in deep handlers (4)
+tests/handlers/lin_deep4.links
+filemode : true
+exit : 1
+stderr : @.*Type error: Variable .* of linear type .* is used in a deep handler.* 
+args : --enable-handlers
+
+
+Use linear variables in shallow handlers (1)
+tests/handlers/lin_shallow1.links
+filemode : true
+exit : 1
+stderr : @.*Type error: Variable .* has linear type .* is used .* times.* 
+args : --enable-handlers
+
+Use linear variables in shallow handlers (2)
+tests/handlers/lin_shallow2.links
 filemode : true
 exit : 1
 stderr : @.*Type error: Variable .* has linear type .* is used .* times.* 

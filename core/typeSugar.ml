@@ -4156,6 +4156,31 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                      let vs'' = Ident.Set.union vs vs' in
                      Usage.restrict (usages body) vs''
                    in
+                    (* check the usages of linear parameters in handler clauses *)
+                    let () =
+                    Env.iter (fun v t ->
+                      let uses = Usage.uses_of v (usages body) in
+                        if uses <> 1 then
+                          if Types.Unl.can_type_be t then
+                            Types.Unl.make_type t
+                          else
+                            Gripers.non_linearity pos uses v t)
+                      (pattern_env pat)
+                   in
+                   (* check the usages of environment linear variables in deep handlers *)
+                   let () =
+                    if descr.shd_depth = Deep then
+                      Usage.iter
+                        (fun v _ ->
+                          if not (StringSet.mem v vs) then
+                            let t = Env.find v henv.var_env in
+                            if Types.Unl.can_type_be t then
+                              Types.Unl.make_type t
+                            else
+                              Gripers.die pos ("Variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t ^ " is used in a deep handler."))
+                        (usages body)
+                     else ()
+                   in
                    (pat, update_usages body us) :: cases)
                  val_cases []
              in
@@ -4179,7 +4204,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                      let vs'' = Ident.Set.union vs vs' in
                      Usage.restrict (usages body) vs''
                    in
-                   
                    (* check the usages of linear parameters in handler clauses *)
                    let () =
                     Env.iter (fun v t ->
@@ -4191,8 +4215,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                             Gripers.non_linearity pos uses v t)
                       (pattern_env pat)
                    in
-
-                   (* check the usages of outside linear variables in deep handlers *)
+                   (* check the usages of environment linear variables in deep handlers *)
                    let () =
                     if descr.shd_depth = Deep then
                       Usage.iter
