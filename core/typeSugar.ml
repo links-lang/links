@@ -2263,7 +2263,7 @@ let type_pattern ?(linear_vars=true) closed
   let fresh_var () =
     if linear_vars
     then Types.fresh_type_variable (lin_any, res_any)
-    else Types.fresh_type_variable (lin_unl, res_any) in (* WHY: why give lin_unl to parameters of non-linear functions? *)
+    else Types.fresh_type_variable (lin_unl, res_any) in
 
   (* NOTE: outdated comments? basic idea is still correct *)
   (* type_pattern p types the pattern p returning a typed pattern, a
@@ -2741,7 +2741,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             end
         | FunLit (argss_prev, lin, fnlit, location) ->
             let (pats, body) = Sugartypes.get_normal_funlit fnlit in
-            let vs = check_for_duplicate_names pos (List.flatten pats) in (* names of all variables in the parameter patterns *)
+            (* names of all variables in the parameter patterns *)
+            let vs = check_for_duplicate_names pos (List.flatten pats) in
             let (pats_init, pats_tail) = from_option ([], []) (unsnoc_opt pats) in
             let tpc' = if DeclaredLinearity.is_linear lin then tpc else tpcu in
             let pats = List.append (List.map (List.map tpc') pats_init)
@@ -3980,7 +3981,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            let henv = context in
            (* deal with parameterised handlers *)
            let (henv, params, descr) =
-             match descr.shd_params with 
+             match descr.shd_params with
              | Some { shp_bindings; _ } ->
                 let _ =
                   check_for_duplicate_names pos (List.map fst shp_bindings)
