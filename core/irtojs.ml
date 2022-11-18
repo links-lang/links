@@ -1278,9 +1278,9 @@ end = functor (K : CONTINUATION) -> struct
               let translate_eff_case env scrutinee (xb, resume, body) kappas =
                 let (_x, x_name) as xb = name_binder xb in
                 let (r, r_name) = name_binder resume in
-                let p = project scrutinee "p" in
+                let p = project (project scrutinee "_value") "p" in
                 let resume =
-                  let s = project scrutinee "s" in
+                  let s = project (project scrutinee "_value") "s" in
                   make_resumption s
                 in
                 let env' =

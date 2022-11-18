@@ -1,44 +1,44 @@
 function systemYield(f, kappa){
     window.requestAnimationFrame(function(){
-        return f(_$Constants.UNIT, _idy);
+        return f(_$Constants.UNIT, _$K.idy);
     });
     return _$Constants.UNIT;
 }
 
 function delayExecution(delay, kappa){
-    window.setTimeout(function(){return _yieldCont(kappa, _$Constants.UNIT);}, delay);
+    window.setTimeout(function(){return _$K.yield(kappa, _$Constants.UNIT);}, delay);
     return _$Constants.UNIT;
 }
 
 function delayExecutionOfF(delay, f, kappa){
     window.setTimeout(function(){f()}, delay);
-    return _yieldCont(kappa, _$Constants.UNIT);
+    return _$K.yield(kappa, _$Constants.UNIT);
 }
 
 function requestAnimationFrame(f, delay, kappa){
     window.requestAnimationFrame(f);
-    return _yieldCont(kappa, _$Constants.UNIT);
+    return _$K.yield(kappa, _$Constants.UNIT);
 }
 
 function setIntervalForF(interval, f, kappa){
-    var id = setInterval(function() {
-        return f(_idy);
+    const _id = setInterval(function() {
+        return f(_$K.idy);
     }, interval);
-    return _yieldCont(kappa, _$Constants.UNIT);
+    return _$K.yield(kappa, _$Constants.UNIT);
 }
 
 const SystemQueue = (function(){
 
-    let queue = _$List.Nil;
+    let queue = _$List.nil;
 
     function enqueue(fiber){
-        queue = _$List.Cons(fiber, queue);
+        queue = _$List.cons(fiber, queue);
         return _$Constants.UNIT;
     }
 
     function dequeue(){
         let temp = queue;
-        queue = _$List.Nil;
+        queue = _$List.nil;
         return temp;
     }
 
@@ -46,7 +46,9 @@ const SystemQueue = (function(){
         return _$List.length(queue);
     }
 
-    return {"enqueue": enqueue, "dequeue": dequeue, "length" : length}
+    return { "enqueue": enqueue
+           , "dequeue": dequeue
+           , "length" : length }
 
 }());
 

@@ -1,8 +1,8 @@
-alien javascript "/js/canvas.js" {
+alien javascript "/examples/handlers/js/canvas.js" {
     getValueFromSelection: (String) ~> String;
 }
 
-alien javascript "js/runtime.js" {
+alien javascript "/examples/handlers/js/runtime.js" {
     delayExecution: (Int) ~> ();
     requestAnimationFrame: (() -> (), Int) ~> ();
     setIntervalForF: (Int, () ~> ()) ~> ();
@@ -19,8 +19,8 @@ typename Priority = [|High|Low|];
 typename Co(e::Eff) = () {Fork: (Co({ |e}), Priority) -> (), Yield:() |e}~> ();
 typename Fiber0(e::Eff) = (prio: Priority, f: () {Fork: (Fiber0({ |e})) -> (), Yield:()|e}~> ());
 typename SchedulerState(a) = (runQ: PrioQueue(a), prio: Priority, startTime: Int);
-typename Fiber = (prio:Priority, f: (SchedulerState(Fiber)) ~> ());
-typename FiberQueue = PrioQueue(Fiber);
+typename Fiber(e::Eff) = (prio:Priority, f: (SchedulerState(Fiber({ |e}))) ~e~> ());
+typename FiberQueue(e::Eff) = PrioQueue(Fiber({ |e}));
 typename Update = [|TextUpdate: String | LocationUpdate: Float|];
 typename STriangle(e::Eff) = (point: Point, targetSize: Int, text: String, children: [STriangle({ |e})]);
 
@@ -407,7 +407,7 @@ fun main_page(_){
 sig main: () ~> ()
 fun main() {
     addRoute("/", main_page);
-    addStaticRoute("/js", "js", [("js", "text/javascript")]);
+    addStaticRoute("/examples/handlers/js", "examples/handlers/js", [("js", "text/javascript")]);
 
     servePages()
 }

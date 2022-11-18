@@ -1,11 +1,11 @@
 typename Canvas = ();
-alien javascript "/js/canvas.js" {
+alien javascript "/examples/handlers/js/canvas.js" {
     drawUnit: (Int, Int, String, Canvas) ~> ();
     drawCustomUnit: (Int, Int, Int, Int, String, Canvas) ~> ();
     getValueFromSelection: (String) ~> String;
 }
 
-alien javascript "js/runtime.js" {
+alien javascript "/examples/handlers/js/runtime.js" {
     systemYield : ((()) {}~> ()) ~> ();
     delayExecution: (Int) ~> ();
     sysEnqueue: (a) ~> ();
@@ -435,7 +435,7 @@ fun main_page(_){
 sig main: () ~> ()
 fun main() {
     addRoute("/", main_page);
-    addStaticRoute("/js", "js", [("js", "text/javascript")]);
+    addStaticRoute("/examples/handlers/js", "examples/handlers/js", [("js", "text/javascript")]);
 
     servePages()
 }
