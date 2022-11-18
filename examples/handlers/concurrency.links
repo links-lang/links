@@ -73,9 +73,9 @@ sig scheduleBreadthFirst :
    Proc ({Fork{p}, Yield{q} | e})
 fun scheduleBreadthFirst(m)() {
   handle(m()) {
-    case Yield(k)   -> enqueue(fun() {k (())}); runNext()
-    case Fork(p, k) -> enqueue(scheduleBreadthFirst(p)); k(())
-    case Return(()) -> runAll()
+    case <Yield => k>   -> enqueue(fun() {k (())}); runNext()
+    case <Fork(p) => k> -> enqueue(scheduleBreadthFirst(p)); k(())
+    case () -> runAll()
   }
 }
 
@@ -87,11 +87,11 @@ sig scheduleDepthFirst :
    Proc ({Fork{p}, Yield{q} | e})
 fun scheduleDepthFirst(m)() {
   handle(m()) {
-    case Yield(k)   -> enqueue(fun() {k (())});
+    case <Yield => k>   -> enqueue(fun() {k (())});
                        runNext()
-    case Fork(p, k) -> enqueue(fun() {k (())});
+    case <Fork(p) => k> -> enqueue(fun() {k (())});
                        scheduleDepthFirst(p)()
-    case Return(()) -> runAll()
+    case () -> runAll()
   }
 }
 
@@ -103,14 +103,14 @@ sig scheduleRandom :
    Proc ({Fork{p}, Yield{q} | e})
 fun scheduleRandom(m)() {
   handle(m()) {
-    case Yield(k)   -> enqueue(fun() {k (())}); runNext()
-    case Fork(p, k) -> if (random() < 0.5) {
+    case <Yield => k>   -> enqueue(fun() {k (())}); runNext()
+    case <Fork(p) => k> -> if (random() < 0.5) {
                          enqueue(scheduleRandom(p)); k(())
                        } else {
                          enqueue(fun() {k (())});
                          scheduleRandom(p)()
                        }
-    case Return(()) -> runAll()
+    case () -> runAll()
   }
 }
 
@@ -121,8 +121,8 @@ sig zipQueue :
    Comp (a, {Enqueue{_},          Dequeue{_}      |e})
 fun zipQueue(m)() {
   handle(m())((front, back) <- ([], [])) {
-    case Enqueue(x, k) -> k((),(front, x :: back))
-    case Dequeue(k)    ->
+    case <Enqueue(x) => k> -> k((),(front, x :: back))
+    case <Dequeue => k>    ->
       switch ((front, back)) {
         case ([], [])   -> k(Nothing,([], []))
         case ([], back) -> var (x::front) = reverse(back);
@@ -130,7 +130,7 @@ fun zipQueue(m)() {
         case (x::front, back) ->
                            k(Just(x),(front, back))
       }
-    case Return(x) -> x
+    case x -> x
   }
 }
 

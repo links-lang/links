@@ -136,10 +136,10 @@ fun solve(forward, timeLeft, sides) {
 
 fun solutions() {
   handle(solve(true, 17, ([Bono, Edge, Adam, Larry], []))) {
-    case Return(xs) -> [xs]
-    case Choose(members, resume) ->
+    case xs -> [xs]
+    case <Choose(members) => resume> ->
       concatMap(resume, members)
-    case Fail -> []
+    case <Fail> -> []
   }
 }
 

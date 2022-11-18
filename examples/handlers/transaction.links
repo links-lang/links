@@ -39,10 +39,10 @@ fun schedule(main) {
 
   fun withThreads(f, q) {
     handle(f())(runQ <- q) {
-      case Return(()) -> runNext(runQ)
-      case Yield(resume) ->
+      case () -> runNext(runQ)
+      case <Yield => resume> ->
          runNext(enqueue(resume, runQ))
-      case Fork(f, resume) ->
+      case <Fork(f) => resume> ->
          withThreads(f, enqueue(resume, runQ))
     }
   }
@@ -57,9 +57,9 @@ fun put(st) { do Put(st) }
 sig runState : (Comp(a, {Get:s, Put: (s) -> () |e}), s) {Get{_}, Put{_} |e}~> (a, s)
 fun runState(m, st) {
   handle(m())(st <- st) {
-    case Return(x)      -> (x, st)
-    case Get(resume)    -> resume(st, st)
-    case Put(p, resume) -> resume((), p)
+    case x      -> (x, st)
+    case <Get => resume>    -> resume(st, st)
+    case <Put(p) => resume> -> resume((), p)
   }
 }
 
@@ -71,9 +71,9 @@ fun abort() {
 
 fun beginTransaction(m) {
   handle(m())([alice, bob] as st <- get()) {
-    case Return(()) -> put(st); (st, "Done")
-    case Abort -> (get(), "Aborted")
-    case Put([acc], resume) ->
+    case () -> put(st); (st, "Done")
+    case <Abort> -> (get(), "Aborted")
+    case <Put([acc]) => resume> ->
        if (acc.1 == "Alice")
           resume((), [acc, bob])
        else

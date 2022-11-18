@@ -34,25 +34,25 @@ fun flickering_st(n)() {
 # Parameterised (deep) handlers are built-in
 fun evalState(st, m) {
   handle(m())(st <- st) {
-    case Return(x) -> x
-    case Get(resume) -> resume(st, st)
-    case Put(p, resume) -> resume((), p)
+    case x -> x
+    case <Get => resume> -> resume(st, st)
+    case <Put(p) => resume> -> resume((), p)
   }
 }
 
 fun logState(m)() {
   handle(m())(history <- []) {
-    case Return(x) -> (x, history)
-    case Put(p,resume) -> resume(put(p), history ++ [p])
+    case x -> (x, history)
+    case <Put(p) => resume> -> resume(put(p), history ++ [p])
   }
 }
 
 # Parameterised handlers can be simulated via a technique known as parameter-passing
 fun evalState0(st, m) {
   (handle(m()) {
-    case Return(x) -> fun(_) { x }
-    case Get(resume) -> fun(st) { resume(st)(st) }
-    case Put(p,resume) -> fun(_) { resume(())(p) }
+    case x -> fun(_) { x }
+    case <Get => resume> -> fun(st) { resume(st)(st) }
+    case <Put(p) => resume> -> fun(_) { resume(())(p) }
   })(st)
 }
 

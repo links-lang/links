@@ -47,16 +47,16 @@ fun fail() {switch(do Fail) { }}
 sig maybe : (Comp(a, {Fail:Zero|e})) -> Comp(Maybe(a), { Fail{_} |e})
 fun maybe(m)() {
   handle(m()) {
-    case Return(x) -> Just(x)
-    case Fail(_)   -> Nothing
+    case x -> Just(x)
+    case <Fail>   -> Nothing
   }
 }
 
 # left biased choice
 fun leftBiased(m)() {
   handle(m()) {
-    case Return(x) -> x
-    case Choose(k) ->
+    case x -> x
+    case <Choose => k> ->
       fun its(c)() {k(c)}
       switch (run $ maybe(its(true))) {
         case Just(x) -> x
@@ -438,13 +438,13 @@ mutual {
   sig parse : (Parser(a, { |e}), [Char]) -> Comp(a, {Choose-,Satisfies-,Peek-,Fail: Zero |e})
   fun parse(m, input)() {
     handle(m())(tokens <- input) {
-      case Return(x) -> x
-      case Peek(resume) ->
+      case x -> x
+      case <Peek => resume> ->
          switch (tokens) {
             case []        -> resume(Nothing, tokens)
             case tok :: _  -> resume(Just(tok), tokens)
          }
-      case Satisfies(pred, resume) ->
+      case <Satisfies(pred) => resume> ->
          var pred = gen1(pred);
          switch (tokens) {
            case c :: tokens ->
@@ -452,7 +452,7 @@ mutual {
               else fail()
            case _ -> fail()
          }
-      case Choose(resume) ->
+      case <Choose => resume> ->
         switch(run $ maybe(fun() { resume(true, tokens) })) {
           case Just(x) -> x
           case Nothing ->

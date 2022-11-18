@@ -244,9 +244,9 @@ fun schedule(main){
     fun runFiber(fiber, runQ){
         #dump(self());
         handle(fiber.f()) ( state <- (prio=fiber.prio, runQ=runQ, startTime=clientTimeMilliseconds()) ){
-            case Return(x) ->
+            case x ->
                 runNext(poll(state.runQ))
-            case Fork(f, resume) ->
+            case <Fork(f) => resume> ->
                 var q = poll(state.runQ);
                 switch ((f.prio, state.prio)) {
                     case (High, _) ->
@@ -259,7 +259,7 @@ fun schedule(main){
                         var qq = fiberEnqueue(resumptionToFiber(resume, state.prio), q);
                         runFiber(f, qq)
                 }
-            case Yield(resume) ->
+            case <Yield => resume> ->
                 var currentTime = clientTimeMilliseconds();
                 var buffer = switch(state.prio){
                     case High -> 120
@@ -299,7 +299,7 @@ fun schedule(main){
 
 fun gensymHandler(f){
     handle(f())(counter <- 0) {
-        case Gensym(resume) -> resume(counter, counter+1)
+        case <Gensym => resume> -> resume(counter, counter+1)
     }
 }
 

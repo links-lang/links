@@ -1,6 +1,7 @@
 open Utility
 open CommonTypes
 open Sugartypes
+open SourceCode
 
 (**
 
@@ -376,12 +377,14 @@ let cleanup_effects tycon_env =
                          (SourceCode.WithPos.make ~pos
                             (Function (domain, ([], Closed), codomain))) )
                  | _, _ -> raise (unexpected_effects_on_abstract_op pos name) )
-             | name, Present node when not (TypeUtils.is_builtin_effect name) ->
+             | name, Present ({ node ; pos } as node') when not (TypeUtils.is_builtin_effect name) ->
                  (* Elaborates `Op : a' to `Op : () {}-> a' *)
+                 let node = match node with
+                 (* | Forall (qs, node') -> Forall (qs, WithPos.make ~pos (Function ([], ([], Closed), node'))) *)
+                 | _ -> Function ([], ([], Closed), node')
+                 in
                  ( name,
-                   Present
-                     (SourceCode.WithPos.make ~pos:node.pos
-                        (Function ([], ([], Closed), node))) )
+                   Present (WithPos.make ~pos node) )
              | x -> x)
            fields
        in
