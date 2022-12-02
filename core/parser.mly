@@ -311,6 +311,7 @@ let parse_foreign_language pos lang =
 %token SPAWN SPAWNAT SPAWNANGELAT SPAWNCLIENT SPAWNANGEL SPAWNWAIT
 %token OFFER SELECT
 %token DOOP
+%token XLIN XUNL
 %token LPAREN RPAREN
 %token LBRACE RBRACE LBRACEBAR BARRBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
@@ -898,7 +899,12 @@ perhaps_db_driver:
 | atomic_expression perhaps_db_args                            { Some $1, $2   }
 | /* empty */                                                  { None   , None }
 
+seq_expression:
+| XLIN LBRACE exp RBRACE                                       { with_pos $loc (Linlet $3) }
+| XUNL LBRACE exp RBRACE                                       { with_pos $loc (Unlet $3) }
+
 exp:
+| seq_expression
 | case_expression
 | conditional_expression
 | database_expression

@@ -220,7 +220,7 @@ type typing_environment = { var_env    : environment ;
                             rec_vars   : Utility.StringSet.t ;
                             tycon_env  : tycon_environment ;
                             effect_row : row ;
-                            cont_lin   : bool ref ;
+                            cont_lin   : int ;
                             desugared  : bool }
 
 val empty_typing_environment : typing_environment

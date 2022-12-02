@@ -1659,19 +1659,19 @@ type context = Types.typing_environment = {
 
   (* cont_lin = true : the continuation can use linear vars
      cont_lin = false : the continuation must not use linear vars *)
-  cont_lin : bool ref;
+  cont_lin : int;
 
   (* Whether this is runs on desugared code, and so some non-user
      facing constructs are permitted. *)
   desugared : bool;
 }
 
-let empty_context eff desugared =
+let empty_context contlin eff desugared =
   { var_env    = Env.empty;
     rec_vars   = StringSet.empty;
     tycon_env  = Env.empty;
     effect_row = eff;
-    cont_lin   = ref true;
+    cont_lin   = contlin;
     desugared }
 
 let bind_var         context (v, t) = {context with var_env    = Env.bind v t context.var_env}
@@ -1680,7 +1680,7 @@ let bind_alias       context (v, t) = {context with tycon_env  = Env.bind v t co
 let bind_effects     context r      = {context with effect_row = r}
 
 
-(* some helper functions for control-flow linearity *)
+(* Tag: some helper functions for control-flow linearity *)
 (* NOTICE: `lin_any` here means this eff_row can be unified with
     linear or unlimited row types *)
 let make_singleton_open_eff_row = fun op_name_sig ->
@@ -1701,6 +1701,25 @@ let make_unit_signature_type = fun islin out ->
 let make_continuation_type = fun islin inp eff out ->
   Types.make_function_type ~linear:(islin) inp eff out
 
+let cont_lin_count = ref 0
+
+(* 0: false; 1: true *)
+(* let cont_lin_map = ref IntMap.empty *)
+let cont_lin_map = ref (IntMap.add (-1) 1 IntMap.empty)
+
+let new_cont_lin () =
+  let newx = !cont_lin_count in
+  let () = cont_lin_count := newx + 1 in
+  let () = cont_lin_map := IntMap.add newx 1 !cont_lin_map in
+  newx
+
+let get_cont_lin context =
+  let x = IntMap.find context.cont_lin !cont_lin_map in
+  if x = 1 then true else false
+
+let set_cont_lin context b =
+  let x = if b then 1 else 0 in
+  cont_lin_map := IntMap.add context.cont_lin x !cont_lin_map
 
 (* TODO(dhil): I have extracted the Usage abstraction from my name
    hygiene/compilation unit patch. The below module is a compatibility
@@ -2675,7 +2694,18 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
     in
     (** update control-flow linearity *)
     let update_linearity p usages =
-      if !(context.cont_lin)
+      (
+        print_string "[[update_linearity]]:\n";
+        print_string <| "cont_lin: " ^ string_of_bool (get_cont_lin context) ^ "\n";
+        Test.print_type context.effect_row "effect_row";
+        (match p.node with
+          | FunLit _ -> print_string <| "fun\n"
+          | Block _ -> print_string <| "block\n"
+          | _ -> print_string "dont know\n"
+        );
+        print_string "\n"
+      );
+      if (get_cont_lin context)
         (* make `context.effect_row` linear if `context.cont_lin` is true *)
         then
           (* only make eff_row linear if p is impure
@@ -2826,7 +2856,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             let effects = Types.make_empty_open_row default_effect_subkind in
             let body = type_check ({context with
                                       var_env = env';
-                                      effect_row = effects}) body in
+                                      effect_row = effects;
+                                      cont_lin = new_cont_lin ()}) body in
 
             (* make types of paramters unlimited if they are not used exactly once *)
             let () =
@@ -4345,7 +4376,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
              in
              T.Row (operations', rho, dual)
            in
-           let m_context = { context with effect_row = Types.make_empty_open_row default_effect_subkind } in
+           let m_context = { context with
+              effect_row = Types.make_empty_open_row default_effect_subkind;
+              cont_lin = new_cont_lin () } in
            let m = type_check m_context m in (* Type-check the input computation m under current context *)
            let m_effects = T.Effect m_context.effect_row in
            (* Most of the work is done by `type_cases'. *)
@@ -4423,11 +4456,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
         (* update continuation linearity *)
         | Linlet p ->
           let (p, t, usages) = type_check context p in
-          let () = context.cont_lin := true in
+          let () = set_cont_lin context true in
           (* TODO: makelin context.effect_row (when p is not pure) *)
           (WithPos.node p, t, usages)
         | Unlet p ->
-          let () = context.cont_lin := false in
+          let () = set_cont_lin context false in
           let (p, t, usages) = type_check context p in
           (WithPos.node p, t, usages)
 
@@ -4569,7 +4602,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
     let exp_pos (p,_,_) = uexp_pos p in
     let pos_and_typ e = (exp_pos e, typ e) in
 
-    let empty_context = empty_context context.effect_row context.desugared in
+    let empty_context = empty_context context.cont_lin context.effect_row context.desugared in
 
     let module T = Types in
     let typed, ctxt, usage = match def with
@@ -5061,7 +5094,7 @@ and type_bindings (globals : context)  bindings =
          let binding, ctxt', usage = type_binding (Types.extend_typing_environment globals ctxt) binding in
          let result_ctxt = Types.extend_typing_environment ctxt ctxt' in
          result_ctxt, (binding::bindings, (binding.pos,ctxt'.var_env,usage)::uinf))
-      (empty_context globals.effect_row globals.desugared, ([], [])) bindings in
+      (empty_context globals.cont_lin globals.effect_row globals.desugared, ([], [])) bindings in
   (* usage_builder checks the usage of variables from the bindings *)
   let usage_builder body_usage =
     List.fold_left
@@ -5291,7 +5324,8 @@ struct
         match body with
         | None -> (bindings, None), Types.unit_type, tyenv'
         | Some body ->
-          let body, typ = type_check_general (Types.extend_typing_environment tyenv tyenv') body in
+          let context = (Types.extend_typing_environment tyenv tyenv') in
+          let body, typ = type_check_general {context with cont_lin = new_cont_lin ()}  body in
           let typ = Types.normalise_datatype typ in
           (bindings, Some body), typ, tyenv' in
       Debug.if_set show_post_sugar_typing

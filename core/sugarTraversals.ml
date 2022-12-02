@@ -319,6 +319,10 @@ class map =
           let ps  = o#list (fun o -> o#phrase) ps in
           let t   = o#option (fun o -> o#typ) t in
           DoOperation (name, ps, t)
+      | Linlet _x ->
+          let _x = o#phrase _x in Linlet _x
+      | Unlet _x ->
+          let _x = o#phrase _x in Unlet _x
       | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
          let m = o#phrase sh_expr in
          let params =
@@ -1126,9 +1130,13 @@ class fold =
           let o = o#name _x in
           let o = o#option (fun o -> o#phrase) _x_i1 in o
       | DoOperation (name,ps,t) ->
-         let o = o#name name in
-     let o = o#option (fun o -> o#unknown) t in
-     let o = o#list (fun o -> o#phrase) ps in o
+          let o = o#name name in
+          let o = o#option (fun o -> o#unknown) t in
+          let o = o#list (fun o -> o#phrase) ps in o
+      | Linlet _x ->
+          let o = o#phrase _x in o
+      | Unlet _x ->
+          let o = o#phrase _x in o
       | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
          let o = o#phrase sh_expr in
          let o =
@@ -1940,6 +1948,12 @@ class fold_map =
           let (o, t) = o#option (fun o -> o#typ) t in
           let (o, ps) = o#list (fun o -> o#phrase) ps in
           (o, DoOperation (name, ps, t))
+      | Linlet _x ->
+          let (o, _x) = o#phrase _x in
+          (o, Linlet _x)
+      | Unlet _x ->
+          let (o, _x) = o#phrase _x in
+          (o, Unlet _x)
       | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
           let (o, m) = o#phrase sh_expr in
           let (o, params) =

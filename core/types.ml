@@ -4198,7 +4198,7 @@ type typing_environment = { var_env    : environment ;
                             rec_vars   : StringSet.t ;
                             tycon_env  : tycon_environment ;
                             effect_row : row;
-                            cont_lin   : bool ref;
+                            cont_lin   : int;
                             desugared  : bool }
                             [@@deriving show]
 
@@ -4206,7 +4206,7 @@ let empty_typing_environment = { var_env    = Env.empty;
                                  rec_vars   = StringSet.empty;
                                  tycon_env  = Env.empty;
                                  effect_row = make_empty_closed_row ();
-                                 cont_lin   = ref true;
+                                 cont_lin   = -1; (* I don't think it will be used *)
                                  desugared  = false }
 
 (* Which printer to use *)

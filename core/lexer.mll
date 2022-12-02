@@ -72,6 +72,8 @@ let keywords = [
  "delete_left", DELETE_LEFT;
  "determined", DETERMINED;
  "do"       , DOOP;
+ "xlin"     , XLIN;
+ "xunl"     , XUNL;
  "effectname", EFFECTNAME;
  "else"     , ELSE;
  "escape"   , ESCAPE;
