@@ -220,7 +220,8 @@ type typing_environment = { var_env    : environment ;
                             rec_vars   : Utility.StringSet.t ;
                             tycon_env  : tycon_environment ;
                             effect_row : row ;
-                            desugared : bool }
+                            cont_lin   : bool ref ;
+                            desugared  : bool }
 
 val empty_typing_environment : typing_environment
 
@@ -427,7 +428,7 @@ val add_tyvar_names : ('a -> Vars.vars_list)
                    -> ('a list)
                    -> unit
 (* Function type constructors *)
-val make_pure_function_type : datatype list -> datatype -> datatype
+val make_pure_function_type : ?linear:bool -> datatype list -> datatype -> datatype
 val make_function_type      : ?linear:bool -> datatype list -> row -> datatype -> datatype
 val make_thunk_type : row -> datatype -> datatype
 

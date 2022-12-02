@@ -93,6 +93,8 @@ struct
     | Upcast (p, _, _)
     | Instantiate p
     | Generalise p
+    | Linlet p
+    | Unlet p
     | Escape (_, p) -> is_pure p
     | ConstructorLit (_, p, _) -> opt_generalisable p
     | RecordLit (fields, p) ->
@@ -1637,6 +1639,7 @@ end
 
 end
 
+(* Tag: context begin *)
 type context = Types.typing_environment = {
   (* mapping from variables to type schemes *)
   var_env   : Types.environment;
@@ -1654,6 +1657,10 @@ type context = Types.typing_environment = {
   (* the current effects *)
   effect_row : Types.row;
 
+  (* cont_lin = true : the continuation can use linear vars
+     cont_lin = false : the continuation must not use linear vars *)
+  cont_lin : bool ref;
+
   (* Whether this is runs on desugared code, and so some non-user
      facing constructs are permitted. *)
   desugared : bool;
@@ -1664,12 +1671,36 @@ let empty_context eff desugared =
     rec_vars   = StringSet.empty;
     tycon_env  = Env.empty;
     effect_row = eff;
+    cont_lin   = ref true;
     desugared }
 
 let bind_var         context (v, t) = {context with var_env    = Env.bind v t context.var_env}
 let unbind_var       context v      = {context with var_env    = Env.unbind v context.var_env}
 let bind_alias       context (v, t) = {context with tycon_env  = Env.bind v t context.tycon_env}
 let bind_effects     context r      = {context with effect_row = r}
+
+
+(* some helper functions for control-flow linearity *)
+(* NOTICE: `lin_any` here means this eff_row can be unified with
+    linear or unlimited row types *)
+let make_singleton_open_eff_row = fun op_name_sig ->
+  Types.make_singleton_open_row op_name_sig (lin_any, res_effect)
+
+(* NOTICE: linear signature is represented by `->`, so we use `not islin` *)
+let make_signature_type = fun islin inp out ->
+  Types.make_pure_function_type ~linear:(not islin) inp out
+
+let make_unit_signature_type = fun islin out ->
+  if islin then
+    Types.Function (Types.unit_type, Types.make_empty_closed_row (), out)
+  else
+    Types.Lolli (Types.unit_type, Types.make_empty_closed_row (), out)
+
+(* NOTICE: linear continuation(function) is still represented by `-@`,
+           so we still use `islin` *)
+let make_continuation_type = fun islin inp eff out ->
+  Types.make_function_type ~linear:(islin) inp eff out
+
 
 (* TODO(dhil): I have extracted the Usage abstraction from my name
    hygiene/compilation unit patch. The below module is a compatibility
@@ -2265,7 +2296,6 @@ let type_pattern ?(linear_vars=true) closed
     then Types.fresh_type_variable (lin_any, res_any)
     else Types.fresh_type_variable (lin_unl, res_any) in
 
-  (* NOTE: outdated comments? basic idea is still correct *)
   (* type_pattern p types the pattern p returning a typed pattern, a
      type environment for the variables bound by the pattern and two
      types. The first type is the type of the pattern 'viewed from the
@@ -2330,13 +2360,16 @@ let type_pattern ?(linear_vars=true) closed
         let vtype typ = Types.Variant (make_singleton_row (name, Present (typ p))) in
         Pattern.Variant (name, Some (erase p)), (vtype ot, vtype it)
       | Pattern.Effect (name, ps, k) ->
+         (* FIXME: very wierd trick; only for testing ideas! *)
+         let is_lincase = if name.[1] = 'L' then true else false in
          (* Auxiliary machinery for typing effect patterns *)
          let rec type_resumption_pat (kpat : Pattern.with_pos) : Pattern.with_pos * (Types.datatype * Types.datatype) =
            let fresh_resumption_type () =
              let domain   = fresh_var () in
              let codomain = fresh_var () in
              let effrow   = Types.make_empty_open_row default_effect_subkind in
-             Types.make_function_type [domain] effrow codomain
+             (* Types.make_function_type [domain] effrow codomain *)
+             make_continuation_type is_lincase [domain] effrow codomain
            in
            let pos' = kpat.pos in
            let open Pattern in
@@ -2367,14 +2400,15 @@ let type_pattern ?(linear_vars=true) closed
              (* Construct operation type, i.e. op : A -> B or op : B *)
              match domain, codomain with
              | [], [] | _, [] -> assert false (* The continuation is at least unary *)
-             | [], [t] -> Function (Types.unit_type, Types.make_empty_closed_row (), t)
-             | [], ts -> Types.make_tuple_type ts
+             | [], [t] -> make_unit_signature_type is_lincase t
+             | [], ts -> Types.make_tuple_type ts (* TODO: WT: I don't understand this case *)
              | ts, [t] ->
-                Types.make_function_type ts (Types.make_empty_closed_row ()) t
+                make_signature_type is_lincase ts t
              | ts, ts' ->
                 (* parameterised continuation *)
                 let t = ListUtils.last ts' in
-                Types.make_function_type ts (Types.make_empty_closed_row ()) t
+                (* Types.make_function_type ts (Types.make_empty_closed_row ()) t *)
+                make_signature_type is_lincase ts t
            in
            Types.Effect (make_singleton_row (name, Present t))
          in
@@ -2616,6 +2650,41 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
         end;
     in
 
+    (* control-flow linearity relevant definitions *)
+    (** make an effect row type linear *)
+    let makelin_effrow = fun row ->
+      (* trick: for effect row types, Unl means "linear", Any means "linear or unlimited" *)
+      if Types.Unl.can_type_be row then
+        Types.Unl.make_type row
+      else
+        Gripers.die pos ("Effect row type " ^ Types.string_of_datatype row
+          ^ " can not be made linear (represented by Unl).")
+    in
+    (** make all variables in a term unlimited  *)
+    let makeunl_term = fun usages ->
+      let env = context.var_env in
+      Usage.iter
+        (fun v _ ->
+            let t = Env.find v env in
+            if Types.Unl.can_type_be t then
+              Types.Unl.make_type t
+            else
+              Gripers.die pos ("Variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t
+                ^ " is used in a non-linear continuation."))
+        usages
+    in
+    (** update control-flow linearity *)
+    let update_linearity p usages =
+      if !(context.cont_lin)
+        (* make `context.effect_row` linear if `context.cont_lin` is true *)
+        then
+          (* only make eff_row linear if p is impure
+             removing this condition is also OK *)
+          if (Utils.is_generalisable p) then ()
+          else makelin_effrow (context.effect_row)
+        (* make all vars in `p` unlimited if `context.cont_lin` is false *)
+        else makeunl_term usages
+    in
     let module T = Types in
     let e, t, usages =
       match (expr : phrasenode) with
@@ -2739,9 +2808,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                   List.iter (fun e' -> unify ~handle:Gripers.list_lit (pos_and_typ e, pos_and_typ e')) es;
                   ListLit (List.map erase (e::es), Some (typ e)), T.Application (Types.list, [PrimaryKind.Type, typ e]), Usage.combine_many (List.map usages (e::es))
             end
+        (* Tag: FunLit begin *)
         | FunLit (argss_prev, lin, fnlit, location) ->
             let (pats, body) = Sugartypes.get_normal_funlit fnlit in
-            (* names of all variables in the parameter patterns *)
+            (* vs: names of all variables in the parameter patterns *)
             let vs = check_for_duplicate_names pos (List.flatten pats) in
             let (pats_init, pats_tail) = from_option ([], []) (unsnoc_opt pats) in
             let tpc' = if DeclaredLinearity.is_linear lin then tpc else tpcu in
@@ -2758,6 +2828,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                                       var_env = env';
                                       effect_row = effects}) body in
 
+            (* make types of paramters unlimited if they are not used exactly once *)
             let () =
               Env.iter (fun v t ->
                 let uses = Usage.uses_of v (usages body) in
@@ -2768,6 +2839,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                       Gripers.non_linearity pos uses v t)
                 pat_env in
 
+            (* make types of env vars unlimited if they are used in unlimited functions *)
             let () =
               if DeclaredLinearity.is_nonlinear lin then
                 Usage.iter
@@ -3467,6 +3539,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             in RangeLit (erase l, erase r),
                Types.make_list_type Types.int_type,
                Usage.combine (usages l) (usages r)
+
+        (* Tag: FnAppl begin *)
         | FnAppl (f, ps) ->
             let f = tc f in
             let ps = List.map (tc) ps in
@@ -3934,6 +4008,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
         | Upcast _ -> assert false
 
         (* effect handlers *)
+        (* Tag: Handle begin *)
         | Handle { sh_expr = m; sh_value_cases = val_cases; sh_effect_cases = eff_cases; sh_descr = descr; } ->
            ignore
              (if not (Settings.get  Basicsettings.Handlers.enabled)
@@ -4006,6 +4081,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                                                                              shp_types = pat_types } })
              | None -> (henv, [], descr)
            in
+           (* Tag: Handle type_cases begin *)
            let type_cases val_cases eff_cases =
              let wild_row () =
                let fresh_row = Types.make_empty_open_row default_effect_subkind in
@@ -4066,6 +4142,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                      | Pattern.Effect (name, _, kpat) -> name, kpat
                      | _ -> assert false
                    in
+                   (* deal with parameterised handlers? *)
                    let pat, kpat =
                      let rec find_effect_type eff = function
                        | (eff', t) :: _ when eff = eff' ->
@@ -4188,6 +4265,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
              let eff_cases =
                List.fold_right
                  (fun (pat, (kpat : Pattern.with_pos * Types.datatype Env.t * Types.datatype), body) cases ->
+                   Test.print_env (pattern_env pat) "pat env";
                    let body = type_check (henv ++ pattern_env pat) body in
                    let () = unify ~handle:Gripers.handle_branches
                               (pos_and_typ body, no_pos bt)
@@ -4254,7 +4332,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            in
            (* make_operations_presence_polymorphic makes the operations in the given row polymorphic in their presence *)
            let make_operations_presence_polymorphic : Types.row -> Types.row
-         = fun row ->
+            = fun row ->
              let (operations, rho, dual) = TypeUtils.extract_row_parts row in
              let operations' =
                StringMap.mapi
@@ -4303,7 +4381,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                          shd_types = (Types.flatten_row inner_eff, typ m, Types.flatten_row outer_eff, body_type);
                          shd_raw_row = Types.make_empty_closed_row (); }
            in
-           (* Tag: combine all usages counting in handlers *)
+           (* combine all usages counting in handlers *)
            let usages =
              Usage.combine_many [ Usage.align (List.map (fun (_,(_, _, m)) -> m) params)
                                 ; usages m
@@ -4314,6 +4392,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                     sh_effect_cases = erase_cases eff_cases;
                     sh_value_cases = erase_cases val_cases;
                     sh_descr = descr }, body_type, usages
+        (* Tag: Do begin *)
         | DoOperation (opname, args, _) ->
            (* Strategy:
               1. List.map tc args
@@ -4321,6 +4400,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               3. Construct effect row where the operation name gets bound to the previously constructed operation type
               4. Unify with current effect context
            *)
+           (* FIXME: very wierd trick; only for testing ideas! *)
+           let is_lindo = if opname.[0] = 'L' then true else false in
            if String.compare opname "Return" = 0 then
              Gripers.die pos "The implicit effect Return is not invocable"
            else if String.compare opname Value.session_exception_operation = 0 && not context.desugared then
@@ -4330,15 +4411,26 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
              let ps     = List.map tc args in
              let inp_t  = List.map typ ps in
              let out_t  = Types.fresh_type_variable (lin_unl, res_any) in
-             let optype = Types.make_pure_function_type inp_t out_t in
-             let effrow = Types.make_singleton_open_row (opname, T.Present optype) (lin_unl, res_effect) in
+             let optype = make_signature_type is_lindo inp_t out_t in
+             let effrow = make_singleton_open_eff_row (opname, T.Present optype) in
              (effrow, out_t, ps)
            in
            let p = Position.resolve_expression pos in
            let () = unify ~handle:Gripers.do_operation
              (no_pos (T.Effect context.effect_row), (p, T.Effect row))
            in
-             (DoOperation (opname, List.map erase args, Some return_type), return_type, Usage.combine_many (List.map usages args))
+           (DoOperation (opname, List.map erase args, Some return_type), return_type, Usage.combine_many (List.map usages args))
+        (* update continuation linearity *)
+        | Linlet p ->
+          let (p, t, usages) = type_check context p in
+          let () = context.cont_lin := true in
+          (* TODO: makelin context.effect_row (when p is not pure) *)
+          (WithPos.node p, t, usages)
+        | Unlet p ->
+          let () = context.cont_lin := false in
+          let (p, t, usages) = type_check context p in
+          (WithPos.node p, t, usages)
+
         | Switch (e, binders, _) ->
             let e = tc e in
             let binders, pattern_type, body_type = type_cases binders in
@@ -4441,7 +4533,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             unify ~handle:Gripers.raise_effect
               (no_pos (T.Effect context.effect_row), (Position.resolve_expression pos, T.Effect effects));
             (Raise, Types.fresh_type_variable (lin_any, res_any), Usage.empty)
-    in with_pos pos e, t, usages
+    in
+    let p = with_pos pos e in
+    let () = update_linearity p usages in (*  *)
+    p, t, usages
 
 (* [type_binding] takes XXX YYY (FIXME)
     The input context is the environment in which to type the bindings.
@@ -5156,6 +5251,19 @@ module Check =
 struct
   let program tyenv (bindings, body) =
     try
+      (* Tag: some test code to print the parsed results *)
+      (
+        match body with
+          | None -> ()
+          | Some body -> 
+              print_string "---------- BEGIN parsed results -----------\n";
+              (* let () = print_string "bindings:\n" in *)
+              (* let _  = if (bindings = []) then () else (print_string -<- show_binding) <| List.hd bindings in print_string "\n"; *)
+              print_string "body:\n";
+              (print_string -<- show_phrase) body;
+              print_string "\n";
+              print_string "---------- END parsed results -----------\n";
+      );
       Debug.if_set Basicsettings.show_stages (fun () -> "Type checking...");
       Debug.if_set show_pre_sugar_typing
         (fun () ->
@@ -5164,6 +5272,21 @@ struct
       let tyenv' = Types.normalise_typing_environment tyenv' in
       if Settings.get check_top_level_purity then
         binding_purity_check bindings; (* TBD: do this only in web mode? *)
+      (* (
+        print_string "---------- BEGIN varenv -----------\n";
+        (
+          match tyenv'.effect_row with
+            | Types.Row (fieldmap, row_var, _) -> 
+                print_string <| "row var: " ^ Types.string_of_row_var row_var ^ "\n";
+                (* print_string <| string_of_int (Utility.StringMap.size fieldmap) ^ "\n"; *)
+                print_string "labels: ";
+                Utility.StringMap.iter (fun s _ -> print_string (s ^ " ")) fieldmap;
+                print_string "\n"
+            | _ -> ()
+        );
+        print_string <| "effect row: " ^ Types.string_of_row tyenv'.effect_row ^ "\n";
+        print_string "---------- END varenv -----------\n";
+      ); *)
       let program, typ, tyenv' =
         match body with
         | None -> (bindings, None), Types.unit_type, tyenv'

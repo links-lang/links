@@ -68,7 +68,10 @@ type tyarg = Types.type_arg
 *)
 
 let default_subkind : Subkind.t = (lin_unl, res_any)
-let default_effect_subkind : Subkind.t = (lin_unl, res_any)
+
+(* NOTICE: `lin_any` here means this eff_row_var can be unified with
+    linear or unlimited row types *)
+let default_effect_subkind : Subkind.t = (lin_any, res_any)
 
 type kind = PrimaryKind.t option * Subkind.t option
     [@@deriving show]
@@ -473,6 +476,8 @@ and phrasenode =
   | ConstructorLit   of Name.t * phrase option * Types.datatype option
   | DoOperation      of Name.t * phrase list * Types.datatype option
   | Handle           of handler
+  | Unlet            of phrase
+  | Linlet           of phrase
   | Switch           of phrase * (Pattern.with_pos * phrase) list *
                           Types.datatype option
   | Receive          of (Pattern.with_pos * phrase) list * Types.datatype option
@@ -793,6 +798,8 @@ struct
     | TryInOtherwise (p1, pat, p2, p3, _ty) ->
        union (union_map phrase [p1; p2; p3]) (pattern pat)
     | Raise -> empty
+    | Unlet p -> phrase p
+    | Linlet p -> phrase p
   and binding (binding': binding)
       : StringSet.t (* vars bound in the pattern *)
       * StringSet.t (* free vars in the rhs *) =

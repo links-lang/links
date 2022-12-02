@@ -4198,6 +4198,7 @@ type typing_environment = { var_env    : environment ;
                             rec_vars   : StringSet.t ;
                             tycon_env  : tycon_environment ;
                             effect_row : row;
+                            cont_lin   : bool ref;
                             desugared  : bool }
                             [@@deriving show]
 
@@ -4205,6 +4206,7 @@ let empty_typing_environment = { var_env    = Env.empty;
                                  rec_vars   = StringSet.empty;
                                  tycon_env  = Env.empty;
                                  effect_row = make_empty_closed_row ();
+                                 cont_lin   = ref true;
                                  desugared  = false }
 
 (* Which printer to use *)
@@ -4330,12 +4332,13 @@ let normalise_typing_environment env =
 
 (* Functions on environments *)
 let extend_typing_environment
-    {var_env = l; rec_vars = lvars; tycon_env = al; effect_row = _; desugared = _;  }
-    {var_env = r; rec_vars = rvars; tycon_env = ar; effect_row = er; desugared = dr } : typing_environment =
+    {var_env = l; rec_vars = lvars; tycon_env = al; effect_row = _; cont_lin = _; desugared = _;  }
+    {var_env = r; rec_vars = rvars; tycon_env = ar; effect_row = er; cont_lin = xl; desugared = dr } : typing_environment =
   { var_env    = Env.extend l r
   ; rec_vars   = StringSet.union lvars rvars
   ; tycon_env  = Env.extend al ar
   ; effect_row = er
+  ; cont_lin   = xl
   ; desugared  = dr }
 
 let string_of_environment env = show_environment (Env.map DecycleTypes.datatype env)
@@ -4667,8 +4670,8 @@ let make_function_type : ?linear:bool -> datatype list -> row -> datatype -> dat
   else
     Function (make_tuple_type args, effs, range)
 
-let make_pure_function_type : datatype list -> datatype -> datatype
-  = fun domain range -> make_function_type domain (make_empty_closed_row ()) range
+let make_pure_function_type : ?linear:bool -> datatype list -> datatype -> datatype
+  = fun ?(linear=false) domain range -> make_function_type ~linear:linear domain (make_empty_closed_row ()) range
 
 let make_thunk_type : row -> datatype -> datatype
   = fun effs rtype ->
