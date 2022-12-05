@@ -1,0 +1,46 @@
+# choose.links
+
+# Choice example.
+
+# The choice computation
+fun choice() {
+  var x = if (xunl{do Choose()}) { 2 }
+          else { 4 };
+  var y = if (xunl{do Choose()}) { 8 }
+          else { 16 };
+  x + y
+}
+
+# Linear version of Choose
+fun lin_choice() {
+  var x = if (do LLChoose()) { 2 }
+          else { 4 };
+  var y = if (do LLChoose()) { 8 }
+          else { 16 };
+  x + y
+}
+
+#
+# A few (closed) handlers
+#
+
+# The "positive" handler
+fun positive(m)() {
+  handle(m()) {
+    case LLChoose(k) -> k(true)
+    case Return(x)   -> x
+  }
+}
+
+# The "I'll-take-everything" handler
+fun enumerate(m)() {
+  handle(xunl{m()}) {
+    case Choose(k) -> k(true) ++ k(false)
+    case Return(x) -> [x]
+  }
+}
+# links> enumerate
+# fun : (() {Choose:() {}-@ Bool|a}~> b) -> () {Choose{_}|a}~> [b]
+# NOTE: the current parser cannot recognize {}-@ as an operation signature
+
+[positive(lin_choice)()] ++ enumerate(choice)()

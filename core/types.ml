@@ -4206,7 +4206,7 @@ let empty_typing_environment = { var_env    = Env.empty;
                                  rec_vars   = StringSet.empty;
                                  tycon_env  = Env.empty;
                                  effect_row = make_empty_closed_row ();
-                                 cont_lin   = -1; (* I don't think it will be used *)
+                                 cont_lin   = -1;
                                  desugared  = false }
 
 (* Which printer to use *)

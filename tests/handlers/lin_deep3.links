@@ -5,11 +5,11 @@ fun test() {
   });
 
   handle({
-    ignore(do Flip(ch))
+    ignore(do LL(ch))
   }) {
     case Return(_) -> ()
-    case Flip(ch, resume) -> {
-      ignore(do Flip(ch));
+    case LL(ch, resume) -> {
+      ignore(do LL(ch));
       var (i, ch) = receive(ch);
       close(ch);
       resume(true)

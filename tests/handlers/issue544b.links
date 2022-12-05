@@ -1,0 +1,57 @@
+# issue 544
+# https://github.com/links-lang/links/issues/544
+
+
+# Breaking type safety.
+# Inadvertently send two integers over a session-typed channel
+# !Int.!String.end by using multi-shot continuations and exceptions.
+
+# A correct linear version
+fun unsound_correct() {
+  var ch = fork(fun(ch) {
+    var (i, ch) = receive(ch);
+    var (s, ch) = receive(ch);
+    println("Int: " ^^ intToString(i));
+    println("String: " ^^ s);
+    close(ch)
+  });
+
+  handle({
+    # Nondeterministic choice.
+    var msg = if (do LLFlip) 42 else 84;
+    var ch = send(msg, ch);
+    # Throws an exception
+    ignore(do LLFail);
+    var ch = send("foo", ch);
+    close(ch)
+  }) {
+    case Return(_) -> ()
+    case LLFail(_) -> ()
+    case LLFlip(resume) -> resume(true)
+  }
+}
+
+fun unsound() {
+  var ch = fork(fun(ch) {
+    var (i, ch) = receive(ch);
+    var (s, ch) = receive(ch);
+    println("Int: " ^^ intToString(i));
+    println("String: " ^^ s);
+    close(ch)
+  });
+
+  handle({
+    # Nondeterministic choice.
+    var msg = if (xunl{do Flip}) 42 else 84;
+    var ch = send(msg, ch);
+    # Throws an exception
+    ignore(do Fail);
+    var ch = send("foo", ch);
+    close(ch)
+  }) {
+    case Return(_) -> ()
+    case Fail(_) -> ()
+    case Flip(resume) ->
+      resume(true); resume(false)
+  }
+}

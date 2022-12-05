@@ -1,11 +1,11 @@
 var lf = linfun(x) {x};
 
 handle({
-  ignore(do Foo);
+  ignore(do LL);
   lf(2)
 }) {
   case Return(_) -> lf(3)
-  case Foo(resume) -> {
+  case LL(resume) -> {
     resume(())
   }
 }

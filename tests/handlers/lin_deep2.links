@@ -4,13 +4,13 @@ var ch = fork(fun(ch) {
 });
 
 handle({
-  ignore(do Foo);
+  ignore(do LLo);
   var (i, ch) = receive(ch);
   println("Int: " ^^ intToString(i));
   close(ch)
 }) {
   case Return(_) -> ()
-  case Foo(resume) -> {
+  case LLo(resume) -> {
     var (i, ch) = receive(ch);
     println("Int: " ^^ intToString(i));
     close(ch);
