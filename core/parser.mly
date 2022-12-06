@@ -310,8 +310,8 @@ let parse_foreign_language pos lang =
 %token HANDLE SHALLOWHANDLE
 %token SPAWN SPAWNAT SPAWNANGELAT SPAWNCLIENT SPAWNANGEL SPAWNWAIT
 %token OFFER SELECT
-%token DOOP
-%token XLIN XUNL
+%token DOOP UNDOOP LINDOOP
+%token LINLET UNLET
 %token LPAREN RPAREN
 %token LBRACE RBRACE LBRACEBAR BARRBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
@@ -678,7 +678,8 @@ unary_expression:
 | MINUSDOT unary_expression                                    { unary_appl ~ppos:$loc UnaryOp.FloatMinus $2 }
 | OPERATOR unary_expression                                    { unary_appl ~ppos:$loc (UnaryOp.Name $1)  $2 }
 | postfix_expression | constructor_expression                  { $1 }
-| DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (DoOperation ($2, $3, None)) }
+| DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (DoOperation ($2, $3, None, false)) }
+| LINDOOP CONSTRUCTOR loption(arg_spec)                        { with_pos $loc (DoOperation ($2, $3, None, true)) }
 
 infix_appl:
 | unary_expression                                             { $1 }
@@ -900,8 +901,10 @@ perhaps_db_driver:
 | /* empty */                                                  { None   , None }
 
 seq_expression:
-| XLIN LBRACE exp RBRACE                                       { with_pos $loc (Linlet $3) }
-| XUNL LBRACE exp RBRACE                                       { with_pos $loc (Unlet $3) }
+// | LINLET LPAREN exp RPAREN                                      { with_pos $loc (Linlet $3) }
+// | UNLET LPAREN exp RPAREN                                       { with_pos $loc (Unlet $3) }
+| LBRACKETBAR exp BARRBRACKET                                   { with_pos $loc (Unlet $2) }
+| LEFTTRIANGLE exp RIGHTTRIANGLE                                { with_pos $loc (Linlet $2) }
 
 exp:
 | seq_expression

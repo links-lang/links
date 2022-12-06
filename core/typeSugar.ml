@@ -1729,7 +1729,12 @@ let make_continuation_type = fun islin inp eff out ->
 *)
 let cont_lin_count = ref 0
 
-let default_cont_lin = true
+(* 
+  0 means the current term is in the body of a linlet and bound by another linlet
+  1 means the current term is in the body of an unlet and bound by a linlet
+  2 means the current term is in the body of an unlet and bound by a linlet
+*)
+let default_cont_lin = (true, true)
 
 (* TODO: `-1` is the `cont_lin` of `empty_typing_environment`.
    I guess it is used in the typing of default global bindings. *)
@@ -1741,11 +1746,25 @@ let new_cont_lin () =
   let () = cont_lin_map := IntMap.add newx default_cont_lin !cont_lin_map in
   newx
 
-let get_cont_lin context =
-  IntMap.find context.cont_lin !cont_lin_map
+let is_in_linlet context =
+  fst <| IntMap.find context.cont_lin !cont_lin_map
 
-let set_cont_lin context b =
-  cont_lin_map := IntMap.add context.cont_lin b !cont_lin_map
+let is_bound_by_linlet context =
+  snd <| IntMap.find context.cont_lin !cont_lin_map
+
+let update_in_linlet context a =
+  let b = is_bound_by_linlet context in
+  cont_lin_map := IntMap.add context.cont_lin (a, b) !cont_lin_map
+
+let update_bound_by_linlet context b =
+  let a = is_in_linlet context in
+  cont_lin_map := IntMap.add context.cont_lin (a, b) !cont_lin_map
+
+(* let get_cont_lin context = *)
+  (* IntMap.find context.cont_lin !cont_lin_map *)
+
+(* let set_cont_lin context b = *)
+  (* cont_lin_map := IntMap.add context.cont_lin b !cont_lin_map *)
 
 
 
@@ -2407,8 +2426,9 @@ let type_pattern ?(linear_vars=true) closed
         let vtype typ = Types.Variant (make_singleton_row (name, Present (typ p))) in
         Pattern.Variant (name, Some (erase p)), (vtype ot, vtype it)
       | Pattern.Effect (name, ps, k) ->
-         (* FIXME: very wierd trick; only for testing ideas! *)
-         let is_lincase = if name.[1] = 'L' then true else false in
+         (* FIXME: trick: linear signautre if the first letter is L *)
+         let is_lincase = if name.[0] = 'L' then true else false in
+         (* let name = if name.[0] = 'U' then String.sub name 1 (String.length name - 1) else name in *)
          (* Auxiliary machinery for typing effect patterns *)
          let rec type_resumption_pat (kpat : Pattern.with_pos) : Pattern.with_pos * (Types.datatype * Types.datatype) =
            let fresh_resumption_type () =
@@ -2730,15 +2750,18 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
         Test.print_type context.effect_row "effect_row";
         print_string "\n"
       ); *)
-      if (get_cont_lin context)
-        (* make `context.effect_row` linear if `context.cont_lin` is true *)
+      if (is_bound_by_linlet context)
+        (* make `context.effect_row` linear if the current term is bound by a linlet *)
         then
           (* only make eff_row linear if p is impure
              removing this condition is also OK *)
           if (Utils.is_generalisable p) then ()
           else makelin_effrow (context.effect_row)
-        (* make all vars in `p` unlimited if `context.cont_lin` is false *)
-        else makeunl_term usages
+        else ();
+      if (not (is_in_linlet context))
+        (* make all vars in `p` unlimited if the current term is in the body of an unlet *)
+        then makeunl_term usages
+        else ()
     in
     let module T = Types in
     let e, t, usages =
@@ -4455,15 +4478,17 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                     sh_value_cases = erase_cases val_cases;
                     sh_descr = descr }, body_type, usages
         (* Tag: Do begin *)
-        | DoOperation (opname, args, _) ->
+        | DoOperation (opname, args, _, is_lindo) ->
            (* Strategy:
               1. List.map tc args
               2. Construct operation type
               3. Construct effect row where the operation name gets bound to the previously constructed operation type
               4. Unify with current effect context
            *)
-           (* FIXME: very wierd trick; only for testing ideas! *)
-           let is_lindo = if opname.[0] = 'L' then true else false in
+           (* let is_lindo = is_bound_by_linlet context in *)
+           (* undo is implicitly bound by an unlet *)
+           let () = if not is_lindo then update_bound_by_linlet context false else ()
+           in
            if String.compare opname "Return" = 0 then
              Gripers.die pos "The implicit effect Return is not invocable"
            else if String.compare opname Value.session_exception_operation = 0 && not context.desugared then
@@ -4481,15 +4506,20 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            let () = unify ~handle:Gripers.do_operation
              (no_pos (T.Effect context.effect_row), (p, T.Effect row))
            in
-           (DoOperation (opname, List.map erase args, Some return_type), return_type, Usage.combine_many (List.map usages args))
+           let () = if not is_lindo then update_in_linlet context false else ()
+           in
+           (DoOperation (opname, List.map erase args, Some return_type, is_lindo)
+           , return_type, Usage.combine_many (List.map usages args))
         (* update continuation linearity *)
         | Linlet p ->
+          let () = update_bound_by_linlet context true in
           let (p, t, usages) = type_check context p in
-          let () = set_cont_lin context true in
+          let () = update_in_linlet context true in
           (WithPos.node p, t, usages)
         | Unlet p ->
-          let () = set_cont_lin context false in
+          let () = update_bound_by_linlet context false in
           let (p, t, usages) = type_check context p in
+          let () = update_in_linlet context false in
           (WithPos.node p, t, usages)
 
         | Switch (e, binders, _) ->

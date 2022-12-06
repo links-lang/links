@@ -474,7 +474,7 @@ and phrasenode =
   | Instantiate      of phrase
   | Generalise       of phrase
   | ConstructorLit   of Name.t * phrase option * Types.datatype option
-  | DoOperation      of Name.t * phrase list * Types.datatype option
+  | DoOperation      of Name.t * phrase list * Types.datatype option * bool
   | Handle           of handler
   | Unlet            of phrase
   | Linlet           of phrase
@@ -793,7 +793,7 @@ struct
                      diff (option_map phrase where) pat_bound;
                      diff (union_map (snd ->- phrase) fields) pat_bound]
     | DBTemporalJoin (_, p, _) -> phrase p
-    | DoOperation (_, ps, _) -> union_map phrase ps
+    | DoOperation (_, ps, _, _) -> union_map phrase ps
     | QualifiedVar _ -> empty
     | TryInOtherwise (p1, pat, p2, p3, _ty) ->
        union (union_map phrase [p1; p2; p3]) (pattern pat)

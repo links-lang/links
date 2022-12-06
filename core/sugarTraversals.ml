@@ -315,10 +315,10 @@ class map =
           let _x_i1 = o#option (fun o -> o#phrase) _x_i1 in
           let _x_i2 = o#option (fun o -> o#typ) _x_i2 in
           ConstructorLit ((_x, _x_i1, _x_i2))
-      | DoOperation (name, ps, t) ->
+      | DoOperation (name, ps, t, b) ->
           let ps  = o#list (fun o -> o#phrase) ps in
           let t   = o#option (fun o -> o#typ) t in
-          DoOperation (name, ps, t)
+          DoOperation (name, ps, t, b)
       | Linlet _x ->
           let _x = o#phrase _x in Linlet _x
       | Unlet _x ->
@@ -1129,10 +1129,11 @@ class fold =
       | ConstructorLit ((_x, _x_i1, _x_i2)) ->
           let o = o#name _x in
           let o = o#option (fun o -> o#phrase) _x_i1 in o
-      | DoOperation (name,ps,t) ->
+      | DoOperation (name,ps,t,b) ->
           let o = o#name name in
           let o = o#option (fun o -> o#unknown) t in
-          let o = o#list (fun o -> o#phrase) ps in o
+          let o = o#list (fun o -> o#phrase) ps in
+          let o = o#bool b in o
       | Linlet _x ->
           let o = o#phrase _x in o
       | Unlet _x ->
@@ -1944,10 +1945,10 @@ class fold_map =
           let (o, _x_i1) = o#option (fun o -> o#phrase) _x_i1 in
           let o, _x_i2 = o#option (fun o -> o#typ) _x_i2 in
           (o, (ConstructorLit ((_x, _x_i1, _x_i2))))
-      | DoOperation (name, ps, t) ->
+      | DoOperation (name, ps, t, b) ->
           let (o, t) = o#option (fun o -> o#typ) t in
           let (o, ps) = o#list (fun o -> o#phrase) ps in
-          (o, DoOperation (name, ps, t))
+          (o, DoOperation (name, ps, t, b))
       | Linlet _x ->
           let (o, _x) = o#phrase _x in
           (o, Linlet _x)

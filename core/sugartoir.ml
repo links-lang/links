@@ -982,9 +982,13 @@ struct
               cofv (I.inject (name, I.record ([], None), t))
           | ConstructorLit (name, Some e, Some t) ->
               cofv (I.inject (name, ev e, t))
-          | DoOperation (name, ps, Some t) ->
+          | DoOperation (name, ps, Some t, _) ->
              let vs = evs ps in
              I.do_operation (name, vs, t)
+          (* FIXME: I don't know what's this. I suppose it is related to semantics,
+             but Unlet and Linlet do not influence semantics. *)
+          | Unlet _ -> assert false
+          | Linlet _ -> assert false
           | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
              (* it happens that the ambient effects are the right ones
                 for all of the patterns here (they match those of the

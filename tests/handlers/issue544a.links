@@ -14,13 +14,13 @@ fun deadlock_correct() {
 
   handle({
     # Nondeterministic choice.
-    ignore(do LLFlip);
+    ignore(ldo LFlip);
     var (i, ch) = receive(ch);
     println("Int: " ^^ intToString(i));
     close(ch)
   }) {
     case Return(_) -> ()
-    case LLFlip(resume) -> resume(true)
+    case LFlip(resume) -> resume(true)
   }
 }
 
@@ -32,7 +32,7 @@ fun deadlock() {
 
   handle({
     # Nondeterministic choice.
-    ignore(xunl{do Flip});
+    ignore(do Flip);
     var (i, ch) = receive(ch);
     println("Int: " ^^ intToString(i));
     close(ch)

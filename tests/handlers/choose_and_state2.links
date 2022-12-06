@@ -1,26 +1,26 @@
-fun incr(x) {var y = xunl{do Get}; do Put(x+y)}
+fun incr(x) {var y = do Get; do Put(x+y)}
 
 fun choice() {
-  var x = if (xunl{do LLChoose()}) { incr(1); do Get }
+  var x = if ([|ldo LChoose()|]) { incr(1); do Get }
           else { incr(1); do Get };
-  var y = if (xunl{do LLChoose()}) { incr(1); do Get }
+  var y = if ([|ldo LChoose()|]) { incr(1); do Get }
           else { incr(1); do Get };
   x + y
 }
 
 fun positive(m)() {
   handle(m()) {
-    case LLChoose(k) -> k(true)
+    case LChoose(k) -> k(true)
     case Return(x)   -> x
   }
 }
 
 fun evalState(st)(m)() {
-  (xunl{handle(xunl{m()}) {
+  ([|handle([|m()|]) {
     case Return(x) -> fun(_)  { x }
-    case Get(k)    -> fun(st) { xunl{k(st)(st)} }
-    case Put(p,k)  -> fun(_)  { xunl{k(())(p)}  }
-  }})(st)
+    case Get(k)    -> fun(st) { [|k(st)(st)|] }
+    case Put(p,k)  -> fun(_)  { [|k(())(p)|]  }
+  }|])(st)
 }
 
 positive(evalState(0)(choice))()

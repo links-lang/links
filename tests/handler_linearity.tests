@@ -27,22 +27,22 @@ stderr : @.*Type error: Variable .* of linear type .* is used in a deep handler.
 args : --enable-handlers
 
 Linear operation and continuation
-handle (do LL(20) + 1) {case LL(i, k) -> k(i)}
+handle (ldo LL(20) + 1) {case LL(i, k) -> k(i)}
 stdout : 21 : Int
 args : --enable-handlers
 
 Non-linear operation and continuation
-handle (xunl{do UU(20) + 1}) {case UU(i, k) -> k(i) + k(i)}
+handle (do UU(20) + 1) {case UU(i, k) -> k(i) + k(i)}
 stdout : 42 : Int
 args : --enable-handlers
 
 Use linear variable in linear continuation
-{linfun f(x) {40+x} handle (f(do LL)) {case LL(k) -> k(2)}}
+{linfun f(x) {40+x} handle (f(ldo LL)) {case LL(k) -> k(2)}}
 stdout : 42 : Int
 args : --enable-handlers
 
 Use linear variable in non-linear continuation
-{linfun f(x) {x} handle (f(xunl{do UU})) {case UU(k) -> k(1)}}
+{linfun f(x) {x} handle (f(do UU)) {case UU(k) -> k(1)}}
 exit : 1
 stderr : @.*Type error: Variable .* of linear type .* is used in a non-linear continuation.* 
 args : --enable-handlers

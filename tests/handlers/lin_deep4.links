@@ -1,7 +1,7 @@
 var lf = linfun(x) {x};
 
 handle({
-  ignore(do LL);
+  ignore(ldo LL);
   lf(2)
 }) {
   case Return(_) -> lf(3)

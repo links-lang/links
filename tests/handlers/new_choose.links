@@ -4,18 +4,18 @@
 
 # The choice computation
 fun choice() {
-  var x = if (xunl{do Choose()}) { 2 }
+  var x = if (do Choose()) { 2 }
           else { 4 };
-  var y = if (xunl{do Choose()}) { 8 }
+  var y = if (do Choose()) { 8 }
           else { 16 };
   x + y
 }
 
 # Linear version of Choose
 fun lin_choice() {
-  var x = if (do LLChoose()) { 2 }
+  var x = if (ldo LChoose()) { 2 }
           else { 4 };
-  var y = if (do LLChoose()) { 8 }
+  var y = if (ldo LChoose()) { 8 }
           else { 16 };
   x + y
 }
@@ -27,14 +27,14 @@ fun lin_choice() {
 # The "positive" handler
 fun positive(m)() {
   handle(m()) {
-    case LLChoose(k) -> k(true)
+    case LChoose(k) -> k(true)
     case Return(x)   -> x
   }
 }
 
 # The "I'll-take-everything" handler
 fun enumerate(m)() {
-  handle(xunl{m()}) {
+  handle([|m()|]) {
     case Choose(k) -> k(true) ++ k(false)
     case Return(x) -> [x]
   }
