@@ -15,16 +15,16 @@ fun run(m) {
 sig get : Comp({Get:a |_}, a)
 fun get() {do Get}
 
-sig put : (a) {Put:(a) {}-> ()|_}~> ()
+sig put : (a) {Put:(a) => ()|_}~> ()
 fun put(p) {do Put(p)}
 
 # Println line operation
-sig logVal : (a) {Log:(a) {}-> ()|_}~> ()
+sig logVal : (a) {Log:(a) => ()|_}~> ()
 fun logVal(p) {do Log(p)}
 
 # Stateful computation evaluator
 sig evalState : (s) ->
-                (Comp({Get:s,Put:(s) {}-> () |e}, a)) ->
+                (Comp({Get:s,Put:(s) => () |e}, a)) ->
                  Comp({Get{_},Put{_}         |e}, a)
 fun evalState(st)(m)() {
   (handle(m()) {
@@ -46,7 +46,7 @@ fun logState(m)() {
 }
 
 # Printlns integers to stdout
-sig logPrinter : (Comp({Log:(Int) {}-> () |e}, a)) ->
+sig logPrinter : (Comp({Log:(Int) => () |e}, a)) ->
                   Comp({Log{_}            |e}, a)
 fun logPrinter(m)() {
   handle(m()) {
@@ -58,7 +58,7 @@ fun logPrinter(m)() {
 
 # Log accumulator
 sig logAccumulator : ([a]) ->
-                     (Comp({Log:(a) {}-> () |e}, b)) ->
+                     (Comp({Log:(a) => () |e}, b)) ->
                       Comp({Log{_}          |e}, (b,[a]))
 fun logAccumulator(ps)(m)() {
   (handle(m()) {

@@ -153,6 +153,7 @@ and typ =
   | ForAll of (Quantifier.t list * typ)
   (* Effect *)
   | Effect of row
+  | Operation of (typ * typ)
   (* Row *)
   | Row of (field_spec_map * row_var * bool)
   | Closed
@@ -383,6 +384,10 @@ struct
       | Effect row ->
          let (o, row') = o#row row in
          (o, Effect row')
+      | Operation (dom, cod) ->
+         let (o, dom') = o#typ dom in
+         let (o, cod') = o#typ cod in
+         (o, Operation(dom', cod'))
       (* Row *)
       | Row (fsp, rv, d) ->
          let (o, fsp') = o#field_spec_map fsp in
@@ -594,7 +599,7 @@ class virtual type_predicate = object(self)
     | Absent -> true
     | Present t -> self#type_satisfies vars t
     | Select r | Choice r -> self#row_satisfies vars r
-    | Input (a, b) | Output (a, b) -> self#type_satisfies vars a && self#type_satisfies vars b
+    | Input (a, b) | Output (a, b) | Operation (a, b) -> self#type_satisfies vars a && self#type_satisfies vars b
     | Dual s -> self#type_satisfies vars s
     | End -> true
 
@@ -657,6 +662,7 @@ class virtual type_iter = object(self)
        self#visit_type (rec_appl, rec_vars, TypeVarSet.add_quantifiers qs quant_vars) t
     (* Effect *)
     | Effect r -> self#visit_row vars r
+    | Operation (a, b) -> self#visit_type vars a; self#visit_type vars b
     (* Row *)
     | Row (fields, row_var, _dual) ->
        self#visit_point self#visit_row vars row_var;
@@ -756,6 +762,7 @@ module Base : Constraint = struct
         | ForAll ([], t) -> super#type_satisfies vars t
         (* Effect *)
         | Effect _ as t -> super#type_satisfies vars t
+        | Operation _ -> failwith "TODO types.ml/766"
         (* Row *)
         | Row _ as t -> super#type_satisfies vars t
         (* Presence *)
@@ -803,6 +810,7 @@ module Unl : Constraint = struct
       | ForAll _ as t -> super#type_satisfies vars t
       (* Effect *)
       | Effect _  -> true
+      | Operation _ -> true
       (* Row *)
       | Row _ as t -> super#type_satisfies vars t
       (* Presence *)
@@ -850,6 +858,7 @@ module Unl : Constraint = struct
        | ForAll _ as t -> super#visit_type vars t
        (* Effect *)
        | Effect _ -> ()
+       | Operation _ -> ()
        (* Row *)
        | Row _ as t -> super#visit_type vars t
        (* Presence *)
@@ -897,6 +906,7 @@ module Session : Constraint = struct
         | Primitive _ | Function _ | Lolli _ | Record _ | Variant _ | Table _ | Lens _ | ForAll _ -> false
         (* Effect *)
         | Effect _  -> false
+        | Operation _ -> failwith "TODO types.ml/910"
     end
   end
 
@@ -1160,6 +1170,8 @@ let free_type_vars, free_row_type_vars, free_tyarg_vars =
     | Lolli (f, m, t)         ->
        S.union_all [free_type_vars' rec_vars f; free_row_type_vars' rec_vars m; free_type_vars' rec_vars t]
     | Effect row | Record row | Variant row -> free_row_type_vars' rec_vars row
+    | Operation (f, t) ->
+       S.union_all [free_type_vars' rec_vars f; free_type_vars' rec_vars t]
     | Table (_, r, w, n)         ->
        S.union_all
          [free_type_vars' rec_vars r; free_type_vars' rec_vars w; free_type_vars' rec_vars n]
@@ -1357,6 +1369,7 @@ and subst_dual_type : var_map -> datatype -> datatype =
   | Record row -> Record (sdr row)
   | Variant row -> Variant (sdr row)
   | Effect row -> Effect (sdr row)
+  | Operation (f, t) -> Operation (sdt f, sdt t)
   | Table (t, r, w, n) -> Table (t, sdt r, sdt w, sdt n)
   | Lens _sort -> t
   (* TODO: we could do a check to see if we can preserve aliases here *)
@@ -1562,6 +1575,7 @@ and normalise_datatype rec_names t =
   | Record row              -> Record (nr row)
   | Variant row             -> Variant (nr row)
   | Effect row              -> Effect (nr row)
+  | Operation (f, t)        -> Operation (nt f, nt t)
   | Table (t, r, w, n)      -> Table (t, nt r, nt w, nt n)
   | Lens sort               -> Lens sort
   | Alias (k, (name, qs, ts, is_dual), datatype) ->
@@ -1869,6 +1883,8 @@ struct
        (List.rev vars) @ (free_bound_type_vars bound_vars body)
     (* Effect *)
     | Effect row -> free_bound_row_type_vars bound_vars row
+    | Operation (f, t) ->
+       (fbtv f) @ (fbtv t)
     (* Row *)
     | Row (field_env, row_var, _) ->
        let field_type_vars =
@@ -2633,6 +2649,7 @@ struct
               "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype { context with bound_vars } p body
          (* Effect *)
          | Effect r -> "{" ^ row "," context p r ^ "}"
+         | Operation (f, t) -> sd f ^ " => " ^ sd t
          (* Row *)
          | Row _ as t -> "{" ^ row "," context p t ^ "}"
          (* Presence *)
@@ -3107,7 +3124,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             method effect_row : row -> 'self_type * row_erasability * tid option
               = let maybe_contract : typ -> typ
                   = function
-                  | Function (d,_,c) as tp when ES.contract_operation_arrows policy ->
+                  | Operation (d,c) as tp when ES.contract_operation_arrows policy ->
                      (* we are in an operation fieldspec and it's an arrow, and we
                       want contractions: check if a contraction is possible here
                       *)
@@ -3782,7 +3799,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
              StringBuffer.write buf ")"
         )
 
-  and func : (typ * row * typ) printer
+   and func : (typ * row * typ) printer
     = let open Printer in
       let func_arrow : row printer
         = let is_field_present fields lbl =
@@ -3904,6 +3921,15 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           StringBuffer.write buf " ";
 
 
+          Printer.apply datatype ctx range buf;
+        )
+
+  and op : (typ * typ) printer
+    = let open Printer in
+      Printer (fun ctx (domain, range) buf ->
+          (* build up the function type string: domain, arrow with effects, range *)
+          Printer.apply row (Context.set_ambient Context.Tuple ctx) domain buf; (* function domain is always a Record *)
+          StringBuffer.write buf " => ";
           Printer.apply datatype ctx range buf;
         )
 
@@ -4038,6 +4064,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
             | Record _ | Variant _ | Effect _ | Row _ | Select _ | Choice _
               -> with_value row tp
+
+            | Operation o        -> with_value op o
 
             | _ -> raise (internal_error ("Printer for this type not implemented:\n" ^ show_datatype @@ DecycleTypes.datatype tp))
           in
@@ -4360,6 +4388,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
     | Function (f, m, t)      -> union [make_env boundvars f; make_env boundvars m; make_env boundvars t]
     | Lolli (f, m, t)         -> union [make_env boundvars f; make_env boundvars m; make_env boundvars t]
     | Effect row | Record row | Variant row -> make_env boundvars row
+    | Operation (f, t)        -> union [make_env boundvars f; make_env boundvars t]
     | Table (_, r, w, n)      -> union [make_env boundvars r; make_env boundvars w; make_env boundvars n]
     | Lens _                  -> empties
     | Alias (_, (_, _, ts, _), d) -> union (List.map (make_env_ta boundvars) ts @ [make_env boundvars d])
@@ -4666,6 +4695,10 @@ let make_function_type : ?linear:bool -> datatype list -> row -> datatype -> dat
     Lolli (make_tuple_type args, effs, range)
   else
     Function (make_tuple_type args, effs, range)
+
+let make_operation_type : datatype list -> datatype -> datatype
+  = fun args range ->
+  Operation (make_tuple_type args, range)
 
 let make_pure_function_type : datatype list -> datatype -> datatype
   = fun domain range -> make_function_type domain (make_empty_closed_row ()) range

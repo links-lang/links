@@ -29,8 +29,8 @@ sig f : Comp ((),{ |(mu a . Bar,Foo:(() { |a}~> _) {}-> ()|_) }) fun f() { () } 
 stdout : fun : Comp ((),{ |(mu a.Bar:(),Foo:(() { |a}~> _) {}-> ()|_)})
 
 Recursive row variable in effect signature [1]
-sig w : (() { |(mu a . F:(() { |a}~> ()) {}-> _|e)}~> ()) {F{_}|e}~> () fun w(g) { handle(g()) { case () -> () case <F(h) => res> -> w(h) }} w
-stdout : fun : (() { |(mu a.F:(() { |a}~> ()) {}-> _|c)}~> ()) {F{_}|c}~> ()
+sig w : (() { |(mu a . F:(() { |a}~> ()) => _|e)}~> ()) {F{_}|e}~> () fun w(g) { handle(g()) { case () -> () case <F(h) => res> -> w(h) }} w
+stdout : fun : (() { |(mu a.F:(() { |a}~> ()) => _|c)}~> ()) {F{_}|c}~> ()
 args : --enable-handlers
 
 Recursive row variable in effect signature [2]

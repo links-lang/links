@@ -43,12 +43,12 @@ fun freshVar(pre) {
 }
 
 ## Introduction forms
-sig lam : (Var) {Lam:(Var) -> () |_}-> ()
+sig lam : (Var) {Lam:(Var) => () |_}-> ()
 fun lam(x) {
   do Lam(x)
 }
 
-sig var_ : (Var) {Var:(Var) -> a |_}-> a
+sig var_ : (Var) {Var:(Var) => a |_}-> a
 fun var_(x) {
   do Var(x)
 }
@@ -60,14 +60,14 @@ fun lit(x)() { x }
 
 # Due to the (current) lack of multi-handlers in Links, we are going
 # simulate them by reifying operations.
-typename Expr(a) = Comp(a, {Var:(Var) -> Expr(a), Lam:(Var) -> ()});
+typename Expr(a) = Comp(a, {Var:(Var) => Expr(a), Lam:(Var) => ()});
 typename Step(a) = [|Val:a
                     |Lam:(Var, Expr(a))|];
 
 # The handler `step' big-steps a term to either a value or a
 # lambda-abstraction. Crucially, the handler is shallow such that the
 # effects of continuation of `Lam' can be handled by another handler.
-sig step : (Expr(a)) {Lam{_}, Var:(Var) -> Expr(a)}~> Step(a)
+sig step : (Expr(a)) {Lam{_}, Var:(Var) => Expr(a)}~> Step(a)
 fun step(f) {
   shallowhandle( f() ) {
      case x    -> Val(x)
@@ -76,7 +76,7 @@ fun step(f) {
 }
 
 # Substitution handler M[V/x]
-sig subst : (Expr(a), Expr(a), Var) {Var: (Var) -> Expr(a), Lam: (Var) -> ()}~> a
+sig subst : (Expr(a), Expr(a), Var) {Var: (Var) => Expr(a), Lam: (Var) => ()}~> a
 fun subst(m, v, x) {
   handle( m() ) {
     case <Var(y) => resume> ->

@@ -121,7 +121,7 @@ stdout : A(fun) : Either (())
 args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
 
 Type names with effect arrows are not considered
-typename X = Comp((), {Var:() -> ()}); fun() { } : X({ |_})
+typename X = Comp((), {Var:() => ()}); fun() { } : X({ |_})
 exit : 1
 stderr : @.*Arity mismatch: Type X expects 0 type arguments, but 1 arguments were provided.*
 args : --set=effect_sugar=true

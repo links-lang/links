@@ -36,32 +36,32 @@ args : --enable-handlers
 
 Operation invocation sugar (1)
 { fun() { do Foo } }
-stdout : fun : () {Foo:() {}-> a|_}-> a
+stdout : fun : () {Foo:() => a|_}-> a
 args : --enable-handlers
 
 Operation invocation sugar (2)
 { fun() { do Foo() } }
-stdout : fun : () {Foo:() {}-> a|_}-> a
+stdout : fun : () {Foo:() => a|_}-> a
 args : --enable-handlers
 
 Operation invocation sugar (3)
 { fun() { do Foo(()) } }
-stdout : fun : () {Foo:(()) {}-> a|_}-> a
+stdout : fun : () {Foo:(()) => a|_}-> a
 args : --enable-handlers
 
 Operation invocation sugar (4)
 fun() { do Foo }
-stdout : fun : () {Foo:() {}-> a|_}-> a
+stdout : fun : () {Foo:() => a|_}-> a
 args : --enable-handlers
 
 Operation invocation sugar (5)
 fun() { do Foo() }
-stdout : fun : () {Foo:() {}-> a|_}-> a
+stdout : fun : () {Foo:() => a|_}-> a
 args : --enable-handlers
 
 Operation invocation sugar (6)
 fun() { do Foo(()) }
-stdout : fun : () {Foo:(()) {}-> a|_}-> a
+stdout : fun : () {Foo:(()) => a|_}-> a
 args : --enable-handlers
 
 Exception handling (1)
@@ -150,7 +150,7 @@ args : --enable-handlers
 
 Type inference for deep handler
 fun() { handle({do A; do B}) { case <A => k> -> k(()) case x -> x } }
-stdout : fun : () {A{_},B:() {}-> b|_}~> b
+stdout : fun : () {A{_},B:() => b|_}~> b
 args : --enable-handlers
 
 Soundness
@@ -231,7 +231,7 @@ args : --enable-handlers
 
 Operation parameter pattern-matching (7)
 fun(m) { handle(m()) { case <Move(Alice)> -> 'A' case <Move(Bob)> -> 'B' case <Move(_)> -> 'U' case x -> x } }
-stdout : fun : (() {Move:([|Alice|Bob|_|]) {}-> _::Any|c}~> Char) {Move{_}|c}~> Char
+stdout : fun : (() {Move:([|Alice|Bob|_|]) => _::Any|c}~> Char) {Move{_}|c}~> Char
 args : --enable-handlers
 
 Operation parameter pattern-matching (8)
@@ -369,12 +369,12 @@ args : --enable-handlers
 
 Type ascription, parameterised handlers (1)
 { fun(a : Int)(b : Float)(c : String)(m)() { handle (m())(x <- a, y <- b, z <- c) { case <Op(p) => k> -> k(c,42,p,"Foo") case _ -> x } } }
-stdout : fun : (Int) -> (Float) -> (String) -> (() {Op:(Float) {}-> String|d}~> _) -> () {Op{_}|d}~> Int
+stdout : fun : (Int) -> (Float) -> (String) -> (() {Op:(Float) => String|d}~> _) -> () {Op{_}|d}~> Int
 args : --enable-handlers
 
 Type ascription, parameterised handlers (2)
 { fun(a : Float, b : String, c : Int)(m)() { handle(m())(x <- a, y <- b, z <- c) { case <Op(p) => k> -> k(x,p,"Bar",99) case _ -> y } } }
-stdout : fun : (Float, String, Int) -> (() {Op:(Float) {}-> Float|b}~> _) -> () {Op{_}|b}~> String
+stdout : fun : (Float, String, Int) -> (() {Op:(Float) => Float|b}~> _) -> () {Op{_}|b}~> String
 args : --enable-handlers
 
 Instantiate.ArityMismatch #132 (RESOLVED)
@@ -382,9 +382,19 @@ sig f : (() {Foo:Int|a}~> b) {Foo{_}|a}~> b fun f(m) { error("N/A") } fun g(m) {
 stdout : () : ()
 args : --enable-handlers
 
-Operation polymorphism
-sig catch : (() {Fail:forall a.a |e}~> b) {Fail{_} |e}~> Maybe(b) fun catch(m) { handle(m()) { case <Fail => k> -> Nothing case x -> Just(x) } } catch(fun() { 42 })
+Operation polymorphism (1)
+sig catch : (() {Fail:forall a.a |e}~> b) {Fail{_} |e}~> Maybe(b) fun catch(m) { handle(m()) { case <Fail => k> : (forall a. () => a) -> Nothing case x -> Just(x) } } catch(fun() { 42 })
 stdout : Just(42) : Maybe (Int)
+args : --enable-handlers
+
+Operation polymorphism (2)
+sig catch : (() {Fail:forall a.a |e}~> b) {Fail{_} |e}~> Maybe(b) fun catch(m) { handle(m()) { case <Fail => k> : (forall a. () => a) -> Nothing case x -> Just(x) } } sig f : () {Fail:forall a.a}~> Int fun f () { if (do Fail) 42 else do Fail } catch (f)
+stdout : Nothing : Maybe (Int)
+args : --enable-handlers
+
+Operation polymorphism (3)
+sig h : (() {Switch:forall a,b. (a,b) => (b,a) |e}~> c) {Switch{_} |e}~> c fun h(m) { handle(m()) { case <Switch(x,y) => k> : (forall a,b. (a,b) => (b,a)) -> k ((y,x)) } } sig f : () {Switch:forall a,b. (a,b) => (b,a)}~> Int fun f () { var (d,u) = do Switch(2,4) ; 10*d+u } h(f)
+stdout : 42 : Int
 args : --enable-handlers
 
 Generalise (1)
@@ -413,8 +423,8 @@ stdout : (1, true, (false, 1), "Hello World") : (Int, Bool, (Bool, Int), String)
 args : --enable-handlers
 
 Effect type sugar (1)
-fun(g : (() {A:a,B:(a) -> b|_}~> b)) { g }(fun(){error("N/A")})
-stdout : fun : () {A:() {}-> a,B:(a) {}-> b|_}~> b
+fun(g : (() {A:a,B:(a) => b|_}~> b)) { g }(fun(){error("N/A")})
+stdout : fun : () {A:() => a,B:(a) => b|_}~> b
 args : --enable-handlers
 
 Effect type sugar (2)
@@ -449,7 +459,22 @@ args : --enable-handlers
 
 Omission of resumption for nullary operations (3)
 fun(m) { handle(m()) { case <Foo> -> 5 } }
-stdout : fun : (() {Foo:() {}-> _::Any|b}~> Int) {Foo{_}|b}~> Int
+stdout : fun : (() {Foo:() => _::Any|b}~> Int) {Foo{_}|b}~> Int
+args : --enable-handlers
+
+Operation annotation (1)
+fun(m) { handle(m()) { case <Foo(x) => k> : ((Int) => Int) -> k (x) } }
+stdout : fun : (() {Foo:(Int) => Int|a}~> b::Any) {Foo{_}|a}~> b::Any
+args : --enable-handlers
+
+Operation annotation (2)
+fun(f)(m) { handle(m()) { case <Foo(x : Bool) => k> -> k (f (x)) } }
+stdout : fun : ((Bool) {Foo{a}|b}~> c::Any) -> (() {Foo:(Bool) => c::Any|b}~> e::Any) {Foo{a}|b}~> e::Any
+args : --enable-handlers
+
+Operation annotation (3)
+fun(m) { handle(m()) { case <Foo(x) => k> : ((a) => (() {}-> (a,a))) -> k ( fun () { (x,x) } ) } }
+stdout : fun : (() {Foo:(a) => () {}-> (a, a)|b}~> c::Any) {Foo{_}|b}~> c::Any
 args : --enable-handlers
 
 Examples
