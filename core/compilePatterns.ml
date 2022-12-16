@@ -981,23 +981,25 @@ let compile_handle_cases
                 | _ -> false)
               fields
           in
+          let rec extract t = match TypeUtils.concrete_type t with
+            | Types.Operation (domain, _) ->
+              let (fields, _, _) = TypeUtils.extract_row domain |> TypeUtils.extract_row_parts in
+              let arity = StringMap.size fields in
+              if arity = 1 then
+                match StringMap.find "1" fields with
+                | Types.Present t -> t
+                | _ -> assert false
+              else
+                domain (* n-ary operation *)
+            | Types.ForAll (_, t) -> extract t
+            | _ -> Types.unit_type (* nullary operation *)
+          in
           let fields'' =
             StringMap.map
               (function
-              | Types.Present t ->
-                 begin match TypeUtils.concrete_type t with
-                 | Types.Function (domain, _, _) ->
-                    let (fields, _, _) = TypeUtils.extract_row domain |> TypeUtils.extract_row_parts in
-                    let arity = StringMap.size fields in
-                    if arity = 1 then
-                      match StringMap.find "1" fields with
-                      | Types.Present t -> t
-                      | _ -> assert false
-                    else
-                      domain (* n-ary operation *)
-                 | _ -> Types.unit_type (* nullary operation *)
-                 end
-              | _ -> assert false)
+                | Types.Present t ->
+                  extract t
+                | _ -> assert false)
               fields'
           in
           Types.make_variant_type fields''

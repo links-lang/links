@@ -86,8 +86,8 @@ object (o : 'self_type)
          * (where (do SessionFail) has the empty type) *)
         let ty =
           Types.fresh_type_variable (CommonTypes.lin_any, CommonTypes.res_any) in
-        let doOp = DoOperation (failure_op_name, [], Some (Types.empty_type)) in
         let with_pos x = SourceCode.WithPos.make ~pos x in
+        let doOp = DoOperation (with_pos (Operation failure_op_name), [], Some (Types.empty_type)) in
         (o, with_pos (Switch (with_pos doOp, [], Some ty)), ty)
     | { node = TryInOtherwise (_, _, _, _, None); _} -> assert false
     | { node = TryInOtherwise (try_phr, pat, as_phr, otherwise_phr, (Some dt)); pos }

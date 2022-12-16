@@ -28,7 +28,7 @@ sig put : (s) -> State(Unit, s)
 fun put(s)(_) {(s, Unit)}
 
 # Reify reflect
-sig reify : (Comp(b, {Reflect:(State(a, s)) {}-> a |_})) { |_}~> State(b, s)
+sig reify : (Comp(b, {Reflect:(State(a, s)) => a |_})) { |_}~> State(b, s)
 fun reify(m) {
   handle(m()) {
     case x     -> return(x)
@@ -36,7 +36,7 @@ fun reify(m) {
   }
 }
 
-sig reflect : (State(a, s)) {Reflect:(State(a, s)) {}-> a |_}-> a
+sig reflect : (State(a, s)) {Reflect:(State(a, s)) => a |_}-> a
 fun reflect(m) {do Reflect(m)}
 
 # Example

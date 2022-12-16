@@ -350,6 +350,13 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
          | Effect r -> eq_rows (context, l, r)
          | _         -> false
          end
+      | Operation (lfrom, lto) ->
+          begin match t2 with
+            | Operation (rfrom, rto) ->
+              eqt     (context, lfrom, rfrom) &&
+              eqt     (context, lto  , rto  )
+            | _ -> false
+          end
       (* Row *)
       | Row _ ->
          begin match t2 with
@@ -595,7 +602,9 @@ struct
             let o, v, vt = o#value v in
             let _ = match TypeUtils.concrete_type t with
               | Variant _ ->
-                 o#check_eq_types  (variant_at ~overstep_quantifiers:false name t) vt (SVal orig)
+                 Debug.print "2" ;
+                 let x = o#check_eq_types  (variant_at ~overstep_quantifiers:false name t) vt (SVal orig)
+                 in Debug.print "22" ; x
               | _ -> raise_ir_type_error "trying to inject into non-variant type" (SVal orig) in
             o, Inject (name, v, t), t
         | TAbs (tyvars, v) ->
@@ -753,7 +762,9 @@ struct
                  StringMap.fold
                    (fun name  (binder, comp) (o, cases, types) ->
                      let type_binder = Var.type_of_binder binder in
+                     Debug.print "1" ;
                      let type_variant = variant_at ~overstep_quantifiers:false name variant in
+                     Debug.print "11" ;
                      o#check_eq_types type_binder type_variant (STC orig);
                      let o, b = o#binder binder in
                      let o, c, t = o#computation comp in

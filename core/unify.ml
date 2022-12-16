@@ -160,6 +160,12 @@ let rec eq_types : (datatype * datatype) -> bool =
          | Effect r -> eq_rows (l, r)
          | _        -> false
          end
+      | Operation (lfrom, lto) ->
+          begin match unalias t2 with
+          | Operation (rfrom, rto) -> eq_types (lfrom, rfrom)
+                                         && eq_types (lto,   rto)
+          | _                          -> false
+          end
       (* Row *)
       | Row (lfield_env, lrow_var, ldual) ->
          begin match unalias t2 with
@@ -681,6 +687,9 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
     | (Present _ | Absent), (Present _ | Absent) -> unify_presence' rec_env (t1, t2)
     (* Effect *)
     | Effect (Row l), Effect (Row r) -> ur (l, r)
+    | Operation (lfrom, lto), Operation (rfrom, rto) ->
+       (ut (lfrom, rfrom);
+        ut (lto, rto))
     (* Session *)
     | Input (t, s), Input (t', s')
     | Output (t, s), Output (t', s') -> unify' rec_env (t, t'); ut (s, s')

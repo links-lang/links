@@ -20,12 +20,12 @@ fun dequeue(q) {
 }
 
 # Concurrency API
-typename Co(e::Eff) = () {Fork:(Co({ |e})) -> (), Yield:() |e}~> ();
+typename Co(e::Eff) = () {Fork:(Co({ |e})) => (), Yield:() |e}~> ();
 
 sig yield : () { Yield:() |e}~> ()
 fun yield() { do Yield }
 
-sig fork : (Co({ |e})) {Fork: (Co({ |e})) -> () |_}~> ()
+sig fork : (Co({ |e})) {Fork: (Co({ |e})) => () |_}~> ()
 fun fork(f) { do Fork(f) }
 
 sig schedule : (Co({ |e})) {Fork{_}, Yield{_} |e}~> ()
@@ -54,7 +54,7 @@ fun schedule(main) {
 fun get() { do Get }
 fun put(st) { do Put(st) }
 
-sig runState : (Comp(a, {Get:s, Put: (s) -> () |e}), s) {Get{_}, Put{_} |e}~> (a, s)
+sig runState : (Comp(a, {Get:s, Put: (s) => () |e}), s) {Get{_}, Put{_} |e}~> (a, s)
 fun runState(m, st) {
   handle(m())(st <- st) {
     case x      -> (x, st)
@@ -88,7 +88,7 @@ typename Bank = [Account];
 var accounts = [("Alice", 100), ("Bob", 25)];
 
 # Transfer
-sig transfer : (Bool, Int, String, String) {Abort:Zero, Yield:(), Get:Bank, Put: (Bank) -> () |_}~> ()
+sig transfer : (Bool, Int, String, String) {Abort:Zero, Yield:(), Get:Bank, Put: (Bank) => () |_}~> ()
 fun transfer(delay, amount, src, dest) {
   fun upd(account) {
     var accounts = filter(fun(a) { a.1 <> account.1 }, get());
