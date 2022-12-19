@@ -1,0 +1,77 @@
+#
+# Cooperative concurrency with first-order algebraic effects
+#
+
+typename Two = Bool;
+typename One = ();
+
+# type of a concurrent computation
+typename Co(e::Eff, a) = Comp (a, {Fork  : Two,
+                                   Yield : One,
+                                   Stop  : Zero | e});
+
+## cooperative concurrency interface
+sig fork : Comp(Two, {Fork:Two|_})
+fun fork() {do Fork}
+
+sig yield : Comp(One, {Yield:One|_})
+fun yield() {do Yield}
+
+sig stop : Comp(a, {Stop:Zero|_})
+fun stop() {switch (do Stop) { }}
+
+# example abstract concurrent computation
+sig test : Co({ |e}, One)
+fun test() {
+  print("M1 ");
+  if(fork()) { print("A1 "); yield(); print ("A2 "); stop() } else {
+    print("M2 ");
+    yield();
+    if(fork()) { print("B1 "); yield(); print ("B2 "); stop() } else {
+      yield();
+      print("M3 ");
+      yield();
+      print("\n");
+      stop()
+    }
+ }
+}
+
+# a resumption takes an initial list of resumptions and if one of them
+# yields a value returns a pair of the value and a list of unfinished
+# resumptions
+typename Res(e::Eff, a) = (List(Res({ |e}, a))) ~e~> Maybe ((a, List(Res({ |e}, a))));
+
+# The internal type annotations shouldn't be necessary
+
+sig coop : (Co({ |e}, a)) {Fork{_},Yield{_},Stop{_}|e}~> Res({ |e}, a)
+fun coop(m) {
+  handle(m()) {
+    case x            -> fun (rs) {Just ((x, rs))}
+    case <Fork => k>  -> fun (rs) {
+                           var (r' : Res({ |e}, a)) = fun (rs) {k(false)(rs)};
+                           k(true)(rs ++ [r'])}
+    case <Yield => k> -> fun (rs) {
+                           switch (rs) {
+                             case []        -> k(())([])
+                             case (r :: rs) ->
+                               var (r' : Res({ |e}, a)) = fun (rs) {k(())(rs)};
+                               r(rs ++ [r'])
+                           }
+                         }
+    case <Stop => k>  -> fun (rs) {
+                           switch (rs) {
+                             case []        -> Nothing
+                             case (r :: rs) -> (r : Res({ |e}, a))(rs)
+                           }
+                         }
+  }
+}
+
+# There seems to be a bug in type inference which means that run
+# cannot be given the correct type signature
+
+#sig run : (Co({ |e}, a)) {Fork{_},Yield{_},Stop{_}|e}~>  Maybe ((a, List(Res({ |e}, a))))
+fun run(m) {
+  coop(m)([])
+}
