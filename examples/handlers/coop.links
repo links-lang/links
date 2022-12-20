@@ -44,34 +44,31 @@ typename Res(e::Eff, a) = (List(Res({ |e}, a))) ~e~> Maybe ((a, List(Res({ |e}, 
 
 # The internal type annotations shouldn't be necessary
 
-sig coop : (Co({ |e}, a)) {Fork{_},Yield{_},Stop{_}|e}~> Res({ |e}, a)
+sig coop : (Co({ |e}, a)) {Fork{p},Yield{q},Stop{r}|e}~> Res({Fork{p},Yield{q},Stop{r}|e}, a)
 fun coop(m) {
   handle(m()) {
     case x            -> fun (rs) {Just ((x, rs))}
     case <Fork => k>  -> fun (rs) {
-                           var (r' : Res({ |e}, a)) = fun (rs) {k(false)(rs)};
+                           var (r' : Res({Fork{p},Yield{q},Stop{r}|e}, a)) = fun (rs) {k(false)(rs)};
                            k(true)(rs ++ [r'])}
     case <Yield => k> -> fun (rs) {
                            switch (rs) {
                              case []        -> k(())([])
                              case (r :: rs) ->
-                               var (r' : Res({ |e}, a)) = fun (rs) {k(())(rs)};
+                               var (r' : Res({Fork{p},Yield{q},Stop{r}|e}, a)) = fun (rs) {k(())(rs)};
                                r(rs ++ [r'])
                            }
                          }
     case <Stop => k>  -> fun (rs) {
                            switch (rs) {
                              case []        -> Nothing
-                             case (r :: rs) -> (r : Res({ |e}, a))(rs)
+                             case (r :: rs) -> (r : Res({Fork{p},Yield{q},Stop{r}|e}, a))(rs)
                            }
                          }
   }
 }
 
-# There seems to be a bug in type inference which means that run
-# cannot be given the correct type signature
-
-#sig run : (Co({ |e}, a)) {Fork{_},Yield{_},Stop{_}|e}~>  Maybe ((a, List(Res({ |e}, a))))
+sig run : (Co({ |e}, a)) {Fork{p},Yield{q},Stop{r}|e}~>  Maybe ((a, List(Res({Fork{p},Yield{q},Stop{r}|e}, a))))
 fun run(m) {
   coop(m)([])
 }
