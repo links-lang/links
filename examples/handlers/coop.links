@@ -81,7 +81,7 @@ fun coop(m) {
   }
 }
 
-sig run : (Co({ |e}, a)) {Fork{p},Yield{q},Stop{r}|e}~> Maybe ((a, Pool({Fork{p},Yield{q},Stop{r}|e}, a)))
+sig run : (Co({ |e}, a)) {Fork{p},Yield{q},Stop{r}|e}~> Maybe ((a, ResList({Fork{p},Yield{q},Stop{r}|e}, a)))
 fun run(m) {
   coop(m)(Nil)
 }
