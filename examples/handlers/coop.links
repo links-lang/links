@@ -40,35 +40,48 @@ fun test() {
 # a resumption takes an initial list of resumptions and if one of them
 # yields a value returns a pair of the value and a list of unfinished
 # resumptions
-typename Res(e::Eff, a) = (List(Res({ |e}, a))) ~e~> Maybe ((a, List(Res({ |e}, a))));
+mutual {
+  typename Res(e::Eff, a) = (ResList({ |e}, a)) ~e~> Maybe ((a, ResList({ |e}, a)));
+  typename ResList(e::Eff, a) = [|Cons:(Res({ |e}, a), ResList({ |e}, a))|Nil|];
+}
 
-# The internal type annotations shouldn't be necessary
+# Links (following OCaml) only infers recursive types when all
+# recursive type variables are guarded by a variant or record
+# constructor. This means it is more convenient to define Res mutually
+# recursively with a bespoke list type rather than using the standard
+# list type - otherwise we would need to add a number of type
+# annotations inside the body of coop.
+
+fun snoc(rs, r) {
+  switch (rs) {
+    case Nil             -> Cons(r, Nil)
+    case (Cons (r', rs)) -> Cons(r', snoc(rs, r))
+  }
+}
 
 sig coop : (Co({ |e}, a)) {Fork{p},Yield{q},Stop{r}|e}~> Res({Fork{p},Yield{q},Stop{r}|e}, a)
 fun coop(m) {
   handle(m()) {
     case x            -> fun (rs) {Just ((x, rs))}
     case <Fork => k>  -> fun (rs) {
-                           var (r' : Res({Fork{p},Yield{q},Stop{r}|e}, a)) = fun (rs) {k(false)(rs)};
-                           k(true)(rs ++ [r'])}
+                           k(true)(snoc(rs, k(false)))
+                         }
     case <Yield => k> -> fun (rs) {
                            switch (rs) {
-                             case []        -> k(())([])
-                             case (r :: rs) ->
-                               var (r' : Res({Fork{p},Yield{q},Stop{r}|e}, a)) = fun (rs) {k(())(rs)};
-                               r(rs ++ [r'])
+                             case Nil         -> k(())(Nil)
+                             case Cons(r, rs) -> r(snoc(rs, k(())))
                            }
                          }
-    case <Stop => k>  -> fun (rs) {
+    case <Stop>       -> fun (rs) {
                            switch (rs) {
-                             case []        -> Nothing
-                             case (r :: rs) -> (r : Res({Fork{p},Yield{q},Stop{r}|e}, a))(rs)
+                             case Nil         -> Nothing
+                             case Cons(r, rs) -> r(rs)
                            }
                          }
   }
 }
 
-sig run : (Co({ |e}, a)) {Fork{p},Yield{q},Stop{r}|e}~>  Maybe ((a, List(Res({Fork{p},Yield{q},Stop{r}|e}, a))))
+sig run : (Co({ |e}, a)) {Fork{p},Yield{q},Stop{r}|e}~> Maybe ((a, Pool({Fork{p},Yield{q},Stop{r}|e}, a)))
 fun run(m) {
-  coop(m)([])
+  coop(m)(Nil)
 }
