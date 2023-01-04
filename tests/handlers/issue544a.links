@@ -14,7 +14,7 @@ fun deadlock_correct() {
 
   handle({
     # Nondeterministic choice.
-    ignore(ldo LFlip);
+    ignore(lindo LFlip);
     var (i, ch) = receive(ch);
     println("Int: " ^^ intToString(i));
     close(ch)

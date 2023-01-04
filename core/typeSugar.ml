@@ -1657,9 +1657,10 @@ type context = Types.typing_environment = {
   (* the current effects *)
   effect_row : Types.row;
 
-  (* the current continuation linearity
-     cont_lin = true : the continuation can use linear vars
-     cont_lin = false : the continuation must not use linear vars *)
+  (* the current continuation linearity.
+     It will be mapped to a pair of bools, where
+     the first bool value indicates whether the current term is in a linear continuation currently
+     the second bool value indicates whether the current term is bound by a linlet *)
   cont_lin : int;
 
   (* Whether this is runs on desugared code, and so some non-user
@@ -1687,7 +1688,7 @@ let bind_effects     context r      = {context with effect_row = r}
   - An effect row type with kind `Any` means it can be linear or unlimited.
   - An effect row type with kind `Unl` means it must be linear!
   Moreover, for effect signatures, `->` means linera signature which must have a linear
-  continuation, and `-@` means signature with kind Any.
+  continuation, and `-@` means signature which may have any continuation.
   This is just an implementation trick to reuse the previous mechanism of unification.
 *)
 (* `lin_any` here means this eff_row can be unified with linear or unlimited row types *)
@@ -1711,29 +1712,27 @@ let make_continuation_type = fun islin inp eff out ->
 
 (*
     `cont_lin` (continuation linearity) is represented by an integer, which is
-    mapped to a bool by `cont_lin_map`.
-    - `cont_lin = true` : the current and following term is (part of) a linear
-      continuation. If the current term is not pure, we should guarantee that
-      the current effect type `effect_row` is linear.
-    - `cont_lin = false` : the current and following term is (part of) an
-      unlimited continuation. We need to guarantee that all variables in the
-      current term is unlimited.
+    mapped to a pair of bools by `cont_lin_map`.
+    - `cont_lin.first = true` : the current term is in a linear continuation.
+    - `cont_lin.first = false` : the current term is in an unlimited
+      continuation. We should guarantee it does not use linear variables bound
+      outside.
+    - `cont_lin.second = true` : the current term is bound by linlet (i.e. has a
+      linear continuation). If the current term is not pure, we should guarantee
+      that the current effect type `effect_row` is linear.
+    - `cont_lin.second = false` : the current term is bound by let (i.e. has an
+      unlimited continuation).
 
-    We will implement `cont_lin = true` by default. However, it should be able
-    to be overwritten.
+    We will implement `cont_lin = (true, true)` by default because some functions
+    in prelude.links uses session types.
 
-    The reason to use a global map is that we have syntax like `linlet` and
-    `unlet` which updates `cont_lin`, meanwhile we want to make sure sequenced
-    terms have the same `cont_lin`. The only places where `cont_lin` is updated
-    to a new one is where `effect_row` is updated to a new one.
+    The reason to use a global map is that we have syntax like `lindo` which
+    updates `cont_lin`, meanwhile we want to make sure sequenced terms have the
+    same `cont_lin`. The only places where `cont_lin` is updated to a new one is
+    where `effect_row` is updated to a new one.
 *)
 let cont_lin_count = ref 0
 
-(* 
-  0 means the current term is in the body of a linlet and bound by another linlet
-  1 means the current term is in the body of an unlet and bound by a linlet
-  2 means the current term is in the body of an unlet and bound by a linlet
-*)
 let default_cont_lin = (true, true)
 
 (* TODO: `-1` is the `cont_lin` of `empty_typing_environment`.
@@ -1760,11 +1759,6 @@ let update_bound_by_linlet context b =
   let a = is_in_linlet context in
   cont_lin_map := IntMap.add context.cont_lin (a, b) !cont_lin_map
 
-(* let get_cont_lin context = *)
-  (* IntMap.find context.cont_lin !cont_lin_map *)
-
-(* let set_cont_lin context b = *)
-  (* cont_lin_map := IntMap.add context.cont_lin b !cont_lin_map *)
 
 
 
@@ -4485,9 +4479,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               3. Construct effect row where the operation name gets bound to the previously constructed operation type
               4. Unify with current effect context
            *)
-           (* let is_lindo = is_bound_by_linlet context in *)
-           (* undo is implicitly bound by an unlet *)
-           let () = if not is_lindo then update_bound_by_linlet context false else ()
+           (* let () = if is_lindo then update_bound_by_linlet context true *)
+           let () = if is_lindo then ()
+                                else update_bound_by_linlet context false
            in
            if String.compare opname "Return" = 0 then
              Gripers.die pos "The implicit effect Return is not invocable"
@@ -4506,7 +4500,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            let () = unify ~handle:Gripers.do_operation
              (no_pos (T.Effect context.effect_row), (p, T.Effect row))
            in
-           let () = if not is_lindo then update_in_linlet context false else ()
+           (* let () = if is_lindo then update_in_linlet context true *)
+           let () = if is_lindo then ()
+                                else update_in_linlet context false
            in
            (DoOperation (opname, List.map erase args, Some return_type, is_lindo)
            , return_type, Usage.combine_many (List.map usages args))

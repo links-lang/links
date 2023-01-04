@@ -13,9 +13,9 @@ fun choice() {
 
 # Linear version of Choose
 fun lin_choice() {
-  var x = if (ldo LChoose()) { 2 }
+  var x = if (lindo LChoose()) { 2 }
           else { 4 };
-  var y = if (ldo LChoose()) { 8 }
+  var y = if (lindo LChoose()) { 8 }
           else { 16 };
   x + y
 }

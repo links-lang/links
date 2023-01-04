@@ -27,7 +27,7 @@ stderr : @.*Type error: Variable .* of linear type .* is used in a deep handler.
 args : --enable-handlers
 
 Linear operation and continuation
-handle (ldo LL(20) + 1) {case LL(i, k) -> k(i)}
+handle (lindo LL(20) + 1) {case LL(i, k) -> k(i)}
 stdout : 21 : Int
 args : --enable-handlers
 
@@ -37,7 +37,7 @@ stdout : 42 : Int
 args : --enable-handlers
 
 Use linear variable in linear continuation
-{linfun f(x) {40+x} handle (f(ldo LL)) {case LL(k) -> k(2)}}
+{linfun f(x) {40+x} handle (f(lindo LL)) {case LL(k) -> k(2)}}
 stdout : 42 : Int
 args : --enable-handlers
 

@@ -4,7 +4,7 @@ var ch = fork(fun(ch) {
 });
 
 handle({
-  ignore(ldo LL);
+  ignore(lindo LL);
   var (i, ch) = receive(ch);
   println("Int: " ^^ intToString(i));
   close(ch)

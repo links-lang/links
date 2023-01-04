@@ -18,10 +18,10 @@ fun unsound_correct() {
 
   handle({
     # Nondeterministic choice.
-    var msg = if (ldo LFlip) 42 else 84;
+    var msg = if (lindo LFlip) 42 else 84;
     var ch = send(msg, ch);
     # Throws an exception
-    ignore(ldo LFail);
+    ignore(lindo LFail);
     var ch = send("foo", ch);
     close(ch)
   }) {

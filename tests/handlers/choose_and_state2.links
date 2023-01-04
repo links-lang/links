@@ -1,9 +1,12 @@
 fun incr(x) {var y = do Get; do Put(x+y)}
 
+# this example shows that we can use linear operations
+# in an environment surrounded by unlimited operations
 fun choice() {
-  var x = if ([|ldo LChoose()|]) { incr(1); do Get }
+  [|ignore("switch from linlet to let")|];
+  var x = if (lindo LChoose()) { incr(1); do Get }
           else { incr(1); do Get };
-  var y = if ([|ldo LChoose()|]) { incr(1); do Get }
+  var y = if (lindo LChoose()) { incr(1); do Get }
           else { incr(1); do Get };
   x + y
 }

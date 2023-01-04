@@ -72,9 +72,7 @@ let keywords = [
  "delete_left", DELETE_LEFT;
  "determined", DETERMINED;
  "do"       , DOOP;
- "ldo"      , LINDOOP;
- "lin"      , LINLET;
- "un"       , UNLET;
+ "lindo"      , LINDOOP;
  "effectname", EFFECTNAME;
  "else"     , ELSE;
  "escape"   , ESCAPE;
