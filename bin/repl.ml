@@ -61,16 +61,16 @@ let print_value rtype value =
     pp_set_margin std_formatter width;
     pp_set_tags std_formatter (Settings.get print_colors);
     pp_set_mark_tags std_formatter (Settings.get print_colors);
-    begin [@alert "-deprecated"] pp_set_formatter_tag_functions
+    begin pp_set_formatter_stag_functions
       std_formatter
-      {mark_open_tag = (function
-                        | "constructor" -> "\x1b[32m"
-                        | "recordlabel" -> "\x1b[35m"
-                        (* | "string" -> "\x1b[36m" *)
+      {mark_open_stag = (function
+                        | String_tag "constructor" -> "\x1b[32m"
+                        | String_tag "recordlabel" -> "\x1b[35m"
+                        (* | String_tag "string" -> "\x1b[36m" *)
                         | _ -> "");
-       mark_close_tag  = (fun _ -> "\x1b[39m");
-       print_open_tag  = ignore;
-       print_close_tag = ignore;
+       mark_close_stag  = (fun _ -> "\x1b[39m");
+       print_open_stag  = ignore;
+       print_close_stag = ignore;
       }
     end;
     fprintf std_formatter "@[%a@;<1 4>: %s@]"
