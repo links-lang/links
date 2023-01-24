@@ -41,6 +41,16 @@ module Sessions = struct
               |> convert parse_bool
               |> CLI.(add (long "session-exceptions"))
               |> sync)
+
+  let expose_session_fail =
+    Settings.(flag "expose_session_fail" ~default:true
+              |> synopsis "Exposes the SessionFail effect"
+              |> depends Handlers.enabled
+              |> depends exceptions_enabled
+              |> privilege `System
+              |> convert parse_bool
+              |> CLI.(add (long "session-fail-exposed"))
+              |> sync)
 end
 
 module System = struct
