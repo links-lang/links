@@ -49,7 +49,7 @@ module Sessions = struct
               |> depends exceptions_enabled
               |> privilege `System
               |> convert parse_bool
-              |> CLI.(add (long "session-fail-exposed"))
+              |> CLI.(add (long "expose-session-fail"))
               |> sync)
 end
 

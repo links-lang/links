@@ -646,7 +646,15 @@ and match_variant
                    if StringSet.mem name names then
                      (cases, cs)
                    else
-                     let case_type = TypeUtils.variant_at name t in
+                     let case_type =
+                       if Settings.get Basicsettings.Sessions.exceptions_enabled &&
+                          not (Settings.get Basicsettings.Sessions.expose_session_fail) &&
+                          String.compare name Value.session_exception_operation = 0
+                       then
+                         Types.empty_type
+                       else
+                         TypeUtils.variant_at name t
+                     in
 (*                     let inject_type = TypeUtils.inject_type name case_type in *)
                      let (case_binder, case_variable) = Var.fresh_var_of_type case_type in
                      let match_env = bind_type case_variable case_type env in
@@ -668,7 +676,13 @@ and match_variant
             let default_type =
               StringSet.fold
                 (fun name t ->
-                   let _, t = TypeUtils.split_variant_type name t in t) cs t in
+                   if Settings.get Basicsettings.Sessions.exceptions_enabled &&
+                      not (Settings.get Basicsettings.Sessions.expose_session_fail) &&
+                      String.compare name Value.session_exception_operation = 0
+                   then
+                     t
+                   else
+                     let _, t = TypeUtils.split_variant_type name t in t) cs t in
               begin
                 match default_type with
                   | Types.Variant row
