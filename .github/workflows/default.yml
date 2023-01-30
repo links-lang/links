@@ -17,7 +17,8 @@ jobs:
         os:
           - ubuntu-20.04
         ocaml-compiler:
-          - 4.08.0
+          - 4.14.1
+          - 5.0.0
 
     runs-on: ${{ matrix.os }}
 
@@ -71,7 +72,8 @@ jobs:
         os:
           - ubuntu-20.04
         ocaml-compiler:
-          - 4.08.0
+          - 4.14.1
+          - 5.0.0
 
     runs-on: ${{ matrix.os }}
 
@@ -112,7 +114,8 @@ jobs:
         os:
           - ubuntu-20.04
         ocaml-compiler:
-          - 4.08.0
+          - 4.14.1
+          - 5.0.0
 
     runs-on: ${{ matrix.os }}
 
@@ -200,7 +203,8 @@ jobs:
         os:
           - ubuntu-20.04
         ocaml-compiler:
-          - 4.08.0
+          - 4.14.1
+          - 5.0.0
 
     runs-on: ${{ matrix.os }}
 
@@ -278,7 +282,8 @@ jobs:
         os:
           - ubuntu-18.04
         ocaml-compiler:
-          - 4.08.0
+          - 4.14.1
+          - 5.0.0
 
     runs-on: ${{ matrix.os }}
 
