@@ -34,7 +34,7 @@ module Check_error : sig
         (** Error thrown when the algorithm assumes that some
             columns have not been included because there is
             some cycle with them. *)
-    | FunDepNotTreeForm of Alias.Set.t  (** Error thrown when *)
+    | FunDepNotTreeForm  (** Error thrown when not in tree form *)
   [@@deriving show]
 end
 

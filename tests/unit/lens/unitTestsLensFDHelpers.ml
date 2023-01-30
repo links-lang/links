@@ -173,9 +173,7 @@ module Tree_form = struct
     assert_equal_tree_form_error ~ctxt err
       (Fun_dep.Tree.Tree_form_error.NotDisjoint (cols "B"));
     let tree = of_fds fds ~columns:(cols "A B C D E F G") |> H.assert_error in
-    assert_equal_tree_error ~ctxt
-      (Fun_dep.Check_error.FunDepNotTreeForm (cols ""))
-      tree
+    assert_equal_tree_error ~ctxt Fun_dep.Check_error.FunDepNotTreeForm tree
 
   let key_split ctxt =
     let open Fun_dep.Tree in
