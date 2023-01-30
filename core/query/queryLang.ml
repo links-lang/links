@@ -26,7 +26,7 @@ let runtime_type_error error =
 
 let query_error fmt =
   let error msg = raise (DbEvaluationError msg) in
-    Printf.kprintf error fmt
+    Printf.ksprintf error fmt
 
 type base_type = | Bool | Char | Float | Int | String | DateTime
 
