@@ -185,7 +185,7 @@ let rec directives : (string * ((Context.t -> string list -> Context.t) * string
                   else (Module_hacks.Name.prettify name)
                 in
                 Printf.fprintf stderr " %-16s : %s\n"
-                  name ty)
+                  name ty) (* TODO(dhil): should really "prettify" ty here too as it may contain unique labels that have been expanded. *)
             nenv ();
           context),
          "display the current value environment");

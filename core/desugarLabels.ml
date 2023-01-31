@@ -19,9 +19,14 @@ let visitor =
 
     method! bindingnode = function
         | FreshLabel labels ->
-            let labels = List.map Label.bind_local labels in
-            label_env <- Env.bind_labels labels label_env ;
-            FreshLabel labels
+          let labels = List.map Label.bind_local labels in
+          label_env <- Env.bind_labels labels label_env ;
+          FreshLabel labels
+        | Module { binder; members } ->
+          let env = label_env in
+          let members = self#list (fun o -> o#binding) members in
+          label_env <- env;
+          Module { binder; members }
         | b -> super#bindingnode b
 
     method! phrasenode = function

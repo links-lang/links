@@ -63,3 +63,12 @@ exit : 1
 Lexical scoping [2]
 fun() { var x = { fresh `A; ignore(42); fun() { do `A } }; x }
 stdout : fun : () -> () {`A:() => b|_}-> b
+
+Lexical scoping [3]
+{ module T { fresh `A; } fun() { do `A } }
+stderr : @.*
+exit : 1
+
+Lexical scoping [4]
+module T { fresh `A; fun f() { do `A } }
+stdout : () : ()
