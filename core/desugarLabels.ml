@@ -4,7 +4,7 @@ open Sugartypes
 module Env = Label.Env
 
 let visitor =
-    object (_self)
+    object (self)
     inherit SugarTraversals.map as super
 
     val mutable label_env : Env.t = Env.empty
@@ -24,7 +24,15 @@ let visitor =
             FreshLabel labels
         | b -> super#bindingnode b
 
-    end
+    method! phrasenode = function
+       | Block (bs, e) ->
+         let env = label_env in
+         let bs = self#list (fun o -> o#binding) bs in
+         let e = self#phrase e in
+         label_env <- env;
+         Block (bs, e)
+       | e -> super#phrasenode e
+  end
 
 let program p = visitor#program p
 

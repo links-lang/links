@@ -54,3 +54,12 @@ Avoiding pollution [2]
 filemode : true
 stdout : 42 : Int
 args : --enable-handlers
+
+Lexical scoping [1]
+fun() { var x = { fresh `A; 42 }; do `A }
+stderr : @.*
+exit : 1
+
+Lexical scoping [2]
+fun() { var x = { fresh `A; ignore(42); fun() { do `A } }; x }
+stdout : fun : () -> () {`A:() => b|_}-> b
