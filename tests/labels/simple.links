@@ -1,5 +1,2 @@
-fresh `A {
-
-  fun f () { do `A }
-
-}
+fresh `A;
+fun f () { do `A }

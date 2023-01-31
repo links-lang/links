@@ -4,7 +4,7 @@ open Sugartypes
 module Env = Label.Env
 
 let visitor =
-    object (self)
+    object (_self)
     inherit SugarTraversals.map as super
 
     val mutable label_env : Env.t = Env.empty
@@ -18,12 +18,10 @@ let visitor =
             | _             -> failwith ("The local label " ^ Label.show lbl ^ " is not bound")
 
     method! bindingnode = function
-        | FreshLabel (labels, decls) ->
+        | FreshLabel labels ->
             let labels = List.map Label.bind_local labels in
             label_env <- Env.bind_labels labels label_env ;
-            let decls = List.map self#binding decls in
-            label_env <- Env.unbind_labels labels label_env ;
-            FreshLabel(labels, decls)
+            FreshLabel labels
         | b -> super#bindingnode b
 
     end
@@ -33,9 +31,11 @@ let program p = visitor#program p
 let sentence = function
   | Definitions bs ->
       let bs' = visitor#list (fun o b -> o#binding b) bs in
-        Definitions bs'
-  | Expression  p  -> Expression p
-  | Directive   d  -> Directive d
+      Definitions bs'
+  | Expression p ->
+      let p' = visitor#phrase p in
+      Expression p'
+  | Directive d -> Directive d
 
 module Untyped = struct
     open Transform.Untyped

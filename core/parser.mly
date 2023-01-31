@@ -300,7 +300,7 @@ let parse_foreign_language pos lang =
 
 let any = any_pat dp
 let local_label = Label.make_local
-let label = Label.make_global
+let label = Label.make
 %}
 
 %token EOF
@@ -456,8 +456,7 @@ nofun_declaration:
 | typedecl SEMICOLON                                           { $1 }
 | links_module | links_open SEMICOLON                          { $1 }
 | pollute = boption(OPEN) IMPORT CONSTRUCTOR SEMICOLON         { import ~ppos:$loc($2) ~pollute [$3] }
-| FRESH separated_nonempty_list(COMMA, BTCONSTRUCTOR)
-    LBRACE declarations RBRACE                                 { with_pos $loc (FreshLabel(List.map local_label $2, $4))}
+| FRESH separated_nonempty_list(COMMA, BTCONSTRUCTOR) SEMICOLON { with_pos $loc (FreshLabel (List.map local_label $2))}
 
 alien_datatype:
 | VARIABLE COLON datatype SEMICOLON                            { (binder ~ppos:$loc($1) $1, datatype $3) }
@@ -983,6 +982,7 @@ binding:
 | fun_kind VARIABLE arg_lists perhaps_location switch_funlit_body               { switch_fun_binding ~ppos:$loc None ($1, $2, $3, $4, $5) }
 | typedecl SEMICOLON | links_module
 | links_open SEMICOLON                                         { $1 }
+| FRESH separated_nonempty_list(COMMA, BTCONSTRUCTOR) SEMICOLON { with_pos $loc (FreshLabel (List.map local_label $2))}
 
 mutual_binding_block:
 | MUTUAL LBRACE mutual_bindings RBRACE                         { MutualBindings.flatten $3 }
@@ -1189,7 +1189,7 @@ field_label:
 | CONSTRUCTOR                                                  { label $1 }
 | VARIABLE                                                     { label $1 }
 | STRING                                                       { label $1 }
-| UINTEGER                                                     { label (string_of_int $1) }
+| UINTEGER                                                     { Label.Number $1 }
 
 rfields:
 | fields_def(rfield, COMMA, row_var, kinded_row_var)                  { $1 }

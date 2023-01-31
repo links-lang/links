@@ -1695,11 +1695,11 @@ let lookup_effect    context name   =
     end
   | _ -> raise (internal_error "Effect row in the context is not a row")
 
-let unbind_alias     context v      = {context with tycon_env  = Env.unbind v context.tycon_env}
+(* let unbind_alias     context v      = {context with tycon_env  = Env.unbind v context.tycon_env} *)
 let bind_labels      context ls     = {context with label_env  = Label.Env.bind_labels ls context.label_env}
 (* let unbind_labels    context ls     = {context with label_env  = Label.Env.unbind_labels ls context.label_env} *)
 
-let extend = Types.extend_typing_environment
+(* let extend = Types.extend_typing_environment *)
 
 (* TODO(dhil): I have extracted the Usage abstraction from my name
    hygiene/compilation unit patch. The below module is a compatibility
@@ -2668,57 +2668,57 @@ let erase_local_labels_from_tycon ?(exact=true) pos labels tycon =
       } ;
       Some (`Mutual (qs, tygroup))
 
-let rec erase_local_labels labels decls ctx =
-  let erase_binder pos binder ctx =
-    let name  = Binder.to_name binder in
-    let t' = Env.find_opt name ctx.var_env in
-    match OptionUtils.opt_bind (erase_local_labels_from_type pos labels) t' with
-    | Some t -> bind_var ctx (name, t)
-    | None -> unbind_var ctx name
-  in
-  let erase_alias pos name ctx =
-    let tycon' = Env.find_opt name ctx.tycon_env in
-    match OptionUtils.opt_bind (erase_local_labels_from_tycon pos labels) tycon' with
-    | Some tycon -> bind_alias ctx (name, tycon)
-    | None -> unbind_alias ctx name
-  in
-  let rec erase_pat pat ctx =
-    let e = erase_pat in
-    let e_list ps ctx = List.fold_left (fun ctx p -> e p ctx) ctx ps in
-    let e_opt p_opt ctx = match p_opt with None -> ctx | Some p -> e p ctx in
-    let open Pattern in
-    let pos = WithPos.pos pat in
-    match WithPos.node pat with
-    | Cons (p,p')         -> ctx |> e p |> e p'
-    | List ps             -> ctx |> e_list ps
-    | Variant (_, p_opt)  -> ctx |> e_opt p_opt
-    | Operation (_, ps, p)   -> ctx |> e_list ps |> e p
-    | Record (lps, p_opt) -> ctx |> e_list (snd (List.split lps)) |> e_opt p_opt
-    | Tuple ps            -> ctx |> e_list ps
-    | Variable b          -> ctx |> erase_binder pos b
-    | As (b, p)           -> ctx |> erase_binder pos b |> e p
-    | HasType (p,_)       -> ctx |> e p
-    | _ -> ctx
-  in
-  List.fold_left (fun ctx d ->
-    let pos = WithPos.pos d in
-    match WithPos.node d with
-    | Fun { fun_binder ; _ } -> erase_binder pos fun_binder ctx
-    | Funs rfuns -> List.fold_left
-        (fun ctx rfun ->
-          erase_binder (WithPos.pos rfun) (WithPos.node rfun).rec_binder ctx
-        ) ctx rfuns
-    | Val (pat, _, _, _) ->  erase_pat pat ctx
-    | FreshLabel (_, decls') -> erase_local_labels labels decls' ctx
-    | Aliases ts -> List.fold_left (fun ctx { node=(name, _, _); _} -> erase_alias pos name ctx) ctx ts
-    | Infix _
-    | Exp _
-    | Foreign _ -> ctx
-    | Import _
-    | Open _
-    | Module  _
-    | AlienBlock _ -> assert false
-  ) ctx decls
+(* let erase_local_labels labels decls ctx = *)
+(*   let erase_binder pos binder ctx = *)
+(*     let name  = Binder.to_name binder in *)
+(*     let t' = Env.find_opt name ctx.var_env in *)
+(*     match OptionUtils.opt_bind (erase_local_labels_from_type pos labels) t' with *)
+(*     | Some t -> bind_var ctx (name, t) *)
+(*     | None -> unbind_var ctx name *)
+(*   in *)
+(*   let erase_alias pos name ctx = *)
+(*     let tycon' = Env.find_opt name ctx.tycon_env in *)
+(*     match OptionUtils.opt_bind (erase_local_labels_from_tycon pos labels) tycon' with *)
+(*     | Some tycon -> bind_alias ctx (name, tycon) *)
+(*     | None -> unbind_alias ctx name *)
+(*   in *)
+(*   let rec erase_pat pat ctx = *)
+(*     let e = erase_pat in *)
+(*     let e_list ps ctx = List.fold_left (fun ctx p -> e p ctx) ctx ps in *)
+(*     let e_opt p_opt ctx = match p_opt with None -> ctx | Some p -> e p ctx in *)
+(*     let open Pattern in *)
+(*     let pos = WithPos.pos pat in *)
+(*     match WithPos.node pat with *)
+(*     | Cons (p,p')         -> ctx |> e p |> e p' *)
+(*     | List ps             -> ctx |> e_list ps *)
+(*     | Variant (_, p_opt)  -> ctx |> e_opt p_opt *)
+(*     | Operation (_, ps, p)   -> ctx |> e_list ps |> e p *)
+(*     | Record (lps, p_opt) -> ctx |> e_list (snd (List.split lps)) |> e_opt p_opt *)
+(*     | Tuple ps            -> ctx |> e_list ps *)
+(*     | Variable b          -> ctx |> erase_binder pos b *)
+(*     | As (b, p)           -> ctx |> erase_binder pos b |> e p *)
+(*     | HasType (p,_)       -> ctx |> e p *)
+(*     | _ -> ctx *)
+(*   in *)
+(*   List.fold_left (fun ctx d -> *)
+(*     let pos = WithPos.pos d in *)
+(*     match WithPos.node d with *)
+(*     | Fun { fun_binder ; _ } -> erase_binder pos fun_binder ctx *)
+(*     | Funs rfuns -> List.fold_left *)
+(*         (fun ctx rfun -> *)
+(*           erase_binder (WithPos.pos rfun) (WithPos.node rfun).rec_binder ctx *)
+(*         ) ctx rfuns *)
+(*     | Val (pat, _, _, _) ->  erase_pat pat ctx *)
+(*     | FreshLabel _ -> ctx *)
+(*     | Aliases ts -> List.fold_left (fun ctx { node=(name, _, _); _} -> erase_alias pos name ctx) ctx ts *)
+(*     | Infix _ *)
+(*     | Exp _ *)
+(*     | Foreign _ -> ctx *)
+(*     | Import _ *)
+(*     | Open _ *)
+(*     | Module  _ *)
+(*     | AlienBlock _ -> assert false *)
+(*   ) ctx decls *)
 
 (** Check if all local labels in that type are bound and not shadowed **)
 let check_labels pos dt ctx =
@@ -5127,34 +5127,27 @@ and type_binding : context -> binding -> binding * context * Usage.t =
           let () = unify pos ~handle:Gripers.bind_exp
             (pos_and_typ e, no_pos Types.unit_type) in
           Exp (erase e), empty_context, usages e
-      | FreshLabel(labels, decls) ->
+      | FreshLabel ls ->
           let context = { context with
             var_env = Env.fold (fun k v env ->
-              match erase_local_labels_from_type ~exact:false pos labels v with
+              match erase_local_labels_from_type ~exact:false pos ls v with
               | Some v -> Env.bind k v env
               | None -> env
               ) context.var_env Env.empty ;
             tycon_env = Env.fold (fun k v env ->
-              match erase_local_labels_from_tycon ~exact:false pos labels v with
+              match erase_local_labels_from_tycon ~exact:false pos ls v with
               | Some v -> Env.bind k v env
               | None -> env
               ) context.tycon_env Env.empty
           } in
-          let context = bind_labels context labels in
-          let (context,_), decls = ListUtils.fold_left_map
-            (fun (ctx, loc_ctx) d ->
-              let d, ctx', _ = type_binding loc_ctx d in
-              (extend ctx ctx', extend loc_ctx ctx'), d
-            ) (empty_context, context) decls in
-          let context = erase_local_labels labels decls context in
-          (* let context = unbind_labels context labels in *)
-          (FreshLabel(labels, decls), context, Usage.empty)
+          let context = bind_labels context ls in
+          (FreshLabel ls, context, Usage.empty)
       | Import _
       | Open _
       | AlienBlock _
       | Module _ -> assert false
     in
-      WithPos.make ~pos typed, ctxt, usage
+    WithPos.make ~pos typed, ctxt, usage
 and type_regex typing_env : regex -> regex =
   fun m ->
     let erase (e, _, _) = e in

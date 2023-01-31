@@ -805,10 +805,9 @@ class map =
          in
          let language = o#foreign_language (Alien.language alien) in
          AlienBlock (Alien.modify ~language ~declarations alien)
-      | FreshLabel(_x, _x_i1) ->
-        let _x = o#list (fun o -> o#label) _x in
-        let _x_i1 = o#list (fun o -> o#binding) _x_i1 in
-        FreshLabel(_x,_x_i1)
+      | FreshLabel ls ->
+        let ls = o#list (fun o -> o#label) ls in
+        FreshLabel ls
 
     method binding : binding -> binding =
       fun p ->
@@ -1594,9 +1593,8 @@ class fold =
              let o = o#binder b in
              o#datatype' dt)
            (Alien.declarations alien)
-      | FreshLabel(_x, _x_i1) ->
-        let o = o#list (fun o -> o#label) _x in
-        let o = o#list (fun o -> o#binding) _x_i1 in
+      | FreshLabel ls ->
+        let o = o#list (fun o -> o#label) ls in
         o
 
     method binding : binding -> 'self_type =
@@ -2551,10 +2549,9 @@ class fold_map =
              (Alien.declarations alien)
          in
          o, AlienBlock (Alien.modify ~language:lang ~declarations alien)
-      | FreshLabel(_x, _x_i1) ->
-        let o, _x = o#list (fun o -> o#label) _x in
-        let o, _x_i1 = o#list (fun o -> o#binding) _x_i1 in
-        o, FreshLabel(_x,_x_i1)
+      | FreshLabel ls ->
+        let (o, ls) = o#list (fun o -> o#label) ls in
+        (o, FreshLabel ls)
 
 
     method binding : binding -> ('self_type * binding) =

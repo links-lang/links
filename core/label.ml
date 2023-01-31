@@ -1,6 +1,13 @@
 open Utility
 open CommonTypes
 
+let show_unique_labels_idents =
+  Settings.(flag ~default:false "show_unique_labels_idents"
+            |> privilege `User
+            |> synopsis "Show the internal numeric identifier for each unique label"
+            |> convert parse_bool
+            |> sync)
+
 let internal_error message =
   Errors.internal_error ~filename:"label.ml" ~message
 let local_error show lbl =
@@ -43,7 +50,10 @@ module Label = struct
     type label = t
 
     let show = function
-        | Local (name, id) -> "`" ^ name ^ "<" ^ Uid.show id ^ ">"
+        | Local (name, id) ->
+          if Settings.get show_unique_labels_idents
+          then Printf.sprintf "`%s<%s>" name (Uid.show id)
+          else Printf.sprintf "`%s" name
         | Global name -> name
         | Number n -> string_of_int n
 
@@ -54,20 +64,24 @@ module Label = struct
         | Number n -> string_of_int n
       end
 
-    let make_local ?(uid=Uid.Free) name = Local (name, uid)
-
-    let make_global name = Global name
-
-    let make ?(local=false) name =
-        if local
-        then make_local name
-        else make_global name
-
     let of_int i = Number i
 
     let to_int = function
         | Number n -> n
+        | Global i -> int_of_string i
         | l -> raise (local_error show l)
+
+    let make_local ?(uid=Uid.Free) name = Local (name, uid)
+
+    let make_global name = Global name
+
+    let make textual_name =
+      let is_digit ch =
+        Char.code ch >= 48 && Char.code ch <= 57
+      in
+      if String.for_all is_digit textual_name
+      then of_int (int_of_string textual_name)
+      else make_global textual_name
 
     let name = function
         | Local (name,_) ->  "`"^name
@@ -79,9 +93,12 @@ module Label = struct
         | Local (_, uid), Local (_, uid') -> Uid.compare uid uid'
         | Global g, Global g' -> String.compare g g'
         | Local _, Global _ -> 1
-        | Number n, Number n' -> Int.compare n n'
         | Local _, Number _ -> 1
-        | _, _ -> -1
+        | Global _, Number _ -> 1
+        | Number _, Global _ -> -1
+        | Number _, Local _ -> -1
+        | Global _, Local _ -> -1
+        | Number n, Number m -> Int.compare n m
 
     let equal lbl lbl' = compare lbl lbl' = 0
 
@@ -109,8 +126,8 @@ module Label = struct
         | None         , Local (name, _)        -> Local (name, Uid.new_uid ())
         | _ -> raise (not_local_error show lbl)
 
-    let one = Number 1
-    let two = Number 2
+    let one = of_int 1
+    let two = of_int 2
     let return = make_global "return"
 end
 

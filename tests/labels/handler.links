@@ -1,24 +1,22 @@
-fresh `Ask {
+fresh `Ask;
 
-    effectname A(e::Eff) = {`Ask:() => Int|e} ;
+effectname A(e::Eff) = {`Ask:() => Int|e} ;
 
-    sig h_ask : (Comp(a, { |A({ |e})})) -> Comp(a, {`Ask{_}|e})
-    fun h_ask (m) ()  {
-        handle (m()) {
-            case <`Ask => k> -> k(41)
-        }
-    }
+sig h_ask : (Comp(a, { |A({ |e})})) -> Comp(a, {`Ask{_}|e})
+fun h_ask (m) ()  {
+  handle (m()) {
+    case <`Ask => k> -> k(41)
+  }
+}
 
-    sig f : () -A({ |e})-> Int
-    fun f () {
-        do `Ask + 1
-    }
+sig f : () -A({ |e})-> Int
+fun f () {
+  do `Ask + 1
+}
 
-    sig res : () {`Ask{_}|_}~> Int
-    fun res () {
-        h_ask(f)()
-    }
-
+sig res : () {`Ask{_}|_}~> Int
+fun res () {
+  h_ask(f)()
 }
 
 res ()

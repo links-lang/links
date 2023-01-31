@@ -1,11 +1,11 @@
-open CommonTypes
+val show_unique_labels_idents : bool Settings.setting
 
 module Uid : sig
   type t = Id of Int.t | Free
 end
 
-type local = Name.t * Uid.t
-type global = Name.t
+type local = string * Uid.t
+type global = string
 
 type t =
     | Local of local
@@ -14,18 +14,18 @@ type t =
    [@@deriving show]
 type label = t
 
-val make_local : ?uid:Uid.t -> Name.t -> t
-val make_global : Name.t -> t
-val make : ?local:bool -> Name.t -> t
+val make_local : ?uid:Uid.t -> string -> t
+val make_global : string -> t
+val make : string -> t
 
 val of_int : Int.t -> t
 val to_int : t -> Int.t
-val name : t -> Name.t
+val name : t -> string
 
 val compare : t -> t -> int
 val equal : t -> t -> bool
 val textual_equal : t -> t -> bool
-val name_is : t -> Name.t -> bool
+val name_is : t -> string -> bool
 
 val is_local : t -> bool
 val is_global : t -> bool

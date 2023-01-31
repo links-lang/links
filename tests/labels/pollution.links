@@ -23,32 +23,30 @@ fun receives (ss) (h) () {
     }
 }
 
-fresh `Abort {
+fresh `Abort;
 
-    sig protect : (Comp(a, {`Abort:Zero, Abort:Zero | e})) -> Comp(a, {Abort{_}, `Abort:Zero|e})
-    fun protect (m) () {
-        handle (m()) {
-            case <Abort => k> -> k (do `Abort)
-        }
+sig protect : (Comp(a, {`Abort:Zero, Abort:Zero | e})) -> Comp(a, {Abort{_}, `Abort:Zero|e})
+fun protect (m) () {
+    handle (m()) {
+        case <Abort => k> -> k (do `Abort)
     }
-
-    sig unprotect : (Comp(a, {`Abort:Zero, Abort:Zero | e})) -> Comp(a, {`Abort{_}, Abort:Zero|e})
-    fun unprotect (m) () {
-        handle (m()) {
-            case <`Abort => k> -> k (do Abort)
-        }
-    }
-
-
-    typename CA(a,e::Eff) = Comp(a, {Abort:Zero|e}) ;
-    typename CNAR(a,s,e::Eff) = Comp(a, {Receive:s, Abort:Zero, `Abort- |e}) ;
-    typename CAR(a,s,e::Eff) = Comp(a, {Receive:s, Abort:Zero, `Abort:Zero|e}) ;
-
-    sig withtwo21s : (CNAR(a,Int,{ |e})) -> CA(Maybe(a), {Receive{_}, `Abort{_} |e})
-    fun withtwo21s (h) { unprotect ( maybe( receives ([21,21]) ( protect ( h : CAR(a,Int,{ |e}) <- (CNAR(a,Int,{ |e}))
-    ) ) ) ) }
-
 }
+
+sig unprotect : (Comp(a, {`Abort:Zero, Abort:Zero | e})) -> Comp(a, {`Abort{_}, Abort:Zero|e})
+fun unprotect (m) () {
+   handle (m()) {
+       case <`Abort => k> -> k (do Abort)
+    }
+}
+
+
+typename CA(a,e::Eff) = Comp(a, {Abort:Zero|e}) ;
+typename CNAR(a,s,e::Eff) = Comp(a, {Receive:s, Abort:Zero, `Abort- |e}) ;
+typename CAR(a,s,e::Eff) = Comp(a, {Receive:s, Abort:Zero, `Abort:Zero|e}) ;
+
+sig withtwo21s : (CNAR(a,Int,{ |e})) -> CA(Maybe(a), {Receive{_}, `Abort{_} |e})
+fun withtwo21s (h) { unprotect ( maybe( receives ([21,21]) ( protect ( h : CAR(a,Int,{ |e}) <- (CNAR(a,Int,{ |e}))
+  ) ) ) ) }
 
 
 typename CRI(e::Eff) = Comp(Int, { |R(Int,{ |e})}) ;

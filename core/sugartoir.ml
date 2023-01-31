@@ -1334,8 +1334,7 @@ struct
                    let xt = Binder.to_type binder in
                    I.alien (Var.make_info xt x scope, Alien.object_name alien, Alien.language alien,
                             fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
-                | FreshLabel (_, decls) -> (* TODO: is that right ? ignore local labels *)
-                    eval_bindings scope env (decls @ bs) e
+                | FreshLabel _ -> eval_bindings scope env bs e (* TODO: is that right ? ignore local labels *)
                 | Aliases _
                 | Infix _ ->
                     (* Ignore type alias and infix declarations - they

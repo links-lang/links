@@ -244,7 +244,6 @@ module Pattern = struct
     | Cons     of with_pos * with_pos
     | List     of with_pos list
     | Variant  of Label.t * with_pos option
-    (* | Effect   of Label.t * with_pos list * with_pos *)
     | Operation of Label.t * with_pos list * with_pos
     | Negative of Label.t list
     | Record   of (Label.t * with_pos) list * with_pos option
@@ -535,7 +534,7 @@ and bindingnode =
   | Exp     of phrase
   | Module  of { binder: Binder.with_pos; members: binding list }
   | AlienBlock of Alien.multi Alien.t
-  | FreshLabel of Label.t list * binding list
+  | FreshLabel of Label.t list
 and binding = bindingnode WithPos.t
 and block_body = binding list * phrase
 and cp_phrasenode =
@@ -818,12 +817,7 @@ struct
     | Import _
     | Open _
     | Aliases _ -> empty, empty
-    | FreshLabel (_, decls) ->
-        List.fold_left
-          (fun (b,f) decl -> let b', f' = binding decl in
-              StringSet.union b b', StringSet.union f f')
-          (StringSet.empty, StringSet.empty)
-          decls
+    | FreshLabel _ -> empty, empty
     (* This is technically a declaration, thus the name should
        probably be treated as bound rather than free. *)
     | Infix { name; _ } -> empty, singleton name

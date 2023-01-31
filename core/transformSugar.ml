@@ -905,11 +905,9 @@ class transform (env : Types.typing_environment) =
       | (Infix _) as node ->
          (o, node)
       | Exp e -> let (o, e, _) = o#phrase e in (o, Exp e)
-      | FreshLabel(labels, decls) ->
+      | FreshLabel ls ->
           (* do we wanna do something with labels ? *)
-          let o, decls = ListUtils.fold_left_map
-            (fun o d -> o#binding d) o decls in
-          (o, FreshLabel(labels, decls))
+          (o, FreshLabel ls)
       | AlienBlock _ -> assert false
       | Module _ -> assert false
       | Import _ -> assert false
