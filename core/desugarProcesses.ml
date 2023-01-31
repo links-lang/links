@@ -1,4 +1,3 @@
-open Utility
 open CommonTypes
 open Sugartypes
 open SugarConstructors.DummyPositions
@@ -81,7 +80,7 @@ object (o : 'self_type)
           Types.(remove_field hear (remove_field wild (Row (fieldenv, rho, false))))
         in
         begin
-          match StringMap.find Types.hear fieldenv with
+          match Label.Map.find Types.hear fieldenv with
           | (Types.Present mbt) ->
              o#phrasenode
                (Switch (fn_appl "recv" [(Type, mbt); (Row, other_effects)] [],

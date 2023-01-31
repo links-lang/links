@@ -1,0 +1,5 @@
+fresh `A {
+
+  fun f () { do `A }
+
+}

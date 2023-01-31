@@ -104,7 +104,7 @@ struct
     function
       | (x, QL.Table t) ->
         let field_types = QL.table_field_types t in
-        let tyx = Types.make_record_type field_types in
+        let tyx = Types.make_record_type (Label.string_to_label_map field_types) in
         List.rev
             (StringMap.fold
                (fun name _t es ->

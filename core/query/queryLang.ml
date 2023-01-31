@@ -164,10 +164,10 @@ let rec expression_of_base_value : Value.t -> t = function
       raise (internal_error ("expression_of_base_value undefined for " ^
         Value.string_of_value other))
 
-let field_types_of_spec_map =
-        StringMap.map (function
+let field_types_of_spec_map m =
+        Label.label_to_string_map (Label.Map.map (function
           | Types.Present t -> t
-          | _ -> assert false)
+          | _ -> assert false) m)
 
 let field_types_of_row r =
         let (field_spec_map,_,_) = TypeUtils.extract_row_parts r in
@@ -299,7 +299,7 @@ let rec occurs_free_gens (gs : (Var.var * t) list) q =
 let rec type_of_expression : t -> Types.datatype = fun v ->
   let te = type_of_expression in
   let record fields : Types.datatype =
-    Types.make_record_type (StringMap.map te fields)
+    Types.make_record_type (Label.Map.map te (Label.string_to_label_map fields))
   in
   match v with
   | Var (_,ty) -> ty
@@ -634,8 +634,8 @@ let rec select_clause : Sql.index -> bool -> t -> Sql.select_clause =
       let fields =
         Sql.Fields
           (List.rev
-            (StringMap.fold
-              (fun name _ fields ->
+            (Label.Map.fold
+              (fun label _ fields -> let name = Label.name label in
                 (Sql.Project (var, name), name)::fields)
               fields
               []))

@@ -301,13 +301,13 @@ struct
 end
 
 module type INTSET = Set with type elt = int
+module type INTMAP = Map with type key = int
 module IntSet = Set.Make(Int)
 module IntMap = Map.Make(Int)
 
 module IntPairMap = Map.Make(IntPair)
 
 module type STRINGMAP = Map with type key = string
-module type INTMAP = Map with type key = int
 module StringSet = Set.Make(String)
 module StringMap : STRINGMAP = Map.Make(String)
 
@@ -600,6 +600,14 @@ struct
     | [] :: xss -> transpose xss
     | (x :: xs) :: xss ->
        (x :: (List.map List.hd xss)) :: transpose (xs :: List.map List.tl xss)
+
+  let fold_left_map f accu l =
+    let rec aux accu l_accu = function
+      | [] -> accu, List.rev l_accu
+      | x :: l ->
+          let accu, x = f accu x in
+          aux accu (x :: l_accu) l in
+    aux accu [] l
 end
 include ListUtils
 

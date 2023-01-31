@@ -105,7 +105,7 @@ module Desugar = struct
               ForAll (qs, t)
         | Unit -> Types.unit_type
         | Tuple ks ->
-            let labels = map string_of_int (Utility.fromTo 1 (1 + length ks)) in
+            let labels = map Label.mk_int (Utility.fromTo 1 (1 + length ks)) in
             let unit = Types.make_empty_closed_row () in
             let present (s, x) = (s, Types.Present x)
             in
@@ -243,7 +243,10 @@ module Desugar = struct
               if qn = tn then
                 type_args qs ts
               else
-                raise (TypeApplicationArityMismatch { pos = node.pos; name = name; expected = qn; provided = tn })
+                raise (TypeApplicationArityMismatch
+                            { pos = node.pos;
+                              name = name;
+                              expected = qn; provided = tn })
             in
             begin match SEnv.find_opt name alias_env with
               | None -> raise (unbound_tycon node.pos name)
@@ -282,7 +285,7 @@ module Desugar = struct
         | Closed -> Types.make_empty_closed_row ()
         | Open srv ->
            let rv = SugarTypeVar.get_resolved_row_exn srv in
-           Types.Row (StringMap.empty, rv, false)
+           Types.Row (Label.Map.empty, rv, false)
         | Recursive (stv, r) ->
            let mrv = SugarTypeVar.get_resolved_row_exn stv in
 
@@ -291,7 +294,7 @@ module Desugar = struct
 
            (* Turn mrv into a proper recursive row *)
            Unionfind.change mrv (Types.Recursive (var, sk, r));
-           Types.Row (StringMap.empty, mrv, false)
+           Types.Row (Label.Map.empty, mrv, false)
 
     in
     let fields = List.map (fun (k, p) -> (k, fieldspec alias_env p node)) fields in
@@ -335,7 +338,7 @@ module Desugar = struct
     let write_row, needed_row =
       match TypeUtils.concrete_type read_type with
       | Record (Row (fields, _, _)) ->
-          StringMap.fold
+          Label.Map.fold
             (fun label t (write, needed) ->
               match lookup label constraints with
               | Some cs ->

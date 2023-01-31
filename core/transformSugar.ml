@@ -24,7 +24,7 @@ let type_section env =
       let (fields, rho, _) = TypeUtils.extract_row_parts row in
       let eb, e = Types.fresh_row_quantifier default_effect_subkind in
 
-      let r = Record (Row (StringMap.add label (Present a) fields, rho, false)) in
+      let r = Record (Row (Label.Map.add label (Present a) fields, rho, false)) in
         ForAll ([ab; rhob; eb],
                 Function (Types.make_tuple_type [r], e, a))
   | Name var -> TyEnv.find var env
@@ -432,13 +432,13 @@ class transform (env : Types.typing_environment) =
           let (o, fields, field_types) =
             let rec list o =
               function
-                | [] -> (o, [], StringMap.empty)
+                | [] -> (o, [], Label.Map.empty)
                 | (name, e)::fields ->
                     let (o, e, t) = o#phrase e in
                     let (o, fields, field_types) = list o fields in
                       (o,
                        (name, e)::fields,
-                       StringMap.add name t field_types)
+                       Label.Map.add name t field_types)
             in
               list o fields in
           let (o, base, base_type) = option o (fun o -> o#phrase) base in
@@ -471,7 +471,7 @@ class transform (env : Types.typing_environment) =
                let  ( fs, rv, closed ) =
                  Types.flatten_row row |> TypeUtils.extract_row_parts
                in
-               let fs = List.fold_left2 (fun fs (name, _) t -> StringMap.add name (Present t) fs) fs fields ts in
+               let fs = List.fold_left2 (fun fs (name, _) t -> Label.Map.add name (Present t) fs) fs fields ts in
                Record (Row (fs, rv, closed))
             | _ -> t
           in
@@ -905,6 +905,11 @@ class transform (env : Types.typing_environment) =
       | (Infix _) as node ->
          (o, node)
       | Exp e -> let (o, e, _) = o#phrase e in (o, Exp e)
+      | FreshLabel(labels, decls) ->
+          (* do we wanna do something with labels ? *)
+          let o, decls = ListUtils.fold_left_map
+            (fun o d -> o#binding d) o decls in
+          (o, FreshLabel(labels, decls))
       | AlienBlock _ -> assert false
       | Module _ -> assert false
       | Import _ -> assert false

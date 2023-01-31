@@ -428,9 +428,9 @@ struct
   let close f zs tyargs =
     Closure (f, tyargs, Extend (List.fold_right
                             (fun (zname, zv) fields ->
-                               StringMap.add zname zv fields)
+                               Label.Map.add zname zv fields)
                             zs
-                            StringMap.empty, None))
+                            Label.Map.empty, None))
 
   class visitor tenv fenv =
     object (o : 'self) inherit IrTraversals.Transform.visitor(tenv) as super
@@ -456,7 +456,7 @@ struct
             if IntSet.mem x cvars then
               (* We cannot return t as the type of the result here. If x refers to a hoisted function that was generalised, then
                  t has additional quantifiers that are not present in the corresponding type of projecting x from parent_env *)
-              let projected_t = TypeUtils.project_type (string_of_int x) (thd3 (o#var parent_env)) in
+              let projected_t = TypeUtils.project_type (Label.mk_int x) (thd3 (o#var parent_env)) in
               Project (string_of_int x, Variable parent_env), projected_t
             else if IntMap.mem x fenv then
               let zs = (IntMap.find x fenv).termvars in
@@ -476,7 +476,7 @@ struct
                       (fun b ->
                         let z = Var.var_of_binder b in
                         let v = fst (var_val z) in
-                        (string_of_int z, v))
+                        (Label.mk_int z, v))
                       zs
                   in
                   close x zs tyargs, overall_type
@@ -534,14 +534,14 @@ struct
             | [], [] -> o, None
             | _ ->
               let zt =
-                Types.make_record_type
+                Types.(make_record_type
                   (List.fold_left
                      (fun fields b ->
                        let x = Var.var_of_binder b in
                        let xt = Var.type_of_binder b in
-                       StringMap.add (string_of_int x) xt fields)
-                     StringMap.empty
-                     zs)
+                       Label.Map.add (Label.mk_int x) xt fields)
+                     Label.Map.empty
+                     zs))
               in
               (* fresh variable for the closure environment *)
               let zb = Var.(fresh_binder (make_local_info (zt, "env_" ^ string_of_int f))) in
@@ -610,14 +610,14 @@ struct
                      | [], [] -> o, None
                      | _ ->
                        let zt =
-                         Types.make_record_type
+                         Types.(make_record_type
                            (List.fold_left
                               (fun fields b ->
                                 let x = Var.var_of_binder b in
                                 let xt = Var.type_of_binder b in
-                                StringMap.add (string_of_int x) xt fields)
-                              StringMap.empty
-                              zs)
+                                Label.Map.add (Label.mk_int x) xt fields)
+                              Label.Map.empty
+                              zs))
                        in
                        (* fresh variable for the closure environment *)
                        let zb = Var.(fresh_binder (make_local_info (zt, "env_" ^ string_of_int f))) in

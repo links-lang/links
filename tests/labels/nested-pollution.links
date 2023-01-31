@@ -1,0 +1,47 @@
+fresh `A {
+
+    sig h_a : (Comp(a,{`A:(Int) => Int|e})) -> Comp(a, {`A{_}|e})
+    fun h_a (m) () {
+        handle (m ()) {
+            case <`A(x) => k> -> k (2*x)
+        }
+    }
+
+    sig double : (Int) {`A:(Int) => Int|e}-> Int
+    fun double (x) { do `A(x) }
+
+    sig times_two : (Int) -> Comp(Int, {`A{_}|_})
+    fun times_two (x) { h_a ( fun () { double(x) } ) }
+
+    sig times_two' : (Int) {`A{_}|_}~> Int
+    fun times_two' (x) { times_two (x) () }
+
+    fresh `A {
+
+        sig h_a' : (Comp(a,{`A:(Int) => Int|e})) -> Comp(a, {`A{_}|e})
+        fun h_a' (m) () {
+            handle (m()) {
+                case <`A(x) => k> -> k (3*x)
+            }
+        }
+
+        sig triple : (Int) {`A:(Int) => Int|e}-> Int
+        fun triple (x) { do `A(x) }
+
+        sig sextuple : (Int) {`A:(Int) => Int|e}~> Int
+        fun sextuple (x) { triple( times_two'(x) ) }
+
+        sig times_six : (Int) -> Comp(Int, {`A{_}|_})
+        fun times_six (x) { h_a' (fun () { sextuple (x) }) }
+
+        sig times_six' : (Int) {`A{_}|_}~> Int
+        fun times_six' (x) { times_six (x) () }
+
+    }
+
+    var fun_xlii = times_two( 21+21 ) ;
+
+    var xlii = fun_xlii () ;
+}
+
+xlii - times_six' (7)

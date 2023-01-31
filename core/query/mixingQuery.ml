@@ -111,8 +111,8 @@ let rec flattened_pair_ft x y =
       in
       StringMap.fold (fun f t acc -> StringMap.add (flatfield "2" f) t acc) (Q.field_types_of_row rowy) out1
   (* XXX: same as above, using a field with an empty name to deal with variables of non-record type ... will it work? *)
-  | Q.Var (nx, tyx), _ -> flattened_pair_ft (Q.Var (nx, Types.make_record_type (StringMap.from_alist ["", tyx]))) y
-  | _, Q.Var (ny, tyy) -> flattened_pair_ft x (Q.Var (ny, Types.make_record_type (StringMap.from_alist ["", tyy])))
+  | Q.Var (nx, tyx), _ -> flattened_pair_ft (Q.Var (nx, Types.make_record_type (Label.Map.from_alist [Label.make "", tyx]))) y
+  | _, Q.Var (ny, tyy) -> flattened_pair_ft x (Q.Var (ny, Types.make_record_type (Label.Map.from_alist [Label.make "", tyy])))
   | _ -> assert false
 
 (* gs must ALWAYS be non-empty, both input and output!*)
@@ -410,12 +410,12 @@ struct
                              label
                          else
                            StringMap.add label (xlate env v) fields)
-                       ext_fields
+                       (Label.label_to_string_map ext_fields)
                        fields)
           | _ -> Q.query_error "Error adding fields: non-record"
       end
     | Project (label, r) -> Q.Project (xlate env r, label)
-    | Erase (labels, r) -> Q.Erase (xlate env r, labels)
+    | Erase (labels, r) -> Q.Erase (xlate env r, Label.label_to_string_set labels)
     | Inject (label, v, _) -> Q.Variant (label, xlate env v)
     | TAbs (_, v) -> xlate env v
     | TApp (v, _) -> xlate env v
@@ -429,9 +429,9 @@ struct
                List.map Q.unbox_xml (Q.unbox_list v) @ children)
             children [] in
         let children =
-          StringMap.fold
+          Label.Map.fold
             (fun name v attrs ->
-               Value.Attr (name, Q.unbox_string (xlate env v)) :: attrs)
+               Value.Attr (Label.name name, Q.unbox_string (xlate env v)) :: attrs)
             attrs children
         in
           Q.Singleton (Q.XML (Value.Node (tag, children)))
@@ -513,7 +513,7 @@ struct
       raise (Errors.runtime_error "special not allowed in query block")
     | Case (v, cases, default) ->
         let v' = xlate env v in
-        let cases' = StringMap.map (fun (x,y) -> (x, computation env y)) cases in
+        let cases' = Label.Map.map (fun (x,y) -> (x, computation env y)) cases |> Label.label_to_string_map in
         let default' = opt_app (fun (x,y) -> Some (x, computation env y)) None default in
         Q.Case (v', cases', default')
     | If (c, t, e) ->
@@ -806,7 +806,7 @@ struct
 end
 
 let compile_update : Value.database -> Value.env ->
-  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> Sql.query =
+  ((Ir.var * string * Types.datatype Label.Map.t) * Ir.computation option * Ir.computation) -> Sql.query =
   fun db env ((x, table, field_types), where, body) ->
     let tyx = Types.make_record_type field_types in
     let env = Q.bind (Q.env_of_value_env QueryPolicy.Mixing env) (x, Q.Var (x, tyx)) in
@@ -819,7 +819,7 @@ let compile_update : Value.database -> Value.env ->
       q
 
 let compile_delete : Value.database -> Value.env ->
-  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> Sql.query =
+  ((Ir.var * string * Types.datatype Label.Map.t) * Ir.computation option) -> Sql.query =
   fun db env ((x, table, field_types), where) ->
     let tyx = Types.make_record_type field_types in
     let env = Q.bind (Q.env_of_value_env QueryPolicy.Mixing env) (x, Q.Var (x, tyx)) in

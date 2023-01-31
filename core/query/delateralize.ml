@@ -33,7 +33,7 @@ let graph_query (q1,ty1) x (q2,ty2) =
 let prom_delateralize gs q1 x (q2,ty2) y (q3,ty3) =
     let p = Var.fresh_raw_var () in
     let graph, ftys = graph_query (QL.Dedup q2,ty2) x (q3,ty3) in
-    let vp = QL.Var (p,Types.make_record_type ftys) in
+    let vp = QL.Var (p,Types.make_record_type (Label.string_to_label_map ftys)) in
     let vx = QL.Var (x,ty2) in
     let eq_test a b = QL.Apply (QL.Primitive "==", [a;b]) in
     let and_query a b = QL.Apply (QL.Primitive "&&", [a;b]) in
