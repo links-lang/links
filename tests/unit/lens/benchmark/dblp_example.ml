@@ -15,43 +15,43 @@ let setup_dblp_database ~n test_ctx =
     Format.asprintf
       {|
   drop table if exists inproceedings_subset;
-	create table inproceedings_subset AS
-	(
-		(
-			select t1.inproceedings, t4.title, t4.year, t1.proceedings from inproceedings_crossref as t1
-				join inproceedings_author as t2 on t1.inproceedings = t2.inproceedings
-				join inproceedings as t4 on t1.inproceedings = t4.inproceedings
-			where t4.year = 2016 and t1.proceedings != 'conf/pods/2016'
-			Limit (%d-108)
-		)
-		UNION
-		(
-			select t1.inproceedings, t1.title, t1.year, t2.proceedings from inproceedings as t1
-				join inproceedings_crossref as t2 on t1.inproceedings = t2.inproceedings
-				where t2.proceedings = 'conf/pods/2006'
-		)
-	);
+  create table inproceedings_subset AS
+  (
+    (
+      select t1.inproceedings, t4.title, t4.year, t1.proceedings from inproceedings_crossref as t1
+        join inproceedings_author as t2 on t1.inproceedings = t2.inproceedings
+        join inproceedings as t4 on t1.inproceedings = t4.inproceedings
+      where t4.year = 2016 and t1.proceedings != 'conf/pods/2016'
+      Limit (%d-108)
+    )
+    UNION
+    (
+      select t1.inproceedings, t1.title, t1.year, t2.proceedings from inproceedings as t1
+        join inproceedings_crossref as t2 on t1.inproceedings = t2.inproceedings
+        where t2.proceedings = 'conf/pods/2006'
+    )
+  );
   alter table inproceedings_subset add primary key (inproceedings);
   drop table if exists inproceedings_author_subset;
-	create table inproceedings_author_subset AS
-	(
-		select distinct t1.inproceedings, t1.author from inproceedings_author as t1
-			join inproceedings_subset as t2 on t1.inproceedings = t2.inproceedings
-	);
+  create table inproceedings_author_subset AS
+  (
+    select distinct t1.inproceedings, t1.author from inproceedings_author as t1
+      join inproceedings_subset as t2 on t1.inproceedings = t2.inproceedings
+  );
   --alter table inproceedings_author_subset add primary key (inproceedings, author);
-	drop table if exists inproceedings_crossref_subset;
-	create table inproceedings_crossref_subset as
-	(
-		select distinct t1.inproceedings, t1.proceedings from inproceedings_crossref as t1
-			join inproceedings_subset as t2 on t1.inproceedings = t2.inproceedings
-	);
+  drop table if exists inproceedings_crossref_subset;
+  create table inproceedings_crossref_subset as
+  (
+    select distinct t1.inproceedings, t1.proceedings from inproceedings_crossref as t1
+      join inproceedings_subset as t2 on t1.inproceedings = t2.inproceedings
+  );
   --alter table inproceedings_crossref_subset add primary key (inproceedings, proceedings);
-	drop table if exists proceedings_subset;
-	create table proceedings_subset as
-	(
-		select distinct t1.proceedings, t1.proceedings_name, t1.proceedings_year from proceedings as t1
-			join inproceedings_crossref_subset as t2 on t1.proceedings = t2.proceedings
-	);
+  drop table if exists proceedings_subset;
+  create table proceedings_subset as
+  (
+    select distinct t1.proceedings, t1.proceedings_name, t1.proceedings_year from proceedings as t1
+      join inproceedings_crossref_subset as t2 on t1.proceedings = t2.proceedings
+  );
   --alter table proceedings_subset add primary key (proceedings);
 |}
       n
