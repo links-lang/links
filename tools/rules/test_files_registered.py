@@ -50,6 +50,7 @@ BLACKLIST = {
   "tests/session-exceptions/clientCancel9.links",
   "tests/session-exceptions/clientClosure.links",
   "tests/session-exceptions/clientClosure2.links",
+  "tests/unit/lens/benchmark/dblp.links",
  }
 
 
