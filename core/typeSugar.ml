@@ -4544,7 +4544,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                 (T.Row (Label.Map.empty, rho, false)) in
             let try_effects =
               Types.row_with
-                (Value.session_exception_operation, T.Present (Types.make_pure_function_type [] Types.empty_type))
+                (Value.session_exception_operation, T.Present (Types.make_operation_type [] Types.empty_type))
                 (T.Row (Label.Map.empty, rho, false)) in
 
             unify ~handle:Gripers.try_effect

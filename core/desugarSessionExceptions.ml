@@ -108,7 +108,8 @@ object (o : 'self_type)
         let outer_effects = o#lookup_effects in
 
         let fail_cont_ty =
-          Types.make_pure_function_type [] (Types.empty_type) in
+          Types.make_operation_type [] Types.empty_type
+        in
 
         let inner_effects =
           effect_row
