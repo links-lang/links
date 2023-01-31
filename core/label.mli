@@ -8,22 +8,23 @@ type local = Name.t * Uid.t
 type global = Name.t
 
 type t =
-    | Lcl of local
-    | Gbl of global
+    | Local of local
+    | Global of global
+    | Number of int
    [@@deriving show]
 type label = t
 
-val mk_local : Name.t -> t
-val mk_global : Name.t -> t
+val make_local : ?uid:Uid.t -> Name.t -> t
+val make_global : Name.t -> t
 val make : ?local:bool -> Name.t -> t
 
-val mk_int : Int.t -> t
+val of_int : Int.t -> t
 val to_int : t -> Int.t
 val name : t -> Name.t
 
 val compare : t -> t -> int
-val eq : t -> t -> bool
-val eq_name : t -> t -> bool
+val equal : t -> t -> bool
+val textual_equal : t -> t -> bool
 val name_is : t -> Name.t -> bool
 
 val is_local : t -> bool

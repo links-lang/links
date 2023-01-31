@@ -35,106 +35,83 @@ end
 module Label = struct
     type local = Name.t * Uid.t
     type global = Name.t
-    (* type unresolved = Name.t *)
 
     type t =
-        | Lcl of local
-        | Gbl of global
-        (* | Unr of unresolved *)
+        | Local of local
+        | Global of global
+        | Number of int
     type label = t
 
     let show = function
-        | Lcl (name, id) -> "`" ^ name ^ "<" ^ Uid.show id ^ ">"
-        | Gbl name -> name
-        (* | Unr name -> "`?" ^ name *)
+        | Local (name, id) -> "`" ^ name ^ "<" ^ Uid.show id ^ ">"
+        | Global name -> name
+        | Number n -> string_of_int n
 
     let pp f l =
       Format.pp_print_string f begin match l with
-        | Lcl (name, id) -> "`"^name ^ "<" ^ Uid.show id ^ ">"
-        | Gbl name -> name
-        (* | Unr name -> "`?" ^ name *)
+        | Local (name, id) -> "`"^name ^ "<" ^ Uid.show id ^ ">"
+        | Global name -> name
+        | Number n -> string_of_int n
       end
 
-    let mk_local name = Lcl (name, Uid.Free)
+    let make_local ?(uid=Uid.Free) name = Local (name, uid)
 
-    let mk_global name = Gbl name
-
-    (* let mk_unresolved name = Unr name *)
+    let make_global name = Global name
 
     let make ?(local=false) name =
-        if local then
-            mk_local name
-        else
-            mk_global name
+        if local
+        then make_local name
+        else make_global name
 
-    let mk_int i = mk_global (string_of_int i)
+    let of_int i = Number i
 
     let to_int = function
-        | Gbl g -> int_of_string g
+        | Number n -> n
         | l -> raise (local_error show l)
 
     let name = function
-        (* | Gbl name | Lcl (name,_) | Unr name -> name *)
-        | Lcl (name,_) ->  "`"^name
-        | Gbl name -> name
-        (* | Unr name -> name *)
-
+        | Local (name,_) ->  "`"^name
+        | Global name -> name
+        | Number n -> string_of_int n
 
     let compare lbl lbl' = match lbl,lbl' with
-        | Lcl(name, Uid.Free), Lcl(name', Uid.Free) -> String.compare name name'
-        | Lcl(_, uid), Lcl(_, uid') -> Uid.compare uid uid'
-        | Gbl g, Gbl g' -> String.compare g g'
-        (* | Unr u, Unr u' -> String.compare u u' *)
-        (* | Unr _, _ *)
-        | Lcl _, Gbl _ -> 1
+        | Local (name, Uid.Free), Local (name', Uid.Free) -> String.compare name name'
+        | Local (_, uid), Local (_, uid') -> Uid.compare uid uid'
+        | Global g, Global g' -> String.compare g g'
+        | Local _, Global _ -> 1
+        | Number n, Number n' -> Int.compare n n'
+        | Local _, Number _ -> 1
         | _, _ -> -1
 
-    let eq lbl lbl' = compare lbl lbl' = 0
+    let equal lbl lbl' = compare lbl lbl' = 0
 
-    let eq_name lbl lbl' = String.compare (name lbl) (name lbl') = 0
+    let textual_equal lbl lbl' = String.compare (name lbl) (name lbl') = 0
 
     let name_is lbl name' = String.compare (name lbl) name' = 0
 
     let is_local = function
-        | Lcl _ -> true
+        | Local _ -> true
         | _ -> false
 
-    let is_global = function
-        | Gbl _ -> true
-        | _ -> false
+    let is_global l = not (is_local l)
 
     let is_free = function
-        | Lcl (_, uid) -> Uid.is_free uid
+        | Local (_, uid) -> Uid.is_free uid
         | l -> raise (not_local_error show l)
 
     let uid = function
-        | Lcl (_, uid) -> uid
+        | Local (_, uid) -> uid
         | l -> raise (not_local_error show l)
 
     let bind_local ?bind_with lbl = match bind_with, lbl with
-        | Some bind_lbl, Lcl (name, Uid.Free) -> Lcl (name, uid bind_lbl)
-        | Some _       , Lcl _                -> raise (not_free_error show lbl)
-        | None         , Lcl (name, _)        -> Lcl (name, Uid.new_uid ())
+        | Some bind_lbl, Local (name, Uid.Free) -> Local (name, uid bind_lbl)
+        | Some _       , Local _                -> raise (not_free_error show lbl)
+        | None         , Local (name, _)        -> Local (name, Uid.new_uid ())
         | _ -> raise (not_local_error show lbl)
 
-
-    (* let is_resolved = function *)
-    (*     | Unr _ -> false *)
-    (*     | _ -> true *)
-
-
-    let one = mk_global "1"
-    let two = mk_global "2"
-    let return = mk_global "Return"
-
-
-    (* let resolve_global = function *)
-    (*     | Unr name -> Gbl name *)
-    (*     | _ -> failwith "already resolved" *)
-
-    (* let resolve_local = function *)
-    (*     | Unr name -> mk_local name *)
-    (*     | _ -> failwith "already resolved" *)
+    let one = Number 1
+    let two = Number 2
+    let return = make_global "return"
 end
 
 include Label

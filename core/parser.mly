@@ -299,8 +299,8 @@ let parse_foreign_language pos lang =
              (pos, Printf.sprintf "Unrecognised foreign language '%s'." lang))
 
 let any = any_pat dp
-let local_label = Label.mk_local
-let label = Label.mk_global
+let local_label = Label.make_local
+let label = Label.make_global
 %}
 
 %token EOF

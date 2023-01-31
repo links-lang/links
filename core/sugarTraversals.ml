@@ -641,12 +641,12 @@ class map =
 
     method label : Datatype.label -> Datatype.label =
       let open Label in function
-      (* | Unr _x -> let _x = o#name _x in Unr _x *)
-      | Gbl _x -> let _x = o#name _x in Gbl _x
-      | Lcl (_x, _x_i1) ->
+      | Global _x -> let _x = o#name _x in Global _x
+      | Local (_x, _x_i1) ->
           let _x = o#name _x in
           let _x_i1 = o#uid _x_i1 in
-          Lcl (_x, _x_i1)
+          Local (_x, _x_i1)
+      | Number n -> let n = o#int n in Number n
 
     method uid : Label.Uid.t -> Label.Uid.t =
       let open Label.Uid in function
@@ -1443,12 +1443,12 @@ class fold =
 
     method label : Datatype.label -> 'self_type =
       let open Label in function
-      (* | Unr _x -> let o = o#name _x in o *)
-      | Gbl _x -> let o = o#name _x in o
-      | Lcl (_x, _x_i1) ->
+      | Global _x -> let o = o#name _x in o
+      | Local (_x, _x_i1) ->
           let o = o#name _x in
           let o = o#uid _x_i1 in
           o
+      | Number n -> o#int n
 
     method uid : Label.Uid.t -> 'self_type =
       let open Label.Uid in function
@@ -2358,12 +2358,14 @@ class fold_map =
 
     method label : Datatype.label -> ('self_type * Datatype.label) =
       let open Label in function
-      (* | Unr _x -> let (o,_x) = o#name _x in (o, Unr _x) *)
-      | Gbl _x -> let (o,_x) = o#name _x in (o, Gbl _x)
-      | Lcl (_x, _x_i1) ->
-          let (o, _x) = o#name _x in
-          let (o, _x_i1) = o#uid _x_i1 in
-          (o, Lcl (_x, _x_i1))
+      | Global _x -> let (o,_x) = o#name _x in (o, Global _x)
+      | Local (_x, _x_i1) ->
+        let (o, _x) = o#name _x in
+        let (o, _x_i1) = o#uid _x_i1 in
+        (o, Local (_x, _x_i1))
+      | Number n ->
+        let (o, n) = o#int n in
+        (o, Number n)
 
     method uid : Label.Uid.t -> ('self_type * Label.Uid.t) =
       let open Label.Uid in function

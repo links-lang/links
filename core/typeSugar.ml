@@ -2007,9 +2007,9 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
             match p.node with
               | Variable _ | Any -> [ with_pos p.pos Pattern.Any ]
               | As (_, p) | HasType (p, _) -> unwrap_at name p
-              | Variant (name', None) when Label.eq name name' ->
+              | Variant (name', None) when Label.equal name name' ->
                     [with_pos p.pos (Pattern.Record ([], None))]
-              | Variant (name', Some p) when Label.eq name name' -> [p]
+              | Variant (name', Some p) when Label.equal name name' -> [p]
               | Variant _ -> []
               | Negative names when List.mem name names -> []
               | Negative _ -> [ with_pos p.pos Pattern.Any ]
@@ -2056,7 +2056,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
           let unwrap_at : Label.t -> Pattern.with_pos -> Pattern.with_pos list = fun name p ->
             let open Pattern in
             match p.node with
-              | Operation (name', ps, _) when Label.eq name name' -> ps
+              | Operation (name', ps, _) when Label.equal name name' -> ps
               | Operation _ -> []
               | Variable _ | Any | As _ | HasType _ | Negative _
               | Nil | Cons _ | List _ | Tuple _ | Record _ | Variant _ | Constant _ -> assert false in
@@ -2606,10 +2606,10 @@ let erase_local_labels_from_type ?(exact=true) pos labels dt =
         let remove () = f in
         let to_remove k =
           if exact then List.mem k labels
-          else List.filter (Label.eq_name k) labels <> []
+          else List.filter (Label.textual_equal k) labels <> []
         in
         let is_shadowed k =
-          if exact then List.filter (Label.eq_name k) labels <> []
+          if exact then List.filter (Label.textual_equal k) labels <> []
           else false
         in
         if Label.is_global k then keep ()
@@ -2746,7 +2746,7 @@ let check_labels pos dt ctx =
         else
           match Label.Env.find_homonyms k ctx.label_env with
             | [] -> unbound ()
-            | k' :: _ when Label.eq k k' -> ok ()
+            | k' :: _ when Label.equal k k' -> ok ()
             | _ -> ignore (shadowed ())            (* without the ignore we get a warning ?? *)
         ; ct v
       ) fields ;
@@ -4281,7 +4281,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                          ((uexp_pos pat, effrow),  no_pos (T.Effect inner_eff));
                    let pat, kpat =
                      let rec find_effect_type eff = function
-                       | (eff', t) :: _ when Label.eq eff eff' ->
+                       | (eff', t) :: _ when Label.equal eff eff' ->
                           begin match t with
                           | T.Present t -> t
                           | _ -> assert false
@@ -4520,7 +4520,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
           in
             doop, rettyp, usage
         | Operation name ->
-           if Label.eq name Value.session_exception_operation && not context.desugared then
+           if Label.equal name Value.session_exception_operation && not context.desugared then
              Gripers.die pos "The session failure effect SessionFail is not directly invocable (use `raise` instead)"
            else
              let t = match lookup_effect context name with

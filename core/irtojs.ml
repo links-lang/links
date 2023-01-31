@@ -1200,7 +1200,7 @@ end = functor (K : CONTINUATION) -> struct
               * environment passed as an argument already) need to be compiled specially *)
              let op =
                if (session_exceptions_enabled &&
-                     L.eq name Value.session_exception_operation &&
+                     L.equal name Value.session_exception_operation &&
                    List.length args = 0) then
                  let affected_variables =
                    VariableInspection.get_affected_variables (K.reify kappa) in
@@ -1242,7 +1242,7 @@ end = functor (K : CONTINUATION) -> struct
                 let name_map =
                   List.fold_left
                     (fun box (i, _, initial_value) ->
-                      L.Map.add (L.mk_int i) initial_value box)
+                      L.Map.add (L.of_int i) initial_value box)
                     L.Map.empty params
                 in
                 (Ir.Let (param_ptr_binder, ([], Ir.Return (Ir.Extend (name_map, None)))) :: bs, tc)

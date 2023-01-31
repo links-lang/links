@@ -105,7 +105,7 @@ module Desugar = struct
               ForAll (qs, t)
         | Unit -> Types.unit_type
         | Tuple ks ->
-            let labels = map Label.mk_int (Utility.fromTo 1 (1 + length ks)) in
+            let labels = map Label.of_int (Utility.fromTo 1 (1 + length ks)) in
             let unit = Types.make_empty_closed_row () in
             let present (s, x) = (s, Types.Present x)
             in

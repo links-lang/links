@@ -960,7 +960,7 @@ struct
               *)
               ec e
           | TupleLit es ->
-              let fields = mapIndex (fun e i -> (Label.mk_int (i+1), ev e)) es in
+              let fields = mapIndex (fun e i -> (Label.of_int (i+1), ev e)) es in
                 cofv (I.record (fields, None))
           | RecordLit (fields, rest) ->
               cofv

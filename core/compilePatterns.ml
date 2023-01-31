@@ -156,7 +156,7 @@ let rec desugar_pattern : Types.row -> Sugartypes.Pattern.with_pos -> Pattern.t 
             in
               Pattern.Record (bs, p), env
         | Tuple ps ->
-            let bs = mapIndex (fun p i -> (Label.mk_int (i+1), p)) ps in
+            let bs = mapIndex (fun p i -> (Label.of_int (i+1), p)) ps in
               desugar_pattern (WithPos.make ~pos (Record (bs, None)))
         | Constant constant ->
             Pattern.Constant constant, empty
@@ -986,7 +986,7 @@ let compile_handle_cases
               let (fields, _, _) = TypeUtils.extract_row domain |> TypeUtils.extract_row_parts in
               let arity = Label.Map.size fields in
               if arity = 1 then
-                match Label.Map.find (Label.make "1") fields with
+                match Label.Map.find Label.one fields with
                 | Types.Present t -> t
                 | _ -> assert false
               else
@@ -1031,7 +1031,7 @@ let compile_handle_cases
                   | [Pattern.Operation (name, ps, _)] ->
                      let packaged_args =
                        let fields =
-                         List.mapi (fun i p -> (Label.mk_int (i+1), p)) ps
+                         List.mapi (fun i p -> (Label.of_int (i+1), p)) ps
                        in
                        Pattern.Record (Label.Map.from_alist fields, None)
                      in

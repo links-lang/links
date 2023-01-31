@@ -456,7 +456,7 @@ struct
             if IntSet.mem x cvars then
               (* We cannot return t as the type of the result here. If x refers to a hoisted function that was generalised, then
                  t has additional quantifiers that are not present in the corresponding type of projecting x from parent_env *)
-              let projected_t = TypeUtils.project_type (Label.mk_int x) (thd3 (o#var parent_env)) in
+              let projected_t = TypeUtils.project_type (Label.of_int x) (thd3 (o#var parent_env)) in
               Project (string_of_int x, Variable parent_env), projected_t
             else if IntMap.mem x fenv then
               let zs = (IntMap.find x fenv).termvars in
@@ -476,7 +476,7 @@ struct
                       (fun b ->
                         let z = Var.var_of_binder b in
                         let v = fst (var_val z) in
-                        (Label.mk_int z, v))
+                        (Label.of_int z, v))
                       zs
                   in
                   close x zs tyargs, overall_type
@@ -539,7 +539,7 @@ struct
                      (fun fields b ->
                        let x = Var.var_of_binder b in
                        let xt = Var.type_of_binder b in
-                       Label.Map.add (Label.mk_int x) xt fields)
+                       Label.Map.add (Label.of_int x) xt fields)
                      Label.Map.empty
                      zs))
               in
@@ -615,7 +615,7 @@ struct
                               (fun fields b ->
                                 let x = Var.var_of_binder b in
                                 let xt = Var.type_of_binder b in
-                                Label.Map.add (Label.mk_int x) xt fields)
+                                Label.Map.add (Label.of_int x) xt fields)
                               Label.Map.empty
                               zs))
                        in

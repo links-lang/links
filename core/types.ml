@@ -1701,7 +1701,7 @@ let wild_present   = (wild, Present unit_type)
 let hear_present t = (hear, Present t)
 
 let is_builtin_effect lbl =
-  Label.eq lbl wild || Label.eq lbl hear
+  Label.equal lbl wild || Label.equal lbl hear
 
 
 (* precondition: the row is unwrapped *)
@@ -1719,7 +1719,7 @@ let is_tuple ?(allow_onetuples=false) row =
        n = 0
        || (List.for_all
              (fun i ->
-               let name = Label.mk_int i in
+               let name = Label.of_int i in
                FieldEnv.mem name field_env
                && (match FieldEnv.find name field_env with
                    | Present _ -> true
@@ -4616,7 +4616,7 @@ let make_tuple_type (ts : datatype list) : datatype =
   Record
     (snd
        (List.fold_left
-          (fun (n, row) t -> n+1, row_with (Label.mk_int n, Present t) row)
+          (fun (n, row) t -> n+1, row_with (Label.of_int n, Present t) row)
           (1, make_empty_closed_row ())
           ts))
 

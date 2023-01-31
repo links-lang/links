@@ -667,7 +667,7 @@ module Eff_Handler_Continuation = struct
           | ((User_defined h, pk) :: k) ->
              begin match Label.Map.lookup opname h.cases with
              | Some (b, _, comp)
-                  when session_exn_enabled && Label.eq session_exception_operation opname ->
+                  when session_exn_enabled && Label.equal session_exception_operation opname ->
                 let var = Var.var_of_binder b in
                 let continuation_thunk =
                   fun () -> E.computation (Env.bind var (arg, Scope.Local) h.env) k comp
@@ -693,7 +693,7 @@ module Eff_Handler_Continuation = struct
              | None -> handle ((User_defined h, pk) :: k') k
              end
           | (identity, pk) :: k -> handle ((identity, pk) :: k') k
-          | [] when session_exn_enabled && Label.eq session_exception_operation opname ->
+          | [] when session_exn_enabled && Label.equal session_exception_operation opname ->
               (* If this is a session exception operation, we need to gather all
                * of the computations in the pure continuation stack, so we can inspect
                * their free variables. *)
