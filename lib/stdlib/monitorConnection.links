@@ -1,0 +1,54 @@
+# This module provides a simple API for creating a connection between
+# a client and a server in which cleanup code will automatically be
+# called as soon as the connection is broken (e.g. because the client
+# closes the browser window).
+
+# Required settings:
+#
+#   enable_handlers=true
+#   session_exceptions=true
+#   expose_session_fail=false
+
+# Typical mode of use. For each client:
+#
+# * Create a new connection object `conn` by calling `newConnection()`
+#
+# * Initialise the client by calling `clientInit(conn)` on the client.
+#
+# * Initialise the server by calling `serverInit(conn, cleanup)` on
+# the server. The `cleanup` function be called as soon as the
+# connection is closed.
+#
+# The `clientInit` and `serverInit` functions should be called exactly
+# once for each new connection object.
+
+# The implementation represents connection objects as access points
+# and relies on session exceptions in order to detect broken
+# connections.
+
+typename Connection = AP(?().End);
+
+sig newConnection : () ~> Connection
+fun newConnection() {
+  new()
+}
+
+sig clientInit : (Connection) ~> ()
+fun clientInit(conn) {
+  ignore(spawn {var c = request(conn); ignore(recv()); close(send((), c))})
+}
+
+sig serverInit : (Connection, () ~e~> ()) ~e~> ()
+fun serverInit(conn, cleanup) {
+  ignore(spawn {
+    var c = accept(conn);
+    try {
+      var ((), c) = receive(c);
+      close(c)
+    } as () in {
+      ()
+    } otherwise {
+      cleanup()
+    }
+  })
+}
