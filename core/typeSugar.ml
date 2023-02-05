@@ -4299,7 +4299,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
           let row =
             if Settings.get Basicsettings.Sessions.exceptions_enabled &&
                not (Settings.get Basicsettings.Sessions.expose_session_fail) &&
-               String.compare opname Value.session_exception_operation = 0
+               String.equal opname Value.session_exception_operation
             then
                Types.make_empty_open_row (lin_unl, res_effect)
             else
