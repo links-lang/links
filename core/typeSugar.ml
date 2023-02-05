@@ -4313,7 +4313,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
           in
             doop, rettyp, usage
         | Operation name ->
-           if String.compare name Value.session_exception_operation = 0 then
+           if String.equal name Value.session_exception_operation then
              if not context.desugared then
                Gripers.die pos "The session failure effect SessionFail is not directly invocable (use `raise` instead)"
              else
