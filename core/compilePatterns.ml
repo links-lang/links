@@ -678,7 +678,7 @@ and match_variant
                 (fun name t ->
                    if Settings.get Basicsettings.Sessions.exceptions_enabled &&
                       not (Settings.get Basicsettings.Sessions.expose_session_fail) &&
-                      String.compare name Value.session_exception_operation = 0
+                      String.equal name Value.session_exception_operation
                    then
                      t
                    else
