@@ -13,7 +13,6 @@ let receive_str   = "receive"
 let request_str   = "request"
 let send_str      = "send"
 let wait_str      = "wait"
-let wild_str      = "wild"
 
 class desugar_cp env =
   let open CommonTypes.PrimaryKind in
@@ -48,8 +47,8 @@ object (o : 'self_type)
             let o = o#restore_envs envs in
             o, block_node
                  ([val_binding (with_dummy_pos (
-                                    Pattern.Record ([("1", variable_pat ~ty:u x);
-                                                     ("2", variable_pat ~ty:s c)], None)))
+                                    Pattern.Record ([(Label.one, variable_pat ~ty:u x);
+                                                     (Label.two, variable_pat ~ty:s c)], None)))
                                (fn_appl receive_str grab_tyargs [var c])],
                  with_dummy_pos e), t
          | CPGive ((c, _), None, p) ->
@@ -71,7 +70,8 @@ object (o : 'self_type)
             let c = Binder.to_name bndr in
             let t = Binder.to_type bndr in
             o, Var c, t
-         | CPSelect (bndr, label, p) ->
+         | CPSelect (bndr, name, p) ->
+            let label = Label.make name in
             let c = Binder.to_name bndr in
             let s = Binder.to_type bndr in
             let envs = o#backup_envs in
@@ -85,11 +85,12 @@ object (o : 'self_type)
          | CPOffer (bndr, cases) ->
             let c = Binder.to_name bndr in
             let s = Binder.to_type bndr in
-            let desugar_branch (label, p) (o, cases) =
+            let desugar_branch (name, p) (o, cases) =
+              let label = Label.make name in
               let envs = o#backup_envs in
               let o = {< var_env = TyEnv.bind c (TypeUtils.choice_at label s) (o#get_var_env ()) >} in
               let (o, p, t) = desugar_cp o p in
-              let pat : Pattern.with_pos = with_dummy_pos (Pattern.Variant (label,
+              let pat : Pattern.with_pos = with_dummy_pos (Pattern.Variant (Label.make name,
                       Some (variable_pat ~ty:(TypeUtils.choice_at label s) c))) in
               o#restore_envs envs, ((pat, with_dummy_pos p), t) :: cases in
             let (o, cases) = List.fold_right desugar_branch cases (o, []) in
@@ -115,10 +116,10 @@ object (o : 'self_type)
             let (eff_fields, eff_row, eff_closed) =
               Types.flatten_row o#lookup_effects
               |> TypeUtils.extract_row_parts in
-            let eff_fields = StringMap.remove wild_str eff_fields in
+            let eff_fields = Label.Map.remove Types.wild eff_fields in
             let eff_fields =
               if Settings.get Basicsettings.Sessions.exceptions_enabled then
-                StringMap.remove Value.session_exception_operation eff_fields
+                Label.Map.remove Value.session_exception_operation eff_fields
               else
                 eff_fields in
 

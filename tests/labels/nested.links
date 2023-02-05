@@ -1,0 +1,16 @@
+fresh `A;
+fresh `B;
+
+sig f : () {`A:(), `B:Bool}-> Bool
+fun f () { do `A ; do `B }
+
+sig f' : () {`A:Int}-> Int
+fun f' () { do `A * 42 }
+
+fresh `C, `B, `A;
+
+sig g : () {`C:Int, `B:Bool}-> Int
+fun g () { if (do `B) 1 else do `C }
+
+sig h : () {`C:Int, `A:()}-> Int
+fun h () { do `A ; do `C }

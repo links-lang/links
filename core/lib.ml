@@ -1726,6 +1726,7 @@ let type_env : Types.environment =
 let typing_env = {Types.var_env = type_env;
                   Types.rec_vars = StringSet.empty;
                   tycon_env = alias_env;
+                  label_env = Label.Env.empty;
                   Types.effect_row = Types.closed_wild_row;
                   Types.desugared = false }
 
@@ -1746,7 +1747,7 @@ let rec function_arity =
   function
     | Function (Record row, _, _) ->
         let (l, _, _) = TypeUtils.extract_row_parts row in
-        (Some (StringMap.size l))
+        (Some (Label.Map.size l))
     | ForAll (_, t) -> function_arity t
     | _ -> None
 

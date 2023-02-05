@@ -11,9 +11,9 @@ let variables_in_computation comp =
   let variable_set = ref IntSet.empty in
   let add_variable var =
     variable_set := (IntSet.add var !variable_set) in
-  let rec traverse_stringmap : 'a . ('a -> unit) -> 'a stringmap -> unit =
+  let rec traverse_name_map : 'a . ('a -> unit) -> 'a name_map -> unit =
     fun proj_fn smap -> (* (proj_fn: 'a . 'a -> 'b) (smap: 'a stringmap) : unit = *)
-      StringMap.fold (fun _ v _ -> proj_fn v) smap ()
+      Label.Map.fold (fun _ v _ -> proj_fn v) smap ()
   and traverse_value = function
     | Variable v -> add_variable v
     | Closure (_, _, value)
@@ -24,13 +24,13 @@ let variables_in_computation comp =
     | Coerce (value, _)
     | Erase (_, value) -> traverse_value value
     | XmlNode (_, v_map, vs) ->
-        traverse_stringmap (traverse_value) v_map;
+        traverse_name_map (traverse_value) v_map;
         List.iter traverse_value vs
     | ApplyPure (v, vs) ->
         traverse_value v;
         List.iter traverse_value vs
     | Extend (v_map, v_opt) ->
-        traverse_stringmap (traverse_value) v_map;
+        traverse_name_map (traverse_value) v_map;
         begin match v_opt with | Some v -> traverse_value v | None -> () end
     | Constant _ -> ()
   and traverse_tail_computation = function
@@ -42,7 +42,7 @@ let variables_in_computation comp =
         traverse_value v; List.iter traverse_computation [c1 ; c2]
     | Case (scrutinee, cases, case_opt) ->
         traverse_value scrutinee;
-        traverse_stringmap (fun (_, c) -> traverse_computation c) cases;
+        traverse_name_map (fun (_, c) -> traverse_computation c) cases;
         OptionUtils.opt_iter (fun (_, c) -> traverse_computation c) case_opt
   and traverse_fundef {fn_binder = bnd; _} =
     let fun_var = Var.var_of_binder bnd in
@@ -109,7 +109,7 @@ let variables_in_computation comp =
     | DoOperation (_, vs, _) -> List.iter (traverse_value) vs
     | Choice (v, clauses) ->
         traverse_value v;
-        traverse_stringmap (fun (_, c) ->
+        traverse_name_map (fun (_, c) ->
           traverse_computation c) clauses
     | Lens (value, _)
     | LensSerial { lens = value; _ }
@@ -124,7 +124,7 @@ let variables_in_computation comp =
   and traverse_clause (_, _, c) = traverse_computation c
   and traverse_handler (h: Ir.handler) =
     traverse_computation (h.ih_comp);
-    traverse_stringmap (traverse_clause) h.ih_cases;
+    traverse_name_map (traverse_clause) h.ih_cases;
     traverse_computation (snd h.ih_return)
   in
   traverse_computation comp;

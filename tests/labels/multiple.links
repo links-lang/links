@@ -1,0 +1,9 @@
+fresh `A, `B, `C;
+sig f : () {`A:(), `B:Bool}-> Bool
+fun f () { do `A ; do `B }
+
+sig g : () {`C:Int, `B:Bool}-> Int
+fun g () { if (do `B) 1 else do `C }
+
+sig h : () {`C:Int, `A:()}-> Int
+fun h () { do `A ; do `C }

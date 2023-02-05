@@ -167,7 +167,7 @@ struct
           opt_app (value env) (Lwt.return (`Record [])) r >>= fun res ->
           match res with
             | `Record fs ->
-                let fields = StringMap.bindings fields in
+                let fields = StringMap.bindings (Label.label_to_string_map fields) in
                 LwtHelpers.foldr_lwt
                    (fun (label, v) (fs: (string * Value.t) list)  ->
                       if List.mem_assoc label fs then
@@ -194,11 +194,11 @@ struct
         begin
           match v with
             | `Record fields when
-                StringSet.for_all (fun label -> List.mem_assoc label fields) labels ->
+                Label.Set.for_all (fun label -> List.mem_assoc (Label.name label) fields) labels ->
                   Lwt.return (
-                `Record (StringSet.fold (fun label fields -> List.remove_assoc label fields) labels fields))
+                `Record (Label.Set.fold (fun label fields -> List.remove_assoc (Label.name label) fields) labels fields))
             | v ->
-               type_error ~action:(Printf.sprintf "erase labels {%s}" (String.concat "," (StringSet.elements labels)))
+               type_error ~action:(Printf.sprintf "erase labels {%s}" (String.concat "," (StringSet.elements (Label.label_to_string_set labels))))
                  "record" v
         end
     | Inject (label, v, _) ->
@@ -211,7 +211,7 @@ struct
               value env v >>= fun v ->
                Lwt.return (List.map Value.unbox_xml (Value.unbox_list v) @ children))
             children (Lwt.return []) >>= fun children ->
-          let attrs = StringMap.bindings attrs in
+          let attrs = StringMap.bindings (Label.label_to_string_map attrs) in
           LwtHelpers.foldr_lwt
             (fun (name, v) attrs ->
                value env v >>= fun str ->
@@ -574,7 +574,7 @@ struct
       begin match v with
         | `Variant (label, _) as v ->
           begin
-            match StringMap.lookup label cases, default, v with
+            match StringMap.lookup label (Label.label_to_string_map cases), default, v with
             | Some (b, c), _, `Variant (_, v)
             | _, Some (b, c), v ->
                let var = Var.var_of_binder b in
@@ -781,11 +781,11 @@ struct
                         let r, _ = Types.unwrap_row (TypeUtils.extract_row t) in
                         TypeUtils.extract_row_parts r in
                       let fields =
-                        StringMap.fold
+                        Label.Map.fold
                           (fun name t fields ->
                             let open Types in
                             match t with
-                              | Present t -> (name, t)::fields
+                              | Present t -> (Label.name name, t)::fields
                               | _ -> assert false)
                           fieldMap
                           []
@@ -880,7 +880,7 @@ struct
                 StringMap.map
                     (function
                        | Types.Present t -> t
-                       | _ -> assert false) fields
+                       | _ -> assert false) (Label.label_to_string_map fields)
               in
               Lwt.return
                 (db, table, field_types, temporal_fields)
@@ -918,7 +918,7 @@ struct
                     StringMap.map
                         (function
                            | Types.Present t -> t
-                           | _ -> assert false) fields
+                           | _ -> assert false) (Label.label_to_string_map fields)
                   in
                   Lwt.return
                     (db, table, field_types, temporal_fields)
@@ -1016,7 +1016,7 @@ struct
             Debug.print ("chose label: " ^ label);
 
               begin
-                match StringMap.lookup label cases with
+                match StringMap.lookup label (Label.label_to_string_map cases) with
                 | Some (b, body) ->
                    let var = Var.var_of_binder b in
                    computation (Value.Env.bind var (chan, Scope.Local) env) cont body

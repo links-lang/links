@@ -18,9 +18,9 @@ type tyvar = Quantifier.t
 type tyarg = Types.type_arg
   [@@deriving show]
 
-type name_set = Utility.stringset
+type name_set = Label.Set.t
   [@@deriving show]
-type 'a name_map = 'a Utility.stringmap
+type 'a name_map = 'a Label.Map.t
   [@@deriving show]
 
 type 'a var_map = 'a Utility.intmap
@@ -119,7 +119,7 @@ and special =
   | Select     of Name.t * value
   | Choice     of value * (binder * computation) name_map
   | Handle     of handler
-  | DoOperation of Name.t * value list * Types.t
+  | DoOperation of Label.t * value list * Types.t
 and computation = binding list * tail_computation
 and effect_case = binder * binder * computation
 and handler = {

@@ -130,13 +130,13 @@ struct
       ('self_type -> 'a -> ('self_type * 'a * datatype)) ->
       'a name_map -> 'self_type * 'a name_map * datatype name_map =
       fun f vmap ->
-        StringMap.fold
+        Label.Map.fold
           (fun name v (o, vmap, tmap) ->
              let (o, v, t) = f o v in
-               (o, StringMap.add name v vmap,
-                   StringMap.add name t tmap))
+               (o, Label.Map.add name v vmap,
+                   Label.Map.add name t tmap))
           vmap
-          (o, StringMap.empty, StringMap.empty)
+          (o, Label.Map.empty, Label.Map.empty)
 
     method var_map :
       'a.
@@ -196,7 +196,7 @@ struct
               o, Extend (fields, base), t
         | Project (name, v) ->
             let (o, v, vt) = o#value v in
-              o, Project (name, v), deconstruct (project_type name) vt
+              o, Project (name, v), deconstruct (project_type (Label.make name)) vt
         | Erase (names, v) ->
             let (o, v, vt) = o#value v in
             let t = deconstruct (erase_type names) vt in
@@ -284,8 +284,8 @@ struct
                           let o, c, t = o#computation c in
                             o, (b, c), t) default in
             let t =
-              if not (StringMap.is_empty case_types) then
-                (StringMap.to_alist ->- List.hd ->- snd) case_types
+              if not (Label.Map.is_empty case_types) then
+                (Label.Map.to_alist ->- List.hd ->- snd) case_types
               else
                 val_of default_type
             in
@@ -389,7 +389,7 @@ struct
                          let o, b = o#binder b in
                          let o, c, t = o#computation c in
                          o, (b, c), t) bs in
-           let t = (StringMap.to_alist ->- List.hd ->- snd) branch_types in
+           let t = (Label.Map.to_alist ->- List.hd ->- snd) branch_types in
            o, Choice (v, bs), t
     | Handle ({ ih_comp; ih_cases; ih_return; ih_depth }) ->
        let (o, comp, _) = o#computation ih_comp in

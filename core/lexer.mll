@@ -98,6 +98,7 @@ let keywords = [
  "false"    , FALSE;
  "for"      , FOR;
  "forall"   , FORALL;
+ "fresh"    , FRESH;
  "from"     , FROM;
  "fun"      , FUN;
  "formlet"  , FORMLET;
@@ -265,6 +266,9 @@ rule lex ctxt nl = parse
                                               if op = "<" then ctxt#enter_effect_pattern
                                               else if op = ">" then ctxt#leave_effect_pattern);
                                               OPERATOR op }
+  | "`" (def_id as var)                 { if List.mem_assoc var keywords || not (Char.isUpper var.[0]) then
+                                              raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf))
+                                          else BTCONSTRUCTOR var  }
   | '`' (def_id as var) '`'             { if List.mem_assoc var keywords || Char.isUpper var.[0] then
                                               raise (LexicalError (lexeme lexbuf, lexeme_end_p lexbuf))
                                           else OPERATOR var }

@@ -29,8 +29,8 @@ let check_assoc_list_for_duplicates assoc description =
   let has_duplicates =
     List.fold_left
       (fun (seen, dupls) (key, _) ->
-        (StringSet.add key seen, dupls && StringSet.mem key seen))
-      (StringSet.empty, [] <> assoc)
+        (Label.Set.add key seen, dupls && Label.Set.mem key seen))
+      (Label.Set.empty, [] <> assoc)
       assoc
     |> snd
   in
@@ -195,7 +195,8 @@ let ( |--> ) = fun_ct
 let wild_fun_ct parameters codomain =
   let effects =
     State.return
-      (Types.make_singleton_closed_row ("wild", Types.Present Types.unit_type))
+      (Types.make_singleton_closed_row
+         (Types.wild, Types.Present Types.unit_type))
     |> State.return
   in
   fun_t ~effects parameters codomain
@@ -203,6 +204,7 @@ let wild_fun_ct parameters codomain =
 let ( |~~> ) = wild_fun_ct
 
 let record_t ?row_var assoc =
+  let assoc = List.map (fun (x, y) -> (Label.make x, y)) assoc in
   let row_var =
     match row_var with
     | Some rv -> rv
@@ -210,10 +212,11 @@ let record_t ?row_var assoc =
   in
   check_assoc_list_for_duplicates assoc "record type";
   helper_tuple1 assoc row_var (fun assoc row_var ->
-      let map = StringMap.from_alist assoc in
+      let map = Label.Map.from_alist assoc in
       Types.Record (Types.Row (map, row_var, false)))
 
 let variant ?row_var assoc =
+  let assoc = List.map (fun (x, y) -> (Label.make x, y)) assoc in
   check_assoc_list_for_duplicates assoc "variant type";
   let row_var =
     match row_var with
@@ -221,7 +224,7 @@ let variant ?row_var assoc =
     | None -> Unionfind.fresh Types.Closed |> State.return |> State.return
   in
   helper_tuple1 assoc row_var (fun assoc row_var ->
-      let map = StringMap.from_alist assoc in
+      let map = Label.Map.from_alist assoc in
       Types.Variant (Types.Row (map, row_var, false)))
 
 (* Rows *)
@@ -234,8 +237,9 @@ let row_var rv =
   Unionfind.fresh (Types.Var (id, (CT.PrimaryKind.Row, sk), `Rigid))
 
 let row assoc rv =
+  let assoc = List.map (fun (x, y) -> (Label.make x, y)) assoc in
   let mk_row assoc rv =
-    let map = StringMap.from_alist assoc in
+    let map = Label.Map.from_alist assoc in
     Types.Row (map, rv, false)
   in
   check_assoc_list_for_duplicates assoc "row";
@@ -344,15 +348,16 @@ let wi_binder ?(scope = Var.Scope.Local) id ty =
 
 let build_record (extendee : Ir.value t option)
     (assoc : (string * Ir.value t) list) : Ir.value t =
+  let assoc = List.map (fun (x, y) -> (Label.make x, y)) assoc in
   let _, has_duplicates =
     List.fold_left
       (fun (seen, dupls) (key, _) ->
-        (StringSet.add key seen, dupls && StringSet.mem key seen))
-      (StringSet.empty, [] <> assoc)
+        (Label.Set.add key seen, dupls && Label.Set.mem key seen))
+      (Label.Set.empty, [] <> assoc)
       assoc
   in
   let stage2 (extendee : Ir.value lookup option)
-      (assoc : (string * Ir.value Repr.lookup) list) : Ir.value lookup =
+      (assoc : (Label.t * Ir.value Repr.lookup) list) : Ir.value lookup =
     let* assoc =
       State.List.map
         ~f:(fun (x, y) ->
@@ -360,7 +365,7 @@ let build_record (extendee : Ir.value t option)
           (x, y))
         assoc
     in
-    let map = StringMap.from_alist assoc in
+    let map = Label.Map.from_alist assoc in
     let finalize e =
       if has_duplicates then raise (SchinksError "Duplicate fields in record!")
       else Ir.Extend (map, e)
@@ -371,14 +376,14 @@ let build_record (extendee : Ir.value t option)
         let+ e = e in
         finalize (Some e)
   in
-  let assoc : (string * Ir.value lookup) list stage1 =
+  let assoc : (Label.t * Ir.value lookup) list stage1 =
     State.List.map
       ~f:(fun (x, y) ->
         let+ y = y in
         (x, y))
       assoc
   in
-  let* (assoc : (string * Ir.value lookup) list) = assoc in
+  let* (assoc : (Label.t * Ir.value lookup) list) = assoc in
   match extendee with
   | Some (e : Ir.value t) ->
       let+ (e : Ir.value lookup) = e in
@@ -424,6 +429,7 @@ let apply f args =
 let case (v : Ir.value t) ?(default : (Ir.binder t * Ir.computation t) option)
     (cases : (string * Ir.binder t * Ir.computation t) list) :
     Ir.tail_computation t =
+  let cases = List.map (fun (x, y, z) -> (Label.make x, y, z)) cases in
   let* v = v in
   let f (x, y) =
     let* x = x in
@@ -442,7 +448,7 @@ let case (v : Ir.value t) ?(default : (Ir.binder t * Ir.computation t) option)
   let+ cases = State.List.map ~f:g cases in
   let assoc = List.map (fun (a, b, c) -> (a, (b, c))) cases in
   check_assoc_list_for_duplicates assoc "variants of case";
-  let case_map = StringMap.from_alist assoc in
+  let case_map = Label.Map.from_alist assoc in
   Ir.Case (v, case_map, default)
 
 (*

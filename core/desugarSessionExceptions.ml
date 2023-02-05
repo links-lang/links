@@ -108,7 +108,8 @@ object (o : 'self_type)
         let outer_effects = o#lookup_effects in
 
         let fail_cont_ty =
-          Types.make_pure_function_type [] (Types.empty_type) in
+          Types.make_operation_type [] Types.empty_type
+        in
 
         let inner_effects =
           effect_row
@@ -127,7 +128,7 @@ object (o : 'self_type)
         let effect_cases = [otherwise_clause] in
 
         (* Manually construct a row with the two hardwired handler cases. *)
-        let raw_row = Types.row_with ("Return", (Types.Present try_dt)) inner_effects in
+        let raw_row = Types.row_with (Label.return, (Types.Present try_dt)) inner_effects in
         (* Dummy types *)
         let types =
           (inner_effects, try_dt, outer_effects, otherwise_dt) in
@@ -193,8 +194,8 @@ let wrap_linear_handlers =
                constructor ~body:(var fresh_var) "Just",
                constructor "Nothing", dtopt)),
             [
-              (with_dummy_pos (Pattern.Variant ("Just", (Some x))), super#phrase m);
-              (with_dummy_pos (Pattern.Variant ("Nothing", None)), super#phrase n)
+              (with_dummy_pos (Pattern.Variant (Label.make "Just", (Some x))), super#phrase m);
+              (with_dummy_pos (Pattern.Variant (Label.make "Nothing", None)), super#phrase n)
             ], None))
       | p -> super#phrase p
   end

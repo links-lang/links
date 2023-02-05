@@ -66,6 +66,7 @@
     "false"
     "for"
     "forall"
+    "fresh"
     "from"
     "fun"
     "formlet"

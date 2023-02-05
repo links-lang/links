@@ -1,0 +1,74 @@
+Unbounded local label
+./tests/labels/unbounded.links
+filemode : true
+stderr : @.*
+exit : 1
+
+Simple scope and do operation
+./tests/labels/simple.links
+filemode : true
+stdout : () : ()
+
+Simple scope, effectname, typename and do operation
+./tests/labels/simple-names.links
+filemode : true
+stdout : () : ()
+
+Multiple label bounded at a time
+./tests/labels/multiple.links
+filemode : true
+stdout : () : ()
+
+Handler for local effect
+./tests/labels/handler.links
+filemode : true
+stdout : 42 : Int
+args : --enable-handlers
+
+Nested label bindings [1]
+./tests/labels/nested.links
+filemode : true
+stdout : () : ()
+
+Nested label bindings [2]
+./tests/labels/nested-names.links
+filemode : true
+stderr : @.*
+exit : 1
+
+Wrong local handler
+./tests/labels/wrong-handler.links
+filemode : true
+stderr : @.*
+exit : 1
+args : --enable-handlers
+
+Avoiding pollution [1]
+./tests/labels/pollution.links
+filemode : true
+stdout : (Just(42), Nothing, Just(-1)) : (Maybint, Maybint, Maybint)
+args : --enable-handlers
+
+Avoiding pollution [2]
+./tests/labels/nested-pollution.links
+filemode : true
+stdout : 42 : Int
+args : --enable-handlers
+
+Lexical scoping [1]
+fun() { var x = { fresh `A; 42 }; do `A }
+stderr : @.*
+exit : 1
+
+Lexical scoping [2]
+fun() { var x = { fresh `A; ignore(42); fun() { do `A } }; x }
+stdout : fun : () -> () {`A:() => b|_}-> b
+
+Lexical scoping [3]
+{ module T { fresh `A; } fun() { do `A } }
+stderr : @.*
+exit : 1
+
+Lexical scoping [4]
+module T { fresh `A; fun f() { do `A } }
+stdout : () : ()

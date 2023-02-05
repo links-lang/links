@@ -1,7 +1,7 @@
 open Utility
 open Types
 
-module FieldEnv = Utility.StringMap
+module FieldEnv = Label.Map
 
 (* TODO
 
@@ -66,11 +66,11 @@ let rec is_guarded : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
              match row with
              | Row (fields, row_var, _dual)
                   when
-                    (FieldEnv.mem "1" fields &&
+                    (FieldEnv.mem Label.one fields &&
                        FieldEnv.size fields = 1 &&
                          Unionfind.find row_var = Closed) ->
                 begin
-                  match FieldEnv.find "1" fields with
+                  match FieldEnv.find Label.one fields with
                   | Present t        -> isg t
                   | (Absent | Var _) -> true
                   | _ -> raise Types.tag_expectation_mismatch
@@ -93,7 +93,7 @@ let rec is_guarded : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
         | Row (fields, row_var, _dual) ->
            let check_fields = false in
            (if check_fields then
-              (StringMap.fold
+              (Label.Map.fold
                  (fun _ f b -> b && isg f)
                  fields
                  true)

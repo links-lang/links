@@ -514,6 +514,11 @@ and desugar ?(toplevel=false) (renamer' : Epithet.t) (scope' : Scope.t) =
          let b = self#binding b in
          b :: self#bindings bs
 
+    method! label = function
+      | Label.Local (textual_name, uid) ->
+        Label.Local (Epithet.expand renamer textual_name, uid)
+      | l -> l
+
     method! program (bs, exp) =
       (* It is crucial that we enforce left-to-right evaluation of
          [bs] and [exp]. Note that OCaml uses right-to-left evaluation
