@@ -3,7 +3,7 @@
   (public_name links-mysql8)
   (synopsis "MySQL8 database backend for Links")
   (optional)
-  (libraries mysql8 links.core))
+  (libraries str unix mysql8 links.core))
 
 
 (install
