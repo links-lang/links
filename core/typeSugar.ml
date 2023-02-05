@@ -4058,7 +4058,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                    let effrow =
                      if Settings.get Basicsettings.Sessions.exceptions_enabled &&
                         not (Settings.get Basicsettings.Sessions.expose_session_fail) &&
-                        String.compare effname Value.session_exception_operation = 0
+                        String.equal effname Value.session_exception_operation
                      then
                        Types.Effect (Types.make_empty_open_row (lin_any, res_any))
                      else
