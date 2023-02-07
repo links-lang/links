@@ -111,9 +111,12 @@ object (o : 'self_type)
           Types.make_pure_function_type [] (Types.empty_type) in
 
         let inner_effects =
-          effect_row
+          if Settings.get Basicsettings.Sessions.expose_session_fail then
+            effect_row
             |> Types.row_with (failure_op_name, Types.Present fail_cont_ty)
-            |> Types.flatten_row in
+            |> Types.flatten_row
+          else
+            effect_row in
 
         let cont_pat = variable_pat ~ty:(Types.make_function_type [] inner_effects (Types.empty_type))
           (Utility.gensym ~prefix:"dsh" ()) in

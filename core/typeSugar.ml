@@ -3401,7 +3401,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
              *)
             let inner_effects = Types.row_with Types.wild_present pid_effects in
             let inner_effects =
-              if Settings.get  Basicsettings.Sessions.exceptions_enabled then
+              if Settings.get Basicsettings.Sessions.exceptions_enabled &&
+                 Settings.get Basicsettings.Sessions.expose_session_fail
+              then
                 let ty = Types.make_operation_type [] (Types.empty_type) in
                 Types.row_with (Value.session_exception_operation, T.Present ty) inner_effects
               else
@@ -4053,7 +4055,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                      | Pattern.Operation (name, _, k) -> name, k
                      | _ -> assert false
                    in
-                   let effrow = Types.Effect (Types.make_singleton_open_row (effname, Types.Present efftyp) (lin_any, res_any)) in
+                   let effrow =
+                     if Settings.get Basicsettings.Sessions.exceptions_enabled &&
+                        not (Settings.get Basicsettings.Sessions.expose_session_fail) &&
+                        String.equal effname Value.session_exception_operation
+                     then
+                       Types.Effect (Types.make_empty_open_row (lin_any, res_any))
+                     else
+                       Types.Effect (Types.make_singleton_open_row (effname, Types.Present efftyp) (lin_any, res_any)) in
                    unify ~handle:Gripers.handle_effect_patterns
                          ((uexp_pos pat, effrow),  no_pos (T.Effect inner_eff));
                    let pat, kpat =
@@ -4287,7 +4296,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
           let opname = find_opname (erase op) in
           let infer_opt = no_pos (Types.make_operation_type (List.map typ ps) rettyp) in
           let term = (exp_pos op, opt) in
-          let row = Types.make_singleton_open_row (opname, T.Present (typ op)) (lin_unl, res_effect) in
+          let row =
+            if Settings.get Basicsettings.Sessions.exceptions_enabled &&
+               not (Settings.get Basicsettings.Sessions.expose_session_fail) &&
+               String.equal opname Value.session_exception_operation
+            then
+               Types.make_empty_open_row (lin_unl, res_effect)
+            else
+              Types.make_singleton_open_row (opname, T.Present (typ op)) (lin_unl, res_effect) in
           let p = Position.resolve_expression pos in
           let () =
             unify ~handle:Gripers.do_operation
@@ -4297,10 +4313,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
           in
             doop, rettyp, usage
         | Operation name ->
-           if String.compare name Value.session_exception_operation = 0 && not context.desugared then
-             Gripers.die pos "The session failure effect SessionFail is not directly invocable (use `raise` instead)"
+           if String.equal name Value.session_exception_operation then
+             if not context.desugared then
+               Gripers.die pos "The session failure effect SessionFail is not directly invocable (use `raise` instead)"
+             else
+               (Operation name, Types.empty_type, Usage.empty)
            else
-             let t = match lookup_effect context name with
+             let t =
+               match lookup_effect context name with
                | Some t -> t
                | None   -> Types.fresh_type_variable (lin_unl, res_any)
              in
@@ -4316,13 +4336,21 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               outer effects *)
             let rho = Types.fresh_row_variable default_effect_subkind in
             let outer_effects =
-              Types.row_with
-                (Value.session_exception_operation, Types.fresh_presence_variable default_subkind)
-                (T.Row (StringMap.empty, rho, false)) in
+              if Settings.get Basicsettings.Sessions.expose_session_fail then
+                Types.row_with
+                  (Value.session_exception_operation, Types.fresh_presence_variable default_subkind)
+                  (T.Row (StringMap.empty, rho, false))
+              else
+                T.Row (StringMap.empty, rho, false)
+            in
             let try_effects =
-              Types.row_with
-                (Value.session_exception_operation, T.Present (Types.make_operation_type [] Types.empty_type))
-                (T.Row (StringMap.empty, rho, false)) in
+              if Settings.get Basicsettings.Sessions.expose_session_fail then
+                Types.row_with
+                  (Value.session_exception_operation, T.Present (Types.make_operation_type [] Types.empty_type))
+                  (T.Row (StringMap.empty, rho, false))
+              else
+                T.Row (StringMap.empty, rho, false)
+            in
 
             unify ~handle:Gripers.try_effect
               (no_pos (T.Effect context.effect_row), no_pos (T.Effect outer_effects));
@@ -4400,9 +4428,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                 erase unless_phrase, Some return_type), return_type, usages_res
         | QualifiedVar _ -> assert false
         | Raise ->
-            let effects = Types.make_singleton_open_row
-                            (Value.session_exception_operation, T.Present (Types.make_operation_type [] Types.empty_type))
-                            default_effect_subkind
+            let effects =
+              if Settings.get Basicsettings.Sessions.expose_session_fail then
+                Types.make_singleton_open_row
+                  (Value.session_exception_operation, T.Present (Types.make_operation_type [] Types.empty_type))
+                  default_effect_subkind
+              else
+                Types.make_empty_open_row default_effect_subkind
             in
             unify ~handle:Gripers.raise_effect
               (no_pos (T.Effect context.effect_row), (Position.resolve_expression pos, T.Effect effects));
