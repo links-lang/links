@@ -4140,6 +4140,27 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
              in
              (* Closing of subpatterns in effect patterns *)
              let inner_eff = TypeUtils.extract_row (close_pattern_type (List.map (fst3 ->- fst3) eff_cases) (T.Effect inner_eff)) in
+             let check_linear_paras_in_clauses pat body =
+              Env.iter (fun v t ->
+                let uses = Usage.uses_of v (usages body) in
+                  if uses <> 1 then
+                    if Types.Unl.can_type_be t then
+                      Types.Unl.make_type t
+                    else
+                      Gripers.non_linearity pos uses v t)
+                (pattern_env pat) in
+             let check_linear_vars_in_deep_handlers henv vs body =
+              if descr.shd_depth = Deep then
+                Usage.iter
+                  (fun v _ ->
+                    if not (StringSet.mem v vs) then
+                      let t = Env.find v henv.var_env in
+                      if Types.Unl.can_type_be t then
+                        Types.Unl.make_type t
+                      else
+                        Gripers.linear_vars_in_deep_handler pos v t)
+                  (usages body)
+               else () in
              (* Type value clause bodies *)
              let val_cases =
                List.fold_right
@@ -4156,31 +4177,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                      let vs'' = Ident.Set.union vs vs' in
                      Usage.restrict (usages body) vs''
                    in
-                    (* check the usages of linear parameters in handler clauses *)
-                    let () =
-                    Env.iter (fun v t ->
-                      let uses = Usage.uses_of v (usages body) in
-                        if uses <> 1 then
-                          if Types.Unl.can_type_be t then
-                            Types.Unl.make_type t
-                          else
-                            Gripers.non_linearity pos uses v t)
-                      (pattern_env pat)
-                   in
+                   (* check the usages of linear parameters in handler clauses *)
+                   let () = check_linear_paras_in_clauses pat body in
                    (* check the usages of environment linear variables in deep handlers *)
-                   let () =
-                    if descr.shd_depth = Deep then
-                      Usage.iter
-                        (fun v _ ->
-                          if not (StringSet.mem v vs) then
-                            let t = Env.find v henv.var_env in
-                            if Types.Unl.can_type_be t then
-                              Types.Unl.make_type t
-                            else
-                              Gripers.linear_vars_in_deep_handler pos v t)
-                        (usages body)
-                     else ()
-                   in
+                   let () = check_linear_vars_in_deep_handlers henv vs body in
                    (pat, update_usages body us) :: cases)
                  val_cases []
              in
@@ -4205,30 +4205,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                      Usage.restrict (usages body) vs''
                    in
                    (* check the usages of linear parameters in handler clauses *)
-                   let () =
-                    Env.iter (fun v t ->
-                      let uses = Usage.uses_of v (usages body) in
-                        if uses <> 1 then
-                          if Types.Unl.can_type_be t then
-                            Types.Unl.make_type t
-                          else
-                            Gripers.non_linearity pos uses v t)
-                      (pattern_env pat)
-                   in
+                   let () = check_linear_paras_in_clauses pat body in
                    (* check the usages of environment linear variables in deep handlers *)
-                   let () =
-                    if descr.shd_depth = Deep then
-                      Usage.iter
-                        (fun v _ ->
-                          if not (StringSet.mem v vs) then
-                            let t = Env.find v henv.var_env in
-                            if Types.Unl.can_type_be t then
-                              Types.Unl.make_type t
-                            else
-                              Gripers.linear_vars_in_deep_handler pos v t)
-                        (usages body)
-                     else ()
-                   in
+                   let () = check_linear_vars_in_deep_handlers henv vs body in
 
                    let () =
                      let pos' = (fst3 kpat) |> WithPos.pos |> Position.resolve_expression in
