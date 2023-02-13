@@ -2262,7 +2262,6 @@ let type_pattern ?(linear_vars=true) closed
     then Types.fresh_type_variable (lin_any, res_any)
     else Types.fresh_type_variable (lin_unl, res_any) in
 
-  (* NOTE: outdated comments? basic idea is still correct *)
   (* type_pattern p types the pattern p returning a typed pattern, a
      type environment for the variables bound by the pattern and two
      types. The first type is the type of the pattern 'viewed from the
