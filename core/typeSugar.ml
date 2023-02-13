@@ -1789,9 +1789,6 @@ end = struct
           'sink'. *)
        empty
     | usages :: usagess  ->
-       (* let () = StringMap.iter (fun s _ -> print_string <| s ^ "  ") usages in
-       let _ = List.map (StringMap.iter (fun s _ -> print_string <| s ^ "  ")) usagess in
-       print_string "\n" ; *)
        let combine' : Ident.t -> int option -> int option -> int option
          = fun _ident x y ->
          let unlimited = max_int in
