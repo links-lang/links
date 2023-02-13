@@ -394,6 +394,7 @@ sig
 
   val non_linearity : Position.t -> int -> string -> Types.datatype -> unit
   val linear_recursive_function : Position.t -> string -> unit
+  val linear_vars_in_deep_handler : Position.t -> string -> Types.datatype -> unit
 
   val try_in_unless_pat : griper
   val try_in_unless_branches : griper
@@ -1534,6 +1535,9 @@ end
 
     let linear_recursive_function pos f =
       die pos ("Recursive function " ^ f ^ " cannot be linear.")
+
+    let linear_vars_in_deep_handler pos v t =
+      die pos ("Variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t ^ " is used in a deep handler.")
 
     (* Affine session exception handling *)
     let try_in_unless_pat ~pos ~t1:l ~t2:r ~error:_ =
@@ -4173,7 +4177,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                             if Types.Unl.can_type_be t then
                               Types.Unl.make_type t
                             else
-                              Gripers.die pos ("Variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t ^ " is used in a deep handler."))
+                              Gripers.linear_vars_in_deep_handler pos v t)
                         (usages body)
                      else ()
                    in
@@ -4221,7 +4225,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                             if Types.Unl.can_type_be t then
                               Types.Unl.make_type t
                             else
-                              Gripers.die pos ("Variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t ^ " is used in a deep handler."))
+                              Gripers.linear_vars_in_deep_handler pos v t)
                         (usages body)
                      else ()
                    in
