@@ -5,7 +5,7 @@
     ignore(do Foo);
     lf(1)
   }) {
-    case Return(_) -> lf(2)
-    case Foo(resume) -> 3
+    case _ -> lf(2)
+    case <Foo => _> -> 3
   }
 }
