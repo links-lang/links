@@ -84,14 +84,14 @@ let cannot_insert_presence_var2 pos op =
       ^ ". However, in the current context, implictly bound (presence) \
          variables are disallowed" )
 
-let unexpected_effects_on_abstract_op pos name =
-  Errors.Type_error
-    ( pos,
-      "The abstract operation "
-      ^ name
-      ^ " has unexpected effects in its signature. The effect signature on an \
-         abstract operation arrow is always supposed to be empty, since any \
-         effects it might have are ultimately conferred by its handler." )
+(* let unexpected_effects_on_abstract_op pos name = *)
+(*   Errors.Type_error *)
+(*     ( pos, *)
+(*       "The abstract operation " *)
+(*       ^ name *)
+(*       ^ " has unexpected effects in its signature. The effect signature on an \ *)
+(*          abstract operation arrow is always supposed to be empty, since any \ *)
+(*          effects it might have are ultimately conferred by its handler." ) *)
 
 let shared_effect_forbidden_here pos =
   Errors.Type_error
@@ -356,34 +356,21 @@ let cleanup_effects tycon_env =
 
      method effect_row ~allow_shared (fields, var) =
        let open Datatype in
-       let open SourceCode.WithPos in
-       let fields =
-         List.map
-           (function
-             | ( name,
-                 Present
-                   { node = Function (domain, (fields, rv), codomain); pos } )
-               as op
-               when not (TypeUtils.is_builtin_effect name) -> (
-                 (* Elaborates `Op : a -> b' to `Op : a {}-> b' *)
-                 match (rv, fields) with
-                 | Closed, [] -> op
-                 | Open _, []
-                 | Recursive _, [] ->
-                     (* might need an extra check on recursive rows *)
-                     ( name,
-                       Present
-                         (SourceCode.WithPos.make ~pos
-                            (Function (domain, ([], Closed), codomain))) )
-                 | _, _ -> raise (unexpected_effects_on_abstract_op pos name) )
-             | name, Present node when not (TypeUtils.is_builtin_effect name) ->
-                 (* Elaborates `Op : a' to `Op : () {}-> a' *)
-                 ( name,
-                   Present
-                     (SourceCode.WithPos.make ~pos:node.pos
-                        (Function ([], ([], Closed), node))) )
-             | x -> x)
-           fields
+       let open SourceCode in
+       let open WithPos in
+       (* Elaborates `Op : a' to `Op : () {}-> a' *)
+       let rec elaborate_op dt =
+         let { node ; pos } = dt in
+         WithPos.make ~pos (match node with
+             | Datatype.Operation _     -> node
+             | Datatype.Forall (qs, dt) -> Datatype.Forall (qs, elaborate_op dt)
+             | _                        -> Datatype.Operation ([], dt))
+       in
+       let fields = List.map (function
+           | name, Present dt when not (TypeUtils.is_builtin_effect name) ->
+             ( name, Present (elaborate_op dt) )
+           | x -> x
+         ) fields
        in
        let gue = SugarTypeVar.get_unresolved_exn in
        let var =

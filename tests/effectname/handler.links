@@ -1,11 +1,11 @@
-effectname State(a,e::Eff) = { Get:() {}-> a, Put:(a) {}-> () | e } ;
+effectname State(a,e::Eff) = { Get:() => a, Put:(a) => () | e } ;
 
 sig hstate : (() ~State(a,{ |e})~> b) -> () {Get{_}, Put{_} | e}~> (a) ~e~> (b,a)
 fun hstate (m)() {
     handle (m()) {
-        case Return(x) -> fun (s) { (x,s) }
-        case Get(k)    -> fun (s) { k(s)(s) }
-        case Put(s',k) -> fun (s) { k(())(s') }
+        case x -> fun (s) { (x,s) }
+        case <Get => k>     -> fun (s) { k(s)(s) }
+        case <Put(s') => k> -> fun (s) { k(())(s') }
     }
 }
 
@@ -17,13 +17,13 @@ fun f () {
     ()
 }
 
-effectname Reader(a,e::Eff) = {Ask:() {}-> a | e } ;
+effectname Reader(a,e::Eff) = {Ask:() => a | e } ;
 
 sig hreader : (() ~Reader(Int,{ |e})~> a) -> () {Ask{_}|e}~> a
 fun hreader (m)() {
     handle (m()) {
-           case Return(x)  -> x
-           case Ask(k)     -> k (-42)
+           case x -> x
+           case <Ask => k> -> k (-42)
     }
 }
 

@@ -195,6 +195,7 @@ module Datatype = struct
     | Record          of row
     | Variant         of row
     | Effect          of row
+    | Operation       of with_pos list * with_pos
     | Table           of Temporality.t * with_pos * with_pos * with_pos
     | List            of with_pos
     | TypeApplication of string * type_arg list
@@ -242,7 +243,9 @@ module Pattern = struct
     | Cons     of with_pos * with_pos
     | List     of with_pos list
     | Variant  of Name.t * with_pos option
-    | Effect   of Name.t * with_pos list * with_pos
+    (* | Effect   of Name.t * with_pos list * with_pos *)
+    (* | Effect2  of with_pos list * with_pos option *)
+    | Operation of Label.t * with_pos list * with_pos
     | Negative of Name.t list
     | Record   of (Name.t * with_pos) list * with_pos option
     | Tuple    of with_pos list
@@ -471,7 +474,8 @@ and phrasenode =
   | Instantiate      of phrase
   | Generalise       of phrase
   | ConstructorLit   of Name.t * phrase option * Types.datatype option
-  | DoOperation      of Name.t * phrase list * Types.datatype option
+  | DoOperation      of phrase * phrase list * Types.datatype option
+  | Operation        of Name.t
   | Handle           of handler
   | Switch           of phrase * (Pattern.with_pos * phrase) list *
                           Types.datatype option
@@ -636,7 +640,7 @@ struct
     | List ps               -> union_map pattern ps
     | Cons (p1, p2)         -> union (pattern p1) (pattern p2)
     | Variant (_, popt)     -> option_map pattern popt
-    | Effect (_, ps, kopt)  -> union (union_map pattern ps) (pattern kopt)
+    | Operation (_, ps, kopt)  -> union (union_map pattern ps) (pattern kopt)
     | Record (fields, popt) ->
        union (option_map pattern popt)
          (union_map (snd ->- pattern) fields)
@@ -789,6 +793,7 @@ struct
                      diff (union_map (snd ->- phrase) fields) pat_bound]
     | DBTemporalJoin (_, p, _) -> phrase p
     | DoOperation (_, ps, _) -> union_map phrase ps
+    | Operation _ -> empty
     | QualifiedVar _ -> empty
     | TryInOtherwise (p1, pat, p2, p3, _ty) ->
        union (union_map phrase [p1; p2; p3]) (pattern pat)

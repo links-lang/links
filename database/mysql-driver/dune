@@ -3,7 +3,7 @@
   (public_name links-mysql)
   (synopsis "MySQL database backend for Links")
   (optional)
-  (libraries mysql links.core))
+  (libraries str unix mysql links.core))
 
 
 (install

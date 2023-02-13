@@ -71,6 +71,10 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
            get_type_args kind (TypeVarSet.add_quantifiers qs bound_vars) t
         (* Effect *)
         | Effect row -> get_row_type_args kind bound_vars row
+        | Operation (f, t) ->
+            let from_gens = gt f
+            and to_gens = gt t in
+              from_gens @ to_gens
         (* Row *)
         | Row (field_env, row_var, _) ->
            let field_vars =

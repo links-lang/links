@@ -5,7 +5,7 @@ typename Answer = [|Low|Correct|High|];
 sig readInt : () {Read:Int|_}~> Int
 fun readInt() {var n = do Read; print(" " ^^ intToString(n)); n}
 
-sig guess : () {Read:Int,Guess:(Int) -> Answer|_}~> ()
+sig guess : () {Read:Int,Guess:(Int) => Answer|_}~> ()
 fun guess() {
   print("Take a guess>");
   var number = readInt();
@@ -26,8 +26,8 @@ fun isNil(xs) {
 sig input : ([Int], Comp({Read:Int |e}, a)) {Read{_} |e}~> ()
 fun input(guesses, m) {
   handle(m())(guesses <- guesses) {
-    case Return(x) -> ()
-    case Read(resume) ->
+    case x -> ()
+    case <Read => resume> ->
        switch(guesses) {
          case [] -> ()
          case g :: gs -> resume(g, gs)
@@ -35,22 +35,22 @@ fun input(guesses, m) {
   }
 }
 
-sig mySecret : (Int, Comp({Guess:(Int) -> Answer|e}, a)) {Guess{_} |e}~> a
+sig mySecret : (Int, Comp({Guess:(Int) => Answer|e}, a)) {Guess{_} |e}~> a
 fun mySecret(secret, m) {
   handle(m()) {
-    case Return(x) -> x
-    case Guess(n,resume) ->
+    case x -> x
+    case <Guess(n) => resume> ->
       if (n < secret) resume(Low)
       else if (n > secret) resume(High)
       else resume(Correct)
   }
 }
 
-sig logger : (Comp({Guess:(Int) -> Answer|e}, a)) {Guess:(Int) -> Answer|e}~> [(Int,Answer)]
+sig logger : (Comp({Guess:(Int) => Answer|e}, a)) {Guess:(Int) => Answer|e}~> [(Int,Answer)]
 fun logger(m) {
   handle(m())(log <- []) {
-    case Return(_) -> log
-    case Guess(n, resume) ->
+    case _ -> log
+    case <Guess(n) => resume> ->
        var an = do Guess(n);
        resume(an, (n, an) :: log)
   }

@@ -31,7 +31,7 @@ struct
     | Nil
     | Cons     of t * t
     | Variant  of Name.t * t
-    | Effect   of Name.t * t list * t
+    | Operation of Name.t * t list * t
     | Negative of StringSet.t
     | Record   of t StringMap.t * t option
     | Constant of Constant.t
@@ -55,7 +55,7 @@ struct
     | SRecord
     | SConstant
     | SVariable
-    | SEffect
+    | SOperation
 
   type annotation_element =
     | Binder of binder
@@ -128,7 +128,7 @@ let rec desugar_pattern : Types.row -> Sugartypes.Pattern.with_pos -> Pattern.t 
         | Variant (name, Some p) ->
             let p, env = desugar_pattern p in
             Pattern.Variant (name, p), env
-        | Effect (name, ps, k) ->
+        | Operation (name, ps, k) ->
            let ps, env =
              List.fold_right
                (fun p (ps, env) ->
@@ -137,7 +137,7 @@ let rec desugar_pattern : Types.row -> Sugartypes.Pattern.with_pos -> Pattern.t 
                ps ([], empty)
            in
            let k, env' = desugar_pattern k in
-           Pattern.Effect (name, ps, k), env ++ env'
+           Pattern.Operation (name, ps, k), env ++ env'
         | Negative names -> Pattern.Negative (StringSet.from_list names), empty
         | Record (bs, p) ->
             let bs, env =
@@ -327,7 +327,7 @@ let let_pattern : raw_env -> Pattern.t -> value * Types.datatype -> computation 
               (lp t pattern value body)
         | Pattern.HasType (pat, t) ->
            lp t pat (Coerce (value, t)) body
-        | Pattern.Effect _ -> assert false (* This pattern cannot appear in a let expression *)
+        | Pattern.Operation _ -> assert false (* This pattern cannot appear in a let expression *)
     in
       lp value_type pat value body
 
@@ -342,7 +342,7 @@ let rec get_pattern_sort : Pattern.t -> Pattern.sort =
     | Any | Variable _ -> SVariable
     | As (_, pattern) -> get_pattern_sort pattern
     | HasType (pattern, _) -> get_pattern_sort pattern
-    | Effect _ -> SEffect
+    | Operation _ -> SOperation
 
 let get_clause_pattern_sort : clause -> Pattern.sort =
   function
@@ -525,7 +525,7 @@ let rec match_cases : var list -> clause list -> bound_computation -> bound_comp
                        match_record vars (arrange_record_clauses clauses) comp var
                    | SConstant ->
                       match_constant vars (arrange_constant_clauses clauses) comp var
-                   | SEffect -> assert false (* TODO FIXME have proper pattern matching compilation of effect patterns *)
+                   | SOperation -> assert false (* TODO FIXME have proper pattern matching compilation of effect patterns *)
               ) clausess def env
       | _, _ -> assert false
 
@@ -646,7 +646,15 @@ and match_variant
                    if StringSet.mem name names then
                      (cases, cs)
                    else
-                     let case_type = TypeUtils.variant_at name t in
+                     let case_type =
+                       if Settings.get Basicsettings.Sessions.exceptions_enabled &&
+                          not (Settings.get Basicsettings.Sessions.expose_session_fail) &&
+                          String.equal name Value.session_exception_operation
+                       then
+                         Types.empty_type
+                       else
+                         TypeUtils.variant_at name t
+                     in
 (*                     let inject_type = TypeUtils.inject_type name case_type in *)
                      let (case_binder, case_variable) = Var.fresh_var_of_type case_type in
                      let match_env = bind_type case_variable case_type env in
@@ -668,7 +676,13 @@ and match_variant
             let default_type =
               StringSet.fold
                 (fun name t ->
-                   let _, t = TypeUtils.split_variant_type name t in t) cs t in
+                   if Settings.get Basicsettings.Sessions.exceptions_enabled &&
+                      not (Settings.get Basicsettings.Sessions.expose_session_fail) &&
+                      String.equal name Value.session_exception_operation
+                   then
+                     t
+                   else
+                     let _, t = TypeUtils.split_variant_type name t in t) cs t in
               begin
                 match default_type with
                   | Types.Variant row
@@ -981,23 +995,25 @@ let compile_handle_cases
                 | _ -> false)
               fields
           in
+          let rec extract t = match TypeUtils.concrete_type t with
+            | Types.Operation (domain, _) ->
+              let (fields, _, _) = TypeUtils.extract_row domain |> TypeUtils.extract_row_parts in
+              let arity = StringMap.size fields in
+              if arity = 1 then
+                match StringMap.find "1" fields with
+                | Types.Present t -> t
+                | _ -> assert false
+              else
+                domain (* n-ary operation *)
+            | Types.ForAll (_, t) -> extract t
+            | _ -> Types.unit_type (* nullary operation *)
+          in
           let fields'' =
             StringMap.map
               (function
-              | Types.Present t ->
-                 begin match TypeUtils.concrete_type t with
-                 | Types.Function (domain, _, _) ->
-                    let (fields, _, _) = TypeUtils.extract_row domain |> TypeUtils.extract_row_parts in
-                    let arity = StringMap.size fields in
-                    if arity = 1 then
-                      match StringMap.find "1" fields with
-                      | Types.Present t -> t
-                      | _ -> assert false
-                    else
-                      domain (* n-ary operation *)
-                 | _ -> Types.unit_type (* nullary operation *)
-                 end
-              | _ -> assert false)
+                | Types.Present t ->
+                  extract t
+                | _ -> assert false)
               fields'
           in
           Types.make_variant_type fields''
@@ -1008,11 +1024,11 @@ let compile_handle_cases
               (fun (ps, body) ->
                 let variant_pat =
                   match ps with
-                  | [Pattern.Effect (name, [], _)] ->
+                  | [Pattern.Operation (name, [], _)] ->
                      Pattern.Variant (name, Pattern.Any)
-                  | [Pattern.Effect (name, [p], _)] ->
+                  | [Pattern.Operation (name, [p], _)] ->
                      Pattern.Variant (name, p)
-                  | [Pattern.Effect (name, ps, _)] ->
+                  | [Pattern.Operation (name, ps, _)] ->
                      let packaged_args =
                        let fields =
                          List.mapi (fun i p -> (string_of_int (i+1), p)) ps
@@ -1049,7 +1065,7 @@ let compile_handle_cases
           in
           List.fold_left
             (fun acc -> function
-              | [Pattern.Effect (name, _, k)] ->
+              | [Pattern.Operation (name, _, k)] ->
                  upd name (gather_binders k) acc
               | _ -> assert false)
             StringMap.empty (List.map fst raw_effect_clauses)

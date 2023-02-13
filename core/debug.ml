@@ -22,7 +22,7 @@ let print_l message =
      prerr_endline (Lazy.force message); flush stderr)
 
 (** Print a formatted debugging message if debugging is enabled *)
-let f fmt = Printf.kprintf print fmt
+let f fmt = Printf.ksprintf print fmt
 
 (** Print a debugging message if debugging is enabled and setting is on.
     [message] is a thunk returning the string to print.
