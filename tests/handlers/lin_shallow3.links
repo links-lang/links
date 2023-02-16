@@ -5,7 +5,7 @@
     ignore(do Foo);
     1
   }) {
-    case <Foo => _> -> {
+    case <Foo -> _> -> {
       lf(2)
     }
   }
