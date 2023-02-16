@@ -4,7 +4,7 @@ handle({
   ignore(do Foo);
   lf(2)
 }) {
-  case Foo(resume) -> {
+  case <Foo => resume> -> {
     ignore(lf(3));
     resume(())
   }
