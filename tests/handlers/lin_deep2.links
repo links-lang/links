@@ -9,8 +9,8 @@ handle({
   println("Int: " ^^ intToString(i));
   close(ch)
 }) {
-  case Return(_) -> ()
-  case Flip(resume) -> {
+  case _ -> ()
+  case <Flip => resume> -> {
     var (i, ch) = receive(ch);
     println("Int: " ^^ intToString(i));
     close(ch);
