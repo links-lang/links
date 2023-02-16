@@ -4,8 +4,8 @@ handle({
   ignore(do Foo);
   lf(2)
 }) {
-  case Return(_) -> lf(3)
-  case Foo(resume) -> {
+  case _ -> lf(3)
+  case <Foo => resume> -> {
     resume(())
   }
 }
