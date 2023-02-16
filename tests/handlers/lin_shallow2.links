@@ -6,6 +6,6 @@
     lf(1)
   }) {
     case _ -> lf(2)
-    case <Foo => _> -> 3
+    case <Foo -> _> -> 3
   }
 }
