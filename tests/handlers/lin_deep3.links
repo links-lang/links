@@ -7,8 +7,8 @@ fun test() {
   handle({
     ignore(do Flip(ch))
   }) {
-    case Return(_) -> ()
-    case Flip(ch, resume) -> {
+    case _ -> ()
+    case <Flip(ch) => resume> -> {
       ignore(do Flip(ch));
       var (i, ch) = receive(ch);
       close(ch);
