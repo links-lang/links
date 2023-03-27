@@ -23,7 +23,7 @@ let eval_error fmt : 'r =
 let mapstrcat sep f l = l |> List.map f |> String.concat sep
 
 let dummy_sql_empty_query =
-    (S.All,S.Fields [(S.Constant (Constant.Int 42), "@unit@")], [], S.Constant (Constant.Bool false), [])
+  (S.All,S.Fields [(S.Constant (Constant.Int 42), "@unit@")], [], S.Constant (Constant.Bool false), [], [])
 
 let dependency_of_contains_free = function true -> S.Lateral | _ -> S.Standard
 
@@ -36,21 +36,38 @@ and disjunct is_set = function
 | QL.Prom p -> sql_of_query S.Distinct p
 | QL.Singleton _ as j -> S.Select (body is_set [] [] j)
 | QL.For (_, gs, os, j) -> S.Select (body is_set gs os j)
+| QL.AggBy (ar, q) -> aggregator ar q
 | _arg ->
    Debug.print ("error in EvalMixingQuery.disjunct: unexpected arg = " ^ QL.show _arg);
    failwith "disjunct"
+
+and aggregator ar q =
+  let aggr = function
+  (* FIXME: complete and factorize *)
+  | QL.Primitive "Sum" -> "sum"
+  | _ -> assert false
+  in
+  let z = Var.fresh_raw_var () in
+  let tyk, tyv = q |> QL.type_of_expression |> Types.unwrap_map_type in
+  let fsk, _, _ = tyk |> Types.extract_row |> Types.extract_row_parts in
+  let fsv, _, _ = tyv |> Types.extract_row |> Types.extract_row_parts in
+  let fields_k = fsk |> StringMap.to_alist |> List.map (fun (f,_) -> S.Project (z, "1@" ^ f), "1@" ^ f) in
+  let fields_v = fsv |> StringMap.to_alist |> List.map (fun (f,_) -> S.Apply (aggr <| StringMap.find f ar, [S.Project (z, "2@" ^ f)]), "2@" ^ f) in
+  let fields = fields_k @ fields_v in
+  let gbys = List.map (fun (_,f) -> S.Project (z, f)) fields_k in
+  S.Select (S.All, S.Fields fields, [S.Subquery (S.Standard, sql_of_query S.All q, z)], S.Constant (Constant.Bool true), gbys, [])
 
 and generator locvars = function
 (* XXX: grouping generators *)
 | (QL.Entries, v, QL.Prom p) -> (S.Subquery (dependency_of_contains_free (E.contains_free locvars p), sql_of_query S.Distinct p, v))
 | (QL.Entries, v, QL.Table Value.Table.{ name; _}) -> (S.TableRef (name, v))
 | (QL.Entries, v, QL.Dedup (QL.Table Value.Table.{ name; _ })) ->
-    S.Subquery (S.Standard, S.Select (S.Distinct, S.Star, [S.TableRef (name, v)], S.Constant (Constant.Bool true), []), v)
+    S.Subquery (S.Standard, S.Select (S.Distinct, S.Star, [S.TableRef (name, v)], S.Constant (Constant.Bool true), [], []), v)
 | (QL.Keys, v, QL.GroupBy ((x, QL.Record gc), QL.Table Value.Table.{ name; _}))
 | (QL.Keys, v, QL.GroupBy ((x, QL.Record gc), QL.Dedup (QL.Table Value.Table.{ name; _}))) ->
     let fields = List.map (fun (f,e) -> (base_exp e, f)) (StringMap.to_alist gc) in
     S.Subquery (dependency_of_contains_free (E.contains_free locvars (QL.Record gc)),
-      S.Select (S.Distinct, S.Fields fields, [S.TableRef (name, x)], S.Constant (Constant.Bool true), []), v)
+      S.Select (S.Distinct, S.Fields fields, [S.TableRef (name, x)], S.Constant (Constant.Bool true), [], []), v)
 | (QL.Keys, v, q) ->
     let z = Var.fresh_raw_var () in
     let tyk, _ = q |> QL.type_of_expression |> Types.unwrap_map_type in
@@ -65,7 +82,7 @@ and generator locvars = function
         S.Fields fields,
         [S.Subquery (S.Standard, sql_of_query S.All q, z)],
         S.Constant (Constant.Bool true),
-        []), v)
+        [], []), v)
 | (_genkind, _, _arg) -> Debug.print ("error in EvalMixingQuery.disjunct: unexpected arg = " ^ QL.show _arg); failwith "generator"
 
 and body is_set gs os j =
@@ -78,7 +95,7 @@ and body is_set gs os j =
             |> List.rev
         in
         let os = List.map base_exp os in
-        (is_set, S.Fields body, froms, where, os)
+        (is_set, S.Fields body, froms, where, [], os)
     in
     match j with
     | QL.Concat [] -> dummy_sql_empty_query

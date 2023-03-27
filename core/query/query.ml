@@ -60,6 +60,7 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> Q.t -> Q.t =
           let y = Var.fresh_raw_var () in
           let env' = Env.Int.bind x y env in
           Q.GroupBy ((y,freshen_for_bindings env' k), ffb q)
+      | Q.AggBy (ar, q) -> Q.AggBy (ar, ffb q)
       | Q.Lookup (q,k) -> Q.Lookup (ffb q, ffb k)
 
 (* simple optimisations *)

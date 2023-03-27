@@ -82,6 +82,8 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> Q.t -> Q.t =
       let y = Var.fresh_raw_var () in
       let env' = Env.Int.bind v y env in
       Q.GroupBy ((y, freshen_for_bindings env' i), ffb q)
+    (* XXX: defensive programming; recursion on ar not needed now, but may be in the future *)
+    | Q.AggBy (ar, q) -> Q.AggBy (StringMap.map ffb ar, ffb q)
     | Q.Lookup (q,k) -> Q.Lookup (ffb q, ffb k)
 
 let flatfield f1 f2 = f1 ^ "@" ^ f2
@@ -731,6 +733,7 @@ struct
        in
        let ql' = List.map (fun (b, c, gs, os) -> (reduce_groupby b, c, gs, os)) ql in
        pack_ncoll ql'
+    | Q.AggBy (ar, q) -> Q.AggBy (ar, norm in_dedup env q)
     | Q.Lookup (q, k) ->
        let ql = unpack_ncoll (norm in_dedup env q) in
        let k' = norm false env k in

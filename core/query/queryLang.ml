@@ -47,6 +47,7 @@ type t =
     | Dedup     of t
     | Prom      of t
     | GroupBy   of (Var.var * t) * t
+    | AggBy     of t StringMap.t * t
     | Lookup    of t * t
     | Record    of t StringMap.t
     | Project   of t * string
@@ -77,6 +78,7 @@ struct
     | Dedup     of pt
     | Prom      of pt
     | GroupBy   of (Var.var * pt) * pt
+    | AggBy     of pt StringMap.t * pt
     | Lookup    of pt * pt
     | Record    of pt StringMap.t
     | Project   of pt * string
@@ -118,6 +120,7 @@ let rec pt_of_t : 't -> S.pt = fun v ->
       | Var (v, t) -> S.Var (v, t)
       | Constant c -> S.Constant c
       | GroupBy ((x,k), q) -> S.GroupBy ((x, bt k), bt q)
+      | AggBy (ar, q) -> S.AggBy (StringMap.map bt ar, bt q)
       | Lookup (q,k) -> S.Lookup (bt q, bt k)
       | Database _ -> assert false
 
@@ -240,6 +243,7 @@ let unbox_string =
 let recdty_field_types (t : Types.datatype) : Types.datatype StringMap.t =
       field_types_of_row (TypeUtils.extract_row t)
 
+(* TODO/FIXME: substitute into GroupBy/AggBy? *)
 let rec subst t x u =
   let srec t = subst t x u in
   match t with
@@ -272,6 +276,7 @@ let rec subst t x u =
       Closure (c, cenv)
   | v -> v
 
+(* TODO/FIXME: GroupBy/AggBy? *)
 (** Returns (Some ty) if v occurs free with type ty, None otherwise *)
 let occurs_free (v : Var.var) =
   let rec occf bvs = function
@@ -330,6 +335,13 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       let elty = TypeUtils.element_type ~overstep_quantifiers:true (te q) in
       Types.make_mapentry_type ity elty
       |> Types.make_list_type
+  | AggBy (f,q) -> 
+      (* TODO pseudocode
+       * let tyk = te q |> Types.unwrap_map_type |> fst in
+       * let ty = TypeUtils.return_type (Env.String.find f Lib.type_env) BUT DOES THIS WORK FOR AGGREGATION PRIMITIVES (if so, why don't we always use it for Primitive? 
+       * in Types.make_mapentry_type tyk ty |> Type.make_list_type
+       *)
+      assert false
   | Lookup (q, _) ->
       Types.unwrap_map_type (te q)
       |> snd
@@ -364,6 +376,8 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       end
   | Apply (Primitive "Empty", _) -> Types.bool_type (* HACK *)
   | Apply (Primitive "Sum", _) -> Types.int_type
+  | Apply (Primitive "SumFloat", _) -> Types.float_type
+  | Apply (Primitive "Avg", _) -> Types.float_type
   (* XXX: the following might be completely unnecessary if we call type_of_expression only on normalized query *)
   | Apply (Primitive "Distinct", [q]) -> type_of_expression q
   | Apply (Primitive f, _) -> TypeUtils.return_type (Env.String.find f Lib.type_env)
@@ -401,6 +415,7 @@ let is_list =
     | If (_, _, Concat []) -> true
     | _ -> false
 
+(* TODO/FIXME GroupBy/AggBy *)
 (** Returns which database was used if any.
 
    Currently this assumes that at most one database is used.
@@ -469,6 +484,7 @@ let append_env e1 e2 =
     let qenv = Env.Int.extend e1.qenv e2.qenv in
     { policy = e1.policy; venv; qenv }
 
+(* TODO/FIXME AggBy *)
 let lookup_fun env (f, fvs) =
   match Tables.lookup Tables.fun_defs f with
   | Some (finfo, (xs, body), z, location) ->
@@ -662,17 +678,17 @@ let rec select_clause : Sql.index -> bool -> t -> Sql.select_clause =
         let os = List.map (base index) os in
           begin
             match body with
-              | (_, fields, tables, condition, []) ->
-                  (Sql.All, fields, Sql.TableRef(name, x)::tables, condition, os)
+              | (_, fields, tables, condition, [], []) ->
+                  (Sql.All, fields, Sql.TableRef(name, x)::tables, condition, [], os)
               | _ -> assert false
           end
     | If (c, body, Concat []) ->
       (* Turn conditionals into where clauses. We might want to do
          this earlier on.  *)
       let c = base index c in
-      let (_, fields, tables, c', os) = select_clause index unit_query body in
+      let (_, fields, tables, c', gbys, os) = select_clause index unit_query body in
       let c = Sql.smart_and c c' in
-      (Sql.All, fields, tables, c, os)
+      (Sql.All, fields, tables, c, gbys, os)
     | Table Value.Table.{ name = table; row = (fields, _, _); _ } ->
       (* eta expand tables. We might want to do this earlier on.  *)
       (* In fact this should never be necessary as it is impossible
@@ -687,13 +703,13 @@ let rec select_clause : Sql.index -> bool -> t -> Sql.select_clause =
               fields
               []))
       in
-        (Sql.All, fields, [Sql.TableRef(table, var)], Sql.Constant (Constant.Bool true), [])
+        (Sql.All, fields, [Sql.TableRef(table, var)], Sql.Constant (Constant.Bool true), [], [])
     | Singleton _ when unit_query ->
       (* If we're inside an Sql.Empty or a Sql.Length it's safe to ignore
          any fields here. *)
       (* We currently detect this earlier, so the unit_query stuff here
          is redundant. *)
-      (Sql.All, Sql.Fields [], [], Sql.Constant (Constant.Bool true), [])
+      (Sql.All, Sql.Fields [], [], Sql.Constant (Constant.Bool true), [], [])
     | Singleton (Record fields) ->
       (* BUGBUG: this code ignores keys because we haven't implemented
        * the conversion of grouping queries to SQL yet *)
@@ -706,7 +722,7 @@ let rec select_clause : Sql.index -> bool -> t -> Sql.select_clause =
               fields
               []))
       in
-        (Sql.All, fields, [], Sql.Constant (Constant.Bool true), [])
+        (Sql.All, fields, [], Sql.Constant (Constant.Bool true), [], [])
     | _ -> assert false
 and clause : Sql.index -> bool -> t -> Sql.query =
   fun index unit_query v -> Sql.Select(select_clause index unit_query v)
@@ -808,9 +824,9 @@ let let_clause : let_clause -> Sql.query =
     let gs_out = extract_gens outer in
     let gs_in = extract_gens inner in
     let q_outer = clause (outer_index gs_out) false outer in
-    let (_fDist, result,tables,where,os) = select_clause (inner_index t gs_in) false inner in
+    let (_fDist, result,tables,where,gbys,os) = select_clause (inner_index t gs_in) false inner in
     let tablename = Sql.string_of_subquery_var q in
-    let q_inner = Sql.Select(Sql.All,result,Sql.TableRef(tablename,t)::tables,where,os) in
+    let q_inner = Sql.Select(Sql.All,result,Sql.TableRef(tablename,t)::tables,where,gbys,os) in
     Sql.With (tablename, q_outer, [q_inner])
 
 let sql_of_let_query : let_query -> Sql.query =
@@ -895,6 +911,7 @@ struct
         let (o, x) = f o x in
         (o, x :: acc)) xs (o, [])
 
+    (* FIXME/TODO GroupBy/AggBy *)
     method query =
       function
       | For (tag_opt, gs, os, body) ->
@@ -965,6 +982,9 @@ struct
           let (o,i) = o#query i in
           let (o,q) = o#query q in
           (o, GroupBy ((v,i),q))
+      | AggBy (ar,q) ->
+          let (o,q) = o#query q in
+          (o, AggBy (ar, q))
       | Lookup (q,i) ->
           let (o,q) = o#query q in
           let (o,i) = o#query i in
@@ -1013,6 +1033,8 @@ struct
       | Primitive p   -> Primitive p
       | Apply (Primitive "Empty", [e]) -> Apply (Primitive "Empty", [flatten_inner_query e])
       | Apply (Primitive "Sum", [e]) -> Apply (Primitive "Sum", [flatten_inner_query e])
+      | Apply (Primitive "SumFloat", [e]) -> Apply (Primitive "SumFloat", [flatten_inner_query e])
+      | Apply (Primitive "Avg", [e]) -> Apply (Primitive "Avg", [flatten_inner_query e])
       | Apply (Primitive "length", [e]) -> Apply (Primitive "length", [flatten_inner_query e])
       | Apply (Primitive "tilde", [s; r]) as e ->
           Debug.print ("Applying flatten_inner to tilde expression: " ^ show e);

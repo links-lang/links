@@ -115,7 +115,7 @@ module TransactionTime = struct
 
     (* And here's the selection query: *)
     let sel_query =
-      Sql.Select (Sql.All, select_fields, [TableRef (table, tbl_var)], sel_where, []) in
+      Sql.Select (Sql.All, select_fields, [TableRef (table, tbl_var)], sel_where, [], []) in
 
     (* Generate fresh variable for selection result *)
     let sel_var = Var.fresh_raw_var () in
@@ -335,7 +335,7 @@ module ValidTime = struct
         in
 
         let select =
-          Sql.Select (All, Fields select_fields, [TableRef (table, tbl_var)], sel_where, []) in
+          Sql.Select (All, Fields select_fields, [TableRef (table, tbl_var)], sel_where, [], []) in
 
         (* Generate fresh variable for selection result *)
         let sel_var = Var.fresh_raw_var () in
@@ -447,7 +447,7 @@ module ValidTime = struct
               (* Need to swap (col, val) pairs to (val, col) to fit select_clause AST,
                * which mirrors "SELECT V as K" form in SQL *)
               |> List.map (fun (k, v) -> (v, k)) in
-            Sql.Select (All, Fields fields, [TableRef (table, tbl_var)], where, []) in
+            Sql.Select (All, Fields fields, [TableRef (table, tbl_var)], where, [], []) in
 
           let insert_select sel =
             let var = Var.fresh_raw_var () in
@@ -623,7 +623,7 @@ module ValidTime = struct
             |> and_where in
 
           let sel_query =
-            Sql.Select (All, Fields select_fields, [TableRef (table, tbl_var)], sel_where, []) in
+            Sql.Select (All, Fields select_fields, [TableRef (table, tbl_var)], sel_where, [], []) in
 
           (* Generate fresh variable for selection result *)
           let sel_var = Var.fresh_raw_var () in
