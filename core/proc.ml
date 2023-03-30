@@ -342,23 +342,7 @@ module type WEBSOCKETS =
       client_id ->
       channel_id ->
       Value.delegated_chan list ->
-      bool ->
       Value.t ->
-      unit Lwt.t
-
-  (** Sends a lost message request for carrier channel `channel_id`,
-   * given a list of delegated endpoints `channel_id list` *)
-  val get_lost_messages :
-      client_id ->
-      channel_id ->
-      channel_id list ->
-      unit Lwt.t
-
-  (** Deliver lost messages *)
-  val deliver_lost_messages :
-      client_id ->
-      channel_id ->
-      (channel_id * Value.t list) list ->
       unit Lwt.t
 
   (** Send a cancellation notification *)
@@ -408,15 +392,10 @@ sig
   val block : channel_id -> process_id -> unit
   val unblock : channel_id -> process_id option
 
-  val send_from_local : Value.t -> channel_id -> send_result Lwt.t
-  val send_from_remote :
-    client_id -> Value.delegated_chan list -> Value.t -> channel_id -> send_result Lwt.t
+  val send_from_server : Value.t -> channel_id -> send_result Lwt.t
+  val send_from_client : Value.t -> channel_id -> send_result Lwt.t
 
   val receive : chan -> receive_result
-
-  val handle_lost_message_response :
-    channel_id -> ((channel_id * (Value.t list)) list) -> unit Lwt.t
-
 
   val handle_remote_cancel :
     notify_ep:channel_id -> cancelled_ep:channel_id -> unit Lwt.t
@@ -504,12 +483,10 @@ struct
           Session.ap_request_from_client client_id blocked_pid_on_client apid
       | APAccept (blocked_pid_on_client, apid) ->
           Session.ap_accept_from_client client_id blocked_pid_on_client apid
-      | ChanSend (chan_id, deleg_chans, v) ->
+      | ChanSend (chan_id, v) ->
           Debug.print @@ "Got ChanSend message from PID " ^ (ChannelID.to_string chan_id);
           Proc.resolve_external_processes v;
-          Session.send_from_remote client_id deleg_chans v chan_id >>= fun _ -> Lwt.return ()
-      | LostMessageResponse (carrier_chan_id, lost_message_table) ->
-          Session.handle_lost_message_response carrier_chan_id lost_message_table
+          Session.send_from_client v chan_id >>= fun _ -> Lwt.return ()
       | ChannelCancellation cancel_data ->
           let notify_ep = cancel_data.notify_ep in
           let cancelled_ep = cancel_data.cancelled_ep in
@@ -584,7 +561,7 @@ struct
     let str_json = Json.json_to_string json_val in
     send_or_buffer_message cid str_json
 
-  let deliver_session_message client_id session_ep deleg_chans requires_lost_messages v =
+  let deliver_session_message client_id session_ep deleg_chans v =
     let json_val = Json.jsonize_value v in
 
     let jsonize_deleg_chan (chan, msgs) =
@@ -602,32 +579,7 @@ struct
         ("opcode", `String "SESSION_MESSAGE_DELIVERY");
         ("ep_id", ChannelID.to_json session_ep);
         ("deleg_chans", deleg_chans_json);
-        ("requires_lost_messages", `Bool requires_lost_messages);
         ("msg", json_val)] in
-    let json_str = Json.json_to_string json in
-    send_or_buffer_message client_id json_str
-
-  let get_lost_messages client_id carrier_chan chan_ids =
-    let chan_ids_json = `List (List.map (ChannelID.to_json) chan_ids) in
-    let json =
-      `Assoc [
-        ("opcode", `String "GET_LOST_MESSAGES");
-        ("carrier_ep", ChannelID.to_json carrier_chan);
-        ("ep_ids", chan_ids_json)] in
-    let json_str = Json.json_to_string json in
-    send_or_buffer_message client_id json_str
-
-  let deliver_lost_messages client_id carrier_channel_id lost_msg_table =
-    let json_buf msgs = `List (List.map (Json.jsonize_value) msgs |> List.rev) in
-    let json_table : Yojson.Basic.t =
-      `Assoc
-        (List.map (fun (cid, msgs) ->
-          (ChannelID.to_string cid, json_buf msgs)) lost_msg_table) in
-    let json =
-      `Assoc [
-        ("opcode", `String "DELIVER_LOST_MESSAGES");
-        ("ep_id", ChannelID.to_json carrier_channel_id);
-        ("lost_messages", json_table)] in
     let json_str = Json.json_to_string json in
     send_or_buffer_message client_id json_str
 
@@ -755,10 +707,6 @@ and Session : SESSION = struct
     | Local (* Receive endpoint resides on the server *)
     | Remote of client_id (* Receive endpoint resides on client_id *)
 
-  type send_kind =
-    | FromLocal
-    | FromRemote of (client_id * (Value.delegated_chan list))
-
   (* Send channel ID * Receive channel ID *)
   (* Invariant: receive endpoint must reside on the same VM. *)
   type chan = Value.chan
@@ -779,8 +727,6 @@ and Session : SESSION = struct
 
   type ap_state = Balanced | Accepting of ap_req list | Requesting of ap_req list
 
-  type message = client_id option * Value.delegated_chan list * Value.t
-
   let flip_chan (outp, inp) = (inp, outp)
 
   (* Access points *)
@@ -796,12 +742,6 @@ and Session : SESSION = struct
   (* Buffers of all channels _where the receive endpoint is on this server_ *)
   let buffers = (Hashtbl.create 10000 : (channel_id, buffer) Hashtbl.t)
 
-  (* Pending buffers: messages stored in a delegated channel's buffer *)
-  let pending_buffers = (Hashtbl.create 10000 : (channel_id, Value.t list) Hashtbl.t)
-
-  (* Orphan messages: messages which have arrived for a channel before lost messages *)
-  let orphans = (Hashtbl.create 10000 : (channel_id, buffer) Hashtbl.t)
-
   (* Endpoint Cancellation *)
   let cancelled_endpoints = ref ChannelIDSet.empty
   let cancel_endpoint c =
@@ -812,37 +752,7 @@ and Session : SESSION = struct
   (* Channels of the form (peer EP, ep on client) *)
   let client_channel_map = (Hashtbl.create 10000 : (client_id, chan list) Hashtbl.t)
 
-
-
-  (* Delegating channels: channels being used as a carrier for delegation. Any channel in this
-   * set should *not* be delegated *)
-  let delegation_carriers = ref ChannelIDSet.empty
-  let add_delegation_carrier c =
-    delegation_carriers := ChannelIDSet.add c (!delegation_carriers)
-  let remove_delegation_carrier c =
-    delegation_carriers := (ChannelIDSet.remove c (!delegation_carriers))
-  let is_delegation_carrier c =
-    ChannelIDSet.mem c (!delegation_carriers)
-
-  let chans_can_be_delegated chans =
-    not @@ List.exists (is_delegation_carrier) chans
-
   let lookup_endpoint = Hashtbl.find endpoint_states
-
-  (* Queue of channel IDs where there are pending send actions *)
-  let blocked_outgoing_channels = ref []
-
-  let queue_blocked_channel c =
-    let rec loop = function
-      | [] -> [c]
-      | x :: xs ->
-          if (x = c) then x :: xs else
-            x :: (loop xs) in
-    let xs' = loop (!blocked_outgoing_channels) in
-    blocked_outgoing_channels := xs'
-
-  (* Outgoing buffers: Messages which cannot yet be sent due to a pending delegation *)
-  let outgoing_buffers = (Hashtbl.create 10000 : (channel_id, message list) Hashtbl.t)
 
   let blocked = (Hashtbl.create 10000 : (channel_id, process_id) Hashtbl.t)
   let forward_tbl = (Hashtbl.create 10000 : (channel_id, channel_id Unionfind.point) Hashtbl.t)
@@ -860,8 +770,8 @@ and Session : SESSION = struct
   let register_channel location ch =
     begin
     match Hashtbl.lookup endpoint_states (snd ch) with
-      | Some(Local) -> ()
-      | Some(Remote old_cid) ->
+      | Some Local -> ()
+      | Some (Remote old_cid) ->
           (* If we're reassigning a channel, we need to firstly remove it from
            * the previous client's channel list *)
           begin
@@ -1100,7 +1010,6 @@ and Session : SESSION = struct
     end >>= fun _ ->
     action ()
 
-
   let request_core apid client_info_opt =
       let make_req ch =
         match client_info_opt with
@@ -1193,231 +1102,59 @@ and Session : SESSION = struct
           Some pid
       | None -> None
 
-
-  (* Sets the location of the *send* endpoint of a delegated channel created
-   * on a client CID to Remote(cid).
-   * If both ends are in the same message and subsequently sent to a client then
-   * not to worry -- they'll both be set correctly (atomically) in the send step. *)
-  let record_chan_locations owner_cid chans =
-    List.iter (fun (ch, _) ->
-      let ch = flip_chan ch in
-      register_client_channel owner_cid ch) chans
-
-  let do_local_send awaken msg send_port=
+  (* Sends *)
+  let do_local_send msg send_port =
     let p = find_active send_port in
     (* We'll either have a local buffer if channel is not in the process of
      * being delegated, or an entry in the orphans table otherwise. *)
-    match Hashtbl.lookup buffers p with
-      | Some queue ->
-          Queue.push msg queue;
-          if (awaken) then
-            OptionUtils.opt_iter Proc.awaken (Session.unblock send_port)
-          else ()
-      | None ->
-          Queue.push msg (Hashtbl.find orphans p)
+    let queue = Hashtbl.find buffers p in
+    Queue.push msg queue;
+    OptionUtils.opt_iter Proc.awaken (Session.unblock send_port)
 
-  let delegate_to_client source_client_id_opt deleg_chans dest_client_id msg send_port =
-    (* Update endpoint states for channels *)
-    List.iter (fun (chan, _buf) ->
-      register_client_channel dest_client_id chan) deleg_chans;
-    let lost_msg_eps = List.map (snd -<- fst) deleg_chans in
-    (* Only need to send a GLM if we're delegating from a client, not the server *)
-    match source_client_id_opt with
-      | Some source_cid ->
-          Websockets.get_lost_messages source_cid send_port lost_msg_eps >>= fun _ ->
-          Websockets.deliver_session_message dest_client_id send_port
-            deleg_chans true msg
-      | None ->
-          Websockets.deliver_session_message dest_client_id send_port
-            deleg_chans false msg
-
-  let delegate_to_server client_id deleg_chans msg send_port =
-    List.iter (fun (chan, buf) ->
-      let chan_ep = snd chan in
-      Debug.print @@ "Updating buffer for " ^ (ChannelID.to_string chan_ep);
-      register_server_channel chan;
-      Hashtbl.replace forward_tbl chan_ep (Unionfind.fresh chan_ep);
-      Hashtbl.replace orphans chan_ep (Queue.create ());
-      Hashtbl.replace pending_buffers chan_ep buf) deleg_chans;
-    let lost_msg_eps = List.map (snd -<- fst) deleg_chans in
-    Websockets.get_lost_messages client_id send_port lost_msg_eps >>= fun _ ->
-    Lwt.return @@ do_local_send false msg send_port
-
-  (* Get buffers for a list of local channels *)
-  let get_local_delegated_buffers msg =
+  (* Given a message, return an association list mapping each delegated endpoint
+   * to its buffer contents. *)
+  let delegated_buffers msg =
     Value.get_contained_channels msg
     |> List.map (fun ((_, ep2) as ch) ->
         (ch, Hashtbl.find buffers ep2 |> Queue.to_list))
 
-  (* Send which originated on the server *)
-  let send_from_local_internal msg send_port =
-    if is_endpoint_cancelled send_port then Lwt.return SendPartnerCancelled else
-    match lookup_endpoint send_port with
+  (* Send 'msg' to 'port', where the send originated from the server *)
+  let send_from_server msg port =
+    (* Check if EP is cancelled *)
+    if is_endpoint_cancelled port then Lwt.return SendPartnerCancelled else
+    (* If not, then route accordingly *)
+    match lookup_endpoint port with
       | Local ->
           (* If we're doing a local -> local, we don't need to do anything special. *)
-          do_local_send true msg send_port;
+          do_local_send msg port;
           Lwt.return SendOK
-      | Remote client_id ->
-          (* If we're doing a local -> remote, we grab the buffer but don't need
-           * to do anything special with lost messages. *)
-          let deleg_chans = get_local_delegated_buffers msg in
-          delegate_to_client None deleg_chans client_id msg send_port >>= fun _ ->
+      | Remote dest_id ->
+          (* If we're sending a message from the server to client, then for each
+             delegated endpoint, we need to:
+               1) Update the recorded location to be the destination client
+               2) Retrieve and send along the contents of the endpoint's buffer.  *)
+          let deleg_chans = delegated_buffers msg in
+          (* Update endpoint states channels *)
+          List.iter (fun (chan, _buf) ->
+            register_client_channel dest_id chan) deleg_chans;
+          Websockets.deliver_session_message dest_id port deleg_chans msg >>=
+            fun _ ->
           Lwt.return SendOK
 
-  (* Send which originated on a client *)
-  let send_from_remote_internal owner_cid deleg_chans msg send_port =
-    if is_endpoint_cancelled send_port then Lwt.return SendPartnerCancelled else
-    match lookup_endpoint send_port with
+  (* A send which originated on a client. Idea is to route the message to either
+     a server process or another client process.
+     Assumption: Remote send does not contain any endpoints. This will have been
+     checked on the client. *)
+  let send_from_client msg port =
+    assert (List.length (Value.get_contained_channels msg) = 0);
+    if is_endpoint_cancelled port then Lwt.return SendPartnerCancelled else
+    match lookup_endpoint port with
       | Local ->
-          (* Client -> Server delegation *)
-          (* If we're not delegating anything, then we can just do a
-           * straightforward local send *)
-          if (List.length deleg_chans) = 0 then
-            begin
-              do_local_send true msg send_port;
-              Lwt.return SendOK
-            end
-          else
-            begin
-              record_chan_locations owner_cid deleg_chans;
-              delegate_to_server owner_cid deleg_chans msg send_port >>= fun _ ->
-              Lwt.return SendOK
-            end
+          do_local_send msg port;
+          Lwt.return SendOK
       | Remote cid ->
-          if (List.length deleg_chans) = 0 then
-            begin
-              Websockets.deliver_session_message cid send_port
-                deleg_chans false msg >>= fun _ ->
-              Lwt.return SendOK
-            end
-          else
-            begin
-              (* Client -> Client Delegation *)
-              add_delegation_carrier send_port;
-              delegate_to_client (Some owner_cid) deleg_chans cid msg send_port >>= fun _ ->
-              Lwt.return SendOK
-            end
-
-  let can_send chans send_port =
-    (not @@ Hashtbl.mem outgoing_buffers send_port) &&
-    (chans_can_be_delegated chans)
-
-  let queue_outgoing cid_opt chans msg send_port =
-    begin
-    match Hashtbl.lookup outgoing_buffers send_port with
-      | Some xs ->
-          Hashtbl.replace outgoing_buffers send_port (xs @ [(cid_opt, chans, msg)])
-      | None ->
-          Hashtbl.replace outgoing_buffers send_port ([(cid_opt, chans, msg)])
-    end;
-    queue_blocked_channel send_port
-
-
-
-  let send send_kind msg send_port =
-    match send_kind with
-      | FromLocal ->
-          let bufs = get_local_delegated_buffers msg in
-          let chan_ids = List.map (snd -<- fst) bufs in
-          if can_send chan_ids send_port then
-            send_from_local_internal msg send_port
-          else
-            begin
-              queue_outgoing None bufs msg send_port;
-              Lwt.return SendOK
-            end
-      | FromRemote (cid, chans) ->
-          if can_send (List.map (snd -<- fst) chans) send_port then
-            send_from_remote_internal cid chans msg send_port
-          else
-            begin
-              queue_outgoing (Some cid) chans msg send_port;
-              Lwt.return SendOK
-            end
-
-  let send_from_local msg port = send FromLocal msg port
-  let send_from_remote cid chans msg port =
-    send (FromRemote (cid, chans)) msg port
-
-  (* Sends all possible messages from an outgoing buffer.
-   * Returns true if all were sent, false otherwise. *)
-  let service_channel c =
-    let rec service_channel_inner = function
-      | [] ->
-          Debug.print @@ "Finished servicing channel " ^ (ChannelID.to_string c);
-          Lwt.return []
-      | ((cid_opt, chans, msg) :: msgs) as xs ->
-          (* If we can send this message, do so, get the wheels in motion, as it were *)
-          let chan_ids = List.map (snd -<- fst) chans in
-          if (chans_can_be_delegated chan_ids) then
-            begin
-              match cid_opt with
-                | Some cid -> send_from_remote_internal cid chans msg c
-                | None -> send_from_local_internal msg c
-            end >>= fun _ -> service_channel_inner msgs
-          else
-            (* If we're blocked on a channel now, we need to return the
-             * remainder of the messages *)
-            (Debug.print @@ "Could not finish servicing channel " ^ (ChannelID.to_string c) ^
-               " due to remaining blocked delegations";
-             Lwt.return xs)
-          in
-    service_channel_inner (Hashtbl.find outgoing_buffers c) >>= fun res ->
-    if (List.length res) = 0 then
-      (Hashtbl.remove outgoing_buffers c;
-      Lwt.return true)
-    else
-      (Hashtbl.replace outgoing_buffers c res;
-       Lwt.return false)
-
-  let service_pending_requests () =
-    let blocked_channels = !blocked_outgoing_channels in
-    let rec service_requests_inner = function
-      | [] -> Lwt.return []
-      | x :: xs ->
-          Debug.print @@ "Servicing blocked channel " ^ (ChannelID.to_string x);
-          service_channel x >>= fun completed ->
-          if completed then
-            service_requests_inner xs
-          else
-            (service_requests_inner xs) >>= fun res ->
-            Lwt.return @@ x :: res in
-    service_requests_inner blocked_channels >>= fun new_blocked_channels ->
-    blocked_outgoing_channels := new_blocked_channels;
-    Lwt.return ()
-
-
-  let handle_local_lost_messages carrier_channel lost_message_table =
-    (* For each entry in the lost message table, combine with orphans and
-     * pendings, put into buffers, remove from pendings and orphans *)
-    List.iter (fun (ep_id, ep_lost_msgs) ->
-      let ep_orphans = Hashtbl.find orphans ep_id |> Queue.to_list in
-      let ep_orig_buf = Hashtbl.find pending_buffers ep_id in
-      let complete_buf = ep_orig_buf @ ep_lost_msgs @ ep_orphans in
-      Hashtbl.remove orphans ep_id;
-      Hashtbl.remove pending_buffers ep_id;
-      Hashtbl.replace buffers ep_id (Queue.of_list complete_buf)) lost_message_table;
-    remove_delegation_carrier carrier_channel;
-    service_pending_requests () >>= fun _ ->
-    OptionUtils.opt_iter Proc.awaken (Session.unblock carrier_channel);
-    Lwt.return ()
-
-  let handle_remote_lost_messages cid carrier_channel lost_message_table =
-    remove_delegation_carrier carrier_channel;
-    service_pending_requests () >>= fun _ ->
-    Websockets.deliver_lost_messages cid carrier_channel lost_message_table
-
-  let handle_lost_message_response carrier_channel lost_message_table =
-    match lookup_endpoint carrier_channel with
-      | Local ->
-          handle_local_lost_messages carrier_channel lost_message_table
-      | Remote cid ->
-          handle_remote_lost_messages cid carrier_channel lost_message_table
-
-  let can_receive_message msg =
-    let contained_channels = Value.get_contained_channels msg in
-    let is_chan_ready (_, recv_ep) = Hashtbl.mem buffers recv_ep in
-    List.for_all (is_chan_ready) contained_channels
+          Websockets.deliver_session_message cid port [] msg >>= fun _ ->
+          Lwt.return SendOK
 
   (* Closing a channel endpoint results in its queue in the buffers hashtable
    * being deleted. *)
@@ -1427,6 +1164,7 @@ and Session : SESSION = struct
       | Local -> Hashtbl.remove buffers p
       | _ -> ()
 
+  (* Receives from the given channel. *)
   let receive chan =
       let recv_port = receive_port chan in
       let partner_ep = send_port chan in
@@ -1435,7 +1173,7 @@ and Session : SESSION = struct
           (* Debug.print ("Receiving on: " ^ string_of_int p); *)
           let p = find_active recv_port in
           let buf = Hashtbl.find buffers p in
-          if (not (Queue.is_empty buf)) && (can_receive_message @@ Queue.peek buf) then
+          if (not (Queue.is_empty buf)) then
               ReceiveOK (Queue.pop buf)
           else
             if is_endpoint_cancelled partner_ep then
@@ -1443,8 +1181,7 @@ and Session : SESSION = struct
             else
               ReceiveBlocked
         | Remote _ ->
-            (* If this happens, something has gone *seriously* wrong
-             * internally. *)
+            (* This should not happen. *)
             raise (Errors.internal_error ~filename:"proc.ml" ~message:"Cannot receive on remote port!")
 
   (* Currently: all four of these should be server endpoints.
