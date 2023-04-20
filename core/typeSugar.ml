@@ -1711,25 +1711,30 @@ let make_continuation_type = fun islin inp eff out ->
   Types.make_function_type ~linear:(islin) inp eff out
 
 (*
-    `cont_lin` (continuation linearity) is represented by an integer, which is
-    mapped to a pair of bools by `cont_lin_map`.
-    - `cont_lin.first = true` : the current term is in a linear continuation.
+    `cont_lin` (continuation linearity) is represented by an integer,
+    which is mapped to a pair of bools by the global `cont_lin_map`.
+    - `cont_lin.first = true` : the current term is in a linear
+      continuation. Nothing to do.
     - `cont_lin.first = false` : the current term is in an unlimited
-      continuation. We should guarantee it does not use linear variables bound
-      outside.
-    - `cont_lin.second = true` : the current term is bound by linlet (i.e. has a
-      linear continuation). If the current term is not pure, we should guarantee
-      that the current effect type `effect_row` is linear.
-    - `cont_lin.second = false` : the current term is bound by let (i.e. has an
-      unlimited continuation).
+      continuation. We need to guarantee it does not use linear
+      variables bound outside.
+    - `cont_lin.second = true` : the current term is bound by linlet
+      (i.e. has a linear continuation). If the current term is not
+      pure, we should guarantee that the current effect type
+      `effect_row` is linear.
+    - `cont_lin.second = false` : the current term is bound by let
+      (i.e. has an unlimited continuation). Nothing to do.
 
-    We will implement `cont_lin = (true, true)` by default because some functions
-    in prelude.links uses session types.
+    We implement `cont_lin = (true, true)` by default because some
+    functions in prelude.links uses session types (thus there are
+    linear variables which are excluded when cont_lin.first=false).
 
-    The reason to use a global map is that we have syntax like `lindo` which
-    updates `cont_lin`, meanwhile we want to make sure sequenced terms have the
-    same `cont_lin`. The only places where `cont_lin` is updated to a new one is
-    where `effect_row` is updated to a new one.
+    The reason to use a global map is that we have syntax like `lindo`
+    which updates `cont_lin`, meanwhile we want to make sure sequenced
+    terms have the same `cont_lin`. The only places where `cont_lin`
+    is updated to a new one is where `effect_row` is updated to a new
+    one. (I think `effect_row` also uses some global mechanism for
+    unification.)
 *)
 let cont_lin_count = ref 0
 
