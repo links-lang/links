@@ -20,6 +20,9 @@ fun yield() {do Yield}
 sig stop : Comp(a, {Stop:Zero|_})
 fun stop() {switch (do Stop) { }}
 
+# in fact `Yield` is redundant: we could use
+# yield() == if(fork()) {stop()} else {()}
+
 # example abstract concurrent computation
 sig test : Co({ |e}, One)
 fun test() {
@@ -27,10 +30,11 @@ fun test() {
   if(fork()) { print("A1 "); yield(); print ("A2 "); stop() } else {
     print("M2 ");
     yield();
+    print("M3 ");
     if(fork()) { print("B1 "); yield(); print ("B2 "); stop() } else {
+      print("M4 ");
       yield();
-      print("M3 ");
-      yield();
+      print("M5 ");
       print("\n");
       stop()
     }
@@ -64,12 +68,12 @@ fun coop(m) {
   handle(m()) {
     case x            -> fun (rs) {Just ((x, rs))}
     case <Fork => k>  -> fun (rs) {
-                           k(true)(snoc(rs, k(false)))
+                           k(true)(snoc(rs, fun(rs) {k(false)(rs)}))
                          }
     case <Yield => k> -> fun (rs) {
                            switch (rs) {
                              case Nil         -> k(())(Nil)
-                             case Cons(r, rs) -> r(snoc(rs, k(())))
+                             case Cons(r, rs) -> r(snoc(rs, fun(rs) {k(())(rs)}))
                            }
                          }
     case <Stop>       -> fun (rs) {

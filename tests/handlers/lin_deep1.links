@@ -1,0 +1,11 @@
+var lf = linfun(x) {x};
+
+handle({
+  ignore(do Foo);
+  lf(2)
+}) {
+  case <Foo => resume> -> {
+    ignore(lf(3));
+    resume(())
+  }
+}

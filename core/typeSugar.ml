@@ -395,6 +395,7 @@ sig
 
   val non_linearity : Position.t -> int -> string -> Types.datatype -> unit
   val linear_recursive_function : Position.t -> string -> unit
+  val linear_vars_in_deep_handler : Position.t -> string -> Types.datatype -> unit
 
   val try_in_unless_pat : griper
   val try_in_unless_branches : griper
@@ -1535,6 +1536,9 @@ end
 
     let linear_recursive_function pos f =
       die pos ("Recursive function " ^ f ^ " cannot be linear.")
+
+    let linear_vars_in_deep_handler pos v t =
+      die pos ("Variable " ^ v ^ " of linear type " ^ Types.string_of_datatype t ^ " is used in a deep handler.")
 
     (* Affine session exception handling *)
     let try_in_unless_pat ~pos ~t1:l ~t2:r ~error:_ =
@@ -2773,6 +2777,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             end
         | FunLit (argss_prev, lin, fnlit, location) ->
             let (pats, body) = Sugartypes.get_normal_funlit fnlit in
+            (* names of all variables in the parameter patterns *)
             let vs = check_for_duplicate_names pos (List.flatten pats) in
             let (pats_init, pats_tail) = from_option ([], []) (unsnoc_opt pats) in
             let tpc' = if DeclaredLinearity.is_linear lin then tpc else tpcu in
@@ -3401,7 +3406,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
              *)
             let inner_effects = Types.row_with Types.wild_present pid_effects in
             let inner_effects =
-              if Settings.get  Basicsettings.Sessions.exceptions_enabled then
+              if Settings.get Basicsettings.Sessions.exceptions_enabled &&
+                 Settings.get Basicsettings.Sessions.expose_session_fail
+              then
                 let ty = Types.make_operation_type [] (Types.empty_type) in
                 Types.row_with (Value.session_exception_operation, T.Present ty) inner_effects
               else
@@ -3963,6 +3970,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               else
                 Gripers.upcast_subtype pos t2 t1
         | Upcast _ -> assert false
+
+        (* effect handlers *)
         | Handle { sh_expr = m; sh_value_cases = val_cases; sh_effect_cases = eff_cases; sh_descr = descr; } ->
            ignore
              (if not (Settings.get  Basicsettings.Handlers.enabled)
@@ -3975,6 +3984,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            in
            (* type parameters *)
            let henv = context in
+           (* deal with parameterised handlers *)
            let (henv, params, descr) =
              match descr.shd_params with
              | Some { shp_bindings; _ } ->
@@ -4053,7 +4063,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                      | Pattern.Operation (name, _, k) -> name, k
                      | _ -> assert false
                    in
-                   let effrow = Types.Effect (Types.make_singleton_open_row (effname, Types.Present efftyp) (lin_any, res_any)) in
+                   let effrow =
+                     if Settings.get Basicsettings.Sessions.exceptions_enabled &&
+                        not (Settings.get Basicsettings.Sessions.expose_session_fail) &&
+                        String.equal effname Value.session_exception_operation
+                     then
+                       Types.Effect (Types.make_empty_open_row (lin_any, res_any))
+                     else
+                       Types.Effect (Types.make_singleton_open_row (effname, Types.Present efftyp) (lin_any, res_any)) in
                    unify ~handle:Gripers.handle_effect_patterns
                          ((uexp_pos pat, effrow),  no_pos (T.Effect inner_eff));
                    let pat, kpat =
@@ -4130,6 +4147,27 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
              in
              (* Closing of subpatterns in effect patterns *)
              let inner_eff = TypeUtils.extract_row (close_pattern_type (List.map (fst3 ->- fst3) eff_cases) (T.Effect inner_eff)) in
+             let check_linear_paras_in_clauses pat body =
+              Env.iter (fun v t ->
+                let uses = Usage.uses_of v (usages body) in
+                  if uses <> 1 then
+                    if Types.Unl.can_type_be t then
+                      Types.Unl.make_type t
+                    else
+                      Gripers.non_linearity pos uses v t)
+                (pattern_env pat) in
+             let check_linear_vars_in_deep_handlers henv vs body =
+              if descr.shd_depth = Deep then
+                Usage.iter
+                  (fun v _ ->
+                    if not (StringSet.mem v vs) then
+                      let t = Env.find v henv.var_env in
+                      if Types.Unl.can_type_be t then
+                        Types.Unl.make_type t
+                      else
+                        Gripers.linear_vars_in_deep_handler pos v t)
+                  (usages body)
+               else () in
              (* Type value clause bodies *)
              let val_cases =
                List.fold_right
@@ -4137,12 +4175,19 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                    let body = type_check (henv ++ pattern_env pat) body in
                    let () = unify ~handle:Gripers.handle_branches
                           (pos_and_typ body, no_pos bt) in
+                   (* see the comments in eff_cases for the meaning of vs and vs' *)
                    let vs = Env.domain (pattern_env pat) in
-                   let vs' = Env.domain henv.var_env in
+                   let vs' = Env.domain <| List.fold_left (fun env p -> Env.extend env (pattern_env p))
+                                           Env.empty (List.map fst params)
+                   in
                    let us =
                      let vs'' = Ident.Set.union vs vs' in
                      Usage.restrict (usages body) vs''
                    in
+                   (* check the usages of linear parameters in handler clauses *)
+                   let () = check_linear_paras_in_clauses pat body in
+                   (* check the usages of environment linear variables in deep handlers *)
+                   let () = check_linear_vars_in_deep_handlers henv vs body in
                    (pat, update_usages body us) :: cases)
                  val_cases []
              in
@@ -4154,12 +4199,23 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                    let () = unify ~handle:Gripers.handle_branches
                               (pos_and_typ body, no_pos bt)
                    in
+                   (* vs is the variables in the pattern of eff-clauses *)
                    let vs = Env.domain (pattern_env pat) in
-                   let vs' = Env.domain henv.var_env in
+                   (* vs' is the variables in the params of parameterised handlers *)
+                   let vs' = Env.domain <| List.fold_left (fun env p -> Env.extend env (pattern_env p))
+                                           Env.empty (List.map fst params)
+                   in
+                   (* we need to remove vs ∪ vs' from the usages counting
+                      because they are only bound in the handler *)
                    let us =
                      let vs'' = Ident.Set.union vs vs' in
                      Usage.restrict (usages body) vs''
                    in
+                   (* check the usages of linear parameters in handler clauses *)
+                   let () = check_linear_paras_in_clauses pat body in
+                   (* check the usages of environment linear variables in deep handlers *)
+                   let () = check_linear_vars_in_deep_handlers henv vs body in
+
                    let () =
                      let pos' = (fst3 kpat) |> WithPos.pos |> Position.resolve_expression in
                      let kt = TypeUtils.return_type (pattern_typ kpat) in
@@ -4186,7 +4242,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            let make_operations_presence_polymorphic : Types.row -> Types.row
             = fun row ->
              let (operations, rho, dual) = TypeUtils.extract_row_parts row in
-              let operations' =
+             let operations' =
                StringMap.mapi
                  (fun name p ->
                    if TypeUtils.is_builtin_effect name
@@ -4195,7 +4251,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                                                                        make absent operations polymorphic in their presence. *)
                  operations
              in
-            T.Row (operations', rho, dual)
+             T.Row (operations', rho, dual)
            in
            let m_context = { context with effect_row = Types.make_empty_open_row default_effect_subkind } in
            let m = type_check m_context m in (* Type-check the input computation m under current context *)
@@ -4232,6 +4288,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                          shd_types = (Types.flatten_row inner_eff, typ m, Types.flatten_row outer_eff, body_type);
                          shd_raw_row = Types.make_empty_closed_row (); }
            in
+           (* Tag: combine all usages counting in handlers *)
            let usages =
              Usage.combine_many [ Usage.align (List.map (fun (_,(_, _, m)) -> m) params)
                                 ; usages m
@@ -4287,7 +4344,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
           let opname = find_opname (erase op) in
           let infer_opt = no_pos (Types.make_operation_type (List.map typ ps) rettyp) in
           let term = (exp_pos op, opt) in
-          let row = Types.make_singleton_open_row (opname, T.Present (typ op)) (lin_unl, res_effect) in
+          let row =
+            if Settings.get Basicsettings.Sessions.exceptions_enabled &&
+               not (Settings.get Basicsettings.Sessions.expose_session_fail) &&
+               String.equal opname Value.session_exception_operation
+            then
+               Types.make_empty_open_row (lin_unl, res_effect)
+            else
+              Types.make_singleton_open_row (opname, T.Present (typ op)) (lin_unl, res_effect) in
           let p = Position.resolve_expression pos in
           let () =
             unify ~handle:Gripers.do_operation
@@ -4297,10 +4361,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
           in
             doop, rettyp, usage
         | Operation name ->
-           if String.compare name Value.session_exception_operation = 0 && not context.desugared then
-             Gripers.die pos "The session failure effect SessionFail is not directly invocable (use `raise` instead)"
+           if String.equal name Value.session_exception_operation then
+             if not context.desugared then
+               Gripers.die pos "The session failure effect SessionFail is not directly invocable (use `raise` instead)"
+             else
+               (Operation name, Types.empty_type, Usage.empty)
            else
-             let t = match lookup_effect context name with
+             let t =
+               match lookup_effect context name with
                | Some t -> t
                | None   -> Types.fresh_type_variable (lin_unl, res_any)
              in
@@ -4316,13 +4384,21 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               outer effects *)
             let rho = Types.fresh_row_variable default_effect_subkind in
             let outer_effects =
-              Types.row_with
-                (Value.session_exception_operation, Types.fresh_presence_variable default_subkind)
-                (T.Row (StringMap.empty, rho, false)) in
+              if Settings.get Basicsettings.Sessions.expose_session_fail then
+                Types.row_with
+                  (Value.session_exception_operation, Types.fresh_presence_variable default_subkind)
+                  (T.Row (StringMap.empty, rho, false))
+              else
+                T.Row (StringMap.empty, rho, false)
+            in
             let try_effects =
-              Types.row_with
-                (Value.session_exception_operation, T.Present (Types.make_operation_type [] Types.empty_type))
-                (T.Row (StringMap.empty, rho, false)) in
+              if Settings.get Basicsettings.Sessions.expose_session_fail then
+                Types.row_with
+                  (Value.session_exception_operation, T.Present (Types.make_operation_type [] Types.empty_type))
+                  (T.Row (StringMap.empty, rho, false))
+              else
+                T.Row (StringMap.empty, rho, false)
+            in
 
             unify ~handle:Gripers.try_effect
               (no_pos (T.Effect context.effect_row), no_pos (T.Effect outer_effects));
@@ -4400,9 +4476,13 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                 erase unless_phrase, Some return_type), return_type, usages_res
         | QualifiedVar _ -> assert false
         | Raise ->
-            let effects = Types.make_singleton_open_row
-                            (Value.session_exception_operation, T.Present (Types.make_operation_type [] Types.empty_type))
-                            default_effect_subkind
+            let effects =
+              if Settings.get Basicsettings.Sessions.expose_session_fail then
+                Types.make_singleton_open_row
+                  (Value.session_exception_operation, T.Present (Types.make_operation_type [] Types.empty_type))
+                  default_effect_subkind
+              else
+                Types.make_empty_open_row default_effect_subkind
             in
             unify ~handle:Gripers.raise_effect
               (no_pos (T.Effect context.effect_row), (Position.resolve_expression pos, T.Effect effects));
@@ -4933,6 +5013,7 @@ and type_bindings (globals : context)  bindings =
          let result_ctxt = Types.extend_typing_environment ctxt ctxt' in
          result_ctxt, (binding::bindings, (binding.pos,ctxt'.var_env,usage)::uinf))
       (empty_context globals.effect_row globals.desugared, ([], [])) bindings in
+  (* usage_builder checks the usage of variables from the bindings *)
   let usage_builder body_usage =
     List.fold_left
       (fun usages (pos,env,usage) ->
