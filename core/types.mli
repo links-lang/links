@@ -246,6 +246,7 @@ val datetime_type : datatype
 val database_type : datatype
 val xml_type : datatype
 val empty_type : datatype
+val wrong_type : datatype
 val wild : Label.t
 val hear : Label.t
 val wild_present : Label.t * datatype

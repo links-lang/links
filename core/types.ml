@@ -107,6 +107,15 @@ let valid_time_data = {
   arity      = [pk_type, (lin_any, res_any)]
 }
 
+(* Not a real type! 
+ * Used when a type is needed, but none is known.
+ * You need to make sure any code using this type will not be executed. *)
+let wrong = {
+  Abstype.id = "Wrong";
+  name = "Wrong";
+  arity = []
+}
+
 (* When unifying, we need to keep track of both mu-bound recursive variables
  * and names of recursive type applications. The `rec_id` type allows us to
  * abstract this and keep both in the same environment. *)
@@ -1681,6 +1690,7 @@ let float_type    = Primitive Primitive.Float
 let datetime_type = Primitive Primitive.DateTime
 let xml_type      = Alias (("Xml", [], [], false), Application (list, [(PrimaryKind.Type, Primitive Primitive.XmlItem)]))
 let database_type = Primitive Primitive.DB
+let wrong_type    = Application (wrong, [])
 (* Empty type, used for exceptions *)
 let empty_type    = Variant (make_empty_closed_row ())
 let wild = "wild"

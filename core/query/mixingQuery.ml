@@ -289,16 +289,10 @@ struct
     Q.Project (x, TemporalField.to_field)
   | Q.Apply (Q.Primitive "Distinct", [u]) -> Q.Prom (Q.Dedup u)
   | Q.Apply (Q.Primitive "AggBy", [q; aggs]) ->
-    let vty = Types.string_type (* HACK *)
-      (*
-       Q.type_of_expression q
-      |> Types.unwrap_map_type
-      |> snd
-      |> Types.make_list_type
-      *)
-    in
     let of_closure = function
     | Q.Closure (([x], comp), env) ->
+        (* a dummy type because we cannot synthesize the right one here *)
+        let vty = Types.wrong_type in
         let vx = Q.Var (x, vty) in
         let env' = Q.bind env (x, vx) in
         x, xc env' comp
