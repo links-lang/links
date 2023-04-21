@@ -566,6 +566,13 @@ fun lookupG(x,l) {
   }
 }
 
+sig aggBy : ([(a, [b])], ([b]) -c-> d) -c-> [(a, d)]
+fun aggBy(q, agg) {
+  concatMapKey(fun (k) {
+    [(k, agg(lookupG(k, q)))]
+    }, q)
+}
+
 # Gets children of elements in an XML forest, concatenated in order
 # @param {Xml} xml
 # @returns {Xml}

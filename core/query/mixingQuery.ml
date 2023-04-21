@@ -270,7 +270,8 @@ struct
     let open Q in
     Env.Int.bindings (e.qenv)
 
-  let reduce_artifacts = function
+  (* this now receives xc (xlate computation) *)
+  let reduce_artifacts xc = function
   | Q.Apply (Q.Primitive "stringToXml", [u]) ->
     Q.Singleton (Q.XML (Value.Text (Q.unbox_string u)))
   | Q.Apply (Q.Primitive "AsList", [xs])
@@ -287,6 +288,61 @@ struct
   | Q.Apply (Q.Primitive "vtTo", [x]) ->
     Q.Project (x, TemporalField.to_field)
   | Q.Apply (Q.Primitive "Distinct", [u]) -> Q.Prom (Q.Dedup u)
+  | Q.Apply (Q.Primitive "AggBy", [q; aggs]) ->
+    let vty = Types.string_type (* HACK *)
+      (*
+       Q.type_of_expression q
+      |> Types.unwrap_map_type
+      |> snd
+      |> Types.make_list_type
+      *)
+    in
+    let of_closure = function
+    | Q.Closure (([x], comp), env) ->
+        let vx = Q.Var (x, vty) in
+        let env' = Q.bind env (x, vx) in
+        x, xc env' comp
+    | q -> Debug.print (Q.show q);  assert false (* TODO error message *)
+    in
+    let of_apply = function
+    | Q.Apply (f, [arg]) -> f, arg
+    | q -> Debug.print (Q.show q);  assert false (* TODO error message *)
+    in
+    let of_map_project = function
+    | Q.Apply (_ (* Q.Primitive "ConcatMap" but not really *), [c;q]) -> c, q
+    | q -> Debug.print (Q.show q);  assert false (* TODO error message *)
+    in
+    let of_project = function
+    | Q.Project (r, l) -> l, r
+    | q -> Debug.print (Q.show q);  assert false (* TODO error message *)
+    in
+    let of_singleton = function
+    (* | Q.Singleton q -> q -- but not really *)
+    | Q.Apply (Q.Primitive "Cons", [q; Q.Concat []]) -> q
+    | q -> Debug.print (Q.show q);  assert false (* TODO error message *)
+    in
+    let of_record x = function
+    | Q.Record fields -> 
+      StringMap.fold (fun label v acc ->
+        (* f is the aggregate function for this label *)
+        let f, arg = of_apply v in
+        let c, q = of_map_project arg in
+        (* TODO we should check q = x *)
+        let y, cbody = of_closure c in
+        match of_project (of_singleton cbody) with
+        | l, Q.Var (var, _) when l = label && var = y ->
+          StringMap.add label f acc
+        (* this is caused by an unwanted eta expansion that we can avoid by giving fresh variables a dummy non-record type, rather than unit *)
+        | l, q -> Debug.print ("label " ^ l ^ ": " ^ (Q.show q));  assert false (* TODO error message *)
+        )
+        fields
+        StringMap.empty
+    | q -> Debug.print (Q.show q);  assert false (* TODO error message *)
+    in
+    Debug.print ("Aggregating with: " ^ Q.show aggs);
+    let x, v = of_closure aggs in
+    let ar = of_record x v in (* FIXME: not a query valued StringMap! *)
+    Q.AggBy (ar, q)
 
   | u -> u
 
@@ -370,7 +426,7 @@ struct
           Q.Singleton (Q.XML (Value.Node (tag, children)))
 
     | ApplyPure (f, ps) ->
-        reduce_artifacts (Q.Apply (xlate env f, List.map (xlate env) ps))
+        reduce_artifacts computation (Q.Apply (xlate env f, List.map (xlate env) ps))
     | Closure (f, _, v) ->
       let open Q in
       let (_finfo, (xs, body), z_opt, _location) = Tables.find Tables.fun_defs f in
@@ -408,7 +464,7 @@ struct
   and tail_computation env : Ir.tail_computation -> Q.t = let open Ir in function
     | Return v -> xlate env v
     | Apply (f, args) ->
-        reduce_artifacts (Q.Apply (xlate env f, List.map (xlate env) args))
+        reduce_artifacts computation (Q.Apply (xlate env f, List.map (xlate env) args))
     | Special (Ir.Query (None, policy, e, _)) ->
         let open Q in
         check_policies_compatible env.policy policy;
@@ -733,7 +789,7 @@ struct
        in
        let ql' = List.map (fun (b, c, gs, os) -> (reduce_groupby b, c, gs, os)) ql in
        pack_ncoll ql'
-    | Q.AggBy (ar, q) -> Q.AggBy (ar, norm in_dedup env q)
+    | Q.AggBy (ar, q) -> Q.AggBy (StringMap.map (norm false env) ar, norm in_dedup env q)
     | Q.Lookup (q, k) ->
        let ql = unpack_ncoll (norm in_dedup env q) in
        let k' = norm false env k in
@@ -843,7 +899,7 @@ struct
     | t, _ -> Q.query_error "Application of non-function: %s" (Q.string_of_t t)
 
   and norm_comp in_dedup env c =
-(*    (let c' = *)
+(*    (let c' =  *)
     computation env c
 (*    in Debug.print ("norm_comp: computation returned " ^ Q.show c'); c') *)
     |> norm in_dedup env
@@ -855,11 +911,11 @@ struct
 
   let eval policy env e =
     Debug.debug_time "Query.eval" (fun () ->
-      (* let res = *)
+      let res =
       norm_comp (Q.env_of_value_env policy env) e
-      (* in
+      in
       Debug.print ("eval returned: " ^ Q.show res);
-      res *)
+      res 
       )
 end
 

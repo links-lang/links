@@ -335,13 +335,12 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       let elty = TypeUtils.element_type ~overstep_quantifiers:true (te q) in
       Types.make_mapentry_type ity elty
       |> Types.make_list_type
-  | AggBy (f,q) -> 
-      (* TODO pseudocode
-       * let tyk = te q |> Types.unwrap_map_type |> fst in
-       * let ty = TypeUtils.return_type (Env.String.find f Lib.type_env) BUT DOES THIS WORK FOR AGGREGATION PRIMITIVES (if so, why don't we always use it for Primitive? 
-       * in Types.make_mapentry_type tyk ty |> Type.make_list_type
-       *)
-      assert false
+  | AggBy (aggs,q) -> 
+      let tyk = te q |> Types.unwrap_map_type |> fst in
+      let ty = StringMap.map (function Primitive f -> TypeUtils.return_type (Env.String.find f Lib.type_env) | _ -> assert false) aggs 
+        |> Types.make_record_type
+      in
+      Types.make_mapentry_type tyk ty |> Types.make_list_type
   | Lookup (q, _) ->
       Types.unwrap_map_type (te q)
       |> snd
@@ -451,6 +450,7 @@ let used_database : t -> Value.database option =
           traverse (scrutinee :: (cases @ default))
       | Erase (x, _) -> used x
       | Variant (_, x) -> used x
+      | AggBy (_aggs, q) -> used q
       | _ -> None
   and used =
     function
@@ -509,6 +509,8 @@ let lookup_fun env (f, fvs) =
         Primitive "SortBy"
       | "groupBy" | "groupByMap" ->
         Primitive "GroupBy"
+      | "aggBy" ->
+        Primitive "AggBy"
       | "lookupG" ->
         Primitive "Lookup"
       | _ ->
@@ -1099,6 +1101,7 @@ struct
         (* BUG BUG: flattening will render os useless *)
         For (tag, gs', os, body')
       | GroupBy ((x,kc), v) -> GroupBy ((x, flatten_inner kc), flatten_comprehension v)
+      | AggBy _ as q -> q (* aggregation is assumed to be flat *)
       | Prom q -> Prom (flatten_comprehension q)
       | If (c, e, Concat []) ->
         If (flatten_inner c, flatten_comprehension e, Concat [])

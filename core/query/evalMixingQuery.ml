@@ -150,8 +150,8 @@ let sql_of_query = sql_of_query S.All
 
 let compile_mixing : delateralize:QueryPolicy.t -> Value.env -> (int * int) option * Ir.computation -> (Value.database * Sql.query * Types.datatype * (Value.t -> Value.t)) option =
   fun ~delateralize env (range, e) ->
-    (* Debug.print ("env: "^Value.show_env env);
-    Debug.print ("e: "^Ir.show_computation e); *)
+    Debug.print ("env: "^Value.show_env env);
+    Debug.print ("e: "^Ir.show_computation e); 
     if range != None then eval_error "Range is not (yet) supported by the new mixing normaliser";
     let evaluator =
         if delateralize = QueryPolicy.Delat
@@ -159,7 +159,7 @@ let compile_mixing : delateralize:QueryPolicy.t -> Value.env -> (int * int) opti
             else MixingQuery.Eval.eval QueryPolicy.Mixing
     in
     let v = evaluator env e in
-      (* Debug.print ("v: "^ QL.show v); *)
+      Debug.print ("v: "^ QL.show v);
       match QL.used_database v with
         | None -> None
         | Some db ->
@@ -190,5 +190,5 @@ let compile_mixing : delateralize:QueryPolicy.t -> Value.env -> (int * int) opti
     in
     let q = sql_of_query v_flat in
     let _range = None in
-      (* Debug.print ("Generated SQL query: "^(db#string_of_query ~range:_range q)); *)
+      Debug.print ("Generated SQL query: "^(db#string_of_query ~range:_range q)); 
       Some (db, q, t_flat, readback)
