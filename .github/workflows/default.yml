@@ -308,7 +308,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Install system dependencies
-        run: sudo apt-get install -y libev-dev
+        run: sudo apt-get install -y libev-dev libmariadb-dev-compat
         shell: bash
 
       - name: Use OCaml ${{ matrix.ocaml-compiler }}
