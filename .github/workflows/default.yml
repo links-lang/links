@@ -279,7 +279,7 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - ubuntu-20.04
+          - ubuntu-22.04
         ocaml-compiler:
           - 4.14.1
           - 5.0.0
@@ -316,7 +316,7 @@ jobs:
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
-      - run: opam install -y conf-libev
+      - run: opam install -y conf-libev conf-mariadb
 
       - name: Install Links dependencies
         run: >-
