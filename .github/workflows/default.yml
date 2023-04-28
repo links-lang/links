@@ -287,8 +287,8 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     services:
-      mysql:
-        image: mysql:5.7
+      mariadb:
+        image: mariadb:10.3
         env:
           MYSQL_USER: links
           MYSQL_PASSWORD: links
