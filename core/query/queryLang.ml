@@ -47,7 +47,7 @@ type t =
     | Dedup     of t
     | Prom      of t
     | GroupBy   of (Var.var * t) * t
-    | AggBy     of t StringMap.t * t
+    | AggBy     of (t * string) StringMap.t * t
     | Lookup    of t * t
     | Record    of t StringMap.t
     | Project   of t * string
@@ -78,7 +78,7 @@ struct
     | Dedup     of pt
     | Prom      of pt
     | GroupBy   of (Var.var * pt) * pt
-    | AggBy     of pt StringMap.t * pt
+    | AggBy     of (pt * string) StringMap.t * pt
     | Lookup    of pt * pt
     | Record    of pt StringMap.t
     | Project   of pt * string
@@ -120,7 +120,7 @@ let rec pt_of_t : 't -> S.pt = fun v ->
       | Var (v, t) -> S.Var (v, t)
       | Constant c -> S.Constant c
       | GroupBy ((x,k), q) -> S.GroupBy ((x, bt k), bt q)
-      | AggBy (ar, q) -> S.AggBy (StringMap.map bt ar, bt q)
+      | AggBy (ar, q) -> S.AggBy (StringMap.map (fun (x,y) -> bt x, y) ar, bt q)
       | Lookup (q,k) -> S.Lookup (bt q, bt k)
       | Database _ -> assert false
 
@@ -337,7 +337,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       |> Types.make_list_type
   | AggBy (aggs,q) -> 
       let tyk = te q |> Types.unwrap_map_type |> fst in
-      let ty = StringMap.map (function Primitive f -> TypeUtils.return_type (Env.String.find f Lib.type_env) | _ -> assert false) aggs 
+      let ty = StringMap.map (function (Primitive f,_) -> TypeUtils.return_type (Env.String.find f Lib.type_env) | _ -> assert false) aggs 
         |> Types.make_record_type
       in
       Types.make_mapentry_type tyk ty |> Types.make_list_type

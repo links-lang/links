@@ -31,7 +31,7 @@ type t =
     | Dedup     of t
     | Prom      of t
     | GroupBy   of (Var.var * t) * t
-    | AggBy     of t StringMap.t * t
+    | AggBy     of (t * string) StringMap.t * t
     | Lookup    of t * t
     | Record    of t StringMap.t
     | Project   of t * string

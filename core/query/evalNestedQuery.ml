@@ -42,7 +42,7 @@ let tag_query : QL.t -> QL.t =
         | Database db -> Database db
         | GroupBy ((x,k), q) -> GroupBy ((x,tag k), tag q)
         (* XXX: defensive programming: recursion on ar not needed now, but might be in the future *)
-        | AggBy (ar, q) -> AggBy (StringMap.map tag ar, tag q)
+        | AggBy (ar, q) -> AggBy (StringMap.map (fun (x,y) -> tag x, y) ar, tag q)
         | Lookup (q,k) -> Lookup (tag q, tag k)
     in
       tag e

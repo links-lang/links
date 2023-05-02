@@ -83,7 +83,7 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> Q.t -> Q.t =
       let env' = Env.Int.bind v y env in
       Q.GroupBy ((y, freshen_for_bindings env' i), ffb q)
     (* XXX: defensive programming; recursion on ar not needed now, but may be in the future *)
-    | Q.AggBy (ar, q) -> Q.AggBy (StringMap.map ffb ar, ffb q)
+    | Q.AggBy (ar, q) -> Q.AggBy (StringMap.map (fun (x,y) -> ffb x, y) ar, ffb q)
     | Q.Lookup (q,k) -> Q.Lookup (ffb q, ffb k)
 
 let flatfield f1 f2 = f1 ^ "@" ^ f2
@@ -324,9 +324,8 @@ struct
         (* TODO we should check q = x *)
         let y, cbody = of_closure c in
         match of_project (of_singleton cbody) with
-        | l, Q.Var (var, _) when l = label && var = y ->
-          StringMap.add label f acc
-        (* this is caused by an unwanted eta expansion that we can avoid by giving fresh variables a dummy non-record type, rather than unit *)
+        | l, Q.Var (var, _) when var = y ->
+          StringMap.add label (f, l) acc
         | l, q -> Debug.print ("label " ^ l ^ ": " ^ (Q.show q));  assert false (* TODO error message *)
         )
         fields
@@ -335,7 +334,7 @@ struct
     in
     Debug.print ("Aggregating with: " ^ Q.show aggs);
     let x, v = of_closure aggs in
-    let ar = of_record x v in (* FIXME: not a query valued StringMap! *)
+    let ar = of_record x v in 
     Q.AggBy (ar, q)
 
   | u -> u
@@ -783,7 +782,7 @@ struct
        in
        let ql' = List.map (fun (b, c, gs, os) -> (reduce_groupby b, c, gs, os)) ql in
        pack_ncoll ql'
-    | Q.AggBy (ar, q) -> Q.AggBy (StringMap.map (norm false env) ar, norm in_dedup env q)
+    | Q.AggBy (ar, q) -> Q.AggBy (StringMap.map (fun (x,y) -> norm false env x, y) ar, norm in_dedup env q)
     | Q.Lookup (q, k) ->
        let ql = unpack_ncoll (norm in_dedup env q) in
        let k' = norm false env k in
