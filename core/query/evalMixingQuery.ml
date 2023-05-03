@@ -50,11 +50,9 @@ and aggregator ar q =
   let z = Var.fresh_raw_var () in
   let tyk, tyv = q |> QL.type_of_expression |> Types.unwrap_map_type in
   let fsk, _, _ = tyk |> Types.extract_row |> Types.extract_row_parts in
-  let fsv, _, _ = tyv |> Types.extract_row |> Types.extract_row_parts in
   let fields_k = fsk |> StringMap.to_alist |> List.map (fun (f,_) -> S.Project (z, "1@" ^ f), "1@" ^ f) in
-  let fields_v = fsv |> StringMap.to_alist |> List.map (fun (f,_) -> 
-    let aggfun, f_in = StringMap.find f ar in
-    S.Apply (aggr aggfun, [S.Project (z, "2@" ^ f_in)]), "2@" ^ f)
+  let fields_v = ar |> StringMap.to_alist |> List.map (fun (f_out, (aggfun, f_in)) -> 
+    S.Apply (aggr aggfun, [S.Project (z, "2@" ^ f_in)]), "2@" ^ f_out)
   in
   let fields = fields_k @ fields_v in
   let gbys = List.map (fun (_,f) -> S.Project (z, f)) fields_k in

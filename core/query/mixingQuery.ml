@@ -270,7 +270,20 @@ struct
     let open Q in
     Env.Int.bindings (e.qenv)
 
-  (* this now receives xc (xlate computation) *)
+  let rec reduce_project (r, label) =
+    match r with
+      | Q.Record fields ->
+        assert (StringMap.mem label fields);
+        StringMap.find label fields
+      | Q.If (c, t, e) ->
+        Q.If (c, reduce_project (t, label), reduce_project (e, label))
+      | Q.Var (_x, Types.Record row) ->
+        let field_types =  Q.field_types_of_row row in
+        assert (StringMap.mem label field_types);
+        Q.Project (r, label)
+      | _ -> Q.query_error ("Error projecting label %s from record: %s") label (Q.string_of_t r)
+
+  (* this now receives a function xc (xlate computation) *)
   let reduce_artifacts xc = function
   | Q.Apply (Q.Primitive "stringToXml", [u]) ->
     Q.Singleton (Q.XML (Value.Text (Q.unbox_string u)))
@@ -303,7 +316,8 @@ struct
     | q -> Debug.print (Q.show q);  assert false (* TODO error message *)
     in
     let of_map_project = function
-    | Q.Apply (_ (* Q.Primitive "ConcatMap" but not really *), [c;q]) -> c, q
+    | Q.Apply (Q.Primitive "ConcatMap", [c;q]) -> c, q
+    | Q.Apply (Q.Project (r, l), [c;q]) when reduce_project (r, l) = Q.Primitive "ConcatMap" -> c, q
     | q -> Debug.print (Q.show q);  assert false (* TODO error message *)
     in
     let of_project = function
@@ -650,20 +664,7 @@ struct
     | Q.MapEntry (k,v) -> Q.MapEntry (norm false env k, norm false env v)
     | Q.Concat xs -> reduce_concat (List.map (norm in_dedup env) xs)
     | Q.Project (r, label) ->
-        let rec project (r, label) =
-          match r with
-            | Q.Record fields ->
-              assert (StringMap.mem label fields);
-              StringMap.find label fields
-            | Q.If (c, t, e) ->
-              Q.If (c, project (t, label), project (e, label))
-            | Q.Var (_x, Types.Record row) ->
-              let field_types =  Q.field_types_of_row row in
-              assert (StringMap.mem label field_types);
-              Q.Project (r, label)
-            | _ -> Q.query_error ("Error projecting label %s from record: %s") label (Q.string_of_t r)
-        in
-        retn in_dedup (project (norm false env r, label))
+        retn in_dedup (reduce_project (norm false env r, label))
     | Q.Erase (r, labels) ->
         let rec erase (r, labels) =
           match r with
