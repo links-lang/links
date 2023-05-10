@@ -22,7 +22,6 @@ let graph_query (q1,ty1) x (q2,ty2) =
     let y = Var.fresh_raw_var () in
     let p = Q.flattened_pair (QL.Var (x,ty1)) (QL.Var (y,ty2)) in
     let ftys = Q.flattened_pair_ft (QL.Var (x,ty1)) (QL.Var (y,ty2)) in
-    (* XXX: grouping generators *)
     QL.For (None, [(QL.Entries, x, q1); (QL.Entries, y, q2)], [], QL.Singleton p), ftys
 
 (*
@@ -59,7 +58,6 @@ let prom_delateralize gs q1 x (q2,ty2) y (q3,ty3) =
     let q1_rp = QL.subst q1 y rp
     in
     QL.For (None,
-        (* XXX: grouping generators *)
         gs @ [(QL.Entries, p, QL.Prom graph)],
         [],
         QL.If (eq_query, q1_rp, QL.nil))
@@ -72,7 +70,6 @@ let rec delateralize_step q =
     match q with
     | QL.For (_tag, gs, os, q) ->
         let rec findgs gsx = function
-        (* XXX: grouping generators *)
         | (_genkind, y,QL.Prom qy as gy)::gsy ->
             begin
                 match QL.occurs_free_gens gsx qy with

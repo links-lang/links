@@ -398,7 +398,6 @@ let eta_expand_list xs =
   let x = Var.fresh_raw_var () in
   let ty = TypeUtils.element_type ~overstep_quantifiers:true (type_of_expression xs) in
     (* Debug.print ("eta_expand_list create: " ^ show (Var (x, ty))); *)
-    (* XXX: grouping generators *)
     (* BUG? this assumes no maps! *)
     ([Entries, x, xs], [], Singleton (eta_expand_var (x, ty)))
 
@@ -503,6 +502,20 @@ let lookup_fun env (f, fvs) =
         Primitive "Map"
       | "sum" ->
         Primitive "Sum"
+      | "sumF" ->
+        Primitive "SumF"
+      | "avg" ->
+        Primitive "Avg"
+      | "avgF" ->
+        Primitive "AvgF"
+      | "min" ->
+        Primitive "Min"
+      | "minF" ->
+        Primitive "MinF"
+      | "max" ->
+        Primitive "Max"
+      | "maxF" ->
+        Primitive "MaxF"
       | "empty" ->
         Primitive "Empty"
       | "sortByBase" ->
@@ -913,7 +926,6 @@ struct
         let (o, x) = f o x in
         (o, x :: acc)) xs (o, [])
 
-    (* FIXME/TODO GroupBy/AggBy *)
     method query =
       function
       | For (tag_opt, gs, os, body) ->
@@ -979,12 +991,15 @@ struct
       | Primitive x -> (o, Primitive x)
       | Var (v, dts) -> (o, Var (v, dts))
       | Constant c -> (o, Constant c)
-      (* XXX: fix grouping operations *)
       | GroupBy ((v,i),q) ->
           let (o,i) = o#query i in
           let (o,q) = o#query q in
           (o, GroupBy ((v,i),q))
       | AggBy (ar,q) ->
+          let (o,ar) = StringMap.fold (fun l_in (v, l_out) (o, acc) ->
+                  let (o, v) = o#query v in
+                  (o, StringMap.add l_in (v, l_out) acc)) ar (o, StringMap.empty)
+          in
           let (o,q) = o#query q in
           (o, AggBy (ar, q))
       | Lookup (q,i) ->
@@ -1111,7 +1126,7 @@ struct
           match flatten_inner e with
           | MapEntry (Record _, Record _)
           | Record _ as p -> p
-          | MapEntry (_, _) -> assert false (* XXX: do we want to handle the case of MapEntries not containing records? *)
+          | MapEntry (_, _) -> assert false (* we don't want to handle the case of MapEntries not containing records *)
           | p -> Record (StringMap.add "@" p StringMap.empty)
         in
         Singleton e'

@@ -96,7 +96,7 @@ let rec flattened_pair x y =
   | _, Q.Var (_ny, Types.Record row) ->
       let y' = Q.Record (StringMap.fold (fun f _ acc -> StringMap.add f (Q.Project (y,f)) acc) (Q.field_types_of_row row) StringMap.empty)
       in flattened_pair x y'
-  (* We uese a field with an empty name to deal with variables of non-record type *)
+  (* We use a field with an empty name to deal with variables of non-record type *)
   | Q.Var (_nx, _), _ ->
       let x' = Q.Record (StringMap.from_alist ["",x])
       in flattened_pair x' y
@@ -118,7 +118,7 @@ let rec flattened_pair_ft x y =
           StringMap.fold (fun f t acc -> StringMap.add (flatfield "1" f) t acc) (Q.field_types_of_row rowx) StringMap.empty
       in
       StringMap.fold (fun f t acc -> StringMap.add (flatfield "2" f) t acc) (Q.field_types_of_row rowy) out1
-  (* XXX: same as above, using a field with an empty name to deal with variables of non-record type ... will it work? *)
+  (* XXX: same as above, using a field with an empty name to deal with variables of non-record type *)
   | Q.Var (nx, tyx), _ -> flattened_pair_ft (Q.Var (nx, Types.make_record_type (StringMap.from_alist ["", tyx]))) y
   | _, Q.Var (ny, tyy) -> flattened_pair_ft x (Q.Var (ny, Types.make_record_type (StringMap.from_alist ["", tyy])))
   | _ -> assert false
@@ -553,7 +553,6 @@ struct
     let vx = Q.Var (x, ty_elem) in
     let cenv = Q.bind env (x, vx) in
     (* Debug.print ("mk_for_term: " ^ string_of_int newx ^ " for " ^ string_of_int x); *)
-    (* XXX: grouping generators *)
     Q.For (None, [pol,x,xs], [], body_f cenv)
 
   (* this has the effect of performing beta reduction when the generator in
@@ -586,7 +585,6 @@ struct
         |> TypeUtils.element_type
       in
       let vz = Q.Var (z, tyz) in
-      (* XXX: grouping generators *)
       gsx@[Q.Entries,z,u], Q.Singleton vz
   | u -> gsx, u
 
@@ -695,7 +693,6 @@ struct
     | Q.For (_, gs, os, u) as _orig ->
         let reduce_gs =
           let rec rgs gsx cx env os body = function
-          (* XXX: grouping generators *)
           | (pol,x,g)::gs' ->
               let ng = unpack_ncoll (norm in_dedup env g) in
               begin

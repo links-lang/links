@@ -208,10 +208,6 @@ fun eighth(p)  { p.8 }
 fun ninth(p)   { p.9 }
 fun tenth(p)   { p.10 }
 
-fun sum(ns) {
-  fold_left((+), 0, ns)
-}
-
 fun product(ns) {
   fold_left((*), 1, ns)
 }
@@ -435,12 +431,78 @@ fun empty(l) {
 }
 
 unsafe sig sum : ([Int]) -> Int
-fun sum(l) {
-  switch (l) {
+fun sum(ns) {
+  switch (ns) {
     case [] -> 0
     case n::ns -> n + sum(ns)
   }
 }
+
+unsafe sig sumF : ([Float]) -> Float
+fun sumF(ns) {
+  switch (ns) {
+    case [] -> 0.0
+    case n::ns -> n +. sumF(ns)
+  }
+}
+
+fun avg(l) {
+  switch (l) {
+    case [] -> 0
+    case n::ns -> sum(l) / length(l)
+  }
+}
+
+fun avgF(l) {
+  switch (l) {
+    case [] -> 0.0
+    case n::ns -> sumF(l) /. intToFloat(length(l))
+  }
+}
+
+# Returns the minimum of a and b.
+fun minimum(a,b) {
+  if (a < b) { a }
+  else { b }
+}
+
+# Returns the maximum of a and b.
+fun maximum(a,b) {
+  if (a > b) { a }
+  else { b }
+}
+
+#unsafe sig max_list : ([Int]) -> Int
+#fun max_list(ns) {
+#  switch (ns) {
+#    case [] -> min_int
+#    case n::ns -> maximum(n, max_list(ns))
+#  }
+#}
+#
+#unsafe sig maxF_list : ([Float]) -> Float
+#fun maxF_list(ns) {
+#  switch (ns) {
+#    case [] -> min_float
+#    case n::ns -> maximum(n, maxF_list(ns))
+#  }
+#}
+#
+#unsafe sig min_list : ([Int]) -> Int
+#fun min_list(ns) {
+#  switch (ns) {
+#    case [] -> max_int
+#    case n::ns -> minimum(n, min_list(ns))
+#  }
+#}
+#
+#unsafe sig minF_list : ([Float]) -> Float
+#fun minF_list(ns) {
+#  switch (ns) {
+#    case [] -> max_float
+#    case n::ns -> minimum(n, minF_list(ns))
+#  }
+#}
 
 # association lists
 # TBD: memassoc is an old LISP word. Perhaps a more modern name would fit better?
@@ -1443,12 +1505,6 @@ fun elemIndex(x, xs) {
   }, (0,Nothing), xs);
 
   second(n)
-}
-
-# Returns the maximum of a and b.
-fun maximum(a,b) {
-  if (a > b) { a }
-  else { b }
 }
 
 ####

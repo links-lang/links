@@ -45,6 +45,14 @@ and aggregator ar q =
   let aggr = function
   (* FIXME: complete and factorize *)
   | QL.Primitive "Sum" -> "sum"
+  | QL.Primitive "SumF" -> "sum"
+  | QL.Primitive "Avg" -> "avg"
+  | QL.Primitive "AvgF" -> "avg"
+  | QL.Primitive "Min" -> "min"
+  | QL.Primitive "Max" -> "max"
+  | QL.Primitive "MinF" -> "min"
+  | QL.Primitive "MaxF" -> "max"
+  | QL.Primitive "length" -> "count"
   | _ -> assert false
   in
   let z = Var.fresh_raw_var () in
@@ -59,7 +67,6 @@ and aggregator ar q =
   S.Select (S.All, S.Fields fields, [S.Subquery (S.Standard, sql_of_query S.All q, z)], S.Constant (Constant.Bool true), gbys, [])
 
 and generator locvars = function
-(* XXX: grouping generators *)
 | (QL.Entries, v, QL.Prom p) -> (S.Subquery (dependency_of_contains_free (E.contains_free locvars p), sql_of_query S.Distinct p, v))
 | (QL.Entries, v, QL.Table Value.Table.{ name; _}) -> (S.TableRef (name, v))
 | (QL.Entries, v, QL.Dedup (QL.Table Value.Table.{ name; _ })) ->
@@ -90,7 +97,6 @@ and body is_set gs os j =
     let selquery body where =
         let froms =
             gs
-            (* XXX: grouping generators *)
             |> List.fold_left (fun (locvars,acc) (_genkind, v,_q as g) -> (v::locvars, generator locvars g::acc)) ([],[])
             |> snd
             |> List.rev
@@ -140,6 +146,13 @@ and base_exp = function
 | QL.Apply (QL.Primitive "Empty", [v]) -> S.Empty (sql_of_query S.All v)
 | QL.Apply (QL.Primitive "length", [v]) -> S.Length (sql_of_query S.All v)
 | QL.Apply (QL.Primitive "Sum", [v]) -> S.Aggr ("sum", sql_of_query S.All v)
+| QL.Apply (QL.Primitive "SumF", [v]) -> S.Aggr ("sum", sql_of_query S.All v)
+| QL.Apply (QL.Primitive "Avg", [v]) -> S.Aggr ("sum", sql_of_query S.All v)
+| QL.Apply (QL.Primitive "AvgF", [v]) -> S.Aggr ("sum", sql_of_query S.All v)
+| QL.Apply (QL.Primitive "Min", [v]) -> S.Aggr ("sum", sql_of_query S.All v)
+| QL.Apply (QL.Primitive "MinF", [v]) -> S.Aggr ("sum", sql_of_query S.All v)
+| QL.Apply (QL.Primitive "Max", [v]) -> S.Aggr ("sum", sql_of_query S.All v)
+| QL.Apply (QL.Primitive "MaxF", [v]) -> S.Aggr ("sum", sql_of_query S.All v)
 | QL.Apply (QL.Primitive f, vs) -> S.Apply (f, List.map base_exp vs)
 | QL.Constant c -> S.Constant c
 | e ->
