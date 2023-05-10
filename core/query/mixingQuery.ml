@@ -330,7 +330,7 @@ struct
     | q -> Debug.print (Q.show q);  assert false (* TODO error message *)
     in
     let of_record x = function
-    | Q.Record fields -> 
+    | Q.Record fields ->
       StringMap.fold (fun label v acc ->
         (* f is the aggregate function for this label *)
         let f, arg = of_apply v in
@@ -348,7 +348,7 @@ struct
     in
     Debug.print ("Aggregating with: " ^ Q.show aggs);
     let x, v = of_closure aggs in
-    let ar = of_record x v in 
+    let ar = of_record x v in
     Q.AggBy (ar, q)
 
   | u -> u
@@ -906,7 +906,7 @@ struct
       norm_comp (Q.env_of_value_env policy env) e
       in
       Debug.print ("eval returned: " ^ Q.show res);
-      res 
+      res
       )
 end
 

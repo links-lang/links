@@ -59,7 +59,7 @@ and aggregator ar q =
   let tyk, tyv = q |> QL.type_of_expression |> Types.unwrap_map_type in
   let fsk, _, _ = tyk |> Types.extract_row |> Types.extract_row_parts in
   let fields_k = fsk |> StringMap.to_alist |> List.map (fun (f,_) -> S.Project (z, "1@" ^ f), "1@" ^ f) in
-  let fields_v = ar |> StringMap.to_alist |> List.map (fun (f_out, (aggfun, f_in)) -> 
+  let fields_v = ar |> StringMap.to_alist |> List.map (fun (f_out, (aggfun, f_in)) ->
     S.Apply (aggr aggfun, [S.Project (z, "2@" ^ f_in)]), "2@" ^ f_out)
   in
   let fields = fields_k @ fields_v in
@@ -165,7 +165,7 @@ let sql_of_query = sql_of_query S.All
 let compile_mixing : delateralize:QueryPolicy.t -> Value.env -> (int * int) option * Ir.computation -> (Value.database * Sql.query * Types.datatype * (Value.t -> Value.t)) option =
   fun ~delateralize env (range, e) ->
     Debug.print ("env: "^Value.show_env env);
-    Debug.print ("e: "^Ir.show_computation e); 
+    Debug.print ("e: "^Ir.show_computation e);
     if range != None then eval_error "Range is not (yet) supported by the new mixing normaliser";
     let evaluator =
         if delateralize = QueryPolicy.Delat
@@ -204,5 +204,5 @@ let compile_mixing : delateralize:QueryPolicy.t -> Value.env -> (int * int) opti
     in
     let q = sql_of_query v_flat in
     let _range = None in
-      Debug.print ("Generated SQL query: "^(db#string_of_query ~range:_range q)); 
+      Debug.print ("Generated SQL query: "^(db#string_of_query ~range:_range q));
       Some (db, q, t_flat, readback)

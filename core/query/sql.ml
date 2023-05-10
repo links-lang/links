@@ -29,7 +29,7 @@ and insert_records =
   | Values of (base list list)
   | TableQuery of Var.var
 and select_clause =
-    (* ( distinct_opt, fs, ts, cond, groupby, orderby) *) 
+    (* ( distinct_opt, fs, ts, cond, groupby, orderby) *)
     multiplicity * select_fields * from_clause list * base * base list * base list
 and select_fields =
   | Star

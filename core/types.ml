@@ -107,7 +107,7 @@ let valid_time_data = {
   arity      = [pk_type, (lin_any, res_any)]
 }
 
-(* Not a real type! 
+(* Not a real type!
  * Used when a type is needed, but none is known.
  * You need to make sure any code using this type will not be executed. *)
 let wrong = {

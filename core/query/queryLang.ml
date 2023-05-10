@@ -274,7 +274,7 @@ let rec subst t x u =
       let cenv = bind closure_env (x,u) in
       Closure (c, cenv)
   | AggBy (ar, q) -> AggBy (StringMap.map (fun (t0,l) -> srec t0, l) ar, srec q)
-  | GroupBy ((v,i), q) -> 
+  | GroupBy ((v,i), q) ->
       let i' = if v = x then i else srec i in
       let q' = srec q in
       GroupBy ((v,i'), q')
@@ -340,9 +340,9 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       let elty = TypeUtils.element_type ~overstep_quantifiers:true (te q) in
       Types.make_mapentry_type ity elty
       |> Types.make_list_type
-  | AggBy (aggs,q) -> 
+  | AggBy (aggs,q) ->
       let tyk = te q |> Types.unwrap_map_type |> fst in
-      let ty = StringMap.map (function (Primitive f,_) -> TypeUtils.return_type (Env.String.find f Lib.type_env) | _ -> assert false) aggs 
+      let ty = StringMap.map (function (Primitive f,_) -> TypeUtils.return_type (Env.String.find f Lib.type_env) | _ -> assert false) aggs
         |> Types.make_record_type
       in
       Types.make_mapentry_type tyk ty |> Types.make_list_type
@@ -491,7 +491,6 @@ let append_env e1 e2 =
     let qenv = Env.Int.extend e1.qenv e2.qenv in
     { policy = e1.policy; venv; qenv }
 
-(* TODO/FIXME AggBy *)
 let lookup_fun env (f, fvs) =
   match Tables.lookup Tables.fun_defs f with
   | Some (finfo, (xs, body), z, location) ->
