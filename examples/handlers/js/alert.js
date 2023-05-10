@@ -4,9 +4,9 @@ function _alertBox(msg) {
 
 function wait(time, cb, kappa) {
     setTimeout(function() {
-        return _applyCont(_makeCont(cb), _idy);
+        return _$K.apply(_$K.make(cb), _$K.idy);
     }, time);
-    return _applyCont(kappa, {});
+    return _$K.apply(kappa, _$Constants.UNIT);
 }
 
 var alertBox = _$Links.kify(_alertBox);

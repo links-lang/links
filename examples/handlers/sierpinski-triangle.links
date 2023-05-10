@@ -1,8 +1,8 @@
-alien javascript "/js/canvas.js" {
+alien javascript "/examples/handlers/js/canvas.js" {
     getValueFromSelection: (String) ~> String;
 }
 
-alien javascript "js/runtime.js" {
+alien javascript "/examples/handlers/js/runtime.js" {
     delayExecution: (Int) ~> ();
     requestAnimationFrame: (() -> (), Int) ~> ();
     setIntervalForF: (Int, () ~> ()) ~> ();
@@ -16,11 +16,11 @@ typename Point = (x:Int, y:Int);
 typename Queue(a) = (rear: [a], front: [a]);
 typename PrioQueue(a) = (high: Queue(a), low: Queue(a));
 typename Priority = [|High|Low|];
-typename Co(e::Eff) = () {Fork: (Co({ |e}), Priority) -> (), Yield:() |e}~> ();
-typename Fiber0(e::Eff) = (prio: Priority, f: () {Fork: (Fiber0({ |e})) -> (), Yield:()|e}~> ());
+typename Co(e::Eff) = () {Fork: (Co({ |e}), Priority) => (), Yield:() |e}~> ();
+typename Fiber0(e::Eff) = (prio: Priority, f: () {Fork: (Fiber0({ |e})) => (), Yield:()|e}~> ());
 typename SchedulerState(a) = (runQ: PrioQueue(a), prio: Priority, startTime: Int);
-typename Fiber = (prio:Priority, f: (SchedulerState(Fiber)) ~> ());
-typename FiberQueue = PrioQueue(Fiber);
+typename Fiber(e::Eff) = (prio:Priority, f: (SchedulerState(Fiber({ |e}))) ~e~> ());
+typename FiberQueue(e::Eff) = PrioQueue(Fiber({ |e}));
 typename Update = [|TextUpdate: String | LocationUpdate: Float|];
 typename STriangle(e::Eff) = (point: Point, targetSize: Int, text: String, children: [STriangle({ |e})]);
 
@@ -115,7 +115,7 @@ fun fiberQueueLength(q){
     length(q.low.rear) + length(q.high.front) + length(q.high.rear) + length(q.low.front)
 }
 
-sig fork : (Fiber0({ |e})) {Fork: (Fiber0({ |e})) -> (), Yield:() |e}~> ()
+sig fork : (Fiber0({ |e})) {Fork: (Fiber0({ |e})) => (), Yield:() |e}~> ()
 fun fork(f){
     do Fork(f)
 }
@@ -125,7 +125,7 @@ fun yield(){
     do Yield
 }
 
-sig makeFiber: (Priority, () {Fork: (Fiber0({ |e})) -> (), Yield:() |e}~> ()) -> Fiber0({ |e})
+sig makeFiber: (Priority, () {Fork: (Fiber0({ |e})) => (), Yield:() |e}~> ()) -> Fiber0({ |e})
 fun makeFiber(prio, f){
     (prio= prio, f=f)
 }
@@ -244,9 +244,9 @@ fun schedule(main){
     fun runFiber(fiber, runQ){
         #dump(self());
         handle(fiber.f()) ( state <- (prio=fiber.prio, runQ=runQ, startTime=clientTimeMilliseconds()) ){
-            case Return(x) ->
+            case x ->
                 runNext(poll(state.runQ))
-            case Fork(f, resume) ->
+            case <Fork(f) => resume> ->
                 var q = poll(state.runQ);
                 switch ((f.prio, state.prio)) {
                     case (High, _) ->
@@ -259,7 +259,7 @@ fun schedule(main){
                         var qq = fiberEnqueue(resumptionToFiber(resume, state.prio), q);
                         runFiber(f, qq)
                 }
-            case Yield(resume) ->
+            case <Yield => resume> ->
                 var currentTime = clientTimeMilliseconds();
                 var buffer = switch(state.prio){
                     case High -> 120
@@ -299,7 +299,7 @@ fun schedule(main){
 
 fun gensymHandler(f){
     handle(f())(counter <- 0) {
-        case Gensym(resume) -> resume(counter, counter+1)
+        case <Gensym => resume> -> resume(counter, counter+1)
     }
 }
 
@@ -407,7 +407,7 @@ fun main_page(_){
 sig main: () ~> ()
 fun main() {
     addRoute("/", main_page);
-    addStaticRoute("/js", "js", [("js", "text/javascript")]);
+    addStaticRoute("/examples/handlers/js", "examples/handlers/js", [("js", "text/javascript")]);
 
     servePages()
 }

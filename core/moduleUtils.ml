@@ -23,12 +23,7 @@ let use_stdlib
 
 (* Standard library path *)
 let stdlib_path =
-  let dir =
-    match Utility.getenv "LINKS_LIB" with
-    | Some path -> Filename.concat path "stdlib"
-    | None -> ""
-  in
-  Settings.(option ~default:(Some dir) "stdlib_path"
+  Settings.(option ~default:(Some Linkspath.stdlib) "stdlib_path"
             |> to_string from_string_option
             |> convert Utility.(Sys.expand ->- some)
             |> sync)
@@ -210,12 +205,12 @@ let create_module_info_map program =
           @ get_binding_names bs
       | _ :: bs -> get_binding_names bs in (* Other binding types are uninteresting for this pass *)
 
-    (* Getting type names -- we're interested in typename decls *)
+    (* Getting type names -- we're interested in typename/effectname decls *)
     let rec get_type_names = function
       | [] -> []
       | b :: bs ->
           match node b with
-            | Typenames ts ->
+            | Aliases ts ->
                 let ns = ListUtils.concat_map (fun {node=(n, _, _); _} -> [n]) ts in
                 ns @ (get_type_names bs)
             | _ -> get_type_names bs in

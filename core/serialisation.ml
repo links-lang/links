@@ -131,6 +131,7 @@ module Compressible = struct
       | `PrimitiveFunction of string
       | `ClientDomRef of int
       | `ClientFunction of string
+      | `ClientClosure of int
       | `Continuation of K.compressed_t
       | `Resumption of K.compressed_r
       | `Alien ]
@@ -169,6 +170,7 @@ module Compressible = struct
       | `PrimitiveFunction (f, _op) -> `PrimitiveFunction f
       | `ClientDomRef i -> `ClientDomRef i
       | `ClientFunction f -> `ClientFunction f
+      | `ClientClosure i  -> `ClientClosure i
       | `Continuation cont -> `Continuation (K.compress cont)
       | `Resumption r -> `Resumption (K.compress_r r)
       | `Pid _ -> assert false (* mmmmm *)
@@ -213,6 +215,7 @@ module Compressible = struct
       | `PrimitiveFunction f -> `PrimitiveFunction (f,None)
       | `ClientDomRef i -> `ClientDomRef i
       | `ClientFunction f -> `ClientFunction f
+      | `ClientClosure i -> `ClientClosure i
       | `Continuation cont -> `Continuation (K.decompress ~globals cont)
       | `Resumption res -> `Resumption (K.decompress_r ~globals res)
       | `Alien -> `Alien
@@ -462,7 +465,8 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
             match List.assoc "db" bs |> from_json with
             | `Database db -> db
             | _ -> raise (error ("first argument to a table must be a database"))
-          end in
+          end
+        in
         let name = assoc_string "name" bs in
         let keys = List.assoc "keys" bs |> unwrap_list in
         let keys =
@@ -498,6 +502,11 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
           end
         in
         Value.make_table ~database ~name ~keys ~temporality ~temporal_fields ~row
+      in
+      let parse_client_closure xs () =
+        match List.assoc_opt "_closureTable" xs with
+        | Some index -> Some (`ClientClosure (unwrap_int index))
+        | None -> None
       in
 
       let (<|>) (o1: unit -> t option) (o2: unit -> t option) : unit -> t option =
@@ -601,6 +610,7 @@ module UnsafeJsonSerialiser : SERIALISER with type s := Yojson.Basic.t = struct
            <|> (parse_session_channel xs)
            <|> (parse_server_func xs)
            <|> (parse_date xs)
+           <|> (parse_client_closure xs)
          in
          begin
            match result () with

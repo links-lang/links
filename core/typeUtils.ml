@@ -126,6 +126,7 @@ let rec return_type ?(overstep_quantifiers=true) t = match (concrete_type t, ove
   | (ForAll (_, t), true) -> return_type t
   | (Function (_, _, t), _) -> t
   | (Lolli (_, _, t), _) -> t
+  | (Operation (_, t), _) -> t
   | (t, _) ->
       error ("Attempt to take return type of non-function: " ^ string_of_datatype t)
 
@@ -237,7 +238,7 @@ let rec primary_kind_of_type t =
      failwith "Top-level Recursive should have been removed by concrete_type call"
   | Meta p ->
      primary_kind_of_type (Unionfind.find p)
-  | Alias (_, d) ->
+  | Alias (_, _, d) ->
      primary_kind_of_type d
   | Primitive _
   | Function _
@@ -248,6 +249,7 @@ let rec primary_kind_of_type t =
   | ForAll _
   | Application _
   | RecursiveApplication _
+  | Operation _
   | Input _
   | Output _
   | Select _
@@ -323,7 +325,7 @@ let check_type_wellformedness primary_kind t : unit =
     | (Var _ | Recursive _ | Closed) ->
        (* freestanding Var / Recursive / Closed not implemented yet (must be inside Meta) *)
        raise tag_expectation_mismatch
-    | Alias ((_name, qs, ts, _), d) ->
+    | Alias (_, (_name, qs, ts, _), d) ->
        List.iter2 (compare_kinds rec_env) qs ts;
        typ rec_env d
     | Application (abs_type, args) ->
@@ -357,6 +359,9 @@ let check_type_wellformedness primary_kind t : unit =
     | Effect row ->
        irow row;
        pk_row
+    | Operation (f, t) ->
+       idatatype f; idatatype t;
+       pk_type
     (* Presence *)
     | Present t ->
        idatatype t;

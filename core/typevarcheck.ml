@@ -33,7 +33,7 @@ let rec is_guarded : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
         | Not_typed -> true
         | (Var _ | Recursive _) ->
            failwith ("freestanding Var / Recursive not implemented yet (must be inside Meta)")
-        | Alias (_, t) -> isg t
+        | Alias (_, _, t) -> isg t
         | Application (_, ts) ->
             (* don't treat abstract type constructors as guards *)
             List.for_all (is_guarded_type_arg bound_vars expanded_apps var) ts
@@ -87,6 +87,8 @@ let rec is_guarded : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
               expanded_apps var t
         (* Effect *)
         | Effect row -> isgr row
+        | Operation (f, t) ->
+            isg f && isg t
         (* Row *)
         | Row (fields, row_var, _dual) ->
            let check_fields = false in
@@ -138,7 +140,7 @@ let rec is_negative : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
         | Not_typed -> false
         | (Var _ | Recursive _) ->
            failwith ("freestanding Var / Recursive not implemented yet (must be inside Meta)")
-        | Alias (_, t) -> isn t
+        | Alias (_, _, t) -> isn t
         | Application (_, ts) ->
             List.exists (is_negative_type_arg bound_vars expanded_apps var) ts
         | RecursiveApplication { r_unique_name; r_args; r_unwind; r_dual; _ } ->
@@ -174,6 +176,8 @@ let rec is_negative : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
               expanded_apps var t
         (* Effect *)
         | Effect row -> isnr row
+        | Operation (f, t) ->
+            isp f || isn t
         (* Row *)
         | Row (field_env, row_var, _dual) ->
            is_negative_field_env bound_vars expanded_apps var field_env
@@ -225,7 +229,7 @@ and is_positive : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
         | Not_typed -> false
         | (Var _ | Recursive _) ->
            failwith ("freestanding Var / Recursive not implemented yet (must be inside Meta)")
-        | Alias (_, t) -> isp t
+        | Alias (_, _, t) -> isp t
         | Application (_, ts) ->
             List.exists (is_positive_type_arg bound_vars expanded_apps var) ts
         | RecursiveApplication { r_unique_name; r_args; r_unwind; r_dual; _ } ->
@@ -261,6 +265,8 @@ and is_positive : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
               expanded_apps var t
         (* Effect *)
         | Effect row -> ispr row
+        | Operation (f, t) ->
+            isn f || isp t
         (* Row *)
         | Row (field_env, row_var, _dual) ->
            is_positive_field_env bound_vars expanded_apps var field_env

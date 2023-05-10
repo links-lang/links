@@ -86,8 +86,8 @@ object (o : 'self_type)
          * (where (do SessionFail) has the empty type) *)
         let ty =
           Types.fresh_type_variable (CommonTypes.lin_any, CommonTypes.res_any) in
-        let doOp = DoOperation (failure_op_name, [], Some (Types.empty_type)) in
         let with_pos x = SourceCode.WithPos.make ~pos x in
+        let doOp = DoOperation (with_pos (Operation failure_op_name), [], Some (Types.empty_type)) in
         (o, with_pos (Switch (with_pos doOp, [], Some ty)), ty)
     | { node = TryInOtherwise (_, _, _, _, None); _} -> assert false
     | { node = TryInOtherwise (try_phr, pat, as_phr, otherwise_phr, (Some dt)); pos }
@@ -111,15 +111,18 @@ object (o : 'self_type)
           Types.make_pure_function_type [] (Types.empty_type) in
 
         let inner_effects =
-          effect_row
+          if Settings.get Basicsettings.Sessions.expose_session_fail then
+            effect_row
             |> Types.row_with (failure_op_name, Types.Present fail_cont_ty)
-            |> Types.flatten_row in
+            |> Types.flatten_row
+          else
+            effect_row in
 
         let cont_pat = variable_pat ~ty:(Types.make_function_type [] inner_effects (Types.empty_type))
           (Utility.gensym ~prefix:"dsh" ()) in
 
         let otherwise_pat : Sugartypes.Pattern.with_pos =
-          with_dummy_pos (Pattern.Effect (failure_op_name, [], cont_pat)) in
+          with_dummy_pos (Pattern.Operation (failure_op_name, [], cont_pat)) in
 
         let otherwise_clause = (otherwise_pat, otherwise_phr) in
 

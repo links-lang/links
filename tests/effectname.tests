@@ -1,0 +1,62 @@
+Simple effectname declarations
+./tests/effectname/simple-decl.links
+filemode : true
+stdout : () : ()
+
+Declaration and instanciation [1]
+./tests/effectname/zero.links
+filemode : true
+stdout : fun : () {}-> ()
+
+Declaration and instanciation [2]
+./tests/effectname/one.links
+filemode : true
+stdout : fun : () {E:() => ()}-> ()
+
+Declaration and instanciation [3]
+./tests/effectname/two.links
+filemode : true
+stdout : fun : () {E:() => ()}-> ()
+
+Twice the same effectname in one row
+./tests/effectname/two-nested.links
+filemode : true
+stdout : fun : () {E:() => ()}-> ()
+
+Mixed typename and effectname aliases
+./tests/effectname/typenames.links
+filemode : true
+stdout : fun : T' (Bool,Int,{})
+
+Nested declaration and instanciation
+./tests/effectname/nested-decl.links
+filemode : true
+stdout : fun : () {E:() => Int,E':(Int) => ()}-> ()
+
+Recursive alias
+./tests/effectname/recursive.links
+filemode : true
+stderr : @.*
+exit : 1
+
+Effectname aliases in handlers signatures
+./tests/effectname/handler.links
+filemode : true
+args : --enable-handlers
+stdout : (((), 42), (0, 42), (0, 42)) : (((), Int), (Int, Int), (Int, Int))
+
+Twice the same effect label in the row
+./tests/effectname/effect-same-name.links
+filemode : true
+stdout : fun : () {E:() => Int}-> Int
+
+Mutual declaration
+./tests/effectname/mutual.links
+filemode : true
+stdout : () : ()
+
+Underscore in effect alias application
+./tests/effectname/underscore.links
+filemode : true
+args : --enable-handlers
+stdout : true : Bool

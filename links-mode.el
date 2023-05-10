@@ -62,6 +62,7 @@
     "do"
     "else"
     "escape"
+    "effectname"
     "false"
     "for"
     "forall"
@@ -144,6 +145,7 @@
      (2 font-lock-function-name-face))
    ;; type operators
    '("\\(-\\|~\\)\\(>\\|@\\)" . font-lock-function-name-face)
+   '("\\(=>\\)" . font-lock-function-name-face)
    '("\\(-\\|~\\)\\([a-z]+\\)\\(-\\|~\\)\\(>\\|@\\)"
      (1 font-lock-function-name-face)
      (2 font-lock-variable-name-face)

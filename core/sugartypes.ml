@@ -117,7 +117,7 @@ let get_unresolved_exn = function
 let get_unresolved_name_exn =
   get_unresolved_exn ->- fst3
 
- let get_resolved_type_exn =
+let get_resolved_type_exn =
    function
    | TResolvedType point -> point
    | _ -> raise (internal_error "requested kind does not match existing kind info")
@@ -195,6 +195,7 @@ module Datatype = struct
     | Record          of row
     | Variant         of row
     | Effect          of row
+    | Operation       of with_pos list * with_pos
     | Table           of Temporality.t * with_pos * with_pos * with_pos
     | List            of with_pos
     | TypeApplication of string * type_arg list
@@ -209,6 +210,7 @@ module Datatype = struct
   and with_pos = t WithPos.t
   and row = (string * fieldspec) list * row_var
   and row_var =
+    | EffectApplication of string * type_arg list
     | Closed
     | Open of SugarTypeVar.t
     | Recursive of SugarTypeVar.t * row
@@ -227,6 +229,9 @@ end
 type datatype' = Datatype.with_pos * Types.datatype option
     [@@deriving show]
 
+type row' = Datatype.row * Types.row option
+    [@@deriving show]
+
 type type_arg' = Datatype.type_arg * Types.type_arg option
     [@@deriving show]
 
@@ -238,7 +243,9 @@ module Pattern = struct
     | Cons     of with_pos * with_pos
     | List     of with_pos list
     | Variant  of Name.t * with_pos option
-    | Effect   of Name.t * with_pos list * with_pos
+    (* | Effect   of Name.t * with_pos list * with_pos *)
+    (* | Effect2  of with_pos list * with_pos option *)
+    | Operation of Label.t * with_pos list * with_pos
     | Negative of Name.t list
     | Record   of (Name.t * with_pos) list * with_pos option
     | Tuple    of with_pos list
@@ -467,7 +474,8 @@ and phrasenode =
   | Instantiate      of phrase
   | Generalise       of phrase
   | ConstructorLit   of Name.t * phrase option * Types.datatype option
-  | DoOperation      of Name.t * phrase list * Types.datatype option
+  | DoOperation      of phrase * phrase list * Types.datatype option
+  | Operation        of Name.t
   | Handle           of handler
   | Switch           of phrase * (Pattern.with_pos * phrase) list *
                           Types.datatype option
@@ -520,7 +528,7 @@ and bindingnode =
   | Foreign of Alien.single Alien.t
   | Import of { pollute: bool; path : Name.t list }
   | Open of Name.t list
-  | Typenames of typename list
+  | Aliases of alias list
   | Infix   of { assoc: Associativity.t;
                  precedence: int;
                  name: string }
@@ -541,8 +549,11 @@ and cp_phrasenode =
   | CPLink        of Binder.with_pos * Binder.with_pos
   | CPComp        of Binder.with_pos * cp_phrase * cp_phrase
 and cp_phrase = cp_phrasenode WithPos.t
-and typenamenode = Name.t * SugarQuantifier.t list * datatype'
-and typename = typenamenode WithPos.t
+and aliasnode = Name.t * SugarQuantifier.t list * aliasbody
+and alias = aliasnode WithPos.t
+and aliasbody =
+  | Typename of datatype'
+  | Effectname of row'
 and function_definition = {
     fun_binder: Binder.with_pos;
     fun_linearity: DeclaredLinearity.t;
@@ -629,7 +640,7 @@ struct
     | List ps               -> union_map pattern ps
     | Cons (p1, p2)         -> union (pattern p1) (pattern p2)
     | Variant (_, popt)     -> option_map pattern popt
-    | Effect (_, ps, kopt)  -> union (union_map pattern ps) (pattern kopt)
+    | Operation (_, ps, kopt)  -> union (union_map pattern ps) (pattern kopt)
     | Record (fields, popt) ->
        union (option_map pattern popt)
          (union_map (snd ->- pattern) fields)
@@ -782,6 +793,7 @@ struct
                      diff (union_map (snd ->- phrase) fields) pat_bound]
     | DBTemporalJoin (_, p, _) -> phrase p
     | DoOperation (_, ps, _) -> union_map phrase ps
+    | Operation _ -> empty
     | QualifiedVar _ -> empty
     | TryInOtherwise (p1, pat, p2, p3, _ty) ->
        union (union_map phrase [p1; p2; p3]) (pattern pat)
@@ -804,7 +816,7 @@ struct
           names, union_map (fun rhs -> diff (funlit rhs) names) rhss
     | Import _
     | Open _
-    | Typenames _ -> empty, empty
+    | Aliases _ -> empty, empty
     (* This is technically a declaration, thus the name should
        probably be treated as bound rather than free. *)
     | Infix { name; _ } -> empty, singleton name

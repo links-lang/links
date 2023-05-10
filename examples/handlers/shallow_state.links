@@ -14,7 +14,7 @@ fun compify(k)(x) {
 # The run handler forces evaluation of a computation
 fun run(m) {
   handle(m()) {
-    case Return(x) -> x
+    case x -> x
   }
 }
 
@@ -22,44 +22,44 @@ fun run(m) {
 sig get : Comp(a, {Get:a |_})
 fun get() {do Get}
 
-sig put : (a) {Put:(a) -> ()|_}~> ()
+sig put : (a) {Put:(a) => ()|_}~> ()
 fun put(p) {do Put(p)}
 
 # Print line operation
-sig logVal : (a) {Log:(a) -> ()|_}~> ()
+sig logVal : (a) {Log:(a) => ()|_}~> ()
 fun logVal(p) {do Log(p)}
 
 # Stateful computation evaluator
 sig evalState : (s) -f->
-                (Comp(a, {Get:s,Put:(s) -> () |e})) -f->
+                (Comp(a, {Get:s,Put:(s) => () |e})) -f->
                  Comp(a, { |e})
 fun evalState(st)(m)() {
   (shallowhandle(m()) {
-    case Return(x) -> fun(_)  { x }
-    case Get(k)    -> fun(st) { var k = compify(k); run -<- evalState(st) $ k(st) }
-    case Put(p,k)  -> fun(_)  { var k = compify(k); run -<- evalState(p)  $ k(()) }
+    case x -> fun(_)  { x }
+    case <Get -> k>    -> fun(st) { var k = compify(k); run -<- evalState(st) $ k(st) }
+    case <Put(p) -> k>  -> fun(_)  { var k = compify(k); run -<- evalState(p)  $ k(()) }
   })(st)
 }
 
 fun logState(m)() {
   shallowhandle(m()) {
-    case Get(k)    -> var k = compify(k);
+    case <Get -> k>    -> var k = compify(k);
                       var v = get();
                       logState(k(v))()
-    case Put(p,k)  -> var k = compify(k);
+    case <Put(p) -> k>  -> var k = compify(k);
                       logVal(p);
                       var v = put(p);
                       logState(k(v))()
-    case Return(x) -> x
+    case x -> x
   }
 }
 
 # Prints integers to stdout
-sig logPrinter : (Comp(a, {Log:(Int) -> () |e})) -f-> Comp(a, { |e})
+sig logPrinter : (Comp(a, {Log:(Int) => () |e})) -f-> Comp(a, { |e})
 fun logPrinter(m)() {
   shallowhandle(m()) {
-    case Return(x) -> x
-    case Log(p,k)  -> var k = compify(k);
+    case x -> x
+    case <Log(p) -> k>  -> var k = compify(k);
                       print(intToString(p));
                       logPrinter(k(()))()
   }
@@ -67,12 +67,12 @@ fun logPrinter(m)() {
 
 # Log accumulator
 sig logAccumulator : ([a]) -f->
-                     (Comp(b,       {Log:(a) -> () |e})) -f->
+                     (Comp(b,       {Log:(a) => () |e})) -f->
                       Comp((b,[a]), { |e})
 fun logAccumulator(ps)(m)() {
   shallowhandle(m()) {
-    case Return(x) -> (x,ps)
-    case Log(p,k) -> var k = compify(k);
+    case x -> (x,ps)
+    case <Log(p) -> k> -> var k = compify(k);
                      run -<- logAccumulator(p :: ps) $ k(())
   }
 }

@@ -1,0 +1,12 @@
+typename T = forall e::Eff. (Int) -e-> Int ;
+
+effectname A(a,e::Eff) = { E1: T, E2: (Int) => a | e } ;
+
+typename T'(a,b,e::Eff) = (a) { E: (a) => Int | A(b,{ |e}) }-> b ;
+
+sig f : T'(Bool, Int, {})
+fun f (x) {
+    do E2( (do E1 ()) (do E(x)) )
+}
+
+f

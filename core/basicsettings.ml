@@ -1,5 +1,5 @@
 (** The banner *)
-let version = "0.9.7 (Burghmuirhead)"
+let version = "0.9.8 (Burghmuirhead)"
 let version = Settings.(option ~default:(Some version) ~readonly:true "version"
                         |> privilege `System
                         |> synopsis "Print version and exit"
@@ -40,6 +40,16 @@ module Sessions = struct
               |> privilege `System
               |> convert parse_bool
               |> CLI.(add (long "session-exceptions"))
+              |> sync)
+
+  let expose_session_fail =
+    Settings.(flag "expose_session_fail" ~default:true
+              |> synopsis "Exposes the SessionFail effect"
+              |> depends Handlers.enabled
+              |> depends exceptions_enabled
+              |> privilege `System
+              |> convert parse_bool
+              |> CLI.(add (long "expose-session-fail"))
               |> sync)
 end
 
@@ -116,11 +126,11 @@ module System = struct
               |> sync)
 
   let custom_js_runtime =
-    Settings.(option "custom_js_runtime"
+    Settings.(multi_option "custom_js_runtime"
               |> privilege `User
               |> synopsis "If link_js_runtime is set to true, then the JS compiler will link the provided file(s) rather than the standard Links JS runtime"
-              |> to_string from_string_option
-              |> convert (fun s -> Some s)
+              |> to_string string_of_paths
+              |> convert parse_paths
               |> hidden
               |> CLI.(add (long "Xcustom-js-runtime"))
               |> sync)

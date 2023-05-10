@@ -1,0 +1,14 @@
+effectname A(e::Eff) = { FEct : () => Bool | e } ;
+
+sig callF : () -A({ |_})-> Bool      # with _ => error, with e => no error
+fun callF () {  do FEct  }
+
+sig handlerA : ( () ~A({ |b})~> c ) {FEct{_}|b}~> c
+fun handlerA (h) {
+    handle (h()) {
+           case x -> x
+           case <FEct => k> -> k(true)
+    }
+}
+
+handlerA( callF )

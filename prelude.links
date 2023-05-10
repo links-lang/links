@@ -1329,6 +1329,9 @@ fun sendSuspend(pagef) {
   }
 }
 
+#### CONCURRENCY ####
+typename Pid(a::Type) = Process({hear: a});
+
 #### SESSION TYPING STUFF ####
 #sig fork : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
 sig fork : forall s::Session,e::Row.((s) {SessionFail:[||]}~> ()) ~e~> ~s

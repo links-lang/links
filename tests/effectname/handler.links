@@ -1,0 +1,38 @@
+effectname State(a,e::Eff) = { Get:() => a, Put:(a) => () | e } ;
+
+sig hstate : (() ~State(a,{ |e})~> b) -> () {Get{_}, Put{_} | e}~> (a) ~e~> (b,a)
+fun hstate (m)() {
+    handle (m()) {
+        case x -> fun (s) { (x,s) }
+        case <Get => k>     -> fun (s) { k(s)(s) }
+        case <Put(s') => k> -> fun (s) { k(())(s') }
+    }
+}
+
+
+sig f : () ~State(Int,{})~> ()
+fun f () {
+    var x = do Get() ;
+    do Put(2*x) ;
+    ()
+}
+
+effectname Reader(a,e::Eff) = {Ask:() => a | e } ;
+
+sig hreader : (() ~Reader(Int,{ |e})~> a) -> () {Ask{_}|e}~> a
+fun hreader (m)() {
+    handle (m()) {
+           case x -> x
+           case <Ask => k> -> k (-42)
+    }
+}
+
+sig g : () ~State(Int,{ |Reader(Int,{})})~> Int
+fun g () {
+    var x = do Get() ;
+    var y = do Ask() ;
+    do Put(2*x) ;
+    y + do Get()
+}
+
+( hstate(f)()(21) , hstate(hreader(g))()(21) , hreader(fun () { hstate(g)()(21) })() )

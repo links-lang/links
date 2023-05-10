@@ -268,13 +268,31 @@ struct
   (* Temporal projection operations *)
   | Q.Apply (Q.Primitive "ttData", [x])
   | Q.Apply (Q.Primitive "vtData", [x]) ->
-    Q.Project (x, TemporalField.data_field)
+    begin
+        match x with
+            | Q.Record r ->
+                StringMap.find TemporalField.data_field r
+            | _ ->
+                Q.Project (x, TemporalField.data_field)
+    end
   | Q.Apply (Q.Primitive "ttFrom", [x])
   | Q.Apply (Q.Primitive "vtFrom", [x]) ->
-    Q.Project (x, TemporalField.from_field)
+      begin
+        match x with
+            | Q.Record r ->
+                StringMap.find TemporalField.from_field r
+            | _ ->
+                Q.Project (x, TemporalField.from_field)
+      end
   | Q.Apply (Q.Primitive "ttTo", [x])
   | Q.Apply (Q.Primitive "vtTo", [x]) ->
-    Q.Project (x, TemporalField.to_field)
+      begin
+        match x with
+            | Q.Record r ->
+                StringMap.find TemporalField.to_field r
+            | _ ->
+                Q.Project (x, TemporalField.to_field)
+      end
   | u -> u
 
   let rec xlate env : Ir.value -> Q.t = let open Ir in function

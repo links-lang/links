@@ -982,9 +982,25 @@ struct
               cofv (I.inject (name, I.record ([], None), t))
           | ConstructorLit (name, Some e, Some t) ->
               cofv (I.inject (name, ev e, t))
-          | DoOperation (name, ps, Some t) ->
-             let vs = evs ps in
-             I.do_operation (name, vs, t)
+          | DoOperation (op, ps, Some t) ->
+            let name =
+              let o = (object (o)
+                inherit SugarTraversals.fold as super
+                val mutable opname = None
+
+                method opname = match opname with
+                  | Some name -> name
+                  | None -> failwith "Operation with no name"
+
+                method! phrasenode = function
+                  | Operation name -> opname <- Some name ; o
+                  | p -> super#phrasenode p
+              end)#phrase op in
+              o#opname
+            in
+            let vs = evs ps in
+            I.do_operation (name, vs, t)
+          | Operation _ -> assert false
           | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
              (* it happens that the ambient effects are the right ones
                 for all of the patterns here (they match those of the
@@ -1317,7 +1333,7 @@ struct
                    let xt = Binder.to_type binder in
                    I.alien (Var.make_info xt x scope, Alien.object_name alien, Alien.language alien,
                             fun v -> eval_bindings scope (extend [x] [(v, xt)] env) bs e)
-                | Typenames _
+                | Aliases _
                 | Infix _ ->
                     (* Ignore type alias and infix declarations - they
                        shouldn't be needed in the IR *)

@@ -23,29 +23,29 @@ fun showToss(toss) {
 
 fun positive(m) client {
   handle(m()) {
-    case Return(x) -> x
-    case Choose(k) -> k(true)
+    case x -> x
+    case <Choose => k> -> k(true)
   }
 }
 
 fun allChoices(m)() client {
   handle(m()) {
-    case Return(x) -> [x]
-    case Choose(k) -> k(true) ++ k(false)
+    case x -> [x]
+    case <Choose => k> -> k(true) ++ k(false)
   }
 }
 
 fun failure(m)() client {
   handle(m()) {
-    case Return(x) -> [x]
-    case Fail(k) -> []
+    case x -> [x]
+    case <Fail => k> -> []
   }
 }
 
 # fun allChoicesShallow(m)() client {
 #   shallowhandle(m()) {
-#     case Return(x) -> [x]
-#     case Choose(k) -> allChoicesShallow(fun() {k(true)})() ++ allChoicesShallow(fun() {k(false)})()
+#     case x -> [x]
+#     case <Choose -> k> -> allChoicesShallow(fun() {k(true)})() ++ allChoicesShallow(fun() {k(false)})()
 #   }
 # }
 
