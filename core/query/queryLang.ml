@@ -243,7 +243,6 @@ let unbox_string =
 let recdty_field_types (t : Types.datatype) : Types.datatype StringMap.t =
       field_types_of_row (TypeUtils.extract_row t)
 
-(* TODO/FIXME: substitute into GroupBy/AggBy? *)
 let rec subst t x u =
   let srec t = subst t x u in
   match t with
@@ -274,9 +273,13 @@ let rec subst t x u =
   | Closure (c, closure_env) ->
       let cenv = bind closure_env (x,u) in
       Closure (c, cenv)
+  | AggBy (ar, q) -> AggBy (StringMap.map (fun (t0,l) -> srec t0, l) ar, srec q)
+  | GroupBy ((v,i), q) -> 
+      let i' = if v = x then i else srec i in
+      let q' = srec q in
+      GroupBy ((v,i'), q')
   | v -> v
 
-(* TODO/FIXME: GroupBy/AggBy? *)
 (** Returns (Some ty) if v occurs free with type ty, None otherwise *)
 let occurs_free (v : Var.var) =
   let rec occf bvs = function
@@ -305,6 +308,8 @@ let occurs_free (v : Var.var) =
       let bvs'', res = List.fold_left (fun (bvs',acc) (_genkind,w,q) -> w::bvs', acc ||=? occf bvs' q) (bvs, None) gs in
       res ||=? occf bvs'' b
   | Record fl -> map_tryPick (fun _ t -> occf bvs t) fl
+  | GroupBy ((v,i), q) -> occf (v::bvs) i ||=? occf bvs q
+  | AggBy (ar, q) -> map_tryPick (fun _ (t, _) -> occf bvs t) ar ||=? occf bvs q
   | _ -> None
   in occf []
 
@@ -449,7 +454,10 @@ let used_database : t -> Value.database option =
           traverse (scrutinee :: (cases @ default))
       | Erase (x, _) -> used x
       | Variant (_, x) -> used x
-      | AggBy (_aggs, q) -> used q
+      | AggBy (aggs, q) ->
+          let aggs' = StringMap.to_alist aggs |> List.map (fun (_,(x,_)) -> x) in
+          traverse (q::aggs')
+      | GroupBy ((_,i), q) -> traverse [q;i]
       | _ -> None
   and used =
     function
