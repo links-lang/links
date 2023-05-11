@@ -302,6 +302,7 @@ struct
     Q.Project (x, TemporalField.to_field)
   | Q.Apply (Q.Primitive "Distinct", [u]) -> Q.Prom (Q.Dedup u)
   | Q.Apply (Q.Primitive "AggBy", [q; aggs]) ->
+    let aggError x = Debug.print ("AggBy error --" ^ x); assert false in
     let of_closure = function
     | Q.Closure (([x], comp), env) ->
         (* a dummy type because we cannot synthesize the right one here *)
@@ -309,25 +310,25 @@ struct
         let vx = Q.Var (x, vty) in
         let env' = Q.bind env (x, vx) in
         x, xc env' comp
-    | q -> Debug.print (Q.show q);  assert false (* TODO error message *)
+    | q -> aggError ("of_closure of " ^ (Q.show q))
     in
     let of_apply = function
     | Q.Apply (f, [arg]) -> f, arg
-    | q -> Debug.print (Q.show q);  assert false (* TODO error message *)
+    | q -> aggError ("of_apply of " ^ (Q.show q))
     in
     let of_map_project = function
     | Q.Apply (Q.Primitive "ConcatMap", [c;q]) -> c, q
     | Q.Apply (Q.Project (r, l), [c;q]) when reduce_project (r, l) = Q.Primitive "ConcatMap" -> c, q
-    | q -> Debug.print (Q.show q);  assert false (* TODO error message *)
+    | q -> aggError ("of_map_project of " ^ (Q.show q))
     in
     let of_project = function
     | Q.Project (r, l) -> l, r
-    | q -> Debug.print (Q.show q);  assert false (* TODO error message *)
+    | q -> aggError ("of_project of " ^ (Q.show q))
     in
     let of_singleton = function
     (* | Q.Singleton q -> q -- but not really *)
     | Q.Apply (Q.Primitive "Cons", [q; Q.Concat []]) -> q
-    | q -> Debug.print (Q.show q);  assert false (* TODO error message *)
+    | q -> aggError ("of_singleton of " ^  (Q.show q))
     in
     let of_record x = function
     | Q.Record fields ->
@@ -340,11 +341,11 @@ struct
         match of_project (of_singleton cbody) with
         | l, Q.Var (var, _) when var = y ->
           StringMap.add label (f, l) acc
-        | l, q -> Debug.print ("label " ^ l ^ ": " ^ (Q.show q));  assert false (* TODO error message *)
+        | l, q -> aggError ("of_record label " ^ l ^ ": " ^ (Q.show q))
         )
         fields
         StringMap.empty
-    | q -> Debug.print (Q.show q);  assert false (* TODO error message *)
+    | q -> aggError ("of_record " ^ (Q.show q))
     in
     Debug.print ("Aggregating with: " ^ Q.show aggs);
     let x, v = of_closure aggs in
@@ -563,17 +564,12 @@ struct
   | (Q.Values, x, Q.Singleton (Q.MapEntry (_,v))) -> gsx, Q.bind env (x,v)
   *)
   | (Q.Keys, x, Q.Singleton (Q.MapEntry (k,_))) -> gsx, Q.bind env (x,k)
-  (* FIXME: this is incorrect if we are in a bag context and pol = Q.Keys *)
   | (pol, x, q) ->
       let z = Var.fresh_raw_var () in
       let tyz = type_of_for_var pol q in
-(*        Q.type_of_expression q
-        |> TypeUtils.element_type
-      in *)
       let vz = Q.Var (z, tyz) in
       let env' = Q.bind env (x, vz) in
       gsx@[pol,z,q], env'
-
 
   (* when the head of a comprehension is a Prom, this lifts it to a generator
    * by means of eta-expansion *)
