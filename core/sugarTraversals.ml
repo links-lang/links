@@ -315,10 +315,14 @@ class map =
           let _x_i1 = o#option (fun o -> o#phrase) _x_i1 in
           let _x_i2 = o#option (fun o -> o#typ) _x_i2 in
           ConstructorLit ((_x, _x_i1, _x_i2))
-      | DoOperation (name, ps, t, b) ->
+      | DoOperation (op, ps, t, b) ->
+          let op  = o#phrase op in
           let ps  = o#list (fun o -> o#phrase) ps in
           let t   = o#option (fun o -> o#typ) t in
-          DoOperation (name, ps, t, b)
+          DoOperation (op, ps, t, b)
+      | Operation _x ->
+          let _x = o#name _x in
+          Operation _x
       | Linlet _x ->
           let _x = o#phrase _x in Linlet _x
       | Unlet _x ->
@@ -559,11 +563,11 @@ class map =
           let _x = o#name _x in
           let _x_i1 = o#option (fun o -> o#pattern) _x_i1
           in Variant ((_x, _x_i1))
-      | Effect (name, ps, k) ->
+      | Operation (name, ps, k) ->
          let name = o#name name in
          let ps = o#list (fun o -> o#pattern) ps in
          let k  = o#pattern k in
-         Effect (name, ps, k)
+         Operation (name, ps, k)
       | Negative _x ->
           let _x = o#list (fun o -> o#name) _x
           in Negative _x
@@ -675,6 +679,10 @@ class map =
       | Record _x -> let _x = o#row _x in Record _x
       | Variant _x -> let _x = o#row _x in Variant _x
       | Effect r -> let r = o#row r in Effect r
+      | Operation (_x, _x_i1, _x_i2) ->
+        let _x = o#list (fun o -> o#datatype) _x in
+        let _x_i1 = o#datatype _x_i1 in 
+        let _x_i2 = o#bool _x_i2 in Operation (_x, _x_i1, _x_i2)
       | Table (_t, _x, _x_i1, _x_i2) ->
          let _x = o#datatype _x in
          let _x_i1 = o#datatype _x_i1 in
@@ -1129,11 +1137,13 @@ class fold =
       | ConstructorLit ((_x, _x_i1, _x_i2)) ->
           let o = o#name _x in
           let o = o#option (fun o -> o#phrase) _x_i1 in o
-      | DoOperation (name,ps,t,b) ->
-          let o = o#name name in
-          let o = o#option (fun o -> o#unknown) t in
-          let o = o#list (fun o -> o#phrase) ps in
-          let o = o#bool b in o
+      | DoOperation (op,ps,t,b) ->
+         let o = o#phrase op in
+         let o = o#option (fun o -> o#unknown) t in
+         let o = o#list (fun o -> o#phrase) ps in
+         let o = o#bool b in o
+      | Operation (_x) ->
+          let o = o#name _x in o
       | Linlet _x ->
           let o = o#phrase _x in o
       | Unlet _x ->
@@ -1349,7 +1359,7 @@ class fold =
       | Variant ((_x, _x_i1)) ->
           let o = o#name _x in
           let o = o#option (fun o -> o#pattern) _x_i1 in o
-      | Effect (name, ps, k) ->
+      | Operation (name, ps, k) ->
          let o = o#name name in
          let o = o#list (fun o -> o#pattern) ps in
          let o = o#pattern k in
@@ -1452,6 +1462,10 @@ class fold =
       | Record _x -> let o = o#row _x in o
       | Variant _x -> let o = o#row _x in o
       | Effect r -> let o = o#row r in o
+      | Operation (_x, _x_i1, _x_i2) ->
+        let o = o#list (fun o -> o#datatype) _x in
+        let o = o#datatype _x_i1 in
+        let o = o#bool _x_i2 in o
       | Table (_t, _x, _x_i1, _x_i2) ->
           let o = o#datatype _x in
           let o = o#datatype _x_i1 in
@@ -1945,10 +1959,14 @@ class fold_map =
           let (o, _x_i1) = o#option (fun o -> o#phrase) _x_i1 in
           let o, _x_i2 = o#option (fun o -> o#typ) _x_i2 in
           (o, (ConstructorLit ((_x, _x_i1, _x_i2))))
-      | DoOperation (name, ps, t, b) ->
+      | DoOperation (op, ps, t, b) ->
+          let (o, op) = o#phrase op in
           let (o, t) = o#option (fun o -> o#typ) t in
           let (o, ps) = o#list (fun o -> o#phrase) ps in
-          (o, DoOperation (name, ps, t, b))
+          (o, DoOperation (op, ps, t, b))
+      | Operation _x ->
+          let (o, _x) = o#name _x in
+          (o, Operation _x)
       | Linlet _x ->
           let (o, _x) = o#phrase _x in
           (o, Linlet _x)
@@ -2233,11 +2251,11 @@ class fold_map =
           let (o, _x) = o#name _x in
           let (o, _x_i1) = o#option (fun o -> o#pattern) _x_i1
           in (o, (Variant ((_x, _x_i1))))
-      | Effect (name, ps, k) ->
+      | Operation (name, ps, k) ->
          let (o, name) = o#name name in
          let (o, ps) = o#list (fun o -> o#pattern) ps in
          let (o, k) = o#pattern k in
-         (o, Effect (name, ps, k))
+         (o, Operation (name, ps, k))
       | Negative _x ->
           let (o, _x) = o#list (fun o -> o#name) _x in (o, (Negative _x))
       | Record ((_x, _x_i1)) ->
@@ -2368,6 +2386,11 @@ class fold_map =
       | Record _x -> let (o, _x) = o#row _x in (o, (Record _x))
       | Variant _x -> let (o, _x) = o#row _x in (o, (Variant _x))
       | Effect r -> let (o, r) = o#row r in (o, Effect r)
+      | Operation (_x, _x_i1, _x_i2) ->
+        let (o, _x) = o#list (fun o -> o#datatype) _x in
+        let (o, _x_i1) = o#datatype _x_i1 in 
+        let (o, _x_i2) = o#bool _x_i2 in
+        (o, Operation (_x, _x_i1, _x_i2))
       | Table (_t, _x, _x_i1, _x_i2) ->
           let (o, _x) = o#datatype _x in
           let (o, _x_i1) = o#datatype _x_i1 in

@@ -7,8 +7,8 @@ fun test() {
   handle({
     ignore(lindo LL(ch))
   }) {
-    case Return(_) -> ()
-    case LL(ch, resume) -> {
+    case _ -> ()
+    case <LL(ch) => resume> -> {
       ignore(lindo LL(ch));
       var (i, ch) = receive(ch);
       close(ch);

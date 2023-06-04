@@ -4,8 +4,8 @@ handle({
   ignore(lindo LL);
   lf(2)
 }) {
-  case Return(_) -> lf(3)
-  case LL(resume) -> {
+  case _ -> lf(3)
+  case <LL => resume> -> {
     resume(())
   }
 }

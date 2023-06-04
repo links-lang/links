@@ -87,6 +87,8 @@ let rec is_guarded : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
               expanded_apps var t
         (* Effect *)
         | Effect row -> isgr row
+        | Operation (f, t, _) ->
+            isg f && isg t
         (* Row *)
         | Row (fields, row_var, _dual) ->
            let check_fields = false in
@@ -174,6 +176,8 @@ let rec is_negative : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
               expanded_apps var t
         (* Effect *)
         | Effect row -> isnr row
+        | Operation (f, t, _) ->
+            isp f || isn t
         (* Row *)
         | Row (field_env, row_var, _dual) ->
            is_negative_field_env bound_vars expanded_apps var field_env
@@ -261,6 +265,8 @@ and is_positive : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
               expanded_apps var t
         (* Effect *)
         | Effect row -> ispr row
+        | Operation (f, t, _) ->
+            isn f || isp t
         (* Row *)
         | Row (field_env, row_var, _dual) ->
            is_positive_field_env bound_vars expanded_apps var field_env

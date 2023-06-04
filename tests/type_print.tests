@@ -15,7 +15,7 @@ args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
 
 Effect sugar: Implicit effect variables (4)
 fun(_) {} : (() {F:()|_}-> ()) {F:()|_} -> ()
-stdout : fun : (() {F:() {}-> ()|_}-> ()) {F:() {}-> ()|_}-> ()
+stdout : fun : (() {F:() => ()|_}-> ()) {F:() => ()|_}-> ()
 args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
 
 Effect sugar: Single-use variables

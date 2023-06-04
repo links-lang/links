@@ -400,7 +400,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "spawn",
   (`PFun (fun _ -> assert false),
     begin
-    if Settings.get Basicsettings.Sessions.exceptions_enabled then
+    if Settings.get Basicsettings.Sessions.exceptions_enabled &&
+       Settings.get Basicsettings.Sessions.expose_session_fail then
       datatype "(() { SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
     else
       datatype "(() ~e~@ _) ~> Process ({ |e })"
@@ -410,7 +411,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "spawnAt",
   (`PFun (fun _ -> assert false),
     begin
-    if Settings.get Basicsettings.Sessions.exceptions_enabled then
+    if Settings.get Basicsettings.Sessions.exceptions_enabled &&
+       Settings.get Basicsettings.Sessions.expose_session_fail then
       datatype "(Location, () {SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
     else
       datatype "(Location, () ~e~@ _) ~> Process ({ |e })"
@@ -420,7 +422,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "spawnClient",
   (`PFun (fun _ -> assert false),
     begin
-    if Settings.get Basicsettings.Sessions.exceptions_enabled then
+    if Settings.get Basicsettings.Sessions.exceptions_enabled &&
+       Settings.get Basicsettings.Sessions.expose_session_fail then
       datatype "(() { SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
     else
       datatype "(() ~e~@ _) ~> Process ({ |e })"
@@ -430,7 +433,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "spawnAngel",
   (`PFun (fun _ -> assert false),
     begin
-    if Settings.get Basicsettings.Sessions.exceptions_enabled then
+    if Settings.get Basicsettings.Sessions.exceptions_enabled &&
+       Settings.get Basicsettings.Sessions.expose_session_fail then
       datatype "(() { SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
     else
       datatype "(() ~e~@ _) ~> Process ({ |e })"
@@ -440,7 +444,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "spawnAngelAt",
   (`PFun (fun _ -> assert false),
     begin
-    if Settings.get Basicsettings.Sessions.exceptions_enabled then
+    if Settings.get Basicsettings.Sessions.exceptions_enabled &&
+       Settings.get Basicsettings.Sessions.expose_session_fail then
       datatype "(Location, () { SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
     else
       datatype "(Location, () ~e~@ _) ~> Process ({ |e })"

@@ -298,11 +298,12 @@ let parse_foreign_language pos lang =
     raise (ConcreteSyntaxError
              (pos, Printf.sprintf "Unrecognised foreign language '%s'." lang))
 
+let any = any_pat dp
 %}
 
 %token EOF
 %token EQ IN
-%token FUN LINFUN FROZEN_FUN FROZEN_LINFUN RARROW LOLLI FATRARROW VAR OP
+%token FUN LINFUN FROZEN_FUN FROZEN_LINFUN RARROW LOLLI FATRARROW FATLOLLI VAR OP
 %token SQUIGRARROW SQUIGLOLLI TILDE
 %token IF ELSE
 %token MINUS MINUSDOT
@@ -678,8 +679,8 @@ unary_expression:
 | MINUSDOT unary_expression                                    { unary_appl ~ppos:$loc UnaryOp.FloatMinus $2 }
 | OPERATOR unary_expression                                    { unary_appl ~ppos:$loc (UnaryOp.Name $1)  $2 }
 | postfix_expression | constructor_expression                  { $1 }
-| DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (DoOperation ($2, $3, None, false)) }
-| LINDOOP CONSTRUCTOR loption(arg_spec)                        { with_pos $loc (DoOperation ($2, $3, None, true)) }
+| DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (DoOperation (with_pos $loc($2) (Operation $2), $3, None, false)) }
+| LINDOOP CONSTRUCTOR loption(arg_spec)                        { with_pos $loc (DoOperation (with_pos $loc($2) (Operation $2), $3, None, true)) }
 
 infix_appl:
 | unary_expression                                             { $1 }
@@ -815,9 +816,9 @@ case:
 case_expression:
 | SWITCH LPAREN exp RPAREN LBRACE case* RBRACE                 { with_pos $loc (Switch ($3, $6, None)) }
 | RECEIVE LBRACE case* RBRACE                                  { with_pos $loc (Receive ($3, None)) }
-| SHALLOWHANDLE LPAREN exp RPAREN LBRACE case* RBRACE          { with_pos $loc (Handle (untyped_handler $3 $6 Shallow)) }
-| HANDLE LPAREN exp RPAREN LBRACE case* RBRACE                 { with_pos $loc (Handle (untyped_handler $3 $6 Deep   )) }
-| HANDLE LPAREN exp RPAREN LPAREN handle_params RPAREN LBRACE case* RBRACE
+| SHALLOWHANDLE LPAREN exp RPAREN LBRACE handle_cases RBRACE   { with_pos $loc (Handle (untyped_handler $3 $6 Shallow)) }
+| HANDLE LPAREN exp RPAREN LBRACE handle_cases RBRACE          { with_pos $loc (Handle (untyped_handler $3 $6 Deep   )) }
+| HANDLE LPAREN exp RPAREN LPAREN handle_params RPAREN LBRACE handle_cases RBRACE
                                                                { with_pos $loc (Handle (untyped_handler ~parameters:$6 $3 $9 Deep)) }
 | RAISE                                                        { with_pos $loc (Raise) }
 | TRY exp AS pattern IN exp OTHERWISE exp                      { with_pos $loc (TryInOtherwise ($2, $4, $6, $8, None)) }
@@ -825,6 +826,14 @@ case_expression:
 handle_params:
 | separated_nonempty_list(COMMA,
     separated_pair(pattern, LARROW, exp))                      { $1 }
+
+handle_cases:
+| effect_case handle_cases                                     { (fst $2, $1 :: snd $2) }
+| case handle_cases                                            { ($1 :: fst $2, snd $2) }
+| /* empty */                                                  { ([],[]) }
+
+effect_case:
+| CASE effect_pattern RARROW case_contents { $2, block ~ppos:$loc($4) $4 }
 
 iteration_expression:
 | FOR LPAREN perhaps_generators RPAREN
@@ -1026,7 +1035,7 @@ just_datatype:
 | datatype EOF                                                 { $1 }
 
 datatype:
-| mu_datatype | straight_arrow | squiggly_arrow                { with_pos $loc $1 }
+| mu_datatype | straight_arrow | squiggly_arrow | fat_arrow    { with_pos $loc $1 }
 
 arrow_prefix:
 | LBRACE erow RBRACE                                           { $2            }
@@ -1062,6 +1071,10 @@ squiggly_arrow:
   squig_arrow_prefix SQUIGLOLLI datatype                       { Datatype.Lolli    ($1, row_with_wp $2, $4) }
 | parenthesized_datatypes SQUIGRARROW datatype                 { Datatype.Function ($1, row_with_wp fresh_effects, $3) }
 | parenthesized_datatypes SQUIGLOLLI datatype                  { Datatype.Lolli    ($1, row_with_wp fresh_effects, $3) }
+
+fat_arrow:
+| parenthesized_datatypes FATRARROW datatype                   { Datatype.Operation ($1, $3, false) }
+| parenthesized_datatypes FATLOLLI datatype                    { Datatype.Operation ($1, $3, true) }
 
 mu_datatype:
 | MU VARIABLE DOT mu_datatype                                  { Datatype.Mu (named_typevar $2 `Rigid, with_pos $loc($4) $4) }
@@ -1309,6 +1322,28 @@ regex_pattern_sequence:
 pattern:
 | typed_pattern                                                { $1 }
 | typed_pattern COLON primary_datatype_pos                     { with_pos $loc (Pattern.HasType ($1, datatype $3)) }
+
+effect_pattern:
+| typed_effect_pattern                                         { $1 }
+| typed_effect_pattern COLON primary_datatype_pos              { with_pos $loc (Pattern.HasType ($1, datatype $3)) }
+
+typed_effect_pattern:
+| lt = OPERATOR resumable_operation_pattern gt = OPERATOR
+    { if (lt <> "<") then raise (ConcreteSyntaxError (pos $loc(lt), ""))
+      else if (gt <> ">") then raise (ConcreteSyntaxError (pos $loc(gt), ""))
+      else $2 }
+
+resumable_operation_pattern:
+| operation_pattern FATRARROW pattern
+    { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3)) }
+| operation_pattern RARROW pattern
+    { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3)) }
+| operation_pattern
+    { with_pos $loc (Pattern.Operation (fst $1, snd $1, any)) }
+
+operation_pattern:
+| CONSTRUCTOR                                                  { ($1, []) }
+| CONSTRUCTOR multi_args                                       { ($1, $2) }
 
 typed_pattern:
 | cons_pattern                                                 { $1 }

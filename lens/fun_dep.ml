@@ -38,7 +38,7 @@ module Check_error = struct
   type t =
     | UnboundColumns of Alias.Set.t
     | ProbablyCycle of Alias.Set.t
-    | FunDepNotTreeForm of Alias.Set.t
+    | FunDepNotTreeForm
   [@@deriving show]
 end
 
@@ -229,7 +229,7 @@ module Tree = struct
         false)
     in
     List.for_all ~f:traverse tree
-    |> Result.of_bool ~error:(Check_error.FunDepNotTreeForm !joint)
+    |> Result.of_bool ~error:Check_error.FunDepNotTreeForm
 
   let rec all_cols tree =
     let f tree =

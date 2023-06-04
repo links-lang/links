@@ -14,8 +14,8 @@ fun await() {
 
 fun run() client {
     handle(await()) {
-      case Await(initiate, resume) -> initiate(resume)
-      case Return(x) -> x
+      case <Await(initiate) => resume> -> initiate(resume)
+      case x -> x
     }
     # wait(1000, fun() {
     #   alertBox("Hello again!")

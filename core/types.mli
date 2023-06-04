@@ -144,6 +144,8 @@ and typ =
   | ForAll of (Quantifier.t list * typ)
   (* Effect *)
   | Effect of row
+  (* | Operation of (typ * typ) *)
+  | Operation of (typ * typ * bool) (* true: linear operation; false: unlimited operation *)
   (* Row *)
   | Row of (field_spec_map * row_var * bool)
   | Closed
@@ -430,6 +432,7 @@ val add_tyvar_names : ('a -> Vars.vars_list)
 (* Function type constructors *)
 val make_pure_function_type : ?linear:bool -> datatype list -> datatype -> datatype
 val make_function_type      : ?linear:bool -> datatype list -> row -> datatype -> datatype
+val make_operation_type     : ?linear:bool -> datatype list -> datatype -> datatype
 val make_thunk_type : row -> datatype -> datatype
 
 
