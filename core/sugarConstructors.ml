@@ -290,7 +290,7 @@ module SugarConstructors (Position : Pos)
     node
 
   (** Handlers *)
-  let untyped_handler ?(val_cases = []) ?parameters expr eff_cases depth =
+  let untyped_handler ?parameters expr (val_cases, eff_cases) depth =
     { sh_expr         = expr;
       sh_effect_cases = eff_cases;
       sh_value_cases  = val_cases;

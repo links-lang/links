@@ -1,7 +1,7 @@
 # Pi estimation
 
 # Operations
-sig yield : (a) {Yield: (a) -> () |_}-> ()
+sig yield : (a) {Yield: (a) => () |_}-> ()
 fun yield(x) { do Yield(x) }
 
 sig await : () {Await:a |_}-> a
@@ -25,7 +25,7 @@ fun insideUnitCircle(p) {
 }
 
 # Streams of random points
-sig randomPoints : () {Yield: (Point) -> () |_}~> a
+sig randomPoints : () {Yield: (Point) => () |_}~> a
 fun randomPoints() {
   var p = makePoint(random(), random());
   yield(p);
@@ -33,11 +33,11 @@ fun randomPoints() {
 }
 
 # Synchronous take operation
-sig take : (Int, Comp(b, {Yield: (a) -> () |e})) {Yield{_} |e}~> [a]
+sig take : (Int, Comp(b, {Yield: (a) => () |e})) {Yield{_} |e}~> [a]
 fun take(n, m) {
   handle(m())(n <- n, st <- []) {
-    case Return(_) -> st
-    case Yield(x, resume) ->
+    case _ -> st
+    case <Yield(x) => resume> ->
        if (n <= 0) st
        else resume((), n-1, x :: st)
   }
@@ -45,7 +45,7 @@ fun take(n, m) {
 
 # Compute pi
 
-sig computePi : (Int) -> Comp(a, {Yield: (Float) -> () |_})
+sig computePi : (Int) -> Comp(a, {Yield: (Float) => () |_})
 fun computePi(n)() {
   fun loop(total, count) {
      # Synchronously take `n' random points
@@ -114,16 +114,16 @@ typename Step(a, e::Eff, r) =
                          |Awaits:Resumption(a, { |e}, b)
                          |]);
 
-sig step : (Comp(b, {Await:a, Yield: (a) -> () |e})) {Await{q}, Yield{p} |e}~> Step(a, { Await{q}, Yield{p} |e}, b)
+sig step : (Comp(b, {Await:a, Yield: (a) => () |e})) {Await{q}, Yield{p} |e}~> Step(a, { Await{q}, Yield{p} |e}, b)
 fun step(f) {
   handle(f()) {
-    case Return(x)        -> Done(x)
-    case Yield(x, resume) -> Yielded(x, resume)
-    case Await(resume)    -> Awaits(resume)
+    case x        -> Done(x)
+    case <Yield(x) => resume> -> Yielded(x, resume)
+    case <Await => resume>    -> Awaits(resume)
   }
 }
 
-sig exchange : (Comp(b, {Await:a, Yield: (a) -> () |e}), Comp(b, {Await:a, Yield: (a) -> () |e})) { Await{_}, Yield{_} |e}~> b
+sig exchange : (Comp(b, {Await:a, Yield: (a) => () |e}), Comp(b, {Await:a, Yield: (a) => () |e})) { Await{_}, Yield{_} |e}~> b
 fun exchange(f, g) {
   fun exchange_aux(f, g) {
     switch( (f, g) ) {
@@ -138,30 +138,30 @@ fun exchange(f, g) {
 
 # Shallow handler
 typename Consumer(a, e::Eff, b) = (a) {Abort:Zero, Await:a |e}~> b;
-typename Producer(a, e::Eff, b) = () {Abort:Zero, Yield:(a) -> () |e}~> b;
+typename Producer(a, e::Eff, b) = () {Abort:Zero, Yield:(a) => () |e}~> b;
 
 mutual {
   sig copipe : (Consumer(a, { Yield{q} |e}, b), Producer(a, { Await{p} |e}, _)) {Abort:Zero, Await{p}, Yield{q} |e}~> b
   fun copipe(receiver, sender) {
     shallowhandle(sender()) {
-      case Return(_) -> abort()
-      case Yield(x, resume) -> pipe(fun() { resume(()) }, fun() { receiver(x) })
+      case _ -> abort()
+      case <Yield(x) -> resume> -> pipe(fun() { resume(()) }, fun() { receiver(x) })
     }
   }
 
   sig pipe : (Producer(a, { Await{p} |e}, _), Comp(b, {Abort:Zero, Await:a, Yield{q} |e})) {Abort:Zero, Await{p}, Yield{q} |e}~> b
   fun pipe(sender, receiver) {
     shallowhandle(receiver()) {
-      case Return(x) -> x
-      case Await(resume) -> copipe(resume, sender)
+      case x -> x
+      case <Await -> resume> -> copipe(resume, sender)
     }
   }
 }
 
 fun catch(m) {
   handle(m()) {
-    case Return(x) -> x
-    case Abort     -> error("Caught abort")
+    case x -> x
+    case <Abort> -> error("Caught abort")
   }
 }
 

@@ -7,7 +7,7 @@ typename Unit = [|Unit|];
 # The run handler forces evaluation of a computation
 fun run(m) {
   handle(m()) {
-    case Return(x) -> x
+    case x -> x
   }
 }
 
@@ -15,55 +15,55 @@ fun run(m) {
 sig get : Comp({Get:a |_}, a)
 fun get() {do Get}
 
-sig put : (a) {Put:(a) {}-> ()|_}~> ()
+sig put : (a) {Put:(a) => ()|_}~> ()
 fun put(p) {do Put(p)}
 
 # Println line operation
-sig logVal : (a) {Log:(a) {}-> ()|_}~> ()
+sig logVal : (a) {Log:(a) => ()|_}~> ()
 fun logVal(p) {do Log(p)}
 
 # Stateful computation evaluator
 sig evalState : (s) ->
-                (Comp({Get:s,Put:(s) {}-> () |e}, a)) ->
+                (Comp({Get:s,Put:(s) => () |e}, a)) ->
                  Comp({Get{_},Put{_}         |e}, a)
 fun evalState(st)(m)() {
   (handle(m()) {
-    case Return(x) -> fun(_)  { x }
-    case Get(k)    -> fun(st) { k(st)(st) }
-    case Put(p,k)  -> fun(_)  { k(())(p) }
+    case x -> fun(_)  { x }
+    case <Get => k>    -> fun(st) { k(st)(st) }
+    case <Put(p) => k>  -> fun(_)  { k(())(p) }
   })(st)
 }
 
 fun logState(m)() {
   handle(m()) {
-    case Get(k)    -> var v = get();
+    case <Get => k>    -> var v = get();
                       k(v)
-    case Put(p,k)  -> logVal(p);
+    case <Put(p) => k>  -> logVal(p);
                       var v = put(p);
                       k(v)
-    case Return(x) -> x
+    case x -> x
   }
 }
 
 # Printlns integers to stdout
-sig logPrinter : (Comp({Log:(Int) {}-> () |e}, a)) ->
+sig logPrinter : (Comp({Log:(Int) => () |e}, a)) ->
                   Comp({Log{_}            |e}, a)
 fun logPrinter(m)() {
   handle(m()) {
-    case Return(x) -> x
-    case Log(p,k)  -> println(intToString(p));
+    case x -> x
+    case <Log(p) => k>  -> println(intToString(p));
                       k(())
   }
 }
 
 # Log accumulator
 sig logAccumulator : ([a]) ->
-                     (Comp({Log:(a) {}-> () |e}, b)) ->
+                     (Comp({Log:(a) => () |e}, b)) ->
                       Comp({Log{_}          |e}, (b,[a]))
 fun logAccumulator(ps)(m)() {
   (handle(m()) {
-    case Return(x) -> fun(ps) { (x,ps) }
-    case Log(p,k)  -> fun(ps) { k(())(p :: ps) }
+    case x -> fun(ps) { (x,ps) }
+    case <Log(p) => k>  -> fun(ps) { k(())(p :: ps) }
   })(ps)
 }
 

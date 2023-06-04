@@ -3,7 +3,7 @@
   (public_name links-postgresql)
   (synopsis "PostgreSQL database backend for Links")
   (optional)
-  (libraries postgresql links.core))
+  (libraries unix str postgresql links.core))
 
 
 (install

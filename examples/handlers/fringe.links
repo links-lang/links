@@ -13,11 +13,11 @@ typename Tree(a) = [|Leaf:a
                     |Node:(Tree(a),Tree(a))|];
 
 # Yield operation for (leaf-)values
-sig yield : (a) {Yield:(a) {}-> ()|_}-> ()
+sig yield : (a) {Yield:(a) => ()|_}-> ()
 fun yield(v) {do Yield(v)}
 
 # Post-order tree traversal
-sig walkTree : (Tree(a)) -f-> Comp((), {Yield:(a) {}-> ()|e})
+sig walkTree : (Tree(a)) -f-> Comp((), {Yield:(a) => ()|e})
 fun walkTree(tree)() {
   switch (tree) {
     case Leaf(v)   -> yield(v)
@@ -31,11 +31,11 @@ typename Status(a) = mu r . [|Done:()
                             |Yielded:(a, Continuation((), r))|];
 
 # Pauses evaluation of a computation whenever Yield occurs
-sig step : (Comp((), { Yield:(a) {}-> () |_})) -> (()) { |_}~> Status(a)
+sig step : (Comp((), { Yield:(a) => () |_})) -> (()) { |_}~> Status(a)
 fun step(f)(()) {
   handle (f()) {
-    case Return(()) -> Done(())
-    case Yield(v,k) -> Yielded(v,k)
+    case () -> Done(())
+    case <Yield(v) => k> -> Yielded(v,k)
   }
 }
 

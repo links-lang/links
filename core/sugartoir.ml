@@ -982,9 +982,25 @@ struct
               cofv (I.inject (name, I.record ([], None), t))
           | ConstructorLit (name, Some e, Some t) ->
               cofv (I.inject (name, ev e, t))
-          | DoOperation (name, ps, Some t, _) ->
-             let vs = evs ps in
-             I.do_operation (name, vs, t)
+          | DoOperation (op, ps, Some t, _) ->
+            let name =
+              let o = (object (o)
+                inherit SugarTraversals.fold as super
+                val mutable opname = None
+
+                method opname = match opname with
+                  | Some name -> name
+                  | None -> failwith "Operation with no name"
+
+                method! phrasenode = function
+                  | Operation name -> opname <- Some name ; o
+                  | p -> super#phrasenode p
+              end)#phrase op in
+              o#opname
+            in
+            let vs = evs ps in
+            I.do_operation (name, vs, t)
+          | Operation _ -> assert false
           (* FIXME: I don't know what's this. I suppose it is related to semantics,
              but Unlet and Linlet do not influence semantics. *)
           | Unlet _ -> assert false

@@ -17,7 +17,8 @@
              cohttp cohttp-lwt-unix cohttp-lwt
              conduit-lwt-unix uri
              websocket websocket-lwt-unix.cohttp
-             findlib menhirLib links.lens calendar)
+             findlib menhirLib links.lens calendar
+             dynlink)
   (preprocess (pps ppx_deriving.std ppx_deriving_yojson)))
 
 

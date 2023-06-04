@@ -76,7 +76,7 @@ fun compareMembers(x, y) {
 typename Side = [U2];
 
 # Non-determinstic choice.
-sig choose : ([a]) {Choose:([a]) -> a|_}-> a
+sig choose : ([a]) {Choose:([a]) => a|_}-> a
 fun choose(xs) { do Choose(xs) }
 
 # Failure.
@@ -84,7 +84,7 @@ sig fail : () {Fail:Zero|_}-> a
 fun fail() { switch (do Fail) { } }
 
 # Selects one or two to cross the bridge.
-sig selectParty : (Side) {Choose:(Side) -> U2, Fail:Zero|_}~> [U2]
+sig selectParty : (Side) {Choose:(Side) => U2, Fail:Zero|_}~> [U2]
 fun selectParty(side) {
   var m1 = choose(side);
   var m2 = choose(side);
@@ -111,7 +111,7 @@ fun without(xs, ys) {
 }
 
 # The main loop.
-sig solve : (Bool, Int, ([U2], [U2])) {Choose:([U2]) -> U2, Fail:Zero|_}~> [([U2], Bool)]
+sig solve : (Bool, Int, ([U2], [U2])) {Choose:([U2]) => U2, Fail:Zero|_}~> [([U2], Bool)]
 fun solve(forward, timeLeft, sides) {
   fun step(sideFrom, sideTo) {
     var party = selectParty(sideFrom);
@@ -136,10 +136,10 @@ fun solve(forward, timeLeft, sides) {
 
 fun solutions() {
   handle(solve(true, 17, ([Bono, Edge, Adam, Larry], []))) {
-    case Return(xs) -> [xs]
-    case Choose(members, resume) ->
+    case xs -> [xs]
+    case <Choose(members) => resume> ->
       concatMap(resume, members)
-    case Fail -> []
+    case <Fail> -> []
   }
 }
 

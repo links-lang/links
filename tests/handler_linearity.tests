@@ -77,4 +77,23 @@ tests/handlers/issue544b.links
 filemode : true
 exit : 1
 stderr : @.*Type error: Variable .* of linear type .* is used in a non-linear continuation.* 
+
+Use linear variables in shallow handlers (1)
+tests/handlers/lin_shallow1.links
+filemode : true
+exit : 1
+stderr : @.*Type error: Variable .* has linear type .* is used .* times.* 
+args : --enable-handlers
+
+Use linear variables in shallow handlers (2)
+tests/handlers/lin_shallow2.links
+filemode : true
+exit : 1
+stderr : @.*Type error: Variable .* has linear type .* is used .* times.* 
+args : --enable-handlers
+
+Use linear variables in shallow handlers (3)
+tests/handlers/lin_shallow3.links
+filemode : true
+stdout : 2 : Int
 args : --enable-handlers

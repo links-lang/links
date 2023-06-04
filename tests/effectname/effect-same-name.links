@@ -1,4 +1,4 @@
-effectname A(a,b,e::Eff) = { E: () {}-> a, E: () {}-> b | e } ;
+effectname A(a,b,e::Eff) = { E: () => a, E: () => b | e } ;
 
 sig f : () -A(Int, Bool, {})-> Int
 fun f () {

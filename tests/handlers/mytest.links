@@ -1,0 +1,27 @@
+    fun printInt(x) {println(intToString(x))}
+
+    sig sender       : (!Int.End) ~> ()
+    fun sender(ch)   { var ch = send(42, ch); close(ch) }
+
+    # sig senderx       : (!Int.End) ~> ()
+    # fun senderx(ch)   { var ch = send(42, ch); close(ch); var ch = send(42, ch); close(ch) }
+
+    sig sender2      : (!Int.End) {Choose: ()=>Bool}~> ()
+    fun sender2(ch)  { var x = if (do Choose) 42 else 1; var ch = send(x, ch); close(ch) }
+
+    sig receiver     : (?Int.End) ~> ()
+    fun receiver(ch) { var (i, ch) = receive(ch); close(ch); printInt(i) }
+
+    sig choose : () {Choose: ()=>Bool}~> ()
+    fun choose() {var i = if (do Choose) 42 else 1; printInt(i)}
+
+    # var ch = fork(receiver); sender(ch)
+    var ch = fork(receiver); sender(ch)
+
+    # handle({var ch = fork(receiver); sender2(ch)}) {
+    #   case <Choose => r> -> r(true); r(false)
+    # }
+
+# handle(choose()) {
+#   case <Choose => r> -> r(true); r(false)
+# }
