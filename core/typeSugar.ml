@@ -2441,14 +2441,12 @@ let type_pattern ?(linear_vars=true) closed
       | Pattern.Operation (name, ps, k) ->
          (* FIXME: trick: linear signautre if the first letter is L *)
          let is_lincase = if name.[0] = 'L' then true else false in
-         (* let name = if name.[0] = 'U' then String.sub name 1 (String.length name - 1) else name in *)
          (* Auxiliary machinery for typing effect patterns *)
          let rec type_resumption_pat (kpat : Pattern.with_pos) : Pattern.with_pos * (Types.datatype * Types.datatype) =
            let fresh_resumption_type () =
              let domain   = fresh_var () in
              let codomain = fresh_var () in
              let effrow   = Types.make_empty_open_row default_effect_subkind in
-             (* Types.make_function_type [domain] effrow codomain *)
              make_continuation_type is_lincase [domain] effrow codomain
            in
            let pos' = kpat.pos in
@@ -2483,7 +2481,7 @@ let type_pattern ?(linear_vars=true) closed
              | [], [t] -> Types.Operation (Types.unit_type, t, is_lincase)
              | [], ts -> Types.make_tuple_type ts  (* FIXME: WT: I don't understand this case *)
              | ts, [t] ->
-                Types.make_operation_type ts t
+                Types.make_operation_type ~linear:is_lincase ts t
              | ts, ts' ->
                 (* parameterised continuation *)
                 let t = ListUtils.last ts' in

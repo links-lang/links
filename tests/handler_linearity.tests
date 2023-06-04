@@ -27,22 +27,22 @@ stderr : @.*Type error: Variable .* of linear type .* is used in a deep handler.
 args : --enable-handlers
 
 Linear operation and continuation
-handle (lindo LL(20) + 1) {case LL(i, k) -> k(i)}
+handle (lindo LL(20) + 1) {case <LL(i) => k> -> k(i)}
 stdout : 21 : Int
 args : --enable-handlers
 
 Non-linear operation and continuation
-handle (do UU(20) + 1) {case UU(i, k) -> k(i) + k(i)}
+handle (do UU(20) + 1) {case <UU(i) => k> -> k(i) + k(i)}
 stdout : 42 : Int
 args : --enable-handlers
 
 Use linear variable in linear continuation
-{linfun f(x) {40+x} handle (f(lindo LL)) {case LL(k) -> k(2)}}
+{linfun f(x) {40+x} handle (f(lindo LL)) {case <LL => k> -> k(2)}}
 stdout : 42 : Int
 args : --enable-handlers
 
 Use linear variable in non-linear continuation
-{linfun f(x) {x} handle (f(do UU)) {case UU(k) -> k(1)}}
+{linfun f(x) {x} handle (f(do UU)) {case <UU => k> -> k(1)}}
 exit : 1
 stderr : @.*Type error: Variable .* of linear type .* is used in a non-linear continuation.* 
 args : --enable-handlers
@@ -77,6 +77,7 @@ tests/handlers/issue544b.links
 filemode : true
 exit : 1
 stderr : @.*Type error: Variable .* of linear type .* is used in a non-linear continuation.* 
+args : --enable-handlers
 
 Use linear variables in shallow handlers (1)
 tests/handlers/lin_shallow1.links

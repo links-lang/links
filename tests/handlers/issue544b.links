@@ -25,9 +25,9 @@ fun unsound_correct() {
     var ch = send("foo", ch);
     close(ch)
   }) {
-    case Return(_) -> ()
-    case LFail(_) -> ()
-    case LFlip(resume) -> resume(true)
+    case _ -> ()
+    case <LFail> -> ()
+    case <LFlip => resume> -> resume(true)
   }
 }
 
@@ -49,9 +49,9 @@ fun unsound() {
     var ch = send("foo", ch);
     close(ch)
   }) {
-    case Return(_) -> ()
-    case Fail(_) -> ()
-    case Flip(resume) ->
+    case _ -> ()
+    case <Fail> -> ()
+    case <Flip => resume> ->
       resume(true); resume(false)
   }
 }

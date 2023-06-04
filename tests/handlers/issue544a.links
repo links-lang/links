@@ -19,8 +19,8 @@ fun deadlock_correct() {
     println("Int: " ^^ intToString(i));
     close(ch)
   }) {
-    case Return(_) -> ()
-    case LFlip(resume) -> resume(true)
+    case _ -> ()
+    case <LFlip => resume> -> resume(true)
   }
 }
 
@@ -37,8 +37,8 @@ fun deadlock() {
     println("Int: " ^^ intToString(i));
     close(ch)
   }) {
-    case Return(_) -> ()
-    case Flip(resume) ->
+    case _ -> ()
+    case <Flip => resume> ->
       resume(true); resume(false)
   }
 }

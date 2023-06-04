@@ -27,16 +27,16 @@ fun lin_choice() {
 # The "positive" handler
 fun positive(m)() {
   handle(m()) {
-    case LChoose(k) -> k(true)
-    case Return(x)   -> x
+    case x   -> x
+    case <LChoose => k> -> k(true)
   }
 }
 
 # The "I'll-take-everything" handler
 fun enumerate(m)() {
   handle([|m()|]) {
-    case Choose(k) -> k(true) ++ k(false)
-    case Return(x) -> [x]
+    case x -> [x]
+    case <Choose => k> -> k(true) ++ k(false)
   }
 }
 # links> enumerate

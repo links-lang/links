@@ -2,10 +2,10 @@
   var lf = linfun(x) {x};
 
   shallowhandle({
-    ignore(do Foo);
+    ignore(lindo LFoo);
     lf(1)
   }) {
     case _ -> lf(2)
-    case <Foo -> _> -> 3
+    case <LFoo> -> 3
   }
 }

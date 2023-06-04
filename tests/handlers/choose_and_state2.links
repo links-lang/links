@@ -13,16 +13,16 @@ fun choice() {
 
 fun positive(m)() {
   handle(m()) {
-    case LChoose(k) -> k(true)
-    case Return(x)   -> x
+    case x -> x
+    case <LChoose => k> -> k(true)
   }
 }
 
 fun evalState(st)(m)() {
   ([|handle([|m()|]) {
-    case Return(x) -> fun(_)  { x }
-    case Get(k)    -> fun(st) { [|k(st)(st)|] }
-    case Put(p,k)  -> fun(_)  { [|k(())(p)|]  }
+    case x -> fun(_)  { x }
+    case <Get => k>    -> fun(st) { [|k(st)(st)|] }
+    case <Put(p) => k> -> fun(_)  { [|k(())(p)|]  }
   }|])(st)
 }
 

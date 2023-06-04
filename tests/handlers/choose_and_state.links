@@ -12,16 +12,16 @@ fun enumerate(m)() {
   handle([|m()|]) {
     # NOTE: Unlike `new_choose.links`, this `xunl` is necessary
     # if you want to combine these two handlers
-    case Choose(k) -> [|k(true) ++ k(false)|]
-    case Return(x) -> [x]
+    case x -> [x]
+    case <Choose => k> -> [|k(true) ++ k(false)|]
   }
 }
 
 fun evalState(st)(m)() {
   ([|handle([|m()|]) {
-    case Return(x) -> fun(_)  { x }
-    case Get(k)    -> fun(st) { [|k(st)(st)|] }
-    case Put(p,k)  -> fun(_)  { [|k(())(p)|]  }
+    case x -> fun(_)  { x }
+    case <Get => k>    -> fun(st) { [|k(st)(st)|] }
+    case <Put(p) => k>  -> fun(_)  { [|k(())(p)|]  }
   }|])(st)
 }
 
