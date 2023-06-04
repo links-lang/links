@@ -2739,7 +2739,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
     (* control-flow linearity relevant definitions *)
     (** make an effect row type linear *)
     let makelin_effrow = fun row ->
-      (* trick: for effect row types, Unl means "linear", Any means "linear or unlimited" *)
+      (* trick: for effect row types, Unl means Lin, Any means Any *)
+      (* Test.print_type row "effect_row"; *)
+      (* print_string <| "can_be_Unl: " ^ string_of_bool (Types.Unl.can_type_be row) ^ "\n"; *)
       if Types.Unl.can_type_be row then
         Types.Unl.make_type row
       else
@@ -2760,10 +2762,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
         usages
     in
     (** update control-flow linearity *)
-    let update_linearity p usages =
+    let update_linearity _ usages =
       (* (
         print_string "[[update_linearity]]:\n";
-        print_string <| "cont_lin: " ^ string_of_bool (get_cont_lin context) ^ "\n";
+        print_string <| "is_bound_by: " ^ string_of_bool (is_bound_by_linlet context) ^ "\n";
+        print_string <| "is_in: " ^ string_of_bool (is_in_linlet context) ^ "\n";
         print_string <| "is_pure: " ^ string_of_bool (Utils.is_generalisable p) ^ "\n";
         Test.print_term p "p";
         Test.print_type context.effect_row "effect_row";
@@ -2772,10 +2775,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
       if (is_bound_by_linlet context)
         (* make `context.effect_row` linear if the current term is bound by a linlet *)
         then
-          (* only make eff_row linear if p is impure
-             removing this condition is also OK *)
-          if (Utils.is_generalisable p) then ()
-          else makelin_effrow (context.effect_row)
+          makelin_effrow (context.effect_row)
         else ();
       if (not (is_in_linlet context))
         (* make all vars in `p` unlimited if the current term is in the body of an unlet *)
@@ -4465,6 +4465,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
         | DoOperation (op, ps, _, is_lindo) ->
           let () = if is_lindo then ()
                                else update_bound_by_linlet context false
+                               (* do is implicitly bound by an unlet *)
           in
           let op_linearity = if is_lindo then lin_unl else lin_any
           (* lin_unl: linear operation; lin_any: unlimited operation *)

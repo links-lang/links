@@ -32,7 +32,7 @@ fun deadlock() {
 
   handle({
     # Nondeterministic choice.
-    ignore(do Flip);
+    do Flip;
     var (i, ch) = receive(ch);
     println("Int: " ^^ intToString(i));
     close(ch)

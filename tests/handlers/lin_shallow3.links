@@ -2,7 +2,7 @@
   var lf = linfun(x) {x};
 
   shallowhandle({
-    ignore(do Foo);
+    do Foo;
     1
   }) {
     case <Foo> -> {

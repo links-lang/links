@@ -811,7 +811,7 @@ module Unl : Constraint = struct
       | ForAll _ as t -> super#type_satisfies vars t
       (* Effect *)
       | Effect _  -> true
-      | Operation _ -> true
+      | Operation (_,_,b) -> b
       (* Row *)
       | Row _ as t -> super#type_satisfies vars t
       (* Presence *)
@@ -819,6 +819,9 @@ module Unl : Constraint = struct
       | Present t -> o#type_satisfies vars t
       (* Session *)
       | Input _ | Output _ | Select _ | Choice _ | Dual _ | End -> false
+
+    (* method! row_satisfies var = fun *)
+      (* | _ -> false *)
   end
 
   let type_satisfies, row_satisfies =

@@ -3,7 +3,7 @@ fun incr(x) {var y = do Get; do Put(x+y)}
 # this example shows that we can use linear operations
 # in an environment surrounded by unlimited operations
 fun choice() {
-  [|ignore("switch from linlet to let")|];
+  [|()|];
   var x = if (lindo LChoose()) { incr(1); do Get }
           else { incr(1); do Get };
   var y = if (lindo LChoose()) { incr(1); do Get }
@@ -20,7 +20,7 @@ fun positive(m)() {
 
 fun evalState(st)(m)() {
   ([|handle([|m()|]) {
-    case x -> fun(_)  { x }
+    case x -> fun(_)  { [|x|] }
     case <Get => k>    -> fun(st) { [|k(st)(st)|] }
     case <Put(p) => k> -> fun(_)  { [|k(())(p)|]  }
   }|])(st)
