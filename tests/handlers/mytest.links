@@ -1,5 +1,0 @@
-# handle (lindo Mytest) {case <Mytest =@ _> -> ()}
-
-fun(m)() {
-    handle (m()) {case <Mytest =@ _> -> ()}
-}
