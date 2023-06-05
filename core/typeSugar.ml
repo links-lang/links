@@ -4129,7 +4129,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
         | Upcast _ -> assert false
 
         (* effect handlers *)
-        (* Tag: Handle begin *)
         | Handle { sh_expr = m; sh_value_cases = val_cases; sh_effect_cases = eff_cases; sh_descr = descr; } ->
            ignore
              (if not (Settings.get  Basicsettings.Handlers.enabled)

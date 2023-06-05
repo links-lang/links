@@ -1,11 +1,10 @@
-fun evalState0(m)() {
+fun f(m) {
   [|()|];
-  var h = handle([|m()|]) {
-    case x          -> fun(_) {[|x|]}
-    case <Get => k> -> fun(_) {[|k(())(1)|]}
-  };
-  [|([|h|])([|0|])|]
+  var t = [|m()|];
+  handle(t) {
+    case x -> [x]
+    case <Choose => k> -> k(true) ++ k(false)
+  }
 }
 
-
-evalState0
+f

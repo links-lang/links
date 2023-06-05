@@ -12,18 +12,18 @@ fun enumerate(m)() {
   [|()|];
   handle([|m()|]) {
     case x -> [x]
-    case <Choose => k> -> [|k(true) ++ k(false)|]
+    case <Choose => k> -> k(true) ++ k(false)
   }
 }
 
 
 fun evalState(st)(m)() {
   [|()|];
-  ([|handle([|m()|]) {
-    case x -> fun(_)  { [|x|] }
+  (handle([|m()|]) {
+    case x              -> fun(_)  { [|x|] }
     case <Get => k>     -> fun(st) { [|k(st)(st)|] }
     case <Put(p) => k>  -> fun(_)  { [|k(())(p)|]  }
-  }|])(st)
+  })(st)
 }
 
 evalState(0)(enumerate(choice))() ++ enumerate(evalState(0)(choice))()

@@ -19,11 +19,18 @@ fun positive(m)() {
 }
 
 fun evalState(st)(m)() {
-  ([|handle([|m()|]) {
+  [|()|];
+  (handle([|m()|]) {
     case x -> fun(_)  { [|x|] }
     case <Get => k>    -> fun(st) { [|k(st)(st)|] }
     case <Put(p) => k> -> fun(_)  { [|k(())(p)|]  }
-  }|])(st)
+  })(st)
 }
+
+# This is not well-typed. Probably this can be an disadvantage
+# of using row polymorphism. The basic reason is that the linear
+# k is used in the handler positive, thus all effects must be linear,
+# which excludes Get and Put.
+# evalState(0)(positive(choice))()
 
 positive(evalState(0)(choice))()
