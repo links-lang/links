@@ -1,10 +1,5 @@
-fun f(m) {
-  [|()|];
-  var t = [|m()|];
-  handle(t) {
-    case x -> [x]
-    case <Choose => k> -> k(true) ++ k(false)
-  }
-}
+# handle (lindo Mytest) {case <Mytest =@ _> -> ()}
 
-f
+fun(m)() {
+    handle (m()) {case <Mytest =@ _> -> ()}
+}

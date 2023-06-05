@@ -2439,8 +2439,6 @@ let type_pattern ?(linear_vars=true) closed
         let vtype typ = Types.Variant (make_singleton_row (name, Present (typ p))) in
         Pattern.Variant (name, Some (erase p)), (vtype ot, vtype it)
       | Pattern.Operation (name, ps, k, is_lincase) ->
-         (* FIXME: trick: linear signautre if the first letter is L *)
-         (* let is_lincase = if name.[0] = 'L' then true else false in *)
          (* Auxiliary machinery for typing effect patterns *)
          let rec type_resumption_pat (kpat : Pattern.with_pos) : Pattern.with_pos * (Types.datatype * Types.datatype) =
            let fresh_resumption_type () =
@@ -2454,6 +2452,7 @@ let type_pattern ?(linear_vars=true) closed
            match kpat.node with
            | Any ->
               let t = fresh_resumption_type () in
+              if is_lincase then Gripers.die pos' ("The linear continuation is not bound.") else ();
               kpat, (t, t)
            | Variable bndr ->
               let xtype = fresh_resumption_type () in
@@ -2470,6 +2469,7 @@ let type_pattern ?(linear_vars=true) closed
          in
          (* Typing of effect patterns *)
          let ps = List.map tp ps in
+         (* if name = "Mytest" then print_string ("Mytest: " ^ (Test.print_pattern k.node) ^ "\n") else (); *)
          let k = type_resumption_pat k in
          let eff typ =
            let domain = List.map typ ps in
@@ -4219,7 +4219,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                      erase_ann pat
                    in
                    let effname, kpat = match pat.node with
-                     | Pattern.Operation (name, _, k, b) -> name, k
+                     | Pattern.Operation (name, _, k, _) -> name, k
                      | _ -> assert false
                    in
                    (* deal with parameterised handlers? *)
@@ -4314,6 +4314,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                     if Types.Unl.can_type_be t then
                       Types.Unl.make_type t
                     else
+                      (* if effname = "Hi" then () else (); *)
                       Gripers.non_linearity pos uses v t)
                 (pattern_env pat) in
              let check_linear_vars_in_deep_handlers henv vs body =

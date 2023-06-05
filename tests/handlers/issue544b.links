@@ -21,12 +21,12 @@ fun unsound_correct() {
     var msg = if (lindo Flip) 42 else 84;
     var ch = send(msg, ch);
     # Throws an exception
-    ignore(lindo Fail);
+    lindo Fail;
     var ch = send("foo", ch);
     close(ch)
   }) {
     case _ -> ()
-    case <Fail =@ _> -> ()
+    case <Fail =@ resume> -> println("Failed"); resume(())
     case <Flip =@ resume> -> resume(true)
   }
 }
