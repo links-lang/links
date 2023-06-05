@@ -1705,19 +1705,19 @@ let lookup_effect    context name   =
   This is just an implementation trick to reuse the previous mechanism of unification.
 *)
 (* `lin_any` here means this eff_row can be unified with linear or unlimited row types *)
-let make_singleton_open_eff_row = fun op_name_sig ->
-  Types.make_singleton_open_row op_name_sig (lin_any, res_effect)
+(* let make_singleton_open_eff_row = fun op_name_sig -> *)
+  (* Types.make_singleton_open_row op_name_sig (lin_any, res_effect) *)
 
 (* linear signature is represented by `->`, so we use `not islin` *)
-let make_signature_type = fun islin inp out ->
-  Types.make_pure_function_type ~linear:(not islin) inp out
+(* let make_signature_type = fun islin inp out -> *)
+  (* Types.make_pure_function_type ~linear:(not islin) inp out *)
 
 (* make a signature type without parameters *)
-let make_unit_signature_type = fun islin out ->
+(* let make_unit_signature_type = fun islin out ->
   if islin then
     Types.Function (Types.unit_type, Types.make_empty_closed_row (), out)
   else
-    Types.Lolli (Types.unit_type, Types.make_empty_closed_row (), out)
+    Types.Lolli (Types.unit_type, Types.make_empty_closed_row (), out) *)
 
 (* linear continuation(function) is still represented by `-@`, so we still use `islin` *)
 let make_continuation_type = fun islin inp eff out ->
