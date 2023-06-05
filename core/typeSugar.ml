@@ -4682,6 +4682,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             (Raise, Types.fresh_type_variable (lin_any, res_any), Usage.empty)
     in
     let p = with_pos pos e in
+    (* FIXME: For |do l V|, the usages include the usages in V. Thus,
+       |linfun f(ch:End) {do Close(ch)}| is not well-typed. The main
+       reason is that the typing rule of unlet (including the implicit
+       unlet in do) and linlet here is not a true sequencing. *)
     let () = update_linearity p usages in
     p, t, usages
 
