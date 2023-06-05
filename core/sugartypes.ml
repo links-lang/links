@@ -248,7 +248,7 @@ module Pattern = struct
     | Variant  of Name.t * with_pos option
     (* | Effect   of Name.t * with_pos list * with_pos *)
     (* | Effect2  of with_pos list * with_pos option *)
-    | Operation of Label.t * with_pos list * with_pos
+    | Operation of Label.t * with_pos list * with_pos * bool (* true: linear operation *)
     | Negative of Name.t list
     | Record   of (Name.t * with_pos) list * with_pos option
     | Tuple    of with_pos list
@@ -645,7 +645,7 @@ struct
     | List ps               -> union_map pattern ps
     | Cons (p1, p2)         -> union (pattern p1) (pattern p2)
     | Variant (_, popt)     -> option_map pattern popt
-    | Operation (_, ps, kopt)  -> union (union_map pattern ps) (pattern kopt)
+    | Operation (_, ps, kopt, _)  -> union (union_map pattern ps) (pattern kopt)
     | Record (fields, popt) ->
        union (option_map pattern popt)
          (union_map (snd ->- pattern) fields)

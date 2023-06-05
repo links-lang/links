@@ -13,9 +13,9 @@ fun choice() {
 
 # Linear version of Choose
 fun lin_choice() {
-  var x = if (lindo LChoose()) { 2 }
+  var x = if (lindo Choose()) { 2 }
           else { 4 };
-  var y = if (lindo LChoose()) { 8 }
+  var y = if (lindo Choose()) { 8 }
           else { 16 };
   x + y
 }
@@ -28,7 +28,7 @@ fun lin_choice() {
 fun positive(m)() {
   handle(m()) {
     case x   -> x
-    case <LChoose => k> -> k(true)
+    case <Choose =@ k> -> k(true)
   }
 }
 

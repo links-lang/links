@@ -128,7 +128,7 @@ let rec desugar_pattern : Types.row -> Sugartypes.Pattern.with_pos -> Pattern.t 
         | Variant (name, Some p) ->
             let p, env = desugar_pattern p in
             Pattern.Variant (name, p), env
-        | Operation (name, ps, k) ->
+        | Operation (name, ps, k, _) ->
            let ps, env =
              List.fold_right
                (fun p (ps, env) ->

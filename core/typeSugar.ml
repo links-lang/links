@@ -180,7 +180,7 @@ struct
     | Tuple ps -> List.for_all is_safe_pattern ps
     | HasType (p, _)
     | As (_, p) -> is_safe_pattern p
-    | Operation (_, ps, k) ->
+    | Operation (_, ps, k, _) ->
        List.for_all is_safe_pattern ps && is_safe_pattern k
   and is_pure_regex = function
       (* don't check whether it can fail; just check whether it
@@ -2138,7 +2138,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
           let unwrap_at : string -> Pattern.with_pos -> Pattern.with_pos list = fun name p ->
             let open Pattern in
             match p.node with
-              | Operation (name', ps, _) when name=name' -> ps
+              | Operation (name', ps, _, _) when name=name' -> ps
               | Operation _ -> []
               | Variable _ | Any | As _ | HasType _ | Negative _
               | Nil | Cons _ | List _ | Tuple _ | Record _ | Variant _ | Constant _ -> assert false in
@@ -2309,7 +2309,7 @@ let check_for_duplicate_names : Position.t -> Pattern.with_pos list -> string li
           List.fold_right (fun p binderss -> gather binderss p) ps binderss
       | Variant (_, p) ->
          opt_app (fun p -> gather binderss p) binderss p
-      | Operation (_, ps, k) ->
+      | Operation (_, ps, k, _) ->
          let binderss' =
            List.fold_right (fun p binderss -> gather binderss p) ps binderss
          in
@@ -2347,7 +2347,7 @@ let rec pattern_env : Pattern.with_pos -> Types.datatype Env.t =
     | HasType (p,_) -> pattern_env p
     | Variant (_, Some p) -> pattern_env p
     | Variant (_, None) -> Env.empty
-    | Operation (_, ps, k) ->
+    | Operation (_, ps, k, _) ->
       let env = List.fold_right (pattern_env ->- Env.extend) ps Env.empty in
       Env.extend env (pattern_env k)
     | Negative _ -> Env.empty
@@ -2438,9 +2438,9 @@ let type_pattern ?(linear_vars=true) closed
         let p = tp p in
         let vtype typ = Types.Variant (make_singleton_row (name, Present (typ p))) in
         Pattern.Variant (name, Some (erase p)), (vtype ot, vtype it)
-      | Pattern.Operation (name, ps, k) ->
+      | Pattern.Operation (name, ps, k, is_lincase) ->
          (* FIXME: trick: linear signautre if the first letter is L *)
-         let is_lincase = if name.[0] = 'L' then true else false in
+         (* let is_lincase = if name.[0] = 'L' then true else false in *)
          (* Auxiliary machinery for typing effect patterns *)
          let rec type_resumption_pat (kpat : Pattern.with_pos) : Pattern.with_pos * (Types.datatype * Types.datatype) =
            let fresh_resumption_type () =
@@ -2498,7 +2498,7 @@ let type_pattern ?(linear_vars=true) closed
          | None ->
            (eff ot, eff it)
          in
-         Pattern.Operation (name, List.map erase ps, erase k), (ot, it)
+         Pattern.Operation (name, List.map erase ps, erase k, is_lincase), (ot, it)
       | Negative names ->
         let row_var = Types.fresh_row_variable (lin_any, res_any) in
 
@@ -4219,7 +4219,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                      erase_ann pat
                    in
                    let effname, kpat = match pat.node with
-                     | Pattern.Operation (name, _, k) -> name, k
+                     | Pattern.Operation (name, _, k, b) -> name, k
                      | _ -> assert false
                    in
                    (* deal with parameterised handlers? *)
@@ -4407,8 +4407,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                  (fun name p ->
                    if TypeUtils.is_builtin_effect name
                    then p
-                   else Types.fresh_presence_variable (lin_unl, res_any)) (* It is questionable whether it is ever correct to
+                   else Types.fresh_presence_variable (lin_any, res_any)) (* It is questionable whether it is ever correct to
                                                                        make absent operations polymorphic in their presence. *)
+                                                                       (* WT: I suppose I should change the kind from lin_unl to lin_any *)
                  operations
              in
              T.Row (operations', rho, dual)

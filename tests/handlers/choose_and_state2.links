@@ -4,9 +4,9 @@ fun incr(x) {var y = do Get; do Put(x+y)}
 # in an environment surrounded by unlimited operations
 fun choice() {
   [|()|];
-  var x = if (lindo LChoose()) { incr(1); do Get }
+  var x = if (lindo Choose()) { incr(1); do Get }
           else { incr(1); do Get };
-  var y = if (lindo LChoose()) { incr(1); do Get }
+  var y = if (lindo Choose()) { incr(1); do Get }
           else { incr(1); do Get };
   x + y
 }
@@ -14,7 +14,7 @@ fun choice() {
 fun positive(m)() {
   handle(m()) {
     case x -> x
-    case <LChoose => k> -> k(true)
+    case <Choose =@ k> -> k(true)
   }
 }
 
