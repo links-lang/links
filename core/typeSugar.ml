@@ -2943,7 +2943,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                                       effect_row = effects;
                                       cont_lin = new_cont_lin ()}) body in
 
-            (* make types of paramters unlimited if they are not used exactly once *)
+            (* make types of parameters unlimited if they are not used exactly once *)
             let () =
               Env.iter (fun v t ->
                 let uses = Usage.uses_of v (usages body) in
