@@ -4298,7 +4298,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                     if Types.Unl.can_type_be t then
                       Types.Unl.make_type t
                     else
-                      (* if effname = "Hi" then () else (); *)
                       Gripers.non_linearity pos uses v t)
                 (pattern_env pat) in
              let check_linear_vars_in_deep_handlers henv vs body =
