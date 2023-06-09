@@ -312,7 +312,6 @@ let any = any_pat dp
 %token SPAWN SPAWNAT SPAWNANGELAT SPAWNCLIENT SPAWNANGEL SPAWNWAIT
 %token OFFER SELECT
 %token DOOP LINDOOP
-%token LINLET UNLET
 %token LPAREN RPAREN
 %token LBRACE RBRACE LBRACEBAR BARRBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
@@ -910,8 +909,6 @@ perhaps_db_driver:
 | /* empty */                                                  { None   , None }
 
 seq_expression:
-// | LINLET LPAREN exp RPAREN                                      { with_pos $loc (Linlet $3) }
-// | UNLET LPAREN exp RPAREN                                       { with_pos $loc (Unlet $3) }
 | LBRACKETBAR exp BARRBRACKET                                   { with_pos $loc (Unlet $2) }
 | LEFTTRIANGLE exp RIGHTTRIANGLE                                { with_pos $loc (Linlet $2) }
 

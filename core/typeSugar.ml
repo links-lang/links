@@ -1898,9 +1898,6 @@ end = struct
           'sink'. *)
        empty
     | usages :: usagess  ->
-       (* let () = StringMap.iter (fun s _ -> print_string <| s ^ "  ") usages in
-       let _ = List.map (StringMap.iter (fun s _ -> print_string <| s ^ "  ")) usagess in
-       print_string "\n" ; *)
        let combine' : Ident.t -> int option -> int option -> int option
          = fun _ident x y ->
          let unlimited = max_int in
@@ -2763,15 +2760,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
     in
     (** update control-flow linearity *)
     let update_linearity _ usages =
-      (* (
-        print_string "[[update_linearity]]:\n";
-        print_string <| "is_bound_by: " ^ string_of_bool (is_bound_by_linlet context) ^ "\n";
-        print_string <| "is_in: " ^ string_of_bool (is_in_linlet context) ^ "\n";
-        print_string <| "is_pure: " ^ string_of_bool (Utils.is_generalisable p) ^ "\n";
-        Test.print_term p "p";
-        Test.print_type context.effect_row "effect_row";
-        print_string "\n"
-      ); *)
       if (is_bound_by_linlet context)
         (* make `context.effect_row` linear if the current term is bound by a linlet *)
         then
