@@ -479,12 +479,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "send",
   (`PFun (fun _ -> assert false),
-   datatype "forall a::Type(Any, Any), s::Type(Any, Session), e::Row.(a, !a.s) ~e~> s",
+   datatype "forall a::Type(Any, Any), s::Type(Any, Session), e::Row(Any, Any).(a, !a.s) ~e~> s",
    IMPURE);
 
   "receive",
   (`PFun (fun _ -> assert false),
-   datatype "forall a::Type(Any, Any), s::Type(Any, Session), e::Row. (?a.s) ~e~> (a, s)",
+   datatype "forall a::Type(Any, Any), s::Type(Any, Session), e::Row(Any, Any). (?a.s) ~e~> (a, s)",
    IMPURE);
 
   "link",
@@ -692,7 +692,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "print",
   (p1 (fun msg -> print_string (Value.unbox_string msg); flush stdout; `Record []),
-   datatype "(String) ~> ()",
+   (* datatype "(String) ~> ()", *)
+   datatype "(String) { |_::Any}~> ()",
   IMPURE);
 
   "javascript",

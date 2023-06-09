@@ -365,7 +365,7 @@ let cleanup_effects tycon_env =
              | Datatype.Operation _     -> node
              | Datatype.Forall (qs, dt) -> Datatype.Forall (qs, elaborate_op dt)
              | _                        -> Datatype.Operation ([], dt, false))
-             (* FIXME: WT: I don't understand the last case. I just put false here. *)
+             (* nullary operations without =@ are unlimited *)
        in
        let fields = List.map (function
            | name, Present dt when not (TypeUtils.is_builtin_effect name) ->

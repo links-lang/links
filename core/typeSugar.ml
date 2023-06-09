@@ -1700,8 +1700,8 @@ let lookup_effect    context name   =
   NOTE: The meaning of Any and Unl for effect row types is different from other types:
   - An effect row type with kind `Any` means it can be linear or unlimited.
   - An effect row type with kind `Unl` means it must be linear!
-  Moreover, for effect signatures, `->` means linera signature which must have a linear
-  continuation, and `-@` means signature which may have any continuation.
+  Moreover, for effect signatures, `=>` means linear signature which must have a linear
+  continuation, and `=@` means signature which may have any continuation.
   This is just an implementation trick to reuse the previous mechanism of unification.
 *)
 (* `lin_any` here means this eff_row can be unified with linear or unlimited row types *)

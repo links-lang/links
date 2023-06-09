@@ -1231,7 +1231,7 @@ typename Pid(a::Type) = Process({hear: a});
 # FIXME: WT: I modified the signature of SessionFail to be linear
 # to make these functions well-typed.
 #sig fork : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
-sig fork : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~> ()) ~e~> ~s
+sig fork : forall s::Session,e::Row(Unl,Any).((s) {SessionFail:() =@ [||]}~> ()) ~e~> ~s
 fun fork(f) {
   var ap = new ();
   var _ = spawnAngel {
