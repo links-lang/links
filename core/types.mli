@@ -144,7 +144,6 @@ and typ =
   | ForAll of (Quantifier.t list * typ)
   (* Effect *)
   | Effect of row
-  (* | Operation of (typ * typ) *)
   | Operation of (typ * typ * bool) (* true: linear operation; false: unlimited operation *)
   (* Row *)
   | Row of (field_spec_map * row_var * bool)
