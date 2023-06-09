@@ -2466,7 +2466,6 @@ let type_pattern ?(linear_vars=true) closed
          in
          (* Typing of effect patterns *)
          let ps = List.map tp ps in
-         (* if name = "Mytest" then print_string ("Mytest: " ^ (Test.print_pattern k.node) ^ "\n") else (); *)
          let k = type_resumption_pat k in
          let eff typ =
            let domain = List.map typ ps in
@@ -3996,8 +3995,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
         | Block (bindings, e) ->
             let context', bindings, usage_builder = type_bindings context bindings in
             let cur_context = (Types.extend_typing_environment context context') in
-            (* let new_context = {cur_context with cont_lin = new_cont_lin ()} in *)
-            (* let new_context = {cur_context with cont_lin = context.cont_lin} in *)
             let e = type_check cur_context e in
             Block (bindings, erase e), typ e, usage_builder (usages e)
         | Regex r ->
@@ -4210,7 +4207,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                      | Pattern.Operation (name, _, k, _) -> name, k
                      | _ -> assert false
                    in
-                   (* deal with parameterised handlers? *)
                    let effrow =
                      if Settings.get Basicsettings.Sessions.exceptions_enabled &&
                         not (Settings.get Basicsettings.Sessions.expose_session_fail) &&
@@ -5202,8 +5198,6 @@ and type_bindings (globals : context) bindings =
     List.fold_left
       (fun (ctxt, (bindings, uinf)) (binding : binding) ->
          let cur_ctxt = (Types.extend_typing_environment globals ctxt) in
-         (* create a new cont_lin before typing every binding *)
-         (* let new_ctxt = {cur_ctxt with cont_lin = new_cont_lin ()} in *)
          let binding, ctxt', usage = type_binding cur_ctxt binding in
          let result_ctxt = Types.extend_typing_environment ctxt ctxt' in
          result_ctxt, (binding::bindings, (binding.pos,ctxt'.var_env,usage)::uinf))
@@ -5397,19 +5391,6 @@ module Check =
 struct
   let program tyenv (bindings, body) =
     try
-      (* Tag: some test code to print the parsed results *)
-      (* (
-        match body with
-          | None -> ()
-          | Some body -> 
-              print_string "---------- BEGIN parsed results -----------\n";
-              (* let () = print_string "bindings:\n" in *)
-              (* let _  = if (bindings = []) then () else (print_string -<- show_binding) <| List.hd bindings in print_string "\n"; *)
-              print_string "body:\n";
-              (print_string -<- show_phrase) body;
-              print_string "\n";
-              print_string "---------- END parsed results -----------\n";
-      ); *)
       Debug.if_set Basicsettings.show_stages (fun () -> "Type checking...");
       Debug.if_set show_pre_sugar_typing
         (fun () ->
