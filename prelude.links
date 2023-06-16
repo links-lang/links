@@ -472,37 +472,37 @@ fun maximum(a,b) {
   else { b }
 }
 
-#unsafe sig max_list : ([Int]) -> Int
-#fun max_list(ns) {
-#  switch (ns) {
-#    case [] -> min_int
-#    case n::ns -> maximum(n, max_list(ns))
-#  }
-#}
-#
-#unsafe sig maxF_list : ([Float]) -> Float
-#fun maxF_list(ns) {
-#  switch (ns) {
-#    case [] -> min_float
-#    case n::ns -> maximum(n, maxF_list(ns))
-#  }
-#}
-#
-#unsafe sig min_list : ([Int]) -> Int
-#fun min_list(ns) {
-#  switch (ns) {
-#    case [] -> max_int
-#    case n::ns -> minimum(n, min_list(ns))
-#  }
-#}
-#
-#unsafe sig minF_list : ([Float]) -> Float
-#fun minF_list(ns) {
-#  switch (ns) {
-#    case [] -> max_float
-#    case n::ns -> minimum(n, minF_list(ns))
-#  }
-#}
+unsafe sig max_list : ([Int]) -> Int
+fun max_list(ns) {
+  switch (ns) {
+    case [] -> min_int
+    case n::ns -> maximum(n, max_list(ns))
+ }
+}
+
+unsafe sig maxF_list : ([Float]) -> Float
+fun maxF_list(ns) {
+  switch (ns) {
+    case [] -> neg_infinity
+    case n::ns -> maximum(n, maxF_list(ns))
+  }
+}
+
+unsafe sig min_list : ([Int]) -> Int
+fun min_list(ns) {
+  switch (ns) {
+    case [] -> max_int
+    case n::ns -> minimum(n, min_list(ns))
+  }
+}
+
+unsafe sig minF_list : ([Float]) -> Float
+fun minF_list(ns) {
+  switch (ns) {
+    case [] -> infinity
+    case n::ns -> minimum(n, minF_list(ns))
+  }
+}
 
 # association lists
 # TBD: memassoc is an old LISP word. Perhaps a more modern name would fit better?
