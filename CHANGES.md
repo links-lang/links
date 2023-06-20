@@ -1,7 +1,11 @@
 # Unreleased
 
 List of changes since the latest release.
-
+* The package `links-mysql`, based on the `mysql` opam package is no
+  longer supported. Instead, the package `links-mysql8`, based on the
+  `mysql8` package is provided, which also supports version of MySQL
+   prior to 8.
+   
 # 0.9.7
 
 This release includes minor bug fixes, improvements, and a breaking
