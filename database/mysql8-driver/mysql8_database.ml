@@ -262,7 +262,7 @@ end
 class mysql_database spec = object(self)
   inherit Value.database mysql_printer
   val connection = connect spec
-  method driver_name () = "mysql"
+  method driver_name () = "mysql8"
   method exec query : Value.dbvalue =
     try
       new mysql_result (exec connection query) connection
