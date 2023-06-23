@@ -35,6 +35,6 @@ depends: [
   "result"
   "ocamlfind"
   "menhir" {>= "20210419"}
-  "ppx_sexp_conv"
+  "ppx_sexp_conv" {<= "v0.15.1"}
   "calendar" {>= "2.0.4"}
 ]
