@@ -1,0 +1,43 @@
+var db = database "links";
+
+var inproceedingsT =
+  table "inproceedings_subset"
+  with (inproceedings : String, title : String, year : Int, proceedings : String)
+  tablekeys [["inproceedings"]]
+  from db;
+
+var inproceedings_authorT =
+  table "inproceedings_author_subset"
+  with (inproceedings : String, author : String)
+  from db;
+
+
+var inproceedingsL = lens inproceedingsT with { inproceedings -> title year proceedings };
+var inproceedings_authorL = lens inproceedings_authorT default;
+
+var joinL = lensjoin inproceedings_authorL with inproceedingsL on inproceedings delete_left;
+
+var selectL = lensselect from joinL by fun (r) {r.proceedings == "conf/pods/2006"};
+
+var recs = lensget selectL;
+
+var newRecs =
+  for (t <- recs)
+    if (t.inproceedings == "conf/pods/BohannonPV06")
+      [(t with title = "Relational lenses")]
+    else
+      [(t)];
+
+fun doTime() server {
+  lensQueryStatisticsReset();
+
+  var t1 = serverTimeMilliseconds();
+  var a = lensput selectL with newRecs;
+  var t2 = serverTimeMilliseconds();
+  var res = (lensQueryCount(), lensQueryTimeMilliseconds(), t2-t1);
+  var a = lensput selectL with recs;
+
+  res
+}
+
+doTime()

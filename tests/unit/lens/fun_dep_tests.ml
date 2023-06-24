@@ -4,20 +4,22 @@ open Links_core
 open Links_lens
 open Utility
 open Phrase.Value
+open Utility.O
 module Fun_dep = Lens.Fun_dep
 module H = LensTestHelpers
+module U = TestUtility
 
-let dat_fd_set = H.fundepset_of_string "A B -> C D; C D -> E; E -> F G"
+let dat_fd_set = U.Fun_dep.Set.of_string "A B -> C D; C D -> E; E -> F G"
 
-let dat_cols = H.colset_of_string "C D"
+let dat_cols = U.Fun_dep.colset_of_string "C D"
 
-let dat_closure = H.colset_of_string "C D E F G"
+let dat_closure = U.Fun_dep.colset_of_string "C D E F G"
 
-let dat_fd_set_2 = H.fundepset_of_string "A -> B; B -> C"
+let dat_fd_set_2 = U.Fun_dep.Set.of_string "A -> B; B -> C"
 
-let cols s = H.colset_of_string s
+let cols s = U.Fun_dep.colset_of_string s
 
-let fds s = H.fundepset_of_string s
+let fds s = U.Fun_dep.Set.of_string s
 
 let rec_constr (cols : string list) (vals : int list) =
   box_record (List.map2 (fun c v -> (c, box_int v)) cols vals)
@@ -28,7 +30,7 @@ let delt_constr (cols : string list) ((vals, m) : int list * int) =
 (* Tests *)
 
 let test_show_fd_set test_ctx =
-  let show = Fun_dep.Set.show dat_fd_set in
+  let show = U.Fun_dep.Set.show dat_fd_set in
   H.print_verbose test_ctx show;
   let cmp = "{({A; B; }, {C; D; }); ({C; D; }, {E; }); ({E; }, {F; G; }); }" in
   assert_equal show cmp
@@ -37,56 +39,34 @@ let test_transitive_closure _test_ctx =
   let outp = Fun_dep.Set.transitive_closure ~cols:dat_cols dat_fd_set in
   assert_equal true (Lens.Alias.Set.equal outp dat_closure)
 
-let construct_join_lens fd_set name data =
-  let cols =
-    Fun_dep.Set.fold
-      (fun fd fld ->
-        Lens.Alias.Set.union_all [ Fun_dep.left fd; Fun_dep.right fd; fld ])
-      fd_set Lens.Alias.Set.empty
+let fmt_tex_table ~cols f delta =
+  let fmt_cols f cols =
+    Format.pp_print_list ~pp_sep:(Format.pp_constant "")
+      (Format.pp_constant_poly "c")
+      f cols
   in
-  let cols = Lens.Alias.Set.elements cols in
-  let colFn table name =
-    Lens.Column.make ~alias:name ~name ~table ~typ:Lens.Phrase.Type.Int
-      ~present:true
+  let fmt_line pp f cols =
+    Format.fprintf f "\t%a\\\\"
+      (Format.pp_print_list ~pp_sep:(Format.pp_constant " & ") pp)
+      cols
   in
-  let l1 =
-    `LensMem (`List data, (fd_set, None, List.map ~f:(colFn name) cols))
+  let fmt_record f r =
+    let r = unbox_record r in
+    Format.fprintf f "%a"
+      (fmt_line (Format.pp_map ~f:(snd >> unbox_int) Format.pp_print_int))
+      r
   in
-  l1
+  Format.fprintf f {|\\begin{array}{c|%a}
+%a
+%a
+\\end{array}|} fmt_cols cols
+    (fmt_line Format.pp_print_string)
+    cols
+    (Format.pp_print_list ~pp_sep:Format.pp_print_newline fmt_record)
+    delta
 
-let construct_join_lens_2 l1 l2 on =
-  let sort, on =
-    Lens.Sort.join_lens_sort (Lens.Value.sort l1) (Lens.Value.sort l2) ~on
-    |> Result.ok_exn
-  in
-  `LensJoin (l1, l2, on, `Constant (`Bool true), `Constant (`Bool false), sort)
-
-let cat_tex cols name delta =
-  let cs = List.fold_right (fun _a b -> b ^ "c") cols "" in
-  let _ = Debug.print ("\\begin{array}{c|" ^ cs ^ "}") in
-  let _ =
-    Debug.print
-      ("\t" ^ name ^ List.fold_left (fun a b -> a ^ " & " ^ b) "" cols ^ "\\\\")
-  in
-  let _ = Debug.print "\t\\hline" in
-  let _ =
-    if List.length delta = 0 then Debug.print "\\\\"
-    else
-      let _ =
-        List.map
-          ~f:(fun (row, m) ->
-            Debug.print
-              (List.fold_left
-                 (fun a (_, b) -> a ^ "& " ^ string_of_int (unbox_int b) ^ " ")
-                 ("\t" ^ string_of_int m)
-                 (unbox_record row)
-              ^ "\\\\"))
-          delta
-      in
-      ()
-  in
-  let _ = Debug.print "\\end{array}" in
-  ()
+let cat_tex cols _name delta =
+  Format.asprintf "%a" (fmt_tex_table ~cols) delta |> Debug.print
 
 let test_calculate_fd_changelist test_ctx =
   let data = UnitTestsLensSetOperations.test_data_3 in
@@ -94,36 +74,8 @@ let test_calculate_fd_changelist test_ctx =
   let changeset =
     Lens.Sorted_records.calculate_fd_changelist ~fun_deps:fds data
   in
-  let _ =
-    List.map
-      ~f:(fun ((cols_l, cols_r), changes) ->
-        let _ =
-          H.print_verbose test_ctx
-            (H.col_list_to_string cols_l " "
-            ^ " -> "
-            ^ H.col_list_to_string cols_r " ")
-        in
-        let strfn dat =
-          if dat = [] then ""
-          else
-            List.fold_left
-              (fun a b -> a ^ ", " ^ show b)
-              (show (List.hd dat))
-              (List.tl dat)
-        in
-        let _ =
-          List.map
-            ~f:(fun (chl, chr) ->
-              H.print_verbose test_ctx ("  " ^ strfn chl ^ " -> " ^ strfn chr))
-            changes
-        in
-        ())
-      changeset
-  in
-  (* let phrase = Lens.Helpers.Incremental.matches_change changeset in
-     let str = match phrase with None -> "None" | Some phrase -> Format.asprintf "%a" Lens.Database.fmt_phrase_dummy phrase in
-        H.print_verbose test_ctx str; *)
-  ()
+  let module V = (val U.Debug.verbose_printer test_ctx) in
+  V.printf "%a" Lens.Sorted_records.pp_changelist_pretty changeset
 
 let assert_equal_cols ~ctxt v1 v2 =
   assert_equal ~ctxt ~cmp:Alias.Set.equal ~printer:Alias.Set.show v1 v2

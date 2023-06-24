@@ -8,30 +8,7 @@ open Lens
 open Lens.Utility
 open Lens.Utility.O
 
-let display_table_query_opt =
-  Conf.make_bool "display_table_query" false
-    "Show queries to take and manipulate tables."
-
-let leave_tables_opt =
-  Conf.make_bool "leave_tables" false "Do not delete tables after run."
-
-let database_args_opt =
-  let module Database = Links_core.Database in
-  let connection_args = Settings.get Database.connection_info in
-  Conf.make_string "database_args"
-    ("links:" ^ Links_core.Utility.from_option "" connection_args)
-    "Database connection args."
-
-let verbose_opt = Conf.make_bool "v" false "Print verbose information."
-
-let classic_opt =
-  Conf.make_bool "classic_lenses" false "Use non incremental relational lenses."
-
-let benchmark_opt = Conf.make_bool "benchmark" false "Benchmark operations."
-
-let set_n_opt = Conf.make_int "set_n" 0 "Override n."
-
-let set_upto_opt = Conf.make_int "set_upto" 10 "Override upto."
+include TestUtility.Options
 
 module LensTestHelpers = struct
   let get_db test_ctx =
@@ -135,29 +112,10 @@ module LensTestHelpers = struct
     let predicate = Some predicate in
     Lens.Value.lens_get_select_opt l ~predicate
 
-  let create_table test_ctx db tablename (primary_key : string list)
+  let create_table test_ctx db table (primary_key : string list)
       (fields : string list) =
-    let colfn col =
-      let open Database in
-      db.quote_field col ^ " INTEGER NOT NULL"
-    in
-    let query =
-      let open Database in
-      "CREATE TABLE "
-      ^ db.quote_field tablename
-      ^ " ( "
-      ^ List.fold_left (fun a b -> a ^ colfn b ^ ", ") "" fields
-      ^ "CONSTRAINT "
-      ^ db.quote_field ("PK_" ^ tablename)
-      ^ " PRIMARY KEY ("
-      ^ List.fold_left
-          (fun a b -> a ^ ", " ^ b)
-          (List.hd primary_key) (List.tl primary_key)
-      ^ "));"
-    in
-    print_table_query test_ctx query;
-    let open Database in
-    db.execute query
+    let open (val TestUtility.Table.create_db test_ctx db) in
+    create ~table ~primary_key ~fields
 
   let create_table_easy test_ctx db tablename str =
     let fd = fundep_of_string str in
@@ -167,6 +125,7 @@ module LensTestHelpers = struct
     create_table test_ctx db tablename
       (Lens.Alias.Set.elements left)
       (Lens.Alias.Set.elements cols)
+    |> ignore
 
   let value_as_string db = function
     | `String s -> "\'" ^ db#escape_string s ^ "\'"
@@ -270,16 +229,16 @@ module LensTestHelpers = struct
     Lens.Statistics.reset ();
     let res =
       Lens.Statistics.debug_time_out fn (fun time ->
-          print_endline ("Total Time: " ^ string_of_int time))
+          print_endline ("Total Time: " ^ string_of_int (int_of_float time)))
     in
     print_query_time ();
     res
 
   let time_op fn =
     Lens.Statistics.reset ();
-    let ttime = ref 0 in
+    let ttime = ref 0.0 in
     let _ = Lens.Statistics.debug_time_out fn (fun time -> ttime := time) in
-    (Lens.Statistics.get_query_time (), !ttime)
+    (Lens.Statistics.get_query_time (), int_of_float !ttime)
 
   let time_query_both fn =
     let res = time_query false fn in

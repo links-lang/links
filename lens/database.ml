@@ -250,12 +250,14 @@ module Select = struct
 
   let execute query ~db ~field_types =
     let query = Format.asprintf "%a" (fmt ~db) query in
-    db.execute_select query ~field_types
+    Statistics.time_query (fun () -> db.execute_select query ~field_types)
 
   let query_exists query ~db =
     let sql = Format.asprintf "SELECT EXISTS (%a) AS t" (fmt ~db) query in
     let field_types = [ ("t", Phrase_type.Bool) ] in
-    let res = db.execute_select sql ~field_types in
+    let res =
+      Statistics.time_query (fun () -> db.execute_select sql ~field_types)
+    in
     match res with
     | [ Phrase_value.Record [ (_, Phrase_value.Bool b) ] ] -> b
     | _ -> failwith "Expected singleton value."

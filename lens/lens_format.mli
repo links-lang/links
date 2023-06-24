@@ -5,6 +5,12 @@ type 'a fmt_fn = formatter -> 'a -> unit
 (** Returns a formatter which prints a constant string value. *)
 val pp_constant : string -> unit fmt_fn
 
+(** Returns a formatter which prints a constant string value, ignoring the input value. *)
+val pp_constant_poly : string -> 'a fmt_fn
+
+(** Transforms the input using the function f and prints it using the supplied formatter. *)
+val pp_map : f:('a -> 'b) -> 'b fmt_fn -> 'a fmt_fn
+
 (** A formatter which prints a constant ", " *)
 val pp_comma : unit fmt_fn
 
