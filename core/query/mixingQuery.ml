@@ -330,12 +330,12 @@ struct
     | Q.Apply (Q.Primitive "Cons", [q; Q.Concat []]) -> q
     | q -> aggError ("of_singleton of " ^  (Q.show q))
     in
-    let of_record x = function
+    let of_record _x = function
     | Q.Record fields ->
       StringMap.fold (fun label v acc ->
         (* f is the aggregate function for this label *)
         let f, arg = of_apply v in
-        let c, q = of_map_project arg in
+        let c, _q = of_map_project arg in
         (* TODO we should check q = x *)
         let y, cbody = of_closure c in
         match of_project (of_singleton cbody) with
