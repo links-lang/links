@@ -4707,10 +4707,6 @@ let make_function_type : ?linear:bool -> datatype list -> row -> datatype -> dat
   else
     Function (make_tuple_type args, effs, range)
 
-let make_operation_type : ?linear:bool -> datatype list -> datatype -> datatype
-  = fun ?(linear=false) args range ->
-  Operation (make_tuple_type args, range, DeclaredLinearity.(if linear then Lin else Unl))
-
 let make_pure_function_type : ?linear:bool -> datatype list -> datatype -> datatype
   = fun ?(linear=false) domain range -> make_function_type ~linear domain (make_empty_closed_row ()) range
 

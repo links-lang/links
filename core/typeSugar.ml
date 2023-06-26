@@ -1697,6 +1697,13 @@ let lookup_effect    context name   =
 
 module LinCont = struct
   (* Some helper functions for control-flow linearity. *)
+
+  let is_enabled = (Settings.get Basicsettings.CTLinearity.enabled)
+  (* let is_enabled = true *)
+
+  let enabled = fun f ->
+    if is_enabled then f () else ()
+    (* f () *)
   (*
     NOTE: The meaning of Any and Unl for effect row types is different from other types:
     - An effect row type with kind `Any` means it can be linear or unlimited.
@@ -1720,9 +1727,19 @@ module LinCont = struct
     else
       Types.Lolli (Types.unit_type, Types.make_empty_closed_row (), out) *)
 
+  
+  let make_operation_type : ?linear:bool -> Types.datatype list -> Types.datatype -> Types.datatype
+    = fun ?(linear=false) args range ->
+      let lin = if is_enabled then DeclaredLinearity.(if linear then Lin else Unl)
+                else DeclaredLinearity.Unl
+      in Types.Operation (Types.make_tuple_type args, range, lin)
+
   (* linear continuation(function) is still represented by `-@`, so we still use `islin` *)
   let make_continuation_type = fun islin inp eff out ->
-    Types.make_function_type ~linear:(islin) inp eff out
+    if is_enabled
+    then (Types.make_function_type ~linear:(islin) inp eff out)
+    else (Types.make_function_type ~linear:(false) inp eff out)
+
 
   (*
       `cont_lin` (continuation linearity) is represented by an integer,
@@ -1759,24 +1776,32 @@ module LinCont = struct
   let linmap = ref (IntMap.add (-1) default IntMap.empty)
 
   let getnew () =
-    let newx = !count in
-    let () = count := newx + 1 in
-    let () = linmap := IntMap.add newx default !linmap in
-    newx
+    if is_enabled then (
+      let newx = !count in
+      let () = count := newx + 1 in
+      let () = linmap := IntMap.add newx default !linmap in
+      newx )
+    else -1
 
   let is_in_linlet context =
-    fst <| IntMap.find context.cont_lin !linmap
+    if is_enabled then fst <| IntMap.find context.cont_lin !linmap
+    else false
 
   let is_bound_by_linlet context =
-    snd <| IntMap.find context.cont_lin !linmap
+    if is_enabled then snd <| IntMap.find context.cont_lin !linmap
+    else false
 
   let update_in_linlet context a =
-    let b = is_bound_by_linlet context in
-    linmap := IntMap.add context.cont_lin (a, b) !linmap
+    enabled (fun () ->
+      let b = is_bound_by_linlet context in
+      linmap := IntMap.add context.cont_lin (a, b) !linmap
+    )
 
   let update_bound_by_linlet context b =
-    let a = is_in_linlet context in
-    linmap := IntMap.add context.cont_lin (a, b) !linmap
+    enabled (fun () ->
+      let a = is_in_linlet context in
+      linmap := IntMap.add context.cont_lin (a, b) !linmap
+    )
 end
 
 
@@ -2478,11 +2503,11 @@ let type_pattern ?(linear_vars=true) closed
              | [], [t] -> Types.Operation (Types.unit_type, t, linearity)
              | [], ts -> Types.make_tuple_type ts  (* FIXME: WT: I don't understand this case *)
              | ts, [t] ->
-                Types.make_operation_type ~linear:is_lincase ts t
+                LinCont.make_operation_type ~linear:is_lincase ts t
              | ts, ts' ->
                 (* parameterised continuation *)
                 let t = ListUtils.last ts' in
-                Types.make_operation_type ~linear:is_lincase ts t
+                LinCont.make_operation_type ~linear:is_lincase ts t
            in
            t
          in
@@ -2760,8 +2785,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
     in
     (** update control-flow linearity *)
     let update_linearity _ usages =
-      if not (Settings.get Basicsettings.CTLinearity.enabled) then ()
-      else (
+      LinCont.enabled (fun () ->
         if (LinCont.is_bound_by_linlet context)
           (* make `context.effect_row` linear if the current term is bound by a linlet *)
           then
@@ -2770,7 +2794,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
         if (not (LinCont.is_in_linlet context))
           (* make all vars in `p` unlimited if the current term is in the body of an unlet *)
           then makeunl_term usages
-          else ())
+          else ()
+      )
     in
     let find_opname phrase =
       let o = object (o)
@@ -3550,7 +3575,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               if Settings.get Basicsettings.Sessions.exceptions_enabled &&
                  Settings.get Basicsettings.Sessions.expose_session_fail
               then
-                let ty = Types.make_operation_type [] (Types.empty_type) in
+                let ty = LinCont.make_operation_type [] (Types.empty_type) in
                 Types.row_with (Value.session_exception_operation, T.Present ty) inner_effects
               else
                 inner_effects in
@@ -4455,7 +4480,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                                else LinCont.update_bound_by_linlet context false
                                (* do is implicitly bound by an unlet *)
           in
-          let op_linearity = if is_lindo then lin_unl else lin_any
+          let op_linearity =
+            if LinCont.is_enabled then (if is_lindo then lin_unl else lin_any)
+            else lin_any
           (* lin_unl: linear operation; lin_any: unlimited operation *)
           in
           (* inline the type checking of Operation here to be able to
@@ -4520,7 +4547,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
           in
 
           let opname = find_opname (erase op) in
-          let infer_opt = no_pos (Types.make_operation_type ~linear:is_lindo (List.map typ ps) rettyp) in
+          let infer_opt = no_pos (LinCont.make_operation_type ~linear:is_lindo (List.map typ ps) rettyp) in
           let term = (exp_pos op, opt) in
           let row =
             if Settings.get Basicsettings.Sessions.exceptions_enabled &&
@@ -4574,7 +4601,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             let try_effects =
               if Settings.get Basicsettings.Sessions.expose_session_fail then
                 Types.row_with
-                  (Value.session_exception_operation, T.Present (Types.make_operation_type [] Types.empty_type))
+                  (Value.session_exception_operation, T.Present (LinCont.make_operation_type [] Types.empty_type))
                   (T.Row (StringMap.empty, rho, false))
               else
                 T.Row (StringMap.empty, rho, false)
@@ -4659,7 +4686,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             let effects =
               if Settings.get Basicsettings.Sessions.expose_session_fail then
                 Types.make_singleton_open_row
-                  (Value.session_exception_operation, T.Present (Types.make_operation_type [] Types.empty_type))
+                  (Value.session_exception_operation, T.Present (LinCont.make_operation_type [] Types.empty_type))
                   default_effect_subkind
               else
                 Types.make_empty_open_row default_effect_subkind
