@@ -56,7 +56,7 @@ and aggregator ar q =
   | _ -> assert false
   in
   let z = Var.fresh_raw_var () in
-  let tyk, tyv = q |> QL.type_of_expression |> Types.unwrap_map_type in
+  let tyk, _tyv = q |> QL.type_of_expression |> Types.unwrap_map_type in
   let fsk, _, _ = tyk |> Types.extract_row |> Types.extract_row_parts in
   let fields_k = fsk |> StringMap.to_alist |> List.map (fun (f,_) -> S.Project (z, "1@" ^ f), "1@" ^ f) in
   let fields_v = ar |> StringMap.to_alist |> List.map (fun (f_out, (aggfun, f_in)) ->
@@ -118,6 +118,11 @@ and body is_set gs os j =
     | QL.If (c, QL.Singleton (QL.Record fields), QL.Concat []) ->
         selquery
         <| List.map (fun (f,x) -> (base_exp x, f)) (StringMap.to_alist fields)
+        <| base_exp c
+    | QL.If (c, QL.Singleton (QL.MapEntry (QL.Record keys, QL.Record values)), QL.Concat []) ->
+        selquery
+        <| List.map (fun (f,x) -> (base_exp x, "1@" ^ f)) (StringMap.to_alist keys)
+           @ List.map (fun (f,x) -> (base_exp x, "2@" ^ f)) (StringMap.to_alist values)
         <| base_exp c
     | _ -> Debug.print ("error in EvalMixingQuery.body: unexpected j = " ^ QL.show j); failwith "body"
 
