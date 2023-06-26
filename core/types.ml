@@ -3446,8 +3446,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
   (* For correct printing of subkinds, need to know the subkind in advance:
    * see line (1): that has to be Empty so that the :: is not printed *)
-  let subkind_name : Policy.t -> Subkind.t -> unit printer
-    = fun policy (lin, res) ->
+  let subkind_name : ?is_row:bool -> Policy.t -> Subkind.t -> unit printer
+    = fun ?(is_row=false) policy (lin, res) ->
     let open Printer in
     let full_name : unit printer
       = Printer (fun _ctx () buf ->
@@ -3465,8 +3465,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
        let module L = Linearity in
        let module R = Restriction in
        match (lin, res) with
-       | (L.Unl, R.Any)     -> Empty (* (1) see above *)
-       | (L.Any, R.Any)     -> constant "Any"
+       | (L.Unl, R.Any)     -> if is_row then constant "Lin" else Empty (* (1) see above *)
+       | (L.Any, R.Any)     -> if is_row then Empty else constant "Any"
        | (L.Unl, R.Base)    -> constant @@ R.to_string res_base
        | (L.Any, R.Session) -> constant @@ R.to_string res_session
        | (L.Unl, R.Effect)  -> constant @@ R.to_string res_effect
@@ -3506,16 +3506,22 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                end
              | PrimaryKind.Row -> begin
                  match subknd with
-                 | L.Unl, R.Any | L.Unl, R.Effect ->
+                 | L.Any, R.Any | L.Any, R.Effect ->
                     StringBuffer.write buf (P.to_string pk_row)
+                 | L.Unl, R.Any | L.Unl, R.Effect ->
+                    (* explicit kinds for linear row variables *)
+                    StringBuffer.write buf (P.to_string pk_row ^ "(Lin)")
                  | _ ->
                     let ctx' = Context.(with_policy Policy.(set_kinds Full (policy ctx)) ctx) in
                     Printer.apply full_name ctx' () buf
                end
              | PrimaryKind.Presence -> begin
                  match subknd with
-                 | L.Unl, R.Any ->
+                 | L.Any, R.Any ->
                     StringBuffer.write buf (P.to_string pk_presence)
+                 | L.Unl, R.Any ->
+                    (* explicit kinds for linear presence variables *)
+                    StringBuffer.write buf (P.to_string pk_presence ^ "(Lin)")
                  | _ ->
                     let ctx' = Context.(with_policy Policy.(set_kinds Full (policy ctx)) ctx) in
                     Printer.apply full_name ctx' () buf
@@ -3579,8 +3585,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                  | _, _             -> StringBuffer.write buf var_name);
                 (if is_presence && not (Context.is_ambient_type_arg ctx) then StringBuffer.write buf "}"))
           in
+          let is_row = (PrimaryKind.Row = Kind.primary_kind knd) in
           if not in_binder
-          then seq ~sep:"::" (print_var, subkind_name (Context.policy ctx) subknd) (var_name, ()) ctx buf
+          then seq ~sep:"::" (print_var, subkind_name ~is_row:is_row (Context.policy ctx) subknd) (var_name, ()) ctx buf
           else seq ~sep:"::" (print_var, kind_name ctx knd) (var_name, ()) ctx buf)
 
   and recursive : (tid * Kind.t * typ) printer
