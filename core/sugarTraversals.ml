@@ -42,6 +42,9 @@ class map =
 
     method bool : bool -> bool = function | false -> false | true -> true
 
+    method linearity : DeclaredLinearity.t -> DeclaredLinearity.t =
+      DeclaredLinearity.(function | Lin -> Lin | Unl -> Unl)
+
     method unary_op : UnaryOp.t -> UnaryOp.t =
       let open UnaryOp in function
       | Minus -> Minus
@@ -567,7 +570,7 @@ class map =
          let name = o#name name in
          let ps = o#list (fun o -> o#pattern) ps in
          let k  = o#pattern k in
-         let b = o#bool b in
+         let b = o#linearity b in
          Operation (name, ps, k, b)
       | Negative _x ->
           let _x = o#list (fun o -> o#name) _x
@@ -683,7 +686,7 @@ class map =
       | Operation (_x, _x_i1, _x_i2) ->
         let _x = o#list (fun o -> o#datatype) _x in
         let _x_i1 = o#datatype _x_i1 in 
-        let _x_i2 = o#bool _x_i2 in Operation (_x, _x_i1, _x_i2)
+        let _x_i2 = o#linearity _x_i2 in Operation (_x, _x_i1, _x_i2)
       | Table (_t, _x, _x_i1, _x_i2) ->
          let _x = o#datatype _x in
          let _x_i1 = o#datatype _x_i1 in
@@ -909,6 +912,9 @@ class fold =
     method timestamp : Timestamp.t -> 'self_type = o#unknown
 
     method bool : bool -> 'self_type = function | false -> o | true -> o
+
+    method linearity : DeclaredLinearity.t -> 'self_type =
+      DeclaredLinearity.(function | Unl -> o | Lin -> o)
 
     method unary_op : UnaryOp.t -> 'self_type =
       let open UnaryOp in function
@@ -1142,7 +1148,7 @@ class fold =
          let o = o#phrase op in
          let o = o#option (fun o -> o#unknown) t in
          let o = o#list (fun o -> o#phrase) ps in
-         let o = o#bool b in o
+         let o = o#linearity b in o
       | Operation (_x) ->
           let o = o#name _x in o
       | Linlet _x ->
@@ -1364,7 +1370,7 @@ class fold =
          let o = o#name name in
          let o = o#list (fun o -> o#pattern) ps in
          let o = o#pattern k in
-         let o = o#bool b in
+         let o = o#linearity b in
          o
       | Negative _x ->
           let o = o#list (fun o -> o#name) _x in o
@@ -1467,7 +1473,7 @@ class fold =
       | Operation (_x, _x_i1, _x_i2) ->
         let o = o#list (fun o -> o#datatype) _x in
         let o = o#datatype _x_i1 in
-        let o = o#bool _x_i2 in o
+        let o = o#linearity _x_i2 in o
       | Table (_t, _x, _x_i1, _x_i2) ->
           let o = o#datatype _x in
           let o = o#datatype _x_i1 in
@@ -1689,6 +1695,9 @@ class fold_map =
 
     method bool : bool -> ('self_type * bool) =
       function | false -> (o, false) | true -> (o, true)
+
+    method linearity : DeclaredLinearity.t -> ('self_type * DeclaredLinearity.t) =
+      DeclaredLinearity.(function | Unl -> (o, Unl) | Lin -> (o, Lin))
 
     method unary_op : UnaryOp.t -> ('self_type * UnaryOp.t) =
       let open UnaryOp in function
@@ -2257,7 +2266,7 @@ class fold_map =
          let (o, name) = o#name name in
          let (o, ps) = o#list (fun o -> o#pattern) ps in
          let (o, k) = o#pattern k in
-         let (o, b) = o#bool b in
+         let (o, b) = o#linearity b in
          (o, Operation (name, ps, k, b))
       | Negative _x ->
           let (o, _x) = o#list (fun o -> o#name) _x in (o, (Negative _x))
@@ -2392,7 +2401,7 @@ class fold_map =
       | Operation (_x, _x_i1, _x_i2) ->
         let (o, _x) = o#list (fun o -> o#datatype) _x in
         let (o, _x_i1) = o#datatype _x_i1 in 
-        let (o, _x_i2) = o#bool _x_i2 in
+        let (o, _x_i2) = o#linearity _x_i2 in
         (o, Operation (_x, _x_i1, _x_i2))
       | Table (_t, _x, _x_i1, _x_i2) ->
           let (o, _x) = o#datatype _x in

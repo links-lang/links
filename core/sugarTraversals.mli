@@ -25,6 +25,7 @@ class map :
     method float           : float -> float
     method char            : char -> char
     method bool            : bool -> bool
+    method linearity       : DeclaredLinearity.t -> DeclaredLinearity.t
     method timestamp       : Timestamp.t -> Timestamp.t
     method unary_op        : UnaryOp.t -> UnaryOp.t
     method tyunary_op      : tyarg list * UnaryOp.t -> tyarg list * UnaryOp.t
@@ -110,6 +111,7 @@ class fold :
     method char            : char -> 'self
     method timestamp       : Timestamp.t -> 'self
     method bool            : bool -> 'self
+    method linearity       : DeclaredLinearity.t -> 'self
     method unary_op        : UnaryOp.t -> 'self
     method tyunary_op      : tyarg list * UnaryOp.t -> 'self
     method binder          : Binder.with_pos -> 'self
@@ -187,6 +189,7 @@ object ('self)
   method binop           : BinaryOp.t -> 'self * BinaryOp.t
   method tybinop         : tyarg list * BinaryOp.t -> 'self * (tyarg list * BinaryOp.t)
   method bool            : bool -> 'self * bool
+  method linearity       : DeclaredLinearity.t -> 'self * DeclaredLinearity.t
   method char            : char -> 'self * char
   method timestamp       : Timestamp.t -> 'self * Timestamp.t
   method constant        : Constant.t -> 'self * Constant.t

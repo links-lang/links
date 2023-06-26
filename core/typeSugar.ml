@@ -1778,8 +1778,6 @@ let update_bound_by_linlet context b =
   cont_lin_map := IntMap.add context.cont_lin (a, b) !cont_lin_map
 
 
-
-
 (* TODO(dhil): I have extracted the Usage abstraction from my name
    hygiene/compilation unit patch. The below module is a compatibility
    module which will make it easier for me to merge my other branch
@@ -2435,7 +2433,8 @@ let type_pattern ?(linear_vars=true) closed
         let p = tp p in
         let vtype typ = Types.Variant (make_singleton_row (name, Present (typ p))) in
         Pattern.Variant (name, Some (erase p)), (vtype ot, vtype it)
-      | Pattern.Operation (name, ps, k, is_lincase) ->
+      | Pattern.Operation (name, ps, k, linearity) ->
+         let is_lincase = linearity = DeclaredLinearity.Lin in
          (* Auxiliary machinery for typing effect patterns *)
          let rec type_resumption_pat (kpat : Pattern.with_pos) : Pattern.with_pos * (Types.datatype * Types.datatype) =
            let fresh_resumption_type () =
@@ -2474,7 +2473,7 @@ let type_pattern ?(linear_vars=true) closed
              (* Construct operation type, i.e. op : A -> B or op : B *)
              match domain, codomain with
              | [], [] | _, [] -> assert false (* The continuation is at least unary *)
-             | [], [t] -> Types.Operation (Types.unit_type, t, is_lincase)
+             | [], [t] -> Types.Operation (Types.unit_type, t, linearity)
              | [], ts -> Types.make_tuple_type ts  (* FIXME: WT: I don't understand this case *)
              | ts, [t] ->
                 Types.make_operation_type ~linear:is_lincase ts t
@@ -2494,7 +2493,7 @@ let type_pattern ?(linear_vars=true) closed
          | None ->
            (eff ot, eff it)
          in
-         Pattern.Operation (name, List.map erase ps, erase k, is_lincase), (ot, it)
+         Pattern.Operation (name, List.map erase ps, erase k, linearity), (ot, it)
       | Negative names ->
         let row_var = Types.fresh_row_variable (lin_any, res_any) in
 
@@ -4446,7 +4445,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                     sh_effect_cases = erase_cases eff_cases;
                     sh_value_cases = erase_cases val_cases;
                     sh_descr = descr }, body_type, usages
-        | DoOperation (op, ps, _, is_lindo) ->
+        | DoOperation (op, ps, _, linearity) ->
+          let is_lindo = linearity = DeclaredLinearity.Lin in
           let () = if is_lindo then ()
                                else update_bound_by_linlet context false
                                (* do is implicitly bound by an unlet *)
@@ -4499,20 +4499,20 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                   in
 
                   let rettyp = Types.for_all (rqs, rettyp) in
-                  let opt = T.Operation (pts, rettyp, is_lindo) in
+                  let opt = T.Operation (pts, rettyp, linearity) in
                   let op' = erase op in
                   let sugar_rqs = List.map SugarQuantifier.mk_resolved rqs in
-                  let e = tabstr (sugar_rqs, DoOperation (with_dummy_pos (tappl (op'.node, tyargs)), List.map erase ps, Some rettyp, is_lindo)) in
+                  let e = tabstr (sugar_rqs, DoOperation (with_dummy_pos (tappl (op'.node, tyargs)), List.map erase ps, Some rettyp, linearity)) in
                     e, rettyp, Usage.combine_many (usages op :: List.map usages ps), opt
                 | _ -> assert false
               end
             | T.Operation (pts, rettyp, _) ->
-                let opt = T.Operation (pts, rettyp, is_lindo) in
-                DoOperation (erase op, List.map erase ps, Some rettyp, is_lindo), rettyp, Usage.combine_many (usages op :: List.map usages ps), opt
+                let opt = T.Operation (pts, rettyp, linearity) in
+                DoOperation (erase op, List.map erase ps, Some rettyp, linearity), rettyp, Usage.combine_many (usages op :: List.map usages ps), opt
             | opt ->
               (* fresh variable case *)
               let rettyp = Types.fresh_type_variable (lin_unl, res_any) in
-                DoOperation (erase op, List.map erase ps, Some rettyp, is_lindo), rettyp, Usage.combine_many (usages op :: List.map usages ps), opt
+                DoOperation (erase op, List.map erase ps, Some rettyp, linearity), rettyp, Usage.combine_many (usages op :: List.map usages ps), opt
           in
 
           let opname = find_opname (erase op) in

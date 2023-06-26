@@ -153,7 +153,7 @@ and typ =
   | ForAll of (Quantifier.t list * typ)
   (* Effect *)
   | Effect of row
-  | Operation of (typ * typ * bool)
+  | Operation of (typ * typ * DeclaredLinearity.t)
   (* Row *)
   | Row of (field_spec_map * row_var * bool)
   | Closed
@@ -811,7 +811,7 @@ module Unl : Constraint = struct
       | ForAll _ as t -> super#type_satisfies vars t
       (* Effect *)
       | Effect _  -> true
-      | Operation (_,_,b) -> b
+      | Operation (_,_,b) -> DeclaredLinearity.(if b = Lin then true else false)
       (* Row *)
       | Row _ as t -> super#type_satisfies vars t
       (* Presence *)
@@ -2653,7 +2653,7 @@ struct
               "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype { context with bound_vars } p body
          (* Effect *)
          | Effect r -> "{" ^ row "," context p r ^ "}"
-         | Operation (f, t, b) -> sd f ^ (if b then " =@ " else " => ") ^ sd t
+         | Operation (f, t, b) -> sd f ^ (if b=DeclaredLinearity.Lin then " =@ " else " => ") ^ sd t
          (* Row *)
          | Row _ as t -> "{" ^ row "," context p t ^ "}"
          (* Presence *)
@@ -3932,12 +3932,12 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
           Printer.apply datatype ctx range buf;
         )
 
-  and op : (typ * typ * bool) printer
+  and op : (typ * typ * DeclaredLinearity.t) printer
     = let open Printer in
       Printer (fun ctx (domain, range, lin) buf ->
           (* build up the function type string: domain, arrow with effects, range *)
           Printer.apply row (Context.set_ambient Context.Tuple ctx) domain buf; (* function domain is always a Record *)
-          StringBuffer.write buf (if lin then " =@ " else " => ");
+          StringBuffer.write buf (if lin=DeclaredLinearity.Lin then " =@ " else " => ");
           Printer.apply datatype ctx range buf;
         )
 
@@ -4709,7 +4709,7 @@ let make_function_type : ?linear:bool -> datatype list -> row -> datatype -> dat
 
 let make_operation_type : ?linear:bool -> datatype list -> datatype -> datatype
   = fun ?(linear=false) args range ->
-  Operation (make_tuple_type args, range, linear)
+  Operation (make_tuple_type args, range, DeclaredLinearity.(if linear then Lin else Unl))
 
 let make_pure_function_type : ?linear:bool -> datatype list -> datatype -> datatype
   = fun ?(linear=false) domain range -> make_function_type ~linear domain (make_empty_closed_row ()) range

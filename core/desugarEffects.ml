@@ -364,7 +364,7 @@ let cleanup_effects tycon_env =
          WithPos.make ~pos (match node with
              | Datatype.Operation _     -> node
              | Datatype.Forall (qs, dt) -> Datatype.Forall (qs, elaborate_op dt)
-             | _                        -> Datatype.Operation ([], dt, false))
+             | _                        -> Datatype.Operation ([], dt, DeclaredLinearity.Unl))
              (* nullary operations without =@ are unlimited *)
        in
        let fields = List.map (function

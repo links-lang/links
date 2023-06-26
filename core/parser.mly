@@ -678,8 +678,8 @@ unary_expression:
 | MINUSDOT unary_expression                                    { unary_appl ~ppos:$loc UnaryOp.FloatMinus $2 }
 | OPERATOR unary_expression                                    { unary_appl ~ppos:$loc (UnaryOp.Name $1)  $2 }
 | postfix_expression | constructor_expression                  { $1 }
-| DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (DoOperation (with_pos $loc($2) (Operation $2), $3, None, false)) }
-| LINDOOP CONSTRUCTOR loption(arg_spec)                        { with_pos $loc (DoOperation (with_pos $loc($2) (Operation $2), $3, None, true)) }
+| DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (DoOperation (with_pos $loc($2) (Operation $2), $3, None, DeclaredLinearity.Unl)) }
+| LINDOOP CONSTRUCTOR loption(arg_spec)                        { with_pos $loc (DoOperation (with_pos $loc($2) (Operation $2), $3, None, DeclaredLinearity.Lin)) }
 
 infix_appl:
 | unary_expression                                             { $1 }
@@ -1070,8 +1070,8 @@ squiggly_arrow:
 | parenthesized_datatypes SQUIGLOLLI datatype                  { Datatype.Lolli    ($1, row_with_wp fresh_effects, $3) }
 
 fat_arrow:
-| parenthesized_datatypes FATRARROW datatype                   { Datatype.Operation ($1, $3, false) }
-| parenthesized_datatypes FATLOLLI datatype                    { Datatype.Operation ($1, $3, true) }
+| parenthesized_datatypes FATRARROW datatype                   { Datatype.Operation ($1, $3, DeclaredLinearity.Unl) }
+| parenthesized_datatypes FATLOLLI datatype                    { Datatype.Operation ($1, $3, DeclaredLinearity.Lin) }
 
 mu_datatype:
 | MU VARIABLE DOT mu_datatype                                  { Datatype.Mu (named_typevar $2 `Rigid, with_pos $loc($4) $4) }
@@ -1332,13 +1332,13 @@ typed_effect_pattern:
 
 resumable_operation_pattern:
 | operation_pattern FATRARROW pattern
-    { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3, false)) }
+    { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3, DeclaredLinearity.Unl)) }
 | operation_pattern FATLOLLI pattern
-    { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3, true)) }
+    { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3, DeclaredLinearity.Lin)) }
 | operation_pattern RARROW pattern
-    { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3, false)) }
+    { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3, DeclaredLinearity.Unl)) }
 | operation_pattern
-    { with_pos $loc (Pattern.Operation (fst $1, snd $1, any, false)) }
+    { with_pos $loc (Pattern.Operation (fst $1, snd $1, any, DeclaredLinearity.Lin)) }
 
 operation_pattern:
 | CONSTRUCTOR                                                  { ($1, []) }

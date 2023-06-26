@@ -198,7 +198,7 @@ module Datatype = struct
     | Record          of row
     | Variant         of row
     | Effect          of row
-    | Operation       of with_pos list * with_pos * bool (* true: linear operation *)
+    | Operation       of with_pos list * with_pos * DeclaredLinearity.t
     | Table           of Temporality.t * with_pos * with_pos * with_pos
     | List            of with_pos
     | TypeApplication of string * type_arg list
@@ -248,7 +248,7 @@ module Pattern = struct
     | Variant  of Name.t * with_pos option
     (* | Effect   of Name.t * with_pos list * with_pos *)
     (* | Effect2  of with_pos list * with_pos option *)
-    | Operation of Label.t * with_pos list * with_pos * bool (* true: linear operation *)
+    | Operation of Label.t * with_pos list * with_pos * DeclaredLinearity.t
     | Negative of Name.t list
     | Record   of (Name.t * with_pos) list * with_pos option
     | Tuple    of with_pos list
@@ -477,7 +477,7 @@ and phrasenode =
   | Instantiate      of phrase
   | Generalise       of phrase
   | ConstructorLit   of Name.t * phrase option * Types.datatype option
-  | DoOperation      of phrase * phrase list * Types.datatype option * bool
+  | DoOperation      of phrase * phrase list * Types.datatype option * DeclaredLinearity.t
   | Operation        of Name.t
   | Handle           of handler
   | Unlet            of phrase
