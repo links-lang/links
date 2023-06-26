@@ -4,6 +4,10 @@ type 'a fmt_fn = formatter -> 'a -> unit
 
 let pp_constant str f () = fprintf f "%s" str
 
+let pp_constant_poly str f _ = fprintf f "%s" str
+
+let pp_map ~f pp fmt v = pp fmt (f v)
+
 let pp_comma b () = fprintf b ", "
 
 let pp_comma_list f b v = pp_print_list ~pp_sep:pp_comma f b v

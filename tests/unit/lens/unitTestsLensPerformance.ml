@@ -6,6 +6,8 @@ module Phrase = Lens.Phrase
 open Lens.Phrase.Value
 module Record = Lens.Phrase.Value.Record
 
+open TestUtility
+
 (* let _ = Settings.set_value Debug.debugging_enabled true  *)
 
 let performance_opt =
@@ -23,57 +25,56 @@ let skip_long_performance test_ctx =
   skip_if v "Not running long performance tests because of -skip-long-perf"
 
 let test_join_five test_ctx n =
+  let module V = (val TestUtility.Debug.verbose_printer test_ctx) in
   skip_performance test_ctx;
   skip_long_performance test_ctx;
-  let db = LensTestHelpers.get_db test_ctx in
-  let l1 =
-    LensTestHelpers.drop_create_populate_table test_ctx db "t1" "a -> b c"
-      "a b c"
-      [ `Seq; `RandTo (n / 15); `Rand ]
-      n
+  let module DB = (val TestUtility.Table.create test_ctx) in
+  let module L1 =
+  (val DB.drop_create_easy_populate ~table:"t1" ~fd:"a -> b c" ~n
+         [ `Seq; `RandTo (n / 15); `Rand ])
   in
-  let l2 =
-    LensTestHelpers.drop_create_populate_table test_ctx db "t2" "b -> d e"
-      "b d e"
-      [ `Seq; `RandTo (n / 15 / 15); `Rand ]
-      (n / 15)
+  let module L2 =
+  (val DB.drop_create_easy_populate ~table:"t2" ~fd:"b -> d e" ~n:(n / 15)
+         [ `Seq; `RandTo (n / 15 / 15); `Rand ])
   in
-  let l3 =
-    LensTestHelpers.drop_create_populate_table test_ctx db "t3" "d -> f g"
-      "d f g"
-      [ `Seq; `RandTo (n / 15 / 15 / 15); `Rand ]
-      (n / 15 / 15)
+  let module L3 =
+  (val DB.drop_create_easy_populate ~table:"t3" ~fd:"d -> f g"
+         ~n:(n / 15 / 15)
+         [ `Seq; `RandTo (n / 15 / 15 / 15); `Rand ])
   in
-  let l4 =
-    LensTestHelpers.drop_create_populate_table test_ctx db "t4" "f -> h" "f h"
-      [ `Seq; `Rand ]
-      (n / 15 / 15 / 15)
+  let module L4 =
+  (val DB.drop_create_easy_populate ~table:"t4" ~fd:"f -> h"
+         ~n:(n / 15 / 15 / 15)
+         [ `Seq; `Rand ])
   in
-  let l5 = LensTestHelpers.join_lens_dl l1 l2 [ ("b", "b", "b") ] in
-  let l6 = LensTestHelpers.join_lens_dl l3 l4 [ ("f", "f", "f") ] in
-  let l7 = LensTestHelpers.join_lens_dl l5 l6 [ ("d", "d", "d") ] in
+  let l1 = L1.lens () in
+  let l2 = L2.lens () in
+  let l3 = L3.lens () in
+  let l4 = L4.lens () in
+  let l5 = Mk_lens.join_dl l1 l2 in
+  let l6 = Mk_lens.join_dl l3 l4 in
+  let l7 = Mk_lens.join_dl l5 l6 in
   let l8 =
-    LensTestHelpers.select_lens l7
-      (Phrase.equal (Phrase.var "b") (Phrase.Constant.int 10))
+    Mk_lens.select
+      ~predicate:(Phrase.equal (Phrase.var "b") (Phrase.Constant.int 10))
+      l7
   in
+  let db = DB.db in
   (* run tests *)
   let res = Lens.Value.lens_get ~db l8 in
   (* let r = LensTestHelpers.time_query_both (fun () -> lens_put l8 res None) in *)
-  let _ =
-    LensTestHelpers.print_verbose test_ctx (Lens.Phrase.Value.show_values res)
-  in
+  V.printf "%a" Lens.Phrase.Value.pp_values res;
   (* modify res *)
   let row = List.hd res in
   let row = Record.set row ~key:"a" ~value:(box_int (n + 1)) in
   let res = row :: res in
-  (* et r = LensTestHelpers.time_query_both (fun () -> lens_put l8 res None) in *)
-  let _ = LensTestHelpers.print_verbose test_ctx (show_values res) in
+  (* let r = LensTestHelpers.time_query_both (fun () -> lens_put l8 res None) in *)
+  V.printf "%a" Lens.Phrase.Value.pp_values res;
   (* cleanup *)
-  let _ = LensTestHelpers.drop_if_cleanup test_ctx db "t1" in
-  let _ = LensTestHelpers.drop_if_cleanup test_ctx db "t2" in
-  let _ = LensTestHelpers.drop_if_cleanup test_ctx db "t3" in
-  let _ = LensTestHelpers.drop_if_cleanup test_ctx db "t4" in
-  ()
+  L1.drop ();
+  L2.drop ();
+  L3.drop ();
+  L4.drop ()
 
 let create_join_n_lens test_ctx db n rows =
   let r = LensTestHelpers.range 1 n in

@@ -16,8 +16,20 @@ val make : Alias.Set.t -> Alias.Set.t -> t
 (** Get the left side of a functional dependency (i.e. left of X -> Y returns X)*)
 val left : t -> Alias.Set.t
 
+(** Get the left side of a functional dependency as a list (i.e. left of X -> Y returns Y)*)
+val left_list : t -> Alias.t list
+
 (** Get the right side of a functional dependency (i.e. left of X -> Y returns Y)*)
 val right : t -> Alias.Set.t
+
+(** Get the right side of a functional dependency as a list (i.e. left of X -> Y returns Y)*)
+val right_list : t -> Alias.t list
+
+(** Get all of the columns of a functional dependency (i.e. left of X -> Y returns XY)*)
+val all_columns : t -> Alias.Set.t
+
+(** Get all of the columns of a functional dependency as a list (i.e. left of X -> Y returns XY)*)
+val all_columns_list : t -> Alias.t list
 
 (** Convert two sets of alias lists into a functional dependency *)
 val of_lists : Alias.t list * Alias.t list -> t

@@ -250,12 +250,14 @@ module Select = struct
 
   let execute query ~db ~field_types =
     let query = Format.asprintf "%a" (fmt ~db) query in
-    db.execute_select query ~field_types
+    Statistics.time_query (fun () -> db.execute_select query ~field_types)
 
   let query_exists query ~db =
     let sql = Format.asprintf "SELECT EXISTS (%a) AS t" (fmt ~db) query in
     let field_types = [ ("t", Phrase_type.Bool) ] in
-    let res = db.execute_select sql ~field_types in
+    let res =
+      Statistics.time_query (fun () -> db.execute_select sql ~field_types)
+    in
     match res with
     | [ Phrase_value.Record [ (_, Phrase_value.Bool b) ] ] -> b
     | _ -> failwith "Expected singleton value."
@@ -350,9 +352,7 @@ module Insert = struct
     let last_id_fun =
       let driver = db.driver_name () in
       match driver with
-      | "mysql"
-       |"mysql8" ->
-          "last_insert_id()"
+      | "mysql8" -> "last_insert_id()"
       | "sqlite3" -> "last_insert_rowid()"
       | _ ->
           let fn = "exec_insert_returning_hack" in
@@ -372,7 +372,6 @@ module Insert = struct
   let exec_insert_returning ~db ~field_types data =
     match db.driver_name () with
     | "sqlite3"
-     |"mysql"
      |"mysql8" ->
         exec_insert_returning_hack ~db data
     | _ ->
@@ -407,9 +406,7 @@ module Change = struct
 
   let exec_multi ~db data =
     match db.driver_name () with
-    | "mysql"
-     |"mysql8" ->
-        exec_multi_slow ~db data
+    | "mysql8" -> exec_multi_slow ~db data
     | _ ->
         let fmt_cmd_sep f () = Format.pp_print_string f ";\n" in
         let fmt_cmd_list = Format.pp_print_list ~pp_sep:fmt_cmd_sep (fmt ~db) in
