@@ -1052,14 +1052,15 @@ struct
     | _ -> StringMap.add "@" t' StringMap.empty |> Types.make_record_type |> Types.make_list_type
 
   let rec flatten_inner : t -> t =
+    let is_aggr_primitive = function
+      | "Sum" | "SumF" | "Avg" | "AvgF" | "Min" | "MinF" | "Max" | "MaxF" | "length" -> true
+      | _ -> false
+    in
     function
       | Constant c    -> Constant c
       | Primitive p   -> Primitive p
       | Apply (Primitive "Empty", [e]) -> Apply (Primitive "Empty", [flatten_inner_query e])
-      | Apply (Primitive "Sum", [e]) -> Apply (Primitive "Sum", [flatten_inner_query e])
-      | Apply (Primitive "SumFloat", [e]) -> Apply (Primitive "SumFloat", [flatten_inner_query e])
-      | Apply (Primitive "Avg", [e]) -> Apply (Primitive "Avg", [flatten_inner_query e])
-      | Apply (Primitive "length", [e]) -> Apply (Primitive "length", [flatten_inner_query e])
+      | Apply (Primitive f as p, [e]) when is_aggr_primitive f -> Apply (p, [flatten_inner_query e])
       | Apply (Primitive "tilde", [s; r]) as e ->
           Debug.print ("Applying flatten_inner to tilde expression: " ^ show e);
           Apply (Primitive "tilde", [flatten_inner s; flatten_inner r])
