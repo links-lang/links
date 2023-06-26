@@ -3,78 +3,78 @@ tests/handlers/lin_deep1.links
 filemode : true
 exit : 1
 stderr : @.*Type error: Variable .* of linear type .* is used in a deep handler.* 
-args : --enable-handlers
+args : --enable-handlers --track-control-flow-linearity
 
 Use linear variables in deep handlers (2)
 tests/handlers/lin_deep2.links
 filemode : true
 exit : 1
 stderr : @.*Type error: Variable .* of linear type .* is used in a deep handler.* 
-args : --enable-handlers
+args : --enable-handlers --track-control-flow-linearity
 
 Use linear variables in deep handlers (3)
 tests/handlers/lin_deep3.links
 filemode : true
 exit : 1
 stderr : @.*Type error: Variable .* has linear type .* is used .* times.* 
-args : --enable-handlers
+args : --enable-handlers --track-control-flow-linearity
 
 Use linear variables in deep handlers (4)
 tests/handlers/lin_deep4.links
 filemode : true
 exit : 1
 stderr : @.*Type error: Variable .* of linear type .* is used in a deep handler.* 
-args : --enable-handlers
+args : --enable-handlers --track-control-flow-linearity
 
 Linear operation and continuation
 handle (lindo Foo(20) + 1) {case <Foo(i) =@ k> -> k(i)}
 stdout : 21 : Int
-args : --enable-handlers
+args : --enable-handlers --track-control-flow-linearity
 
 Non-linear operation and continuation
 handle (do Foo(20) + 1) {case <Foo(i) => k> -> k(i) + k(i)}
 stdout : 42 : Int
-args : --enable-handlers
+args : --enable-handlers --track-control-flow-linearity
 
 Use linear variable in linear continuation
 {linfun f(x) {40+x} handle (f(lindo Foo)) {case <Foo =@ k> -> k(2)}}
 stdout : 42 : Int
-args : --enable-handlers
+args : --enable-handlers --track-control-flow-linearity
 
 Use linear variable in non-linear continuation
 {linfun f(x) {[|x|]} handle ([|f(do Foo)|]) {case <Foo => k> -> k(1)}}
 exit : 1
 stderr : @.*Type error: Variable .* of linear type .* is used in a non-linear continuation.* 
-args : --enable-handlers
+args : --enable-handlers --track-control-flow-linearity
 
 New implementation of examples/handlers/choose.links
 tests/handlers/new_choose.links
 filemode : true
 stdout : [10, 10, 18, 12, 20] : [Int]
-args : --enable-handlers
+args : --enable-handlers --track-control-flow-linearity
 
 Combine unlimited choice and state
 tests/handlers/choose_and_state.links
 filemode : true
 stdout : [3, 4, 9, 10, 3, 3, 3, 3] : [Int]
-args : --enable-handlers
+args : --enable-handlers --track-control-flow-linearity
 
 Combine linear choice and unlimited state
 tests/handlers/choose_and_state2.links
 filemode : true
 stdout : 3 : Int
-args : --enable-handlers
+args : --enable-handlers --track-control-flow-linearity
 
 Check the first part of Issue 544
 tests/handlers/issue544a.links
 filemode : true
 exit : 1
 stderr : @.*Type error: Variable .* of linear type .* is used in a non-linear continuation.* 
-args : --enable-handlers
+args : --enable-handlers --track-control-flow-linearity
 
 Check the second part of Issue 544
 tests/handlers/issue544b.links
 filemode : true
 exit : 1
 stderr : @.*Type error: Variable .* of linear type .* is used in a non-linear continuation.* 
-args : --enable-handlers
+args : --enable-handlers --track-control-flow-linearity

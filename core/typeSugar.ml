@@ -2760,15 +2760,17 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
     in
     (** update control-flow linearity *)
     let update_linearity _ usages =
-      if (LinCont.is_bound_by_linlet context)
-        (* make `context.effect_row` linear if the current term is bound by a linlet *)
-        then
-          makelin_effrow (context.effect_row)
-        else ();
-      if (not (LinCont.is_in_linlet context))
-        (* make all vars in `p` unlimited if the current term is in the body of an unlet *)
-        then makeunl_term usages
-        else ()
+      if not (Settings.get Basicsettings.CTLinearity.enabled) then ()
+      else (
+        if (LinCont.is_bound_by_linlet context)
+          (* make `context.effect_row` linear if the current term is bound by a linlet *)
+          then
+            makelin_effrow (context.effect_row)
+          else ();
+        if (not (LinCont.is_in_linlet context))
+          (* make all vars in `p` unlimited if the current term is in the body of an unlet *)
+          then makeunl_term usages
+          else ())
     in
     let find_opname phrase =
       let o = object (o)
@@ -4117,7 +4119,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
         (* effect handlers *)
         | Handle { sh_expr = m; sh_value_cases = val_cases; sh_effect_cases = eff_cases; sh_descr = descr; } ->
            ignore
-             (if not (Settings.get  Basicsettings.Handlers.enabled)
+             (if not (Settings.get Basicsettings.Handlers.enabled)
               then raise (Errors.disabled_extension
                             ~pos ~setting:("enable_handlers", true)
                             ~flag:"--enable-handlers" "Handlers"));
