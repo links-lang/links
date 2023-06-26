@@ -71,24 +71,8 @@ module type WEBSOCKETS =
     val deliver_session_message :
       client_id ->
       channel_id ->
-      Value.delegated_chan list->
-      bool ->
+      Value.delegated_chan list ->
       Value.t ->
-      unit Lwt.t
-
-  (** Sends a lost message request for carrier channel `channel_id`,
-   * given a list of delegated endpoints `channel_id list` *)
-  val get_lost_messages :
-      client_id ->
-      channel_id ->
-      channel_id list ->
-      unit Lwt.t
-
-  (** Deliver lost messages *)
-  val deliver_lost_messages :
-      client_id ->
-      channel_id ->
-      (channel_id * Value.t list) list ->
       unit Lwt.t
 
   (** Send a cancellation notification *)
@@ -144,14 +128,11 @@ sig
   val block : channel_id -> process_id -> unit
   val unblock : channel_id -> process_id option
 
-  val send_from_local : Value.t -> channel_id -> send_result Lwt.t
-  val send_from_remote :
-    client_id -> Value.delegated_chan list -> Value.t -> channel_id -> send_result Lwt.t
+  val send_from_server : Value.t -> channel_id -> send_result Lwt.t
+  val send_from_client :
+    Value.t -> channel_id -> send_result Lwt.t
 
   val receive : chan -> receive_result
-
-  val handle_lost_message_response :
-    channel_id -> ((channel_id * (Value.t list)) list) -> unit Lwt.t
 
   val handle_remote_cancel :
     notify_ep:channel_id -> cancelled_ep:channel_id -> unit Lwt.t
