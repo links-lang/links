@@ -275,7 +275,7 @@ class virtual printer =
       | "^." -> Format.fprintf ppf "pow(%a,%a)"
             pr_b_one_table l
             pr_b_one_table r
-      | _ -> Format.fprintf ppf "(%a%s%a)"
+      | _ -> Format.fprintf ppf "((%a)%s(%a))"
             pr_b_one_table l
             (Arithmetic.sql_name op)
             pr_b_one_table r
