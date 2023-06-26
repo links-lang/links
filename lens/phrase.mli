@@ -36,6 +36,9 @@ val equal : t -> t -> t
 (** Logical not of a phrase. *)
 val not' : t -> t
 
+(** Less than of a phrase. *)
+val lt : t -> t -> t
+
 (** Create a tuple of a list of phrases. *)
 val tuple : t list -> t
 

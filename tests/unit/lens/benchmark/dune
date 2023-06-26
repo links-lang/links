@@ -1,0 +1,6 @@
+(executable
+ (name links_lens_benchmark)
+ (modes native)
+ (flags :standard -safe-string -dtypes -w Ae-44-45-60 -g)
+ (libraries ounit2.advanced ounit2 dynlink links.core links.lens links-postgresql links_unit_lens_utility result links_lens_unit_tests)
+ (preprocess (pps ppx_deriving.std)))
