@@ -3827,8 +3827,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | None | Some Absent | Some (Meta _) -> false
             | _ -> raise tag_expectation_mismatch
           in
-          let decide_skip ctx vid =
+          let decide_skip ctx vid subknd =
             let anonymity = get_var_anonymity ctx vid in
+            (* linear row variables should not be skipped *)
+            let is_linrow = fst subknd = Linearity.Unl in
             if Context.implicit_shared_effect_exists ctx
             then begin
                 let es_policy = Policy.es_policy (Context.policy ctx) in
@@ -3839,12 +3841,13 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
                 match anonymity with
                 | Visible -> false (* decided Visible, cannot skip *)
-                | Anonymous -> arrows_show_impl_shared ||
-                                 (arrows_curried_hide_fresh && Context.is_ambient_arrow_curried ctx)
-                | ImplicitEffectVar -> not arrows_show_impl_shared
+                | Anonymous -> (arrows_show_impl_shared ||
+                               (arrows_curried_hide_fresh && Context.is_ambient_arrow_curried ctx)) &&
+                               not is_linrow
+                | ImplicitEffectVar -> not arrows_show_impl_shared && not is_linrow
               end
             else match anonymity with
-                 | Anonymous -> true (* skip *)
+                 | Anonymous -> not is_linrow (* skip *)
                  | Visible   -> false (* no skip *)
                  | _         ->
                     raise (internal_error "ImplicitEffectVar anonymity is not allowed when effect sugar is disabled")
@@ -3885,18 +3888,27 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                           it's anonymous in which case we skip it entirely *)
                     match Unionfind.find rvar with
                     | Var (vid, knd, _) ->
-                       if decide_skip ctx vid
-                       then () (* skip printing it entirely *)
-                       else begin
-                           (if is_wild
-                            then StringBuffer.write buf "~"
-                            else StringBuffer.write buf "-");
-                           let ctx =
-                             Context.(set_ambient Effect
-                                        (with_policy Policy.(set_kinds Hide (policy ctx)) ctx))
-                           in
-                           Printer.apply var ctx (vid, knd) buf
-                         end
+                      let subknd = Kind.subkind knd in
+                      let is_linrow = fst subknd = Linearity.Unl in
+                      if decide_skip ctx vid subknd
+                      then () (* skip printing it entirely *)
+                      else 
+                      begin
+                        (if is_wild
+                          then StringBuffer.write buf "~"
+                          else StringBuffer.write buf "-");
+                        (if is_linrow
+                          then StringBuffer.write buf "("
+                          else ());
+                        let ctx =
+                          Context.(set_ambient Effect
+                                  (with_policy Policy.(set_kinds Default (policy ctx)) ctx))
+                        in
+                        Printer.apply var ctx (vid, knd) buf;
+                        (if is_linrow
+                          then StringBuffer.write buf ")"
+                          else ())
+                      end
                     | _ ->
                        begin (* special case, construct row syntax, but only call the inside *)
                          StringBuffer.write buf "{";
