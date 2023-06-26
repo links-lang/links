@@ -1695,87 +1695,89 @@ let lookup_effect    context name   =
   | _ -> raise (internal_error "Effect row in the context is not a row")
 
 
-(* Tag: some helper functions for control-flow linearity *)
-(*
-  NOTE: The meaning of Any and Unl for effect row types is different from other types:
-  - An effect row type with kind `Any` means it can be linear or unlimited.
-  - An effect row type with kind `Unl` means it must be linear!
-  Moreover, for effect signatures, `=>` means linear signature which must have a linear
-  continuation, and `=@` means signature which may have any continuation.
-  This is just an implementation trick to reuse the previous mechanism of unification.
-*)
-(* `lin_any` here means this eff_row can be unified with linear or unlimited row types *)
-(* let make_singleton_open_eff_row = fun op_name_sig -> *)
-  (* Types.make_singleton_open_row op_name_sig (lin_any, res_effect) *)
+module LinCont = struct
+  (* Some helper functions for control-flow linearity. *)
+  (*
+    NOTE: The meaning of Any and Unl for effect row types is different from other types:
+    - An effect row type with kind `Any` means it can be linear or unlimited.
+    - An effect row type with kind `Unl` means it must be linear!
+    Moreover, for effect signatures, `=>` means linear signature which must have a linear
+    continuation, and `=@` means signature which may have any continuation.
+    This is just an implementation trick to reuse the previous mechanism of unification.
+  *)
+  (* `lin_any` here means this eff_row can be unified with linear or unlimited row types *)
+  (* let make_singleton_open_eff_row = fun op_name_sig -> *)
+    (* Types.make_singleton_open_row op_name_sig (lin_any, res_effect) *)
 
-(* linear signature is represented by `->`, so we use `not islin` *)
-(* let make_signature_type = fun islin inp out -> *)
-  (* Types.make_pure_function_type ~linear:(not islin) inp out *)
+  (* linear signature is represented by `->`, so we use `not islin` *)
+  (* let make_signature_type = fun islin inp out -> *)
+    (* Types.make_pure_function_type ~linear:(not islin) inp out *)
 
-(* make a signature type without parameters *)
-(* let make_unit_signature_type = fun islin out ->
-  if islin then
-    Types.Function (Types.unit_type, Types.make_empty_closed_row (), out)
-  else
-    Types.Lolli (Types.unit_type, Types.make_empty_closed_row (), out) *)
+  (* make a signature type without parameters *)
+  (* let make_unit_signature_type = fun islin out ->
+    if islin then
+      Types.Function (Types.unit_type, Types.make_empty_closed_row (), out)
+    else
+      Types.Lolli (Types.unit_type, Types.make_empty_closed_row (), out) *)
 
-(* linear continuation(function) is still represented by `-@`, so we still use `islin` *)
-let make_continuation_type = fun islin inp eff out ->
-  Types.make_function_type ~linear:(islin) inp eff out
+  (* linear continuation(function) is still represented by `-@`, so we still use `islin` *)
+  let make_continuation_type = fun islin inp eff out ->
+    Types.make_function_type ~linear:(islin) inp eff out
 
-(*
-    `cont_lin` (continuation linearity) is represented by an integer,
-    which is mapped to a pair of bools by the global `cont_lin_map`.
-    - `cont_lin.first = true` : the current term is in a linear
-      continuation. Nothing to do.
-    - `cont_lin.first = false` : the current term is in an unlimited
-      continuation. We need to guarantee it does not use linear
-      variables bound outside.
-    - `cont_lin.second = true` : the current term is bound by linlet
-      (i.e. has a linear continuation). If the current term is not
-      pure, we should guarantee that the current effect type
-      `effect_row` is linear.
-    - `cont_lin.second = false` : the current term is bound by let
-      (i.e. has an unlimited continuation). Nothing to do.
+  (*
+      `cont_lin` (continuation linearity) is represented by an integer,
+      which is mapped to a pair of bools by the global `cont_lin_map`.
+      - `cont_lin.first = true` : the current term is in a linear
+        continuation. Nothing to do.
+      - `cont_lin.first = false` : the current term is in an unlimited
+        continuation. We need to guarantee it does not use linear
+        variables bound outside.
+      - `cont_lin.second = true` : the current term is bound by linlet
+        (i.e. has a linear continuation). If the current term is not
+        pure, we should guarantee that the current effect type
+        `effect_row` is linear.
+      - `cont_lin.second = false` : the current term is bound by let
+        (i.e. has an unlimited continuation). Nothing to do.
 
-    We implement `cont_lin = (true, true)` by default because some
-    functions in prelude.links uses session types (thus there are
-    linear variables which are excluded when cont_lin.first=false).
+      We implement `cont_lin = (true, true)` by default because some
+      functions in prelude.links uses session types (thus there are
+      linear variables which are excluded when cont_lin.first=false).
 
-    The reason to use a global map is that we have syntax like `lindo`
-    which updates `cont_lin`, meanwhile we want to make sure sequenced
-    terms have the same `cont_lin`. The only places where `cont_lin`
-    is updated to a new one is where `effect_row` is updated to a new
-    one. (I think `effect_row` also uses some global mechanism for
-    unification.)
-*)
-let cont_lin_count = ref 0
+      The reason to use a global map is that we have syntax like `lindo`
+      which updates `cont_lin`, meanwhile we want to make sure sequenced
+      terms have the same `cont_lin`. The only places where `cont_lin`
+      is updated to a new one is where `effect_row` is updated to a new
+      one. (I think `effect_row` also uses some global mechanism for
+      unification.)
+  *)
+  let count = ref 0
 
-let default_cont_lin = (true, true)
+  let default = (true, true)
 
-(* TODO: `-1` is the `cont_lin` of `empty_typing_environment`.
-   I guess it is used in the typing of default global bindings. *)
-let cont_lin_map = ref (IntMap.add (-1) default_cont_lin IntMap.empty)
+  (* TODO: `-1` is the `cont_lin` of `empty_typing_environment`.
+    I guess it is used in the typing of default global bindings. *)
+  let linmap = ref (IntMap.add (-1) default IntMap.empty)
 
-let new_cont_lin () =
-  let newx = !cont_lin_count in
-  let () = cont_lin_count := newx + 1 in
-  let () = cont_lin_map := IntMap.add newx default_cont_lin !cont_lin_map in
-  newx
+  let getnew () =
+    let newx = !count in
+    let () = count := newx + 1 in
+    let () = linmap := IntMap.add newx default !linmap in
+    newx
 
-let is_in_linlet context =
-  fst <| IntMap.find context.cont_lin !cont_lin_map
+  let is_in_linlet context =
+    fst <| IntMap.find context.cont_lin !linmap
 
-let is_bound_by_linlet context =
-  snd <| IntMap.find context.cont_lin !cont_lin_map
+  let is_bound_by_linlet context =
+    snd <| IntMap.find context.cont_lin !linmap
 
-let update_in_linlet context a =
-  let b = is_bound_by_linlet context in
-  cont_lin_map := IntMap.add context.cont_lin (a, b) !cont_lin_map
+  let update_in_linlet context a =
+    let b = is_bound_by_linlet context in
+    linmap := IntMap.add context.cont_lin (a, b) !linmap
 
-let update_bound_by_linlet context b =
-  let a = is_in_linlet context in
-  cont_lin_map := IntMap.add context.cont_lin (a, b) !cont_lin_map
+  let update_bound_by_linlet context b =
+    let a = is_in_linlet context in
+    linmap := IntMap.add context.cont_lin (a, b) !linmap
+end
 
 
 (* TODO(dhil): I have extracted the Usage abstraction from my name
@@ -2441,7 +2443,7 @@ let type_pattern ?(linear_vars=true) closed
              let domain   = fresh_var () in
              let codomain = fresh_var () in
              let effrow   = Types.make_empty_open_row default_effect_subkind in
-             make_continuation_type is_lincase [domain] effrow codomain
+             LinCont.make_continuation_type is_lincase [domain] effrow codomain
            in
            let pos' = kpat.pos in
            let open Pattern in
@@ -2758,12 +2760,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
     in
     (** update control-flow linearity *)
     let update_linearity _ usages =
-      if (is_bound_by_linlet context)
+      if (LinCont.is_bound_by_linlet context)
         (* make `context.effect_row` linear if the current term is bound by a linlet *)
         then
           makelin_effrow (context.effect_row)
         else ();
-      if (not (is_in_linlet context))
+      if (not (LinCont.is_in_linlet context))
         (* make all vars in `p` unlimited if the current term is in the body of an unlet *)
         then makeunl_term usages
         else ()
@@ -2927,7 +2929,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             let body = type_check ({context with
                                       var_env = env';
                                       effect_row = effects;
-                                      cont_lin = new_cont_lin ()}) body in
+                                      cont_lin = LinCont.getnew ()}) body in
 
             (* make types of parameters unlimited if they are not used exactly once *)
             let () =
@@ -4399,7 +4401,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
            in
            let m_context = { context with
               effect_row = Types.make_empty_open_row default_effect_subkind;
-              cont_lin   = new_cont_lin () } in
+              cont_lin   = LinCont.getnew () } in
            let m = type_check m_context m in (* Type-check the input computation m under current context *)
            let m_effects = T.Effect m_context.effect_row in
            (* Most of the work is done by `type_cases'. *)
@@ -4448,7 +4450,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
         | DoOperation (op, ps, _, linearity) ->
           let is_lindo = linearity = DeclaredLinearity.Lin in
           let () = if is_lindo then ()
-                               else update_bound_by_linlet context false
+                               else LinCont.update_bound_by_linlet context false
                                (* do is implicitly bound by an unlet *)
           in
           let op_linearity = if is_lindo then lin_unl else lin_any
@@ -4534,20 +4536,20 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               (no_pos (T.Effect context.effect_row), (p, T.Effect row))
           in
           let () = if is_lindo then ()
-                               else update_in_linlet context false
+                               else LinCont.update_in_linlet context false
           in
             doop, rettyp, usage
         | Operation _ ->
           Gripers.die pos "The operation label is used in invalid positions."
         | Linlet p ->
-          let () = update_bound_by_linlet context true in
+          let () = LinCont.update_bound_by_linlet context true in
           let (p, t, usages) = type_check context p in
-          let () = update_in_linlet context true in
+          let () = LinCont.update_in_linlet context true in
           (WithPos.node p, t, usages)
         | Unlet p ->
-          let () = update_bound_by_linlet context false in
+          let () = LinCont.update_bound_by_linlet context false in
           let (p, t, usages) = type_check context p in
-          let () = update_in_linlet context false in
+          let () = LinCont.update_in_linlet context false in
           (WithPos.node p, t, usages)
         | Switch (e, binders, _) ->
             let e = tc e in
@@ -4791,7 +4793,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
           let context_body = List.fold_left fold_in_envs context_body pats in
 
           let new_body_context = {context_body with effect_row = effects;
-                                               cont_lin = new_cont_lin () } in
+                                               cont_lin = LinCont.getnew () } in
           let body = type_check new_body_context body in
 
           (* check that the body type matches the return type of any annotation *)
@@ -5004,7 +5006,7 @@ and type_binding : context -> binding -> binding * context * Usage.t =
                       let body_context = {context with var_env = Env.extend body_env self_env} in
                       let effects = fresh_tame () in
                       let new_body_context = {body_context with effect_row = effects;
-                                                                cont_lin = new_cont_lin () } in
+                                                                cont_lin = LinCont.getnew () } in
                       let body = type_check new_body_context body in
                       let () =
                         Env.iter
@@ -5404,7 +5406,7 @@ struct
         | Some body ->
           let context = (Types.extend_typing_environment tyenv tyenv') in
           (* create a new cont_lin before typing the body *)
-          let body, typ = type_check_general {context with cont_lin = new_cont_lin ()} body in
+          let body, typ = type_check_general {context with cont_lin = LinCont.getnew ()} body in
           let typ = Types.normalise_datatype typ in
           (bindings, Some body), typ, tyenv' in
       Debug.if_set show_post_sugar_typing
