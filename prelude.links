@@ -2,8 +2,8 @@ fun assert(ok, msg) {
   if (not(ok)) debug("assertion failed: " ^^ msg) else ()
 }
 
-sig ignore : (a) -> ()
-fun ignore (_) { () }
+sig ignore : (a) { |_::Any}-> ()
+fun ignore (_) { [|()|] }
 
 fun println(msg) {
   print(msg ^^ "\n")

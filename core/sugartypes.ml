@@ -73,6 +73,10 @@ let default_subkind : Subkind.t = (lin_unl, res_any)
     linear or unlimited row types *)
 let default_effect_subkind : Subkind.t = (lin_any, res_any)
 
+let default_effect_lin : Linearity.t = lin_any
+
+let default_presence_subkind : Subkind.t = (lin_any, res_any)
+
 type kind = PrimaryKind.t option * Subkind.t option
     [@@deriving show]
 

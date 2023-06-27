@@ -44,7 +44,6 @@ let mk_binop_fn impl unbox_fn constr = function
 
 let int_op impl pure : located_primitive * Types.datatype * pure =
   (`PFun (fun _ -> mk_binop_fn impl Value.unbox_int (fun x -> `Int x))),
-  (* datatype "(Int, Int) -> Int", *)
   datatype "(Int, Int) { |_::Any}-> Int",
   pure
 

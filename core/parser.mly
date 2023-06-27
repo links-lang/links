@@ -112,7 +112,7 @@ let full_kind_of pos prim lin rest =
   let r = restriction_of_string  pos rest in
   (Some p, Some (l, r))
 
-(* the Row(Lin) syntactic sugar for linear effect vars *)
+(* the Row(Lin) and Row(Any) syntactic sugars for linear effect vars *)
 let linrow_kind_of pos prim lin =
   let p = primary_kind_of_string pos prim in
   let l = linearity_of_string    pos lin  in
@@ -143,7 +143,7 @@ let kind_of p =
   | "Any"      -> (Some pk_type, Some (lin_any, res_any))
   | "Base"     -> (Some pk_type, Some (lin_unl, res_base))
   | "Session"  -> (Some pk_type, Some (lin_any, res_session))
-  | "Eff"      -> (Some pk_row , Some (lin_unl, res_effect))
+  | "Eff"      -> (Some pk_row , Some (lin_any, res_effect))
   | k          -> raise (ConcreteSyntaxError (pos p, "Invalid kind: " ^ k))
 
 let subkind_of p =
@@ -153,7 +153,7 @@ let subkind_of p =
   | "Lin"     -> Some (lin_unl, res_any) (* for linear effect vars *)
   | "Base"    -> Some (lin_unl, res_base)
   | "Session" -> Some (lin_any, res_session)
-  | "Eff"     -> Some (lin_unl, res_effect)
+  | "Eff"     -> Some (lin_any, res_effect)
   | sk        -> raise (ConcreteSyntaxError (pos p, "Invalid subkind: " ^ sk))
 
 let named_quantifier name kind freedom = SugarQuantifier.mk_unresolved name kind freedom
@@ -208,8 +208,7 @@ let fresh_typevar freedom : SugarTypeVar.t =
   named_typevar "$" freedom
 
 let fresh_effects =
-  (* WT: probably change None to (Any, Any) *)
-  (* WT: need to parse Lin *)
+  (* use None or (Some (lin_any, lin_any)) *)
   let stv = SugarTypeVar.mk_unresolved "$eff" None `Rigid in
   ([], Datatype.Open stv)
 
