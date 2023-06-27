@@ -3864,10 +3864,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 | Empty -> false
                 | _ -> true
               in
-              if visible_fields = 0
+              if visible_fields = 0 && not row_var_exists
               then begin
-                  if not row_var_exists
-                  then begin
                       let effect_sugar = Policy.effect_sugar (Context.policy ctx) in
                       let es_policy = Policy.es_policy (Context.policy ctx) in
                       if not ((Context.is_ambient_operation ctx)
@@ -3882,32 +3880,42 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                             StringBuffer.write buf "{ | .}"
                           else
                             StringBuffer.write buf "{}"
-                        end
-                    end
-                  else (* empty open row use the abbreviated notation -a- or ~a~ unless
-                          it's anonymous in which case we skip it entirely *)
+                      end
+              end
+              else begin
                     match Unionfind.find rvar with
                     | Var (vid, knd, _) ->
                       let subknd = Kind.subkind knd in
                       let is_linrow = fst subknd = Linearity.Unl in
-                      if decide_skip ctx vid subknd
-                      then () (* skip printing it entirely *)
-                      else 
-                      begin
-                        (if is_wild
-                          then StringBuffer.write buf "~"
-                          else StringBuffer.write buf "-");
-                        (if is_linrow
-                          then StringBuffer.write buf "("
-                          else ());
-                        let ctx =
-                          Context.(set_ambient Effect
-                                  (with_policy Policy.(set_kinds Default (policy ctx)) ctx))
-                        in
-                        Printer.apply var ctx (vid, knd) buf;
-                        (if is_linrow
-                          then StringBuffer.write buf ")"
-                          else ())
+                    (* empty unlimited open row use the abbreviated notation -a- or ~a~ unless
+                      it's anonymous in which case we skip it entirely *)
+                      if visible_fields = 0 && not is_linrow
+                      then begin
+                        if decide_skip ctx vid subknd
+                        then () (* skip printing it entirely *)
+                        else
+                        begin
+                          (if is_wild
+                            then StringBuffer.write buf "~"
+                            else StringBuffer.write buf "-");
+                          (if is_linrow
+                            then StringBuffer.write buf "("
+                            else ());
+                          let ctx =
+                            Context.(set_ambient Effect
+                                    (with_policy Policy.(set_kinds Default (policy ctx)) ctx))
+                          in
+                          Printer.apply var ctx (vid, knd) buf;
+                          (if is_linrow
+                            then StringBuffer.write buf ")"
+                            else ())
+                        end
+                      end
+                      else begin
+                      (* need the full effect row, but only construct the inside of it *)
+                        StringBuffer.write buf "{";
+                        Printer.apply row_parts (Context.set_ambient Context.Effect ctx) r' buf;
+                        StringBuffer.write buf "}";
                       end
                     | _ ->
                        begin (* special case, construct row syntax, but only call the inside *)
@@ -3915,12 +3923,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                          Printer.apply row_parts (Context.set_ambient Context.Effect ctx) r' buf;
                          StringBuffer.write buf "}"
                        end
-                end
-              else begin (* need the full effect row, but only construct the inside of it *)
-                  StringBuffer.write buf "{";
-                  Printer.apply row_parts (Context.set_ambient Context.Effect ctx) r' buf;
-                  StringBuffer.write buf "}";
-                end;
+              end;
               (if is_wild then StringBuffer.write buf "~" else StringBuffer.write buf "-");
               (* add the arrowhead/lollipop/oparrow *)
               (if is_lolli then StringBuffer.write buf "@"

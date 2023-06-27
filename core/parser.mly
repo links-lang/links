@@ -67,6 +67,7 @@ let linearity_of_string p =
   function
   | "Any" -> lin_any
   | "Unl" -> lin_unl
+  | "Lin" -> lin_unl (* for effect vars *)
   | lin   ->
      raise (ConcreteSyntaxError (pos p, "Invalid kind linearity: " ^ lin))
 
@@ -111,6 +112,13 @@ let full_kind_of pos prim lin rest =
   let r = restriction_of_string  pos rest in
   (Some p, Some (l, r))
 
+(* the Row(Lin) syntactic sugar for linear effect vars *)
+let linrow_kind_of pos prim lin =
+  let p = primary_kind_of_string pos prim in
+  let l = linearity_of_string    pos lin  in
+  let r = res_any in
+  (Some p, Some (l, r))
+
 let full_subkind_of pos lin rest =
   let l = linearity_of_string   pos lin  in
   let r = restriction_of_string pos rest in
@@ -142,6 +150,7 @@ let subkind_of p =
   function
   (* subkind abbreviations *)
   | "Any"     -> Some (lin_any, res_any)
+  | "Lin"     -> Some (lin_unl, res_any) (* for linear effect vars *)
   | "Base"    -> Some (lin_unl, res_base)
   | "Session" -> Some (lin_any, res_session)
   | "Eff"     -> Some (lin_unl, res_effect)
@@ -199,6 +208,8 @@ let fresh_typevar freedom : SugarTypeVar.t =
   named_typevar "$" freedom
 
 let fresh_effects =
+  (* WT: probably change None to (Any, Any) *)
+  (* WT: need to parse Lin *)
   let stv = SugarTypeVar.mk_unresolved "$eff" None `Rigid in
   ([], Datatype.Open stv)
 
@@ -526,6 +537,8 @@ typeargs_opt:
 kind:
 | COLONCOLON CONSTRUCTOR LPAREN CONSTRUCTOR COMMA CONSTRUCTOR RPAREN
                                                                { full_kind_of $loc $2 $4 $6 }
+| COLONCOLON CONSTRUCTOR LPAREN CONSTRUCTOR RPAREN
+                                                               { linrow_kind_of $loc $2 $4 }
 | COLONCOLON CONSTRUCTOR                                       { kind_of $loc($2) $2        }
 
 subkind:
