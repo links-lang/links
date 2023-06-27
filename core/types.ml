@@ -3444,6 +3444,8 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
   type 'a printer = 'a Printer.t
 
+  let lincont_enabled = Settings.get Basicsettings.CTLinearity.enabled
+
   (* For correct printing of subkinds, need to know the subkind in advance:
    * see line (1): that has to be Empty so that the :: is not printed *)
   let subkind_name : ?is_row:bool -> Policy.t -> Subkind.t -> unit printer
@@ -3465,8 +3467,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
        let module L = Linearity in
        let module R = Restriction in
        match (lin, res) with
-       | (L.Unl, R.Any)     -> if is_row then constant "Lin" else Empty (* (1) see above *)
-       | (L.Any, R.Any)     -> if is_row then Empty else constant "Any"
+       | (L.Unl, R.Any)     -> Empty (* (1) see above *)
+       | (L.Any, R.Any)     -> if is_row && not lincont_enabled then Empty else constant "Any"
+       (* | (L.Unl, R.Any)     -> if is_row then constant "Lin" else Empty *)
+       (* | (L.Any, R.Any)     -> if is_row then Empty else constant "Any" *)
        | (L.Unl, R.Base)    -> constant @@ R.to_string res_base
        | (L.Any, R.Session) -> constant @@ R.to_string res_session
        | (L.Unl, R.Effect)  -> constant @@ R.to_string res_effect
@@ -3586,8 +3590,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                 (if is_presence && not (Context.is_ambient_type_arg ctx) then StringBuffer.write buf "}"))
           in
           let is_row = (PrimaryKind.Row = Kind.primary_kind knd) in
+          let is_presence = (PrimaryKind.Presence = Kind.primary_kind knd) in
           if not in_binder
-          then seq ~sep:"::" (print_var, subkind_name ~is_row:is_row (Context.policy ctx) subknd) (var_name, ()) ctx buf
+          then seq ~sep:"::" (print_var, subkind_name ~is_row:(is_row || is_presence) (Context.policy ctx) subknd) (var_name, ()) ctx buf
           else seq ~sep:"::" (print_var, kind_name ctx knd) (var_name, ()) ctx buf)
 
   and recursive : (tid * Kind.t * typ) printer

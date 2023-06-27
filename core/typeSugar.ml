@@ -1769,7 +1769,7 @@ module LinCont = struct
   *)
   let count = ref 0
 
-  let default = (true, true)
+  let default = if is_enabled then (true, true) else (false, false)
 
   (* TODO: `-1` is the `cont_lin` of `empty_typing_environment`.
     I guess it is used in the typing of default global bindings. *)
@@ -1991,8 +1991,8 @@ let add_empty_usages (p, t) = (p, t, Usage.empty)
 let type_unary_op pos env =
   let datatype = datatype env.tycon_env in
   function
-  | UnaryOp.Minus      -> add_empty_usages (datatype "(Int) -> Int")
-  | UnaryOp.FloatMinus -> add_empty_usages (datatype "(Float) -> Float")
+  | UnaryOp.Minus      -> add_empty_usages (datatype "(Int) { |_::Any}-> Int")
+  | UnaryOp.FloatMinus -> add_empty_usages (datatype "(Float) { |_::Any}-> Float")
   | UnaryOp.Name n     ->
      try
        add_usages (Utils.instantiate env.var_env n) (Usage.singleton n)
@@ -2475,7 +2475,7 @@ let type_pattern ?(linear_vars=true) closed
            match kpat.node with
            | Any ->
               let t = fresh_resumption_type () in
-              if is_lincase then Gripers.die pos' ("The linear continuation is not bound.") else ();
+              if is_lincase && LinCont.is_enabled then Gripers.die pos' ("The linear continuation is not bound.") else ();
               kpat, (t, t)
            | Variable bndr ->
               let xtype = fresh_resumption_type () in
@@ -4475,14 +4475,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                     sh_value_cases = erase_cases val_cases;
                     sh_descr = descr }, body_type, usages
         | DoOperation (op, ps, _, linearity) ->
-          let is_lindo = linearity = DeclaredLinearity.Lin in
+          let is_lindo = if LinCont.is_enabled then linearity = DeclaredLinearity.Lin else false in
           let () = if is_lindo then ()
                                else LinCont.update_bound_by_linlet context false
                                (* do is implicitly bound by an unlet *)
           in
-          let op_linearity =
-            if LinCont.is_enabled then (if is_lindo then lin_unl else lin_any)
-            else lin_any
+          let op_linearity = if is_lindo then lin_unl else lin_any
           (* lin_unl: linear operation; lin_any: unlimited operation *)
           in
           (* inline the type checking of Operation here to be able to

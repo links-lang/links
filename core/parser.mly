@@ -1350,7 +1350,7 @@ resumable_operation_pattern:
 | operation_pattern RARROW pattern
     { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3, DeclaredLinearity.Unl)) }
 | operation_pattern
-    { with_pos $loc (Pattern.Operation (fst $1, snd $1, any, DeclaredLinearity.Lin)) }
+    { with_pos $loc (Pattern.Operation (fst $1, snd $1, any, DeclaredLinearity.Unl)) }
 
 operation_pattern:
 | CONSTRUCTOR                                                  { ($1, []) }
