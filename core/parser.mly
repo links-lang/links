@@ -223,6 +223,7 @@ let make_effect_var : is_dot:bool -> ParserPosition.t -> Datatype.row_var
   then begin
       if is_dot
       then Datatype.Closed
+      (* use None or (Some (lin_any, lin_any)) *)
       else Datatype.Open (SugarTypeVar.mk_unresolved "$eff" None `Rigid)
     end else begin
       if is_dot

@@ -1243,6 +1243,7 @@ fun fork(f) {
 #sig linFork : forall s::Session,e::Row.((s) ~e~@ ()) ~e~> ~s
 sig linFork : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~@ ()) ~e~> ~s
 fun linFork(f) {
+  <|()|>;
   var ap = new();
   var _ = spawnAngel {
     f(accept(ap))
@@ -1253,6 +1254,7 @@ fun linFork(f) {
 #sig reproduce : forall s::Session,e::Row.(AP(s), (s) ~e~> ()) ~e~> ()
 sig reproduce : forall s::Session,e::Row.(AP(s), (s) {SessionFail:() =@ [||]}~> ()) ~e~> ()
 fun reproduce(ap, f) {
+  <|()|>;
   var x = accept(ap);
   var _ = spawn {f(x)};
   reproduce(ap, f)
@@ -1270,6 +1272,7 @@ fun reproduce(ap, f) {
 #sig connect : forall s::Session,e::Row,a.((s) ~e~> (), (~s) ~e~> a) ~e~> a
 sig connect : forall s::Session,e::Row,a.((s) {SessionFail:() =@ [||]}~> (), (~s) ~e~> a) ~e~> a
 fun connect(f, g) {
+  <|()|>;
   var ap = new();
   var done = new();
   var _ = spawn {
@@ -1288,17 +1291,20 @@ typename EndQuery = ?().End;
 
 sig wait : (EndQuery) ~> ()
 fun wait(s) {
+  <|()|>;
   var (_, s) = receive(s);
   close(s)
 }
 
 sig closeBang : (EndBang) ~> ()
 fun closeBang(s) {
+  <|()|>;
   close(send((), s))
 }
 
 sig makeEndBang : () ~> EndBang
 fun makeEndBang() {
+  <|()|>;
   var ap = new();
   var _ = spawn {
      var c = accept(ap);
@@ -1312,6 +1318,7 @@ fun makeEndBang() {
 #sig forkSync : forall s::Session,e::Row.((s) ~e~> EndBang) ~e~> ~s
 sig forkSync : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~> EndBang) ~e~> ~s
 fun forkSync(f) {
+  <|()|>;
   var ap = new();
   var _ = spawn {
     var c = accept(ap);
@@ -1324,6 +1331,7 @@ fun forkSync(f) {
 #sig linForkSync : forall s::Session,e::Row.((s) ~e~@ EndBang) ~e~> ~s
 sig linForkSync : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~@ EndBang) ~e~> ~s
 fun linForkSync(f) {
+  <|()|>;
   var ap = new();
   var _ = spawn {
     var c = accept(ap);
@@ -1336,6 +1344,7 @@ fun linForkSync(f) {
 #sig linkSync : forall s::Session,e::Row.(s, ~s) ~e~> EndBang
 sig linkSync : forall s::Session,e::Row.(s, ~s) {SessionFail:() =@ [||] | e}~> EndBang
 fun linkSync(s, c) {
+  <|()|>;
   link(s, c);
   makeEndBang()
 }
@@ -1343,6 +1352,7 @@ fun linkSync(s, c) {
 #sig runSync : ((!a.EndBang) ~e~> EndBang) ~e~> a
 sig runSync : ((!a.EndBang) {SessionFail:() =@ [||]}~> EndBang) ~e~> a
 fun runSync(f) {
+  <|()|>;
   var c = forkSync(f);
   var (v, c) = receive(c);
   wait(c);

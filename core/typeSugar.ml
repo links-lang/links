@@ -1769,7 +1769,7 @@ module LinCont = struct
   *)
   let count = ref 0
 
-  let default = if is_enabled then (true, true) else (false, false)
+  let default = (false, false)
 
   (* TODO: `-1` is the `cont_lin` of `empty_typing_environment`.
     I guess it is used in the typing of default global bindings. *)
@@ -5419,6 +5419,18 @@ module Check =
 struct
   let program tyenv (bindings, body) =
     try
+      (
+      match body with
+        | None -> ()
+        | Some body -> 
+            print_string "---------- BEGIN typeSugar input -----------\n";
+            let () = print_string "bindings:\n" in
+            let _  = if (bindings = []) then () else (print_string -<- show_binding) <| List.hd bindings in print_string "\n";
+            print_string "body:\n";
+            (print_string -<- show_phrase) body;
+            print_string "\n";
+            print_string "---------- END typeSugar input -----------\n";
+      );
       Debug.if_set Basicsettings.show_stages (fun () -> "Type checking...");
       Debug.if_set show_pre_sugar_typing
         (fun () ->
