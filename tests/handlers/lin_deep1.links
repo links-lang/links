@@ -1,10 +1,12 @@
 var lf = linfun(x) {x};
 
 handle({
+  xlin;
   ignore(lindo LL);
   lf(2)
 }) {
   case LL(resume) -> {
+    xlin;
     ignore(lf(3));
     resume(())
   }

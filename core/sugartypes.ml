@@ -75,12 +75,8 @@ let default_effect_subkind : Subkind.t = (lin_any, res_any)
 
 let default_effect_lin : Linearity.t = lin_any
 
-let default_presence_subkind : Subkind.t = (lin_any, res_any)
-
 type kind = PrimaryKind.t option * Subkind.t option
     [@@deriving show]
-
-
 
 module SugarTypeVar =
 struct
@@ -89,7 +85,8 @@ struct
    about its primary kind. This is filled in when resolving the variable *)
 (* FIXME: the above comment may well be false now - check *)
 type t =
-  | TUnresolved       of Name.t * Subkind.t option * Freedom.t
+  | TUnresolved       of Name.t * (bool * Subkind.t option) * Freedom.t
+                                  (* true: is an effect var *)
   | TResolvedType     of Types.meta_type_var
   | TResolvedRow      of Types.meta_type_var
   | TResolvedPresence of Types.meta_type_var
@@ -99,8 +96,8 @@ let is_resolved = function
   | TUnresolved _ -> false
   | _ -> true
 
-let mk_unresolved name subkind_opt freedom_opt =
-  TUnresolved (name, subkind_opt, freedom_opt)
+let mk_unresolved name ?(is_eff=false) subkind_opt freedom_opt =
+  TUnresolved (name, (is_eff, subkind_opt), freedom_opt)
 
 let mk_resolved_tye point : t =
   TResolvedType point
@@ -113,8 +110,8 @@ let mk_resolved_presence point : t =
 
 
 let get_unresolved_exn = function
-  | TUnresolved (name, subkind, freedom) ->
-     name, subkind, freedom
+  | TUnresolved (name, (is_eff, subkind), freedom) ->
+     name, (is_eff, subkind), freedom
   | _ ->
      raise
        (internal_error

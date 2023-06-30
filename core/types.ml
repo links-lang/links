@@ -3452,9 +3452,10 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
     = fun ?(is_row=false) policy (lin, res) ->
     let open Printer in
     let full_name : unit printer
-      = Printer (fun _ctx () buf ->
+      = let linname = if is_row && lin=Linearity.Unl then "Lin" else Linearity.to_string lin
+        in Printer (fun _ctx () buf ->
             StringBuffer.write buf "(";
-            StringBuffer.write buf (Linearity.to_string lin);
+            StringBuffer.write buf linname;
             StringBuffer.write buf ",";
             StringBuffer.write buf (Restriction.to_string res);
             StringBuffer.write buf ")"
@@ -3467,10 +3468,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
        let module L = Linearity in
        let module R = Restriction in
        match (lin, res) with
-       | (L.Unl, R.Any)     -> Empty (* (1) see above *)
-       | (L.Any, R.Any)     -> if is_row && not lincont_enabled then Empty else constant "Any"
-       (* | (L.Unl, R.Any)     -> if is_row then constant "Lin" else Empty *)
-       (* | (L.Any, R.Any)     -> if is_row then Empty else constant "Any" *)
+       (* FIXME: Actually it should be is_eff, not is_row. But we dont know whether it is an eff var. *)
+       | (L.Unl, R.Any)     -> if is_row && lincont_enabled then constant "Lin" else Empty (* (1) see above *)
+       | (L.Any, R.Any)     -> if is_row then Empty else constant "Any"
        | (L.Unl, R.Base)    -> constant @@ R.to_string res_base
        | (L.Any, R.Session) -> constant @@ R.to_string res_session
        | (L.Unl, R.Effect)  -> constant @@ R.to_string res_effect
@@ -3485,10 +3485,12 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
       fun ctx ((primary, subknd) as knd) ->
 
+      let is_row = (PrimaryKind.Row = primary) in
+      let is_presence = (PrimaryKind.Presence = Kind.primary_kind knd) in
       let full_name : unit printer
         = Printer (fun ctxt () buf ->
               StringBuffer.write buf (P.to_string primary);
-              Printer.apply (subkind_name (Context.policy ctxt) subknd) ctxt () buf)
+              Printer.apply (subkind_name ~is_row:(is_row || is_presence) (Context.policy ctxt) subknd) ctxt () buf)
       in
       let policy = Context.policy ctx in
       match Policy.kinds policy, knd with

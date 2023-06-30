@@ -27,7 +27,7 @@ stderr : @.*Type error: Variable .* of linear type .* is used in a deep handler.
 args : --enable-handlers --track-control-flow-linearity
 
 Linear operation and continuation
-handle (lindo Foo(20) + 1) {case <Foo(i) =@ k> -> k(i)}
+handle (lindo Foo(20) + 1) {case <Foo(i) =@ k> -> xlin; k(i)}
 stdout : 21 : Int
 args : --enable-handlers --track-control-flow-linearity
 
@@ -37,14 +37,19 @@ stdout : 42 : Int
 args : --enable-handlers --track-control-flow-linearity
 
 Use linear variable in linear continuation
-{linfun f(x) {40+x} handle (f(lindo Foo)) {case <Foo =@ k> -> k(2)}}
+{linfun f(x) {40+x} handle ({xlin; f(lindo Foo)}) {case <Foo =@ k> -> xlin; k(2)}}
 stdout : 42 : Int
 args : --enable-handlers --track-control-flow-linearity
 
 Use linear variable in non-linear continuation
-{linfun f(x) {[|x|]} handle ([|f(do Foo)|]) {case <Foo => k> -> k(1)}}
+{linfun f(x) {x} handle (f(do Foo)) {case <Foo => k> -> k(1)}}
 exit : 1
 stderr : @.*Type error: Variable .* of linear type .* is used in a non-linear continuation.* 
+args : --enable-handlers --track-control-flow-linearity
+
+Operation annotation
+fun(m) { xlin; handle(m()) { case <Foo(x) =@ k> : ((Int) =@ Int) -> xlin; k (x) } }
+stdout : fun : (() {Foo:(Int) =@ Int|a::Lin}~> b::Any) {Foo{_}::Lin|a::Lin}~> b::Any
 args : --enable-handlers --track-control-flow-linearity
 
 New implementation of examples/handlers/choose.links
@@ -69,12 +74,12 @@ Check the first part of Issue 544
 tests/handlers/issue544a.links
 filemode : true
 exit : 1
-stderr : @.*Type error: Variable .* of linear type .* is used in a non-linear continuation.* 
+stderr : @.*Type error: Effect row type .* can not be made linear .*
 args : --enable-handlers --track-control-flow-linearity
 
 Check the second part of Issue 544
 tests/handlers/issue544b.links
 filemode : true
 exit : 1
-stderr : @.*Type error: Variable .* of linear type .* is used in a non-linear continuation.* 
+stderr : @.*Type error: Effect row type .* can not be made linear .*
 args : --enable-handlers --track-control-flow-linearity

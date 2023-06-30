@@ -28,19 +28,16 @@ fun lin_choice() {
 fun positive(m)() {
   handle(m()) {
     case x   -> x
-    case <Choose =@ k> -> k(true)
+    case <Choose =@ k> -> xlin; k(true)
   }
 }
 
 # The "I'll-take-everything" handler
 fun enumerate(m)() {
-  handle([|m()|]) {
+  handle(m()) {
     case x -> [x]
     case <Choose => k> -> k(true) ++ k(false)
   }
 }
-# links> enumerate
-# fun : (() {Choose:() {}-@ Bool|a}~> b) -> () {Choose{_}|a}~> [b]
-# NOTE: the current parser cannot recognize {}-@ as an operation signature
 
 [positive(lin_choice)()] ++ enumerate(choice)()

@@ -1769,7 +1769,7 @@ module LinCont = struct
   *)
   let count = ref 0
 
-  let default = if is_enabled then (true, true) else (false, false)
+  let default = (false, false)
 
   (* TODO: `-1` is the `cont_lin` of `empty_typing_environment`.
     I guess it is used in the typing of default global bindings. *)
@@ -2633,7 +2633,7 @@ let make_ft_poly_curry declared_linearity ps effects return_type =
       | [p] -> [], make_ftcon declared_linearity (args p, effects, return_type)
       | p::ps ->
           let qs, t = ft ps in
-          let q, eff = Types.fresh_row_quantifier default_subkind in
+          let q, eff = Types.fresh_row_quantifier default_effect_subkind in
             q::qs, make_ftcon declared_linearity (args p, eff, t)
       | [] -> assert false in
   Types.for_all (ft ps)
@@ -4240,9 +4240,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                         not (Settings.get Basicsettings.Sessions.expose_session_fail) &&
                         String.equal effname Value.session_exception_operation
                      then
-                       Types.Effect (Types.make_empty_open_row (lin_any, res_any))
+                       Types.Effect (Types.make_empty_open_row default_effect_subkind)
                      else
-                       Types.Effect (Types.make_singleton_open_row (effname, Types.Present efftyp) (lin_any, res_any)) in
+                       Types.Effect (Types.make_singleton_open_row (effname, Types.Present efftyp) default_effect_subkind) in
                    unify ~handle:Gripers.handle_effect_patterns
                          ((uexp_pos pat, effrow),  no_pos (T.Effect inner_eff));
                    let pat, kpat =
@@ -4419,9 +4419,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                  (fun name p ->
                    if TypeUtils.is_builtin_effect name
                    then p
-                   else Types.fresh_presence_variable (lin_any, res_any)) (* It is questionable whether it is ever correct to
+                   else Types.fresh_presence_variable default_effect_subkind) (* It is questionable whether it is ever correct to
                                                                        make absent operations polymorphic in their presence. *)
-                                                                       (* WT: I suppose I should change the kind from lin_unl to lin_any *)
                  operations
              in
              T.Row (operations', rho, dual)
@@ -4937,7 +4936,6 @@ and type_binding : context -> binding -> binding * context * Usage.t =
             List.map (WithPos.map ~f:Renamer.rename_recursive_functionnode) defs in
 
           let fresh_tame () = Types.make_empty_open_row default_effect_subkind in
-          (* let fresh_wild () = Types.make_singleton_open_row ("wild", (Present Types.unit_type)) (lin_any, res_any) in *)
 
           let inner_rec_vars, inner_env, patss =
             List.fold_left
@@ -5419,6 +5417,18 @@ module Check =
 struct
   let program tyenv (bindings, body) =
     try
+      (* (
+      match body with
+        | None -> ()
+        | Some body -> 
+            print_string "---------- BEGIN typeSugar input -----------\n";
+            let () = print_string "bindings:\n" in
+            let _  = if (bindings = []) then () else (print_string -<- show_binding) <| List.hd bindings in print_string "\n";
+            print_string "body:\n";
+            (print_string -<- show_phrase) body;
+            print_string "\n";
+            print_string "---------- END typeSugar input -----------\n";
+      ); *)
       Debug.if_set Basicsettings.show_stages (fun () -> "Type checking...");
       Debug.if_set show_pre_sugar_typing
         (fun () ->

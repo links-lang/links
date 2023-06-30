@@ -137,7 +137,7 @@ let kind_of p =
   function
   (* primary kind abbreviation  *)
   | "Type"     -> (Some pk_type, None)
-  | "Row"      -> (Some pk_row, None)
+  | "Row"      -> (Some pk_row, None) (* either a value row or an effect row *)
   | "Presence" -> (Some pk_presence, None)
   (* subkind of type abbreviations *)
   | "Any"      -> (Some pk_type, Some (lin_any, res_any))
@@ -200,16 +200,14 @@ let parseRegexFlags f =
               | _ -> assert false) (asList f 0 [])
 
 
+let named_typevar ?(is_eff=false) name freedom : SugarTypeVar.t =
+  SugarTypeVar.mk_unresolved name ~is_eff:is_eff None freedom
 
-let named_typevar name freedom : SugarTypeVar.t =
-  SugarTypeVar.mk_unresolved name None freedom
-
-let fresh_typevar freedom : SugarTypeVar.t =
-  named_typevar "$" freedom
+let fresh_typevar ?(is_eff=false) freedom : SugarTypeVar.t =
+  named_typevar ~is_eff:is_eff "$" freedom
 
 let fresh_effects =
-  (* use None or (Some (lin_any, lin_any)) *)
-  let stv = SugarTypeVar.mk_unresolved "$eff" None `Rigid in
+  let stv = SugarTypeVar.mk_unresolved ~is_eff:true "$eff" None `Rigid in
   ([], Datatype.Open stv)
 
 let make_effect_var : is_dot:bool -> ParserPosition.t -> Datatype.row_var
@@ -223,12 +221,14 @@ let make_effect_var : is_dot:bool -> ParserPosition.t -> Datatype.row_var
   then begin
       if is_dot
       then Datatype.Closed
-      else Datatype.Open (SugarTypeVar.mk_unresolved "$eff" None `Rigid)
+      else Datatype.Open (SugarTypeVar.mk_unresolved "$eff" ~is_eff:true None `Rigid)
     end else begin
       if is_dot
       then raise (ConcreteSyntaxError (pos loc, "Dot syntax in effect row variables is only supported when effect_sugar and effect_sugar_policy.open_default are enabled."))
       else Datatype.Closed
     end
+
+let dummy_phrase pos = with_pos pos (Sugartypes.RecordLit ([], None))
 
 module MutualBindings = struct
 
@@ -322,6 +322,7 @@ let any = any_pat dp
 %token SPAWN SPAWNAT SPAWNANGELAT SPAWNCLIENT SPAWNANGEL SPAWNWAIT
 %token OFFER SELECT
 %token DOOP LINDOOP
+%token LINFLAG
 %token LPAREN RPAREN
 %token LBRACE RBRACE LBRACEBAR BARRBRACE LQUOTE RQUOTE
 %token RBRACKET LBRACKET LBRACKETBAR BARRBRACKET
@@ -921,8 +922,9 @@ perhaps_db_driver:
 | /* empty */                                                  { None   , None }
 
 seq_expression:
-| LBRACKETBAR exp BARRBRACKET                                   { with_pos $loc (Unlet $2) }
-| LEFTTRIANGLE exp RIGHTTRIANGLE                                { with_pos $loc (Linlet $2) }
+| LBRACKETBAR exp BARRBRACKET                                  { with_pos $loc (Unlet $2) }
+| LEFTTRIANGLE exp RIGHTTRIANGLE                                { with_pos $loc (Linlet $2) } // deprecated
+| LINFLAG                                                      { with_pos $loc (Linlet (dummy_phrase $loc)) }
 
 exp:
 | seq_expression
@@ -1051,18 +1053,18 @@ arrow_prefix:
 
 straight_arrow_prefix:
 | hear_arrow_prefix | arrow_prefix                             { $1       }
-| MINUS nonrec_row_var | MINUS kinded_nonrec_row_var           { ([], $2) }
+| MINUS nonrec_eff_var | MINUS kinded_nonrec_row_var           { ([], $2) }
 | MINUS effect_app                                             { ([], $2) }
 
 squig_arrow_prefix:
 | hear_arrow_prefix | arrow_prefix                             { $1       }
-| TILDE nonrec_row_var | TILDE kinded_nonrec_row_var           { ([], $2) }
+| TILDE nonrec_eff_var | TILDE kinded_nonrec_row_var           { ([], $2) }
 | TILDE effect_app                                             { ([], $2) }
 
 hear_arrow_prefix:
 | LBRACE COLON datatype COMMA efields RBRACE                   { hear_arrow_prefix $3 $5                    }
 | LBRACE COLON datatype RBRACE                                 { hear_arrow_prefix $3 ([], Datatype.Closed) }
-| LBRACE COLON datatype VBAR nonrec_row_var RBRACE
+| LBRACE COLON datatype VBAR nonrec_eff_var RBRACE
 | LBRACE COLON datatype VBAR kinded_nonrec_row_var RBRACE      { hear_arrow_prefix $3 ([], $5)              }
 
 straight_arrow:
@@ -1231,13 +1233,13 @@ vfield:
 efields:
 | efield                                                       { ([$1], make_effect_var ~is_dot:false $loc) }
 | soption(efield) VBAR DOT                                     { ( $1 , make_effect_var ~is_dot:true  $loc) }
-| soption(efield) VBAR row_var                                 { ( $1 , $3                                ) }
+| soption(efield) VBAR eff_var                                 { ( $1 , $3                                ) }
 | soption(efield) VBAR kinded_row_var                          { ( $1 , $3                                ) }
 | soption(efield) VBAR effect_app                              { ( $1 , $3                                ) }
 | efield COMMA efields                                         { ( $1::fst $3, snd $3                     ) }
 
 efield:
-| effect_label fieldspec                                       { ($1, $2)      }
+| effect_label efieldspec                                       { ($1, $2)      }
 
 effect_label:
 | CONSTRUCTOR                                                  { $1 }
@@ -1260,6 +1262,20 @@ braced_fieldspec:
 | LBRACE UNDERSCORE RBRACE                                     { Datatype.Var (fresh_typevar `Rigid)    }
 | LBRACE PERCENT RBRACE                                        { Datatype.Var (fresh_typevar `Flexible) }
 
+efieldspec:
+| ebraced_fieldspec                                             { $1 }
+| COLON datatype                                               { Datatype.Present $2 }
+| MINUS                                                        { Datatype.Absent }
+
+ebraced_fieldspec:
+| LBRACE COLON datatype RBRACE                                 { Datatype.Present $3 }
+| LBRACE MINUS RBRACE                                          { Datatype.Absent }
+| LBRACE VARIABLE RBRACE                                       { Datatype.Var (named_typevar ~is_eff:true $2 `Rigid) }
+| LBRACE PERCENTVAR RBRACE                                     { Datatype.Var (named_typevar ~is_eff:true $2 `Flexible) }
+| LBRACE UNDERSCORE RBRACE                                     { Datatype.Var (fresh_typevar ~is_eff:true `Rigid)    }
+| LBRACE PERCENT RBRACE                                        { Datatype.Var (fresh_typevar ~is_eff:true `Flexible) }
+
+
 nonrec_row_var:
 | VARIABLE                                                     { Datatype.Open (named_typevar $1 `Rigid   ) }
 | PERCENTVAR                                                   { Datatype.Open (named_typevar $1 `Flexible) }
@@ -1276,6 +1292,15 @@ kinded_nonrec_row_var:
 kinded_row_var:
 | row_var subkind                                              { attach_row_subkind ($1, $2) }
 
+nonrec_eff_var:
+| VARIABLE                                                     { Datatype.Open (named_typevar ~is_eff:true $1 `Rigid   ) }
+| PERCENTVAR                                                   { Datatype.Open (named_typevar ~is_eff:true $1 `Flexible) }
+| UNDERSCORE                                                   { Datatype.Open (fresh_typevar ~is_eff:true `Rigid)    }
+| PERCENT                                                      { Datatype.Open (fresh_typevar ~is_eff:true `Flexible) }
+
+eff_var:
+| nonrec_eff_var                                               { $1 }
+| LPAREN MU VARIABLE DOT fields RPAREN                         { Datatype.Recursive (named_typevar ~is_eff:true $3 `Rigid, $5) }
 
 vrow_var:
 /* This uses the usual nonrec_row_var, because a variant version would be exactly the same. */

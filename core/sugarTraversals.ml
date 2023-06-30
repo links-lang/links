@@ -85,11 +85,12 @@ class map =
     method type_variable : SugarTypeVar.t -> SugarTypeVar.t =
       let open SugarTypeVar in
       function
-        | TUnresolved (name, subkind_opt, freedom) ->
+        | TUnresolved (name, (is_eff, subkind_opt), freedom) ->
            let name' = o#name name in
+           let is_eff' = o#bool is_eff in
            let subkind_opt' = o#option (fun o -> o#subkind) subkind_opt in
            let freedom' = o#freedom freedom in
-           TUnresolved (name', subkind_opt', freedom')
+           TUnresolved (name', (is_eff', subkind_opt'), freedom')
         | v -> o#unknown v
 
 
@@ -952,8 +953,9 @@ class fold =
     method type_variable : SugarTypeVar.t -> 'self_type =
       let open SugarTypeVar in
       function
-        | TUnresolved (name, subkind_opt, freedom) ->
+        | TUnresolved (name, (is_eff, subkind_opt), freedom) ->
            let o = o#name name in
+           let o = o#bool is_eff in
            let o = o#option (fun o -> o#subkind) subkind_opt in
            let o = o#freedom freedom in
            o
@@ -1734,11 +1736,12 @@ class fold_map =
     method type_variable : SugarTypeVar.t -> ('self_type * SugarTypeVar.t) =
       let open SugarTypeVar in
       function
-        | TUnresolved (name, subkind_opt, freedom) ->
+        | TUnresolved (name, (is_eff, subkind_opt), freedom) ->
            let o, name' = o#name name in
+           let o, is_eff' = o#bool is_eff in
            let o, subkind_opt' = o#option (fun o -> o#subkind) subkind_opt in
            let o, freedom' = o#freedom freedom in
-           o, TUnresolved (name', subkind_opt', freedom')
+           o, TUnresolved (name', (is_eff', subkind_opt'), freedom')
         | v -> o#unknown v
 
 
