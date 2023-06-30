@@ -4421,7 +4421,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                    then p
                    else Types.fresh_presence_variable default_effect_subkind) (* It is questionable whether it is ever correct to
                                                                        make absent operations polymorphic in their presence. *)
-                                                                       (* WT: I suppose I should change the kind from lin_unl to lin_any *)
                  operations
              in
              T.Row (operations', rho, dual)

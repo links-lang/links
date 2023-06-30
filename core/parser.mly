@@ -1239,7 +1239,7 @@ efields:
 | efield COMMA efields                                         { ( $1::fst $3, snd $3                     ) }
 
 efield:
-| effect_label fieldspec                                       { ($1, $2)      }
+| effect_label efieldspec                                       { ($1, $2)      }
 
 effect_label:
 | CONSTRUCTOR                                                  { $1 }
@@ -1261,6 +1261,20 @@ braced_fieldspec:
 | LBRACE PERCENTVAR RBRACE                                     { Datatype.Var (named_typevar $2 `Flexible) }
 | LBRACE UNDERSCORE RBRACE                                     { Datatype.Var (fresh_typevar `Rigid)    }
 | LBRACE PERCENT RBRACE                                        { Datatype.Var (fresh_typevar `Flexible) }
+
+efieldspec:
+| ebraced_fieldspec                                             { $1 }
+| COLON datatype                                               { Datatype.Present $2 }
+| MINUS                                                        { Datatype.Absent }
+
+ebraced_fieldspec:
+| LBRACE COLON datatype RBRACE                                 { Datatype.Present $3 }
+| LBRACE MINUS RBRACE                                          { Datatype.Absent }
+| LBRACE VARIABLE RBRACE                                       { Datatype.Var (named_typevar ~is_eff:true $2 `Rigid) }
+| LBRACE PERCENTVAR RBRACE                                     { Datatype.Var (named_typevar ~is_eff:true $2 `Flexible) }
+| LBRACE UNDERSCORE RBRACE                                     { Datatype.Var (fresh_typevar ~is_eff:true `Rigid)    }
+| LBRACE PERCENT RBRACE                                        { Datatype.Var (fresh_typevar ~is_eff:true `Flexible) }
+
 
 nonrec_row_var:
 | VARIABLE                                                     { Datatype.Open (named_typevar $1 `Rigid   ) }

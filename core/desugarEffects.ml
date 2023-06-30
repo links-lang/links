@@ -380,10 +380,10 @@ let cleanup_effects tycon_env =
             if not (SugarTypeVar.is_resolved stv)
             then begin
                 let gen_unresolved_eff () =
-                  SugarTypeVar.mk_unresolved shared_effect_var_name None `Rigid
+                  SugarTypeVar.mk_unresolved shared_effect_var_name ~is_eff:true None `Rigid
                 in
                 let to_unresolved_general sk fr =
-                  SugarTypeVar.mk_unresolved "$" sk fr
+                  SugarTypeVar.mk_unresolved "$" ~is_eff:true sk fr
                 in
                 let gen_resolved_flex () =
                   SugarTypeVar.mk_resolved_row
@@ -949,7 +949,7 @@ class main_traversal simple_tycon_env =
                     (* Looking for this gives us the operations associcated with
                        the $eff var. The kind and freedom info are ignored for the lookup *)
                     let eff_sugar_var =
-                      SugarTypeVar.mk_unresolved shared_effect_var_name None
+                      SugarTypeVar.mk_unresolved shared_effect_var_name ~is_eff:true None
                         `Rigid
                     in
 
