@@ -18,11 +18,10 @@ fun positive(m)() {
 }
 
 fun evalState(st)(m)() {
-  [|()|];
-  (handle([|m()|]) {
-    case x -> fun(_)  { [|x|] }
-    case <Get => k>    -> fun(st) { [|k(st)(st)|] }
-    case <Put(p) => k> -> fun(_)  { [|k(())(p)|]  }
+  (handle(m()) {
+    case x -> fun(_)  { x }
+    case <Get => k>    -> fun(st) { k(st)(st) }
+    case <Put(p) => k> -> fun(_)  { k(())(p)  }
   })(st)
 }
 
