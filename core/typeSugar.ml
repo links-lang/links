@@ -1699,11 +1699,9 @@ module LinCont = struct
   (* Some helper functions for control-flow linearity. *)
 
   let is_enabled = (Settings.get Basicsettings.CTLinearity.enabled)
-  (* let is_enabled = true *)
 
   let enabled = fun f ->
     if is_enabled then f () else ()
-    (* f () *)
   (*
     NOTE: The meaning of Any and Unl for effect row types is different from other types:
     - An effect row type with kind `Any` means it can be linear or unlimited.
@@ -1712,22 +1710,7 @@ module LinCont = struct
     continuation, and `=@` means signature which may have any continuation.
     This is just an implementation trick to reuse the previous mechanism of unification.
   *)
-  (* `lin_any` here means this eff_row can be unified with linear or unlimited row types *)
-  (* let make_singleton_open_eff_row = fun op_name_sig -> *)
-    (* Types.make_singleton_open_row op_name_sig (lin_any, res_effect) *)
 
-  (* linear signature is represented by `->`, so we use `not islin` *)
-  (* let make_signature_type = fun islin inp out -> *)
-    (* Types.make_pure_function_type ~linear:(not islin) inp out *)
-
-  (* make a signature type without parameters *)
-  (* let make_unit_signature_type = fun islin out ->
-    if islin then
-      Types.Function (Types.unit_type, Types.make_empty_closed_row (), out)
-    else
-      Types.Lolli (Types.unit_type, Types.make_empty_closed_row (), out) *)
-
-  
   let make_operation_type : ?linear:bool -> Types.datatype list -> Types.datatype -> Types.datatype
     = fun ?(linear=false) args range ->
       let lin = if is_enabled then DeclaredLinearity.(if linear then Lin else Unl)
@@ -1742,8 +1725,9 @@ module LinCont = struct
 
 
   (*
-      `cont_lin` (continuation linearity) is represented by an integer,
-      which is mapped to a pair of bools by the global `cont_lin_map`.
+      `cont_lin` (continuation linearity) is represented by an
+      integer, which is mapped to a pair of bools by the global
+      `cont_lin_map`.
       - `cont_lin.first = true` : the current term is in a linear
         continuation. Nothing to do.
       - `cont_lin.first = false` : the current term is in an unlimited
@@ -1756,23 +1740,21 @@ module LinCont = struct
       - `cont_lin.second = false` : the current term is bound by let
         (i.e. has an unlimited continuation). Nothing to do.
 
-      We implement `cont_lin = (true, true)` by default because some
-      functions in prelude.links uses session types (thus there are
-      linear variables which are excluded when cont_lin.first=false).
+      We implement `cont_lin = (false, false)` by default because it
+      is more compatible with previous effect handlers.
 
-      The reason to use a global map is that we have syntax like `lindo`
-      which updates `cont_lin`, meanwhile we want to make sure sequenced
-      terms have the same `cont_lin`. The only places where `cont_lin`
-      is updated to a new one is where `effect_row` is updated to a new
-      one. (I think `effect_row` also uses some global mechanism for
-      unification.)
+      The reason to use a global map is that we want to make sure
+      sequenced terms (terms in the "same scope") have the same
+      `cont_lin`. The only places where `cont_lin` is updated to a new
+      one is where `effect_row` is updated to a new one. (I think
+      `effect_row` also uses some global mechanism for unification.)
   *)
   let count = ref 0
 
   let default = (false, false)
 
-  (* TODO: `-1` is the `cont_lin` of `empty_typing_environment`.
-    I guess it is used in the typing of default global bindings. *)
+  (* `-1` is the `cont_lin` of `empty_typing_environment`. It is
+    supposed to be used in the typing of default global bindings. *)
   let linmap = ref (IntMap.add (-1) default IntMap.empty)
 
   let getnew () =
@@ -2784,8 +2766,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
         usages
     in
     (** update control-flow linearity *)
-    let update_linearity _ usages =
-      LinCont.enabled (fun () ->
+    let update_linearity p usages =
+      (LinCont.enabled (fun () ->
         if (LinCont.is_bound_by_linlet context)
           (* make `context.effect_row` linear if the current term is bound by a linlet *)
           then
@@ -2794,8 +2776,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
         if (not (LinCont.is_in_linlet context))
           (* make all vars in `p` unlimited if the current term is in the body of an unlet *)
           then makeunl_term usages
-          else ()
-      )
+          else ();
+        (match p with
+          | Linlet _ -> LinCont.update_in_linlet context true
+          | Unlet _ -> LinCont.update_in_linlet context false
+          | DoOperation (_,_,_,lin) ->
+              if lin = DeclaredLinearity.Unl then LinCont.update_in_linlet context false
+          | _ -> ())
+      ))
     in
     let find_opname phrase =
       let o = object (o)
@@ -2937,7 +2925,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                   List.iter (fun e' -> unify ~handle:Gripers.list_lit (pos_and_typ e, pos_and_typ e')) es;
                   ListLit (List.map erase (e::es), Some (typ e)), T.Application (Types.list, [PrimaryKind.Type, typ e]), Usage.combine_many (List.map usages (e::es))
             end
-        (* Tag: FunLit begin *)
         | FunLit (argss_prev, lin, fnlit, location) ->
             let (pats, body) = Sugartypes.get_normal_funlit fnlit in
             (* vs: names of all variables in the parameter patterns *)
@@ -4561,21 +4548,22 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             unify ~handle:Gripers.do_operation
               (no_pos (T.Effect context.effect_row), (p, T.Effect row))
           in
-          let () = if is_lindo then ()
-                               else LinCont.update_in_linlet context false
-          in
+          (* postponed *)
+          (* let () = if is_lindo then () *)
+                   (* else LinCont.update_in_linlet context false *)
+          (* in *)
             doop, rettyp, usage
         | Operation _ ->
           Gripers.die pos "The operation label is used in invalid positions."
         | Linlet p ->
           let () = LinCont.update_bound_by_linlet context true in
           let (p, t, usages) = type_check context p in
-          let () = LinCont.update_in_linlet context true in
+          (* let () = LinCont.update_in_linlet context true in *) (* postponed *)
           (WithPos.node p, t, usages)
         | Unlet p ->
           let () = LinCont.update_bound_by_linlet context false in
           let (p, t, usages) = type_check context p in
-          let () = LinCont.update_in_linlet context false in
+          (* let () = LinCont.update_in_linlet context false in *) (* postponed *)
           (WithPos.node p, t, usages)
         | Switch (e, binders, _) ->
             let e = tc e in
@@ -4693,11 +4681,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             (Raise, Types.fresh_type_variable (lin_any, res_any), Usage.empty)
     in
     let p = with_pos pos e in
-    (* FIXME: For |do l V|, the usages include the usages in V. Thus,
-       |linfun f(ch:End) {do Close(ch)}| is not well-typed. The main
-       reason is that the typing rule of unlet (including the implicit
-       unlet in do) and linlet here is not a true sequencing. *)
-    let () = update_linearity p usages in
+    let () = update_linearity expr usages in
     p, t, usages
 
 (* [type_binding] takes XXX YYY (FIXME)
