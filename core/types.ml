@@ -3469,7 +3469,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
        let module R = Restriction in
        match (lin, res) with
        | (L.Unl, R.Any)     -> if is_row && lincont_enabled then constant "Lin" else Empty (* (1) see above *)
-       | (L.Any, R.Any)     -> if is_row && lincont_enabled then Empty else constant "Any"
+       | (L.Any, R.Any)     -> if is_row then Empty else constant "Any"
        (* | (L.Unl, R.Any)     -> if is_row then constant "Lin" else Empty *)
        (* | (L.Any, R.Any)     -> if is_row then Empty else constant "Any" *)
        | (L.Unl, R.Base)    -> constant @@ R.to_string res_base
@@ -3487,10 +3487,11 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
       fun ctx ((primary, subknd) as knd) ->
 
       let is_row = (PrimaryKind.Row = primary) in
+      let is_presence = (PrimaryKind.Presence = Kind.primary_kind knd) in
       let full_name : unit printer
         = Printer (fun ctxt () buf ->
               StringBuffer.write buf (P.to_string primary);
-              Printer.apply (subkind_name ~is_row:is_row (Context.policy ctxt) subknd) ctxt () buf)
+              Printer.apply (subkind_name ~is_row:(is_row || is_presence) (Context.policy ctxt) subknd) ctxt () buf)
       in
       let policy = Context.policy ctx in
       match Policy.kinds policy, knd with

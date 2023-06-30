@@ -35,7 +35,7 @@ fun deadlock() {
 
   handle({
     # Nondeterministic choice.
-    do Flip;
+    ignore(do Flip);
     xlin;
     var (i, ch) = receive(ch);
     println("Int: " ^^ intToString(i));

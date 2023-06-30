@@ -2633,7 +2633,7 @@ let make_ft_poly_curry declared_linearity ps effects return_type =
       | [p] -> [], make_ftcon declared_linearity (args p, effects, return_type)
       | p::ps ->
           let qs, t = ft ps in
-          let q, eff = Types.fresh_row_quantifier default_subkind in
+          let q, eff = Types.fresh_row_quantifier default_effect_subkind in
             q::qs, make_ftcon declared_linearity (args p, eff, t)
       | [] -> assert false in
   Types.for_all (ft ps)
@@ -4240,9 +4240,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                         not (Settings.get Basicsettings.Sessions.expose_session_fail) &&
                         String.equal effname Value.session_exception_operation
                      then
-                       Types.Effect (Types.make_empty_open_row (lin_any, res_any))
+                       Types.Effect (Types.make_empty_open_row default_effect_subkind)
                      else
-                       Types.Effect (Types.make_singleton_open_row (effname, Types.Present efftyp) (lin_any, res_any)) in
+                       Types.Effect (Types.make_singleton_open_row (effname, Types.Present efftyp) default_effect_subkind) in
                    unify ~handle:Gripers.handle_effect_patterns
                          ((uexp_pos pat, effrow),  no_pos (T.Effect inner_eff));
                    let pat, kpat =
@@ -4419,7 +4419,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                  (fun name p ->
                    if TypeUtils.is_builtin_effect name
                    then p
-                   else Types.fresh_presence_variable (lin_any, res_any)) (* It is questionable whether it is ever correct to
+                   else Types.fresh_presence_variable default_effect_subkind) (* It is questionable whether it is ever correct to
                                                                        make absent operations polymorphic in their presence. *)
                                                                        (* WT: I suppose I should change the kind from lin_unl to lin_any *)
                  operations
@@ -4937,7 +4937,6 @@ and type_binding : context -> binding -> binding * context * Usage.t =
             List.map (WithPos.map ~f:Renamer.rename_recursive_functionnode) defs in
 
           let fresh_tame () = Types.make_empty_open_row default_effect_subkind in
-          (* let fresh_wild () = Types.make_singleton_open_row ("wild", (Present Types.unit_type)) (lin_any, res_any) in *)
 
           let inner_rec_vars, inner_env, patss =
             List.fold_left
