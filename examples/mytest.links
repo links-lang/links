@@ -1,0 +1,4 @@
+sig myid : (a) -> a
+fun myid(x) {x}
+
+myid(1)
