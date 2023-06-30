@@ -3468,10 +3468,9 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
        let module L = Linearity in
        let module R = Restriction in
        match (lin, res) with
+       (* FIXME: Actually it should be is_eff, not is_row. But we dont know whether it is an eff var. *)
        | (L.Unl, R.Any)     -> if is_row && lincont_enabled then constant "Lin" else Empty (* (1) see above *)
        | (L.Any, R.Any)     -> if is_row then Empty else constant "Any"
-       (* | (L.Unl, R.Any)     -> if is_row then constant "Lin" else Empty *)
-       (* | (L.Any, R.Any)     -> if is_row then Empty else constant "Any" *)
        | (L.Unl, R.Base)    -> constant @@ R.to_string res_base
        | (L.Any, R.Session) -> constant @@ R.to_string res_session
        | (L.Unl, R.Effect)  -> constant @@ R.to_string res_effect
