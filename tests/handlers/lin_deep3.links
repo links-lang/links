@@ -1,14 +1,17 @@
 fun test() {
   var ch = fork(fun(ch) {
+     xlin;
      var ch = send(42, ch);
      close(ch)
   });
 
   handle({
+    xlin;
     ignore(lindo LL(ch))
   }) {
     case _ -> ()
     case <LL(ch) => resume> -> {
+      xlin;
       ignore(lindo LL(ch));
       var (i, ch) = receive(ch);
       close(ch);

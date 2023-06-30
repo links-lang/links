@@ -1,9 +1,11 @@
 var ch = fork(fun(ch) {
+    xlin;
     var ch = send(42, ch);
     close(ch)
 });
 
 handle({
+  xlin;
   ignore(lindo LL);
   var (i, ch) = receive(ch);
   println("Int: " ^^ intToString(i));
@@ -11,6 +13,7 @@ handle({
 }) {
   case _ -> ()
   case <LL => resume> -> {
+    xlin;
     var (i, ch) = receive(ch);
     println("Int: " ^^ intToString(i));
     close(ch);

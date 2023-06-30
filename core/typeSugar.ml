@@ -5419,7 +5419,7 @@ module Check =
 struct
   let program tyenv (bindings, body) =
     try
-      (
+      (* (
       match body with
         | None -> ()
         | Some body -> 
@@ -5430,7 +5430,7 @@ struct
             (print_string -<- show_phrase) body;
             print_string "\n";
             print_string "---------- END typeSugar input -----------\n";
-      );
+      ); *)
       Debug.if_set Basicsettings.show_stages (fun () -> "Type checking...");
       Debug.if_set show_pre_sugar_typing
         (fun () ->

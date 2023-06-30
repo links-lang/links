@@ -9,6 +9,7 @@
 # A correct linear version
 fun unsound_correct() {
   var ch = fork(fun(ch) {
+    xlin;
     var (i, ch) = receive(ch);
     var (s, ch) = receive(ch);
     println("Int: " ^^ intToString(i));
@@ -19,6 +20,7 @@ fun unsound_correct() {
   handle({
     # Nondeterministic choice.
     var msg = if (lindo Flip) 42 else 84;
+    xlin;
     var ch = send(msg, ch);
     # Throws an exception
     lindo Fail;
@@ -26,13 +28,14 @@ fun unsound_correct() {
     close(ch)
   }) {
     case _ -> ()
-    case <Fail =@ resume> -> println("Failed"); resume(())
-    case <Flip =@ resume> -> resume(true)
+    case <Fail =@ resume> -> xlin; println("Failed"); resume(())
+    case <Flip =@ resume> -> xlin; resume(true)
   }
 }
 
 fun unsound() {
   var ch = fork(fun(ch) {
+    xlin;
     var (i, ch) = receive(ch);
     var (s, ch) = receive(ch);
     println("Int: " ^^ intToString(i));
@@ -43,6 +46,7 @@ fun unsound() {
   handle({
     # Nondeterministic choice.
     var msg = if (do Flip) 42 else 84;
+    xlin;
     var ch = send(msg, ch);
     # Throws an exception
     ignore(do Fail);

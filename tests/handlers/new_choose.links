@@ -28,7 +28,7 @@ fun lin_choice() {
 fun positive(m)() {
   handle(m()) {
     case x   -> x
-    case <Choose =@ k> -> k(true)
+    case <Choose =@ k> -> xlin; k(true)
   }
 }
 

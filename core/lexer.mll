@@ -164,6 +164,8 @@ let keywords = [
  "with"     , WITH;
 (* SAND *)
  "tablekeys"     , TABLEKEYS;
+ (* Control-flow linearity *)
+ "xlin"     , LINFLAG
 ]
 
 exception LexicalError of (string * Lexing.position)

@@ -8,31 +8,35 @@
 # A correct linear version
 fun deadlock_correct() {
   var ch = fork(fun(ch) {
-     var ch = send(42, ch);
-     close(ch)
+    xlin;
+    var ch = send(42, ch);
+    close(ch)
   });
 
   handle({
     # Nondeterministic choice.
     ignore(lindo Flip);
+    xlin;
     var (i, ch) = receive(ch);
     println("Int: " ^^ intToString(i));
     close(ch)
   }) {
     case _ -> ()
-    case <Flip =@ resume> -> resume(true)
+    case <Flip =@ resume> -> xlin; resume(true)
   }
 }
 
 fun deadlock() {
   var ch = fork(fun(ch) {
-     var ch = send(42, ch);
-     close(ch)
+    xlin;
+    var ch = send(42, ch);
+    close(ch)
   });
 
   handle({
     # Nondeterministic choice.
     do Flip;
+    xlin;
     var (i, ch) = receive(ch);
     println("Int: " ^^ intToString(i));
     close(ch)

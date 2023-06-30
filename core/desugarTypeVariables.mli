@@ -1,6 +1,6 @@
 val infer_kinds : bool Settings.setting
 
-val concrete_subkind : CommonTypes.Subkind.t option -> CommonTypes.Subkind.t
+val concrete_subkind : ?is_effect:bool -> CommonTypes.Subkind.t option -> CommonTypes.Subkind.t
 
 val free_type_variable : ?var:string -> SourceCode.Position.t -> exn
 

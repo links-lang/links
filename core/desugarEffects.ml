@@ -131,7 +131,7 @@ let simplify_tycon_env (tycon_env : Types.tycon_environment) : simple_tycon_env
 let make_anon_point k sk freedom =
   let var = Types.fresh_raw_variable () in
   Unionfind.fresh
-    (Types.Var (var, (k, DesugarTypeVariables.concrete_subkind sk), freedom))
+    (Types.Var (var, (k, DesugarTypeVariables.concrete_subkind ~is_effect:true sk), freedom))
 
 (** A map with SugarTypeVar as keys, use for associating the former
    with information about what
@@ -391,7 +391,7 @@ let cleanup_effects tycon_env =
                      Unionfind.fresh
                        (Types.Var (var, (PrimaryKind.Row, (default_effect_lin, res_effect)), `Flexible)))
                 in
-                let name, sk, fr = gue stv in
+                let name, (_, sk), fr = gue stv in
                 if has_effect_sugar
                 then
                   begin
@@ -454,7 +454,7 @@ let gather_mutual_info (tycon_env : simple_tycon_env) =
            match eff_var with
            | Datatype.Open stv
              when (not (SugarTypeVar.is_resolved stv))
-                  && SugarTypeVar.get_unresolved_exn stv = ("$eff", None, `Rigid)
+                  && SugarTypeVar.get_unresolved_exn stv = ("$eff", (true, None), `Rigid)
              ->
                self#with_implicit
            | _ -> self )
@@ -769,7 +769,7 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
                 let point =
                   lazy
                     (let var = Types.fresh_raw_variable () in
-                     Unionfind.fresh (Types.Var (var, (PrimaryKind.Presence, default_presence_subkind), `Rigid)))
+                     Unionfind.fresh (Types.Var (var, (PrimaryKind.Presence, default_effect_subkind), `Rigid)))
                 in
                 StringMap.add op point m)
               v StringMap.empty),
@@ -1019,7 +1019,7 @@ class main_traversal simple_tycon_env =
             if not allow_implictly_bound_vars then
               raise (DesugarTypeVariables.free_type_variable dpos);
 
-            let _name, sk, freedom = SugarTypeVar.get_unresolved_exn stv in
+            let _name, (_, sk), freedom = SugarTypeVar.get_unresolved_exn stv in
             let mtv = make_anon_point (PrimaryKind.Row) sk freedom in
             let rtv = SugarTypeVar.mk_resolved_row mtv in
             (o, D.Open rtv)
@@ -1325,7 +1325,7 @@ module Untyped = struct
   let name = "effects"
 
   let program state program' =
-    (
+    (* (
       match program' with
         | (bindings, body) ->
       (match body with
@@ -1338,7 +1338,7 @@ module Untyped = struct
             (print_string -<- show_phrase) body;
             print_string "\n";
             print_string "---------- END desugarEffects input -----------\n";)
-    );
+    ); *)
     let open Types in
     let tyenv = Context.typing_environment (context state) in
     let program' = program tyenv.tycon_env program' in

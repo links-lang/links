@@ -3,7 +3,6 @@ fun incr(x) {var y = do Get; do Put(x+y)}
 # this example shows that we can use linear operations
 # in an environment surrounded by unlimited operations
 fun choice() {
-  [|()|];
   var x = if (lindo Choose()) { incr(1); do Get }
           else { incr(1); do Get };
   var y = if (lindo Choose()) { incr(1); do Get }
@@ -14,7 +13,7 @@ fun choice() {
 fun positive(m)() {
   handle(m()) {
     case x -> x
-    case <Choose =@ k> -> k(true)
+    case <Choose =@ k> -> xlin; k(true)
   }
 }
 

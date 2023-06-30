@@ -2,8 +2,8 @@ fun assert(ok, msg) {
   if (not(ok)) debug("assertion failed: " ^^ msg) else ()
 }
 
-sig ignore : (a) { |_::Any}-> ()
-fun ignore (_) { [|()|] }
+sig ignore : (a) -> ()
+fun ignore (_) { () }
 
 fun println(msg) {
   print(msg ^^ "\n")
@@ -1289,20 +1289,20 @@ fun connect(f, g) {
 typename EndBang = !().End;
 typename EndQuery = ?().End;
 
-sig wait : (EndQuery) ~> ()
+sig wait : (EndQuery) { |_::Lin}~> ()
 fun wait(s) {
   <|()|>;
   var (_, s) = receive(s);
   close(s)
 }
 
-sig closeBang : (EndBang) ~> ()
+sig closeBang : (EndBang) { |_::Lin}~> ()
 fun closeBang(s) {
   <|()|>;
   close(send((), s))
 }
 
-sig makeEndBang : () ~> EndBang
+sig makeEndBang : () { |_::Lin}~> EndBang
 fun makeEndBang() {
   <|()|>;
   var ap = new();
@@ -1350,7 +1350,7 @@ fun linkSync(s, c) {
 }
 
 #sig runSync : ((!a.EndBang) ~e~> EndBang) ~e~> a
-sig runSync : ((!a.EndBang) {SessionFail:() =@ [||]}~> EndBang) ~e~> a
+sig runSync : ((!a.EndBang) {SessionFail:() =@ [||]}~> EndBang) { |_::Lin}~> a
 fun runSync(f) {
   <|()|>;
   var c = forkSync(f);
