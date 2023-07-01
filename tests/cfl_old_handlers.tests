@@ -231,7 +231,7 @@ args : --enable-handlers --track-control-flow-linearity
 
 Operation parameter pattern-matching (7)
 fun(m) { handle(m()) { case <Move(Alice)> -> 'A' case <Move(Bob)> -> 'B' case <Move(_)> -> 'U' case x -> x } }
-stdout : fun : (() {Move:([|Alice|Bob|_::Lin|]) => _::Any|c}~> Char) {Move{_}|c}~> Char
+stdout : fun : (() {Move:([|Alice|Bob|_|]) => _::Any|c}~> Char) {Move{_}|c}~> Char
 args : --enable-handlers --track-control-flow-linearity
 
 Operation parameter pattern-matching (8)
