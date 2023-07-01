@@ -27,23 +27,24 @@ let lens_put_set_step ~db lens data (fn : Value.t -> Sorted.t -> unit) =
       in
       fn l res
   | LensJoin { left; right; on; del_left; del_right; _ } ->
+      let cols_simp = List.map (fun (a, _, _) -> a) on in
+      let on' = List.map (fun a -> (a, a, a)) cols_simp in
       let getfds l = Value.fundeps l in
       let cols l = Value.cols_present_aliases l in
       let r = get left in
       let s = get right in
       let m0 =
-        Sorted.relational_update ~fun_deps:(getfds left)
+        Sorted.relational_merge ~fun_deps:(getfds left)
           ~update_with:(Sorted.project_onto data ~columns:(cols left))
           r
       in
       let n0 =
-        Sorted.relational_update ~fun_deps:(getfds right)
+        Sorted.relational_merge ~fun_deps:(getfds right)
           ~update_with:(Sorted.project_onto data ~columns:(cols right))
           s
       in
-      let l = Sorted.minus (Sorted.join_exn m0 n0 ~on) data in
-      let join_cols = cols lens |> List.map (fun v -> (v, v, v)) in
-      let ll = Sorted.join_exn l data ~on:join_cols in
+      let l = Sorted.minus (Sorted.join_exn m0 n0 ~on:on') data in
+      let ll = Sorted.join_exn l data ~on:on' in
       let la = Sorted.minus l ll in
       let m =
         Sorted.minus
@@ -65,8 +66,8 @@ let lens_put_set_step ~db lens data (fn : Value.t -> Sorted.t -> unit) =
       let sort = Value.sort l in
       let r = get l in
       let m1 =
-        Sorted.relational_update ~fun_deps:(Sort.fds sort) ~update_with:data
-          (Sorted.filter r ~predicate)
+        Sorted.relational_merge ~fun_deps:(Sort.fds sort) ~update_with:data
+          (Sorted.filter r ~predicate:(Phrase.not' predicate))
       in
       let nh = Sorted.minus (Sorted.filter m1 ~predicate) data in
       let r = Sorted.minus m1 nh in

@@ -19,9 +19,7 @@ type incoming_websocket_message =
   (* Accept on a server access point *)
   | APAccept of (process_id * apid)
   (* Send a message to a remote channel. *)
-  | ChanSend of (channel_id * (Value.delegated_chan list) * Value.t)
-  (* Lost message response, containing lost messages for a set of channels *)
-  | LostMessageResponse of (channel_id * ((channel_id * (Value.t list)) list))
+  | ChanSend of (channel_id * Value.t)
   (* Channel cancellation notification: a channel has been cancelled on a client,
    * where the other EP is either on the server or another client *)
   | ChannelCancellation of channel_cancellation
@@ -70,38 +68,12 @@ let from_json json : incoming_websocket_message =
         let (pid, apid) = parse_srv_ap_msg () in
         APAccept (pid, apid)
       | "REMOTE_SESSION_SEND" ->
-        let parse_deleg_entry entry =
-          let get_entry_value key = List.assoc key entry in
-          let chan =
-            get_entry_value "chan" |> Value.unbox_channel in
-          let buf =
-            get_entry_value "buffer"
-            |> Value.unbox_list
-            |> List.rev in (* Client representation of a buffer is reversed... *)
-          (chan, buf) in
-
         let remote_ep =
           get_field_value "remoteEP"
             |> Value.unbox_string
             |> ChannelID.of_string in
-        let deleg_set =
-          get_field_value "delegatedSessions"
-            |> Value.unbox_list
-            |> List.map (parse_deleg_entry -<- Value.unbox_record) in
         let msg = get_field_value "msg" in
-        ChanSend (remote_ep, deleg_set, msg)
-      | "LOST_MESSAGES" ->
-        let carrier_chan = unbox_string "epID" |> ChannelID.of_string in
-        let unboxed_msgs = get_field_value "msgs" |> Value.unbox_record in
-
-        let parse_lost_message_entry (chan_str, msgs) =
-          let chan_id = ChannelID.of_string chan_str in
-          let msgs = Value.unbox_list msgs |> List.rev in
-          (chan_id, msgs) in
-
-        let msg_table = List.map parse_lost_message_entry unboxed_msgs in
-        LostMessageResponse (carrier_chan, msg_table)
-
+        ChanSend (remote_ep, msg)
       | "CHANNEL_CANCELLATION" ->
         let notify_ep = unbox_string "notify_ep" |> ChannelID.of_string in
         let cancelled_ep = unbox_string "cancelled_ep" |> ChannelID.of_string in

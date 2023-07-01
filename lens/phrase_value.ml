@@ -121,6 +121,21 @@ let rec default_value t =
   | Phrase_type.Record r ->
       Record (String.Map.to_list (fun k t -> (k, default_value t)) r)
 
+let rec pp_pretty f t =
+  match t with
+  | Bool b -> Format.pp_print_bool f b
+  | Int i -> Format.pp_print_int f i
+  | Serial `NewKey -> Format.pp_constant "$$" f ()
+  | Serial (`NewKeyMapped v) -> Format.fprintf f "$%i" v
+  | Serial (`Key v) -> Format.fprintf f "@%i" v
+  | Char c -> Format.pp_print_char f c
+  | Float v -> Format.pp_print_float f v
+  | String v -> Format.pp_print_string f v
+  | Tuple t -> Format.fprintf f "(%a)" (Format.pp_comma_list pp_pretty) t
+  | Record t ->
+      let pp_entry f (k, v) = Format.fprintf f "%s = %a" k pp_pretty v in
+      Format.fprintf f "(%a)" (Format.pp_comma_list pp_entry) t
+
 module Record = struct
   let get t ~key =
     unbox_record t

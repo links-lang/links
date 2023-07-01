@@ -6,7 +6,15 @@ type t = Alias.Set.t * Alias.Set.t [@@deriving show, sexp]
 
 let left (l, _) = l
 
+let left_list = left >> Alias.Set.elements
+
 let right (_, r) = r
+
+let right_list = right >> Alias.Set.elements
+
+let all_columns (l, r) = Alias.Set.union l r
+
+let all_columns_list = all_columns >> Alias.Set.elements
 
 let pp_pretty f fd =
   let pp_cols =
@@ -151,8 +159,7 @@ module Set = struct
     List.map ~f:fd_of fds |> of_list
 
   let all_columns fds =
-    let cols fd = Alias.Set.union (left fd) (right fd) in
-    elements fds |> List.map ~f:cols |> Alias.Set.union_all
+    elements fds |> List.map ~f:all_columns |> Alias.Set.union_all
 
   let all_nodes fds =
     let nodes fd = Alias.Set.Set.of_list [ left fd; right fd ] in

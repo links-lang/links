@@ -24,6 +24,8 @@ let or' v1 v2 = InfixAppl (Binary.LogicalOr, v1, v2)
 
 let equal v1 v2 = InfixAppl (Binary.Equal, v1, v2)
 
+let lt v1 v2 = InfixAppl (Binary.Less, v1, v2)
+
 let not' v1 = UnaryAppl (Unary.Not, v1)
 
 let tuple v = TupleLit v
