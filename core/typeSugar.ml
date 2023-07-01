@@ -4538,9 +4538,9 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                not (Settings.get Basicsettings.Sessions.expose_session_fail) &&
                String.equal opname Value.session_exception_operation
             then
-               Types.make_empty_open_row (lin_any, res_effect)
+               Types.make_empty_open_row default_effect_subkind
             else
-              Types.make_singleton_open_row (opname, T.Present (typ op)) (lin_any, res_effect) in
+              Types.make_singleton_open_row (opname, T.Present (typ op)) default_effect_subkind in
           let p = Position.resolve_expression pos in
           let () =
             unify ~handle:Gripers.do_operation

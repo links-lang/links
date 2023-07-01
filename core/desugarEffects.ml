@@ -128,10 +128,10 @@ let simplify_tycon_env (tycon_env : Types.tycon_environment) : simple_tycon_env
   in
   SEnv.fold simplify_tycon tycon_env SEnv.empty
 
-let make_anon_point k sk freedom =
+let make_anon_point ?(is_eff=true) k sk freedom =
   let var = Types.fresh_raw_variable () in
   Unionfind.fresh
-    (Types.Var (var, (k, DesugarTypeVariables.concrete_subkind ~is_effect:true sk), freedom))
+    (Types.Var (var, (k, DesugarTypeVariables.concrete_subkind ~is_effect:is_eff sk), freedom))
 
 (** A map with SugarTypeVar as keys, use for associating the former
    with information about what
@@ -1019,8 +1019,8 @@ class main_traversal simple_tycon_env =
             if not allow_implictly_bound_vars then
               raise (DesugarTypeVariables.free_type_variable dpos);
 
-            let _name, (_, sk), freedom = SugarTypeVar.get_unresolved_exn stv in
-            let mtv = make_anon_point (PrimaryKind.Row) sk freedom in
+            let _name, (is_eff, sk), freedom = SugarTypeVar.get_unresolved_exn stv in
+            let mtv = make_anon_point ~is_eff:is_eff (PrimaryKind.Row) sk freedom in
             let rtv = SugarTypeVar.mk_resolved_row mtv in
             (o, D.Open rtv)
         | D.Open srv when not (SugarTypeVar.is_resolved srv) ->

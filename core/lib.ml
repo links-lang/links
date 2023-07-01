@@ -356,7 +356,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "Send",
   (p2 (fun _pid _msg ->
          assert(false)), (* Now handled in evalir.ml *)
-   datatype "forall a::Type(Any, Any), e::Row(Unl, Any), f::Row.(Process ({hear:a|e}), a) ~f~> ()",
+   datatype "forall a::Type(Any, Any), e::Row(Any, Any), f::Row(Any, Any).(Process ({hear:a|e}), a) ~f~> ()",
    IMPURE);
 
   "self",
@@ -488,7 +488,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "link",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session), e::Row(Unl, Any).(s, ~s) ~e~> ()",
+   datatype "forall s::Type(Any, Session), e::Row(Any, Any).(s, ~s) ~e~> ()",
    IMPURE);
 
   (* access points *)
