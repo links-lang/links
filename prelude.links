@@ -1230,6 +1230,8 @@ typename Pid(a::Type) = Process({hear: a});
 #### SESSION TYPING STUFF ####
 # FIXME: WT: I modified the signature of SessionFail to be linear
 # to make these functions well-typed.
+# e::Row(Lin) is also made to be linear
+# However, this breaks backward compatibility.
 #sig fork : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
 sig fork : forall s::Session,e::Row(Lin).((s) {SessionFail:() =@ [||]}~> ()) ~e~> ~s
 fun fork(f) {

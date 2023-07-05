@@ -182,6 +182,17 @@ let attach_row_subkind (r, subkind) =
     | _ -> assert false
   in attach_subkind_helper update subkind
 
+let attach_presence_subkind (t, subkind) =
+  let update sk =
+    match t with
+    | Datatype.Var stv ->
+       let (x, _, freedom) = SugarTypeVar.get_unresolved_exn stv in
+       let stv' = SugarTypeVar.mk_unresolved x sk freedom in
+       Datatype.Var stv'
+    | _ -> assert false
+  in attach_subkind_helper update subkind
+
+
 let alias p name args aliasbody =
     with_pos p (Aliases [with_pos p (name, args, aliasbody)])
 
@@ -1270,11 +1281,21 @@ efieldspec:
 ebraced_fieldspec:
 | LBRACE COLON datatype RBRACE                                 { Datatype.Present $3 }
 | LBRACE MINUS RBRACE                                          { Datatype.Absent }
-| LBRACE VARIABLE RBRACE                                       { Datatype.Var (named_typevar ~is_eff:true $2 `Rigid) }
-| LBRACE PERCENTVAR RBRACE                                     { Datatype.Var (named_typevar ~is_eff:true $2 `Flexible) }
-| LBRACE UNDERSCORE RBRACE                                     { Datatype.Var (fresh_typevar ~is_eff:true `Rigid)    }
-| LBRACE PERCENT RBRACE                                        { Datatype.Var (fresh_typevar ~is_eff:true `Flexible) }
+// | LBRACE VARIABLE RBRACE                                       { Datatype.Var (named_typevar ~is_eff:true $2 `Rigid) }
+// | LBRACE PERCENTVAR RBRACE                                     { Datatype.Var (named_typevar ~is_eff:true $2 `Flexible) }
+// | LBRACE UNDERSCORE RBRACE                                     { Datatype.Var (fresh_typevar ~is_eff:true `Rigid)    }
+// | LBRACE PERCENT RBRACE                                        { Datatype.Var (fresh_typevar ~is_eff:true `Flexible) }
+| LBRACE nonrec_epresence_var RBRACE                           { $2 }
+| LBRACE kinded_epresence_var RBRACE                           { $2 }
 
+kinded_epresence_var:
+| nonrec_epresence_var subkind                                 { attach_presence_subkind ($1, $2) }
+
+nonrec_epresence_var:
+| VARIABLE                                                     { Datatype.Var (named_typevar ~is_eff:true $1 `Rigid   ) }
+| PERCENTVAR                                                   { Datatype.Var (named_typevar ~is_eff:true $1 `Flexible) }
+| UNDERSCORE                                                   { Datatype.Var (fresh_typevar ~is_eff:true `Rigid)    }
+| PERCENT                                                      { Datatype.Var (fresh_typevar ~is_eff:true `Flexible) }
 
 nonrec_row_var:
 | VARIABLE                                                     { Datatype.Open (named_typevar $1 `Rigid   ) }

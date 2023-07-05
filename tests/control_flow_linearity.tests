@@ -49,7 +49,7 @@ args : --enable-handlers --track-control-flow-linearity
 
 Operation annotation
 fun(m) { xlin; handle(m()) { case <Foo(x) =@ k> : ((Int) =@ Int) -> xlin; k (x) } }
-stdout : fun : (() {Foo:(Int) =@ Int|a::Lin}~> b::Any) {Foo{_}::Lin|a::Lin}~> b::Any
+stdout : fun : (() {Foo:(Int) =@ Int|a::Lin}~> b::Any) {Foo{_::Lin}|a::Lin}~> b::Any
 args : --enable-handlers --track-control-flow-linearity
 
 New implementation of examples/handlers/choose.links

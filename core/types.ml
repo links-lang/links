@@ -3588,13 +3588,13 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
            *    (or "{% ... }" if Flexible, but the % will be contributed by rule (3)) [is_presence]
            *)
 
+          let is_presence = (PrimaryKind.Presence = Kind.primary_kind knd) in
+          (if is_presence && not (Context.is_ambient_type_arg ctx) then StringBuffer.write buf "{");
           let print_var : string printer =
             Printer (fun ctx var_name buf ->
                 let anonymity = get_var_anonymity ctx vid in
                 let show_flexible = (Policy.flavours Context.(policy ctx)) && flavour = `Flexible in
-                let is_presence = (PrimaryKind.Presence = Kind.primary_kind knd) in
 
-                (if is_presence && not (Context.is_ambient_type_arg ctx) then StringBuffer.write buf "{");
                 (if show_flexible then StringBuffer.write buf "%");
                 (match anonymity, show_flexible with
                  | Anonymous, true  -> ()
@@ -3603,17 +3603,18 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                     if Policy.(EffectSugar.arrows_show_implicit (es_policy (Context.policy ctx)))
                     then StringBuffer.write buf var_name
                     else StringBuffer.write buf "_"
-                 | _, _             -> StringBuffer.write buf var_name);
-                (if is_presence && not (Context.is_ambient_type_arg ctx) then StringBuffer.write buf "}"))
+                 | _, _             -> StringBuffer.write buf var_name)
+                )
           in
-          let is_presence = Kind.primary_kind knd = PrimaryKind.Presence in
           let is_row = Kind.primary_kind knd = PrimaryKind.Row
                      || Context.is_ambient_rowvar ctx in
           let is_eff = Context.is_ambient_effvar ctx
                      || (Context.is_ambient_effect ctx && (is_presence || is_row)) in
           if not in_binder
           then seq ~sep:"::" (print_var, subkind_name ~is_eff:is_eff (Context.policy ctx) subknd) (var_name, ()) ctx buf
-          else seq ~sep:"::" (print_var, kind_name ctx knd) (var_name, ()) ctx buf)
+          else seq ~sep:"::" (print_var, kind_name ctx knd) (var_name, ()) ctx buf;
+          (if is_presence && not (Context.is_ambient_type_arg ctx) then StringBuffer.write buf "}")
+          )
 
   and recursive : (tid * Kind.t * typ) printer
     = let open Printer in
