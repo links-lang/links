@@ -55,6 +55,8 @@ open ParserConstructors
 
 let default_fixity = 9
 
+let lincont_enabled = Settings.get Basicsettings.CTLinearity.enabled
+
 let primary_kind_of_string p =
   function
   | "Type"     -> pk_type
@@ -1096,7 +1098,8 @@ squiggly_arrow:
 
 fat_arrow:
 | parenthesized_datatypes FATRARROW datatype                   { Datatype.Operation ($1, $3, DeclaredLinearity.Unl) }
-| parenthesized_datatypes FATLOLLI datatype                    { Datatype.Operation ($1, $3, DeclaredLinearity.Lin) }
+| parenthesized_datatypes FATLOLLI datatype                    { Datatype.Operation ($1, $3,
+  if lincont_enabled then DeclaredLinearity.Lin else DeclaredLinearity.Unl) }
 
 mu_datatype:
 | MU VARIABLE DOT mu_datatype                                  { Datatype.Mu (named_typevar $2 `Rigid, with_pos $loc($4) $4) }

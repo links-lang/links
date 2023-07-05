@@ -9,6 +9,9 @@ let internal_error message =
 let tag_expectation_mismatch =
   internal_error "Type tag expectation mismatch"
 
+
+let lincont_enabled = Settings.get Basicsettings.CTLinearity.enabled
+
 module FieldEnv = Utility.StringMap
 type 'a stringmap = 'a Utility.stringmap [@@deriving show]
 type 'a field_env = 'a stringmap [@@deriving show]
@@ -811,7 +814,9 @@ module Unl : Constraint = struct
       | ForAll _ as t -> super#type_satisfies vars t
       (* Effect *)
       | Effect _  -> true
-      | Operation (_,_,b) -> DeclaredLinearity.(if b = Lin then true else false)
+      | Operation (_,_,b) ->
+        if lincont_enabled then DeclaredLinearity.(if b = Lin then true else false)
+        else true
       (* Row *)
       | Row _ as t -> super#type_satisfies vars t
       (* Presence *)
@@ -3448,7 +3453,6 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
 
   type 'a printer = 'a Printer.t
 
-  let lincont_enabled = Settings.get Basicsettings.CTLinearity.enabled
 
   (* For correct printing of subkinds, need to know the subkind in advance:
    * see line (1): that has to be Empty so that the :: is not printed *)

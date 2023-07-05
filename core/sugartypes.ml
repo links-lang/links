@@ -71,9 +71,13 @@ let default_subkind : Subkind.t = (lin_unl, res_any)
 
 (* NOTICE: `lin_any` here means this eff_row_var can be unified with
     linear or unlimited row types *)
-let default_effect_subkind : Subkind.t = (lin_any, res_any)
 
-let default_effect_lin : Linearity.t = lin_any
+let lincont_enabled = Settings.get Basicsettings.CTLinearity.enabled
+
+let default_effect_lin : Linearity.t = if lincont_enabled then lin_any else lin_unl
+
+let default_effect_subkind : Subkind.t =(default_effect_lin, res_any)
+
 
 type kind = PrimaryKind.t option * Subkind.t option
     [@@deriving show]
