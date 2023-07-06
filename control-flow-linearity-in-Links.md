@@ -1,7 +1,7 @@
 # Control-Flow Linearity
 
 Enable the feature of tracking control-flow linearity by passing the
-flag `-track-control-flow-linearity`. It is usually used with
+flag `--track-control-flow-linearity`. It is usually used with
 `--enabled-handlers`.
 
 ## New constructs
