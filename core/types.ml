@@ -3478,7 +3478,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
        let module R = Restriction in
        match (lin, res) with
        | (L.Unl, R.Any)     -> if is_eff && lincont_enabled then constant "Lin" else Empty (* (1) see above *)
-       | (L.Any, R.Any)     -> if is_eff then Empty else constant "Any"
+       | (L.Any, R.Any)     -> if is_eff && lincont_enabled then Empty else constant "Any"
        | (L.Unl, R.Base)    -> constant @@ R.to_string res_base
        | (L.Any, R.Session) -> constant @@ R.to_string res_session
        | (L.Unl, R.Effect)  -> constant @@ R.to_string res_effect (* control-flow-linearity may also need changing this *)

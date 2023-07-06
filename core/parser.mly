@@ -57,6 +57,8 @@ let default_fixity = 9
 
 let lincont_enabled = Settings.get Basicsettings.CTLinearity.enabled
 
+let default_effect_lin = if lincont_enabled then lin_any else lin_unl
+
 let primary_kind_of_string p =
   function
   | "Type"     -> pk_type
@@ -145,7 +147,7 @@ let kind_of p =
   | "Any"      -> (Some pk_type, Some (lin_any, res_any))
   | "Base"     -> (Some pk_type, Some (lin_unl, res_base))
   | "Session"  -> (Some pk_type, Some (lin_any, res_session))
-  | "Eff"      -> (Some pk_row , Some (lin_any, res_effect))
+  | "Eff"      -> (Some pk_row , Some (default_effect_lin, res_effect))
   | k          -> raise (ConcreteSyntaxError (pos p, "Invalid kind: " ^ k))
 
 let subkind_of p =
@@ -155,7 +157,7 @@ let subkind_of p =
   | "Lin"     -> Some (lin_unl, res_any) (* for linear effect vars *)
   | "Base"    -> Some (lin_unl, res_base)
   | "Session" -> Some (lin_any, res_session)
-  | "Eff"     -> Some (lin_any, res_effect)
+  | "Eff"     -> Some (default_effect_lin, res_effect)
   | sk        -> raise (ConcreteSyntaxError (pos p, "Invalid subkind: " ^ sk))
 
 let named_quantifier name kind freedom = SugarQuantifier.mk_unresolved name kind freedom
@@ -935,8 +937,8 @@ perhaps_db_driver:
 | /* empty */                                                  { None   , None }
 
 seq_expression:
-| LBRACKETBAR exp BARRBRACKET                                  { with_pos $loc (Unlet $2) }
-| LEFTTRIANGLE exp RIGHTTRIANGLE                                { with_pos $loc (Linlet $2) } // deprecated
+// | LBRACKETBAR exp BARRBRACKET                                  { with_pos $loc (Unlet $2) }
+// | LEFTTRIANGLE exp RIGHTTRIANGLE                                { with_pos $loc (Linlet $2) } // deprecated
 | LINFLAG                                                      { with_pos $loc (Linlet (dummy_phrase $loc)) }
 
 exp:
