@@ -515,9 +515,11 @@ struct
         apply_cont cont env (`Record [])
     (*****************)
     | `PrimitiveFunction (n,None), args ->
-       apply_cont cont env (Lib.apply_pfun n args (Value.Env.request_data env))
+       Lib.apply_pfun n args (Value.Env.request_data env) >>= fun v -> 
+       apply_cont cont env v
     | `PrimitiveFunction (_, Some code), args ->
-       apply_cont cont env (Lib.apply_pfun_by_code code args (Value.Env.request_data env))
+       Lib.apply_pfun_by_code code args (Value.Env.request_data env) >>= fun v ->
+       apply_cont cont env v
     | `ClientFunction name, args ->
         let req_data = Value.Env.request_data env in
         client_call req_data name cont args

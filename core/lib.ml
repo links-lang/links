@@ -2,6 +2,7 @@ open CommonTypes
 
 open Utility
 open Proc
+open Lwt
 
 (* Error functions *)
 let runtime_error msg = raise (Errors.runtime_error msg)
@@ -32,7 +33,8 @@ let datatype = DesugarDatatypes.read ~aliases:alias_env
 
 type primitive =
 [ Value.t
-| `PFun of RequestData.request_data -> Value.t list -> Value.t ]
+| `PFun of RequestData.request_data -> Value.t list -> Value.t 
+| `PFunLwt of RequestData.request_data -> Value.t list -> Value.t Lwt.t ]
 
 type pure = PURE | IMPURE
 
@@ -84,26 +86,26 @@ let float_fn fn pure =
 (* Functions which also take the request data as an argument --
  * for example those which set cookies, change the headers, etc. *)
 let p1D fn =
-  `PFun (fun req_data args ->
+  `PFunLwt (fun req_data args ->
       match args with
         | ([a]) -> fn a req_data
         | _ -> assert false)
 
 let p2D fn =
-  `PFun (fun req_data args ->
+  `PFunLwt (fun req_data args ->
       match args with
         | [a; b] -> fn a b req_data
         | _ -> assert false)
 
 let p3D fn =
-  `PFun (fun req_data args ->
+  `PFunLwt (fun req_data args ->
       match args with
         | [a;b;c] -> fn a b c req_data
         | _ -> assert false)
 
-let p1 fn = p1D (fun x _ -> fn x)
-let p2 fn = p2D (fun x y _ -> fn x y)
-let p3 fn = p3D (fun x y z _ -> fn x y z)
+let p1 fn = p1D (fun x _ -> Lwt.return (fn x))
+let p2 fn = p2D (fun x y _ -> Lwt.return (fn x y))
+let p3 fn = p3D (fun x y z _ -> Lwt.return (fn x y z))
 
 let rec equal l r =
   match l, r with
@@ -690,7 +692,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   IMPURE);
 
   "print",
-  (p1 (fun msg -> print_string (Value.unbox_string msg); flush stdout; `Record []),
+  (p1D (fun msg _ -> Lwt_io.print (Value.unbox_string msg) >>= fun _ ->  Lwt.return (`Record [])),
    datatype "(String) ~> ()",
   IMPURE);
 
@@ -1029,7 +1031,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          let resp_headers = RequestData.get_http_response_headers req_data in
          RequestData.set_http_response_headers req_data
              (("Set-Cookie", cookieName ^ "=" ^ cookieVal) :: resp_headers);
-           `Record []
+           Lwt.return (`Record [])
              (* Note: perhaps this should affect cookies returned by
                 getcookie during the current request. *)),
    datatype "(String, String) ~> ()",
@@ -1058,7 +1060,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
            else
              ""
          in
-           Value.box_string value),
+           Lwt.return (Value.box_string value)),
    datatype "(String) ~> String",
   IMPURE);
 
@@ -1069,7 +1071,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
            let resp_headers = RequestData.get_http_response_headers req_data in
            RequestData.set_http_response_headers req_data (("Location", url) :: resp_headers);
            RequestData.set_http_response_code req_data 302;
-           `Record []
+           Lwt.return (`Record [])
       ), datatype "(String) ~> ()",
   IMPURE);
   (* Should this function really return?
@@ -1809,7 +1811,8 @@ let apply_pfun_by_code var args req_data =
   | Some #Value.t ->
       raise (runtime_type_error ("Attempt to apply primitive non-function "
            ^ "(#" ^string_of_int var^ ")."))
-  | Some (`PFun p) -> p req_data args
+  | Some (`PFun p) -> Lwt.return (p req_data args)
+  | Some (`PFunLwt p) -> p req_data args
   | None -> assert false
 
 
