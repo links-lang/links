@@ -692,7 +692,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   IMPURE);
 
   "print",
-  (p1D (fun msg _ -> Lwt_io.print (Value.unbox_string msg) >>= fun _ ->  Lwt.return (`Record [])),
+  (p1 (fun msg -> print_string (Value.unbox_string msg); flush stdout; `Record []),
    datatype "(String) ~> ()",
   IMPURE);
 
