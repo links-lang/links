@@ -37,5 +37,5 @@ depends: [
   "menhir" {>= "20210419"}
   "ppx_sexp_conv" {<= "v0.15.1"}
   "calendar" {>= "2.0.4"}
-  "rdf_lwt {>= "0.14.0"}
+  "rdf_lwt" {>= "0.14.0"}
 ]
