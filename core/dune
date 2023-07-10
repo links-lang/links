@@ -19,7 +19,7 @@
              websocket websocket-lwt-unix.cohttp
              findlib menhirLib links.lens calendar
              dynlink
-	     rdf rdf_lwt iri)
+             rdf rdf_lwt iri)
   (preprocess (pps ppx_deriving.std ppx_deriving_yojson)))
 
 
