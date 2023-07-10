@@ -515,7 +515,7 @@ struct
         apply_cont cont env (`Record [])
     (*****************)
     | `PrimitiveFunction (n,None), args ->
-       Lib.apply_pfun n args (Value.Env.request_data env) >>= fun v -> 
+       Lib.apply_pfun n args (Value.Env.request_data env) >>= fun v ->
        apply_cont cont env v
     | `PrimitiveFunction (_, Some code), args ->
        Lib.apply_pfun_by_code code args (Value.Env.request_data env) >>= fun v ->

@@ -12,5 +12,5 @@
  * returns: a Links value consisting of a list of association lists
  *          bound variables in the query result to their bindings
  *)
- 
+
 val select : base:Iri.t -> Uri.t -> string -> (string * string) list list Lwt.t

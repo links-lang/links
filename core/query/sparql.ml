@@ -11,7 +11,7 @@ let internal_error message =
 let select ~base uri query =
   get ~base ~accept:"application/json" uri {in_query = query; in_dataset = empty_dataset} >>= fun result ->
   match result with
-  | Result(Rdf.Sparql.Solutions ss) -> 
+  | Result(Rdf.Sparql.Solutions ss) ->
       Lwt.return (List.map (fun s -> Rdf.Sparql.solution_fold (fun x t l -> (x, Rdf.Term.string_of_term t)::l) s []) ss)
   | Result(Rdf.Sparql.Bool _) -> raise (internal_error("expected SELECT query, but result is a boolean"))
   | Result(Rdf.Sparql.Graph _) -> raise (internal_error("expected SELECT query, but result is a graph"))
