@@ -13,4 +13,4 @@
  *          bound variables in the query result to their bindings
  *)
  
-val select : base:Iri.t -> Uri.t -> string -> Value.t
+val select : base:Iri.t -> Uri.t -> string -> (string * string) list list Lwt.t
