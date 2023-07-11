@@ -19,7 +19,7 @@ ERRORS=0
 
 for dir in ${DIRS[@]}; do
     for file in $(eval "find \""$dir"\" -type f \( ${FIND_STR} \) \
-      -exec egrep -l \" +$\" {} \;"); do
+      -exec grep -E -l \" +$\" {} \;"); do
           echo -n "$file"
           if [[ $STRIP -eq 1 ]]; then
               echo -n "..."
