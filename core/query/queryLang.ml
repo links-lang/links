@@ -515,13 +515,13 @@ let lookup_fun env (f, fvs) =
         Primitive "Avg"
       | "avgF" ->
         Primitive "AvgF"
-      | "min" ->
+      | "min_list" ->
         Primitive "Min"
-      | "minF" ->
+      | "minF_list" ->
         Primitive "MinF"
-      | "max" ->
+      | "max_list" ->
         Primitive "Max"
-      | "maxF" ->
+      | "maxF_list" ->
         Primitive "MaxF"
       | "empty" ->
         Primitive "Empty"
