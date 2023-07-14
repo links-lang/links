@@ -406,7 +406,7 @@ struct
       Debug.print ("sending: " ^ Value.string_of_value v ^ " to channel: " ^ Value.string_of_value chan);
       let unboxed_chan = Value.unbox_channel chan in
       let outp = Session.send_port unboxed_chan in
-      Session.send_from_local v outp >>= fun res ->
+      Session.send_from_server v outp >>= fun res ->
         begin
           match res with
             | SendOK -> apply_cont cont env chan
@@ -995,7 +995,7 @@ struct
       Debug.print ("selecting: " ^ name ^ " from: " ^ Value.string_of_value chan);
       let ch = Value.unbox_channel chan in
       let (outp, _inp) = ch in
-      Session.send_from_local (Value.box_variant name (Value.box_unit ())) outp >>= fun _ ->
+      Session.send_from_server (Value.box_variant name (Value.box_unit ())) outp >>= fun _ ->
       OptionUtils.opt_iter Proc.awaken (Session.unblock outp);
       apply_cont cont env chan
     | Choice (v, cases) ->

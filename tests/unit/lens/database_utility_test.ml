@@ -5,7 +5,8 @@ module H = LensTestHelpers
 let test_create_table test_ctx =
   let module DB = (val TestUtility.Table.create test_ctx) in
   let module MyTable =
-  (val DB.drop_create_easy ~table:"MyTable" "key1 key2 -> value1 value2 value3")
+    (val DB.drop_create_easy ~table:"MyTable"
+           "key1 key2 -> value1 value2 value3")
   in
   let testData = [ [ 1; 1; 1; 1; 1 ]; [ 1; 2; 3; 1; 2 ]; [ 3; 3; 3; 3; 3 ] ] in
   MyTable.insert_ints testData;
@@ -15,8 +16,8 @@ let test_create_table test_ctx =
 let test_create_table_rand test_ctx =
   let module DB = (val TestUtility.Table.create test_ctx) in
   let module MyTableRand =
-  (val DB.drop_create_easy ~table:"MyTableRand"
-         "key1 key2 -> value1 value2 value3")
+    (val DB.drop_create_easy ~table:"MyTableRand"
+           "key1 key2 -> value1 value2 value3")
   in
   let testData =
     H.gen_data [ `Seq; `Constant 1; `RandTo 15; `Rand; `Rand ] 100
@@ -28,8 +29,8 @@ let test_create_table_rand test_ctx =
 let test_drop_create_and_populate test_ctx =
   let module DB = (val TestUtility.Table.create test_ctx) in
   let module TestTable =
-  (val DB.drop_create_easy_populate ~table:"test_table" ~fd:"a -> b c" ~n:500
-         [ `Seq; `RandTo 15; `Rand ])
+    (val DB.drop_create_easy_populate ~table:"test_table" ~fd:"a -> b c" ~n:500
+           [ `Seq; `RandTo 15; `Rand ])
   in
   assert_equal 500 (TestTable.count ());
   TestTable.drop ()

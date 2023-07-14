@@ -165,8 +165,8 @@ let test_select_lens_1 n test_ctx =
   let behaviour = behaviour test_ctx in
   let module DB = (val Table.create test_ctx) in
   let module T1 =
-  (val DB.drop_create_easy_populate ~table:"t1" ~fd:"a -> b c" ~n
-         [ `Seq; `RandTo (n / 15); `Rand ])
+    (val DB.drop_create_easy_populate ~table:"t1" ~fd:"a -> b c" ~n
+           [ `Seq; `RandTo (n / 15); `Rand ])
   in
   let db = DB.db in
   let l1 = T1.lens () in
@@ -307,8 +307,8 @@ let template_put_delta ~n ~upto ~put test_ctx =
   let module DB = (val Table.create test_ctx) in
   let db = DB.db in
   let module T1 =
-  (val DB.drop_create_easy_populate ~table:"t1" ~fd:"a -> b c" ~n
-         [ `Seq; `RandTo (n / 10); `RandTo 100 ])
+    (val DB.drop_create_easy_populate ~table:"t1" ~fd:"a -> b c" ~n
+           [ `Seq; `RandTo (n / 10); `RandTo 100 ])
   in
   let l1 = T1.lens () in
   let res = Lens.Value.lens_get ~db l1 in
@@ -449,7 +449,8 @@ let test_join_lens_dr_2 n test_ctx =
   in
   let l2 =
     H.drop_create_populate_table test_ctx db "t2" "b -> d" "b d"
-      [ `Seq; `RandTo 40 ] 50
+      [ `Seq; `RandTo 40 ]
+      50
   in
   let l3 = H.join_lens_dr l1 l2 [ ("b", "b", "b") ] in
   let res =
