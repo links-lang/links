@@ -16,7 +16,7 @@ if has_gnu_find ; then
       TAB_REGEX=$'\t'
       EVAL_CMD="find \""$dir"\" \
         -type f \( ${FIND_STR} \) \
-        -exec egrep -l \"$TAB_REGEX\" {} \; "
+        -exec grep -E -l \"$TAB_REGEX\" {} \; "
       for file in $(eval "$EVAL_CMD"); do
           echo "Tab character found in $file, alerting authorities."
           exit 1

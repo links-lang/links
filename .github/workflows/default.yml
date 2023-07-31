@@ -17,7 +17,7 @@ jobs:
         os:
           - ubuntu-20.04
         ocaml-compiler:
-          - 4.08.1
+          - 4.14.1
 
     runs-on: ${{ matrix.os }}
 
@@ -33,7 +33,7 @@ jobs:
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
-      - run: opam install -y ocamlformat.0.19.0
+      - run: opam install -y ocamlformat.0.25.1
 
       - name: Ad-hoc rule check
         run: |
