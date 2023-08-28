@@ -424,7 +424,6 @@ let is_list =
     | If (_, _, Concat []) -> true
     | _ -> false
 
-(* TODO/FIXME GroupBy/AggBy *)
 (** Returns which database was used if any.
 
    Currently this assumes that at most one database is used.
@@ -739,8 +738,7 @@ let rec select_clause : Sql.index -> bool -> t -> Sql.select_clause =
          is redundant. *)
       (Sql.All, Sql.Fields [], [], Sql.Constant (Constant.Bool true), [], [])
     | Singleton (Record fields) ->
-      (* BUGBUG: this code ignores keys because we haven't implemented
-       * the conversion of grouping queries to SQL yet *)
+      (* this code is only used in the non-mixing normalizer and thus doesn't support grouping *)
       let fields =
         Sql.Fields
           (List.rev
