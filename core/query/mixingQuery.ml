@@ -545,15 +545,8 @@ struct
 
   let mk_for_term env (pol,x,xs) body_f =
     let ty_elem = type_of_for_var pol xs in
-    (*
-      Q.type_of_expression xs
-      |> TypeUtils.element_type ~overstep_quantifiers:true
-    in
-    *)
-    (* let newx = Var.fresh_raw_var () in *)
     let vx = Q.Var (x, ty_elem) in
     let cenv = Q.bind env (x, vx) in
-    (* Debug.print ("mk_for_term: " ^ string_of_int newx ^ " for " ^ string_of_int x); *)
     Q.For (None, [pol,x,xs], [], body_f cenv)
 
   (* this has the effect of performing beta reduction when the generator in
@@ -704,9 +697,6 @@ struct
                 | _ ->
                   let z = Var.fresh_raw_var () in
                   let tyz = type_of_for_var pol g in
-(*                    Q.type_of_expression g
-                    |> TypeUtils.element_type
-                  in *)
                   let vz = Q.Var (z, tyz) in
                   let env' = Q.bind env (x, vz) in
                   rgs (gsx@[pol,z,pack_ncoll ng]) cx env' os body gs'
@@ -886,9 +876,7 @@ struct
     | t, _ -> Q.query_error "Application of non-function: %s" (Q.string_of_t t)
 
   and norm_comp in_dedup env c =
-(*    (let c' =  *)
     computation env c
-(*    in Debug.print ("norm_comp: computation returned " ^ Q.show c'); c') *)
     |> norm in_dedup env
   and retn in_dedup u = if in_dedup then Q.Dedup u else u
 
@@ -898,11 +886,11 @@ struct
 
   let eval policy env e =
     Debug.debug_time "Query.eval" (fun () ->
-      let res =
+      (* let res = *)
       norm_comp (Q.env_of_value_env policy env) e
-      in
+      (* in
       Debug.print ("eval returned: " ^ Q.show res);
-      res
+      res *)
       )
 end
 
