@@ -43,7 +43,6 @@ and disjunct is_set = function
 
 and aggregator ar q =
   let aggr = function
-  (* FIXME: complete and factorize *)
   | QL.Primitive "Sum" -> "sum"
   | QL.Primitive "SumF" -> "sum"
   | QL.Primitive "Avg" -> "avg"
