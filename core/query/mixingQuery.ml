@@ -537,7 +537,7 @@ struct
     | Q.Variant (_, t) -> cfree bvs t
     | Q.Concat tl -> List.exists (cfree bvs) tl
     | Q.For (_, gs, os, b) ->
-        let _, bvs'', res = List.fold_left (fun (_genkind,bvs',acc) (_, w,q) -> (), w::bvs', acc || cfree bvs' q) ((), bvs, false) gs in
+        let bvs'', res = List.fold_left (fun (bvs',acc) (_genkind,w,q) -> w::bvs', acc || cfree bvs' q) (bvs, false) gs in
         res || cfree bvs'' b || List.exists (cfree bvs) os
     | Q.Record fl -> StringMap.exists (fun _ t -> cfree bvs t) fl
     | _ -> false
