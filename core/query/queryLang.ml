@@ -380,8 +380,14 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       end
   | Apply (Primitive "Empty", _) -> Types.bool_type (* HACK *)
   | Apply (Primitive "Sum", _) -> Types.int_type
-  | Apply (Primitive "SumFloat", _) -> Types.float_type
+  | Apply (Primitive "SumF", _) -> Types.float_type
   | Apply (Primitive "Avg", _) -> Types.float_type
+  | Apply (Primitive "AvgF", _) -> Types.float_type
+  | Apply (Primitive "Min", _) -> Types.int_type
+  | Apply (Primitive "MinF", _) -> Types.float_type
+  | Apply (Primitive "Max", _) -> Types.int_type
+  | Apply (Primitive "MaxF", _) -> Types.float_type
+  | Apply (Primitive "length", _) -> Types.int_type
   (* XXX: the following might be completely unnecessary if we call type_of_expression only on normalized query *)
   | Apply (Primitive "Distinct", [q]) -> type_of_expression q
   | Apply (Primitive f, _) -> TypeUtils.return_type (Env.String.find f Lib.type_env)
