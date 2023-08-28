@@ -168,8 +168,8 @@ let sql_of_query = sql_of_query S.All
 
 let compile_mixing : delateralize:QueryPolicy.t -> Value.env -> (int * int) option * Ir.computation -> (Value.database * Sql.query * Types.datatype * (Value.t -> Value.t)) option =
   fun ~delateralize env (range, e) ->
-    Debug.print ("env: "^Value.show_env env);
-    Debug.print ("e: "^Ir.show_computation e);
+    (* Debug.print ("env: "^Value.show_env env);
+    Debug.print ("e: "^Ir.show_computation e); *)
     if range != None then eval_error "Range is not (yet) supported by the new mixing normaliser";
     let evaluator =
         if delateralize = QueryPolicy.Delat
@@ -177,14 +177,16 @@ let compile_mixing : delateralize:QueryPolicy.t -> Value.env -> (int * int) opti
             else MixingQuery.Eval.eval QueryPolicy.Mixing
     in
     let v = evaluator env e in
-      Debug.print ("v: "^ QL.show v);
+      (* Debug.print ("v: "^ QL.show v); *)
       match QL.used_database v with
         | None -> None
         | Some db ->
     let strip_presence = function Types.Present t -> t | _ -> assert false in
     let v_flat = QL.FlattenRecords.flatten_query v in
+    (* 
     Debug.print ("Generated NRC query: " ^ QL.show v);
     Debug.print ("Flattened NRC query: " ^ QL.show v_flat);
+    *)
     let readback = QL.FlattenRecords.unflatten_query (QL.type_of_expression v) in
     (* the calling code expects the item type, not the list type *)
     let t_flat = Types.unwrap_list_type (QL.type_of_expression v_flat) in
