@@ -30,22 +30,22 @@ let test_join_five test_ctx n =
   skip_long_performance test_ctx;
   let module DB = (val TestUtility.Table.create test_ctx) in
   let module L1 =
-  (val DB.drop_create_easy_populate ~table:"t1" ~fd:"a -> b c" ~n
-         [ `Seq; `RandTo (n / 15); `Rand ])
+    (val DB.drop_create_easy_populate ~table:"t1" ~fd:"a -> b c" ~n
+           [ `Seq; `RandTo (n / 15); `Rand ])
   in
   let module L2 =
-  (val DB.drop_create_easy_populate ~table:"t2" ~fd:"b -> d e" ~n:(n / 15)
-         [ `Seq; `RandTo (n / 15 / 15); `Rand ])
+    (val DB.drop_create_easy_populate ~table:"t2" ~fd:"b -> d e" ~n:(n / 15)
+           [ `Seq; `RandTo (n / 15 / 15); `Rand ])
   in
   let module L3 =
-  (val DB.drop_create_easy_populate ~table:"t3" ~fd:"d -> f g"
-         ~n:(n / 15 / 15)
-         [ `Seq; `RandTo (n / 15 / 15 / 15); `Rand ])
+    (val DB.drop_create_easy_populate ~table:"t3" ~fd:"d -> f g"
+           ~n:(n / 15 / 15)
+           [ `Seq; `RandTo (n / 15 / 15 / 15); `Rand ])
   in
   let module L4 =
-  (val DB.drop_create_easy_populate ~table:"t4" ~fd:"f -> h"
-         ~n:(n / 15 / 15 / 15)
-         [ `Seq; `Rand ])
+    (val DB.drop_create_easy_populate ~table:"t4" ~fd:"f -> h"
+           ~n:(n / 15 / 15 / 15)
+           [ `Seq; `Rand ])
   in
   let l1 = L1.lens () in
   let l2 = L2.lens () in
