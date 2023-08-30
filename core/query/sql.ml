@@ -131,7 +131,10 @@ struct
         "ord",      "ord";
         "chr",      "char";
         "random",   "rand";
-        "sum",      "sum"]
+        "sum",      "sum";
+        "avg",      "avg";
+        "min",      "min";
+        "max",      "max"]
 
   let is f = StringMap.mem f funs
   let name f = StringMap.find f funs

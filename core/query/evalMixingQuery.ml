@@ -151,12 +151,12 @@ and base_exp = function
 | QL.Apply (QL.Primitive "length", [v]) -> S.Length (sql_of_query S.All v)
 | QL.Apply (QL.Primitive "Sum", [v]) -> S.Aggr ("sum", sql_of_query S.All v)
 | QL.Apply (QL.Primitive "SumF", [v]) -> S.Aggr ("sum", sql_of_query S.All v)
-| QL.Apply (QL.Primitive "Avg", [v]) -> S.Aggr ("sum", sql_of_query S.All v)
-| QL.Apply (QL.Primitive "AvgF", [v]) -> S.Aggr ("sum", sql_of_query S.All v)
-| QL.Apply (QL.Primitive "Min", [v]) -> S.Aggr ("sum", sql_of_query S.All v)
-| QL.Apply (QL.Primitive "MinF", [v]) -> S.Aggr ("sum", sql_of_query S.All v)
-| QL.Apply (QL.Primitive "Max", [v]) -> S.Aggr ("sum", sql_of_query S.All v)
-| QL.Apply (QL.Primitive "MaxF", [v]) -> S.Aggr ("sum", sql_of_query S.All v)
+| QL.Apply (QL.Primitive "Avg", [v]) -> S.Aggr ("avg", sql_of_query S.All v)
+| QL.Apply (QL.Primitive "AvgF", [v]) -> S.Aggr ("avg", sql_of_query S.All v)
+| QL.Apply (QL.Primitive "Min", [v]) -> S.Aggr ("min", sql_of_query S.All v)
+| QL.Apply (QL.Primitive "MinF", [v]) -> S.Aggr ("min", sql_of_query S.All v)
+| QL.Apply (QL.Primitive "Max", [v]) -> S.Aggr ("max", sql_of_query S.All v)
+| QL.Apply (QL.Primitive "MaxF", [v]) -> S.Aggr ("max", sql_of_query S.All v)
 | QL.Apply (QL.Primitive f, vs) -> S.Apply (f, List.map base_exp vs)
 | QL.Constant c -> S.Constant c
 | e ->
