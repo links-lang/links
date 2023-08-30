@@ -183,7 +183,7 @@ let compile_mixing : delateralize:QueryPolicy.t -> Value.env -> (int * int) opti
         | Some db ->
     let strip_presence = function Types.Present t -> t | _ -> assert false in
     let v_flat = QL.FlattenRecords.flatten_query v in
-    (* 
+    (*
     Debug.print ("Generated NRC query: " ^ QL.show v);
     Debug.print ("Flattened NRC query: " ^ QL.show v_flat);
     *)
