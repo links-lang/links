@@ -45,17 +45,17 @@ fun test() {
   })
 
   # 3.
-#  query mixing {
-#    # var t = for (p <-- products, o <-- orders) where (p.pid == o.pid) [(prod = p, ord = o)];
-#    var t = for (o <-- orders, p <-- products) where (p.pid == o.pid)
-#      [(odates = o.dates, ocid = o.cid, opid = o.pid, oqty = o.qty
-#       , ppid = p.pid, pname = p.name, pcategory = p.category, pprice = p.price)];
-#    var m = groupBy (fun (x) { (pid = x.opid) }, t);
-#    concatMapKey(
-#      fun (k) {
-#        [(pid = k.pid, sales_avg = avg(for (z <- lookupG(k,m)) [ z.pprice * z.oqty ]))]
-#      }, m)
-#  }
+  query mixing {
+    # var t = for (p <-- products, o <-- orders) where (p.pid == o.pid) [(prod = p, ord = o)];
+    var t = for (o <-- orders, p <-- products) where (p.pid == o.pid)
+      [(odates = o.dates, ocid = o.cid, opid = o.pid, oqty = o.qty
+       , ppid = p.pid, pname = p.name, pcategory = p.category, pprice = p.price)];
+    var m = groupBy (fun (x) { (pid = x.opid) }, t);
+    concatMapKey(
+      fun (k) {
+        [(pid = k.pid, sales_avg = avg(for (z <- lookupG(k,m)) [ z.pprice * z.oqty ]))]
+      }, m)
+  }
 
 }
 
