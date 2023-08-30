@@ -448,8 +448,8 @@ fun sumF(ns) {
 
 fun avg(l) {
   switch (l) {
-    case [] -> 0
-    case n::ns -> sum(l) / length(l)
+    case [] -> 0.0
+    case n::ns -> intToFloat(sum(l)) /. intToFloat(length(l))
   }
 }
 
