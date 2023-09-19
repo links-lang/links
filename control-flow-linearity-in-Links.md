@@ -115,8 +115,14 @@ fun : (a::Any) {L:() =@ ()|_::Lin}-> a::Any
 
 ## Compatibility
 
-* Passes all previous tests with the flag disabled.
-* Passes all previous effect handler tests with the flag enabled, including
+* This extension passes all previous tests with the flag disabled.
+* Since this extension more focuses on the compatibility with the
+  effect handler extension of Links, it passes all previous effect
+  handler tests with the flag enabled, including
   * `/tests/handlers_with_cfl_on.tests`, and
   * `/tests/typecheck_examples_with_cfl_on.tests`.
-* Not entirely compatible with FreezeML, SessionFail, etc. (?)
+* For other tests especially those use session types, since this
+  extension changes some parsing/printing behaviours and does not
+  allow linear resources by default, appropriate changes are required
+  to make it pass the tests with the flag enabled, e.g.,
+  `tests/sessions_with_cfl_on.tests`.
