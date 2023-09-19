@@ -686,7 +686,7 @@ class map =
       | Effect r -> let r = o#row r in Effect r
       | Operation (_x, _x_i1, _x_i2) ->
         let _x = o#list (fun o -> o#datatype) _x in
-        let _x_i1 = o#datatype _x_i1 in 
+        let _x_i1 = o#datatype _x_i1 in
         let _x_i2 = o#linearity _x_i2 in Operation (_x, _x_i1, _x_i2)
       | Table (_t, _x, _x_i1, _x_i2) ->
          let _x = o#datatype _x in
@@ -2403,7 +2403,7 @@ class fold_map =
       | Effect r -> let (o, r) = o#row r in (o, Effect r)
       | Operation (_x, _x_i1, _x_i2) ->
         let (o, _x) = o#list (fun o -> o#datatype) _x in
-        let (o, _x_i1) = o#datatype _x_i1 in 
+        let (o, _x_i1) = o#datatype _x_i1 in
         let (o, _x_i2) = o#linearity _x_i2 in
         (o, Operation (_x, _x_i1, _x_i2))
       | Table (_t, _x, _x_i1, _x_i2) ->

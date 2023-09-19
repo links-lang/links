@@ -1330,7 +1330,7 @@ module Untyped = struct
         | (bindings, body) ->
       (match body with
         | None -> ()
-        | Some body -> 
+        | Some body ->
             print_string "---------- BEGIN desugarEffects input -----------\n";
             let () = print_string "bindings:\n" in
             let _  = if (bindings = []) then () else (print_string -<- show_binding) <| List.hd bindings in print_string "\n";
