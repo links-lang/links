@@ -1,5 +1,5 @@
 ---
-config: tests/cfl_examples_default.config
+config: tests/examples_default_with_cfl_on.config
 ---
 
 Typecheck example file examples/handlers/alert.links
