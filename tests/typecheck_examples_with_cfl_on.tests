@@ -2,6 +2,8 @@
 config: tests/examples_default_with_cfl_on.config
 ---
 
+# Only include the files in examples/handlers
+
 Typecheck example file examples/handlers/alert.links
 examples/handlers/alert.links
 filemode : true

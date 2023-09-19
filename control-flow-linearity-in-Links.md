@@ -115,10 +115,8 @@ fun : (a::Any) {L:() =@ ()|_::Lin}-> a::Any
 
 ## Compatibility
 
-* Compatible with all previous handler tests (except part of
-  polymorphic operations and effect sugar).
-* Not entirely compatible with FreezeML, SessionFail, etc.
-* Passes all tests with the flag disabled, except
-  * `!FAILURE: Operation polymorphism (2)`
-  * `!FAILURE: Operation polymorphism (3)`
-  * `!FAILURE: Typecheck example file examples/handlers/monadic_reflection.links`
+* Passes all previous tests with the flag disabled.
+* Passes all previous effect handler tests with the flag enabled, including
+  * `/tests/handlers_with_cfl_on.tests`, and
+  * `/tests/typecheck_examples_with_cfl_on.tests`.
+* Not entirely compatible with FreezeML, SessionFail, etc. (?)
