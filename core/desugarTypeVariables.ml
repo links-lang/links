@@ -642,20 +642,6 @@ module Untyped = struct
   let name = "type_variables"
 
   let program state program' =
-    (* (
-      match program' with
-        | (bindings, body) ->
-      (match body with
-        | None -> ()
-        | Some body ->
-            print_string "---------- BEGIN desugarTyVar input -----------\n";
-            let () = print_string "bindings:\n" in
-            let _  = if (bindings = []) then () else (print_string -<- show_binding) <| List.hd bindings in print_string "\n";
-            print_string "body:\n";
-            (print_string -<- show_phrase) body;
-            print_string "\n";
-            print_string "---------- END desugarTyVar input -----------\n";)
-    ); *)
     let _tyenv = Context.typing_environment (context state) in
     let program' = program program' in
     return state program'

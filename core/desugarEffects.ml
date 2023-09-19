@@ -1325,20 +1325,6 @@ module Untyped = struct
   let name = "effects"
 
   let program state program' =
-    (* (
-      match program' with
-        | (bindings, body) ->
-      (match body with
-        | None -> ()
-        | Some body ->
-            print_string "---------- BEGIN desugarEffects input -----------\n";
-            let () = print_string "bindings:\n" in
-            let _  = if (bindings = []) then () else (print_string -<- show_binding) <| List.hd bindings in print_string "\n";
-            print_string "body:\n";
-            (print_string -<- show_phrase) body;
-            print_string "\n";
-            print_string "---------- END desugarEffects input -----------\n";)
-    ); *)
     let open Types in
     let tyenv = Context.typing_environment (context state) in
     let program' = program tyenv.tycon_env program' in

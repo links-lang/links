@@ -2745,8 +2745,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
     (** make an effect row type linear *)
     let makelin_effrow = fun row ->
       (* trick: for effect row types, Unl means Lin, Any means Any *)
-      (* Test.print_type row "effect_row"; *)
-      (* print_string <| "can_be_Unl: " ^ string_of_bool (Types.Unl.can_type_be row) ^ "\n"; *)
       if Types.Unl.can_type_be row then
         Types.Unl.make_type row
       else
@@ -5402,18 +5400,6 @@ module Check =
 struct
   let program tyenv (bindings, body) =
     try
-      (* (
-      match body with
-        | None -> ()
-        | Some body ->
-            print_string "---------- BEGIN typeSugar input -----------\n";
-            let () = print_string "bindings:\n" in
-            let _  = if (bindings = []) then () else (print_string -<- show_binding) <| List.hd bindings in print_string "\n";
-            print_string "body:\n";
-            (print_string -<- show_phrase) body;
-            print_string "\n";
-            print_string "---------- END typeSugar input -----------\n";
-      ); *)
       Debug.if_set Basicsettings.show_stages (fun () -> "Type checking...");
       Debug.if_set show_pre_sugar_typing
         (fun () ->
