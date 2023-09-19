@@ -1688,7 +1688,8 @@ let bind_effects     context r      = {context with effect_row = Types.flatten_r
 
 let lookup_effect    context name   =
   match context.effect_row with
-  | Types.Row (fields, _, _) -> begin match Utility.StringMap.find_opt name fields with
+  | Types.Row (fields, _, _) ->
+    begin match Utility.StringMap.find_opt name fields with
       | Some (Types.Present t) -> Some t
       | _ -> None
     end
@@ -4779,7 +4780,6 @@ and type_binding : context -> binding -> binding * context * Usage.t =
               | None ->
                   context, make_ft lin pats effects return_type, []
               | Some ft ->
-                  (* Debug.print ("t: " ^ Types.string_of_datatype ft); *)
                   (* make sure the annotation has the right shape *)
                   let shape = make_ft lin pats effects return_type in
                   let quantifiers, ft_mono = TypeUtils.split_quantified_type ft in
@@ -4802,7 +4802,8 @@ and type_binding : context -> binding -> binding * context * Usage.t =
           let fold_in_envs = List.fold_left (fun env pat' -> env ++ (pattern_env pat')) in
           let context_body = List.fold_left fold_in_envs context_body pats in
 
-          let new_body_context = {context_body with effect_row = effects;
+          (* the effects are flattened and a new cont_lin is generated before type checking the body *)
+          let new_body_context = {context_body with effect_row = Types.flatten_row effects;
                                                cont_lin = LinCont.getnew () } in
           let body = type_check new_body_context body in
 
