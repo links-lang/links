@@ -116,10 +116,12 @@ let full_kind_of pos prim lin rest =
   let r = restriction_of_string  pos rest in
   (Some p, Some (l, r))
 
-(* the Row(Lin) and Row(Any) syntactic sugars for linear effect vars *)
+(* The Row(Lin) and Row(Any) syntactic sugars for linear effect vars.
+   Note that these two syntactic sugars should only be used for effect
+   row variables, not for value row variables.  *)
 let linrow_kind_of pos prim lin =
   let p = primary_kind_of_string pos prim in
-  let l = linearity_of_string    pos lin  in
+  let l = if lincont_enabled then linearity_of_string pos lin else lin_unl in
   let r = res_any in
   (Some p, Some (l, r))
 

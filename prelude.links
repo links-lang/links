@@ -1228,10 +1228,11 @@ fun sendSuspend(pagef) {
 typename Pid(a::Type) = Process({hear: a});
 
 #### SESSION TYPING STUFF ####
-# WT: The signature of SessionFail is changed to be linear
-# to make these functions well-typed.
+# The SessionFail is defined to be a control-flow-linear operation.
+# The effect row variable `e` can have kind `Row(Any)` because no linear
+# resources is used in this function.
 #sig fork : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
-sig fork : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~> ()) ~e~> ~s
+sig fork : forall s::Session,e::Row(Any).((s) {SessionFail:() =@ [||]}~> ()) ~e~> ~s
 fun fork(f) {
   var ap = new ();
   var _ = spawnAngel {
