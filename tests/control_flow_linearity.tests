@@ -66,8 +66,7 @@ stdout : 42 : Int
 Use linear variable in non-linear continuation
 {linfun f(x) {x} handle ({do Foo; f(42)}) {case <Foo => k> -> k(1)}}
 exit : 1
-# stderr : @.*Type error: Variable .* of linear type .* is used in a non-linear continuation.*
-stderr : @.*Type error: Effect row type .* can not be made linear .*
+stderr : @.*Type error: Variable .* of linear type .* is used in a non-linear continuation.*
 
 
 Operation annotation
