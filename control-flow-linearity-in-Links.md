@@ -59,10 +59,12 @@ unlimited.
     ```
 
 2. We can only invoke control-flow-linear operations in a
-   control-flow-linear effect scope. The linear control flow enables
-   the usage of the linear channel `ch`. Now the effect variable `_`
-   has kind `Lin` explicitly, which can only be unified with linear
-   operations with signatures `=@`.
+   control-flow-linear effect scope (in other words, we cannot invoke
+   control-flow-unlimited operations in a control-flow-linear effect
+   scope). The linear control flow enables the usage of the linear
+   channel `ch`. Now the effect variable `_` has kind `Lin`
+   explicitly, which can only be unified with linear operations with
+   signatures `=@`.
 
     ```
     links> fun(ch:End) {xlin; lindo L; close(ch)};

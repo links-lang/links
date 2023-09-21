@@ -2,33 +2,51 @@
 config: tests/control_flow_linearity.config
 ---
 
+# Checking the usage of linear resources in handlers
+
 Use linear variables in deep handlers (1)
-tests/handlers/lin_deep1.links
+tests/control_flow_linearity/lin_deep1.links
 filemode : true
 exit : 1
-stderr : @.*Type error: Variable .* of linear type .* is used in a deep handler.* 
-
+stderr : @.*Type error: Variable .* of linear type .* is used in a deep handler.*
 
 Use linear variables in deep handlers (2)
-tests/handlers/lin_deep2.links
+tests/control_flow_linearity/lin_deep2.links
 filemode : true
 exit : 1
-stderr : @.*Type error: Variable .* of linear type .* is used in a deep handler.* 
-
+stderr : @.*Type error: Variable .* of linear type .* is used in a deep handler.*
 
 Use linear variables in deep handlers (3)
-tests/handlers/lin_deep3.links
+tests/control_flow_linearity/lin_deep3.links
+filemode : true
+stdout : 84 : Int
+
+Use linear variables in shallow handlers (1)
+tests/control_flow_linearity/lin_shallow1.links
+filemode : true
+stdout : fun : () {Foo:() =@ Int|_::Lin}~> Int
+
+Use linear variables in shallow handlers (2)
+tests/control_flow_linearity/lin_shallow2.links
 filemode : true
 exit : 1
-stderr : @.*Type error: Variable .* has linear type .* is used .* times.* 
+stderr : @.*Type error: Variable .* has linear type .* is used 2 times.*
 
-
-Use linear variables in deep handlers (4)
-tests/handlers/lin_deep4.links
+Use linear variables in shallow handlers (3)
+tests/control_flow_linearity/lin_shallow3.links
 filemode : true
 exit : 1
-stderr : @.*Type error: Variable .* of linear type .* is used in a deep handler.* 
+stderr : @.*Type error: Use of variable .* of linear type .* in unlimited function binding.*
 
+Use linear variables in shallow handlers (4)
+tests/control_flow_linearity/lin_shallow4.links
+filemode : true
+stdout : 84 : Int
+
+Use linear variables in shallow handlers (5)
+tests/control_flow_linearity/lin_shallow5.links
+filemode : true
+stdout : 84 : Int
 
 Linear operation and continuation
 handle (lindo Foo(20) + 1) {case <Foo(i) =@ k> -> xlin; k(i)}
@@ -48,7 +66,7 @@ stdout : 42 : Int
 Use linear variable in non-linear continuation
 {linfun f(x) {x} handle (f(do Foo)) {case <Foo => k> -> k(1)}}
 exit : 1
-stderr : @.*Type error: Variable .* of linear type .* is used in a non-linear continuation.* 
+stderr : @.*Type error: Variable .* of linear type .* is used in a non-linear continuation.*
 
 
 Operation annotation
@@ -57,32 +75,32 @@ stdout : fun : (() {Foo:(Int) =@ Int|a::Lin}~> b::Any) {Foo{_::Lin}|a::Lin}~> b:
 
 
 New implementation of examples/handlers/choose.links
-tests/handlers/new_choose.links
+tests/control_flow_linearity/new_choose.links
 filemode : true
 stdout : [10, 10, 18, 12, 20] : [Int]
 
 
 Combine unlimited choice and state
-tests/handlers/choose_and_state.links
+tests/control_flow_linearity/choose_and_state.links
 filemode : true
 stdout : [3, 4, 9, 10, 3, 3, 3, 3] : [Int]
 
 
 Combine linear choice and unlimited state
-tests/handlers/choose_and_state2.links
+tests/control_flow_linearity/choose_and_state2.links
 filemode : true
 stdout : 3 : Int
 
 
 Check the first part of Issue 544
-tests/handlers/issue544a.links
+tests/control_flow_linearity/issue544a.links
 filemode : true
 exit : 1
 stderr : @.*Type error: Effect row type .* can not be made linear .*
 
 
 Check the second part of Issue 544
-tests/handlers/issue544b.links
+tests/control_flow_linearity/issue544b.links
 filemode : true
 exit : 1
 stderr : @.*Type error: Effect row type .* can not be made linear .*
