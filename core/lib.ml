@@ -494,37 +494,37 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (* access points *)
   "new",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session), e::Row.() ~e~> AP(s)",
+   datatype "forall s::Type(Any, Session), e::Row(Any, Any).() ~e~> AP(s)",
    IMPURE);
 
   "newAP",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session), e::Row. (Location) ~e~> AP(s)",
+   datatype "forall s::Type(Any, Session), e::Row(Any, Any). (Location) ~e~> AP(s)",
    IMPURE);
 
   "newClientAP",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session), e::Row.() ~e~> AP(s)",
+   datatype "forall s::Type(Any, Session), e::Row(Any, Any).() ~e~> AP(s)",
    IMPURE);
 
   "newServerAP",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session), e::Row.() ~e~> AP(s)",
+   datatype "forall s::Type(Any, Session), e::Row(Any, Any).() ~e~> AP(s)",
    IMPURE);
 
   "accept",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session), e::Row.(AP(s)) ~e~> s",
+   datatype "forall s::Type(Any, Session), e::Row(Any, Any).(AP(s)) ~e~> s",
    IMPURE);
 
   "request",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session), e::Row.(AP(s)) ~e~> ~s",
+   datatype "forall s::Type(Any, Session), e::Row(Any, Any).(AP(s)) ~e~> ~s",
    IMPURE);
 
   "cancel",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session), e::Row.(s) ~e~> ()",
+   datatype "forall s::Type(Any, Session), e::Row(Any, Any).(s) ~e~> ()",
    IMPURE);
 
   "close",

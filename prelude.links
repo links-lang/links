@@ -1230,9 +1230,8 @@ typename Pid(a::Type) = Process({hear: a});
 #### SESSION TYPING STUFF ####
 # WT: The signature of SessionFail is changed to be linear
 # to make these functions well-typed.
-# e::Row(Lin) is also changed to be linear.
 #sig fork : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
-sig fork : forall s::Session,e::Row(Lin).((s) {SessionFail:() =@ [||]}~> ()) ~e~> ~s
+sig fork : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~> ()) ~e~> ~s
 fun fork(f) {
   var ap = new ();
   var _ = spawnAngel {
@@ -1242,7 +1241,7 @@ fun fork(f) {
 }
 
 #sig linFork : forall s::Session,e::Row.((s) ~e~@ ()) ~e~> ~s
-sig linFork : forall s::Session,e::Row(Lin).((s) {SessionFail:() =@ [||]}~@ ()) ~e~> ~s
+sig linFork : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~@ ()) ~e~> ~s
 fun linFork(f) {
   xlin;
   var ap = new();
@@ -1290,20 +1289,20 @@ fun connect(f, g) {
 typename EndBang = !().End;
 typename EndQuery = ?().End;
 
-sig wait : (EndQuery) { |_::Lin}~> ()
+sig wait : forall e::Row . (EndQuery) { |e}~> ()
 fun wait(s) {
   xlin;
   var (_, s) = receive(s);
   close(s)
 }
 
-sig closeBang : (EndBang) { |_::Lin}~> ()
+sig closeBang : forall e::Row . (EndBang) { |e}~> ()
 fun closeBang(s) {
   xlin;
   close(send((), s))
 }
 
-sig makeEndBang : () { |_::Lin}~> EndBang
+sig makeEndBang : forall e::Row . () { |e}~> EndBang
 fun makeEndBang() {
   xlin;
   var ap = new();
@@ -1351,7 +1350,7 @@ fun linkSync(s, c) {
 }
 
 #sig runSync : ((!a.EndBang) ~e~> EndBang) ~e~> a
-sig runSync : ((!a.EndBang) {SessionFail:() =@ [||]}~> EndBang) { |_::Lin}~> a
+sig runSync : forall a, e::Row . ((!a.EndBang) {SessionFail:() =@ [||]}~> EndBang) { |e}~> a
 fun runSync(f) {
   xlin;
   var c = forkSync(f);
