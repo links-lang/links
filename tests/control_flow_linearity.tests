@@ -2,7 +2,94 @@
 config: tests/control_flow_linearity.config
 ---
 
-# Checking the usage of linear resources in handlers
+Use linear variables in linear continuations (1)
+fun(){xlin; var lf = linfun(x) {x}; lf(42)}
+stdout : fun : () { |_::Lin}-> Int
+
+Use linear variables in linear continuations (2)
+{ xlin; var lf = linfun(x) {x}; linfun(){xlin; lf(1)} }
+stdout : fun : () { |_::Lin}-@ Int
+
+Use linear variables in unlimited continuations (1)
+fun() {var lf = linfun(x) {x}; lf(1)}
+exit : 1
+stderr : @.*Type error: Variable .* of linear type .* is used in a non-linear continuation.*
+
+Use linear variables in unlimited continuations (2)
+{ xlin; var lf = linfun(x) {x}; linfun(){lf(1)} }
+exit : 1
+stderr : @.*Type error: Variable .* of linear type .* is used in a non-linear continuation.*
+
+Use control-flow-linear operations in unlimited continuations
+fun() {lindo Foo}
+stdout : fun : () {Foo:() =@ a|_}-> a
+
+Use control-flow-linear operations in linear continuations
+fun() {xlin; lindo Foo}
+stdout : fun : () {Foo:() =@ a|_::Lin}-> a
+
+Use control-flow-linear operations and linear variables in linear continuations
+fun(ch:End) {xlin; lindo L; close(ch)}
+stdout : fun : (End) {L:() =@ ()|_::Lin}~> ()
+
+Use control-flow-unlimited operations in unlimited continuations
+fun() {do Foo}
+stdout : fun : () {Foo:() => a|_}-> a
+
+Use control-flow-unlimited operations in linear continuations
+fun() {xlin; do Foo}
+exit : 1
+stderr : @.*Type error.*
+
+Mix control-flow-linear and -unlimited operations in unlimited continuations
+fun() {do U; lindo L}
+stdout : fun : () {L:() =@ a,U:() => ()|_}-> a
+
+
+Handle control-flow-linear operations (1)
+handle (lindo Foo(20) + 1) {case <Foo(i) =@ k> -> xlin; k(i)}
+stdout : 21 : Int
+
+Handle control-flow-linear operations (2)
+{linfun f(x) {40+x} handle ({xlin; f(lindo Foo)}) {case <Foo =@ k> -> xlin; k(2)}}
+stdout : 42 : Int
+
+Handle control-flow-linear operations (3)
+handle (lindo Foo(20) + 1) {case <Foo(i) => k> -> xlin; k(i)}
+exit : 1
+stderr : @.*Type error.*
+
+Handle control-flow-unlimited operations (1)
+handle (do Foo(20) + 1) {case <Foo(i) => k> -> k(i) + k(i)}
+stdout : 42 : Int
+
+Handle control-flow-unlimited operations (2)
+{linfun f(x) {x} handle (f(do Foo)) {case <Foo => k> -> k(1)}}
+exit : 1
+stderr : @.*Type error: Variable .* of linear type .* is used in a non-linear continuation.*
+
+Handle control-flow-unlimited operations (3)
+handle (do Foo(20) + 1) {case <Foo(i) =@ k> -> k(i) + k(i)}
+exit : 1
+stderr : @.*Type error.*
+
+Handle control-flow-unlimited operations (4)
+fun(ch:End) { xlin; close(ch); handle ({if (do Choose) 40 else 2}) {case <Choose => r> -> r(true) + r(false)} }
+stdout : fun : (End) {Choose{_::Lin}|_::Lin}~> Int
+
+
+CFL kinds of explicit quantifiers in type signatures (1)
+sig f:forall e::Row(Any). () {Foo:() => Int|e}-> Int fun f() {do Foo} f
+stdout : fun : () {Foo:() => Int|_}-> Int
+
+CFL kinds of explicit quantifiers in type signatures (2)
+sig f:forall e::Row. () {Foo:() => Int|e}-> Int fun f() {do Foo} f
+stdout : fun : () {Foo:() => Int|_::Lin}-> Int
+
+Operation annotation
+fun(m) { xlin; handle(m()) { case <Foo(x) =@ k> : ((Int) =@ Int) -> xlin; k (x) } }
+stdout : fun : (() {Foo:(Int) =@ Int|a::Lin}~> b::Any) {Foo{_::Lin}|a::Lin}~> b::Any
+
 
 Use linear variables in deep handlers (1)
 tests/control_flow_linearity/lin_deep1.links
@@ -48,56 +135,27 @@ tests/control_flow_linearity/lin_shallow5.links
 filemode : true
 stdout : 84 : Int
 
-Linear operation and continuation
-handle (lindo Foo(20) + 1) {case <Foo(i) =@ k> -> xlin; k(i)}
-stdout : 21 : Int
 
-
-Non-linear operation and continuation
-handle (do Foo(20) + 1) {case <Foo(i) => k> -> k(i) + k(i)}
-stdout : 42 : Int
-
-
-Use linear variable in linear continuation
-{linfun f(x) {40+x} handle ({xlin; f(lindo Foo)}) {case <Foo =@ k> -> xlin; k(2)}}
-stdout : 42 : Int
-
-
-Use linear variable in non-linear continuation
-{linfun f(x) {x} handle ({do Foo; f(42)}) {case <Foo => k> -> k(1)}}
-exit : 1
-stderr : @.*Type error: Variable .* of linear type .* is used in a non-linear continuation.*
-
-
-Operation annotation
-fun(m) { xlin; handle(m()) { case <Foo(x) =@ k> : ((Int) =@ Int) -> xlin; k (x) } }
-stdout : fun : (() {Foo:(Int) =@ Int|a::Lin}~> b::Any) {Foo{_::Lin}|a::Lin}~> b::Any
-
-
-New implementation of examples/handlers/choose.links
-tests/control_flow_linearity/new_choose.links
+Linear choice and unlimited choice
+tests/control_flow_linearity/choose.links
 filemode : true
 stdout : [10, 10, 18, 12, 20] : [Int]
 
-
-Combine unlimited choice and state
+Combine unlimited choice and unlimited state
 tests/control_flow_linearity/choose_and_state.links
 filemode : true
 stdout : [3, 4, 9, 10, 3, 3, 3, 3] : [Int]
-
 
 Combine linear choice and unlimited state
 tests/control_flow_linearity/choose_and_state2.links
 filemode : true
 stdout : 3 : Int
 
-
 Check the first part of Issue 544
 tests/control_flow_linearity/issue544a.links
 filemode : true
 exit : 1
 stderr : @.*Type error: Effect row type .* can not be made linear .*
-
 
 Check the second part of Issue 544
 tests/control_flow_linearity/issue544b.links

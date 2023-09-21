@@ -98,7 +98,7 @@ unlimited.
    value row variables and effect row variables in Links.
 
     ```
-    links> sig f:forall e::Row(Any). () {Get:() => Int|e}-> Int fun f() {do Get}; f();
+    links> sig f:forall e::Row(Any). () {Get:() => Int|e}-> Int fun f() {do Get}
     f = fun : () {Get:() => Int|_}-> Int
     ```
 

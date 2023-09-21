@@ -1,4 +1,4 @@
-# issue 544
+# issue 544b
 # https://github.com/links-lang/links/issues/544
 
 
@@ -6,7 +6,7 @@
 # Inadvertently send two integers over a session-typed channel
 # !Int.!String.end by using multi-shot continuations and exceptions.
 
-# A correct linear version
+# A fixed version
 fun unsound_correct() {
   var ch = fork(fun(ch) {
     xlin;
@@ -33,6 +33,7 @@ fun unsound_correct() {
   }
 }
 
+# The original incorrect version
 fun unsound() {
   var ch = fork(fun(ch) {
     xlin;
