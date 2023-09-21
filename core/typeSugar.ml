@@ -1834,6 +1834,8 @@ module Usage: sig
   val filter : (Ident.t -> int -> bool) -> t -> t
   (* Iterates over entries in a given container. *)
   val iter : (Ident.t -> int -> unit) -> t -> unit
+  (* Folds over entries in a given container. *)
+  val fold : (Ident.t -> int -> 'b -> 'b) -> t -> 'b -> 'b
   (* Returns a usage container that does not contain any of the names
      in the given set. *)
   val restrict : t -> Ident.Set.t -> t
@@ -1892,6 +1894,9 @@ end = struct
 
   let iter f usages =
     Ident.Map.iter f usages
+
+  let fold f usages =
+    Ident.Map.fold f usages
 
   let restrict usages idents =
     filter (fun v _ -> not (Ident.Set.mem v idents)) usages
@@ -2741,8 +2746,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
         end;
     in
 
-    (* control-flow linearity relevant definitions *)
-    (** make an effect row type linear *)
+    (* Auxiliarty functions for control-flow linearity *)
+    (* check if an effect row type can be made linear *)
+    let _canlin_effrow = fun row ->
+      (* trick: for effect row types, Unl means Lin, Any means Any *)
+      Types.Unl.can_type_be row
+    in
     let makelin_effrow = fun row ->
       (* trick: for effect row types, Unl means Lin, Any means Any *)
       if Types.Unl.can_type_be row then
@@ -2751,7 +2760,17 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
         Gripers.die pos ("Effect row type " ^ Types.string_of_datatype row
           ^ " can not be made linear (represented by Unl).")
     in
-    (** make all variables in a term unlimited  *)
+    (* check if a term uses any linear variable *)
+    let _haslin_term = fun usages ->
+      (* trick: for effect row types, Unl means Lin, Any means Any *)
+      let env = context.var_env in
+      Usage.fold
+        (fun v _ b ->
+            let t = Env.find v env in
+            b || not (Types.Unl.can_type_be t))
+        usages false
+    in
+    (* make all variables in a term unlimited  *)
     let makeunl_term = fun usages ->
       let env = context.var_env in
       Usage.iter
@@ -2764,13 +2783,12 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                 ^ " is used in a non-linear continuation."))
         usages
     in
-    (** update control-flow linearity *)
-    let update_linearity p usages =
+    (* update control-flow linearity without automatically inserting xlin *)
+    let update_cflinearity p usages =
       (LinCont.enabled (fun () ->
         if (LinCont.is_bound_by_linlet context)
           (* make `context.effect_row` linear if the current term is bound by a linlet *)
-          then
-            makelin_effrow (context.effect_row)
+          then makelin_effrow (context.effect_row)
           else ();
         if (not (LinCont.is_in_linlet context))
           (* make all vars in `p` unlimited if the current term is in the body of an unlet *)
@@ -2784,6 +2802,34 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
           | _ -> ())
       ))
     in
+    (* update control-flow linearity with automatically inserting xlin
+       This function isn't very useful as usually we don't know the
+       linearity of vars at the beginning until they are unified
+       (e.g., applied to functions). *)
+    (* let update_cflinearity_auto_xlin p usages =
+      (LinCont.enabled (fun () ->
+        if (LinCont.is_bound_by_linlet context)
+          (* make `context.effect_row` linear if the current term is bound by a linlet *)
+          then makelin_effrow (context.effect_row)
+          else ();
+        if (not (LinCont.is_in_linlet context))
+          then
+            if haslin_term usages then (
+              (* automatically insert a xlin if the term uses linear variables *)
+              LinCont.update_in_linlet context true;
+              makelin_effrow (context.effect_row)
+            )
+            (* make all vars in `p` unlimited if the current term is in the body of an unlet *)
+            else makeunl_term usages
+          else ();
+        (match p with
+          | Linlet _ -> LinCont.update_in_linlet context true
+          | Unlet _ -> LinCont.update_in_linlet context false
+          | DoOperation (_,_,_,lin) ->
+              if lin = DeclaredLinearity.Unl then LinCont.update_in_linlet context false
+          | _ -> ())
+      ))
+    in *)
     let find_opname phrase =
       let o = object (o)
         inherit SugarTraversals.fold as super
@@ -4680,7 +4726,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             (Raise, Types.fresh_type_variable (lin_any, res_any), Usage.empty)
     in
     let p = with_pos pos e in
-    let () = update_linearity expr usages in
+    let () = update_cflinearity expr usages in
     p, t, usages
 
 (* [type_binding] takes XXX YYY (FIXME)

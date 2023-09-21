@@ -16,7 +16,6 @@ fun h(m) {
         var (i, ch) = receive(ch);
         close(ch);
         h(linfun(){xlin; k(i)})()
-        #h(linfun(){xlin; k(1)})()
       }
     }
   }

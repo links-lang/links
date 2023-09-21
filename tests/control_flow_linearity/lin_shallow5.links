@@ -8,7 +8,6 @@ var ch = fork(fun(ch) {
 });
 
 shallowhandle({
-  xlin;
   lindo Foo() + 42
 }) {
   case <Foo =@ k> -> {

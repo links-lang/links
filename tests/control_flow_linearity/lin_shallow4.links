@@ -21,7 +21,6 @@ fun h(m) {
 }
 
 shallowhandle({
-  xlin;
   lindo Foo() + 42
 }) {
   case <Foo =@ k> -> {

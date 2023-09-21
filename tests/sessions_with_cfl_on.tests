@@ -10,12 +10,12 @@ fun f(ap) {send(42, request(ap))} f
 stdout : fun : (AP (?(Int).~a::Session)) { |_::Lin}~> a::Session
 
 Linear function annotation
-sig h : ((a::Any) -e-@ a::Any, a::Any) { | e::Lin}-> a::Any fun h(f, x) {xlin; f(x)}
+sig h : ((a::Any) -e-@ a::Any, a::Any) { |e::Lin}-> a::Any fun h(f, x) {xlin; f(x)}
 stdout : () : ()
 exit : 0
 
 Non-linear use of linear function
-sig h : ((a::Any) -e-@ a::Any, a::Any) -e-> a::Any fun h(f, x) {f(f(x))}
+sig h : ((a::Any) -e-@ a::Any, a::Any) { |e::Lin}-> a::Any fun h(f, x) {xlin; f(f(x))}
 stderr : @..*
 exit : 1
 
