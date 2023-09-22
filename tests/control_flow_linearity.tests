@@ -187,7 +187,6 @@ tests/control_flow_linearity/popl24/intro_fixed.links
 filemode : true
 stdout : 42well-typed() : ()
 
-## Examples in Section 4
 
 ## Examples in Section 4
 
