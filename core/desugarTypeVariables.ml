@@ -84,10 +84,10 @@ let free_type_variable ?var pos =
         "Unbound " ^ desc ^ " in position where
         no free type variables are allowed")
 
-let concrete_subkind =
+let concrete_subkind ?(is_effect=false) =
   function
   | Some subkind -> subkind
-  | None         -> default_subkind
+  | None         -> if is_effect then default_effect_subkind else default_subkind
 
 
 let default_kind : PrimaryKind.t = PrimaryKind.Type
@@ -169,9 +169,9 @@ However, this is not the same as setting defaults. Instead,
 the info in the map takes precedence.
 
 *)
-let make_opt_kinded_var k sk_opt freedom : Types.t =
+let make_opt_kinded_var k ?(is_eff=false) sk_opt freedom : Types.t =
   let var = Types.fresh_raw_variable () in
-  let sk = concrete_subkind sk_opt in
+  let sk = concrete_subkind ~is_effect:is_eff sk_opt in
   Types.Var (var, (k, sk), freedom)
 
 let get_var_info (info : Types.t) =
@@ -179,26 +179,26 @@ let get_var_info (info : Types.t) =
   | Types.Var (var, k, fd) -> (var, k, fd)
   | _ -> raise found_non_var_meta_var
 
-let make_fresh_entry pk_opt sk_opt freedom : tyvar_map_entry =
+let make_fresh_entry pk_opt ?(is_eff=false) sk_opt freedom : tyvar_map_entry =
   let open PrimaryKind in
   match pk_opt with
     | None -> TVUnkinded (sk_opt, freedom)
     | Some Type ->
-       let point = Unionfind.fresh (make_opt_kinded_var Type sk_opt freedom) in
+       let point = Unionfind.fresh (make_opt_kinded_var ~is_eff:is_eff Type sk_opt freedom) in
        TVType (sk_opt, point)
     | Some Row ->
-       let point = Unionfind.fresh (make_opt_kinded_var Row sk_opt freedom) in
+       let point = Unionfind.fresh (make_opt_kinded_var ~is_eff:is_eff Row sk_opt freedom) in
        TVRow (sk_opt, point)
     | Some Presence ->
-       let point = Unionfind.fresh (make_opt_kinded_var Presence sk_opt freedom) in
+       let point = Unionfind.fresh (make_opt_kinded_var ~is_eff:is_eff Presence sk_opt freedom) in
        TVPresence (sk_opt, point)
 
 
 
 (* does not do all sanity checks *)
 (* Note that this always reuses existing points! *)
-let update_entry pk sk_opt freedom existing_entry : tyvar_map_entry =
-  let con_sk = concrete_subkind sk_opt in
+let update_entry pk ?(is_eff=false) sk_opt freedom existing_entry : tyvar_map_entry =
+  let con_sk = concrete_subkind ~is_effect:is_eff sk_opt in
   let open PrimaryKind in
   match pk, existing_entry with
     | _, TVUnkinded _ ->
@@ -290,7 +290,7 @@ object (o : 'self)
 
 
   (** Used for type/row/presence variables found along the way, including anonymous ones *)
-  method add ?pos name (pk : PrimaryKind.t) (sk : Subkind.t option) freedom : 'self * SugarTypeVar.t =
+  method add ?pos name (pk : PrimaryKind.t) ?(is_eff=false) (sk : Subkind.t option) freedom : 'self * SugarTypeVar.t =
     let anon = is_anonymous_name name in
     let pos = OptionUtils.from_option SourceCode.Position.dummy pos in
     if not anon && StringMap.mem name tyvar_map then
@@ -314,7 +314,7 @@ object (o : 'self)
            the *existing* unionfind point carried inside the entry *)
         let entry =
           if pk' <> pk_union' || sk' <> sk_union' then
-            update_entry pk sk freedom existing_entry
+            update_entry pk ~is_eff:is_eff sk freedom existing_entry
           else
             existing_entry
         in
@@ -332,7 +332,7 @@ object (o : 'self)
            Since at this point we know the primary kind,
            this will always result in the creation of a unionfind point.
          *)
-        let entry = make_fresh_entry (Some pk) sk freedom in
+        let entry = make_fresh_entry (Some pk) ~is_eff:is_eff sk freedom in
         let o =
           if anon then o else o#bind name entry in
         let resolved_var = resolved_var_of_entry entry in
@@ -390,8 +390,8 @@ object (o : 'self)
     let open Datatype in
     function
     | TypeVar stv ->
-       let (name, sk, freedom) = SugarTypeVar.get_unresolved_exn stv in
-       let o, resolved_tv = o#add name pk_type sk freedom in
+       let (name, (is_eff, sk), freedom) = SugarTypeVar.get_unresolved_exn stv in
+       let o, resolved_tv = o#add name pk_type ~is_eff:is_eff sk freedom in
        (* let resolved_tv = resolved_var_of_entry entry in *)
        o, TypeVar resolved_tv
     | Forall (unresolved_qs, body) ->
@@ -423,8 +423,8 @@ object (o : 'self)
           appear in contexts where implictly scoped variables are allowed.  *)
        o, orig
     | Open srv ->
-       let (name, sk, freedom) = SugarTypeVar.get_unresolved_exn srv in
-       let o, resolved_rv = o#add name pk_row sk freedom in
+       let (name, (is_eff, sk), freedom) = SugarTypeVar.get_unresolved_exn srv in
+       let o, resolved_rv = o#add name pk_row ~is_eff:is_eff sk freedom in
        o, Datatype.Open resolved_rv
     | Recursive (stv, r) ->
        let original_o = o in
@@ -446,8 +446,8 @@ object (o : 'self)
        let o, t = o#datatype t in
        o, Present t
     | Var utv ->
-       let (name, sk, freedom) = SugarTypeVar.get_unresolved_exn utv in
-       let o, resolved_pv = o#add name pk_presence sk freedom in
+       let (name, (is_eff, sk), freedom) = SugarTypeVar.get_unresolved_exn utv in
+       let o, resolved_pv = o#add name pk_presence ~is_eff:is_eff sk freedom in
        o, Var resolved_pv
 
   method! phrase p =

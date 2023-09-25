@@ -1,0 +1,155 @@
+---
+config: tests/examples_default_with_cfl_on.config
+---
+
+# Only include the files in examples/handlers
+
+Typecheck example file examples/handlers/alert.links
+examples/handlers/alert.links
+filemode : true
+
+Typecheck example file examples/handlers/aop.links
+examples/handlers/aop.links
+filemode : true
+
+Typecheck example file examples/handlers/aop2.links
+examples/handlers/aop2.links
+filemode : true
+
+Typecheck example file examples/handlers/coins_web.links
+examples/handlers/coins_web.links
+filemode : true
+
+Typecheck example file examples/handlers/choose.links
+examples/handlers/choose.links
+filemode : true
+args : --set=enable_handlers=true
+
+Typecheck example file examples/handlers/coins.links
+examples/handlers/coins.links
+filemode : true
+args : --set=effect_sugar=true
+
+Typecheck example file examples/handlers/concurrency.links
+examples/handlers/concurrency.links
+filemode : true
+args : --set=enable_handlers=true
+
+Typecheck example file examples/handlers/coop.links
+examples/handlers/coop.links
+filemode : true
+args : --set=enable_handlers=true
+
+Typecheck example file examples/handlers/count_web.links
+examples/handlers/count_web.links
+filemode : true
+ignore : broken example
+
+Typecheck example file examples/handlers/deep_state.links
+examples/handlers/deep_state.links
+filemode : true
+
+Typecheck example file examples/handlers/exceptions.links
+examples/handlers/exceptions.links
+filemode : true
+args : --set=effect_sugar=true
+
+Typecheck example file examples/handlers/fringe.links
+examples/handlers/fringe.links
+filemode : true
+args : --set=effect_sugar=true --set=effect_sugar_policy=final_arrow
+
+Typecheck example file examples/handlers/identity.links
+examples/handlers/identity.links
+filemode : true
+
+Typecheck example file examples/handlers/lambda.links
+examples/handlers/lambda.links
+filemode : true
+args : --set=effect_sugar=true
+
+Typecheck example file examples/handlers/light_switch.links
+examples/handlers/light_switch.links
+filemode : true
+
+Typecheck example file examples/handlers/monadic_reflection.links
+examples/handlers/monadic_reflection.links
+filemode : true
+args : --set=effect_sugar=true --set=effect_sugar_policy=final_arrow
+
+Typecheck example file examples/handlers/nim.links
+examples/handlers/nim.links
+filemode : true
+args : --set=enable_handlers=true
+
+Typecheck example file examples/handlers/nim-webversion.links
+examples/handlers/nim-webversion.links
+filemode : true
+
+Typecheck example file examples/handlers/number_games.links
+examples/handlers/number_games.links
+filemode : true
+
+Typecheck example file examples/handlers/pi.links
+examples/handlers/pi.links
+filemode : true
+
+Typecheck example file examples/handlers/pipes.links
+examples/handlers/pipes.links
+filemode : true
+
+Typecheck example file examples/handlers/racing-lines.links
+examples/handlers/racing-lines.links
+filemode : true
+
+Typecheck example file examples/handlers/sat.links
+examples/handlers/sat.links
+filemode : true
+args : --set=effect_sugar=true
+
+Typecheck example file examples/handlers/shiftreset.links
+examples/handlers/shiftreset.links
+filemode : true
+args : --set=effect_sugar=true
+
+Typecheck example file examples/handlers/shallow_state.links
+examples/handlers/shallow_state.links
+filemode : true
+args : --set=effect_sugar=true
+
+Typecheck example file examples/handlers/sierpinski-triangle.links
+examples/handlers/sierpinski-triangle.links
+filemode : true
+args : --set=effect_sugar=true
+
+Typecheck example file examples/handlers/sudoku.links
+examples/handlers/sudoku.links
+filemode : true
+args : --set=effect_sugar=true
+
+Typecheck example file examples/handlers/tests.links
+examples/handlers/tests.links
+filemode : true
+ignore : broken example
+
+Typecheck example file examples/handlers/toggle.links
+examples/handlers/toggle.links
+filemode : true
+ignore : broken example
+
+Typecheck example file examples/handlers/toggle_web.links
+examples/handlers/toggle_web.links
+filemode : true
+ignore : broken example
+
+Typecheck example file examples/handlers/transaction.links
+examples/handlers/transaction.links
+filemode : true
+
+Typecheck example file examples/handlers/unhandled.links
+examples/handlers/unhandled.links
+filemode : true
+
+Typecheck example file examples/handlers/u2_puzzle.links
+examples/handlers/u2_puzzle.links
+filemode : true

@@ -68,12 +68,19 @@ type tyarg = Types.type_arg
 *)
 
 let default_subkind : Subkind.t = (lin_unl, res_any)
-let default_effect_subkind : Subkind.t = (lin_unl, res_any)
+
+(* NOTICE: `lin_any` here means this eff_row_var can be unified with
+    linear or unlimited row types *)
+
+let lincont_enabled = Settings.get Basicsettings.CTLinearity.enabled
+
+let default_effect_lin : Linearity.t = if lincont_enabled then lin_any else lin_unl
+
+let default_effect_subkind : Subkind.t =(default_effect_lin, res_any)
+
 
 type kind = PrimaryKind.t option * Subkind.t option
     [@@deriving show]
-
-
 
 module SugarTypeVar =
 struct
@@ -82,7 +89,8 @@ struct
    about its primary kind. This is filled in when resolving the variable *)
 (* FIXME: the above comment may well be false now - check *)
 type t =
-  | TUnresolved       of Name.t * Subkind.t option * Freedom.t
+  | TUnresolved       of Name.t * (bool * Subkind.t option) * Freedom.t
+                                  (* true: is an effect var *)
   | TResolvedType     of Types.meta_type_var
   | TResolvedRow      of Types.meta_type_var
   | TResolvedPresence of Types.meta_type_var
@@ -92,8 +100,8 @@ let is_resolved = function
   | TUnresolved _ -> false
   | _ -> true
 
-let mk_unresolved name subkind_opt freedom_opt =
-  TUnresolved (name, subkind_opt, freedom_opt)
+let mk_unresolved name ?(is_eff=false) subkind_opt freedom_opt =
+  TUnresolved (name, (is_eff, subkind_opt), freedom_opt)
 
 let mk_resolved_tye point : t =
   TResolvedType point
@@ -106,8 +114,8 @@ let mk_resolved_presence point : t =
 
 
 let get_unresolved_exn = function
-  | TUnresolved (name, subkind, freedom) ->
-     name, subkind, freedom
+  | TUnresolved (name, (is_eff, subkind), freedom) ->
+     name, (is_eff, subkind), freedom
   | _ ->
      raise
        (internal_error
@@ -195,7 +203,7 @@ module Datatype = struct
     | Record          of row
     | Variant         of row
     | Effect          of row
-    | Operation       of with_pos list * with_pos
+    | Operation       of with_pos list * with_pos * DeclaredLinearity.t
     | Table           of Temporality.t * with_pos * with_pos * with_pos
     | List            of with_pos
     | TypeApplication of string * type_arg list
@@ -245,7 +253,7 @@ module Pattern = struct
     | Variant  of Name.t * with_pos option
     (* | Effect   of Name.t * with_pos list * with_pos *)
     (* | Effect2  of with_pos list * with_pos option *)
-    | Operation of Label.t * with_pos list * with_pos
+    | Operation of Label.t * with_pos list * with_pos * DeclaredLinearity.t
     | Negative of Name.t list
     | Record   of (Name.t * with_pos) list * with_pos option
     | Tuple    of with_pos list
@@ -474,9 +482,11 @@ and phrasenode =
   | Instantiate      of phrase
   | Generalise       of phrase
   | ConstructorLit   of Name.t * phrase option * Types.datatype option
-  | DoOperation      of phrase * phrase list * Types.datatype option
+  | DoOperation      of phrase * phrase list * Types.datatype option * DeclaredLinearity.t
   | Operation        of Name.t
   | Handle           of handler
+  | Unlet            of phrase
+  | Linlet           of phrase
   | Switch           of phrase * (Pattern.with_pos * phrase) list *
                           Types.datatype option
   | Receive          of (Pattern.with_pos * phrase) list * Types.datatype option
@@ -640,7 +650,7 @@ struct
     | List ps               -> union_map pattern ps
     | Cons (p1, p2)         -> union (pattern p1) (pattern p2)
     | Variant (_, popt)     -> option_map pattern popt
-    | Operation (_, ps, kopt)  -> union (union_map pattern ps) (pattern kopt)
+    | Operation (_, ps, kopt, _)  -> union (union_map pattern ps) (pattern kopt)
     | Record (fields, popt) ->
        union (option_map pattern popt)
          (union_map (snd ->- pattern) fields)
@@ -792,12 +802,14 @@ struct
                      diff (option_map phrase where) pat_bound;
                      diff (union_map (snd ->- phrase) fields) pat_bound]
     | DBTemporalJoin (_, p, _) -> phrase p
-    | DoOperation (_, ps, _) -> union_map phrase ps
+    | DoOperation (_, ps, _, _) -> union_map phrase ps
     | Operation _ -> empty
     | QualifiedVar _ -> empty
     | TryInOtherwise (p1, pat, p2, p3, _ty) ->
        union (union_map phrase [p1; p2; p3]) (pattern pat)
     | Raise -> empty
+    | Unlet p -> phrase p
+    | Linlet p -> phrase p
   and binding (binding': binding)
       : StringSet.t (* vars bound in the pattern *)
       * StringSet.t (* free vars in the rhs *) =

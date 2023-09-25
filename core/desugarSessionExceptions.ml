@@ -87,7 +87,8 @@ object (o : 'self_type)
         let ty =
           Types.fresh_type_variable (CommonTypes.lin_any, CommonTypes.res_any) in
         let with_pos x = SourceCode.WithPos.make ~pos x in
-        let doOp = DoOperation (with_pos (Operation failure_op_name), [], Some (Types.empty_type)) in
+        (* FIXME: WT: I don't know whether should it be lindo or not *)
+        let doOp = DoOperation (with_pos (Operation failure_op_name), [], Some (Types.empty_type), DeclaredLinearity.Lin) in
         (o, with_pos (Switch (with_pos doOp, [], Some ty)), ty)
     | { node = TryInOtherwise (_, _, _, _, None); _} -> assert false
     | { node = TryInOtherwise (try_phr, pat, as_phr, otherwise_phr, (Some dt)); pos }
@@ -122,7 +123,8 @@ object (o : 'self_type)
           (Utility.gensym ~prefix:"dsh" ()) in
 
         let otherwise_pat : Sugartypes.Pattern.with_pos =
-          with_dummy_pos (Pattern.Operation (failure_op_name, [], cont_pat)) in
+          (* FIXME: WT: I don't know whether should it be lincase or not *)
+          with_dummy_pos (Pattern.Operation (failure_op_name, [], cont_pat, DeclaredLinearity.Lin)) in
 
         let otherwise_clause = (otherwise_pat, otherwise_phr) in
 

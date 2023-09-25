@@ -1,0 +1,24 @@
+sig outch : () { |_::Lin}~> !Int.!String.End
+fun outch() {
+  xlin;
+  fork(fun(ic) {
+    xlin;
+    var (i, ic) = receive(ic);     # receive the integer
+    var (s, ic) = receive(ic);     # receive the string
+    print(intToString(i) ^^ s);    # convert, concat, and print
+    close(ic)                      # close the input channel
+  })
+}
+
+handle({
+  xlin;
+  var oc = outch();
+  var msg = if (lindo Flip) 42 else 84; # choose an integer message to send
+  var oc = send(msg, oc);
+  lindo Fail;                           # this is our exception
+  var oc = send("well-typed", oc);
+  close(oc)
+}) {
+  case <Fail =@ resume> -> xlin; resume(())
+  case <Flip =@ resume> -> xlin; resume(true)
+}

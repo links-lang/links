@@ -15,9 +15,9 @@ module Linearity = struct
     | Unl -> true
     | _   -> false
 
-  let to_string = function
+  let to_string ?(is_eff=false) = function
     | Any -> "Any"
-    | Unl -> "Unl"
+    | Unl -> if is_eff then "Lin" else "Unl"
 
   let min l r =
     match l, r with
