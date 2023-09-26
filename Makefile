@@ -43,7 +43,7 @@ ROOT:=$(shell dirname $(firstword $(MAKEFILE_LIST)))
 BUILD_DIR:=$(ROOT)/_build
 
 # The build command and some standard build system flags
-BUILD=dune build
+BUILD=opam exec dune -- build
 MAIN=links
 SOURCES=$(MAIN)
 DB_STABLE=links-postgresql,links-sqlite3,links-mysql8
@@ -148,7 +148,7 @@ database-tests: links
 # Cleans the project directory.
 .PHONY: clean
 clean:
-	dune clean
+	opam exec dune -- clean
 	rm -rf *.install
 	rm -rf links linx
 	rm -rf doc/_build
