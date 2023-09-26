@@ -15,13 +15,13 @@
 module C = Configurator.V1
 
 let is_git_repository () =
-  try
-    let ic = Unix.open_process_in "git rev-parse --is-inside-work-tree 2> /dev/null" in
-    let ans = String.equal "true" (input_line ic) in
-    match Unix.close_process_in ic with
-    | Unix.WEXITED 0 -> ans
-    | _ -> false
-  with End_of_file -> false
+  let ic = Unix.open_process_in "git rev-parse --is-inside-work-tree 2> /dev/null" in
+  let ans =
+    try String.equal "true" (input_line ic) with _ -> false
+  in
+  match Unix.close_process_in ic with
+  | Unix.WEXITED 0 -> ans
+  | _ -> false
 
 let check_opam =
   Option.is_some (Sys.getenv_opt "LINKS_BUILT_BY_OPAM")
@@ -55,7 +55,7 @@ let _ =
          let cwd = Sys.getcwd () in
          let config = "None" in
          let paths =
-           List.map (Filename.concat cwd) ["lib/js"; "examples"; "lib/stdlib"; "prelude.links"]
+           List.map (Filename.concat cwd) ["../lib/js"; "../examples"; "../lib/stdlib"; "../prelude.links"]
          in
          config :: paths
   in
