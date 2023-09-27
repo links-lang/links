@@ -43,7 +43,7 @@ ROOT:=$(shell dirname $(firstword $(MAKEFILE_LIST)))
 BUILD_DIR:=$(ROOT)/_build
 
 # The build command and some standard build system flags
-BUILD=dune build
+BUILD=opam exec dune -- build
 MAIN=links
 SOURCES=$(MAIN)
 DB_STABLE=links-postgresql,links-sqlite3,links-mysql8
@@ -125,7 +125,7 @@ include-db-sources:
 # Auxiliary rule used by `opam install` to build Links
 .PHONY: opam-build-links.opam
 opam-build-links.opam: links.opam
-	$(shell LINKS_BUILT_BY_OPAM=1 dune build -p links)
+	$(shell LINKS_BUILT_BY_OPAM=1 opam exec dune -- build -p links)
 
 # Runs the test suite. We reset the variables CAMLRUNPARAM and
 # OCAMLRUNPARAM, because some of the tests are sensitive to the
@@ -148,7 +148,7 @@ database-tests: links
 # Cleans the project directory.
 .PHONY: clean
 clean:
-	dune clean
+	opam exec dune -- clean
 	rm -rf *.install
 	rm -rf links linx
 	rm -rf doc/_build
@@ -175,8 +175,8 @@ open-doc: doc/_build/html
 
 # Release Links
 opam-release:
-	dune-release tag
-	dune-release distrib -p $(RELEASE_PKGS)
-	dune-release publish -p $(RELEASE_PKGS) distrib
-	dune-release opam -p $(RELEASE_PKGS) pkg
-	dune-release opam -p $(RELEASE_PKGS) submit
+	opam exec dune-release -- tag
+	opam exec dune-release -- distrib -p $(RELEASE_PKGS)
+	opam exec dune-release -- publish -p $(RELEASE_PKGS) distrib
+	opam exec dune-release -- opam -p $(RELEASE_PKGS) pkg
+	opam exec dune-release -- opam -p $(RELEASE_PKGS) submit
