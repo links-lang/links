@@ -35,11 +35,12 @@ end
 (* control-flow linearity *)
 module CTLinearity = struct
   let enabled =
-    Settings.(flag "track_control_flow_linearity"
+    Settings.(flag "control_flow_linearity"
               |> privilege `System
               |> synopsis "Enables the control-flow linearity extension"
+              |> depends Handlers.enabled
               |> convert parse_bool
-              |> CLI.(add (long "track-control-flow-linearity"))
+              |> CLI.(add (long "control-flow-linearity"))
               |> sync)
 end
 

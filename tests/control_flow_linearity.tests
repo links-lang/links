@@ -193,7 +193,7 @@ stdout : 42well-typed() : ()
 The `faithfulSend` with CFL off
 fun faithfulSend(c) { linfun (s) { var c = send(s, c); close(c) } } faithfulSend
 stdout : fun : (!(a::Any).End) -> (a::Any) ~@ ()
-args : --set=track_control_flow_linearity=false
+args : --set=control_flow_linearity=false
 
 The `faithfulSend` with CFL on
 fun faithfulSend(c) { xlin; linfun (s) { xlin; var c = send(s, c); close(c) } } faithfulSend
@@ -213,7 +213,7 @@ stdout : fun : (!(String).End) {Choose{_::Lin}|_::Lin}~> ()
 S2.1 Channel version of `faithfulWrite` (with CFL off)
 fun faithfulSend(c) { linfun (s) { var c = send(s, c); close(c) } } faithfulSend
 stdout : fun : (!(a::Any).End) -> (a::Any) ~@ ()
-args : --set=track_control_flow_linearity=false
+args : --set=control_flow_linearity=false
 
 S2.1 Channel version of `faithfulWrite` (with CFL on)
 fun faithfulSend(c) { xlin; linfun (s) { xlin; var c = send(s, c); close(c) } } faithfulSend
@@ -222,12 +222,12 @@ stdout : fun : (!(a::Any).End) { |_::Lin}-> (a::Any) { |_::Lin}~@ ()
 S2.1 Subkinding of value linearity (with CFL off) (1)
 fun id(x) {x} id(42)
 stdout : 42 : Int
-args : --set=track_control_flow_linearity=false
+args : --set=control_flow_linearity=false
 
 S2.1 Subkinding of value linearity (with CFL off) (2)
 fun id(x) {x} id(linfun(){42})
 stdout : fun : () -@ Int
-args : --set=track_control_flow_linearity=false
+args : --set=control_flow_linearity=false
 
 S2.1 Subkinding of value linearity (with CFL on) (1)
 fun id(x) {xlin; x} id(42)
@@ -240,7 +240,7 @@ stdout : fun : () -@ Int
 S2.2 Channel version of `dubiousWrite` (with CFL off)
 fun dubiousSend(c) {var c = send(if (do Choose) "A" else "B", c); close(c)} dubiousSend
 stdout : fun : (!(String).End) {Choose:() => Bool|_}~> ()
-args : --set=track_control_flow_linearity=false
+args : --set=control_flow_linearity=false
 
 S2.2 Channel version of `dubiousWrite` (with CFL on)
 fun dubiousSend(c) {xlin; var c = send(if (lindo Choose) "A" else "B", c); close(c)} dubiousSend
