@@ -1,0 +1,21 @@
+# Use the linear variable `ch` in a shallow handler with an auxiliary
+# deep handler
+
+var ch = fork(fun(ch) {
+    xlin;
+    var ch = send(42, ch);
+    close(ch)
+});
+
+shallowhandle({
+  lindo Foo() + 42
+}) {
+  case <Foo =@ k> -> {
+    xlin;
+    var (i, ch) = receive(ch);
+    close(ch);
+    handle ({xlin; k(i)}) {
+      case <Foo =@ k> -> xlin; k(0)
+    }
+  }
+}

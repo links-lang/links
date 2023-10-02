@@ -1333,8 +1333,11 @@ fun sendSuspend(pagef) {
 typename Pid(a::Type) = Process({hear: a});
 
 #### SESSION TYPING STUFF ####
+# The SessionFail is defined to be a control-flow-linear operation.
+# The effect row variable `e` can have kind `Row(Any)` because no linear
+# resources is used in this function.
 #sig fork : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
-sig fork : forall s::Session,e::Row.((s) {SessionFail:[||]}~> ()) ~e~> ~s
+sig fork : forall s::Session,e::Row(Any).((s) {SessionFail:() =@ [||]}~> ()) ~e~> ~s
 fun fork(f) {
   var ap = new ();
   var _ = spawnAngel {
@@ -1344,8 +1347,9 @@ fun fork(f) {
 }
 
 #sig linFork : forall s::Session,e::Row.((s) ~e~@ ()) ~e~> ~s
-sig linFork : forall s::Session,e::Row.((s) {SessionFail:[||]}~@ ()) ~e~> ~s
+sig linFork : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~@ ()) ~e~> ~s
 fun linFork(f) {
+  xlin;
   var ap = new();
   var _ = spawnAngel {
     f(accept(ap))
@@ -1354,8 +1358,9 @@ fun linFork(f) {
 }
 
 #sig reproduce : forall s::Session,e::Row.(AP(s), (s) ~e~> ()) ~e~> ()
-sig reproduce : forall s::Session,e::Row.(AP(s), (s) {SessionFail:[||]}~> ()) ~e~> ()
+sig reproduce : forall s::Session,e::Row.(AP(s), (s) {SessionFail:() =@ [||]}~> ()) ~e~> ()
 fun reproduce(ap, f) {
+  xlin;
   var x = accept(ap);
   var _ = spawn {f(x)};
   reproduce(ap, f)
@@ -1371,8 +1376,9 @@ fun reproduce(ap, f) {
 # run even if the main process terminates.)
 
 #sig connect : forall s::Session,e::Row,a.((s) ~e~> (), (~s) ~e~> a) ~e~> a
-sig connect : forall s::Session,e::Row,a.((s) {SessionFail:[||]}~> (), (~s) ~e~> a) ~e~> a
+sig connect : forall s::Session,e::Row,a.((s) {SessionFail:() =@ [||]}~> (), (~s) ~e~> a) ~e~> a
 fun connect(f, g) {
+  xlin;
   var ap = new();
   var done = new();
   var _ = spawn {
@@ -1389,19 +1395,22 @@ fun connect(f, g) {
 typename EndBang = !().End;
 typename EndQuery = ?().End;
 
-sig wait : (EndQuery) ~> ()
+sig wait : forall e::Row . (EndQuery) { |e}~> ()
 fun wait(s) {
+  xlin;
   var (_, s) = receive(s);
   close(s)
 }
 
-sig closeBang : (EndBang) ~> ()
+sig closeBang : forall e::Row . (EndBang) { |e}~> ()
 fun closeBang(s) {
+  xlin;
   close(send((), s))
 }
 
-sig makeEndBang : () ~> EndBang
+sig makeEndBang : forall e::Row . () { |e}~> EndBang
 fun makeEndBang() {
+  xlin;
   var ap = new();
   var _ = spawn {
      var c = accept(ap);
@@ -1413,8 +1422,9 @@ fun makeEndBang() {
 # with split ends we synchronise on the termination of each spawned
 # child process
 #sig forkSync : forall s::Session,e::Row.((s) ~e~> EndBang) ~e~> ~s
-sig forkSync : forall s::Session,e::Row.((s) {SessionFail:[||]}~> EndBang) ~e~> ~s
+sig forkSync : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~> EndBang) ~e~> ~s
 fun forkSync(f) {
+  xlin;
   var ap = new();
   var _ = spawn {
     var c = accept(ap);
@@ -1425,8 +1435,9 @@ fun forkSync(f) {
 }
 
 #sig linForkSync : forall s::Session,e::Row.((s) ~e~@ EndBang) ~e~> ~s
-sig linForkSync : forall s::Session,e::Row.((s) {SessionFail:[||]}~@ EndBang) ~e~> ~s
+sig linForkSync : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~@ EndBang) ~e~> ~s
 fun linForkSync(f) {
+  xlin;
   var ap = new();
   var _ = spawn {
     var c = accept(ap);
@@ -1437,15 +1448,17 @@ fun linForkSync(f) {
 }
 
 #sig linkSync : forall s::Session,e::Row.(s, ~s) ~e~> EndBang
-sig linkSync : forall s::Session,e::Row.(s, ~s) {SessionFail:[||] | e}~> EndBang
+sig linkSync : forall s::Session,e::Row.(s, ~s) {SessionFail:() =@ [||] | e}~> EndBang
 fun linkSync(s, c) {
+  xlin;
   link(s, c);
   makeEndBang()
 }
 
 #sig runSync : ((!a.EndBang) ~e~> EndBang) ~e~> a
-sig runSync : ((!a.EndBang) {SessionFail:[||]}~> EndBang) ~e~> a
+sig runSync : forall a, e::Row . ((!a.EndBang) {SessionFail:() =@ [||]}~> EndBang) { |e}~> a
 fun runSync(f) {
+  xlin;
   var c = forkSync(f);
   var (v, c) = receive(c);
   wait(c);

@@ -1,0 +1,27 @@
+fun incr(x) {var y = do Get; do Put(x+y)}
+
+fun choice() {
+  var x = if (do Choose()) { incr(1); do Get }
+          else { incr(1); do Get };
+  var y = if (do Choose()) { incr(1); do Get }
+          else { incr(1); do Get };
+  x + y
+}
+
+fun enumerate(m)() {
+  handle(m()) {
+    case x -> [x]
+    case <Choose => k> -> k(true) ++ k(false)
+  }
+}
+
+
+fun evalState(st)(m)() {
+  (handle(m()) {
+    case x              -> fun(_)  { x }
+    case <Get => k>     -> fun(st) { k(st)(st) }
+    case <Put(p) => k>  -> fun(_)  { k(())(p)  }
+  })(st)
+}
+
+evalState(0)(enumerate(choice))() ++ enumerate(evalState(0)(choice))()

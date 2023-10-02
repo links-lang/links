@@ -71,11 +71,11 @@ module Deep {
     typename Consumer(e::Eff, s, a) = (s) ~e~> (Producer({ |e}, s, a)) ~e~> a;
   }
 
-  typename Pipe(e::Eff, s, a) = forall b::Presence, c::Presence.
+  typename Pipe(e::Eff, s, a) = forall b::Presence(Any), c::Presence(Any).
                (Comp({ Await: s, Yield{c} |e}, a)) { Await{b}, Yield{c} |e}~>
                       (Producer({ Await{b}, Yield{c} |e}, s, a)) { Await{b}, Yield{c} |e}~> a;
 
-  typename Copipe(e::Eff, s, a) = forall b::Presence, c::Presence.
+  typename Copipe(e::Eff, s, a) = forall b::Presence(Any), c::Presence(Any).
             (Comp({ Await{b}, Yield: (s) => () |e}, a)) { Await{b}, Yield{c} |e}~>
                    (Consumer({ Await{b}, Yield{c} |e}, s, a)) { Await{b}, Yield{c} |e}~> a;
 

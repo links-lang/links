@@ -128,7 +128,7 @@ let rec desugar_pattern : Types.row -> Sugartypes.Pattern.with_pos -> Pattern.t 
         | Variant (name, Some p) ->
             let p, env = desugar_pattern p in
             Pattern.Variant (name, p), env
-        | Operation (name, ps, k) ->
+        | Operation (name, ps, k, _) ->
            let ps, env =
              List.fold_right
                (fun p (ps, env) ->
@@ -996,7 +996,7 @@ let compile_handle_cases
               fields
           in
           let rec extract t = match TypeUtils.concrete_type t with
-            | Types.Operation (domain, _) ->
+            | Types.Operation (domain, _, _) ->
               let (fields, _, _) = TypeUtils.extract_row domain |> TypeUtils.extract_row_parts in
               let arity = StringMap.size fields in
               if arity = 1 then

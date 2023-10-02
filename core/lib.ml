@@ -376,7 +376,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "Send",
   (p2 (fun _pid _msg ->
          assert(false)), (* Now handled in evalir.ml *)
-   datatype "forall a::Type(Any, Any), e::Row(Unl, Any), f::Row.(Process ({hear:a|e}), a) ~f~> ()",
+   datatype "forall a::Type(Any, Any), e::Row(Any, Any), f::Row(Any, Any).(Process ({hear:a|e}), a) ~f~> ()",
    IMPURE);
 
   "self",
@@ -498,53 +498,53 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "send",
   (`PFun (fun _ -> assert false),
-   datatype "forall a::Type(Any, Any), s::Type(Any, Session), e::Row.(a, !a.s) ~e~> s",
+   datatype "forall a::Type(Any, Any), s::Type(Any, Session), e::Row(Any, Any).(a, !a.s) ~e~> s",
    IMPURE);
 
   "receive",
   (`PFun (fun _ -> assert false),
-   datatype "forall a::Type(Any, Any), s::Type(Any, Session), e::Row. (?a.s) ~e~> (a, s)",
+   datatype "forall a::Type(Any, Any), s::Type(Any, Session), e::Row(Any, Any). (?a.s) ~e~> (a, s)",
    IMPURE);
 
   "link",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session), e::Row(Unl, Any).(s, ~s) ~e~> ()",
+   datatype "forall s::Type(Any, Session), e::Row(Any, Any).(s, ~s) ~e~> ()",
    IMPURE);
 
   (* access points *)
   "new",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session), e::Row.() ~e~> AP(s)",
+   datatype "forall s::Type(Any, Session), e::Row(Any, Any).() ~e~> AP(s)",
    IMPURE);
 
   "newAP",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session), e::Row. (Location) ~e~> AP(s)",
+   datatype "forall s::Type(Any, Session), e::Row(Any, Any). (Location) ~e~> AP(s)",
    IMPURE);
 
   "newClientAP",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session), e::Row.() ~e~> AP(s)",
+   datatype "forall s::Type(Any, Session), e::Row(Any, Any).() ~e~> AP(s)",
    IMPURE);
 
   "newServerAP",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session), e::Row.() ~e~> AP(s)",
+   datatype "forall s::Type(Any, Session), e::Row(Any, Any).() ~e~> AP(s)",
    IMPURE);
 
   "accept",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session), e::Row.(AP(s)) ~e~> s",
+   datatype "forall s::Type(Any, Session), e::Row(Any, Any).(AP(s)) ~e~> s",
    IMPURE);
 
   "request",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session), e::Row.(AP(s)) ~e~> ~s",
+   datatype "forall s::Type(Any, Session), e::Row(Any, Any).(AP(s)) ~e~> ~s",
    IMPURE);
 
   "cancel",
   (`PFun (fun _ -> assert false),
-   datatype "forall s::Type(Any, Session), e::Row.(s) ~e~> ()",
+   datatype "forall s::Type(Any, Session), e::Row(Any, Any).(s) ~e~> ()",
    IMPURE);
 
   "close",
@@ -716,6 +716,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "print",
   (p1 (fun msg -> print_string (Value.unbox_string msg); flush stdout; `Record []),
+   (* datatype "(String) ~> ()", *)
    datatype "(String) ~> ()",
   IMPURE);
 
@@ -1775,6 +1776,7 @@ let typing_env = {Types.var_env = type_env;
                   Types.rec_vars = StringSet.empty;
                   tycon_env = alias_env;
                   Types.effect_row = Types.closed_wild_row;
+                  Types.cont_lin = -1;
                   Types.desugared = false }
 
 let primitive_names = StringSet.elements (Env.String.domain type_env)

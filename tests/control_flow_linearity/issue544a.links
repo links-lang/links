@@ -1,0 +1,49 @@
+# issue 544a
+# https://github.com/links-lang/links/issues/544
+
+# Breaking session fidelity.
+# Invoke the resumption twice to inadvertently perform two receives
+# over a session-typed channel !Int.end.
+
+# A fixed version
+fun deadlock_correct() {
+  var ch = fork(fun(ch) {
+    xlin;
+    var ch = send(42, ch);
+    close(ch)
+  });
+
+  handle({
+    # Nondeterministic choice.
+    ignore(lindo Flip);
+    xlin;
+    var (i, ch) = receive(ch);
+    println("Int: " ^^ intToString(i));
+    close(ch)
+  }) {
+    case _ -> ()
+    case <Flip =@ resume> -> xlin; resume(true)
+  }
+}
+
+# The original incorrect version
+fun deadlock() {
+  var ch = fork(fun(ch) {
+    xlin;
+    var ch = send(42, ch);
+    close(ch)
+  });
+
+  handle({
+    # Nondeterministic choice.
+    ignore(do Flip);
+    xlin;
+    var (i, ch) = receive(ch);
+    println("Int: " ^^ intToString(i));
+    close(ch)
+  }) {
+    case _ -> ()
+    case <Flip => resume> ->
+      resume(true); resume(false)
+  }
+}
