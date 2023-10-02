@@ -359,9 +359,6 @@ struct
     | Variable var ->
         begin
           match Q.lookup env var with
-            | Q.Var (x, tyx) ->
-                (* eta-expand record variables *)
-                Q.eta_expand_var (x, tyx)
             | Q.Primitive "Nil" -> Q.nil
             (* We could consider detecting and eta-expand tables here.
                The only other possible sources of table values would
@@ -556,12 +553,42 @@ struct
    * NRC with grouping forces the generator to be a pure collection *)
   | (Q.Entries, x, Q.Singleton v) -> gsx, Q.bind env (x,v)
   | (Q.Keys, x, Q.Singleton (Q.MapEntry (k,_))) -> gsx, Q.bind env (x,k)
+  | (Q.Entries, x, (Q.Table (Value.Table.{ row; temporality; temporal_fields; _ } as table) as q))
+     when temporality = Temporality.Transaction || temporality = Temporality.valid ->
+       let (from_field, to_field) = OptionUtils.val_of temporal_fields in
+       (* Transaction / Valid-time tables: Need to wrap as metadata *)
+       (* First, generate a fresh variable for the table *)
+       let make_spec_map = StringMap.map (fun x -> Types.Present x) in
+       let field_types = Q.table_field_types table in
+       let base_field_types =
+         StringMap.filter
+           (fun x _ -> x <> from_field && x <> to_field)
+           field_types in
+       let (_, row_var, dual) = row in
+       let z = Var.fresh_raw_var () in
+       let tyz = Types.(Record (Row (make_spec_map field_types, row_var, dual))) in
+       let base_ty_elem = Types.(Record (Row (make_spec_map base_field_types, row_var, dual))) in
+       let vz = Q.Var (z, tyz) in
+
+       (* Second, generate a fresh variable for the metadata *)
+       let metadata_record =
+         StringMap.from_alist [
+           (TemporalField.data_field,
+             Q.eta_expand_var (z, base_ty_elem));
+           (TemporalField.from_field,
+             Q.Project (vz, from_field));
+           (TemporalField.to_field,
+             Q.Project (vz, to_field))
+         ] in
+       Debug.print ("reduce_for_source with temporal generator: " ^ (Q.show (Q.Record metadata_record)));
+       let env' = Q.bind env (x, Q.Record metadata_record) in
+       gsx@[Q.Entries, z, q], env'
   | (pol, x, q) ->
       let z = Var.fresh_raw_var () in
       let tyz = type_of_for_var pol q in
       let vz = Q.Var (z, tyz) in
       let env' = Q.bind env (x, vz) in
-      gsx@[pol,z,q], env'
+      gsx@[pol, z, q], env'
 
   (* when the head of a comprehension is a Prom, this lifts it to a generator
    * by means of eta-expansion *)
