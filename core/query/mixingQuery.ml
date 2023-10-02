@@ -552,10 +552,9 @@ struct
   (* this has the effect of performing beta reduction when the generator in
    * the main input is a Singleton *)
   let reduce_for_source gsx env = function
+  (* in a value comprehesion, no need to unbox a MapEntry in v because
+   * NRC with grouping forces the generator to be a pure collection *)
   | (Q.Entries, x, Q.Singleton v) -> gsx, Q.bind env (x,v)
-  (* we are not doing value comprehension on maps
-  | (Q.Values, x, Q.Singleton (Q.MapEntry (_,v))) -> gsx, Q.bind env (x,v)
-  *)
   | (Q.Keys, x, Q.Singleton (Q.MapEntry (k,_))) -> gsx, Q.bind env (x,k)
   | (pol, x, q) ->
       let z = Var.fresh_raw_var () in
