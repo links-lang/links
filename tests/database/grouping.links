@@ -42,7 +42,7 @@ fun test() {
     # the query generation code is too dumb to reduce projqty and convert the query to an aggregation query...
     # var projqty = fun (t) { for (o <- t) [o.qty] };
     aggBy(m, fun(t) { (qty_sum = sum(for (o <- t) [o.qty])) })
-  })
+  });
 
   # 3.
   query mixing {

@@ -248,7 +248,7 @@ let rec subst t x u =
   match t with
   | Var (var, _) when var = x -> u
   | Record fl -> Record (StringMap.map srec fl)
-  | Singleton v -> srec v
+  | Singleton v -> Singleton (srec v)
   | MapEntry (k, v) -> MapEntry (srec k, srec v)
   | Concat xs -> Concat (List.map srec xs)
   | Project (r, label) -> Project (srec r, label)

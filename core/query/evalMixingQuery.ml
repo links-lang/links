@@ -148,6 +148,7 @@ and base_exp = function
                 Sql.Apply ("RLIKE", [base_exp s; r])
     end
 | QL.Apply (QL.Primitive "Empty", [v]) -> S.Empty (sql_of_query S.All v)
+(* length takes as input a collection of records so it cannot be converted to S.Aggr *)
 | QL.Apply (QL.Primitive "length", [v]) -> S.Length (sql_of_query S.All v)
 | QL.Apply (QL.Primitive "Sum", [v]) -> S.Aggr ("sum", sql_of_query S.All v)
 | QL.Apply (QL.Primitive "SumF", [v]) -> S.Aggr ("sum", sql_of_query S.All v)
