@@ -5,6 +5,19 @@ List of changes since the latest release.
   longer supported. Instead, the package `links-mysql8`, based on the
   `mysql8` package is provided, which also supports version of MySQL
    prior to 8.
+
+# 0.9.8
+
+This release ...
+
+* Control-flow linearity: Links now tracks control-flow linearity when
+  the flag `--control-flow-linearity` is enabled. This extension fixes
+  a long-standing soundness bug (see issue
+  [#544](https://github.com/links-lang/links/issues/544)) with the
+  interaction between exceptions, multi-shot effect handlers and
+  session-typed channels. More details about this extension can be
+  found in the [wiki
+  page](https://github.com/links-lang/links/wiki/Control-flow-linearity).
    
 # 0.9.7
 
