@@ -9,7 +9,7 @@ The result of grouping over a relation is represented as a finite map, which in 
 
 Further information on this feature is provided in the [Links GitHub wiki](https://github.com/links-lang/links/wiki/Grouping-and-aggregation).
 
-## Other fixes/miscellaneous
+## Other changes and fixes
 * The package `links-mysql`, based on the `mysql` opam package is no
   longer supported. Instead, the package `links-mysql8`, based on the
   `mysql8` package is provided, which also supports version of MySQL
