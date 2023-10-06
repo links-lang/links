@@ -1,4 +1,4 @@
-# Unreleased
+# Unreleased (scheduled for 0.9.8)
 
 List of changes since the latest release.
 
@@ -14,11 +14,6 @@ Further information on this feature is provided in the [Links GitHub wiki](https
   longer supported. Instead, the package `links-mysql8`, based on the
   `mysql8` package is provided, which also supports version of MySQL
    prior to 8.
-
-# 0.9.8
-
-This release ...
-
 * Control-flow linearity: Links now tracks control-flow linearity when
   the flag `--control-flow-linearity` is enabled. This extension fixes
   a long-standing soundness bug (see issue
