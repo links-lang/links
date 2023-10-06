@@ -237,6 +237,26 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "^.", float_op ( ** ) PURE;
   "^^", string_op ( ^ ) PURE;
 
+  "max_int",
+  (Value.box_int max_int,
+   datatype "Int",
+   PURE);
+
+  "min_int",
+  (Value.box_int min_int,
+   datatype "Int",
+   PURE);
+
+  "infinity",
+  (Value.box_float Float.infinity,
+   datatype "Float",
+   PURE);
+
+  "neg_infinity",
+  (Value.box_float Float.neg_infinity,
+   datatype "Float",
+   PURE);
+
   (* Comparisons *)
   "==",
   (p2 (fun v1 v2 -> Value.box_bool (equal v1 v2)),
@@ -591,6 +611,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (p1 (Value.unbox_list ->- List.length ->- Value.box_int),
    datatype "([a]) -> Int",
   PURE);
+
+  "Sum",
+  (p1 (Value.unbox_list ->- List.fold_left (fun x y -> x + Value.unbox_int y) 0 ->- Value.box_int),
+   datatype "([Int]) -> Int",
+   PURE);
 
   "take",
   (p2 (fun n l ->

@@ -61,6 +61,14 @@ let list     = {
   arity      = [pk_type, (lin_unl, res_any)] ;
 }
 
+(* WR: used by DB queries *)
+let mapentry = {
+  Abstype.id = "MapEntry" ;
+  name       = "MapEntry" ;
+  arity      = [pk_type, (lin_unl, res_any)
+               ;pk_type, (lin_unl, res_any)] ;
+}
+
 let event    = {
   Abstype.id = "Event" ;
   name       = "Event" ;
@@ -100,6 +108,15 @@ let valid_time_data = {
   Abstype.id = "ValidTime";
   name       = "ValidTime";
   arity      = [pk_type, (lin_any, res_any)]
+}
+
+(* Not a real type!
+ * Used when a type is needed, but none is known.
+ * You need to make sure any code using this type will not be executed. *)
+let wrong = {
+  Abstype.id = "Wrong";
+  name = "Wrong";
+  arity = []
 }
 
 (* When unifying, we need to keep track of both mu-bound recursive variables
@@ -1701,6 +1718,7 @@ let float_type    = Primitive Primitive.Float
 let datetime_type = Primitive Primitive.DateTime
 let xml_type      = Alias (pk_type, ("Xml", [], [], false), Application (list, [(PrimaryKind.Type, Primitive Primitive.XmlItem)]))
 let database_type = Primitive Primitive.DB
+let wrong_type    = Application (wrong, [])
 (* Empty type, used for exceptions *)
 let empty_type    = Variant (make_empty_closed_row ())
 let wild = "wild"
@@ -4676,6 +4694,8 @@ let make_tuple_type (ts : datatype list) : datatype =
           ts))
 
 let make_list_type t = Application (list, [PrimaryKind.Type, t])
+let make_mapentry_type t t' =
+        Application (mapentry, [PrimaryKind.Type, t; PrimaryKind.Type, t'])
 let make_process_type r = Application (process, [PrimaryKind.Row, r])
 
 let make_transaction_time_data_type typ =
@@ -4819,3 +4839,9 @@ let pp_tycon_spec : Format.formatter -> tycon_spec -> unit = fun fmt t ->
 let unwrap_list_type = function
   | Application ({Abstype.id = "List"; _}, [PrimaryKind.Type, t]) -> t
   | _ -> assert false
+
+let unwrap_mapentry_type = function
+  | Application ({Abstype.id = "MapEntry"; _}, [PrimaryKind.Type, t; PrimaryKind.Type, t']) -> t, t'
+  | _ -> assert false
+
+let unwrap_map_type = unwrap_list_type ->- unwrap_mapentry_type

@@ -10,7 +10,6 @@
 
 open Utility
 open CommonTypes
-open Var
 open Errors
 
 module Q = QueryLang
@@ -28,9 +27,10 @@ let rec tail_of_t : Q.t -> Q.t = fun v ->
       | Q.For (_, _gs, _os, t) -> tt t
       | _ -> (* Debug.print ("v: "^string_of_t v); *) assert false
 
-let type_of_for_var gen =
-  Q.type_of_expression gen
-  |> Types.unwrap_list_type
+let type_of_for_var pol gen =
+  match pol, Q.type_of_expression gen with
+  | Q.Keys, ty -> fst <| Types.unwrap_map_type ty
+  | _, ty -> Types.unwrap_list_type ty
 
 let rec freshen_for_bindings : Var.var Env.Int.t -> Q.t -> Q.t =
   fun env v ->
@@ -44,9 +44,9 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> Q.t -> Q.t =
     | Q.For (tag, gs, os, b) ->
       let gs', env' =
         List.fold_left
-          (fun (gs', env') (x, source) ->
+          (fun (gs', env') (genkind, x, source) ->
             let y = Var.fresh_raw_var () in
-            ((y, ffb source)::gs', Env.Int.bind x y env'))
+            ((genkind, y, ffb source)::gs', Env.Int.bind x y env'))
           ([], env)
           gs
       in
@@ -54,6 +54,7 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> Q.t -> Q.t =
     | Q.If (c, t, e) -> Q.If (ffb c, ffb t, ffb e)
     | Q.Table _ as t -> t
     | Q.Singleton v -> Q.Singleton (ffb v)
+    | Q.MapEntry (k,v) -> Q.MapEntry (ffb k, ffb v)
     | Q.Database db -> Q.Database db
     | Q.Concat vs -> Q.Concat (List.map ffb vs)
     | Q.Dedup q -> Q.Dedup (ffb q)
@@ -77,6 +78,13 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> Q.t -> Q.t =
       end *)
       Q.Var (var_lookup x, ts)
     | Q.Constant c -> Q.Constant c
+    | Q.GroupBy ((v,i),q) ->
+      let y = Var.fresh_raw_var () in
+      let env' = Env.Int.bind v y env in
+      Q.GroupBy ((y, freshen_for_bindings env' i), ffb q)
+    (* XXX: defensive programming; recursion on ar not needed now, but may be in the future *)
+    | Q.AggBy (ar, q) -> Q.AggBy (StringMap.map (fun (x,y) -> ffb x, y) ar, ffb q)
+    | Q.Lookup (q,k) -> Q.Lookup (ffb q, ffb k)
 
 let flatfield f1 f2 = f1 ^ "@" ^ f2
 
@@ -88,7 +96,7 @@ let rec flattened_pair x y =
   | _, Q.Var (_ny, Types.Record row) ->
       let y' = Q.Record (StringMap.fold (fun f _ acc -> StringMap.add f (Q.Project (y,f)) acc) (Q.field_types_of_row row) StringMap.empty)
       in flattened_pair x y'
-  (* We uese a field with an empty name to deal with variables of non-record type *)
+  (* We use a field with an empty name to deal with variables of non-record type *)
   | Q.Var (_nx, _), _ ->
       let x' = Q.Record (StringMap.from_alist ["",x])
       in flattened_pair x' y
@@ -110,7 +118,7 @@ let rec flattened_pair_ft x y =
           StringMap.fold (fun f t acc -> StringMap.add (flatfield "1" f) t acc) (Q.field_types_of_row rowx) StringMap.empty
       in
       StringMap.fold (fun f t acc -> StringMap.add (flatfield "2" f) t acc) (Q.field_types_of_row rowy) out1
-  (* XXX: same as above, using a field with an empty name to deal with variables of non-record type ... will it work? *)
+  (* XXX: same as above, using a field with an empty name to deal with variables of non-record type *)
   | Q.Var (nx, tyx), _ -> flattened_pair_ft (Q.Var (nx, Types.make_record_type (StringMap.from_alist ["", tyx]))) y
   | _, Q.Var (ny, tyy) -> flattened_pair_ft x (Q.Var (ny, Types.make_record_type (StringMap.from_alist ["", tyy])))
   | _ -> assert false
@@ -208,82 +216,6 @@ let rec reduce_where_then (c, t) =
   | _ ->
     Q.If (c, t, Q.Concat [])
 
-let rec reduce_for_body (gs, os, body) =
-  let rb = reduce_for_body in
-  match body with
-    | Q.For (_, gs', os', body') -> rb (gs @ gs', os @ os', body')
-    (* | Prom _ as u               ->
-          let z = Var.fresh_raw_var () in
-          let tyz = type_of_expression u in
-          let ftz = recdty_field_types (Types.unwrap_list_type tyz) in
-          let vz = Var (z, ftz) in
-          For (None, gs @ [(z, u)], [] (* os *), (Singleton vz)) *)
-    (* make sure when we reach this place, gs can NEVER be empty
-      | _ when gs = [] (* && _os = [] *) -> body *)
-    | Q.Concat vs -> reduce_concat (List.map (fun v -> rb (gs, os, v)) vs)
-    | _                         -> Q.For (None, gs, os, body)
-
-let rec reduce_for_source : Q.env -> var * Q.t * Types.datatype -> (Q.env -> (Q.t list -> Q.t list) -> Q.t) -> Q.t =
-  fun env (x, source, ty) body ->
-      let empty_os = fun os -> os in
-      let add_os os = fun os' -> os@os' in
-      let rs = fun gen' -> reduce_for_source env gen' body in
-      match source with
-        | Q.Singleton v ->
-          begin
-            let env' = Q.bind env (x, v) in
-            match body env' empty_os with
-            (* the normal form of a For does not have Prom in its body
-                --> we hoist it to a generator *)
-            | Q.Prom _ as q ->
-                let z = Var.fresh_raw_var () in
-                let tyq = Q.type_of_expression q in
-                (* Debug.print ("reduce_for_source.Singleton fresh var: " ^ show (Var (z,tyq))); *)
-                reduce_for_body ([(z,q)], [], Q.Singleton (Q.eta_expand_var (z, tyq)))
-            | q -> q
-          end
-        | Q.Concat vs ->
-          reduce_concat (List.map (fun s -> rs (x,s,ty)) vs)
-        | Q.If (c, t, Q.Concat []) ->
-          reduce_for_source env (x, t, ty) (fun env' os_f -> reduce_where_then (c, body env' os_f))
-        | Q.For (_, gs, os', v) ->
-          (* NOTE:
-
-              We are relying on peculiarities of the way we manage
-              the environment in order to avoid having to
-              augment it with the generator bindings here.
-
-              In particular, we rely on the fact that if a variable
-              is not found on a lookup then we return the eta
-              expansion of that variable rather than complaining that
-              it isn't bound in the environment.
-
-          *)
-          let tyv = Q.type_of_expression v in
-          (* this ensures os' is added to the right of the final comprehension, and further inner orderings to the right of os' *)
-          let body' = fun env' os_f -> body env' (os_f ->- add_os os') in
-          reduce_for_body (gs, [], reduce_for_source env (x,v,tyv) body')
-        | Q.Table Value.Table.{ row; _ }
-        | Q.Dedup (Q.Table Value.Table.{ row; _ }) ->
-            (* we need to generate a fresh variable in order to
-              correctly handle self joins *)
-            let y = Var.fresh_raw_var () in
-            let ty_elem = Types.Record (Types.Row row) in
-            (* Debug.print ("reduce_for_source.Table fresh var: " ^ string_of_int y ^ " for " ^ string_of_int x); *)
-            let env' = Q.bind env (x, Q.Var (y, ty_elem)) in
-            (* Debug.print ("reduce_for_source.Table body before renaming: " ^ show (body env empty_os)); *)
-            let body' = body env' empty_os in
-            (* Debug.print ("reduce_for_source.Table body after renaming: " ^ show body'); *)
-            reduce_for_body ([(y, source)], [], body')
-        | Q.Prom _ ->
-            let y = Var.fresh_raw_var () in
-            let ty_elem = type_of_for_var source in
-            (* Debug.print ("reduce_for_source.Prom fresh var: " ^ string_of_int y); *)
-            let env' = Q.bind env (x, Q.Var (y, ty_elem)) in
-            let body' = body env' empty_os in
-            reduce_for_body ([(y,source)], [], body')
-        | v -> Q.query_error "Bad source in for comprehension: %s" (Q.string_of_t v)
-
 let rec reduce_if_body (c, t, e) =
   match t with
     | Q.Record then_fields ->
@@ -338,7 +270,21 @@ struct
     let open Q in
     Env.Int.bindings (e.qenv)
 
-  let reduce_artifacts = function
+  let rec reduce_project (r, label) =
+    match r with
+      | Q.Record fields ->
+        assert (StringMap.mem label fields);
+        StringMap.find label fields
+      | Q.If (c, t, e) ->
+        Q.If (c, reduce_project (t, label), reduce_project (e, label))
+      | Q.Var (_x, Types.Record row) ->
+        let field_types =  Q.field_types_of_row row in
+        assert (StringMap.mem label field_types);
+        Q.Project (r, label)
+      | _ -> Q.query_error ("Error projecting label %s from record: %s") label (Q.string_of_t r)
+
+  (* this now receives a function xc (xlate computation) *)
+  let reduce_artifacts xc = function
   | Q.Apply (Q.Primitive "stringToXml", [u]) ->
     Q.Singleton (Q.XML (Value.Text (Q.unbox_string u)))
   | Q.Apply (Q.Primitive "AsList", [xs])
@@ -355,6 +301,57 @@ struct
   | Q.Apply (Q.Primitive "vtTo", [x]) ->
     Q.Project (x, TemporalField.to_field)
   | Q.Apply (Q.Primitive "Distinct", [u]) -> Q.Prom (Q.Dedup u)
+  | Q.Apply (Q.Primitive "AggBy", [q; aggs]) ->
+    let aggError x = Debug.print ("AggBy error --" ^ x); assert false in
+    let of_closure = function
+    | Q.Closure (([x], comp), env) ->
+        (* a dummy type because we cannot synthesize the right one here *)
+        let vty = Types.wrong_type in
+        let vx = Q.Var (x, vty) in
+        let env' = Q.bind env (x, vx) in
+        x, xc env' comp
+    | q -> aggError ("of_closure of " ^ (Q.show q))
+    in
+    let of_apply = function
+    | Q.Apply (f, [arg]) -> f, arg
+    | q -> aggError ("of_apply of " ^ (Q.show q))
+    in
+    let of_map_project = function
+    | Q.Apply (Q.Primitive "ConcatMap", [c;q]) -> c, q
+    | Q.Apply (Q.Project (r, l), [c;q]) when reduce_project (r, l) = Q.Primitive "ConcatMap" -> c, q
+    | q -> aggError ("of_map_project of " ^ (Q.show q))
+    in
+    let of_project = function
+    | Q.Project (r, l) -> l, r
+    | q -> aggError ("of_project of " ^ (Q.show q))
+    in
+    let of_singleton = function
+    (* | Q.Singleton q -> q -- but not really *)
+    | Q.Apply (Q.Primitive "Cons", [q; Q.Concat []]) -> q
+    | q -> aggError ("of_singleton of " ^  (Q.show q))
+    in
+    let of_record _x = function
+    | Q.Record fields ->
+      StringMap.fold (fun label v acc ->
+        (* f is the aggregate function for this label *)
+        let f, arg = of_apply v in
+        let c, _q = of_map_project arg in
+        (* TODO we should check q = x *)
+        let y, cbody = of_closure c in
+        match of_project (of_singleton cbody) with
+        | l, Q.Var (var, _) when var = y ->
+          StringMap.add label (f, l) acc
+        | l, q -> aggError ("of_record label " ^ l ^ ": " ^ (Q.show q))
+        )
+        fields
+        StringMap.empty
+    | q -> aggError ("of_record " ^ (Q.show q))
+    in
+    Debug.print ("Aggregating with: " ^ Q.show aggs);
+    let x, v = of_closure aggs in
+    let ar = of_record x v in
+    Q.AggBy (ar, q)
+
   | u -> u
 
   let rec xlate env : Ir.value -> Q.t = let open Ir in function
@@ -362,9 +359,6 @@ struct
     | Variable var ->
         begin
           match Q.lookup env var with
-            | Q.Var (x, tyx) ->
-                (* eta-expand record variables *)
-                Q.eta_expand_var (x, tyx)
             | Q.Primitive "Nil" -> Q.nil
             (* We could consider detecting and eta-expand tables here.
                The only other possible sources of table values would
@@ -437,7 +431,7 @@ struct
           Q.Singleton (Q.XML (Value.Node (tag, children)))
 
     | ApplyPure (f, ps) ->
-        reduce_artifacts (Q.Apply (xlate env f, List.map (xlate env) ps))
+        reduce_artifacts computation (Q.Apply (xlate env f, List.map (xlate env) ps))
     | Closure (f, _, v) ->
       let open Q in
       let (_finfo, (xs, body), z_opt, _location) = Tables.find Tables.fun_defs f in
@@ -475,7 +469,7 @@ struct
   and tail_computation env : Ir.tail_computation -> Q.t = let open Ir in function
     | Return v -> xlate env v
     | Apply (f, args) ->
-        reduce_artifacts (Q.Apply (xlate env f, List.map (xlate env) args))
+        reduce_artifacts computation (Q.Apply (xlate env f, List.map (xlate env) args))
     | Special (Ir.Query (None, policy, e, _)) ->
         let open Q in
         check_policies_compatible env.policy policy;
@@ -540,22 +534,99 @@ struct
     | Q.Variant (_, t) -> cfree bvs t
     | Q.Concat tl -> List.exists (cfree bvs) tl
     | Q.For (_, gs, os, b) ->
-        let bvs'', res = List.fold_left (fun (bvs',acc) (w,q) -> w::bvs', acc || cfree bvs' q) (bvs, false) gs in
+        let bvs'', res = List.fold_left (fun (bvs',acc) (_genkind,w,q) -> w::bvs', acc || cfree bvs' q) (bvs, false) gs in
         res || cfree bvs'' b || List.exists (cfree bvs) os
     | Q.Record fl -> StringMap.exists (fun _ t -> cfree bvs t) fl
     | _ -> false
     in cfree []
 
-  let mk_for_term env (x,xs) body_f =
-    let ty_elem =
-      Q.type_of_expression xs
-      |> TypeUtils.element_type ~overstep_quantifiers:true
-    in
-    (* let newx = Var.fresh_raw_var () in *)
+  let mk_for_term env (pol,x,xs) body_f =
+    let ty_elem = type_of_for_var pol xs in
     let vx = Q.Var (x, ty_elem) in
     let cenv = Q.bind env (x, vx) in
-    (* Debug.print ("mk_for_term: " ^ string_of_int newx ^ " for " ^ string_of_int x); *)
-    Q.For (None, [x,xs], [], body_f cenv)
+    Q.For (None, [pol,x,xs], [], body_f cenv)
+
+  (* this has the effect of performing beta reduction when the generator in
+   * the main input is a Singleton *)
+  let reduce_for_source gsx env = function
+  (* in a value comprehesion, no need to unbox a MapEntry in v because
+   * NRC with grouping forces the generator to be a pure collection *)
+  | (Q.Entries, x, Q.Singleton v) -> gsx, Q.bind env (x,v)
+  | (Q.Keys, x, Q.Singleton (Q.MapEntry (k,_))) -> gsx, Q.bind env (x,k)
+  | (Q.Entries, x, (Q.Table (Value.Table.{ row; temporality; temporal_fields; _ } as table) as q))
+     when temporality = Temporality.Transaction || temporality = Temporality.valid ->
+       let (from_field, to_field) = OptionUtils.val_of temporal_fields in
+       (* Transaction / Valid-time tables: Need to wrap as metadata *)
+       (* First, generate a fresh variable for the table *)
+       let make_spec_map = StringMap.map (fun x -> Types.Present x) in
+       let field_types = Q.table_field_types table in
+       let base_field_types =
+         StringMap.filter
+           (fun x _ -> x <> from_field && x <> to_field)
+           field_types in
+       let (_, row_var, dual) = row in
+       let z = Var.fresh_raw_var () in
+       let tyz = Types.(Record (Row (make_spec_map field_types, row_var, dual))) in
+       let base_ty_elem = Types.(Record (Row (make_spec_map base_field_types, row_var, dual))) in
+       let vz = Q.Var (z, tyz) in
+
+       (* Second, generate a fresh variable for the metadata *)
+       let metadata_record =
+         StringMap.from_alist [
+           (TemporalField.data_field,
+             Q.eta_expand_var (z, base_ty_elem));
+           (TemporalField.from_field,
+             Q.Project (vz, from_field));
+           (TemporalField.to_field,
+             Q.Project (vz, to_field))
+         ] in
+       Debug.print ("reduce_for_source with temporal generator: " ^ (Q.show (Q.Record metadata_record)));
+       let env' = Q.bind env (x, Q.Record metadata_record) in
+       gsx@[Q.Entries, z, q], env'
+  | (pol, x, q) ->
+      let z = Var.fresh_raw_var () in
+      let tyz = type_of_for_var pol q in
+      let vz = Q.Var (z, tyz) in
+      let env' = Q.bind env (x, vz) in
+      gsx@[pol, z, q], env'
+
+  (* when the head of a comprehension is a Prom, this lifts it to a generator
+   * by means of eta-expansion *)
+  let reduce_for_body gsx = function
+  | Q.Prom _ as u ->
+      let z = Var.fresh_raw_var () in
+      let tyz =
+        Q.type_of_expression u
+        |> TypeUtils.element_type
+      in
+      let vz = Q.Var (z, tyz) in
+      gsx@[Q.Entries,z,u], Q.Singleton vz
+  | u -> gsx, u
+
+  (* auxiliary functions to pack/unpack normalised collections *)
+  let pack_for (body, c, gs, os) =
+    let body' = reduce_where_then (c,body) in
+    match gs, os with
+    | [], [] -> body'
+    | _ -> Q.For (None, gs, os, body')
+
+  let pack_ncoll ql = reduce_concat (List.map pack_for ql)
+
+  let unpack_where = function
+    | Q.If (c, t, Q.Concat []) -> t, c
+    | q -> q,  Q.Constant (Constant.Bool true)
+
+  let unpack_for = function
+    | Q.For (_, gs, os, body) ->
+        let body', c = unpack_where body in
+        body', c, gs, os
+    | q ->
+        let body', c = unpack_where q in
+        body', c, [], []
+
+  let unpack_ncoll = function
+  | Q.Concat ql -> List.map unpack_for ql
+  | q -> [unpack_for q]
 
   let rec norm in_dedup env : Q.t -> Q.t =
     function
@@ -603,22 +674,10 @@ struct
         end
     | Q.Record fl -> Q.Record (StringMap.map (norm false env) fl)
     | Q.Singleton v -> Q.Singleton (norm false env v)
+    | Q.MapEntry (k,v) -> Q.MapEntry (norm false env k, norm false env v)
     | Q.Concat xs -> reduce_concat (List.map (norm in_dedup env) xs)
     | Q.Project (r, label) ->
-        let rec project (r, label) =
-          match r with
-            | Q.Record fields ->
-              assert (StringMap.mem label fields);
-              StringMap.find label fields
-            | Q.If (c, t, e) ->
-              Q.If (c, project (t, label), project (e, label))
-            | Q.Var (_x, Types.Record row) ->
-              let field_types =  Q.field_types_of_row row in
-              assert (StringMap.mem label field_types);
-              Q.Project (r, label)
-            | _ -> Q.query_error ("Error projecting label %s from record: %s") label (Q.string_of_t r)
-        in
-        retn in_dedup (project (norm false env r, label))
+        retn in_dedup (reduce_project (norm false env r, label))
     | Q.Erase (r, labels) ->
         let rec erase (r, labels) =
           match r with
@@ -647,31 +706,36 @@ struct
     | Q.Apply (f, xs) as _orig ->
       apply in_dedup env (norm false env f, List.map (norm false env) xs)
     | Q.For (_, gs, os, u) as _orig ->
-        let rec reduce_gs env os_f body = function
-        | [] ->
-          begin
-            match norm in_dedup env body with
-            | Q.For (_, gs', os', u') ->
-                reduce_gs env (os_f -<- (fun os'' -> os'@os'')) u' gs'
-            (* this special case allows us to hoist a non-standard For body into a generator *)
-            | Q.Prom _ as u' ->
-                let z = Var.fresh_raw_var () in
-                let tyz =
-                  Q.type_of_expression u'
-                  |> TypeUtils.element_type
-                in
-                let vz = Q.Var (z, tyz) in
-                reduce_for_source env (z, u', tyz) (fun env' os_f' ->
-                  Q.For (None, [], List.map (norm false env') (os_f' (os_f [])),
-                    norm in_dedup env' (Q.Singleton vz)))
-            | u' ->
-                Q.For (None, [], List.map (norm false env) (os_f []), u')
-          end
-        | (x,g)::gs' -> (* equivalent to xs = For gs' u, body = g, but possibly the arguments aren't normalized *)
-            let tyg = Q.type_of_expression g in
-            reduce_for_source env (x, norm in_dedup env g, tyg) (fun env' os_f' -> reduce_gs env' (os_f -<- os_f') body gs')
+        let reduce_gs =
+          let rec rgs gsx cx env os body = function
+          | (pol,x,g)::gs' ->
+              let ng = unpack_ncoll (norm in_dedup env g) in
+              begin
+                match pol, in_dedup, ng with
+                (* if pol is Entries, we are in a set comprehension, or the generator is nil or a singleton, we can reduce *)
+                | Q.Entries, _, _
+                | _, true, _
+                | _, _, ([] | [(Q.Singleton _, _, [], _)]) ->
+                  List.concat (List.map (fun (gsrc, gc, ggs, gos) ->
+                        let gsx', env' = reduce_for_source (gsx@ggs) env (pol,x,gsrc) in
+                        rgs gsx' (reduce_and (cx, gc)) env' (os@gos) body gs') ng)
+                (* pol is Keys, we are in a bag comprehension, and the generator is not nil or a singleton: no unnesting or splitting of unions *)
+                | _ ->
+                  let z = Var.fresh_raw_var () in
+                  let tyz = type_of_for_var pol g in
+                  let vz = Q.Var (z, tyz) in
+                  let env' = Q.bind env (x, vz) in
+                  rgs (gsx@[pol,z,pack_ncoll ng]) cx env' os body gs'
+              end
+          | [] ->
+              let nbody = unpack_ncoll (norm in_dedup env body) in
+              List.map (fun (bbody, bc, bgs, bos) ->
+                    let bgs', bbody' = reduce_for_body (gsx@bgs) bbody in
+                    let os' = List.map (fun o -> norm false env o) (os@bos) in
+                    bbody', reduce_and (cx, bc), bgs', os') nbody
+          in rgs [] (Q.Constant (Constant.Bool true))
         in
-        reduce_gs env (fun os' -> os@os') u gs
+        pack_ncoll (reduce_gs env os u gs)
     | Q.If (c, t, e) ->
         reduce_if_condition (norm false env c, norm in_dedup env t, norm in_dedup env e)
     | Q.Case (v, cases, default) ->
@@ -700,7 +764,57 @@ struct
     | Q.Prom v when in_dedup -> norm false env v
     | Q.Prom v (* when not in_dedup *) ->
         Q.Prom (norm false env v)
+    | Q.GroupBy ((x,qx), q) ->
+       let ql = unpack_ncoll (norm in_dedup env q) in
+       let qx' = norm false env qx in
+       (* the following assumes normalised records are eta expanded *)
+       let rcd_combine = function
+       | Q.Record rx, Q.Record ry ->
+           begin
+             try Q.Record (StringMap.union_disjoint rx ry)
+             with StringMap.Not_disjoint _ -> Q.query_error "rcd_combine: unnable to merge overlapping grouping criteria (buggy typechecker?)"
+           end
+       | Q.Record _, z | z, _ -> Q.query_error "rcd_combine: unexpected non-record argument (buggy normaliser?): %s" (Q.show z)
+       in
+       let gc_combine (x,qx) (y,qy) =
+         let z = Var.fresh_raw_var () in
+         let tyz = TypeUtils.element_type ~overstep_quantifiers:true (Q.type_of_expression q) in
+         let vz = Q.Var (z, tyz) in
+         let qx = norm false (Q.bind env (x, vz)) qx in
+         let qy = norm false (Q.bind env (y, vz)) qy in
+         z, rcd_combine (qx, qy)
+       in
+       let reduce_groupby = function
+       | Q.Singleton (Q.MapEntry (k, v)) -> Q.Singleton (Q.MapEntry (rcd_combine ((norm false (Q.bind env (x, v)) qx'), k), v))
+       | Q.Singleton v (* not MapEntry *) -> Q.Singleton (Q.MapEntry (norm false (Q.bind env (x, v)) qx', v))
+       | Q.GroupBy ((y, qy), q') -> Q.GroupBy (gc_combine (x,qx') (y,qy), q')
+       | qf -> Q.GroupBy ((x, qx'), qf)
+       in
+       let ql' = List.map (fun (b, c, gs, os) -> (reduce_groupby b, c, gs, os)) ql in
+       pack_ncoll ql'
+    | Q.AggBy (ar, q) -> Q.AggBy (StringMap.map (fun (x,y) -> norm false env x, y) ar, norm in_dedup env q)
+    | Q.Lookup (q, k) ->
+       let ql = unpack_ncoll (norm in_dedup env q) in
+       let k' = norm false env k in
+       let reduce_lookup = function
+       | Q.Singleton (Q.MapEntry (kv, v)) -> reduce_where_then (reduce_eq (kv, k'), Q.Singleton v)
+       | Q.Singleton _ (* not MapEntry *) as qorig -> assert (Q.type_of_expression k' = Types.unit_type); qorig
+       | qorig -> Q.Lookup (qorig, k)
+       in
+       let ql' = List.map (fun (b, c, gs, os) -> (reduce_lookup b, c, gs, os)) ql in
+       pack_ncoll ql'
     | v -> retn in_dedup v
+
+  and apply_concatMap in_dedup env pol xs = function
+  | Q.Closure (([x], body), closure_env) ->
+      (* Debug.print ("Application of ConcatMap(Key)");
+      Debug.print ("pol: " ^ Q.show_genkind pol);
+      Debug.print ("f: " ^ Q.show f);
+      Debug.print ("xs: " ^ Q.show xs); *)
+      (fun cenv -> computation cenv body)
+      |> mk_for_term (env ++ closure_env) (pol,x,xs)
+      |> norm in_dedup env
+  | _ -> assert false
 
   and apply in_dedup env : Q.t * Q.t list -> Q.t = function
     | Q.Closure ((xs, body), closure_env), args ->
@@ -717,27 +831,29 @@ struct
         norm in_dedup env (Q.Concat [Q.Singleton x; xs])
     | Q.Primitive "Concat", ([_xs; _ys] as l) ->
         norm in_dedup env (Q.Concat l)
-    | Q.Primitive "ConcatMap", [f; xs] ->
-        begin
-          match f with
-            | Q.Closure (([x], body), closure_env) ->
-                (* Debug.print ("Applying ConcatMap");
-                Debug.print ("f: " ^ Q.show f);
-                Debug.print ("xs: " ^ Q.show xs); *)
-                (fun cenv -> computation cenv body)
-                |> mk_for_term (env ++ closure_env) (x,xs)
-                |> norm in_dedup env
-            | _ -> assert false
-        end
+    | Q.Primitive "ConcatMap", [f; xs] -> apply_concatMap in_dedup env Q.Entries xs f
+    | Q.Primitive "ConcatMapKey", [f; xs] -> apply_concatMap in_dedup env Q.Keys xs f
     | Q.Primitive "Map", [f; xs] ->
         begin
           match f with
             | Q.Closure (([x], body), closure_env) ->
                 (fun cenv -> Q.Singleton (computation cenv body))
-                |> mk_for_term (env ++ closure_env) (x,xs)
+                |> mk_for_term (env ++ closure_env) (Q.Entries,x,xs)
                 |> norm in_dedup env
             | _ -> assert false
         end
+    | Q.Primitive "GroupBy", [f; q] ->
+        begin
+          match f with
+            | Q.Closure (([x], body_c), closure_env) ->
+                let tyx = TypeUtils.element_type ~overstep_quantifiers:true (Q.type_of_expression q) in
+                let vx = Q.Var (x, tyx) in
+                let body_env = Q.bind (env ++ closure_env) (x,vx) in
+                let body = computation body_env body_c in
+                norm in_dedup env (Q.GroupBy ((x, body), q))
+            | _ -> assert false
+        end
+    | Q.Primitive "Lookup", [v; q] -> norm in_dedup env (Q.Lookup (q, v))
     | Q.Primitive "SortBy", [f; xs] ->
         begin
           match xs with
@@ -791,7 +907,6 @@ struct
   and retn in_dedup u = if in_dedup then Q.Dedup u else u
 
   (* specialize norm_* with in_dedup = false at the start of normalization *)
-  (* (norm is currently unused outside query.ml, so we comment the following) *)
   let norm = norm false
   let norm_comp = norm_comp false
 

@@ -7,7 +7,7 @@ module QL = QueryLang
    semantics. *)
 module Order =
 struct
-  type gen = Var.var * QL.t
+  type gen = QL.genkind * Var.var * QL.t
   type context = gen list
 
 (* TODO:
@@ -100,9 +100,9 @@ struct
   type preclause = (path * (context * QL.t)) * query_tree
   type clause = context * QL.t * orders
 
-  let gen : (Var.var * QL.t) -> QL.t list =
+  let gen : (QL.genkind * Var.var * QL.t) -> QL.t list =
     function
-      | (x, QL.Table t) ->
+      | (_genkind, x, QL.Table t) ->
         let field_types = QL.table_field_types t in
         let tyx = Types.make_record_type field_types in
         List.rev
@@ -298,7 +298,7 @@ let ordered_query v =
   (* Debug.print ("concat vs: "^Q.string_of_t (`Concat vs)); *)
   Sql.Union (Sql.All, List.map QL.sql_of_query vs, n)
 
-let compile : Value.env -> (int * int) option * Ir.computation -> (Value.database * Sql.query * Types.datatype) option =
+let compile : Value.env -> (int * int) option * Ir.computation -> (Value.database * Sql.query * Types.datatype * (Value.t -> Value.t)) option =
   fun env (range, e) ->
     (* Debug.print ("e: "^Ir.show_computation e); *)
     let v = Q.Eval.eval QueryPolicy.Flat env e in
@@ -308,5 +308,7 @@ let compile : Value.env -> (int * int) option * Ir.computation -> (Value.databas
         | Some db ->
             let t = Types.unwrap_list_type (QL.type_of_expression v) in
             let q = ordered_query v in
-              Debug.print ("Generated query: "^(db#string_of_query ~range q));
-              Some (db, q, t)
+            Debug.print ("Generated query: "^(db#string_of_query ~range q));
+            (* TODO: trivial readback, might be changed (see EvalMixingQuery) to allow nested records *)
+            let readback x = x in
+            Some (db, q, t, readback)

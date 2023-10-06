@@ -14,7 +14,7 @@ open CommonTypes
 val flatfield : string -> string -> string
 val flattened_pair : QueryLang.t -> QueryLang.t -> QueryLang.t
 val flattened_pair_ft : QueryLang.t -> QueryLang.t -> Types.datatype stringmap
-val type_of_for_var : QueryLang.t -> Types.datatype
+val type_of_for_var : QueryLang.genkind -> QueryLang.t -> Types.datatype
 
 val reduce_where_then : QueryLang.t * QueryLang.t -> QueryLang.t
 val reduce_and : QueryLang.t * QueryLang.t -> QueryLang.t

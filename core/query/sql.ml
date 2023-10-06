@@ -29,7 +29,8 @@ and insert_records =
   | Values of (base list list)
   | TableQuery of Var.var
 and select_clause =
-    multiplicity * select_fields * from_clause list * base * base list
+    (* ( distinct_opt, fs, ts, cond, groupby, orderby) *)
+    multiplicity * select_fields * from_clause list * base * base list * base list
 and select_fields =
   | Star
   | Fields    of (base * string) list
@@ -41,6 +42,7 @@ and base =
   | Constant  of Constant.t
   | Project   of Var.var * string
   | Apply     of string * base list
+  | Aggr      of string * query
   | Empty     of query
   | Length    of query
   | RowNumber of (Var.var * string) list
@@ -128,7 +130,11 @@ struct
         "toLower",  "lower";
         "ord",      "ord";
         "chr",      "char";
-        "random",   "rand" ]
+        "random",   "rand";
+        "sum",      "sum";
+        "avg",      "avg";
+        "min",      "min";
+        "max",      "max"]
 
   let is f = StringMap.mem f funs
   let name f = StringMap.find f funs
@@ -177,8 +183,11 @@ class virtual printer =
     (* SQL doesn't support empty records, so this is a hack. *)
     Format.pp_print_string ppf "0 as \"@unit@\""
 
-  method pp_select ppf mult fields tables condition os ignore_fields =
+  method pp_select ppf mult fields tables condition gbys os ignore_fields =
     let pp_os_condition ppf a =
+      Format.fprintf ppf "%a" (self#pp_base false) a in
+    (* XXX: probbly same as above, but come back later *)
+    let pp_gby ppf a =
       Format.fprintf ppf "%a" (self#pp_base false) a in
     let pr_q = self#pp_query ignore_fields in
     let pp_distinct ppf = function
@@ -191,6 +200,10 @@ class virtual printer =
         | _ ->
             Format.fprintf ppf "\norder by %a"
             (self#pp_comma_separated pp_os_condition) os in
+    let pp_groupby ppf = function
+    | [] -> ()
+    | gbys -> Format.fprintf ppf "\ngroup by %a" (self#pp_comma_separated pp_gby) gbys
+    in
     let pp_from_clause ppf fc =
       match fc with
         | TableRef (t, x) -> Format.fprintf ppf "%a as %s" self#pp_quote t (string_of_table_var x)
@@ -201,11 +214,12 @@ class virtual printer =
         | Constant (Constant.Bool true) -> ()
         | _ -> Format.fprintf ppf "\nwhere %a" pp_os_condition condition
     in
-    Format.fprintf ppf "select %a%a\nfrom %a%a%a"
+    Format.fprintf ppf "select %a%a\nfrom %a%a%a%a"
       pp_distinct mult
       self#pp_fields fields
       (self#pp_comma_separated pp_from_clause) tables
       pp_where condition
+      pp_groupby gbys
       pp_orderby os
 
   method private pr_b_ignore_fields = self#pp_base true
@@ -264,7 +278,7 @@ class virtual printer =
       | "^." -> Format.fprintf ppf "pow(%a,%a)"
             pr_b_one_table l
             pr_b_one_table r
-      | _ -> Format.fprintf ppf "(%a%s%a)"
+      | _ -> Format.fprintf ppf "((%a)%s(%a))"
             pr_b_one_table l
             (Arithmetic.sql_name op)
             pr_b_one_table r
@@ -307,15 +321,15 @@ class virtual printer =
         Format.fprintf ppf "%a%a"
           (Format.pp_print_list ~pp_sep:pp_sep_union pp_union_term) qs
           Format.pp_print_string (order_by_clause n)
-      | Select (_, fields, [], Constant (Constant.Bool true), _os) ->
+      | Select (_, fields, [], Constant (Constant.Bool true), _gbys, _os) ->
         Format.fprintf ppf "select %a" pp_fields fields
-      | Select (_, fields, [], condition, _os) ->
+      | Select (_, fields, [], condition, _gbys, _os) ->
         Format.fprintf ppf "select * from (select %a) as %a where %a"
           pp_fields fields
           Format.pp_print_string (fresh_dummy_var ())
           pr_b condition
-      | Select (mult, fields, tables, condition, os) ->
-          self#pp_select ppf mult fields tables condition os ignore_fields
+      | Select (mult, fields, tables, condition, gbys, os) ->
+          self#pp_select ppf mult fields tables condition gbys os ignore_fields
       | Delete { del_table; del_where } ->
           self#pp_delete ppf del_table del_where
       | Update { upd_table; upd_fields; upd_where } ->
@@ -411,6 +425,13 @@ class virtual printer =
             Format.fprintf ppf "select count(*) from (%a) as %a"
               pr_q_true q
               Format.pp_print_string (fresh_dummy_var ())
+        | Aggr (f, q) ->
+            let v = fresh_table_var () in
+            Format.fprintf ppf "select %a(%a) from (%a) as %a"
+              Format.pp_print_string (SqlFuns.name f)
+              (self#pp_projection true) (v, "@")
+              pr_q_true q
+              Format.pp_print_string (string_of_table_var v)
         | RowNumber [] ->
             Format.fprintf ppf "%a" Format.pp_print_string "1"
         | RowNumber ps ->
@@ -448,7 +469,7 @@ let rec inline_outer_with q =
     | fromclause -> fromclause
   in
   match q with
-    | With (z, q, [Select (fSet, fields, tables, condition, os)]) ->
-        Select(fSet, fields, List.map (replace_subquery z q) tables, condition, os)
+    | With (z, q, [Select (fSet, fields, tables, condition, gbys, os)]) ->
+        Select(fSet, fields, List.map (replace_subquery z q) tables, condition, gbys, os)
     | Union (fSet, qs,n) -> Union (fSet, List.map inline_outer_with qs,n)
     | q -> q

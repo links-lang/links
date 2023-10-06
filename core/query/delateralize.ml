@@ -22,15 +22,19 @@ let graph_query (q1,ty1) x (q2,ty2) =
     let y = Var.fresh_raw_var () in
     let p = Q.flattened_pair (QL.Var (x,ty1)) (QL.Var (y,ty2)) in
     let ftys = Q.flattened_pair_ft (QL.Var (x,ty1)) (QL.Var (y,ty2)) in
-    QL.For (None, [(x, q1); (y, q2)], [], QL.Singleton p), ftys
+    QL.For (None, [(QL.Entries, x, q1); (QL.Entries, y, q2)], [], QL.Singleton p), ftys
 
 (*
     DELATERALIZING REWRITE for Prom:
      for gs, y <- Prom(q3) do q1                          -- s.t. x <- q2 in gs
      ~> for gs, p <- Prom(G(x <- Dedup q2; q3))
         where x = p.1 do (\lambda y.q1) p.2
+
+     there's a similar rewrite for key comprehension, but the bag promotion is implicit:
+     this is why we require a genkind parameter
 *)
-let prom_delateralize gs q1 x (q2,ty2) y (q3,ty3) =
+let rew_delateralize genkind gs q1 x (q2,ty2) y (q3,ty3) =
+    let cast x = match genkind with QL.Entries -> QL.Prom x | _ -> x in
     let p = Var.fresh_raw_var () in
     let graph, ftys = graph_query (QL.Dedup q2,ty2) x (q3,ty3) in
     let vp = QL.Var (p,Types.make_record_type ftys) in
@@ -58,7 +62,7 @@ let prom_delateralize gs q1 x (q2,ty2) y (q3,ty3) =
     let q1_rp = QL.subst q1 y rp
     in
     QL.For (None,
-        gs @ [(p, QL.Prom graph)],
+        gs @ [(QL.Entries, p, cast graph)],
         [],
         QL.If (eq_query, q1_rp, QL.nil))
 
@@ -70,23 +74,24 @@ let rec delateralize_step q =
     match q with
     | QL.For (_tag, gs, os, q) ->
         let rec findgs gsx = function
-        | (y,QL.Prom qy as gy)::gsy ->
+        | (QL.Entries as genkind, y,QL.Prom qy as gy)::gsy
+        | (QL.Keys as genkind, y, qy as gy)::gsy ->
             begin
                 match QL.occurs_free_gens gsx qy with
                 (* tail-consing is annoying, but occurs_free_list needs arguments in this order *)
                 | None -> findgs (gsx@[gy]) gsy
-                | Some (x,qx,tyx) -> Some (gsx,x,qx,tyx,y,qy,gsy)
+                | Some (x,qx,tyx) -> Some (gsx,x,qx,tyx,genkind,y,qy,gsy)
             end
         | gy::gsy -> findgs (gy::gsx) gsy
         | [] -> None
         in begin
             match findgs [] gs with
-            | Some (gsx,x,qx,tyx,y,qy,gsy) ->
+            | Some (gsx,x,qx,tyx,gky,y,qy,gsy) ->
                 let qf = QL.For (None, gsy, [], q) in
-                let tyy = Q.type_of_for_var qy in
-                Some (prom_delateralize gsx qf x (qx,tyx) y (qy,tyy))
+                let tyy = Q.type_of_for_var gky qy in
+                Some (rew_delateralize gky gsx qf x (qx,tyx) y (qy,tyy))
             | None ->
-                let ogs = gs >>==? (fun (z,qz) -> ds qz >>=? fun qz' -> Some (z,qz')) in
+                let ogs = gs >>==? (fun (genkind, z,qz) -> ds qz >>=? fun qz' -> Some (genkind,z,qz')) in
                 let oq = ds q in
                 begin
                     match ogs, oq with

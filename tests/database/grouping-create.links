@@ -1,0 +1,122 @@
+var db = database "links";
+var factorials = table "factorials" with (i : Int, f : Int) from db;
+
+var clients = table "cclients" with (cid : Int, name : String, address : String) from db;
+var products = table "products" with (pid : Int, name : String, category : Int, price : Int) from db;
+var orders = table "orders" with (dates : String, cid : Int, pid : Int, qty : Int) from db;
+var classes = table "classes" with (class : String) from db;
+var students = table "students" with (sid : Int, name : String, class : String) from db;
+var tests = table "tests" with (id : Int, sid : Int, course : String, score: Int) from db;
+var degrees = table "degrees" with (sid : Int, degree : String) from db;
+
+fun exterminate() {
+  delete (x <-- clients);
+  delete (x <-- products);
+  delete (x <-- orders);
+  delete (x <-- classes);
+  delete (x <-- students);
+  delete (x <-- tests);
+  delete (x <-- degrees)
+}
+
+fun rndInt(i) {
+  floatToInt(random() *. intToFloat(i)) + 1
+}
+
+fun rndName() {
+  "name" ^^ intToString(rndInt(353))
+}
+
+fun rndCity() {
+  "city" ^^ intToString(rndInt(23))
+}
+
+fun rndDate() {
+  var i = rndInt(31);
+  if (i < 10)
+    { "2020-01-0" ^^ intToString(i) }
+  else
+    { "2020-01-" ^^ intToString(i) }
+}
+
+fun intToClass(i) {
+  "class" ^^ intToString(i)
+}
+
+fun rndClass() {
+  intToClass(rndInt(5))
+}
+
+fun intToCourse(i) {
+  "course" ^^ intToString(i)
+}
+
+fun rndCourse() {
+  intToCourse(rndInt(3))
+}
+
+fun rndDegree() {
+  if (random() < 0.8)
+    { "BSc" }
+  else
+    { "MSc" }
+}
+
+fun populate() {
+  ignore(for (i <- [1..1000]) {
+    insert clients
+      values (cid, name, address)
+      [(cid = i, name = rndName(), address = rndCity())];
+    []
+  });
+
+  ignore(for (i <- [1..5000]) {
+    insert products
+      values (pid, name, category, price)
+      [(pid = i, name = rndName(), category = rndInt(11), price = rndInt(1000))];
+    []
+  });
+
+  ignore(for (i <- [1..10000]) {
+    insert orders
+      values (dates, cid, pid, qty)
+      [(dates = rndDate(), cid = rndInt(1000), pid = rndInt(5000), qty = rndInt(20))];
+    []
+  });
+
+  ignore(for (i <- [1..5]) {
+    insert classes
+      values (class)
+      [(class = intToClass(i))];
+    []
+  });
+
+  ignore(for (i <- [1..1000]) {
+    insert students
+      values (sid, name, class)
+      [(sid = i, name = rndName(), class = rndClass())];
+    []
+  });
+
+  ignore(for (i <- [1..2000]) {
+    insert tests
+      values (id, sid, course, score)
+      [(id = i, sid = rndInt(1000), course = rndCourse(), score = rndInt(100))];
+    []
+  });
+
+  ignore(for (i <- [1..1000]) {
+    insert degrees
+      values (sid, degree)
+      [(sid = i, degree = rndDegree())];
+    []
+  })
+}
+
+fun test() {
+  exterminate();
+  populate()
+}
+
+test()
+

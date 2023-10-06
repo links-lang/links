@@ -22,9 +22,9 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> Q.t -> Q.t =
       | Q.For (tag, gs, os, b) ->
         let gs', env' =
           List.fold_left
-            (fun (gs', env') (x, source) ->
+            (fun (gs', env') (genkind, x, source) ->
               let y = Var.fresh_raw_var () in
-                ((y, ffb source)::gs', Env.Int.bind x y env'))
+                ((genkind, y, ffb source)::gs', Env.Int.bind x y env'))
             ([], env)
             gs
         in
@@ -32,6 +32,7 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> Q.t -> Q.t =
       | Q.If (c, t, e) -> Q.If (ffb c, ffb t, ffb e)
       | Q.Table _ as t -> t
       | Q.Singleton v -> Q.Singleton (ffb v)
+      | Q.MapEntry (k,v) -> Q.MapEntry (ffb k, ffb v)
       | Q.Database db -> Q.Database db
       | Q.Concat vs -> Q.Concat (List.map ffb vs)
       | Q.Dedup t -> Q.Dedup (ffb t)
@@ -54,6 +55,12 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> Q.t -> Q.t =
           | Some y -> Q.Var (y, ts)
         end
       | Q.Constant c -> Q.Constant c
+      | Q.GroupBy ((x,k),q) ->
+          let y = Var.fresh_raw_var () in
+          let env' = Env.Int.bind x y env in
+          Q.GroupBy ((y,freshen_for_bindings env' k), ffb q)
+      | Q.AggBy (ar, q) -> Q.AggBy (ar, ffb q)
+      | Q.Lookup (q,k) -> Q.Lookup (ffb q, ffb k)
 
 (* simple optimisations *)
 let reduce_and (a, b) =
@@ -168,7 +175,7 @@ let rec reduce_for_source : Q.t * (Q.t -> Q.t) -> Q.t =
                 | Current ->
                   let x = Var.fresh_raw_var () in
                   let ty_elem = Types.Record (Types.Row row) in
-                    reduce_for_body ([(x, source)], [], body (Q.Var (x, ty_elem)))
+                    reduce_for_body ([(Q.Entries, x, source)], [], body (Q.Var (x, ty_elem)))
                 | Temporality.Transaction | Temporality.Valid ->
                   let (from_field, to_field) = OptionUtils.val_of temporal_fields in
                   (* Transaction / Valid-time tables: Need to wrap as metadata *)
@@ -196,7 +203,7 @@ let rec reduce_for_source : Q.t * (Q.t -> Q.t) -> Q.t =
                       (TemporalField.to_field,
                         Q.Project (table_var, to_field))
                     ] in
-                  let generators = [ (table_raw_var, source) ] in
+                  let generators = [ (Q.Entries, table_raw_var, source) ] in
                   reduce_for_body (generators, [], body (Q.Record metadata_record))
           end
       | v -> Q.query_error "Bad source in for comprehension: %s" (Q.string_of_t v)
