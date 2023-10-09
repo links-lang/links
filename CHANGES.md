@@ -52,6 +52,7 @@ page](https://github.com/links-lang/links/wiki/Control-flow-linearity).
 * The `SessionFail` effect can now be supressed by disabling the
   `expose_session_fail` setting. When doing so, the `SessionFail` effect
   is included in the `wild` effect instead.
+* The (incomplete) support for distributed session delegation has been removed.
    
 # 0.9.7
 
