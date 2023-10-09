@@ -3,11 +3,19 @@
 List of changes since the latest release.
 
 ## Queries mixing set and bag semantics
-Links now provides experimental support for SQL queries with grouping and aggregation. These require the _mixing_ normaliser (`mixing_norm=on` in the configuration file).
+Links now provides experimental support for SQL queries with grouping and
+aggregation. These require the _mixing_ normaliser (`mixing_norm=on` in the
+configuration file).
 
-The result of grouping over a relation is represented as a finite map, which in Links is treated as a list of (grouping key, associated subrelation) pairs. Aggregation can then be applied groupwise to a finite map to obtain again a relation. Such Links queries are translated to SQL queries using `group by` and aggregates.
+The result of grouping over a relation is represented as a finite map, which in
+Links is treated as a list of (grouping key, associated subrelation) pairs.
+Aggregation can then be applied groupwise to a finite map to obtain again a
+relation. Such Links queries are translated to SQL queries using `group by` and
+aggregates.
 
-Further information on this feature is provided in the [Links GitHub wiki](https://github.com/links-lang/links/wiki/Grouping-and-aggregation).
+Further information on this feature is provided in the [Links GitHub
+wiki](https://github.com/links-lang/links/wiki/Grouping-and-aggregation).
+
 
 ## New syntax for handlers
 
@@ -26,21 +34,24 @@ handle (...) {
 }
 ```
 
-We can also write `case <Op(params) -> resumption> -> ...`. For now, the semantics for `->` and `=>` are the same.
+We can also write `case <Op(params) -> resumption> -> ...`.
+For now, the semantics for `->` and `=>` are the same.
+
+## Control-flow linearity
+Links now tracks control-flow linearity when the flag `--control-flow-linearity`
+is enabled. This extension fixes a long-standing soundness bug (see issue
+[#544](https://github.com/links-lang/links/issues/544)) with the interaction
+between exceptions, multi-shot effect handlers and session-typed channels. More
+details about this extension can be found in the [wiki
+page](https://github.com/links-lang/links/wiki/Control-flow-linearity).
 
 ## Other changes and fixes
-* The package `links-mysql`, based on the `mysql` opam package is no
-  longer supported. Instead, the package `links-mysql8`, based on the
-  `mysql8` package is provided, which also supports version of MySQL
-   prior to 8.
-* Control-flow linearity: Links now tracks control-flow linearity when
-  the flag `--control-flow-linearity` is enabled. This extension fixes
-  a long-standing soundness bug (see issue
-  [#544](https://github.com/links-lang/links/issues/544)) with the
-  interaction between exceptions, multi-shot effect handlers and
-  session-typed channels. More details about this extension can be
-  found in the [wiki
-  page](https://github.com/links-lang/links/wiki/Control-flow-linearity).
+* The package `links-mysql` now relies on the `mysql8` package as its underlying
+  database driver.
+* Links now supports OCaml 5.
+* The `SessionFail` effect can now be supressed by disabling the
+  `expose_session_fail` setting. When doing so, the `SessionFail` effect
+  is included in the `wild` effect instead.
    
 # 0.9.7
 
