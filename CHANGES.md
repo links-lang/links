@@ -9,6 +9,25 @@ The result of grouping over a relation is represented as a finite map, which in 
 
 Further information on this feature is provided in the [Links GitHub wiki](https://github.com/links-lang/links/wiki/Grouping-and-aggregation).
 
+## New syntax for handlers
+
+The syntax for handlers has changed. Instead of
+```
+handle (...) {
+  case Op(params, resumption) -> ...
+  case Return(x) -> x
+}
+```
+we write
+```
+handle (...) {
+  case <Op(params) => resumption> -> ...
+  case x -> x
+}
+```
+
+We can also write `case <Op(params) -> resumption> -> ...`. For now, the semantics for `->` and `=>` are the same.
+
 ## Other changes and fixes
 * The package `links-mysql`, based on the `mysql` opam package is no
   longer supported. Instead, the package `links-mysql8`, based on the
