@@ -16,11 +16,11 @@ val nenv : Var.var Env.String.t
 
 val primitive_vars : Utility.IntSet.t
 
-val apply_pfun : string -> Value.t list -> RequestData.request_data -> Value.t
+val apply_pfun : string -> Value.t list -> RequestData.request_data -> Value.t Lwt.t
 val primitive_stub : string -> Value.t
 
 (* jcheney: added to avoid string comparisons at runtime *)
-val apply_pfun_by_code : Var.var -> Value.t list -> RequestData.request_data -> Value.t
+val apply_pfun_by_code : Var.var -> Value.t list -> RequestData.request_data -> Value.t Lwt.t
 val primitive_stub_by_code : Var.var -> Value.t
 
 val primitive_name : Var.var -> string
