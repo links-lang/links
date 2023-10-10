@@ -1,0 +1,63 @@
+var db = database "links";
+var factorials = table "factorials" with (i : Int, f : Int) from db;
+
+var clients = table "cclients" with (cid : Int, name : String, address : String) from db;
+var products = table "products" with (pid : Int, name : String, category : Int, price : Int) from db;
+var orders = table "orders" with (dates : String, cid : Int, pid : Int, qty : Int) from db;
+var classes = table "classes" with (class : String) from db;
+var students = table "students" with (sid : Int, name : String, class : String) from db;
+var tests = table "tests" with (id : Int, sid : Int, course : String, score: Int) from db;
+var degrees = table "degrees" with (sid : Int, degree : String) from db;
+
+fun test() {
+  # 1.
+  ignore(query mixing {
+    var m = groupBy(fun (o) { (pid = o.pid) }, for (o <-- orders) where (o.dates == "2020-01-01") [o]);
+    concatMapKey(fun (k) { [(pid = k.pid, qty_sum = sum(for (o <- lookupG(k,m)) [o.qty]))] }, m)
+  });
+
+  # 2.
+  ignore(query mixing {
+    # var t = for (o <-- orders, p <-- products) where (o.pid == p.pid) [(ord = o, prod  = p)];
+    var t = for (o <-- orders, p <-- products) where (o.pid == p.pid)
+      [(odates = o.dates, ocid = o.cid, opid = o.pid, oqty = o.qty
+       , ppid = p.pid, pname = p.name, pcategory = p.category, pprice = p.price)];
+    var m = groupBy(
+      fun (x) {
+        (dates = x.odates, opid = x.opid,
+         ppid = x.ppid, name = x.pname, category = x.pcategory, price = x.pprice)
+      }, t);
+    var t' = concatMapKey(
+      fun (k) {
+        [(category = k.category
+         ,sale = intToFloat(k.price * sum(for (x <- lookupG(k,m)) [x.oqty])) *. 0.8)]
+      }, m);
+    var m' = groupBy (fun (z) { (category = z.category) }, t');
+    concatMapKey(fun (k) { [(result = sumF(for (z <- lookupG(k,m')) [z.sale]) *. 100.0)] }, m')
+  });
+
+  # 1a.
+  ignore(query mixing {
+    var m = groupBy(fun (o) { (pid = o.pid) }, for (o <-- orders) where (o.dates == "2020-01-01") [o]);
+    # the query generation code is too dumb to reduce projqty and convert the query to an aggregation query...
+    # var projqty = fun (t) { for (o <- t) [o.qty] };
+    aggBy(m, fun(t) { (qty_sum = sum(for (o <- t) [o.qty])) })
+  });
+
+  # 3.
+  query mixing {
+    # var t = for (p <-- products, o <-- orders) where (p.pid == o.pid) [(prod = p, ord = o)];
+    var t = for (o <-- orders, p <-- products) where (p.pid == o.pid)
+      [(odates = o.dates, ocid = o.cid, opid = o.pid, oqty = o.qty
+       , ppid = p.pid, pname = p.name, pcategory = p.category, pprice = p.price)];
+    var m = groupBy (fun (x) { (pid = x.opid) }, t);
+    concatMapKey(
+      fun (k) {
+        [(pid = k.pid, sales_avg = avg(for (z <- lookupG(k,m)) [ z.pprice * z.oqty ]))]
+      }, m)
+  }
+
+}
+
+test()
+

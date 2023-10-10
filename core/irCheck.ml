@@ -350,11 +350,12 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
          | Effect r -> eq_rows (context, l, r)
          | _         -> false
          end
-      | Operation (lfrom, lto) ->
+      | Operation (lfrom, lto, llin) ->
           begin match t2 with
-            | Operation (rfrom, rto) ->
+            | Operation (rfrom, rto, rlin) ->
               eqt     (context, lfrom, rfrom) &&
-              eqt     (context, lto  , rto  )
+              eqt     (context, lto  , rto  ) &&
+              llin = rlin
             | _ -> false
           end
       (* Row *)

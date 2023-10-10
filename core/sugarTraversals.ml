@@ -42,6 +42,9 @@ class map =
 
     method bool : bool -> bool = function | false -> false | true -> true
 
+    method linearity : DeclaredLinearity.t -> DeclaredLinearity.t =
+      DeclaredLinearity.(function | Lin -> Lin | Unl -> Unl)
+
     method unary_op : UnaryOp.t -> UnaryOp.t =
       let open UnaryOp in function
       | Minus -> Minus
@@ -82,11 +85,12 @@ class map =
     method type_variable : SugarTypeVar.t -> SugarTypeVar.t =
       let open SugarTypeVar in
       function
-        | TUnresolved (name, subkind_opt, freedom) ->
+        | TUnresolved (name, (is_eff, subkind_opt), freedom) ->
            let name' = o#name name in
+           let is_eff' = o#bool is_eff in
            let subkind_opt' = o#option (fun o -> o#subkind) subkind_opt in
            let freedom' = o#freedom freedom in
-           TUnresolved (name', subkind_opt', freedom')
+           TUnresolved (name', (is_eff', subkind_opt'), freedom')
         | v -> o#unknown v
 
 
@@ -315,14 +319,18 @@ class map =
           let _x_i1 = o#option (fun o -> o#phrase) _x_i1 in
           let _x_i2 = o#option (fun o -> o#typ) _x_i2 in
           ConstructorLit ((_x, _x_i1, _x_i2))
-      | DoOperation (op, ps, t) ->
+      | DoOperation (op, ps, t, b) ->
           let op  = o#phrase op in
           let ps  = o#list (fun o -> o#phrase) ps in
           let t   = o#option (fun o -> o#typ) t in
-          DoOperation (op, ps, t)
+          DoOperation (op, ps, t, b)
       | Operation _x ->
           let _x = o#name _x in
           Operation _x
+      | Linlet _x ->
+          let _x = o#phrase _x in Linlet _x
+      | Unlet _x ->
+          let _x = o#phrase _x in Unlet _x
       | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
          let m = o#phrase sh_expr in
          let params =
@@ -559,11 +567,12 @@ class map =
           let _x = o#name _x in
           let _x_i1 = o#option (fun o -> o#pattern) _x_i1
           in Variant ((_x, _x_i1))
-      | Operation (name, ps, k) ->
+      | Operation (name, ps, k, b) ->
          let name = o#name name in
          let ps = o#list (fun o -> o#pattern) ps in
          let k  = o#pattern k in
-         Operation (name, ps, k)
+         let b = o#linearity b in
+         Operation (name, ps, k, b)
       | Negative _x ->
           let _x = o#list (fun o -> o#name) _x
           in Negative _x
@@ -675,9 +684,10 @@ class map =
       | Record _x -> let _x = o#row _x in Record _x
       | Variant _x -> let _x = o#row _x in Variant _x
       | Effect r -> let r = o#row r in Effect r
-      | Operation (_x, _x_i1) ->
+      | Operation (_x, _x_i1, _x_i2) ->
         let _x = o#list (fun o -> o#datatype) _x in
-        let _x_i1 = o#datatype _x_i1 in Operation (_x, _x_i1)
+        let _x_i1 = o#datatype _x_i1 in
+        let _x_i2 = o#linearity _x_i2 in Operation (_x, _x_i1, _x_i2)
       | Table (_t, _x, _x_i1, _x_i2) ->
          let _x = o#datatype _x in
          let _x_i1 = o#datatype _x_i1 in
@@ -904,6 +914,9 @@ class fold =
 
     method bool : bool -> 'self_type = function | false -> o | true -> o
 
+    method linearity : DeclaredLinearity.t -> 'self_type =
+      DeclaredLinearity.(function | Unl -> o | Lin -> o)
+
     method unary_op : UnaryOp.t -> 'self_type =
       let open UnaryOp in function
       | Minus -> o
@@ -940,8 +953,9 @@ class fold =
     method type_variable : SugarTypeVar.t -> 'self_type =
       let open SugarTypeVar in
       function
-        | TUnresolved (name, subkind_opt, freedom) ->
+        | TUnresolved (name, (is_eff, subkind_opt), freedom) ->
            let o = o#name name in
+           let o = o#bool is_eff in
            let o = o#option (fun o -> o#subkind) subkind_opt in
            let o = o#freedom freedom in
            o
@@ -1132,12 +1146,17 @@ class fold =
       | ConstructorLit ((_x, _x_i1, _x_i2)) ->
           let o = o#name _x in
           let o = o#option (fun o -> o#phrase) _x_i1 in o
-      | DoOperation (op,ps,t) ->
+      | DoOperation (op,ps,t,b) ->
          let o = o#phrase op in
          let o = o#option (fun o -> o#unknown) t in
-         let o = o#list (fun o -> o#phrase) ps in o
+         let o = o#list (fun o -> o#phrase) ps in
+         let o = o#linearity b in o
       | Operation (_x) ->
           let o = o#name _x in o
+      | Linlet _x ->
+          let o = o#phrase _x in o
+      | Unlet _x ->
+          let o = o#phrase _x in o
       | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
          let o = o#phrase sh_expr in
          let o =
@@ -1349,10 +1368,11 @@ class fold =
       | Variant ((_x, _x_i1)) ->
           let o = o#name _x in
           let o = o#option (fun o -> o#pattern) _x_i1 in o
-      | Operation (name, ps, k) ->
+      | Operation (name, ps, k, b) ->
          let o = o#name name in
          let o = o#list (fun o -> o#pattern) ps in
          let o = o#pattern k in
+         let o = o#linearity b in
          o
       | Negative _x ->
           let o = o#list (fun o -> o#name) _x in o
@@ -1452,9 +1472,10 @@ class fold =
       | Record _x -> let o = o#row _x in o
       | Variant _x -> let o = o#row _x in o
       | Effect r -> let o = o#row r in o
-      | Operation (_x, _x_i1) ->
+      | Operation (_x, _x_i1, _x_i2) ->
         let o = o#list (fun o -> o#datatype) _x in
-        let o = o#datatype _x_i1 in o
+        let o = o#datatype _x_i1 in
+        let o = o#linearity _x_i2 in o
       | Table (_t, _x, _x_i1, _x_i2) ->
           let o = o#datatype _x in
           let o = o#datatype _x_i1 in
@@ -1677,6 +1698,9 @@ class fold_map =
     method bool : bool -> ('self_type * bool) =
       function | false -> (o, false) | true -> (o, true)
 
+    method linearity : DeclaredLinearity.t -> ('self_type * DeclaredLinearity.t) =
+      DeclaredLinearity.(function | Unl -> (o, Unl) | Lin -> (o, Lin))
+
     method unary_op : UnaryOp.t -> ('self_type * UnaryOp.t) =
       let open UnaryOp in function
       | Minus -> (o, Minus)
@@ -1712,11 +1736,12 @@ class fold_map =
     method type_variable : SugarTypeVar.t -> ('self_type * SugarTypeVar.t) =
       let open SugarTypeVar in
       function
-        | TUnresolved (name, subkind_opt, freedom) ->
+        | TUnresolved (name, (is_eff, subkind_opt), freedom) ->
            let o, name' = o#name name in
+           let o, is_eff' = o#bool is_eff in
            let o, subkind_opt' = o#option (fun o -> o#subkind) subkind_opt in
            let o, freedom' = o#freedom freedom in
-           o, TUnresolved (name', subkind_opt', freedom')
+           o, TUnresolved (name', (is_eff', subkind_opt'), freedom')
         | v -> o#unknown v
 
 
@@ -1948,14 +1973,20 @@ class fold_map =
           let (o, _x_i1) = o#option (fun o -> o#phrase) _x_i1 in
           let o, _x_i2 = o#option (fun o -> o#typ) _x_i2 in
           (o, (ConstructorLit ((_x, _x_i1, _x_i2))))
-      | DoOperation (op, ps, t) ->
+      | DoOperation (op, ps, t, b) ->
           let (o, op) = o#phrase op in
           let (o, t) = o#option (fun o -> o#typ) t in
           let (o, ps) = o#list (fun o -> o#phrase) ps in
-          (o, DoOperation (op, ps, t))
+          (o, DoOperation (op, ps, t, b))
       | Operation _x ->
           let (o, _x) = o#name _x in
           (o, Operation _x)
+      | Linlet _x ->
+          let (o, _x) = o#phrase _x in
+          (o, Linlet _x)
+      | Unlet _x ->
+          let (o, _x) = o#phrase _x in
+          (o, Unlet _x)
       | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
           let (o, m) = o#phrase sh_expr in
           let (o, params) =
@@ -2234,11 +2265,12 @@ class fold_map =
           let (o, _x) = o#name _x in
           let (o, _x_i1) = o#option (fun o -> o#pattern) _x_i1
           in (o, (Variant ((_x, _x_i1))))
-      | Operation (name, ps, k) ->
+      | Operation (name, ps, k, b) ->
          let (o, name) = o#name name in
          let (o, ps) = o#list (fun o -> o#pattern) ps in
          let (o, k) = o#pattern k in
-         (o, Operation (name, ps, k))
+         let (o, b) = o#linearity b in
+         (o, Operation (name, ps, k, b))
       | Negative _x ->
           let (o, _x) = o#list (fun o -> o#name) _x in (o, (Negative _x))
       | Record ((_x, _x_i1)) ->
@@ -2369,9 +2401,11 @@ class fold_map =
       | Record _x -> let (o, _x) = o#row _x in (o, (Record _x))
       | Variant _x -> let (o, _x) = o#row _x in (o, (Variant _x))
       | Effect r -> let (o, r) = o#row r in (o, Effect r)
-      | Operation (_x, _x_i1) ->
+      | Operation (_x, _x_i1, _x_i2) ->
         let (o, _x) = o#list (fun o -> o#datatype) _x in
-        let (o, _x_i1) = o#datatype _x_i1 in (o, Operation (_x, _x_i1))
+        let (o, _x_i1) = o#datatype _x_i1 in
+        let (o, _x_i2) = o#linearity _x_i2 in
+        (o, Operation (_x, _x_i1, _x_i2))
       | Table (_t, _x, _x_i1, _x_i2) ->
           let (o, _x) = o#datatype _x in
           let (o, _x_i1) = o#datatype _x_i1 in

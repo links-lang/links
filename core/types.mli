@@ -86,6 +86,7 @@ end
 
 val process      : Abstype.t
 val list         : Abstype.t
+val mapentry     : Abstype.t
 val event        : Abstype.t
 val dom_node     : Abstype.t
 val access_point : Abstype.t
@@ -144,7 +145,7 @@ and typ =
   | ForAll of (Quantifier.t list * typ)
   (* Effect *)
   | Effect of row
-  | Operation of (typ * typ)
+  | Operation of (typ * typ * DeclaredLinearity.t)
   (* Row *)
   | Row of (field_spec_map * row_var * bool)
   | Closed
@@ -221,7 +222,8 @@ type typing_environment = { var_env    : environment ;
                             rec_vars   : Utility.StringSet.t ;
                             tycon_env  : tycon_environment ;
                             effect_row : row ;
-                            desugared : bool }
+                            cont_lin   : int ;
+                            desugared  : bool }
 
 val empty_typing_environment : typing_environment
 
@@ -246,6 +248,7 @@ val datetime_type : datatype
 val database_type : datatype
 val xml_type : datatype
 val empty_type : datatype
+val wrong_type : datatype
 val wild : Label.t
 val hear : Label.t
 val wild_present : Label.t * datatype
@@ -369,12 +372,15 @@ or None otherwise.
 *)
 val unwrap_row : row -> (row * row_var option)
 val unwrap_list_type : typ -> typ
+val unwrap_mapentry_type : typ -> typ * typ
+val unwrap_map_type : typ -> typ * typ
 
 val extract_tuple : row -> datatype list
 
 (** type constructors *)
 val make_tuple_type : datatype list -> datatype
 val make_list_type : datatype -> datatype
+val make_mapentry_type : datatype -> datatype -> datatype
 val make_process_type : row -> datatype
 val make_record_type  : datatype field_env -> datatype
 val make_variant_type : datatype field_env -> datatype
@@ -428,9 +434,8 @@ val add_tyvar_names : ('a -> Vars.vars_list)
                    -> ('a list)
                    -> unit
 (* Function type constructors *)
-val make_pure_function_type : datatype list -> datatype -> datatype
+val make_pure_function_type : ?linear:bool -> datatype list -> datatype -> datatype
 val make_function_type      : ?linear:bool -> datatype list -> row -> datatype -> datatype
-val make_operation_type : datatype list -> datatype -> datatype
 val make_thunk_type : row -> datatype -> datatype
 
 

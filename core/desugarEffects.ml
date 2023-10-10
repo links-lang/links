@@ -128,10 +128,10 @@ let simplify_tycon_env (tycon_env : Types.tycon_environment) : simple_tycon_env
   in
   SEnv.fold simplify_tycon tycon_env SEnv.empty
 
-let make_anon_point k sk freedom =
+let make_anon_point ?(is_eff=true) k sk freedom =
   let var = Types.fresh_raw_variable () in
   Unionfind.fresh
-    (Types.Var (var, (k, DesugarTypeVariables.concrete_subkind sk), freedom))
+    (Types.Var (var, (k, DesugarTypeVariables.concrete_subkind ~is_effect:is_eff sk), freedom))
 
 (** A map with SugarTypeVar as keys, use for associating the former
    with information about what
@@ -364,7 +364,8 @@ let cleanup_effects tycon_env =
          WithPos.make ~pos (match node with
              | Datatype.Operation _     -> node
              | Datatype.Forall (qs, dt) -> Datatype.Forall (qs, elaborate_op dt)
-             | _                        -> Datatype.Operation ([], dt))
+             | _                        -> Datatype.Operation ([], dt, DeclaredLinearity.Unl))
+             (* nullary operations without =@ are unlimited *)
        in
        let fields = List.map (function
            | name, Present dt when not (TypeUtils.is_builtin_effect name) ->
@@ -379,18 +380,18 @@ let cleanup_effects tycon_env =
             if not (SugarTypeVar.is_resolved stv)
             then begin
                 let gen_unresolved_eff () =
-                  SugarTypeVar.mk_unresolved shared_effect_var_name None `Rigid
+                  SugarTypeVar.mk_unresolved shared_effect_var_name ~is_eff:true None `Rigid
                 in
                 let to_unresolved_general sk fr =
-                  SugarTypeVar.mk_unresolved "$" sk fr
+                  SugarTypeVar.mk_unresolved "$" ~is_eff:true sk fr
                 in
                 let gen_resolved_flex () =
                   SugarTypeVar.mk_resolved_row
                     (let var = Types.fresh_raw_variable () in
                      Unionfind.fresh
-                       (Types.Var (var, (PrimaryKind.Row, (lin_unl, res_effect)), `Flexible)))
+                       (Types.Var (var, (PrimaryKind.Row, (default_effect_lin, res_effect)), `Flexible)))
                 in
-                let name, sk, fr = gue stv in
+                let name, (_, sk), fr = gue stv in
                 if has_effect_sugar
                 then
                   begin
@@ -453,7 +454,7 @@ let gather_mutual_info (tycon_env : simple_tycon_env) =
            match eff_var with
            | Datatype.Open stv
              when (not (SugarTypeVar.is_resolved stv))
-                  && SugarTypeVar.get_unresolved_exn stv = ("$eff", None, `Rigid)
+                  && SugarTypeVar.get_unresolved_exn stv = ("$eff", (true, None), `Rigid)
              ->
                self#with_implicit
            | _ -> self )
@@ -768,7 +769,7 @@ let gather_operations (tycon_env : simple_tycon_env) allow_fresh dt =
                 let point =
                   lazy
                     (let var = Types.fresh_raw_variable () in
-                     Unionfind.fresh (Types.Var (var, (PrimaryKind.Presence, default_subkind), `Rigid)))
+                     Unionfind.fresh (Types.Var (var, (PrimaryKind.Presence, default_effect_subkind), `Rigid)))
                 in
                 StringMap.add op point m)
               v StringMap.empty),
@@ -786,7 +787,7 @@ let preprocess_type (dt : Datatype.with_pos) tycon_env allow_fresh shared_effect
           lazy
             (let var = Types.fresh_raw_variable () in
              Unionfind.fresh
-               (Types.Var (var, (PrimaryKind.Row, (lin_unl, res_any)), `Rigid)))
+               (Types.Var (var, (PrimaryKind.Row, default_effect_subkind), `Rigid)))
         in
         Some point
     | _ ->
@@ -948,7 +949,7 @@ class main_traversal simple_tycon_env =
                     (* Looking for this gives us the operations associcated with
                        the $eff var. The kind and freedom info are ignored for the lookup *)
                     let eff_sugar_var =
-                      SugarTypeVar.mk_unresolved shared_effect_var_name None
+                      SugarTypeVar.mk_unresolved shared_effect_var_name ~is_eff:true None
                         `Rigid
                     in
 
@@ -1018,8 +1019,8 @@ class main_traversal simple_tycon_env =
             if not allow_implictly_bound_vars then
               raise (DesugarTypeVariables.free_type_variable dpos);
 
-            let _name, sk, freedom = SugarTypeVar.get_unresolved_exn stv in
-            let mtv = make_anon_point (PrimaryKind.Row) sk freedom in
+            let _name, (is_eff, sk), freedom = SugarTypeVar.get_unresolved_exn stv in
+            let mtv = make_anon_point ~is_eff:is_eff (PrimaryKind.Row) sk freedom in
             let rtv = SugarTypeVar.mk_resolved_row mtv in
             (o, D.Open rtv)
         | D.Open srv when not (SugarTypeVar.is_resolved srv) ->
@@ -1177,7 +1178,7 @@ class main_traversal simple_tycon_env =
               ({ node = t, args, b; pos } as tn) =
             if StringMap.find t implicits then
               let var = Types.fresh_raw_variable () in
-              let q = (var, (PrimaryKind.Row, (lin_unl, res_effect))) in
+              let q = (var, (PrimaryKind.Row, (default_effect_lin, res_effect))) in
               (* Add the new quantifier to the argument list and rebind. *)
               (* let qs = List.map (snd ->- OptionUtils.val_of) args @ [q] in *)
               let args = args @ [ SugarQuantifier.mk_resolved q ] in
@@ -1191,7 +1192,7 @@ class main_traversal simple_tycon_env =
               let tycon_env = SEnv.bind t (env_args, true, None) tycon_env in
               let shared_effect_var : Types.meta_row_var Lazy.t =
                 lazy
-                  (Unionfind.fresh (Types.Var (var, (PrimaryKind.Row, (lin_unl, res_effect)), `Rigid)))
+                  (Unionfind.fresh (Types.Var (var, (PrimaryKind.Row, (default_effect_lin, res_effect)), `Rigid)))
               in
               let shared_var_env =
                 StringMap.add t (Some shared_effect_var) shared_var_env

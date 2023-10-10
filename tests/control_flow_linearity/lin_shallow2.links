@@ -1,0 +1,13 @@
+# Using the linear variable `lf` twice (once inside the handler, once
+# outside the handler) is invalid
+
+fun() {
+  var lf = linfun(x) {x};
+
+  shallowhandle({
+    xlin;
+    lf(lindo Foo)
+  }) {
+    case <Foo =@ k> -> xlin; k(lf(1))
+  }
+}

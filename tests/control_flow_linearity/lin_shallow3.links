@@ -1,0 +1,24 @@
+# Using the linear variable `ch` in a recursive function is invalid
+
+var ch = fork(fun(ch) {
+    xlin;
+    var ch = send(42, ch);
+    close(ch)
+});
+
+sig h : (() {Foo:() =@ Int|a::Lin}~@ b) { |_::Lin}-> () {Foo{_::Lin}|a::Lin}~@ b
+fun h(m) {
+  xlin;
+  linfun() {
+    shallowhandle({xlin; m()}) {
+      case <Foo =@ k> -> {
+        xlin;
+        var (i, ch) = receive(ch);
+        close(ch);
+        h(linfun(){xlin; k(i)})()
+      }
+    }
+  }
+}
+
+h(linfun(){xlin; lindo Foo() + 42})()

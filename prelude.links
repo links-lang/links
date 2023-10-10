@@ -208,10 +208,6 @@ fun eighth(p)  { p.8 }
 fun ninth(p)   { p.9 }
 fun tenth(p)   { p.10 }
 
-fun sum(ns) {
-  fold_left((+), 0, ns)
-}
-
 fun product(ns) {
   fold_left((*), 1, ns)
 }
@@ -434,6 +430,80 @@ fun empty(l) {
   }
 }
 
+unsafe sig sum : ([Int]) -> Int
+fun sum(ns) {
+  switch (ns) {
+    case [] -> 0
+    case n::ns -> n + sum(ns)
+  }
+}
+
+unsafe sig sumF : ([Float]) -> Float
+fun sumF(ns) {
+  switch (ns) {
+    case [] -> 0.0
+    case n::ns -> n +. sumF(ns)
+  }
+}
+
+fun avg(l) {
+  switch (l) {
+    case [] -> 0.0
+    case n::ns -> intToFloat(sum(l)) /. intToFloat(length(l))
+  }
+}
+
+fun avgF(l) {
+  switch (l) {
+    case [] -> 0.0
+    case n::ns -> sumF(l) /. intToFloat(length(l))
+  }
+}
+
+# Returns the minimum of a and b.
+fun minimum(a,b) {
+  if (a < b) { a }
+  else { b }
+}
+
+# Returns the maximum of a and b.
+fun maximum(a,b) {
+  if (a > b) { a }
+  else { b }
+}
+
+unsafe sig max_list : ([Int]) -> Int
+fun max_list(ns) {
+  switch (ns) {
+    case [] -> min_int
+    case n::ns -> maximum(n, max_list(ns))
+ }
+}
+
+unsafe sig maxF_list : ([Float]) -> Float
+fun maxF_list(ns) {
+  switch (ns) {
+    case [] -> neg_infinity
+    case n::ns -> maximum(n, maxF_list(ns))
+  }
+}
+
+unsafe sig min_list : ([Int]) -> Int
+fun min_list(ns) {
+  switch (ns) {
+    case [] -> max_int
+    case n::ns -> minimum(n, min_list(ns))
+  }
+}
+
+unsafe sig minF_list : ([Float]) -> Float
+fun minF_list(ns) {
+  switch (ns) {
+    case [] -> infinity
+    case n::ns -> minimum(n, minF_list(ns))
+  }
+}
+
 # association lists
 # TBD: memassoc is an old LISP word. Perhaps a more modern name would fit better?
 sig memassoc : (a,[(a,b)]) ~> Bool
@@ -528,6 +598,41 @@ fun dedup(l) server {
 
 fun distinct(t) server {
 	dedup(asList(t))
+}
+
+sig concatMapKey : ((a) -b-> [c], [(a,[d])]) -b-> [c]
+fun concatMapKey(f, l) {
+  for (x <- l) f(x.1)
+}
+
+# XXX: I believe the arguments are in the wrong order, but see sortBy
+sig groupBy : ((a) -b-> c, [a]) -b-> [(c, [a])]
+fun groupBy(f, l) {
+  var is = dedup(map(f, l));
+  for (i <- is) [(i, filter(fun (x) { f(x) == i }, l))]
+}
+
+sig groupByMap : ((a) -b-> c, [(d,[a])]) -b-> [((c,d), [a])]
+fun groupByMap(f, xs) {
+  for (x <- xs) 
+    for (k <- dedup(map(f,x.2))) 
+      [((k,x.1), filter(fun (v) { f(v) == k }, x.2))]
+}
+
+unsafe sig lookupG : (a,[(a,[b])]) -> [b]
+fun lookupG(x,l) {
+  switch (l) {
+    case [] -> []
+    case (a,b)::xs -> if (a == x) b
+                      else lookupG(x,xs)
+  }
+}
+
+sig aggBy : ([(a, [b])], ([b]) -c-> d) -c-> [(a, d)]
+fun aggBy(q, agg) {
+  concatMapKey(fun (k) {
+    [(k, agg(lookupG(k, q)))]
+    }, q)
 }
 
 # Gets children of elements in an XML forest, concatenated in order
@@ -1228,8 +1333,11 @@ fun sendSuspend(pagef) {
 typename Pid(a::Type) = Process({hear: a});
 
 #### SESSION TYPING STUFF ####
+# The SessionFail is defined to be a control-flow-linear operation.
+# The effect row variable `e` can have kind `Row(Any)` because no linear
+# resources is used in this function.
 #sig fork : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
-sig fork : forall s::Session,e::Row.((s) {SessionFail:[||]}~> ()) ~e~> ~s
+sig fork : forall s::Session,e::Row(Any).((s) {SessionFail:() =@ [||]}~> ()) ~e~> ~s
 fun fork(f) {
   var ap = new ();
   var _ = spawnAngel {
@@ -1239,8 +1347,9 @@ fun fork(f) {
 }
 
 #sig linFork : forall s::Session,e::Row.((s) ~e~@ ()) ~e~> ~s
-sig linFork : forall s::Session,e::Row.((s) {SessionFail:[||]}~@ ()) ~e~> ~s
+sig linFork : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~@ ()) ~e~> ~s
 fun linFork(f) {
+  xlin;
   var ap = new();
   var _ = spawnAngel {
     f(accept(ap))
@@ -1249,8 +1358,9 @@ fun linFork(f) {
 }
 
 #sig reproduce : forall s::Session,e::Row.(AP(s), (s) ~e~> ()) ~e~> ()
-sig reproduce : forall s::Session,e::Row.(AP(s), (s) {SessionFail:[||]}~> ()) ~e~> ()
+sig reproduce : forall s::Session,e::Row.(AP(s), (s) {SessionFail:() =@ [||]}~> ()) ~e~> ()
 fun reproduce(ap, f) {
+  xlin;
   var x = accept(ap);
   var _ = spawn {f(x)};
   reproduce(ap, f)
@@ -1266,8 +1376,9 @@ fun reproduce(ap, f) {
 # run even if the main process terminates.)
 
 #sig connect : forall s::Session,e::Row,a.((s) ~e~> (), (~s) ~e~> a) ~e~> a
-sig connect : forall s::Session,e::Row,a.((s) {SessionFail:[||]}~> (), (~s) ~e~> a) ~e~> a
+sig connect : forall s::Session,e::Row,a.((s) {SessionFail:() =@ [||]}~> (), (~s) ~e~> a) ~e~> a
 fun connect(f, g) {
+  xlin;
   var ap = new();
   var done = new();
   var _ = spawn {
@@ -1284,19 +1395,22 @@ fun connect(f, g) {
 typename EndBang = !().End;
 typename EndQuery = ?().End;
 
-sig wait : (EndQuery) ~> ()
+sig wait : forall e::Row . (EndQuery) { |e}~> ()
 fun wait(s) {
+  xlin;
   var (_, s) = receive(s);
   close(s)
 }
 
-sig closeBang : (EndBang) ~> ()
+sig closeBang : forall e::Row . (EndBang) { |e}~> ()
 fun closeBang(s) {
+  xlin;
   close(send((), s))
 }
 
-sig makeEndBang : () ~> EndBang
+sig makeEndBang : forall e::Row . () { |e}~> EndBang
 fun makeEndBang() {
+  xlin;
   var ap = new();
   var _ = spawn {
      var c = accept(ap);
@@ -1308,8 +1422,9 @@ fun makeEndBang() {
 # with split ends we synchronise on the termination of each spawned
 # child process
 #sig forkSync : forall s::Session,e::Row.((s) ~e~> EndBang) ~e~> ~s
-sig forkSync : forall s::Session,e::Row.((s) {SessionFail:[||]}~> EndBang) ~e~> ~s
+sig forkSync : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~> EndBang) ~e~> ~s
 fun forkSync(f) {
+  xlin;
   var ap = new();
   var _ = spawn {
     var c = accept(ap);
@@ -1320,8 +1435,9 @@ fun forkSync(f) {
 }
 
 #sig linForkSync : forall s::Session,e::Row.((s) ~e~@ EndBang) ~e~> ~s
-sig linForkSync : forall s::Session,e::Row.((s) {SessionFail:[||]}~@ EndBang) ~e~> ~s
+sig linForkSync : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~@ EndBang) ~e~> ~s
 fun linForkSync(f) {
+  xlin;
   var ap = new();
   var _ = spawn {
     var c = accept(ap);
@@ -1332,15 +1448,17 @@ fun linForkSync(f) {
 }
 
 #sig linkSync : forall s::Session,e::Row.(s, ~s) ~e~> EndBang
-sig linkSync : forall s::Session,e::Row.(s, ~s) {SessionFail:[||] | e}~> EndBang
+sig linkSync : forall s::Session,e::Row.(s, ~s) {SessionFail:() =@ [||] | e}~> EndBang
 fun linkSync(s, c) {
+  xlin;
   link(s, c);
   makeEndBang()
 }
 
 #sig runSync : ((!a.EndBang) ~e~> EndBang) ~e~> a
-sig runSync : ((!a.EndBang) {SessionFail:[||]}~> EndBang) ~e~> a
+sig runSync : forall a, e::Row . ((!a.EndBang) {SessionFail:() =@ [||]}~> EndBang) { |e}~> a
 fun runSync(f) {
+  xlin;
   var c = forkSync(f);
   var (v, c) = receive(c);
   wait(c);
@@ -1403,12 +1521,6 @@ fun elemIndex(x, xs) {
   }, (0,Nothing), xs);
 
   second(n)
-}
-
-# Returns the maximum of a and b.
-fun maximum(a,b) {
-  if (a > b) { a }
-  else { b }
 }
 
 ####

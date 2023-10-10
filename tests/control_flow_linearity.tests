@@ -1,0 +1,316 @@
+---
+config: tests/control_flow_linearity.config
+---
+
+# Usage of control-flow-linear/unlimited operations and linear resources
+
+Using linear variables in linear continuations (1)
+fun(){xlin; var lf = linfun(x) {x}; lf(42)}
+stdout : fun : () { |_::Lin}-> Int
+
+Using linear variables in linear continuations (2)
+{ xlin; var lf = linfun(x) {x}; linfun(){xlin; lf(1)} }
+stdout : fun : () { |_::Lin}-@ Int
+
+Using linear variables in unlimited continuations (1)
+fun() {var lf = linfun(x) {x}; lf(1)}
+exit : 1
+stderr : @.*Type error: Variable .* of linear type .* is used in a non-linear continuation.*
+
+Using linear variables in unlimited continuations (2)
+{ xlin; var lf = linfun(x) {x}; linfun(){lf(1)} }
+exit : 1
+stderr : @.*Type error: Variable .* of linear type .* is used in a non-linear continuation.*
+
+Using control-flow-linear operations in unlimited continuations
+fun() {lindo Foo}
+stdout : fun : () {Foo:() =@ a|_}-> a
+
+Using control-flow-linear operations in linear continuations
+fun() {xlin; lindo Foo}
+stdout : fun : () {Foo:() =@ a|_::Lin}-> a
+
+Using control-flow-linear operations and linear variables in linear continuations
+fun(ch:End) {xlin; lindo L; close(ch)}
+stdout : fun : (End) {L:() =@ ()|_::Lin}~> ()
+
+Using control-flow-unlimited operations in unlimited continuations
+fun() {do Foo}
+stdout : fun : () {Foo:() => a|_}-> a
+
+Using control-flow-unlimited operations in linear continuations
+fun() {xlin; do Foo}
+exit : 1
+stderr : @.*Type error.*
+
+Mixing control-flow-linear and -unlimited operations in unlimited continuations
+fun() {do U; lindo L}
+stdout : fun : () {L:() =@ a,U:() => ()|_}-> a
+
+
+# Handling control-flow-linear/unlimited operations
+
+Handling control-flow-linear operations (1)
+handle (lindo Foo(20) + 1) {case <Foo(i) =@ k> -> xlin; k(i)}
+stdout : 21 : Int
+
+Handling control-flow-linear operations (2)
+{linfun f(x) {40+x} handle ({xlin; f(lindo Foo)}) {case <Foo =@ k> -> xlin; k(2)}}
+stdout : 42 : Int
+
+Handling control-flow-linear operations (3)
+handle (lindo Foo(20) + 1) {case <Foo(i) => k> -> xlin; k(i)}
+exit : 1
+stderr : @.*Type error.*
+
+Handling control-flow-unlimited operations (1)
+handle (do Foo(20) + 1) {case <Foo(i) => k> -> k(i) + k(i)}
+stdout : 42 : Int
+
+Handling control-flow-unlimited operations (2)
+{linfun f(x) {x} handle (f(do Foo)) {case <Foo => k> -> k(1)}}
+exit : 1
+stderr : @.*Type error: Variable .* of linear type .* is used in a non-linear continuation.*
+
+Handling control-flow-unlimited operations (3)
+handle (do Foo(20) + 1) {case <Foo(i) =@ k> -> k(i) + k(i)}
+exit : 1
+stderr : @.*Type error.*
+
+Handling control-flow-unlimited operations (4)
+fun(ch:End) { xlin; close(ch); handle ({if (do Choose) 40 else 2}) {case <Choose => r> -> r(true) + r(false)} }
+stdout : fun : (End) {Choose{_::Lin}|_::Lin}~> Int
+
+
+# Kind annotations and operation annotations
+
+CFL kinds of explicit quantifiers in type signatures (1)
+sig f:forall e::Row(Any). () {Foo:() => Int|e}-> Int fun f() {do Foo} f
+stdout : fun : () {Foo:() => Int|_}-> Int
+
+CFL kinds of explicit quantifiers in type signatures (2)
+sig f:forall e::Row. () {Foo:() => Int|e}-> Int fun f() {do Foo} f
+stdout : fun : () {Foo:() => Int|_::Lin}-> Int
+
+Operation annotation
+fun(m) { xlin; handle(m()) { case <Foo(x) =@ k> : ((Int) =@ Int) -> xlin; k (x) } }
+stdout : fun : (() {Foo:(Int) =@ Int|a::Lin}~> b::Any) {Foo{_::Lin}|a::Lin}~> b::Any
+
+
+# Usage of linear resources in handlers
+
+Using linear variables in deep handlers (1)
+tests/control_flow_linearity/lin_deep1.links
+filemode : true
+exit : 1
+stderr : @.*Type error: Variable .* of linear type .* is used in a deep handler.*
+
+Using linear variables in deep handlers (2)
+tests/control_flow_linearity/lin_deep2.links
+filemode : true
+exit : 1
+stderr : @.*Type error: Variable .* of linear type .* is used in a deep handler.*
+
+Using linear variables in deep handlers (3)
+tests/control_flow_linearity/lin_deep3.links
+filemode : true
+stdout : 84 : Int
+
+Using linear variables in shallow handlers (1)
+tests/control_flow_linearity/lin_shallow1.links
+filemode : true
+stdout : fun : () {Foo:() =@ Int|_::Lin}~> Int
+
+Using linear variables in shallow handlers (2)
+tests/control_flow_linearity/lin_shallow2.links
+filemode : true
+exit : 1
+stderr : @.*Type error: Variable .* has linear type .* is used 2 times.*
+
+Using linear variables in shallow handlers (3)
+tests/control_flow_linearity/lin_shallow3.links
+filemode : true
+exit : 1
+stderr : @.*Type error: Use of variable .* of linear type .* in unlimited function binding.*
+
+Using linear variables in shallow handlers (4)
+tests/control_flow_linearity/lin_shallow4.links
+filemode : true
+stdout : 84 : Int
+
+Using linear variables in shallow handlers (5)
+tests/control_flow_linearity/lin_shallow5.links
+filemode : true
+stdout : 84 : Int
+
+
+# Previous examples with control-flow linearity
+
+Linear choice and unlimited choice
+tests/control_flow_linearity/choose.links
+filemode : true
+stdout : [10, 10, 18, 12, 20] : [Int]
+
+Combining unlimited choice and unlimited state
+tests/control_flow_linearity/choose_and_state.links
+filemode : true
+stdout : [3, 4, 9, 10, 3, 3, 3, 3] : [Int]
+
+Combining linear choice and unlimited state
+tests/control_flow_linearity/choose_and_state2.links
+filemode : true
+stdout : 3 : Int
+
+Checking the first part of Issue 544
+tests/control_flow_linearity/issue544a.links
+filemode : true
+exit : 1
+stderr : @.*Type error: Effect row type .* can not be made linear .*
+
+Checking the second part of Issue 544
+tests/control_flow_linearity/issue544b.links
+filemode : true
+exit : 1
+stderr : @.*Type error: Effect row type .* can not be made linear .*
+
+
+# Examples in the paper
+
+The original introduction program
+tests/control_flow_linearity/popl24/intro.links
+filemode : true
+exit : 1
+stderr : @.*Type error.*
+
+The fixed version of the original introduction program
+tests/control_flow_linearity/popl24/intro_fixed.links
+filemode : true
+stdout : 42well-typed() : ()
+
+
+## Examples in Section 4
+
+The `faithfulSend` with CFL off
+fun faithfulSend(c) { linfun (s) { var c = send(s, c); close(c) } } faithfulSend
+stdout : fun : (!(a::Any).End) -> (a::Any) ~@ ()
+args : --set=track_control_flow_linearity=false
+
+The `faithfulSend` with CFL on
+fun faithfulSend(c) { xlin; linfun (s) { xlin; var c = send(s, c); close(c) } } faithfulSend
+stdout : fun : (!(a::Any).End) { |_::Lin}-> (a::Any) { |_::Lin}~@ ()
+
+The `dubiousSend` with CFL on
+fun dubiousSend(c) {xlin; var c = send(if (lindo Choose) "A" else "B", c); close(c)} dubiousSend
+stdout : fun : (!(String).End) {Choose:() =@ Bool|_::Lin}~> ()
+
+Handling `dubiousSend` with a linear handler
+fun dubiousSend(c) {xlin; var c = send(if (lindo Choose) "A" else "B", c); close(c)} fun(c) {handle ({xlin; dubiousSend(c)}) {case <Choose =@ r> -> xlin; r(true)} }
+stdout : fun : (!(String).End) {Choose{_::Lin}|_::Lin}~> ()
+
+
+## Examples in Section 2
+
+S2.1 Channel version of `faithfulWrite` (with CFL off)
+fun faithfulSend(c) { linfun (s) { var c = send(s, c); close(c) } } faithfulSend
+stdout : fun : (!(a::Any).End) -> (a::Any) ~@ ()
+args : --set=track_control_flow_linearity=false
+
+S2.1 Channel version of `faithfulWrite` (with CFL on)
+fun faithfulSend(c) { xlin; linfun (s) { xlin; var c = send(s, c); close(c) } } faithfulSend
+stdout : fun : (!(a::Any).End) { |_::Lin}-> (a::Any) { |_::Lin}~@ ()
+
+S2.1 Subkinding of value linearity (with CFL off) (1)
+fun id(x) {x} id(42)
+stdout : 42 : Int
+args : --set=track_control_flow_linearity=false
+
+S2.1 Subkinding of value linearity (with CFL off) (2)
+fun id(x) {x} id(linfun(){42})
+stdout : fun : () -@ Int
+args : --set=track_control_flow_linearity=false
+
+S2.1 Subkinding of value linearity (with CFL on) (1)
+fun id(x) {xlin; x} id(42)
+stdout : 42 : Int
+
+S2.1 Subkinding of value linearity (with CFL on) (2)
+fun id(x) {xlin; x} id(linfun(){42})
+stdout : fun : () -@ Int
+
+S2.2 Channel version of `dubiousWrite` (with CFL off)
+fun dubiousSend(c) {var c = send(if (do Choose) "A" else "B", c); close(c)} dubiousSend
+stdout : fun : (!(String).End) {Choose:() => Bool|_}~> ()
+args : --set=track_control_flow_linearity=false
+
+S2.2 Channel version of `dubiousWrite` (with CFL on)
+fun dubiousSend(c) {xlin; var c = send(if (lindo Choose) "A" else "B", c); close(c)} dubiousSend
+stdout : fun : (!(String).End) {Choose:() =@ Bool|_::Lin}~> ()
+
+S2.2 Handling `dubiousWrite` with an unlimited handler
+fun dubiousSend(c) {xlin; var c = send(if (lindo Choose) "A" else "B", c); close(c)} fun(c) {handle ({xlin; dubiousSend(c)}) {case <Choose =@ r> -> xlin; r(true); r(false)} }
+exit : 1
+stderr : @.*Type error: Variable .* has linear type .* is used 2 times.*
+
+S2.2 Handling `dubiousWrite` with a linear handler
+fun dubiousSend(c) {xlin; var c = send(if (lindo Choose) "A" else "B", c); close(c)} fun(c) {handle ({xlin; dubiousSend(c)}) {case <Choose =@ r> -> xlin; r(true)} }
+stdout : fun : (!(String).End) {Choose{_::Lin}|_::Lin}~> ()
+
+S2.2 Subkinding of control-flow linearity (1)
+fun tossCoin(g) {var b = g(); if (b) "heads" else "tails"} fun(){ tossCoin(fun(){do Choose}) }
+stdout : fun : () {Choose:() => Bool|_}-> String
+
+S2.2 Subkinding of control-flow linearity (2)
+fun tossCoin(g) {var b = g(); if (b) "heads" else "tails"} fun(){ tossCoin(fun(){lindo Choose}) }
+stdout : fun : () {Choose:() =@ Bool|_}-> String
+
+S2.2 Subkinding of control-flow linearity (3)
+fun tossCoin(g) {var b = g(); if (b) "heads" else "tails"} fun(){ tossCoin(fun(){xlin; lindo Choose}) }
+stdout : fun : () {Choose:() =@ Bool|_::Lin}-> String
+
+S2.3 Different types of verboseId (1)
+fun verboseId(x) {do Print("id is called"); x} verboseId
+stdout : fun : (a) {Print:(String) => ()|_}-> a
+
+S2.3 Different types of verboseId (2)
+fun verboseId(x) {lindo Print("id is called"); x} verboseId
+stdout : fun : (a) {Print:(String) =@ ()|_}-> a
+
+S2.3 Different types of verboseId (3)
+sig verboseId: (a) {Print:(String) => ()|_::Lin}-> a fun verboseId(x) {do Print("id is called"); x} verboseId
+stdout : fun : (a) {Print:(String) => ()|_::Lin}-> a
+
+S2.3 Different types of verboseId (4)
+sig verboseId: (a) {Print:(String) =@ ()|_::Lin}-> a fun verboseId(x) {lindo Print("id is called"); x} verboseId
+stdout : fun : (a) {Print:(String) =@ ()|_::Lin}-> a
+
+S2.3 Different types of verboseId (5)
+fun verboseId(x) {xlin; lindo Print("id is called"); x} verboseId
+stdout : fun : (a::Any) {Print:(String) =@ ()|_::Lin}-> a::Any
+
+S2.3 Different types of verboseId (6)
+linfun verboseId(x) {do Print("id is called"); x} {xlin; verboseId}
+stdout : fun : (a) {Print:(String) => ()|_}-@ a
+
+S2.3 Different types of verboseId (7)
+linfun verboseId(x) {lindo Print("id is called"); x} {xlin; verboseId}
+stdout : fun : (a) {Print:(String) =@ ()|_}-@ a
+
+S2.3 Different types of verboseId (8)
+sig verboseId: (a) {Print:(String) => ()|_::Lin}-@ a linfun verboseId(x) {do Print("id is called"); x} {xlin; verboseId}
+stdout : fun : (a) {Print:(String) => ()|_::Lin}-@ a
+
+S2.3 Different types of verboseId (9)
+sig verboseId: (a) {Print:(String) =@ ()|_::Lin}-@ a linfun verboseId(x) {lindo Print("id is called"); x} {xlin; verboseId}
+stdout : fun : (a) {Print:(String) =@ ()|_::Lin}-@ a
+
+S2.3 Different types of verboseId (10)
+linfun verboseId(x) {xlin; lindo Print("id is called"); x} {xlin; verboseId}
+stdout : fun : (a::Any) {Print:(String) =@ ()|_::Lin}-@ a::Any
+
+S2.4 Restriction of row-based effect types (1)
+fun verboseClose(c:End) {xlin; var s = lindo Get; close(c); lindo Print(s)} verboseClose
+stdout : fun : (End) {Get:() =@ a,Print:(a) =@ b|_::Lin}~> b
+
+S2.4 Restriction of row-based effect types (2)
+fun sandwichClose(g,f,h) {xlin; g(); close(f); h()} sandwichClose
+stdout : fun : (() { |a::Lin}~> (), End, () { |a::Lin}~> b::Any) { |a::Lin}~> b::Any

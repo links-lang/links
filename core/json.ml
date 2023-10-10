@@ -120,6 +120,8 @@ let rec jsonize_value' : Value.t -> Yojson.Basic.t =
   | #Value.primitive_value as p -> jsonize_primitive p
   | `Variant (label, value) ->
      lit ~tag:"Variant" [("_label", `String label); ("_value", jsonize_value' value)]
+  | `Entry (key, value) ->
+     lit ~tag:"MapEntry" [("_key", jsonize_value' key); ("_value", jsonize_value' value)]
   | `Record fields ->
      lit ~tag:"Record" (List.map (fun (k, v) -> (k, jsonize_value' v )) fields)
   | `List l ->  cons_listify (List.map jsonize_value' l)

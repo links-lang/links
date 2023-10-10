@@ -777,7 +777,7 @@ struct
                begin
                   match evaluator e with
                   | None -> computation env cont e
-                  | Some (db, q, t) ->
+                  | Some (db, q, t, readback) ->
                       let q = db#string_of_query ~range q in
                       let (fieldMap, _, _) =
                         let r, _ = Types.unwrap_row (TypeUtils.extract_row t) in
@@ -792,7 +792,9 @@ struct
                           fieldMap
                           []
                       in
-                      apply_cont cont env (Database.execute_select fields q db)
+                      Database.execute_select fields q db
+                      |> readback (* unflattens records/finite maps *)
+                      |> apply_cont cont env
                end
          end
     | TemporalJoin (tmp, e, _t) ->

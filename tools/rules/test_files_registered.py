@@ -7,6 +7,8 @@ TEST_DIR="tests"
 # The following files are excluded from being tested,
 # because they are not entry points to some test
 BLACKLIST = {
+  "tests/database/grouping-create.links",
+  "tests/database/grouping.links",
   "tests/empty_prelude.links",
   "tests/freezeml_prelude.links",
   "tests/presence_type_arg_typename.links",

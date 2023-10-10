@@ -33,15 +33,22 @@ type base_type = | Bool | Char | Float | Int | String | DateTime
 type tag = int
     [@@deriving show]
 
+type genkind = Entries | Keys
+    [@@deriving show]
+
 type t =
-    | For       of tag option * (Var.var * t) list * t list * t
+    | For       of tag option * (genkind * Var.var * t) list * t list * t
     | If        of t * t * t
     | Table     of Value.table
     | Database  of (Value.database * string)
     | Singleton of t
+    | MapEntry  of t * t
     | Concat    of t list
     | Dedup     of t
     | Prom      of t
+    | GroupBy   of (Var.var * t) * t
+    | AggBy     of (t * string) StringMap.t * t
+    | Lookup    of t * t
     | Record    of t StringMap.t
     | Project   of t * string
     | Erase     of t * StringSet.t
@@ -62,13 +69,17 @@ module S =
 struct
   (** [pt]: A printable version of [t] *)
   type pt =
-    | For       of (Var.var * pt) list * pt list * pt
+    | For       of (genkind * Var.var * pt) list * pt list * pt
     | If        of pt * pt * pt
     | Table     of Value.table
     | Singleton of pt
+    | MapEntry  of pt * pt
     | Concat    of pt list
     | Dedup     of pt
     | Prom      of pt
+    | GroupBy   of (Var.var * pt) * pt
+    | AggBy     of (pt * string) StringMap.t * pt
+    | Lookup    of pt * pt
     | Record    of pt StringMap.t
     | Project   of pt * string
     | Erase     of pt * StringSet.t
@@ -87,11 +98,12 @@ let rec pt_of_t : 't -> S.pt = fun v ->
   let bt = pt_of_t in
     match v with
       | For (_, gs, os, b) ->
-          S.For (List.map (fun (x, source) -> (x, bt source)) gs,
+          S.For (List.map (fun (genkind, x, source) -> (genkind, x, bt source)) gs,
                 List.map bt os,
                 bt b)
       | If (c, t, e) -> S.If (bt c, bt t, bt e)
       | Table t -> S.Table t
+      | MapEntry (k,v) -> S.MapEntry (bt k, bt v)
       | Singleton v -> S.Singleton (bt v)
       | Concat vs -> S.Concat (List.map bt vs)
       | Dedup q -> S.Dedup (bt q)
@@ -107,6 +119,9 @@ let rec pt_of_t : 't -> S.pt = fun v ->
       | Primitive f -> S.Primitive f
       | Var (v, t) -> S.Var (v, t)
       | Constant c -> S.Constant c
+      | GroupBy ((x,k), q) -> S.GroupBy ((x, bt k), bt q)
+      | AggBy (ar, q) -> S.AggBy (StringMap.map (fun (x,y) -> bt x, y) ar, bt q)
+      | Lookup (q,k) -> S.Lookup (bt q, bt k)
       | Database _ -> assert false
 
 let string_of_t = S.show_pt -<- pt_of_t
@@ -126,10 +141,13 @@ let default_of_base_type =
 
 let rec value_of_expression = fun v ->
   let ve = value_of_expression in
-  let value_of_singleton = fun s ->
-    match s with
-      | Singleton v -> ve v
-      | _ -> assert false
+  let value_of_mapentry = function
+    | MapEntry (k, v) -> `Entry (ve k, ve v)
+    | v -> ve v
+  in
+  let value_of_singleton = function
+    | Singleton v -> value_of_mapentry v
+    | _ -> assert false
   in
     match v with
       | Constant (Constant.Bool   b) -> `Bool b
@@ -197,6 +215,7 @@ let unbox_pair =
           x, y
     | _ -> raise (runtime_type_error "failed to unbox pair")
 
+(* XXX: not updated for grouping: only lists, not maps! *)
 let rec unbox_list =
   function
     | Concat vs -> concat_map unbox_list vs
@@ -215,7 +234,8 @@ let unbox_string =
         implode
           (List.map
               (function
-                | Constant (Constant.Char c) -> c
+                (* BUG? assumes we will only unbox from plain lists, not maps *)
+                | (Constant (Constant.Char c)) -> c
                 | _ -> raise (runtime_type_error "failed to unbox string"))
               (unbox_list v))
     | _ -> raise (runtime_type_error "failed to unbox string")
@@ -229,6 +249,7 @@ let rec subst t x u =
   | Var (var, _) when var = x -> u
   | Record fl -> Record (StringMap.map srec fl)
   | Singleton v -> Singleton (srec v)
+  | MapEntry (k, v) -> MapEntry (srec k, srec v)
   | Concat xs -> Concat (List.map srec xs)
   | Project (r, label) -> Project (srec r, label)
   | Erase (r, labels) -> Erase (srec r, labels)
@@ -236,7 +257,7 @@ let rec subst t x u =
   | Apply (f, xs) -> Apply (srec f, List.map srec xs)
   | For (_, gs, os, u) ->
       (* XXX: assuming fresh x!*)
-      let gs' = List.map (fun (v,g) -> (v, srec g)) gs in
+      let gs' = List.map (fun (genkind, v,g) -> (genkind, v, srec g)) gs in
       let os' = List.map srec os in
       let u' = srec u in
       For (None, gs', os', u')
@@ -252,6 +273,11 @@ let rec subst t x u =
   | Closure (c, closure_env) ->
       let cenv = bind closure_env (x,u) in
       Closure (c, cenv)
+  | AggBy (ar, q) -> AggBy (StringMap.map (fun (t0,l) -> srec t0, l) ar, srec q)
+  | GroupBy ((v,i), q) ->
+      let i' = if v = x then i else srec i in
+      let q' = srec q in
+      GroupBy ((v,i'), q')
   | v -> v
 
 (** Returns (Some ty) if v occurs free with type ty, None otherwise *)
@@ -271,24 +297,27 @@ let occurs_free (v : Var.var) =
       occf bvs' b ||= tryPick (fun _ q -> occf bvs q) e *)
       failwith "MixingQuery.occurs_free: unexpected Closure in query"
   | Apply (t, args) -> occf bvs t ||=? list_tryPick (occf bvs) args
-  | Singleton t
+  | Singleton t -> occf bvs t
+  | MapEntry (k, t) -> occf bvs k ||=? occf bvs t
   | Dedup t
   | Prom t
   | Project (t,_) -> occf bvs t
   | Concat tl -> list_tryPick (occf bvs) tl
   | For (_, gs, _os, b) ->
       (* FIXME: do we need to check os as well? *)
-      let bvs'', res = List.fold_left (fun (bvs',acc) (w,q) -> w::bvs', acc ||=? occf bvs' q) (bvs, None) gs in
+      let bvs'', res = List.fold_left (fun (bvs',acc) (_genkind,w,q) -> w::bvs', acc ||=? occf bvs' q) (bvs, None) gs in
       res ||=? occf bvs'' b
   | Record fl -> map_tryPick (fun _ t -> occf bvs t) fl
+  | GroupBy ((v,i), q) -> occf (v::bvs) i ||=? occf bvs q
+  | AggBy (ar, q) -> map_tryPick (fun _ (t, _) -> occf bvs t) ar ||=? occf bvs q
   | _ -> None
   in occf []
 
 (** Returns Some (x,qx,tyx) for the first generator x <- qx such that x occurs free with type tyx *)
-let rec occurs_free_gens (gs : (Var.var * t) list) q =
+let rec occurs_free_gens (gs : (genkind * Var.var * t) list) q =
   match gs with
   | [] -> None
-  | (x,qx)::gs' ->
+  | (_genkind,x,qx)::gs' ->
       match occurs_free x (For (None, gs', [], q)) with
       | Some tyx -> Some (x,qx,tyx)
       | None -> occurs_free_gens gs' q
@@ -306,7 +335,25 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
   | Concat [] -> Types.make_list_type(Types.unit_type)
   | Concat (v::_) -> te v
   | For (_, _, _os, body) -> te body
+  | GroupBy ((_x,i),q) ->
+      let ity = te i in
+      let elty = TypeUtils.element_type ~overstep_quantifiers:true (te q) in
+      Types.make_mapentry_type ity elty
+      |> Types.make_list_type
+  | AggBy (aggs,q) ->
+      let tyk = te q |> Types.unwrap_map_type |> fst in
+      let ty = StringMap.map (function (Primitive f,_) -> TypeUtils.return_type (Env.String.find f Lib.type_env) | _ -> assert false) aggs
+        |> Types.make_record_type
+      in
+      Types.make_mapentry_type tyk ty |> Types.make_list_type
+  | Lookup (q, _) ->
+      Types.unwrap_map_type (te q)
+      |> snd
   | Singleton t -> Types.make_list_type (te t)
+  | MapEntry (k,v) ->
+      let tyk = te k in
+      let tyv = te v in
+      Types.make_mapentry_type tyk tyv
   | Record fields -> record fields
   | If (_, t, _) -> te t
   | Table Value.Table.{ row; _ } -> Types.make_list_type (Types.Record (Types.Row row))
@@ -332,6 +379,16 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
                 (string_of_t w) Types.pp_datatype ty)
       end
   | Apply (Primitive "Empty", _) -> Types.bool_type (* HACK *)
+  | Apply (Primitive "Sum", _) -> Types.int_type
+  | Apply (Primitive "SumF", _) -> Types.float_type
+  | Apply (Primitive "Avg", _) -> Types.float_type
+  | Apply (Primitive "AvgF", _) -> Types.float_type
+  | Apply (Primitive "Min", _) -> Types.int_type
+  | Apply (Primitive "MinF", _) -> Types.float_type
+  | Apply (Primitive "Max", _) -> Types.int_type
+  | Apply (Primitive "MaxF", _) -> Types.float_type
+  | Apply (Primitive "length", _) -> Types.int_type
+  (* XXX: the following might be completely unnecessary if we call type_of_expression only on normalized query *)
   | Apply (Primitive "Distinct", [q]) -> type_of_expression q
   | Apply (Primitive f, _) -> TypeUtils.return_type (Env.String.find f Lib.type_env)
   | e -> Debug.print("Can't deduce type for: " ^ show e); assert false
@@ -352,7 +409,8 @@ let eta_expand_list xs =
   let x = Var.fresh_raw_var () in
   let ty = TypeUtils.element_type ~overstep_quantifiers:true (type_of_expression xs) in
     (* Debug.print ("eta_expand_list create: " ^ show (Var (x, ty))); *)
-    ([x, xs], [], Singleton (eta_expand_var (x, ty)))
+    (* BUG? this assumes no maps! *)
+    ([Entries, x, xs], [], Singleton (eta_expand_var (x, ty)))
 
 (* takes a normal form expression and returns true iff it has list type *)
 let is_list =
@@ -384,8 +442,9 @@ let used_database : t -> Value.database option =
       | Prom q -> used q
       | Dedup q -> used_item q
       | Table Value.Table.{ database = (db, _); _ } -> Some db
-      | For (_, gs, _, _body) -> List.map snd gs |> traverse
-      | Singleton v -> used v
+      | For (_, gs, _, _body) -> List.map (fun (_,_,src) -> src) gs |> traverse
+      | Singleton v -> used_item v
+      | MapEntry (k,v) -> used_item v ||=? used_item k
       | Record v ->
           StringMap.to_alist v
           |> List.map snd
@@ -400,6 +459,10 @@ let used_database : t -> Value.database option =
           traverse (scrutinee :: (cases @ default))
       | Erase (x, _) -> used x
       | Variant (_, x) -> used x
+      | AggBy (aggs, q) ->
+          let aggs' = StringMap.to_alist aggs |> List.map (fun (_,(x,_)) -> x) in
+          traverse (q::aggs')
+      | GroupBy ((_,i), q) -> traverse [q;i]
       | _ -> None
   and used =
     function
@@ -445,12 +508,36 @@ let lookup_fun env (f, fvs) =
         Primitive "Distinct"
       | "concatMap" ->
         Primitive "ConcatMap"
+      | "concatMapKey" ->
+        Primitive "ConcatMapKey"
       | "map" ->
         Primitive "Map"
+      | "sum" ->
+        Primitive "Sum"
+      | "sumF" ->
+        Primitive "SumF"
+      | "avg" ->
+        Primitive "Avg"
+      | "avgF" ->
+        Primitive "AvgF"
+      | "min_list" ->
+        Primitive "Min"
+      | "minF_list" ->
+        Primitive "MinF"
+      | "max_list" ->
+        Primitive "Max"
+      | "maxF_list" ->
+        Primitive "MaxF"
       | "empty" ->
         Primitive "Empty"
       | "sortByBase" ->
         Primitive "SortBy"
+      | "groupBy" | "groupByMap" ->
+        Primitive "GroupBy"
+      | "aggBy" ->
+        Primitive "AggBy"
+      | "lookupG" ->
+        Primitive "Lookup"
       | _ ->
         begin
           match location with
@@ -486,6 +573,7 @@ let rec expression_of_value : env -> Value.t -> t = fun env v ->
     | `Database db -> Database db
     | `List vs ->
         Concat (List.map (fun v -> Singleton (expression_of_value env v)) vs)
+    | `Entry (k,v) -> MapEntry (expression_of_value env k, expression_of_value env v)
     | `Record fields ->
         Record
           (List.fold_left
@@ -553,6 +641,7 @@ let check_policies_compatible env_policy block_policy =
            let rec string =
               function
                 | Constant (Constant.String s) -> Some (str (quote s))
+                (* BUGBUG: don't know how to process maps yet *)
                 | Singleton (Constant (Constant.Char c)) ->
                     Some (str (string_of_char c))
                 | Project (v, field) ->
@@ -596,6 +685,7 @@ let check_policies_compatible env_policy block_policy =
                             end
                     end
             in
+            (* grouping BUG? what happens if rs is a map? *)
               seq (unbox_list rs)
         | Variant ("StartAnchor", _) -> Some (str "")
         | Variant ("EndAnchor", _) -> Some (str "")
@@ -610,22 +700,22 @@ let rec select_clause : Sql.index -> bool -> t -> Sql.select_clause =
     | Concat _ -> assert false
     | For (_, [], _, body) ->
         select_clause index unit_query body
-    | For (_, (x, Table Value.Table.{ name; _ })::gs, os, body) ->
+    | For (_, (_genkind, x, Table Value.Table.{ name; _ })::gs, os, body) ->
         let body = select_clause index unit_query (For (None, gs, [], body)) in
         let os = List.map (base index) os in
           begin
             match body with
-              | (_, fields, tables, condition, []) ->
-                  (Sql.All, fields, Sql.TableRef(name, x)::tables, condition, os)
+              | (_, fields, tables, condition, [], []) ->
+                  (Sql.All, fields, Sql.TableRef(name, x)::tables, condition, [], os)
               | _ -> assert false
           end
     | If (c, body, Concat []) ->
       (* Turn conditionals into where clauses. We might want to do
          this earlier on.  *)
       let c = base index c in
-      let (_, fields, tables, c', os) = select_clause index unit_query body in
+      let (_, fields, tables, c', gbys, os) = select_clause index unit_query body in
       let c = Sql.smart_and c c' in
-      (Sql.All, fields, tables, c, os)
+      (Sql.All, fields, tables, c, gbys, os)
     | Table Value.Table.{ name = table; row = (fields, _, _); _ } ->
       (* eta expand tables. We might want to do this earlier on.  *)
       (* In fact this should never be necessary as it is impossible
@@ -640,14 +730,15 @@ let rec select_clause : Sql.index -> bool -> t -> Sql.select_clause =
               fields
               []))
       in
-        (Sql.All, fields, [Sql.TableRef(table, var)], Sql.Constant (Constant.Bool true), [])
+        (Sql.All, fields, [Sql.TableRef(table, var)], Sql.Constant (Constant.Bool true), [], [])
     | Singleton _ when unit_query ->
       (* If we're inside an Sql.Empty or a Sql.Length it's safe to ignore
          any fields here. *)
       (* We currently detect this earlier, so the unit_query stuff here
          is redundant. *)
-      (Sql.All, Sql.Fields [], [], Sql.Constant (Constant.Bool true), [])
+      (Sql.All, Sql.Fields [], [], Sql.Constant (Constant.Bool true), [], [])
     | Singleton (Record fields) ->
+      (* this code is only used in the non-mixing normalizer and thus doesn't support grouping *)
       let fields =
         Sql.Fields
           (List.rev
@@ -657,7 +748,7 @@ let rec select_clause : Sql.index -> bool -> t -> Sql.select_clause =
               fields
               []))
       in
-        (Sql.All, fields, [], Sql.Constant (Constant.Bool true), [])
+        (Sql.All, fields, [], Sql.Constant (Constant.Bool true), [], [])
     | _ -> assert false
 and clause : Sql.index -> bool -> t -> Sql.query =
   fun index unit_query v -> Sql.Select(select_clause index unit_query v)
@@ -722,7 +813,7 @@ type let_clause = Var.var * t * Var.var * t
 type let_query = let_clause list
 
 
-let gens_index (gs : (Var.var * t) list)   =
+let gens_index (gs : (genkind * Var.var * t) list)   =
   let open Value.Table in
   let all_fields t =
     let field_types = table_field_types t in
@@ -734,7 +825,7 @@ let gens_index (gs : (Var.var * t) list)   =
       | (ks::_) -> StringSet.from_list ks
       | _ -> all_fields t
   in
-  let table_index (x, source) =
+  let table_index (_genkind, x, source) =
     let t = match source with Table t -> t | _ -> assert false in
     let labels = key_fields t in
       List.rev
@@ -759,9 +850,9 @@ let let_clause : let_clause -> Sql.query =
     let gs_out = extract_gens outer in
     let gs_in = extract_gens inner in
     let q_outer = clause (outer_index gs_out) false outer in
-    let (_fDist, result,tables,where,os) = select_clause (inner_index t gs_in) false inner in
+    let (_fDist, result,tables,where,gbys,os) = select_clause (inner_index t gs_in) false inner in
     let tablename = Sql.string_of_subquery_var q in
-    let q_inner = Sql.Select(Sql.All,result,Sql.TableRef(tablename,t)::tables,where,os) in
+    let q_inner = Sql.Select(Sql.All,result,Sql.TableRef(tablename,t)::tables,where,gbys,os) in
     Sql.With (tablename, q_outer, [q_inner])
 
 let sql_of_let_query : let_query -> Sql.query =
@@ -851,9 +942,9 @@ struct
       | For (tag_opt, gs, os, body) ->
           let (o, tag_opt) = o#option (fun o -> o#tag) tag_opt in
           let (o, gs) =
-            o#list (fun o (v, t) ->
+            o#list (fun o (k, v, t) ->
               let (o, t) = o#query t in
-              (o, (v, t))) gs in
+              (o, (k, v, t))) gs in
           let (o, os) = o#list (fun o -> o#query) os in
           let (o, body) = o#query body in
           (o, For (tag_opt, gs, os, body))
@@ -865,6 +956,10 @@ struct
       | Table t -> (o, Table t)
       | Database  (dt, s) -> (o, Database (dt, s))
       | Singleton x -> let (o, x) = o#query x in (o, Singleton x)
+      | MapEntry (k,x) ->
+          let (o, k) = o#query k in
+          let (o, x) = o#query x
+          in (o, MapEntry (k,x))
       | Concat xs -> let (o, xs) = o#list (fun o -> o#query) xs in (o, Concat xs)
       | Dedup q ->
           let (o, q) = o#query q in
@@ -907,5 +1002,208 @@ struct
       | Primitive x -> (o, Primitive x)
       | Var (v, dts) -> (o, Var (v, dts))
       | Constant c -> (o, Constant c)
+      | GroupBy ((v,i),q) ->
+          let (o,i) = o#query i in
+          let (o,q) = o#query q in
+          (o, GroupBy ((v,i),q))
+      | AggBy (ar,q) ->
+          let (o,ar) = StringMap.fold (fun l_in (v, l_out) (o, acc) ->
+                  let (o, v) = o#query v in
+                  (o, StringMap.add l_in (v, l_out) acc)) ar (o, StringMap.empty)
+          in
+          let (o,q) = o#query q in
+          (o, AggBy (ar, q))
+      | Lookup (q,i) ->
+          let (o,q) = o#query q in
+          let (o,i) = o#query i in
+          (o, Lookup (q,i))
   end
 end
+
+module FlattenRecords =
+struct
+
+  (* this is a lightly generalised version of the flattening used by shredding
+   * TODO: verify that shredding works well with this version and remove the legacy code *)
+  let rec flatten_base_type = function
+  | Types.Primitive _ as t -> t
+  | Types.Record fields ->
+    Types.make_record_type
+      (StringMap.fold
+         (fun name t fields ->
+           match flatten_base_type t with
+             | Types.Record inner_fields ->
+               StringMap.fold
+                 (fun name' t fields ->
+                   StringMap.add (name ^ "@" ^ name') t fields)
+                 (field_types_of_row inner_fields)
+                 fields
+             | Types.Primitive _ as t ->
+               StringMap.add name t fields
+             | _ -> assert false)
+         (field_types_of_row fields)
+         StringMap.empty)
+  | t (* MapEntry *) ->
+    let kty, vty = Types.unwrap_mapentry_type t in
+    let kty' = flatten_base_type kty in
+    let vty' = flatten_base_type vty in
+    Types.make_mapentry_type kty' vty'
+
+  let flatten_query_type t =
+    let t' = Types.unwrap_list_type t |> flatten_base_type in
+    match t' with
+    | Types.Record _ -> Types.make_list_type t'
+    | _ -> StringMap.add "@" t' StringMap.empty |> Types.make_record_type |> Types.make_list_type
+
+  let rec flatten_inner : t -> t =
+    let is_aggr_primitive = function
+      | "Sum" | "SumF" | "Avg" | "AvgF" | "Min" | "MinF" | "Max" | "MaxF" | "length" -> true
+      | _ -> false
+    in
+    function
+      | Constant c    -> Constant c
+      | Primitive p   -> Primitive p
+      | Apply (Primitive "Empty", [e]) -> Apply (Primitive "Empty", [flatten_inner_query e])
+      | Apply (Primitive f as p, [e]) when is_aggr_primitive f -> Apply (p, [flatten_inner_query e])
+      | Apply (Primitive "tilde", [s; r]) as e ->
+          Debug.print ("Applying flatten_inner to tilde expression: " ^ show e);
+          Apply (Primitive "tilde", [flatten_inner s; flatten_inner r])
+      | Apply (Primitive f, es) -> Apply (Primitive f, List.map flatten_inner es)
+      | If (c, t, e)  ->
+        If (flatten_inner c, flatten_inner t, flatten_inner e)
+      | MapEntry (k,v) -> MapEntry (flatten_inner k, flatten_inner v)
+      | Project (_,_) as e ->
+        let rec flatten_projs acc = function
+        | Project (e', l) -> flatten_projs (l::acc) e'
+        | Var (_,_) as e' ->
+          (* HACK: FIXME? this keeps z annotated with its original unflattened type *)
+          (* (we could use the flatten_type above, but we probably don't need the type to be accurate
+           * as all eta expansions have already happened) *)
+          let l' = acc |> List.rev |> String.concat "@"
+          in Project (e', l')
+        | _ -> assert false
+        in flatten_projs [] e
+      | Record fields ->
+        let extend name name' = name ^ "@" ^ name' in
+        (* concatenate labels of nested records *)
+        Record
+          (StringMap.fold
+             (fun name body fields ->
+               match flatten_inner body with
+                 | Record inner_fields ->
+                   StringMap.fold
+                     (fun name' body fields ->
+                       StringMap.add (extend name name') body fields)
+                     inner_fields
+                     fields
+                 | body ->
+                   StringMap.add name body fields)
+             fields
+             StringMap.empty)
+      | Variant ("Simply", x) ->
+          Variant ("Simply", flatten_inner x)
+      | Variant ("Seq", Singleton r) ->
+          Variant ("Seq", Singleton (flatten_inner r))
+      | Variant ("Seq", Concat rs) ->
+          Variant ("Seq",
+            Concat (List.map (
+              function | Singleton x -> Singleton (flatten_inner x) | _ -> assert false) rs))
+      | Variant ("Quote", Variant ("Simply", v)) ->
+          Variant ("Quote", Variant ("Simply", flatten_inner v))
+      (* Other regex variants which don't need to be traversed *)
+      | Variant (s, x) when s = "Repeat" || s = "StartAnchor" || s = "EndAnchor" ->
+          Variant (s, x)
+      | e ->
+        Debug.print ("Can't apply flatten_inner to: " ^ show e);
+        assert false
+
+  and flatten_inner_query : t -> t = fun e -> flatten_comprehension e
+
+  and flatten_comprehension : t -> t =
+    function
+      | For (tag, gs, os, body) ->
+        (* for heterogeneous and grouping, we need recursion on gs *)
+        let gs' = List.map (fun (pol,x,g) -> pol, x, flatten_comprehension g) gs in
+        let body' = flatten_comprehension body in
+        (* BUG BUG: flattening will render os useless *)
+        For (tag, gs', os, body')
+      | GroupBy ((x,kc), v) -> GroupBy ((x, flatten_inner kc), flatten_comprehension v)
+      | AggBy _ as q -> q (* aggregation is assumed to be flat *)
+      | Prom q -> Prom (flatten_comprehension q)
+      | If (c, e, Concat []) ->
+        If (flatten_inner c, flatten_comprehension e, Concat [])
+      | Singleton e ->
+        let e' =
+          (* lift base expressions to records *)
+          match flatten_inner e with
+          | MapEntry (Record _, Record _)
+          | Record _ as p -> p
+          | MapEntry (_, _) -> assert false (* we don't want to handle the case of MapEntries not containing records *)
+          | p -> Record (StringMap.add "@" p StringMap.empty)
+        in
+        Singleton e'
+      (* HACK: not sure if Concat is supposed to appear here...
+         but it can do inside "Empty" or "Length". *)
+      | Concat es ->
+        Concat (List.map flatten_comprehension es)
+      | Table _ | Dedup _ as e ->
+        (* this is a (possibly deduplicated) table: it must be already flat *)
+        e
+      | e ->
+        Debug.print ("Can't apply flatten_comprehension to: " ^ show e);
+        assert false
+
+  let flatten_query = flatten_comprehension
+
+  (* unflattens a flattened record according to a given nested record type *)
+  let rec unflatten_record ?(prefix = "") nty frow : Value.t =
+    let ur = unflatten_record in
+    let extend_label l = if prefix = "" then l else prefix ^ "@" ^ l in
+    let base_label = if prefix = "" then "@" else prefix in
+    match nty with
+    | Types.Primitive _ -> List.assoc base_label frow
+    | Types.Record nrow ->
+        let nfields =
+          StringMap.fold
+          <| (fun k v acc -> (k, ur ~prefix:(extend_label k) v frow)::acc)
+          <| field_types_of_row nrow
+          <| []
+        in `Record nfields
+    | _ -> assert false
+
+  let unflatten_query nty fval : Value.t =
+    let of_list = function `List l -> l | _ -> assert false in
+    let of_record = function `Record r -> r | _ -> assert false in
+    (* under the assumption that the given type is a list *)
+    match Types.unwrap_list_type nty with
+    (* special reconstruction for finite maps of relations, resulting from grouping *)
+    (* standard reconstruction of relations over nested records of primitives *)
+    | Types.Record _ | Types.Primitive _ as vty -> `List (List.map (fun r -> unflatten_record vty (of_record r)) (of_list fval))
+    | t' (* assumed to be MapEntry *) ->
+      let kty, vty = Types.unwrap_mapentry_type t' in
+      let l = of_list fval in
+      let tbl = Hashtbl.create (List.length l) in
+      let insert (k,v) =
+        try
+          let vl = Hashtbl.find tbl k
+          in Hashtbl.replace tbl k (v::vl)
+        with NotFound _ -> Hashtbl.add tbl k [v]
+      in
+      let split r =
+        unflatten_record ~prefix:"1" kty r,
+        unflatten_record ~prefix:"2" vty r
+      in
+      let pair x y = `Record [("1",x);("2",y)]
+      in
+      List.iter (of_record ->- split ->- insert) l;
+      `List (Hashtbl.fold (fun k v acc -> pair k (`List v)::acc) tbl [])
+
+    (* XXX: (bug?) from the shredding code, it would appear unit fields are not returned by a DB query
+     * and need to be inferred from the nested type when unflattening -- we're not doing that here
+     *
+     * or maybe we are? we proceed by case analysis on the nested type and, from the looks of it,
+     * the code, not finding any matching attribute in the DB result, should conjure a `Record StringMap.empty
+     * i.e. the unit value! *)
+
+end
+

@@ -1,0 +1,24 @@
+sig outch : () ~> !Int.!String.End
+fun outch() {
+  fork(fun(ic) {
+    var (i, ic) = receive(ic);     # receive the integer
+    var (s, ic) = receive(ic);     # receive the string
+    print(intToString(i) ^^ s);    # convert, concat, and print
+    close(ic)                      # close the input channel
+  })
+}
+
+# sig unsound : () {}~> ()
+# fun unsound() {
+handle({
+  var oc = outch();
+  var msg = if (do Flip) 42 else 84; # choose an integer message to send
+  var oc = send(msg, oc);
+  do Fail;                           # this is our exception
+  var oc = send("well-typed", oc);
+  close(oc)
+}) {
+  case <Fail> -> ()
+  case <Flip => resume> -> resume(true); resume(false)
+}
+# }
