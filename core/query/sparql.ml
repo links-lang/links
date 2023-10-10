@@ -16,4 +16,4 @@ let select ~base uri query =
   | Result(Rdf.Sparql.Bool _) -> raise (internal_error("expected SELECT query, but result is a boolean"))
   | Result(Rdf.Sparql.Graph _) -> raise (internal_error("expected SELECT query, but result is a graph"))
   | Ok -> raise (internal_error("expected SELECT query, but no result returned"))
-  | Error(msg) -> raise (internal_error(Rdf.Sparql_protocol.string_of_error msg))
+  | Error(msg) -> raise (internal_error("SPARQL error: " ^ (Rdf.Sparql_protocol.string_of_error msg)))
