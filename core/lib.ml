@@ -1703,7 +1703,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     (* SPARQL *)
     "sparql",
     (`Server
-       (p3D (fun base uri query _ ->
+       (p3 (fun base uri query ->
                  let base = Iri.of_string (Value.unbox_string base) in
                  let uri = Uri.of_string(Value.unbox_string uri) in
                  let query = Value.unbox_string query in
