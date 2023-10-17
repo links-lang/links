@@ -2,13 +2,21 @@ open Lens_utility
 open Lens_utility.O
 module Column = Column
 
-type t = {
-  fds : Fun_dep.Set.t;
-  predicate : Phrase.t option;
-  query : Phrase.t option;
-  cols : Column.t list;
-}
-[@@deriving show, sexp]
+include struct
+  (* Workaround for issue #1187 (i.e., the @@deriving sexp clause on t
+     below creates code triggering warning 40):
+     We disable warning 40 within this module, and immediately include it. *)
+
+  [@@@ocaml.warning "-40"]
+
+  type t = {
+    fds : Fun_dep.Set.t;
+    predicate : Phrase.t option;
+    query : Phrase.t option;
+    cols : Column.t list;
+  }
+  [@@deriving show, sexp]
+end
 
 let fds t = t.fds
 

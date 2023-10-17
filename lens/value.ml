@@ -1,25 +1,33 @@
 open Lens_utility
 
-type t =
-  | Lens of { table : Database.Table.t; sort : Sort.t }
-  | LensMem of { records : Phrase_value.t list; sort : Sort.t }
-  | LensSelect of { lens : t; predicate : Phrase.t; sort : Sort.t }
-  | LensJoin of {
-      left : t;
-      right : t;
-      on : (string * string * string) list;
-      del_left : Phrase.t;
-      del_right : Phrase.t;
-      sort : Sort.t;
-    }
-  | LensDrop of {
-      lens : t;
-      drop : string;
-      key : string;
-      default : Phrase_value.t;
-      sort : Sort.t;
-    }
-[@@deriving sexp]
+include struct
+  (* Workaround for issue #1187 (i.e., the @@deriving sexp clause on t
+     below creates code triggering warning 40):
+     We disable warning 40 within this module, and immediately include it. *)
+
+  [@@@ocaml.warning "-40"]
+
+  type t =
+    | Lens of { table : Database.Table.t; sort : Sort.t }
+    | LensMem of { records : Phrase_value.t list; sort : Sort.t }
+    | LensSelect of { lens : t; predicate : Phrase.t; sort : Sort.t }
+    | LensJoin of {
+        left : t;
+        right : t;
+        on : (string * string * string) list;
+        del_left : Phrase.t;
+        del_right : Phrase.t;
+        sort : Sort.t;
+      }
+    | LensDrop of {
+        lens : t;
+        drop : string;
+        key : string;
+        default : Phrase_value.t;
+        sort : Sort.t;
+      }
+  [@@deriving sexp]
+end
 
 let serialize v =
   let sexp = sexp_of_t v in

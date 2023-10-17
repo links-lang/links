@@ -2,15 +2,23 @@ open Operators
 open Lens_utility
 module LPV = Phrase_value
 
-type t = {
-  serialize : unit -> string;
-  driver_name : unit -> string;
-  escape_string : string -> string;
-  quote_field : string -> string;
-  execute : string -> unit;
-  execute_select :
-    string -> field_types:(string * Phrase_type.t) list -> Phrase_value.t list;
-}
+include struct
+  (* Workaround for issue #1187 (i.e., the @@deriving sexp clause on t
+     below creates code triggering warning 40):
+     We disable warning 40 within this module, and immediately include it. *)
+
+  [@@@ocaml.warning "-40"]
+
+  type t = {
+    serialize : unit -> string;
+    driver_name : unit -> string;
+    escape_string : string -> string;
+    quote_field : string -> string;
+    execute : string -> unit;
+    execute_select :
+      string -> field_types:(string * Phrase_type.t) list -> Phrase_value.t list;
+  }
+end
 
 module E = struct
   type t =
@@ -48,7 +56,13 @@ let show _ = "<db_driver>"
 let pp f v = Format.fprintf f "%s" (show v)
 
 module Table = struct
-  type t = { name : string; keys : string list list } [@@deriving sexp]
+  include struct
+    (* Defining t withing a module and immediately including it as a way to
+       disable warning 40 exactly on the code generated for the
+       @@deriving clauses below *)
+    [@@@ocaml.warning "-40"]
+    type t = { name : string; keys : string list list } [@@deriving sexp]
+  end
 
   let name t = t.name
 end
