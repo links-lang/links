@@ -106,7 +106,7 @@ jobs:
           ./run-tests nodb-unit-tests
         shell: bash
 
-  postgres-mysql8-sqlite3:
+  postgres-mysql-sqlite3:
     strategy:
       fail-fast: false
       matrix:
@@ -163,7 +163,7 @@ jobs:
           opam install
           ./links.opam
           ./links-postgresql.opam
-          ./links-mysql8.opam
+          ./links-mysql.opam
           ./links-sqlite3.opam
           --deps-only
           --ignore-constraints-on=links
@@ -189,13 +189,13 @@ jobs:
           LINKS_POSTGRES_USER: links
           LINKS_POSTGRES_PASSWORD: links
           LINKS_POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
-          LINKS_MYSQL8_HOST: 127.0.0.1
-          LINKS_MYSQL8_USER: links
-          LINKS_MYSQL8_PASSWORD: links
-          LINKS_MYSQL8_PORT: ${{ job.services.mysql.ports[3306] }}
+          LINKS_MYSQL_HOST: 127.0.0.1
+          LINKS_MYSQL_USER: links
+          LINKS_MYSQL_PASSWORD: links
+          LINKS_MYSQL_PORT: ${{ job.services.mysql.ports[3306] }}
         shell: bash
 
-  links-mysql8_mysql57:
+  links-mysql_mysql57:
     strategy:
       fail-fast: false
       matrix:
@@ -249,7 +249,7 @@ jobs:
         run: >-
           opam install
           ./links.opam
-          ./links-mysql8.opam
+          ./links-mysql.opam
           --deps-only
           --ignore-constraints-on=links
 
@@ -262,16 +262,16 @@ jobs:
       - name: Run database testsuite
         run: |
           eval $(opam env)
-          ./run-database-tests tests/database -d mysql8
-          ./run-database-tests tests/relational-lenses -d mysql8
+          ./run-database-tests tests/database -d mysql
+          ./run-database-tests tests/relational-lenses -d mysql
         env:
           # TODO(dhil): I do not know how to index into the
           # environments of either service. Until we figure out how to
           # do it, we will just duplicate information here.
-          LINKS_MYSQL8_HOST: 127.0.0.1
-          LINKS_MYSQL8_USER: links
-          LINKS_MYSQL8_PASSWORD: links
-          LINKS_MYSQL8_PORT: ${{ job.services.mysql.ports[3306] }}
+          LINKS_MYSQL_HOST: 127.0.0.1
+          LINKS_MYSQL_USER: links
+          LINKS_MYSQL_PASSWORD: links
+          LINKS_MYSQL_PORT: ${{ job.services.mysql.ports[3306] }}
         shell: bash
 
 

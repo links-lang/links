@@ -1,0 +1,12 @@
+(library
+  (name links_mysql)
+  (public_name links-mysql)
+  (synopsis "MySQL database backend for Links")
+  (optional)
+  (libraries str unix mysql8 links.core))
+
+
+(install
+  (section share)
+  (files   links_mysql_dependencies.json)
+  (package links-mysql))

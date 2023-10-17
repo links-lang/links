@@ -262,7 +262,7 @@ end
 class mysql_database spec = object(self)
   inherit Value.database mysql_printer
   val connection = connect spec
-  method driver_name () = "mysql8"
+  method driver_name () = "mysql"
   method exec query : Value.dbvalue =
     try
       new mysql_result (exec connection query) connection
@@ -305,5 +305,5 @@ let parse_args (args : string) : db =
            failwith ("[" ^ msg ^ "] Couldn't parse mysql port number : " ^ port))
     | _ -> failwith "Insufficient arguments when establishing mysql connection"
 
-let driver_name = "mysql8"
+let driver_name = "mysql"
 let _ = Value.register_driver (driver_name, fun args -> new mysql_database (parse_args args), Value.reconstruct_db_string (driver_name, args))
