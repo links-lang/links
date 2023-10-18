@@ -1,22 +1,18 @@
 open Lens_utility
 module Type = Phrase_type
 
-include struct
-  (* Workaround for issue #1187 (i.e., the @@deriving sexp clause on t
-     below creates code triggering warning 40):
-     We disable warning 40 within this module, and immediately include it. *)
+(* Workaround for issue #1187 (i.e., the @@deriving sexp clause on t
+   below creates code triggering warning 40 otherwise) *)
+open Sexplib0.Sexp_conv
 
-  [@@@ocaml.warning "-40"]
-
-  type t = {
-    table : string;
-    name : string;
-    alias : string;
-    typ : Type.t;
-    present : bool;
-  }
-  [@@deriving show, sexp]
-end
+type t = {
+  table : string;
+  name : string;
+  alias : string;
+  typ : Type.t;
+  present : bool;
+}
+[@@deriving show, sexp]
 
 let make ~table ~name ~alias ~typ ~present =
   { table; name; alias; typ; present }
