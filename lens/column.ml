@@ -3,7 +3,8 @@ module Type = Phrase_type
 
 (* Workaround for issue #1187 (i.e., the @@deriving sexp clause on t
    below creates code triggering warning 40 otherwise) *)
-open Sexplib0.Sexp_conv
+open Sexplib0.Sexp_conv_record.Fields
+open Sexplib0.Sexp_conv_record.Kind
 
 type t = {
   table : string;
