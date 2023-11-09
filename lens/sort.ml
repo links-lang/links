@@ -2,6 +2,11 @@ open Lens_utility
 open Lens_utility.O
 module Column = Column
 
+(* Workaround for issue #1187 (i.e., the @@deriving sexp clause on t
+   below creates code triggering warning 40 otherwise) *)
+open Sexplib0.Sexp_conv_record.Fields
+open Sexplib0.Sexp_conv_record.Kind
+
 type t = {
   fds : Fun_dep.Set.t;
   predicate : Phrase.t option;
