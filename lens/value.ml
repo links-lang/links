@@ -1,5 +1,10 @@
 open Lens_utility
 
+(* Workaround for issue #1187 (i.e., the @@deriving sexp clause on t
+   below creates code triggering warning 40 otherwise) *)
+open Sexplib0.Sexp_conv_record.Fields
+open Sexplib0.Sexp_conv_record.Kind
+
 type t =
   | Lens of { table : Database.Table.t; sort : Sort.t }
   | LensMem of { records : Phrase_value.t list; sort : Sort.t }
