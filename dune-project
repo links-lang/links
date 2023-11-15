@@ -3,7 +3,7 @@
 (using menhir 2.0)                 ;; enable use of menhir
 (name links)                       ;; package name
 (implicit_transitive_deps false)   ;; hides transitive dependencies in libraries/executables/tests
-(generate_opam_files true)         ;; generate .opam package files using the descriptions defined in this file.
+(generate_opam_files true)         ;; generate .opam package files using the descriptions defined in this file
 
 
 ;;
