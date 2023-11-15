@@ -66,7 +66,7 @@
  (name links-postgresql)
  (synopsis "Postgresql database driver for the Links Programming Language")
  (description "Postgresql database driver for the Links Programming Language")
- (depends (links (= version))
+ (depends (links (= :version))
           postgresql)
  (tags
    ("postgresql" "database")))
@@ -79,7 +79,7 @@
  (name links-sqlite3)
  (synopsis "SQLite database driver for the Links Programming Language")
  (description "SQLite database driver for the Links Programming Language")
- (depends (links (= version))
+ (depends (links (= :version))
           sqlite3)
  (tags
    ("sqlite" "database")))
@@ -92,7 +92,7 @@
  (name links-mysql)
  (synopsis "MySQL database driver for the Links Programming Language")
  (description "MySQL database driver for the Links Programming Language")
- (depends (links (= version))
+ (depends (links (= :version))
           conf-mysql
           mysql8)
  (tags
