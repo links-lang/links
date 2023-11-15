@@ -46,7 +46,7 @@ BUILD_DIR:=$(ROOT)/_build
 BUILD=opam exec dune -- build
 MAIN=links
 SOURCES=$(MAIN)
-DB_STABLE=links-postgresql,links-sqlite3,links-mysql8
+DB_STABLE=links-postgresql,links-sqlite3,links-mysql
 DB_SOURCES=$(DB_STABLE)
 # Note: this relies on lazy expansion of `SOURCES'.
 COMMON_FLAGS=--only-packages $(SOURCES) --build-dir=$(BUILD_DIR)
