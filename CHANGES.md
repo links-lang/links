@@ -1,5 +1,7 @@
 # 0.9.8
 
+This release includes minor bug fixes, improvements, and a breaking change regarding the syntax of handlers.
+
 ## Queries mixing set and bag semantics
 Links now provides experimental support for SQL queries with grouping and
 aggregation. These require the _mixing_ normaliser (`mixing_norm=on` in the
