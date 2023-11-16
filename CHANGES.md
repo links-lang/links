@@ -1,5 +1,3 @@
-# Unreleased (scheduled for 0.9.9)
-
 # 0.9.8
 
 List of changes since the latest release.
