@@ -1,3 +1,5 @@
+# Unreleased
+
 # 0.9.8
 
 This release includes minor bug fixes, improvements, and a breaking change regarding the syntax of handlers.
@@ -54,7 +56,7 @@ page](https://github.com/links-lang/links/wiki/Control-flow-linearity).
   is included in the `wild` effect instead.
 * The (incomplete) support for distributed session delegation has been removed.
 * The standard library now provides functions for issuing SPARQL queries.
-   
+
 # 0.9.7
 
 This release includes minor bug fixes, improvements, and a breaking
