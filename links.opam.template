@@ -1,0 +1,4 @@
+build: [
+  [ "dune" "exec" "preinstall/preinstall.exe" "--" "-libdir" _:lib ]
+  [ make "opam-build-links.opam" ]
+]
