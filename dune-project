@@ -31,7 +31,7 @@
  (name links)
  (synopsis "The Links Programming Language")
  (description "Links is a functional programming language designed to make web programming easier.")
- (depends (ocaml (>= : 4.14.0))
+ (depends (ocaml (>= : 5.1.1))
           (dune-configurator (>= : 3.8))
            ppx_deriving
           (ppx_deriving_yojson (>= 3.3))

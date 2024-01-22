@@ -1,5 +1,9 @@
 # Unreleased
 
+## Require OCaml 5.1.1
+
+The minimum required OCaml version has been raised to 5.1.1.
+
 # 0.9.8
 
 This release includes minor bug fixes, improvements, and a breaking change regarding the syntax of handlers.
