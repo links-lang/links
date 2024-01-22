@@ -17,7 +17,7 @@ jobs:
         os:
           - ubuntu-20.04
         ocaml-compiler:
-          - 5.1.0
+          - 5.1.1
 
     runs-on: ${{ matrix.os }}
 
@@ -71,7 +71,7 @@ jobs:
         os:
           - ubuntu-20.04
         ocaml-compiler:
-          - 5.1.0
+          - 5.1.1
 
     runs-on: ${{ matrix.os }}
 
@@ -112,7 +112,7 @@ jobs:
         os:
           - ubuntu-20.04
         ocaml-compiler:
-          - 5.1.0
+          - 5.1.1
 
     runs-on: ${{ matrix.os }}
 
@@ -200,7 +200,7 @@ jobs:
         os:
           - ubuntu-20.04
         ocaml-compiler:
-          - 5.1.0
+          - 5.1.1
 
     runs-on: ${{ matrix.os }}
 
