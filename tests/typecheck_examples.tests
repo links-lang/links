@@ -764,3 +764,8 @@ filemode : true
 Typecheck example file examples/mvu/dispatch.links
 examples/mvu/dispatch.links
 filemode : true
+
+Typecheck example file examples/mvu/changePage.links
+examples/mvu/changePage.links
+filemode : true
+

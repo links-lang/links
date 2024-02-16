@@ -1,0 +1,46 @@
+import Mvu;
+import MvuHTML;
+import MvuAttrs;
+open import MvuCommands;
+typename Message = [| Navigate |];
+
+fun updt(msg, _) {
+  switch (msg) {
+    case Navigate -> ((), changePage("/2"))
+  }
+}
+
+fun view(_) {
+  open MvuHTML;
+  open MvuAttrs;
+  button(onClick(fun() { Navigate }), textNode("Navigate to second page"))
+}
+
+fun page1(_) {
+  Mvu.runCmd("placeholder", (),
+    view, updt, MvuCommands.empty);
+  page
+    <html>
+      <body>
+      <div id="placeholder"></div>
+      </body>
+    </html>
+}
+
+fun page2(_) {
+  page
+    <html>
+      <body>
+      <h1>Successfully redirected</h1>
+      </body>
+    </html>
+}
+
+
+fun main() {
+  addRoute("/", page1);
+  addRoute("/2", page2);
+  servePages()
+}
+
+main()
