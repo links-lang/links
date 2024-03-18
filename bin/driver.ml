@@ -162,7 +162,7 @@ module Phases = struct
     = fun initial_context filename ->
     (* Process source file (and its dependencies. *)
     let result =
-      Parse.run initial_context filename
+      (Debug.debug_time "Parsing" (fun () -> Parse.run initial_context filename))
       |> Desugar.run
       |> (fun result -> if Settings.get typecheck_only then exit 0 else result)
       |> Compile.IR.run
