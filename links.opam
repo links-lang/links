@@ -23,7 +23,7 @@ doc: "https://links-lang.org/quick-help.html"
 bug-reports: "https://github.com/links-lang/links/issues"
 depends: [
   "dune" {>= "2.7"}
-  "ocaml" { >= "5.1.0"}
+  "ocaml" { >= "5.1.1"}
   "dune-configurator" { >= "3.8"}
   "ppx_deriving"
   "ppx_deriving_yojson" {>= "3.3"}
