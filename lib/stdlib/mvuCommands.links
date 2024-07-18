@@ -4,9 +4,14 @@ typename Command(a :: Type(Any, Any)) =
   [| NoCommand
    | CommandAppend : (Command(a), Command(a))
    | Spawn: (() {}~> a)
+   | Redirect: String
    |];
 
 var empty = NoCommand;
+
+
+sig changePage : (String) -> Command(a)
+fun changePage(url) { Redirect(url) }
 
 sig spawnProc:
   forall a :: Type(Any, Any) .
@@ -39,6 +44,7 @@ fun processCommand(cmd, ap) {
     case CommandAppend(c1, c2) ->
       processCommand(c1, ap);
       processCommand(c2, ap)
+    case Redirect(url) -> redirect(url)
     case Spawn(f) ->
       ignore(
         spawn {

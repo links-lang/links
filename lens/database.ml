@@ -2,6 +2,11 @@ open Operators
 open Lens_utility
 module LPV = Phrase_value
 
+(* Workaround for issue #1187 (i.e., the @@deriving sexp clause on t
+   below creates code triggering warning 40 otherwise) *)
+open Sexplib0.Sexp_conv_record.Fields
+open Sexplib0.Sexp_conv_record.Kind
+
 type t = {
   serialize : unit -> string;
   driver_name : unit -> string;
@@ -352,7 +357,7 @@ module Insert = struct
     let last_id_fun =
       let driver = db.driver_name () in
       match driver with
-      | "mysql8" -> "last_insert_id()"
+      | "mysql" -> "last_insert_id()"
       | "sqlite3" -> "last_insert_rowid()"
       | _ ->
           let fn = "exec_insert_returning_hack" in
@@ -372,7 +377,7 @@ module Insert = struct
   let exec_insert_returning ~db ~field_types data =
     match db.driver_name () with
     | "sqlite3"
-     |"mysql8" ->
+     |"mysql" ->
         exec_insert_returning_hack ~db data
     | _ ->
         let cmd = Format.asprintf "%a" (fmt ~db) data in
@@ -406,7 +411,7 @@ module Change = struct
 
   let exec_multi ~db data =
     match db.driver_name () with
-    | "mysql8" -> exec_multi_slow ~db data
+    | "mysql" -> exec_multi_slow ~db data
     | _ ->
         let fmt_cmd_sep f () = Format.pp_print_string f ";\n" in
         let fmt_cmd_list = Format.pp_print_list ~pp_sep:fmt_cmd_sep (fmt ~db) in

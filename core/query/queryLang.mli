@@ -17,15 +17,22 @@ type base_type = | Bool | Char | Float | Int | String | DateTime
 type tag = int
     [@@deriving show]
 
+type genkind = Entries | Keys
+    [@@deriving show]
+
 type t =
-    | For       of tag option * (Var.var * t) list * t list * t
+    | For       of tag option * (genkind * Var.var * t) list * t list * t
     | If        of t * t * t
     | Table     of Value.table
     | Database  of (Value.database * string)
     | Singleton of t
+    | MapEntry  of t * t
     | Concat    of t list
     | Dedup     of t
     | Prom      of t
+    | GroupBy   of (Var.var * t) * t
+    | AggBy     of (t * string) StringMap.t * t
+    | Lookup    of t * t
     | Record    of t StringMap.t
     | Project   of t * string
     | Erase     of t * StringSet.t
@@ -78,13 +85,13 @@ val append_env : env -> env -> env
 
 val subst : t -> Var.var -> t -> t
 
-val occurs_free_gens : (Var.var * t) list -> t -> (Var.var * t * Types.datatype) option
+val occurs_free_gens : (genkind * Var.var * t) list -> t -> (Var.var * t * Types.datatype) option
 
 val type_of_expression : t -> Types.datatype
 
 val eta_expand_var : Var.var * Types.datatype -> t
 
-val eta_expand_list : t -> (Var.var * t) list * t list * t
+val eta_expand_list : t -> (genkind * Var.var * t) list * t list * t
 
 val default_of_base_type : Primitive.t -> t
 
@@ -131,3 +138,10 @@ sig
 end
 
 module Transform : QUERY_VISITOR
+
+module FlattenRecords :
+  sig
+    val flatten_query_type : Types.t -> Types.t
+    val flatten_query : t -> t
+    val unflatten_query : Types.t -> Value.t -> Value.t
+  end

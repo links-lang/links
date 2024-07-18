@@ -515,9 +515,11 @@ struct
         apply_cont cont env (`Record [])
     (*****************)
     | `PrimitiveFunction (n,None), args ->
-       apply_cont cont env (Lib.apply_pfun n args (Value.Env.request_data env))
+       Lib.apply_pfun n args (Value.Env.request_data env) >>= fun v ->
+       apply_cont cont env v
     | `PrimitiveFunction (_, Some code), args ->
-       apply_cont cont env (Lib.apply_pfun_by_code code args (Value.Env.request_data env))
+       Lib.apply_pfun_by_code code args (Value.Env.request_data env) >>= fun v ->
+       apply_cont cont env v
     | `ClientFunction name, args ->
         let req_data = Value.Env.request_data env in
         client_call req_data name cont args
@@ -775,7 +777,7 @@ struct
                begin
                   match evaluator e with
                   | None -> computation env cont e
-                  | Some (db, q, t) ->
+                  | Some (db, q, t, readback) ->
                       let q = db#string_of_query ~range q in
                       let (fieldMap, _, _) =
                         let r, _ = Types.unwrap_row (TypeUtils.extract_row t) in
@@ -790,7 +792,9 @@ struct
                           fieldMap
                           []
                       in
-                      apply_cont cont env (Database.execute_select fields q db)
+                      Database.execute_select fields q db
+                      |> readback (* unflattens records/finite maps *)
+                      |> apply_cont cont env
                end
          end
     | TemporalJoin (tmp, e, _t) ->

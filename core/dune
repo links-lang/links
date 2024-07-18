@@ -18,7 +18,8 @@
              conduit-lwt-unix uri
              websocket websocket-lwt-unix.cohttp
              findlib menhirLib links.lens calendar
-             dynlink)
+             dynlink
+             rdf rdf_lwt iri)
   (preprocess (pps ppx_deriving.std ppx_deriving_yojson)))
 
 

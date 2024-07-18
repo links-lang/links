@@ -2,6 +2,7 @@ open CommonTypes
 
 open Utility
 open Proc
+open Lwt
 
 (* Error functions *)
 let runtime_error msg = raise (Errors.runtime_error msg)
@@ -32,14 +33,16 @@ let datatype = DesugarDatatypes.read ~aliases:alias_env
 
 type primitive =
 [ Value.t
-| `PFun of RequestData.request_data -> Value.t list -> Value.t ]
+| `PFun of RequestData.request_data -> Value.t list -> Value.t Lwt.t ]
 
 type pure = PURE | IMPURE
 
 type located_primitive = [ `Client | `Server of primitive | primitive ]
 
+let pure_pfun fn = `PFun(fun _ xs -> Lwt.return (fn xs))
+
 let mk_binop_fn impl unbox_fn constr = function
-    | [x; y] -> constr (impl (unbox_fn x) (unbox_fn y))
+    | [x; y] -> Lwt.return (constr (impl (unbox_fn x) (unbox_fn y)))
     | _ -> raise (internal_error "arity error in integer operation")
 
 let int_op impl pure : located_primitive * Types.datatype * pure =
@@ -63,7 +66,7 @@ let conversion_op' ~unbox ~conv ~(box :'a->Value.t): Value.t list -> Value.t = f
 
 let conversion_op ~from ~unbox ~conv ~(box :'a->Value.t) ~into pure : located_primitive * Types.datatype * pure =
   let open Types in
-  ((`PFun (fun _ x -> conversion_op' ~unbox:unbox ~conv:conv ~box:box x) : located_primitive),
+  ((pure_pfun (fun x -> conversion_op' ~unbox ~conv:conv ~box:box x) : located_primitive),
    (let q, r = fresh_row_quantifier (lin_any, res_any) in
       (ForAll ([q], Function (make_tuple_type [from], r, into)) : datatype)),
    pure)
@@ -74,7 +77,7 @@ let string_to_xml : Value.t -> Value.t = function
 
 (* The following functions expect 1 argument. Assert false otherwise. *)
 let float_fn fn pure =
-  (`PFun (fun _ args ->
+  (pure_pfun (fun args ->
       match args with
         | [c] -> (Value.box_float (fn (Value.unbox_float c)))
         | _ -> assert false),
@@ -101,9 +104,10 @@ let p3D fn =
         | [a;b;c] -> fn a b c req_data
         | _ -> assert false)
 
-let p1 fn = p1D (fun x _ -> fn x)
-let p2 fn = p2D (fun x y _ -> fn x y)
-let p3 fn = p3D (fun x y z _ -> fn x y z)
+let p1 fn = p1D (fun x _ -> Lwt.return (fn x))
+let p2 fn = p2D (fun x y _ -> Lwt.return (fn x y))
+let p3 fn = p3D (fun x y z _ -> Lwt.return (fn x y z))
+
 
 let rec equal l r =
   match l, r with
@@ -237,6 +241,26 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "^.", float_op ( ** ) PURE;
   "^^", string_op ( ^ ) PURE;
 
+  "max_int",
+  (Value.box_int max_int,
+   datatype "Int",
+   PURE);
+
+  "min_int",
+  (Value.box_int min_int,
+   datatype "Int",
+   PURE);
+
+  "infinity",
+  (Value.box_float Float.infinity,
+   datatype "Float",
+   PURE);
+
+  "neg_infinity",
+  (Value.box_float Float.neg_infinity,
+   datatype "Float",
+   PURE);
+
   (* Comparisons *)
   "==",
   (p2 (fun v1 v2 -> Value.box_bool (equal v1 v2)),
@@ -313,14 +337,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   PURE);
 
   "intToXml",
-  (`PFun (fun _ ->
-    string_to_xml -<- (conversion_op' ~unbox:Value.unbox_int ~conv:(string_of_int) ~box:Value.box_string)),
+  (pure_pfun (string_to_xml -<- (conversion_op' ~unbox:Value.unbox_int ~conv:(string_of_int) ~box:Value.box_string)),
    datatype "(Int) -> Xml",
   PURE);
 
   "floatToXml",
-  (`PFun (fun _ ->
-    string_to_xml -<- (conversion_op' ~unbox:Value.unbox_float ~conv:(string_of_float') ~box:Value.box_string)),
+  (pure_pfun (string_to_xml -<- (conversion_op' ~unbox:Value.unbox_float ~conv:(string_of_float') ~box:Value.box_string)),
    datatype "(Float) -> Xml",
    PURE);
 
@@ -360,12 +382,12 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
    IMPURE);
 
   "self",
-  (`PFun (fun _ _ -> `Pid (`ServerPid (Proc.get_current_pid()))),
+  (pure_pfun (fun _ -> `Pid (`ServerPid (Proc.get_current_pid()))),
    datatype "() {hear{a}|e}~> Process ({ hear{a} })",
    IMPURE);
 
   "here",
-  (`PFun (fun _ _ -> `SpawnLocation (`ServerSpawnLoc)),
+  (pure_pfun (fun _ -> `SpawnLocation (`ServerSpawnLoc)),
     datatype "() ~> Location",
     IMPURE
   );
@@ -373,13 +395,13 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "there",
   (`PFun (fun req_data _ ->
     let client_id = RequestData.get_client_id req_data in
-    `SpawnLocation (`ClientSpawnLoc client_id)),
+    Lwt.return (`SpawnLocation (`ClientSpawnLoc client_id))),
     datatype "() ~> Location",
     IMPURE
   );
 
   "haveMail",
-  (`PFun(fun _ ->
+  (`PFun(fun _ _ ->
            runtime_error "The haveMail function is not implemented on the server yet"),
    datatype "() {:_|_}~> Bool",
    IMPURE);
@@ -591,6 +613,11 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   (p1 (Value.unbox_list ->- List.length ->- Value.box_int),
    datatype "([a]) -> Int",
   PURE);
+
+  "Sum",
+  (p1 (Value.unbox_list ->- List.fold_left (fun x y -> x + Value.unbox_int y) 0 ->- Value.box_int),
+   datatype "([Int]) -> Int",
+   PURE);
 
   "take",
   (p2 (fun n l ->
@@ -1030,7 +1057,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
          let resp_headers = RequestData.get_http_response_headers req_data in
          RequestData.set_http_response_headers req_data
              (("Set-Cookie", cookieName ^ "=" ^ cookieVal) :: resp_headers);
-           `Record []
+           Lwt.return (`Record [])
              (* Note: perhaps this should affect cookies returned by
                 getcookie during the current request. *)),
    datatype "(String, String) ~> ()",
@@ -1059,7 +1086,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
            else
              ""
          in
-           Value.box_string value),
+           Lwt.return (Value.box_string value)),
    datatype "(String) ~> String",
   IMPURE);
 
@@ -1070,7 +1097,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
            let resp_headers = RequestData.get_http_response_headers req_data in
            RequestData.set_http_response_headers req_data (("Location", url) :: resp_headers);
            RequestData.set_http_response_code req_data 302;
-           `Record []
+           Lwt.return (`Record [])
       ), datatype "(String) ~> ()",
   IMPURE);
   (* Should this function really return?
@@ -1100,32 +1127,32 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   "serverTime",
   (`Server
-     (`PFun (fun _ _ ->
+     (pure_pfun (fun _ ->
                Value.box_int(int_of_float(Unix.time())))),
    datatype "() ~> Int",
    IMPURE);
 
   "lensQueryTimeMilliseconds",
   (`Server
-     (`PFun (fun _ _ -> Value.box_int (Lens.Statistics.get_query_time ()))),
+     (pure_pfun (fun _ -> Value.box_int (Lens.Statistics.get_query_time ()))),
    datatype "() ~> Int",
    IMPURE);
 
   "lensQueryCount",
   (`Server
-     (`PFun (fun _ _ -> Value.box_int (Lens.Statistics.get_query_count ()))),
+     (pure_pfun (fun _ -> Value.box_int (Lens.Statistics.get_query_count ()))),
    datatype "() ~> Int",
    IMPURE);
 
   "lensQueryStatisticsReset",
   (`Server
-     (`PFun (fun _ _ -> Value.box_unit (Lens.Statistics.reset ()))),
+     (pure_pfun (fun _ -> Value.box_unit (Lens.Statistics.reset ()))),
    datatype "() ~> ()",
    IMPURE);
 
   "serverTimeMilliseconds",
   (`Server
-     (`PFun (fun _ _ ->
+     (pure_pfun (fun _ ->
                Value.box_int(time_milliseconds()))),
    datatype "() ~> Int",
    IMPURE);
@@ -1198,14 +1225,14 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   IMPURE);
 
   "now",
-  (`PFun (fun _ _ -> Value.box_datetime (Timestamp.now ())),
+  (pure_pfun (fun _ -> Value.box_datetime (Timestamp.now ())),
     datatype "() -> DateTime",
     IMPURE);
 
   (* Returns UTC offset of local time. For example, if local time is British
      Summer Time, then utcOffset() would return 1. *)
   "utcOffset",
-  (`PFun (fun _ _ ->
+  (pure_pfun (fun _ ->
       CalendarLib.Time_Zone.(gap UTC Local)
       |> Value.box_int),
     datatype "() ~> Int",
@@ -1301,8 +1328,8 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   IMPURE);
 
   "getDatabaseConfig",
-  (`PFun
-     (fun _ _ ->
+  (pure_pfun
+     (fun _ ->
     let args = from_option "" (Settings.get Database.connection_info) in
     match Settings.get DatabaseDriver.driver with
     | None ->
@@ -1340,7 +1367,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
              let cgi_params = RequestData.get_cgi_parameters req_data in
              let makestrpair (x1, x2) = `Record [("1", Value.box_string x1); ("2", Value.box_string x2)] in
              let is_internal s = Str.string_match (Str.regexp "^_") s 0 in
-               `List (List.map makestrpair (List.filter (not -<- is_internal -<- fst) cgi_params))),
+               Lwt.return (`List (List.map makestrpair (List.filter (not -<- is_internal -<- fst) cgi_params)))),
     datatype "() ~> [(String,String)]",
     IMPURE));
 
@@ -1497,7 +1524,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
   (* non-deterministic random number generator *)
   "random",
-  (`PFun (fun _ _ -> (Value.box_float (Random.float 1.0))),
+  (pure_pfun (fun _ -> (Value.box_float (Random.float 1.0))),
    datatype "() -> Float",
    IMPURE);
 
@@ -1609,7 +1636,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
 
     "gensym",
     (let idx = ref 0 in
-     `PFun (fun _ _ -> let i = !idx in idx := i+1; (Value.box_int i)),
+     pure_pfun (fun _ -> let i = !idx in idx := i+1; (Value.box_int i)),
       datatype "() -> Int",
       IMPURE);
 
@@ -1694,10 +1721,25 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     (* CLI *)
     "getArgs",
     (`Server
-       (`PFun (fun _ _ ->
+       (pure_pfun (fun _ ->
             Value.(box_list (List.map box_string (Settings.get_rest_arguments ()))))),
      datatype "() ~> [String]",
+     IMPURE);
+
+    (* SPARQL *)
+    "sparql",
+    (`Server
+       (p3D (fun base uri query _ ->
+                 let base = Iri.of_string (Value.unbox_string base) in
+                 let uri = Uri.of_string(Value.unbox_string uri) in
+                 let query = Value.unbox_string query in
+                 Sparql.select ~base uri query >>= fun result ->
+                 Lwt.return (Value.box_list (List.map (fun s ->
+                               Value.box_list (List.map (fun (k,v) ->
+                                       (Value.box_pair (Value.box_string k) (Value.box_string v))) s)) result)))),
+     datatype "(String,String,String) ~> [[(String,String)]]",
      IMPURE)
+
 ]
 
 let impl : located_primitive -> primitive option = function

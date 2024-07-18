@@ -2,12 +2,12 @@
 
 We recommend installing Links using the OPAM tool (version >= 2.1), available from [opam.ocaml.org](https://opam.ocaml.org/).
 
-Links requires at least OCaml 4.08.0 to build and install. Therefore
+Links requires at least OCaml 5.1.1 to build and install. Therefore
 you should first install the minimum (or greater) required version of
 OCaml:
 
 ```
-$ opam switch install 4.08.0
+$ opam switch create 5.1.1
 ```
 
 You can then install Links and its database drivers simply by issuing the commands:
