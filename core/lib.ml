@@ -401,7 +401,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     begin
     if Settings.get Basicsettings.Sessions.exceptions_enabled &&
        Settings.get Basicsettings.Sessions.expose_session_fail then
-      datatype "(() { SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
+      datatype "(() { SessionFail:() =@ [||] |e}~@ _) ~> Process ({ |e })"
     else
       datatype "(() ~e~@ _) ~> Process ({ |e })"
     end,
@@ -412,7 +412,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     begin
     if Settings.get Basicsettings.Sessions.exceptions_enabled &&
        Settings.get Basicsettings.Sessions.expose_session_fail then
-      datatype "(Location, () {SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
+      datatype "(Location, () {SessionFail:() =@ [||] |e}~@ _) ~> Process ({ |e })"
     else
       datatype "(Location, () ~e~@ _) ~> Process ({ |e })"
     end,
@@ -423,7 +423,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     begin
     if Settings.get Basicsettings.Sessions.exceptions_enabled &&
        Settings.get Basicsettings.Sessions.expose_session_fail then
-      datatype "(() { SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
+      datatype "(() { SessionFail:() =@ [||] |e}~@ _) ~> Process ({ |e })"
     else
       datatype "(() ~e~@ _) ~> Process ({ |e })"
     end,
@@ -434,7 +434,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     begin
     if Settings.get Basicsettings.Sessions.exceptions_enabled &&
        Settings.get Basicsettings.Sessions.expose_session_fail then
-      datatype "(() { SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
+      datatype "(() { SessionFail:() =@ [||] |e}~@ _) ~> Process ({ |e })"
     else
       datatype "(() ~e~@ _) ~> Process ({ |e })"
     end,
@@ -445,7 +445,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
     begin
     if Settings.get Basicsettings.Sessions.exceptions_enabled &&
        Settings.get Basicsettings.Sessions.expose_session_fail then
-      datatype "(Location, () { SessionFail:[||] |e}~@ _) ~> Process ({ |e })"
+      datatype "(Location, () { SessionFail:() =@ [||] |e}~@ _) ~> Process ({ |e })"
     else
       datatype "(Location, () ~e~@ _) ~> Process ({ |e })"
     end,

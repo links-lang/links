@@ -87,7 +87,7 @@ object (o : 'self_type)
         let ty =
           Types.fresh_type_variable (CommonTypes.lin_any, CommonTypes.res_any) in
         let with_pos x = SourceCode.WithPos.make ~pos x in
-        (* FIXME: WT: I don't know whether should it be lindo or not *)
+        (* It should be lindo SessionFail *)
         let doOp = DoOperation (with_pos (Operation failure_op_name), [], Some (Types.empty_type), DeclaredLinearity.Lin) in
         (o, with_pos (Switch (with_pos doOp, [], Some ty)), ty)
     | { node = TryInOtherwise (_, _, _, _, None); _} -> assert false

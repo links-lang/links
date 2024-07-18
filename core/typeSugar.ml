@@ -3607,7 +3607,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               if Settings.get Basicsettings.Sessions.exceptions_enabled &&
                  Settings.get Basicsettings.Sessions.expose_session_fail
               then
-                let ty = LinCont.make_operation_type [] (Types.empty_type) in
+                (* This is the operation type for SessionFail. We need it to be linear. *)
+                let ty = LinCont.make_operation_type ~linear:true [] (Types.empty_type) in
                 Types.row_with (Value.session_exception_operation, T.Present ty) inner_effects
               else
                 inner_effects in
@@ -4716,7 +4717,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             let effects =
               if Settings.get Basicsettings.Sessions.expose_session_fail then
                 Types.make_singleton_open_row
-                  (Value.session_exception_operation, T.Present (LinCont.make_operation_type [] Types.empty_type))
+                  (* SessionFail is control-flow linear *)
+                  (Value.session_exception_operation, T.Present (LinCont.make_operation_type ~linear:true [] Types.empty_type))
                   default_effect_subkind
               else
                 Types.make_empty_open_row default_effect_subkind
