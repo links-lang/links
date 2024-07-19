@@ -1,0 +1,66 @@
+# Computing the Sierpinski triangle using bit twiddling.
+# Adapted from https://www.johndcook.com/blog/2019/11/26/fractal-via-bit-twiddling/
+
+# First things first, we do not have bit twiddling operations in
+# Links. So we need to implement them. Fortunately, we require only
+# the bitwise-and operation.
+
+# We represent a bitvector as a list of booleans.
+typename Bits = [Bool];
+
+# The following function zips two bitvectors together, padding with
+# zeroes (false) if needed.
+sig zipbits : ((Bool, Bool) ~e~> Bool, Bits, Bits) ~e~> Bits
+fun zipbits(f, xs, ys) {
+  switch ((xs, ys)) {
+    case ([], []) -> []
+    case (x :: xs, []) -> f(x, false) :: zipbits(f, xs, [])
+    case ([], y :: ys) -> f(y, false) :: zipbits(f, [], ys)
+    case (x :: xs, y :: ys) -> f(x, y) :: zipbits(f, xs, ys)
+  }
+}
+
+# Computes the bitwise-and of two bit vectors.
+sig band : (Bits, Bits) ~> Bits
+fun band(bs, bs') {
+  zipbits(fun(b, b') { b && b' }, bs, bs')
+}
+
+# Conversions between Int <-> Bits
+sig pow2 : (Int) ~> Int
+fun pow2(n) {
+  if (n == 0) 1
+  else 2 * pow2(n-1)
+}
+
+sig bitsToInt : (Bits) ~> Int
+fun bitsToInt(bs) {
+  var xs = mapi(fun(b, i) {
+    if (b) pow2(i) else 0
+  }, bs);
+  sum(xs)
+}
+
+sig intToBits : (Int) ~> Bits
+fun intToBits(i) {
+  fun loop(i) {
+    if (i > 0) (mod(i, 2) == 1) :: intToBits(i / 2)
+    else []
+  }
+  loop(i)
+}
+
+# Now we can compute and render the Sierpinski triangle. We print an
+# asterisk (*) whenever the bitwise-and of i and j is zero.
+sig sierpinski : () ~> ()
+fun sierpinski() {
+  var range = [0..31];
+  iter(fun(i) {
+    var bs = intToBits(i);
+    iter(fun(j) {
+      var bs' = intToBits(j);
+      print(if (all(not, band(bs, bs'))) "*" else " ")
+    }, range);
+    println("")
+  }, range)
+}

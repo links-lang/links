@@ -669,6 +669,10 @@ Typecheck example file examples/validate.links
 examples/validate.links
 filemode : true
 
+Typecheck example file examples/sierpinski-bits.links
+examples/sierpinski-bits.links
+filemode : true
+
 Typecheck example file examples/webserver/buttons.links
 examples/webserver/buttons.links
 filemode : true
