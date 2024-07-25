@@ -477,6 +477,26 @@ fun(m) { handle(m()) { case <Foo(x) => k> : ((a) => (() {}-> (a,a))) -> k ( fun 
 stdout : fun : (() {Foo:(a) => () {}-> (a, a)|b}~> c::Any) {Foo{_}|b}~> c::Any
 args : --enable-handlers
 
+Operation term-level annotation (1)
+fun() { handle({ do (Throw : forall a. () => a) }) { case <Throw> : (forall a. () => a) -> () } }
+stdout : fun : () {Throw{_}|_}~> ()
+args : --enable-handlers
+
+Operation term-level annotation (2)
+fun() { do (Swap : forall a, b. (a, b) => (b, a))(2, "hello") }
+stdout : fun : () {Swap:forall a,b.(a, b) => (b, a)|_}-> (String, Int)
+args : --enable-handlers
+
+Operation term-level annotation (3)
+fun(x,y) { do (Swap : forall a, b. (a, b) => (b, a))(x, y) }
+stdout : fun : (a, b) {Swap:forall c,d.(c, d) => (d, c)|_}-> (b, a)
+args : --enable-handlers
+
+Operation term-level annotation (4)
+sig catch : ((() {Throw: forall a. () => a |e}~> a) {Throw: forall a. () => a |e}~> b) {Throw{_} |e}~> Maybe(b) fun catch(f) {  handle(f(fun(){ do (Throw : forall a. () => a) })) {    case ans -> Just(ans)    case <Throw> : (forall a. () => a) -> Nothing  }}
+stdout : () : ()
+args : --enable-handlers
+
 Examples
 ./examples/handlers/tests.links
 filemode : true

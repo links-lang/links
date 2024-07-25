@@ -322,11 +322,14 @@ class map =
       | DoOperation (op, ps, t, b) ->
           let op  = o#phrase op in
           let ps  = o#list (fun o -> o#phrase) ps in
-          let t   = o#option (fun o -> o#typ) t in
+          let t   = o#option (fun o -> o#unknown) t in
+          let b   = o#linearity b in
           DoOperation (op, ps, t, b)
-      | Operation _x ->
+      | Operation (_x, t, t') ->
           let _x = o#name _x in
-          Operation _x
+          let t = o#option (fun o -> o#datatype') t in
+          let t' = o#option (fun o -> o#unknown) t' in
+          Operation (_x, t, t')
       | Linlet _x ->
           let _x = o#phrase _x in Linlet _x
       | Unlet _x ->
@@ -1146,13 +1149,15 @@ class fold =
       | ConstructorLit ((_x, _x_i1, _x_i2)) ->
           let o = o#name _x in
           let o = o#option (fun o -> o#phrase) _x_i1 in o
-      | DoOperation (op,ps,t,b) ->
+      | DoOperation (op, ps, t, b) ->
          let o = o#phrase op in
-         let o = o#option (fun o -> o#unknown) t in
          let o = o#list (fun o -> o#phrase) ps in
+         let o = o#option (fun o -> o#unknown) t in
          let o = o#linearity b in o
-      | Operation (_x) ->
-          let o = o#name _x in o
+      | Operation (_x, t, t') ->
+         let o = o#name _x in
+         let o = o#option (fun o -> o#datatype') t in
+         let o = o#option (fun o -> o#unknown) t' in o
       | Linlet _x ->
           let o = o#phrase _x in o
       | Unlet _x ->
@@ -1975,12 +1980,15 @@ class fold_map =
           (o, (ConstructorLit ((_x, _x_i1, _x_i2))))
       | DoOperation (op, ps, t, b) ->
           let (o, op) = o#phrase op in
-          let (o, t) = o#option (fun o -> o#typ) t in
           let (o, ps) = o#list (fun o -> o#phrase) ps in
+          let (o, t) = o#option (fun o -> o#unknown) t in
+          let (o, b)  = o#linearity b in
           (o, DoOperation (op, ps, t, b))
-      | Operation _x ->
+      | Operation (_x, t, t') ->
           let (o, _x) = o#name _x in
-          (o, Operation _x)
+          let (o, t) = o#option (fun o -> o#datatype') t in
+          let (o, t') = o#option (fun o -> o#unknown) t' in
+          (o, Operation (_x, t, t'))
       | Linlet _x ->
           let (o, _x) = o#phrase _x in
           (o, Linlet _x)
