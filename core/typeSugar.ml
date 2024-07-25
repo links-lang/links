@@ -312,6 +312,7 @@ sig
   val unary_apply : griper
   val infix_apply : griper
   val fun_apply : griper
+  val op_apply : griper
   val type_apply : Position.t -> string -> Types.datatype -> Types.type_arg list -> 'a
 
   val generalise_value_restriction : Position.t -> string -> 'a
@@ -357,6 +358,8 @@ sig
   val duplicate_names_in_pattern : Position.t -> 'a
 
   val type_annotation : griper
+
+  val optype_ambient_annotation : griper
 
   val bind_val : griper
   val bind_val_annotation : griper
@@ -1064,7 +1067,19 @@ end
                "while the arguments passed to it have types"  ^ nl  () ^
                 String.concat (nl() ^ "and" ^ nl()) ppr_types ^ nl  () ^
                "and the currently allowed effects are"        ^ nli () ^
-                code ppr_eff)
+                 code ppr_eff)
+
+    let op_apply ~pos ~t1:(lexpr, lt) ~t2:(_,rt) ~error:_ =
+      let tys = TypeUtils.arg_types rt in
+      build_tyvar_names (lt :: tys);
+      let ppr_type  = show_type lt in
+      let ppr_types = List.map (fun t -> tab() ^ code (show_type t)) tys in
+      die pos ("The operation"                                ^ nli () ^
+                code lexpr                                    ^ nl  () ^
+               "has type"                                     ^ nli () ^
+                code ppr_type                                 ^ nl  () ^
+               "while the arguments passed to it have types"  ^ nl  () ^
+                String.concat (nl() ^ "and" ^ nl()) ppr_types)
 
     let generalise_value_restriction pos exp =
       die pos ("Because of the value restriction, the expression " ^ nli () ^
@@ -1259,6 +1274,17 @@ end
                "is"                                  ^ nli () ^
                 code ppr_lt                          ^ nl  () ^
                "but it is annotated with type"       ^ nli () ^
+                 code ppr_rt)
+
+    let optype_ambient_annotation ~pos ~t1:(lexpr,lt) ~t2:(_,rt) ~error:_ =
+      build_tyvar_names [lt; rt];
+      let ppr_lt = show_type lt in
+      let ppr_rt = show_type rt in
+      die pos ("The operation" ^ nli () ^
+                code lexpr                           ^ nl  () ^
+               "is annotated with type"              ^ nli () ^
+                code ppr_lt                          ^ nl  () ^
+               "but the ambient context expects type"       ^ nli () ^
                 code ppr_rt)
 
     let bind_val ~pos ~t1:l ~t2:r ~error:_ =
@@ -1721,8 +1747,8 @@ module LinCont = struct
   (* linear continuation(function) is still represented by `-@`, so we still use `islin` *)
   let make_continuation_type = fun islin inp eff out ->
     if is_enabled
-    then (Types.make_function_type ~linear:(islin) inp eff out)
-    else (Types.make_function_type ~linear:(false) inp eff out)
+    then Types.make_function_type ~linear:islin inp eff out
+    else Types.make_function_type ~linear:false inp eff out
 
 
   (*
@@ -2667,8 +2693,8 @@ let resolve_type_annotation : Binder.with_pos -> Sugartypes.datatype' option -> 
    with sufficiently effect-polymorphic operations).
  *)
 
-let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
-  fun context {node=expr; pos} ->
+let rec type_check : ?linop:bool -> context -> phrase -> phrase * Types.datatype * Usage.t =
+  fun ?(linop=false) context {node=expr; pos} ->
     let _UNKNOWN_POS_ = "<unknown>" in
     let no_pos t = (_UNKNOWN_POS_, t) in
 
@@ -2694,7 +2720,8 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
     let tpc p = type_pattern `Closed p in
     let tpcu p = type_pattern ~linear_vars:false `Closed p in
     let tpo p = type_pattern `Open p
-    and tc : phrase -> phrase * Types.datatype * Usage.t = type_check context
+    and tc : phrase -> phrase * Types.datatype * Usage.t = type_check ~linop:false context
+    and tc_lin : phrase -> phrase * Types.datatype * Usage.t = type_check ~linop:true context
     and expr_string (p : Sugartypes.phrase) : string =
       let pos = WithPos.pos p in
       Position.Resolved.resolve pos |> Position.Resolved.source_expression
@@ -2830,22 +2857,6 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
           | _ -> ())
       ))
     in *)
-    let find_opname phrase =
-      let o = object (o)
-        inherit SugarTraversals.fold as super
-        val mutable opname = None
-
-        method opname = match opname with
-          | Some name -> name
-          | None -> failwith "Operation with no name"
-
-        method! phrasenode = function
-          | Operation name -> opname <- Some name ; o
-          | p -> super#phrasenode p
-      end in
-      let o = o#phrase phrase in
-      o#opname
-    in
 
     let module T = Types in
     let e, t, usages =
@@ -4507,37 +4518,35 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                     sh_value_cases = erase_cases val_cases;
                     sh_descr = descr }, body_type, usages
         | DoOperation (op, ps, _, linearity) ->
-          let is_lindo = if LinCont.is_enabled then linearity = DeclaredLinearity.Lin else false in
-          let () = if is_lindo then ()
-                               else LinCont.update_bound_by_linlet context false
-                               (* do is implicitly bound by an unlet *)
+          let is_lindo =
+            if LinCont.is_enabled
+            then linearity = DeclaredLinearity.Lin
+            else false
           in
-          let op_linearity = if is_lindo then lin_unl else lin_any
-          (* lin_unl: linear operation; lin_any: unlimited operation *)
+          let () =
+            (* do is implicitly bound by an unlet *)
+            if is_lindo
+            then ()
+            else LinCont.update_bound_by_linlet context false
           in
-          (* inline the type checking of Operation here to be able to
-             use is_lindo *)
-          let op = (match op.node with
-            | Operation name ->
-                if String.equal name Value.session_exception_operation then
-                  if not context.desugared then
-                    Gripers.die pos "The session failure effect SessionFail is not directly invocable (use `raise` instead)"
-                  else
-                    (Operation name, Types.empty_type, Usage.empty)
-                else
-                  let t =
-                    match lookup_effect context name with
-                    | Some t -> t
-                    | None   -> Types.fresh_type_variable (op_linearity, res_any)
-                  in
-                  (Operation name, t, Usage.empty)
-            | _ -> Gripers.die pos "Do should take an operation label.")
+          (* let op_linearity = *)
+          (*   (\* lin_unl: linear operation; lin_any: unlimited operation *\) *)
+          (*   if is_lindo then lin_unl else lin_any *)
+          (* in *)
+          (* Check that the `op` phrase is indeed an operation *)
+          let opname = match op.node with
+           | Operation (name, _, _) -> name
+           | _ -> Gripers.die pos "Do should take an operation label."
           in
-          let op = (let a,b,c = op in with_pos pos a,b,c) in
-          let ps = List.map (tc) ps in
-          let doop, rettyp, usage, opt  =
+          let op =
+            if is_lindo
+            then tc_lin op
+            else tc op
+          in
+          let ps = List.map tc ps in
+          let doop, rettyp, usage =
             match Types.concrete_type (typ op) with
-            | T.ForAll (_, (T.Operation _)) as t ->
+            | T.ForAll (_, T.Operation (_, _, _)) as t ->
               begin
                 match Instantiate.typ t with
                 | tyargs, T.Operation (pts, rettyp, _) ->
@@ -4547,38 +4556,39 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                     let arg_vars = Types.free_type_vars pts in
                     (* return true if this quantifier appears free in the arguments (or effects) *)
                     let free_in_arg q = Types.TypeVarSet.mem (Quantifier.to_var q) arg_vars in
-                    if Settings.get  dodgey_type_isomorphism then
-                      let rta, rqs =
-                        List.map (fun q -> (q, Types.quantifier_of_type_arg q)) tyargs
-                        |> List.filter (fun (_, q) -> free_in_arg q)
-                        |> List.split
-                      in
-                      List.iter Generalise.rigidify_type_arg rta;
-                      rqs
-                    else
-                      []
+                    if Settings.get dodgey_type_isomorphism
+                    then let rta, rqs =
+                           List.map (fun q -> (q, Types.quantifier_of_type_arg q)) tyargs
+                           |> List.filter (fun (_, q) -> free_in_arg q)
+                           |> List.split
+                         in
+                         List.iter Generalise.rigidify_type_arg rta;
+                         rqs
+                    else []
                   in
-
-                  let rettyp = Types.for_all (rqs, rettyp) in
-                  let opt = T.Operation (pts, rettyp, linearity) in
+                  let rettyp' = Types.for_all (rqs, rettyp) in
                   let op' = erase op in
                   let sugar_rqs = List.map SugarQuantifier.mk_resolved rqs in
-                  let e = tabstr (sugar_rqs, DoOperation (with_dummy_pos (tappl (op'.node, tyargs)), List.map erase ps, Some rettyp, linearity)) in
-                    e, rettyp, Usage.combine_many (usages op :: List.map usages ps), opt
+                  let e =
+                    tabstr (sugar_rqs, (DoOperation (with_dummy_pos (tappl (op'.node, tyargs)), List.map erase ps, Some rettyp', linearity)))
+                  in
+                  (* Check that the argument types match up. *)
+                  let boxed_ps = Types.make_tuple_type (List.map typ ps) in
+                  unify ~handle:Gripers.op_apply (pos_and_typ (with_pos (WithPos.pos op') e, boxed_ps, (usages op)), no_pos pts);
+                  e, rettyp', Usage.combine_many (usages op :: List.map usages ps)
                 | _ -> assert false
               end
-            | T.Operation (pts, rettyp, _) ->
-                let opt = T.Operation (pts, rettyp, linearity) in
-                DoOperation (erase op, List.map erase ps, Some rettyp, linearity), rettyp, Usage.combine_many (usages op :: List.map usages ps), opt
-            | opt ->
-              (* fresh variable case *)
-              let rettyp = Types.fresh_type_variable (lin_unl, res_any) in
-                DoOperation (erase op, List.map erase ps, Some rettyp, linearity), rettyp, Usage.combine_many (usages op :: List.map usages ps), opt
+            | T.Operation (_, rety, _) ->
+                let inferred = LinCont.make_operation_type ~linear:is_lindo (List.map typ ps) rety in
+                unify ~handle:Gripers.op_apply (pos_and_typ op, no_pos inferred);
+                DoOperation (erase op, List.map erase ps, Some rety, linearity), rety, Usage.combine_many (usages op :: List.map usages ps)
+            | rety ->
+               let opty = LinCont.make_operation_type ~linear:is_lindo (List.map typ ps) (Types.fresh_type_variable (lin_unl, res_any)) in
+               let pos = Position.Resolved.source_expression (Position.Resolved.resolve pos) in
+               unify ~handle:Gripers.type_annotation ((pos, opty), no_pos rety);
+               let rety = TypeUtils.return_type opty in
+               DoOperation (erase op, List.map erase ps, Some rety, linearity), rety, Usage.combine_many (usages op :: List.map usages ps)
           in
-
-          let opname = find_opname (erase op) in
-          let infer_opt = no_pos (LinCont.make_operation_type ~linear:is_lindo (List.map typ ps) rettyp) in
-          let term = (exp_pos op, opt) in
           let row =
             if Settings.get Basicsettings.Sessions.exceptions_enabled &&
                not (Settings.get Basicsettings.Sessions.expose_session_fail) &&
@@ -4586,11 +4596,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             then
                Types.make_empty_open_row default_effect_subkind
             else
-              Types.make_singleton_open_row (opname, T.Present (typ op)) default_effect_subkind in
+              Types.make_singleton_open_row (opname, T.Present (typ op)) default_effect_subkind
+          in
           let p = Position.resolve_expression pos in
           let () =
-            unify ~handle:Gripers.do_operation
-              (term, infer_opt) ;
             unify ~handle:Gripers.do_operation
               (no_pos (T.Effect context.effect_row), (p, T.Effect row))
           in
@@ -4599,8 +4608,32 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                    (* else LinCont.update_in_linlet context false *)
           (* in *)
             doop, rettyp, usage
-        | Operation _ ->
-          Gripers.die pos "The operation label is used in invalid positions."
+        | Operation (name, annot_ty, _) ->
+           let op_linearity =
+            (* lin_unl: linear operation; lin_any: unlimited operation *)
+            if linop then lin_unl else lin_any
+          in
+          if String.equal name Value.session_exception_operation then
+            if not context.desugared then
+              Gripers.die pos "The session failure effect SessionFail is not directly invocable (use `raise` instead)"
+            else
+              let ty = OptionUtils.val_of (snd (OptionUtils.val_of annot_ty)) in
+              (Operation (name, annot_ty, Some ty), ty, Usage.empty)
+          else
+            let ty =
+              let ambient_ty = match lookup_effect context name with
+                | None -> Types.fresh_type_variable (op_linearity, res_any)
+                | Some ty -> ty
+              in
+              match annot_ty with
+              | None -> ambient_ty
+              | Some (_, Some check_ty) ->
+                 let pos = Position.Resolved.source_expression (Position.Resolved.resolve pos) in
+                 unify ~handle:Gripers.optype_ambient_annotation ((pos, check_ty), no_pos ambient_ty);
+                 ambient_ty
+              | _ -> assert false (* the datatype' is fully constructed by desugarDatatypes *)
+            in
+            (Operation (name, annot_ty, Some ty), ty, Usage.empty)
         | Linlet p ->
           let () = LinCont.update_bound_by_linlet context true in
           let (p, t, usages) = type_check context p in
