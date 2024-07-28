@@ -136,6 +136,8 @@ module RecIdMap = Map.Make(RecId)
 module type RECIDSET = Utility.Set with type elt = rec_id
 module RecIdSet : RECIDSET = Set.Make(RecId)
 
+let pp_exn fmt _ = Format.fprintf fmt "exn"
+
 type tygroup = {
   id: int;
   type_map: ((Quantifier.t list * typ) Utility.StringMap.t);
@@ -171,6 +173,7 @@ and typ =
   | Table of (Temporality.t * typ * typ * typ)
   | Lens of Lens.Type.t
   | ForAll of (Quantifier.t list * typ)
+  | Abstract of exn
   (* Effect *)
   | Effect of row
   | Operation of (typ * typ * DeclaredLinearity.t)
@@ -400,6 +403,7 @@ struct
          let (o, names') = o#list (fun o -> o#quantifier) names in
          let (o, body') = o#typ body in
          (o, ForAll (names', body'))
+      | Abstract abs -> (o, Abstract abs)
       (* Effect *)
       | Effect row ->
          let (o, row') = o#row row in
@@ -613,6 +617,7 @@ class virtual type_predicate = object(self)
     | Table _ -> true
     | Lens _ -> true
     | ForAll (qs, t) -> self#type_satisfies (rec_appl, rec_vars, TypeVarSet.add_quantifiers qs quant_vars) t
+    | Abstract _abs -> true (* This does assume that all abstract types satisfy the predicate. *)
     | Row (fields, row_var, _) ->
        let row_var = self#point_satisfies self#row_satisfies vars row_var in
        let fields = FieldEnv.for_all (fun _ f -> self#field_satisfies vars f) fields in
@@ -681,6 +686,7 @@ class virtual type_iter = object(self)
     | Lens _ -> ()
     | ForAll (qs, t) ->
        self#visit_type (rec_appl, rec_vars, TypeVarSet.add_quantifiers qs quant_vars) t
+    | Abstract _abs -> ()
     (* Effect *)
     | Effect r -> self#visit_row vars r
     | Operation (a, b, _) -> self#visit_type vars a; self#visit_type vars b
@@ -779,7 +785,7 @@ module Base : Constraint = struct
         (* Type *)
         | Primitive (Bool | Int | Char | Float | String | DateTime) -> true
         | Primitive _ -> false
-        | (Function _ | Lolli _ | Record _ | Variant _ | Table _ | Lens _ | ForAll (_::_, _)) -> false
+        | (Function _ | Lolli _ | Record _ | Variant _ | Table _ | Lens _ | ForAll (_::_, _)) | Abstract _ -> false
         | ForAll ([], t) -> super#type_satisfies vars t
         (* Effect *)
         | Effect _ as t -> super#type_satisfies vars t
@@ -829,6 +835,7 @@ module Unl : Constraint = struct
       | (Record _ | Variant _) as t -> super#type_satisfies vars t
       | (Table _ | Lens _) -> true
       | ForAll _ as t -> super#type_satisfies vars t
+      | Abstract _ as t -> super#type_satisfies vars t
       (* Effect *)
       | Effect _  -> true
       | Operation (_,_,b) ->
@@ -882,6 +889,7 @@ module Unl : Constraint = struct
        | (Record _ | Variant _) as t -> super#visit_type vars t
        | Table _ | Lens _ -> ()
        | ForAll _ as t -> super#visit_type vars t
+       | Abstract _abs -> ()
        (* Effect *)
        | Effect _ -> ()
        | Operation _ -> ()
@@ -929,7 +937,7 @@ module Session : Constraint = struct
         (* Unspecified kind *)
         | Application _ -> false (* FIXME: we assume that abstract types cannot have session kind *)
         (* Type but not Session *)
-        | Primitive _ | Function _ | Lolli _ | Record _ | Variant _ | Table _ | Lens _ | ForAll _ -> false
+        | Primitive _ | Function _ | Lolli _ | Record _ | Variant _ | Table _ | Lens _ | ForAll _ | Abstract _ -> false
         (* Effect *)
         | Effect _  -> false
         | Operation _ -> failwith "TODO types.ml/910"
@@ -1209,6 +1217,7 @@ let free_type_vars, free_row_type_vars, free_tyarg_vars =
        S.union_all (List.map (free_tyarg_vars' rec_vars) r_args)
     | ForAll (tvars, body)    -> S.diff (free_type_vars' rec_vars body)
                                    (TypeVarSet.add_quantifiers tvars S.empty)
+    | Abstract _abs -> S.empty
     | Meta point       ->
        begin
          match Unionfind.find point with
@@ -1407,6 +1416,7 @@ and subst_dual_type : var_map -> datatype -> datatype =
      RecursiveApplication { app with r_args =
                                        List.map (subst_dual_type_arg rec_points) app.r_args }
   | ForAll (qs, body) -> ForAll (qs, sdt body)
+  | Abstract abs -> Abstract abs
   | Meta point ->
      begin
        match Unionfind.find point with
@@ -1619,6 +1629,7 @@ and normalise_datatype rec_names t =
        | ForAll (qs', body) -> ForAll (qs @ qs', body)
        | body -> ForAll (qs, body)
      end
+  | Abstract abs -> Abstract abs
   | Meta point       ->
      begin
        match Unionfind.find point with
@@ -1908,6 +1919,7 @@ struct
            (bound_vars, [])
            tyvars in
        (List.rev vars) @ (free_bound_type_vars bound_vars body)
+    | Abstract _abs -> []
     (* Effect *)
     | Effect row -> free_bound_row_type_vars bound_vars row
     | Operation (f, t, _) ->
@@ -2674,6 +2686,7 @@ struct
                  "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype { context with bound_vars } p body
             else
               "forall "^ mapstrcat "," (quantifier p) tyvars ^"."^ datatype { context with bound_vars } p body
+         | Abstract _abs -> "<abstract>"
          (* Effect *)
          | Effect r -> "{" ^ row "," context p r ^ "}"
          | Operation (f, t, b) -> sd f ^ (if b=DeclaredLinearity.Lin then " =@ " else " => ") ^ sd t
@@ -4131,6 +4144,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
             | Table tab          -> with_value table tab
             | Lens tp            -> with_value lens tp
             | ForAll fa          -> with_value forall fa
+            | Abstract _abs      -> constant "<abstract>"
 
             | Input _ | Output _ -> with_value session_io tp
             | Dual tp            -> with_value session_dual tp
@@ -4473,6 +4487,7 @@ let make_fresh_envs : datatype -> datatype IntMap.t * row IntMap.t * field_spec 
     | RecursiveApplication { r_args ; _ } -> union (List.map (make_env_ta boundvars) r_args)
     | ForAll (qs, t)          ->
        make_env (TypeVarSet.add_quantifiers qs boundvars) t
+    | Abstract _abs -> empties
     | Meta point ->
        begin
          match Unionfind.find point with

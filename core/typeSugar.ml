@@ -2224,6 +2224,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
           let pats = concat_map unwrap pats in
             Application (Types.list, [cpta pats t])
       | ForAll (qs, t) -> ForAll (qs, cpt pats t)
+      | Abstract abs -> Abstract abs
       | Meta point ->
           begin
             match Unionfind.find point with

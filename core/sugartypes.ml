@@ -191,7 +191,9 @@ type fieldconstraint = Readonly | Default
     [@@deriving show]
 
 module Datatype = struct
+  let pp_exn fmt _ = Format.fprintf fmt "exn"
   type t =
+    | Abstract        of exn
     | TypeVar         of SugarTypeVar.t
     | QualifiedTypeApplication of Name.t list * type_arg list
     | Function        of with_pos list * row * with_pos

@@ -247,6 +247,9 @@ let make_effect_var : is_dot:bool -> ParserPosition.t -> Datatype.row_var
 
 let dummy_phrase pos = with_pos pos (Sugartypes.RecordLit ([], None))
 
+let fresh_abstract_identity : unit -> exn
+  = fun () -> let exception E in E
+
 module MutualBindings = struct
 
   type mutual_bindings =
@@ -539,6 +542,7 @@ signature:
 | SIG sigop COLON datatype                                     { with_pos $loc ($2, datatype $4) }
 
 typedecl:
+| TYPENAME CONSTRUCTOR typeargs_opt                             { alias $loc $2 $3 (Typename   ( WithPos.make (Datatype.Abstract (fresh_abstract_identity ())), None)) }
 | TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                 { alias $loc $2 $3 (Typename   ( $5     , None)) }
 | EFFECTNAME CONSTRUCTOR typeargs_opt EQ LBRACE erow RBRACE     { alias $loc $2 $3 (Effectname ( $6     , None)) }
 | EFFECTNAME CONSTRUCTOR typeargs_opt EQ effect_app             { alias $loc $2 $3 (Effectname (([], $5), None)) }

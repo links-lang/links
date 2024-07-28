@@ -232,6 +232,7 @@ let rec primary_kind_of_type t =
   match concrete_type t with
   | Not_typed ->
      failwith "Not_typed has no kind"
+  | Abstract _ -> PrimaryKind.Type
   | Var (_, kind, _) ->
      Kind.primary_kind kind
   | Recursive _ ->
@@ -325,6 +326,7 @@ let check_type_wellformedness primary_kind t : unit =
     | (Var _ | Recursive _ | Closed) ->
        (* freestanding Var / Recursive / Closed not implemented yet (must be inside Meta) *)
        raise tag_expectation_mismatch
+    | Abstract _abs -> pk_type
     | Alias (_, (_name, qs, ts, _), d) ->
        List.iter2 (compare_kinds rec_env) qs ts;
        typ rec_env d

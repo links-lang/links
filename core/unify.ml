@@ -83,8 +83,18 @@ let rec eq_types : (datatype * datatype) -> bool =
   fun (t1, t2) ->
     let rec unalias = function
       | Alias (_, _, x) -> unalias x
-      | x            -> x in
+      | x            -> x
+    in
     match unalias t1 with
+      | Abstract abs ->
+         begin match unalias t2 with
+         | Abstract abs' ->
+            abs == abs' (* pointer equality *)
+            && (let [@ocaml.warning "-8"]Alias (_, (_, _, tyargs, _), _) = t1 in
+                let [@ocaml.warning "-8"]Alias (_, (_, _, tyargs', _), _) = t2 in
+                List.for_all2 (fun (_tyk, ty) (_tyk', ty') -> eq_types (ty, ty')) tyargs tyargs')
+         | _ -> false
+         end
       | Not_typed ->
           begin match unalias t2 with
           | Not_typed -> true
@@ -598,7 +608,18 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
             Unionfind.change point t; *)
          | t' -> ut (t, t')
        end
-    | Alias (_, _, t1), t2 | t1, Alias (_, _, t2) -> ut (t1, t2)
+    | Abstract _, _ | _, Abstract _ ->
+       failwith "freestanding Abstract (must be under an alias)"
+    | Alias (_, _, Abstract abs), Alias (_, _, Abstract abs') ->
+       if abs == abs'
+       then let [@ocaml.warning "-8"]Alias (_, (_, _, tyargs, _), _) = t1 in
+            let [@ocaml.warning "-8"]Alias (_, (_, _, tyargs', _), _) = t2 in
+            List.iter2 (fun tyargs tyargs' -> unify_type_args' rec_env (tyargs, tyargs')) tyargs tyargs'
+       else raise (Failure (`Msg "cannot unify different abstract types"))
+    | ((Alias (_, _, Abstract _) as t1), t2) | (t2, (Alias (_, _, Abstract _) as t1)) ->
+       raise (Failure (`Msg ("Cannot unify abstract type '" ^ string_of_datatype t1 ^ "' with concrete type '" ^ string_of_datatype t2 ^ "'")))
+    | Alias (_, _, t1), t2 | t1, Alias (_, _, t2) ->
+       ut (t1, t2)
     | Application (l, _), Application (r, _) when l <> r ->
        raise (Failure
                 (`Msg ("Cannot unify abstract type '"^string_of_datatype t1^
