@@ -85,6 +85,7 @@ let rec is_guarded : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
             is_guarded
               (TypeVarSet.add_quantifiers qs bound_vars)
               expanded_apps var t
+        | Abstract _abs -> true (* TODO(dhil): could be unguarded... *)
         (* Effect *)
         | Effect row -> isgr row
         | Operation (f, t, _) ->
@@ -174,6 +175,7 @@ let rec is_negative : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
             is_negative
               (TypeVarSet.add_quantifiers qs bound_vars)
               expanded_apps var t
+        | Abstract _abs -> false
         (* Effect *)
         | Effect row -> isnr row
         | Operation (f, t, _) ->
@@ -263,6 +265,7 @@ and is_positive : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
             is_positive
               (TypeVarSet.add_quantifiers qs bound_vars)
               expanded_apps var t
+        | Abstract _abs -> false
         (* Effect *)
         | Effect row -> ispr row
         | Operation (f, t, _) ->

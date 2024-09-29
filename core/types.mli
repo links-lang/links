@@ -143,6 +143,7 @@ and typ =
   | Table of (Temporality.t * typ * typ * typ)
   | Lens of Lens.Type.t
   | ForAll of (Quantifier.t list * typ)
+  | Abstract of Utility.Gensym.t
   (* Effect *)
   | Effect of row
   | Operation of (typ * typ * DeclaredLinearity.t)
@@ -453,6 +454,7 @@ val pp_row' : Format.formatter -> row' -> unit
 val pp_type_arg : Format.formatter -> type_arg -> unit
 val pp_tycon_spec: Format.formatter -> tycon_spec -> unit
 val pp_field_spec: Format.formatter -> field_spec -> unit
+val pp_exn : Format.formatter -> exn -> unit
 
 (* Recursive type applications *)
 val recursive_applications : datatype -> string list

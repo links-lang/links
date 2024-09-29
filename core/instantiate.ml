@@ -43,6 +43,7 @@ let instantiates : instantiation_maps -> (datatype -> datatype) * (row -> row) *
     match datatype with
         | Not_typed -> raise (internal_error "Not_typed' passed to `instantiate'")
         | Primitive _  -> datatype
+        | Abstract _abs -> datatype
         | Meta point ->
             let t = Unionfind.find point in
               begin
