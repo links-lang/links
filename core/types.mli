@@ -143,7 +143,7 @@ and typ =
   | Table of (Temporality.t * typ * typ * typ)
   | Lens of Lens.Type.t
   | ForAll of (Quantifier.t list * typ)
-  | Abstract of exn
+  | Abstract of Utility.Gensym.t
   (* Effect *)
   | Effect of row
   | Operation of (typ * typ * DeclaredLinearity.t)

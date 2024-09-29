@@ -89,7 +89,7 @@ let rec eq_types : (datatype * datatype) -> bool =
       | Abstract abs ->
          begin match unalias t2 with
          | Abstract abs' ->
-            abs == abs' (* pointer equality *)
+            Gensym.equal abs abs'
             && (let [@ocaml.warning "-8"]Alias (_, (_, _, tyargs, _), _) = t1 in
                 let [@ocaml.warning "-8"]Alias (_, (_, _, tyargs', _), _) = t2 in
                 List.for_all2 (fun (_tyk, ty) (_tyk', ty') -> eq_types (ty, ty')) tyargs tyargs')
@@ -611,7 +611,7 @@ let rec unify' : unify_env -> (datatype * datatype) -> unit =
     | Abstract _, _ | _, Abstract _ ->
        failwith "freestanding Abstract (must be under an alias)"
     | Alias (_, _, Abstract abs), Alias (_, _, Abstract abs') ->
-       if abs == abs'
+       if Gensym.equal abs abs'
        then let [@ocaml.warning "-8"]Alias (_, (_, _, tyargs, _), _) = t1 in
             let [@ocaml.warning "-8"]Alias (_, (_, _, tyargs', _), _) = t2 in
             List.iter2 (fun tyargs tyargs' -> unify_type_args' rec_env (tyargs, tyargs')) tyargs tyargs'
