@@ -54,7 +54,7 @@ module Sessions = struct
               |> sync)
 
   let expose_session_fail =
-    Settings.(flag "expose_session_fail" ~default:true
+    Settings.(flag "expose_session_fail" ~default:false
               |> synopsis "Exposes the SessionFail effect"
               |> depends Handlers.enabled
               |> depends exceptions_enabled
