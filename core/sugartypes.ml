@@ -192,6 +192,7 @@ type fieldconstraint = Readonly | Default
 
 module Datatype = struct
   type t =
+    | Abstract        of Gensym.t
     | TypeVar         of SugarTypeVar.t
     | QualifiedTypeApplication of Name.t list * type_arg list
     | Function        of with_pos list * row * with_pos

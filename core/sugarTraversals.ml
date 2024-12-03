@@ -659,6 +659,7 @@ class map =
     method datatypenode : Datatype.t -> Datatype.t =
       let open Datatype in
       function
+      | Abstract abs -> Abstract abs
       | TypeVar _x ->
           let _x = o#type_variable _x in TypeVar _x
       | QualifiedTypeApplication (ns, args) ->
@@ -1450,6 +1451,7 @@ class fold =
     method datatypenode : Datatype.t -> 'self_type =
       let open Datatype in
       function
+      | Abstract _abs -> o
       | TypeVar _x ->
           let o = o#type_variable _x in o
       | QualifiedTypeApplication (ns, args) ->
@@ -2372,6 +2374,7 @@ class fold_map =
     method datatypenode : Datatype.t -> ('self_type * Datatype.t) =
       let open Datatype in
       function
+      | Abstract abs -> (o, Abstract abs)
       | TypeVar _x ->
           let (o, _x) = o#type_variable _x in (o, (TypeVar _x))
       | QualifiedTypeApplication (ns, args) ->
