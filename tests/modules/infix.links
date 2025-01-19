@@ -1,0 +1,7 @@
+module A {
+    fun run (action, l, r) {
+      l `action` r
+    }
+}
+
+A.run((+), 100, 50)

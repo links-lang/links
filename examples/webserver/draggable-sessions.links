@@ -1,0 +1,122 @@
+mutual {
+  typename Wait = [&|MouseDown:?DomNode.Drag|&];
+  typename Drag = [&|MouseOut:?DomNode.Drag, MouseUp:Wait|&];
+
+  sig waiting : (String, Wait) ~> ()
+  fun waiting(id, s) client {
+    offer (s) {
+      case MouseDown(s) ->
+        var (elem, s) = receive(s);
+        dragging(id, elem, s)
+    }
+  }
+
+  sig dragging : (String, DomNode, Drag) ~> ()
+  fun dragging(id, elem, s) {
+    offer(s) {
+      case MouseUp(s)   -> waiting(id, s)
+      case MouseOut(s)  -> {
+        var (toElem, s) = receive(s);
+        swapNodes(elem, toElem);
+        dragging(id, elem, s)
+      }
+    }
+  }
+}
+
+fun format(text) {
+    <li style="color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1;
+               border:1px solid #C5DEA1; cursor: move; margin: 0px;">
+    {stringToXml(text)}</li>
+}
+
+sig draggableList : (String, [String]) ~> Xml
+fun draggableList(id, items)
+{
+  var ap = newClientAP();
+
+  var manager = spawnClient {
+    mutual {
+      fun wait(c) {
+        var s = accept(ap);
+        <|offer s {
+          case MouseUp -> {close(s); wait(c)}
+          case MouseDown -> s(elem).{
+            close(s);
+            if (isElementNode(elem) && (parentNode(elem) == getNodeById(id))) {
+              <|MouseDown c.c[elem].{drag(c)}|>
+            } else {
+              wait(c)
+            }}
+          case MouseOut -> s(elem).{close(s); wait(c)}
+        }|>
+      }
+
+      fun drag(c) {
+        offer(accept(ap)) {
+          case MouseUp(s)   -> <|MouseUp c.{close(s); wait(c)}|>
+          case MouseDown(s) -> <|s(elem).{close(s); drag(c)}|>
+          case MouseOut(s)  -> <|s(toElem).{
+            close(s);
+            if (isElementNode(toElem) && (parentNode(toElem) == getNodeById(id))) {
+              <| MouseOut c.c[toElem].{drag(c)} |>
+            } else {
+              drag(c)
+            }}|>
+        }
+      }
+    }
+
+    wait(fork (fun (s) {waiting(id, s)}))
+  };
+
+  fun mouseUp() {
+    var c = request(ap);
+    <| MouseUp c.{close(c)}|>
+  }
+
+  fun mouseDown(elem) {
+    var c = request(ap);
+    <|MouseDown c.c[elem].{close(c)}|>
+  }
+
+  fun mouseOut(toElem) {
+    var c = request(ap);
+    <|MouseOut c.c[toElem].{close(c)}|>
+  }
+
+  <ul id="{id}"
+      style="width: 200px;
+             list-style-image: url(http://script.aculo.us/images/bullet.gif)"
+      l:onload        = "{# HACK: make sure that manager gets serialised!
+                          ignore(manager)}"
+      l:onmouseup     = "{mouseUp()}"
+      l:onmouseuppage = "{mouseUp()}"
+      l:onmousedown   = "{mouseDown(getTarget(event))}"
+      l:onmouseout    = "{mouseOut(getToElement(event))}">{
+   for (item <- items)
+        format(item)
+  }</ul>
+}
+
+fun mainPage(_) {
+  page
+   <html>
+   <body>
+   <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Bears</h2>
+   {draggableList("bears",["Pooh", "Paddington", "Rupert", "Edward"])}
+   <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Beers</h2>
+   {draggableList("beers",["Budvar", "Delirium Tremens", "Deuchars"])}
+   <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Boars</h2>
+   {draggableList("boars",["Sus scrofa scrofa","Sus scrofa ussuricus",
+                           "Sus scrofa cristatus","Sus scrofa taiwanus"])}
+   </body>
+   </html>
+}
+
+fun main() {
+  addRoute("/", mainPage);
+  servePages()
+}
+
+main()

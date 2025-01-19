@@ -1,0 +1,15 @@
+fun g() client {
+  println("!")
+}
+
+fun f() server {
+  <b l:onmousedown="{g()}">world</b>
+}
+
+page
+  <html>
+    <body>
+      <b l:onmousedown="{replaceNode(f(), getNodeById("hole"))}">hello</b>
+      <div><div id="hole">to be replaced</div></div>
+    </body>
+  </html>

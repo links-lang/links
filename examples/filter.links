@@ -1,0 +1,403 @@
+### DOM stuff ###
+fun domValue(id) client {
+  domGetNodeValueFromRef(getNodeById(id))
+}
+
+fun domContent(id) client {
+  childNodes(getValue(getNodeById(id)))
+}
+
+fun stringToComparison(s) {
+  switch (s) {
+    case "lt" -> Lt
+    case "eq" -> Eq
+    case "gt" -> Gt
+  }
+}
+
+### validation ###
+
+fun isPrice(s) {
+  s =~ /^[0-9]*{"."}?[0-9]+$/
+}
+
+fun isYear(s) {
+  if (s =~ /^[0-9]+$/) {
+    var n = stringToInt(s);
+    (n >= 1970) && (n <= 2000)
+  } else {
+    false
+  }
+}
+
+### constructing predicates ###
+
+fun reflectComparison(o) {
+  switch (o) {
+    case Lt -> (<)
+    case Eq -> (==)
+    case Gt -> (>)
+  }
+}
+
+fun atomicPredicate(a) {
+  switch (a) {
+    case Price(o, v) ->
+      var o = reflectComparison(o);
+      fun (r) {r.price `o` v}
+    case Year(o, v) ->
+      var o = reflectComparison(o);
+      fun (r) {r.year `o` v}
+    case Type(id, _) ->
+      fun (r) {r.wine_type == id}
+    case Region(id, _) ->
+      fun (r) {r.region == id}
+  }
+}
+
+fun makePredicate(atomss) server {
+  fun clause(atoms) {
+    switch (atoms) {
+      case [] -> fun (_) {true}
+      case [a] -> atomicPredicate(a)
+      case a::atoms ->
+        var f = atomicPredicate(a);
+        var g = clause(atoms);
+        fun (r) {f(r) && g(r)}
+    }
+  }
+
+  switch (atomss) {
+    case [] -> fun (_) {false}
+    case [atoms] -> clause(atoms)
+    case (atoms::atomss) ->
+      var f = clause(atoms);
+      var g = makePredicate(atomss);
+
+      fun (r) {f(r) || g(r)}
+  }
+}
+
+### rendering atoms ###
+
+fun showComparison(o) {
+  switch (o) {
+    case Lt -> "<"
+    case Eq -> "="
+    case Gt -> ">"
+  }
+}
+
+fun formatAtom(a) {
+  fun format(x, o, y) {
+    <#>({x} {stringToXml(o)} {y})</#>
+  }
+  switch (a) {
+    case Price(o, v) -> format(<#>price</#>, showComparison(o), floatToXml(v))
+    case Year(o, v) -> format(<#>year</#>, showComparison(o), intToXml(v))
+    case Type(id, name) -> format(<#>type</#>, "=", name)
+    case Region(id, name) -> format(<#>region</#>, "=", name)
+  }
+}
+
+fun renderAtom(pre, a) {
+  appendChildren
+    (<#>{pre}{formatAtom(a)}</#>,
+     getNodeById("filter"))
+}
+
+### making a query ###
+
+# fetch the results filtered by a predicate
+fun fetchResults(pred) server {
+  var db = database "winestore";
+  var wineTable = table "wine"
+                  with (wine_id : Int, wine_name : String, wine_type : Int,
+                        year : Int, winery_id : Int)
+                  from db;
+
+  var wineTypeTable = table "wine_type"
+                      with (wine_type_id : Int, wine_type : String)
+                      from db;
+
+  var regionTable = table "region"
+                    with (region_id : Int, region_name : String)
+                    from db;
+
+  var inventoryTable = table "inventory" with
+                       (wine_id : Int, cost : Float)
+                       from db;
+
+  var wineryTable = table "winery" with
+                    (winery_id : Int, winery_name : String,
+                     region_id : Int)
+                    from db;
+
+  query {
+    for (w <-- wineTable, i <-- inventoryTable, t <-- wineTypeTable, r <-- regionTable, y <-- wineryTable)
+    where (w.wine_id == i.wine_id &&
+           w.wine_type == t.wine_type_id &&
+           w.winery_id == y.winery_id &&
+           y.region_id == r.region_id &&
+             pred((price=i.cost, year=w.year, wine_type=t.wine_type_id, region=r.region_id)))
+    [(name=w.wine_name, wine_type=t.wine_type, region=r.region_name, year=w.year, price=i.cost)]
+  }
+}
+
+
+fun fetchResultsFactored(pred) server {
+  var db = database "winestore";
+  var wineTable = table "wine"
+                  with (wine_id : Int, wine_name : String, wine_type : Int,
+                        year : Int, winery_id : Int)
+                  from db;
+
+  var wineTypeTable = table "wine_type"
+                      with (wine_type_id : Int, wine_type : String)
+                      from db;
+
+  var regionTable = table "region"
+                    with (region_id : Int, region_name : String)
+                    from db;
+
+  var inventoryTable = table "inventory" with
+                       (wine_id : Int, cost : Float)
+                       from db;
+
+  var wineryTable = table "winery" with
+                    (winery_id : Int, winery_name : String,
+                     region_id : Int)
+                    from db;
+
+  fun wines() {
+    for (w <-- wineTable)
+      [(id=w.wine_id, name=w.wine_name)]
+  }
+
+  fun regions() {
+    for (w <-- wineTable, y <-- wineryTable, r <-- regionTable)
+      where (w.winery_id == y.winery_id && y.region_id == r.region_id)
+        [(id=w.wine_id, region_id=r.region_id, region_name=r.region_name)]
+  }
+
+  fun types() {
+    for (w <-- wineTable, t <-- wineTypeTable)
+      where (w.wine_type == t.wine_type_id)
+        [(id=w.wine_id, wine_type_id=t.wine_type_id, wine_type=t.wine_type)]
+  }
+
+  fun years() {
+    for (w <-- wineTable)
+      [(id=w.wine_id, year=w.year)]
+  }
+
+  fun prices() {
+    for (w <-- wineTable, i <-- inventoryTable)
+      where (w.wine_id == i.wine_id)
+        [(id=w.wine_id, price=i.cost)]
+  }
+
+  query {
+    var everything =
+      for (w <- wines(), p <- prices(), y <- years(), t <- types(), r <- regions())
+        where (w.id == p.id &&
+               w.id == y.id &&
+               w.id == t.id &&
+               w.id == r.id)
+        [(w, p, y, t, r)];
+
+    for ((w, p, y, t, r) <- everything)
+      where(pred((price=p.price, year=y.year, wine_type=t.wine_type_id, region=r.region_id)))
+        [(name=w.name, price=p.price, year=y.year, wine_type=t.wine_type, region=r.region_name)]
+  }
+}
+
+fun makeQuery(atomss) server {
+  fetchResults(makePredicate(atomss))
+#  fetchResultsFactored(makePredicate(atomss))
+}
+
+### interaction with the client ###
+
+fun showResults(wines) client {
+  var r = getNodeById("results");
+  var xml =
+    for (w <- wines)
+      <#>
+        {intToXml(w.year)}
+        {stringToXml(w.region)}
+        <i>{stringToXml(w.wine_type ^^ " " ^^ w.name)}</i>
+        ${floatToXml(w.price)}
+        <br/>
+      </#>;
+  domReplaceChildren(xml, r)
+}
+
+fun lookupRegion() client {
+  var s = domValue("region-value");
+  var id = stringToInt(s);
+  var name = domContent("region" ^^ s);
+  Just(Region(id, name))
+}
+
+fun lookupPrice() client {
+  var s = domValue("price-value");
+  var e = getNodeById("price-error");
+
+  if (isPrice(s)) {
+    var v = stringToFloat(s);
+    var comparison = stringToComparison(domValue("price-comp"));
+    domReplaceChildren(<#/>, e);
+    Just(Price(comparison, v))
+  } else {
+    domReplaceChildren(<#>Price must be a number greater than or equal to 0</#>, e);
+    Nothing
+  }
+}
+
+fun lookupYear() client {
+  var s = domValue("year-value");
+  var e = getNodeById("year-error");
+
+  if (isYear(s)) {
+    var v = stringToInt(s);
+    var comparison = stringToComparison(domValue("year-comp"));
+    domReplaceChildren(<#/>, e);
+    Just(Year(comparison, v))
+  } else {
+    domReplaceChildren(<#>Year must be a year in the range 1970-2000</#>, e);
+    Nothing
+  }
+}
+
+fun lookupType() client {
+  var s = domValue("type-value");
+  var id = stringToInt(s);
+  var name = domContent("type" ^^ s);
+  Just(Type(id, name))
+}
+
+fun manager(atoms, atomss) client {
+  receive {
+    case Constraint(connective, field) ->
+      var a =
+        switch (field) {
+          case Price  -> lookupPrice()
+          case Year   -> lookupYear()
+          case Type   -> lookupType()
+          case Region -> lookupRegion()
+        };
+      switch (a) {
+        case Nothing -> manager(atoms, atomss)
+        case Just(a) ->
+          switch ((atoms, connective)) {
+            case ([], _)  -> domReplaceChildren(<#/>, getNodeById("filter"));
+                             renderAtom(<#/>, a); manager([a], atomss)
+            case (_, And) -> renderAtom(<#> and </#>, a); manager(a::atoms, atomss)
+            case (_, Or)  -> renderAtom(<#> or<br/></#>, a); manager([a], atoms::atomss)
+          }
+      }
+    case Query ->
+      showResults(makeQuery(atoms::atomss)); manager(atoms, atomss)
+    case Reset ->
+      domReplaceChildren(<#>true</#>, getNodeById("filter"));
+      domReplaceChildren(<#/>, getNodeById("results"));
+      domReplaceChildren(<#/>, getNodeById("price-error"));
+      domReplaceChildren(<#/>, getNodeById("year-error"));
+      manager([], [])
+  }
+}
+
+### fetch the types and regions from the database for display in the dropdowns ###
+fun fetchTypesAndRegions() server {
+  var db = database "winestore";
+  var wineTypeTable = table "wine_type"
+                      with (wine_type_id : Int, wine_type : String)
+                      from db;
+  var regionTable = table "region"
+                    with (region_id : Int, region_name : String)
+                    from db;
+
+  var wineTypes =
+    query {
+      for (t <-- wineTypeTable)
+      where (t.wine_type <> "All")
+      [(id=t.wine_type_id, name=t.wine_type)]
+    };
+
+  var regions =
+    query {
+      for (r <-- regionTable)
+      where (r.region_name <> "All")
+      [(id=r.region_id, name=r.region_name)]
+    };
+
+  (wineTypes, regions)
+}
+
+fun main() {
+  var p = spawnClient {manager([], [])};
+  var (wineTypes, regions) = fetchTypesAndRegions();
+
+  page
+   <html>
+    <body>
+     <h1>Dynamic wine filtering</h1>
+     <h2>Add a condition</h2>
+     <table>
+      <tr>
+         <td align="right">Price</td>
+         <td align="center"><select id="price-comp">
+          <option value="lt" selected="SELECTED">&lt;</option>
+          <option value="eq">=</option>
+          <option value="gt">&gt;</option>
+         </select></td>
+         <td align="left"><input type="text" autocomplete="off" id="price-value"/></td>
+         <td><button l:onclick="{p ! Constraint(And,Price)}">and</button>
+         <button l:onclick="{p ! Constraint(Or,Price)}">or</button></td>
+         <div id="price-error" style="color: red"/>
+      </tr>
+      <tr>
+         <td align="right">Year</td>
+         <td align="center"><select id="year-comp">
+          <option value="lt" selected="SELECTED">&lt;</option>
+          <option value="eq">=</option>
+          <option value="gt">&gt;</option>
+         </select></td>
+         <td align="left"><input type="text" autocomplete="off" id="year-value"/></td>
+         <td><button l:onclick="{p ! Constraint(And,Year)}">and</button>
+         <button l:onclick="{p ! Constraint(Or,Year)}">or</button></td>
+         <div id="year-error" style="color: red"/>
+      </tr>
+      <tr>
+         <td align="right">Type</td>
+         <td align="center"> = </td>
+         <td align="left"><select id="type-value">
+          {for (t <- wineTypes)
+            <option id="type{intToString(t.id)}" value="{intToString(t.id)}">{stringToXml(t.name)}</option>}
+         </select></td>
+         <td><button l:onclick="{p ! Constraint(And,Type)}">and</button>
+         <button l:onclick="{p ! Constraint(Or,Type)}">or</button></td>
+      </tr>
+      <tr>
+         <td align="right">Region</td>
+         <td align="center"> = </td>
+         <td align="left"><select id="region-value">
+          {for (r <- regions)
+            <option id="region{intToString(r.id)}" value="{intToString(r.id)}">{stringToXml(r.name)}</option>}
+         </select></td>
+         <td><button l:onclick="{p ! Constraint(And,Region)}">and</button>
+         <button l:onclick="{p ! Constraint(Or,Region)}">or</button></td>
+      </tr>
+     </table>
+     <button style="float:right" l:onclick="{p ! Query}">Fetch results</button>
+     <h2>Filter</h2>
+     <div id="filter">true</div>
+     <button style="float:right" l:onclick="{p ! Reset}">Reset</button>
+     <h2>Results</h2>
+     <div id="results"/>
+    </body>
+   </html>
+}
+
+main()

@@ -1,0 +1,8 @@
+import VarRefB;
+
+module A {
+  fun bar() {
+    true
+  }
+}
+VarRefB.bar()

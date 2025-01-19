@@ -1,0 +1,238 @@
+open import MvuEvents;
+
+# Type definitions
+## Attributes
+typename AttrKey = String;
+typename AttrValue = String;
+
+# Monoidal attributes (including event handlers)
+typename Attr(a :: Type(Any, Any)) =
+  [| AttrEmpty
+   | AttrAppend: (Attr(a), Attr(a))
+   | AttrAttribute: (AttrKey, AttrValue)
+   | AttrEventHandler: EventHandler(a) |];
+
+sig attr : forall a :: Type(Any, Any), e :: Row .
+  (AttrKey, AttrValue) -e-> Attr(a)
+fun attr(k, v) {
+  AttrAttribute(k, v)
+}
+
+var empty = AttrEmpty;
+var a0 = empty;
+
+fun eventHandler(hndlr) {
+  AttrEventHandler(hndlr)
+}
+
+sig append : forall a :: Type(Any, Any), e :: Row .
+  (Attr(a), Attr(a)) -e-> Attr(a)
+fun append(a1, a2) {
+  switch ((a1, a2)) {
+    case (AttrEmpty, a2) -> a2
+    case (a1, AttrEmpty) -> a1
+    case (a1, a2) -> AttrAppend(a1, a2)
+  }
+}
+
+sig +@ : forall a :: Type(Any, Any), e :: Row . (Attr(a), Attr(a)) -e-> Attr(a)
+op a1 +@ a2 { append(a1, a2) }
+
+fun concat(attrs) {
+  fold_right(fun(x, acc) { append(x, acc) }, AttrEmpty, attrs)
+}
+
+fun placeholder(val) {
+    attr ("placeholder", val)
+}
+
+fun id(val) {
+    attr ("id", val)
+}
+
+fun type(val) {
+    attr ("type", val)
+}
+
+fun width(val) {
+    attr ("width", val)
+}
+
+fun height(val) {
+    attr ("height", val)
+}
+
+fun style(val) {
+    attr ("style", val)
+}
+
+fun class (val) {
+	attr ("className", val)
+}
+
+fun color(val) {
+    attr ("color", val)
+}
+
+fun title(val) {
+	attr ("title", val)
+}
+
+fun href(val) {
+	attr ("href", val)
+}
+
+fun dir(val) {
+	attr ("dir", val)
+}
+
+fun lang(val) {
+	attr ("lang", val)
+}
+
+fun face(val) {
+	attr ("face", val)
+}
+
+fun name(val) {
+    attr ("name", val)
+}
+
+fun value(val) {
+    attr ("value", val)
+}
+
+fun for_(val) {
+    attr ("htmlFor", val)
+}
+
+fun text(val) {
+    attr ("text", val)
+}
+
+fun href(val) {
+    attr ("href", val)
+}
+
+fun autofocus(val) {
+  if (val) {
+    attr ("autofocus", "true")
+  } else {
+    AttrEmpty
+  }
+}
+
+fun checked(val) {
+    if (val) {
+      attr ("checked", "true")
+    } else {
+      AttrEmpty
+    }
+}
+
+fun hidden(val) {
+    if (val == true) {
+      attr("hidden", "true")
+    } else {
+      AttrEmpty
+    }
+}
+
+fun classList(classes) {
+    switch (classes) {
+        case ((val,b)::xs) ->
+            if (b == true) {
+                val ^^ " " ^^ classList(xs)
+            } else {
+                classList(xs)
+            }
+        case [] -> ""
+    }
+}
+
+
+#### Event handlers which can be added as attributes.
+
+### MOUSE HELPERS ###
+
+fun onClick(f) {
+  eventHandler(UnitHandler("click", f))
+}
+fun onMouseMove(f) {
+  eventHandler(UnitHandler("mousemove", f))
+}
+fun onMouseDown(f) {
+  eventHandler(UnitHandler("mousedown", f))
+}
+fun onMouseUp(f) {
+  eventHandler(UnitHandler("mouseup", f))
+}
+fun onMouseEnter(f) {
+  eventHandler(UnitHandler("mouseenter", f))
+}
+fun onMouseLeave(f) {
+  eventHandler(UnitHandler("mouseleave", f))
+}
+fun onDoubleClick(f) {
+  eventHandler(UnitHandler("dblclick", f))
+}
+fun onMouseOver(f) {
+  eventHandler(UnitHandler("mouseover", f))
+}
+fun onMouseOut(f) {
+  eventHandler(UnitHandler("mouseout", f))
+}
+
+### FOCUS HELPERS ###
+
+fun onFocus(f) {
+  eventHandler(UnitHandler("focus", f))
+}
+
+fun onBlur(f) {
+  eventHandler(UnitHandler("blur", f))
+}
+
+### KEYBOARD HELPERS ###
+
+fun onKeyUp(f) {
+  eventHandler(PropertyHandler("keyup", "value", fun(val) { Just(f(val)) } ))
+}
+
+fun onKeyDown(f) {
+  eventHandler(PropertyHandler("keydown", "value", fun(val) { Just(f(val)) }))
+}
+
+fun onKeyPress(f) {
+  eventHandler(PropertyHandler("keypress", "value", fun(val) { Just(f(val)) }))
+}
+
+fun onInput(f) {
+  eventHandler(PropertyHandler("input", "value", fun(val) { Just(f(val)) }))
+}
+
+fun onChange(f) {
+  eventHandler(PropertyHandler("change", "value", fun(val) { Just(f(val)) } ))
+}
+
+fun getKey(event, f) {
+  eventHandler(KeyboardEventHandler(event, fun(evt) { Just(f(evt.key)) } ))
+}
+
+fun onKey(eventName, key, f) {
+  eventHandler(
+    KeyboardEventHandler(eventName,
+      fun(evt) {
+        if(key == evt.key) {
+          Just(f())
+        } else {
+          Nothing
+        }
+      }
+    )
+  )
+}
+
+fun onEnter(f) { onKey("keydown", "Enter", f) }
+
+

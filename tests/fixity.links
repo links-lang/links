@@ -1,0 +1,84 @@
+# Tests fixity of operators.
+
+fun assertion(e, s) {
+  if (not(e)) println("Assertion failure: " ^^ s)
+  else ()
+}
+
+# Some silly operations
+prefix 9 @@;
+sig @@ : (a) -> [a]
+op @@ x { [x] }
+
+prefix 3 @@@@;
+sig @@@@ : ([a]) -> [[a]]
+op @@@@ xs { [xs] }
+
+infix 2 ++++;
+sig ++++ : ([[a]], [[a]]) -> [[a]]
+op xss ++++ yss { xss ++ yss }
+
+postfix 1 <<>>;
+sig <<>> : (a) -> (a, ())
+op x <<>> { (x, ()) }
+
+fun test1() { @@ 0 }
+fun test2() { @@@@ @@ 0 }
+fun test3() { 0 <<>> }
+fun test4() { @@@@ @@ 0 <<>> }
+fun test5() {
+  @@@@ [1,2] ++ [3,4] ++++ @@@@ [5,6] ++ @@ 7 ++ @@ 8 <<>>
+}
+
+prefix 7 -*;
+op -* x { -1*x }
+postfix 8 *++;
+op *+ x { x + 2 }
+
+fun test6() { -* -3 *+ }
+
+prefix 8 -*;
+postfix 7 *+;
+fun test7() { -* -3 *+ }
+
+prefix 8 -*;
+postfix 8 *+;
+fun test8() { -* -3 *+ }
+
+# Overloading of primitive arithmetic operations.
+fun test9() { 2 + 3 * 3 - 2 / 3 }
+
+infixl 9 +;
+fun test10() { 2 + 3 * 3 - 2 / 3 }
+
+infixl 6 +;
+infixl 1 /;
+fun test11() { 2 + 3 * 3 - 2 / 3 }
+
+infixl 2 *;
+fun test12() { 2 + 3 * 3 - 2 / 3 }
+
+infixl 8 --;
+op x -- y { x - y }
+infixl 6 /;
+infixl 5 *;
+infixl 4 +;
+fun test13() { 2 + 3 * 3 -- 2 / 3 }
+
+fun main() {
+  assertion(test1() == [0], "test1");
+  assertion(test2() == [[0]], "test2");
+  assertion(test3() == (0, ()), "test3");
+  assertion(test4() == ([[0]], ()), "test4");
+  assertion(test5() == ([[1,2,3,4],[5,6,7,8]], ()), "test5");
+  assertion(test6() == 1, "test6");
+  assertion(test7() == 5, "test7");
+  assertion(test8() == 5, "test8");
+  assertion(test9() == 11, "test9");
+  assertion(test10() == 15, "test10");
+  assertion(test11() == 3, "test11");
+  assertion(test12() == 1, "test12");
+  assertion(test13() == 2, "test13")
+}
+
+main()

@@ -1,0 +1,49 @@
+typename Task         = String;
+typename Employee     = (name:String, tasks:[Task], salary:Int);
+typename Contact      = (name:String, "client":Bool);
+typename Department   = (name:String, employees:[Employee], contacts:[Contact]);
+typename Organisation = [Department];
+
+var db = database "organisation";
+
+var keytasks    = table "keytasks"    with (task : String)                from db;
+var tasks       = table "tasks"       with (employee : String, task : String)  from db;
+var employees   = table "employees"
+                  with (dept : String, employee : String, salary : Int)        from db;
+var contacts    = table "contacts"
+                  with (dept : String, contact : String, "client" : Bool) from db;
+var departments = table "departments" with (dept : String)                from db;
+
+# construct a nested representation of the organisation
+sig organisation : () -> Organisation
+fun organisation() {
+  for (x <-- departments)
+    [(name=x.dept,
+      employees=
+        for (y <-- employees) where (x.dept == y.dept)
+          [(name=y.employee,
+            tasks=
+              for (z <-- tasks)
+              where (y.employee == z.employee)
+                [z.task],
+            salary=y.salary)],
+      contacts=
+       for (y <-- contacts) where (x.dept == y.dept)
+         [(name=y.contact, "client"=y."client")])]
+}
+
+
+
+
+sig emptyDepartments : (() {}-> (Organisation)) -> [(name:String)]
+fun emptyDepartments(org) {
+  query {
+  for (x <- org())
+  where (empty(x.employees))
+    [(name = x.name)]
+  }
+}
+
+
+emptyDepartments(organisation)
+

@@ -1,0 +1,118 @@
+
+typename Ping = [| Ping |];
+typename Pong = [| Pong |];
+
+typename PingPong = ?(Ping) . !(Pong) . PingPong;
+
+module ClientCommon {
+  fun disableButton() {
+    var buttonRef = getNodeById("pingButton");
+    var _ = domSetAttributeFromRef(buttonRef, "disabled", "disabled");
+    ()
+  }
+
+  fun enableButton() {
+    var buttonRef = getNodeById("pingButton");
+    domRemoveAttributeFromRef(buttonRef, "disabled")
+  }
+
+  fun logMessage(msg) {
+    appendChildren(<#>{stringToXml(msg)}</#>, getNodeById("msgs"))
+  }
+
+  fun makePage(clPid, isPinger) {
+    var caption = if (isPinger) { "Send Ping!" } else { "Send Pong!" };
+    page
+      <html>
+        <head>Links Server AP test: client to client</head>
+        <h1>Hello!</h1>
+        <button id="pingButton" l:onclick="{clPid ! SendPingPong}" disabled="disabled" >
+          { stringToXml(caption) }
+        </button>
+        <h1>Messages:</h1>
+        <div id="msgs"></div>
+      </html>
+  }
+}
+
+module Pinger {
+  open ClientCommon;
+
+  ## Why does this need this annotation?
+  sig commLoop : (~PingPong) ~%e~>()
+  fun commLoop(ch) {
+    receive {
+      case SendPingPong ->
+        var ch = send(Ping, ch);
+        logMessage("Sent Ping!");
+        disableButton();
+        var (pong, ch) = receive(ch);
+        logMessage("Received Pong!");
+        enableButton();
+        commLoop(ch)
+    }
+  }
+  sig commThread : (AP(PingPong)) ~%e~> ()
+  fun commThread(ap) {
+    # Request a channel from the access point
+    var ch = request(ap);
+    logMessage("Established session connection with ponger!");
+    enableButton();
+    commLoop(ch)
+  }
+
+
+  fun setup(srvAP) {
+    # Spawn a thread on the client to request a channel from
+    # srvAP, and handle communication.
+    var clPid = spawnClient { commThread(srvAP) };
+    makePage(clPid, true)
+  }
+
+}
+
+module Ponger {
+  open ClientCommon;
+
+  sig commLoop : (PingPong) ~%e~>()
+  fun commLoop(ch) {
+    var (_, ch) = receive(ch);
+    logMessage("Received Ping!");
+    enableButton();
+    receive {
+      case SendPingPong ->
+        var ch = send(Pong, ch);
+        logMessage("Sent Pong!");
+        disableButton();
+        commLoop(ch)
+    }
+  }
+
+  sig commThread : (AP(PingPong)) ~%e~> ()
+  fun commThread(ap) {
+    # Accept a channel from the access point
+    var ch = accept(ap);
+    logMessage("Established session connection with pinger!");
+    commLoop(ch)
+  }
+
+
+  fun setup(srvAP) {
+    # Spawn a thread on the client to request a channel from
+    # srvAP, and handle communication.
+    var clPid = spawnClient { commThread(srvAP) };
+    makePage(clPid, false)
+  }
+}
+
+
+fun main() {
+  var srvAP = new();
+  addRoute("/pinger", fun(_) { Pinger.setup(srvAP) });
+  addRoute("/ponger", fun(_) { Ponger.setup(srvAP) });
+  serveWebsockets();
+  servePages()
+}
+
+main()
+

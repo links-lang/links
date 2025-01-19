@@ -1,0 +1,49 @@
+import Draggable;
+import Progress;
+
+import Buttons;
+import FormsTest;
+import Validate;
+
+import LoginFlow;
+import Mandelbrot;
+import Mandelcolor;
+import Todo;
+import Crop;
+
+import Twentyfortyeight;
+import Breakout;
+import Tetris;
+import Pacman;
+
+import ExamplesPage;
+
+fun main() {
+  addStaticRoute("/examples/", "examples/", [("links", "text/plain")]);
+  addStaticRoute("/examplessrc/", "examples/", [("links", "text/plain")]);
+
+  addRoute("/examples/draggable.links", fun(_) {Draggable.main()});
+  addRoute("/examples/progress.links", fun(_) {Progress.main()});
+
+  addRoute("/examples/buttons.links", fun(_) {Buttons.main()});
+  addRoute("/examples/formsTest.links", fun(_) {FormsTest.main()});
+
+  addRoute("/examples/validate.links", fun(_) {Validate.main()});
+
+  addRoute("/examples/loginFlow.links", fun(_) {LoginFlow.main()});
+  addRoute("/examples/mandelbrot.links", fun(_) {Mandelbrot.main()});
+  addRoute("/examples/mandelcolor.links", fun(_) {Mandelcolor.main()});
+  addRoute("/examples/todo.links", fun(_) {Todo.main()});
+  addRoute("/examples/crop.links", fun(_) {Crop.main()});
+
+  # games
+  addRoute("/examples/games/twentyfortyeight.links", fun(_) {Twentyfortyeight.main()});
+  addRoute("/examples/games/breakout.links", fun(_) {Breakout.main()});
+  addRoute("/examples/games/tetris.links", fun(_) {Tetris.main()});
+  addRoute("/examples/games/pacman.links", fun(_) {Pacman.main()});
+
+  addRoute("/", fun(_) { ExamplesPage.main() });
+  servePages()
+}
+
+main()

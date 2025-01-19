@@ -1,0 +1,1763 @@
+fun assert(ok, msg) {
+  if (not(ok)) debug("assertion failed: " ^^ msg) else ()
+}
+
+sig ignore : (a) -> ()
+fun ignore (_) { () }
+
+fun println(msg) {
+  print(msg ^^ "\n")
+}
+
+# Don't use a for comprehension to define concatMap, as
+# for comprehensions are desugared into concatMap!
+unsafe sig concatMap : ((a) -b-> [c], [a]) -b-> [c]
+fun concatMap(f, l) {
+  switch (l) {
+    case [] -> []
+    case hd::tl -> f(hd) ++ concatMap(f, tl)
+  }
+}
+
+unsafe sig map : ((a) -b-> c, [a]) -b-> [c]
+fun map(f, l) {
+  switch (l) {
+    case []     -> []
+    case hd::tl -> f(hd) :: map(f,tl)
+  }
+}
+
+fun filter(p, l) {
+  concatMap (fun (x) {if(p(x)) [x] else []}, l)
+}
+
+fun iter(f, xs) {
+  switch (xs) {
+    case [] -> ()
+    case x :: xs -> ignore(f(x)); iter(f, xs)
+  }
+}
+
+# TBD: rename this 'sortOn' to follow Haskell usage?
+sig sortBy : ((a) ~b~> c, [a]) ~b~> [a]
+fun sortBy (f, l) {
+  switch (l) {
+    case [] -> []
+    case x::xs -> {
+      var lt = filter (fun (y) {f(y) < f(x)}, xs);
+      var ge = filter (fun (y) {f(y) >= f(x)}, xs);
+      sortBy(f, lt) ++ [x] ++ sortBy(f, ge)
+    }
+  }
+}
+
+unsafe sig sortByBase : ((a) -b-> (| _::Base), [a]) -b-> [a]
+fun sortByBase(f, l) {
+  switch (l) {
+    case [] -> []
+    case x::xs -> {
+      var lt = filter (fun (y) {f(y) < f(x)}, xs);
+      var ge = filter (fun (y) {f(y) >= f(x)}, xs);
+      sortByBase(f, lt) ++ [x] ++ sortByBase(f, ge)
+    }
+  }
+}
+
+fun all(p, l) {
+   switch (l) {
+     case []    -> true
+     case x::xs -> p(x) && all(p, xs)
+   }
+}
+
+fun and(l) {
+  all(fun(x) { x }, l)
+}
+
+fun or(l) {
+   switch (l) {
+     case [] -> false
+     case x::xs -> x || or(xs)
+   }
+}
+
+fun any(p, l) {
+   switch (l) {
+     case [] -> false
+     case x::xs -> p(x) || any(p, xs)
+   }
+}
+
+fun the(l) {
+  var x = hd(l);
+  if (all(fun (y) { x == y }, l))
+    x
+  else
+    error("list argument to 'the' had varying values.")
+}
+
+fun elem(x, l) {
+  not(l==[]) && (x == hd(l) || x `elem` tl(l))
+}
+
+fun odd(i)  { i `mod` 2 == 1 }
+fun even(i) { i `mod` 2 == 0 }
+
+fun intRange(m,n) {
+  fun intRangeAux(m,n,result) {
+    if (m > n) result
+    else intRangeAux(m, n-1, n::result)
+  }
+  intRangeAux(m,n,[])
+}
+
+#fun null(l) { l == [] }
+
+# return element at index i of xs
+fun selectElem(xs, i) {
+  hd(drop(i, xs))
+}
+
+# infix operator for 'selectElem'
+op xs !! n { selectElem(xs, n) }
+
+# swap all instances of x1 and x2 in xs
+fun swap(xs, x1, x2) {
+ for (x <- xs) {
+  if (x == x1) [x2]
+  else if (x == x2) [x1]
+  else [x]
+ }
+}
+
+fun fold_left(p, u, l) {
+  switch (l) {
+    case [] -> u
+    case x::xs -> fold_left(p, p(u, x), xs)
+  }
+}
+
+fun fold_left1(p, l) {
+  fold_left(p, hd(l), tl(l))
+}
+
+fun fold_right(f, u, l) {
+  switch (l) {
+    case [] -> u
+    case x::xs -> f(x, fold_right(f,u,xs))
+  }
+}
+
+fun fold_right1(f, l) {
+  fold_right(f, hd(l), tl(l))
+}
+
+fun unzip(l) {
+  switch (l) {
+    case [] -> ([], [])
+    case (a,b)::xs -> {
+     var (c,d) = unzip(xs);
+     (a :: c, b :: d)
+    }
+  }
+}
+
+sig zip : ([a], [b]) ~> [(a, b)]
+fun zip(l, r) {
+  switch ((l, r)) {
+    case ([], []) -> []
+    case (lh::lt, rh::rt) ->
+        (lh, rh) :: zip (lt, rt)
+    case (_, _) -> []
+  }
+}
+
+sig empty : ([a]) -> Bool
+fun empty(l) {
+  switch (l) {
+    case [] -> true
+    case _ -> false
+  }
+}
+
+fun replicate(n, item) {
+  if (n <= 0) []
+  else item :: replicate(n-1, item)
+}
+
+
+fun flip(f) {
+  fun(x,y) { f(y,x) }
+}
+
+sig curry : ((a, b) -d-> c) -> (a) -> (b) -d-> c
+fun curry(f) {
+  fun (x)(y) { f(x,y) }
+}
+
+fun uncurry(f) {
+  fun (x, y) { f(x)(y) }
+}
+
+fun compose(f, g) {
+  fun (x) { f(g(x)) }
+}
+
+fun id(x) { x }
+
+fun first(p)   { p.1 }
+fun second(p)  { p.2 }
+fun third(p)   { p.3 }
+fun fourth(p)  { p.4 }
+fun fifth(p)   { p.5 }
+fun sixth(p)   { p.6 }
+fun seventh(p) { p.7 }
+fun eighth(p)  { p.8 }
+fun ninth(p)   { p.9 }
+fun tenth(p)   { p.10 }
+
+fun product(ns) {
+  fold_left((*), 1, ns)
+}
+
+fun mapi(f, xs) {
+  fun mi(i, xs) {
+    switch (xs) {
+      case []    -> []
+      case x::xs -> f(x, i) :: mi(i+1, xs)
+    }
+  }
+  mi(0, xs)
+}
+
+sig substAt : ([a], Int, a) ~> [a]
+fun substAt(xs, i, y) {
+  switch (xs) {
+    case [] -> []
+    case x::xs -> if (i <= 0) {y :: xs}
+                  else {x :: substAt(xs, i-1, y)}
+  }
+}
+
+fun reverse(l) {
+  fun aux(l,o) {
+    switch (l) {
+      case [] -> o
+      case x::xs -> aux(xs, x::o)
+    }
+  }
+  aux(l, [])
+}
+
+
+fun concat(list) {
+  switch (list) {
+    case [] -> []
+    case (x::xs) -> x ++ concat(xs)
+  }
+}
+
+fun join(glue,list) {
+  switch (list) {
+    case [] -> []
+    case [x] -> x
+    case (x::xs) -> x ++ glue ++ join(glue,xs)
+  }
+}
+
+# break :: ((a) -> Bool) -> ([a]) -> ([a],[a])
+# concat :: [[a]] -> [a]
+# const :: const :: (a) -> b -> a
+# elemBy :: ((a) -> (a) -> Bool) -> (a) -> ([a]) -> Bool
+# notElemBy :: ((a) -> (a) -> Bool) -> (a) -> ([a]) -> Bool
+# span :: ((a) -> Bool) -> ([a]) -> ([a],[a])
+sig span : ((a) ~b~> Bool, [a]) ~b~> ([a], [a])
+fun span(p, xs) {
+  fun go(acc, xs, p) {
+    switch(xs) {
+      case [] -> (acc, [])
+      case x :: xs ->
+        if (p(x)) {
+          go(x :: acc, xs, p)
+        } else {
+          (reverse(acc), x :: xs)
+        }
+    }
+  }
+  go([], xs, p)
+}
+# splitAt :: Int -> ([a]) -> ([a],[a])
+
+sig takeWhile : ((a) ~b~> Bool, [a]) ~b~> [a]
+fun takeWhile(pred, list) {
+  first(span(pred, list))
+}
+
+sig dropWhile : ((a) ~b~> Bool, [a]) ~b~> [a]
+fun dropWhile(pred, list) {
+  second(span(pred, list))
+}
+
+# until :: ((a) -> Bool) -> ((a) -> a) -> (a) -> a
+# zipWith :: ((a) -> b -> c) -> ([a]) -> [b] -> [c]
+
+# div :: Int -> Int -> Int
+# gcd :: Int -> Int -> Int
+# rem :: Int -> Int -> Int
+# lcm :: Int -> Int -> Int
+# subtract :: Int -> Int -> Int
+# quot :: Int -> Int -> Int
+#
+# # sig signum : (Int) -> Int
+# fun signum(i) {
+#   if (i>0) 1
+#   else if (i < 0) -1
+#   else 0
+# }
+
+fun abs(i) {
+  if (i < 0) -i else i
+}
+
+sig init : ([a]) ~> [a]
+fun init(list) {
+  switch (list) {
+    case [y] -> []
+    case (h::t) -> h::init(t)
+  }
+}
+
+fun curtail(list) { init(list) }
+
+sig last : ([a]) ~> a
+fun last(list) {
+  switch (list) {
+    case [x] -> x
+    case (h::t) -> last(t)
+  }
+}
+
+fun intercalate(bone, rushes) {
+  switch (rushes) {
+    case [] -> []
+    case [x] -> x
+    case x::xs -> x ++ bone ++ intercalate(bone, xs)
+  }
+}
+
+sig unlines : ([String]) ~> String
+fun unlines(ws) {
+  implode(intercalate(explode("\n"), map(explode, ws)))
+}
+
+sig unwords : ([String]) ~> String
+fun unwords(ws) {
+  implode(intercalate(explode(" "), map(explode, ws)))
+}
+
+# lines :: String -> [String]
+# words :: String -> [String]
+
+### Defined internally to Links:
+# ceiling :: Float -> Int
+# floor :: Float -> Int
+# cos :: Float -> Float
+# log :: Float -> Float
+# sin :: Float -> Float
+# sqrt :: Float -> Float
+# tan :: Float -> Float
+# (*.) :: Float -> Float -> Float
+# (/.) :: Float -> Float -> Float
+# (+.) :: Float -> Float -> Float
+# (-.) :: Float -> Float -> Float
+# (^.) :: Float -> Int -> Float
+# (/=.) :: Float -> Float -> Bool
+# (==.) :: Float -> Float -> Bool
+#
+# (**.) :: Float -> Float -> Float
+# exp :: Float -> Float
+# pi :: Float
+# signumFloat :: Float -> Int
+# round :: Float -> Int
+# truncate :: Float -> Int
+#
+# Option types
+typename Maybe (a) = [|Nothing | Just:a|];
+
+sig isJust : (Maybe (a)) -> Bool
+fun isJust(x) {
+  switch (x) {
+    case Just (x) -> true
+    case Nothing -> false
+  }
+}
+
+sig search : ((a) ~b~> Bool, [a]) ~b~> Maybe (a)
+fun search(p,l) {
+  switch (l) {
+    case [] -> Nothing
+    case x::xs -> if (p(x)) Just(x)
+                  else search(p,xs)
+  }
+}
+
+sig find : ((a) ~b~> Bool, [a]) ~b~> a
+fun find(p,l) {
+  switch (l) {
+    case [] -> error("Not_found")
+    case x::xs -> if (p(x)) x
+                  else find(p,xs)
+  }
+}
+
+sig fromJust : (Maybe (a)) ~> a
+fun fromJust(x) {
+  switch (x) {
+    case Just (x) -> x
+    case Nothing -> error ("fromJust failed")
+  }
+}
+
+sig fromMaybe : (Maybe (a), a) -> a
+fun fromMaybe(x, y) {
+  switch (x) {
+    case Just (x) -> x
+    case Nothing -> y
+  }
+}
+
+unsafe sig sum : ([Int]) -> Int
+fun sum(ns) {
+  switch (ns) {
+    case [] -> 0
+    case n::ns -> n + sum(ns)
+  }
+}
+
+unsafe sig sumF : ([Float]) -> Float
+fun sumF(ns) {
+  switch (ns) {
+    case [] -> 0.0
+    case n::ns -> n +. sumF(ns)
+  }
+}
+
+fun avg(l) {
+  switch (l) {
+    case [] -> 0.0
+    case n::ns -> intToFloat(sum(l)) /. intToFloat(length(l))
+  }
+}
+
+fun avgF(l) {
+  switch (l) {
+    case [] -> 0.0
+    case n::ns -> sumF(l) /. intToFloat(length(l))
+  }
+}
+
+# Returns the minimum of a and b.
+fun minimum(a,b) {
+  if (a < b) { a }
+  else { b }
+}
+
+# Returns the maximum of a and b.
+fun maximum(a,b) {
+  if (a > b) { a }
+  else { b }
+}
+
+unsafe sig max_list : ([Int]) -> Int
+fun max_list(ns) {
+  switch (ns) {
+    case [] -> min_int
+    case n::ns -> maximum(n, max_list(ns))
+ }
+}
+
+unsafe sig maxF_list : ([Float]) -> Float
+fun maxF_list(ns) {
+  switch (ns) {
+    case [] -> neg_infinity
+    case n::ns -> maximum(n, maxF_list(ns))
+  }
+}
+
+unsafe sig min_list : ([Int]) -> Int
+fun min_list(ns) {
+  switch (ns) {
+    case [] -> max_int
+    case n::ns -> minimum(n, min_list(ns))
+  }
+}
+
+unsafe sig minF_list : ([Float]) -> Float
+fun minF_list(ns) {
+  switch (ns) {
+    case [] -> infinity
+    case n::ns -> minimum(n, minF_list(ns))
+  }
+}
+
+# association lists
+# TBD: memassoc is an old LISP word. Perhaps a more modern name would fit better?
+sig memassoc : (a,[(a,b)]) ~> Bool
+fun memassoc(x,l) {
+  switch (l) {
+    case []    -> false
+    case (k,v)::xs -> k == x || memassoc(x, xs)
+  }
+}
+
+sig lookup : (a,[(a,b)]) ~> Maybe (b)
+fun lookup(x,l) {
+  switch (l) {
+    case [] -> Nothing
+    case (a,b)::xs -> if (a == x) Just(b)
+                      else lookup(x,xs)
+  }
+}
+
+sig assoc : (String,[(String,b)]) ~> b
+fun assoc(x,l) {
+  switch (l) {
+    case []    -> error("Not found " ^^ x)
+    case (k,v)::xs -> if (k == x) v
+                      else assoc(x, xs)
+  }
+}
+
+sig assocDefault : (String,[(String,b)],b) ~> b
+fun assocDefault(x,l,d) {
+  switch (l) {
+    case []    -> d
+    case (k,v)::xs -> if (k == x) v
+                      else assocDefault(x, xs, d)
+  }
+}
+
+sig removeAssoc : (a,[(a,b)]) ~> [(a,b)]
+fun removeAssoc(x,l) {
+  switch (l) {
+    case [] -> []
+    case (k,v)::xs -> if(k == x) xs
+                      else (k,v)::removeAssoc(x, xs)
+  }
+}
+
+sig assocAll : (String,[(String,b)]) ~> [b]
+fun assocAll(x,l) {
+  switch (l) {
+    case []    -> []
+    case (k,v)::xs -> if (k == x)
+                        (v::assocAll(x,xs))
+                      else
+                        assocAll(x,xs)
+  }
+}
+
+sig isInt : (String) -> Bool
+fun isInt (x) { x =~ /-?[0-9]+$/ }
+
+sig isFloat : (String) -> Bool
+fun isFloat (x) { x =~ /-?[0-9]+(\.[0-9]+)?$/ }
+
+sig asList : (TableHandle((|a::Base),(|_::Base),(|_::Base))) {}-> [(|a::Base)]
+fun asList(t) server {
+  for (x <-- t) [x]
+}
+
+fun dedup(l) server {
+  # an unsafe local definition of elem, only for use within dedup!
+  # (ensures dedup is tame, while keeping the global def of elem wild)
+  unsafe sig elem : (a,[a]) -b-> Bool
+  fun elem(x, l) {
+    switch (l) {
+      case [] -> false
+      case hd::tl -> x == hd || x `elem` tl
+    }
+  }
+  unsafe sig aux : ([a],[a]) -> [a]
+  fun aux(vl, rl) {
+    switch (rl) {
+      case [] -> []
+      case r::rl0 ->
+        if (r `elem` vl)
+          aux(vl, rl0)
+        else
+          r::aux(r::vl, rl0)
+    }
+  }
+  aux([]:[a], l)
+}
+
+fun distinct(t) server {
+	dedup(asList(t))
+}
+
+sig concatMapKey : ((a) -b-> [c], [(a,[d])]) -b-> [c]
+fun concatMapKey(f, l) {
+  for (x <- l) f(x.1)
+}
+
+# XXX: I believe the arguments are in the wrong order, but see sortBy
+sig groupBy : ((a) -b-> c, [a]) -b-> [(c, [a])]
+fun groupBy(f, l) {
+  var is = dedup(map(f, l));
+  for (i <- is) [(i, filter(fun (x) { f(x) == i }, l))]
+}
+
+sig groupByMap : ((a) -b-> c, [(d,[a])]) -b-> [((c,d), [a])]
+fun groupByMap(f, xs) {
+  for (x <- xs) 
+    for (k <- dedup(map(f,x.2))) 
+      [((k,x.1), filter(fun (v) { f(v) == k }, x.2))]
+}
+
+unsafe sig lookupG : (a,[(a,[b])]) -> [b]
+fun lookupG(x,l) {
+  switch (l) {
+    case [] -> []
+    case (a,b)::xs -> if (a == x) b
+                      else lookupG(x,xs)
+  }
+}
+
+sig aggBy : ([(a, [b])], ([b]) -c-> d) -c-> [(a, d)]
+fun aggBy(q, agg) {
+  concatMapKey(fun (k) {
+    [(k, agg(lookupG(k, q)))]
+    }, q)
+}
+
+# Gets children of elements in an XML forest, concatenated in order
+# @param {Xml} xml
+# @returns {Xml}
+sig childNodes : (Xml) ~> Xml
+fun childNodes(xml) {
+  for (x <- xml) itemChildNodes(x)
+}
+
+# Gets text content of an XML forest, concatenated in order
+# @param {Xml} xml
+# @returns {String}
+sig getTextContent : (Xml) ~> String
+fun getTextContent(xml) {
+  fold_left((^^),"",for (x <- xml) [itemTextContent(x)])
+}
+
+# Appends a XML forest to an XmlItems children
+# @param {XmlItem} item
+# @param {Xml} child
+# @returns {XmlItem}
+sig appendChild : (XmlItem, Xml) ~> XmlItem
+fun appendChild(item, child) {
+  switch (xmlItemToVariant(item)) {
+    case Node(n, c) -> variantToXmlItem(Node(n, c ++ xmlToVariant(child)))
+    case NsNode(ns, n, c) -> variantToXmlItem(NsNode(ns, n, c ++ xmlToVariant(child)))
+    case _ -> error("Cannot append to " ^^ show(item))
+  }
+}
+
+# Sets or overrides an attribute of a XmlItem
+# @param {XmlItem} item
+# @param {String} name Name of the attribute
+# @param {String} value Value the attribute is set to
+# @returns {XmlItem} Updated item
+sig setAttribute : (XmlItem, String, String) ~> XmlItem
+fun setAttribute (item, name, value) {
+  fun helper (i, o) {
+    switch (i) {
+      case [ ] -> reverse(Attr(name, value) :: o)
+      case Attr(n, v)::t -> if (n == name) {
+        reverse(Attr(n, value) :: o)
+      } else {
+        helper(t, Attr(n, v) :: o)
+      }
+      case other::t -> helper(t, other :: o)
+    }
+  }
+  if (strContains(name, ':')) {
+    error("Attribute names cannot contain colons. Use setAttributeNS instead.")
+  } else {
+    switch (xmlItemToVariant(item)) {
+      case Node(n, c) -> variantToXmlItem(Node(n, helper(c, [ ])))
+      case NsNode(ns, n, c) -> variantToXmlItem(NsNode(ns, n, helper(c, [ ])))
+      case _ -> error("Cannot set attribute of " ^^ show(item))
+    }
+  }
+}
+
+# Sets or overrides a namespaced attribute of a XmlItem
+# @param {XmlItem} item
+# @param {String} namespace
+# @param {String} name Name of the attribute
+# @param {String} value Value the attribute is set to
+# @returns {XmlItem} Updated item
+sig setAttributeNS : (XmlItem, String, String, String) ~> XmlItem
+fun setAttributeNS (item, namespace, name, value) {
+  fun helper (i, o) {
+    switch (i) {
+      case [ ] -> reverse(NsAttr(namespace, name, value) :: o)
+      case NsAttr(ns, n, v)::t -> if (ns == namespace && n == name) {
+        reverse(NsAttr(ns, n, value) :: o)
+      } else {
+        helper(t, NsAttr(ns, n, v) :: o)
+      }
+      case other::t -> helper(t, other :: o)
+    }
+  }
+
+  if (strContains(name, ':')) {
+    error("Attribute names cannot contain colons.")
+  } else {
+    switch (xmlItemToVariant(item)) {
+      case Node(n, c) -> variantToXmlItem(Node(n, helper(c, [ ])))
+      case NsNode(ns, n, c) -> variantToXmlItem(NsNode(ns, n, helper(c, [ ])))
+      case _ -> error("Cannot set attribute of " ^^ show(item))
+    }
+  }
+}
+
+# Adds child to the front of an XmlItems children
+# Note: It is possible to add multiple children by passing an XML forest
+# @param {XmlItem} item
+# @param {Xml} child or children
+# @returns {XmlItem}
+sig prependChild : (XmlItem, Xml) ~> XmlItem
+fun prependChild (item, child) {
+  switch (xmlItemToVariant(item)) {
+    case Node(n, c) -> variantToXmlItem(Node(n, xmlToVariant(child) ++ c ))
+    case NsNode(ns, n, c) -> variantToXmlItem(NsNode(ns, n, xmlToVariant(child) ++ c ))
+    case _ -> error("Cannot prepend child in " ^^ show(item))
+  }
+}
+
+# Replaces all children of an XmlItem
+# @param {XmlItem} item
+# @param {Xml} newChildren
+# @returns {XmlItem} item with new children
+sig replaceChildren : (XmlItem, Xml) ~> XmlItem
+fun replaceChildren (item, newChildren) {
+  switch (xmlItemToVariant(item)) {
+    case Node(n, c) -> variantToXmlItem(Node(n, xmlToVariant(newChildren)))
+    case NsNode(ns, n, c) -> variantToXmlItem(NsNode(ns, n, xmlToVariant(newChildren)))
+    case _ -> error("Cannot replace children of " ^^ show(item))
+  }
+}
+
+
+#### FORMLETS ####
+####   A library of functions supporting the 'formlet ... yields ...' syntax
+####   TBD: move to a namespaced module
+
+####   NOTE: top-level vars have been eta-expanded in order to tell
+####   the JS compiler that they are pure and hence can be safely
+####   compiled. If we had a purity analysis then all of these could
+####   be safely eta-reduced again.
+
+typename Env = [(String,String)];
+typename Gen = Int;
+typename State (d,a) = (d) {}~> (a,d);
+typename Collector (a) = (Env) {}~> a;
+typename CheckedCollector (a) = Collector((Xml, Maybe(a)));
+typename Formlet (a) = State (Gen, (Xml, CheckedCollector(a)));
+typename XmlContext = (Xml) {}~> Xml;
+
+typename Attributes = [(String, String)];
+
+# attributes for a multipart form
+var multipart = [("enctype", "multipart/form-data")];
+
+sig $ : ((a) -b-> c, a) -b-> c
+op f $ x { f(x) }
+
+# state monad
+sig runState : (State (d,a), d) {}~> (a,d)
+fun runState(s, i) { s(i) }
+
+infixl 1 >>=;
+sig >>= : (State (d,a), (a) {}~> State(d,b)) -> State (d,b)
+op x >>= f {
+   (fun (s1) { var (v,s2) = x (s1); runState (f (v), s2) })
+}
+
+sig return : (a) -> State (b,a)
+fun return(a) { fun (s) { (a,s) } }
+
+sig fmap : ((a) {}~> b, State (c,a)) -> State (c,b)
+fun fmap(f, x) { x >>= return `compose` f }
+
+sig pure : (a) -> Formlet(a)
+fun pure(v) {
+  return(([], fun (_) { ([], Just (v)) }))
+}
+
+sig pureE : (a) -> Maybe (a)
+fun pureE (x) { Just (x) }
+
+sig applyE : (Maybe ((a) -e-> b), Maybe (a)) -e-> Maybe (b)
+fun applyE (f, x) {
+  switch ((f, x)) {
+    case (Just (f), Just (x)) -> Just (f(x))
+    case (_       , _       ) -> Nothing
+  }
+}
+
+infixr 1 @@@;
+sig @@@ : (Formlet (a), Formlet ((a) {}~> b)) -> Formlet (b)
+op m @@@ k {
+  m >>= fun((x,c)){
+  k >>= fun((y,f)){
+  return((x++y,
+          fun(e){
+                  var (fx, f) = f(e);
+                  var (cx, c) = c(e);
+                  (cx++fx,  f `applyE` c)
+         }))}}
+}
+
+# x @@=> f
+#   Returns a formlet that post-processes the formlet x by running its
+#   output through f.   (This is fmap for the Formlet functor.)
+#   (This could be written more efficiently.)
+sig @@=> : (Formlet(a), (a) {}~> b) -> Formlet(b)
+op m @@=> f {
+  m @@@ pure(f)
+}
+
+sig xml : (Xml) -> Formlet (())
+fun xml(x) { return ( (x, fun (e) { (x, pureE(())) })) }
+
+sig text : (String) ~> Formlet (())
+fun text(s) { xml(stringToXml(s)) }
+
+sig plug : (XmlContext, Formlet (a)) -> Formlet (a)
+op f `plug` m {
+  m >>= fun((x,collector)){ return((f(x),
+    fun (env) { var (xml,c) = collector (env);
+                (f(xml), c) }))}
+}
+
+sig makeName : (Int) -> String
+fun makeName(i) { "input_" ^^ intToString(i) }
+
+sig nextName : State (Int,String)
+var nextName = fun (i) { (makeName(i), i+1) };
+
+sig sequence : ([State(a,b)]) ~> State(a,[b])
+fun sequence(xs) {
+  switch (xs) {
+    case [] -> return([])
+    case x::xs -> x >>= (fun (x) {
+                  sequence(xs) >>= (fun (xs) {
+                    return (x :: xs)})})
+  }
+}
+
+sig formlets : ([Formlet (a)]) ~> Formlet ([a])
+fun formlets(fs) {
+  switch (fs) {
+    case []    -> formlet <#/> yields []
+    case [x]   -> formlet <#>{x -> f}</#> yields [f]
+    case x::xs -> formlet <#>{x -> f}{formlets(xs) -> fs}</#> yields f::fs
+  }
+}
+#
+# Page stuff
+typename RecForms = [mu a.(([a]) {}~> Xml)];
+typename MultiXmlContext = ([Xml]) {}~> Xml;
+
+typename CheckedFormBuilder = (MultiXmlContext, RecForms, Int) {}~> Xml;
+typename Page = (Int, MultiXmlContext, (Gen) {}~> ([CheckedFormBuilder], Gen));
+typename Handler (a) = (a) {}~> Page;
+
+sig pickleCont : (() { |e}-> Page) ~> String
+fun pickleCont(cont) {unsafePickleCont(fun () {cont()})}
+
+sig unitP : Page
+var unitP = (0, fun ([]) {<#/>}, fun (gen) {([], gen)});
+
+sig joinP : (Page, Page) -> Page
+fun joinP((i1, k1, fs1), (i2, k2, fs2)) {
+  (i1+i2,
+   fun (xs) {
+     <#>{k1(take(i1, xs))}{k2(drop(i1, xs))}</#>
+   },
+   fun (gen) {
+     var (ms1, gen) = fs1(gen);
+     var (ms2, gen) = fs2(gen);
+     (ms1 ++ ms2, gen)
+   })
+}
+
+sig joinManyP : ([Page]) ~> Page
+fun joinManyP(gs) {
+  fold_left(joinP, unitP, gs)
+}
+
+sig bodyP : (Xml) -> Page
+fun bodyP(xml) {
+  (0, fun ([]) {xml}, fun (gen) {([], gen)})
+}
+
+sig plugP : (XmlContext, Page) -> Page
+fun plugP(context, (i, k, fs)) {
+  (i, fun (xs) {context(k(xs))}, fs)
+}
+
+sig mkForm : ((Env) { |e}~> Page, Xml, Attributes) ~> Xml
+fun mkForm(cont, contents, attributes) {
+  <form enctype="application/x-www-form-urlencoded"
+        action="#" method="POST" {attributes}>
+    <input type="hidden"
+           name="_k"
+           value="{pickleCont(fun () {cont(environment())})}" />
+    {contents}
+  </form>
+}
+
+sig validate :
+  (CheckedCollector (a), Handler (a), MultiXmlContext, RecForms, Int, Attributes) -> (Env) {}~> Page
+fun validate(c, h, k, zs, i, attributes) (env) {
+  var (xml, v) = c(env);
+  switch (v) {
+    case Just(v) -> h(v)
+    case Nothing  -> {
+      fun z(zs) {
+        mkForm(validate(c, h, k, zs, i, attributes), xml, attributes)
+      }
+      var zs = substAt(zs, i, z);
+      bodyP(k(map (fun (z) {z(zs)}, zs)))
+    }
+  }
+}
+
+sig mkCheckedFormBuilder : (Xml, CheckedCollector(a), Handler(a), Attributes) { |e}-> (MultiXmlContext, RecForms, Int) ~> Xml
+fun mkCheckedFormBuilder(x, c, h, attributes)(k, zs, i) {
+  mkForm(validate(c, h, k, zs, i, attributes), x, attributes)
+}
+
+sig formP : (Formlet(a), Handler(a), Attributes) -> Page
+fun formP(f, h, attributes) {
+  (1,
+   fun ([x]) {x},
+   fun (gen) {
+     var ((x, c), gen) = runState(f, gen);
+     ([mkCheckedFormBuilder(x, c, h, attributes)], gen)
+   })
+}
+
+#
+sig renderPagePure : (Page) {}~> Xml
+fun renderPagePure((n, k, fs)) {
+  var (ms, _) = fs(0);
+  var zs = mapi(fun (m, i)(zs) {m(k, zs, i)}, ms);
+  k(map (fun (z) {z(zs)}, zs))
+}
+
+sig renderPage : (Page) ~> Xml
+fun renderPage(p) {
+  # HACK: this allows us to use renderPage in effectful contexts
+  (renderPagePure : ((Page) ~%~> Xml) <- ((Page) {}~> Xml))(p)
+}
+
+# end of pagelet stuff
+
+# Types of input we need to handle:
+#   text (done)
+#   password (done)
+#   checkbox (done)
+#   radio (done)
+#   submit (done)
+#   reset (done)
+#   file (done)
+#   hidden (done)
+#   image
+#   button (done)
+
+# A one element String-type formlet can be constructed using the [input]
+# function.
+
+fun mkInput(mkXml,mkFilledXml) {
+  nextName >>= fun (name) {
+    (return ((mkXml(name),
+              fun (env) { var v = assoc (name, env);
+                          (mkFilledXml(name,v), pureE (v)) })))}
+}
+
+sig input : Formlet (String)
+var input = fun (gen) {
+              mkInput(fun(name) { <input name="{name}"/> },
+                      fun(name,v) { <input name="{name}" value="{v}"/> })(gen)
+            };
+
+# QUESTION:
+#   Should we change the semantics of attribute expressions such that
+#   they *do not* override literal attributes?
+#
+#   An advantage of doing this would be that we wouldn't have to use
+#   removeAssoc in formlet library functions. A disadvantage is that
+#   this wouldn't correspond with the usual update semantics.
+
+# input with attributes
+sig inputA : (Attributes) ~> Formlet (String)
+fun inputA(attributes) {
+  mkInput(fun(name) { <input name="{name}" {removeAssoc("name", attributes)}/> },
+          fun(name,v) { <input name="{name}" value="{v}" {removeAssoc("name", removeAssoc("value", attributes))}/> })
+}
+
+# A formlet producing a String whose contents are hidden on entry.
+sig inputPasswordA : (Attributes) ~> Formlet (String)
+fun inputPasswordA(attributes) {
+  inputA(("type", "password")::removeAssoc("type", attributes))
+}
+
+# A one-element formlet populated with an initial value
+sig inputValueA : (String, Attributes) ~> Formlet (String)
+fun inputValueA(v, attributes) {
+  inputA(("value", v)::removeAssoc("value", attributes))
+}
+
+# A "file" type input.
+sig inputFileA : (Attributes) ~> Formlet (String)
+fun inputFileA(attributes) {
+  inputA(("type", "file")::removeAssoc("type", attributes))
+}
+
+# A formlet producing a String whose contents are hidden on entry.
+sig inputPassword : Formlet (String)
+var inputPassword = fun (gen) {inputPasswordA([])(gen)};
+
+# A one-element formlet populated with an initial value
+sig inputValue : (String) ~> Formlet (String)
+fun inputValue(v) {
+  inputValueA(v, [])
+}
+
+# A "file" type input.
+sig inputFile : Formlet (String)
+var inputFile = fun (gen) {inputFileA([])(gen)};
+
+sig textarea : (String) ~> Formlet (String)
+fun textarea(value) {
+  mkInput(fun (name) { <textarea name="{name}">{stringToXml(value)}</textarea> },
+          fun (name,value) { <textarea name="{name}">{stringToXml(value)}</textarea> })
+}
+
+# raw submit button
+sig submit : (String) ~> Xml
+fun submit(text) {
+  <button type="submit">{stringToXml(text)}</button>
+}
+
+# button that returns true iff it is pressed
+sig button : (String,[|Submit|Reset|Button|]) ~> Formlet (Bool)
+fun button(text, behaviour) {
+  nextName >>= fun (name) {
+    var behaviour = switch (behaviour) {
+      case Submit -> "submit"
+      case Reset -> "reset"
+      case Button -> "button"
+    };
+    var xml = <button name="{name}" value="here" type="{behaviour}">{stringToXml(text)}</button>;
+    return ((xml,
+             fun (env) { (xml, pureE (memassoc(name, env))) }))
+  }
+}
+
+sig submitButton : (String) ~> Formlet (Bool)
+fun submitButton(text) {
+  button(text, Submit)
+}
+
+sig resetButton : (String) ~> Formlet (Bool)
+fun resetButton(text) {
+  button(text, Reset)
+}
+
+sig pushButton : (String) ~> Formlet (Bool)
+fun pushButton(text) {
+  button(text, Button)
+}
+
+sig checkboxDefault : (Bool) ~> Formlet (Bool)
+fun checkboxDefault(checked) {
+  fun (gen) {
+    (nextName >>= fun (name) {
+     var xml = <input type="checkbox" name="{name}" value="yes" />;
+     return ((addAttributes(xml, if (checked) [("checked","Y")]
+                                 else []),
+             fun (env) { var checked = memassoc(name, env);
+                         (addAttributes(xml,if (checked) [("checked","Y")]
+                                            else []),
+                          pureE (checked)) }))})(gen)
+  }
+}
+
+sig checkbox : Formlet (Bool)
+var checkbox = fun(gen) {checkboxDefault(false)(gen)};
+
+# before ++ [selected] ++ after is a list of (value, data) pairs
+# layout is a function for rendering a list of (radio button, data) pairs
+#
+# [NOTE]
+#   A default selection is compulsory as recommended by the HTML spec.
+#   We should probably do the same for 'choice' (drop-down menus) as well.
+#
+# It is the user's responsibility to ensure that layout produces Xml that
+# uses each radio button exactly once and does not introduce any other input
+# elements.
+#
+# The data components are useful for attaching extra data such as labels to
+# the radio buttons.
+
+# 'inputRadiogroup(items, selected, layout)' constructs a list of
+# radio buttons in XML form, pairs them with the values from 'items',
+# and passes this list of pairs to the 'layout' function, which should
+# return XML. The result is a formlet that will return the value from
+# 'items' that is associated with the radio button selected by the user.
+sig inputRadiogroup : ([a], a, ([(Xml, a)]) {}~> Xml) ->
+                     Formlet (a)
+fun inputRadiogroup(items, selected, layout) {
+  nextName >>= fun (name) {
+  sequence (for (x <- items) [nextName]) >>= fun (keys) {
+    var keyedItems = zip(keys,items);
+    fun itemXml(selected) {
+      for ((key, data) <- keyedItems)
+        [(addAttributes(<input type="radio" name="{name}" value="{key}" />,
+                        if (data == selected)
+                          [("checked","on")] else []),
+          data)]
+    }
+    var xml = layout(itemXml(selected));
+    return ((xml,
+             fun (env) {
+               var selectedValue = assoc(name, env);
+               var selectedData = assoc(selectedValue, keyedItems);
+               var xml = layout(itemXml(selectedData));
+            (xml, pureE(selectedData))}))
+  }
+  }
+}
+
+# preludeOptionKeyed: A utility function for the <select> formlets
+# ('choice' and 'choices'). Constructs an <option> element and an associated
+# function for determining whether this option was selected.
+sig preludeOptionKeyed : (String, (a,String), Bool) ~>
+                        (Xml, ((String) -c-> [a]) -> (String) -c-> [a])
+fun preludeOptionKeyed (key, (data,text), selected) {
+  if (selected) {
+     ((<option value="{key}" selected="SELECTED">{stringToXml(text)}</option>,
+      (fun (k) (aKey) { if (aKey == key) data::k(aKey) else k(aKey) })))
+  } else {
+     ((<option value="{key}">{stringToXml(text)}</option>,
+      (fun (k) (aKey) { if (aKey == key) data::k(aKey) else k(aKey) })))
+  }
+}
+
+sig preludeOptionsKeyed : ([(String,(a,String))], a) { |e}~>
+                         (Xml, (String) -> [a])
+fun preludeOptionsKeyed(items, def) {
+  switch (items) {
+     case [] -> ((<#/>, fun (_) { [] }))
+     case (itemKey, item)::items -> {
+       var (xml,r1) = preludeOptionKeyed(itemKey, item, (first(item) == def));
+       var (morexml, r2) = preludeOptionsKeyed(items, def);
+       ((xml++morexml, r1(r2))) }
+  }
+}
+
+sig preludeMultiOptionsKeyed
+    : ([(String, (a,String,Bool))]) { |e}~> (Xml, (String) -> [a])
+fun preludeMultiOptionsKeyed(items) {
+  switch (items) {
+     case [] -> ((<#/>, fun (_) { [] }))
+     case (itemKey, item)::items ->
+       var (xml,r1) = preludeOptionKeyed(itemKey,(first(item),second(item)),
+                                         third(item));
+       var (morexml, r2) = preludeMultiOptionsKeyed(items);
+       (xml ++ morexml, r1(r2))
+  }
+}
+
+sig choiceDefault : ([(a,String)], a) ~> Formlet (a)
+fun choiceDefault (items, selected) {
+  # generate a fresh name for the field (menu) as a whole
+  nextName >>= fun (fieldName) {
+  # generate a list of fresh names, one for each menu item.
+  sequence (for (x <- items) [nextName]) >>= fun (optKeys) {
+     var keyedItems = zip(optKeys, items);
+     return ((
+        # pre-validation, use the original 'selected' parameter
+        {var (optsXml,_) = preludeOptionsKeyed(keyedItems, selected);
+         <select name="{fieldName}">{optsXml}</select>},
+        fun (env) {
+          # post-validation, we need to find the 'selected' item in the env:
+          # 1. get the String key of the selection
+          var selectedKey = assoc(fieldName,env);
+          # 2. find the corresponding 'data' value
+          var (selected, _) = assoc(selectedKey, keyedItems);
+          # 3. create the <option> elements, marking that one selected.
+          var (optsXml, retrieve) = preludeOptionsKeyed(keyedItems, selected);
+          (<select name="{fieldName}">{optsXml}</select>,
+           pureE(hd(retrieve(selectedKey)))) }))
+  }
+  }
+}
+
+sig choices : ([(a,String, Bool)]) ~> Formlet ([a])
+fun choices (items) {
+  # generate a fresh name for the field (menu) as a whole
+  nextName >>= fun (fieldName) {
+  # generate a list of fresh names, one for each menu item.
+  sequence (for (x <- items) [nextName]) >>= fun (optKeys) {
+    var keyedItems = zip(optKeys, items);
+    return ((
+       # pre-validation, use the 'selected' flags in the 'items' list
+       {var (xml, retrieve) = preludeMultiOptionsKeyed(keyedItems);
+        <select name="{fieldName}" multiple="multiple">{xml}</select>},
+       fun (env) {
+         # post-validation, 'env' determines which items are selected.
+         var selectedKeys = assocAll(fieldName,env);
+         # now re-mark the items as selected or not according to
+         #     whether they appear in the query env.
+         var keyedItems = for (((key, (data, text, sel))) <- keyedItems)
+                            [(key, (data, text, key `elem` selectedKeys))];
+         var (xml, retrieve) = preludeMultiOptionsKeyed(keyedItems);
+         (<select name="{fieldName}" multiple="multiple">{xml}</select>,
+          pureE(concatMap(retrieve, selectedKeys)))
+       }))
+  }
+  }
+}
+
+sig choicesNone : ([(a, String)]) ~> Formlet ([a])
+fun choicesNone (items) {
+  choices (map (fun ((v, text)) {(v, text, false)}, items))
+}
+
+sig choice : ([(a,String)]) ~> Formlet (a)
+fun choice (items) {
+  var (selected, _) = hd(items);
+  choiceDefault(items, selected)
+}
+
+typename Either (a,b) = [|Left:a | Right : b|];
+
+# given a formlet and a "predicate", return a new formlet that uses
+# the predicate for validation.
+sig satisfies : (Formlet (a), (a,Xml) {}~> Either(Xml,Xml)) -> Formlet(a)
+fun satisfies(f, validate) {
+   f >>= fun((xml,collector)) {
+   return((xml, fun (env) {
+       var (cxml, val) = collector(env);
+       switch (val) {
+         case Nothing  -> (cxml, Nothing)
+         case Just (v) ->
+            switch (validate(v, cxml)) {
+               case Right (xml) -> (xml, Nothing)
+               case Left (xml)  -> (xml, Just (v)) }}}))}
+}
+
+
+sig errorMsg : ((a) ~b~> Bool, (a) ~b~> String) -> (a,Xml) ~b~> Either (Xml,Xml)
+fun errorMsg (f, msg) (x,xml) {
+  if (f(x)) Left (xml)
+  else Right (<span class="errorinput">{xml} </span>
+          ++ <span class="error"> {stringToXml(msg(x))}</span>)
+}
+
+infixr 5 `errorMsg`;
+
+sig transform : (Formlet(a), (a) {}~> Bool, (a) {}~> String, (a) {}~> b) -> Formlet(b)
+fun transform(f, predicate, error, g) {
+  formlet
+    <#>{f `satisfies` (predicate `errorMsg` error) -> v}</#>
+  yields
+    g(v)
+}
+
+# checked input components
+
+sig inputInt : Formlet(Int)
+var inputInt = fun (gen) {transform(input, isInt, fun (s) {s ^^ " is not an integer"}, stringToInt)(gen)};
+
+sig inputIntA : (Attributes) ~> Formlet(Int)
+fun inputIntA(attributes) {
+  transform(inputA(attributes), isInt, fun (s) {s ^^ " is not an integer"}, stringToInt)
+}
+
+sig inputIntValue : (Int) ~> Formlet(Int)
+fun inputIntValue(v) {
+  transform(inputA([("value", intToString(v))]), isInt, fun (s) {s ^^ "is not an integer"}, stringToInt)
+}
+
+sig inputFloat : Formlet(Float)
+var inputFloat = fun (gen) {transform(input, isFloat, fun (s) {s ^^ " is not a float"}, stringToFloat)(gen)};
+
+#### WEB-RELATED ####
+
+# [freshResource] is a bit of magic that makes the subsequent actions a
+# new resource.  That is, it redirects the user to a new URL for the
+# continuation. If you call this immediately after doing a destructive
+# action (e.g. database updates) then reloading and the back button
+# are made "safe": the visible URL does not refer to the action, but
+# only to what follows the freshResource call.
+# Note: doesn't presently work in client context, but could.
+sig freshResource : () ~> ()
+fun freshResource() {
+  escape esc in {
+    redirect("?_k=" ^^ unsafePickleCont(fun () {esc(())})); exit([])
+  }
+}
+
+# [sendSuspend] generates a page, outputs it, and terminates. It
+# passes to pagef the continuation, which will resume at the place
+# of the sendSuspend call. This continuation can be used in l:action
+# for example, to pass form values through as the return value
+# of sendSuspend.
+sig sendSuspend : (((a) ~> Page) ~b~> Page) ~b~> a
+fun sendSuspend(pagef) {
+  escape returnf in {
+    exit(renderPage(pagef(returnf)))
+  }
+}
+
+#### CONCURRENCY ####
+typename Pid(a::Type) = Process({hear: a});
+
+#### SESSION TYPING STUFF ####
+# The SessionFail is defined to be a control-flow-linear operation.
+# The effect row variable `e` can have kind `Row(Any)` because no linear
+# resources is used in this function.
+#sig fork : forall s::Session,e::Row.((s) ~e~> ()) ~e~> ~s
+sig fork : forall s::Session,e::Row(Any).((s) {SessionFail:() =@ [||]}~> ()) ~e~> ~s
+fun fork(f) {
+  var ap = new ();
+  var _ = spawnAngel {
+    f(accept(ap))
+  };
+  request(ap)
+}
+
+#sig linFork : forall s::Session,e::Row.((s) ~e~@ ()) ~e~> ~s
+sig linFork : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~@ ()) ~e~> ~s
+fun linFork(f) {
+  xlin;
+  var ap = new();
+  var _ = spawnAngel {
+    f(accept(ap))
+  };
+  request(ap)
+}
+
+#sig reproduce : forall s::Session,e::Row.(AP(s), (s) ~e~> ()) ~e~> ()
+sig reproduce : forall s::Session,e::Row.(AP(s), (s) {SessionFail:() =@ [||]}~> ()) ~e~> ()
+fun reproduce(ap, f) {
+  xlin;
+  var x = accept(ap);
+  var _ = spawn {f(x)};
+  reproduce(ap, f)
+}
+
+# Here we use an additional access point to synchronise on termination
+# of communicating threads. This synchronisation can be useful because
+# we do not have an explicit close function and by default the
+# top-level process does not wait for running threads to terminate.
+#
+# (In fact, this gymnastics is no longer necessary now that we have
+# spawnAngel which allows us to spawn a process that will continue to
+# run even if the main process terminates.)
+
+#sig connect : forall s::Session,e::Row,a.((s) ~e~> (), (~s) ~e~> a) ~e~> a
+sig connect : forall s::Session,e::Row,a.((s) {SessionFail:() =@ [||]}~> (), (~s) ~e~> a) ~e~> a
+fun connect(f, g) {
+  xlin;
+  var ap = new();
+  var done = new();
+  var _ = spawn {
+    f(accept(ap));
+    close(send((), accept(done)))
+  };
+  var result = g(request(ap));
+  var (_, s) = receive(request(done));
+  close(s);
+  result
+}
+
+### sessions with split ends ###
+typename EndBang = !().End;
+typename EndQuery = ?().End;
+
+sig wait : forall e::Row . (EndQuery) { |e}~> ()
+fun wait(s) {
+  xlin;
+  var (_, s) = receive(s);
+  close(s)
+}
+
+sig closeBang : forall e::Row . (EndBang) { |e}~> ()
+fun closeBang(s) {
+  xlin;
+  close(send((), s))
+}
+
+sig makeEndBang : forall e::Row . () { |e}~> EndBang
+fun makeEndBang() {
+  xlin;
+  var ap = new();
+  var _ = spawn {
+     var c = accept(ap);
+     wait(c)
+  };
+  request(ap)
+}
+
+# with split ends we synchronise on the termination of each spawned
+# child process
+#sig forkSync : forall s::Session,e::Row.((s) ~e~> EndBang) ~e~> ~s
+sig forkSync : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~> EndBang) ~e~> ~s
+fun forkSync(f) {
+  xlin;
+  var ap = new();
+  var _ = spawn {
+    var c = accept(ap);
+    var c = f(c);
+    closeBang(c)
+  };
+  request(ap)
+}
+
+#sig linForkSync : forall s::Session,e::Row.((s) ~e~@ EndBang) ~e~> ~s
+sig linForkSync : forall s::Session,e::Row.((s) {SessionFail:() =@ [||]}~@ EndBang) ~e~> ~s
+fun linForkSync(f) {
+  xlin;
+  var ap = new();
+  var _ = spawn {
+    var c = accept(ap);
+    var c = f(c);
+    closeBang(c)
+  };
+  request(ap)
+}
+
+#sig linkSync : forall s::Session,e::Row.(s, ~s) ~e~> EndBang
+sig linkSync : forall s::Session,e::Row.(s, ~s) {SessionFail:() =@ [||] | e}~> EndBang
+fun linkSync(s, c) {
+  xlin;
+  link(s, c);
+  makeEndBang()
+}
+
+#sig runSync : ((!a.EndBang) ~e~> EndBang) ~e~> a
+sig runSync : forall a, e::Row . ((!a.EndBang) {SessionFail:() =@ [||]}~> EndBang) { |e}~> a
+fun runSync(f) {
+  xlin;
+  var c = forkSync(f);
+  var (v, c) = receive(c);
+  wait(c);
+  v
+}
+### end of sessions with split ends ###
+
+####
+sig lf : ((a) -e-> b) -> (a) -e-@ b
+fun lf(f) {
+  linfun (x) {
+    f(x)
+  }
+}
+
+### Handler stuff
+typename Comp(a, e::Eff) = () ~e~> a;
+typename Zero = [||];
+
+# Composition operators
+# Data flows from right to left (or inside-out)
+infixr 9 -<-;
+sig -<- : ((a) -e-> b, (c) -e-> a) -> (c) -e-> b
+op f -<- g {
+  fun(x) { f(g(x)) }
+}
+
+# Data flow from left to right (or outside-in)
+infixr 9 ->-;
+op f ->- g {
+  g -<- f
+}
+
+# Effect row generalisation
+sig gen0 : (Comp(a, { })) -> Comp(a, { |e})
+fun gen0(f) {
+  (f : (Comp(a, { |e})) <- (Comp(a, { })))
+}
+
+sig gen1 : ((a) {}~> b) -> ((a) { |%}~> b)
+fun gen1(f) {
+  (f : ((a) { |%}~> b) <- ((a) {}~> b))
+}
+
+sig gen2 : ((a,b) {}~> c) -> ((a,b) { |%}~> c)
+fun gen2(f) {
+  (f : ((a,b) { |%}~> c) <- ((a,b) {}~> c))
+}
+
+
+## Utility functions
+# Returns Just the index of x in xs if x is an element in xs, otherwise Nothing.
+sig elemIndex : (a, [a]) ~> Maybe(Int)
+fun elemIndex(x, xs) {
+  var n = fold_left(fun(acc, y) {
+    switch (acc) {
+       case (n,Just(i)) -> (n,Just(i))
+       case (n,Nothing) -> if (x == y) { (n, Just(n)) } else { (n+1,Nothing) }
+    }
+  }, (0,Nothing), xs);
+
+  second(n)
+}
+
+####
+
+sig partition : ((a) ~b~> Bool, [a]) ~b~> ([a], [a])
+fun partition(pred, xs) {
+  fun go(ayes, noes, xs) {
+    switch(xs) {
+      case [] -> (ayes, noes)
+      case x :: xs ->
+        if (pred(x)) {
+          go(x :: ayes, noes, xs)
+        } else {
+          go(ayes, x :: noes, xs)
+        }
+    }
+  }
+  go([], [], xs)
+}
+
+sig groupByFlat : ((a) -b-> c, [a]) -b-> [(c, [a])]
+fun groupByFlat(project, ts) {
+  for(t <- ts)
+    [(project(t),for (u <- ts) where (project(t) == project(u)) [u])]
+}
+
+####
+sig assertEq : (a, a) ~> ()
+fun assertEq (actual, expected) server {
+  if (expected == actual)
+      ()
+  else {
+      print("Assertion failed.");
+      println("Expected:");
+      println(show(expected));
+      println("but got:");
+      print(show(actual));
+      sysexit(2)
+  }
+}
+
+#### APP SERVER ####
+
+sig defaultErrorPage : (String, String, Location) {}~> Page
+fun defaultErrorPage(_, error_string, _) {
+  bodyP(<html>
+        <body>
+        <h1>Wrong</h1>
+        <p>Links has encountered an internal error; the error message is <em>{stringToXml(error_string)}</em></p>
+        </body>
+        </html>)
+}
+
+sig addLocatedRouteWithErrors : (String, (String, Location) {hear{_}}~> Page, (String, String, Location) {hear{_}}~> Page) ~> ()
+fun addLocatedRouteWithErrors(path, f, error_handler) { unsafeAddRoute(path, f, error_handler) }
+
+sig addLocatedRouteHandler : (String, (String, Location) {hear{_}}~> Page) ~> ()
+fun addLocatedRouteHandler(path,f) { addLocatedRouteWithErrors(path, fun(p, l){f(p, l)}, defaultErrorPage) }
+
+sig addRoute : (String, (String) {hear{_}}~> Page) ~> ()
+fun addRoute(path, f) { addLocatedRouteHandler(path, fun(p, _){f(p)}) }
+
+sig addSimpleRouteHandler : (String, (String) {hear{_}}~> Page) ~> ()
+fun addSimpleRouteHandler(path,f) { addRoute(path,f) }
+
+sig serveThis : (() {hear{_}}~> Page) ~> ()
+fun serveThis(p) {
+  addRoute("/",fun (_) {p()});
+  servePages()
+}
+
+sig serveThese : ([(String,() {hear{_}}~> Page)]) ~> ()
+fun serveThese(routes) {
+  var _ = map(fun ((s,p)) {addRoute(s,fun (_) {p()})}, routes);
+  servePages()
+}
+
+# Operations on (ASCII) characters
+sig isLower : (Char) -> Bool
+fun isLower(ch) {
+  var c = ord(ch);
+  (97 <= c && c <= 122) # ord('a') = 97, ord('z') = 122
+}
+
+sig isUpper : (Char) -> Bool
+fun isUpper(ch) {
+  var c = ord(ch);
+  (65 <= c && c <= 90) # ord('A') = 65, ord('Z') = 90
+}
+
+sig isAlpha : (Char) -> Bool
+fun isAlpha(ch) {
+  isLower(ch) || isUpper(ch)
+}
+
+sig isDigit : (Char) -> Bool
+fun isDigit(ch) {
+  var c = ord(ch);
+  (48 <= c && c <= 57)
+}
+
+sig isAlnum : (Char) -> Bool
+fun isAlnum(ch) {
+ isAlpha(ch) || isDigit(ch)
+}
+
+sig isXDigit : (Char) -> Bool
+fun isXDigit(ch) {
+  isDigit(ch)
+  || ({ var c = ord(ch);
+        (65 <= c && c <= 70)        # ord('F') = 70
+        || (97 <= c && c <= 102) }) # ord('f') = 102
+}
+
+sig isBlank : (Char) -> Bool
+fun isBlank(ch) {
+  var c = ord(ch);
+  c == 32 || c == 9 # ord(' ') = 32, ord('\t') = 9
+}
+
+# Implements the behaviour of Char.uppercase_ascii in OCaml.
+sig toUpper : (Char) -> Char
+fun toUpper(ch) {
+  if (isLower(ch)) {
+    chr(ord(ch) - 32)
+  } else ch
+}
+
+# Implements the behaviour of Char.lowercase_ascii in OCaml.
+sig toLower : (Char) -> Char
+fun toLower(ch) {
+  if (isUpper(ch)) {
+    chr(ord(ch) + 32)
+  } else ch
+}
+
+typename Serial = [| Key:Int | NewKey | NewKeyMapped:Int |];
+
+sig isNew : (Serial) -> Bool
+fun isNew(x) {
+  switch (x) {
+    case NewKey -> true
+    case NewKeyMapped (x) -> true
+    case Key (x) -> false
+  }
+}
+
+
+### Date / Time functions
+
+# UTC Time Accessors
+
+sig utcYear : (DateTime) -> Int
+fun utcYear(dt) { dateYear(dt, 0) }
+
+sig utcDay : (DateTime) -> Int
+fun utcDay(dt) { dateDay(dt, 0) }
+
+sig utcMonth : (DateTime) -> Int
+fun utcMonth(dt) { dateMonth(dt, 0) }
+
+sig utcHours : (DateTime) -> Int
+fun utcHours(dt) { dateHours(dt, 0) }
+
+sig utcMinutes : (DateTime) -> Int
+fun utcMinutes(dt) { dateMinutes(dt) }
+
+sig utcSeconds : (DateTime) -> Int
+fun utcSeconds(dt) { dateSeconds(dt) }
+
+sig utcMilliseconds : (DateTime) -> Int
+fun utcMilliseconds(dt) { dateMilliseconds(dt) }
+
+# Local time accessors (Note that these are impure since we use utcOffset() to
+# get the currently-set UTC offset to convert from UTC to local time)
+
+sig localYear : (DateTime) ~> Int
+fun localYear(dt) { dateYear(dt, utcOffset()) }
+
+sig localDay : (DateTime) ~> Int
+fun localDay(dt) { dateDay(dt, utcOffset()) }
+
+sig localMonth : (DateTime) ~> Int
+fun localMonth(dt) { dateMonth(dt, utcOffset()) }
+
+sig localHours : (DateTime) ~> Int
+fun localHours(dt) { dateHours(dt, utcOffset()) }
+
+sig localMinutes : (DateTime) ~> Int
+fun localMinutes(dt) { dateMinutes(dt) }
+
+sig localSeconds : (DateTime) ~> Int
+fun localSeconds(dt) { dateSeconds(dt) }
+
+sig localMilliseconds : (DateTime) -> Int
+fun localMilliseconds(dt) { dateMilliseconds(dt) }
+
+# Default serialisation of DTs at the moment is in local time,
+# so `showLocal` is just a specialisation of the default `show`
+# function.
+sig showLocal : (DateTime) ~> String
+fun showLocal(dt) {
+    show(dt)
+}
+
+### Temporal DB functions
+
+# Transaction-time timeslice for current DB
+fun ttCurrent(tbl) {
+    query nested {
+        for (x <-t- tbl)
+            where (ttTo(x) == forever)
+            [ ttData(x) ]
+    }
+}
+
+# Transaction-time timeslice for DB at a given time
+fun ttAt(tbl, timestamp) {
+    query nested {
+        for (x <-t- tbl)
+            where (ttFrom(x) <= timestamp && timestamp < ttTo(x))
+            [ ttData(x) ]
+    }
+}
+
+
+# Valid-time timeslice for current DB
+fun vtCurrent(tbl) {
+    query nested {
+        var time = now();
+        for (x <-v- tbl)
+            where (time >= vtFrom(x) && time < vtTo(x))
+            [ vtData(x) ]
+    }
+}
+
+# Valid-time timeslice for DB at a given time
+fun vtAt(tbl, time) {
+    query nested {
+        for (x <-v- tbl)
+            where (time >= vtFrom(x) && time < vtTo(x))
+            [ vtData(x) ]
+    }
+}

@@ -1,0 +1,4 @@
+open import ModuleC;
+fun foo() {
+  bar()
+}

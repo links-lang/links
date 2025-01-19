@@ -1,0 +1,88 @@
+fun intersperse(y, xs) {
+   switch (xs) {
+     case []      -> []
+     case [x]     -> [x]
+     case x :: xs -> x :: y :: intersperse(y,xs)
+   }
+}
+
+## Various conversion functions
+fun showList(showX)(xs) {
+  var xs = fold_left(fun (acc, x) { acc ^^ x }
+                    , ""
+                    , intersperse(",", map(showX, xs)));
+  "[" ^^ xs ^^ "]"
+}
+
+fun showToss(toss) {
+  switch(toss) {
+    case Heads -> "Heads"
+    case Tails -> "Tails"
+  }
+}
+
+fun positive(m) client {
+  handle(m()) {
+    case x -> x
+    case <Choose => k> -> k(true)
+  }
+}
+
+fun allChoices(m)() client {
+  handle(m()) {
+    case x -> [x]
+    case <Choose => k> -> k(true) ++ k(false)
+  }
+}
+
+fun failure(m)() client {
+  handle(m()) {
+    case x -> [x]
+    case <Fail => k> -> []
+  }
+}
+
+# fun allChoicesShallow(m)() client {
+#   shallowhandle(m()) {
+#     case x -> [x]
+#     case <Choose -> k> -> allChoicesShallow(fun() {k(true)})() ++ allChoicesShallow(fun() {k(false)})()
+#   }
+# }
+
+fun toss() client {
+  if (do Choose) Heads else Tails
+}
+
+fun drunkToss() client {
+  if (do Choose) toss() else do Fail
+}
+
+fun run() client {
+  var xs = allChoices(failure(drunkToss))();
+  println(showList(showList(showToss))(xs));
+  var ys = failure(allChoices(drunkToss))();
+  println(showList(showList(showToss))(ys));
+  ()
+  # var zs = allChoicesShallow(toss)();
+  # print(showList(showToss)(zs))
+}
+
+# Page
+fun mainPage(_) {
+  page
+    <html>
+      <body>
+         <form l:onsubmit="{run()}">
+          <input type="submit" value="Click me" />
+        </form>
+      </body>
+    </html>
+}
+
+
+fun main() {
+  addRoute("/", mainPage);
+  servePages()
+}
+
+main()

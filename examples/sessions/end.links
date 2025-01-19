@@ -1,0 +1,19 @@
+fun oneA(a)(c) {
+  send(a, c)
+}
+
+fun oneB(c) {
+  var (y, c) = receive(c);
+  var _ = wait(c);
+  y
+}
+
+fun twoA(a)(c) {
+  <| c[a].c[] |>
+}
+
+fun twoB(c, return) {
+  <| c(y).c().return[y].return[] |>
+}
+
+(oneB(forkSync(oneA(1))), runSync (fun (return) {<|nu c.({twoA(2)(c)}|{twoB(c, return)})|>}))

@@ -1,0 +1,85 @@
+var db = database "links";
+
+var agencies =
+  table "agencies"
+  with (id: Int,
+        name: String,
+        based_in: String,
+        phone: String)
+  tablekeys [["id"]]
+  from db;
+
+var externalTours =
+  table "externaltours"
+  with (id: Int,
+        name: String,
+        destination: String,
+        type: String,
+        price: Int)
+  tablekeys [["id"]]
+  from db;
+
+fun q() {
+  query nested {
+    for (a <-- agencies)
+      for (e <-- externalTours)
+      where (a.name == e.name && e.type == "boat")
+        [(name = a.name,
+          phone = a.phone)]
+  }
+}
+
+fun lin_a() {
+  for (a <-- agencies)
+    [(data = a, prov = [("table" = "agencies", row = a.id)])]
+}
+
+fun lin_e() {
+  for (e <-- externalTours)
+    [(data = e, prov = [("table" = "externaltours", row = e.id)])]
+}
+
+# Query q manually rewritten to calculate lineage
+fun q_lineage() {
+  query nested {
+    for (y_a <- lin_a())
+      for (z_a <- for (y_e <- lin_e())
+                    for (z_e <- if (y_a.data.name == y_e.data.name && y_e.data.type == "boat")
+                                  [(data = (name = y_a.data.name,
+                                            phone = y_a.data.phone),
+                                    prov = [])] else [])
+                      [(data = z_e.data,
+                        prov = y_e.prov ++ z_e.prov)])
+        [(data = z_a.data,
+          prov = y_a.prov ++ z_a.prov)]
+  }
+}
+
+fun issue27() {
+  query nested {
+    for (a <-- agencies)
+      [(name = a.name,
+        based_in = a.based_in)]
+  }
+}
+
+fun test() {
+  assertEq(q(), [(name = "BayTours", phone = "415-1200"),
+                 (name = "BayTours", phone = "415-1200"),
+                 (name = "HarborCruz", phone = "831-3000")]);
+  # This is a bit fragile, because ordering depends on internals of query compilation...
+  assertEq(q_lineage(), [(data = (name = "BayTours", phone = "415-1200"),
+                          prov = [(row = 1, "table" = "agencies"),
+                                  (row = 5, "table" = "externaltours")]),
+                         (data = (name = "BayTours", phone = "415-1200"),
+                          prov = [(row = 1, "table" = "agencies"),
+                                  (row = 6, "table" = "externaltours")]),
+                         (data = (name = "HarborCruz", phone = "831-3000"),
+                          prov = [(row = 2, "table" = "agencies"),
+                                  (row = 7, "table" = "externaltours")])]);
+  # https://github.com/links-lang/links/issues/27
+  assertEq(issue27(), [(name = "BayTours", based_in = "San Francisco"),
+                       (name = "HarborCruz", based_in = "Santa Cruz")])
+}
+
+test()

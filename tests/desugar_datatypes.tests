@@ -1,0 +1,127 @@
+Type variables are correctly scoped [1]
+typename A = forall a::Eff. forall a::Type. () ~a~> ();
+exit : 1
+stderr : @.*Mismatch in kind for type variable `a'.*
+
+Type variables are correctly scoped [2]
+./tests/desugar_datatypes/shadowKinds.links
+filemode : true
+exit : 1
+stderr : @.*Mismatch in kind for type variable `a'.*
+
+Subkind declaration mismatches are reported
+() : (( | a :: Any)) { | a :: Eff }~> ()
+exit : 1
+stderr : @.*Mismatch in kind for type variable `a'\..*
+
+Subkind declaration mismatches are reported [forall]
+() : forall a::Base. a::Any
+exit : 1
+stderr : @.*Mismatch in kind for type variable `a'\..*
+
+Subkind declaration mismatches are reported [typename]
+typename A(a::Base) = a::Any;
+exit : 1
+stderr : @.*Mismatch in kind for type variable `a'\..*
+
+Kind declaration mismatches are reported
+() : forall a::Row. (a) ~a~> ()
+exit : 1
+stderr : @.*Mismatch in kind for type variable `a'\..*
+
+Kind usage mismatches are reported
+() : (a) ~a~> ()
+exit : 1
+stderr : @.*Mismatch in kind for type variable `a'\..*
+
+Quantifiers within nested definitions are allowed [1]
+./tests/desugar_datatypes/nestedQuantifiers1.links
+filemode : true
+stdout : () : ()
+
+Quantifiers within nested definitions are allowed [2]
+./tests/desugar_datatypes/nestedQuantifiers2.links
+filemode : true
+stdout : () : ()
+
+Qualified type variables default to `type' [typename]
+typename Arrow (a) = () -a-> ();
+exit : 1
+stderr : @.*Mismatch in kind for type variable `a'.*
+
+Qualified type variables default to `type' [forall]
+sig f : forall a. () -a-> () fun f() {}
+exit : 1
+stderr : @.*Mismatch in kind for type variable `a'.*
+
+Qualified type variables can infer their kind if enabled [typename]
+typename Arrow (a) = () -a-> ();
+stdout : () : ()
+args : --set=infer_kinds=true
+
+Qualified type variables can infer their kind if enabled [forall]
+sig f : forall a. () -a-> () fun f() {}
+stdout : () : ()
+args : --set=infer_kinds=true
+
+Free type variables are detected
+typename A = a;
+exit : 1
+stderr : @.*Unbound type variable `a'.*
+
+Implicit type variables are detected
+typename A = () -> ();
+exit : 1
+stderr : @.*Unbound anonymous type variable.*
+
+Free type variables are detected (in nested definitions)
+./tests/desugar_datatypes/nestedTypename.links
+filemode : true
+exit : 1
+stderr : @.*Unbound type variable `a'.*
+
+Type aliases cannot repeat variables
+typename T(a::Type, a::Type) = a;
+exit : 1
+stderr : @.*Multiple definitions of type variable `a'.\.*
+
+foralls cannot repeat variables
+() : forall a::Type, a::Type. a
+exit : 1
+stderr : @.*Multiple definitions of type variable `a'.\.*
+
+Sugar for shared effect variables in functions
+fun (f, x: Int) { f(x) + 0 }
+stdout : @fun : \(\(Int\) -> Int, Int\) -> Int
+args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+
+Sugar for shared effect variables in type applications (1)
+sig forever : (Comp(a)) ~> b fun forever(f) { ignore(f()); forever(f) } forever
+stdout : fun : (Comp (_)) ~> _
+args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+
+Sugar for shared effect variables in type applications (2)
+sig f : Comp(()) fun f() { } f
+stdout : fun : Comp (())
+args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+
+Implicit effect variables are shared across different functions
+(map, id) : (((a) -> b, [a]) -> [b], (c) -> c)
+stdout : (fun, fun) : (((a) -> c, [a]) -> [c], (d) -> d)
+args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+
+Sugar for implicit effect variables in typenames
+typename Comp(a) = () ~> a; fun() {} : Comp((), { | e})
+stdout : fun : Comp (())
+args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+
+Sugar for implicit effect variables in typenames (propagates through types)
+mutual { typename Either(a) = [|A:() ~> a|B:Indirect(a)|]; typename Indirect(a) = Either(a); } A(fun() {}) : Either((), { | e})
+stdout : A(fun) : Either (())
+args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+
+Type names with effect arrows are not considered
+typename X = Comp((), {Var:() => ()}); fun() { } : X({ |_})
+exit : 1
+stderr : @.*Arity mismatch: Type X expects 0 type arguments, but 1 arguments were provided.*
+args : --set=effect_sugar=true

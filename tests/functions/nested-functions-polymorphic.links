@@ -1,0 +1,15 @@
+sig f1 : (a, b, c) {}~> Int
+fun f1(x,y,z) {
+    fun f2 () {
+        fun f3(q) {
+            var r2 = y;
+            var r3 = z;
+            q
+        }
+        f3(123)
+    }
+    f2()
+
+}
+
+f1(1, "hello", 14.5)

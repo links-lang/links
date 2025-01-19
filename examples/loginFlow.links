@@ -1,0 +1,71 @@
+var noMsg = "";
+
+sig validAuth : (String, String) -> Bool
+fun validAuth(name, pass) {
+  name == "foo" && pass == "bar"
+}
+
+mutual {
+  sig login_widget : (String, Handler((username:String, pass:String))) ~> Page
+  fun login_widget(msg, return) {
+     page
+      <html>
+        <style>
+        label {{float: left; width: 90pt; text-align: right; display: inline;
+                 margin-right: 3pt; }}
+        </style>
+        <body>
+        <div class="error">{stringToXml(msg)}</div>
+        <form l:action="{return((username=username, pass=pass))}" method="post">
+          <label>Name:</label>
+          <div> <input l:name="username" /></div>
+          <label>Password:</label>
+          <div><input l:name="pass" type="password" /></div>
+          <input type="Submit" />
+        </form>
+        <a l:href="{main()}">Start over</a>
+        </body>
+      </html>
+  }
+
+  sig get_user : (String) ~> String
+  fun get_user(msg) {
+    var current_user = getCookie("loginname");
+    if (current_user <> "")     # User is logged in! Return creds.
+      current_user
+    else {                      # User is not logged in, show login page.
+      var (username=name, pass=pass) =
+        sendSuspend(fun (r){login_widget(msg, r)});
+      if (validAuth(name, pass)) {
+        # User logged in successfully, set cookie and return creds.
+        setCookie("loginname", name);
+        name
+      } else
+        # User failed to log in, show page again.
+        get_user("The password you entered was incorrect")
+    }
+  }
+
+  sig logout : () ~> ()
+  fun logout() {
+    setCookie("loginname", "")
+  }
+
+  sig logoutLink : (() ~> Page) ~> Xml
+  fun logoutLink(target) {
+    <a l:href="{logout(); freshResource(); target()}">Logout</a>
+  }
+
+  fun main() {
+   var user = get_user(noMsg);
+
+   page
+    <html>
+      <body>
+        <div>Thanks for logging in, {stringToXml(user)}.</div>
+        <div>{logoutLink(main)}</div>
+      </body>
+    </html>
+  }
+}
+main()

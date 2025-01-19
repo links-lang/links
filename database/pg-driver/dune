@@ -1,0 +1,12 @@
+(library
+  (name links_postgresql)
+  (public_name links-postgresql)
+  (synopsis "PostgreSQL database backend for Links")
+  (optional)
+  (libraries unix str postgresql links.core))
+
+
+(install
+  (section share)
+  (files   links_postgresql_dependencies.json)
+  (package links-postgresql))

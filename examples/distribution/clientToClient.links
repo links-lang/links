@@ -1,0 +1,69 @@
+
+# Broadcasts the new PID to all registered PIDs
+fun broadcastNewPid(newNumber, newPid, pids) server {
+  switch (pids) {
+    case [] -> ()
+    case p::ps ->
+      p ! NewPid(newNumber, newPid);
+      broadcastNewPid(newNumber, newPid, ps)
+  }
+}
+
+# Runs on the server, distributes PID list
+fun clientRegProcess(pids) server {
+  receive {
+    case Register(newNumber, newPid) ->
+      broadcastNewPid(newNumber, newPid, pids);
+      clientRegProcess(newPid :: pids)
+  }
+}
+
+fun addMessage(str) client {
+  var new_node = <#> <p>{stringToXml(str)}</p> </#>;
+  appendChildren(new_node, getNodeById("log"))
+}
+
+fun clientLoopProcess(local_number) client {
+  receive {
+    # Receive notification that a new client has joined
+    case NewPid(process_number, pid) ->
+      pid ! Greeting(local_number);
+      addMessage(intToString(process_number) ^^ " joined!");
+      clientLoopProcess(local_number)
+
+    # Receive a greeting from another client
+    case Greeting(remote_number) ->
+      addMessage(intToString(remote_number) ^^ " says hi!");
+      clientLoopProcess(local_number)
+  }
+}
+
+
+fun mainPage(regPid) {
+  # Create a fresh process number
+  var new_process_number = gensym ();
+
+  # Spawn the client loop process
+  var pid = spawnClient { clientLoopProcess(new_process_number) };
+
+  # Register the new process
+  regPid ! Register(new_process_number, pid);
+
+  page
+    <html>
+      <body>
+        <h1>Client-to-client test</h1>
+        <div id="log"></div>
+        <div></div>
+      </body>
+    </html>
+}
+
+fun main() {
+  var registryPid = spawn { clientRegProcess([]) };
+  addRoute("/x", fun(_) { mainPage(registryPid) });
+  serveWebsockets();
+  servePages()
+}
+
+main()

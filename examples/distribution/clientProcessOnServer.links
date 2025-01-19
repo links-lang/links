@@ -1,0 +1,33 @@
+fun spawnedFn() {
+  receive {
+    case Hi() -> debug("Received hi on client (?)")
+  }
+}
+
+fun spawnClientProcessFromServer() server {
+  spawnClient { spawnedFn() }
+}
+
+fun doRpc() client {
+  var pid = spawnClientProcessFromServer();
+  pid ! Hi()
+}
+
+
+fun mainPage() {
+  var x = spawnClient { doRpc() };
+  page
+    <html>
+      <body>
+        <div l:onload="{ignore(x)}"> </div>
+        <h1>Hi</h1>
+      </body>
+    </html>
+}
+
+fun main() {
+  addRoute("/", fun(_) { mainPage() } );
+  servePages()
+}
+
+main()

@@ -1,0 +1,681 @@
+open import MvuAttrs;
+
+# HTML Type
+typename HTML(a :: Type(Any, Any)) =
+  [| HTMLEmpty
+   | HTMLAppend: (HTML(a), HTML(a))
+   | HTMLText: (String)
+   | HTMLRaw: (String)
+   | HTMLWidget: (String, [(String, String)])
+   | HTMLTag: (tagName: String, attrs: Attr(a), children: HTML(a))
+   |];
+
+var empty = HTMLEmpty;
+var h0 = empty;
+
+fun textNode(str) {
+  HTMLText(str)
+}
+
+fun unescapedTextNode(str) {
+  HTMLRaw(str)
+}
+
+# An HTML element not affected by the rendering loop.
+# Generally used as a placeholder.
+fun htmlWidget(name, attrs) {
+  HTMLWidget(name, attrs)
+}
+
+sig tag : forall a :: Type(Any, Any), e :: Row .
+  (String, Attr(a), HTML(a)) -e-> HTML(a)
+fun tag(nameOfTag, attrs, children) {
+  HTMLTag((tagName=nameOfTag, attrs=attrs, children=children))
+}
+
+sig append : forall a :: Type(Any, Any), e :: Row .
+  (HTML(a), HTML(a)) -e-> HTML(a)
+fun append(h1, h2) {
+# Take advantage of monoid laws. If either is empty, return the other.
+  switch ((h1, h2)) {
+    case (HTMLEmpty, h2) -> h2
+    case (h1, HTMLEmpty) -> h1
+    case (h1, h2) -> HTMLAppend(h1, h2)
+  }
+}
+
+sig +* : forall a :: Type(Any, Any), e :: Row . (HTML(a), HTML(a)) -e-> HTML(a)
+op a1 +* a2 { append(a1, a2) }
+
+fun concat(nodes) {
+  fold_right(fun(x, acc) { append(x, acc) }, HTMLEmpty, nodes)
+}
+
+fun concatMap(f, nodes) {
+  fold_right(fun(x, acc) { append(f(x), acc) }, HTMLEmpty, nodes)
+}
+
+fun html(attrs, children) {
+    tag("html", attrs, children)
+}
+
+fun head(attrs, children) {
+    tag("head", attrs, children)
+}
+
+fun title(attrs, children) {
+    tag("title", attrs, children)
+}
+
+fun base(attrs, children) {
+    tag("base", attrs, children)
+}
+
+fun isindex(attrs, children) {
+    tag("isindex", attrs, children)
+}
+
+fun link(attrs, children) {
+    tag("link", attrs, children)
+}
+
+fun meta(attrs, children) {
+    tag("meta", attrs, children)
+}
+
+fun style(attrs, children) {
+    tag("style", attrs, children)
+}
+
+fun script(attrs, children) {
+    tag("script", attrs, children)
+}
+
+fun noscript(attrs, children) {
+    tag("noscript", attrs, children)
+}
+
+fun body(attrs, children) {
+    tag("body", attrs, children)
+}
+
+fun section(attrs, children) {
+    tag("section", attrs, children)
+}
+
+fun nav(attrs, children) {
+    tag("nav", attrs, children)
+}
+
+fun article(attrs, children) {
+    tag("article", attrs, children)
+}
+
+fun aside(attrs, children) {
+    tag("aside", attrs, children)
+}
+
+fun h1(attrs, children) {
+    tag("h1", attrs, children)
+}
+
+fun h2(attrs, children) {
+    tag("h2", attrs, children)
+}
+
+fun h3(attrs, children) {
+    tag("h3", attrs, children)
+}
+
+fun h4(attrs, children) {
+    tag("h4", attrs, children)
+}
+
+fun h5(attrs, children) {
+    tag("h5", attrs, children)
+}
+
+fun h6(attrs, children) {
+    tag("h6", attrs, children)
+}
+
+fun hgroup(attrs, children) {
+    tag("hgroup", attrs, children)
+}
+
+fun header(attrs, children) {
+    tag("header", attrs, children)
+}
+
+fun footer(attrs, children) {
+    tag("footer", attrs, children)
+}
+
+fun address(attrs, children) {
+    tag("address", attrs, children)
+}
+
+fun p(attrs, children) {
+    tag("p", attrs, children)
+}
+
+fun hr(attrs, children) {
+    tag("hr", attrs, children)
+}
+
+fun pre(attrs, children) {
+    tag("pre", attrs, children)
+}
+
+fun blockquote(attrs, children) {
+    tag("blockquote", attrs, children)
+}
+
+fun ol(attrs, children) {
+    tag("ol", attrs, children)
+}
+
+fun ul(attrs, children) {
+    tag("ul", attrs, children)
+}
+
+fun li(attrs, children) {
+    tag("li", attrs, children)
+}
+
+fun dl(attrs, children) {
+    tag("dl", attrs, children)
+}
+
+fun dt(attrs, children) {
+    tag("dt", attrs, children)
+}
+
+fun dd(attrs, children) {
+    tag("dd", attrs, children)
+}
+
+fun figure(attrs, children) {
+    tag("figure", attrs, children)
+}
+
+fun figcaption(attrs, children) {
+    tag("figcaption", attrs, children)
+}
+
+fun div(attrs, children) {
+    tag("div", attrs, children)
+}
+
+fun center(attrs, children) {
+    tag("center", attrs, children)
+}
+
+fun a(attrs, children) {
+    tag("a", attrs, children)
+}
+
+fun abbr(attrs, children) {
+    tag("abbr", attrs, children)
+}
+
+fun acronym(attrs, children) {
+    tag("acronym", attrs, children)
+}
+
+fun b(attrs, children) {
+    tag("b", attrs, children)
+}
+
+fun basefont(attrs, children) {
+    tag("basefont", attrs, children)
+}
+
+fun bdo(attrs, children) {
+    tag("bdo", attrs, children)
+}
+
+fun big(attrs, children) {
+    tag("big", attrs, children)
+}
+
+fun blink(attrs, children) {
+    tag("blink", attrs, children)
+}
+
+fun br(attrs, children) {
+    tag("br", attrs, children)
+}
+
+fun cite(attrs, children) {
+    tag("cite", attrs, children)
+}
+
+fun code(attrs, children) {
+    tag("code", attrs, children)
+}
+
+fun dfn(attrs, children) {
+    tag("dfn", attrs, children)
+}
+
+fun em(attrs, children) {
+    tag("em", attrs, children)
+}
+
+fun font(attrs, children) {
+    tag("font", attrs, children)
+}
+
+fun i(attrs, children) {
+    tag("i", attrs, children)
+}
+
+fun kbd(attrs, children) {
+    tag("kbd", attrs, children)
+}
+
+fun listing(attrs, children) {
+    tag("listing", attrs, children)
+}
+
+fun mark(attrs, children) {
+    tag("mark", attrs, children)
+}
+
+fun marquee(attrs, children) {
+    tag("marquee", attrs, children)
+}
+
+fun nextid(attrs, children) {
+    tag("nextid", attrs, children)
+}
+
+fun nobr(attrs, children) {
+    tag("nobr", attrs, children)
+}
+
+fun q(attrs, children) {
+    tag("q", attrs, children)
+}
+
+fun rp(attrs, children) {
+    tag("rp", attrs, children)
+}
+
+fun rt(attrs, children) {
+    tag("rt", attrs, children)
+}
+
+fun ruby(attrs, children) {
+    tag("ruby", attrs, children)
+}
+
+fun s(attrs, children) {
+    tag("s", attrs, children)
+}
+
+fun samp(attrs, children) {
+    tag("samp", attrs, children)
+}
+
+fun small(attrs, children) {
+    tag("small", attrs, children)
+}
+
+fun spacer(attrs, children) {
+    tag("spacer", attrs, children)
+}
+
+fun span(attrs, children) {
+    tag("span", attrs, children)
+}
+
+fun strike(attrs, children) {
+    tag("strike", attrs, children)
+}
+
+fun strong(attrs, children) {
+    tag("strong", attrs, children)
+}
+
+fun sub(attrs, children) {
+    tag("sub", attrs, children)
+}
+
+fun sup(attrs, children) {
+    tag("sup", attrs, children)
+}
+
+fun time(attrs, children) {
+    tag("time", attrs, children)
+}
+
+fun tt(attrs, children) {
+    tag("tt", attrs, children)
+}
+
+fun u(attrs, children) {
+    tag("u", attrs, children)
+}
+
+fun var_(attrs, children) {
+    tag("var", attrs, children)
+}
+
+fun wbr(attrs, children) {
+    tag("wbr", attrs, children)
+}
+
+fun xmp(attrs, children) {
+    tag("xmp", attrs, children)
+}
+
+fun ins(attrs, children) {
+    tag("ins", attrs, children)
+}
+
+fun del(attrs, children) {
+    tag("del", attrs, children)
+}
+
+fun img(attrs, children) {
+    tag("img", attrs, children)
+}
+
+fun iframe(attrs, children) {
+    tag("iframe", attrs, children)
+}
+
+fun embed(attrs, children) {
+    tag("embed", attrs, children)
+}
+
+fun object(attrs, children) {
+    tag("object", attrs, children)
+}
+
+fun param(attrs, children) {
+    tag("param", attrs, children)
+}
+
+fun video(attrs, children) {
+    tag("video", attrs, children)
+}
+
+fun audio(attrs, children) {
+    tag("audio", attrs, children)
+}
+
+fun source(attrs, children) {
+    tag("source", attrs, children)
+}
+
+fun track(attrs, children) {
+    tag("track", attrs, children)
+}
+
+fun canvas(attrs, children) {
+    tag("canvas", attrs, children)
+}
+
+fun map_(attrs, children) {
+    tag("map", attrs, children)
+}
+
+fun area(attrs, children) {
+    tag("area", attrs, children)
+}
+
+fun math(attrs, children) {
+    tag("math", attrs, children)
+}
+
+fun svg(attrs, children) {
+    tag("svg", attrs, children)
+}
+
+fun applet(attrs, children) {
+    tag("applet", attrs, children)
+}
+
+fun frame(attrs, children) {
+    tag("frame", attrs, children)
+}
+
+fun frameset(attrs, children) {
+    tag("frameset", attrs, children)
+}
+
+fun noframes(attrs, children) {
+    tag("noframes", attrs, children)
+}
+
+fun bgsound(attrs, children) {
+    tag("bgsound", attrs, children)
+}
+
+fun noembed(attrs, children) {
+    tag("noembed", attrs, children)
+}
+
+fun plaintext(attrs, children) {
+    tag("plaintext", attrs, children)
+}
+
+fun table_(attrs, children) {
+    tag("table", attrs, children)
+}
+
+fun caption(attrs, children) {
+    tag("caption", attrs, children)
+}
+
+fun colgroup(attrs, children) {
+    tag("colgroup", attrs, children)
+}
+
+fun col(attrs, children) {
+    tag("col", attrs, children)
+}
+
+fun tbody(attrs, children) {
+    tag("tbody", attrs, children)
+}
+
+fun thead(attrs, children) {
+    tag("thead", attrs, children)
+}
+
+fun tfoot(attrs, children) {
+    tag("tfoot", attrs, children)
+}
+
+fun tr(attrs, children) {
+    tag("tr", attrs, children)
+}
+
+fun td(attrs, children) {
+    tag("td", attrs, children)
+}
+
+fun th(attrs, children) {
+    tag("th", attrs, children)
+}
+
+fun form(attrs, children) {
+    tag("form", attrs, children)
+}
+
+fun fieldset(attrs, children) {
+    tag("fieldset", attrs, children)
+}
+
+fun legend(attrs, children) {
+    tag("legend", attrs, children)
+}
+
+fun label(attrs, children) {
+    tag("label", attrs, children)
+}
+
+fun input(attrs, children) {
+    tag("input", attrs, children)
+}
+
+fun button(attrs, children) {
+    tag("button", attrs, children)
+}
+
+fun select_(attrs, children) {
+    tag("select", attrs, children)
+}
+
+fun datalist(attrs, children) {
+    tag("datalist", attrs, children)
+}
+
+fun optgroup(attrs, children) {
+    tag("optgroup", attrs, children)
+}
+
+fun option(attrs, children) {
+    tag("option", attrs, children)
+}
+
+fun textarea(attrs, children) {
+    tag("textarea", attrs, children)
+}
+
+fun keygen(attrs, children) {
+    tag("keygen", attrs, children)
+}
+
+fun output(attrs, children) {
+    tag("output", attrs, children)
+}
+
+fun progress(attrs, children) {
+    tag("progress", attrs, children)
+}
+
+fun meter(attrs, children) {
+    tag("meter", attrs, children)
+}
+
+fun details(attrs, children) {
+    tag("details", attrs, children)
+}
+
+fun summary(attrs, children) {
+    tag("summary", attrs, children)
+}
+
+fun command(attrs, children) {
+    tag("command", attrs, children)
+}
+
+fun menu(attrs, children) {
+    tag("menu", attrs, children)
+}
+
+fun acronym(attrs, children) {
+    tag("acronym", attrs, children)
+}
+
+fun applet(attrs, children) {
+    tag("applet", attrs, children)
+}
+
+fun basefont(attrs, children) {
+    tag("basefont", attrs, children)
+}
+
+fun bgsound(attrs, children) {
+    tag("bgsound", attrs, children)
+}
+
+fun big(attrs, children) {
+    tag("big", attrs, children)
+}
+
+fun blink(attrs, children) {
+    tag("blink", attrs, children)
+}
+
+fun c(attrs, children) {
+    tag("c", attrs, children)
+}
+
+fun span(attrs, children) {
+    tag("span", attrs, children)
+}
+
+fun center(attrs, children) {
+    tag("center", attrs, children)
+}
+
+fun font(attrs, children) {
+    tag("font", attrs, children)
+}
+
+fun frame(attrs, children) {
+    tag("frame", attrs, children)
+}
+
+fun frameset(attrs, children) {
+    tag("frameset", attrs, children)
+}
+
+fun isindex(attrs, children) {
+    tag("isindex", attrs, children)
+}
+
+fun listing(attrs, children) {
+    tag("listing", attrs, children)
+}
+
+fun marquee(attrs, children) {
+    tag("marquee", attrs, children)
+}
+
+fun nextid(attrs, children) {
+    tag("nextid", attrs, children)
+}
+
+fun nobr(attrs, children) {
+    tag("nobr", attrs, children)
+}
+
+fun noembed(attrs, children) {
+    tag("noembed", attrs, children)
+}
+
+fun noframes(attrs, children) {
+    tag("noframes", attrs, children)
+}
+
+fun plaintext(attrs, children) {
+    tag("plaintext", attrs, children)
+}
+
+fun spacer(attrs, children) {
+    tag("spacer", attrs, children)
+}
+
+fun strike(attrs, children) {
+    tag("strike", attrs, children)
+}
+
+fun tt(attrs, children) {
+    tag("tt", attrs, children)
+}
+
+fun u(attrs, children) {
+    tag("u", attrs, children)
+}
+
+fun xmp(attrs, children) {
+    tag("xmp", attrs, children)
+}
+

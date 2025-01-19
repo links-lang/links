@@ -1,0 +1,29 @@
+fun goAlright() {
+  try {
+    var s = fork (fun (s) { close(send(5, s)) });
+    var (res, s) = receive(s);
+    close(s);
+    res
+  } as (x) in {
+    "result: " ^^ intToString(x)
+  } otherwise {
+    "exception"
+  }
+}
+
+fun go() {
+  try {
+    var s = fork (fun (s) { cancel(s) });
+    var (res, s) = receive(s);
+    close(s);
+    res
+  } as (x) in {
+    "result: " ^^ intToString(x)
+  } otherwise {
+    "exception"
+  }
+}
+
+go()
+#goBadly()
+#goAlright()

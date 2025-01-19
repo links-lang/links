@@ -1,0 +1,148 @@
+Function typing bug (see jdy's blog, 2005-10-24)
+(fun (x,y) { [x] ++ [y] }) ([1],"a")
+stderr : @..*
+exit : 1
+
+Type annotations on functions
+fun (x) { x } : (String) -> String
+stdout : fun : (String) -> String
+
+Incorrect type annotations rejected
+fun (x) { x + 1 } : (Float) -> String
+stderr : @..*
+exit : 1
+
+Loose type annotations on functions
+fun (x) { x } : (b) -> b
+stdout : @fun : \(([a-z])\) -> \1
+
+Trailing semicolon means "ignore the final value" [1]
+{ 2 }
+stdout : 2 : Int
+
+Trailing semicolon means "ignore the final value" [2]
+{ 2; }
+stderr : @.*
+exit : 1
+
+Trailing semicolon means "ignore the final value" [3]
+fun () { 2 }
+stdout : fun : () -> Int
+
+Trailing semicolon means "ignore the final value" [4]
+fun () { 2; }
+stderr : @.*
+exit : 1
+
+Type annotations
+fun (x:Int) {x:Int}
+stdout : fun : (Int) -> Int
+
+Identity annotation
+fun (x:a) {x:a}
+stdout : @fun : \(([a-z]+)\) -> \1
+
+Type annotation scope
+fun (x:a, y:a) {(x, y)}
+stdout : @fun : \(([a-z]+), \1\) -> \(\1, \1\)
+
+Negative recursive type
+fun (x) {x:a} : a
+stderr : @.*
+exit : 1
+
+Infers effect variables
+fun (f, x: Int) { f(x) + 0 }
+stdout : @fun : \(\(Int\) -a-> Int, Int\) -a-> Int
+
+Typename [1]
+typename Foo = Int; fun f(x:Foo) {x} f(1)
+stdout : 1 : Foo
+
+Typename [2]
+typename Bar(a,b,c) = (a,b,c); fun f(x:Bar(a,b,c)) {x} f((false, 1, "two"))
+stdout : (false, 1, "two") : Bar (Bool,Int,String)
+
+Typename [3]
+typename F(a,b) = (a) {:b}~> a; sig f : F(Int,Int) fun f(x) {recv() + x} sig g : F(Int,String) fun g(x) {stringToInt(recv()) + x} g
+stdout : fun : F (Int,String)
+
+Nested closures
+./tests/functions/nested-closures.links
+filemode : true
+stdout : true : Bool
+
+Quantification of alien functions (#280)
+./tests/functions/alien-quantification.links
+filemode : true
+exit : 1
+stderr : @.*
+
+Type annotation on inner function (correct, basic)
+./tests/functions/innerfun1.links
+filemode : true
+stdout : "Hello!" : String
+
+Type annotation on inner function (incorrect, basic)
+./tests/functions/innerfun2.links
+filemode : true
+stderr : @.*
+exit : 1
+
+Type annotation on inner function (correct, recursive)
+./tests/functions/innerfun3.links
+filemode : true
+stdout : "Hello!" : String
+
+Closure conversion: Test generalization of free type variables during hoisting
+./tests/functions/nested-functions-polymorphic.links
+filemode : true
+stdout : 123 : Int
+
+Closure conversion: Test function with free type variables, but no free term variables
+./tests/functions/closure-conv-type-abstr-only.links
+filemode : true
+stdout : 42 : Int
+
+Quantifiers should not escape their scopes (#687)
+./tests/functions/escaped-quantifier.links
+filemode : true
+stderr : @.*escape their scope.*
+exit : 1
+
+Linearity (1)
+fun (x, y) {(x, y)}
+stdout : fun : (a::Any, b::Any) -> (a::Any, b::Any)
+
+Linearity (2)
+fun (x) {fun (y) {(x, y)}}
+stdout : fun : (a) -> (c::Any) -> (a, c::Any)
+
+Linearity (3) (#795)
+fun (x)(y) {(x, y)}
+stdout : fun : (a) -> (c::Any) -> (a, c::Any)
+
+Linearity (4)
+linfun (x){ linfun (y) {(x, y)}}
+stdout : fun : (a::Any) -@ (c::Any) -@ (a::Any, c::Any)
+
+Linearity (5)
+linfun (x)(y) {(x, y)}
+stdout : fun : (a::Any) -@ (c::Any) -@ (a::Any, c::Any)
+
+Linearity (6) (#797)
+fun f(x)(y) {(x, y)} f
+stdout : fun : (a) -> (c::Any) -> (a, c::Any)
+
+Linearity (7) (#797)
+fun f(x)(y) {f(x)(y)} f
+stdout : fun : (_) -> (_::Any) ~> _::Any
+
+Linearity (8) (#797)
+linfun f(x)(y) {(x, y)} f
+stdout : fun : (a::Any) -@ (c::Any) -@ (a::Any, c::Any)
+
+Linearity (9) - linear recursive functions should be disallowed
+linfun f(x) {f(x)} f
+stderr : @.*cannot be linear.*
+exit : 1

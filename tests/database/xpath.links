@@ -1,0 +1,103 @@
+# Links port of the XPath code from
+#
+#   A Practical Theory of Language-Integrated Query
+#   James Cheney, Sam Lindley, Philip Wadler
+#   at ICFP'13
+
+var db = database "links";
+
+var xml = table ("xml") with
+    (id : Int,
+     parent : Int,
+     name : String,
+     pre : Int,
+     post : Int) from db;
+
+typename Axis = [| Self
+                 | Child
+                 | Descendant
+                 | DescendantOrSelf
+                 | Following
+                 | FollowingSibling
+                 | Rev:Axis
+                 |];
+
+typename Path = [| Axis:Axis
+                 | Seq:(Path, Path)
+                 | Name:String
+                 | Filter:Path
+                 |];
+
+typename Node = (id:Int,name:String,parent:Int,post:Int,pre:Int);
+
+fun axis(ax) {
+  switch (ax) {
+    case Self -> fun (s, t) { s.id == t.id }
+    case Child -> fun (s, t) { s.id == t.parent }
+    case Descendant -> fun (s, t) { s.pre < t.pre && t.post < s.post }
+    case DescendantOrSelf -> fun (s, t) { s.pre <= t.pre && t.post <= s.post }
+    case Following -> fun (s, t) { s.post < t.pre }
+    case FollowingSibling -> fun (s, t) { s.post < t.pre && s.parent == t.parent }
+    case Rev(ax) -> var rev = axis(ax); fun (s, t) { rev(t, s) }
+  }
+}
+
+sig path : (Path) ~> (Node, Node) {}-> Bool
+fun path(p: Path) {
+  switch (p) {
+    case Seq(p, q) ->
+      var p = path(p);
+      var q = path(q);
+      fun (s, u) {
+        not(empty(for (t <-- xml)
+                  where (p(s, t) && q(t, u))
+                   [()]))
+      }
+    case Axis(ax) -> axis(ax)
+    case Name(name) -> fun (s, t) { s.id == t.id && s.name == name }
+    case Filter(p) ->
+      var p = path(p);
+      fun (s, t) {
+        s.id == t.id && not(empty(for (u <-- xml)
+                                  where (p(s, u))
+                                    [()]))
+      }
+  }
+}
+
+# /*/*
+var xp0 = Seq(Axis(Child), Axis(Child));
+
+# //*/parent::*
+var xp1 = Seq(Axis(DescendantOrSelf), Axis(Rev(Child)));
+
+# //*[following-sibling::d]
+var xp2 = Seq(Axis(DescendantOrSelf), Filter(Seq(Axis(FollowingSibling), Name("d"))));
+
+# //f[ancestor::*/preceding::b]
+var xp3 = Seq(Axis(DescendantOrSelf),
+              Seq(Name("f"),
+                  Filter(Seq(Axis(Rev(DescendantOrSelf)),
+                             Seq(Axis(Rev(Following)),
+                                 Name("b"))))));
+
+var xpmin = Seq(Axis(DescendantOrSelf),
+              Filter(Seq(Axis(Child),
+                         Axis(Child))));
+
+fun xpath(p) {
+  var p = path(p);
+  query {
+    for (root <-- xml,
+         s <-- xml)
+    where (root.parent == -1 && p(root, s))
+    orderby (s.name)
+      [(name=s.name)]
+  }
+}
+
+fun test() {
+  assertEq(xpath(xp0), [(name="b"), (name="d")])
+}
+
+test()

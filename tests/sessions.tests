@@ -1,0 +1,53 @@
+Access points
+fun f(ap) {send(42, request(ap))} f
+stdout : fun : (AP (?(Int).~a::Session)) ~> a::Session
+
+Linear function annotation
+sig h : ((a::Any) -e-@ a::Any, a::Any) -e-> a::Any fun h(f, x) {f(x)}
+stdout : () : ()
+exit : 0
+
+Non-linear use of linear function
+sig h : ((a::Any) -e-@ a::Any, a::Any) -e-> a::Any fun h(f, x) {f(f(x))}
+stderr : @..*
+exit : 1
+
+Linear identity
+fun (x) {x}
+stdout : fun : (a::Any) -> a::Any
+exit : 0
+
+Non-linear dup
+fun (x) {(x, x)}
+stdout : fun : (a) -> (a, a)
+exit : 0
+
+Receive value
+fun (c) {receive(c).1}
+stdout : fun : (?(a::Any)._::(Unl,Session)) ~> a::Any
+exit : 0
+
+Receive channel
+fun (c) {receive(c).2}
+stdout : fun : (?(_).b::Session) ~> b::Session
+exit : 0
+
+Ignore send
+fun (c) {ignore(send(42, c))}
+stdout : fun : (!(Int)._::(Unl,Session)) ~> ()
+exit : 0
+
+Linear end
+ignore(request((new(): AP(End))))
+stderr : @..*
+exit : 1
+
+Non-linear generalisation (1)
+{var x = A; ()}
+stdout : () : ()
+exit : 0
+
+Non-linear generalisation (2)
+fun (r) {var (x=42|q) = r; ()}
+stdout : @fun..*
+exit : 0

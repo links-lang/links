@@ -1,0 +1,164 @@
+# An adaption of Oleg Kiselyov's solution to the "U2 puzzle"
+# (c.f. http://okmij.org/ftp/ML/puzzle.ml) using effect handlers.
+
+# Problem statement
+# "U2" has a concert that starts in 17 minutes and they must all cross a
+# bridge to get there.  All four men begin on the same side of the
+# bridge.  It is night. There is one flashlight.  A maximum of two people
+# can cross at one time.  Any party who crosses, either 1 or 2 people,
+# must have the flashlight with them. The flashlight must be walked back
+# and forth, it cannot be thrown, etc..  Each band member walks at a
+# different speed.  A pair must walk together at the rate of the slower
+# man's pace:
+#
+# Bono:  1 minute to cross
+# Edge:  2 minutes to cross
+# Adam:  5 minutes to cross
+# Larry: 10 minutes to cross
+#
+# For example: if Bono and Larry walk across first, 10 minutes have
+# elapsed when they get to the other side of the bridge.  If Larry then
+# returns with the flashlight, a total of 20 minutes have passed and you
+# have failed the mission.
+
+typename U2 = [|Bono|Edge|Adam|Larry|];
+
+sig speed : (U2) -> Int
+fun speed(member) {
+  switch (member) {
+    case Bono  -> 1
+    case Edge  -> 2
+    case Adam  -> 5
+    case Larry -> 10
+  }
+}
+
+sig memberToString : (U2) -> String
+fun memberToString(member) {
+  switch (member) {
+    case Bono  -> "Bono"
+    case Edge  -> "Edge"
+    case Adam  -> "Adam"
+    case Larry -> "Larry"
+  }
+}
+
+sig showMembers : ([U2]) ~> String
+fun showMembers(members) {
+  switch (members) {
+    case [] -> ""
+    case [member] -> memberToString(member)
+    case member :: members ->
+      memberToString(member) ^^ ", " ^^ showMembers(members)
+  }
+}
+
+typename Ordering = [|LT|EQ|GT|];
+
+# Compares members according the order in which they were declared in
+# type `U2'.
+sig compareMembers : (U2, U2) -> Ordering
+fun compareMembers(x, y) {
+  if (x == y) EQ
+  else {
+    switch ((x, y)) {
+      case (Bono,_) -> LT
+      case (_,Bono) -> GT
+      case (Larry,_) -> GT
+      case (_,Larry) -> LT
+      case (Adam,Edge) -> GT
+      case (Edge,Adam)  -> LT
+    }
+  }
+}
+
+# Either side of the bridge.
+typename Side = [U2];
+
+# Non-determinstic choice.
+sig choose : ([a]) {Choose:([a]) => a|_}-> a
+fun choose(xs) { do Choose(xs) }
+
+# Failure.
+sig fail : () {Fail:Zero|_}-> a
+fun fail() { switch (do Fail) { } }
+
+# Selects one or two to cross the bridge.
+sig selectParty : (Side) {Choose:(Side) => U2, Fail:Zero|_}~> [U2]
+fun selectParty(side) {
+  var m1 = choose(side);
+  var m2 = choose(side);
+  switch (compareMembers(m1, m2)) {
+    case EQ -> [m1]
+    case LT -> [m1, m2]
+    case _  -> fail()
+  }
+}
+
+fun max2(a,b) {
+  if (b > a) b
+  else a
+}
+
+# Computes the elapsed time.
+fun elapsedTime(side) {
+  fold_left(fun(z, x) { max2(z, speed(x)) }, 0, side)
+}
+
+# "Subtraction" on sets.
+fun without(xs, ys) {
+  filter(fun(y) { not(y `elem` xs) }, ys)
+}
+
+# The main loop.
+sig solve : (Bool, Int, ([U2], [U2])) {Choose:([U2]) => U2, Fail:Zero|_}~> [([U2], Bool)]
+fun solve(forward, timeLeft, sides) {
+  fun step(sideFrom, sideTo) {
+    var party = selectParty(sideFrom);
+    var elapsed = elapsedTime(party);
+    ignore(if (elapsed > timeLeft) fail() else ());
+    var sideFrom0 = without(party, sideFrom);
+    var sideTo0 = sideTo ++ party;
+    (party, forward) :: solve(not(forward), (timeLeft - elapsed), (sideTo0, sideFrom0))
+  }
+
+  switch (sides) {
+    case ([], sideTo) ->
+      if (forward) []
+      else step([], sideTo)
+    case (sideFrom, []) ->
+      if (not(forward)) []
+      else step(sideFrom, [])
+    case (sideFrom, sideTo) ->
+      step(sideFrom, sideTo)
+  }
+}
+
+fun solutions() {
+  handle(solve(true, 17, ([Bono, Edge, Adam, Larry], []))) {
+    case xs -> [xs]
+    case <Choose(members) => resume> ->
+      concatMap(resume, members)
+    case <Fail> -> []
+  }
+}
+
+fun printSolution(sol) {
+  switch (sol) {
+    case []-> ()
+    case (members, dir) :: sol ->
+      print(if (dir) "forward" else "back");
+      println(": " ^^ showMembers(members));
+      printSolution(sol)
+  }
+}
+
+fun printSolutions(sols) {
+  switch (sols) {
+    case [] -> ()
+    case sol :: sols ->
+      println("=== Solution ===");
+      printSolution(sol);
+      printSolutions(sols)
+  }
+}

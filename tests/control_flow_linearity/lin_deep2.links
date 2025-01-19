@@ -1,0 +1,23 @@
+# Using the linear variable `ch` in a deep handler is invalid
+
+var ch = fork(fun(ch) {
+    xlin;
+    var ch = send(42, ch);
+    close(ch)
+});
+
+handle({
+  xlin;
+  lindo Foo() + 42
+}) {
+  case _ -> {
+    xlin;
+    var (i, ch) = receive(ch);
+    close(ch);
+    i
+  }
+  case <Foo =@ k> -> {
+    xlin;
+    k(1)
+  }
+}

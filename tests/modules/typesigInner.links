@@ -1,0 +1,13 @@
+module A {
+    module B {
+        typename Foo = Int;
+    }
+
+    open B;
+    sig bar : (Foo) -> Foo
+    fun bar(x) {
+        x + 1
+    }
+}
+
+A.bar(10)

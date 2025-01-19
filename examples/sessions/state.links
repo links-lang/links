@@ -1,0 +1,53 @@
+typename State(a) = AP (!a.End);
+
+sig newCell : forall a::Any, e::Eff.(a) ~e~> State(a)
+fun newCell(v) {
+  var x = new();
+  var _ = spawn {close(send(v, accept(x)))};
+  x
+}
+
+sig put : (State(a), a) ~> ()
+fun put(x, v) {
+  var (_, s) = receive(request(x));
+  close(s);
+  var _ = spawn {close(send(v, accept(x)))};
+  ()
+}
+
+sig get : (State(a)) ~> a
+fun get(x) {
+  var (v, s) = receive(request(x));
+  close(s);
+  var _ = spawn {close(send(v, accept(x)))};
+  v
+}
+
+# an atomic swap operation
+sig swap : forall a::Any, e::Eff.(State(a), a) ~e~> a
+fun swap(x, w) {
+  var (v, s) = receive(request(x));
+  close(s);
+  var _ = spawn {close(send(w, accept(x)))};
+  v
+}
+
+# Landin's knot - this function loops forever
+sig forever : () ~> ()
+fun forever() {
+  var x = newCell(fun () {()});
+  put(x, fun () {get(x)()});
+  get(x)()
+}
+
+
+## Landin's knot - this function loops forever
+#sig forever0 : () ~> ()
+#fun forever0() {
+#  var x = newCell(linfun () {()});
+#  put(x, linfun () {get(x)()});
+#  get(x)()
+#}
+
+
+forever()

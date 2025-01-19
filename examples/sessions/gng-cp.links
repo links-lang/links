@@ -1,0 +1,14 @@
+fun main() {
+  fun giver(x,y,s) {
+    <| s[x].s[y].s(z).s().{z} |>
+  }
+
+  fun grabber(s) {
+    <| s(x).s(y).s[x+y].{s} |>
+  }
+
+
+  <| nu s. ({grabber(s)} | {giver(6,7,s)}) |>
+}
+
+main()

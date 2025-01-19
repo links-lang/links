@@ -1,0 +1,64 @@
+open import MvuEvents;
+
+typename Sub(a :: Type(Any, Any)) =
+  [| SubEmpty
+   | SubAppend: (Sub(a), Sub(a))
+   | SubEventHandler: EventHandler(a)  # Subscribe to a window event
+   | SubInterval: (Int, () {}~> a)     # Timing interval
+   | SubAnimationFrame: ((Int) {}~> a) # Animation frame (int is timestamp)
+   |];
+
+fun append(s1, s2) {
+  switch((s1, s2)) {
+    case (SubEmpty, s2) -> s2
+    case (s1, SubEmpty) -> s1
+    case (s1, s2) -> SubAppend(s1, s2)
+  }
+}
+
+op s1 +^ s2 { append(s1, s2) }
+
+fun concat(nodes) {
+  fold_right(fun(x, acc) { append(x, acc) }, SubEmpty, nodes)
+}
+
+sig onKeyboardEvent : forall a :: Type(Any, Any), e :: Row .
+  (String, (KeyboardEvent) {}~> Maybe(a)) -e-> Sub(a)
+fun onKeyboardEvent(evtName, f) {
+  var hdler =
+    KeyboardEventHandler(evtName, fun(evt) { f(evt) });
+  SubEventHandler(hdler)
+}
+
+fun onKeyDown(f) {
+  onKeyboardEvent("keydown", fun(x) { Just(f(x)) })
+}
+
+fun onKeyUp(f) {
+  onKeyboardEvent("keyup", fun(x) { Just(f(x)) })
+}
+
+fun onKeyPress(f) {
+  onKeyboardEvent("keypress", fun(x) { Just(f(x)) } )
+}
+
+sig onMouseEvent : forall a :: Type(Any, Any), e :: Row .
+  (String, (MouseEvent) {}~> Maybe(a)) -e-> Sub(a)
+fun onMouseEvent(evtName, f) {
+  var hdler =
+    MouseEventHandler(evtName, fun(evt) { f(evt) });
+  SubEventHandler(hdler)
+}
+
+fun onMouseMove(f) {
+  onMouseEvent("mousemove", f)
+}
+
+fun getEvery(interval, f) {
+  SubInterval(interval, f)
+}
+
+fun animationFrame(f) {
+  SubAnimationFrame(f)
+}
+

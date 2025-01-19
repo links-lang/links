@@ -1,0 +1,43 @@
+# Duality and recursive session types.
+
+# This example attempts to demonstrate that, perhaps by accident, Links does the right thing with
+# recursive session types and their duals.  We begin by defining two recursive session types:
+typename Forker = mu a.!~a.a;
+typename Forkee = mu a.?a.a;
+
+# That these are dual can be seen using either of the "correct" notions of duality---for instance,
+# if we say that ~(mu a.S) = mu a.~(S[~a/a]), following Baelde's work, then we have that
+#    ~(mu a.!~a.a) = mu a.~(!~(~a).~a)
+#                  = mu a.?a.a
+
+# The initiator of a fork bomb spawns copies of itself forever.
+sig f : (Forker) ~> ()
+fun f(c) {
+  var ap = new();
+  ignore(spawn {
+    var c = accept(ap);
+    f(c)
+  });
+  f(send(request(ap), c))
+}
+
+# The recipient receives copies forever; of course, it has to fork copies of itself to receive the
+# copies from the copies.
+sig g : (Forkee) ~> ()
+fun g(c) {
+  var (d,c) = receive(c);
+  ignore(spawn {
+    g(d)
+  });
+  g(c)
+}
+
+# If those are dual, we should be able to connect them via an access point.
+fun forever() {
+  var ap = new();
+  ignore(spawn{f(accept(ap))});
+  g(request(ap))
+}
+
+# And that this file typechecks indicates that duality and recursion are properly interacting.  (At
+# least as far as sending and receiving go.)

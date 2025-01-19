@@ -1,0 +1,139 @@
+#
+# An implementation of untyped Lambda calculus using effect handlers
+#
+# Idea: Introduction forms are abstract operations, and elimination
+#       forms are effect handlers. In our little calculus we have two
+#       introduction forms: lambdas and variables. There is one
+#       explicit elimination form, namely, application. Substitution
+#       acts as an implicit elimination form for variables.
+#
+#       There is a simple translation [[.]] from the abstract syntax
+#       of the untyped lambda calculus into abstract operations and
+#       effect handlers. First, let's fix some notation:
+#
+#       M,N ::= x    (variables)
+#            | \x.M  (lambdas)
+#            | M N   (application)
+#
+#       Given a carrier set A of values and signature E = {Lam: (Var) -> (), Var: (Var) -> (() -> a)},
+#       for a \in A. We write `do l' for the introduction of an operation `l':
+#
+#       [[x]]    = do Var(x)
+#       [[\x.M]] = do Lam(x); [[M]]
+#       [[M N]]  = app([[M]], [[N]])
+#
+#       where `app' is a multi-handler for `Lam' that implements the
+#       beta rule for call-by-value lambda calculus, i.e.
+#
+#          M --> (\x. M')   N --> V val
+#       --------------------------------- [beta]
+#                 M N --> M'[V/x]
+#
+#
+#       Substitution is a deep handler.
+
+# Variables are just strings...
+typename Var = String;
+
+# ... to ensure uniqueness of variable names, we make use of the
+# built-in `gensym' function.
+sig freshVar : (String) -> Var
+fun freshVar(pre) {
+  pre ^^ "_" ^^ intToString(gensym())
+}
+
+## Introduction forms
+sig lam : (Var) {Lam:(Var) => () |_}-> ()
+fun lam(x) {
+  do Lam(x)
+}
+
+sig var_ : (Var) {Var:(Var) => a |_}-> a
+fun var_(x) {
+  do Var(x)
+}
+
+sig lit : (a) -> Comp(a)
+fun lit(x)() { x }
+
+## Elimination forms
+
+# Due to the (current) lack of multi-handlers in Links, we are going
+# simulate them by reifying operations.
+typename Expr(a) = Comp(a, {Var:(Var) => Expr(a), Lam:(Var) => ()});
+typename Step(a) = [|Val:a
+                    |Lam:(Var, Expr(a))|];
+
+# The handler `step' big-steps a term to either a value or a
+# lambda-abstraction. Crucially, the handler is shallow such that the
+# effects of continuation of `Lam' can be handled by another handler.
+sig step : (Expr(a)) {Lam{_}, Var:(Var) => Expr(a)}~> Step(a)
+fun step(f) {
+  shallowhandle( f() ) {
+     case x    -> Val(x)
+     case <Lam(x) -> body> -> Lam(x, fun() { body(()) })
+  }
+}
+
+# Substitution handler M[V/x]
+sig subst : (Expr(a), Expr(a), Var) {Var: (Var) => Expr(a), Lam: (Var) => ()}~> a
+fun subst(m, v, x) {
+  handle( m() ) {
+    case <Var(y) => resume> ->
+      if (x == y) resume(v)
+      else resume(do Var(y))
+  }
+}
+
+# The following is our poor-man's multi-handler.
+sig app : (Expr(a), Expr(a)) -> Expr(a)
+fun app(m, n)() {
+  var f = step(m);
+  var v = step(n);
+  switch ((f, v)) {
+    case (Lam(x, body), Val(v)) -> # substitutes body[v/x]
+       subst(body, lit(v), x)
+    case (Lam(x, body0), Lam(y, body1)) -> # substitutes body0[\y.body1/x]
+       subst(body0, fun() { do Lam(y); body1() }, x)
+    case (_,_) -> error("Semantic error")
+  }
+}
+
+# A top-level handler to catch (some higher divine power forbid it)
+# unbound variables or unhandled lambdas.
+sig catchAll : (Expr(a)) {}~> a
+fun catchAll(f) {
+  handle( f() ) {
+    case <Var(y)> -> error("Unbound variable " ^^ y)
+    case <Lam(_)> -> error("Escaped Lam")
+  }
+}
+
+## Examples
+
+sig id : Expr(a)
+fun id() {
+  var x = freshVar("x");
+  lam(x); var_(x)()
+}
+
+sig add : Expr(Int)
+fun add() {
+  var x = freshVar("x");
+  var y = freshVar("y");
+  lam(x);
+    lam(y);
+      var_(x)() + var_(y)()
+}
+
+var add3 = app(add, lit(3));
+
+sig exThreePlusSeven : Comp(Int, {})
+fun exThreePlusSeven() {
+  catchAll(
+    app(
+     app(
+       app(id, add),
+       lit(3)),
+     lit(4)))
+}

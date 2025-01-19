@@ -1,0 +1,192 @@
+typename Zero = [||];
+
+typename Comp(e::Eff,a) = (() ~e~> a);
+
+sig runState :
+        (Comp ({Get:s,  Put:(s) => ()|e}, a)) ->
+  (s) -> Comp ({Get{_}, Put{_}         |e}, (a, s))
+fun runState(m)(s)() {
+  (handle(m()) {
+     case x -> fun (s) {(x, s)}
+     case <Get => k>    -> fun (s) {k(s)(s)}
+     case <Put(s) => k> -> fun (_) {k(())(s)}
+   })(s)
+}
+
+sig evalState :
+        (Comp ({Get:s,  Put:(s) => ()|e}, a)) ->
+  (s) -> Comp ({Get{_}, Put{_}         |e}, a)
+fun evalState(m)(s)() {
+  (handle(m()) {
+     case x -> fun (s) {x}
+     case <Get => k>    -> fun (s) {k(s)(s)}
+     case <Put(s) => k> -> fun (_) {k(())(s)}
+   })(s)
+}
+
+sig runStringWriter :
+             (Comp ({Tell:(String) => ()|e}, a)) ->
+  (String) -> Comp ({Tell{_}              |e}, (a, String))
+fun runStringWriter(m)(s)() {
+  (handle(m()) {
+     case x -> fun (s) {(x, s)}
+     case <Tell(t) => k> -> fun (s) {k(())(s ^^ t)}
+   })(s)
+}
+
+sig printer :
+  (Comp ({Tell:(String) => ()}, a)) {}~> a
+fun printer(m) {
+  handle(m()) {
+     case x -> x
+     case <Tell(s) => k> -> println(s); k(())
+  }
+}
+
+sig get : () {Get:s|_}~> s
+fun get() {do Get}
+
+sig put : (s) {Put:(s) => ()|_}~> ()
+fun put(s) {do Put(s)}
+
+sig tell : (String) {Tell:(String) => ()|_}~> ()
+fun tell(s) {do Tell(s)}
+
+typename Expr =
+  [| Lit : Int
+   | Var : String
+   | Plus : (Expr, Expr)
+   | Assign : (String, Expr)
+   | Sequence : [Expr]
+   | While : (Expr, Expr)
+   |];
+
+fun showExpr(e) {
+  switch (e) {
+    case Lit(i)        -> intToString(i)
+    case Var(x)        -> x
+    case Plus(l, r)    -> "(" ^^ showExpr(l) ^^ ")+(" ^^ showExpr(r) ^^ ")"
+    case Assign(x, e)  -> x ^^ " := " ^^ showExpr(e)
+    case Sequence(es)  ->
+      fun showExprs(es) {
+        switch (es) {
+          case []      -> ""
+          case [e]     -> showExpr(e)
+          case (e::es) -> showExpr(e) ^^ ", " ^^ showExprs(es)
+        }
+      }
+      "[" ^^ showExprs(es) ^^ "]"
+    case While(c, b)   -> "while (" ^^ showExpr(c) ^^ ") {" ^^ showExpr(b) ^^ "}"
+  }
+}
+
+typename SComp(e::Eff, a) =
+  Comp ({Suspend:(Expr, SComp({ |e}, a)) => a|e}, a);
+
+sig suspend :
+    (Expr) ->
+      (SComp({ |e}, a))
+        {Suspend:(Expr, SComp({ |e}, a)) => a|e}~> a
+fun suspend(e)(m) {do Suspend(e, m)}
+
+typename Env = [(String, Int)];
+fun showEnv(env) {
+  fun showEntry((x, i)) {x ^^ "=" ^^ intToString(i)}
+
+  fun showEntries(es) {
+    switch(es) {
+      case []      -> ""
+      case [e]     -> showEntry(e)
+      case (e::es) -> showEntry(e) ^^ "; " ^^ showEntries(es)
+    }
+  }
+  "{" ^^ showEntries(env) ^^ "}"
+}
+
+mutual {
+  sig bevalStep :
+    (Expr) -> SComp ({Get:Env, Put: (Env) => ()|e}, Int)
+  fun bevalStep(exp)() {
+    switch(exp) {
+      case Lit(x) -> x
+      case Var(x) ->
+        switch (lookup(x, get())) {
+          case Just(v) -> v
+          case Nothing -> error("variable: " ^^ x ^^ " not found!")
+        }
+      case Plus(l, r) -> beval(l) + beval(r)
+      case Assign(x, e) ->
+        var v = beval(e);
+        put ((x, v) :: get());
+        v
+      case Sequence([])    -> 0
+      case Sequence([e])   -> beval(e)
+      case Sequence(e::es) ->
+        ignore(beval(e)); beval (Sequence(es))
+      case While(c, b)     ->
+        if (beval(c) == 0) {
+          0
+        } else {
+          ignore(beval(b)); beval(exp)
+        }
+    }
+  }
+
+  sig beval : (Expr) {Get:Env,
+                      Put:(Env) => (),
+                      Suspend:(Expr, SComp({Get:Env,
+                                            Put:(Env) => ()|e}, Int)) => Int|e}~> Int
+  fun beval(e) {suspend(e)(bevalStep(e))}
+}
+
+var beval = fun (e)() {beval(e)};
+
+sig force :
+(SComp({          |e}, a)) ~>
+  Comp({Suspend{_}|e}, a)
+fun force(m)() {
+  handle(m()) {
+    case x        -> x
+    case <Suspend(e, m) => k> -> k (force(m)())
+  }
+}
+
+sig logger :  (SComp ({Tell:(String) => ()|e}, Int)) ->
+  (String) -> (SComp ({Tell:(String) => ()|e}, Int))
+fun logger(m)(name)() {
+  (handle(m()) {
+     case x        -> fun (_) {x}
+     case <Suspend(e, m) => k> ->
+       fun (name) {
+         tell("Entering " ^^ name ^^ " with " ^^ showExpr(e) ^^ "\n");
+         var y = suspend(e)(logger(m)(name));
+         tell("Exiting " ^^ name ^^ " with " ^^ intToString(y) ^^ "\n");
+         k(y)(name)
+       }
+   })(name)
+}
+
+sig dump : (SComp ({Get:Env, Tell:(String) => ()|e}, Int)) ->
+           (SComp ({Get:Env, Tell:(String) => ()|e}, Int))
+fun dump(m)() {
+  handle(m()) {
+     case x        -> x
+     case <Suspend(e, m) => k> ->
+       tell(showEnv(get()));
+       k(suspend(e)(dump(m)))
+  }
+}
+
+sig e1 : Expr
+var e1 = Plus (Lit(3), Lit(4));
+sig e2 : Expr
+var e2 = Plus (Assign("x", Lit(3)), Assign("y", Lit(4)));
+sig e3 : Expr
+var e3 = Plus (Plus(Assign ("x", Lit(3)), Assign("y", Lit(4))), Plus (Var("x"), Var("y")));
+
+fun test0(e) {printer(evalState (force (beval(e)))([]))}
+fun test1(e) {printer(evalState (force (logger (beval(e))("eval")))([]))}
+fun test2(e) {printer(evalState (force (dump (beval(e))))([]))}
+fun test3(e) {printer(evalState (force (dump (logger (beval(e))("eval"))))([]))}
+
+

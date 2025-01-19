@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+
+typecheck_tests_file="tests/typecheck_examples.tests"
+example_folder="examples"
+
+missing=""
+
+while read file; do
+    if ! grep  -q -E "^$file$" "$typecheck_tests_file"; then
+        # Only error if the file is tracked.
+        git ls-files --error-unmatch "$file" 2> /dev/null # Returns 1 when the file is untracked.
+        if [[ $? -ne 1 ]]; then
+            echo "FAILURE: Links example file $file is not mentioned in $typecheck_tests_file"
+            missing+="$file "
+        fi
+    fi
+done <<< "$(find "$example_folder" -iname "*.links")"
+
+if [[ $missing != "" ]]; then
+    echo ""
+    echo "To solve this problem, you may try adding the lines between (but not including)  the dashed lines below to $typecheck_tests_file."
+    echo "Note that all test specifications must be separated by a *single* empty line."
+    echo "This assumes that the examples do not need any special flags to run, otherwise you may wish to change the \"args\" line."
+    echo "-------------------------------------------------------"
+    first=0
+    for m in $missing; do
+        if [[ $first -eq 0 ]] ; then
+            first=1
+        else
+            echo ""
+        fi
+        echo "Typecheck example file $m"
+        echo "$m"
+        echo "filemode : args"
+        echo "args : --config=tests/typecheck_examples.tests.config"
+    done
+    echo "-------------------------------------------------------"
+    echo ""
+    exit 1
+else
+    echo "SUCCESS: All examples occur in $typecheck_tests_file"
+    exit 0
+fi

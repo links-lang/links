@@ -1,0 +1,178 @@
+# ToDo List
+
+
+typename Cmd = [|Add : String | Done : Int|];
+
+sig addNewItem : (String, Process( {hear : Cmd |_} )) ~> ()
+fun addNewItem(item, pId) client {
+    pId ! Add(item)
+}
+
+sig deleteItem : (Int, Process( {hear : Cmd |_} )) ~> ()
+fun deleteItem(id, pId) client {
+    pId ! Done(id)
+}
+sig itemsToXml : ([(Int, String)]) {hear:Cmd | _}~> Xml
+fun itemsToXml(items) client {
+    var pid = self();
+    <#>
+        {
+            for ((id, item) <- items){
+
+                <div class="list-item  rounded-corners center">
+                    <p class="text">{stringToXml(item)} </p>
+                    <button class="rounded-corners center done-button" l:onclick="{deleteItem(id, pid)}"> Done </button>
+                </div>
+            }
+
+        }
+    </#>
+}
+
+sig renderItemList : ([(Int, String)]) {hear: Cmd | %}~> ()
+fun renderItemList(items){
+    var list = getNodeById("item-list");
+    domReplaceChildren(itemsToXml(items), list)
+}
+
+sig todoProcess : ([(Int, String)], Int) {hear:Cmd|_}~> a
+fun todoProcess(prevList, nextId) client {
+    var cmd = recv();
+    var (items, nextId) = switch(cmd){
+        case Add(item) -> {
+            ((nextId, item) :: prevList, nextId+1)
+        }
+        case Done(id) -> {
+            (filter(
+                fun((itemId, _)){
+                    id <> itemId
+                }, prevList), nextId)
+        }
+    };
+    renderItemList(items);
+    todoProcess(items, nextId)
+
+}
+
+sig main_page : (_) ~> Page
+fun main_page(_) {
+    var pId = spawnClient{todoProcess([], 0)};
+
+    var todoList =
+        <#>
+            <div class="list  rounded-corners center">
+                <h1 class="centered-text bold-coloured-heading"> My ToDo-List </h1>
+                <div id="item-list">
+
+                </div>
+                <form l:onsubmit="{addNewItem(newItem, pId)}" class="form">
+                    <input  type="text" l:name="newItem" class="input-field rounded-corners center" />
+                    <input class="submit-button rounded-corners center" type="submit"/>
+                </form>
+            </div>
+        </#>;
+
+    page
+    <html>
+    <head>
+        <style>
+        body{{
+            font-size: 20px;
+            font-family: Bookman, sans-serif;
+        }}
+        .text{{
+            width: 80%;
+            float: left;
+        }}
+        .centered-text{{
+            text-align: center;
+        }}
+        .center{{
+            margin: 0 auto;
+        }}
+        .bold-coloured-heading{{
+            color: #00a075;
+            font-weight: bold;
+            font-size: 4em;
+        }}
+        .list{{
+            width: 65%;
+            min-width: 350px;
+            min-height: 600px;
+            background-color: #e8eaed;
+            padding: 1em;
+            border: 2px  solid #00a075;
+
+        }}
+        .list-item{{
+            margin-top: .4em;
+            margin-bottom: .4em;
+            min-width: 300px;
+            width: 90%;
+            min-height: 2em;
+            background-color: #f2f2f2;
+            color: #010b19;
+            border: 1px solid #00a075;
+            padding: .3em 5%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }}
+        .form{{
+            width: 100%;
+        }}
+        .input-field{{
+            width: 100%;
+            min-width: 300px;
+            min-height: 2em;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            display: inline-block;
+            background-color: #f2f2f2;
+            color: #010b19;
+            padding: .2em 5%;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+            font-size: 20px;
+
+        }}
+        .submit-button{{
+            width: 300px;
+            height: 50px;
+            background-color: #00a075;
+            color: white;
+            padding: 14px 20px;
+            margin-top: 10px;
+            border: none;
+            cursor: pointer;
+            display: inline-block;
+        }}
+        .submit-button:hover .done-button:hover{{
+            background-color: #028461;
+        }}
+        .done-button{{
+            background-color: #00a075;
+            width: 50px;
+            float: right;
+            padding: 5px 5px;
+            border: none;
+        }}
+        .rounded-corners{{
+            border-radius: 5px;
+        }}
+        </style>
+    </head>
+        <body>
+            {todoList}
+        </body>
+    </html>
+}
+
+sig main : () ~> ()
+fun main() {
+    addRoute("/", main_page);
+
+    servePages()
+}
+
+main()

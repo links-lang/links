@@ -1,0 +1,39 @@
+# Failure of sending
+
+fun goAlright() {
+  var ap = new(); # Yay synchronisation!
+  try {
+    var s = fork (fun (s) {
+      close(request(ap));
+      var (_, s) = receive(s);
+      close(s)
+    });
+    close(accept(ap));
+    close(send(5, s))
+  } as (_) in {
+    "send successful"
+  } otherwise {
+    "exception"
+  }
+}
+
+
+fun go() {
+  var ap = new(); # Yay synchronisation!
+  try {
+    var s = fork (fun (s) {
+      cancel(s);
+      close(request(ap))
+    });
+    close(accept(ap));
+    close(send(5, s))
+  } as (_) in {
+    "send successful"
+  } otherwise {
+    "exception"
+  }
+}
+
+go()
+#goBadly()
+#goAlright()

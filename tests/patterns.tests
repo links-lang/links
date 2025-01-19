@@ -1,0 +1,160 @@
+---
+args : --set=typecheck_ir=true
+---
+
+Nested variant matching [1]
+switch (A (A)) { case A (A) -> 0 case A (B) -> 1 }
+stdout : 0 : Int
+
+Nested variant matching [2]
+switch (A (A)) { case A (B) -> 0 case A (A) -> 1 }
+stdout : 1 : Int
+
+Constant patterns [1]
+switch (A (1)) { case A (0) -> 0 case A (1) -> 1 }
+stdout : 1 : Int
+
+Constant patterns [2]
+switch (A (1)) { case A (0) -> 0 case _ -> 1 }
+stdout : 1 : Int
+
+Constant patterns [3]
+switch (A (1)) { case A (0) -> 0 case A (x) -> 1 }
+stdout : 1 : Int
+
+Default pattern
+switch (A) { case _ -> 0 }
+stdout : 0 : Int
+
+Integer pattern
+switch (0) { case x -> x+1 }
+stdout : 1 : Int
+
+List pattern
+switch (A ([])) { case A (_::_) -> 0 case A ([]) -> 1 }
+stdout : 1 : Int
+
+Open record pattern
+fun (r) {switch (r) {case (l=l|s) -> s}}
+stdout : @fun : \(\(l:_\|([a-z])::Any\)\) -> \(l-\|\1::Any\)
+
+HasType pattern [1]
+switch (1) {case (0:Int) -> 0 case (1:Int) -> 1}
+stdout : 1 : Int
+
+HasType pattern [2]
+switch (1) {case (1:Int) -> 1 case (x:String) -> 0}
+stderr : @..*
+exit : 1
+
+HasType pattern [3]
+switch (A) {case A -> 0 case -A:[|B:[|C:String|]|] -> 1}
+stdout : 0 : Int
+
+HasType pattern [4]
+switch (A) {case A -> 0 case B(C(x:String)) -> 1}
+stdout : 0 : Int
+
+As pattern
+switch (1) {case 1 as x -> x}
+stdout : 1 : Int
+
+Absence typing in variant patterns
+fun f(x) {switch (x) {case A(B) -> B case A(-B as y) -> A(f(y))}} f
+stdout : @fun : \(\[||\(mu ([a-z]+) . A:\[\|B:\(\)\|\1\|\]\)|\]\) -> mu ([a-z]+) . \[\|A:\2 \| B:()\|[a-z]+\|\]
+
+Redundant pattern [1]
+fun (x) { switch (x) { case x -> x case A -> A }}
+stderr : @..*
+exit : 1
+ignore : Awaiting decision about what we want Links to guarantee
+
+Redundant pattern [2]
+fun (x) { switch (x) { case x -> A(1) case A -> A('2') } }
+stderr : @..*
+exit : 1
+
+Redundant pattern [3]
+fun (x) {switch (x) { case(A(B(C(1,2,3)))) -> 0 case(A(B(C(1,2,3)))) -> 1}}
+stderr : @..*
+exit : 1
+ignore : Awaiting decision about what we want Links to guarantee
+
+Type-based redundant pattern
+fun (x) {switch (x) { case(true) -> 0 case(false) -> 1 case(y) -> 2}}
+stdout : fun : (Bool) -> Int
+
+Pattern matching twice against the same expression
+fun (x) {(switch (x) {case A -> 0 case _ -> 1}) + (switch (x) {case A -> 0 case _ -> 1})}
+stdout : @fun : \(\[\|A\|_\|\]\) -> Int
+
+Negative pattern [1]
+fun (-Foo) { () }
+stdout : fun : ([|Foo:_::Any|_::Any|]) -> ()
+
+Negative pattern [2]
+(fun (-Foo) { () })(Bar)
+stdout : () : ()
+
+Negative pattern [3]
+(fun (-Foo) { () })(Foo)
+stderr : @..*
+exit : 1
+
+Negative pattern [4]
+fun (-(Foo,Bar,Baz)) { () }
+stdout : fun : ([|Bar:_::Any|Baz:_::Any|Foo:_::Any|_::Any|]) -> ()
+
+Negative pattern [5]
+(fun (-(Foo,Bar,Baz)) { () })(Bar)
+stderr : @..*
+exit : 1
+
+Negative pattern [6]
+(fun (-(Foo,Bar,Baz)) { () })(Baz)
+stderr : @..*
+exit : 1
+
+Negative pattern [5]
+(fun (-(Foo,Bar,Baz)) { () })(Foo)
+stderr : @..*
+exit : 1
+
+Negative pattern [6]
+(fun (-(Foo,Bar,Baz)) { 42 })(Quux)
+stdout : 42 : Int
+
+Negative pattern [7]
+(fun() { var -Foo = Foo; () })()
+stderr : @..*
+exit : 1
+
+Negative pattern [8]
+(fun() { var -(Foo,Bar,Baz) = Bar; () })()
+stderr : @..*
+exit : 1
+
+Negative pattern [9]
+(fun() { var -(Foo,Bar,Baz) = Quux; 42 })()
+stdout : 42 : Int
+
+Negative pattern [10]
+fun(-Foo as r) { r }
+stdout : fun : ([|Foo:_::Any|b::Any|]) -> [|Foo-|b::Any|]
+
+Negative pattern [11]
+(fun(x) { switch(x) { case (-(Foo, Bar, Baz) as x) -> x case _ -> Quux }})(Foo)
+stdout : Quux : [|Bar-|Baz-|Foo-|Quux|_|]
+
+Negative pattern [12]
+(fun(x) { switch(x) { case (-(Foo, Bar, Baz) as x) -> x case _ -> Quux }})(FooBar)
+stdout : FooBar : [|Bar-|Baz-|Foo-|FooBar|Quux|_|]
+
+Presence polymorphism 1 [13]
+(fun (x : [|Foo| Bar{p}|]) { switch(x) {case Foo -> 1 case _ -> 2  }} )
+stdout : fun : ([|Bar{_}|Foo|]) -> Int
+
+Presence polymorphism 2 [14]
+(fun (x : [|Foo| Bar{p}|]) { switch(x) {case Bar -> 1 case _ -> 2  }} )
+stderr : @.*Type error.*
+exit : 1

@@ -1,0 +1,99 @@
+typename DragSelect = mu a.[+|MouseDown:!DomNode.a, MouseOut:!DomNode.a, MouseUp:a|+];
+typename DragOffer  = mu a.[&|MouseDown:?DomNode.a, MouseOut:?DomNode.a, MouseUp:a|&];
+
+sig waiting : (String, DragOffer) ~> ()
+fun waiting(id, s) client {
+  offer (s) {
+    case MouseDown(s) ->
+      var (elem, s) = grab(s);
+      if (isElementNode(elem) && (parentNode(elem) == getNodeById(id)))
+        dragging(id, elem, s)
+      else
+        waiting(id, s)
+    case MouseUp(s)   -> waiting(id, s)
+    case MouseOut(s)  -> var (toElem, s) = grab(s); waiting(id, s)
+  }
+}
+
+sig dragging : (String, DomNode, DragOffer) ~> ()
+fun dragging(id, elem, s) {
+  offer(s) {
+    case MouseUp(s)   -> waiting(id, s)
+    case MouseDown(s) -> var (elem, s) = grab(s);
+      if (isElementNode(elem) && (parentNode(elem) == getNodeById(id)))
+        dragging(id, elem, s)
+      else
+        waiting(id, s)
+    case MouseOut(s)  -> var (toElem, s) = grab(s);
+      if (isElementNode(toElem) && (parentNode(toElem) == getNodeById(id))) {
+        swapNodes(elem, toElem);
+        dragging(id, elem, s)
+      } else {
+        dragging(id, elem, s)
+      }
+  }
+}
+
+fun format(text) {
+    <li style="color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1;
+               border:1px solid #C5DEA1; cursor: move; margin: 0px;">
+    {stringToXml(text)}</li>
+}
+
+sig draggableList : (String, [String]) ~> Xml
+fun draggableList(id, items)
+{
+  var ap = new();
+
+  var manager = spawn {
+    fun manage(c) {
+      var s = accept(ap);
+      manage(<|case s {
+        MouseUp   : MouseUp c.{c};
+        MouseDown : s(elem).MouseDown c.c[elem].{c};
+        MouseOut  : s(elem).MouseOut c.c[elem].{c}
+      }|>)
+    }
+
+    manage(fork (linfun (s) {waiting(id, s)}));
+  };
+
+  fun mouseUp() {
+    var c = request(ap);
+    <|MouseUp c.{()}|>
+  }
+
+  fun mouseDown(elem) {
+    var c = request(ap);
+    <|MouseDown c.c[elem].{()}|>
+  }
+
+  fun mouseOut(toElem) {
+    var c = request(ap);
+    <|MouseOut c.c[toElem].{()}|>
+  }
+
+  <ul id="{id}"
+      style="width: 200px;
+             list-style-image: url(http://script.aculo.us/images/bullet.gif)"
+      l:onmouseup     = "{mouseUp()}"
+      l:onmouseuppage = "{mouseUp()}"
+      l:onmousedown   = "{mouseDown(getTarget(event))}"
+      l:onmouseout    = "{mouseOut(getToElement(event))}">{
+   for (item <- items)
+        format(item)
+  }</ul>
+}
+
+page
+ <html>
+ <body>
+ <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Bears</h2>
+ {draggableList("bears",["Pooh", "Paddington", "Rupert", "Edward"])}
+ <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Beers</h2>
+ {draggableList("beers",["Budvar", "Delirium Tremens", "Deuchars"])}
+ <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Boars</h2>
+ {draggableList("boars",["Sus scrofa scrofa","Sus scrofa ussuricus",
+                         "Sus scrofa cristatus","Sus scrofa taiwanus"])}
+ </body>
+ </html>

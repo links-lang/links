@@ -1,0 +1,103 @@
+typename Domain = String;
+typename Error = String;
+typename Success = String;
+typename Address = String;
+typename Message = String;
+typename Subject = String;
+
+typename SMTPServer = [&|EHLO:?Domain.[+|REJECT:!Error.EndBang, ACCEPT:[&|MAIL:?Address.[+|REJECT:!Error.EndBang, ACCEPT:[&|RCPT:?Address.[+|REJECT:!Error.EndBang, ACCEPT:[&|DATA:?Subject.?Message.[+|REJECT:!Error.EndBang, ACCEPT:!Success.EndBang|+]|&]|+]|&]|+]|&]|+]|&];
+
+
+sig mailServer : (SMTPServer) ~> EndBang
+fun mailServer(s) client {
+
+<| offer s {
+    case EHLO -> s(domain). {
+    <| ACCEPT s. {
+       <| offer s {
+          case MAIL -> s(address). {
+               <| ACCEPT s. {
+                  <| offer s {
+                     case RCPT -> s(rcpt). {
+                          <| ACCEPT s. {
+                             <| offer s {
+                                case DATA -> s(subject).s(message). {
+                                     <| ACCEPT s.s["Success! Mail sent."].s[] |>
+                                }
+                              } |>
+                           } |>
+                      }
+                   } |>
+                } |>
+           }
+        } |>
+    } |>
+  }
+ } |>
+}
+
+sig parseServerAnswer : (String) ~> Int
+fun parseServerAnswer(packet) client {
+    var charred = explode(packet);
+    var charredStatus = [selectElem(charred, 0), selectElem(charred, 1), selectElem(charred, 2)];
+    var intStatus = stringToInt(implode(charredStatus));
+    intStatus
+}
+
+sig mailClient : (~SMTPServer, !String.EndBang, (1:String, 2:String, 3:String, 4:String)) ~> EndBang
+fun mailClient(c, return, mail_form) client {
+
+<| EHLO c.c["mydomain.com"].{
+    <| offer c {
+        case REJECT -> c(error).c().return[error].return[]
+        case ACCEPT ->
+             MAIL c.c[mail_form.1]. {
+               <| offer c {
+                    case REJECT -> c(error).c().return[error].return[]
+                    case ACCEPT ->
+                         RCPT c.c[mail_form.2]. {
+                            <| offer c {
+                                case REJECT -> c(error).c().return[error].return[]
+                                case ACCEPT ->
+                                     DATA c.c[mail_form.3].c[mail_form.4]. {
+                                        <| offer c {
+                                            case REJECT -> c(error).c().return[error].return[]
+                                            case ACCEPT -> c(success).c().return[success].return[]
+                                           } |>
+                                      }
+                               } |>
+                          }
+                } |>
+              }
+      } |>
+
+  } |>
+}
+
+sig startCommunication : (String, String, String, String) ~> String
+fun startCommunication(sender, recipient, subject, message) client {
+    var mail_form = (sender, recipient, subject, message);
+    runSync (fun(return){<| nu s.({mailServer(s)}|{mailClient(s, return, mail_form)}) |>})
+}
+
+page
+    <html>
+    <head><title>SMTP Client</title></head>
+    <body bgcolor="#e3e2dd">
+
+    <form l:onsubmit="{domReplaceChildren(stringToXml(startCommunication(sender, recipient, subject, message)), getNodeById("result"))}">
+    From:<br />
+    <input type="text" size="30" value="someone@staffmail.inf.ed.ac.uk" l:name="sender" /><br />
+    To:<br />
+    <input type="text" size="30" value="starlight@dust" l:name="recipient" /><br />
+    Subject:<br />
+    <input type="text" size="30" value="Test mail" l:name="subject" /><br />
+    Message:<br />
+    <textarea l:name="message" rows="6" cols="34">Hi! How are you?</textarea><br />
+    <button type="submit">Send</button>
+    </form>
+
+    <p id="result"></p>
+
+    </body>
+    </html>

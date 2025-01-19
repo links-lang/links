@@ -1,0 +1,99 @@
+# With access points.
+
+typename WaitSelect   = mu a.[+|MouseDown:!DomNode.mu b.[+|MouseUp:a, MouseOut:!DomNode.b|+]|+];
+typename WaitOffer    = mu a.[&|MouseDown:?DomNode.mu b.[&|MouseUp:a, MouseOut:?DomNode.b|&]|&];
+
+typename DragSelect   = mu b.[+|MouseUp:[+|MouseDown:!DomNode.b|+], MouseOut:!DomNode.b|+];
+typename DragOffer    = mu b.[&|MouseUp:[&|MouseDown:?DomNode.b|&], MouseOut:?DomNode.b|&];
+
+mutual {
+  sig waiting : (String, WaitOffer) ~> ()
+  fun waiting(id, s) client {
+   offer (s) {
+    case MouseDown(s)  -> var (elem, s) = receive(s);
+        dragging(id, elem, s)
+   }
+  }
+
+  sig dragging : (String, DomNode, DragOffer) ~> ()
+  fun dragging(id, elem, s) {
+   offer(s) {
+    case MouseUp(s)          -> waiting(id, s)
+    case MouseOut(s)        -> var (toElem, s) = receive(s);
+
+     if (isElementNode(toElem) && (parentNode(toElem) == getNodeById(id))) {
+      swapNodes(elem, toElem);
+      dragging(id, elem, s)
+     } else dragging(id, elem, s)
+   }
+  }
+
+  sig manageWait : (String, WaitSelect) {:[|MouseUp|MouseDown:DomNode|MouseOut:DomNode|]|_}~> ()
+  fun manageWait(id, c) {
+    receive {
+        case MouseUp         -> manageWait(id, c)
+
+        case MouseDown(elem) -> if (isElementNode(elem) && (parentNode(elem) == getNodeById(id)))
+              manageDrag(id, send(elem, select MouseDown c))
+
+              else  manageWait(id, c)
+
+              case MouseOut(elem)  -> manageWait(id, c)
+    }
+    }
+
+  sig manageDrag : (String, DragSelect) {:[|MouseUp|MouseDown:DomNode|MouseOut:DomNode|]|_}~> ()
+  fun manageDrag(id, c) {
+
+    receive {
+        case MouseUp           -> manageWait(id, select MouseUp c)
+        case MouseDown(elem)   -> manageDrag(id, c)
+        case MouseOut(elem)    -> manageDrag(id, send(elem, select MouseOut c))
+    }
+  }
+}
+
+fun format(text) {
+    <li style="color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1;
+               border:1px solid #C5DEA1; cursor: move; margin: 0px;">
+    {stringToXml(text)}</li>
+}
+
+sig draggableList : (String, [String]) ~> Xml
+fun draggableList(id, items)
+{
+  var accessPoint = new();
+
+  var dragger = spawn { waiting(id, accept(accessPoint)) };
+
+  var manager = spawn {
+    manageWait(id, request(accessPoint))
+  };
+
+
+   <ul id="{id}" style="width: 200px;
+        list-style-image: url(http://script.aculo.us/images/bullet.gif)"
+      l:onmouseup   = "{manager ! MouseUp}"
+      l:onmouseuppage = "{manager ! MouseUp}"
+      l:onmousedown = "{manager ! MouseDown(getTarget(event))}"
+      l:onmouseout  = "{manager ! MouseOut(getToElement(event))}"
+   >
+    {for (item <- items)
+         format(item)}
+  </ul>
+}
+
+
+page
+ <html>
+ <body>
+ <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Bears</h2>
+ {draggableList("bears",["Pooh", "Paddington", "Rupert", "Edward"])}
+ <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Beers</h2>
+ {draggableList("beers",["Budvar", "Delirium Tremens", "Deuchars"])}
+ <h2 style="font: 42px/30px Georgia, serif; color: #7E9E50;">Great Boars</h2>
+ {draggableList("boars",["Sus scrofa scrofa","Sus scrofa ussuricus",
+                         "Sus scrofa cristatus","Sus scrofa taiwanus"])}
+ </body>
+</html>
+

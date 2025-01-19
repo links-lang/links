@@ -1,0 +1,44 @@
+var db = database "links";
+var staff = table "staff" with (name: String, dept: String) from db;
+var depts = table "depts" with (name: String, coffee_budget: Int) from db;
+
+fun setup() {
+  insert staff values (name, dept)
+    [(name = "Alice", dept = "mathematics"),
+     (name = "Bob", dept = "computer science"),
+     (name = "Carol", dept = "dentistry")];
+  insert depts values (name, coffee_budget)
+    [(name = "mathematics", coffee_budget = 10000),
+     (name = "computer science", coffee_budget = 20000),
+     (name = "dentistry", coffee_budget = 30000)]
+}
+
+fun queryBudgets() {
+  query flat {
+    for (s <-- staff)
+      for (d <-- depts)
+      where (d.name =~ /.*{s.dept}.*/)
+      [(name = s.name, dept = d.name, coffee_budget = d.coffee_budget)]
+  }
+}
+
+# Tests concatenation
+fun concatDepts() {
+  query flat {
+    for (d <-- depts)
+      [(dept = (d.name ^^ "foo"))]
+  }
+}
+
+fun main() {
+  setup();
+  assertEq(sortBy(fun(x) { x.name }, queryBudgets()),
+    [(name = "Alice", dept = "mathematics", coffee_budget = 10000),
+     (name = "Bob", dept = "computer science", coffee_budget = 20000),
+     (name = "Carol", dept = "dentistry", coffee_budget = 30000)]);
+  assertEq(sortBy(fun(x) { x.dept }, concatDepts()),
+    [(dept = "computer sciencefoo"),
+     (dept ="dentistryfoo"),
+     (dept = "mathematicsfoo")])
+}
+main()

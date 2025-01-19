@@ -1,0 +1,48 @@
+# Selection and Choice are redundant in Links
+
+typename CalcOptions = [|Add:?Int.?Int.!Int.End | Mul:?Int.?Int.!Int.End|];
+typename Calc  = ?CalcOptions.End;
+
+sig calc : (Calc) ~> ()
+fun calc(s) {
+  var (x, s) = receive(s);
+  close(s);
+  switch (x) {
+    case Add(s) ->
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      var s = send(x+y,s);
+      close(s)
+    case Mul(s) ->
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      var s = send(x*y,s);
+      close(s)
+  }
+}
+
+sig sel_Add : (~Calc) ~> !Int.!Int.?Int.End
+fun sel_Add(c) {linFork (linfun (d) {close(send(Add(d), c))})}
+
+sig sel_Mul : (~Calc) ~> !Int.!Int.?Int.End
+fun sel_Mul(c) {linFork (linfun (d) {close(send(Mul(d), c))})}
+
+sig user : (~Calc) ~> Int
+fun user(s) {
+  var s = sel_Mul(s);
+  var (x, s) = receive(send(6,send(7,s)));
+  close(s);
+  x
+}
+
+fun main() {
+  var a = new ();
+  var _ = spawn { calc(accept(a)) };
+  user(request(a))
+}
+
+main()
+
+
+#sig sel : ((s::Session) ~e~@ c::Any) -> (!c::Any.End) ~e~> ~s::Session
+#fun sel(f)(c) {knife (linfun (d) {ignore(send(f(d), c))})}

@@ -1,0 +1,12 @@
+fun mainPage() {
+  page
+    <html><body><h1>Hi!</h1></body></html>
+}
+
+fun main() {
+  addRoute("/", fun(_) { mainPage() });
+  serveWebsockets();
+  servePages()
+}
+
+main()

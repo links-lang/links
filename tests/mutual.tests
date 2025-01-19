@@ -1,0 +1,93 @@
+Lists (Correct)
+./tests/mutual/list.links
+filemode : true
+stdout : Cons(1, Cons(2, Cons(3, Nil))) : List (Int)
+
+Lists (Type argument mismatch)
+./tests/mutual/listWrong.links
+filemode : true
+stderr : @.*Type error.*
+exit : 1
+
+Lists (Map)
+./tests/mutual/listMap.links
+filemode : true
+stdout : Cons(2, Cons(3, Cons(4, Nil))) : List (Int)
+
+Odd and even numbers (1)
+./tests/mutual/oddEven.links
+filemode : true
+stdout : SuccO(SuccE(SuccO(Z))) : Odd
+
+Odd and even numbers (2)
+./tests/mutual/oddOrEven.links
+filemode : true
+stdout : false : Bool
+
+Only functions and typenames in mutual blocks
+./tests/mutual/badMutualBinding.links
+filemode : true
+stderr : @.*Only `fun` and `typename`.*
+exit : 1
+
+Unguarded recursive applications disallowed (1)
+./tests/mutual/unguarded1.links
+filemode : true
+stderr : @.*Type error.*
+exit : 1
+
+Unguarded recursive applications disallowed (2)
+./tests/mutual/unguarded2.links
+filemode : true
+stderr : @.*Type error.*
+exit : 1
+
+Type variables not shared in a mutual block
+./tests/mutual/tyvarSharingDisallowed.links
+filemode : true
+stderr : @.*Type error.*
+exit : 1
+
+Linearity (1)
+./tests/mutual/linearity1.links
+filemode : true
+stderr : @.*Type error.*
+exit : 1
+
+Linearity (2)
+./tests/mutual/linearity2.links
+filemode : true
+stdout : () : ()
+
+Linearity (3)
+./tests/mutual/linearity3.links
+filemode : true
+stdout : () : ()
+
+Duplicate type bindings disallowed
+./tests/mutual/duplicateType.links
+filemode : true
+stderr : @.*Duplicate mutually.*
+exit : 1
+
+Duplicate function bindings disallowed
+./tests/mutual/duplicateFun.links
+filemode : true
+stderr : @.*Duplicate mutually.*
+exit : 1
+
+Use structural unification if nominal unification fails
+./tests/mutual/structural.links
+filemode : true
+stdout : 123 : Int
+
+Use structural unification if nominal unification fails (type error)
+./tests/mutual/structural2.links
+filemode : true
+stderr : @.*Type error.*
+exit : 1
+
+Top level functions within a mutal do not share type variables
+./tests/mutual/sharedTyvar.links
+filemode : true
+stdout : () : ()

@@ -1,0 +1,12 @@
+(library
+  (name links_sqlite3)
+  (public_name links-sqlite3)
+  (synopsis "SQLite 3 database backend for Links")
+  (optional)
+  (libraries str sqlite3 links.core))
+
+
+(install
+  (section share)
+  (files   links_sqlite3_dependencies.json)
+  (package links-sqlite3))

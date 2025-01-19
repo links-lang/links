@@ -1,0 +1,6 @@
+(executable
+  (name links)
+  (public_name linx)
+  (package links)
+  (modes native)
+  (libraries unix threads.posix dynlink ANSITerminal linenoise links.core))

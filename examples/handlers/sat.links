@@ -1,0 +1,478 @@
+# Satisfiability testing
+
+typename Expr = [|Var:String
+                 |And:(Expr,Expr)
+                 |Or:(Expr,Expr)
+                 |Not:Expr
+                 |Const:Bool|];
+
+# Converts an expression into a string
+sig exprToString : (Expr) ~> String
+fun exprToString(expr) {
+   fun parens(s) { "(" ^^ s ^^ ")" }
+   switch (expr : Expr) {
+     case Var(name)    -> name
+     case And(e1,e2)   ->
+       switch((e1,e2)) {
+         case (Or(_,_),Or(_,_)) -> parens(exprToString(e1)) ^^ " && " ^^ parens(exprToString(e2))
+         case (Or(_,_),_)       -> parens(exprToString(e1)) ^^ " && " ^^ exprToString(e2)
+         case (_,Or(_,_))       -> exprToString(e1) ^^ " && " ^^ parens(exprToString(e2))
+         case _                 -> exprToString(e1) ^^ " && " ^^ exprToString(e2)
+       }
+     case Or(e1,And(_,_) as e2) -> exprToString(e1) ^^ " || " ^^ parens(exprToString(e2))
+     case Or(e1,e2)    ->
+       switch ((e1,e2)) {
+         case (And(_,_),And(_,_)) -> parens(exprToString(e1)) ^^ " || " ^^ parens(exprToString(e2))
+         case (And(_,_),_)        -> parens(exprToString(e1)) ^^ " || " ^^ exprToString(e2)
+         case (_,And(_,_))        -> exprToString(e1) ^^ " || " ^^ parens(exprToString(e2))
+         case _                   -> exprToString(e1) ^^ " || " ^^ exprToString(e2)
+       }
+     case Not(Var(_) as e) -> "~" ^^ exprToString(e)
+     case Not(Const(_) as e) -> "~" ^^ exprToString(e)
+     case Not(Not(_) as e) -> "~" ^^ exprToString(e)
+     case Not(e)       -> "~" ^^ parens(exprToString(e))
+     case Const(true)  -> "tt"
+     case Const(false) -> "ff"
+  }
+}
+
+# run
+sig run : (Comp(a)) ~> a
+fun run(m) {m()}
+
+# failure
+sig fail : forall a, e::Eff . () {Fail:Zero|e}-> a
+fun fail() {switch(do Fail) { }}
+
+sig maybe : (Comp(a, {Fail:Zero|e})) -> Comp(Maybe(a), { Fail{_} |e})
+fun maybe(m)() {
+  handle(m()) {
+    case x -> Just(x)
+    case <Fail>   -> Nothing
+  }
+}
+
+# left biased choice
+fun leftBiased(m)() {
+  handle(m()) {
+    case x -> x
+    case <Choose => k> ->
+      fun its(c)() {k(c)}
+      switch (run $ maybe(its(true))) {
+        case Just(x) -> x
+        case Nothing ->
+          switch (run $ maybe(its(false))) {
+            case Just(x) -> x
+            case Nothing -> fail()
+          }
+      }
+   }
+}
+
+# choice combinator
+sig choose : () {Choose: Bool |_}-> Bool
+fun choose() { do Choose }
+
+infixl 3 <|>;
+op lhs <|> rhs {
+  if (choose()) lhs()
+  else rhs()
+}
+
+# Returns a free variable, if any, in a given expression
+sig freeVariable : (Expr) -> Comp(Maybe(String), {Choose:Bool |_})
+fun freeVariable(expr)() {
+  switch (expr : Expr) {
+     case Const(_)   -> Nothing
+     case Var(name)  -> Just(name)
+     case Not(e)     -> freeVariable(e)()
+     case And(e1,e2) -> freeVariable(e1) <|> freeVariable(e2)
+     case Or(e1,e2)  -> freeVariable(e1) <|> freeVariable(e2)
+  }
+}
+
+# Guess valuation
+sig guessVariable : (String, Bool, Expr) ~> Expr
+fun guessVariable(x,val,expr) {
+    fun guess(expr) { guessVariable(x,val,expr) }
+
+    switch (expr : Expr) {
+      case Var(name)  ->
+        if (name == x) Const(val)
+        else Var(name)
+      case Not(e)     -> Not(guess(e))
+      case Or(e1,e2)  -> Or(guess(e1),guess(e2))
+      case And(e1,e2) -> And(guess(e1),guess(e2))
+      case expr  -> expr
+    }
+}
+
+sig isConstFalse : (Expr) -> Bool
+fun isConstFalse(expr) {
+  switch (expr) {
+    case Const(b) -> not(b)
+    case _        -> false
+  }
+}
+
+sig isConstTrue : (Expr) -> Bool
+fun isConstTrue(expr) {
+  switch (expr) {
+    case Const(b) -> b
+    case _        -> false
+  }
+}
+
+# Simplify expressions
+sig simplify : (Expr) ~> Expr
+fun simplify(expr) {
+    switch (expr : Expr) {
+      case Var(name) -> Var(name)
+      case Const(b)  -> Const(b)
+      case Not(e) ->
+         switch (simplify(e)) {
+           case Const(b) -> Const(not(b))
+           case e        -> Not(e)
+         }
+      case Or(e1,e2) ->
+        var exprs = filter(not -<- isConstFalse, [simplify(e1),simplify(e2)]);
+        if (any(isConstTrue, exprs)) { Const(true) }
+        else {
+          switch (exprs) {
+            case [] -> Const(false)
+            case [e] -> e
+            case [e1,e2] -> Or(e1,e2)
+          }
+        }
+      case And(e1,e2) ->
+        var exprs = filter(not -<- isConstTrue, [simplify(e1),simplify(e2)]);
+        if (any(isConstFalse, exprs)) { Const(false) }
+        else {
+          switch (exprs) {
+            case [] -> Const(true)
+            case [e] -> e
+            case [e1,e2] -> And(e1,e2)
+          }
+        }
+    }
+}
+
+# Extract the value from the Const constructor
+sig fromConst : (Expr) ~> Bool
+fun fromConst(expr) {
+  switch (expr) {
+    case Const(b) -> b
+    case _        -> error("Not Const: " ^^ exprToString(expr))
+  }
+}
+
+# Simple satisfiability checker
+sig satisfiable : (Expr) -> Comp(Bool, {Choose:Bool |e})
+fun satisfiable(expr)() {
+   switch (freeVariable(expr)()) {
+      case Nothing -> fromConst(expr)
+      case Just(name) ->
+        var trueGuess  = simplify(guessVariable(name, true, expr));
+        var falseGuess = simplify(guessVariable(name, false, expr));
+        satisfiable(trueGuess)() || satisfiable(falseGuess)()
+   }
+}
+
+##
+
+# Apply De Morgan's Laws to get rid of negations
+sig fixNegations : (Expr) ~> Expr
+fun fixNegations(expr) {
+  var f = fixNegations;
+  switch (expr) {
+    # Eliminate double negations
+    case Not(Not(e)) -> f(e)
+    # De Morgan's Laws
+    case Not(And(e1,e2)) -> Or(f(Not(e1)),f(Not(e2)))
+    case Not(Or(e1,e2))  -> And(f(Not(e1)),f(Not(e2)))
+    # Simplify constants
+    case Not(Const(b)) -> Const(not(b))
+    # Recurse
+    case Not(e)     -> Not(f(e))
+    case And(e1,e2) -> And(f(e1),f(e2))
+    case Or(e1,e2)  -> Or(f(e1),f(e2))
+    case e          -> e
+  }
+}
+
+# Distribute OR over AND
+sig distribute : (Expr) ~> Expr
+fun distribute(expr) {
+  var d = distribute;
+  switch (expr : Expr) {
+    # Distribute OR
+    case Or(e1,And(e2,e3)) ->
+       And(Or(d(e1),d(e2)),
+           Or(d(e1),d(e3)))
+    case Or(And(e1,e2),e3) ->
+       And(Or(d(e3),d(e1)),
+           Or(d(e3),d(e2)))
+    # Recurse
+    case Or(e1,e2)  -> Or(d(e1),d(e2))
+    case And(e1,e2) -> And(d(e1),d(e2))
+    case Not(e)     -> Not(d(e))
+    case e          -> e
+  }
+}
+
+# Convert an expression into CNF
+sig cnf : (Expr) ~> Expr
+fun cnf(expr) {
+  var e = distribute(fixNegations(expr));
+  if (e == expr) expr
+  else cnf(e)
+}
+
+sig ex1 : Expr
+var ex1 = Or(Var("a"),Not(And(Var("b"),Or(Var("a"),Var("c")))));
+
+fun check(e) {
+ var res = run -<- maybe -<- leftBiased $ satisfiable(cnf(simplify(e)));
+ switch (res) {
+   case Just(r) -> r
+   case Nothing -> error("Unhandled error.")
+ }
+}
+
+# Optimisations
+typename Polarity = [|Positive
+                     |Negative
+                     |Mixed|];
+
+sig literalPolarity : (Expr, String) -> Maybe(Polarity)
+fun literalPolarity(e,x) {
+  switch (e : Expr) {
+    case Var(y) -> if (x == y) Just(Positive)
+                    else Nothing
+    case Not(Var(y)) -> if (x == y) Just(Negative)
+                        else Nothing
+    case _ -> Nothing
+  }
+}
+
+####
+
+# Parsing
+typename Parser(a) = () {Choose: Bool, Satisfies: ((Char) {}~> Bool) => Char, Peek: Maybe(Char), Fail: Zero |_}~> a;
+typename ExprParser = Parser(Expr);
+
+sig satisfies : ((Char) {}~> Bool) -> Parser(Char)
+fun satisfies(pred)() {
+  do Satisfies(pred)
+}
+
+sig char : (Char) -> Parser(Char)
+fun char(c) { satisfies(fun(k) { k == c }) }
+
+sig peek : Parser(Maybe(Char))
+fun peek() { do Peek }
+
+sig succeed : (a) -> Parser(a)
+fun succeed(x)() { x }
+
+sig many : (Parser(a)) ~> Parser([a])
+fun many(p)() {
+  if (choose()) p() :: many(p)()
+  else []
+}
+
+sig many1 : (Parser(a)) -> Parser([a])
+fun many1(p)() {
+  p() :: many(p)()
+}
+
+sig while : (Parser(a)) ~> Parser(())
+fun while(p)() {
+  if (choose()) { ignore(p()); while(p)() }
+  else ()
+}
+
+sig isLetter : (Char) -> Bool
+fun isLetter(c) {
+     (ord(c) >= 65 && ord(c) <= 90)
+  || (ord(c) >= 97 && ord(c) <= 122)
+}
+
+sig parseLetter : Parser(Char)
+fun parseLetter() {
+  satisfies(isLetter)()
+}
+
+sig parseString : (String) -> Parser(String)
+fun parseString(str)() {
+   var cs = explode(str);
+   iter(fun(c) { ignore(run(char(c))) }, cs);
+   str
+}
+
+sig parseName : Parser(String)
+fun parseName() {
+  var cs = many1(parseLetter)();
+  implode(cs)
+}
+
+sig isWhitespace : (Char) -> Bool
+fun isWhitespace(c) {
+     ord(c) == ord(' ')
+  || ord(c) == ord('\t')
+  || ord(c) == ord('\n')
+}
+
+sig whitespace : Parser(())
+fun whitespace() { while(satisfies(isWhitespace))() }
+
+sig parens : (Parser(a)) -> Parser(a)
+fun parens(p)() {
+  ignore(char('(')());
+  ignore(whitespace());
+  var result = p();
+  ignore(char(')')());
+  ignore(whitespace());
+  result
+}
+
+sig parseEof : Parser(())
+fun parseEof() {
+  switch (peek()) {
+    case Nothing -> ()
+    case Just(_) -> fail()
+  }
+}
+
+# Grammar:
+# S ::= E EOF
+# E ::= E && E
+#   |   E || E
+#   |   ~E
+#   |   tt | ff | var
+#
+# Transformed grammar:
+#
+# E      ::= E_or EOF
+# E_or   ::= E_and || E_or
+#        |   E_and
+# E_and  ::= E_neg && E_and
+#        |   E_neg
+# E_neg  ::= ~E
+#        |   tt | ff | var
+
+mutual {
+  sig parseE : ExprParser
+  fun parseE() {
+    ignore(whitespace());
+    var expr = parseOr();
+    parseEof();
+    expr
+  }
+
+  sig parseOr : ExprParser
+  fun parseOr() {
+    var lhs = parseAnd();
+
+    switch (peek()) {
+      case Nothing -> lhs
+      case Just(c) ->
+        if (c == '|') {
+          ignore(parseString("||")());
+          ignore(whitespace());
+          var rhs = parseOr();
+          Or(lhs, rhs)
+        } else { lhs }
+    }
+  }
+
+  sig parseAnd : ExprParser
+  fun parseAnd() {
+    var lhs = parseNeg();
+
+    switch (peek()) {
+      case Nothing -> lhs
+      case Just(c) ->
+        if (c == '&') {
+          ignore(parseString("&&")());
+          ignore(whitespace());
+          var rhs = parseAnd();
+          And(lhs, rhs)
+        } else { lhs }
+    }
+  }
+
+  sig parseNeg : ExprParser
+  fun parseNeg() {
+    switch (peek()) {
+      case Nothing -> fail()
+      case Just(c) ->
+        if (c == '~') {
+          ignore(char('~')());
+          ignore(whitespace());
+          var expr = parseParenthesisedOrAtomicExpr();
+          Not(expr)
+        } else {
+          parseParenthesisedOrAtomicExpr()
+        }
+    }
+  }
+
+  sig parseAtomicExpr : ExprParser
+  fun parseAtomicExpr() {
+    var name = parseName();
+    ignore(whitespace());
+    switch (name) {
+      case "tt" -> Const(true)
+      case "ff" -> Const(false)
+      case name -> Var(name)
+    }
+  }
+
+  sig parseParenthesisedOrAtomicExpr : ExprParser
+  fun parseParenthesisedOrAtomicExpr() {
+    if (choose()) parens(parseOr)()
+    else parseAtomicExpr()
+  }
+
+  sig parse : (Parser(a, { |e}), [Char]) -> Comp(a, {Choose-,Satisfies-,Peek-,Fail: Zero |e})
+  fun parse(m, input)() {
+    handle(m())(tokens <- input) {
+      case x -> x
+      case <Peek => resume> ->
+         switch (tokens) {
+            case []        -> resume(Nothing, tokens)
+            case tok :: _  -> resume(Just(tok), tokens)
+         }
+      case <Satisfies(pred) => resume> ->
+         var pred = gen1(pred);
+         switch (tokens) {
+           case c :: tokens ->
+              if (pred(c)) resume(c, tokens)
+              else fail()
+           case _ -> fail()
+         }
+      case <Choose => resume> ->
+        switch(run $ maybe(fun() { resume(true, tokens) })) {
+          case Just(x) -> x
+          case Nothing ->
+             switch(run $ maybe(fun() { resume(false, tokens) })) {
+               case Just(x) -> x
+               case Nothing -> println("Parsing failed, left: " ^^ implode(tokens)); fail()
+             }
+        }
+    }
+  }
+}
+
+sig parseTextExpression : (String) ~> Maybe(Expr)
+fun parseTextExpression(textualInput) {
+  var parse = gen0(maybe(parse(parseE, explode(textualInput))));
+  parse()
+}
+
+fun unitTest() {
+   [ parseTextExpression(exprToString(ex1)) == Just(ex1)
+   , check(ex1)
+   ]
+}

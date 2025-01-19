@@ -1,0 +1,24 @@
+open import Comparators;
+open import BinaryTree;
+
+fun print_list(xs) {
+  fun print_list_inner(xs) {
+    switch(xs) {
+      case [] -> ""
+      case [x] -> intToString(x)
+      case x::xs -> intToString(x) ^^ "," ^^ print_list_inner(xs)
+    }
+  }
+  "[" ^^ print_list_inner(xs) ^^ "]"
+}
+
+fun test() {
+  var t = empty();
+  var t = add(intComparator, 3, t);
+  var t = add(intComparator, 2, t);
+  var t = add(intComparator, 1, t);
+  var t = add(intComparator, 4, t);
+  remove(intComparator, 3, t)
+}
+
+test()

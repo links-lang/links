@@ -1,0 +1,48 @@
+# A port of the simple counting benchmark from Kammar et al. (2013)
+
+sig evalState : (Comp({Get:s ,Put:(s) {}-> ()|e}, a)) -> # Stateful computation
+                (s) {Get{_},Put{_} |e}~> a
+fun evalState(m)(st) client {
+  var run =
+    handle(m) {
+      case x      -> fun(_) { x }
+      case <Get => resume>     -> fun(st) { resume(st)(st) }
+      case <Put(st) => resume> -> fun(s) { resume(())(st) }
+    };
+  run(st)
+}
+
+sig count : Comp({Get:Int,Put:(Int) {}-> ()|e}, Int)
+fun count() client {
+  var n = do Get;
+  if (n == 0) n
+  else { do Put(n-1); count() }
+}
+
+
+fun run(n) client {
+  var r = evalState(count)(n);
+  ignore $ domSetPropertyFromRef(getNodeById("result"), "value", intToString(r))
+}
+
+
+# Page
+fun mainPage(_) {
+  page
+    <html>
+      <body>
+        <form l:onsubmit="{run(1000000)}">
+          <input type="submit" value="Run" />
+          <input type="text" id="result" readonly="readonly" value="" />
+        </form>
+      </body>
+    </html>
+}
+
+
+fun main() {
+  addRoute("/", mainPage);
+  servePages()
+}
+
+main()

@@ -1,0 +1,5 @@
+open CyclicC;
+
+fun foo() {
+  baz()
+}

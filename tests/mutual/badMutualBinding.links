@@ -1,0 +1,5 @@
+mutual {
+  fun id(x) { x }
+  fun const(x, y) { x }
+  var bobsleigh = 5;
+}

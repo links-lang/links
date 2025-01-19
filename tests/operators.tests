@@ -1,0 +1,84 @@
+Addition and multiplication [1]
+10 + 20 * 30
+stdout : 610 : Int
+
+Addition and multiplication [2]
+20 * 30 + 10
+stdout : 610 : Int
+
+Plus and multiplication [3]
+(10 + 20) * 30
+stdout : 900 : Int
+
+Subtraction is left associative [1]
+3 - 2 - 1
+stdout : 0 : Int
+
+Subtraction is left associative [1]
+(3 - 2) - 1
+stdout : 0 : Int
+
+Subtraction is left associative [3]
+3 - (2 - 1)
+stdout : 2 : Int
+
+Unary minus
+(-1)
+stdout : -1 : Int
+
+Unary float minus
+(-.1.0)
+stdout : -1.0 : Float
+
+Addition, division, subtraction, and multiplication
+100 + 200 / 10 - 3 * 10
+stdout : 90 : Int
+
+Relational, logical, and arithmetic [1]
+88 > 32 && 42 <= 100 || 100 < 88 + 32 && 30 * 3 + 1 > 90
+stdout : true : Bool
+
+Relational, logical, and arithmetic [1]
+((88 > 32) && (42 <= 100)) || ((100 < 88 + 32) && (30 * 3 + 1 > 90))
+stdout : true : Bool
+
+Exponentiation and unary minus (TODO: result may be surprising. Decide whether to change precedence)
+-2^4
+stdout : 16 : Int
+
+Arithmetic [1]
+3 + 4 * 2 / ( 1 - 5 ) ^ 2 ^ 3
+stdout : 3 : Int
+
+Arithmetic [2]
+3 + ((4 * 2) / (( 1 - 5 ) ^ (2 ^ 3)))
+stdout : 3 : Int
+
+Arithmetic [3]
+2 / ( 1 - 5 ) ^ 2 ^ 3 * 4 + 3
+stdout : 3 : Int
+
+Arithmetic [4]
+3 + 2 / ( 1 - 5 ) ^ 2 ^ 3 * 4
+stdout : 3 : Int
+
+Arithmetic and function calls.
+sin((switch (max([2.0,3.0])) { case Just(f) -> f case Nothing -> 0.0 }) /. 3.0 *. 3.14)
+stdout : 0.00159265291649 : Float
+
+Infix application
+5 `elem` [1,2,3,4] || 3 `elem` [3] && 2 `elem` [1,2,3,4]
+stdout : true : Bool
+
+Cons (TODO: surprising that parentheses are required. Decide whether to change precedence)
+(2 ^ 0) :: (2 ^ 1) :: (2 ^ 2) :: (2 ^ 3) :: []
+stdout : [1, 2, 4, 8] : [Int]
+
+List concatenation
+1 :: [] ++ [] ++ 2 :: 3 :: 4 :: [] ++ 5 :: []
+stdout : [1, 2, 3, 4, 5] : [Int]
+
+Fixity tests
+tests/fixity.links
+filemode : true
+stdout : () : ()

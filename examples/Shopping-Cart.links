@@ -1,0 +1,333 @@
+# Shopping cart example
+
+typename Item = (name : String, quantity : Int, price : Float , id: Int);
+typename Cmd = [|Update : (Int, Int) | Delete : Int |];
+typename ActionableItem(e::Eff) = (item : Item, deleteAction : () ~e~> (), updateAction: () ~e~> ());
+
+var cartItems = [(name = "Apple", quantity = 5, price = 0.5, id = 0),
+            (name = "Lettuce", quantity = 1, price = 0.95, id = 1),
+            (name = "Water", quantity = 8, price = 0.2, id = 2),
+            (name = "Beef Steak", quantity = 2, price = 4.5, id = 3)];
+
+sig deleteItem : (Int, Process( {hear : Cmd} ))~> ()
+fun deleteItem(id, pId) client {
+    pId ! Delete(id)
+}
+
+sig isPosInt: (String) -> Bool
+fun isPosInt(n){
+    (n =~ /^[0-9]+$/)
+}
+
+fun isNegative(n) {
+  n =~ /-[0-9]+$/
+}
+
+sig getQuantityInput : (Int, Int) ~> Int
+fun getQuantityInput(id, prevQty) {
+    var newQty = getInputValue("quantity-field-" ^^ intToString(id));
+    print(newQty);
+    #if (isPosInt(newQty)){
+    if (not(isNegative(newQty))){
+        print("Accepted");
+        stringToInt(newQty)
+    } else{
+        print("Not Accepted");
+        prevQty
+    }
+}
+
+sig updateItem : (Item, Process( {hear : Cmd} )) ~%~> ()
+fun updateItem(item, pId) client{
+    pId ! Update(item.id, getQuantityInput(item.id, item.quantity))
+}
+
+sig attachActionToItems: ([Item], Process( {hear : Cmd} )) ~%~>  [ActionableItem({ |_})]
+fun attachActionToItems(items, pid){
+    map(fun(item) {
+            var del = fun() {
+                deleteItem(item.id, pid)
+            };
+            var upt = fun() {
+                updateItem(item, pid)
+            };
+            (item=item, deleteAction=del, updateAction=upt)
+    }, items)
+}
+
+sig getNDecimals : (Float, Int) -> (Int)
+fun getNDecimals(f, n){
+    floatToInt(
+        (f -. intToFloat(floatToInt(f))) *. intToFloat(10^n)
+        )
+}
+
+sig formatToPounds : (Float) ~> String
+fun formatToPounds(n){
+    "GBP " ^^ intToString(floatToInt(n)) ^^ "." ^^ intToString(getNDecimals(n, 2))
+}
+
+sig getTotalPrice : ([ActionableItem({ | _})]) ~%~> Float
+fun getTotalPrice(items){
+    fun loop(items, acc){
+        switch(items){
+            case [] -> acc
+            case item::items -> loop(items, acc +. (item.item.price *. intToFloat(item.item.quantity)))
+        }
+    }
+    loop(items, 0.0)
+}
+sig itemsToXml : ([ActionableItem({ |_})]) ~> Xml
+fun itemsToXml(items){
+    <#>
+        {
+            for ((item = item, deleteAction = deleteAction, updateAction = updateAction) <- items){
+                <div class="list-item width-list rounded-corners center">
+
+                    <div class="item-left">
+                        <div class="item-name">
+                            {stringToXml(item.name)}
+                        </div>
+                        <div class="under-name">
+                            <button class="rounded-corners delete-button button vertical-align" l:onclick="{deleteAction()}"> Delete </button>
+                            <p class="font-10 vertical-align">Unit Price: {stringToXml(formatToPounds(item.price))}</p>
+                        </div>
+                    </div>
+
+                    <div class="item-right">
+                        <div class="quantity">
+                            <input  type="text" value="{intToString(item.quantity)}" id="{"quantity-field-"^^intToString(item.id)}" class="input-field rounded-corners block center" />
+                            <button class="rounded-corners update-button block center button" l:onclick="{updateAction()}"> Update </button>
+                        </div>
+                        <div class="total-price block">
+                                <p>{stringToXml(formatToPounds(intToFloat(item.quantity) *. item.price))}</p>
+                        </div>
+                    </div>
+                </div>
+            }
+
+        }
+        <hr class="thin-grey center"/>
+        <div class="center width-list font-size-large final-price">
+            <p class="vertical-align text-align-right">Total Price: <span class="final">{stringToXml(formatToPounds(getTotalPrice(items)))}</span></p>
+        </div>
+    </#>
+}
+
+sig renderItemList : ([ActionableItem({ |_})]) {hear: Cmd | %}~> ()
+fun renderItemList(items){
+    var node = getNodeById("content");
+    domReplaceChildren(itemsToXml(items), node)
+}
+
+sig cartProcess : ([ActionableItem({ |_})]) {hear:Cmd|%}~> ()
+fun cartProcess(content) client{
+    renderItemList(content);
+    var cmd = recv();
+    var items = switch(cmd){
+        case Update(id, qty)->{
+            print(intToString(qty));
+            map(fun(actItem){
+                    if (actItem.item.id == id){
+                        var newItem = (actItem.item with quantity = qty);
+                        (item = newItem, deleteAction = actItem.deleteAction, updateAction = actItem.updateAction)
+                    } else{
+                        actItem
+                    }
+                }, content)
+        }
+        case Delete(id) -> {
+            filter(fun((item = item, deleteAction = _, updateAction= _)){
+
+                item.id <> id
+            }, content)
+        }
+    };
+    cartProcess(items)
+}
+
+
+
+
+sig main_page : (_) ~> Page
+fun main_page(_) {
+    var pId = spawnClient{cartProcess(attachActionToItems(cartItems, self()))};
+
+    page
+    <html>
+    <head>
+        <style>
+        body{{
+            font-size: 20px;
+            font-family: Bookman, sans-serif;
+            color: #3e0068;
+        }}
+        .background{{
+            width: 80%;
+            max-width: 1200px;
+            min-width: 300px;
+            background-color: #f3f2f4;
+            height: 100%;
+            margin-top: 1em;
+        }}
+        .top-heading{{
+            height: 5em;
+            min-height: 200px;
+            width: 75%;
+            margin: 1em auto;
+        }}
+        .top-heading img{{
+            height: 90%;
+            float: right;
+        }}
+        .top-heading p{{
+            font-size: 4em;
+            float: left;
+            width: 71%;
+            line-height: 100%;
+        }}
+        .centered-text{{
+            text-align: center;
+        }}
+        .center{{
+            margin: 0 auto;
+        }}
+        .font-size-large{{
+            font-size: 1.5em;
+        }}
+        .text-align-right{{
+            text-align: right;
+        }}
+        .center-vertical{{
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+        }}
+        .width-list{{
+
+            width: 80%;
+        }}
+        .margin-top{{
+            margin-top: 2em;
+        }}
+        .font-10{{
+            font-size: 15px;
+        }}
+        .block{{
+            display: block;
+        }}
+        .list-item{{
+            min-height: 2em;
+            background-color: #ffffff;
+            color: #010b19;
+            border: 1px solid #b8b8b8;
+            padding: .2em 1.1em;
+            clear: both;
+            overflow: hidden;
+        }}
+        .item-left{{
+            width: 50%;
+            float: left;
+        }}
+        .item-right{{
+            margin-top: 1.5em;
+            width: 50%;
+            float: right;
+        }}
+        .item-name{{
+            padding: .2em;
+            line-height:2em;
+            font-size: 1.5em;
+        }}
+        .under-name{{
+            overflow: hidden;
+        }}
+        .under-name p {{
+            float: right;
+        }}
+        .button{{
+            height: 30px;
+            width: 55px;
+        }}
+        .delete-button{{
+            margin-top: 12px;
+            float: left;
+            background-color: #fca22d;
+            height: 20px;
+        }}
+        .update-button{{
+            margin-top: 18px;
+            background-color: #3e0068;
+            color: #ffffff;
+        }}
+        .total-price{{
+            width: 50%;
+            float: right;
+            position: relative;
+        }}
+        .total-price p{{
+            top: 50%;
+            left: 50%;
+            text-align:center;
+            line-height:0;
+        }}
+        .final-price{{
+            padding: 0 1.1em;
+        }}
+        .final {{
+            width: 25%;
+            min-width: 50px;
+            overflow: hidden;
+            padding: 1em;
+        }}
+        .quantity{{
+            width: 50%;
+            float: left;
+        }}
+        .input-field{{
+            margin-bottom: 10px;
+            margin-top: 8px;
+            background-color: #f2f2f2;
+            color: #010b19;
+            padding: .1em 2%;
+            border: 1px solid #ccc;
+            font-size: 15px;
+            width: 30%;
+            min-width: 55px;
+        }}
+        .rounded-corners{{
+            border-radius: 5px;
+        }}
+        .thin-grey{{
+            height: 1px;
+            border: 0;
+            width: 90%;
+            border-top: 1px solid #b8b8b8;
+            margin-top: 1em;
+            margin-bottom: 2em;
+            padding: 0;
+        }}
+        </style>
+    </head>
+        <body>
+            <div class="background center margin-top">
+                <div class="top-heading">
+                    <p class= ""> Shopping Cart </p>
+                    <img class="" src="http://www.clker.com/cliparts/X/U/F/3/N/2/shopping-cart-logo.svg.hi.png" alt="LOGO"/>
+                </div>
+                <hr class="thin-grey center"/>
+                <div id="content">
+                </div>
+            </div>
+        </body>
+    </html>
+}
+
+
+sig main: () ~> ()
+fun main() {
+    addRoute("/", main_page);
+    servePages()
+}
+
+main()

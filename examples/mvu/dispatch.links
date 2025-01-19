@@ -1,0 +1,48 @@
+open import Mvu;
+import MvuHTML;
+import MvuAttrs;
+
+typename Msg = [| Incr |];
+
+typename Model = Int;
+
+fun incrModel(hndl) {
+    Mvu.dispatch(Incr, hndl)
+}
+
+fun view(model) {
+    open MvuAttrs;
+    open MvuHTML;
+
+    h1(a0, textNode(intToString(model)))
+}
+
+fun updt(msg, model) {
+    switch (msg) {
+        case Incr -> model + 1
+    }
+}
+
+fun mainPage() {
+    var hndl = runSimpleHandle("placeholder", 0, view, updt);
+    var _ = spawnClient {
+        dispatch(Incr, hndl);
+        dispatch(Incr, hndl);
+        dispatch(Incr, hndl)
+    };
+    page
+        <html>
+            <body>
+                <div id="placeholder"></div>
+            </body>
+        </html>
+}
+
+
+fun main() {
+    addRoute("/", fun(_) { mainPage() });
+    serveWebsockets();
+    servePages()
+}
+
+main()

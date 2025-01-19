@@ -1,0 +1,277 @@
+typename Address = String;
+typename Domain = String;
+typename Subject = String;
+typename MessageBody = String;
+
+typename Message = (sender:Address, recipients:[Address], subject:Subject, body:MessageBody);
+
+mutual {
+  typename SMTPServer =
+    [&|
+      HELO: ?Domain . [+| ACCEPT: ReceiveMail, REJECT: SMTPServer |+],
+      QUIT: EndBang
+    |&];
+
+  typename ReceiveMail =
+    [&|
+      MAIL:?Address.
+        [+|
+          REJECT: ReceiveMail,
+          ACCEPT: ReceiveRecipient
+        |+],
+      QUIT:EndBang
+    |&];
+
+  typename ReceiveBody =
+    [&|
+      RCPT: ?Address . [+| REJECT: ReceiveBody, ACCEPT: ReceiveBody |+],
+      DATA: ?Subject . ?MessageBody . ReceiveMail
+    |&];
+
+  typename ReceiveRecipient =
+    [&|
+      RCPT:?Address . [+| REJECT: ReceiveRecipient, ACCEPT:ReceiveBody |+]
+    |&];
+}
+
+### helper functions ###
+sig read : (Socket) ~> String
+fun read(socket) {
+  switch(readFromSocket(socket)) {
+    case Just(s) -> s
+    case Nothing -> read(socket)
+  }
+}
+
+sig write : (String, Socket) ~> ()
+fun write(s, socket) {
+  writeToSocket(s, socket)
+}
+
+sig parseServerAnswer : (String) ~> Int
+fun parseServerAnswer(packet) {
+  stringToInt(strsub(packet, 0, 3))
+}
+
+sig extractDomain : (String) ~> String
+fun extractDomain(address) {
+  address =~ s/[^@]*@//
+}
+
+### the server
+mutual {
+  sig mailServer : (SMTPServer) ~> EndBang
+  fun mailServer(s) {
+    var socket = connectSocket("smtp.inf.ed.ac.uk", 25);
+    var socket = fromJust(socket);
+    var welcomeMessage = read(socket);
+    println("S: " ^^ welcomeMessage);
+    offer(s) {
+      case HELO(s) ->
+        var (domain, s) = receive(s);
+        write("HELO " ^^ domain ^^ "\n", socket);
+        var smtpAnswer = read(socket);
+        println("S: " ^^ smtpAnswer);
+        var status = parseServerAnswer(smtpAnswer);
+        if (status <> 250) {
+          var s = select REJECT s;
+          println("S: " ^^ smtpAnswer);
+          mailServer(s)
+        } else {
+          var s = select ACCEPT s;
+          receiveMail(s, socket)
+        }
+      case QUIT(s) -> s
+    }
+  }
+
+  sig receiveMail : (ReceiveMail, Socket) ~> EndBang
+  fun receiveMail(s, socket) {
+    offer(s) {
+      case MAIL(s) ->
+        var (address, s) = receive(s);
+        write("MAIL FROM:<" ^^ address ^^ ">\n", socket);
+        var smtpAnswer = read(socket);
+        println("S: " ^^ smtpAnswer);
+        var status = parseServerAnswer(smtpAnswer);
+        if (status <> 250) {
+          var s = select REJECT s;
+          println("S: " ^^ smtpAnswer);
+          receiveMail(s, socket)
+        } else {
+          var s = select ACCEPT s;
+          receiveRecipient(s, socket)
+        }
+
+      case QUIT(s) ->
+        println("C: QUIT");
+        write("QUIT\n", socket);
+        var smtpAnswer = read(socket);
+        println("S: " ^^ smtpAnswer);
+        closeSocket(socket);
+        s
+    }
+  }
+
+  sig receiveRecipient : (ReceiveRecipient, Socket) ~> EndBang
+  fun receiveRecipient(s, socket) {
+    offer(s) {
+      case RCPT(s) ->
+        var (rcpt, s) = receive(s);
+        write("RCPT TO:<" ^^ rcpt ^^ ">\n", socket);
+        var smtpAnswer = read(socket);
+        println("S: " ^^ smtpAnswer);
+        var status = parseServerAnswer(smtpAnswer);
+        if (status <> 250) {
+          var s = select REJECT s;
+          println("S: " ^^ smtpAnswer);
+          receiveRecipient(s, socket)
+        } else {
+          var s = select ACCEPT s;
+          receiveBody(s, socket)
+        }
+    }
+  }
+
+  sig receiveBody : (ReceiveBody, Socket) ~> EndBang
+  fun receiveBody(s, socket) {
+    offer(s) {
+      case RCPT(s) ->
+        var (rcpt, s) = receive(s);
+        write("RCPT TO:<" ^^ rcpt ^^ ">\n", socket);
+        var smtpAnswer = read(socket);
+        println("S: " ^^ smtpAnswer);
+        var status = parseServerAnswer(smtpAnswer);
+        if (status <> 250) {
+          var s = select REJECT s;
+          println("S: " ^^ smtpAnswer);
+          receiveBody(s, socket)
+        } else {
+          var s = select ACCEPT s;
+          receiveBody(s, socket)
+        }
+      case DATA(s) ->
+        var (subject, s) = receive(s);
+        var (message, s) = receive(s);
+        write("DATA\n", socket);
+        var smtpAnswer = read(socket);
+        println("S: " ^^ smtpAnswer);
+        write("SUBJECT: " ^^ subject ^^ "\n", socket);
+        println("C: SUBJECT: " ^^ subject);
+        write(message ^^ "\n", socket);
+        println("C: " ^^ message);
+        write("\n.\n", socket);
+        println("C: .");
+        var smtpAnswer = read(socket);
+        println("S: " ^^ smtpAnswer);
+        receiveMail(s, socket)
+     }
+  }
+}
+###
+
+### the client
+mutual {
+  sig mailClient : (~SMTPServer, Message) ~> ()
+  fun mailClient(c, message) {
+    var domain = extractDomain(message.sender);
+    var c = send(domain, select HELO c);
+    println("C: HELO " ^^ domain);
+    offer (c) {
+      case REJECT(c) ->
+        mailClient(c, message)
+      case ACCEPT(c) ->
+        sendMail(c, message)
+    }
+  }
+  ###
+
+  sig sendMail : (~ReceiveMail, Message) ~> ()
+  fun sendMail(c, message) {
+    var c = send(message.sender, select MAIL c);
+    println("C: MAIL FROM:<" ^^ message.sender ^^ ">");
+
+    offer (c) {
+      case REJECT(c) ->
+        sendMail(c, message)
+      case ACCEPT(c) ->
+        sendRecipient(c, message)
+    }
+  }
+
+  sig sendRecipient : (~ReceiveRecipient, Message) ~> ()
+  fun sendRecipient(c, message) {
+    switch(message.recipients) {
+      case []    -> error("Messages must be sent to at least one recipient")(c)
+      case x::xs ->
+        var c = send(x, select RCPT c);
+        println("C: RCPT TO:<" ^^ x ^^ ">");
+        offer(c) {
+          case REJECT(c) ->
+            # ignore rejection
+            sendRecipient(c, (message with recipients=xs))
+          case ACCEPT(c) ->
+            sendBody(c, (message with recipients=xs))
+          }
+      }
+  }
+
+  sig sendBody : (~ReceiveBody, Message) ~> ()
+  fun sendBody(c, message) {
+    switch(message.recipients) {
+      case []    ->
+        var c = send(message.subject, select DATA c);
+        var c = send(message.body, c);
+        var c = select QUIT c;
+        wait(c);
+        ()
+      case x::xs ->
+        var c = send(x, select RCPT c);
+        println("C: RCPT TO:<" ^^ x ^^ ">");
+        offer (c) {
+          case REJECT(c) ->
+            # ignore rejection
+            sendBody(c, (message with recipients=xs))
+          case ACCEPT(c) ->
+            sendBody(c, (message with recipients=xs))
+        }
+
+    }
+  }
+}
+###
+
+sig startCommunication : (Message) ~> ()
+fun startCommunication(message) server {
+  mailClient(forkSync(mailServer), message)
+}
+
+var emailFormlet =
+  formlet
+    <#>
+      <div>Sender: {inputValue("foo@bar.com") -> sender}</div>
+      <div>Recipient: {input -> recipient}</div>
+      <div>Subject: {inputValue("Links SMTP test") -> subject}</div>
+      <div>{textarea("Hello ABCD.\nHow are you?") -> body}</div>
+      <div>{submitButton("Send") -> _}</div>
+    </#>
+  yields
+    (sender=sender, recipients=[recipient], subject=subject, body=body);
+
+mutual {
+  fun renderer(message) {
+    startCommunication(message);
+    mailUI()
+  }
+
+
+  fun mailUI() {
+    page
+      <html>
+       <body>
+         {emailFormlet => renderer}
+       </body>
+      </html>
+  }
+}
+mailUI()

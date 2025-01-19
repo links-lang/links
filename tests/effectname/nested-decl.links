@@ -1,0 +1,8 @@
+effectname A = {} ;
+effectname B(a,e::Eff) = { E:a | e } ;
+effectname C = { E': (Int) => () | B(Int, { | A })  } ;
+
+sig f : () -C-> ()
+fun f () { do E'(do E()) }
+
+f

@@ -1,0 +1,15 @@
+typename Calc = [&|Add:?Int.?Int.!Int.End, Mul:?Int.?Int.!Int.End|&];
+
+sig calc : (Calc) ~> ()
+fun calc(s) {
+  <| offer s {
+       case Add -> s(x).s(y).s[x+y].{close(s)}
+       case Mul -> s(x).s(y).s[x*y].{close(s)}} |>
+}
+
+sig user : (~Calc) ~> Int
+fun user(s) {
+  <| Mul s.s[6].s[7].s(z).{close(s); z} |>
+}
+
+user(fork (calc))

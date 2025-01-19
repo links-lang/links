@@ -1,0 +1,347 @@
+typename Author = (id:Int, name:String);
+typename Paper = (id:Int, title:String);
+
+var db = database "citations";
+
+var authorsTable = table "authors" with (id : Int, name : String) where id readonly from db;
+var papersTable = table "papers" with (id : Int, title : String) where id readonly from db;
+var paperauthorTable = table "paperauthor" with (paperid : Int, authorid : Int) from db;
+
+fun renderAuthor(author) {<b>{stringToXml(author.name)}</b>}
+fun renderPaper(paper) {<b>{stringToXml(paper.title)}</b>}
+
+var authorId = "author";
+var paperId = "paper";
+
+var authorLabel = "Author";
+var paperLabel = "Paper";
+
+sig distinct : ([(id:Int|r)]) ~> [(id:Int|r)]
+fun distinct(xs) {
+  fold_left(
+    fun (ys, x) {
+       switch (ys) {
+         case [] -> [x]
+         case (y::ys) ->
+           if(x.id == y.id) {y::ys} else {x::y::ys}
+       }
+    },
+    [],
+    xs)
+}
+
+
+sig header : (String) ~> Xml
+fun header(title) {
+  <head>
+   <title>{stringToXml(title)}</title>
+   <style>
+     .input {{ width:500px }}
+     .suggestions {{ text-align:left; width:500px;
+                     background-color:#ccccff }}
+   </style>
+  </head>
+}
+
+sig getPapersAndCollaborators : (Author) ~> ([Paper], [Author])
+fun getPapersAndCollaborators(author) server {
+  var papers =
+    query {
+      for (r <-- paperauthorTable)
+      where (r.authorid == author.id)
+       for (p <-- papersTable)
+       where (p.id == r.paperid)
+        [(id=p.id, title=p.title)]
+    };
+
+  # return all papers for which authorid is a co-author
+  fun lookupPapers(authorid) {
+    for (r <-- paperauthorTable)
+      where (r.authorid == authorid)
+      [(paperid=r.paperid)]
+  }
+
+  # return the authors of paper p satisfying the predicate f
+  fun lookupAuthors(p, f) {
+    for (r <-- paperauthorTable)
+      where (p.paperid == r.paperid && f(r.authorid))
+      [(id=r.authorid)]
+  }
+
+  # return the details for author c
+  fun lookupAuthorDetails(c) {
+    for (a <-- authorsTable)
+      where (c.id == a.id)
+      [(id=a.id, name=a.name)]
+  }
+
+  var collaborators =
+    query {
+      # papers written by author.id
+      var papers = lookupPapers(author.id);
+
+      # collaborators == authors \ {author.id}
+      var collaborators =
+        for (p <- papers)
+          lookupAuthors(p, fun (id) {id <> author.id});
+
+      for (c <- collaborators)
+        lookupAuthorDetails(c)
+     };
+
+
+#  var collaborators =
+#    query {
+#      for (r <-- paperauthorTable)
+#      for (q <-- paperauthorTable)
+#      for (a <-- authorsTable)
+#       where (r.authorid == author.id &&
+#              r.paperid == q.paperid && not (q.authorid == author.id) &&
+#              q.authorid == a.id)
+#         [(id=a.id, name=a.name)]
+#     };
+
+  (papers, distinct(collaborators))
+}
+
+
+sig getAuthors : (Paper) -> [Author]
+fun getAuthors(paper) server {
+  query {
+    for (r <-- paperauthorTable)
+    where (paper.id == r.paperid)
+     for (a <-- authorsTable)
+     where (r.authorid == a.id)
+      [(id=a.id, name=a.name)]
+  }
+}
+
+mutual {
+  sig formatPaperList : ([Paper]) ~> Xml
+  fun formatPaperList(papers) server {
+    for (p <- papers)
+      <#><a l:href="{showPaperInfo(p)}">{renderPaper(p)}</a><br/></#>
+  }
+
+  fun updateAuthor(author) server {
+    update (a <-- authorsTable)
+     where (a.id == author.id)
+     set (name=author.name);
+
+    showAuthorInfo(author)
+  }
+
+  sig showAuthorInfo : (Author) ~> Page
+  fun showAuthorInfo(author) server {
+    var (papers, collaborators) = getPapersAndCollaborators(author);
+
+    page
+     <html>
+      {header(author.name)}
+      <body>
+       <h1>{stringToXml(author.name)}</h1>
+       <form l:action="{updateAuthor((id=author.id, name=authorName))}" method="POST">
+         <input type="text" class="input" l:name="authorName" value="{author.name}"/>
+         <button type="submit">update name</button>
+       </form>
+       <h2>Papers</h2>
+       <div class="suggestions">{formatPaperList(papers)}</div>
+       <h2>Collaborators</h2>
+       <div class="suggestions">{formatAuthorList(collaborators)}</div>
+      </body>
+     </html>
+  }
+
+  fun updatePaper(paper) server {
+    update (p <-- papersTable)
+     where (p.id == paper.id)
+     set (title=paper.title);
+
+    showPaperInfo(paper)
+  }
+
+  sig showPaperInfo : (Paper) ~> Page
+  fun showPaperInfo(paper) server {
+    var authors = getAuthors(paper);
+
+    page
+     <html>
+      {header(paper.title)}
+      <body>
+       <h1>{stringToXml(paper.title)}</h1>
+       <form l:action="{updatePaper((id=paper.id, title=paperTitle))}" method="POST">
+         <input type="text" class="input" l:name="paperTitle" value="{paper.title}"/>
+         <button type="submit">update title</button>
+       </form>
+       <h2>Authors</h2>
+       <div class="suggestions">{formatAuthorList(authors)}</div>
+      </body>
+     </html>
+  }
+
+  sig formatAuthorList : ([Author]) ~> Xml
+  fun formatAuthorList(authors) server {
+    for (a <- authors)
+      <#><a l:href="{showAuthorInfo(a)}">{renderAuthor(a)}</a><br/></#>
+  }
+}
+
+
+sig completions : (String, String) ~> (Xml, Xml)
+fun completions(authorPrefix, paperPrefix) server {
+  var authors =
+    if (authorPrefix == "") []
+    else {
+      if (paperPrefix == "") {
+        query [10] {
+          for (a <-- authorsTable)
+           where (a.name =~ /^{authorPrefix}.*/)
+           orderby (a.name)
+            [(id=a.id, name=a.name)]
+        }
+      } else {
+        query [10] {
+          for (a <-- authorsTable)
+           orderby (a.name)
+           for (p <-- papersTable)
+           for (r <-- paperauthorTable)
+             where (a.name =~ /^{authorPrefix}.*/ &&
+                    p.title =~ /^{paperPrefix}.*/ &&
+                    p.id == r.paperid && r.authorid == a.id)
+              [(id=a.id, name=a.name)]
+        }
+      }
+    };
+
+  var papers =
+    if (paperPrefix == "") []
+    else {
+      if (authorPrefix == "") {
+        query [10] {
+          for (p <-- papersTable)
+           where (p.title =~ /^{paperPrefix}.*/)
+           orderby (p.title)
+            [(id=p.id, title=p.title)]
+        }
+      } else {
+        distinct(
+          query [10] {
+            for (p <-- papersTable)
+             orderby (p.title)
+              for (a <-- authorsTable)
+              for (r <-- paperauthorTable)
+                where (a.name =~ /^{authorPrefix}.*/ &&
+                       p.title =~ /^{paperPrefix}.*/ &&
+                       p.id == r.paperid && r.authorid == a.id)
+                 [(id=p.id, title=p.title)]
+         })
+      }
+    };
+
+  (formatAuthorList(authors), formatPaperList(papers))
+}
+
+sig suggest : (String, String) ~> ()
+fun suggest(authorPrefix, paperPrefix) client {
+  var (authorList, paperList) = completions(authorPrefix, paperPrefix);
+  domReplaceChildren(
+    authorList,
+    getNodeById(authorId)
+  );
+  domReplaceChildren(
+    paperList,
+    getNodeById(paperId)
+  )
+}
+
+fun main () {
+  # granularity of server requests
+  var w = 1;
+    fun startSuggester(manager) {
+      spawn {
+        fun suggester(a, p, t) {
+          receive {
+            case Change -> {
+              # in practice sleeping isn't necessary
+              # because JavaScript is so slow that sending the
+              # message back and forth has the desired effect
+              # but this is what the code should look like
+              var u = clientTimeMilliseconds();
+              if(u-t < w) { sleep(w-(u-t)) } else {()};
+
+              manager!GetCurrentState;
+              fun f() {
+                receive {
+                  case Change -> f()
+                  case Suggest(b, q) ->
+                    if(a <> b || p <> q) {suggest(b, q)} else {()};
+                    suggester(b, q, t)
+                }
+              }
+              f();
+              suggester(a, p, t)
+            }
+            case Suggest(b, q) ->
+              error("Didn't ask for a suggestion!")
+          }
+        }
+        var t = clientTimeMilliseconds();
+        suggester("", "", t)
+      }
+    }
+
+  var manager = spawnClient {
+    fun receiver(a, p, s) {
+      receive {
+        case Suggest(authorPrefix, paperPrefix) -> {
+          var suggester =
+            switch(s) {
+              case Some(suggester) -> suggester
+              case None -> startSuggester(self())
+            };
+
+          if(authorPrefix <> a || paperPrefix <> p)
+            {suggester!Change}
+# slow version
+#            {suggest(authorPrefix, paperPrefix)}
+          else {()};
+
+          receiver(authorPrefix, paperPrefix, Some(suggester))
+        }
+        case GetCurrentState ->
+          switch (s) {
+            case Some(suggester) -> suggester!Suggest(a, p); receiver(a, p, s)
+            case None -> error("No suggester!")
+          };
+          receiver(a, p, s)
+      }
+    }
+    receiver("", "", None)
+  };
+
+page
+  <html>
+   {header("Citations")}
+   <body>
+    <h1>Find authors and papers</h1>
+    <form l:onkeyup="{manager!Suggest(authorPrefix, paperPrefix)}">
+     <table>
+      <tr>
+       <td>{stringToXml(authorLabel)}:</td>
+       <td><input type="text" l:name="authorPrefix"
+                  class="input" autocomplete="off"/></td>
+      </tr>
+      <tr><td></td><td><div id="{authorId}" class="suggestions"/></td></tr>
+      <tr>
+       <td>{stringToXml(paperLabel)}:</td>
+       <td><input type="text" l:name="paperPrefix"
+                  class="input" autocomplete="off"/></td>
+      </tr>
+      <tr><td></td><td><div id="{paperId}" class="suggestions"/></td></tr>
+     </table>
+    </form>
+   </body>
+  </html>
+}
+
+main()

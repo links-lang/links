@@ -1,0 +1,179 @@
+# Representation that Book, Audio_Visual and Gadget are the subtypes of Product.
+# In this code, it does not make difference, since they all are Strings, but suppose
+# at some later point it will be possible to distinguish them and assign different features.
+
+typename Book         = String;
+typename Audio_Visual     = String;
+typename Gadget     = String;
+typename Product     = [| Book:Book | Audio_Visual:Audio_Visual | Gadget:Gadget|];
+
+
+# Again, it is possible to directly put Int in the session type. This bit only reflects the paper better.
+typename Card = Int;
+typename Lunchers = Card;
+
+
+# Address consists of a street, house number and a city (my interpretation).
+typename Address = (street:String, houseNo:Int, city:String);
+
+# My interpretation. Used for returning a sensible value to main().
+typename OrderSummary = String;
+
+# Session types for mother's choice.
+typename ShopOffer  = mu a.[&|Add:?Product.a, Remove:?Product.a, Checkout:?Card.?Address.![OrderSummary].End|&];
+typename ShopSelect = mu a.[+|Add:!Product.a, Remove:!Product.a, Checkout:!Lunchers.!Address.?[OrderSummary].End|+];
+
+# Session types for son's choice.
+typename SonSelect = [&|Choice:!Product.End|&];
+typename SonOffer  = [+|Choice:?Product.End|+];
+
+
+# A shipper. Is sent a channel to reach a customer, receives their address.
+fun shipper(s) client
+{
+    var (address, s) = receive(s);
+    var addressFull = "Street: " ^^ address.street ^^ ", House number: " ^^ intToString(address.houseNo) ^^ ", City: " ^^ address.city;
+    (addressFull, s)
+}
+
+
+# Convinces Links that any Product is also a String.
+fun turnProductToString(product) client
+{
+    switch(product) {
+        case Book(s) -> s
+        case Audio_Visual(s) -> s
+        case Gadget(s) -> s
+    }
+}
+
+# Turns a list of products into a single string.
+sig concatenateProducts : ([Product], String) ~> (String)
+fun concatenateProducts(products, fullList) client
+{
+    switch(products) {
+        case [] -> fullList
+        case x::xs -> concatenateProducts(xs, (turnProductToString(x) ^^ ". " ^^ fullList))
+    }
+}
+
+# Turns order summary into a single readable string.
+sig summariseOrder : (Int, String, [Product], String) ~> ([String])
+fun summariseOrder(card, address, products, removed) client
+{
+    [concatenateProducts(products, ""), removed, intToString(card), address]
+}
+
+# Removes sendn element.
+sig removeProduct : (Product, [Product]) ~> ([Product])
+fun removeProduct(item, products) client
+{
+    switch (products) {
+             case []    -> []
+             case x::xs -> if (item == x) xs
+                             else x::removeProduct(item, xs)
+  }
+}
+
+# A shop. Accepts orders and allows checkout.
+sig waitForClient : (ShopOffer, [Product], String) ~> ()
+fun waitForClient(s, orderedProducts, removedProducts) client
+{
+
+offer(s) {
+case Add(s) ->
+    var (item, s) = receive(s);                    # Accepts order for an item.
+    waitForClient(s, item::orderedProducts, removedProducts)
+
+case Remove(s) ->
+    var (item, s) = receive(s);
+    var updatedList = removeProduct(item, orderedProducts);
+
+    # See if the list is smaller (= an item to be removed was actually in a list).
+    if (length(updatedList) < length(orderedProducts))
+       waitForClient(s, updatedList, removedProducts ^^ turnProductToString(item) ^^ ". ")
+    else
+       waitForClient(s, orderedProducts, removedProducts)
+
+
+case Checkout(s) ->
+    var (card, s)    = receive(s);        # Take credit card information.
+    var (addressFull, s) = shipper(s);    # Contact shipper, send it the channel to receive address.
+
+    var summary = summariseOrder(card, addressFull, orderedProducts, removedProducts);
+    close(send(summary, s))
+    }
+}
+
+# Waits for signal to be able to choose and picks out the product.
+sig waitForSon : (SonSelect) ~> ()
+fun waitForSon(c) client
+{
+    offer(c) {
+        case Choice(c) -> close(send(Gadget("LED Water Speakers"), c))
+    }
+}
+
+# Sends a signal that it is time to choose a product.
+sig getSonBook : (SonOffer) ~> (Product)
+fun getSonBook(s) client
+{
+    var (choice, s) = receive(select Choice s);
+  close(s);
+    choice
+}
+
+# Mom picks out the products, allows the son to do it, goes to checkout.
+sig orderBooks : (ShopSelect) ~> ([String])
+fun orderBooks(c) client
+{
+    var myAddress = (street="Princes Street", houseNo=14, city="Edinburgh");
+
+    # "Mom's choice".
+    var c = send(Book("Alice in Wonderland"), select Add c);
+    var c = send(Audio_Visual("The Hitchhiker's Guide to the Galaxy"), select Add c);
+
+    # "Son's choice".
+    var choice = getSonBook(fork(waitForSon));
+
+    # Add son's choice.
+    var c = send(choice, select Add c);
+
+    # Remove second mom's book.
+    var c = send(Audio_Visual("The Hitchhiker's Guide to the Galaxy"), select Remove c);
+    var c = send(Book("Rainbow Ponies"), select Remove c); # This was never ordered, should not show up in removed list.
+
+    var c = send(myAddress, send(8753, select Checkout c));
+    var (summary, c) = receive(c);
+  close(c);
+    summary
+}
+
+# Creates a new access point and binds the ends of the channel to appropriate functions.
+sig main : () ~> ()
+fun main() client
+{
+    var order = orderBooks(fork(fun(s){waitForClient(s, [], "")}));
+    appendChildren(stringToXml(order!!0), getNodeById("items"));
+    appendChildren(stringToXml(order!!1), getNodeById("removed"));
+    appendChildren(stringToXml(order!!2), getNodeById("cardNo"));
+    appendChildren(stringToXml(order!!3), getNodeById("address"))
+}
+
+page
+    <html>
+    <head><title>From Academic Papers</title></head>
+    <body>
+    <form l:onsubmit="{main()}">
+    <h3>Finished example from "Linear type theory for asynchronous session types":</h3>
+    <button type="submit">Start communication</button>
+    </form>
+    <p><b>Products ordered:</b></p>
+    <p id="items"></p>
+    <p><b>Products removed:</b></p>
+    <p id="removed"></p>
+    <p><b>Payment details:</b></p>
+    <p id="cardNo">Card number: </p>
+    <p id="address">Address: </p>
+    </body>
+    </html>

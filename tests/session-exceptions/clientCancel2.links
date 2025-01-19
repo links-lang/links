@@ -1,0 +1,3 @@
+open Cancel2
+fun main() { addRoute("/", fun (_) { ignore(spawnClient {print(Cancel2.go()) }); page <#><h1>Yup</h1></#>} ); serveWebsockets(); servePages() }
+main()

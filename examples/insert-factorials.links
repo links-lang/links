@@ -1,0 +1,34 @@
+var db = database "factorials";
+var factorials = table "factorials" with (i : Int, f : Int) from db; #write db;
+
+### library functions ###
+# `diff` is list difference
+fun diff(xs, ys) {
+  filter(fun (x) {not(elem(x, ys))}, xs)
+}
+### end of library functions ###
+
+fun factorial(i) {
+  product([1..i])
+}
+
+fun insertFactorials(n) {
+#  atomic {
+   ignore
+      (for (i <- [0..n]) {
+         var f = factorial(i);
+         update (r <-- factorials)
+          where (r.i == i)
+           set (f = f);
+         []
+       });
+    delete (r <-- factorials)
+      where (r.i < 0 || n < r.i);
+    var indexes = map ((.1), query {for (r <-- factorials) [(1=r.i)]});
+    insert factorials values (i,f)
+      for (i <- [0..n] `diff` indexes)
+        [(i=i, f=factorial(i))]
+#  }
+}
+
+insertFactorials(20)

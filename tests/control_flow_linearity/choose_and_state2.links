@@ -1,0 +1,33 @@
+fun incr(x) {var y = do Get; do Put(x+y)}
+
+# this example shows that we can mix linear and unlimited operations
+fun choice() {
+  var x = if (lindo Choose()) { incr(1); do Get }
+          else { incr(1); do Get };
+  var y = if (lindo Choose()) { incr(1); do Get }
+          else { incr(1); do Get };
+  x + y
+}
+
+fun positive(m)() {
+  handle(m()) {
+    case x -> x
+    case <Choose =@ k> -> xlin; k(true)
+  }
+}
+
+fun evalState(st)(m)() {
+  (handle(m()) {
+    case x -> fun(_)  { x }
+    case <Get => k>    -> fun(st) { k(st)(st) }
+    case <Put(p) => k> -> fun(_)  { k(())(p)  }
+  })(st)
+}
+
+# First handling choose then handling state is ill-typed. This is
+# because the continuation `k` in `positive` is linear, which excludes
+# the usage of unlimited operations `Get` and `Put`.
+
+# evalState(0)(positive(choice))()
+
+positive(evalState(0)(choice))()

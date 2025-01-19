@@ -1,0 +1,116 @@
+# Node-indexed binary trees. Very incomplete; just a demonstration we can now
+# have a standard library.
+
+typename BinaryTree(a) = [| Leaf | Node: (BinaryTree(a), a, BinaryTree(a)) |];
+
+sig empty : () -> (BinaryTree(a))
+fun empty() {
+  Leaf
+}
+
+sig invert : (BinaryTree(a)) ~> BinaryTree(a)
+fun invert(t) {
+  switch(t) {
+    case Leaf -> Leaf
+    case Node(t1, x, t2) -> Node(invert(t2), x, invert(t1))
+  }
+}
+
+sig traverse_preorder : (BinaryTree(a)) ~> List(a)
+fun traverse_preorder(t) {
+  switch(t) {
+    case Leaf -> []
+    case Node(t1, x, t2) -> [x] ++ traverse_preorder(t1) ++ traverse_preorder(t2)
+  }
+}
+
+sig traverse_inorder : (BinaryTree(a)) ~> List(a)
+fun traverse_inorder(t) {
+  switch(t) {
+    case Leaf -> []
+    case Node(t1, x, t2) -> traverse_inorder(t1) ++ [x] ++ traverse_inorder(t2)
+  }
+}
+
+sig traverse_postorder : (BinaryTree(a)) ~> List(a)
+fun traverse_postorder(t) {
+  switch(t) {
+    case Leaf -> []
+    case Node(t1, x, t2) -> traverse_postorder(t1) ++ traverse_postorder(t2) ++ [x]
+  }
+}
+
+# Adds a value to a binary search tree. No rebalancing. O(log(n)).
+# Args:
+# comp: a function taking two values x1 and x2 of type a, returning:
+#  - A negative integer if x1 is less than x2
+#  - Zero if they are the same
+#  - A positive integer if x1 is greater than x2
+# to_add : term to add
+# t: a binary search tree
+sig add : (((a, a) ~%~> Int), a, BinaryTree(a)) ~%~> BinaryTree(a)
+fun add(comp, to_add, t) {
+  switch(t) {
+    case Leaf -> Node(Leaf, to_add, Leaf)
+    case Node(t1, x, t2) ->
+      var comp_result = comp(to_add, x);
+      if (comp_result < 0) {
+        Node(add(comp, to_add, t1), x, t2)
+      } else if (comp_result == 0) {
+        Node(t1, x, t2)
+      } else {
+        Node(t1, x, add(comp, to_add, t2))
+      }
+  }
+}
+
+
+sig leftmost_child : (((a, a) ~%~> Int), BinaryTree(a)) ~%~> BinaryTree(a)
+fun leftmost_child(comp, t) {
+  switch(t) {
+    case Leaf -> Leaf # Shouldn't occur unless we're passed a leaf
+    case Node(t1, x, t2) ->
+      switch (t1) {
+        case Leaf -> Node(t1, x, t2) # We're the leftmost child
+        case Node(t1_1, x_1, t1_2) ->
+          # We're not the leftmost child; recurse
+          leftmost_child(comp, Node(t1_1, x_1, t1_2))
+      }
+  }
+}
+
+# Removes a value from a binary searh tree. No rebalancing. Returns
+# tree unchanged if the value isn't found. O(log(n)).
+# Args:
+# comp: a function taking two values x1 and x2 of type a, returning:
+#  - A negative integer if x1 is less than x2
+#  - Zero if they are the same
+#  - A positive integer if x1 is greater than x2
+# to_remove : term to add
+# t: a binary search tree
+sig remove : (((a, a) ~%~> Int), a, BinaryTree(a)) ~%~> BinaryTree(a)
+fun remove(comp, to_remove, t) {
+  switch(t) {
+    case Leaf -> Leaf
+    case Node(t1, x, t2) ->
+      var comp_result = comp(to_remove, x);
+      if (comp_result < 0) {
+        Node(remove(comp, to_remove, t1), x, t2)
+      } else if (comp_result == 0) {
+        switch ((t1, t2)) {
+          case ((Leaf, Leaf)) -> Leaf
+          case ((Node(t1_1, x, t1_2), Leaf)) -> Node(t1_1, x, t1_2)
+          case ((Leaf, Node(t2_1, x, t2_2))) -> Node(t2_1, x, t2_2)
+          case ((Node(_, _, _), Node(_, _, _))) ->
+            var new_node = leftmost_child(comp, t2);
+            switch(new_node) {
+              case Leaf -> error("Impossible case in binary tree remove") # Bleh
+              case Node(_, lmc_key, _) ->
+                Node(t1, lmc_key, remove(comp, lmc_key, t1))
+            }
+        }
+      } else {
+        Node(t1, x, remove(comp, to_remove, t2))
+      }
+  }
+}

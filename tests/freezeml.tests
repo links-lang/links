@@ -1,0 +1,258 @@
+---
+config: tests/freezeml.config
+---
+
+Polymorphic Instantiation (1)
+fun(x)(y) { y }
+stdout : fun : forall a,b::Row,c::(Any,Any),d::Row.(a) -b-> (c::Any) -d-> c::Any
+
+Polymorphic Instantiation (1•)
+$(fun(x)(y) { y })
+stdout : fun : forall a,b::Row,c::(Any,Any),d::Row.(a) -b-> (c::Any) -d-> c::Any
+
+Polymorphic Instantiation (2)
+choose(id)
+stdout : fun : ((a) -b-> a) -c-> (a) -b-> a
+
+Polymorphic Instantiation (2•)
+choose(~id)
+stdout : fun : (forall a,b::Row.(a) -b-> a) -c-> forall a,b::Row.(a) -b-> a
+
+Polymorphic Instantiation (3)
+choose([])(ids)
+stdout : [] : [forall a,b::Row.(a) -b-> a]
+
+Polymorphic Instantiation (4)
+fun(x : (forall a,e::Row. (a) -e-> a)) { x(x) }
+stdout : fun : forall a::Row,b,c::Row.(forall d,e::Row.(d) -e-> d) -a-> (b) -c-> b
+
+Polymorphic Instantiation (4•)
+fun(x : (forall a,e::Row. (a) -e-> a)) { x(~x) }
+stdout : fun : forall a::Row.(forall b,c::Row.(b) -c-> b) -a-> forall b,c::Row.(b) -c-> b
+
+Polymorphic Instantiation (5)
+id(auto)
+stdout : fun : (forall a,b::Row.(a) -b-> a) -c-> forall d,e::Row.(d) -e-> d
+
+Polymorphic Instantiation (6)
+id(auto')
+stdout : fun : (forall a,b::Row.(a) -b-> a) -c-> (d) -e-> d
+
+Polymorphic Instantiation (6•)
+id(~auto')
+stdout : fun : forall a,b::Row,c::Row.(forall d,e::Row.(d) -e-> d) -b-> (a) -c-> a
+
+Polymorphic Instantiation (7)
+choose(id)(auto)
+stdout : fun : (forall a,b::Row.(a) -b-> a) -c-> forall a,b::Row.(a) -b-> a
+
+Polymorphic Instantiation (8)
+choose(id)(auto')
+exit : 1
+stderr : @.*Type error:.*
+
+Polymorphic Instantiation (9)
+tests/freezeml/a9.links
+filemode : true
+stdout : fun : forall a,b::Row.(a) -b-> a
+
+Polymorphic Instantiation (10)
+poly(~id)
+stdout : (0, true) : (Int, Bool)
+
+Polymorphic Instantiation (11)
+poly($(fun(x:_::(Unl,Any)) { x }))
+stdout : (0, true) : (Int, Bool)
+
+Polymorphic Instantiation (12)
+id(poly)($(fun(x:_::(Unl,Any)) { x }))
+stdout : (0, true) : (Int, Bool)
+
+Inference of Polymorphic Arguments (1)
+fun(f : (forall a,e::Row. (a) -e-> a)) { (f(1), f(true)) }
+stdout : fun : forall a::Row.(forall b,c::Row.(b) -c-> b) -a-> (Int, Bool)
+
+Inference of Polymorphic Arguments (2)
+fun(xs : [forall a,e::Row. (a) -e-> a]) { poly(head(xs)) }
+stdout : fun : forall a::Row.([forall b,c::Row.(b) -c-> b]) -a-> (Int, Bool)
+
+Functions on Polymorphic Lists (1)
+length(ids)
+stdout : 1 : Int
+
+Functions on Polymorphic Lists (2)
+tail(ids)
+stdout : [] : [forall a,b::Row.(a) -b-> a]
+
+Functions on Polymorphic Lists (3)
+head(ids)
+stdout : fun : forall a,b::Row.(a) -b-> a
+
+Functions on Polymorphic Lists (4)
+single(id)
+stdout : [fun] : [(a) -b-> a]
+
+Functions on Polymorphic Lists (4•)
+single(~id)
+stdout : [fun] : [forall a,b::Row.(a) -b-> a]
+
+Functions on Polymorphic Lists (5)
+~id :: ids
+stdout : [fun, fun] : [forall a,b::Row.(a) -b-> a]
+
+Functions on Polymorphic Lists (6)
+$(fun(x:_::(Unl,Any)) { x }) :: ids
+stdout : [fun, fun] : [forall a,b::Row.(a) -b-> a]
+
+Functions on Polymorphic Lists (7)
+single(inc) ++ single(id)
+stdout : [fun, fun] : [(Int) -a-> Int]
+
+Functions on Polymorphic Lists (8)
+tests/freezeml/c8.links
+filemode : true
+stdout : fun : forall a,b::Row.(a) -b-> a
+
+Functions on Polymorphic Lists (9)
+map(poly)(single(~id))
+stdout : [(0, true)] : [(Int, Bool)]
+
+Functions on Polymorphic Lists (10)
+map(head)(single(ids))
+stdout : [fun] : [forall a,b::Row.(a) -b-> a]
+
+Application functions (1)
+app(poly)(~id)
+stdout : (0, true) : (Int, Bool)
+
+Application functions (2)
+revapp(~id)(poly)
+stdout : (0, true) : (Int, Bool)
+
+Application functions (3)
+runST(~argST)
+stdout : 0 : Int
+
+Application functions (4)
+revapp(~argST)(runST)
+stdout : 0 : Int
+
+η-expansion (1)
+tests/freezeml/e1.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+
+η-expansion (2)
+tests/freezeml/e2.links
+filemode : true
+stdout : fun : forall a::Row,b,c::Row.(Int) -a-> (b) -c-> b
+
+η-expansion (3)
+tests/freezeml/e3.links
+filemode : true
+exit : 1
+stderr : @.*Type error:.*
+
+η-expansion (4)
+tests/freezeml/e4.links
+filemode : true
+stdout : 0 : Int
+
+FreezeML programs (1)
+fun id(x) { x } ~id
+stdout : fun : forall a::(Any,Any),b::Row.(a::Any) -b-> a::Any
+
+FreezeML programs (2)
+var ids = [~id]; ~ids
+stdout : [fun] : [forall a,b::Row.(a) -b-> a]
+
+FreezeML programs (5)
+auto(~id)
+stdout : fun : forall a,b::Row.(a) -b-> a
+
+FreezeML programs (6)
+head(ids) :: ids
+stdout : [fun, fun] : [forall a,b::Row.(a) -b-> a]
+
+FreezeML programs (7)
+head(ids)@(3)
+stdout : 3 : Int
+
+FreezeML programs (8)
+choose (head(ids))
+stdout : fun : (forall a,b::Row.(a) -b-> a) -c-> forall a,b::Row.(a) -b-> a
+
+FreezeML programs (8•)
+choose (head(ids)@)
+stdout : fun : ((a) -b-> a) -c-> (a) -b-> a
+
+FreezeML programs (9)
+var f = revapp(~id); f(poly)
+stdout : (0, true) : (Int, Bool)
+
+Do not generalise non-values
+$(id(2))
+exit : 1
+stderr : @.*Because of the value restriction.*
+
+Do not infer polymorphic arguments (1)
+fun(f) { (poly(~f), f(42) + 1) }
+exit : 1
+stderr : @.*Type error:.*
+
+Do not infer polymorphic arguments (2)
+fun(f) { (f(42) + 1, poly(~f)) }
+exit : 1
+stderr : @.*Type error:.*
+
+Do not infer polymorphic arguments (3)
+tests/freezeml/session1.links
+exit : 1
+stderr : @.*Type error:.*
+ignore : Failing test case, as Mono kinds get converted to Session.
+
+Do not infer polymorphic arguments (4)
+tests/freezeml/session2.links
+exit : 1
+stderr : @.*Type error:.*
+
+Do not infer polymorphic values (1)
+fun(bot: (forall a. a)) { var f = bot(bot); (poly(~f), f(42) + 1) }
+exit : 1
+stderr : @.*Type error:.*
+
+Do not infer polymorphic values (2)
+fun(bot: (forall a. a)) { var f = bot(bot); (f(42) + 1, poly(~f)) }
+exit : 1
+stderr : @.*Type error:.*
+
+Nested forall
+var x = auto(~id); x(42)
+stdout : 42 : Int
+
+Recursive functions have monomorphic inner types
+mutual { sig f : forall a. (a) {}-> () fun f(x) {()}    fun g(x) {g(~f)} }
+exit : 1
+stderr : @.*Type error:.*
+
+Generalization of recursive functions
+mutual { sig f : forall a. (a) {}-> () fun f(x) {()}    fun g(x) {x} } g(~f)
+exit : 0
+stdout : fun : forall a.(a) {}-> ()
+
+Freezing recursive function inside mutual block, with annotation
+mutual { sig f : forall a. (a) {}-> () fun f(x) {()}    fun g(x: (forall a. (a) {}-> ())) {g(~f)} }
+stdout : () : ()
+
+Freezing recursive function inside mutual block, without annotation
+mutual { fun f(x) {()}    fun g(x) {g(~f); ()} } ~g
+stdout : fun : forall a,b::Row,c::Row.((a) -b-> ()) ~c~> ()
+
+Freezing recursive function outside mutual block, with annotation
+mutual { sig f : forall a. (a) {}-> () fun f(x) {()} } ~f
+stdout : fun : forall a.(a) {}-> ()
+
+Freezing recursive function outside mutual block, without annotation
+mutual { fun f(x) {()} } ~f
+stdout : fun : forall a,b::Row.(a) -b-> ()

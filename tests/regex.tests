@@ -1,0 +1,112 @@
+Range [1]
+"3" =~ /[0-9]/
+stdout : true : Bool
+
+Range [2]
+"0" =~ /[0-9]/
+stdout : true : Bool
+
+Range [3]
+"9" =~ /[0-9]/
+stdout : true : Bool
+
+Range [4]
+"." =~ /[0-9]/
+stdout : false : Bool
+
+Range [5]
+"p" =~ /[a-z]/
+stdout : true : Bool
+
+Range [6]
+"p" =~ /[A-Z]/
+stdout : false : Bool
+
+Escaping metacharacter
+"some .*string$\" ++?" =~ /some\ \.\*string\$\"\ \+\+\?/
+stdout : true : Bool
+
+Star [1]
+"23r2r3" =~ /.*/
+stdout : true : Bool
+
+Star [2]
+"" =~ /.*/
+stdout : true : Bool
+
+Star [3]
+"abc" =~ /(abc)*/
+stdout : true : Bool
+
+Star [4]
+"abcabc" =~ /(abc)*/
+stdout : true : Bool
+
+Star [5]
+"" =~ /(abc)*/
+stdout : true : Bool
+
+Star [6]
+"a" =~ /(abc)*/
+stdout : true : Bool
+
+Star [7]
+"abca" =~ /(abc)*/
+stdout : true : Bool
+
+Plus [1]
+"23r2r3" =~ /.+/
+stdout : true : Bool
+
+Plus [2]
+"" =~ /.+/
+stdout : false : Bool
+
+Plus [3]
+"abc" =~ /(abc)+/
+stdout : true : Bool
+
+Plus [4]
+"abcabc" =~ /(abc)+/
+stdout : true : Bool
+
+Plus [5]
+"" =~ /(abc)+/
+stdout : false : Bool
+
+Plus [6]
+"a" =~ /(abc)+/
+stdout : false : Bool
+
+Plus [7]
+"abca" =~ /(abc)+/
+stdout : true : Bool
+
+Plus/grouping [1]
+"ABBB" =~ /AB+/
+stdout : true : Bool
+
+Plus/grouping [2]
+"ABAB" =~ /AB+/
+stdout : true : Bool
+
+Plus/grouping [3]
+"ABAB" =~ /((A)(B))+/
+stdout : true : Bool
+
+Plus/grouping [4]
+"ABBB" =~ /((A)(B))+/
+stdout : true : Bool
+
+Interpolation [1]
+var x = "a"; "aaa" =~ /{x}*/
+stdout : true : Bool
+
+Interpolation [2]
+var x = "a"; "abc" =~ /{x}*/
+stdout : true : Bool
+
+WikiParser [1]
+./tests/wikiparser.links
+filemode : true
+stdout : true : Bool

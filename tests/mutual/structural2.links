@@ -1,0 +1,16 @@
+mutual {
+  typename T1(a) = [| Nil | Cons: (a,T1(a)) |];
+}
+mutual {
+  typename T2(a) = [| Nil | Cons: (a,T2(a)) | NotAList |];
+}
+
+sig nil : T1(Int)
+var nil = Nil;
+
+sig test :(T2(Int)) -> Int
+fun test(x) {
+  123
+}
+
+test(nil)

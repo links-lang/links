@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+
+# If you modify the behaviour of this file please remember to update the
+# relevant wiki page:
+#
+# https://github.com/links-lang/links/wiki/Running-the-test-suite
+
+DATABASE_TEST_DIR=tests/database   # Location of database tests
+SHREDDING_TEST_DIR=tests/shredding # Location of shredding tests
+RELATIONAL_LENSES_TEST_DIR=tests/relational-lenses # Location of relational lens tests
+UNIT_TEST_DIR=tests/unit # Location of unit tests
+ret=0                              # Return code. If <> 0 then some tests failed
+STARTCOLOR="\e[31m"                # Control sequence to enable red text
+ENDCOLOR="\e[0m"                   # Control sequence to enable normal text
+
+# If the user presses CTRL+C then kill the script as well
+control_c() {
+        exit 130
+}
+trap control_c SIGINT
+
+prepare_database_config () {
+    # Check if database configuration exists. If not the creating from
+    # a default config.sample file
+    if [[ ! -e $1/config ]]; then
+      echo -en "$STARTCOLOR"
+      echo -e  "Creating default database test configuration $1/config"
+      echo -e  "from $1/config.sample"
+      echo -e  "Please customize to match your local database setup."
+      echo -en "$ENDCOLOR"
+      cp $1/config.sample $1/config
+    fi
+}
+
+prepare_no_database_config () {
+    # Check if database configuration exists. If not the creating from
+    # a default config.sample file
+    if [[ ! -e $1/config ]]; then
+      echo -en "$STARTCOLOR"
+      echo -e  "Creating default database test configuration $1/config"
+      echo -e  "from $1/config.nodb.sample"
+      echo -e  "Please customize to match your local database setup."
+      echo -en "$ENDCOLOR"
+      cp $1/config.nodb.sample $1/config
+    fi
+}
+
+if [[ "$1" == "unit" ]]; then
+    echo "The unit flag is no longer available."
+    echo "Use nodb-unit-tests or db-unit-tests instead."
+    exit 1
+fi
+
+if [ "$1" == "db-only" -o "$1" == "no-db" ]; then
+    echo "The db-only and no-db flags are no longer available."
+    echo "To run a database test suite do one of the following:"
+    echo "    ./run-tests database"
+    echo "    ./run-tests shredding"
+    echo "    ./run-tests relational-lenses"
+    echo "These are equivalent to"
+    echo "    ./run-database-tests tests/<testsuite> --local"
+    echo "which runs a database test suite using the local configuration"
+    echo "file if available, defaulting to pgsql."
+    exit 1
+fi
+
+# Don't run normal tests if user passed in a database testsuite flag
+if [[ "$1" != "database" && "$1" != "shredding" && "$1" != "relational-lenses"
+    && "$1" != "db-unit-tests" && "$1" != "nodb-unit-tests" ]]; then
+    for i in tests/*.tests; do
+        cmnd="./test-harness $i"
+        echo cmnd=$cmnd
+        eval $cmnd
+        ret_code=$?
+        if [ $ret_code != 0 ]; then
+            ret=1
+        fi
+    done
+fi
+
+
+run_database_tests () {
+    cmnd="./run-database-tests $1 --local"
+    echo cmnd=$cmnd
+    eval $cmnd
+    ret_code=$?
+    if [[ ($ret_code -ne 0 && expect_broken -eq 0) || ($ret_code -eq 0 && expect_broken -ne 0) ]]; then
+          echo -e "$STARTCOLOR\rFAILED TEST $t$ENDCOLOR"
+          ret=1
+    fi
+}
+
+run_unit_tests () {
+    unit_test_file="$1"
+    if [ "$1" == "nodb" ]; then
+        prepare_no_database_config "$UNIT_TEST_DIR"
+    else
+        prepare_database_config "$UNIT_TEST_DIR"
+    fi
+    export LINKS_CONFIG="$UNIT_TEST_DIR"
+    dune exec --profile=development tests/unit/${unit_test_file}.exe -- -runner sequential ${@:2}
+    if [ $? != 0 ]; then
+        ret=1
+    fi
+    exit $ret
+}
+
+# Only run database tests if user passed in "database" flag
+if [[ "$1" == "database" ]]; then
+    run_database_tests $DATABASE_TEST_DIR
+fi
+
+# Run shredding tests only if user called for them explicitly
+if [ "$1" == "shredding" ]; then
+    run_database_tests $SHREDDING_TEST_DIR
+fi
+
+# Run relational lenses tests only if user called for them explicitly
+if [ "$1" == "relational-lenses" ]; then
+    run_database_tests $RELATIONAL_LENSES_TEST_DIR
+fi
+
+# Run database-related unit tests if user called for them explicitly
+if [ "$1" == "db-unit-tests" ]; then
+    run_unit_tests "db"
+fi
+
+# Run non-database-related unit tests if user called for them explicitly
+if [ "$1" == "nodb-unit-tests" ]; then
+    run_unit_tests "nodb"
+fi
+
+#look for custom test scripts in the tests folder and execute them
+#they must be called  *.testscript
+for s in tests/*.testscript; do
+        echo "executing custom test script $s"
+        eval "$s"
+        ret_code=$?
+        if [ $ret_code != 0 ]; then
+            echo "script $s failed"
+            ret=1
+        fi
+    done
+
+
+exit $ret

@@ -1,0 +1,37 @@
+
+
+var db = database "links";
+
+var albumsTable =
+    table "albums"
+    with (album: String, quantity: Int)
+    tablekeys [["album"]]
+    from db;
+
+var tracksTable =
+    table "tracks"
+    with (track: String, date: Int, rating: Int, album: String)
+    tablekeys [["track", "album"]]
+    from db;
+
+var albumsLens = lens albumsTable with { album -> quantity };
+var tracksLens = lens tracksTable with { track -> date rating };
+
+var joinedLens = lensjoin albumsLens with tracksLens on album delete_left;
+var droppedLens = lensdrop date determined by track default 2018 from joinedLens;
+var filteredLens = lensselect from droppedLens by fun (x) { x.quantity > 2 };
+
+var tracks = lensget filteredLens;
+
+# filter out all tracks named "Trust" and change Lullaby's rating to 4.
+var newTracks =
+    for (t <- tracks)
+    where (t.track <> "Trust")
+        if (t.track == "Lullaby") [(t with rating = 4)] else [t];
+var newTracks =
+    for (t <- newTracks)
+        if (t.track == "Lovesong") [(t with album = "Disintegration", quantity = 7)] else [t];
+
+var r = lensput filteredLens with newTracks;
+newTracks
+

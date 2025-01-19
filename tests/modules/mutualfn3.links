@@ -1,0 +1,17 @@
+module A {
+  module B {
+    mutual {
+      fun foo(bool_val) { if (bool_val) { baz() } else { bar() } }
+      fun bar() { "Hello!" }
+      fun baz() { foo(false) }
+    }
+  }
+
+  fun foo(bool_val) { B.foo(bool_val) }
+}
+
+fun foo() {
+  A.foo(true)
+}
+
+foo()

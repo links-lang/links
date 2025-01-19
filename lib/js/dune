@@ -1,0 +1,6 @@
+(install
+  (section lib)
+  (files (jslib.js as js/jslib.js)
+         (vdom.js as js/vdom.js)
+         (virtual-dom.js as js/virtual-dom.js))
+  (package links))

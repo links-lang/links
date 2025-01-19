@@ -1,0 +1,16 @@
+effectname Void = {} ;
+effectname Box(e::Eff) = { | e } ;
+effectname OneEffect(a,e::Eff) = { E:a | e } ;
+effectname JustOneEffect(a,e::Eff) = { E:a } ; # aka Joe
+effectname W(e::Eff) = { wild:() | e } ;
+effectname Wild = { wild:() } ;
+effectname TwoEffects(a,e::Eff) = { E1:a, E2:a | e } ;
+
+typename BoxIsCompletlyUseless(e::Eff) = () -Box({ |e })-> () ;
+
+typename Fun(a,b,e::Eff)  = (a) -e-> b ;
+typename SquigglyFun(a,b,e::Eff) = (a) -W({ |e})-> b ;    # as (a) ~e~> b
+typename SimpleSquigglyFunInfix(a,b) = (a) -Wild-> b ;    # as (a) ~> b
+typename SimpleSquigglyFunPrefix(a,b) = (a) { | Wild }-> b ;
+typename SimpleSquigglyFunPrefix2(a,b) = (a) { wild:() }-> b ;
+typename SimpleSquigglyFunBoxWVoid(a,b) = (a) -Box({ |W({ |Void})})-> b ;

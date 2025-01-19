@@ -1,0 +1,2 @@
+# Ensure the DOS line endings test is preserved exactly
+tests/dos-newlines.links binary

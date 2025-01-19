@@ -1,0 +1,64 @@
+fun lowercase(s) {
+  implode(for (c <- explode(s)) [toLower(c)])
+}
+
+fun format(words) {
+ for (w <- words)
+  <span>
+   <b>{stringToXml(w.word)}</b>
+   <i>{stringToXml(w.type)}</i>:
+      {stringToXml(w.meaning)}
+   <br/>
+  </span>
+}
+
+fun completions(pre) server {
+  var wordlist = table "wordlist" with (
+    word : String,
+    type : String,
+    meaning : String
+  ) from (database "dictionary");
+
+  debug("pre: " ^^ pre);
+
+  if (pre == "") []
+  else {
+    query [10] {
+      for (w <-- wordlist)
+       where (w.word =~ /^{pre}.*/)
+       orderby (w.word)
+        [w]
+    }
+  }
+}
+
+fun suggest(pre) client {
+ domReplaceChildren(
+  format(completions(lowercase(pre))),
+  getNodeById("suggestions")
+ )
+}
+
+fun main() {
+ page
+  <html>
+   <head>
+    <title>Dictionary suggest</title>
+    <style>
+      input {{ width:500px }}
+      #suggestions {{ text-align:left; width:500px;
+                      background-color:#ccccff }}
+    </style>
+   </head>
+  <body>
+   <h1>Dictionary suggest</h1>
+   <form l:onkeyup="{suggest(pre)}">
+    <input type="text" l:name="pre"
+           class="input" autocomplete="off"/>
+   </form>
+   <div id="suggestions" class="suggestions"/>
+   </body>
+  </html>
+}
+
+main()

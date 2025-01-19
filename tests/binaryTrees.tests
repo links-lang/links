@@ -1,0 +1,24 @@
+Tree construction and postorder traversal
+./tests/stdlibtests/binaryTree/postorder.links
+filemode : true
+stdout : "[1,4,3,2]" : String
+
+Tree construction and inorder traversal
+./tests/stdlibtests/binaryTree/inorder.links
+filemode : true
+stdout : "[1,2,3,4]" : String
+
+Tree construction and preorder traversal
+./tests/stdlibtests/binaryTree/preorder.links
+filemode : true
+stdout : "[2,1,3,4]" : String
+
+Deletion (1 node)
+./tests/stdlibtests/binaryTree/remove1.links
+filemode : true
+stdout : Node(Node(Leaf, 1, Leaf), 3, Node(Leaf, 4, Leaf)) : BinaryTree.BinaryTree (Int)
+
+Deletion (2 nodes)
+./tests/stdlibtests/binaryTree/remove2.links
+filemode : true
+stdout : Node(Node(Node(Leaf, 1, Leaf), 2, Leaf), 4, Node(Node(Leaf, 1, Leaf), 2, Leaf)) : BinaryTree.BinaryTree (Int)

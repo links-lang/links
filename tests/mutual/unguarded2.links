@@ -1,0 +1,11 @@
+mutual {
+  typename Unguarded1(a) = Unguarded2(a);
+  typename Unguarded2(a) = Unguarded1(a);
+}
+
+typename Unguarded = Unguarded1(Int);
+
+sig bar : Unguarded
+var bar = 5;
+
+bar ^^ "Hello"

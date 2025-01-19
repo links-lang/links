@@ -1,0 +1,71 @@
+typename Date = [|Date:(Int,Int)|];
+typename BookingInfo = (person:String, age:Int, arrival:Date, departure:Date);
+
+var checkedInt = inputInt;
+
+sig date : Formlet(Date)
+var date =
+  formlet
+    <#>
+      { checkedInt -> day } / { checkedInt -> mo }
+    </#>
+  yields Date(day, mo);
+
+fun dateToXml(Date(d, m)) { <em>{intToXml(d)}/{intToXml(m)}</em> }
+
+sig travelForm : Formlet(BookingInfo)
+var travelForm =
+  formlet
+   <table>
+    <tr>
+     <td>Person:</td> <td> { input -> person } </td>
+    </tr>
+    <tr>
+     <td>Age:</td> <td> { checkedInt -> age } </td>
+    </tr>
+    <tr>
+     <td> Arrival:</td> <td> { date -> arr } </td>
+    </tr>
+    <tr>
+     <td> Departure:</td> <td> { date -> dep }</td>
+    </tr>
+    <tr><td>{ submit("Submit") }</td></tr>
+   </table>
+  yields
+    (person=person, age=age, arrival = arr, departure = dep);
+
+
+sig isBefore : (Date,Date) -> Bool
+fun isBefore(Date (day1, month1), Date (day2, month2)) {
+  month1 < month2 || (month1 == month2 && day1 < day2)
+}
+
+sig checkBookingInfo : (BookingInfo) -> Bool
+fun checkBookingInfo((person= _, age= _, arrival=arrival, departure=departure)) {
+  not (departure `isBefore` arrival)
+}
+
+sig checkedForm : Formlet(BookingInfo)
+var checkedForm = travelForm `satisfies` (checkBookingInfo `errorMsg` fun (_) { "You can't depart before you arrive" });
+
+fun showBookingInformation((person=p, age=a, arrival=arr, departure=dep)) {
+  page
+   <html>
+    <h1>Results</h1>
+     <p>
+       You are {stringToXml(p)},  {intToXml(a)} years old.<br/>
+       You'll arrive on {dateToXml(arr)}
+       and leave on {dateToXml(dep)}.
+     </p>
+   </html>
+}
+
+fun main() {
+  page
+   <html>
+    <h1>Date:</h1>
+    { checkedForm => showBookingInformation }
+   </html>
+}
+
+main()

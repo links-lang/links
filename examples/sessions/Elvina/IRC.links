@@ -1,0 +1,266 @@
+# Usage: LinksCalc:<Integer><operator><Integer>
+
+typename Nick     = String;
+typename RealName = String;
+typename Channel  = String;
+typename Message  = String;
+typename Answer   = String;
+
+typename IRCServer = [&| REGISTER:?Nick.?RealName.
+                         [+| REJECT:EndBang, ACCEPT:
+                                                    [&| JOIN:?Channel.mu a.
+                                                                           [&| SERVE:!Message.?Answer.a,
+                                                                               QUIT:EndBang
+                                                                           |&]
+                                                    |&]
+                          |+]
+                     |&];
+
+mutual {
+  # Reacts to new messages in a chat.
+  sig parseMessage : (String) ~> String
+  fun parseMessage(message) {
+
+    # Matches pattern: LinksCalc:Int[+-*/]Int
+    if (message =~ /.*LinksCalc:[0-9]+\+[0-9]+/
+      || message =~ /.*LinksCalc:[0-9]+\-[0-9]+/
+         || message =~ /.*LinksCalc:[0-9]+\*[0-9]+/
+            || message =~ /.*LinksCalc:[0-9]+\/[0-9]+/
+    ) {
+      var expression = parseExpression(explode(message));
+      expression
+    }
+    # Has LinksCalc, but no valid expression.
+    else if (message =~ /.*LinksCalc:.*/) {
+      "LinksCalc: Invalid expression."
+    }
+
+    # Ping - pong response.
+    else if (message =~ /.*PING.*/) {
+        var pongAnswer = "PONG :" ^^ parsePing(message) ^^ "\n";
+        pongAnswer
+    }
+    # None of the keywords, do not react.
+    else {
+      ""
+    }
+  }
+
+  # Expression matched the pattern. Extracts it and calculates the result.
+  sig parseExpression : ([Char]) ~> String
+  fun parseExpression(message) {
+    var expression = extractExpression(message, explode("LinksCalc:"), 0); # Takes out the expression.
+    var (operand1, operand2, operator) = convert(expression); # Divides expression in operand 1, operator, operand 2.
+
+    # Calculates the result. Division by 0 yields infinity.
+    var result = switch(operator) {
+      case '+' -> intToString(stringToInt(operand1) + stringToInt(operand2))
+      case '-' -> intToString(stringToInt(operand1) - stringToInt(operand2))
+      case '*' -> intToString(stringToInt(operand1) * stringToInt(operand2))
+      case '/' -> var operand2 = stringToInt(operand2);
+            if (operand2 == 0)
+              "Infinity"
+            else
+              intToString(stringToInt(operand1) / operand2)
+    };
+    result # Result is String due to infinity case.
+  }
+
+  # Helper function for convert0.
+  sig convert : ([Char]) ~> (String, String, Char)
+  fun convert(expression) {
+    convert0(expression, expression, 0)
+  }
+
+  # Converts expression into operands and operator.
+  sig convert0 : ([Char], [Char], Int) ~> (String, String, Char)
+  fun convert0(expression, currentExp, index) {
+    switch(currentExp) {
+      case [] -> ("4", "3", '+') # Should never reach this.
+      case x::xs ->
+              if (x == '+' || x == '-' || x == '*' || x == '/') {
+                (implode(take((index), expression)), implode(xs), x) # Take chars until operator, after operator and the operator itself.
+              }
+              else convert0(expression, xs, index+1) # Operator has not been reached yet.
+    }
+  }
+
+  # Extracts expression. For example, "45+3".
+  sig extractExpression : ([Char], [Char], Int) ~> ([Char])
+  fun extractExpression(message, keyword, currentKeyLetter) {
+    switch(message) {
+      case [] -> message
+      case x::xs ->
+              if (length(keyword) < currentKeyLetter+1) message
+              else
+              {
+              if (x == keyword !! currentKeyLetter) extractExpression(xs, keyword, currentKeyLetter+1)
+                          else extractExpression(xs, keyword, 0)
+              }
+    }
+  }
+
+  # Receives, for example, "PING :holmes.freenode.net". Returns "holmes.freenode.net" for PONG response.
+  sig parsePing : (String) ~> (String)
+  fun parsePing(message) {
+    implode(parsePing0(explode(message)))
+  }
+
+  # Internal parsePing with [Char].
+  sig parsePing0 : ([Char]) ~> ([Char])
+  fun parsePing0(message) {
+    switch(message) {
+      case [] -> message
+      case x::xs ->
+              if (x == ':') xs
+              else parsePing0(xs)
+    }
+  }
+
+}
+# Infinite service. Receives a message, parses it, sends an answer.
+fun serve(c) {
+    var c = select SERVE c;
+    var (message, c) = receive(c);
+    var answer = parseMessage(message);
+    var c = send(answer, c);
+    serve(c)
+}
+
+# IRC bot which connects to the certain channel and waits for relevant messages.
+sig ircClient : (~IRCServer) ~> ()
+fun ircClient(c) {
+    var c = select REGISTER c;
+    var c = send("LinksBotTest", c); # Nick.
+    var c = send("Links Test", c);   # Real name.
+    offer(c) {
+        case REJECT(c) -> wait(c); ()
+        case ACCEPT(c) ->
+                         var c = send("irchacks", select JOIN c); # Channel name.
+                         serve(c)
+    }
+}
+
+# Used for printlning server answers. No further actions are taken on the text.
+fun readServer(rs, time, timeout) {
+    if   (serverTime() >= time + timeout) () # Timeout.
+    else {
+        var copyRs = rs;
+        switch(readFromSocket(rs)) {
+          case Just(rs) -> println(rs); readServer(copyRs, time, timeout)
+          case Nothing  -> readServer(rs, time, timeout)
+        }
+       }
+}
+
+# Used for regex in order to avoid \n characters.
+fun readServerAccumulate(rs, time, timeout, answer) {
+    if   (serverTime() >= time + timeout) answer # Timeout.
+    else {
+         var copyRs = rs;
+         switch(readFromSocket(rs)) {
+           case Just(rs) -> println(rs); readServerAccumulate(copyRs, time, timeout, answer ^^ rs)
+           case Nothing  -> readServerAccumulate(rs, time, timeout, answer)
+          }
+        }
+}
+# Connects to the real server and gives the socket.
+sig startServer : () ~> (Socket)
+fun startServer() {
+    println("telnet irc.freenode.net 6667");
+    var rs = connectSocket("irc.freenode.net", 6667);
+    var rs = fromJust(rs);
+    readServer(rs, serverTime(), 1);
+    rs
+}
+
+# Infinitely listens to messages on IRC chat.
+sig listenToMessages : (Socket) ~> (String)
+fun listenToMessages(rs) {
+    var rsCopy = rs;
+    switch(readFromSocket(rs)) {
+         case Just(rs) -> println(rs); rs
+         case Nothing  -> listenToMessages(rs)
+         }
+}
+
+
+# Receives new chat messages, sends them to client side, writes out the answer.
+fun startBot(s, rs, channel) {
+    offer(s) {
+        case SERVE(s) ->
+                        var message = listenToMessages(rs);
+                        var s = send(message, s);
+                        var (answer, s) = receive(s);
+
+                        # Ignore, no keywords.
+                        if (answer == "") {
+                            startBot(s, rs, channel)
+                        }
+                        # Ping pong.
+                        else if (answer =~ /.*PONG.*/) {
+                            writeToSocket(answer ^^ "\n", rs);
+                            println(answer);
+                            startBot(s, rs, channel)
+                        }
+                        # Calculations.
+                        else {
+                            writeToSocket("PRIVMSG #" ^^ channel ^^ " : " ^^ answer ^^ "\n", rs);
+                            println("PRIVMSG #" ^^ channel ^^ " : " ^^ answer);
+                            startBot(s, rs, channel)
+
+                        }
+        case QUIT(s) ->
+                        s
+
+    }
+}
+
+# IRC server for IRC bot, also a connector to real server.
+sig ircServer : (IRCServer) ~> EndBang
+fun ircServer(s) {
+
+    var rs = startServer();
+
+    offer(s) {
+        case REGISTER(s) ->
+                           var (nick, s) = receive(s);
+                           var (realName, s) = receive(s);
+                           writeToSocket("NICK " ^^ nick ^^ "\n", rs);
+                           println("NICK " ^^ nick);
+                           writeToSocket("USER " ^^ nick ^^ " 8 * : " ^^ realName ^^ "\n", rs);
+                           println("USER " ^^ nick ^^ " 8 * : " ^^ realName);
+                           var answer = readServerAccumulate(rs, serverTime(), 1, "");
+
+                           if (answer =~ /.*registered.*/) { # Needs better regex!
+                                   var s = select REJECT s;
+                                   writeToSocket("QUIT\n", rs);
+                                   println("QUIT");
+                                   readServer(rs, serverTime(), 1);
+                                   closeSocket(rs);
+                                   s
+                           }
+                           else {
+                                   var s = select ACCEPT s;
+        offer(s) {
+            case JOIN(s) ->
+                         var (channel, s) = receive(s);
+                         writeToSocket("JOIN #" ^^ channel ^^ "\n", rs);
+                            println("JOIN #" ^^ channel);
+                            readServer(rs, serverTime(), 6); # Allows joining any channel, even non-existent.
+
+                            writeToSocket("PRIVMSG #" ^^ channel ^^ " : Links ready. Usage -> LinksCalc:<expression>\n", rs);
+                          println("PRIVMSG #" ^^ channel ^^ " : Links ready. Usage -> LinksCalc:<expression>");
+
+                          startBot(s, rs, channel)
+                    }
+            }
+    }
+
+}
+
+
+fun startCommunication() {
+    ircClient(forkSync(ircServer))
+}
+startCommunication()

@@ -1,0 +1,33 @@
+typename Calc = [&|Add:?Int.?Int.!Int.Calc,
+                   Mul:?Int.?Int.!Int.Calc,
+                   Done:End|&];
+
+sig calc : (Calc) ~> ()
+fun calc(s) {
+  offer (s) {
+    case Add(s) ->
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      var s = send(x+y,s);
+      calc(s)
+    case Mul(s) ->
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      var s = send(x*y,s);
+      calc(s)
+    case Done(s) ->
+      close(s)
+  }
+}
+
+sig user : (~Calc) ~> Int
+fun user(s) {
+  var s = select Mul s;
+  var (v, s) = receive(send(6,send(7,s)));
+  var s = select Add s;
+  var (v, s) = receive(send(v,send(v,s)));
+  close(select Done s);
+  v
+}
+
+connect(calc, user)

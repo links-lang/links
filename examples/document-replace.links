@@ -1,0 +1,16 @@
+fun change() client {
+  replaceDocument(
+   <html>
+    <body>
+       new page
+    </body>
+   </html>
+  )
+}
+
+page
+ <html>
+ <body>
+ <a l:onclick="{change()}">change</a>
+ </body>
+ </html>

@@ -1,0 +1,6 @@
+break-cases=all
+doc-comments=before
+module-item-spacing=preserve
+break-infix=fit-or-vertical
+indicate-nested-or-patterns=space
+disable=true

@@ -1,0 +1,3 @@
+(executable
+ (name preinstall)
+ (libraries dune.configurator))

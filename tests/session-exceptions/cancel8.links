@@ -1,0 +1,25 @@
+fun go() {
+  var ap = new();
+  var syncAP = new();
+
+  try {
+    var s = fork (fun(s) {
+      var t = accept(ap);
+      var clos = linfun() { send(5, t) };
+      close(send(clos, s));
+      close(request(syncAP))
+    });
+    var t = request(ap);
+    close(accept(syncAP));
+    cancel(s);
+    var (res, t) = receive(t);
+    close(t);
+    res
+  } as (x) in {
+    "success: " ^^ intToString(x)
+  } otherwise {
+    "exception"
+  }
+}
+
+go()

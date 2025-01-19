@@ -1,0 +1,193 @@
+open import ChatSessions;
+
+# DOM stuff #
+var nameBoxId = "name_box";
+var chatBoxId = "chat_box";
+
+sig getInputContents : (String) ~> String
+fun getInputContents(domId) {
+  var textNode = getNodeById(domId);
+  domGetPropertyFromRef(textNode, "value")
+}
+
+sig clearInput : (String) ~> ()
+fun clearInput(domId) {
+  var textNode = getNodeById(domId);
+  var _ = domSetPropertyFromRef(textNode, "value", "");
+  ()
+}
+###########
+
+sig outputMessage : (Xml) ~> ()
+fun outputMessage(xml) {
+  var msgsNode = getNodeById("msgs");
+  appendChildren(xml, msgsNode);
+  var scrollHeight = domGetPropertyFromRef(msgsNode, "scrollHeight");
+  var _ = domSetPropertyFromRef(msgsNode, "scrollTop", scrollHeight);
+  ()
+}
+
+sig chat : (Nickname, Message) ~> ()
+fun chat(nick, msg) {
+  outputMessage(<p><b>{stringToXml(nick)}</b>: {stringToXml(msg)}</p>)
+}
+
+sig join : (Nickname) ~> ()
+fun join(nick) {
+  outputMessage(<p><b>{stringToXml(nick)}</b> just joined</p>)
+}
+
+sig newTopic : (Topic) ~> ()
+fun newTopic(topic) {
+  domReplaceChildren(
+    <p><span class="lead"><b>Topic: </b>{stringToXml(topic)}</span></p>,
+    getNodeById("topic"))
+}
+
+sig removeUser : (Nickname) ~> ()
+fun removeUser(nick) {
+  outputMessage(<p><b>{stringToXml(nick)}</b> just left</p>)
+}
+
+sig incomingLoop : (ClientReceive) ~> ()
+fun incomingLoop(s) {
+  offer(s) {
+    case Chat(s) ->
+      var ((nick, chatmsg), s) = receive(s);
+      debug("Received incoming chat message (" ^^ chatmsg ^^ ") from (" ^^ nick ^^ ")");
+      chat(nick, chatmsg);
+      incomingLoop(s)
+    case Join(s) ->
+      var (nick, s) = receive(s);
+      join(nick);
+      incomingLoop(s)
+    case NewTopic(s) ->
+      var (topic, s) = receive(s);
+      newTopic(topic);
+      incomingLoop(s)
+    case Leave(s) ->
+      var (nick, s) = receive(s);
+      removeUser(nick);
+      incomingLoop(s)
+  }
+}
+
+sig outgoingLoop : (AP(?Message.End), ClientSend) ~> ()
+fun outgoingLoop(ap, s) {
+  fun isTopicCmd(s) {
+    (charAt(s, 0) == '/') &&
+    (strlen(s) > 8) &&
+    (strsub(s, 0, 7) == "/topic ")
+  }
+
+  fun getTopic(s) {
+    strsub(s, 7, strlen(s) - 7)
+  }
+
+  fun receiveMsg() {
+    var msgChan = accept(ap);
+    var (msg, s) = receive(msgChan);
+    close(s);
+    msg
+  }
+
+  var msg = receiveMsg();
+
+  if (isTopicCmd(msg)) {
+    var s = select NewTopic s;
+    var s = send(getTopic(msg), s);
+    outgoingLoop(ap, s)
+  } else {
+    var s = select Chat s;
+    var s = send(msg, s);
+    outgoingLoop(ap, s)
+  }
+}
+
+sig beginChat : (Topic, [Nickname], ClientReceive, ClientSend) ~> ()
+fun beginChat(topic, nicks, incoming, outgoing) {
+  var ap = (new() : AP(?Message.End));
+
+  # spawn the incoming and outgoing message handlers
+  ignore(spawn {outgoingLoop(ap, outgoing)});
+  ignore(spawn {incomingLoop(incoming)});
+
+  fun chat() {
+    close(send(getInputContents(chatBoxId), request(ap)));
+    clearInput(chatBoxId)
+  }
+
+  var box =
+    <div id="chatBox">
+      <div id="topic"><p><span class="lead"><b>Topic: </b>{stringToXml(topic)}</span></p></div>
+      <div id="msgs" style="overflow-y:scroll; width:100%; height:400px;"></div>
+      <div>
+        <form l:onsubmit="{chat()}">
+          <input id="chat_box" type="text" style="width:100%"></input>
+        </form>
+      </div>
+    </div>;
+
+  # remove the name request box, put the chatbox in, and we can get going
+  domReplaceChildren(box, getNodeById("main"))
+}
+
+sig connect : () ~> ()
+fun connect() {
+  ignore(spawn {
+    var s = request(wap);
+    var nick = getInputContents(nameBoxId);
+    clearInput(nameBoxId);
+    var s = send(nick, s);
+    debug("sent nick");
+    offer(s) {
+      case Nope(s) ->
+        println("Nickname '" ^^ nick ^^ "' already taken");
+        close(s)
+      case Join(s) ->
+        var ((topic, nicks, incoming), s) = receive(s);
+        debug("received data");
+        beginChat(topic, nicks, incoming, s)
+    }
+  })
+}
+
+sig mainPage : () ~> Page
+fun mainPage() {
+  page
+    <html>
+      <head>
+        <title>Links chat</title>
+        <link href="http://fonts.googleapis.com/css?family=Merriweather:400,300italic,300" rel="stylesheet" type="text/css"></link>
+        <link href="http://fonts.googleapis.com/css?family=Kotta+One" rel="stylesheet" type="text/css"></link>
+        <link href="http://fonts.googleapis.com/css?family=Lora" rel="stylesheet" type="text/css"></link>
+        <link href="css/bootstrap.min.css" rel="stylesheet"></link>
+        <link href="css/abcd.css" rel="stylesheet"></link>
+      </head>
+
+      <div class="navbar-wrapper">
+        <div class="container">
+          <div id="navbar" class="navbar navbar-inverse navbar-fixed-top" role="navigation">
+          </div>
+        </div>
+      </div>
+
+      <div class ="jumbotron">
+        <div class="container">
+          <h1>Links Session-Typed Chat</h1>
+          <hr>...complete with totally original stylesheet</hr>
+        </div>
+      </div>
+
+      <div id="main" class="container marketing">
+        <div class="row featurette">
+          <div>
+            <p>Nickname:</p>
+            <form l:onsubmit="{connect()}">
+              <input id="name_box" type="text"></input>
+            </form>
+          </div>
+        </div>
+      </div>
+    </html>
+}

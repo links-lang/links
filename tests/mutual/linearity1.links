@@ -1,0 +1,10 @@
+mutual {
+  typename Foo = [| Bobsleigh | Bobsleigh2:End |];
+  typename Bar = [| Bobsleigh3 | Bobsleigh4:Foo |];
+}
+
+sig bobsleigh : Bar
+var bobsleigh = Bobsleigh4(Bobsleigh);
+
+ignore(bobsleigh)
+

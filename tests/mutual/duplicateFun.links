@@ -1,0 +1,4 @@
+mutual {
+  fun foo() { () }
+  fun foo(x) { x }
+}

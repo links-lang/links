@@ -1,0 +1,71 @@
+Receiving from cancelled peer endpoint
+./tests/session-exceptions/cancel1.links
+filemode : true
+args : --session-exceptions --enable-handlers
+stdout : "exception" : String
+
+Sending to cancelled peer endpoint
+./tests/session-exceptions/cancel2.links
+filemode : true
+args : --session-exceptions --enable-handlers
+stdout : "send successful" : String
+
+Receiving from cancelled carried endpoint
+./tests/session-exceptions/cancel3.links
+filemode : true
+args : --session-exceptions --enable-handlers
+stdout : "exception" : String
+
+Nested exceptions
+./tests/session-exceptions/cancel4.links
+filemode : true
+args : --session-exceptions --enable-handlers
+stdout : "-1" : String
+
+Operation guarded by failing operation
+./tests/session-exceptions/cancel5.links
+filemode : true
+args : --session-exceptions --enable-handlers
+stdout : "exception" : String
+
+Operation guarded by failing operation (cp style)
+./tests/session-exceptions/cancel6.links
+filemode : true
+args : --session-exceptions --enable-handlers
+stdout : "exception" : String
+
+Cancellation in closure (1)
+./tests/session-exceptions/cancel6.links
+filemode : true
+args : --session-exceptions --enable-handlers
+stdout : "exception" : String
+
+Cancellation in closure (2)
+./tests/session-exceptions/cancel7.links
+filemode : true
+args : --session-exceptions --enable-handlers
+stdout : "exception" : String
+
+Cancellation in closure (3)
+./tests/session-exceptions/cancel8.links
+filemode : true
+args : --session-exceptions --enable-handlers
+stdout : "exception" : String
+
+Cancellation in closure (4)
+./tests/session-exceptions/cancel9.links
+filemode : true
+args : --session-exceptions --enable-handlers
+stdout : "exception" : String
+
+Non-empty continuation environments
+./tests/session-exceptions/cancel10.links
+filemode : true
+args : --session-exceptions --enable-handlers
+stdout : 5 : Int
+
+Offering where peer endpoint is cancelled
+./tests/session-exceptions/cancel11.links
+filemode : true
+args : --session-exceptions --enable-handlers
+stdout : "exception" : String

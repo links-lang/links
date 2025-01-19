@@ -1,0 +1,835 @@
+#
+# LISTS
+#
+
+fun lsMap(f, l) {
+    if (empty(l)) []
+    else f(hd(l)) :: lsMap(f, tl(l))
+}
+
+fun lsFilter(p, l) {
+    if (empty(l)) []
+    else if (p(hd(l))) hd(l) :: lsFilter(p, tl(l))
+    else lsFilter(p, tl(l))
+}
+
+fun lsMapIgnore(f, l) {
+    if (empty(l)) ()
+    else { var _ = f(hd(l)); lsMapIgnore(f, tl(l)) }
+}
+
+fun lsCatMaybes(l) {
+    if (empty(l)) []
+    else switch (hd(l)) {
+        case Just(x) -> x :: lsCatMaybes(tl(l))
+        case Nothing -> lsCatMaybes(tl(l))
+    }
+}
+
+fun lsFoldLeft(f, i, l) {
+    if (empty(l)) i
+    else lsFoldLeft(f, f(i, hd(l)), tl(l))
+}
+
+#~ fun lsReplicate(n, item) {
+#~   if (n == 0) []
+#~   else item ::  lsReplicate(n - 1, item)
+#~ }
+
+#
+# MATH
+#
+sig fabs: (Float) -> Float
+fun fabs(x) {
+    if (x < 0.0) -.x else x
+}
+
+sig fmin: (Float, Float) -> Float
+fun fmin(a, b) {
+    if (a < b) a
+    else b
+}
+
+sig fmax: (Float, Float) -> Float
+fun fmax(a, b) {
+    if (a > b) a
+    else b
+}
+
+fun vectorAdd((v1x, v1y), (v2x, v2y)) {
+    (v1x +. v2x, v1y +. v2y)
+}
+
+fun vectorAddI((v1x, v1y), (v2x, v2y)) {
+    (v1x + v2x, v1y + v2y)
+}
+
+#
+# OTHER
+#
+sig catMaybes: ([Maybe(a)]) -> [a]
+fun catMaybes(ls) {
+    for (x <- ls) {
+        switch (x) {
+            case Just(x) -> [x]
+            case Nothing -> []
+        }
+    }
+}
+
+fun minimum(l) {
+    fun minimumHelper(l, currentMinimum) {
+        switch (l) {
+            case [] -> currentMinimum
+            case x::xs -> if (x < currentMinimum) minimumHelper(xs, x) else minimumHelper(xs, currentMinimum)
+        }
+    }
+    minimumHelper(tl(l), hd(l))
+}
+
+fun replica(n, item) {
+  if (n == 0) []
+  else item :: replica(n-1, item)
+}
+
+fun isNull(l) {
+    switch (l) {
+        case [] -> true
+        case _ -> false
+    }
+}
+
+fun isNothing(x) {
+    switch (x) {
+        case Nothing -> true
+        case _ -> false
+    }
+}
+
+fun maybe(n, f, m) {
+    switch (m) {
+        case Nothing -> n
+        case Just(x) -> f(x)
+    }
+}
+
+# intMap* -- emulates Haskell's IntMap
+typename IntMap(a) = [(Int, a)];
+
+fun intMapFromList(xs) {
+    xs
+}
+
+fun intMapToList(im) {
+    im
+}
+
+fun intMapDelete(i, im) {
+    fun h(i, im2, t) {
+        switch (im2) {
+            case [] -> im
+            case x::xs -> if (x.1 == i) t ++ xs else h(i, xs, t ++ [x]) # could optimize here by doing x::t
+        }
+    }
+
+    h(i, im, [])
+}
+
+fun intMapAt(im: IntMap(a), i) {
+    (im !! i).2
+}
+
+fun intMapElems(im: IntMap(a)) {
+    var (_, elems) = unzip(im);
+    # ELEMENTS SHOULD BE RETURNED IN ASCENDING ORDER OF KEYS
+    elems
+}
+
+fun intMapUpdateWithKey(f, i, im) {
+    fun h(f, i, im2, t) {
+        switch (im2) {
+            case [] -> im
+            case x::xs ->
+                if (i == x.1) {
+                    var newValue = f(x.1, x.2);
+                    switch (newValue) {
+                        case Nothing -> intMapDelete(i, im)
+                        case Just(y) -> t ++ [(i, y)] ++ xs
+                    }
+                } else {
+                    h(f, i, xs, t ++ [x])
+                }
+        }
+    }
+
+    h(f, i, im, [])
+}
+
+fun intMapAdjustWithKey(f, i, im) {
+    intMapUpdateWithKey(fun (k, x) { Just(f(k, x)) }, i, im)
+}
+fun intMapUpdate(f, i, im) {
+    intMapUpdateWithKey(fun(_, x) { f(x) }, i, im)
+}
+
+fun intMapAdjust(f, i, im) {
+    intMapAdjustWithKey(fun (_, x) { f(x) }, i, im)
+}
+fun intMapInsert(i, v, im) {
+    fun h(i, v, im2, t) {
+        switch (im2) {
+            case [] -> (i, v)::im
+            case x::xs ->
+                if (i == x.1) t ++ [(i, v)] ++ xs
+                else h(i, v, xs, t ++ [x])
+        }
+    }
+
+    h(i, v, im, [])
+}
+
+fun intMapFilter(p, im) {
+    switch (im) {
+        case [] -> []
+        case x::xs -> if (p(x.2)) x::intMapFilter(p, xs) else intMapFilter(p, xs)
+    }
+}
+
+fun intMapKeys(im) {
+    switch (im) {
+        case [] -> []
+        case x::xs -> (x.1)::intMapKeys(xs)
+    }
+}
+
+fun intMapLookup(i, im) { # dummy
+    switch (im) {
+        case [] -> Nothing
+        case x::xs -> if (x.1 == i) Just(x.2) else intMapLookup(i, xs)
+    }
+}
+
+#
+# AUX CANVAS
+#
+fun clear(ctx) {
+    jsClearRect(ctx, 0.0, 0.0, jsCanvasWidth(ctx), jsCanvasHeight(ctx))
+}
+
+# ~
+fun mempty(ctx) {
+    ()
+}
+
+fun mconcat(l) {
+    fun callAll(l, ctx) {
+        switch (l) {
+            case [] -> mempty(ctx) # ()?
+            case x::xs -> mconcat(xs)(ctx); x(ctx)
+        }
+    }
+
+    fun (ctx) {
+        callAll(l, ctx)
+    }
+}
+
+fun mappend(l, r) {
+    fun (ctx) {
+        r(ctx);
+        l(ctx)
+    }
+}
+
+#
+# Tetris clone
+# inspired by and partially ported from https://github.com/isomorphism/lazy-tetrominoes
+#
+# all the intMap* functions can be optimized (away?)
+# some unneccessary jsSave-jsRestore, etc.
+
+typename Input = [| KeyUp: Int | KeyDown: Int | CarryOn |];
+
+typename Color = (Float, Float, Float, Float);
+typename Stack = IntMap(IntMap(Maybe(Color)));
+
+typename TilePos = (Int, Int);
+typename Piece = (pos: TilePos, pts: [TilePos], color: Color);
+
+typename GameState = [| Run | Restart | Download |];
+typename Game = (activePiece: Maybe(Piece), queue: Piece, stack: Stack,
+                    score: Int, countdown: Int, dropped: Bool,
+                    clearing: [Int], font: String, state: GameState);
+
+#
+# MAIN
+#
+fun main() {
+    # we can't call a client function at the top-level any more
+
+    # LIST STUFF
+    #var lsNil = lsNilF();
+
+    #
+    # CONSTANTS
+    #
+
+    # CANVAS PARAMETERS
+    var canvasId = "gameCanvas";
+    var canvas2Id = "gameCanvas2";
+    var containerId = "gameContainer";
+
+    var canvasWidth = 400.0;
+    var canvasHeight = 400.0;
+
+    # KEYCODES
+    var leftKeyCode = 37;
+    var rightKeyCode = 39;
+    var upKeyCode = 38;
+    var downKeyCode = 40;
+    var spaceKeyCode = 32;
+    var restartKeyCode = 113;
+    var downloadKeyCode = 115;
+
+    # SIMULATION SETTINGS
+    var doubleBuffer = true;
+    var step = 1.0 /. 60.0;
+    var initialFpsInfo = (frameCount=0, dFps=0.0, avgFps=0.0, fpsAcc=0.0,
+                            loFps=1000000.0, hiFps=0.0, loFpsFrame=0, upFrames=0, downFrames=0);
+    var debug = false;
+
+    # INITIAL GAME STATE
+    var stackHeight = 20;
+    var stackWidth = 10;
+
+    fun makePiece(coords, (r, g, b)) {
+        (pos = (4 - minimum(map(first, coords)), 0), pts = coords, color = (r, g, b, 1.0))
+    }
+    var pieces = [
+        makePiece([(0,2),  (0,1),  (0,0),  (1,0)], (0.3, 0.6, 1.0)),
+        makePiece([(0,2),  (0,1),  (0,0), (-1,0)], (0.6, 0.3, 1.0)),
+        makePiece([(-2,0), (-1,0), (0,0),  (1,0)], (1.0, 1.0, 1.0)),
+        makePiece([(0,0),  (0,1),  (1,1),  (1,0)], (0.6, 0.6, 0.6)),
+        makePiece([(-1,0), (0,0),  (0,1),  (1,1)], (0.6, 1.0, 0.3)),
+        makePiece([(1,0),  (0,0),  (0,1), (-1,1)], (0.3, 1.0, 0.6)),
+        makePiece([(-1,0), (0,0),  (1,0),  (0,1)], (0.3, 1.0, 1.0))]: [Piece];
+
+    fun getRandomPiece() {
+        pieces !! floatToInt((random() *. intToFloat(length(pieces))) -. 1.0)
+    }
+
+    var stackMaxY = stackHeight - 1;
+    var stackMaxX = stackWidth - 1;
+    var emptyRow = intMapFromList(zip([0..stackMaxX], replica(stackMaxX, Nothing)));
+    var emptyStack = intMapFromList(zip([0..stackMaxY], replica(stackMaxY, emptyRow)));
+
+    fun calculateLevel(n) {
+        1 + n / 500
+    }
+
+    fun calculateSpeed(n) {
+        var t = 26 - calculateLevel(n);
+        if (2 > t) 2 else t
+    }
+
+    fun getInitialGameState() {
+        (activePiece = Nothing, queue = getRandomPiece(),
+            stack = emptyStack, score = 0, countdown = calculateSpeed(0),
+            dropped = false, clearing = [], font = "8pt Helvetica",
+            state = Run): Game
+    }
+
+    #
+    # DRAWING
+    #
+    fun tint(color: Color, img) {
+        fun (ctx) { jsSetFillColor(ctx, "rgba(" ^^ intToString(floatToInt(color.1 *. 255.0)) ^^ ", "
+                                                ^^ intToString(floatToInt(color.2 *. 255.0)) ^^ ", "
+                                                ^^ intToString(floatToInt(color.3 *. 255.0)) ^^ ", "
+                                                ^^ intToString(floatToInt(color.4 *. 255.0)) ^^ ")");
+                    img(ctx) }
+    }
+
+    fun rect(x, y, w, h) {
+        fun (ctx) { jsFillRect(ctx, x, y, w, h) }
+    }
+
+    fun tile((x, y)) {
+        rect(1.0 +. intToFloat(x), 1.0 +. intToFloat(y), 0.9, 0.9)
+    }
+
+    fun pieceImg(piece: Piece) {
+        tint(piece.color, mconcat(map(fun (x) { tile(vectorAddI(piece.pos, x)) }, piece.pts)))
+    }
+
+    var holeColor = (0.05, 0.05, 0.05, 1.0);
+    var holes = mconcat([rect( 0.9, 0.9, 9.1, 19.1), rect(-.9.0, 8.0,  9.0, 3.0),
+                         rect(-.9.0, 0.9, 9.0, 6.0), rect(-.9.0, 17.0, 9.0, 3.0)]);
+    var emptyBoard = tint(holeColor, holes);
+
+    fun stackFull(gameState: Game) {
+        any(isJust, intMapElems(intMapAt(gameState.stack, 0)))
+    }
+
+    fun renderGame(ctx, gs: Game) {
+        jsSave(ctx);
+        jsScale(ctx, 19.0, 19.0);
+
+        # drawing helpers
+        fun modulate((r, g, b, a), (rp, gp, bp, ap)) {
+            ((r*.rp), (g*.gp), (b*.bp), (a*.ap))
+        }
+
+        fun darken(x) {
+            modulate((0.5, 0.5, 0.5, 1.0), x)
+        }
+
+        # ~
+        fun renderPiece(ctx) {
+            jsSave(ctx);
+            jsTranslate(ctx, 10.0, 0.0);
+            maybe(mempty, pieceImg, gs.activePiece)(ctx);
+            jsRestore(ctx)
+        }
+
+        fun renderStack(stack: Stack) {
+            fun (ctx) {
+                ignore(map(
+                    fun (col) {
+                        ignore(map(
+                            fun (row) {
+                                switch (row.2) {
+                                    case Nothing -> mempty(ctx)
+                                    case Just(c) -> tint(darken(c), tile((row.1, col.1)))(ctx)
+                                }
+                            },
+                        col.2))
+                    },
+                stack))
+            }
+        }
+
+        fun renderBoard(ctx) {
+            jsSave(ctx);
+            jsTranslate(ctx, 10.0, 0.0);
+            mappend(renderStack(gs.stack), emptyBoard)(ctx);
+            jsRestore(ctx)
+        }
+
+        fun write(str, x, y) {
+            fun (ctx) {
+                jsSave(ctx);
+                jsScale(ctx, 0.12, 0.12);
+                jsCanvasFont(ctx, gs.font);
+                jsFillText(ctx, str, x, y); # x & y should be adjusted for scale
+                jsRestore(ctx)
+            }
+        }
+
+        fun renderGameover(ctx) {
+            tint(holeColor, rect(1.0, 13.0, 9.0, 2.0))(ctx);
+            tint((0.75, 0.25, 0.25, 1.0), write("GAME OVER", 13.0, 120.0))(ctx)
+        }
+
+        fun renderExtra(ctx) {
+            tint((0.9, 0.9, 0.9, 1.0),
+            mconcat([if (stackFull(gs)) renderGameover else mempty,
+                write("Level: " ^^ intToString(calculateLevel(gs.score)), 12.0, 78.0),
+                write("Score: " ^^ intToString(gs.score), 12.0, 88.0),
+                write("Next: ", 12.0, 20.0),
+                write("Use arrows", 17.0, 152.0),
+                write("and spacebar", 13.0, 162.0),
+                fun (ctx) {
+                    jsSave(ctx);
+                    jsTranslate(ctx, 0.0, 2.0);
+                    #jsScale(ctx, 10.0, 10.0);
+                    pieceImg(gs.queue)(ctx);
+                    jsRestore(ctx)
+                }
+            ]))(ctx)
+        }
+
+        fun renderBlink(ctx) {
+            var y = gs.clearing;
+            var x = [0..stackMaxX - 1];
+            var c = if (odd(gs.countdown / 2)) (1.0, 1.0, 1.0, 0.8) else (0.0, 0.0, 0.0, 0.8);
+
+            jsSave(ctx);
+            jsTranslate(ctx, 10.0, 0.0);
+            ignore(map(fun (yy) { map(fun (xx) { tint(c, tile((xx, yy)))(ctx) }, x) }, y));
+            jsRestore(ctx)
+        }
+
+        var img = mconcat([renderBlink, renderExtra, renderPiece, renderBoard]);
+
+        img(ctx);
+        jsRestore(ctx)
+    }
+
+    fun drawFps(ctx, fpsInfo, dFps) {
+        var fpsInfo = (fpsInfo with frameCount = fpsInfo.frameCount + 1, dFps = dFps);
+
+        jsSetFillColor(ctx, "#000");
+        jsFillText(ctx, "FPS: " ^^ strsub(floatToString(dFps), 0, 7), 10.0, 10.0);
+
+        var fpsInfo = if (fpsInfo.loFps > dFps) {
+            (fpsInfo with loFps = dFps, loFpsFrame = fpsInfo.frameCount - 1)
+        }
+        else fpsInfo;
+
+        var fpsInfo = if (fpsInfo.hiFps < dFps)
+            (fpsInfo with hiFps = dFps)
+        else fpsInfo;
+
+        var fpsInfo = (fpsInfo with fpsAcc = fpsInfo.fpsAcc +. dFps);
+
+        var aFpsFrames = 100;
+        var fpsInfo = if (fpsInfo.frameCount > aFpsFrames) {
+            (fpsInfo with avgFps = fpsInfo.fpsAcc /. intToFloat(aFpsFrames), fpsAcc = 0.0, frameCount = 0)
+        } else fpsInfo;
+
+        var fpsInfo = if (fpsInfo.avgFps > 0.0) {
+            if (dFps < fpsInfo.avgFps *. 0.5)
+                (fpsInfo with downFrames = fpsInfo.downFrames + 1)
+            else (fpsInfo with upFrames = fpsInfo.upFrames + 1)
+        } else (fpsInfo with hiFps = 0.0);
+
+        if (fpsInfo.hiFps == 0.0)
+            jsFillText(ctx, "loading data: " ^^ intToString(fpsInfo.frameCount) ^^ "/" ^^ intToString(aFpsFrames), 100.0, 10.0)
+        else
+            jsFillText(ctx, "highest FPS: " ^^ strsub(floatToString(fpsInfo.hiFps), 0, 7), 100.0, 10.0);
+
+        fpsInfo
+    }
+
+
+    fun swapBuffers(mainCanvas, dispCanvas) {
+        var ctx = jsGetContext2D(getNodeById(dispCanvas));
+        jsDrawImage(ctx, getNodeById(mainCanvas), 0.0, 0.0);
+
+        var _ = domSetStyleAttrFromRef(getNodeById(mainCanvas), "display", "block");
+        var _ = domSetStyleAttrFromRef(getNodeById(dispCanvas), "display", "none");
+        clear(ctx)
+    }
+
+    fun draw(gs, lastTime, now, fpsInfo) {
+        # prepare canvas
+        var (mainCanvas, dispCanvas) =
+            if (domGetStyleAttrFromRef(getNodeById(canvasId), "display") == "none" || not(doubleBuffer))
+                (canvasId, canvas2Id)
+            else (canvas2Id, canvasId);
+        var ctx = jsGetContext2D(getNodeById(mainCanvas));
+
+        # render the game
+        clear(ctx);
+        renderGame(ctx, gs);
+
+        # calculate and draw new fpsInfo
+        var dFps = 1000.0 /. (intToFloat(now - lastTime) +. 1.0);
+        var fpsInfo = if (debug) drawFps(ctx, fpsInfo, dFps) else fpsInfo; # debug
+
+        # double buffering
+        if (doubleBuffer) swapBuffers(mainCanvas, dispCanvas) else ();
+
+        # save canvas to file
+        if (gs.state == Download) { # screenshot
+            var downloadNode = getNodeById("download");
+            var imageName = "links-tetris-" ^^ intToString(clientTimeMilliseconds()) ^^ ".png";
+            var _ = domSetAttributeFromRef(downloadNode, "download", imageName);
+            domReplaceChildren(stringToXml("Download the snapshot as " ^^ imageName), downloadNode);
+            jsSaveCanvas(getNodeById(mainCanvas), downloadNode, "image/png")
+        }
+        else ();
+
+        # return
+        fpsInfo
+    }
+
+    #
+    # LOGIC
+    #
+    fun clearing(gs) {
+        gs.clearing
+    }
+
+    fun activePiece(gs) {
+        gs.activePiece
+    }
+
+    fun decCountdown(gs) {
+        (gs with countdown = gs.countdown - 1)
+    }
+
+    fun updateIfReady(p, f, gs) {
+        if (gs.countdown <= 0 && p(gs)) f(gs)
+        else gs
+    }
+
+    fun removeLines(gs) {
+        var intact = intMapElems(fold_right(intMapDelete, gs.stack, gs.clearing));
+        var newRows = replica(length(gs.clearing), emptyRow);
+        var renumbered = intMapFromList(zip([0..stackMaxY], (newRows ++ intact)));
+
+        (gs with stack = renumbered, score = gs.score + length(gs.clearing) * 100,
+            clearing = [], countdown = calculateSpeed(gs.score))
+    }
+
+    fun clearLines(gs) {
+        updateIfReady(compose(not, compose(isNull, clearing)), removeLines, gs) # so much function composition and calling
+    }
+
+    fun checkLines(gs: Game) {
+        var filled = intMapFilter(fun (x) { all(isJust, intMapElems(x)) }, gs.stack);
+        (gs with clearing = intMapKeys(filled), countdown = 20)
+    }
+
+    fun movePiece(xy, piece) {
+        (piece with pos = vectorAddI(xy, piece.pos))
+    }
+
+    fun blocked(piece: Piece, stack) {
+        var ptsPrim = map(fun (x) { vectorAddI(piece.pos, x) }, piece.pts);
+        fun obs((x, y)) {
+          var t = intMapLookup(y, stack); switch (t) { case Nothing -> Nothing case Just(u) -> intMapLookup(x, u) }  }
+        any(fun (x) { maybe(true, isJust, obs(x)) }, ptsPrim)
+    }
+
+    fun settle(piece: Piece, gs: Game) {
+        var tPts = map(fun (x) { vectorAddI(piece.pos, x) }, piece.pts);
+        fun addTile(stk, (x, y)) {
+            intMapAdjust(fun (xx) { intMapInsert(x, Just(piece.color), xx) }, y, stk)
+        }
+
+        var gsPrim = (gs with activePiece = Nothing, stack = fold_left(addTile, gs.stack, tPts));
+        checkLines(gsPrim)
+    }
+
+    fun pieceFall(gs) {
+        fun auxUpdate (gs) {
+            if (gs.dropped) {
+                (gs with score = gs.score + 10, countdown = 1)
+            } else {
+                (gs with score = gs.score + 1, countdown = calculateSpeed(gs.score))
+            }
+        }
+
+        switch (gs.activePiece) {
+            case Nothing -> gs
+            case Just(piece) ->
+                var piecePrim = movePiece((0, 1), piece);
+                var gsPrim = (gs with activePiece = Just(piecePrim));
+
+                if (blocked(piecePrim, gsPrim.stack)) settle(piece, gs)
+                else auxUpdate(gsPrim)
+        }
+    }
+
+    fun dropPiece(gs) {
+        updateIfReady(compose(isJust, activePiece), pieceFall, gs)
+    }
+
+    fun newPiece(gs) {
+        if (isNothing(gs.activePiece) && gs.countdown <= 0) {
+            (gs with countdown = calculateSpeed(gs.score), dropped = false,
+                activePiece = Just(gs.queue), queue = getRandomPiece())
+        } else gs
+    }
+
+    fun rotatePiece(piece: Piece) {
+        (piece with pts = map(fun ((x, y)) { (y, -x) }, piece.pts))
+    }
+
+
+    #
+    # INPUT
+    #
+
+    fun ifInControl(f, gs) {
+        if (isJust(gs.activePiece) && not(gs.dropped)) f(gs)
+        else gs
+    }
+
+    fun tryMove(f, gs) {
+        switch (gs.activePiece) {
+            case Nothing -> gs
+            case Just(piece) ->
+                if (blocked(f(piece), gs.stack)) gs
+                else (gs with activePiece = Just(f(piece)))
+        }
+    }
+
+    fun handleKey(k, gs) {
+        # for some reason pattern matching doesn't work (always selects the first option), so I use if-else
+        if (k == KeyDown(restartKeyCode))
+            (gs with state = Restart)
+        else if (k == KeyDown(downloadKeyCode))
+            (gs with state = Download)
+        else if (gs.state == Run)
+            if (k == KeyDown(spaceKeyCode))
+                (gs with dropped = true, countdown = 0)
+            else if (k == KeyDown(leftKeyCode))
+                ifInControl(fun (x) { tryMove(fun (y) { movePiece((-1, 0), y) }, x) }, gs)
+            else if (k == KeyDown(rightKeyCode))
+                ifInControl(fun (x) { tryMove(fun (y) { movePiece(( 1, 0), y) }, x) }, gs)
+            else if (k == KeyDown(upKeyCode))
+                ifInControl(fun (x) { tryMove(rotatePiece, x) }, gs)
+            else if (k == KeyDown(downKeyCode))
+                ifInControl(pieceFall, gs)
+            else gs
+        else gs
+    }
+
+    fun handleKeys(i, gs) {
+        if (length(i) > 0) fold_right(handleKey, gs, i)
+        else gs
+    }
+
+    #
+    # PROCESSES
+    #
+
+    fun mainGameLogic(gameState, i) {
+        fun auxUpdate(gs) {
+            clearLines(decCountdown(newPiece(dropPiece(gs))))
+        }
+
+        var newGameState = handleKeys(i, gameState);
+
+        if (stackFull(newGameState)) newGameState # handle screenshot & restart here
+        else auxUpdate(newGameState)
+    }
+
+    fun updateLogic(dt, gameState, i) {
+        if (dt > step) {
+            var gameState = mainGameLogic(gameState, i);
+
+            updateLogic(dt -. step, gameState, [])
+        } else (gameState, dt)
+    }
+
+    fun updateState() {
+        fun mainLoop(gameState, dt, lastTime, fpsInfo, ii) {
+            var now = clientTimeMilliseconds();
+            var dt = dt +. fmin(1.0, intToFloat(now - lastTime) /. 1000.0);
+
+            fun aux(auxi: [Input]) {
+                if (haveMail()) {
+                    aux(recv()::auxi)
+                } else auxi
+            }
+
+            var i = aux(ii);
+
+            var (gameStatePrim, dtPrim) = updateLogic(dt, gameState, i);
+
+            if (gameStatePrim.state == Restart)
+                ()
+            else if (dtPrim == dt) { # don't redraw if there were no logic updates
+                mainLoop(gameStatePrim, dtPrim, now, fpsInfo, i)
+            } else {
+                mainLoop((gameStatePrim with state = Run), # if state == Download, reset
+                    dtPrim, now,
+                    draw(gameStatePrim, lastTime, now, fpsInfo), # draw & get new fpsInfo
+                    []) # reset input
+            }
+        }
+
+        var _ = recv(); # wait for initialize()
+        mainLoop(getInitialGameState(), 0.0, clientTimeMilliseconds(), initialFpsInfo, []);
+
+        if (not(haveMail())) self() ! CarryOn else (); # restart
+        updateState()
+    }
+    var updateProcId = spawnClient { updateState() };
+
+
+    fun onKeyDown(e) {
+        updateProcId ! (KeyDown(getCharCode(e)): Input)
+    }
+
+    fun onKeyUp(e) {
+        updateProcId ! (KeyUp(getCharCode(e)): Input)
+    }
+
+    fun initialize() {
+        var _ = recv();
+
+        jsSetOnKeyDown(getNodeById(containerId), onKeyDown);
+        jsSetOnEvent(getNodeById(containerId), "keyup", onKeyUp, true);
+
+        var _ = domSetStyleAttrFromRef(getNodeById("info"), "display", "none");
+
+        updateProcId ! CarryOn
+    }
+    var initializeProcId = spawnClient { initialize() };
+
+    #
+    # PAGE
+    #
+    page
+        <html>
+            <head>
+            <style>
+                body {{
+                    background-color: #111;
+                    color: #ddd;
+                }}
+
+                a {{
+                    color: #d99;
+                }}
+
+                #info {{
+                    font-size: 48px;
+                }}
+
+                #container {{
+                    width: 50%;
+                    margin: auto;
+                    text-align: center;
+                }}
+
+                #{stringToXml(containerId)} {{
+                    position: relative;
+                    width: {stringToXml(floatToString(canvasWidth))}px;
+                    height: {stringToXml(floatToString(canvasHeight))}px;
+                    background-color: #444;
+                    margin: auto;
+                }}
+
+                #{stringToXml(canvas2Id)} {{
+                    display: none;
+                    position: absolute;
+                    top: 0px;
+                    left: 0px;
+                }}
+
+                #{stringToXml(canvasId)} {{
+                    display: block;
+                    position: absolute;
+                    top: 0px;
+                    left: 0px;
+                }}
+            </style>
+            </head>
+
+            <body>
+                <div id="container">
+                    <h1>Tetris in Links</h1>
+
+                    <div id="{containerId}" tabindex="1"
+                        l:onfocus="{initializeProcId ! 0 }">
+                        <canvas id="{canvas2Id}" width="{floatToString(canvasWidth)}" height="{floatToString(canvasHeight)}"></canvas>
+                        <canvas id="{canvasId}" width="{floatToString(canvasWidth)}" height="{floatToString(canvasHeight)}"></canvas>
+                        <div id="info">Click this canvas to start.</div>
+                    </div>
+                    <div id="msg"></div>
+                    <span>The canvas above must be focused for the keyboard input to work.</span><br />
+                    <span>[F2] restarts the game</span><br />
+                    <span>[F4] snapshots the canvas</span><br />
+                    <a id="download" tabindex="2" download=""></a>
+                </div>
+            </body>
+        </html>
+}
+

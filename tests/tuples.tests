@@ -1,0 +1,49 @@
+Tuple printing and typing
+(1,"boo")
+stdout : (1, "boo") : (Int, String)
+
+Tuple equality
+(1,"foo") == (1, "foo")
+stdout : true : Bool
+
+Tuple inequality
+(1,"foo") == (2, "foo")
+stdout : false : Bool
+
+Tuple comparisons [exhaustive]
+((1,"foo") < (2, "foo")) || ((1,"foo") > (2, "foo")) || ((1,"foo") == (2, "foo"))
+stdout : true : Bool
+
+Tuple comparisons [exclusive]
+(((1,"foo") < (2, "foo")) == false) || (((1,"foo") > (2, "foo")) == false)
+stdout : @true .*
+
+Tuple patterns [match]
+{var ((x,y,(z,a,b)), c) = (("string",3.21,(15,[1,2,3],(3,2,1))), ());  z}
+stdout : 15 : Int
+
+Tuple patterns [no match]
+{var ((x,y,(z,a,b)), c) = (("string",3.21,(15,(3,2,1))), ());  z}
+stderr : @.
+exit : 1
+
+Tuple/record interchangeability
+(1,"two",3) == (2="two", 3=3,1=1)
+stdout : true : Bool
+
+Tuple extension
+{var x = (1,"two"); (3='3'|x) }
+stdout : (1, "two", '3') : (Int, String, Char)
+
+Tuple projection
+((1,"two",3).2 == "two")
+stdout : true : Bool
+
+1-tuples
+(1="one")
+stdout : (1 = "one") : (1:String)
+
+Quasituples
+(1="foo", 3="bar")
+stdout : (1 = "foo", 3 = "bar") : (1:String, 3:String)
+ignore : The type is currently printed as (String, String). Is this really what we want?

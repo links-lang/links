@@ -1,0 +1,22 @@
+fun g() client {
+  println("!")
+}
+
+fun f() server {
+  var manager = spawnClient {
+    fun h() {
+      receive {
+        case Click -> {g(); h()}
+      }
+    }
+    h()
+  };
+
+  <div id="hole"><b l:onmousedown="{manager ! Click}">world</b></div>
+}
+
+page
+  <body>
+    <b l:onmousedown="{replaceNode(f(), getNodeById("hole"))}">hello</b>
+    <div><div id="hole">to be replaced</div></div>
+  </body>

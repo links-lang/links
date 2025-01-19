@@ -1,0 +1,15 @@
+(executable
+  (name db)
+  (modes native)
+  (flags :standard -safe-string -dtypes -w Ae-44-45-60 -g)
+  (modules db)
+  (libraries ounit2.advanced ounit2 links_lens_unit_tests)
+  (preprocess (pps ppx_deriving.std)))
+
+(executable
+  (name nodb)
+  (modes native)
+  (flags :standard -safe-string -dtypes -w Ae-44-45-60 -g)
+  (modules nodb)
+  (libraries ounit2.advanced ounit2 links_ir_unit_tests)
+  (preprocess (pps ppx_deriving.std)))

@@ -1,0 +1,65 @@
+# Classic guess a number game
+typename Comp(e::Eff,a) = () ~e~> a;
+typename Answer = [|Low|Correct|High|];
+
+sig readInt : () {Read:Int|_}~> Int
+fun readInt() {var n = do Read; print(" " ^^ intToString(n)); n}
+
+sig guess : () {Read:Int,Guess:(Int) => Answer|_}~> ()
+fun guess() {
+  print("Take a guess>");
+  var number = readInt();
+  switch (do Guess(number)) {
+    case Low -> println("\nYour guess is too low."); guess()
+    case Correct -> println("\nCorrect!!")
+    case High -> println("\nYour guess is too high."); guess()
+  }
+}
+
+fun isNil(xs) {
+  switch (xs) {
+    case [] -> true
+    case _  -> false
+  }
+}
+
+sig input : ([Int], Comp({Read:Int |e}, a)) {Read{_} |e}~> ()
+fun input(guesses, m) {
+  handle(m())(guesses <- guesses) {
+    case x -> ()
+    case <Read => resume> ->
+       switch(guesses) {
+         case [] -> ()
+         case g :: gs -> resume(g, gs)
+       }
+  }
+}
+
+sig mySecret : (Int, Comp({Guess:(Int) => Answer|e}, a)) {Guess{_} |e}~> a
+fun mySecret(secret, m) {
+  handle(m()) {
+    case x -> x
+    case <Guess(n) => resume> ->
+      if (n < secret) resume(Low)
+      else if (n > secret) resume(High)
+      else resume(Correct)
+  }
+}
+
+sig logger : (Comp({Guess:(Int) => Answer|e}, a)) {Guess:(Int) => Answer|e}~> [(Int,Answer)]
+fun logger(m) {
+  handle(m())(log <- []) {
+    case _ -> log
+    case <Guess(n) => resume> ->
+       var an = do Guess(n);
+       resume(an, (n, an) :: log)
+  }
+}
+
+fun example() {
+  mySecret(42, fun() { input([64,32,48,40,44,42], guess) })
+}
+
+fun example2() {
+  mySecret(42, fun() {logger(fun() { input([64,32,48,40,44,42], guess) }) })
+}

@@ -1,0 +1,8 @@
+fun foo() {
+  sig bar : () -> Int
+  fun bar() {
+    "Hello!"
+  }
+  bar()
+}
+foo()

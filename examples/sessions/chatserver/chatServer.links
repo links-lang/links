@@ -1,0 +1,155 @@
+open import ChatSessions;
+open import ChatClient;
+open import LinearList;
+
+typename ServerState = (Topic, [Nickname]);
+
+typename Supervisor =
+  [&|Join:?ChatServer          .End,
+     Chat: ?(Nickname, Message).End,
+     NewTopic: ?Topic          .End,
+     Leave: ?Nickname          .End|&];
+
+# supervisor access point (for communication between the supervisor
+# and workers)
+sig sap : AP(Supervisor)
+var sap = new();
+
+sig disconnect :
+  (Nickname, [Nickname], LinList(WorkerSend)) ~>
+  ([Nickname], LinList(WorkerSend))
+fun disconnect(nick, ns, cs) {
+  switch ((ns, cs)) {
+    case ([], LinNil) -> ([], LinNil)
+    case ((n :: ns), LinCons(c, cs)) ->
+      if (n == nick) {
+        cancel(c);
+        (ns, cs)
+      } else {
+        var (ns, cs) = disconnect(nick, ns, cs);
+        (n::ns, LinCons(c, cs))
+      }
+  }
+}
+
+sig join : (ChatServer) ~> ()
+fun join(c) {
+  close(send(c, select Join request(sap)))
+}
+
+sig chat : (Nickname, Message) ~> ()
+fun chat(nick, msg) {
+  close(send((nick, msg), select Chat request(sap)))
+}
+
+sig newTopic : (Topic) ~> ()
+fun newTopic(newTopic) {
+  close(send(newTopic, select NewTopic request(sap)))
+}
+
+sig leave : (Nickname) ~> ()
+fun leave(nick) {
+  close(send(nick, select Leave request(sap)))
+}
+
+sig acceptor : () ~> ()
+fun acceptor() {
+  var c = accept(wap);
+  ignore(spawn {join(c)});
+  acceptor()
+}
+
+# reads incoming requests from the client, dispatches each command
+# to the supervisor loop which will broadcast to other session
+# clients
+sig worker : (Nickname, WorkerReceive) {SessionFail{_}|_}~> ()
+fun worker(nick, c) {
+  try {
+    offer(c) {
+      case Chat(c) ->
+        var (msg, c) = receive(c);
+        chat(nick, msg);
+        c
+      case NewTopic(c) ->
+        var (topic, c) = receive(c);
+        newTopic(topic);
+        c
+    }
+  } as (c) in {
+    worker(nick, c)
+  } otherwise {
+    leave(nick)
+  }
+}
+
+# Main supervisor loop, containing server state. Awaits
+# (non-session) control messages to update the state, or broadcast
+# instructions to send things along session channels.
+sig supervisor : (Topic, [Nickname], LinList(WorkerSend)) ~> ()
+fun supervisor(topic, nicks, cs) {
+  var s = accept(sap);
+  offer(s) {
+    case Join(s) ->
+      var (d, s) = receive(s);
+      close(s);
+      var (name, d) = receive(d);
+      switch (filter(fun (nick) {nick == name}, nicks)) {
+        case [] ->
+          var workerSend = linFork(
+            linfun (clientReceive) {
+              worker(name,
+                     send((topic, nicks, clientReceive),
+                          select Join d))
+          });
+          var cs = linMap(
+            fun(c) {
+              var c = select Join c;
+              send (name, c)
+            }, cs);
+          supervisor(topic, name :: nicks, LinCons(workerSend, cs))
+        case _ ->
+          close(select Nope d);
+          supervisor(topic, nicks, cs)
+      }
+    case Chat(s) ->
+      var ((nick, msg), s) = receive(s);
+      close(s);
+      var cs = linMap(
+        fun(c) {
+          var c = select Chat c;
+          send ((nick, msg), c)
+        }, cs);
+      supervisor(topic, nicks, cs)
+    case NewTopic(s) ->
+      var (newTopic, s) = receive(s);
+      close(s);
+      var cs = linMap(
+        fun(c) {
+          var c = select NewTopic c;
+          send (newTopic, c)
+        }, cs);
+      supervisor(newTopic, nicks, cs)
+    case Leave(s) ->
+      var (nick, s) = receive(s);
+      close(s);
+      var (nicks, cs) = disconnect(nick, nicks, cs);
+      var cs = linMap(
+        fun(c) {
+          var c = select Leave c;
+          send(nick, c)
+        }, cs);
+      supervisor(topic, nicks, cs)
+  }
+}
+
+sig main : () ~> ()
+fun main() {
+  ignore(spawn {supervisor("Hello, ABCD!", [], LinNil)});
+  ignore(spawn {acceptor()});
+  addRoute("/", fun(_) { ChatClient.mainPage() } );
+  addStaticRoute("/css", "examples/sessions/chatserver/css", [("css", "text/css")]);
+  serveWebsockets();
+  servePages()
+}
+
+main()

@@ -1,0 +1,106 @@
+fun draw(id, items) {
+ domReplaceChildren(
+  for (item <- items)
+   <li class="draggable_element">{stringToXml(item)}</li>,
+  getNodeById(id)
+ )
+}
+
+fun step(state, id, items) client {
+ receive {
+  case GetList(pid)     -> pid ! items; step(state, id, items)
+  case SetList(items)   ->
+   draw(id, items);
+   step(state, id, items)
+  case MouseDown(elem)  ->
+     if (isElementNode(elem) && (parentNode(elem) == getNodeById(id)))
+      step(Dragging(elem), id, items)
+     else
+      step(Waiting, id, items)
+  case MouseUp          -> step(Waiting, id, items)
+  case MouseOut(toElem) ->
+   switch (state) {
+    case Waiting -> step(Waiting, id, items)
+    case Dragging(elem) ->
+     if (isElementNode(toElem) && (parentNode(toElem) == getNodeById(id))) {
+      var items = swap(items,
+                       getTextContent(getValue(firstChild(elem))),
+                       getTextContent(getValue(firstChild(toElem))));
+       draw(id, items);
+       step(Dragging(elem), id, items)
+     } else step(Dragging(elem), id, items)
+   }
+ }
+}
+
+fun draggableList(id, items)
+{
+  var dragger = spawnClient { step(Waiting, id, items) };
+
+  (<ul id="{id}" class="draggable_list"
+       l:onmouseup   = "{dragger ! MouseUp}"
+       l:onmouseuppage = "{dragger ! MouseUp}"
+       l:onmousedown = "{dragger ! MouseDown(getTarget(event))}"
+       l:onmouseout  = "{dragger ! MouseOut(getToElement(event))}">
+    {for (item <- items) <li class="draggable_element">{stringToXml(item)}</li>}
+   </ul>,
+   fun () {spawnWait { dragger ! GetList(self()); receive { case v -> v} }},
+   fun (items) {dragger ! SetList(items)}
+   )
+}
+
+fun itemsTable() server {
+  table "items" with (i : Int, name : String)
+    from database "draggable"
+}
+
+fun load() server {
+  var t = itemsTable();
+  var items =
+    query { for (item <-- t)
+             orderby (item.i)
+              [(name=item.name)]};
+  map ((.name), items)
+}
+
+sig save : ([String]) ~> ()
+fun save(itemsList) server {
+  ignore(mapi(
+    fun (item, i) {
+      update (r <-- itemsTable())
+        where (r.i == i)
+          set (name=item)
+    },
+    itemsList))
+}
+
+fun main() {
+  var (bears, read, write) = draggableList("bears", load());
+
+  var marshaller = spawnClient {
+    fun listen() {
+      receive {
+        case Load -> write(load())
+        case Save -> save(read())
+      };
+      listen()
+    }
+    listen()
+  };
+
+  page
+   <html>
+   <head>
+    <style>
+      .draggable_list {{ width: 200px; list-style-image: url(http://script.aculo.us/images/bullet.gif) }}
+      .draggable_element {{ color: #7E9E50; font: 20px Georgia; background-color: #ECF3E1; border:1px solid #C5DEA1; cursor: move; margin: 0px; }}
+    </style>
+   </head>
+   <body>
+     <h2>Great Bears</h2>{bears}
+     <input type="button" value="load" l:onclick="{marshaller!Load}"/>
+     <input type="button" value="save" l:onclick="{marshaller!Save}"/>
+   </body></html>
+}
+
+main()

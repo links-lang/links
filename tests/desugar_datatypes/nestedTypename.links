@@ -1,0 +1,6 @@
+sig nested_type : (a) -> ()
+fun nested_type(x) {
+  typename A = a;
+
+  {}
+}

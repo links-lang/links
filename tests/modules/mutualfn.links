@@ -1,0 +1,15 @@
+module A {
+  mutual {
+    fun foo() { bar() }
+    fun bar() { "Hello!" }
+    fun baz() { bar() }
+  }
+}
+
+open A;
+
+fun fooThenBaz() {
+  foo() ^^ baz()
+}
+
+fooThenBaz()

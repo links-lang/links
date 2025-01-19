@@ -1,0 +1,260 @@
+# We represent a Sudoku board as row major list of lists.
+# The grid size is always assumed to be 9x9.
+typename Status = [|Unknown|Valid|Invalid|];
+typename Sudoku = (name:String,grid:[[Maybe(Int)]],status:Status);
+
+sig copySudoku : (Sudoku, String) -> Sudoku
+fun copySudoku(sudoku, copyName) {
+  (name=copyName,grid=sudoku.grid,status=sudoku.status)
+}
+
+sig emptySudoku : () ~> Sudoku
+fun emptySudoku() {
+  var range = [0..8];
+  (name="empty", grid=map(fun(_) { map(fun(_) { Nothing }, range) }, range), status=Unknown)
+}
+
+sig intersperse : (a, [a]) ~> [a]
+fun intersperse(y, xs) {
+   switch (xs) {
+     case []      -> []
+     case [x]     -> [x]
+     case x :: xs -> x :: y :: intersperse(y,xs)
+   }
+}
+
+sig dup : ([a]) ~> [a]
+fun dup(xs) {
+  fun aux(xs, visited, dups) {
+    switch (xs) {
+      case [] -> dups
+      case x::xs ->
+         if (elem(x, visited))
+            aux(xs, visited, x::dups)
+         else
+            aux(xs, x::visited, dups)
+    }
+  }
+  aux(xs, [], [])
+}
+
+fun transpose(xss) {
+  switch(xss) {
+     case []                 -> []
+     case [] :: xss          -> transpose(xss)
+     case (x :: xs) :: xss   -> (x :: map(hd, xss)) :: transpose (xs :: map(tl, xss))
+  }
+}
+
+sig concatString : ([String]) ~> String
+fun concatString(ss) {
+  fold_left(fun(acc, s) { acc ^^ s }, "", ss)
+}
+
+sig makeGridId : (String, Int, Int) -> String
+fun makeGridId(sudokuName, rowIndex, colIndex) {
+  sudokuName ^^ intToString(rowIndex) ^^ intToString(colIndex)
+}
+
+sig layoutSudoku : (Sudoku) ~> Xml
+fun layoutSudoku(sudoku) server {
+  fun getTableClass(sudoku) {
+     switch (sudoku.status) {
+       case Unknown -> "grid"
+       case Invalid -> "grid invalid"
+       case Valid   -> "grid valid"
+     }
+  }
+  fun formatRow(xs, i) {
+    mapi(fun(x, j) {
+      var val =
+        switch(x) {
+          case Just(v) -> intToString(v)
+          case Nothing -> ""
+      };
+      var li = i / 3;
+      var lj = j / 3; # localised indices
+      var nodeId = makeGridId(sudoku.name, i, j);
+      var class = if (mod(li+lj, 2) == 0) "coloured" else "";
+      (id=nodeId, class=class, value=val)
+    }, xs)
+  }
+  var rows = mapi(formatRow, sudoku.grid);
+  <table class="{getTableClass(sudoku)}">
+    {for (row <- rows) {
+      <tr>
+        {for (cell <- row) {
+          <td class="{cell.class}">
+            <input maxlength="1" id="{cell.id}" value="{cell.value}" />
+          </td>
+        }}
+      </tr>
+    }}
+   </table>
+}
+
+sig testSudoku : Sudoku
+var testSudoku server = (name="b", grid=map(fun(xs) {
+                           map(fun(x) { Just(x) }, xs)
+                           },
+                           [
+                             [1,2,3,4,5,6,7,8,9],
+                             [4,5,6,7,8,9,1,2,3],
+                             [7,8,9,1,2,3,4,5,6],
+                             [2,1,4,3,6,5,8,9,7],
+                             [3,6,5,8,9,7,2,1,4],
+                             [8,9,7,2,1,4,3,6,5],
+                             [5,3,1,6,4,2,9,7,8],
+                             [6,4,2,9,7,8,5,3,1],
+                             [9,7,8,5,3,1,6,4,2]
+                           ])
+                           , status=Unknown);
+
+
+sig resetSudoku : (Sudoku) ~> Sudoku
+fun resetSudoku(sudoku) client {
+  copySudoku(emptySudoku(), sudoku.name)
+}
+
+sig >>= : (Maybe(a), (a) ~> Maybe(b)) ~> Maybe(b)
+op m >>= f {
+  switch (m) {
+    case Nothing -> Nothing
+    case Just(x) -> f(x)
+  }
+}
+
+sig return : (a) -> Maybe(a)
+fun return(x) {Just(x)}
+
+sig checkSudoku : (Sudoku) ~> Status
+fun checkSudoku(sudoku) {
+  fun allDefined(g) {
+    if (all(isJust, concat(g))) Just(g)
+    else Nothing
+  }
+  fun unique(g) {
+    fun predicate(xss) {
+       all(fun(xs) { length(xs) == 0 }, map(dup, xss))
+    }
+    if (predicate(g) && predicate(transpose(g))) Just(g)
+    else Nothing
+  }
+
+  switch (return(sudoku.grid) >>= allDefined >>= unique) {
+    case Nothing -> Invalid
+    case Just(_) -> Valid
+  }
+}
+
+sig validateSudoku : (Sudoku) ~> Sudoku
+fun validateSudoku(sudoku) {
+  (name=sudoku.name
+  ,grid=sudoku.grid
+  ,status=checkSudoku(sudoku))
+
+}
+
+sig readSudoku : (String) ~> Sudoku
+fun readSudoku(sudokuName) client {
+  fun convertValue(value) {
+     # Sanitise the value
+     if (value =~ /^[1-9]$/) Just(stringToInt(value)) : Maybe(Int)
+     else Nothing #error("Input value must be an integer between [1-9].")
+  }
+  # We assume the grid size is 9x9
+  fun buildGrid(i) {
+    fun buildRow(j) {
+      if (j > 8) []
+      else {
+        var nodeId = makeGridId(sudokuName, i, j);
+        var value = convertValue $ getInputValue(nodeId);
+        value :: buildRow(j+1)
+      }
+    }
+    if (i > 8) []
+    else buildRow(0) :: buildGrid(i+1)
+  }
+  var grid = buildGrid(0);
+  (name=sudokuName,grid=grid,status=Unknown)
+}
+
+
+sig renderSudoku : (Sudoku) ~> ()
+fun renderSudoku(sudoku) client {
+   var layout = layoutSudoku(sudoku);
+   replaceNode(
+     <div id="sudoku-container">
+        {layout}
+     </div>
+     , getNodeById("sudoku-container"))
+}
+
+# Page
+fun mainPage(_) {
+  page
+    <html>
+      <head>
+       <meta charset="UTF-8" />
+       <title>Sudoku solver</title>
+       <style type="text/css">
+         .container {{
+           margin: 0 auto;
+         }}
+
+         .sudoku-container {{
+           padding-bottom: 15px;
+         }}
+
+         .grid {{
+       border: 5px solid #666;
+         }}
+
+         .grid td {{
+       margin: 0;
+         }}
+
+         .grid input {{
+       width: 40px;
+       height: 40px;
+       text-align: center;
+       font-size: 20px;
+       padding: 0;
+       border: 1px #ccc solid;
+       background: transparent;
+         }}
+
+         .coloured {{
+       background: #ccc;
+         }}
+
+         .valid {{
+            border: 5px solid #7edb37;
+         }}
+
+         .invalid {{
+            border: 5px solid #a60000;
+         }}
+       </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>Sudoku solver</h1>
+          <div id="sudoku-container">
+            {layoutSudoku(testSudoku)}
+          </div>
+          <button l:onclick="{renderSudoku(validateSudoku(readSudoku("b")))}">Validate</button>
+          <button l:onclick="{()}" disabled="disabled">Has solution</button>
+          <button l:onclick="{renderSudoku(resetSudoku(readSudoku("b")))}">Reset</button>
+        </div>
+      </body>
+    </html>
+}
+
+
+fun main() {
+  addRoute("/", mainPage);
+  servePages()
+}
+
+main()

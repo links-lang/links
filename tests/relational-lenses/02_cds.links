@@ -1,0 +1,67 @@
+var db = database "links";
+
+var albumsTable =
+    table "albums"
+    with (album: String, quantity: Int)
+    tablekeys [["album"]]
+    from db;
+
+var tracksTable =
+    table "tracks"
+    with (track: String, date: Int, rating: Int, album: String)
+    tablekeys [["track", "album"]]
+    from db;
+
+var albumsLens = lens albumsTable with { album -> quantity };
+var tracksLens = lens tracksTable with { track -> date rating };
+
+var joinedLens = lensjoin albumsLens with tracksLens on album delete_left;
+var droppedLens = lensdrop date determined by track default 2018 from joinedLens;
+
+var quantityLimit = 2;
+fun filter(x) { x.quantity > quantityLimit }
+var filteredLens = lenscheck (lensselect from droppedLens by filter);
+
+sig assertEqSorted : ([a],[a]) ~> ()
+fun assertEqSorted(l1,l2) {
+  assertEq(sortBy(id,l1),sortBy(id,l2))
+}
+
+fun test() {
+  var filtered = lensget filteredLens;
+
+  assertEqSorted(filtered, [
+    (album = "Paris", quantity = 4, rating = 5, track = "Lovesong"),
+    (album = "Wish", quantity = 5, rating = 4, track = "Trust"),
+    (album = "Show", quantity = 3, rating = 3, track = "Lullaby")
+  ]);
+
+  # filter out all tracks named "Trust" and change Lullaby's rating to 4.
+  var newTracks = [
+    (album = "Disintegration", quantity = 7, rating = 5, track = "Lovesong"),
+    (album = "Show", quantity = 3, rating = 4, track = "Lullaby")
+  ];
+
+  lensput filteredLens with newTracks;
+
+  var new = lensget filteredLens;
+  assertEqSorted(new, newTracks);
+
+  assertEqSorted(lensget tracksLens, [
+    (album = "Galore", date = 1989, rating = 5, track = "Lovesong"),
+    (album = "Disintegration", date = 1989, rating = 5, track = "Lovesong"),
+    (album = "Galore", date = 1989, rating = 4, track = "Lullaby"),
+    (album = "Show", date = 1989, rating = 4, track = "Lullaby")
+  ]);
+  assertEqSorted(lensget albumsLens, [
+    (album = "Show", quantity = 3),
+    (album = "Galore", quantity = 1),
+    (album = "Paris", quantity = 4),
+    (album = "Wish", quantity = 5),
+    (album = "Disintegration", quantity = 7)
+  ]);
+
+  lensput filteredLens with filtered
+}
+
+test()

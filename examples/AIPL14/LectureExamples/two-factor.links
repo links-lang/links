@@ -1,0 +1,174 @@
+########################################
+# (Calculator example, repeated)
+
+typename Calc = mu a.[&|Add:?Int.?Int.!Int.a, Mul:?Int.?Int.!Int.a, Stop:EndBang|&];
+
+fun calc(s) {
+  offer (s) {
+    case Add(s) ->
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      var s = send(x+y,s);
+      calc(s)
+    case Mul(s) ->
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      var s = send(x*y,s);
+      calc(s)
+    case Stop(s) ->
+      s
+  }
+}
+
+########################################
+# Two-factor authentication begins
+
+
+typename Error = String;
+typename Username = String;
+typename Password = String;
+typename User = (name:Username, password:Password);
+typename Nonce = Int;
+typename Response = Int;
+
+
+typename TwoFactor = ?User.[+|Accept:!Nonce.?Response.[+|Accept:Calc,
+                                                         Reject:!Error.EndBang|+],
+                              Reject:!Error.EndBang|+];
+
+
+
+sig validUser : (User) ~> Bool
+fun validUser(user) {
+  switch (user.name) {
+    case "me" -> user.password == "pass"
+    case _    -> false
+  }
+}
+
+sig hash : (Int) ~> Int
+fun hash(i) {
+  mod(i * 31,7)
+}
+
+sig secret : Int
+var secret = 2;
+
+sig generateNonce : () ~> Int
+fun generateNonce() {
+  floatToInt(random() *. 65536.0)
+}
+
+#sig reportError : (Error, Checker(s::Session)) ~> EndBang
+fun reportError(e, s) {
+  var s = select Reject s;
+  send(e, s)
+}
+
+sig serve : (TwoFactor) ~> EndBang
+fun serve(s) {
+  var (user, s) = receive(s);
+  if (validUser(user)) {
+    var s = select Accept s;
+    var nonce = generateNonce();
+    var s = send(nonce, s);
+    var (h, s) = receive(s);
+    if (h == hash(secret * nonce)) {
+      var s = select Accept s;
+      calc(s)
+    } else {
+      reportError("Invalid hash", s)
+    }
+  } else {
+    reportError("Invalid username or password", s)
+  }
+}
+
+sig goodMe : (~TwoFactor) ~> Int
+fun goodMe(c) {
+  var c = send((name="me", password="pass"), c);
+  offer (c) {
+    case Accept(c) ->
+      var (nonce, c) = receive(c);
+      var c = send(hash(secret * nonce), c);
+      offer (c) {
+        case Accept(c) ->
+          var c = select Mul c;
+          var (v, c) = receive(send(6,send(7,c)));
+          var c = select Stop c;
+          wait(c);
+          v
+        case Reject(c) ->
+          var (msg, c) = receive(c);
+          wait(c);
+          error(msg)
+      }
+    case Reject(c) ->
+      var (msg, c) = receive(c);
+      wait(c);
+      error(msg)
+  }
+}
+
+sig goodYou : (~TwoFactor) ~> Int
+fun goodYou(c) {
+  var c = send((name="you", password="bar"), c);
+  offer (c) {
+    case Accept(c) ->
+      var (nonce, c) = receive(c);
+      var c = send(hash(secret * nonce), c);
+      offer (c) {
+        case Accept(c) ->
+          var c = select Mul c;
+          var (v, c) = receive(send(6,send(7,c)));
+          var c = select Stop c;
+          wait(c);
+          v
+        case Reject(c) ->
+          var (msg, c) = receive(c);
+          wait(c);
+          error(msg)
+      }
+    case Reject(c) ->
+      var (msg, c) = receive(c);
+      wait(c);
+      error(msg)
+  }
+}
+
+sig badMe : (~TwoFactor) ~> Int
+fun badMe(c) {
+  var c = send((name="me", password="pass"), c);
+  offer (c) {
+    case Accept(c) ->
+      var (nonce, c) = receive(c);
+      var bad_secret = 3;
+      var c = send(hash(bad_secret * nonce), c);
+      offer (c) {
+        case Accept(c) ->
+          var c = select Mul c;
+          var (v, c) = receive(send(6,send(7,c)));
+          var c = select Stop c;
+          wait(c);
+          v
+        case Reject(c) ->
+          var (msg, c) = receive(c);
+          wait(c);
+          error(msg)
+      }
+    case Reject(c) ->
+      var (msg, c) = receive(c);
+      wait(c);
+      error(msg)
+
+  }
+}
+
+sig serveData : ((~TwoFactor) ~e~> Int) ~e~> Int
+fun serveData(user) {
+  user(forkSync(fun (s) {serve(s)}))
+}
+
+serveData(goodMe)
+#serveData(goodYou)
+#serveData(badMe)

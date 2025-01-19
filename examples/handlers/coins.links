@@ -1,0 +1,91 @@
+typename Zero = [||];
+
+typename Comp(a) = (() ~> a);
+typename CF(a, e::Eff) = Comp(a, {Choice: (()) => Bool,
+                                  Failure:(()) => Zero|e});
+
+sig choice : Comp(Bool, {Choice:(()) => Bool|_})
+fun choice() {do Choice(())}
+
+sig choose : (a, a) {Choice:(()) => Bool|_}~> a
+fun choose(x,y) {if (choice()) {x} else {y}}
+
+sig fail : Comp(a, {Failure:(()) => Zero|_})
+fun fail() {switch (do Failure(())) { }}
+
+sig allResults : (CF(a, {})) {}~> [a]
+fun allResults(m) {
+  handle(m()) {
+    case x     -> [x]
+    case <Choice(()) => k>  -> k(true) ++ k(false)
+    case <Failure(()) => k> -> []
+  }
+}
+
+typename Toss = [|Heads|Tails|];
+
+sig drunkToss : CF(Toss)
+fun drunkToss() {
+  if (choice()) {
+    choose(Heads, Tails)
+  } else {
+    fail()
+  }
+}
+
+sig drunkTosses : (Int) -> CF([Toss])
+fun drunkTosses(n)() {
+  for (_ <- [1..n]) [drunkToss()]
+}
+
+sig rand : Comp(Float, {Rand:(()) => Float|_})
+fun rand() {do Rand(())}
+
+sig randomResult :
+  (Comp(a, {Choice:(()) => Bool, Rand:(()) => Float|e})) -f->
+   Comp(a, {Choice{_},           Rand:(()) => Float|e})
+fun randomResult(m)() {
+  handle(m()) {
+    case x    -> x
+    case <Choice(()) => k> -> k (rand() < 0.5)
+  }
+}
+
+sig persevere : (Comp(a, {Failure:(()) => Zero|e})) -f->
+                 Comp(a, {Failure{_}          |e})
+fun persevere(m)() {
+  handle(m()) {
+    case x     -> x
+    case <Failure(()) => k> -> persevere(m)()
+  }
+}
+
+sig maybeResult : (Comp(a,        {Failure:(()) => Zero|e})) -f->
+                   Comp(Maybe(a), {Failure{_}          |e})
+fun maybeResult(m)() {
+  handle(m()) {
+    case x     -> Just(x)
+    case <Failure(()) => k> -> Nothing
+  }
+}
+
+sig handleRandom : (Comp(a, {Rand:(()) => Float})) {}~> a
+fun handleRandom(m) {
+  handle(m()) {
+    case x  -> x
+    case <Rand(()) => k> -> k (random())
+  }
+}
+
+op g -<- f {fun (x) {g(f(x))}}
+
+fun sampleMaybe(m) {(handleRandom -<- maybeResult -<- randomResult)(m)}
+fun sampleMaybe2(m) {(handleRandom -<- randomResult -<- maybeResult)(m)}
+fun sample(m) {(handleRandom -<- persevere -<- randomResult)(m)}
+fun sample2(m) {(handleRandom -<- randomResult -<- persevere)(m)}
+
+allResults(drunkTosses(3))
+#sampleMaybe(drunkTosses(2))
+#sampleMaybe2(drunkTosses(2))
+#sample(drunkTosses(5))
+#sample2(drunkTosses(5))

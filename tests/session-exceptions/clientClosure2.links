@@ -1,0 +1,29 @@
+#open Cancel2
+
+fun makePage() {
+    fun foo() {
+        try {
+          var f = fork(fun(s) { ignore(send(5, s)) });
+          linfun clos() { var (res, _) = receive(f); print("Closure received: " ^^ intToString(res)) }
+          raise;
+          clos()
+        } as (_) in {
+          print("success!")
+        } otherwise {
+          print("exception!")
+        }
+      }
+    var _ = spawnClient {
+      foo()
+    };
+
+    page
+        <#><h1>Yup</h1></#>
+}
+
+fun main() {
+    addRoute("/", fun (_) { makePage() });
+    servePages()
+}
+
+main()

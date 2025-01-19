@@ -1,0 +1,60 @@
+var db = database "links";
+
+var albumsTable =
+    table "albums"
+    with (album: String, quantity: Int)
+    tablekeys [["album"]]
+    from db;
+
+var tracksTable =
+    table "tracks"
+    with (track: String, date: Int, rating: Int, album: String)
+    tablekeys [["track", "album"]]
+    from db;
+
+var albumsLens = lens albumsTable with { album -> quantity };
+var tracksLens = lens tracksTable with { track -> date rating };
+
+var joinedLens = lensjoin albumsLens with tracksLens on album delete_left;
+
+sig assertEqSorted : ([a],[a]) ~> ()
+fun assertEqSorted(l1,l2) {
+  assertEq(sortBy(id,l1),sortBy(id,l2))
+}
+
+fun test() {
+  var old = lensget joinedLens;
+
+  var newTracks = [
+    (album = "Galore", date = 1989, quantity = 1, rating = 5, track = "Lovesong"),
+    (album = "Paris", date = 1989, quantity = 4, rating = 5, track = "Lovesong"),
+    (album = "Galore", date = 1989, quantity = 1, rating = 3, track = "Lullaby"),
+    (album = "Show", date = 1989, quantity = 3, rating = 3, track = "Lullaby"),
+    (album = "Eponymous", date = 1988, quantity = 42, rating = 5, track = "It's the end of the world as we know it"),
+    (album = "Wish", date = 1992, quantity = 5, rating = 4, track = "Trust")
+  ];
+
+  lensput joinedLens with newTracks;
+
+  assertEqSorted(lensget joinedLens, newTracks);
+  assertEqSorted(lensget albumsLens, [
+    (album = "Show", quantity = 3),
+    (album = "Galore", quantity = 1),
+    (album = "Paris", quantity = 4),
+    (album = "Wish", quantity = 5),
+    (album = "Disintegration", quantity = 7),
+    (album = "Eponymous", quantity = 42)
+  ]);
+  assertEqSorted(lensget tracksLens, [
+    (album = "Galore", date = 1989, rating = 5, track = "Lovesong"),
+    (album = "Paris", date = 1989, rating = 5, track = "Lovesong"),
+    (album = "Galore", date = 1989, rating = 3, track = "Lullaby"),
+    (album = "Show", date = 1989, rating = 3, track = "Lullaby"),
+    (album = "Eponymous", date = 1988, rating = 5, track = "It's the end of the world as we know it"),
+    (album = "Wish", date = 1992, rating = 4, track = "Trust")
+  ]);
+
+  lensput joinedLens with old
+}
+
+test()

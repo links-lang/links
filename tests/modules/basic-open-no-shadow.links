@@ -1,0 +1,17 @@
+module A {
+  module B {
+    fun bar() {
+      "hello"
+    }
+  }
+
+  fun foo() {
+    "hi"
+  }
+}
+
+open A;
+fun foo() {
+  "greetings"
+}
+foo()

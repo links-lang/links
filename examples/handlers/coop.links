@@ -1,0 +1,91 @@
+#
+# Cooperative concurrency with first-order algebraic effects
+#
+
+typename Two = Bool;
+typename One = ();
+
+# type of a concurrent computation
+typename Co(e::Eff, a) = Comp (a, {Fork  : Two,
+                                   Yield : One,
+                                   Stop  : Zero | e});
+
+## cooperative concurrency interface
+sig fork : Comp(Two, {Fork:Two|_})
+fun fork() {do Fork}
+
+sig yield : Comp(One, {Yield:One|_})
+fun yield() {do Yield}
+
+sig stop : Comp(a, {Stop:Zero|_})
+fun stop() {switch (do Stop) { }}
+
+# in fact `Yield` is redundant: we could use
+# yield() == if(fork()) {stop()} else {()}
+
+# example abstract concurrent computation
+sig test : Co({ |e}, One)
+fun test() {
+  print("M1 ");
+  if(fork()) { print("A1 "); yield(); print ("A2 "); stop() } else {
+    print("M2 ");
+    yield();
+    print("M3 ");
+    if(fork()) { print("B1 "); yield(); print ("B2 "); stop() } else {
+      print("M4 ");
+      yield();
+      print("M5 ");
+      print("\n");
+      stop()
+    }
+ }
+}
+
+# a resumption takes an initial list of resumptions and if one of them
+# yields a value returns a pair of the value and a list of unfinished
+# resumptions
+mutual {
+  typename Res(e::Eff, a) = (ResList({ |e}, a)) ~e~> Maybe ((a, ResList({ |e}, a)));
+  typename ResList(e::Eff, a) = [|Cons:(Res({ |e}, a), ResList({ |e}, a))|Nil|];
+}
+
+# Links (following OCaml) only infers recursive types when all
+# recursive type variables are guarded by a variant or record
+# constructor. This means it is more convenient to define Res mutually
+# recursively with a bespoke list type rather than using the standard
+# list type - otherwise we would need to add a number of type
+# annotations inside the body of coop.
+
+fun snoc(rs, r) {
+  switch (rs) {
+    case Nil             -> Cons(r, Nil)
+    case (Cons (r', rs)) -> Cons(r', snoc(rs, r))
+  }
+}
+
+sig coop : (Co({ |e}, a)) {Fork{p},Yield{q},Stop{r}|e}~> Res({Fork{p},Yield{q},Stop{r}|e}, a)
+fun coop(m) {
+  handle(m()) {
+    case x            -> fun (rs) {Just ((x, rs))}
+    case <Fork => k>  -> fun (rs) {
+                           k(true)(snoc(rs, fun(rs) {k(false)(rs)}))
+                         }
+    case <Yield => k> -> fun (rs) {
+                           switch (rs) {
+                             case Nil         -> k(())(Nil)
+                             case Cons(r, rs) -> r(snoc(rs, fun(rs) {k(())(rs)}))
+                           }
+                         }
+    case <Stop>       -> fun (rs) {
+                           switch (rs) {
+                             case Nil         -> Nothing
+                             case Cons(r, rs) -> r(rs)
+                           }
+                         }
+  }
+}
+
+sig run : (Co({ |e}, a)) {Fork{p},Yield{q},Stop{r}|e}~> Maybe ((a, ResList({Fork{p},Yield{q},Stop{r}|e}, a)))
+fun run(m) {
+  coop(m)(Nil)
+}

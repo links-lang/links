@@ -1,0 +1,25 @@
+typename Calc = [&|Add:?Int.?Int.!Int.EndBang, Mul:?Int.?Int.!Int.EndBang|&];
+
+sig calc : (Calc) ~> EndBang
+fun calc(s) {
+  offer (s) {
+    case Add(s) ->
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      send(x+y,s)
+    case Mul(s) ->
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      send(x*y,s)
+  }
+}
+
+sig user : (~Calc) ~> Int
+fun user(s) {
+  var s = select Mul s;
+  var (x, s) = receive(send(6,send(7,s)));
+  wait(s);
+  x
+}
+
+user(forkSync (calc))

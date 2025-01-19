@@ -1,0 +1,23 @@
+fun go() {
+  var ap = new();
+
+  try {
+    var s = fork (fun(s) {
+      var t = accept(ap);
+      var clos = linfun() { close(send(5, t)) };
+      raise;
+      close(send(clos, s))
+    });
+    var t = request(ap);
+    var (res, t) = receive(t);
+    close(t);
+    cancel(s);
+    1
+  } as (x) in {
+    "success: " ^^ intToString(x)
+  } otherwise {
+    "exception"
+  }
+}
+
+go()

@@ -1,0 +1,4 @@
+database_driver=postgresql
+database_args=$LINKS_POSTGRES_HOST:$LINKS_POSTGRES_PORT:$LINKS_POSTGRES_USER:$LINKS_POSTGRES_PASSWORD
+coerce_null_integers=on
+null_integer=-1

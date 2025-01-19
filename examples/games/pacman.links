@@ -1,0 +1,1524 @@
+#
+# LISTS
+#
+
+fun lsMap(f, l) {
+    if (empty(l)) []
+    else f(hd(l)) :: lsMap(f, tl(l))
+}
+
+fun lsFilter(p, l) {
+    if (empty(l)) []
+    else if (p(hd(l))) hd(l) :: lsFilter(p, tl(l))
+    else lsFilter(p, tl(l))
+}
+
+fun lsMapIgnore(f, l) {
+    if (empty(l)) ()
+    else { var _ = f(hd(l)); lsMapIgnore(f, tl(l)) }
+}
+
+fun lsCatMaybes(l) {
+    if (empty(l)) []
+    else switch (hd(l)) {
+        case Just(x) -> x :: lsCatMaybes(tl(l))
+        case Nothing -> lsCatMaybes(tl(l))
+    }
+}
+
+fun lsFoldLeft(f, i, l) {
+    if (empty(l)) i
+    else lsFoldLeft(f, f(i, hd(l)), tl(l))
+}
+
+#
+# MATH
+#
+sig fabs: (Float) -> Float
+fun fabs(x) {
+    if (x < 0.0) -.x else x
+}
+
+sig fmin: (Float, Float) -> Float
+fun fmin(a, b) {
+    if (a < b) a
+    else b
+}
+
+sig fmax: (Float, Float) -> Float
+fun fmax(a, b) {
+    if (a > b) a
+    else b
+}
+
+typename Vector = (Float, Float);
+
+fun vectorAdd((v1x, v1y), (v2x, v2y)) {
+    (v1x +. v2x, v1y +. v2y)
+}
+
+fun vectorSub((v1x, v1y), (v2x, v2y)) {
+    (v1x -. v2x, v1y -. v2y)
+}
+
+fun vectorMulS((v1x, v1y), s) {
+    (v1x *. s, v1y *. s)
+}
+
+fun vectorAddI((v1x, v1y), (v2x, v2y)) {
+    (v1x + v2x, v1y + v2y)
+}
+
+
+#
+# OTHER
+#
+sig catMaybes: ([Maybe(a)]) -> [a]
+fun catMaybes(ls) {
+    for (x <- ls) {
+        switch (x) {
+            case Just(x) -> [x]
+            case Nothing -> []
+        }
+    }
+}
+
+fun minimum(l) {
+    fun minimumHelper(l, currentMinimum) {
+        switch (l) {
+            case [] -> currentMinimum
+            case x::xs -> if (x < currentMinimum) minimumHelper(xs, x) else minimumHelper(xs, currentMinimum)
+        }
+    }
+    minimumHelper(tl(l), hd(l))
+}
+
+fun replica(n, item) {
+  if (n == 0) []
+  else item :: replica(n-1, item)
+}
+
+fun isNull(l) {
+    switch (l) {
+        case [] -> true
+        case _ -> false
+    }
+}
+
+fun isNothing(x) {
+    switch (x) {
+        case Nothing -> true
+        case _ -> false
+    }
+}
+
+fun maybe(n, f, m) {
+    switch (m) {
+        case Nothing -> n
+        case Just(x) -> f(x)
+    }
+}
+
+# intMap* -- emulates Haskell's IntMap
+typename IntMap(a) = [(Int, a)];
+
+fun intMapFromList(xs) {
+    xs
+}
+
+fun intMapToList(im) {
+    im
+}
+
+fun intMapDelete(i, im) {
+    fun h(i, im2, t) {
+        switch (im2) {
+            case [] -> im
+            case x::xs -> if (x.1 == i) t ++ xs else h(i, xs, t ++ [x]) # could optimize here by doing x::t
+        }
+    }
+
+    h(i, im, [])
+}
+
+fun intMapAt(im: IntMap(a), i) {
+    (im !! i).2
+}
+
+fun intMapElems(im: IntMap(a)) {
+    var (_, elems) = unzip(im);
+    # ELEMENTS SHOULD BE RETURNED IN ASCENDING ORDER OF KEYS
+    elems
+}
+
+fun intMapUpdateWithKey(f, i, im) {
+    fun h(f, i, im2, t) {
+        switch (im2) {
+            case [] -> im
+            case x::xs ->
+                if (i == x.1) {
+                    var newValue = f(x.1, x.2);
+                    switch (newValue) {
+                        case Nothing -> intMapDelete(i, im)
+                        case Just(y) -> t ++ [(i, y)] ++ xs
+                    }
+                } else {
+                    h(f, i, xs, t ++ [x])
+                }
+        }
+    }
+
+    h(f, i, im, [])
+}
+
+fun intMapUpdate(f, i, im) {
+    intMapUpdateWithKey(fun(_, x) { f(x) }, i, im)
+}
+
+fun intMapAdjustWithKey(f, i, im) {
+    intMapUpdateWithKey(fun (k, x) { Just(f(k, x)) }, i, im)
+}
+
+fun intMapAdjust(f, i, im) {
+    intMapAdjustWithKey(fun (_, x) { f(x) }, i, im)
+}
+
+fun intMapInsert(i, v, im) {
+    fun h(i, v, im2, t) {
+        switch (im2) {
+            case [] -> (i, v)::im
+            case x::xs ->
+                if (i == x.1) t ++ [(i, v)] ++ xs
+                else h(i, v, xs, t ++ [x])
+        }
+    }
+
+    h(i, v, im, [])
+}
+
+fun intMapFilter(p, im) {
+    switch (im) {
+        case [] -> []
+        case x::xs -> if (p(x.2)) x::intMapFilter(p, xs) else intMapFilter(p, xs)
+    }
+}
+
+fun intMapKeys(im) {
+    switch (im) {
+        case [] -> []
+        case x::xs -> (x.1)::intMapKeys(xs)
+    }
+}
+
+fun intMapLookup(i, im) { # dummy
+    switch (im) {
+        case [] -> Nothing
+        case x::xs -> if (x.1 == i) Just(x.2) else intMapLookup(i, xs)
+    }
+}
+
+#
+# AUX CANVAS
+#
+fun clear(ctx) {
+    jsClearRect(ctx, 0.0, 0.0, jsCanvasWidth(ctx), jsCanvasHeight(ctx))
+}
+
+#
+# Pillman
+# by Dariusz Jędrzejczak
+# based on Namco's Pac-Man
+#
+
+typename Input = [| KeyUp: Int | KeyDown: Int | CarryOn |];
+
+typename Planet = (x: Float, y: Float, r: Float);
+typename PillType = [| Regular | Power |];
+
+typename EntityState = [| Idle | Normal | Backward | Transition | Trapped | Vulnerable | Points | Eyes |];
+typename EntityDescription = (idx: Int, position: Vector, planet: Planet, angle: Float,
+                        dir: Float, speed: Float, baseSpeed: Float, r: Float, nextPlanet: Planet,
+                        state: EntityState, timeout: Int, state2: EntityState, timeout2: Int);
+
+typename Timeouts = (eaten: Int, trapped: Int, vulnerable: Int, transition: Int, eat: Int, idle: Int, ate: Int);
+
+typename GameMetaState = [| Run | Download | Restart |];
+typename GameState = [| On | Eaten | Eaten2 | Ate | Over | NextLevel | NextLevel2 | Won |];
+typename Pill = (Planet,[(Float,Float,PillType)]);
+typename Game = (pillman: EntityDescription, roger: EntityDescription,
+                 johnny: EntityDescription, greg: EntityDescription,
+                 bill: EntityDescription, pills: [Pill], pillCount: Int, score: Int,
+                 lives: Int, level: Int, state: GameState, timeout: Int,
+                 timeouts: Timeouts, metaState: GameMetaState);
+
+#
+# MAIN
+#
+fun main() {
+    # CANVAS PARAMETERS
+    var canvasId = "gameCanvas";
+    var canvas2Id = "gameCanvas2";
+    var containerId = "gameContainer";
+
+    var canvasWidth = 600.0;
+    var canvasHeight = 480.0;
+
+    var initializeProcId = spawnClient {
+        # LIST STUFF
+        var lsNil = [];
+
+        #
+        # CONSTANTS
+        #
+        # basic
+        var gameName = "Links Pillman";
+
+        # math
+        var pi = 3.14159265359;
+
+        # dimensions
+        var margin = 8.0;
+        var pillR = 2.0;
+        var powerPillR = 4.0;
+        var ghostR = 6.0;
+        var ghostTrappedOrbit = 6.0;
+        var pillmanR = 7.0;
+
+        # appearance
+        var vulnerableColor = "#66c";
+
+        # timeouts
+        var timeouts = (
+            eaten = 120,
+            trapped = 240,
+            vulnerable = 720,
+            transition = 60,
+            eat = 10,
+            idle = 120,
+            ate = 60
+        );
+
+        # scores
+        var regularPillScore = 10;
+        var powerPillScore = 50;
+
+        # game area
+        var gameAreaWidth = 400.0;
+        var gameAreaHeight = 400.0;
+        var bigR = 24.0;
+        var mediumR = 16.0;
+        var smallR = 8.0;
+        var longSpace = 80.0;
+        var gameAreaCenterX = gameAreaWidth /. 2.0;
+        var gameAreaCenterY = gameAreaHeight /. 2.0;
+
+        # planets
+        var ghostPlanet                = (x = gameAreaCenterX   , y = gameAreaCenterY   , r = bigR   );
+
+        var innerLeftGhostPlanet       = (x = ghostPlanet.x -. 72.0, y = ghostPlanet.y -. 8.0, r = mediumR);
+        var innerRightGhostPlanet      = (x = ghostPlanet.x +. 72.0, y = ghostPlanet.y -. 8.0, r = mediumR);
+        var leftGhostPlanet            = (x = innerLeftGhostPlanet.x -. 56.0, y = innerLeftGhostPlanet.y +. 28.0 , r = mediumR);
+        var rightGhostPlanet           = (x = innerRightGhostPlanet.x +. 56.0, y = innerRightGhostPlanet.y +. 28.0, r = mediumR);
+
+
+        var overGhostPlanet            = (x = ghostPlanet.x     , y = ghostPlanet.y -. 80.0, r = bigR   );
+
+        var innerLeftOverGhostPlanet   = (x = overGhostPlanet.x -. 80.0 , y = overGhostPlanet.y , r = bigR   );
+        var innerRightOverGhostPlanet  = (x = overGhostPlanet.x +. 80.0 , y = overGhostPlanet.y , r = bigR   );
+
+        var leftOverGhostPlanet        = (x = innerLeftOverGhostPlanet.x -. 64.0, y = innerLeftOverGhostPlanet.y, r = smallR );
+        var rightOverGhostPlanet       = (x = innerRightOverGhostPlanet.x +. 64.0, y = innerRightOverGhostPlanet.y, r = smallR );
+
+
+        var topPlanet                  = (x = overGhostPlanet.x , y = overGhostPlanet.y -. 64.0 , r = smallR );
+
+        var innerLeftTopPlanet         = (x = topPlanet.x -. 56.0, y = topPlanet.y       , r = mediumR);
+        var innerRightTopPlanet        = (x = topPlanet.x +. 56.0, y = topPlanet.y       , r = mediumR);
+        var leftTopPlanet              = (x = innerLeftTopPlanet.x -. 64.0, y = innerLeftTopPlanet.y +. 4.0, r = mediumR);
+        var rightTopPlanet             = (x = innerRightTopPlanet.x +. 64.0, y = innerRightTopPlanet.y +. 4.0, r = mediumR);
+
+
+        var leftPortal                 = (x = leftGhostPlanet.x -. 48.0 , y = leftGhostPlanet.y , r = 2.0);
+        var rightPortal                = (x = rightGhostPlanet.x +. 48.0, y = rightGhostPlanet.y, r = 2.0);
+
+
+        var underGhostPlanet           = (x = ghostPlanet.x     , y = ghostPlanet.y +. 80.0, r = bigR   );
+
+        var innerLeftUnderGhostPlanet  = (x = underGhostPlanet.x -. 80.0, y = underGhostPlanet.y -. 16.0, r = mediumR);
+        var innerRightUnderGhostPlanet = (x = underGhostPlanet.x +. 80.0, y = underGhostPlanet.y -. 16.0, r = mediumR);
+        var leftUnderGhostPlanet       = (x = innerLeftUnderGhostPlanet.x -. 48.0, y = innerLeftUnderGhostPlanet.y +. 44.0, r = mediumR);
+        var rightUnderGhostPlanet      = (x = innerRightUnderGhostPlanet.x +. 48.0, y = innerRightUnderGhostPlanet.y +. 44.0, r = mediumR);
+
+
+        var bottomPlanet               = (x = underGhostPlanet.x, y = underGhostPlanet.y +. 80.0, r = bigR   );
+
+        var innerLeftBottomPlanet      = (x = bottomPlanet.x -. 80.0, y = bottomPlanet.y    , r = bigR   );
+        var innerRightBottomPlanet     = (x = bottomPlanet.x +. 80.0, y = bottomPlanet.y    , r = bigR   );
+        var leftBottomPlanet           = (x = innerLeftBottomPlanet.x -. 64.0, y = innerLeftBottomPlanet.y, r = smallR );
+        var rightBottomPlanet          = (x = innerRightBottomPlanet.x +. 64.0, y = innerRightBottomPlanet.y, r = smallR );
+
+
+        var planets = [
+            innerLeftTopPlanet        ,
+            innerRightTopPlanet       ,
+            leftTopPlanet             ,
+            rightTopPlanet            ,
+            topPlanet                 ,
+            innerLeftOverGhostPlanet  ,
+            innerRightOverGhostPlanet ,
+            overGhostPlanet           ,
+            leftOverGhostPlanet       ,
+            rightOverGhostPlanet      ,
+            innerLeftGhostPlanet      ,
+            innerRightGhostPlanet     ,
+            leftGhostPlanet           ,
+            rightGhostPlanet          ,
+            ghostPlanet               ,
+            leftPortal                ,
+            rightPortal               ,
+            innerLeftUnderGhostPlanet ,
+            innerRightUnderGhostPlanet,
+            leftUnderGhostPlanet      ,
+            rightUnderGhostPlanet     ,
+            underGhostPlanet          ,
+            innerLeftBottomPlanet     ,
+            innerRightBottomPlanet    ,
+            leftBottomPlanet          ,
+            rightBottomPlanet         ,
+            bottomPlanet
+        ];
+
+        var connections = [
+            (ghostPlanet, innerLeftGhostPlanet),
+            (ghostPlanet, innerRightGhostPlanet),
+            (innerLeftGhostPlanet, leftGhostPlanet),
+            (innerRightGhostPlanet, rightGhostPlanet),
+            (leftGhostPlanet, innerLeftUnderGhostPlanet),
+            (rightGhostPlanet, innerRightUnderGhostPlanet),
+            (innerLeftUnderGhostPlanet, leftUnderGhostPlanet),
+            (innerRightUnderGhostPlanet, rightUnderGhostPlanet),
+            (leftUnderGhostPlanet, innerLeftBottomPlanet),
+            (rightUnderGhostPlanet, innerRightBottomPlanet),
+            (innerLeftBottomPlanet, leftBottomPlanet),
+            (innerRightBottomPlanet, rightBottomPlanet),
+            (innerLeftBottomPlanet, bottomPlanet),
+            (innerRightBottomPlanet, bottomPlanet),
+            (bottomPlanet, underGhostPlanet),
+            (underGhostPlanet, ghostPlanet),
+            (ghostPlanet, overGhostPlanet),
+            (leftGhostPlanet, leftPortal),
+            (rightGhostPlanet, rightPortal),
+            (overGhostPlanet, innerLeftOverGhostPlanet),
+            (overGhostPlanet, innerRightOverGhostPlanet),
+            (innerLeftOverGhostPlanet, innerLeftGhostPlanet),
+            (innerRightOverGhostPlanet, innerRightGhostPlanet),
+            (innerLeftOverGhostPlanet, leftOverGhostPlanet),
+            (innerRightOverGhostPlanet, rightOverGhostPlanet),
+            (innerLeftOverGhostPlanet, leftTopPlanet),
+            (innerRightOverGhostPlanet, rightTopPlanet),
+            (innerLeftOverGhostPlanet, innerLeftTopPlanet),
+            (innerRightOverGhostPlanet, innerRightTopPlanet),
+            (leftTopPlanet, innerLeftTopPlanet),
+            (rightTopPlanet, innerRightTopPlanet),
+            (innerLeftTopPlanet, topPlanet),
+            (innerRightTopPlanet, topPlanet),
+            (topPlanet, overGhostPlanet)
+        ];
+
+        # pills
+        var initialPills = lsMap(fun (x) {
+            var rr2 = (x.r +. 5.0 +. margin);
+            var dummy = (0.0,0.0,Regular);
+            if (x == ghostPlanet || x == leftPortal || x == rightPortal) (x, [])
+            else {
+                var (specialPill, pillRange) =
+                    if (x == leftBottomPlanet) {
+                        ((x.x +. rr2 *. sin(-.0.5 *. pi), x.y +. rr2 *. cos(-.0.5 *. pi), Power), intRange(-4, 15))
+                    }
+                    else if (x == rightBottomPlanet)
+                        ((x.x +. rr2 *. sin(-.1.5 *. pi), x.y +. rr2 *. cos(-.1.5 *. pi), Power), intRange(-15, 4))
+                    else if (x == leftOverGhostPlanet)
+                        ((x.x +. rr2 *. sin(-.0.5 *. pi), x.y +. rr2 *. cos(-.0.5 *. pi), Power), intRange(-4, 15))
+                    else if (x == rightOverGhostPlanet)
+                        ((x.x +. rr2 *. sin(-.1.5 *. pi), x.y +. rr2 *. cos(-.1.5 *. pi), Power), intRange(-15, 4))
+                    else (dummy, intRange(0, 21));
+
+                var regularPills = lsMap(fun (y) {
+                        (x.x +. rr2 *. sin(intToFloat(y) /. 11.0 *. pi),
+                            x.y +. rr2 *. cos(intToFloat(y) /. 11.0 *. pi), Regular)
+                    }, pillRange);
+
+                (x, if (specialPill == dummy) regularPills else specialPill :: regularPills)
+            }
+        }, planets);
+
+        fun countPills(l, n) {
+            fun pillLength(l, n) {
+                if (empty(l)) n
+                else {
+                    var p = hd(l);
+                    if (p.3 == Regular) pillLength(tl(l), n + 1)
+                    else pillLength(tl(l), n)
+                }
+            }
+
+            if (empty(l)) n
+            else {
+                var p = hd(l);
+                countPills(tl(l), n + pillLength(p.2, 0))
+            }
+        }
+
+        var pillCount = countPills(initialPills, 0);
+
+        # ghosts
+        var rogerGhost =  (idx = 1, position = (ghostPlanet.x, ghostPlanet.y),
+                            planet = ghostPlanet, angle = pi *. 1.0, dir = 1.0,
+                            baseSpeed = 0.015, speed = 0.015, r = ghostR, nextPlanet = ghostPlanet,
+                            state = Trapped, timeout = timeouts.trapped, state2 = Normal, timeout2 = 0): EntityDescription;
+        var johnnyGhost = (idx = 2, position = (ghostPlanet.x, ghostPlanet.y),
+                            planet = ghostPlanet, angle = pi *. 1.6, dir = 1.0,
+                            baseSpeed = 0.012, speed = 0.012, r = ghostR, nextPlanet = ghostPlanet,
+                            state = Trapped, timeout = timeouts.trapped, state2 = Normal, timeout2 = 0): EntityDescription;
+        var gregGhost =   (idx = 3, position = (ghostPlanet.x, ghostPlanet.y),
+                            planet = ghostPlanet, angle = pi *. 1.2, dir = 1.0,
+                            baseSpeed = 0.010, speed = 0.010, r = ghostR, nextPlanet = ghostPlanet,
+                            state = Trapped, timeout = timeouts.trapped, state2 = Normal, timeout2 = 0): EntityDescription;
+        var billGhost =   (idx = 4, position = (ghostPlanet.x, ghostPlanet.y),
+                            planet = ghostPlanet, angle = pi *. 1.4, dir = 1.0,
+                            baseSpeed = 0.012, speed = 0.012, r = ghostR, nextPlanet = ghostPlanet,
+                            state = Trapped, timeout = timeouts.trapped, state2 = Normal, timeout2 = 0): EntityDescription;
+
+
+        # KEYCODES
+        var leftKeyCode = 37;
+        var rightKeyCode = 39;
+        var upKeyCode = 38;
+        var downKeyCode = 40;
+        var spaceKeyCode = 32;
+        var zKeyCode = 90;
+        var xKeyCode = 88;
+        var restartKeyCode = 113;
+        var downloadKeyCode = 115;
+
+        # SIMULATION SETTINGS
+        var doubleBuffer = true;
+        var step = 1.0 /. 60.0;
+        var initialFpsInfo = (frameCount=0, dFps=0.0, avgFps=0.0, fpsAcc=0.0,
+                                loFps=1000000.0, hiFps=0.0, loFpsFrame=0, upFrames=0, downFrames=0);
+        var debug = false;
+
+        # INITIAL GAME STATE
+        var rr = (bottomPlanet.r +. pillmanR +. margin);
+        var pillmanDescription = (idx = 0, position = (bottomPlanet.x +. rr *. sin(pi), bottomPlanet.y +. rr *. cos(pi)),
+                            planet = bottomPlanet, angle = pi, dir = 1.0,
+                            baseSpeed = 0.02, speed = 0.02, r = pillmanR,
+                            nextPlanet = bottomPlanet, state = Normal, timeout = 0,
+                            state2 = Normal, timeout2 = 0): EntityDescription;
+
+        fun getInitialGameState() {
+            (pillman = pillmanDescription,
+                roger = rogerGhost, johnny = johnnyGhost, greg = gregGhost, bill = billGhost,
+                pills = initialPills, score = 0, pillCount = 0, lives = 3, level = 1, state = On,
+                timeout = 0, timeouts = timeouts, metaState = Run): Game
+        }
+
+        #
+        # DRAWING
+        #
+        fun draw(gameState: Game, lastTime, now, fpsInfo) {
+            # prepare canvas
+            var (mainCanvas, dispCanvas) =
+                if (domGetStyleAttrFromRef(getNodeById(canvasId), "display") == "none" || not(doubleBuffer))
+                    (canvasId, canvas2Id)
+                else (canvas2Id, canvasId);
+            var ctx = jsGetContext2D(getNodeById(mainCanvas));
+
+            var pillmanColor = "#cc4";
+            var pupilColor = "#111";
+            var eyeColor = "#ddd";
+            var textColor = "#ddd";
+            var blinkColor = "#ddd";
+            var gameOverColor = "#c66";
+            var planetColor = "#115";
+            var highlightColor = "#282";
+
+            clear(ctx);
+
+            # drawing functions
+            fun drawPillman(pillman, gameState) {
+                if (gameState.state == Eaten2) { # draw the final frame of the eaten animation
+                    var x = pillman.position.1;
+                    var y = pillman.position.2;
+
+                    jsLineWidth(ctx, 1.0);
+                    jsStrokeStyle(ctx, pillmanColor);
+                    jsBeginPath(ctx);
+
+                    jsMoveTo(ctx, x, y -. 3.0);
+                    jsLineTo(ctx, x, y -. 5.0);
+                    jsMoveTo(ctx, x, y +. 3.0);
+                    jsLineTo(ctx, x, y +. 5.0);
+                    jsMoveTo(ctx, x -. 3.0, y);
+                    jsLineTo(ctx, x -. 5.0, y);
+                    jsMoveTo(ctx, x +. 3.0, y);
+                    jsLineTo(ctx, x +. 5.0, y);
+
+                    jsMoveTo(ctx, x -. 2.0, y -. 2.0);
+                    jsLineTo(ctx, x -. 4.0, y -. 4.0);
+                    jsMoveTo(ctx, x +. 2.0, y +. 2.0);
+                    jsLineTo(ctx, x +. 4.0, y +. 4.0);
+                    jsMoveTo(ctx, x -. 2.0, y +. 2.0);
+                    jsLineTo(ctx, x -. 4.0, y +. 4.0);
+                    jsMoveTo(ctx, x +. 2.0, y -. 2.0);
+                    jsLineTo(ctx, x +. 4.0, y -. 4.0);
+
+                    jsClosePath(ctx);
+                    jsStroke(ctx)
+                } else { # draw the animations for eating or being eaten
+                    var (timeout, totalTimeout, piFraction) =
+                    if (gameState.state == Eaten) (gameState.timeout, gameState.timeouts.eaten + 1, 1.0)
+                    else (pillman.timeout, gameState.timeouts.eat + 1, 0.3);
+
+                    var angle =
+                        if (pillman.dir == 1.0) -.pillman.angle -. (piFraction +. 0.1) *. pi
+                        else -.pillman.angle +. (1.1 -. piFraction) *. pi;
+
+                    var mouthOpen = switch (pillman.state) {
+                        case Normal ->
+                            piFraction *. pi *. (intToFloat(timeout + 1) /. intToFloat(totalTimeout))
+                        case Backward ->
+                            piFraction *. pi *. (intToFloat(totalTimeout - timeout + 1) /. intToFloat(totalTimeout))
+                        case _ -> 0.0
+                    };
+
+                    jsSetFillColor(ctx, pillmanColor);
+                    jsBeginPath(ctx);
+
+                    jsMoveTo(ctx, pillman.position.1, pillman.position.2);
+                    jsArc(ctx, pillman.position.1, pillman.position.2, pillmanR,
+                                (1.0 -. piFraction) *. pi -. mouthOpen +. angle,
+                                mouthOpen +. angle,
+                                false);
+                    jsLineTo(ctx, pillman.position.1, pillman.position.2);
+
+                    jsClosePath(ctx);
+                    jsFill(ctx);
+
+                    # draw the eye
+                    if (gameState.state == Eaten || gameState.state == Eaten2) ()
+                    else {
+                        var pillmanRR = (pillman.planet.r +. pillmanR +. margin);
+                        var tailLength = 0.125 *. (bigR +. pillmanR +. margin) /. pillmanRR;
+
+                        jsSetFillColor(ctx, pupilColor);
+                        jsFillCircle(ctx, pillman.planet.x +. (pillmanRR -. 2.0) *. sin(pillman.angle -. pillman.dir *. tailLength),
+                                          pillman.planet.y +. (pillmanRR -. 2.0) *. cos(pillman.angle -. pillman.dir *. tailLength),
+                                          2.0);
+
+                        jsSetFillColor(ctx, eyeColor);
+                        jsFillCircle(ctx, pillman.planet.x +. (pillmanRR -. 2.0) *. sin(pillman.angle -. pillman.dir *. tailLength),
+                                          pillman.planet.y +. (pillmanRR -. 2.0) *. cos(pillman.angle -. pillman.dir *. tailLength),
+                                          1.0)
+                    }
+                }
+            }
+
+            fun drawGhostEyes(ghost, angle, rr, color) {
+                jsSetFillColor(ctx, color);
+                jsFillCircle(ctx, ghost.planet.x +. (rr +. 4.0) *. sin(angle),
+                                ghost.planet.y +. (rr +. 4.0) *. cos(angle), ghostR /. 3.0);
+                jsFillCircle(ctx, ghost.planet.x +. (rr -. 4.0) *. sin(angle),
+                                ghost.planet.y +. (rr -. 4.0) *. cos(angle), ghostR /. 3.0)
+            }
+
+            fun drawGhostPupils(ghost, angle, rr, color) {
+                jsSetFillColor(ctx, color);
+                jsFillCircle(ctx, ghost.planet.x +. (rr +. 4.0) *. sin(angle),
+                                ghost.planet.y +. (rr +. 4.0) *. cos(angle), ghostR /. 5.0);
+                jsFillCircle(ctx, ghost.planet.x +. (rr -. 4.0) *. sin(angle),
+                                ghost.planet.y +. (rr -. 4.0) *. cos(angle), ghostR /. 5.0)
+            }
+
+          fun drawFps(ctx, fpsInfo, dFps) {
+              var fpsInfo = (fpsInfo with frameCount = fpsInfo.frameCount + 1, dFps = dFps);
+
+              jsFillText(ctx, "FPS: " ^^ strsub(floatToString(dFps), 0, 7), 10.0, 10.0);
+
+              var fpsInfo = if (fpsInfo.loFps > dFps) {
+                  (fpsInfo with loFps = dFps, loFpsFrame = fpsInfo.frameCount - 1)
+              }
+              else fpsInfo;
+
+              var fpsInfo = if (fpsInfo.hiFps < dFps)
+                  (fpsInfo with hiFps = dFps)
+              else fpsInfo;
+
+              var fpsInfo = (fpsInfo with fpsAcc = fpsInfo.fpsAcc +. dFps);
+
+              var aFpsFrames = 100;
+              var fpsInfo = if (fpsInfo.frameCount > aFpsFrames) {
+                  (fpsInfo with avgFps = fpsInfo.fpsAcc /. intToFloat(aFpsFrames), fpsAcc = 0.0, frameCount = 0)
+              } else fpsInfo;
+
+              var fpsInfo = if (fpsInfo.avgFps > 0.0) {
+                  if (dFps < fpsInfo.avgFps *. 0.5)
+                      (fpsInfo with downFrames = fpsInfo.downFrames + 1)
+                  else (fpsInfo with upFrames = fpsInfo.upFrames + 1)
+              } else (fpsInfo with hiFps = 0.0);
+
+              if (fpsInfo.hiFps == 0.0)
+                  jsFillText(ctx, "loading data: " ^^ intToString(fpsInfo.frameCount) ^^ "/" ^^ intToString(aFpsFrames), 100.0, 10.0)
+              else
+                  jsFillText(ctx, "highest FPS: " ^^ strsub(floatToString(fpsInfo.hiFps), 0, 7), 100.0, 10.0);
+
+              fpsInfo
+          }
+
+          fun swapBuffers(mainCanvas, dispCanvas) {
+              var ctx = jsGetContext2D(getNodeById(dispCanvas));
+              jsDrawImage(ctx, getNodeById(mainCanvas), 0.0, 0.0);
+
+              var _ = domSetStyleAttrFromRef(getNodeById(mainCanvas), "display", "block");
+              var _ = domSetStyleAttrFromRef(getNodeById(dispCanvas), "display", "none");
+              clear(ctx)
+          }
+
+            fun drawGhost(ghost, color) {
+                var ghostRR = (ghost.planet.r +. ghostR +. margin);
+                var ghostRR2 = ghostRR +. 4.0;
+                var ghostRR3 = ghostRR -. 4.0;
+                var bottomPartR = ghostR /. 3.0;
+                var b = 0.15 *. (bigR +. ghostR +. margin) /. ghostRR *. ghost.dir;
+                var bottomAngle = ghost.angle -. b;
+                var eyesAngle = ghost.angle -. b *. -.0.1;
+                var mouthAngle = ghost.angle -. b *. 0.7;
+
+                # pick a color
+                if (not(ghost.state == Vulnerable) && not(ghost.state2 == Vulnerable)) jsSetFillColor(ctx, color)
+                else {
+                    var oneFourthTimeout = gameState.timeouts.vulnerable / 4;
+                    if (ghost.timeout > oneFourthTimeout || ghost.timeout `mod` 15 > 7)
+                        jsSetFillColor(ctx, vulnerableColor)
+                    else
+                        jsSetFillColor(ctx, "#aad")
+                };
+
+                # draw different parts depending on ghost state
+                if (ghost.state == Points) {
+                    jsSetFillColor(ctx, "#88d");
+                    jsFillText(ctx, intToString(ghost.timeout), ghost.position.1, ghost.position.2)
+                }
+                else if (ghost.state == Eyes) {
+                    drawGhostEyes(ghost, eyesAngle, ghostRR, eyeColor);
+                    drawGhostPupils(ghost, eyesAngle, ghostRR, pupilColor)
+                }
+                else jsFillCircle(ctx, ghost.position.1, ghost.position.2, ghostR); # trapped ghost is just a circle
+
+                if (ghost.state == Normal || ghost.state == Vulnerable || ghost.state == Idle) {
+                    # draw ghost's bottom
+                    jsFillCircle(ctx, ghost.planet.x +. ghostRR *. sin(bottomAngle),
+                                    ghost.planet.y +. ghostRR *. cos(bottomAngle), bottomPartR);
+                    jsFillCircle(ctx, ghost.planet.x +. ghostRR2 *. sin(bottomAngle),
+                                    ghost.planet.y +. ghostRR2 *. cos(bottomAngle), bottomPartR);
+                    jsFillCircle(ctx, ghost.planet.x +. ghostRR3 *. sin(bottomAngle),
+                                    ghost.planet.y +. ghostRR3 *. cos(bottomAngle), bottomPartR);
+                    # eyes
+                    drawGhostEyes(ghost, eyesAngle, ghostRR, eyeColor);
+
+                    if (ghost.state == Normal || ghost.state == Idle) { # no pupils if vulnerable
+                        drawGhostPupils(ghost, eyesAngle, ghostRR, pupilColor)
+                    } else { # draw the mouth when vulnerable
+                        jsBeginPath(ctx);
+                        jsStrokeStyle(ctx, eyeColor);
+                        jsLineWidth(ctx, 1.5);
+                        jsMoveTo(ctx, ghost.planet.x +. ghostRR3 *. sin(mouthAngle),
+                                    ghost.planet.y +. ghostRR3 *. cos(mouthAngle));
+                        jsLineTo(ctx, ghost.planet.x +. ghostRR2 *. sin(mouthAngle),
+                                    ghost.planet.y +. ghostRR2 *. cos(mouthAngle));
+                        jsClosePath(ctx);
+                        jsStroke(ctx)
+                    }
+                } else ()
+            }
+
+            #
+            # DRAWING PART
+            #
+
+            # draw the HUD
+            jsSetFillColor(ctx, textColor);
+            jsFillText(ctx, "Pills: " ^^ intToString(gameState.pillCount) ^^ "/" ^^ intToString(pillCount), 10.0, 30.0);
+            jsFillText(ctx, "Score: " ^^ intToString(gameState.score), 10.0, 40.0);
+            jsFillText(ctx, "Level: " ^^ intToString(gameState.level), 10.0, 50.0);
+
+            if (gameState.lives < 0) {
+                jsSetFillColor(ctx, gameOverColor);
+                jsFillText(ctx, "GAME OVER", 10.0, 70.0)
+            }
+            else {
+                jsFillText(ctx, "Lives: " ^^ intToString(gameState.lives), 10.0, 70.0);
+
+
+                lsMapIgnore(fun (x) {
+                    var x = intToFloat(x);
+                    var pos = (20.0 +. x *. 2.5 *. pillmanR, 90.0);
+                    drawPillman((pillmanDescription with position = pos, planet = (x = pos.1, y = pos.2, r = -.10.0)), (gameState with state = On))
+                }, intRange(0, gameState.lives - 1))
+            };
+
+            # draw the game area
+            var drawOffset = (x = 108.0, y = 24.0);
+            jsSave(ctx);
+            jsTranslate(ctx, drawOffset.x, drawOffset.y);
+
+            # could also draw the static stuff statically -- predraw on a hidden canvas, then display that every frame
+            # draw the connections between planets
+            jsBeginPath(ctx);
+            jsStrokeStyle(ctx, "#222");
+            lsMapIgnore(fun (x) {
+                jsMoveTo(ctx, x.1.x +. random(), x.1.y +. random());
+                jsLineTo(ctx, x.2.x +. random(), x.2.y +. random());
+                jsStroke(ctx)
+            }, connections);
+            jsClosePath(ctx);
+
+            # highlight the connection which pillman collides with
+            if (gameState.pillman.planet == gameState.pillman.nextPlanet) ()
+            else if (gameState.state == On) {
+                jsBeginPath(ctx);
+                jsStrokeStyle(ctx, highlightColor);
+                jsLineWidth(ctx, 4.0);
+                jsMoveTo(ctx, gameState.pillman.planet.x +. random(), gameState.pillman.planet.y +. random());
+                jsLineTo(ctx, gameState.pillman.nextPlanet.x +. random(), gameState.pillman.nextPlanet.y +. random());
+                jsStroke(ctx);
+                jsClosePath(ctx)
+            } else ();
+
+            # draw ghost planet bottom layer
+            jsSetFillColor(ctx, "#003");
+            jsFillCircle(ctx, ghostPlanet.x +. random(), ghostPlanet.y +. random(), ghostPlanet.r *. 1.2 +. random());
+
+            # draw the planets
+            if (gameState.state == NextLevel && gameState.timeout `mod` 20 > 10)
+                jsSetFillColor(ctx, blinkColor)
+            else jsSetFillColor(ctx, planetColor);
+            lsMapIgnore(fun (x) {
+                jsFillCircle(ctx, x.x +. random(), x.y +. random(), x.r +. random())
+            }, planets);
+
+            # draw ghost planet top layer
+            jsSetFillColor(ctx, "#226");
+            jsFillCircle(ctx, ghostPlanet.x +. random(), ghostPlanet.y +. random(), ghostPlanet.r *. 0.8 +. random());
+
+            # draw pills
+            jsSetFillColor(ctx, pillmanColor);
+            lsMapIgnore(fun (x) {
+                lsMapIgnore(fun (y) {
+                    switch (y.3) {
+                        case Regular -> jsFillCircle(ctx, y.1 +. random(), y.2 +. random(), pillR)
+                        case Power -> jsFillCircle(ctx, y.1 +. random(), y.2 +. random(), powerPillR)
+                        case _ -> ()
+                    }
+                }, x.2)
+            }, gameState.pills);
+
+            if (gameState.state == Over) { # don't draw the rest if game over
+                jsSetFillColor(ctx, gameOverColor);
+                jsFillText(ctx, "GAME     OVER", ghostPlanet.x -. 37.0, ghostPlanet.y +. 48.0)
+            }
+            else {
+                # highlight the current planet
+                if (gameState.state == On) {
+                    jsSetFillColor(ctx, highlightColor);
+                    jsFillCircle(ctx, gameState.pillman.planet.x +. random(), gameState.pillman.planet.y +. random(), gameState.pillman.planet.r *. 0.8 +. random())
+                } else ();
+
+                # draw Pillman
+                if (gameState.state == Ate) ()
+                else drawPillman(gameState.pillman, gameState);
+
+                # draw ghosts
+                if (gameState.state == Eaten || gameState.state == Eaten2) () # don't draw ghosts if eaten
+                else {
+                    drawGhost(gameState.roger, "#a44");
+                    drawGhost(gameState.johnny, "#4a4");
+                    drawGhost(gameState.greg, "#a6a");
+                    drawGhost(gameState.bill, "#6aa")
+                };
+
+                # draw portals
+                jsSetFillColor(ctx, "#eec");
+                jsFillCircle(ctx, leftPortal.x, leftPortal.y, leftPortal.r *. 1.2);
+                jsFillCircle(ctx, rightPortal.x, rightPortal.y, rightPortal.r *. 1.2)
+            };
+
+            jsRestore(ctx);
+
+            # calculate and draw new fpsInfo
+            var dFps = 1000.0 /. (intToFloat(now - lastTime) +. 1.0);
+            jsSetFillColor(ctx, textColor);
+            var fpsInfo = if (debug) drawFps(ctx, fpsInfo, dFps) else fpsInfo; # debug
+
+            # double buffering
+            if (doubleBuffer) swapBuffers(mainCanvas, dispCanvas) else ();
+
+            # save canvas to file
+            var gameState = if (gameState.metaState == Download) { # screenshot
+                var downloadNode = getNodeById("download");
+                var imageName = gameName ^^ "-" ^^ intToString(clientTimeMilliseconds()) ^^ ".png";
+                var _ = domSetAttributeFromRef(downloadNode, "download", imageName);
+                domReplaceChildren(
+                    <#>
+                        {stringToXml("Click to download the snapshot as")}
+                        <br />
+                        {stringToXml(imageName)}
+                    </#>,
+                    downloadNode);
+                jsSaveCanvas(getNodeById(mainCanvas), downloadNode, "image/png");
+
+                (gameState with state = On)
+            }
+            else gameState;
+
+            # return
+            fpsInfo
+        }
+
+        #
+        # LOGIC
+        #
+        # collisions
+        fun lineCircleCollision(line, circle) {
+            var (d, f) = (vectorSub(line.2, line.1),  vectorSub(line.1, circle.1));
+
+            var a = (d.1 *. d.1) +. (d.2 *. d.2);
+            var b = 2.0 *. ((f.1 *. d.1) +. (f.2 *. d.2));
+            var c = ((f.1 *. f.1) +. (f.2 *. f.2)) -. (circle.2 *. circle.2);
+            var delta = (b *. b) -. (4.0 *. a *. c);
+
+
+            if (delta < 0.0) false
+            else {
+                var delta = sqrt(delta);
+
+                var t1 = (-.b -. delta) /. (2.0 *. a);
+                var t2 = (-.b +. delta) /. (2.0 *. a);
+
+                if ((t1 >= 0.0 && t1 <= 1.0) || (t2 >= 0.0 && t2 <= 1.0))
+                    true
+                else false
+            }
+        }
+
+        fun circleCircleCollision(circle1, circle2) {
+            var v = vectorSub(circle1.1, circle2.1);
+            var r = circle1.2 +. circle2.2;
+
+            if (v.1 *. v.1 +. v.2 *. v.2 < r *. r)
+                true
+            else false
+        }
+
+        # math
+        fun pointDistance(p1, p2) {
+            var diff = vectorSub(p1, p2);
+            sqrt(diff.1 *. diff.1 +. diff.2 *. diff.2)
+        }
+
+        # entity manipulation
+        fun getNextPlanet(entity, connections) {
+            if (empty(connections)) entity.planet
+            else {
+                var x = hd(connections);
+                if(lineCircleCollision(((x.1.x, x.1.y), (x.2.x, x.2.y)),
+                                        (entity.position, entity.r)))
+                    if (entity.planet == x.2) x.1
+                    else x.2
+                else getNextPlanet(entity, tl(connections))
+            }
+        }
+
+        fun getCurrentSpeed(base, gameState) {
+            base +. intToFloat(gameState.level) *. 0.00012
+        }
+
+        fun resetPillman(pillman, gameState) {
+            (pillman with planet = bottomPlanet, speed = getCurrentSpeed(pillman.baseSpeed, gameState), nextPlanet = bottomPlanet, angle = pi, dir = 1.0, state = Normal)
+        }
+
+        fun resetGhost(ghost, gameState) {
+            var ghost = if (ghost.state == Vulnerable) (ghost with speed = getCurrentSpeed(ghost.baseSpeed, gameState)) else ghost;
+            (ghost with planet = ghostPlanet, state = Trapped, timeout = gameState.timeouts.trapped, state2 = Normal, timeout2 = 0) # should also reset the angle to starting position
+        }
+
+        fun updateGhost(ghost, gameState) {
+            var trappedGhostRR = (ghostPlanet.r /. 4.0 +. ghostR);
+
+            var ghostRR =
+            if (ghost.state == Trapped) trappedGhostRR
+            else if (ghost.state == Transition) ((ghost.planet.r /. intToFloat(ghost.timeout + 1)) +. ghostR +. margin)
+            else (ghost.planet.r +. ghostR +. margin);
+
+            var ghost = (ghost with planet = if (ghost.planet == leftPortal) rightGhostPlanet else if (ghost.planet == rightPortal) leftGhostPlanet else ghost.planet);
+            var ghost = (ghost with
+                angle = ghost.angle +. ghost.dir *. ghost.speed,
+                position = (ghost.planet.x +. ghostRR *. sin(ghost.angle),
+                            ghost.planet.y +. ghostRR *. cos(ghost.angle)),
+                nextPlanet = getNextPlanet(ghost, connections)
+            );
+            var ghost =
+                if (ghost.timeout2 > 0) {
+                   (ghost with timeout2 = ghost.timeout2 - 1)
+                } else ghost;
+
+            var ghost =
+                if (ghost.state == Points)
+                    (ghost with state = Eyes, timeout = 360, speed = getCurrentSpeed(ghost.baseSpeed, gameState) *. 3.0)
+                else if (ghost.timeout > 0)
+                    (ghost with timeout = ghost.timeout - 1)
+                else if (ghost.state == Trapped)
+                    (ghost with state = Transition, timeout = gameState.timeouts.transition)
+                else if (ghost.state == Transition)
+                    (ghost with state = ghost.state2, timeout = ghost.timeout2, state2 = Normal, timeout2 = 0)
+                else if (ghost.state == Vulnerable)
+                    (ghost with state = Normal, timeout = 0, speed = getCurrentSpeed(ghost.baseSpeed, gameState))
+                else if (ghost.state == Idle)
+                    (ghost with state = Normal, timeout = 0)
+                else ghost;
+            ghost
+        }
+
+        fun updatePillman(gameState) {
+            var pillman = gameState.pillman;
+            var pillmanRR = (pillman.planet.r +. pillmanR +. margin);
+
+            var pillman = (pillman with
+                angle = pillman.angle +. pillman.dir *. pillman.speed,
+                position = (pillman.planet.x +. pillmanRR *. sin(pillman.angle),
+                            pillman.planet.y +. pillmanRR *. cos(pillman.angle)),
+                nextPlanet = getNextPlanet(pillman, connections)
+            );
+
+            var pillman =
+                if (pillman.timeout > 0)
+                    (pillman with timeout = pillman.timeout - 1)
+                else if (pillman.state == Normal)
+                    (pillman with state = Backward, timeout = gameState.timeouts.eat)
+                else if (pillman.state == Backward)
+                    (pillman with state = Normal, timeout = gameState.timeouts.eat)
+                else pillman;
+
+            pillman
+        }
+
+        # changes ghost state to Vulnerable
+        fun transformGhost(ghost, gameState) {
+            if (ghost.state == Normal || ghost.state == Idle)
+                (ghost with state = Vulnerable, timeout = gameState.timeouts.vulnerable, speed = getCurrentSpeed(ghost.baseSpeed, gameState) *. 0.5)
+            else if (ghost.state == Trapped)
+                (ghost with state2 = Vulnerable, timeout2 = gameState.timeouts.vulnerable)
+            else
+                ghost
+        }
+
+        # eats a pill if possible and updates the game state
+        fun getNewPillPlanets(l, headPlanets, gameState) {
+            fun getNewPills(l, headPills, gameState) {
+                if (empty(l)) (gameState, headPills)
+                else {
+                    var pill = hd(l);
+
+                    if (circleCircleCollision(((pill.1, pill.2), pillR), (gameState.pillman.position, pillmanR))) {
+                        var gameState = switch (pill.3) {
+                            case Regular ->
+                                (gameState with
+                                    score = gameState.score + regularPillScore,
+                                    pillCount = gameState.pillCount + 1)
+                            case Power ->
+                                    (gameState with
+                                        score = gameState.score + powerPillScore,
+                                        roger = transformGhost(gameState.roger, gameState),
+                                        johnny = transformGhost(gameState.johnny, gameState),
+                                        greg = transformGhost(gameState.greg, gameState),
+                                        bill = transformGhost(gameState.bill, gameState))
+                            case _ -> gameState
+                        };
+                        (gameState, headPills ++ tl(l))
+                    }
+                    else
+                        getNewPills(tl(l), headPills ++ [pill], gameState)
+                }
+            }
+
+            if (empty(l)) gameState
+            else {
+                var pillPlanet = hd(l);
+
+                if (gameState.pillman.planet == pillPlanet.1) {
+                    var (gameState, newPills) = getNewPills(pillPlanet.2, lsNil, gameState);
+                    var t = [(gameState.pillman.planet, newPills)];
+                    var d = t ++ tl(l);
+
+                    (gameState with pills = headPlanets ++ d)
+                }
+                else
+                    getNewPillPlanets(tl(l), headPlanets ++ [pillPlanet], gameState)
+            }
+        }
+
+        #
+        # INPUT
+        #
+        fun changePillmanPlanet(gameState) {
+            if (not(gameState.pillman.nextPlanet == gameState.pillman.planet)) {
+                var newPlanet =
+                    if (gameState.pillman.nextPlanet == leftPortal)
+                        rightGhostPlanet
+                    else if (gameState.pillman.nextPlanet == rightPortal)
+                        leftGhostPlanet
+                    else gameState.pillman.nextPlanet;
+                (gameState with pillman = (gameState.pillman with planet = newPlanet, angle = gameState.pillman.angle +. pi))
+            } else gameState
+        }
+
+        fun handleKey(k, gameState: Game) {
+            # for some reason pattern matching doesn't work (always selects the first option), so I use if-else
+            if (k == KeyDown(restartKeyCode))
+                (gameState with metaState = Restart)
+            else if (k == KeyDown(downloadKeyCode))
+                (gameState with metaState = Download)
+            else if (gameState.state == On)
+                if (k == KeyDown(spaceKeyCode)) {
+                    var gameState = changePillmanPlanet(gameState);
+
+                    # change direction
+                    (gameState with pillman = (gameState.pillman with dir = -.gameState.pillman.dir))
+                } else if (k == KeyDown(zKeyCode)) { # change dir
+                    (gameState with pillman = (gameState.pillman with dir = -.gameState.pillman.dir))
+                } else if (k == KeyDown(xKeyCode)) { # change planet
+                    changePillmanPlanet(gameState)
+                } else gameState
+            else gameState
+        }
+
+        fun handleKeys(i, gs: Game) {
+            if (length(i) > 0) fold_right(handleKey, gs, i)
+            else gs
+        }
+
+        fun mainGameLogic(gameState: Game, i) {
+            var gameState = handleKeys(i, gameState);
+
+            # helper functions
+            fun ghostCollision(ghost) {
+                circleCircleCollision((gameState.pillman.position, pillmanR), (ghost.position, ghostR))
+            }
+
+            fun ghostToInt(ghost) {
+                if (ghost.state == Vulnerable) 1 else 2
+            }
+
+            fun eatPillman() {
+                (gameState with state = Eaten, timeout = gameState.timeouts.eaten, pillman = (gameState.pillman with state = Normal))
+            }
+
+            fun ghostToPoints(ghost, score) {
+                (ghost with state = Points, timeout = score, state2 = Normal, timeout2 = 0)
+            }
+
+            fun isEatState(ghost) {
+                ghost.state == Normal || ghost.state == Idle
+            }
+
+            switch (gameState.state) {
+                case On ->
+                    # ai updating functions:
+                    # planet changing conditions
+                    # direction changing conditions
+                    # depending on state
+                    fun updateVulnerableGhostAI(ghost) {
+                        var pillman = gameState.pillman;
+                        var ghost =
+                            if (ghost.planet == ghost.nextPlanet) ghost
+                            else {
+                                var targetPosition = (pillman.planet.x, pillman.planet.y);
+                                if (pointDistance((ghost.nextPlanet.x, ghost.nextPlanet.y), targetPosition) >
+                                    pointDistance((ghost.planet.x, ghost.planet.y), targetPosition)) {
+                                    (ghost with planet = ghost.nextPlanet, angle = ghost.angle +. pi)
+                                } else ghost
+                            };
+
+                        if (ghost.planet == pillman.planet)
+                            (ghost with dir = pillman.dir)
+                        else ghost
+                    }
+
+                    fun updateEyesGhostAI(ghost) {
+                        if (ghost.planet == ghostPlanet) (ghost with state = Trapped, timeout = gameState.timeouts.trapped, state2 = Normal, timeout2 = 0, speed = getCurrentSpeed(ghost.baseSpeed, gameState))
+                        else if (ghost.planet == ghost.nextPlanet)
+                            if (ghost.timeout > 0) (ghost with timeout = ghost.timeout - 1)
+                            else (ghost with state = Trapped, planet = ghostPlanet, timeout = gameState.timeouts.trapped, state2 = Normal, timeout2 = 0, speed = getCurrentSpeed(ghost.baseSpeed, gameState))
+                        else {
+                            var targetPosition = (ghostPlanet.x, ghostPlanet.y);
+                            if (pointDistance((ghost.nextPlanet.x, ghost.nextPlanet.y), targetPosition) <
+                                pointDistance((ghost.planet.x, ghost.planet.y), targetPosition)) {
+                                (ghost with planet = ghost.nextPlanet, angle = ghost.angle +. pi)
+                            } else ghost
+                        }
+                    }
+
+                    fun updateRogerAI(ghost) {
+                        var pillman = gameState.pillman;
+                        var ghost =
+                            if (ghost.state == Normal) {
+                                var ghost = if (ghost.planet == ghost.nextPlanet) ghost
+                                else {
+                                    var targetPosition = (pillman.planet.x, pillman.planet.y);
+                                    if (pointDistance((ghost.nextPlanet.x, ghost.nextPlanet.y), targetPosition) <
+                                        pointDistance((ghost.planet.x, ghost.planet.y), targetPosition)) {
+                                        (ghost with planet = ghost.nextPlanet, angle = ghost.angle +. pi)
+                                    } else ghost
+                                };
+                                if (ghost.planet == pillman.planet)
+                                    (ghost with dir = -.pillman.dir)
+                                else ghost
+                            }
+                            else if (ghost.state == Vulnerable) updateVulnerableGhostAI(ghost)
+                            else if (ghost.state == Eyes) updateEyesGhostAI(ghost)
+                            else ghost; # handle other states
+
+                        ghost
+                    }
+
+                    fun updateJohnnyAI(ghost) {
+                        var pillman = gameState.pillman;
+                        var ghost =
+                            if (ghost.state == Normal) {
+                                var ghost = if (ghost.planet == ghost.nextPlanet) ghost
+                                else {
+                                    var targetPosition = (pillman.planet.x, pillman.planet.y);
+                                    var targetPosition2 = (gameState.greg.planet.x, gameState.greg.planet.y);
+                                    if (pointDistance((gameState.roger.planet.x, gameState.roger.planet.y), targetPosition) <
+                                        pointDistance((ghost.planet.x, ghost.planet.y), targetPosition2)) {
+                                        (ghost with planet = ghost.nextPlanet, angle = ghost.angle +. pi, state = Idle, timeout = gameState.timeouts.idle, dir = -.ghost.dir)
+                                    } else ghost
+                                };
+                                ghost
+                            }
+                            else if (ghost.state == Vulnerable) updateVulnerableGhostAI(ghost)
+                            else if (ghost.state == Eyes) updateEyesGhostAI(ghost)
+                            else ghost; # handle other states
+
+                        ghost
+                    }
+
+                    fun updateGregAI(ghost) {
+                        var pillman = gameState.pillman;
+                        var ghost =
+                            if (ghost.state == Normal) {
+                                var ghost = if (ghost.planet == ghost.nextPlanet) ghost
+                                else {
+                                    var targetPosition = (gameState.roger.planet.x, gameState.roger.planet.y);
+                                    var targetPosition2 = (pillman.planet.x, pillman.planet.y);
+                                    if (pointDistance((ghost.nextPlanet.x, ghost.nextPlanet.y), targetPosition) <
+                                        pointDistance((ghost.planet.x, ghost.planet.y), targetPosition2)) {
+                                        (ghost with planet = ghost.nextPlanet, angle = ghost.angle +. pi, state = Idle, timeout = gameState.timeouts.idle)
+                                    } else ghost
+                                };
+                                ghost
+                            }
+                            else if (ghost.state == Vulnerable) updateVulnerableGhostAI(ghost)
+                            else if (ghost.state == Eyes) updateEyesGhostAI(ghost)
+                            else ghost; # handle other states
+
+                        ghost
+                    }
+
+                    fun updateBillAI(ghost) {
+                        var pillman = gameState.pillman;
+                        var ghost =
+                            if (ghost.state == Normal) {
+                                var ghost = if (ghost.planet == ghost.nextPlanet) ghost
+                                else {
+                                    var targetPosition = (pillman.position.1, pillman.position.2);
+                                    if (pointDistance((ghost.nextPlanet.x, ghost.nextPlanet.y), targetPosition) <
+                                        pointDistance((ghost.planet.x, ghost.planet.y), targetPosition)) {
+                                        (ghost with planet = ghost.nextPlanet, angle = ghost.angle +. pi)
+                                    } else ghost
+                                };
+                                if (ghost.planet == pillman.planet)
+                                    (ghost with dir = -.gameState.johnny.dir)
+                                else ghost
+                            }
+                            else if (ghost.state == Vulnerable) updateVulnerableGhostAI(ghost)
+                            else if (ghost.state == Eyes) updateEyesGhostAI(ghost)
+                            else ghost; # handle other states
+
+                        ghost
+                    }
+
+                    # update entities
+                    var gameState =
+                        (gameState with
+                            pillman = updatePillman(gameState),
+                            roger = updateGhost(updateRogerAI(gameState.roger), gameState),
+                            johnny = updateGhost(updateJohnnyAI(gameState.johnny), gameState),
+                            greg = updateGhost(updateGregAI(gameState.greg), gameState),
+                            bill = updateGhost(updateBillAI(gameState.bill), gameState)
+                        );
+
+                    # handle pill collisions
+                    var gameState = getNewPillPlanets(gameState.pills, [], gameState);
+
+                    # handle ghost collisions
+                    var ghostScore =
+                        200 * ghostToInt(gameState.roger) * ghostToInt(gameState.johnny) *
+                            ghostToInt(gameState.greg) * ghostToInt(gameState.bill);
+
+                    var gameState =
+                        if (ghostCollision(gameState.roger))
+                            if (gameState.roger.state == Vulnerable)
+                                (gameState with roger = ghostToPoints(gameState.roger, ghostScore), score = gameState.score + ghostScore, state = Ate, timeout = gameState.timeouts.ate)
+                            else if (isEatState(gameState.roger))
+                                eatPillman()
+                            else gameState
+                        else if (ghostCollision(gameState.johnny))
+                            if (gameState.johnny.state == Vulnerable)
+                                (gameState with johnny = ghostToPoints(gameState.johnny, ghostScore), score = gameState.score + ghostScore, state = Ate, timeout = gameState.timeouts.ate)
+                            else if (isEatState(gameState.johnny))
+                                eatPillman()
+                            else gameState
+                        else if (ghostCollision(gameState.greg))
+                            if (gameState.greg.state == Vulnerable)
+                                (gameState with greg = ghostToPoints(gameState.greg, ghostScore), score = gameState.score + ghostScore, state = Ate, timeout = gameState.timeouts.ate)
+                            else if (isEatState(gameState.greg))
+                                eatPillman()
+                            else gameState
+                        else if (ghostCollision(gameState.bill))
+                            if (gameState.bill.state == Vulnerable)
+                                (gameState with bill = ghostToPoints(gameState.bill, ghostScore), score = gameState.score + ghostScore, state = Ate, timeout = gameState.timeouts.ate)
+                            else if (isEatState(gameState.bill))
+                                eatPillman()
+                            else gameState
+                        else gameState;
+
+                    # check levelup conditions
+                    var gameState =
+                        if (gameState.pillCount == pillCount)
+                            (gameState with state = NextLevel, timeout = 60)
+                        else gameState;
+
+                    gameState
+
+                case Over ->
+                    # on gameover
+                    gameState
+
+                case Eaten ->
+                    var gameState = if (gameState.timeout > 0) (gameState with timeout = gameState.timeout - 1)
+                    else (gameState with state = Eaten2, timeout = 30);
+
+                    gameState
+
+                case Eaten2 ->
+                    var gameState =
+                    if (gameState.timeout > 0) (gameState with timeout = gameState.timeout - 1)
+                    else (gameState with
+                            pillman = resetPillman(gameState.pillman, gameState),
+                            roger = resetGhost(gameState.roger, gameState), johnny = resetGhost(gameState.johnny, gameState),
+                            greg = resetGhost(gameState.greg, gameState), bill = resetGhost(gameState.bill, gameState),
+                            state = On, lives = gameState.lives - 1);
+
+                    if (gameState.lives < 0) (gameState with state = Over) # LOSING CONDITIONS
+                    else gameState
+
+                case NextLevel ->
+                    if (gameState.timeout > 0) (gameState with timeout = gameState.timeout - 1)
+                    else (gameState with state = NextLevel2, timeout = 0)
+
+                case NextLevel2 -> # animate
+
+                    var gameState = (gameState with level = gameState.level + 1);
+
+                    var gameState = (gameState with
+                        state = On, timeout = 0,
+                        pills = initialPills, pillCount = 0,
+                        pillman = resetPillman(gameState.pillman, gameState),
+                        roger = resetGhost(gameState.roger, gameState), johnny = resetGhost(gameState.johnny, gameState),
+                        greg = resetGhost(gameState.greg, gameState), bill = resetGhost(gameState.bill, gameState),
+                        timeouts =
+                            (gameState.timeouts with
+                                trapped = timeouts.trapped - (gameState.level / 7),
+                                vulnerable = timeouts.vulnerable - (gameState.level / 7),
+                                transition = timeouts.transition - (gameState.level / 25),
+                                idle = timeouts.idle - (gameState.level / 7),
+                                eat = timeouts.eat - (gameState.level / 50))
+                    );
+
+                    if (gameState.level > 255) (gameState with state = Won) # WIN CONDITIONS
+                    else gameState
+
+                case Ate ->
+                    if (gameState.timeout > 0) (gameState with timeout = gameState.timeout - 1)
+                    else (gameState with state = On, timeout = 0)
+
+                case _ ->
+                    gameState
+            }
+        }
+
+        #
+        # PROCESSES
+        #
+        fun updateLogic(dt, gameState: Game, i) {
+            if (dt > step) {
+                var gameState = mainGameLogic(gameState, i);
+
+                updateLogic(dt -. step, gameState, [])
+            } else (gameState, dt)
+        }
+
+        fun updateState() {
+            fun mainLoop(gameState: Game, dt, lastTime, fpsInfo, ii) {
+                var now = clientTimeMilliseconds();
+                var dt = dt +. fmin(1.0, intToFloat(now - lastTime) /. 1000.0);
+
+                fun aux(auxi: [Input]) {
+                    if (haveMail()) {
+                        aux(recv()::auxi)
+                    } else auxi
+                }
+
+                var i = aux(ii);
+
+                var (gameStatePrim, dtPrim) = updateLogic(dt, gameState, i);
+
+                if (gameStatePrim.metaState == Restart)
+                    ()
+                else if (dtPrim == dt) { # don't redraw if there were no logic updates
+                    mainLoop(gameStatePrim, dtPrim, now, fpsInfo, i)
+                } else {
+                    mainLoop(if (gameStatePrim.metaState == Download) (gameStatePrim with metaState = Run) else gameStatePrim,#(gameStatePrim with state = On), # if state == Download, reset
+                        dtPrim, now,
+                        draw(gameStatePrim, lastTime, now, fpsInfo), # draw & get new fpsInfo
+                        []) # reset input
+                }
+            }
+
+            var _ = recv(); # wait for initialize()
+            mainLoop(getInitialGameState(), 0.0, clientTimeMilliseconds(), initialFpsInfo, []);
+
+            if (not(haveMail())) self() ! CarryOn else (); # restart
+            updateState()
+        }
+        var updateProcId = spawn { updateState() };
+
+
+        fun onKeyDown(e) {
+            updateProcId ! (KeyDown(getCharCode(e)): Input)
+        }
+
+        fun onKeyUp(e) {
+            updateProcId ! (KeyUp(getCharCode(e)): Input)
+        }
+
+        fun initialize() {
+            var _ = recv();
+
+            jsSetOnKeyDown(getNodeById(containerId), onKeyDown);
+            jsSetOnEvent(getNodeById(containerId), "keyup", onKeyUp, true);
+
+            var _ = domSetStyleAttrFromRef(getNodeById("info"), "display", "none");
+
+            updateProcId ! CarryOn
+        }
+        initialize()
+    };
+
+    #
+    # PAGE
+    #
+    page
+        <html>
+            <head>
+            <style>
+                body {{
+                    background-color: #111;
+                    color: #ddd;
+                }}
+
+                a {{
+                    color: #d99;
+                }}
+
+                #info {{
+                    font-size: 48px;
+                }}
+
+                #container {{
+                    width: 50%;
+                    margin: auto;
+                    text-align: center;
+                }}
+
+                #{stringToXml(containerId)} {{
+                    position: relative;
+                    width: {stringToXml(floatToString(canvasWidth))}px;
+                    height: {stringToXml(floatToString(canvasHeight))}px;
+                    background-color: #010101;
+                    margin: auto;
+                }}
+
+                #{stringToXml(canvas2Id)} {{
+                    display: none;
+                    position: absolute;
+                    top: 0px;
+                    left: 0px;
+                }}
+
+                #{stringToXml(canvasId)} {{
+                    display: block;
+                    position: absolute;
+                    top: 0px;
+                    left: 0px;
+                }}
+            </style>
+            </head>
+
+            <body>
+                <div id="container">
+                    <h1>Pillman</h1>
+
+                    <div id="{containerId}" tabindex="1"
+                        l:onfocus="{initializeProcId ! 0 }">
+                        <canvas id="{canvas2Id}" width="{floatToString(canvasWidth)}" height="{floatToString(canvasHeight)}"></canvas>
+                        <canvas id="{canvasId}" width="{floatToString(canvasWidth)}" height="{floatToString(canvasHeight)}"></canvas>
+                        <div id="info">Click this canvas to start.</div>
+                    </div>
+                    <div id="msg"></div>
+                    <span>The canvas above must be focused for the keyboard input to work.</span><br />
+                    <span>[SPACEBAR] controls Pillman</span><br />
+                    <span>or alternatively</span><br />
+                    <span>[Z] changes Pillman's direction and [X] changes Pillman's planet</span><br />
+                    <br />
+                    <span>[F2] restarts the game</span><br />
+                    <span>[F4] snapshots the canvas</span><br />
+                    <a id="download" tabindex="2" download=""></a>
+                </div>
+            </body>
+        </html>
+}
+
+#main()
+
+fun mainPage(_) {
+  main()
+}
+
+fun main2() {
+  addRoute("/", mainPage);
+  servePages()
+}
+
+main2()

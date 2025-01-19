@@ -1,0 +1,61 @@
+import MvuAttrs;
+import MvuHTML;
+import MvuCommands;
+import Mvu;
+
+typename Model = [| NotStarted | Waiting | Result:Int |];
+
+typename Message = [| StartComputation | DeliverResult:Int |];
+
+sig view : (Model) ~%~> MvuHTML.HTML(Message)
+fun view(model) {
+  open MvuAttrs;
+  open MvuHTML;
+  var disabled = MvuAttrs.attr("disabled", "disabled");
+
+  var (text, buttonAttr) =
+    switch(model) {
+      case NotStarted -> ("Not started", a0)
+      case Waiting -> ("Waiting", disabled)
+      case Result(n) -> ("Result: " ^^ intToString(n), a0)
+    };
+
+  div(a0,
+    button(onClick(fun() { StartComputation }) +@ buttonAttr,
+      textNode("Start computation")) +*
+    textNode(text))
+}
+
+fun fib(n) {
+  if (n <= 0) {
+    0
+  } else if (n == 1) {
+    1
+  } else {
+    fib(n - 1) + fib(n - 2)
+  }
+}
+
+sig updt : (Message, Model) ~%~> (Model, MvuCommands.Command(Message))
+fun updt(msg, model) {
+  switch(msg) {
+    case StartComputation ->
+      var cmd =
+        MvuCommands.spawnProc(fun() { DeliverResult(fib(25)) });
+      (Waiting, cmd)
+    case DeliverResult(n) -> (Result(n), MvuCommands.empty)
+  }
+}
+
+fun mainPage() {
+  Mvu.runCmd("placeholder", NotStarted,
+      view, updt, MvuCommands.empty);
+  page
+    <html>
+      <body>
+        <div id="placeholder"></div>
+      </body>
+    </html>
+}
+
+serveThis(mainPage)

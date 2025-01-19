@@ -1,0 +1,540 @@
+#
+# HELPER
+#
+sig catMaybes: ([Maybe(a)]) -> [a]
+fun catMaybes(ls) {
+    for (x <- ls) {
+        switch (x) {
+            case Just(x) -> [x]
+            case Nothing -> []
+        }
+    }
+}
+
+#
+# MATH
+#
+fun vectorAdd((v1x, v1y), (v2x, v2y)) {
+    (v1x +. v2x, v1y +. v2y)
+}
+
+sig fabs: (Float) -> Float
+fun fabs(x) {
+    if (x < 0.0) -.x else x
+}
+
+sig fmin: (Float, Float) -> Float
+fun fmin(a, b) {
+    if (a < b) a
+    else b
+}
+
+sig fmax: (Float, Float) -> Float
+fun fmax(a, b) {
+    if (a > b) a
+    else b
+}
+
+sig boundedIntegrate: ((Float, Float), Float, Float) -> Float
+fun boundedIntegrate((minV, maxV), i, j) {
+    fmin(maxV, fmax(minV, (i +. j)))
+}
+
+#
+# Breakout/Arkanoid clone
+# inspired by and partially ported from http://jshaskell.blogspot.co.uk
+#
+
+typename Input = [| KeyUp: Int | KeyDown: Int |];
+typename Vector = (Float, Float);
+typename PlayerState = (xPos: Float);
+typename BallState = (ballPos: Vector, ballSpeed: Vector);
+typename BlockState = (blockPos: Vector, blockLives: Int);
+typename GameState = [| ProperGameState:(player: PlayerState, ball: BallState, blocks: [BlockState]) | LostScreen | WonScreen |];
+typename BallCollision = [| LeftBounce | RightBounce | UpBounce | DownBounce |];
+typename BlockCollision = [| BlockCollision |];
+typename Rect = (x: Float, y: Float, width: Float, height: Float);
+
+#
+# AUX
+#
+fun clear(ctx) {
+    jsClearRect(ctx, 0.0, 0.0, jsCanvasWidth(ctx), jsCanvasHeight(ctx))
+}
+
+#
+# MAIN
+#
+fun main() {
+    #
+    # CONSTANTS
+    #
+    var canvasId = "gameCanvas";
+    var canvas2Id = "gameCanvas2";
+    var containerId = "gameContainer";
+
+    var screenWidth = 600.0;
+    var screenHeight = 500.0;
+
+    var playerHeight = 20.0;
+    var playerWidth = 60.0;
+    var playerYPos = screenHeight -. playerHeight *. 2.0;
+    var playerSpeed = 5.0;
+    var initialPlayerState = (xPos = (screenWidth -. playerWidth) /. 2.0): PlayerState;
+    var playerColor = "#44a";
+
+    var ballRadius = 7.5;
+    var initialBallState = (ballPos = ((screenWidth /. 2.0), (screenHeight -. 50.0)), ballSpeed = (3.0, -.3.0)): BallState;
+    var initialBallSpeed = (5.0, -.5.0);
+    var ballColor = "#a44";
+
+    var blockWidth = 60.0;
+    var blockHeight = 20.0;
+    var initBlockStates =
+        (for (x <- [20.0, 120.0, 220.0, 320.0, 420.0, 520.0],
+                (y, lives) <- [(60.0,2), (100.0,1), (140.0,2), (180.0,1), (220.0,1), (260.0,1)])
+                    [(blockPos = (x, y), blockLives = lives)]): [BlockState];
+    var blockColor1 = "#4a4";
+    var blockColor2 = "#aa4";
+
+    var initialState = ProperGameState(player = initialPlayerState, ball = initialBallState, blocks = initBlockStates): GameState;
+
+    var leftKeyCode = 37;
+    var rightKeyCode = 39;
+    var restartKeyCode = 82;
+
+    var step = 1.0 /. 30.0;
+
+    var displayDebug = false;
+
+    fun playerRect(px) {
+        (x = px, y = playerYPos, width = playerWidth, height = playerHeight)
+    }
+
+    fun ballRect((ballPos = (ballX, ballY), ballSpeed = _)) {
+        (x = (ballX -. ballRadius), y = (ballY -. ballRadius), width = (2.0 *. ballRadius), height = (2.0 *. ballRadius))
+    }
+
+    fun blockRect((blockPos = (blockX, blockY), blockLives = _): BlockState) {
+        (x = blockX, y = blockY, width = blockWidth, height = blockHeight)
+    }
+
+    fun rectOverlap(r1, r2) {
+        if (r1.x >= r2.x +. r2.width) false
+        else if (r2.x >= r1.x +. r1.width) false
+        else if (r1.y >= r2.y +. r2.height) false
+        else if (r2.y >= r1.y +. r1.height) false
+        else true
+    }
+    #
+    # DRAWING
+    #
+
+    fun drawBlock(ctx, bs) {
+        jsSetFillColor(ctx, if (bs.blockLives == 1) blockColor1 else blockColor2);
+        var r = blockRect(bs);
+        jsFillRect(ctx, r.x, r.y, r.width, r.height)
+    }
+
+    fun drawFps(ctx, fpsInfo, dFps) {
+        var fpsInfo = (fpsInfo with frameCount = fpsInfo.frameCount + 1);
+
+        jsFillText(ctx, "~FPS: " ^^ strsub(floatToString(dFps), 0, 7), 10.0, 10.0);
+
+        var fpsInfo = if (fpsInfo.loFps > dFps) {
+            (fpsInfo with loFps = dFps, loFpsFrame = fpsInfo.frameCount - 1)
+        }
+        else fpsInfo;
+
+        var fpsInfo = if (fpsInfo.hiFps < dFps)
+            (fpsInfo with hiFps = dFps)
+        else fpsInfo;
+
+        var fpsInfo = (fpsInfo with fpsAcc = fpsInfo.fpsAcc +. dFps);
+
+        var aFpsFrames = 1000;
+        var fpsInfo = if (fpsInfo.frameCount > aFpsFrames) {
+            (fpsInfo with avgFps = fpsInfo.fpsAcc /. intToFloat(aFpsFrames), fpsAcc = 0.0, frameCount = 0)
+        } else fpsInfo;
+
+        jsFillText(ctx, "~AFPS: " ^^ strsub(floatToString(fpsInfo.avgFps), 0, 7), 100.0, 10.0);
+
+        var fpsInfo = if (fpsInfo.avgFps > 0.0) {
+            if (dFps < (fpsInfo.avgFps *. 0.5))
+                (fpsInfo with downFrames = fpsInfo.downFrames + 1)
+            else (fpsInfo with upFrames = fpsInfo.upFrames + 1)
+        } else (fpsInfo with hiFps = 0.0);
+        jsFillText(ctx, "~loFPS: " ^^ strsub(floatToString(fpsInfo.loFps), 0, 7), 200.0, 10.0);
+        jsFillText(ctx, "~hiFPS: " ^^ strsub(floatToString(fpsInfo.hiFps), 0, 7), 300.0, 10.0);
+        jsFillText(ctx, "loFPS@: " ^^ intToString(fpsInfo.loFpsFrame), 400.0, 10.0);
+        jsFillText(ctx, "~u: " ^^ strsub(intToString(fpsInfo.upFrames), 0, 7), 475.0, 10.0);
+        jsFillText(ctx, "~d: " ^^ strsub(intToString(fpsInfo.downFrames), 0, 7), 525.0, 10.0);
+        jsFillText(ctx, "~r: " ^^ strsub(floatToString(intToFloat(fpsInfo.upFrames)/.intToFloat(fpsInfo.downFrames)), 0, 7), 10.0, 30.0);
+
+        fpsInfo
+    }
+
+    fun swapBuffers(mainCanvasNode, dispCanvasNode) {
+        var ctx = jsGetContext2D(dispCanvasNode);
+        jsDrawImage(ctx, mainCanvasNode, 0.0, 0.0);
+
+        ignore(domSetStyleAttrFromRef(mainCanvasNode, "display", "block"));
+        ignore(domSetStyleAttrFromRef(dispCanvasNode, "display", "none"));
+        clear(ctx)
+    }
+
+    fun draw(gameState: GameState, lastTime, now, fpsInfo) {
+        var (mainCanvas, dispCanvas) =
+            if (domGetStyleAttrFromRef(getNodeById(canvasId), "display") == "none")
+                (canvasId, canvas2Id)
+            else (canvas2Id, canvasId);
+
+        var mainCanvasNode = getNodeById(mainCanvas);
+        var ctx = jsGetContext2D(mainCanvasNode);
+        clear(ctx);
+
+        jsCanvasFont(ctx, "28px Helvetica");
+
+        switch (gameState) {
+            case LostScreen ->
+                    jsSetFillColor(ctx, "black");
+                    jsFillText(ctx, "You lost. Press [R] to restart.", (screenWidth /. 2.0 -. 180.0), (screenHeight /. 2.0))
+
+            case WonScreen ->
+                    jsSetFillColor(ctx, "black");
+                    jsFillText(ctx, "You won! Press [R] to restart.", (screenWidth /. 2.0 -. 180.0), (screenHeight /. 2.0))
+
+            case ProperGameState(gs) ->
+                    # draw the player:
+                    jsSetFillColor(ctx, playerColor);
+                    var playerRectangle = playerRect(gs.player.xPos);
+                    var halfPlayerHeight = playerHeight /. 2.0;
+                    jsFillRect(ctx, playerRectangle.x +. halfPlayerHeight, playerRectangle.y, playerRectangle.width -. playerHeight, playerRectangle.height);
+                    jsFillCircle(ctx, playerRectangle.x +. halfPlayerHeight , playerRectangle.y +. halfPlayerHeight, halfPlayerHeight);
+                    jsFillCircle(ctx, playerRectangle.x +. playerWidth -. halfPlayerHeight, playerRectangle.y +. halfPlayerHeight, halfPlayerHeight);
+
+                    # draw the blocks:
+                    ignore(map(fun (x) { drawBlock(ctx, x) }, gs.blocks));
+
+                    # draw the ball:
+                    jsSetFillColor(ctx, ballColor);
+                    var (x, y) = (gs.ball).ballPos;
+                    jsFillCircle(ctx, x, y, ballRadius)
+
+            case _ -> ()
+        };
+
+        var fpsInfo =
+            if (displayDebug) drawFps(ctx, fpsInfo, 1000.0 /. (intToFloat(now - lastTime) +. 1.0))
+            else fpsInfo;
+
+        swapBuffers(mainCanvasNode, getNodeById(dispCanvas));
+        fpsInfo
+    }
+
+    #
+    # HELPERS
+    #
+    fun ballWallCollisions((ballPos = (ballX, ballY), ballSpeed = _): BallState) {
+        compose(fun (x) { map(second, x) }, fun (y) { filter(fun(z) { first(z) }, y) })
+            ([
+                (ballX < ballRadius, LeftBounce: BallCollision),
+                (ballX > screenWidth -. ballRadius, RightBounce: BallCollision),
+                (ballY < ballRadius, UpBounce: BallCollision)
+            ])
+    }
+
+    fun ballRectCollisions((ballPos = (ballX, ballY), ballSpeed = _), (x = rx, y = ry, width = rw, height = rh)) {
+        compose(fun (x) { map(second, x) }, fun (x) { filter(fun(y) { first(y) }, x) })
+            ([
+                (ballX >= rx +. rw, LeftBounce: BallCollision),
+                (ballY <= ry, DownBounce: BallCollision),
+                (ballY >= ry +. rh, UpBounce: BallCollision)
+            ])
+    }
+
+    fun ballPlayerCollisions((playerState: Float), (ballState: (ballPos: (Float, Float), ballSpeed: Vector)): BallState) {
+        if (rectOverlap(playerRect(playerState), ballRect(ballState)))
+            ballRectCollisions(ballState, playerRect(playerState))
+        else []
+    }
+
+    fun ballBlocksCollisions(ballState: BallState, blockStates: [BlockState]) {
+        var ballR = ballRect(ballState);
+        fun foldStep((ballC, blockC), blockState) {
+            if (rectOverlap(ballR, blockRect(blockState)))
+                (ballRectCollisions(ballState, blockRect(blockState)) ++ ballC, blockC ++ [[BlockCollision]])
+            else (ballC, blockC ++ [[]])
+        }
+
+        fold_left(foldStep, ([], []), blockStates)
+    }
+
+
+    #
+    # LOGIC
+    #
+    fun keyDown(code, inEvents) {
+        fun step(old, inp) {
+            if (inp == KeyUp(code)) false
+            else if (inp == KeyDown(code)) true
+            else old
+        }
+
+        fold_left(step, false, inEvents)
+    }
+    fun gameOver(gs: GameState) {
+        switch(gs) {
+            case ProperGameState((player = _: PlayerState, ball = (ballPos = (_, ballY), ballSpeed = _): BallState, blocks = _: [BlockState])) -> ballY > screenHeight
+            case _ -> false
+        }
+    }
+
+    fun gameWon(gs: GameState) {
+        switch(gs) {
+            case ProperGameState((player = _: PlayerState, ball = _: BallState, blocks = b: [BlockState])) ->
+                switch (b) { case [] -> true case _ -> false }
+            case _ -> false
+        }
+    }
+
+    fun playerVelocity(inEvents) {
+        var leftDown = keyDown(leftKeyCode, inEvents);
+        var rightDown = keyDown(rightKeyCode, inEvents);
+
+        if (leftDown) -.playerSpeed
+        else if (rightDown) playerSpeed
+        else 0.0
+    }
+
+
+    fun playerState(ps, inEvents) {
+        var vel = playerVelocity(inEvents);
+        var xPos = boundedIntegrate((0.0, screenWidth -. playerWidth), ps, vel);
+        xPos
+    }
+
+    fun ballVelocity((vx, vy), coll: [BallCollision]) {
+        fun bounce((vx, vy), coll) {
+            switch (coll) {
+                case LeftBounce -> (fabs(vx), vy)
+                case RightBounce -> (-.fabs(vx), vy)
+                case UpBounce -> (vx, fabs(vy))
+                case DownBounce -> (vx, -.fabs(vy))
+            }
+        }
+
+        fold_left(bounce, (vx, vy), coll)
+    }
+
+
+    fun ballState(bs: BallState, collEvents: [BallCollision]) {
+        var vel = ballVelocity(bs.ballSpeed, collEvents);
+
+        var pos = vectorAdd(bs.ballPos, vel);
+
+        ((ballPos = pos, ballSpeed = vel): BallState)
+    }
+    fun blockState((initState, blockColls)) {
+        fun updatef(x, y) {
+            switch (x) {
+                case Nothing -> Nothing
+                case Just(bs) -> if (bs.blockLives == 1) Nothing else Just((bs with blockLives = 1))
+            }
+        }
+
+        fold_left(updatef, Just(initState), blockColls)
+    }
+
+    fun blockStates(obs: [BlockState], blockColls: [[BlockCollision]]) {
+        var res = map(blockState, zip(obs, blockColls));
+        var result = filter(isJust, res);
+        catMaybes(result)
+    }
+
+
+
+    fun mainGameLogic(gs: GameState, inEvents: [Input]) {
+        if (gameOver(gs)) { # meh
+            LostScreen
+        } else if (gameWon(gs)) {
+            WonScreen
+        } else {
+            switch (gs) {
+                case ProperGameState(other) ->
+                    var plState = playerState(other.player.xPos, inEvents);
+
+                    var oldBallState = other.ball;
+                    var oldBlockStates = other.blocks;
+
+                    var (ballBlockColls, blockColls) = ballBlocksCollisions(oldBallState, oldBlockStates); # very expensive
+
+                    # expensive
+                    var colls = ballWallCollisions(oldBallState) ++ ballPlayerCollisions(plState, oldBallState) ++ ballBlockColls;
+
+                    var currBallState = ballState(oldBallState, colls);
+                    var currBlockStates = blockStates(oldBlockStates, blockColls); # very expensive
+
+                    var res = ProperGameState((player = ((xPos = plState): PlayerState), ball = currBallState, blocks = currBlockStates));
+                    res
+                case _ -> gs
+            }
+        }
+    }
+    #
+    # PROCESSES
+    #
+    fun masterProc() {
+        fun masterLoop(procId) {
+            procId ! (recv().2: Input);
+            masterLoop(procId)
+        }
+
+        masterLoop(recv().1)
+    }
+    var masterProcId = spawnClient { masterProc() };
+
+    fun dummyProc(i) {
+        var i = i ++ [recv()];
+        ()
+    }
+    var dummyProcId = spawnClient { dummyProc([]: [Input]) };
+
+    # logic, depends on masterProc
+    fun updateLogic(dt, st, i) {
+        if (dt > step) {
+            masterProcId ! (dummyProcId, KeyDown(-1): Input); # reset input
+
+            var stprim = mainGameLogic(st, i);
+
+            updateLogic(dt -. step, stprim, []: [Input])
+        } else (st, dt)
+    }
+
+    fun updateState() {
+        fun mainLoop(st, dt, lastTime, fpsInfo) {
+            var now = clientTimeMilliseconds();
+            var dt = dt +. fmin(1.0, intToFloat(now - lastTime) /. 1000.0);
+
+            var i = if (haveMail())
+                recv()
+            else {
+                masterProcId ! (dummyProcId, KeyDown(-2): Input);
+                recv()
+            };
+
+            if (last(i) == KeyUp(restartKeyCode)) {
+                ()
+            } else {
+                var (stprim, dtprim) = updateLogic(dt, st, i);
+
+                var fpsInfo = draw(stprim, lastTime, now, fpsInfo);
+
+                mainLoop(stprim, dtprim, now, fpsInfo)
+            }
+        }
+
+        ignore(recv());
+        mainLoop(initialState, 0.0, clientTimeMilliseconds(),
+            (frameCount = 0, avgFps = 0.0, fpsAcc = 0.0,
+             loFps = 1000000.0, hiFps = 0.0, loFpsFrame = 0,
+             upFrames = 0, downFrames = 0));
+
+        if (not(haveMail())) self() ! ([]: [Input]) else ();
+        updateState()
+    }
+    var updateProcId = spawnClient { updateState() };
+
+    fun inputStateLoop(i) {
+        var r = recv();
+
+        var i = if (not(r == KeyDown(-1))) i ++ [r] else ([]: [Input]);
+
+        if (not(r == KeyDown(-1)))
+            updateProcId ! i
+        else ();
+
+        inputStateLoop(i)
+    }
+    var inputProcId = spawnClient { inputStateLoop([]: [Input]) };
+
+
+    fun onKeyDown(e) {
+        inputProcId ! (KeyDown(getCharCode(e)): Input)
+    }
+
+    fun onKeyUp(e) {
+        inputProcId ! (KeyUp(getCharCode(e)): Input)
+    }
+
+    # initialize masterProc
+    masterProcId ! (inputProcId, KeyDown(-2): Input);
+
+    fun initialize() {
+        ignore(recv());
+
+        jsSetOnKeyDown(getNodeById(containerId), onKeyDown);
+        jsSetOnEvent(getNodeById(containerId), "keyup", onKeyUp, true);
+
+        ignore(domSetStyleAttrFromRef(getNodeById("info"), "display", "none"));
+
+        updateProcId ! ([]: [Input])
+    }
+    var initializeProcId = spawnClient { initialize() };
+
+    #
+    # PAGE
+    #
+    page
+        <html>
+            <head>
+            <style>
+                #info {{
+                    font-size: 96px;
+                }}
+
+                #container {{
+                    text-align: center;
+                }}
+
+                #{stringToXml(containerId)} {{
+                    position: relative;
+                    width: 600px;
+                    height: 500px;
+                    background-color: #ddd;
+                    margin: 0 auto;
+                }}
+
+                #{stringToXml(canvas2Id)} {{
+                    display: none;
+                    position: absolute;
+                    top: 0px;
+                    left: 0px;
+                }}
+
+                #{stringToXml(canvasId)} {{
+                    display: block;
+                    position: absolute;
+                    top: 0px;
+                    left: 0px;
+                }}
+            </style>
+            </head>
+
+            <body>
+                <div id="container">
+                    <h1>Breakout in Links</h1>
+
+                    <div id="{containerId}" tabindex="1"
+                        l:onfocus="{initializeProcId ! 0 }">
+                        <canvas id="{canvas2Id}" width="600" height="500"></canvas>
+                        <canvas id="{canvasId}" width="600" height="500"></canvas>
+                        <div id="info">Click this rectangle to start the game.</div>
+                    </div>
+                    <div id="msg"></div>
+                </div>
+            </body>
+        </html>
+}
+
+main()

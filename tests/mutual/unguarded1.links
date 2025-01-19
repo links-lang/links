@@ -1,0 +1,6 @@
+typename Unguarded = Unguarded;
+
+sig bar : Unguarded
+var bar = 5;
+
+bar ^^ "Hello"

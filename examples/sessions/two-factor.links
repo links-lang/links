@@ -1,0 +1,135 @@
+typename Data = String;
+typename Error = String;
+typename Username = String;
+typename Password = String;
+typename User = (name:Username, password:Password);
+
+typename Checker(s::Session) = [+|Accept:s, Reject:!Error.EndBang|+];
+typename TwoFactor = ?User.Checker(!Int.?Int.Checker(!Data.EndBang));
+
+# We could use this slightly more general type for reportError:
+#
+#   typename ErrorReporter(r::Row(Any, Session)) = [+|Reject:!Error.EndBang|r|+];
+
+# The unrolled type of TwoFactor:
+#
+#   typename TwoFactor = ?User.[+|Accept:!Int.?Int.[+|Accept:!Data.EndBang,
+#                                                     Reject:!Error.EndBang|+],
+#                                 Reject:!Error.EndBang|+];
+# and its dual:
+#
+#           ~TwoFactor = !User.[&|Accept:?Int.!Int.[&|Accept:?Data.EndBang,
+#                                                     Reject:?Error.EndBang|&],
+#                                 Reject:?Error.EndBang|&];
+
+sig validUser : (User) ~> Bool
+fun validUser(user) {
+  switch (user.name) {
+    case "me" -> true
+    case _    -> false
+  }
+}
+
+sig validHash : (Int, Int) ~> Bool
+fun validHash(h, nonce) {
+  h == 2 * nonce
+}
+
+sig generateNonce : () ~> Int
+fun generateNonce() {
+  floatToInt(random() *. 65536.0)
+}
+
+sig reportError : (Error, Checker(s::Session)) ~> EndBang
+fun reportError(e, s) {
+  var s = select Reject s;
+  send(e, s)
+}
+
+sig serve : (TwoFactor, Data) ~> EndBang
+fun serve(s, data) {
+  var (user, s) = receive(s);
+  if (validUser(user)) {
+    var s = select Accept s;
+    var nonce = generateNonce();
+    var s = send(nonce, s);
+    var (h, s) = receive(s);
+    if (validHash(h, nonce)) {
+      var s = select Accept s;
+      send(data, s)
+    } else {
+      reportError("Invalid hash", s)
+    }
+  } else {
+    reportError("Invalid username or password", s)
+  }
+}
+
+sig goodMe : (~TwoFactor) ~> Data
+fun goodMe(c) {
+  var c = send((name="me", password="foo"), c);
+  offer (c) {
+    case Accept(c) -> var (x, c) = receive(c);
+                      var c = send(2*x, c);
+                      offer (c) {
+                        case Accept(c) -> var (data, c) = receive(c);
+                                          wait(c);
+                                          data
+                        case Reject(c) -> var (msg, c) = receive(c);
+                                          wait(c);
+                                          error(msg)
+                      }
+    case Reject(c) -> var (msg, c) = receive(c);
+                      wait(c);
+                      error(msg)
+  }
+}
+
+sig goodYou : (~TwoFactor) ~> Data
+fun goodYou(c) {
+  var c = send((name="you", password="bar"), c);
+  offer (c) {
+    case Accept(c) -> var (x, c) = receive(c);
+                      var c = send(2*x, c);
+                      offer (c) {
+                        case Accept(c) -> var (data, c) = receive(c);
+                                          wait(c);
+                                          data
+                        case Reject(c) -> var (msg, c) = receive(c);
+                                          wait(c);
+                                          error(msg)
+                      }
+    case Reject(c) -> var (msg, c) = receive(c);
+                      wait(c);
+                      error(msg)
+  }
+}
+
+sig badMe : (~TwoFactor) ~> Data
+fun badMe(c) {
+  var c = send((name="me", password="foo"), c);
+  offer (c) {
+    case Accept(c) -> var (x, c) = receive(c);
+                      var c = send(-x, c);
+                      offer (c) {
+                        case Accept(c) -> var (data, c) = receive(c);
+                                          wait(c);
+                                          data
+                        case Reject(c) -> var (msg, c) = receive(c);
+                                          wait(c);
+                                          error(msg)
+                      }
+    case Reject(c) -> var (msg, c) = receive(c);
+                      wait(c);
+                      error(msg)
+  }
+}
+
+sig serveData : ((~TwoFactor) ~e~> Data) ~e~> Data
+fun serveData(user) {
+  user(forkSync(fun (s) {serve(s, "secret data")}))
+}
+
+serveData(goodMe)
+#serveData(goodYou)
+#serveData(badMe)

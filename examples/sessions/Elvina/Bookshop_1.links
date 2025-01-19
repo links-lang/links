@@ -1,0 +1,48 @@
+typename ShopOffer  = mu a.[&|Add:?String.a, Checkout:?Int.?String.End|&];
+typename ShopSelect = mu a.[+|Add:!String.a, Checkout:!Int.!String.End|+];
+
+
+sig waitForClient : (ShopOffer) ~> ()
+fun waitForClient(s) client
+{
+    offer(s) {
+        case Add(s)      ->
+            var (item, s) = receive(s);
+            appendChildren(stringToXml("Book name received: " ^^ item), getNodeById("items"));
+            waitForClient(s)
+
+        case Checkout(s) ->
+            var (card, s)    = receive(s);
+            appendChildren(stringToXml(", card number received: " ^^ intToString(card)), getNodeById("items"));
+            var (address, s) = receive(s);
+            appendChildren(stringToXml(", address received: " ^^ address), getNodeById("items"));
+            close(s)
+    }
+}
+
+sig orderBooks : (ShopSelect) ~> ()
+fun orderBooks(c) client
+{
+    var c = send("Alice in Wonderland", select Add c);
+    var c = send("Summerhall Square", send(8753, select Checkout c));
+    close(c)
+}
+
+sig main : () ~> ()
+fun main() client
+{
+    orderBooks(fork(waitForClient))
+}
+
+
+page
+    <html>
+    <head><title>From Academic Papers</title></head>
+    <body>
+    <form l:onsubmit="{main()}">
+    <h3>Example 1 from "Linear type theory for asynchronous session types":</h3>
+    <button type="submit">Start communication</button>
+    </form>
+    <p id="items"></p>
+    </body>
+    </html>

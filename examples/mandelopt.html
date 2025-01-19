@@ -1,0 +1,172 @@
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title></title>
+<script type="text/javascript">
+
+var DEBUGGING = true;
+var _dwindow = DEBUGGING ? open('', 'debugwindow','width=550,height=800,toolbar=0,scrollbars=yes') : null;
+function _debug(msg) {
+   if (DEBUGGING) {
+     _dwindow.document.write(msg + '<br/>');
+   }
+}
+
+var precision = 10;
+var realUnit = precision;
+var minPixSize = 16;
+
+function zmagsq(c) {
+  var r = c[1];
+  var i = c[2];
+  return (r*r + i*i) / precision;
+}
+
+function zmagsq_traced(c) {
+  var r = zmagsq(c);
+  return r;
+}
+
+function zsquare(c) {
+  var r = c[1];
+  var i = c[2];
+  return ({1:((r * r - i * i)/precision), 2:((2 * r * i)/precision)});
+}
+
+function zsquare_traced(c) {
+  var r = zsquare(c);
+  return r;
+}
+
+function zplus(z1, z2) {
+  return ({1:(z1[1] + z2[1]), 2:(z1[2] + z2[2])});
+}
+
+var the_limit = 16;
+
+function showz(z) {
+  return "("+intToString(z[1]) + ","+intToString(z[2])+")"
+}
+
+function mandelloop(z, c, i) {
+  for (;;) {
+    if (zmagsq_traced(z) > (4 * precision)) {
+      break;
+    } else if (i >= the_limit) {
+      break;
+    } else {
+      z = zplus(c, zsquare_traced(z));
+      i = i + 1;
+    }
+  }
+  return i;
+}
+
+function intToString(n) {
+  return String(n);
+}
+
+function hexdigit(i) {
+  return "0123456789abcdef".charAt(i);
+}
+
+function redshade(i, max) {
+  if (i == max) return "#000";
+  else return "#" + hexdigit(16*i/max) + "33";
+}
+
+function pixeldiv(x, y, size, color) {
+  var s = intToString(size);
+  var sx = intToString(x);
+  var sy = intToString(y);
+  var div = document.createElement("div");
+  div.setAttribute("id", "p" + sx + "x" + sy);
+  div.setAttribute("style", "width: "+s+"px;      height: "+s+"px;position: absolute;left: "+sx+"px;top: "+sy+"px;background-color: "+redshade(color, the_limit));
+  return div;
+}
+
+function mandelBlock(pixSize, x, y, regionSize, r, i) {
+  var a = pixeldiv(x, y, pixSize, mandelloop(({1:0,2:0}),({1:r,2:i}),0));
+  var b = pixeldiv(x+pixSize, y, pixSize, mandelloop(({1:0,2:0}),({1:r+regionSize,2:i}),0));
+  var c = pixeldiv(x, y+pixSize, pixSize, mandelloop(({1:0,2:0}),({1:r,2:i+regionSize}),0));
+  var d = pixeldiv(x+pixSize, y+pixSize, pixSize, mandelloop(({1:0,2:0}),({1:r+regionSize,2:i+regionSize}),0));
+  return [a,b,c,d];
+}
+
+function mandelMadness(x, y, r, i, pixSize,
+                       maxx, maxy,
+                       mini, minr, maxi, maxr)
+{
+  for (;;) {
+     var docElt = document.documentElement;
+     var xdil = (maxi - mini) / (maxx - 0);
+     var regionSize = pixSize * xdil;
+     for (;;) {
+         if (x+pixSize >= maxx) {
+               x = 0;
+               y += pixSize;
+               r = minr;
+               i += regionSize;
+               continue;
+         } else {
+           if (y+pixSize >= maxy) {
+             if (pixSize > minPixSize) {
+               x = 0;
+               y = 0;
+               r = minr;
+               i = mini;
+               pixSize /= 2;
+               continue;
+             }
+             return ({})
+           } else {
+             var block = mandelBlock(pixSize, x, y, regionSize, r, i);
+             for (var j = 0; j != block.length; j++) {
+                docElt.appendChild(block[j]);
+             }
+             x += pixSize;
+             r += regionSize;
+             break;
+           }
+         }
+     }
+  }
+}
+
+function main() {
+  var minr = -20;
+  var mini = -15;
+  var maxr = 10;
+  var maxi = 15;
+  var pixelWidth = 256;
+  var aspect = (maxr-minr)/(maxi-mini);
+  return mandelMadness(0, 0, minr, mini, pixelWidth/4,
+                       pixelWidth * aspect, pixelWidth,
+                       mini, minr, maxi, maxr)
+}
+
+function _time () {
+  return  (new Date()).getTime();
+}
+
+var _pageTimer;
+function _startTimer() {
+  _pageTimer = _time();
+}
+function _stopTimer() {
+  _pageTimer = _time() - _pageTimer;
+  _debug("Page drawn in " + _pageTimer + "ms");
+}
+
+function runmain() {
+
+_startTimer();
+main()
+_stopTimer();
+}
+
+
+</script></head>
+<body onload="runmain()">
+<div id="p0x0"/>
+</body>
+</html>

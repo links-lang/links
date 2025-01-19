@@ -1,0 +1,27 @@
+
+fun serverProc(i) server {
+  receive {
+    case Hi() ->
+      println("Received 'hi' from client! Number of requests:" ^^ (intToString(i)));
+      serverProc(i + 1)
+  }
+}
+
+fun mainPage(serverPid) {
+  page
+    <html>
+      <body>
+        <h1>Hi!</h1>
+        <button l:onclick="{serverPid ! Hi()}">Send a message to the server!</button>
+      </body>
+    </html>
+}
+
+fun main() {
+  var serverPid = spawn { serverProc(0) };
+  addRoute("/", fun(_) { mainPage(serverPid) });
+  serveWebsockets();
+  servePages()
+}
+
+main()

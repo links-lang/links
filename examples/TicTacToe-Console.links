@@ -1,0 +1,152 @@
+#tictactoe console edition
+
+typename Player = [|X|O|];
+
+var initialState = [Nothing, Nothing, Nothing,
+                    Nothing, Nothing, Nothing,
+                    Nothing, Nothing, Nothing] : [Maybe(Player)];
+
+sig playerToInt : (Player) -> Int
+fun playerToInt(player) {
+    switch(player){
+        case X -> 0
+        case O -> 1
+    }
+}
+
+sig playerToString : (Player) -> String
+fun playerToString(player) {
+    switch(player){
+        case X -> "X"
+        case O -> "O"
+    }
+}
+
+sig maybeToString : ((a) -e-> String) -> (Maybe(a)) -e-> String
+fun maybeToString(xToString)(ma){
+    switch(ma){
+        case Nothing -> "_"
+        case Just(player) -> xToString(player)
+    }
+}
+
+sig stringCat : ([String]) ~> String
+fun stringCat(xs){
+    switch(xs){
+        case [] -> ""
+        case x::xs -> x ^^ stringCat(xs)
+    }
+}
+
+sig intersperse : (a, [a]) ~> [a]
+fun intersperse(y, xs){
+    switch(xs){
+        case [] -> []
+        case [x] -> [x]
+        case x::xs -> x::y::intersperse(y, xs)
+    }
+}
+
+sig listToString : ([a], ((a) ~e~> String)) ~e~>  String
+fun listToString(list, xToString){
+   "[" ^^ stringCat(intersperse(", ", map(xToString, list))) ^^ "]"
+}
+
+sig printState : ([Maybe(Player)]) ~> ()
+fun printState(state){
+    print(listToString(state, maybeToString(playerToString)))
+}
+
+
+sig addMove : (Player, Int, [Maybe(Player)]) ~> [Maybe(Player)]
+fun addMove(player, index, state){
+    print("Set Move");
+    mapi(fun(field, i){
+        if(i==index){
+            Just(player)
+        } else{
+            field
+        }
+    }, state)
+}
+
+sig checkIfWon : (Player, [Maybe(Player)]) ~> Bool
+fun checkIfWon(player : Player, gameState){
+
+    # very stupid. Couldn't understand how to loop through by rows and columns
+    var zero = gameState !! 0;
+    var one = gameState !! 1;
+    var two = gameState !! 2;
+    var three = gameState !! 3;
+    var four = gameState !! 4;
+    var five = gameState !! 5;
+    var six = gameState !! 6;
+    var seven = gameState !! 7;
+    var eight = gameState !! 8;
+    (zero == one) && (one == two) && (two == Just(player)) ||
+    (three == four) && (four == five) && (five == Just(player)) ||
+    (six == seven) && (seven == eight) && (eight == Just(player)) ||
+    (zero == three) && (three == six) && (six == Just(player)) ||
+    (one == four) && (four == seven) && (seven == Just(player)) ||
+    (two == five) && (five == eight) && (eight == Just(player)) ||
+    (zero == four) && (four == eight) && (eight == Just(player))||
+    (two == four) && (four == six) && (six == Just(player))
+
+}
+
+mutual {
+  sig x: ([Maybe(Player)]) {hear:Int|_} ~> ()
+  fun x(gameState){
+      var index = recv();
+      switch(gameState !! index){
+          case Nothing -> {
+              print("Setting X.");
+              var newGameState = addMove(X, index, gameState);
+              printState(newGameState);
+              if (checkIfWon(X, newGameState))
+                  print("X won")
+              else
+                  o(newGameState)
+
+          }
+          case Just(player) -> {
+             print("Already full")
+          }
+      }
+  }
+
+  sig o: ([Maybe(Player)]) {hear:Int|_} ~> ()
+  fun o(gameState){
+      var index = recv();
+      switch(gameState !! index){
+          case Nothing -> {
+              print("Setting O.");
+              var newGameState = addMove(O, index, gameState);
+              printState(newGameState);
+              if (checkIfWon(O, newGameState))
+                  print("O won")
+              else
+                  x(newGameState)
+
+          }
+          case Just(player) -> {
+             print("Already full")
+          }
+      }
+  }
+}
+
+sig playGame : ([Int]) ~> ()
+fun playGame(moveList){
+    var gameId = spawnAngel{x(initialState)};
+    fun nextMove(moveList){
+        switch(moveList){
+            case [] -> ()
+            case move::moveList -> {
+                gameId ! move;
+                nextMove(moveList)
+            }
+        }
+    }
+    nextMove(moveList)
+}

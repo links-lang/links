@@ -1,0 +1,15 @@
+typename Calc = [&|Add:?Int.?Int.!Int.EndBang, Mul:?Int.?Int.!Int.EndBang|&];
+
+sig calc : (Calc) ~> EndBang
+fun calc(s) {
+  <| offer s {
+       case Add -> s(x).s(y).s[x+y].s[]
+       case Mul -> s(x).s(y).s[x*y].s[] } |>
+}
+
+sig user : (~Calc,!Int.EndBang) ~> EndBang
+fun user(s, return) {
+  <| Mul s.s[6].s[7].s(z).s().return[z].return[] |>
+}
+
+runSync (fun(return){<| nu s.({calc(s)}|{user(s, return)}) |>})

@@ -1,0 +1,114 @@
+Construction
+Foo
+stdout : @Foo *\(\) : \[|Foo | [0-9]*\|]
+
+Nested Construction
+Foo (Bar)
+stdout : @Foo *\(Bar\) : \[|Foo:\[|Bar | [0-9]*|\] | [0-9]*\|]
+
+Nested Construction + argument (nary)
+This(Is(A(Valid(Links(Program(42))))))
+stdout : @This *\(Is *\(A *\(Valid *\(Links *\(Program *\(42\)\)\)\)\)\) : \[|This:\[|Is:\[|A:\[|Valid:\[|Links:\[|Program:Int | [0-9]*|\] | [0-9]*|\] | [0-9]*|\] | [0-9]*|\] | [0-9]*|\] | [0-9]*|\]
+
+Trivial closed case
+fun (x) { switch (x) { case A(b) -> b } }
+stdout : @..*
+exit : 0
+
+Variant matching - Closed case, immediate value [1]
+switch (A(3)) { case A(a) -> a case B(b) -> b }
+stdout : 3 : Int
+
+Variant matching - Closed case, immediate value [2]
+switch (B(3)) { case A(a) -> a case B(b) -> b }
+stdout : 3 : Int
+
+Variant matching - Closed case, immediate value [3]
+switch (L(3)) { case L(x) -> x case M(y) -> y }
+stdout : 3 : Int
+
+Variant matching - Closed case in function [1]
+fun (f) { switch (f) { case A(a) -> not(a) case B(b) -> b } }
+stdout : @fun : .*A:Bool.*B:Bool.* -> Bool
+
+Variant matching - Closed case in function [2]
+fun (f) { switch (f) { case A(a) -> not(a) case B(b) -> true } }
+stdout : @fun : .*A:Bool.*B:_.* -> Bool
+
+Variant matching - Closed case in function [3]
+fun (f) { switch (f) { case B(a) -> not(a) case A(b) -> b } }
+stdout : @fun : .*A:Bool.*B:Bool.* -> Bool
+
+Variant matching : Closed case type error
+fun () { switch (C (3)) { case A (a) -> a case B (b) -> b } }
+stderr : @..*
+exit : 1
+
+Variant matching - Open case "immediate value" [1]
+switch (A(true)) { case A(a) -> a case B(b) -> b case c -> false }
+stdout : true : Bool
+
+Variant matching - Open case "immediate value" [2]
+switch (C(true)) { case A(a) -> a case B(b) -> b case c -> false }
+stdout : false : Bool
+
+Variant matching - Open case in function
+fun (f) { switch (f) { case A (a) -> a case B (b) -> b case c -> false } }
+stdout : @fun : .*A:Bool.*B:Bool.* -> Bool
+
+Recursive variant types [1]
+fun (x) { switch (x) { case A(a) -> a case y -> x } }
+stdout : @fun : \(mu [a-z]+\.\[|A:[a-z]+ | [a-z0-9]+|\]\)-> mu [a-z]+\.\[|A:[a-z]+ | [a-z0-9]+|\]
+
+Recursive variant types [2]
+fun increment(x) { switch (x) { case Zero -> Succ (Zero) case Succ (n) -> Succ ((increment(n))) }} increment
+stdout : @fun : \(mu [a-z]+\.\[|Succ:[a-z]+ | Zero|\]\) -> \[|Zero | mu [0-9]+\.Succ:\[|Zero | [0-9]+|\] | [0-9]+|\]
+
+Recursive variant types [3]
+fun rev(x, r) { switch (x) { case Empty -> r case Cons(a, b) -> rev(b, Cons(a, r)) }} rev
+stdout : @fun : \(mu [a-z]+\.\[|Cons:\([a-z]+, [a-z]+\) | Empty|\], mu [a-z]+\.\[|Cons:\([a-z]+, [a-z]+\) | [0-9]+|\]\) -> mu [a-z]+\.\[|Cons:\([a-z]+, [a-z]+\) | [0-9]+|\]
+
+Recursive variant types [4]
+fun increment(x) { switch (x) { case Zero -> Succ (Zero) case Succ (n) -> Succ (increment(n))}} fun (x) {switch (increment(x)) { case Foo -> 0 case Zero -> 1 case Succ (n) -> 2 }}
+stdout : @fun : \(mu ([a-z]+).\[|Succ:\\1 | Zero|\]\) -> Int
+
+Recursive variant types [5]
+fun increment(x) { switch (x) { case Zero -> Succ (Zero) case Succ (n) -> Succ (increment(n))}} increment(increment(Zero))
+stdout : @Succ *\(Succ *\(Zero\)\) : \[|Zero | (mu ([0-9]*).Succ:\[|Zero | \\1|\] | [0-9]*)|\]
+
+Rows preserved across functions
+fun f(x) { switch (x) { case Foo -> Bar case s -> s } } f
+stdout : @fun : \(\[|Bar | Foo | [0-9]*|\]\) -> \[|Bar | [0-9]*|\]
+
+Nullary variants with cases
+switch (None) { case None -> None case Some (x) -> Some (x) }
+stdout : @None *\(\) : \[|None | Some:a | [0-9]*|\]
+
+Nested variant unification
+[C (A), C (B)]
+stdout : @\[C *\(A\), C *\(B\)\] : .*
+
+Type annotations
+fun increment(x) {(Succ (x)):([|Succ:(mu a . [|Zero | Succ:a|])|])} increment
+stdout : @fun : \(mu ([a-z]+)\.\[|Succ:\\1 | Zero|]\) -> \[|Succ:mu ([a-z]+).\[|Succ:\\2 | Zero|\]|\]
+
+Closure at top-level (issue #422) [1]
+(switch(Foo(id)) { case Foo(id) -> fun(x) { id(x) } })(2)
+stdout : 2 : Int
+
+Closure at top-level (issue #422) [2]
+switch(Foo(fun(x) { x })) { case Foo(id) -> fun(x) { id(x) } }
+stdout : fun : (a::Any) -> a::Any
+
+Constructor names with primes (1)
+Foo'
+stdout : Foo' : [|Foo'|_::Any|]
+
+Constructor names with primes (2)
+Foo'''''bar
+stdout : Foo'''''bar : [|Foo'''''bar|_::Any|]
+
+Constructor names with primes (3)
+'Foo
+exit : 1
+stderr : @.*

@@ -1,0 +1,31 @@
+Alien declaration below toplevel
+if (true) { alien javascript "foo.js" foo : () ~> (); foo() } else { () }
+stderr : @.*
+exit : 1
+
+Alien blocks below toplevel
+if (true) { alien javascript "foo.js" { foo : () ~> (); } foo() } else { () }
+stderr : @.*
+exit : 1
+
+Alien functions may be evaluated in the interpreter
+alien javascript "fun.js" f : () ~> (); id(f)
+stdout : alien : () ~> ()
+
+Alien values may be evaluated in the interpreter
+alien javascript "val.js" x : (); id(x)
+stdout : alien : ()
+
+Alien functions may not be applied in the interpreter
+alien javascript "fun.js" f : () ~> (); f()
+exit : 1
+stderr : @.*Cannot make alien call on the server\..*
+
+Alien binders cannot contain primes
+alien javascript "" f' : () -> ();
+exit : 1
+stderr : @.*
+
+Alien type variables can contain primes
+alien javascript "" f : (a', b') -> c';
+stdout : () : ()

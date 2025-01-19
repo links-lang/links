@@ -1,0 +1,10 @@
+module A {
+    var x = 5;
+}
+
+open A;
+
+switch(x) {
+    case(5) -> "hello!"
+    case _ -> "nooo!"
+}

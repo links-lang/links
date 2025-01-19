@@ -1,0 +1,21 @@
+  typename Nat = [| Z | Succ:Nat |];
+
+mutual {
+  sig isOdd : (Nat) ~> Bool
+  fun isOdd(n) {
+    switch(n) {
+      case Z -> false
+      case Succ(n) -> isEven(n)
+    }
+  }
+
+  sig isEven : (Nat) ~> Bool
+  fun isEven(n) {
+    switch(n) {
+      case Z -> true
+      case Succ(n) -> isOdd(n)
+    }
+  }
+}
+
+isEven(Succ(Succ(Succ(Z))))

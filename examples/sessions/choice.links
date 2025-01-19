@@ -1,0 +1,16 @@
+#typename Selection(r::Row(Any,Session)) = ![|~r|].End;
+typename Choice(r::Row(Any,Session)) = ?[|r|].End;
+
+#sig sel_A : Selection({A:~s|r} ~> s
+sig sel_A : forall s::Session,r::Row,e::Row.(![|A:s|r|].End) ~e~> ~s
+fun sel_A(e) {linFork (linfun (x) {close(send(A(x), e))})}
+
+sig off : forall r::Row(Any,Session),e::Row,a.(Choice({ | r}), ([|r|]) ~e~> a) ~e~> a
+fun off(e, f) {
+  var (x, s) = receive(e);
+  close(s);
+  f(x)
+}
+
+#sel_A
+fun (c) {off(c, fun (x) {switch (x) {case A(s) -> receive(s)}})}

@@ -1,0 +1,133 @@
+---
+config: tests/typed_ir.config
+---
+
+Anonymous constant function (#693)
+fun (x) {1}
+stdout : fun : forall a,b::Row.(a) -b-> Int
+
+Anonymous identity function (#693)
+fun (x) {x}
+stdout : fun : forall a::(Any,Any),b::Row.(a::Any) -b-> a::Any
+
+Anonymous composition function (#693)
+fun (f,g) {fun (x){f (g(x))}}
+stdout : fun : forall a::(Any,Any),b::Row,c::(Any,Any),d::(Any,Any),e::Row.((a::Any) -b-> c::Any, (d::Any) -b-> a::Any) -e-> (d::Any) -b-> c::Any
+
+Anonymous application function (#693)
+fun (f) {fun (x){f (x)}}
+stdout : fun : forall a::(Any,Any),b::Row,c::(Any,Any),d::Row.((a::Any) -b-> c::Any) -d-> (a::Any) -b-> c::Any
+
+XML typing (#693)
+fun (x) {<a>{x}</a>}
+stdout : fun : forall a::Row.(Xml) -a-> Xml
+
+ConcatMap (#368)
+tests/typed_ir/T368.links
+filemode : true
+stdout : () : ()
+
+Quantifiers on let-bound values (#620)
+tests/typed_ir/T620.links
+filemode : true
+stdout : () : ()
+
+Bound quantifiers in `and` and `all` (#692)
+tests/typed_ir/T692.links
+filemode : true
+stdout : () : ()
+
+Bound quantifiers in a query (#694)
+tests/typed_ir/T694.links
+filemode : true
+stdout : fun : forall a::Row,b::Row(Any,Base).() -a-> [(|b::(Any,Base))]
+
+Curry (#574)
+tests/typed_ir/T574.links
+filemode : true
+stdout : () : ()
+
+Unsafe type signatures #1 (#691)
+tests/typed_ir/T691a.links
+filemode : true
+exit : 0
+stdout : () : ()
+
+Unsafe type signatures #2 (#691)
+tests/typed_ir/T691b.links
+filemode : true
+exit : 0
+stdout : () : ()
+
+Wild effect compatibility #1 (#697)
+tests/typed_ir/T697a.links
+filemode : true
+stdout : () : ()
+
+Wild effect compatibility #2 (#697)
+tests/typed_ir/T697b.links
+filemode : true
+stdout : () : ()
+
+Wild effect compatibility #3 (#873, 1)
+tests/typed_ir/T873.links
+filemode : true
+exit : 0
+stdout : () : ()
+
+Wild effect compatibility #4 (#873, 2)
+fun () { escape e in { (fun (esc) { esc(()) })(e) } }
+exit : 0
+stdout : fun : forall a::Row.() ~a~> ()
+
+Wild effect compatibility #5 (#873, 3)
+sig foo : () { |e}~> () fun foo () { escape e in { (fun (esc) { esc(()) })(e) }}
+exit : 0
+stdout : () : ()
+
+Call/cc
+sig callcc : (((a) ~> b) ~e~> a) ~e~> a fun callcc(f) { escape k in f(k) }
+exit : 0
+stdout : () : ()
+
+asList (#698)
+tests/typed_ir/T698.links
+filemode : true
+stdout : () : ()
+
+isInt (#575)
+sig isInt : (String) -> Bool fun isInt (x) { x =~ /-?[0-9]+$/ }
+stdout : () : ()
+
+function pattern matching has right effects (#691)
+sig f : ([a]) {}-> a fun f ([x]) { x }
+stdout : () : ()
+
+Generalisation obeys value restriction / Freshening of generalised type variables when turning lambda into named fun (#871)
+var foo = spawn { () }; ()
+exit : 0
+stdout : () : ()
+
+fork (#874)
+tests/typed_ir/T874.links
+filemode : true
+exit : 0
+stdout : () : ()
+
+linFork (#875)
+tests/typed_ir/T875.links
+filemode : true
+exit : 0
+stdout : () : ()
+
+lf (#876)
+tests/typed_ir/T876.links
+filemode : true
+exit : 0
+stdout : () : ()
+
+elemIndex (#877)
+tests/typed_ir/T877.links
+filemode : true
+exit : 0
+stdout : () : ()

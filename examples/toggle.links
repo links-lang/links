@@ -1,0 +1,59 @@
+# Toggle on/off
+
+# Toggle computation
+sig toggle : (Bool) -> Bool
+fun toggle(st) client {
+  not(st)
+}
+
+# Conversion functions
+fun boolToString(b) {
+  switch (b) {
+    case true -> "true"
+    case false -> "false"
+  }
+}
+
+fun stringToBool(s) {
+  switch (s) {
+    case "true"  -> true
+    case "false" -> false
+    case otherwise -> error("Input '" ^^ s ^^ "' was not recognised as a boolean value.")
+  }
+}
+
+
+fun toggleButton() client {
+  var s0 = stringToBool(domGetAttributeFromRef(getNodeById("state"), "value"));
+  var s1 = toggle(s0);
+  if (s1 == true) {
+    domRemoveAttributeFromRef(getNodeById("off"), "disabled");
+    ignore(domSetAttributeFromRef(getNodeById("on"), "disabled", "disabled"))
+  } else {
+    domRemoveAttributeFromRef(getNodeById("on"), "disabled");
+    ignore(domSetAttributeFromRef(getNodeById("off"), "disabled", "disabled"))
+  };
+  ignore(domSetAttributeFromRef(getNodeById("state"), "value", boolToString(s1)))
+}
+
+# Page
+fun mainPage(_) {
+  page
+    <html>
+      <body>
+        <form l:onsubmit="{toggleButton()}">
+          <input type="submit" id="on" value="On" />
+          <input type="submit" id="off" value="Off" disabled="disabled" />
+          <input type="hidden" id="state" value="false" />
+        </form>
+      </body>
+    </html>
+}
+
+
+fun main() {
+  addRoute("/", mainPage);
+  servePages()
+}
+
+main()

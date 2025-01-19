@@ -1,0 +1,114 @@
+Lexical scoping at top-level
+var x = 3; fun y(a) { x + a } var x = 4; y(10)
+stdout : 13 : Int
+exit : 0
+
+Nested scopes
+{ var x = 3; ({ var x = 4; x }, x)}
+stdout : (4, 3) : (Int, Int)
+
+Non-recursive top-level functions:
+var f = fun(x) { f(x) }
+stderr : @..*
+exit : 1
+
+Non-recursive block-scope functions:
+{ var f = fun(x) { f(x) }; () }
+stderr : @..*
+exit : 1
+
+Mutually recursive top-level functions
+mutual { fun evn(n) { n == 0 || od(n - 1) } fun od(n) { evn(n) == false } } evn(20)
+stdout : true : Bool
+exit : 0
+
+Mutually recursive nested functions
+{ mutual{ fun even(n) { n == 0 || odd(n - 1) } fun odd(n) { even(n) == false } } even(20) }
+stdout : true : Bool
+exit : 0
+
+Mutually recursive nested functions returned outside their scope
+{fun f() { mutual { fun even(n) { n == 0 || odd(n - 1) } fun odd(n) { even(n) == false } } even } f()(7) }
+stdout : false : Bool
+exit : 0
+
+Closures using anonymous functions
+fun addn(n) { fun(x) { x + n } } addn(3)(4)
+stdout : 7 : Int
+exit : 0
+
+Closures using named functions
+fun addn(n) { fun f(x) { x + n } f } addn(3)(4)
+stdout : 7 : Int
+exit : 0
+
+Closures where the environment contains a closure from a different scope
+fun add(x,y){x+y} fun baz(z, w) {z + w} fun foo(f, x) { fun bar(y) { f(3, y) } bar(x) } foo(add,4)
+stdout : 7 : Int
+exit : 0
+
+No value recursion
+fun f() { g() } var x = f(); fun g() { x }
+stderr : @.
+exit : 1
+
+as patterns
+{var x::xs as y = [1,2,3]; y}
+stdout : [1, 2, 3] : [Int]
+
+Reject multiple occurrences of a name in a pattern [1]
+fun (x,x) { x }
+stderr : @.
+exit : 1
+
+Reject multiple occurrences of a name in a pattern [2]
+fun () { var (x,x) = (1,2); x }
+stderr : @.
+exit : 1
+
+Reject multiple occurrences of a name in a pattern [3]
+fun () { var (a=x,b=x) = (a=1,b=2); x }
+stderr : @.
+exit : 1
+
+Check that recursive bindings don't destroy the local environments of values in the local environment (see bug report from Thierry, 2006-09-17 on links-users)
+fun (z) { fun s() {} z()}(fun (aa)() { aa(()) }(fun (x){x}))
+stdout : () : ()
+
+Bug in interaction between pattern-matching and anonymous functions
+(fun (l) { switch (l) { case x::xs -> fun (x) { x } } })([1])(2)
+stdout : 2 : Int
+
+Variable names may contain primes (1)
+var x' = 42; x'
+stdout : 42 : Int
+
+Variable names may contain primes (2)
+var x'''y = 128; x'''y
+stdout : 128 : Int
+
+Variable names may contain primes (3)
+var 'x = 42;
+exit : 1
+stderr : @.*
+
+Function names may contain primes (1)
+fun f'() { 42 } f'()
+stdout : 42 : Int
+
+Function names may contain primes (2)
+sig f'''y : (a') -> a' fun f'''y(x) { x } f'''y(128)
+stdout : 128 : Int
+
+Function names may contain primes (3)
+fun 'f() { () }
+exit : 1
+stderr : @.*
+
+Function names may contain primes (4)
+fun f'(x) { x } f'("f'")
+stdout : "f'" : String
+
+A character not a variable name.
+var a' = 42; 'a'
+stdout : 'a' : Char

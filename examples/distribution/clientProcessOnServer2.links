@@ -1,0 +1,34 @@
+fun spawnedFn() {
+  receive {
+    case Hi() -> println("Received hi on client, sent from server RPC!")
+  }
+}
+
+fun sendFromServer(pid) server {
+  pid ! Hi()
+}
+
+fun doRpc(loc) client {
+  var pid = spawnAt(loc, { spawnedFn() });
+  sendFromServer(pid)
+}
+
+
+fun mainPage(loc) {
+  var x = spawnAt(loc, { doRpc(loc) });
+  page
+    <html>
+      <body>
+        <div l:onload="{ignore(x)}"> </div>
+        <h1>Hi</h1>
+      </body>
+    </html>
+}
+
+fun main() {
+  addLocatedRouteHandler("/", fun (_, loc) { mainPage(loc) } );
+  serveWebsockets();
+  servePages()
+}
+
+main()

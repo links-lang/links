@@ -1,0 +1,3 @@
+var db = database "links";
+var factorials = table "factorials" with (i : Int, f : Int) from db;
+query nested {for (x <-- factorials) where (x.i == x.f) []}

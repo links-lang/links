@@ -1,0 +1,4 @@
+var f = id(id);
+
+sig g : forall bobsleigh. (bobsleigh) {}-> bobsleigh
+fun g(x) { f(x) }

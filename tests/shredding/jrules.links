@@ -1,0 +1,79 @@
+# var clients = [(id=1), (id=42), (id=2), (id=3)];
+# # var marketers = [(name="a", clients=[1]), (name="b", clients=[]), (name="c", clients=[1, 2, 3])];
+# var marketers_names = [(name="a"), (name="b"), (name="c")];
+# var mc = [(m="a", c=1),
+#           (m="c", c=1),
+#           (m="c", c=2),
+#           (m="c", c=3)];
+
+var db = database "links";
+
+var clients =
+  table "clients"
+  with (id: Int)
+  # tablekeys [["id"]]
+  from db;
+
+var marketers_names =
+  table "marketers"
+  with (name: String)
+  # tablekeys [["name"]]
+  from db;
+
+var mc =
+  table "mc"
+  with (m: String,
+        c: Int)
+  from db;
+
+sig marketers : () -> [(name:String, clients:[Int])]
+fun marketers () {
+  query nested {
+    for (m <-- marketers_names)
+    [(name=m.name, clients = for (x <-- mc) where (x.m == m.name) [x.c])]
+  }
+}
+
+sig u : () -> [((id:Int), [String])]
+fun u () {
+  query nested {
+    for (c <-- clients)
+       [(c, for (m <- marketers())
+            where (not(empty(for (mc <- m.clients) where (mc == c.id) [()])))
+              [m.name])]
+  }
+}
+
+sig v : () -> [(name:String)]
+fun v () {
+  query nested {
+    for (x <-- marketers_names)
+    where (x.name =~ /a/)
+    [x]
+  }
+}
+
+sig marketers2 : () -> [(name:String, clients:[Int])]
+fun marketers2 () {
+  query nested {
+    for (m <-- marketers_names)
+      [(name=m.name, clients = for (x <-- mc) where (x.m == m.name && x.m =~ /a/) [x.c])]
+  }
+}
+
+sig marketers3 : () -> [(name:String, clients:[Int])]
+fun marketers3 () {
+  query nested {
+    for (m <-- marketers_names)
+      [(name=m.name, clients = for (x <-- mc) where (x.m =~ /.*{m.name}.*/ && x.m == "a") [x.c])]
+  }
+}
+
+fun test() {
+  assertEq(u(), [((id=1), ["a", "c"]), ((id=2), ["c"]), ((id=3), ["c"]), ((id=42), [])]);
+  assertEq(v(), [(name = "a")]);
+  assertEq(marketers2(), [(clients = [1], name = "a"), (clients = [], name = "b"), (clients = [], name = "c")]);
+  assertEq(marketers3(), [(clients = [1], name = "a"), (clients = [], name = "b"), (clients = [], name = "c")])
+}
+
+test()

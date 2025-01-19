@@ -1,0 +1,105 @@
+var db = database "links";
+var factorials = table "factorials" with (i : Int, f : Int) from db;
+
+fun deleteAll() {
+  delete (x <-- factorials)
+}
+
+fun deleteWhere() {
+  delete (x <-- factorials)
+  where (x.i == 2)
+}
+
+fun insertNone() {
+  insert factorials
+  values (i, f)
+    []
+}
+
+fun insertOne() {
+  insert factorials
+  values [(f=1, i=1)]
+}
+
+fun insertTwoThree() {
+  insert factorials
+  values (f, i)
+    [(f=2, i=2),
+     (f=6, i=3)]
+}
+
+fun insertReturningOne() {
+  insert factorials
+  values [(f=1, i=1)] returning i
+}
+
+fun insertReturningTwo() {
+  insert factorials
+  values (f,i) [(f=2, i=2)] returning f
+}
+
+fun updateTwoThree() {
+  update (x <-- factorials)
+  where (x.i == 2)
+  set (f=3)
+}
+
+fun lookupFactorials(n) server {
+  query {
+    for (row <-- factorials)
+    where (row.i <= n)
+    orderby (row.i)
+      [(i=row.i, f=row.f)]
+  }
+}
+
+fun unwrappedLookup(n) server {
+  for (row <-- factorials)
+  where (row.i <= n)
+  orderby (row.i)
+    [(i=row.i, f=row.f)]
+}
+
+fun trivialNested1() server {
+  query { for (y <- for (x <-- factorials) [(b=[])]) [(a=0)]}
+}
+
+fun trivialNested2() server {
+  query { for (y <- for (x <- asList( factorials)) [(b=[])]) [(a=0)]}
+}
+
+fun tableLength() server {
+  hd(query {
+    [(len = length(for (x <-- factorials) [x]))]
+  }).len
+}
+
+fun test() {
+  deleteAll();
+  deleteWhere();
+  assertEq(lookupFactorials(10), []);
+  assertEq(insertReturningOne(), 1);
+  assertEq(lookupFactorials(10), [(f=1,i=1)]);
+  assertEq(insertReturningTwo(), 2);
+  assertEq(lookupFactorials(10), [(f=1,i=1),(f=2,i=2)]);
+  updateTwoThree();
+  assertEq(lookupFactorials(10), [(f=1,i=1),(f=3,i=2)]);
+  deleteAll();
+  insertOne();
+  deleteAll();
+  assertEq(lookupFactorials(10), []);
+  insertNone();
+  assertEq(lookupFactorials(10), []);
+  insertOne();
+  assertEq(lookupFactorials(1), [(f=1,i=1)]);
+  assertEq(query{unwrappedLookup(1)}, [(f=1,i=1)]);
+  insertTwoThree();
+  assertEq(tableLength(), 3);
+  assertEq(lookupFactorials(3), [(i=1, f=1), (i=2, f=2), (f=6,i=3)]);
+  assertEq(trivialNested1(),[(a=0),(a=0),(a=0)]);
+  assertEq(trivialNested2(),[(a=0),(a=0),(a=0)]);
+  assertEq(query  { for (x <-- factorials) where (x.i == 1) [(a=x.i),(a=x.i)] },
+           [(a = 1), (a = 1)])
+}
+
+test()

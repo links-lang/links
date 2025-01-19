@@ -1,0 +1,153 @@
+Iteration
+for (i <- [1,2,3,4,5]) if (i == 3) [] else [i, i]
+stdout : [1, 1, 2, 2, 4, 4, 5, 5] : [Int]
+
+Where clause
+for (i <- [1,2,3,4,5]) where (i <> 3) [i, i]
+stdout : [1, 1, 2, 2, 4, 4, 5, 5] : [Int]
+
+Concatenation/union
+[1,2,3] ++ [4,5]
+stdout : [1, 2, 3, 4, 5] : [Int]
+
+Head and tail
+hd(['a','b','c']) == 'a'
+stdout : true : Bool
+
+Equality
+[1,2,3] == [1,2,3] && [1,2,3] <> [2,1,3]
+stdout : true : Bool
+
+Cons
+1 :: 2 :: 3 :: 4 :: []
+stdout : [1, 2, 3, 4] : [Int]
+
+Let-patterns [1]
+{var x :: xs = [1,2,3] ; x}
+stdout : 1 : Int
+
+Let-patterns [2]
+{var (x :: y :: xs, z) = ([1,2,3],4) ; (x,y)}
+stdout : (1, 2) : (Int, Int)
+
+Let-patterns [3]
+{var ((v,w) :: (x,y) :: z) = [(1,2),(3,4)] ; (w,x)}
+stdout : (2, 3) : (Int, Int)
+
+Let-patterns [4]
+{var (x,y) :: [] = [(1,2),(3,4),(4,5)] ; (x,y)}
+stderr : @..*
+exit : 1
+
+Let-patterns [5]
+{var [(x,y)] = [(1,2),(3,4),(4,5)] ; (x,y)}
+stderr : @..*
+exit : 1
+
+Let-patterns [6]
+{var [] = [1,2,3] ; ()}
+stderr : @..*
+exit : 1
+
+Let-patterns [7]
+{var [x] = [] ; ()}
+stderr : @..*
+exit : 1
+
+Let-patterns [8]
+{var x::y = [] ; ()}
+stderr : @..*
+exit : 1
+
+Case-patterns [1]
+switch ([]) { case [] -> 1 }
+stdout : 1 : Int
+
+Case-patterns [2]
+switch ([]) { case x::xs -> 1 }
+stderr : @..*
+exit : 1
+
+Case-patterns [3]
+switch ([]) { case [] -> 2 case x -> 1 }
+stdout : 2 : Int
+
+Case-patterns [4]
+switch ([]) { case x::xs -> 1 case x -> 2 }
+stdout : 2 : Int
+
+Case-patterns [5]
+switch ([1]) { case x::xs -> 1  case x -> 2 }
+stdout : 1 : Int
+
+Case-patterns [6]
+switch ([1,3]) { case x::y::z -> 3 case x::y -> 2 case x -> 1 }
+stdout : 3 : Int
+
+Case-patterns [7]
+switch ([1]) { case x::y::z -> 3 case x::y -> 2 case x -> 1 }
+stdout : 2 : Int
+
+Case-patterns [8]
+switch ([1,3]) { case x::y::[] -> 3 case x::y -> 2 case x -> 1 }
+stdout : 3 : Int
+
+Case-patterns [9]
+switch ([1]) { case x::[] -> 2 case x -> 1 }
+stdout : 2 : Int
+
+Case-patterns (redundancy) [10]
+fun (x) { switch (x) { case ([], []) -> 1 case (x::xs, y::ys) -> 2 case ([], _) -> 3 case (_, []) -> 4 }}
+stdout : @fun : \(\(\[_\], \[_\]\)\) -> Int
+
+Case-patterns (singleton list pattern)
+switch ([1]) { case [x] -> 2 case x -> 1 }
+stdout : 2 : Int
+
+Case patterns (with redefined hd)
+{ fun hd(_) { 1 } switch (['a']) { case [y] -> y }}
+stdout : 'a' : Char
+
+With parentheses:
+switch ([1]) { case (x::xs) -> 1  case x -> 2 }
+stdout : 1 : Int
+
+Length function
+fun len (l) { switch (l) { case [] -> 0 case x::xs -> 1 + len(xs) } } len ([1,2,3])
+stdout : 3 : Int
+
+Map function
+map(curry((+))(1), [1,2,3])
+stdout : [2, 3, 4] : [Int]
+
+Sorting:
+for (i <- [2,1,3]) orderby (i) [i]
+stdout : [1, 2, 3] : [Int]
+
+Sorting:
+for (i <- [2,1,3]) orderby (-i) [i]
+stdout : [3, 2, 1] : [Int]
+
+Empty-list comparison (1)
+[] < []
+stdout : false : Bool
+
+Empty-list comparison (2)
+[] > []
+stdout : false : Bool
+
+List comparison (1)
+[1] < []
+stdout : false : Bool
+
+List comparison (2)
+[1] > []
+stdout : true : Bool
+
+Nullary for comprehensions
+for () [1]
+stdout : [1] : [Int]
+
+For comprehensions with multiple generators
+for (x <- [1,2], y <- [true, false], z <- ["foo", "bar"]) [(x,y,z)]
+stdout : [(1, true, "foo"), (1, true, "bar"), (1, false, "foo"), (1, false, "bar"), (2, true, "foo"), (2, true, "bar"), (2, false, "foo"), (2, false, "bar")] : [(Int, Bool, String)]

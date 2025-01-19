@@ -1,0 +1,285 @@
+# Deep and shallow implementations of pipes along with their
+# interencodings.
+#
+# The direct implementations are adapted from Kammar et al. (2013)
+# whilst the encoded implementations are adapted from Hillerström and
+# Lindley (2018).
+
+typename Comp(e::Eff,a) = () ~e~> a;
+
+# Basic combinators.
+sig await : () { Await: s |e}-> s
+fun await() { do Await }
+
+sig yield : (s) { Yield: (s) => () |e}-> ()
+fun yield(s) { do Yield(s) }
+
+sig forever : (Comp({ |e}, a)) ~e~> b
+fun forever(f) { ignore(f()); forever(f) }
+
+sig blackhole : Comp({Await:s |e}, a)
+fun blackhole() { forever(await) }
+
+sig take1 : (Int) -> Comp({Await:s, Yield:(s) => () |e}, ())
+fun take1(n)() {
+  fun take0(n) {
+    if (n <= 0) ()
+    else {
+      var x = await();
+      yield(x);
+      take0(n-1)
+   }
+ }
+ take0(n)
+}
+
+sig produceFrom : (Int) -> Comp({ Yield: (Int) => () |e}, a)
+fun produceFrom(n)() {
+  fun produceFrom0(n) {
+     yield(n);
+     produceFrom0(n+1)
+  }
+  produceFrom0(n)
+}
+
+fun skip1(n)() {
+  fun skip0(n) {
+    var x = await();
+    if (n <= 0) yield(x)
+    else skip0(n-1)
+  }
+  skip0(n)
+}
+
+fun printer(toString)() {
+  var x = await();
+  print(toString(x))
+}
+
+fun forward() { yield(await()) }
+
+fun collect(m) {
+  handle(m()) {
+    case _ -> []
+    case <Yield(x)> -> [x]
+  }
+}
+
+module Deep {
+  mutual {
+    typename Producer(e::Eff, s, a) = () ~e~> (Consumer({ |e}, s, a)) ~e~> a;
+    typename Consumer(e::Eff, s, a) = (s) ~e~> (Producer({ |e}, s, a)) ~e~> a;
+  }
+
+  typename Pipe(e::Eff, s, a) = forall b::Presence(Any), c::Presence(Any).
+               (Comp({ Await: s, Yield{c} |e}, a)) { Await{b}, Yield{c} |e}~>
+                      (Producer({ Await{b}, Yield{c} |e}, s, a)) { Await{b}, Yield{c} |e}~> a;
+
+  typename Copipe(e::Eff, s, a) = forall b::Presence(Any), c::Presence(Any).
+            (Comp({ Await{b}, Yield: (s) => () |e}, a)) { Await{b}, Yield{c} |e}~>
+                   (Consumer({ Await{b}, Yield{c} |e}, s, a)) { Await{b}, Yield{c} |e}~> a;
+
+
+  sig expoPipe1 : (Pipe({ |e}, Int, a), Copipe({ |e}, Int, a)) -> (Int) -> Comp({ Await:Int, Yield: (Int) => () |e}, a)
+  fun expoPipe1(pipe, copipe)(n)() {
+    fun expoPipe0(pipe, copipe, n) {
+      if (n == 0) {
+         forever(fun() {
+           var x = await();
+           yield(x+1)
+         })
+      } else {
+         pipe(fun() {expoPipe0(pipe, copipe, n-1)})(fun() { copipe(fun() {expoPipe0(pipe, copipe, n-1)}) })
+      }
+    }
+    expoPipe0(pipe, copipe, n)
+  }
+
+
+  module Direct {
+    sig pipe : Pipe({ |e}, s, a)
+    fun pipe(cons) {
+      handle(cons()) {
+        case x -> fun(_) { x }
+        case <Await => resume> ->
+          fun(prod : Producer({ Await{b}, Yield{c} |e}, s, a)) {
+            prod()(resume)
+          }
+      }
+    }
+
+    sig copipe : Copipe({ |e}, s, a)
+    fun copipe(prod) {
+      handle(prod()) {
+        case x -> fun(_) { x }
+        case <Yield(s) => resume> ->
+          fun(cons : Consumer({ Await{b}, Yield{c} |e}, s, a)) {
+            cons(s)(fun() { resume(()) })
+          }
+      }
+    }
+
+    op producer >+> consumer {
+      fun() { pipe(consumer)(fun() { copipe(producer) }) }
+    }
+
+    fun expoPipe(n) { expoPipe1(pipe, copipe)(n) }
+  }
+
+  module Encoded {
+    sig pipe : Pipe({ |e}, s, a)
+    fun pipe(cons) {
+      fun h(cons) {
+        shallowhandle(cons()) {
+          case x -> fun(_) { x }
+          case <Await -> resume> ->
+            var resume0 = fun(x) {
+              h(fun() { resume(x) })
+            };
+            fun(prod : Producer({ Await{b}, Yield{c} |e}, s, a)) {
+              prod()(resume0)
+            }
+        }
+      }
+      h(cons)
+    }
+
+    sig copipe : Copipe({ |e}, s, a)
+    fun copipe(prod) {
+      fun h(prod) {
+        shallowhandle(prod()) {
+          case x -> fun(_) { x }
+          case <Yield(s) -> resume> ->
+            var resume0 = fun(x) {
+              h(fun() { resume(x) })
+            };
+            fun(cons : Consumer({ Await{b}, Yield{c} |e}, s, a)) {
+              cons(s)(fun() { resume0(()) })
+            }
+        }
+      }
+      h(prod)
+    }
+
+    op producer >+> consumer {
+      fun() { pipe(consumer)(fun() { copipe(producer) }) }
+    }
+
+    fun expoPipe(n) { expoPipe1(pipe, copipe)(n) }
+  }
+}
+
+module Shallow {
+  typename Prod(e::Eff,o,a) = ()   {Yield:(o) => () |e}~> a;
+  typename Cons(e::Eff,i,a) = (i) {Await:i |e}~> a;
+
+  module Direct {
+    mutual {
+      sig pipe : (Prod({ Await{b}                   |e}, s, a),
+                  Comp({ Await:s, Yield{c}          |e}, a)) {Await{b}, Yield{c} |e}~> a
+      fun pipe(prod, cons) {
+        shallowhandle(cons()) {
+          case <Await -> resume> -> copipe(resume, prod)
+        }
+      }
+
+      sig copipe : (Cons({ Yield{c} |e}, s, a),
+                    Comp({ Await{b}, Yield: (s) => () |e}, a)) {Await{b}, Yield{c} |e}~> a
+      fun copipe(cons, prod) {
+        shallowhandle(prod()) {
+          case <Yield(s) -> resume> -> pipe(fun() { resume(()) }, fun() { cons(s) })
+        }
+      }
+    }
+  }
+
+  module Encoded {
+    mutual {
+      sig pipe : (Prod({ Await{b}                   |e}, s, a),
+                  Comp({ Await:s, Yield{c}          |e}, a)) {Await{b}, Yield{c} |e}~> a
+      fun pipe(prod, cons) {
+        var (_,g) = handle(cons()) {
+          case x -> (fun() { x }, fun() { x })
+          case <Await => resume> ->
+            var resume0 = fun(x) {
+              var (f,_) = resume(x);
+              f()
+            };
+            (fun() { var x = do Await; resume0(x) }, fun() { copipe(resume0, prod) })
+        };
+        g()
+      }
+
+      sig copipe : (Cons({ Yield{c} |e}, s, a),
+                    Comp({ Await{b}, Yield: (s) => () |e}, a)) {Await{b}, Yield{c} |e}~> a
+      fun copipe(cons, prod) {
+        var (_,g) = handle(prod()) {
+          case x -> (fun() { x }, fun() { x })
+          case <Yield(s) => resume> ->
+            var resume0 = fun(x) {
+            var (f,_) = resume(x);
+            f()
+          };
+          (fun() { var x = do Yield(s); resume0(x) }, fun() { pipe(fun() { resume0(()) }, fun() { cons(s) }) })
+        };
+        g()
+      }
+    }
+  }
+}
+
+
+op producer >+> consumer {
+  fun() { Deep.Direct.pipe(consumer)(fun() { Deep.Direct.copipe(producer) }) }
+}
+
+sig expoPipe : (Int) -> Comp({ Await: Int, Yield: (Int) => () |e}, a)
+fun expoPipe(n)() {
+  fun expoPipe0(n) {
+    if (n == 0) {
+       forever(fun() {
+         var x = await();
+         yield(x+1)
+       })
+    } else {
+        Deep.Direct.pipe(fun() {expoPipe0(n-1)})(fun() { Deep.Direct.copipe(fun() {expoPipe0(n-1)}) })
+    }
+  }
+  expoPipe0(n)
+}
+
+fun nested(start, depth, end) {
+  var pipeline = produceFrom(start) >+> expoPipe(depth) >+> take1(end) >+> printer(intToString);
+  pipeline()
+}
+
+fun simple() {
+  var pipeline = produceFrom(0) >+> skip1(1000) >+> printer(intToString);
+  pipeline()
+}
+
+fun nested_example(start, depth, end) {
+  var deep = {
+    open Deep.Direct;
+    produceFrom(start) >+> expoPipe(depth) >+> take1(end) >+> forward
+  };
+
+  var deep_encoded = {
+    open Deep.Encoded;
+    produceFrom(start) >+> expoPipe(depth) >+> take1(end) >+> forward
+  };
+
+  var shallow = {
+    open Shallow.Direct;
+    produceFrom(start) >+> expoPipe(depth) >+> take1(end) >+> forward
+  };
+
+  var shallow_encoded = {
+    open Shallow.Encoded;
+    produceFrom(start) >+> expoPipe(depth) >+> take1(end) >+> forward
+  };
+
+  concat([collect(deep), collect(deep_encoded), collect(shallow), collect(shallow_encoded)])
+}
+
+fun unitTest() { nested_example(0, 8, 10) }

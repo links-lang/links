@@ -1,0 +1,94 @@
+# Same Fringe Problem
+#
+#    Definition: Two binary trees have the same fringe if they have exactly
+#    the same leaves reading from left to right.
+#
+#    Problem: Given two binary trees decide whether they have the same fringe.
+#
+
+# Some standard data types
+
+# Binary tree data type
+typename Tree(a) = [|Leaf:a
+                    |Node:(Tree(a),Tree(a))|];
+
+# Yield operation for (leaf-)values
+sig yield : (a) {Yield:(a) => ()|_}-> ()
+fun yield(v) {do Yield(v)}
+
+# Post-order tree traversal
+sig walkTree : (Tree(a)) -f-> Comp((), {Yield:(a) => ()|e})
+fun walkTree(tree)() {
+  switch (tree) {
+    case Leaf(v)   -> yield(v)
+    case Node(l,r) -> walkTree(l)(); walkTree(r)()
+  }
+}
+
+# Convenient type synonyms
+typename Continuation(a, r) = (a) ~> r;
+typename Status(a) = mu r . [|Done:()
+                            |Yielded:(a, Continuation((), r))|];
+
+# Pauses evaluation of a computation whenever Yield occurs
+sig step : (Comp((), { Yield:(a) => () |_})) -> (()) { |_}~> Status(a)
+fun step(f)(()) {
+  handle (f()) {
+    case () -> Done(())
+    case <Yield(v) => k> -> Yielded(v,k)
+  }
+}
+
+# Facilitates communication between two cooperative tree traversals
+sig sameFringe : (Tree(a), Tree(a)) ~> Bool
+fun sameFringe(x, y) {
+  fun sameFringe_aux(f, g) {
+    switch ((f(()), g(()))) {
+      case (Done(_),Done(_)) -> true
+      case (Yielded(v1,k1),Yielded(v2,k2)) ->
+        if (v1 <> v2) false
+        else sameFringe_aux(k1, k2)
+      case _ -> false
+    }
+  }
+  var sameFringe_aux = gen2(sameFringe_aux);
+  sameFringe_aux(step(walkTree(x)), step(walkTree(y)))
+}
+# Examples
+var t1 = Leaf(42);
+var t2 = Leaf(-42);
+
+var t3 = Node(Leaf(1), Node(Leaf(2), Leaf(3)));
+var t4 = Node(Node(Leaf(1),Leaf(2)), Leaf(3));
+var t5 = Node(Node(Leaf(3), Leaf(2)), Leaf(1));
+
+var t6 = Node(Leaf(1), Node(Leaf(2), Node(Leaf(3), Leaf(4))));
+var t7 = Node(Node(Leaf(1),Leaf(2)), Node(Leaf(3), Leaf(4)));
+
+fun examples(correct, incorrect) {
+  fun runTest(((t1, t1Name), (t2, t2Name))) {
+    var s = t1Name ^^ " and " ^^ t2Name;
+    if (sameFringe(t1, t2)) correct(t1Name, t2Name)
+    else incorrect(t1Name, t2Name)
+  }
+  var t1 = (t1, "t1"); var t2 = (t2, "t2");
+  var t3 = (t3, "t3"); var t4 = (t4, "t4");
+  var t5 = (t5, "t5"); var t6 = (t6, "t6");
+  var t7 = (t7, "t7");
+  var tests = [(t1, t1), (t1, t2), (t2, t1), (t1, t3), (t3, t4), (t4, t3), (t3, t5), (t5, t4), (t6, t7), (t7, t6)];
+  map(runTest, tests)
+}
+
+fun unitTest() {
+  examples(fun(_, _) { true }, fun(_, _) { false })
+}
+
+fun runExamples() {
+  ignore(
+    examples(fun(t1, t2) {
+      println(t1 ^^ " and " ^^ t2 ^^ " have the same fringe")
+    },
+    fun(t1, t2) {
+      println(t1 ^^ " and " ^^ t2 ^^ " have the different fringes")
+    }))
+}

@@ -1,0 +1,123 @@
+# SMTP 3 - multiple recipients.
+
+typename Address = String;
+typename Accept = String;
+typename Message = String;
+typename Error = String;
+typename Response = String;
+
+typename SMTPServer =
+  mu send.
+    [&|MAIL: ?Address.
+             [+|REJECT:!Error.send,
+                ACCEPT:!Accept.
+                       mu rcpt.
+                         [&|RCPT:?Address.
+                                 [+|REJECT:!Error.rcpt,
+                                    ACCEPT:!Accept.rcpt|+],
+                            DATA:?Message.
+                                 !Accept.
+                                 send |&] |+],
+       QUIT:EndBang |&];
+
+# Returns true, if the given String is a valid e-mail address.
+# The bit before @ has to be a single word!
+sig isValid : (String) ~> Bool
+fun isValid(address) {
+  address =~ /.[a-z0-9]+.@.[a-z]+.[a-z]+/ # Regex to match 1+characters/numbers @ 1+characters . 1+characters
+}
+
+mutual {
+  sig mailServer : (SMTPServer) ~> EndBang
+  fun mailServer(s) {
+    offer(s) {
+      case MAIL(s) ->
+        var (address, s) = receive(s);
+        println("S: received address as FROM: " ^^ address);
+        if (isValid(address)) {
+          var s = send("250 OK", select ACCEPT s);
+          rcpt(s)
+        } else {
+          var s = send("Invalid e-mail", select REJECT s);
+          mailServer(s)
+        }
+      case QUIT(s) ->
+        s
+    }
+  }
+
+  fun rcpt(s) { offer(s) {
+      case RCPT(s) ->
+        var (address, s) = receive(s);
+        println("S: received address as TO: " ^^ address);
+        if (isValid(address)) {
+          var s = send("250 OK", select ACCEPT s);
+          rcpt(s)
+        } else {
+          var s = send("Invalid e-mail", select REJECT s);
+          rcpt(s)
+        }
+      case DATA(s) ->
+        var (message, s) = receive(s);
+        println("S: received message: " ^^ message);
+        var s = send("250 OK", s);
+        mailServer(s)
+    }
+  }
+
+  sig mailClient : (~SMTPServer) ~> ()
+  fun mailClient(c) {
+    var c = send("starlight@domain.com", select MAIL c);
+    offer (c) {
+      case REJECT(c) ->
+        var (error, c) = receive(c);
+        println("C: client sent MAIL, server replied: " ^^ error);
+        wait(select QUIT c);
+        ()
+
+      case ACCEPT(c) ->
+        var (reply, c) = receive(c);
+        println("C: client sent MAIL, server replied: " ^^ reply);
+
+        fun sendMessage(c) {
+          var c = send("Hello to bravest warriors!", select DATA c);
+          var (reply, c) = receive(c);
+          println("C: client sent DATA, server replied: " ^^ reply);
+          var c = select QUIT c;
+          wait(c);
+          ()
+        }
+
+        var c = send("pink@cloud", select RCPT c);
+        offer (c) {
+          case REJECT(c) ->
+            var (error, c) = receive(c);
+            println("C: client sent RCPT, server replied: " ^^ error);
+            sendMessage(c)
+
+           case ACCEPT(c) ->
+             var (reply, c) = receive(c);
+             println("C: client sent RCPT, server replied: " ^^ reply);
+
+             # choose more rcpt
+             var c = send("bitter@sweet.com", select RCPT c);
+             offer(c) {
+               case REJECT(c) ->
+                 var (error, c) = receive(c);
+                 println("C: client sent RCPT, server replied: " ^^ error);
+                 sendMessage(c)
+               case ACCEPT(c) ->
+                 var (reply, c) = receive(c);
+                 println("C: client sent RCPT, server replied: " ^^ reply);
+                 sendMessage(c)
+             }
+        }
+    }
+  }
+}
+
+fun main() {
+  mailClient(forkSync(mailServer))
+}
+
+main()

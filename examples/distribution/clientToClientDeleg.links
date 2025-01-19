@@ -1,0 +1,56 @@
+typename IntSession = ?Int. ?Int. ?Int.End;
+typename DelegSession = ?(IntSession).End;
+
+module Client1 {
+
+  fun go(ap) {
+    debug("Got send end of delegation channel");
+    var recvEnd = fork(fun(s) { var s = send(2, send(1, s)); sleep(2000); close(send(3, s)) });
+    var delegSess = request(ap);
+    close(send(recvEnd, delegSess));
+    debug("Delegated receive end of session to server")
+  }
+
+  sig mainPage : (AP(DelegSession)) ~%e~> Page
+  fun mainPage(ap) {
+    var _  = spawnClient { go(ap) };
+    page
+      <#><html><body><h1>Hola (c1)</h1></body></html></#>
+  }
+}
+
+module Client2 {
+
+  fun go(ap) {
+    var delegS = accept(ap);
+    debug("Got receive end of delegation channel");
+    var (s, t) = receive(delegS);
+    close(t);
+    debug("Got delegated channel");
+    var (x1, s) = receive(s);
+    debug (intToString(x1));
+    var (x2, s) = receive(s);
+    debug (intToString(x2));
+    var (x3, s) = receive(s);
+    close(s);
+    debug (intToString(x3));
+    go(ap)
+  }
+
+  sig mainPage : (AP(DelegSession)) ~%e~> Page
+  fun mainPage(ap) {
+    var _  = spawnClient { go(ap) };
+    page
+      <#><html><body><h1>Hola (c2)</h1></body></html></#>
+  }
+}
+
+fun main() {
+  var ap = new();
+  addRoute("/c1", fun(_) { Client1.mainPage(ap) });
+  addRoute("/c2", fun(_) { Client2.mainPage(ap) });
+  serveWebsockets();
+  servePages()
+}
+
+main()

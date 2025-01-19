@@ -1,0 +1,44 @@
+alien javascript "/examples/handlers/js/alert.js" alertBox : (String) ~%~> ();
+alien javascript "/examples/handlers/js/alert.js" wait : forall e1 :: Row, e2 :: Row . (Int, () ~e1~> ()) ~e2~> ();
+
+
+fun await() {
+  var msg = do Await(fun(cb) {
+     wait(1000, fun() {
+        alertBox("Invoking resume");
+        cb("Hello")
+     })
+  });
+  alertBox(msg)
+}
+
+fun run() client {
+    handle(await()) {
+      case <Await(initiate) => resume> -> initiate(resume)
+      case x -> x
+    }
+    # wait(1000, fun() {
+    #   alertBox("Hello again!")
+    # });
+    # alertBox("Hello!")
+}
+
+fun mainPage(_) {
+  page
+    <html>
+      <body>
+        <form l:onsubmit="{run()}">
+          <input type="submit" id="on" value="Click me!" />
+        </form>
+      </body>
+    </html>
+}
+
+
+fun main() {
+  addRoute("/", mainPage);
+  addStaticRoute("/examples/handlers/js", "examples/handlers/js", [("js", "text/javascript")]);
+  servePages()
+}
+
+main()

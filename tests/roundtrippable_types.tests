@@ -1,0 +1,21 @@
+Row types
+fun (tbl) { for (x <-- tbl) where (x.id == 42) [x] }
+stdout : fun : (TemporalTable(Current,(id:Int|a::Base),(|_::Base),(|_::Base))) {}-> [(id:Int|a::Base)]
+
+Onetuple with unit
+(1=())
+stdout : (1 = ()) : (1:())
+
+Alias record functional update
+tests/roundtrip/record_update.links
+filemode : true
+stdout : (q = [3, 1, 2]) : Q
+
+Recursive effect
+fun w(g) { handle(g()) { case () -> () case <F(h) => res> -> w(h) }} w
+args : --enable-handlers
+stdout : fun : (() { |(mu a.F:(() { |a}-> ()) => _::Any,wild:()|c)}-> ()) {F{_}|c}~> ()
+
+Row with no fields, but with nested wild row in its row variable
+fun f() { error("") } f
+stdout : fun : () ~> _

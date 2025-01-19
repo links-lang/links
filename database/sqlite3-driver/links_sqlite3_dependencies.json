@@ -1,0 +1,6 @@
+[
+    {
+	opam_package: "sqlite3",
+	files : ["sqlite3"]
+    }
+]

@@ -1,0 +1,72 @@
+open import Mvu;
+open import MvuHTML;
+open import MvuAttrs;
+open import MvuEvents;
+open import MvuSubscriptions;
+import MvuCommands;
+
+typename Model = Maybe(KeyboardEvent);
+typename Msg = [| UpdateEvent: KeyboardEvent |];
+
+sig updt : (Msg, Model) ~> Model
+fun updt(msg, _) {
+  switch(msg) {
+    case UpdateEvent(evt) -> Just(evt)
+  }
+}
+
+fun textPar((k, v)) {
+  p(MvuAttrs.empty, textNode(k ^^ ": " ^^ v))
+}
+
+fun i2s(i) { intToString(i) }
+fun b2s(b) { if(b) { "true" } else { "false"} }
+
+sig view : (Model) ~> HTML(Msg)
+fun view(model) {
+  switch(model) {
+    case Nothing -> textNode("Press a key!")
+    case Just(evt) ->
+      var props = MvuHTML.concat(map(textPar,
+      [
+        ("altKey", b2s(evt.altKey)),
+        ("code", i2s(evt.code)),
+        ("ctrlKey", b2s(evt.ctrlKey)),
+        ("isComposing", b2s(evt.isComposing)),
+        ("key", evt.key),
+        ("locale", evt.locale),
+        ("location", i2s(evt.location)),
+        ("metaKey", b2s(evt.metaKey)),
+        ("repeat", b2s(evt.repeat)),
+        ("shiftKey", b2s(evt.shiftKey))
+      ]));
+      div(style("width:100%;height:100%"), props)
+  }
+}
+
+sig subscriptions : (Model) -> Sub(Msg)
+fun subscriptions(_) {
+  onKeyDown(fun(evt) { UpdateEvent(evt) })
+}
+
+fun mainPage(_) {
+  run("placeholder", Nothing, view,
+      fun (msg, model) { (updt(msg, model), MvuCommands.empty) }, subscriptions,
+      MvuCommands.empty);
+  page
+  <html>
+    <head>
+      <title>Links - Subscriptions</title>
+    </head>
+    <body>
+      <div id="placeholder"></div>
+    </body>
+  </html>
+}
+
+fun main() {
+  addRoute("/", mainPage);
+  servePages()
+}
+
+main()

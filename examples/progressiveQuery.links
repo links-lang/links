@@ -1,0 +1,70 @@
+fun showProgress(wines) client {
+  appendChildren(
+        for (w <- wines)
+          <li>{stringToXml(w.winery)} {stringToXml(w.name)}
+              (${floatToXml(w.cost)})</li>,
+        getNodeById("listing")
+  )
+}
+
+var db = database "winestore";
+
+var inventoryTable = table "inventory" with
+                     (wine_id : Int, cost : Float)
+                     from db;
+
+var wineTable = table "wine"
+                 with (wine_id : Int, wine_name : String, wine_type : Int,
+                       year : Int, winery_id : Int)
+                 from db;
+
+var wineryTable = table "winery" with
+                  (winery_id : Int, winery_name : String,
+                   region_id : Int)
+                  from db;
+
+fun wineriesByRegion(regionID) server {
+  query { for (winery <-- wineryTable)
+          where (winery.region_id == regionID)
+            [winery]
+  }
+}
+
+fun wineCost(wineID) {
+  for (i <- asList(inventoryTable))
+  where (wineID == i.wine_id)
+    [i.cost]
+}
+
+fun winesByWinery(winery) {
+  query {
+    for (wine <-- wineTable)
+    where (wine.winery_id == winery.winery_id)
+    for (cost <- wineCost(wine.wine_id))
+      [(name=wine.wine_name, cost=cost, winery=winery.winery_name)]
+  }
+}
+
+fun foreach(xs, f) {
+  switch (xs) {
+    case [] -> ()
+    case x::xs -> { f(x); foreach(xs, f) }
+  }
+}
+
+fun progressiveSearch(wineries) server {
+  foreach(wineriesByRegion(wineries), fun (winery) {
+    showProgress(winesByWinery(winery))
+  })
+}
+
+page
+ <html>
+  <body>
+   <form l:onchange="{progressiveSearch(stringToInt(regionID))}">
+    Region: <input l:name="regionID" />
+    <input type="submit"/>
+   </form>
+   <ul id="listing"/>
+  </body>
+ </html>

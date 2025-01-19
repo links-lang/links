@@ -1,0 +1,82 @@
+# Toggle on/off
+
+# State operations
+sig get : () {Get:s |_}-> s
+fun get() {do Get}
+
+sig put : (s) {Put:(s) {}-> () |_}-> ()
+fun put(st) {do Put(st)}
+
+# Stateful computation
+sig toggle : Comp({Get:Bool,Put:(Bool) {}-> () |_}, Bool)
+fun toggle() client {
+  var bit = get();
+  put(not(bit));
+  get()
+}
+
+# State handler
+sig runState : (Comp({Get:s ,Put:(s) {}-> () |e},  a  )) -> # Stateful computation
+               (s)                                       -> # Initial state
+                Comp({Get{_},Put{_}          |e}, (a,s))    # Stateless computation
+fun runState(m)(st)() client {
+  var run = handle(m()) {
+    case x      -> fun(ret_st) { (x,ret_st) }
+    case <Get => resume>    -> fun(get_st) { resume(get_st)(get_st) }
+    case <Put(put_st) => resume> -> fun(ignored_st)  { resume(())(put_st) }
+  };
+  run(st)
+}
+
+
+# Conversion functions
+fun boolToString(b) {
+  switch (b) {
+    case true -> "true"
+    case false -> "false"
+  }
+}
+
+fun stringToBool(s) {
+  switch (s) {
+    case "true"  -> true
+    case "false" -> false
+    case otherwise -> error("Input '" ^^ s ^^ "' was not recognised as a boolean value.")
+  }
+}
+
+
+fun toggleButton() client {
+  var s0 = stringToBool(domGetAttributeFromRef(getNodeById("state"), "value"));
+  var (bit,s1) = runState(toggle)(s0)();
+  if (bit == true) {
+    domRemoveAttributeFromRef(getNodeById("off"), "disabled");
+    ignore(domSetAttributeFromRef(getNodeById("on"), "disabled", "disabled"))
+  } else {
+    domRemoveAttributeFromRef(getNodeById("on"), "disabled");
+    ignore(domSetAttributeFromRef(getNodeById("off"), "disabled", "disabled"))
+  };
+  ignore(domSetAttributeFromRef(getNodeById("state"), "value", boolToString(s1)))
+}
+
+# Page
+fun mainPage(_) {
+  page
+    <html>
+      <body>
+        <form l:onsubmit="{toggleButton()}">
+          <input type="submit" id="on" value="On" />
+          <input type="submit" id="off" value="Off" disabled="disabled" />
+          <input type="hidden" id="state" value="false" />
+        </form>
+      </body>
+    </html>
+}
+
+
+fun main() {
+  addRoute("/", mainPage);
+  servePages()
+}
+
+main()

@@ -1,0 +1,221 @@
+Desugaring [1]: Implicit sharing of effects on aliases
+typename T = () -> (); sig f : (T) -> () fun f(t) { t() } f
+stdout : fun : (T ({ |a})) -a-> ()
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=final_arrow,show_implicit
+
+Desugaring [2]: Implicit sharing of effects on aliases
+typename T = () -> (); sig f : (T, T) -> T fun f(p,q) { fun () { p(); q() } } f
+stdout : fun : (T ({ |a}), T ({ |a})) -> T ({ |a})
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=final_arrow,show_implicit
+
+Desugaring [3]: Implicit sharing of effects on aliases
+typename T = () -> (); sig f : (T, T) -> () -> () fun f(p,q) { fun () { p(); q() } } f
+stdout : fun : (T ({ |a}), T ({ |a})) -> () -a-> ()
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=final_arrow,show_implicit
+
+Desugaring [4]: Collector arrows fresh
+sig f : () -> () -> () -> () -> () fun f()()()() { () } f
+stdout : fun : forall a::Row,b::Row,c::Row,d::Row.() -a-> () -b-> () -c-> () -d-> ()
+args : --enable-handlers --set=effect_sugar=true --set=show_quantifiers=true --set=effect_sugar_policy=final_arrow
+
+Desugaring [5]: Higher order, collector arrows fresh
+sig f : (() -> () -> () -> ()) -> (() -> () -> ()) -> () fun f(a)(b) { () } f
+stdout : fun : forall a::Row,b::Row,c::Row,d::Row,e::Row.(() -a-> () -b-> () -c-> ()) -d-> (() -e-> () -c-> ()) -c-> ()
+args : --enable-handlers --set=effect_sugar=true --set=show_quantifiers=true --set=effect_sugar_policy=final_arrow
+
+Desugaring [6]: Higher order, aliases
+typename Comp(a) = () ~> a; sig mapc : ((a) -> Comp(b)) -> ([a]) -> [Comp(b)] fun mapc(c)(lst) { map(c, lst) } mapc
+stdout : fun : forall a,b::Row,c,d::Row.((a) -b-> Comp (c,{ |b})) -d-> ([a]) -b-> [Comp (c,{ |b})]
+args : --enable-handlers --set=effect_sugar=true --set=show_quantifiers=true --set=effect_sugar_policy=final_arrow
+
+Desugaring [7]: Structure containing own helper
+typename S(a) = (ord:(a,a) ~> [|G|LE|],m:a); sig upd : (a, S(a)) ~> S(a) fun upd(x,s) { switch(s.ord(x, s.m)) { case G -> (s with m=x) case LE -> s }} upd
+stdout : fun : (a, S (a,{ |b})) ~b~> S (a,{ |b})
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=final_arrow,show_implicit
+
+Sugar off [1]
+sig f : (() {E:()|e}~> ()) -> () {E{_}|e}~> () fun f(g) { fun() { handle(g()) { case <E => res> -> res(()) }}} f
+stdout : fun : (() {E:() => ()|a}~> ()) -> () {E{_}|a}~> ()
+args : --enable-handlers --set=effect_sugar=false
+
+Sugar off [2], implicit not unifying, no propagation
+sig f : (() {E:()|_}~> ()) -> () { |_}~> () fun f(g) { fun() { handle(g()) { case <E => res> -> res(()) }}} f
+stderr : @.
+exit : 1
+args : --enable-handlers --set=effect_sugar=false
+
+Printer: none [1], signature with explicit shared effect
+sig f : (() {E:()|e}~> ()) -> () {E{_}|e}~> () fun f(g) { fun() { handle(g()) { case <E => res> -> res(()) }}} f
+stdout : fun : (() {E:() => ()|_}~> ()) -_-> () {E{_}|_}~> ()
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=none
+
+Printer: none [2], signature with implicit shared effect
+sig f : (() {E:()|_}~> ()) -> () {E{_}|_}~> () fun f(g) { fun() { handle(g()) { case <E => res> -> res(()) }}} f
+stdout : fun : (() {E:() => ()|_}~> ()) -_-> () {E{_}|_}~> ()
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=none
+
+Printer: none [3], type alias
+typename T(a, e::Eff) = (a) -e-> a; sig f : T(a) fun f(x) { x } f
+stdout : fun : T (_,{ |_})
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=none
+
+Printer: none [4], type alias
+typename T(a) = (a) -> a; sig f : T(a) fun f(x) { x } f
+stdout : fun : T (_,{ |_})
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=none
+
+Printer: none [4], type alias implicit
+typename T(a, e::Eff) = (a) -e-> a; sig f : T(a, { |e}) fun f(x) { x } f
+stdout : fun : T (_)
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=alias_omit
+
+Printer: none [5], no chf
+sig map : ((a) ~> b) -> ([a]) ~> [b] fun map(f)(xs) { switch(xs) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs) }} map
+stdout : fun : ((a) ~> c) -_-> ([a]) ~> [c]
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=none
+
+Printer: none [6], no chf
+sig map : ((a) ~> b) -> ([a]) -> () ~> [b] fun map(f)(xs)() { switch(xs) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs)() }} map
+stdout : fun : ((a) ~> c) -_-> ([a]) -_-> () ~> [c]
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=none
+
+Printer: none [7], no arrows_show_implicit_effect_variable
+sig map : ((a) ~e~> b, [a]) ~e~> [b] fun map(f, lst) { switch(lst) { case [] -> [] case (x::xs) -> f(x) :: map(f, xs) }} map
+stdout : fun : ((a) ~> c, [a]) ~> [c]
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=none
+
+Printer: none [8], no arrows_show_implicit_effect_variable
+sig map : ((a) ~e~> b) -> ([a]) ~e~> [b] fun map(f)(lst) { switch(lst) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs) }} map
+stdout : fun : ((a) ~> c) -_-> ([a]) ~> [c]
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=none
+
+Printer: none [9], dot when not open_default not allowed
+sig ask : () {Ask:a| .}-> a fun ask() { do Ask } ask
+stderr : @.
+exit : 1
+args : --enable-handlers --set=prelude=tests/empty_prelude.links --set=effect_sugar=true --set=effect_sugar_policy=none
+
+Printer: presence_omit [1]: signature with implicit shared effect, handler
+sig f : (() {E:()|_}~> ()) -> () {E{_}|_}~> () fun f(g) { fun() { handle(g()) { case <E => res> -> res(()) }}} f
+stdout : fun : (() {E:() => ()|_}~> ()) -_-> () ~> ()
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=presence_omit
+
+Printer: presence_omit [2]: signature with implicit shared effect, handler, propagation
+sig f : (() {E:()|_}~> ()) -> () { |_}~> () fun f(g) { fun() { handle(g()) { case <E => res> -> res(()) }}} f
+stdout : fun : (() {E:() => ()|_}~> ()) -_-> () ~> ()
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=presence_omit
+
+Printer: presence_omit [3]: multiple shared effect rows
+sig f : (() {E:() => ()|e}~> (), () {F:() => ()|f}~> ()) -> (() {E{_}|e}~> (), () {F{_}|f}~> ()) fun f(p,q) { var p = fun() { handle(p()) { case v -> v case <E => res> -> res(()) }}; var q = fun() { handle(q()) { case v -> v case <F => res> -> res(()) }}; (p,q) } f
+stdout : fun : (() {E:() => ()|a}~> (), () {F:() => ()|b}~> ()) -> (() ~a~> (), () ~b~> ())
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=presence_omit
+
+Printer: alias_omit [1], printer only
+typename T(a, e::Eff) = (a) -e-> a; sig f : T(a, { |e}) fun f(x) { x } f
+stdout : fun : T (_)
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=alias_omit
+
+Printer: alias_omit [2], desugaring + printer
+typename T(a, e::Eff) = (a) -e-> a; sig f : T(a) fun f(x) { x } f
+stdout : fun : T (_)
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=alias_omit
+
+Printer: alias_omit [3], desugaring + printer
+typename T(a) = (a) -> a; sig f : T(a) fun f(x) { x } f
+stdout : fun : T (_)
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=alias_omit
+
+Printer: presence_omit, alias_omit [1], handler (TODO fix #1041 and make effect vars implicit in Comps)
+sig f : (Comp ((), {E:()|e})) -> Comp ((), {E{_}|e}) fun f(x)() { handle(x()) { case () -> () case <E => res> -> () }} f
+stdout : fun : (Comp ((),{E:() => ()|_})) -_-> Comp (())
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=presence_omit,alias_omit,final_arrow
+
+Printer: presence_omit, alias_omit, chf [1], handler (TODO fix #1041 and make effect vars implicit in Comps)
+sig f : (Comp ((), {E:()|e})) -> Comp ((), {E{_}|e}) fun f(x)() { handle(x()) { case () -> () case <E => res> -> () }} f
+stdout : fun : (Comp ((),{E:() => ()|_})) -> Comp (())
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=presence_omit,alias_omit,chf
+
+Printer: pres, alias, chf, contract [1], handler (TODO fix #1041 and make effect vars implicit in Comps)
+sig f : (Comp ((), {E:()|e})) -> Comp ((), {E{_}|e}) fun f(x)() { handle(x()) { case () -> () case <E => res> -> () }} f
+stdout : fun : (Comp ((),{E:()|_})) -> Comp (())
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=pres,alias,chf,contract
+
+Printer: contract_operation_arrows [1]
+sig f : (a) {E:(a) => b}-> b fun f(x) { do E(x) } f
+stdout : fun : (a) {E:(a) => b}-> b
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=contract
+
+Printer: contract_operation_arrows [2]
+sig f : () {E:() => a}-> a fun f() { do E } f
+stdout : fun : () {E:a}-> a
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=contract
+
+Printer: contract_operation_arrows [3]
+sig f : () {E:() => ()}-> () fun f() { do E } f
+stdout : fun : () {E:()}-> ()
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=contract
+
+Printer: contract_operation_arrows [4]
+sig f : (a) {E:(a) => ()}-> () fun f(x) { do E(x) } f
+stdout : fun : (a) {E:(a) => ()}-> ()
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=contract
+
+Printer: chf [1]
+sig map : ((a) ~> b) -> ([a]) ~> [b] fun map(f)(xs) { switch(xs) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs) }} map
+stdout : fun : ((a) ~> c) -> ([a]) ~> [c]
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=chf
+
+Printer: chf [2]
+sig map : ((a) ~> b) -> ([a]) -> () ~> [b] fun map(f)(xs)() { switch(xs) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs)() }} map
+stdout : fun : ((a) ~> c) -> ([a]) -> () ~> [c]
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=chf
+
+Printer: arrows_show_implicit_effect_variable [1]
+sig map : ((a) ~e~> b, [a]) ~e~> [b] fun map(f, lst) { switch(lst) { case [] -> [] case (x::xs) -> f(x) :: map(f, xs) }} map
+stdout : fun : ((a) ~b~> c, [a]) ~b~> [c]
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=arrows_show_implicit_effect_variable
+
+Printer: arrows_show_implicit_effect_variable [2]
+sig map : ((a) ~e~> b) -> ([a]) ~e~> [b] fun map(f)(lst) { switch(lst) { case [] -> [] case (x::xs) -> f(x) :: map(f)(xs) }} map
+stdout : fun : ((a) ~b~> c) -> ([a]) ~b~> [c]
+args : --enable-handlers --set=effect_sugar=true --set=effect_sugar_policy=arrows_show_implicit_effect_variable
+
+Printer: open_default [1], open
+sig ask : () {Ask:a}-> a fun ask() { do Ask } ask
+stdout : fun : () {Ask:() => a}-> a
+args : --enable-handlers --set=prelude=tests/empty_prelude.links --set=effect_sugar=true --set=effect_sugar_policy=open_default
+
+Printer: open_default [2], closed
+sig ask : () {Ask:a| .}-> a fun ask() { do Ask } ask
+stdout : fun : () {Ask:() => a| .}-> a
+args : --enable-handlers --set=prelude=tests/empty_prelude.links --set=effect_sugar=true --set=effect_sugar_policy=open_default
+
+Printer: contract_operation_arrows, open_default [1], open
+sig ask : () {Ask:a}-> a fun ask() { do Ask } ask
+stdout : fun : () {Ask:a}-> a
+args : --enable-handlers --set=prelude=tests/empty_prelude.links --set=effect_sugar=true --set=effect_sugar_policy=open_default,contract
+
+Printer: contract_operation_arrows, open_default [2], closed
+sig ask : () {Ask:a| .}-> a fun ask() { do Ask } ask
+stdout : fun : () {Ask:a| .}-> a
+args : --enable-handlers --set=prelude=tests/empty_prelude.links --set=effect_sugar=true --set=effect_sugar_policy=open_default,contract
+
+Printer: contract_operation_arrows, open_default [3], open
+sig ask : (a) {Ask:(a) => b}-> b fun ask(x) { do Ask(x) } ask
+stdout : fun : (a) {Ask:(a) => b}-> b
+args : --enable-handlers --set=prelude=tests/empty_prelude.links --set=effect_sugar=true --set=effect_sugar_policy=open_default,contract
+
+Printer: contract_operation_arrows, open_default [4], closed
+sig ask : (a) {Ask:(a) => b| .}-> b fun ask(x) { do Ask(x) } ask
+stdout : fun : (a) {Ask:(a) => b| .}-> b
+args : --enable-handlers --set=prelude=tests/empty_prelude.links --set=effect_sugar=true --set=effect_sugar_policy=open_default,contract
+
+Printer: contract_operation_arrows, open_default [5], open, include desugaring
+sig ask : (a) {Ask:(a) => b}-> b fun ask(x) { do Ask(x) } ask
+stdout : fun : (a) {Ask:(a) => b}-> b
+args : --enable-handlers --set=prelude=tests/empty_prelude.links --set=effect_sugar=true --set=effect_sugar_policy=open_default,contract
+
+Printer: contract_operation_arrows, open_default [6], closed, include desugaring
+sig ask : (a) {Ask:(a) => b| .}-> b fun ask(x) { do Ask(x) } ask
+stdout : fun : (a) {Ask:(a) => b| .}-> b
+args : --enable-handlers --set=prelude=tests/empty_prelude.links --set=effect_sugar=true --set=effect_sugar_policy=open_default,contract

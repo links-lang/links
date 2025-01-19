@@ -1,0 +1,5 @@
+var x = link(fork (fun (s) {close(send(42, s))}),
+             fork (fun (c) {var (x, c) = receive(c); close(c); println(intToString(x))}));
+var y = link(fork (fun (c) {var (x, c) = receive(c); close(c); println(intToString(x))}),
+             fork (fun (s) {close(send(42, s))}));
+()

@@ -1,0 +1,10 @@
+effectname A = { E: ( () -A-> () ) => () } ;
+
+sig f : () -A-> ()
+fun f () {}
+
+sig g : () -A-> ()
+fun g () { do E(f) }
+
+sig h : () -A-> ()
+fun h () { do E(g) }

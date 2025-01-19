@@ -1,0 +1,148 @@
+# Ping - pong test cannot work, because the real server replies to it rather than my bot.
+
+# Reads the server's answer to queries.
+sig readServer : (Socket, Int, Int) ~> ()
+fun readServer(rs, time, timeout) {
+  if   (serverTime() >= time + timeout) () # Timeout.
+  else {
+         var copyRs = rs;
+         switch(readFromSocket(rs)) {
+           case Just(rs) -> println(rs); readServer(copyRs, time, timeout)
+           case Nothing  -> readServer(rs, time, timeout)
+          }
+        }
+}
+
+# Writes LinksCalc: and given expression to socket; prints it.
+fun writeExpressionToSocket(message, rs) {
+    writeToSocket("PRIVMSG #irchacks : LinksCalc:" ^^ message ^^ "\n", rs);
+    println("PRIVMSG #irchacks : LinksCalc:" ^^ message)
+}
+
+fun connectToIRCServer() {
+    var rs = connectSocket("irc.freenode.net", 6667);
+    var rs = fromJust(rs);
+    println("telnet irc.freenode.net 6667");
+    readServer(rs, serverTime(), 1);
+
+    writeToSocket("NICK LinksBotTest2\n", rs);
+    println("NICK LinksBotTest2");
+    writeToSocket("USER LinksBotTest2 8 * : Links Test 2\n", rs);
+    println("USER LinksBotTest 8 * : Links Test");
+    readServer(rs, serverTime(), 1);
+    writeToSocket("JOIN #irchacks\n", rs);
+    println("JOIN #irchacks");
+    readServer(rs, serverTime(), 7);
+
+    # Test addition:
+
+    # 4 + 3
+    writeExpressionToSocket("4+3", rs);
+    readServer(rs, serverTime(), 1);
+    # 24 + 1
+    writeExpressionToSocket("24+1", rs);
+    readServer(rs, serverTime(), 1);
+    # 6 + 18
+    writeExpressionToSocket("6+18", rs);
+    readServer(rs, serverTime(), 1);
+    # 49 + 12
+    writeExpressionToSocket("49+12", rs);
+    readServer(rs, serverTime(), 1);
+    # 2 + 0
+    writeExpressionToSocket("2+0", rs);
+    readServer(rs, serverTime(), 1);
+    # 123456789 + 123456789
+    writeExpressionToSocket("123456789+123456789", rs);
+    readServer(rs, serverTime(), 1);
+
+    # Test subtraction.
+
+    # 8 - 4
+    writeExpressionToSocket("8-4", rs);
+    readServer(rs, serverTime(), 1);
+    # 14 - 3
+    writeExpressionToSocket("14-3", rs);
+    readServer(rs, serverTime(), 1);
+    # 7 - 19
+    writeExpressionToSocket("7-19", rs);
+    readServer(rs, serverTime(), 1);
+    # 96 - 13
+    writeExpressionToSocket("96-13", rs);
+    readServer(rs, serverTime(), 1);
+    # 12 - 45
+    writeExpressionToSocket("12-45", rs);
+    readServer(rs, serverTime(), 1);
+    # 11 - 0
+    writeExpressionToSocket("11-0", rs);
+    readServer(rs, serverTime(), 1);
+    # 123456789 - 123456789
+    writeExpressionToSocket("123456789-123456789", rs);
+    readServer(rs, serverTime(), 1);
+
+    # Test multiplication.
+
+    # 4 * 6
+    writeExpressionToSocket("4*6", rs);
+    readServer(rs, serverTime(), 1);
+    # 12 * 9
+    writeExpressionToSocket("12*9", rs);
+    readServer(rs, serverTime(), 1);
+    # 3 * 74
+    writeExpressionToSocket("3*74", rs);
+    readServer(rs, serverTime(), 1);
+    # 15 * 98
+    writeExpressionToSocket("15*98", rs);
+    readServer(rs, serverTime(), 1);
+    # 14 * 0
+    writeExpressionToSocket("14*0", rs);
+    readServer(rs, serverTime(), 1);
+    # 123456789 * 123456789
+    writeExpressionToSocket("123456789*123456789", rs);
+    readServer(rs, serverTime(), 1);
+
+    # Test division (integer division!).
+
+    # 9 / 3
+    writeExpressionToSocket("9/3", rs);
+    readServer(rs, serverTime(), 1);
+    # 40 / 8
+    writeExpressionToSocket("40/8", rs);
+    readServer(rs, serverTime(), 1);
+    # 5 / 10
+    writeExpressionToSocket("5/10", rs);
+    readServer(rs, serverTime(), 1);
+    # 125 / 25
+    writeExpressionToSocket("125/5", rs);
+    readServer(rs, serverTime(), 1);
+    # 1 / 0
+    writeExpressionToSocket("1/0", rs);
+    readServer(rs, serverTime(), 1);
+    # 0 / 1
+    writeExpressionToSocket("0/1", rs);
+    readServer(rs, serverTime(), 1);
+    # 123456789 / 123456789
+    writeExpressionToSocket("123456789/123456789", rs);
+    readServer(rs, serverTime(), 1);
+
+    # Test invalid expressions, containing LinksCalc.
+    writeExpressionToSocket("sweet*pop", rs);
+    readServer(rs, serverTime(), 1);
+
+    writeExpressionToSocket("14-butterfly", rs);
+    readServer(rs, serverTime(), 1);
+
+    writeExpressionToSocket("LinksCalc:+2", rs);
+    readServer(rs, serverTime(), 1);
+
+    # Test a general message that should be ignored by Links bot.
+    writeToSocket("PRIVMSG #irchacks : This is a test message. Please do not reply.\n", rs);
+    println("PRIVMSG #irchacks : This is a test message. Please do not reply.");
+    readServer(rs, serverTime(), 1);
+
+    # End of tests.
+    writeToSocket("QUIT\n", rs);
+    println("QUIT");
+    closeSocket(rs);
+    ()
+}
+connectToIRCServer()

@@ -1,0 +1,2 @@
+#!/bin/bash
+for f in `ls *.sql`; do createdb ${f%.sql}; done

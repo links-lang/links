@@ -1,0 +1,23 @@
+# from Prelude
+typename Maybe (a) = [|Nothing | Just:a|];
+
+fun fold_left(p, u, l) {
+  switch (l) {
+    case [] -> u
+    case x::xs -> fold_left(p, p(u, x), xs)
+  }
+}
+
+fun second(p)  { p.2 }
+
+sig elemIndex : (a, [a]) ~> Maybe(Int)
+fun elemIndex(x, xs) {
+  var n = fold_left(fun(acc, y) {
+    switch (acc) {
+       case (n,Just(i)) -> (n,Just(i))
+       case (n,Nothing) -> if (x == y) { (n, Just(n)) } else { (n+1,Nothing) }
+    }
+  }, (0,Nothing), xs);
+
+  second(n)
+}

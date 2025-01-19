@@ -1,0 +1,26 @@
+fun main() client {
+  fun giver(x,y,a) {
+    var (res, a) = receive(send(y,send(x,request(a))));
+    close(a);
+    res
+  }
+
+  fun grabber(a) {
+    var s = accept(a);
+    var (x,s) = receive(s);
+    var (y,s) = receive(s);
+    var s = send(x+y,s);
+    close(s)
+  }
+
+  var a = new();
+  var _ = spawn { grabber(a) };
+  var result = giver(6,7,a);                              # (2)
+
+  result
+}
+
+page
+  <html><body>
+    Hey, hi.  Also {stringToXml(intToString(main()))}.
+  </body></html>

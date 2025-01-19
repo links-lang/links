@@ -1,0 +1,27 @@
+typename Calc = [&|Add:?Int.?Int.!Int.End, Mul:?Int.?Int.!Int.End|&];
+
+sig calc : (Calc) ~> ()
+fun calc(s) {
+  offer (s) {
+    case Add(s) ->
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      var s = send(x+y,s);
+      close(s)
+    case Mul(s) ->
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      var s = send(x*y,s);
+      close(s)
+  }
+}
+
+sig user : (~Calc) ~> Int
+fun user(s) {
+  var s = select Mul s;
+  var (x, s) = receive(send(6,send(7,s)));
+  close(s);
+  x
+}
+
+user(fork (calc))

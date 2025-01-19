@@ -1,0 +1,16 @@
+fun go() {
+  try {
+    var s = fork (fun (s) { cancel(s) });
+    offer(s) {
+      case Foo(s) -> close(s); 100
+    }
+  } as (x) in {
+    "result: " ^^ intToString(x)
+  } otherwise {
+    "exception"
+  }
+}
+
+go()
+#goBadly()
+#goAlright()

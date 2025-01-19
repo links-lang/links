@@ -1,0 +1,6 @@
+fun(s:%::Session) {
+  var (f, s) = receive(s : ?(%a).%::Session);
+  var _ = f(42) + 1;
+  var (_, s) = first(poly, receive(s : ?(%a).%::Session));
+  s
+}

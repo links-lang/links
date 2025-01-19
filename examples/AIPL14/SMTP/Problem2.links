@@ -1,0 +1,69 @@
+# SMTP 2 (with MAIL recursion)
+
+typename Address = String;
+typename Message = String;
+typename Error = String;
+typename Accept = String;
+
+typename SMTPServer =
+  mu send.[&|MAIL:?Address.
+                  [+|REJECT:!Error.EndBang,
+                     ACCEPT:!Accept.
+                            [&|RCPT:?Address.
+                                    [+|REJECT:!Error.EndBang,
+                                       ACCEPT:!Accept.
+                                              [&|DATA:?Message.!Accept.send|&] |+] |&] |+],
+             QUIT:EndBang|&];
+
+# Returns true, if the given String is a valid e-mail address.
+# The bit before @ has to be a single word!
+sig isValid : (String) ~> Bool
+fun isValid(address) {
+  address =~ /.[a-z0-9]+.@.[a-z]+.[a-z]+/ # Regex to match 1+characters/numbers @ 1+characters . 1+characters
+}
+
+sig mailServer : (SMTPServer) ~> EndBang
+fun mailServer(s) {
+  offer(s) {
+    case MAIL(s) ->
+      var (address, s) = receive(s);
+      println("S: received address as FROM: " ^^ address);
+      if (isValid(address)) {
+        var s = send("250 OK", select ACCEPT s);
+        offer(s) {
+          case RCPT(s) ->
+            var (address, s) = receive(s);
+            println("S: received address as TO: " ^^ address);
+            if (isValid(address)) {
+              var s = send("250 OK", select ACCEPT s);
+              offer(s) {
+                case DATA(s) ->
+                  var (message, s) = receive(s);
+                  println("S: received message: " ^^ message);
+                  var s = send("250 OK", s);
+                  mailServer(s)
+              }
+            } else {
+              var s = send("Invalid e-mail", select REJECT s);
+              s
+            }
+        }
+      } else {
+        var s = send("Invalid e-mail", select REJECT s);
+        s
+      }
+    case QUIT(s) ->
+      s
+  }
+}
+
+sig mailClient : (~SMTPServer) ~> ()
+fun mailClient(c) {
+  # To implement!
+}
+
+fun main() {
+  mailClient(forkSync(mailServer))
+}
+
+main()

@@ -1,0 +1,443 @@
+typename Canvas = ();
+alien javascript "/examples/handlers/js/canvas.js" {
+    drawUnit: (Int, Int, String, Canvas) ~> ();
+    drawCustomUnit: (Int, Int, Int, Int, String, Canvas) ~> ();
+    getValueFromSelection: (String) ~> String;
+}
+
+alien javascript "/examples/handlers/js/runtime.js" {
+    systemYield : ((()) {}~> ()) ~> ();
+    delayExecution: (Int) ~> ();
+    sysEnqueue: (a) ~> ();
+    sysDequeue: () ~> [a];
+    sysQueueLength: () -> Int;
+}
+
+
+fun system(f){
+    handle(f()){
+        case <Yield => resume> -> systemYield(resume)
+    }
+}
+
+typename Point = (x:Int, y:Int);
+typename Queue(a) = (rear: [a], front: [a]);
+typename PrioQueue(a) = (high: Queue(a), low: Queue(a));
+typename Priority = [|High|Low|];
+typename Co(e::Eff) = () {Fork: (Co({ |e}), Priority) => (), Yield:() |e}~> ();
+typename Time = Int;
+typename Fiber0(e::Eff) = (prio: Priority, f: () {Fork: (Fiber0({ |e})) => (), Yield:() |e}~> ());
+typename SchedulerState(a) = (runQ: PrioQueue(a), prio: Priority, startTime: Time);
+typename Fiber(e::Eff) = (prio:Priority, f: (SchedulerState(Fiber({ |e}))) ~e~> ());
+typename FiberQueue(e::Eff) = PrioQueue(Fiber({ |e}));
+
+
+
+var colors = ["green", "red", "blue", "yellow"];
+var priorities = [High, High, Low, Low];
+
+#Threading
+
+sig enqueue: (a, Queue(a)) -> Queue(a)
+fun enqueue(x, q){
+    (q with rear=x::q.rear)
+}
+
+sig dequeue: (Queue(a)) ~> (Maybe(a), Queue(a))
+fun dequeue(q){
+    switch(q) {
+        case (rear=[], front=[]) -> (Nothing, q)
+        case (rear=xs, front=[]) ->
+          var q0 = (rear=[], front=reverse(xs));
+          dequeue(q0)
+        case (rear=ys, front=(x :: xs)) ->
+          var q0 = (rear=ys, front=xs);
+          (Just(x), q0)
+    }
+}
+
+#priorityEnqueue : ( (priority:Priority |r), PriorityQueue({ priority:Priority |r}) ) -> PriorityQueue({ priority:Priority |r})
+sig priorityEnqueue: (a, Priority, PrioQueue(a)) ~> PrioQueue(a)
+fun priorityEnqueue(x, prio, pq){
+    switch(prio){
+        case High -> (pq with high = enqueue(x, pq.high))
+        case Low -> (pq with low = enqueue(x, pq.low))
+    }
+}
+
+sig priorityDequeue: (PrioQueue(a)) ~> (Maybe((a, Priority)), PrioQueue(a) )
+fun priorityDequeue(pq){
+    switch(dequeue(pq.high)){
+        case (Just(x), q) -> (Just((x, High)), (pq with high= q))
+        case (Nothing,_) ->
+            switch(dequeue(pq.low)){
+                case (Nothing, _) -> (Nothing, pq)
+                case (Just(x), q) -> (Just((x, Low)), (pq with low=q))
+            }
+    }
+}
+
+sig fiberEnqueue: (Fiber({ |e}), FiberQueue({ |e})) ~> FiberQueue({ |e})
+fun fiberEnqueue(f, q){
+    priorityEnqueue(f, f.prio, q)
+}
+
+sig fiberBulkEnqueue: ([Fiber({ |e})], FiberQueue({ |e})) ~> FiberQueue({ |e})
+fun fiberBulkEnqueue(fibers, q){
+    switch(fibers){
+        case [] -> q
+        case x::xs ->
+            var pq = fiberEnqueue(x, q);
+            fiberBulkEnqueue(xs, pq)
+    }
+}
+
+sig fiberDequeue: (FiberQueue({ |e})) ~> (Maybe((Fiber({ |e}), Priority)), FiberQueue({ |e}))
+fun fiberDequeue(q){
+    priorityDequeue(q)
+}
+
+fun emptyQueue(){
+    (rear=[], front=[])
+}
+
+fun emptyPrioQueue(){
+    (high= emptyQueue(), low=emptyQueue())
+}
+
+sig queueLength: (Queue(a)) -> Int
+fun queueLength(q){
+    length(q.rear) + length(q.front)
+}
+
+sig fiberQueueLength: (FiberQueue({ |e}))  -> Int
+fun fiberQueueLength(q){
+    length(q.low.rear) + length(q.high.front) + length(q.high.rear) + length(q.low.front)
+}
+
+sig fork : (Fiber0({ |e})) {Fork: (Fiber0({ |e})) => (), Yield:() |e}~> ()
+fun fork(f){
+    do Fork(f)
+}
+
+sig yield: () {Yield:() |e}~> ()
+fun yield(){
+    do Yield
+}
+
+sig makeFiber: (Priority, () {Fork: (Fiber0({ |e})) => (), Yield:() |e}~> ()) -> Fiber0({ |e})
+fun makeFiber(prio, f){
+    (prio= prio, f=f)
+}
+
+sig forever: () {Yield:() |e}~> ()
+fun forever(){ yield(); forever()}
+
+sig schedule: (Fiber0({ |e})) {Yield-, Fork- | e}~> ()
+fun schedule(main){
+
+    #sig makeSchedulerState: (Priority, PrioQueue(a)) ~> SchedulerState(a)
+    fun makeSchedulerState(prio, q){
+        (runQ = q, prio = prio, startTime = clientTimeMilliseconds())
+    }
+
+    fun runNext(q){
+        switch(fiberDequeue(q)){
+            case (Nothing, _) -> ()
+            case (Just((fiber, prio)), q) -> fiber.f(makeSchedulerState(prio, q))
+        }
+    }
+
+    fun resumptionToFiber(resume, prio){
+        (prio = prio, f = fun(state) { resume((), state) })
+    }
+
+    mutual {
+      #sig fiber0ToFiber: (Fiber0({ |%e})) ~%~> Fiber({ |%e})
+      fun fiber0ToFiber(fiber){
+          (prio = fiber.prio, f = fun(state) { runFiber(fiber, state.runQ ) })
+      }
+
+      #sig poll: (FiberQueue({ |e})) ~> FiberQueue({ |e})
+      fun poll(q){
+          var enqueue = map(fiber0ToFiber, sysDequeue());
+          fiberBulkEnqueue(enqueue, q)
+      }
+
+      fun runFiber(fiber, runQ){
+          #println("runQ: " ^^ intToString(fiberQueueLength(runQ)));
+          #dump(self());
+          handle(fiber.f()) ( state <- (prio=fiber.prio, runQ=runQ, startTime=clientTimeMilliseconds()) ){
+              case x ->
+                  runNext(poll(state.runQ))
+              case <Fork(f) => resume> ->
+                  var q = poll(state.runQ);
+                  switch ((f.prio, state.prio)) {
+                      case (High, _) ->
+                          var qq = fiberEnqueue(resumptionToFiber(resume, state.prio), q);
+                          runFiber(f, qq)
+                      case (_, High) ->
+                          var qq = fiberEnqueue(fiber0ToFiber(f), q);
+                          resume((), (state with runQ = qq))
+                      case (_,_) ->
+                          var qq = fiberEnqueue(resumptionToFiber(resume, state.prio), q);
+                          runFiber(f, qq)
+                  }
+              case <Yield => resume> ->
+                  var currentTime = clientTimeMilliseconds();
+                  var buffer = switch(state.prio){
+                      case High -> 400
+                      case Low -> 200
+                  };
+                  if (currentTime - state.startTime <= buffer) resume((), state)
+                  else{
+                      var q = fiberEnqueue(resumptionToFiber(resume, state.prio), state.runQ);
+                      runNext(poll(q))
+                  }
+          }
+      }
+    }
+
+    runFiber(main, emptyPrioQueue())
+
+}
+
+
+# Page Functionality
+
+sig difference: (Point, Point) -> Point
+fun difference(a, b){
+    (x = a.x - b.x, y= a.y - b.y)
+}
+
+sig absolute: (Int) -> Int
+fun absolute(n){
+    if(n < 0){
+        n * -1
+    } else{
+        n
+    }
+}
+
+sig parseInt: (String) ~> Maybe(Int)
+fun parseInt(n){
+    if (n =~ /^[0-9]+$/) {
+        Just(stringToInt(n))
+    } else{
+        Nothing
+    }
+}
+
+sig setValue: (a, String, (a) ~> String) ~%~> ()
+fun setValue(newVal, id, toString){
+    ignore(domSetAttributeFromRef(getNodeById(id), "value", toString(newVal)))
+}
+
+sig getValue: (String) ~> String
+fun getValue(id){
+    domGetAttributeFromRef(getNodeById(id), "value")
+}
+
+fun updatePoints(startx, starty, endx, endy){
+    setValue(startx, "start-x", intToString);
+    setValue(starty, "start-y", intToString);
+    setValue(endx, "end-x", intToString);
+    setValue(endy, "end-y", intToString)
+}
+
+sig getPoints: () ~> Maybe((Point, Point))
+fun getPoints(){
+    var startx = parseInt(getValue("start-x"));
+    var starty = parseInt(getValue("start-y"));
+    var endx = parseInt(getValue("end-x"));
+    var endy = parseInt(getValue("end-y"));
+    switch((startx, starty, endx, endy)){
+        case (Just(sx), Just(sy), Just(ex), Just(ey)) -> Just((x = sx, y = sy), (x = ex, y = ey))
+        case (_, _, _, _) -> Nothing
+    }
+}
+
+sig drawHorizontalLine: (Point, Point, String) {Yield:() |e}~> ()
+fun drawHorizontalLine(start, end, color){
+    var div = getNodeById("box");
+    var context = jsGetContext2D(div);
+    var diff = difference(end, start);
+    fun aux(n, start){
+        drawCustomUnit(start.x, start.y, 1, 25, color, context);
+        yield();
+        delayExecution(10);
+        if (n > 0) aux(n -1, (x = start.x + (diff.x / absolute(diff.x)), y = start.y))
+        else ()
+    }
+    aux(absolute(diff.x), start)
+}
+
+sig drawVerticalLine: (Point, Point, String) {Yield:() |e}~> ()
+fun drawVerticalLine(start, end, color){
+    var div = getNodeById("box");
+    var context = jsGetContext2D(div);
+    var diff = difference(end, start);
+    fun aux(n, start){
+        drawCustomUnit(start.x, start.y, 5, 1, color, context);
+        yield();
+        delayExecution(100);
+        if (n > 0) aux(n -1, (x = start.x, y = start.y + (diff.y / absolute(diff.y))))
+        else ()
+    }
+    aux(absolute(diff.y), start)
+}
+
+sig drawLineInColor: (Point, Point, String) {Yield:() |e}~> ()
+fun drawLineInColor(start, end, color){
+    println("start drawing " ^^ color ^^ ", yield.");
+    yield();
+    drawHorizontalLine((x=start.x, y=start.y), (x=end.x, y=end.y), color);
+    yield();
+    println("finish drawing " ^^ color)
+}
+
+sig addStringToNode: (String, String) ~> ()
+fun addStringToNode(string, id){
+    var node = getNodeById(id);
+    appendChildren(<#><p style="text-align: center;"> {stringToXml(string)} </p></#>, node)
+}
+
+sig prepareDrawingFunction: (Point, Point, String) ~> () {Yield:() |e}~> ()
+fun prepareDrawingFunction(start, end, color){
+    fun(){
+        drawLineInColor(start, end, color)
+    }
+}
+
+sig setUpLineDrawing: (String) ~> () {Yield:() |e}~> ()
+fun setUpLineDrawing(color){
+    var points = getPoints();
+    switch(points){
+        case Nothing -> fun(){}
+        case Just((start, end)) -> {
+            updatePoints(start.x, start.y + 40, end.x , end.y + 40);
+            prepareDrawingFunction(start, end, color)
+        }
+    }
+}
+
+fun start(){
+    fork(makeFiber(Low, forever));
+    fun aux(colors, prios){
+        switch((colors, prios)){
+            case ([],[]) -> ()
+            case (x::xs, y::ys) -> fork(makeFiber(y, setUpLineDrawing(x))); aux(xs, ys)
+            case (_, _) -> ()
+        }
+    }
+    aux(colors, priorities)
+}
+
+fun buttonPressed(){
+    var prio = getValueFromSelection("prio");
+    var f = setUpLineDrawing(getValueFromSelection("line-color"));
+    switch(prio){
+        case "High" -> println("enqueue high"); sysEnqueue(makeFiber(High, f))
+        case "Low" -> println("enqueue low"); sysEnqueue(makeFiber(Low, f))
+        case _ -> ()
+    }
+}
+
+# Web interface
+
+sig main_page : (_) ~> Page
+fun main_page(_){
+
+    var pId = spawnClient{schedule(makeFiber(High, start))};
+
+    page
+    <html>
+    <head>
+        <style>
+        .center{{
+            margin: 0 auto;
+        }}
+        .block{{
+            display: block;
+        }}
+        .box{{
+            width: 400px;
+            height: 600px;
+            border: solid 1px #aaa;
+        }}
+        .buttons{{
+            display:flex;
+            justify-content: center;
+            width: 80%;
+        }}
+        .button{{
+            width: 19%;
+            min-width: 90px;
+            height: 2.6em;
+        }}
+        .margin-all-4{{
+            margin:4px;
+        }}
+        .margin-10{{
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }}
+        .red{{
+            background-color: red;
+            color: white;
+        }}
+        .blue{{
+            background-color: blue;
+            color: white;
+        }}
+        .green{{
+            background-color: green;
+            color: white;
+        }}
+        .yellow{{
+            background-color: yellow;
+            color: black;
+        }}
+        .selection{{
+            width: 300px;
+            display: flex;
+            justify-content: center;
+        }}
+        </style>
+    </head>
+    <body>
+        <canvas id="box" width="400" height="600" class="box center block"></canvas>
+        <div class="selection margin-10 center">
+            <select id="line-color">
+                <option value="red">Red</option>
+                <option value="green">Green</option>
+                <option value="blue">Blue</option>
+                <option value="yellow">Yellow</option>
+                <option value="#801638">Berry </option>
+                <option value="#027878">Teal</option>
+            </select>
+            <select id="prio">
+                <option value="Low">Low</option>
+                <option value="High">High</option>
+            </select>
+        </div>
+        <button class="block button center" l:onclick="{buttonPressed()}">Draw Line</button>
+        <div id="data" display="none">
+            <div id="start-x" value="10"></div>
+            <div id="start-y" value="10"></div>
+            <div id="end-x" value="390"></div>
+            <div id="end-y" value="10"></div>
+        </div>
+    </body>
+    </html>
+}
+
+sig main: () ~> ()
+fun main() {
+    addRoute("/", main_page);
+    addStaticRoute("/examples/handlers/js", "examples/handlers/js", [("js", "text/javascript")]);
+
+    servePages()
+}
+
+main()

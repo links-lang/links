@@ -1,0 +1,48 @@
+html {
+   font-family: helvetica, arial, sans-serif;
+   font-size: large;
+#   background-color: #66b;
+ }
+th.quantity-col, td.quantity-col { text-align: left }
+th.wine-name-col, td.wine-name-col { text-align: left }
+th.price-col, td.price-col { text-align: right }
+th.total-col, td.total-col { text-align: right }
+label { text-align: right }
+td.label { text-align: right }
+p.instructions {
+  margin: 12px;
+#  background-color: #ff8
+}
+table.data-entry {
+  padding: 12px;
+#  background-color: #faa;
+  width: 100%;
+}
+td.mandatory { color: #f33 }
+
+h1 {text-align: center}
+
+p.navigation {
+   text-align: right;
+   font-size: medium;
+   font-style: italic;
+}
+
+ul.wine-listing li {
+  margin: 6px;
+}
+
+ul.wine-listing .price-label { font-weight: bold; }
+ul.wine-listing .bottle-price { font-style: italic; color: #500; }
+ul.wine-listing .wine-name { font-style: italic; }
+
+h2 { font-size: 16pt;
+     margin: 4px;
+}
+
+div.filter-box {
+   border: 1px solid black;
+   padding: 6px;
+   margin: 6px;
+   float: right;
+}

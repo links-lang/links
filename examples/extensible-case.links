@@ -1,0 +1,87 @@
+# From "Extensible Programming with First-Class Cases"
+# Matthias Blume et al
+# ICFP 2006
+
+
+# sig add_A : (([|A- |a|]) -> String) -> ([|A:()|a|]) -> String
+fun add_A(f) (e) {
+  switch (e) {
+    case A -> "A"
+    case -A as x -> f(x)
+  }
+}
+
+fun add_B(f) (e) {
+  switch (e) {
+    case B -> "B"
+    case -B as x -> f(x)
+  }
+}
+
+
+fun add_C(f) (e) {
+  switch (e) {
+    case C -> "C"
+    case -C as x -> f(x)
+  }
+}
+
+fun defaultCase(f:(([|rho|]) -> String)) {
+  f
+}
+
+fun nocases(e:[||]) {
+  switch (e) { }      # unreachable
+}
+
+
+fun sub_A(f)(e) {
+  f(e : [|A:a|rho|] <- [|A- |rho|])
+}
+
+var f = add_A(add_B(add_C(nocases)));
+
+(f(A), f(B), f(C))
+
+
+#   cases A x => e1
+#   default: e2
+# -->
+#   fun (v) {
+#     switch (v) {
+#       case A x -> e1
+#       case -A -> e2
+#     }
+#   }
+#
+#   nocases
+# -->
+#   fun nocases(e:[||]) {
+#     switch (e) { }      # unreachable
+#   }
+#
+#   match
+# -->
+#   fun (c)(v) {
+#     c(v)
+#   }
+#
+#    c - A
+#  ==
+#   fun (e) {c(e : [|A:a|rho|] <- [|A- |rho|])}
+#
+#    c + {A x -> e}
+#  ==
+#    fun (v) {
+#      switch (v) {
+#        case A x -> e
+#        case -A as x -> c(x)
+#      }
+#    }
+#
+
+###
+# ((|r) -> c) -> c
+#
+# sig subtract_l : ((((l:a|r)) -> c) -> c) -> ((((|r)) -> c) -> c)
+# fun subtract_l(h)(k) {h(fun (x) {k(x : (|r) <- (l:a|r))})}

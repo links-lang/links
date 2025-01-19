@@ -1,0 +1,39 @@
+typename CalcSelect = mu a.[+|Add:!Int.!Int.?Int.a, Mul:!Int.!Int.?Int.a, Stop:End|+];
+typename CalcOffer  = mu a.[&|Add:?Int.?Int.!Int.a, Mul:?Int.?Int.!Int.a, Stop:End|&];
+
+sig calc : (CalcOffer) ~> ()
+fun calc(s) client {
+  offer (s) {
+    case Add(s) ->
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      var s = send(x+y,s);
+      calc(s)
+    case Mul(s) ->
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      var s = send(x*y,s);
+      calc(s)
+    case Stop(s) ->
+      close(s)
+  }
+}
+
+sig user : (CalcSelect) ~> Int
+fun user(s) client {
+  var (x, s) = receive(send(6,send(7,select Mul s)));
+  var (y, s) = receive(send(6,send(7,select Mul s)));
+  var (z, s) = receive(send(x,send(y,select Add s)));
+  close(select Stop s);
+  z
+}
+
+fun main() client {
+  user(fork(calc))
+}
+
+
+page
+  <html><body>
+    Hey, hi.  Also {stringToXml(intToString(main()))}.
+  </body></html>

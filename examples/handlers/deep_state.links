@@ -1,0 +1,90 @@
+# Deep state handlers
+
+# Standard types
+typename Comp(e::Eff, a) = () ~e~> a;
+typename Unit = [|Unit|];
+
+# The run handler forces evaluation of a computation
+fun run(m) {
+  handle(m()) {
+    case x -> x
+  }
+}
+
+# Get and put operations
+sig get : Comp({Get:a |_}, a)
+fun get() {do Get}
+
+sig put : (a) {Put:(a) => ()|_}~> ()
+fun put(p) {do Put(p)}
+
+# Println line operation
+sig logVal : (a) {Log:(a) => ()|_}~> ()
+fun logVal(p) {do Log(p)}
+
+# Stateful computation evaluator
+sig evalState : (s) ->
+                (Comp({Get:s,Put:(s) => () |e}, a)) ->
+                 Comp({Get{_},Put{_}         |e}, a)
+fun evalState(st)(m)() {
+  (handle(m()) {
+    case x -> fun(_)  { x }
+    case <Get => k>    -> fun(st) { k(st)(st) }
+    case <Put(p) => k>  -> fun(_)  { k(())(p) }
+  })(st)
+}
+
+fun logState(m)() {
+  handle(m()) {
+    case <Get => k>    -> var v = get();
+                      k(v)
+    case <Put(p) => k>  -> logVal(p);
+                      var v = put(p);
+                      k(v)
+    case x -> x
+  }
+}
+
+# Printlns integers to stdout
+sig logPrinter : (Comp({Log:(Int) => () |e}, a)) ->
+                  Comp({Log{_}            |e}, a)
+fun logPrinter(m)() {
+  handle(m()) {
+    case x -> x
+    case <Log(p) => k>  -> println(intToString(p));
+                      k(())
+  }
+}
+
+# Log accumulator
+sig logAccumulator : ([a]) ->
+                     (Comp({Log:(a) => () |e}, b)) ->
+                      Comp({Log{_}          |e}, (b,[a]))
+fun logAccumulator(ps)(m)() {
+  (handle(m()) {
+    case x -> fun(ps) { (x,ps) }
+    case <Log(p) => k>  -> fun(ps) { k(())(p :: ps) }
+  })(ps)
+}
+
+# Stateful computation which counts down to zero
+fun count() {
+    var i = get();
+    if (i <= 0) {i}
+    else {put(i-1); count()}
+}
+
+# Example 1
+fun example1() {
+  run -<- evalState(5) $ count
+}
+
+# Example 2
+fun example2() {
+  (run -<- logPrinter -<- evalState(5) -<- logState) $ count
+}
+
+# Unit test
+fun unitTest(n) {
+  (run -<- logAccumulator([]) -<- evalState(n) -<- logState) $ count
+}

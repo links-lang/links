@@ -1,0 +1,63 @@
+Escape expressions
+escape e in {2+2}
+stdout : 4 : Int
+
+Nested escapes
+escape return in {1+(escape e in {2+2})}
+stdout : 5 : Int
+
+Invoking escapes
+escape return in {1+(escape e in {return(2+2)})}
+stdout : 4 : Int
+
+Continuation typing [1]
+escape e in {if (false) 1+e else 2}
+stderr : @.*
+exit : 1
+
+Continuation typing [2]
+escape e in { e(1) }
+stdout : 1 : Int
+
+continuation typing [3]
+{ escape y in { ("" == y(1), true == y(1)); 2 } }
+exit : 1
+stderr : @.*Type error.*
+
+continuation typing [4]
+{ escape y in { ("" == y(1), "asdf" == y(1)); 2 } }
+exit : 1
+stderr : @.*Type error.*
+
+continuation typing [5]
+{ escape y in { var _ = ("" == y(1), "asdf" == y(1)); 2 } }
+stdout : 1 : Int
+
+continuation mailbox typing (see r321)
+fun () {(escape e in {spawn { e(self()) }}) ! ""; 1 + recv(); }
+exit : 1
+stderr : @..*
+
+Escape body [1]
+escape k in A
+stdout : A : [|A|_::Any|]
+
+Escape body [2]
+escape k in A(k)
+stdout : A(Continuationpure_continuation) : [|A:(mu a.[|A:(a) ~b~> c::Any|d::Any|]) ~b~> c::Any|d::Any|]
+
+Escape body [3]
+escape k in switch (A) { case A -> 0 case B -> 1 }
+stdout : 0 : Int
+
+Escape body [4]
+escape k in ()
+stdout : () : ()
+
+Escape body [5]
+escape k in (foo="bar",quux=Just(k((foo="baz",quux=Nothing))))
+stdout : (foo = "baz", quux = Nothing) : (foo:String,quux:[|Just:_::Any|Nothing|_::Any|])
+
+Escape body [6]
+escape k in 2 + 40
+stdout : 42 : Int

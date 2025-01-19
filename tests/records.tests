@@ -1,0 +1,125 @@
+Record printing
+(x=1, y="two")
+stdout : (x = 1, y = "two") : (x:Int,y:String)
+
+Quote record labels that are also keywords
+("client"=5, "fun"=7)
+stdout : ("client" = 5, "fun" = 7) : (client:Int,fun:Int)
+
+Record comparisons
+(x=1, y="two") == (y="two", x=1)
+stdout : true : Bool
+
+Record extension
+{var z = (y="three"); (x=4|z) }
+stdout : (x = 4, y = "three") : (x:Int,y:String)
+
+Let pattern matching
+{var (x=a,y=(z=b)) = (y=(z=3),x="four"); a}
+stdout : "four" : String
+
+Lambda pattern matching
+(fun((x=a,y=(z=b))) { a }) ((y=(z=3),x="four"))
+stdout : "four" : String
+
+Projection of absent field
+(x="1").y;;
+stderr : @.
+exit : 1
+
+Projections
+(y=(z=3),x="four").y.z
+stdout : 3 : Int
+
+Projection sections
+(.x)((y=(z=3),x="four"))
+stdout : "four" : String
+
+Passing two different closed rows to an open-row function arg
+fun foo(x) { x.a } (foo((a="a", b=2)), foo((a=1, c=3)))
+stdout : ("a", 1) : (String, Int)
+
+Passing two different list types to a polymorphic function
+fun foo(x) { hd(x) } (foo([1,2]), foo(['a', 'b', 'c']))
+stdout : (1, 'a') : (Int, Char)
+
+Row types preserved across functions
+(fun (x) { var (r=r|s) = x; (r=3|s) })((r=3,s=4)).s
+stdout : 4 : Int
+
+With syntax (same type)
+((x = 3) with x = 4)
+stdout : (x = 4) : (x:Int)
+
+With syntax (different type)
+((x = 3) with x = "four")
+stdout : (x = "four") : (x:String)
+
+With syntax: multiple labels (a)
+((x=3,y=4) with y="four")
+stdout : (x = 3, y = "four") : (x:Int,y:String)
+
+With syntax: multiple labels (b)
+((z='a',x=3,y=4) with x="four",y=3)
+stdout : (x = "four", y = 3, z = 'a') : (x:String,y:Int,z:Char)
+
+With syntax (missing label)
+((x = 3) with y=4)
+stderr : @.
+exit : 1
+
+Tables must have table type.
+fun (t) { for (x <-- t) [(a=x.y)] }
+stdout : @fun : \(TemporalTable\(.*\)\) {}-> .*
+
+Duplicate fields
+(x=3,x=3)
+stderr : @.
+exit : 1
+
+Uninhabited recursive rows (questionable)
+(fun (x : (|(mu b . b))) {x})(())
+stderr : @.
+exit : 1
+
+Missing absent label (1)
+fun (r : (|a)) {(l=42|r)}
+stderr : @.
+exit : 1
+
+Missing absent label (2)
+fun (r : (|a)) {(l=42|(r : (l-|a)))}
+stderr : @.
+exit : 1
+
+Possibly absent label in a closed row
+fun (x : (a{%b}|%c)) {x : ()}
+stdout : fun : (()) -> ()
+
+Record field punning (1)
+var hello = "hellooo"; (=hello)
+stdout : (hello = "hellooo") : (hello:String)
+
+Record field punning (2)
+var hello = "hellooo"; (=hello, world = 5)
+stdout : (hello = "hellooo", world = 5) : (hello:String,world:Int)
+
+Record field punning (3)
+switch((hello=5, world=10)) { case (=hello, world=y) -> hello + y }
+stdout : 15 : Int
+
+Record field punning (4)
+var y = 2; (x=1, =y)
+stdout : (x = 1, y = 2) : (x:Int,y:Int)
+
+Record field punning (5)
+var y = 2; (x=1, =y, z=3)
+stdout : (x = 1, y = 2, z = 3) : (x:Int,y:Int,z:Int)
+
+Record field punning (6)
+var z = 3; (x=1, y=2, =z)
+stdout : (x = 1, y = 2, z = 3) : (x:Int,y:Int,z:Int)
+
+Record field punning (7)
+var x = 1; var y = 2; var z = 3; (=x, =y, =z)
+stdout : (x = 1, y = 2, z = 3) : (x:Int,y:Int,z:Int)

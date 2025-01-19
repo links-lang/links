@@ -1,0 +1,17 @@
+module A {
+    typename DT = [| Foo: (Int, Int) | Bar: String |];
+}
+
+open A;
+
+sig foo : (DT) -> Int
+fun foo(x) {
+    switch (x) {
+        case Foo(x, y) -> x + y
+        case Bar(y) -> (-1)
+    }
+}
+
+var x = Foo(5, 10);
+foo(x)
+

@@ -1,0 +1,280 @@
+open import MindSessions;
+
+typename ClientState = (nick:Nickname,
+                        numPlayers:Int,
+                        lastCard:Int,
+                        failed:Bool,
+                        cards:[Int],
+                        players:[(Nickname, Int)]);
+
+sig cardId : (Int) -> String
+fun cardId(card) {
+  "card_" ^^ intToString(card)
+}
+
+# DOM stuff #
+var nameBoxId = "name_box";
+var chatBoxId = "chat_box";
+
+sig getInputContents : (String) ~> String
+fun getInputContents(domId) {
+  var textNode = getNodeById(domId);
+  domGetPropertyFromRef(textNode, "value")
+}
+
+sig clearInput : (String) ~> ()
+fun clearInput(domId) {
+  var textNode = getNodeById(domId);
+  var _ = domSetPropertyFromRef(textNode, "value", "");
+  ()
+}
+###########
+
+sig outputMessage : (Xml) ~> ()
+fun outputMessage(xml) {
+  var msgsNode = getNodeById("msgs");
+  appendChildren(xml, msgsNode);
+  var scrollHeight = domGetPropertyFromRef(msgsNode, "scrollHeight");
+  var _ = domSetPropertyFromRef(msgsNode, "scrollTop", scrollHeight);
+  ()
+}
+
+
+sig renderCard : ((Int) ~e~> Xml, Int) ~e~> Xml
+fun renderCard(wrap, card) {
+  <span id="{cardId(card)}">{wrap(card)}</span>
+}
+
+sig renderDummies : (Nickname, Int) ~> Xml
+fun renderDummies(nick, n) {
+  fun dummies(n) {
+    if (n <= 0) {
+      <#/>
+    } else {
+      <#><button>?</button>{dummies(n-1)}</#>
+    }
+  }
+  var id="cards_" ^^ nick;
+  <span id="{id}">{dummies(n)}</span>
+}
+
+sig otherPlayer : (Nickname, Int) ~> Xml
+fun otherPlayer(nick, n) {
+  <div><i>{stringToXml(nick)}</i> {renderDummies(nick, n)}</div>
+}
+
+sig outputOtherPlayer : (Nickname, Int) ~> ()
+fun outputOtherPlayer(nick, n) {
+  appendChildren(otherPlayer(nick, n), getNodeById("others"))
+}
+
+sig outputClientState : (ClientState) ~> ()
+fun outputClientState(st) {
+  var x = st.numPlayers - length(st.players);
+  var xml =
+    if(st.failed) {
+      <div>Failed!</div>
+    } else if (x == 0) {
+      var done = empty (filter (fun ((_, cards)) {cards > 0}, st.players));
+      if (done) {
+        <div>Success!</div>
+      } else {
+        <div>Playing...</div>
+      }
+    } else if (x == 1) {
+      <div>Waiting for 1 more players...</div>
+    } else {
+      <div>Waiting for {intToXml(x)} more players...</div>
+    };
+  domReplaceChildren(xml, getNodeById("status"))
+}
+
+sig chat : (Nickname, Message) ~> ()
+fun chat(nick, msg) {
+  outputMessage(<p><b>{stringToXml(nick)}</b>: {stringToXml(msg)}</p>)
+}
+
+sig join : (ClientState, Nickname, Int) ~> ClientState
+fun join(st, nick, numCards) {
+#  outputMessage(<p><b>{stringToXml(nick)}</b> just joined</p>);
+  outputOtherPlayer(nick, numCards);
+  var st = (st with players=(nick, numCards) :: st.players);
+  outputClientState(st);
+  st
+}
+
+sig removeUser : (ClientState, Nickname) ~> ClientState
+fun removeUser(st, nick) {
+  var st = if(assoc(nick, st.players) == 0) {
+             st
+           } else {
+             (st with failed=true)
+           };
+  outputMessage(<p><b>{stringToXml(nick)}</b> just left</p>);
+  outputClientState(st);
+  st
+}
+
+sig play : (ClientState, Nickname, Int) ~> ClientState
+fun play(st, nick, card) {
+  if(st.failed) {
+    st
+  } else {
+    var failed = card < st.lastCard;
+    var st = (st with failed=failed, lastCard=card,
+                      players=map (fun ((name, n)) {
+                                     if (nick == name) {(nick, n-1)}
+                                     else {(name, n)}
+                                   },
+                                   st.players));
+    domReplaceChildren(renderCard (fun (card) {<#>Last card: <button>{intToXml(card)}</button></#>}, card),
+                       getNodeById("played_card"));
+    if(st.nick == nick) {
+      var st = (st with cards=filter (fun (i) {i <> card}, st.cards));
+      removeNode(getNodeById(cardId(card)));
+      outputClientState(st);
+      st
+    } else {
+      removeNode(hd(domGetChildrenFromRef(getNodeById("cards_" ^^ nick))));
+      outputClientState(st);
+      st
+    }
+  }
+}
+
+sig incomingLoop : (ClientState, ClientReceive) ~> ()
+fun incomingLoop(st, s) {
+  offer(s) {
+    case Chat(s) ->
+      var ((nick, chatmsg), s) = receive(s);
+      debug("Received incoming chat message (" ^^ chatmsg ^^ ") from (" ^^ nick ^^ ")");
+      chat(nick, chatmsg);
+      incomingLoop(st, s)
+    case Join(s) ->
+      var ((nick, numCards), s) = receive(s);
+      incomingLoop(join(st, nick, numCards), s)
+    case Play(s) ->
+      var ((nick, card), s) = receive(s);
+      incomingLoop(play(st, nick, card), s)
+    case Leave(s) ->
+      var (nick, s) = receive(s);
+      incomingLoop(removeUser(st, nick), s)
+  }
+}
+
+typename Outgoing = [&|Chat:?Message.End, Play:?Int.End|&];
+
+sig outgoingLoop : (AP(Outgoing), ClientSend) ~> ()
+fun outgoingLoop(ap, s) {
+  offer(accept(ap)) {
+    case Chat(c) ->
+      var (msg, c) = receive(c);
+      close(c);
+      var s = select Chat s;
+      var s = send(msg, s);
+      outgoingLoop(ap, s)
+    case Play(c) ->
+      var (card, c) = receive(c);
+      close(c);
+      var s = send(card, select Play s);
+      var (status, s) = receive(s);
+      # ignore the status (we will be informed if the play actually
+      # happens later)
+
+      # FIXME: remove status from the session type?
+      outgoingLoop(ap, s)
+  }
+}
+
+sig beginChat : (ClientState, ClientReceive, ClientSend) ~> ()
+fun beginChat(st, incoming, outgoing) {
+  var ap = (new() : AP(Outgoing));
+
+  # spawn the incoming and outgoing message handlers
+  ignore(spawn {outgoingLoop(ap, outgoing)});
+  ignore(spawn {incomingLoop(st, incoming)});
+
+  fun chat() {
+    close(send(getInputContents(chatBoxId), select Chat (request(ap))));
+    clearInput(chatBoxId)
+  }
+
+  fun play(card) {
+    close(send(card, select Play (request(ap))))
+  }
+
+  fun playButton(card) {
+    <button l:onclick="{play(card)}" type="submit">{intToXml(card)}</button>
+  }
+
+  var box =
+    <div>
+      <div id="others">
+        {for ((nick, n) <- st.players) where (nick <> st.nick) {otherPlayer(nick, n)}}
+      </div>
+      <div><b>{stringToXml(st.nick)}</b> {for (card <- st.cards) renderCard(playButton, card)}</div>
+      <div id="played_card">---</div>
+      <div id="status"></div>
+      <div id="chatBox">
+        <div>---</div>
+        <div id="msgs" style="overflow-y:scroll; width:100%; height:400px;"></div>
+        <div>
+          <form l:onsubmit="{chat()}">
+            <input id="chat_box" type="text" style="width:100%"></input>
+          </form>
+        </div>
+      </div>
+    </div>;
+
+  # remove the name request box, put the chatbox in, and we can get going
+  domReplaceChildren(box, getNodeById("main"));
+  outputClientState(st)
+}
+
+sig connect : () ~> ()
+fun connect() {
+  ignore(spawn {
+    var s = request(wap);
+    var nick = getInputContents(nameBoxId);
+    clearInput(nameBoxId);
+    var s = send(nick, s);
+    debug("sent nick");
+    offer(s) {
+      case Nope(s) ->
+        println("Nickname '" ^^ nick ^^ "' already taken");
+        close(s)
+      case Join(s) ->
+        var ((numPlayers, cards, players, incoming), s) = receive(s);
+        debug("received data");
+        beginChat((nick=nick,
+                   numPlayers=numPlayers,
+                   lastCard=0,
+                   failed=false,
+                   cards=cards,
+                   players=players), incoming, s)
+    }
+  })
+}
+
+sig mainPage : () ~> Page
+fun mainPage() {
+  page
+    <html>
+      <head>
+        <title>Links Mind</title>
+      </head>
+
+      <div>
+        <h1>Links Mind</h1>
+      </div>
+
+      <div id="main">
+        <div>
+          <p>Nickname:</p>
+          <form l:onsubmit="{connect()}">
+            <input id="name_box" type="text"></input>
+          </form>
+        </div>
+      </div>
+    </html>
+}

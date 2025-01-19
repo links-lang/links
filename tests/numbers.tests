@@ -1,0 +1,58 @@
+Truncating integer division
+2/3 + 1/3
+stdout : @0 .*
+
+Incompatibility of float and int types
+1 + 2.0
+stderr : @.
+exit : 1
+
+Incompatibility with everything else
+1 == "two"
+stderr : @.
+exit : 1
+
+Conversions between float and int types
+intToFloat(3)
+stdout : @3\..*
+
+Integer literals
+2003004005006007002
+stdout : @2003004005006007002 .*
+
+Floating point literals
+3.14
+stdout : @3.14.*
+
+Unary negation [1]
+{var x = 3; -x}
+stdout : @-3 .*
+
+Unary negation [2]
+{var x = 21342; x == - -x}
+stdout : @true .*
+
+Prefix arithmetic operators
+{var plus = (+); plus(1, (+)(2,3))}
+stdout : 6 : Int
+
+Operator precedence [1]
+(2 + 3 * 4 == 14) && (2 * 3 + 4 == 10)
+stdout : true : Bool
+
+Error on division by zero
+{var x = 10; x / (x - 10)}
+stderr : @.
+exit : 1
+
+Equality and comparisons [integer comparison]
+({var x = 100000230 * 102300000; x < x + 1}) && ({var x = 1032452430 * 102300234234; x > x - 1})
+stdout : @true .*
+
+Equality and comparisons [integer equality with 64-bit overflow]
+({var x = 100000230 * 102300000; x == 10230023529000000}) && ({var x = 1032452430 * 102300234234; x == 4163033019059954732})
+stdout : @true .*
+
+Equality and comparisons [floating comparison]
+(-.10.0 < -.9.5 && 10.0 > 9.5 && 10.0 > -.9.5 && -.10.0 < 9.5)
+stdout : @true .*

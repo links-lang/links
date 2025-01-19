@@ -1,0 +1,239 @@
+Modules hide inner definitions
+./tests/modules/basic-hide.links
+filemode : true
+stderr : @.*
+exit : 1
+
+Basic qualified binding resolution
+./tests/modules/basic-qual-resolution.links
+filemode : true
+stdout : "hello" : String
+
+Inner module qualified binding resolution
+./tests/modules/basic-inner-qual-resolution.links
+filemode : true
+stdout : "hi" : String
+
+Open allows basic unqualified binding access
+./tests/modules/basic-open.links
+filemode : true
+stdout : "hello!" : String
+
+Module nesting allows partially-qualified names to be used for resolution
+./tests/modules/basic-partial-qualification.links
+filemode : true
+stdout : "hello" : String
+
+Open allows partially-qualified names to be used for resolution
+./tests/modules/basic-partial-qualification-open.links
+filemode : true
+stdout : "hello" : String
+
+Open still allows fully-qualified names to be used
+./tests/modules/basic-open-fully-qual.links
+filemode : true
+stdout : "hello" : String
+
+Opened module does not shadow bindings after opening
+./tests/modules/basic-open-shadow.links
+filemode : true
+stdout : "hi" : String
+
+Opened module shadows previous bindings after opening
+./tests/modules/basic-open-no-shadow.links
+filemode : true
+stdout : "greetings" : String
+
+Cyclic dependencies outlawed
+./tests/modules/runmulti cyclicA.links
+filemode : true
+stderr : @.*
+exit : 1
+
+Module chasing
+./tests/modules/moduleA.links
+filemode : true
+args : --path=tests/modules
+stdout : "hello from c!" : String
+
+Basic types in modules
+./tests/modules/type-sig.links
+filemode : true
+args : --path=tests/modules
+stdout : 5 : A.AInt
+
+Basic type in session type
+./tests/modules/session-type.links
+filemode : true
+args : --path=tests/modules
+stdout : () : ()
+
+Mutually-recursive functions (1)
+./tests/modules/mutualfn.links
+filemode : true
+args : --path=tests/modules
+stdout : "Hello!Hello!" : String
+
+Mutually-recursive functions (2)
+./tests/modules/mutualfn2.links
+filemode : true
+args : --path=tests/modules
+stdout : "Hello!" : String
+
+Mutually-recursive functions (3)
+./tests/modules/mutualfn3.links
+filemode : true
+args : --path=tests/modules
+stdout : "Hello!" : String
+
+Mutually-recursive types
+./tests/modules/mutualtys.links
+filemode : true
+args : --path=tests/modules
+stdout : () : ()
+
+Type signatures in inner modules
+./tests/modules/typesigInner.links
+filemode : true
+args : --path=tests/modules
+stdout : 11 : A.B.Foo
+
+Infix operators
+./tests/modules/infix.links
+filemode : true
+args : --path=tests/modules
+stdout : 150 : Int
+
+Lots of modules
+./tests/modules/overflow-test/test.links
+filemode : true
+args : --path=tests/modules/overflow-test
+stdout : () : ()
+
+Constructor in module
+./tests/modules/constructor-test-good.links
+filemode : true
+args : --path=tests/modules
+stdout : 15 : Int
+
+Constructor out of scope
+./tests/modules/constructor-test-bad.links
+filemode : true
+args : --path=tests/modules
+stderr : ./tests/modules/constructor-test-bad.links:5: Unbound type constructor DT
+exit : 1
+
+Qualified names allowed without parentheses
+./tests/modules/qualified-type-names.links
+filemode : true
+args : --path=tests/modules
+stdout : () : ()
+
+Scoping/Shadowing of type names (1)
+./tests/modules/type-scoping1.links
+filemode : true
+args : --path=tests/modules
+stdout : () : ()
+
+Scoping/Shadowing of type names (2)
+./tests/modules/type-scoping2.links
+filemode : true
+args : --path=tests/modules
+stdout : () : ()
+
+Scoping/Shadowing of type names (3)
+./tests/modules/type-scoping3.links
+filemode : true
+args : --path=tests/modules
+stdout : () : ()
+
+Scoping/Shadowing of type names (4)
+./tests/modules/type-scoping4.links
+filemode : true
+args : --path=tests/modules
+stdout : () : ()
+
+Scoping/Shadowing of type names (5)
+./tests/modules/type-scoping5.links
+filemode : true
+args : --path=tests/modules
+stdout : () : ()
+
+Scoping/Shadowing of type names (6)
+./tests/modules/type-scoping6.links
+filemode : true
+args : --path=tests/modules
+stdout : () : ()
+
+Broken scoping of type names (1)
+./tests/modules/type-scoping-bad1.links
+filemode : true
+args : --path=tests/modules
+stderr : @.*
+exit : 1
+
+Import alien functions
+./tests/modules/alien_blocks_importer.links
+filemode : true
+args : --path=tests/modules
+stdout : 42 : Int
+
+Structural labels (1)
+./tests/modules/labels0.links
+filemode : true
+stdout : "Hello!" : String
+
+Structural labels (2)
+./tests/modules/labels1.links
+filemode : true
+stderr : @.*
+exit : 1
+
+Boundary peek
+./tests/modules/boundary_peek.links
+filemode : true
+stdout : "A1" : String
+
+Import (1)
+./tests/modules/import1.links
+filemode : true
+args : --path=tests/modules
+stdout : 42 : Int
+
+Import (2)
+./tests/modules/import2.links
+filemode : true
+args : --path=tests/modules
+stderr : @.*
+exit : 1
+
+Import via open
+./tests/modules/import_via_open0.links
+filemode : true
+args : --path=tests/modules
+stderr : @.*
+exit : 1
+
+Open is not include
+./tests/modules/open_is_not_include2.links
+filemode : true
+args : --path=tests/modules
+stdout : [1, 2] : [Int]
+
+Record accesses
+./tests/modules/records.links
+filemode : true
+args : --path=tests/modules
+stdout : "LinksModules" : String
+
+Switch expression
+./tests/modules/switch-test.links
+filemode : true
+args : --path=tests/modules
+stdout : "hello!" : String
+
+Qualified module reference
+./tests/modules/varRefA.links
+filemode : true
+args : --path=tests/modules
+stdout : "hello from b!" : String

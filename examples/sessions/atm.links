@@ -1,0 +1,90 @@
+typename Card = Int;
+typename PIN = Int;
+typename Money = Int;
+
+typename Menu = [&|Withdraw:?Int.[+|Accept:!Card.!Money.End,
+                                    Reject:!Card.End|+],
+                   Balance:!Int.!Card.End|&];
+typename ATM = ?Card.?PIN.[+|Accept:Menu, Reject:!Card.End|+];
+
+sig check : (Card, PIN) ~> Bool
+fun check(card, pin) {
+  (card == 16777216) && (pin == 1024)
+}
+
+sig menu : (Card, Money, Menu) ~> ()
+fun menu(card, balance, c) {
+  offer(c) {
+    case Withdraw(c) ->
+      var (amount, c) = receive(c);
+      if(amount <= balance) {
+        close(send(amount, send(card, select Accept c)))
+      } else {
+        close(send(card, select Reject c))
+      }
+    case Balance(c) ->
+      close(send(card, send(balance, c)))
+  }
+}
+
+sig atm : (Money, ATM) ~> ()
+fun atm(balance, c) {
+  var (card, c) = receive(c);
+  var (pin, c) = receive(c);
+  if(check(card, pin)) {
+    menu(card, balance, select Accept c)
+  } else {
+    close(send(card, select Reject c))
+  }
+}
+
+sig user1 : (~ATM) ~> Int
+fun user1(c) {
+  offer (send(1024, send(16777216, c))) {
+    case Accept(c) ->
+      offer (send (16, select Withdraw c)) {
+        case Accept(c) -> var (card, c) = receive(c);
+                          var (cash, c) = receive(c);
+                          close(c);
+                          cash
+        case Reject(c) -> var (card, c) = receive(c);
+                          close(c);
+                          0
+      }
+    case Reject(c) ->
+      var (card, c) = receive(c); close(c); 0
+  }
+}
+
+sig user2 : (~ATM) ~> Int
+fun user2(c) {
+  offer (send(1023, send(16777216, c))) {
+    case Accept(c) ->
+      offer (send (16, select Withdraw c)) {
+        case Accept(c) -> var (card, c) = receive(c);
+                          var (cash, c) = receive(c);
+                          close(c);
+                          cash
+        case Reject(c) -> var (card, c) = receive(c);
+                          close(c); 0
+      }
+    case Reject(c) ->
+      var (card, c) = receive(c); close(c); 0
+  }
+}
+
+sig user3 : (~ATM) ~> Maybe(Int)
+fun user3(c) {
+  offer (send(1024, send(16777216, c))) {
+    case Accept(c) ->
+      var (balance, c) = receive(select Balance c);
+      var (card, c) = receive(c); close(c); Just(balance)
+    case Reject(c) ->
+      var (card, c) = receive(c); close(c); Nothing
+  }
+}
+
+
+(user1(fork(fun (c) {atm(128, c)})),
+ user2(fork(fun (c) {atm(128, c)})),
+ user3(fork(fun (c) {atm(128, c)})))

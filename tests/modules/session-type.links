@@ -1,0 +1,18 @@
+module A {
+  typename AInt = Int;
+  var foo = 5;
+}
+
+typename Sess = ?(A.AInt).EndBang;
+
+sig srv : (Sess) ~> EndBang
+fun srv(c) {
+  var (_, c) = receive(c);
+  c
+}
+
+fun bar() {
+  var c = forkSync(srv);
+  var c = send(5, c);
+  wait(c)
+}

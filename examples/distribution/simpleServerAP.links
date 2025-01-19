@@ -1,0 +1,105 @@
+
+typename Ping = [| Ping |];
+typename Pong = [| Pong |];
+
+typename PingPong = ?(Ping) . !(Pong) . PingPong;
+
+module Client {
+  fun disableButton() {
+    var buttonRef = getNodeById("pingButton");
+    domSetAttributeFromRef(buttonRef, "disabled", "disabled")
+  }
+
+  fun enableButton() {
+    var buttonRef = getNodeById("pingButton");
+    domRemoveAttributeFromRef(buttonRef, "disabled")
+  }
+
+  fun logMessage(msg) {
+    appendChildren(<#>{stringToXml(msg)}</#>, getNodeById("msgs"))
+  }
+
+  ## Why does this need this annotation?
+  sig commLoop : (~PingPong) { hear{ :[|SendPing|] } | e}~> ()
+  fun commLoop(ch) {
+    receive {
+      case SendPing ->
+        var ch = send(Ping, ch);
+        disableButton();
+        var (pong, ch) = receive(ch);
+        logMessage("Pong!");
+        enableButton();
+        commLoop(ch)
+    }
+  }
+
+  sig commThread : (AP(PingPong)) { hear { :[|SendPing|] } |e}~> ()
+  fun commThread(ap) {
+    # Request a channel from the access point
+    var ch = request(ap);
+    logMessage("Established session connection with the server!");
+    enableButton();
+    commLoop(ch)
+  }
+
+  fun makePage(clPid) {
+    page
+      <html>
+        <head>Links Server AP test</head>
+        <h1>Hello!</h1>
+        <button id="pingButton" l:onclick="{clPid ! SendPing}" disabled="disabled" >Send Ping!</button>
+        <h1>Messages:</h1>
+        <div id="msgs"></div>
+      </html>
+  }
+}
+
+
+module Server {
+
+  sig serverLoop : (PingPong) ~> ()
+  fun serverLoop(ch) {
+    var (_, ch) = receive(ch);
+    debug("Received ping from client");
+    var ch = send(Pong, ch);
+    debug("Sent pong to client");
+    serverLoop(ch)
+  }
+
+  # Handles client requests
+  sig serverThread : (AP(PingPong)) ~> ()
+  fun serverThread(srvAP) {
+    var ch = accept(srvAP);
+    debug("Accepted connection from client");
+    serverLoop(ch)
+  }
+}
+
+module Setup {
+
+  sig mainPage : (Location, AP(PingPong)) ~> Page
+  fun mainPage(loc, srvAP) {
+    # Spawn a thread on the server to match with the client,
+    # and respond to all of the pings.
+    var srvPid = spawnAt(here (), { Server.serverThread(srvAP) } );
+
+    # Spawn a thread on the client to request a channel from
+    # srvAP, and handle communication.
+    var clPid = spawnAt(loc, { Client.commThread(srvAP) } );
+
+    # Finally, generate the page.
+    Client.makePage(clPid)
+  }
+
+}
+
+
+fun main() {
+  var srvAP = new();
+  addLocatedRouteHandler("/", fun(_, clientLoc) { Setup.mainPage(clientLoc, srvAP) });
+  serveWebsockets();
+  servePages()
+}
+
+main()
+

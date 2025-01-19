@@ -1,0 +1,39 @@
+typename Counter = AP (!Int.End);
+
+sig counter : (Counter, Int) ~> ()
+fun counter(p, i) {
+  var s = accept(p);
+  close(send(i, s));
+  counter(p, i+1)
+}
+
+sig readCounter : (Counter) ~> Int
+fun readCounter(p) {
+  var c = request(p);
+  var (x, s) = receive(c);
+  close(s); x
+}
+
+sig user : (Int, Counter, Process ({hear:(Int, (Int, Int))|_})) ~> ()
+fun user(n, p, dest) {
+  var x = readCounter(p);
+  var y = readCounter(p);
+  dest!(n, (x, y))
+}
+
+fun main() {
+  var dest = self();
+  var p = new();
+  var _ = spawn {counter(p, 0)};
+
+  var _ =
+    for (i <- [1..10]) {
+      var _ = spawn {user(i, p, dest)};
+      [()]
+    };
+
+  for (i <- [1..10]) [recv()]
+}
+
+spawnWait { main() }
+

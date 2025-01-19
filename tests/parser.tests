@@ -1,0 +1,47 @@
+Test that DOS newlines are handled
+./tests/dos-newlines.links
+filemode : true
+stdout : 43 : Int
+
+Test precedence parsing (float plus times)
+42.0 +. 1.0 *. 42.0 == 42.0 +. (1.0 *. 42.0)
+stdout : true : Bool
+
+Test precedence parsing (float minus times)
+42.0 -. 1.0 *. 42.0 == 42.0 -. (1.0 *. 42.0)
+stdout : true : Bool
+
+Recursive row variable in record
+tests/records_oop.links
+stdout : (getName = fun, name = "Object") : (name:String|(mu a.getName:((name:String|a)) -> String))
+filemode : true
+
+Recursive row variable in variant [1]
+sig f : ([|(mu a. Op:() { |a}-> ())|]) {}-> () fun f(_) { () } f
+stdout : fun : ([|(mu a.Op:() { |a}-> ())|]) {}-> ()
+
+Recursive row variable in variant [2]
+sig tsize : ([|( mu t. Node:([|t|],[|t|])|Leaf)|]) ~> Int fun tsize(t) { switch (t) { case Leaf -> 1 case Node(l,r) -> 1 + tsize(l) + tsize(r) } } tsize
+stdout : fun : ([|(mu a.Leaf|Node:([|a|], [|a|]))|]) ~> Int
+
+Recursive row variable in row type argument
+sig f : Comp ((),{ |(mu a . Bar,Foo:(() { |a}~> _) {}-> ()|_) }) fun f() { () } f
+stdout : fun : Comp ((),{ |(mu a.Bar:(),Foo:(() { |a}~> _) {}-> ()|_)})
+
+Recursive row variable in effect signature [1]
+sig w : (() { |(mu a . F:(() { |a}~> ()) => _|e)}~> ()) {F{_}|e}~> () fun w(g) { handle(g()) { case () -> () case <F(h) => res> -> w(h) }} w
+stdout : fun : (() { |(mu a.F:(() { |a}~> ()) => _|c)}~> ()) {F{_}|c}~> ()
+args : --enable-handlers
+
+Recursive row variable in effect signature [2]
+sig f : () { |(mu a. Op:(() ~e~> ()) -> ())}~> () fun f() { () } f
+stdout : fun : () { |(mu a.Op:(() ~> ()) -> ())}~> ()
+
+Recursive type variable in codomain
+sig f : (() ~a~> mu b . [|Op:() ~a~> b|]) ~a~> c fun f(m) { switch(m()) { case Op(g) -> f(g) } } f
+stdout : fun : (() ~a~> mu b.[|Op:() ~a~> b|]) ~a~> _
+
+Mono restriction
+id : (a::(Any,Mono)) -> a::(Any,Mono)
+stdout : fun : (a::(Any,Mono)) -> a::(Any,Mono)
+args : --set=show_kinds=full

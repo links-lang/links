@@ -1,0 +1,25 @@
+
+# Directories under scrutiny
+DIRS=("core" "bin" "tests" "examples")
+
+
+# Do we have the find from GNU findutils available?
+# Note that 0 indicates true
+function has_gnu_find()
+{
+  find --version | grep  -q "GNU findutils"
+}
+
+
+# Files we are interested in scanning
+PATTERNS=("*.ml" "*.mli" "*.mly" "*.mll" "*.py" "*.pl" "*.html" "*.js"\
+          "*.txt" "*.links" "*.css" "*.sh" "*.el" "*.vim" "*.opam"\
+          "dune-project" "dune")
+
+
+# Arguments suitable for the find tool in order to search for PATTERNS
+# https://stackoverflow.com/questions/1527049/how-can-i-join-elements-of-an-array-in-bash
+SEP=" -o -name "
+FIND_STR=$(printf "${SEP}\"%s\"" "${PATTERNS[@]}")
+FIND_STR="${FIND_STR:${#SEP}}"
+FIND_STR="-name $FIND_STR"

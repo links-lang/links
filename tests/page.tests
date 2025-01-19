@@ -1,0 +1,14 @@
+Empty page
+addRoute("/", fun(_) { page <#></#> })
+stdout : () : ()
+
+Unhandled operation
+addRoute("/", fun(_) {do Fail})
+stderr : @..*
+args : --enable-handlers
+exit : 1
+
+Handled operation
+addRoute("/", fun(_) { handle({do Fail}) { case <Fail> -> page <#>{stringToXml("Caught")}</#> case _ -> page <#>{stringToXml("Success")}</#> } })
+stdout : () : ()
+args : --enable-handlers

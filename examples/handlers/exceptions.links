@@ -1,0 +1,86 @@
+# Resumable exceptions
+#
+#   Program idea: Small calculator program which sums user supplied
+#                 integers. (Links supports only user input via web
+#                 forms, so we simulate inputs in this example)
+#
+
+# Simulation of input via prompt
+sig input : (String) {Input:(String) => a |_}~> a
+fun input(s) {println(s); do Input(s)}
+
+# Computation summing (simulated) user supplied integers
+sig sumUp : Comp(Int, {Input:(String) => Int |_})
+fun sumUp() {
+  sum([input("10"), input("20"), input("MMXVII"), input("30")])
+}
+
+# Fail operation to signal conversion failure
+sig fail : (exn) {Fail:(exn) => b |_}-> b
+fun fail(e) {do Fail(e)}
+
+# String to integer conversion
+sig parseInt : (String) {Fail:(String) => Int|_}-> Int
+fun parseInt(s) {
+  if (isInt(s)) stringToInt(s)
+  else fail(s)
+}
+
+# Input handling
+sig prompt : (Comp(a, {Fail:(String) => Int,Input:(String) => Int |e})) ->
+              Comp(a, {Fail:(String) => Int,Input{_}                |e})
+fun prompt(m)() {
+  handle(m()) {
+    case x   -> x
+    case <Input(n) => k>  -> k(parseInt(n))
+  }
+}
+
+# Standard exception handling
+sig catchFail : (Comp(a, {Fail:(String) => a |e})) -> Comp(a, {Fail{_} |e})
+fun catchFail(m)() {
+  handle(m()) {
+    case x -> x
+    case <Fail(s)> -> error("Conversion failure: " ^^ s)
+  }
+}
+
+sig printResult : (Comp(Int)) ~> ()
+fun printResult(m) {
+  handle(m()) {
+    case x -> println("Sum is " ^^ intToString(x))
+  }
+}
+
+# Example 1
+fun example1() {
+  printResult -<- catchFail -<- prompt $ sumUp
+}
+
+# Resumable exceptions
+sig catchResume : (Comp(a, {Fail:(String) => Int |e})) -> Comp(a, {Fail{_} |e})
+fun catchResume(m)() {
+  handle(m()) {
+    case x -> x
+    case <Fail(s) => k> -> println("Conversion failure: " ^^ s); k(0)
+  }
+}
+
+# Example 2
+fun example2() {
+  printResult -<- catchResume -<- prompt $ sumUp
+}
+
+# Unit test
+sig sumUpSilently : Comp(Int, {Input:(String) => Int |_})
+fun sumUpSilently() {
+  fun input(s) {do Input(s)}
+  sum([input("10"), input("20"), input("MMXVII"), input("30")])
+}
+
+fun unitTest() {
+  handle(prompt(sumUpSilently)()) {
+    case <Fail(_) => k> -> k(0)
+    case (x : Int) -> x
+  }
+}

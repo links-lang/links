@@ -1,0 +1,325 @@
+Braced XML
+<f>{for (i <- []) <br/>}</f>
+stdout : <f/> : Xml
+
+Escaped braces
+<p>A left: {{ and a right: }}</p>
+stdout : <p>A left: { and a right: }</p> : Xml
+
+Escaped braces (not doubled)
+<p>A left: {{ and a right: }</p>
+stderr : @..*
+exit : 1
+
+Backslashes
+<p>A backslash \ </p>
+stdout : <p>A backslash \ </p> : Xml
+
+Top-level-bound XML object
+fun main() { var x = for (i <- []) <br/>; <f>{x}</f> } main()
+stdout : <f/> : Xml
+
+Let-bound XML object
+{var x = for (i <- []) <br/>; <f>{x}</f>}
+stdout : <f/> : Xml
+
+Whitespace preservation
+<a b="c"> <d/> </a>
+stdout : <a b="c"> <d/> </a> : Xml
+
+Element splicing [1]
+{var x = "three"; <a b="c">{stringToXml(x)}</a>}
+stdout : <a b="c">three</a> : Xml
+
+Element splicing [2]
+{var x = "hre"; <a b="c">t{stringToXml(x)}e</a>}
+stdout : <a b="c">three</a> : Xml
+
+Attribute splicing [1]
+{var x = "three"; <a b="{x}"><c/></a>}
+stdout : <a b="three"><c/></a> : Xml
+
+Attribute splicing [2]
+{var x = "three"; <a b="a{x}b"><c/></a>}
+stdout : <a b="athreeb"><c/></a> : Xml
+
+Rejection of incorrectly nested elements
+<a><b></a></b>
+stderr : @.*
+exit : 1
+
+Rejection of incorrectly typed attributes
+{var x = 3; <a b="{x}"><c/></a>}
+stderr : @.*
+exit : 1
+
+Rejection of incorrectly typed l:attributes
+{var x = 3; <a l:href="{x}"><c/></a>}
+stderr : @.*
+exit : 1
+
+Reject nonsense l:name attributes
+<form><input l:name="{1+1}" /></form>
+stderr : @.*
+exit : 1
+
+Accept okay l:name attributes
+<form l:action="{page <html><body>{stringToXml(foo)}</body></html>}"><input l:name="foo"/></form>
+stdout : @<form action="#">.*</form> : Xml
+
+Looping in XML quasis
+var things = [1, 2]; <ul>{for (x <- things) <br/>}</ul>
+stdout : <ul><br/><br/></ul> : Xml
+
+Amp-encoding (OK)
+<xml>&lt;</xml>
+stdout : <xml>&lt;</xml> : Xml
+
+Amp-encoding (ill-formed XML)
+<xml>this & that</xml>
+stderr : @..*
+exit : 1
+
+Amp-encoding (converting from string)
+var x = "this & that"; <xml>{stringToXml(x)}</xml>
+stdout : <xml>this &amp; that</xml> : Xml
+
+Looping in XML quasis, with multiple content elements.
+var things = [1, 2];<ul>{for (x <- things) <#><li>{stringToXml(intToString(x))}</li><li>1</li></#>}</ul>
+stdout : <ul><li>1</li><li>1</li><li>2</li><li>1</li></ul> : Xml
+
+XML forest
+<#>foo<a/><b>bar</b>fubar</#>
+stdout : foo<a/><b>bar</b>fubar : Xml
+
+Labelization bug
+(escape cc in <form l:action="{exit (cc)}" />) ++ <p/>
+stdout : @.* : \[XmlItem\]
+
+XML Construction
+<#>{[makeXml("foo", [ ("id", "bar"), ("class", "baz") ], <div/>)]}</#>
+stdout : <foo id="bar" class="baz"><div/></foo> : Xml
+
+XML Construction 2
+[ makeXml("foo", [ ("id", "bar"), ("class", "baz") ], <div/>) ]: Xml
+stdout : <foo id="bar" class="baz"><div/></foo> : Xml
+
+XML Construction 3
+makeXml("foo", [ ("id", "bar"), ("class", "baz") ], <div/>)
+stdout : <foo id="bar" class="baz"><div/></foo> : XmlItem
+
+Unpretty-printing attributes of XmlItem
+<foo id="bar" class="baz"><div/></foo>
+stdout : <foo id="bar" class="baz"><div/></foo> : Xml
+args : --set=print_pretty=false
+
+Unpretty-printing long snippets (#256)
+<a><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/></a>
+stdout : <a><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/><b/></a> : Xml
+args : --set=print_pretty=false
+
+XML-Variant-Conversion
+variantToXml(xmlToVariant(<div class="i-am-a-div"><ul><li/><li></li><li>A</li></ul></div>))
+stdout : <div class="i-am-a-div"><ul><li/><li/><li>A</li></ul></div> : Xml
+
+XML-Variant-Conversion (namespaced)
+variantToXmlItem(NsNode("myns", "mytag", [ Attr("x", "y"), NsAttr("a", "b", "c"), Node("div", [ ]), NsNode("foo", "bar", [ ]) ]))
+stdout : <myns:mytag x="y" a:b="c"><div/><foo:bar/></myns:mytag> : XmlItem
+
+Ill-formed namespace
+variantToXmlItem(NsNode("ill:formed", "div", [ ]))
+stderr : @..*
+exit : 1
+
+Ill-formed tag-name [1]
+variantToXmlItem(Node("tag:name", [ ]))
+stderr : @..*
+exit : 1
+
+Ill-formed tag-name [2]
+variantToXmlItem(NsNode("ns", "tag:name", [ ]))
+stderr : @..*
+exit : 1
+
+Appending a children (single)
+appendChild(makeXml("foo", [ ], <div/>), <span/>)
+stdout : <foo><div/><span/></foo> : XmlItem
+
+Appending a children (multiple)
+appendChild(makeXml("foo", [ ], <div/>), <#><div><span>Foo</span></div><span/></#>)
+stdout : <foo><div/><div><span>Foo</span></div><span/></foo> : XmlItem
+
+Prepending a children (single)
+prependChild(makeXml("foo", [ ], <div/>), <span/>)
+stdout : <foo><span/><div/></foo> : XmlItem
+
+Prepending a children (multiple)
+prependChild(makeXml("foo", [ ], <div/>), <#><div><span>Foo</span></div><span/></#>)
+stdout : <foo><div><span>Foo</span></div><span/><div/></foo> : XmlItem
+
+Replace children
+replaceChildren(makeXml("foo", [ ], <div/>), <span/>)
+stdout : <foo><span/></foo> : XmlItem
+
+Setting new Attributes
+setAttribute(makeXml("foo", [ ], <#/>), "bar", "baz")
+stdout : <foo bar="baz"/> : XmlItem
+
+Setting new Attributes NS
+setAttributeNS(makeXml("foo", [ ], <#/>), "attr", "bar", "baz")
+stdout : <foo attr:bar="baz"/> : XmlItem
+
+Setting illformed Attributes [1]
+setAttributeNS(makeXml("foo", [ ], <#/>), "attr", "ill:formed", "baz")
+stderr : @..*
+exit : 1
+
+Setting illformed Attributes [2]
+setAttribute(makeXml("foo", [ ], <#/>), "ill:formed", "baz")
+stderr : @..*
+exit : 1
+
+Setting existing Attributes
+setAttribute(makeXml("foo", [ ("bar", "baz") ], <#/>), "bar", "oof")
+stdout : <foo bar="oof"/> : XmlItem
+
+Getting namespace [1]
+getNamespace([ variantToXmlItem(NsNode("ns", "tagname", [ ])) ])
+stdout : "ns" : String
+
+Getting namespace [2]
+getNamespace([ variantToXmlItem(Node("tagname", [ ])) ])
+stdout : "" : String
+
+Get tag name [1]
+getTagName(<div />)
+stdout : "div" : String
+
+Get tag name [2]
+getTagName([ variantToXmlItem(NsNode("ns", "tagname", [ ])) ])
+stdout : "tagname" : String
+
+Get single attribute [1]
+attribute(<div id="myid" />, "id")
+stdout : Just("myid") : [|Just:String|Nothing|]
+
+Get attributes
+getAttributes(<div id="myid" ns:foo="bar" />)
+stdout : [("ns:foo", "bar"), ("id", "myid")] : [(String, String)]
+
+Top level comment
+<!-- This is an XML comment --> ()
+stdout : () : ()
+
+Body comment
+<b><!-- abc -->ab<!-- foobar -->ba</b>
+stdout : <b>abba</b> : Xml
+
+Unterminated top level comment (1)
+<!-- this comment never ends -> ()
+stderr : @..*
+exit : 1
+
+Unterminated top level comment (2)
+<!-- this comment never ends > ()
+stderr : @..*
+exit : 1
+
+Unterminated top level comment (3)
+<!-- this comment never ends ()
+stderr : @..*
+exit : 1
+
+Unterminated body comment (1)
+<b>ab<!-- this comment never ends -></b>
+stderr : @..*
+exit : 1
+
+Unterminated body comment (2)
+<b>ab<!-- this comment never ends ></b>
+stderr : @..*
+exit : 1
+
+Unterminated body comment (3)
+<b>ab<!-- this comment never ends -></b>
+stderr : @..*
+exit : 1
+
+Unterminated body comment (4)
+<b>ab<!-- this comment never ends</b>
+stderr : @..*
+exit : 1
+
+Nested comments
+<b><!-- First <!-- Second --> --></b>
+stderr : @..*
+exit : 1
+
+Double dash in comment (1)
+<b><!-- -- --></b>
+stderr : @..*
+exit : 1
+
+Double dash in comment (2)
+<b><!-- ---></b>
+stderr : @..*
+exit : 1
+
+Triple dash in comment
+<b><!-- --- --></b>
+stderr : @..*
+exit : 1
+
+XML comment embodied inside a string literal
+"<!-- This is an XML comment -->"
+stdout : "<!-- This is an XML comment -->" : String
+
+Valid XML embodied inside an XML comment
+<!-- <b>Hello World</b> --> ()
+stdout : () : ()
+
+Ill-bracketed tag (closing tag hidden in a comment)
+<b><!-- </b> -->
+stderr : @..*
+exit : 1
+
+Ill-bracketed tag (opening tag hidden in a comment)
+<!-- <b> --></b>
+stderr : @..*
+exit : 1
+
+Newlines in comment
+./tests/xml_comment_newlines.links
+stdout : <b/> : Xml
+filemode : true
+
+Mismatched tags
+<a></b>
+stderr : @.*Closing.*tag.*does.*not.*match.*
+exit : 1
+
+Attributes with hyphens are OK
+<button class="navbar-toggler" type="button" data-toggle="collapse"></button>
+stdout : <button type="button" data-toggle="collapse" class="navbar-toggler"/> : Xml
+
+Tags with hyphens are not OK
+<button-monstrosity type="button"></button-monstrosity>
+stderr : @..*
+exit : 1
+
+Variables with hyphens are not OK
+var hello-world = "hello"
+stderr : @..*
+exit : 1
+
+Getting the children of a singleton Xml is OK
+childNodes(<a><b/></a>)
+stdout : <b/> : Xml
+
+Getting the children of an empty XML is OK
+childNodes([])
+stdout : [] : Xml
+
+Getting the children of a list of children is OK
+childNodes(childNodes(<z><a><b/></a><c><d/></c></z>))
+stdout : <b/><d/> : Xml

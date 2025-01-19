@@ -1,0 +1,217 @@
+open import MindSessions;
+open import MindClient;
+open import LinearList;
+
+# game configuration parameters
+var packSize = 100;
+var numPlayers = 3;
+var level = 3;
+
+typename Supervisor =
+  [&|Join:?ChatServer            .End,
+     Chat: ?(Nickname, Message)  .End,
+     Play: ?(Nickname, Int).!Bool.End,
+     Leave: ?Nickname            .End|&];
+
+# supervisor access point (for communication between the supervisor
+# and workers)
+sig sap : AP(Supervisor)
+var sap = new();
+
+sig rand : (Int) ~> Int
+fun rand(n) {
+  var x = random();
+  if(x <= 0.0) {1} else {floatToInt(ceiling(intToFloat(n) *. x))}
+}
+
+# naive fisher-yates shuffler (quadratic)
+fun shuffler(n, source, target) {
+  if (n <= 0) {
+    target
+  } else {
+    var i = rand(n)-1;
+    var xs = take(i, source);
+    var ys = drop(i, source);
+    shuffler(n-1, xs ++ tl(ys), hd(ys) :: target)
+  }
+}
+
+fun shuffle(n) {
+  shuffler(n, [1..n], [])
+}
+
+typename PlayerState = (Nickname, [Int]);
+typename Mode = [|Waiting|Playing|Done|];
+typename SupervisorState = (lastCard: Int,
+                            mode:Mode,
+                            pack:[Int],
+                            players:[PlayerState]);
+
+sig disconnect :
+  (Nickname, [(Nickname, [Int])], LinList(WorkerSend)) ~>
+  ([(Nickname, [Int])], LinList(WorkerSend))
+fun disconnect(nick, players, cs) {
+  switch ((players, cs)) {
+    case ([], LinNil) -> ([], LinNil)
+    case (((name, cards) :: players), LinCons(c, cs)) ->
+      if (nick == name) {
+        cancel(c);
+        (players, cs)
+      } else {
+        var (players, cs) = disconnect(nick, players, cs);
+        ((name, cards)::players, LinCons(c, cs))
+      }
+  }
+}
+
+sig play : (Nickname, Int) ~> Bool
+fun play(nick, card) {
+  var (status, s) = receive(send((nick, card), select Play request(sap)));
+  close(s);
+  status
+}
+
+sig leave : (Nickname) ~> ()
+fun leave(nick) {
+  close(send(nick, select Leave request(sap)))
+}
+
+# reads incoming requests from the client, dispatches each command
+# to the supervisor loop which will broadcast to other session
+# clients
+sig worker : (Nickname, WorkerReceive) {SessionFail{_}|_}~> ()
+fun worker(nick, c) {
+  try {
+    offer(c) {
+      case Chat(c) ->
+        var (msg, c) = receive(c);
+        chat(nick, msg);
+        c
+      case Play(c) ->
+        var (card, c) = receive(c);
+        send(play(nick, card), c)
+    }
+  } as (c) in {
+    worker(nick, c)
+  } otherwise {
+    leave(nick)
+  }
+}
+
+# Main supervisor loop, containing server state. Awaits
+# (non-session) control messages to update the state, or broadcast
+# instructions to send things along session channels.
+sig supervisor : (SupervisorState, LinList(WorkerSend)) ~> ()
+fun supervisor(st, cs) {
+  var s = accept(sap);
+  offer(s) {
+    case Join(s) ->
+      var (d, s) = receive(s);
+      close(s);
+      var (name, d) = receive(d);
+      switch (filter(fun ((nick, _)) {nick == name}, st.players)) {
+        case [] ->
+          if (st.mode <> Waiting || length(st.players) >= numPlayers || length(st.pack) < level) {
+            debug("full quota of players");
+            # full quota of players / no more cards
+            close(select Nope d);
+            supervisor(st, cs)
+          } else {
+            var hand = sortBy(id, take(level, st.pack));
+            var players = (name, hand) :: st.players;
+            var mode = if (length(players) == numPlayers) {Playing} else {Waiting};
+            var st = (st with mode=mode, pack=drop(level, st.pack), players=players);
+            var playerSummary = for ((nick, cards) <- players) [(nick, length(cards))];
+            var workerSend = linFork(
+              linfun (clientReceive) {
+                worker(name,
+                       send((numPlayers, hand, playerSummary, clientReceive),
+                             select Join d))
+              });
+            var cs = linMap(
+              fun(c) {
+                var c = select Join c;
+                send ((name, level), c)
+              }, cs);
+            supervisor(st, LinCons(workerSend, cs))
+          }
+        case _ ->
+          # nickname already registered
+          close(select Nope d);
+          supervisor(st, cs)
+      }
+    case Chat(s) ->
+      var ((nick, msg), s) = receive(s);
+      close(s);
+      var cs = linMap(
+        fun(c) {
+          var c = select Chat c;
+          send ((nick, msg), c)
+        }, cs);
+      supervisor(st, cs)
+    case Play(s) ->
+      var ((nick, card), s) = receive(s);
+      var hand = assoc(nick, st.players);
+      if (st.mode == Playing && elem(card, hand)) {
+        close(send(true, s));
+        var newHand = filter (fun (i) {i <> card}, hand);
+        var players = map (fun ((name, hand)) {
+                             if (nick == name) {(nick, newHand)}
+                             else {(name, hand)}},
+                           st.players);
+        var cs = linMap(
+          fun (c) {
+            var c = select Play c;
+            send ((nick, card), c)
+          }, cs);
+        var mode = if (st.lastCard >= card) {Done} else {Playing};
+        supervisor((st with lastCard=card, mode=mode, players=players), cs)
+      } else {
+        close(send(false, s));
+        supervisor(st, cs)
+      }
+    case Leave(s) ->
+      var (nick, s) = receive(s);
+      close(s);
+      var (_, cs) = disconnect(nick, st.players, cs);
+      var st = if (empty(assoc(nick, st.players))) {
+                 st
+               } else {
+                 (st with mode=Done)
+               };
+      var cs = linMap(
+        fun(c) {
+          var c = select Leave c;
+          send(nick, c)
+        }, cs);
+      supervisor(st, cs)
+  }
+}
+
+sig join : (ChatServer) ~> ()
+fun join(c) {
+  close(send(c, select Join request(sap)))
+}
+
+sig chat : (Nickname, Message) ~> ()
+fun chat(nick, msg) {
+  close(send((nick, msg), select Chat request(sap)))
+}
+
+sig acceptor : () ~> ()
+fun acceptor() {
+  var c = accept(wap);
+  ignore(spawn {join(c)});
+  acceptor()
+}
+
+sig main : () ~> ()
+fun main() {
+  ignore(spawn {supervisor((pack=shuffle(packSize), lastCard=0, mode=Waiting, players=[]), LinNil)});
+  ignore(spawn {acceptor()});
+  addRoute("/", fun(_) { MindClient.mainPage() } );
+  serveWebsockets();
+  servePages()
+}
+
+main()

@@ -1,0 +1,86 @@
+# an encoding of an asynchronous pi calculus using
+# access points and recursive types
+
+typename Channel = AP (!Channel.End);
+typename Proc = () {}~> ();
+
+sig newChannel : ((Channel) {}~> Proc) {}~> Proc
+fun newChannel(p)() {
+  p(new())()
+}
+
+sig sendChannel : (Channel, Channel, (Channel, Channel) {}~> Proc) {}~> Proc
+fun sendChannel(c, d, p)() {
+  close(send(c, accept(d)));
+  p(c, d)()
+}
+
+sig receiveChannel : (Channel, (Channel, Channel) {}~> Proc) {}~> Proc
+fun receiveChannel(d, p)() {
+  var (x, s) = receive(request(d));
+  close(s);
+  p(d, x)()
+}
+
+sig par : (Proc, Proc) {}~> Proc
+fun par(p, q)() {
+  var _ = spawn { p() }; q()
+#  var _ = spawn { q() };
+#  ()
+}
+
+sig stop : Proc
+fun stop() {()}
+
+# unsafe replication
+sig repeat : (Proc) {}~> Proc
+fun repeat(p)() {
+  var _ = spawn { p() };
+  repeat(p)()
+}
+
+# guarded replication
+sig repeatReceive : (Channel, (Channel, Channel) {}~> Proc) {}~> Proc
+fun repeatReceive(d, p)() {
+  var s = request(d);
+  var _ = spawn {
+    var (x, s) = receive(s);
+    close(s);
+    p(d, x)()};
+  repeatReceive(d, p)()
+}
+
+
+## replication isn't really entirely satisfactory yet
+
+#typename Service(s) = AP(s);
+#
+#sig serve : forall s::Session.((~s) ~e~> ()) ~> Service(s)
+#fun serve(f) {
+#  var p = new();
+#  fun reproduce(ap, f) {
+#    var x = request(ap);
+#    var _ = spawn {f(x)};
+#    reproduce(ap, f)
+#  }
+#  var _ = spawn {reproduce(p, f)};
+#  p
+#}
+#
+#sig req : forall s::Session.(Service(s)) ~> s
+#fun req(s) {
+#  accept(s)
+#}
+#
+##sig reproduce : forall s::Session,e::Row.(AP(s), (s) ~e~> ()) ~e~> ()
+#sig rep : (Proc) {}~> Proc
+#fun rep(p)() {
+#  reproduce(new(), fun (s) {p()})
+#}
+
+
+fun test1() {
+  newChannel(fun (x) {par(sendChannel(x, x, fun (x, y) {stop}),
+                          receiveChannel(x, fun (x, y) {stop}))})()
+}
+test1()

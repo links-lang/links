@@ -1,0 +1,33 @@
+# Delimited continuations using handlers
+
+sig reset : (Comp(b, {Shift: (((a) ~e~> b) ~e~> b) => a |e})) ~e~> b
+fun reset(m) {
+  handle(m()) {
+    case x        -> x
+    case <Shift(f) => resume> -> f(resume)
+  }
+}
+
+sig shift : (((a) ~e~> b) ~e~> b) {Shift:(((a) ~e~> b) ~e~> b) => a|e}~> a
+fun shift(f) { do Shift(f) }
+
+fun comp() {
+    var x = shift(fun(k) { k(k(k(7))) });
+    x  * 2 + 1
+}
+
+fun yield(x) {
+  shift(fun(k) {
+    x :: k(())
+  })
+}
+
+sig example : () {Shift{_} |_}~> [Int]
+fun example() {
+  reset(fun() {
+    yield(1);
+    yield(2);
+    yield(3);
+    []
+  })
+}

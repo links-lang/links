@@ -1,0 +1,47 @@
+Correct message type sent to a process
+spawn { recv() + 1 } ! 1
+stdout : () : ()
+
+Incorrect message type sent to a process is a type error
+spawn { { recv() + 1} } ! "two"
+stderr : @.*Type error.*
+exit : 1
+
+Receive types must unify (correct, closed rows)
+fun f() { receive { case Bar -> () }} fun g() { receive { case Bar -> () }} fun () { f(); g() }
+stdout : @fun : .*
+
+Receive types must unify (incorrect, closed rows)
+fun f() { receive { case Bar -> () }} fun g() { receive { case Foo -> () }} fun () { f(); g() }
+stderr : @.*Type error.*
+exit : 1
+
+Receive types must unify (correct, open rows)
+fun f() { receive { case Bar -> () case x -> () }} fun g() { receive { case Foo -> () case x -> () }} fun () { f(); g() }
+stdout : @fun : .*
+
+Receive types must unify (incorrect, open rows)
+fun f() { receive { case Bar (x) -> x+1 case x -> 0 }} fun g() { receive { case Bar (s) -> s+.1.0 case x -> 0.0 }} fun () { f(); g() }
+stderr : @.*Type error.*
+exit : 1
+
+Basic send/receive test.
+fun main() { spawnWait { var p = spawn { recv() ! "The end" } ! self(); recv() } } main()
+stdout : @"The end" : .*
+
+Mailboxes are not polymorphic [1]
+fun main() { spawnWait { var p = spawn { recv() ! "The end" } ! self(); recv() } } main()
+stdout : "The end" : String
+
+Mailboxes are not polymorphic [2]
+var pid = spawn { recv() ++ [] }; { pid ! "one"; pid ! [2] }
+stderr : @.*Type error.*
+exit : 1
+
+Built-in functions are polymorphic in their mailbox types
+fun f() {var x = recv(); intToString(x)} fun g(x) {var () = recv(); intToString(x)} (f, g)
+stdout : (fun, fun) : (() {:Int|_}~> String, (Int) {:()|_}~> String)
+
+SpawnWait works on the server
+fun go() { var p1 = spawn { receive { case Hi(pid) -> pid ! 100 } }; spawnWait { p1 ! Hi(self()) ; receive { case n -> n } } } go()
+stdout : 100 : Int

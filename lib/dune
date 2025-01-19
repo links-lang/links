@@ -1,0 +1,9 @@
+(install
+  (section lib)
+  (files prelude.links)
+  (package links))
+
+(rule
+  (targets prelude.links)
+  (deps    %{project_root}/prelude.links)
+  (action (copy %{deps} %{targets})))

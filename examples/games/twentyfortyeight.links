@@ -1,0 +1,328 @@
+# helper functions
+
+fun replica(x, y) {
+    if (x == 0) []
+    else y :: replica(x - 1, y)
+}
+
+sig transpose: ([[a]]) ~> [[a]]
+fun transpose(xs) {
+    switch (xs) {
+        case ([]::_) -> []
+        case x -> map(hd, x) :: transpose(map(tl, x))
+    }
+}
+
+# the game 2048
+# ported from https://github.com/gregorulm/h2048/blob/master/h2048.hs
+typename Grid = [[Int]];
+
+var leftKeyCode = 37;
+var rightKeyCode = 39;
+var upKeyCode = 38;
+var downKeyCode = 40;
+
+fun merge(xs) {
+    fun combine(xx) {
+        switch (xx) {
+            case x::y::xs ->
+                if (x == y) {
+                    (x * 2) :: combine(xs)
+                } else {
+                    x :: combine(y::xs)
+                }
+            case x -> x
+        }
+
+    }
+
+    var merged = combine(filter(fun(x) { not(x == 0) }, xs));
+    var padding = replica(length(xs) - length(merged), 0);
+
+    merged ++ padding
+}
+
+fun move(m, grid) {
+    switch (m) {
+        case 37 -> map(merge, grid) # left
+        case 39 -> map(compose(reverse, compose(merge, reverse)), grid) # right
+        case 38 -> transpose(move(37, transpose(grid))) # up
+        case 40 -> transpose(move(39, transpose(grid))) # down
+        case _ -> grid
+    }
+}
+
+fun getZeroes(grid) {
+    fun singleRow(n) {
+        zip(replica(4, n), [0..3])
+    }
+
+    var coordinates = concatMap(singleRow, [0..3]);
+    filter(fun ((row, col)) { ((grid !! row) !! col) == 0 }, coordinates)
+}
+
+fun setSquare(grid, (row, col), val) {
+    var pre = take(row, grid);
+    var mid = take(col, (grid !! row)) ++ [val] ++ drop((col + 1), (grid !! row));
+    var post = drop((row + 1), grid);
+
+    pre ++ [mid] ++ post
+}
+
+fun isMoveLeft(grid) {
+    var directions = [leftKeyCode, rightKeyCode, upKeyCode, downKeyCode];
+    var allChoices = map(compose(length, compose(getZeroes, fun (dir) { move(dir, grid) })), directions);
+
+    sum(allChoices) > 0
+}
+
+fun showRowHelper(r) client {
+    for (x <- r)
+        <#>
+            <div class="{ implode(explode("tile tile-") ++ explode(intToString(x))) }">
+            { if (x == 0) stringToXml("") else stringToXml(intToString(x)) }
+            </div>
+        </#>
+}
+
+fun showRow(r) client {
+    <div style="clear:both">
+        { showRowHelper(r) }
+    </div>
+}
+
+fun printGrid(grid) client {
+    replaceNode(
+        <div id="grid">
+            { concatMap(showRow, grid) }
+        </div>,
+        getNodeById("grid")
+    )
+}
+
+
+fun check2048(grid) {
+    not([] == filter(fun (x) { x == 2048 }, concat(grid)))
+}
+
+fun choose(xs) {
+    var i = floatToInt(random() *. intToFloat(length(xs) - 1));
+    xs !! i
+}
+
+fun addTile(grid) {
+    var candidates = getZeroes(grid);
+    var pick = choose(candidates);
+    var val = choose([2,2,2,2,2,2,2,2,2,4]);
+    var newGridprim = setSquare(grid, pick, val);
+    newGridprim
+}
+
+fun newGrid(grid, msg) {
+    var newGridprim = move(msg, grid);
+    newGridprim
+}
+
+fun gameLoop(grid) {
+    printGrid(grid);
+
+    if (isMoveLeft(grid)) {
+        if (check2048(grid)) {
+            replaceNode(<div id="win" class="win-lose">You win!</div>, getNodeById("win"));
+            replaceNode(<div id="m" />, getNodeById("n"))
+        } else {
+            var newGridprim = move(recv(), grid);
+            if (not(grid == newGridprim)) {
+                var new = addTile(newGridprim);
+                gameLoop(new)
+            } else {
+                gameLoop(grid)
+            }
+        }
+    } else {
+        replaceNode(<div id="lose" class="win-lose">You lose!</div>, getNodeById("lose"));
+        replaceNode(<div id="m" />, getNodeById("n"))
+    }
+}
+
+fun mesg(str) {
+    replaceNode(
+        <div id="msg">
+            {stringToXml(str)}
+        </div>,
+        getNodeById("msg")
+    )
+}
+
+fun start() {
+    var gridprim = addTile(replica(4, [0, 0, 0, 0]));
+    addTile(gridprim)
+}
+
+fun main() {
+    var grid = start();
+    var gameProc = spawnClient { gameLoop(grid) };
+
+    page
+        <html>
+            <head>
+
+            <style>
+                body {{
+                    font-family: "Clear Sans", "Helvetica Neue", "Helvetica", Arial, sans-serif;
+                    background-color: #faf8ef;
+                    color: #7f7469;
+                    text-align: center;
+                }}
+
+                #grid {{
+                }}
+
+                .tile {{
+                    font-family: "Clear Sans", "Helvetica Neue", "Helvetica", Arial, sans-serif;
+                    display: inline-block;
+                    float: left;
+                    width: 90px;
+                    height: 90px;
+                    line-height: 90px;
+                    font-size: 45px;
+                    font-weight: bold;
+                    text-align: center;
+                    border: #bbada0 5px solid;
+                    border-radius: 7px;
+                    vertical-align: middle;
+                }}
+                .tile-0 {{
+                    background-color: #cdc0b4;
+                }}
+                .tile-2 {{
+                    background-color: #eee4da;
+                    font-size: 50px;
+                }}
+                .tile-4 {{
+                    background-color: #ede0c8;
+                    font-size: 50px;
+                }}
+                .tile-8 {{
+                    background-color: #f2b179;
+                    color: #f9f6f2;
+                    font-size: 50px;
+                }}
+                .tile-16 {{
+                    background-color: #f59563;
+                    color: #f9f6f2;
+                    font-size: 50px;
+                }}
+                .tile-32 {{
+                    background-color: #f67c5f;
+                    color: #f9f6f2;
+                    font-size: 50px;
+                }}
+                .tile-64 {{
+                    background-color: #f65e3b;
+                    color: #f9f6f2;
+                    font-size: 50px;
+                }}
+                .tile-128 {{
+                    background-color: #edcf72;
+                    color: #f9f6f2;
+                    font-size: 40px;
+                }}
+                .tile-256 {{
+                    background-color: #edcc61;
+                    color: #f9f6f2;
+                    font-size: 40px;
+                }}
+                .tile-512 {{
+                    background-color: #edc850;
+                    color: #f9f6f2;
+                    font-size: 40px;
+                }}
+                .tile-1024 {{
+                    background-color: #edc53f;
+                    color: #f9f6f2;
+                    font-size: 30px;
+                }}
+                .tile-2048 {{
+                    background-color: #edc22e;
+                    color: #f9f6f2;
+                    font-size: 30px;
+                }}
+
+                #ultracontainer {{
+                    width: 450px;
+                    margin: 0 auto;
+                }}
+
+                #supercontainer {{
+                    border: #bbada0 5px solid;
+                    background-color: #bbada0;
+                    border-radius: 10px;
+                    padding-top: 0px;
+                    padding-left: 0px;
+                    width: 400px;
+                    height: 400px;
+                    margin: 0 auto;
+                }}
+
+                .win-lose {{
+                    position: absolute;
+                    top: 270px;
+                    font-weight: bold;
+                    color: #f9f6f2;
+                }}
+
+                #win {{
+                    z-index: 1001;
+                    font-size: 96px;
+                }}
+
+                #lose {{
+                    z-index: 1000;
+                    font-size: 90px;
+                }}
+
+                h1 {{
+                    font-size: 64px;
+                    margin: 10px auto;
+                }}
+
+                #m {{
+                    width: 410px;
+                    height: 410px;
+                    position: absolute;
+                    margin: -5px -5px;
+                    border-radius: 10px;
+                    z-index: 999;
+                    background-color: #ddb132;
+                    opacity: 0.5;
+                }}
+            </style>
+            </head>
+
+            <body>
+                <div id="ultracontainer"
+                    tabindex="1"
+                    l:onkeydown="{ gameProc ! getCharCode(event) }"
+                    l:onfocus="{mesg("Game on. Use arrow keys.")}"
+                    l:onblur="{mesg("Click on the board to play.")}">
+                    <h1>2048 in Links</h1>
+                    <div id="msg">Click on the board to play.</div>
+                    <div>The board must be focused for the input to work.</div>
+
+                    <div id="supercontainer">
+                        <div id="n" />
+                        <div id="container">
+                            <div id="main">
+                                <div id="lose" class="win-lose"></div>
+                                <div id="win" class="win-lose"></div>
+                                <div id="grid"/>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </body>
+        </html>
+}
+
+main()

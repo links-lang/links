@@ -1,0 +1,23 @@
+{"databases" :
+ [ "pgsql",
+   "sqlite3",
+   "mysql" ],
+ "setups" :
+ [ "factorials",
+   "null",
+   "mixing",
+   "regexes",
+   "xpath-reduced",
+   "xpath" ],
+ "tests" :
+ [ "factorials",
+   "factorials-large",
+   "empty",
+   "emptyfun",
+   "null",
+   "mixing",
+   "regexes",
+   "unit",
+   "xpath",
+   "xpath-reduced" ]
+}

@@ -1,0 +1,21 @@
+Build prelude with recheck_frontend_transformations=true
+()
+exit : 0
+args : --set=recheck_frontend_transformations=true
+stdout : () : ()
+
+Type variable freshening in type signatures (#865)
+./tests/recheck_frontend_transformations/T865.links
+filemode : true
+exit : 0
+args : --config=tests/recheck_frontend_transformations.config
+stdout : @\(\) : \(Types\.Record \(Types\.Row .*\)\)
+stderr : @.*
+
+Session exceptions desugaring (#882)
+./tests/recheck_frontend_transformations/T882.links
+filemode : true
+exit : 0
+args : --config=tests/recheck_frontend_transformations.config
+stdout : @\(\) : \(Types\.Record \(Types\.Row .*\)\)
+stderr : @.*

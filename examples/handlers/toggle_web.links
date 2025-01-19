@@ -1,0 +1,100 @@
+# Toggle on/off
+
+# State operations
+sig get : () {Get:s |_}-> s
+fun get() {do Get}
+
+sig put : (s) {Put:(s) {}-> () |_}-> ()
+fun put(st) {do Put(st)}
+
+# Stateful computation
+sig toggle : Comp({Get:Bool,Put:(Bool) {}-> () |_}, Bool)
+fun toggle() client {
+  var bit = get();
+  put(not(bit));
+  get()
+}
+
+# State handler
+sig runState : (Comp({Get:s ,Put:(s) {}-> () |e},  a  )) -> # Stateful computation
+               (s)                                       -> # Initial state
+                Comp({Get{_},Put{_}          |e}, (a,s))    # Stateless computation
+fun runState(m)(st)() client {
+  var run = handle(m()) {
+    case x      -> fun(ret_st) { (x,ret_st) }
+    case <Get => resume>    -> fun(get_st) { resume(get_st)(get_st) }
+    case <Put(put_st) => resume> -> fun(ignored_st)  { resume(())(put_st) }
+  };
+  run(st)
+}
+
+
+# Conversion functions
+fun boolToString(b) {
+  switch (b) {
+    case true -> "true"
+    case false -> "false"
+  }
+}
+
+fun stringToBool(s) {
+  switch (s) {
+    case "true"  -> true
+    case "false" -> false
+    case otherwise -> error("Input '" ^^ s ^^ "' was not recognised as a boolean value.")
+  }
+}
+
+fun enableButton(btn) {
+  domRemoveAttributeFromRef(getNodeById(btn), "disabled");
+}
+
+fun disableButton(btn) {
+  ignore(domSetAttributeFromRef(getNodeById(btn), "disabled", "disabled"))
+}
+
+fun toggleButton() client {
+  var bit = toggle();
+  if (bit) {
+    enableButton("off");
+    disableButton("on")
+  } else {
+    enableButton("on");
+    disableButton("off")
+  }
+}
+
+fun worker(st) client {
+   receive {
+      case Toggle ->
+        var (_,st) = runState(toggleButton)(st)();
+        worker(st)
+      case Exit -> ()
+   }
+}
+
+fun sendToggle(workerPid) {
+   workerPid ! Toggle
+}
+
+# Page
+fun mainPage(_) {
+  var w = spawnClient { worker(false) };
+  page
+    <html>
+      <body>
+        <form l:onsubmit="{sendToggle(w)}">
+          <input type="submit" id="on" value="On" />
+          <input type="submit" id="off" value="Off" disabled="disabled" />
+        </form>
+      </body>
+    </html>
+}
+
+
+fun main() {
+  addRoute("/", mainPage);
+  servePages()
+}
+
+main()

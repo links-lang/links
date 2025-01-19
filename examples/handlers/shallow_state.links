@@ -1,0 +1,100 @@
+# Shallow state handlers
+
+# Standard types
+typename Comp(a) = () ~> a;
+typename Unit = [|Unit|];
+
+# Convenient auxiliary function: turns a shallow continuation into a
+# computation.
+sig compify : ((a) ~e~> b) -> ((a) -> Comp(b, { |e}))
+fun compify(k)(x) {
+  fun() {k(x)}
+}
+
+# The run handler forces evaluation of a computation
+fun run(m) {
+  handle(m()) {
+    case x -> x
+  }
+}
+
+# Get and put operations
+sig get : Comp(a, {Get:a |_})
+fun get() {do Get}
+
+sig put : (a) {Put:(a) => ()|_}~> ()
+fun put(p) {do Put(p)}
+
+# Print line operation
+sig logVal : (a) {Log:(a) => ()|_}~> ()
+fun logVal(p) {do Log(p)}
+
+# Stateful computation evaluator
+sig evalState : (s) -f->
+                (Comp(a, {Get:s,Put:(s) => () |e})) -f->
+                 Comp(a, { |e})
+fun evalState(st)(m)() {
+  (shallowhandle(m()) {
+    case x -> fun(_)  { x }
+    case <Get -> k>    -> fun(st) { var k = compify(k); run -<- evalState(st) $ k(st) }
+    case <Put(p) -> k>  -> fun(_)  { var k = compify(k); run -<- evalState(p)  $ k(()) }
+  })(st)
+}
+
+fun logState(m)() {
+  shallowhandle(m()) {
+    case <Get -> k>    -> var k = compify(k);
+                      var v = get();
+                      logState(k(v))()
+    case <Put(p) -> k>  -> var k = compify(k);
+                      logVal(p);
+                      var v = put(p);
+                      logState(k(v))()
+    case x -> x
+  }
+}
+
+# Prints integers to stdout
+sig logPrinter : (Comp(a, {Log:(Int) => () |e})) -f-> Comp(a, { |e})
+fun logPrinter(m)() {
+  shallowhandle(m()) {
+    case x -> x
+    case <Log(p) -> k>  -> var k = compify(k);
+                      print(intToString(p));
+                      logPrinter(k(()))()
+  }
+}
+
+# Log accumulator
+sig logAccumulator : ([a]) -f->
+                     (Comp(b,       {Log:(a) => () |e})) -f->
+                      Comp((b,[a]), { |e})
+fun logAccumulator(ps)(m)() {
+  shallowhandle(m()) {
+    case x -> (x,ps)
+    case <Log(p) -> k> -> var k = compify(k);
+                     run -<- logAccumulator(p :: ps) $ k(())
+  }
+}
+
+# Stateful computation which counts down to zero
+fun count() {
+    var i = get();
+    if (i <= 0) {i}
+    else {put(i-1); count()}
+}
+
+# Example 1
+fun example1() {
+  run -<- evalState(5) $ count
+}
+
+# Example 2
+fun example2() {
+  (run -<- logPrinter -<- evalState(5) -<- logState) $ count
+}
+
+# Unit test
+fun unitTest(n) {
+  (run -<- logAccumulator([]) -<- evalState(n) -<- logState) $ count
+}

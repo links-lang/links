@@ -1,0 +1,146 @@
+var db = database "links";
+
+var departments =
+  table "departments"
+  with (id: Int,
+        name: String)
+  # tablekeys [["name"]]
+  from db;
+
+var employees =
+  table "employees"
+  with (id: Int,
+        dept: String,
+        name: String,
+        salary : Int)
+  # tablekeys [["emp"]]
+  from db;
+
+var tasks =
+  table "tasks"
+  with (id: Int,
+        employee: String,
+        task: String)
+  # tablekeys [["emp","tsk"]]
+  from db;
+
+var contacts =
+  table "contacts"
+  with (id: Int,
+        dept: String,
+        name: String,
+        "client": Bool)
+  # tablekeys [["name"]]
+  from db;
+
+fun dropTables() {
+  delete (x <-- departments);
+  delete (x <-- employees);
+  delete (x <-- tasks);
+  delete (x <-- contacts)
+}
+
+fun createTables () {
+  insert departments
+  values (id, name)
+  [ (id = 1, name = "Product"),
+    (id = 2, name = "Quality"),
+    (id = 3, name = "Research"),
+    (id = 4, name = "Sales")];
+  insert employees
+  values (id, dept, name, salary)
+  [ (id = 1, dept = "Product",  name = "Alex", salary =   20000),
+    (id = 2, dept = "Product",  name = "Bert", salary =     900),
+    (id = 3, dept = "Research", name = "Cora", salary =   50000),
+    (id = 4, dept = "Research", name = "Drew", salary =   60000),
+    (id = 5, dept = "Research", name = "Edna", salary = 2000000),
+    (id = 6, dept = "Sales",    name = "Fred", salary =     700),
+    (id = 7, dept = "Sales",    name = "Gina", salary = 100000)];
+  insert tasks
+  values (id, employee, task)
+  [ (id = 1,  employee = "Alex", task = "build"),
+    (id = 2,  employee = "Bert", task = "build"),
+    (id = 3,  employee = "Cora", task = "abstract"),
+    (id = 4,  employee = "Cora", task = "build"),
+    (id = 5,  employee = "Cora", task = "design"),
+    (id = 6,  employee = "Drew", task = "abstract"),
+    (id = 7,  employee = "Drew", task = "design"),
+    (id = 8,  employee = "Edna", task = "abstract"),
+    (id = 9,  employee = "Edna", task = "call"),
+    (id = 10, employee = "Edna", task = "design"),
+    (id = 11, employee = "Fred", task = "call"),
+    (id = 12, employee = "Gina", task = "call"),
+    (id = 13, employee = "Gina", task = "dissemble")];
+  insert contacts
+  values (id, name, dept, "client")
+  [(id = 1, dept="Product",  name="Pam", "client"=false),
+   (id = 2, dept="Product",  name="Pat", "client"=true),
+   (id = 3, dept="Research", name="Rob", "client"=false),
+   (id = 4, dept="Research", name="Roy", "client"=false),
+   (id = 5, dept="Sales",    name="Sam", "client"=false),
+   (id = 6, dept="Sales",    name="Sid", "client"=false),
+   (id = 7, dept="Sales",    name="Sue", "client"=true)]
+}
+
+fun setup() {
+  dropTables();
+  createTables()
+}
+
+fun tasksOfEmp(e) {
+  for (t <-- tasks)
+  where (t.employee == e.name)
+    [t.task]
+}
+
+fun contactsOfDept(d) {
+  for (c <-- contacts)
+  where (d.name == c.dept)
+    [(name = c.name,
+      "client" = c."client")]
+}
+
+fun employeesByTask (t) {
+  for (e <-- employees,
+       d <-- departments)
+  where (e.name == t.employee && e.dept == d.name)
+    [(name = e.name,
+      salary = e.salary,
+      tasks = tasksOfEmp(e))]
+}
+
+fun employeesOfDept (d) {
+  for (e <-- employees)
+  where (d.name == e.dept)
+    [(name = e.name,
+      salary = e.salary,
+      tasks = tasksOfEmp(e))]
+}
+
+fun q_org () {
+  query nested {
+    for (d <-- departments)
+      [(name = d.name,
+        employees = employeesOfDept(d),
+        contacts = contactsOfDept(d))]
+  }
+}
+
+fun test() {
+  setup();
+  assertEq(q_org(), [(contacts=[("client"=false,name="Pam"), ("client"=true,name="Pat")],
+                      employees=[(name="Alex",salary=20000,tasks=["build"]),
+                                 (name="Bert",salary=900,tasks=["build"])],name="Product"),
+                     (contacts=[],employees=[],name="Quality"),
+                     (contacts=[("client"=false,name="Rob"), ("client"=false,name="Roy")],
+                      employees=[(name="Cora",salary=50000,tasks=["abstract", "build", "design"]),
+                                 (name="Drew",salary=60000,tasks=["abstract", "design"]),
+                                 (name="Edna",salary=2000000,tasks=["abstract", "call", "design"])],
+                      name="Research"),
+                     (contacts=[("client"=false,name="Sam"), ("client"=false,name="Sid"), ("client"=true,name="Sue")],
+                      employees=[(name="Fred",salary=700,tasks=["call"]),
+                                 (name="Gina",salary=100000,tasks=["call", "dissemble"])],
+                      name="Sales")])
+}
+
+test()

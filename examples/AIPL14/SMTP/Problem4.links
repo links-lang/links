@@ -1,0 +1,102 @@
+# SMTP 4 - At least one recipient
+
+typename Address = String;
+typename Accept = String;
+typename Message = String;
+typename Error = String;
+
+
+typename SMTPServer =
+  mu outer.[&|MAIL:?Address.
+                   [+|REJECT:!Error.outer,
+                      ACCEPT:!Accept.
+                             mu rcptLoop.
+                               [&|RCPT:?Address.
+                                       [+|REJECT:!Error.rcptLoop,
+                                          ACCEPT:!Accept.
+                                                 mu inner.
+                                                   [&|RCPT:?Address.
+                                                           [+|REJECT:!Error.inner,
+                                                              ACCEPT:!Accept.inner|+],
+                                                      DATA:?Message.!Accept.outer|&] |+] |&] |+],
+              QUIT:EndBang |&];
+
+# Returns true, if the given String is a valid e-mail address.
+sig isValid : (String) ~> Bool
+fun isValid(address) {
+  address =~ /.[a-z0-9]+.@.[a-z]+.[a-z]+/ # Regex to match 1+characters/numbers @ 1+characters . 1+characters
+}
+
+mutual {
+  sig mailServer : (SMTPServer) ~> EndBang
+  fun mailServer(s) {
+    outer(s)
+  }
+
+  fun outer(s) {
+    offer(s) {
+      case MAIL(s) ->
+        var (address, s) = receive(s);
+        println("S: received address as FROM: " ^^ address);
+        if (isValid(address)) {
+          var s = send("250 OK", select ACCEPT s);
+          rcptLoop(s)
+        }
+        else {
+          var s = send("Invalid e-mail.", select REJECT s);
+          outer(s)
+        }
+      case QUIT(s) ->
+        s
+    }
+  }
+
+  fun rcptLoop(s) {
+    offer(s) {
+      case RCPT(s) ->
+        var (recipient, s) = receive(s);
+        println("S: received address as TO: " ^^ recipient);
+        if (isValid(recipient)) {
+          var s = send("250 OK", select ACCEPT s);
+          inner(s)
+        }
+        else {
+          var s = send("S: Invalid e-mail.", select REJECT s);
+          rcptLoop(s)
+        }
+    }
+  }
+
+
+  fun inner(s) {
+    offer(s) {
+      case RCPT(s) ->
+        var (recipient, s) = receive(s);
+        println("S: received address as TO: " ^^ recipient);
+        if (isValid(recipient)) {
+          var s = send("250 OK", select ACCEPT s);
+          inner(s)
+        }
+        else {
+          var s = send("S: Invalid e-mail.", select REJECT s);
+          inner(s)
+        }
+      case DATA(s) ->
+        var (message, s) = receive(s);
+        println("S: received message: " ^^ message);
+        var s = send("250 OK", s);
+        outer(s)
+    }
+  }
+}
+
+sig mailClient : (~SMTPServer) ~> ()
+fun mailClient(c) {
+  # To implement!
+}
+
+fun main() {
+  mailClient(forkSync(mailServer))
+}
+
+main()

@@ -1,0 +1,415 @@
+alien javascript "/examples/handlers/js/canvas.js" {
+    getValueFromSelection: (String) ~> String;
+}
+
+alien javascript "/examples/handlers/js/runtime.js" {
+    delayExecution: (Int) ~> ();
+    requestAnimationFrame: (() -> (), Int) ~> ();
+    setIntervalForF: (Int, () ~> ()) ~> ();
+    sysEnqueue: (a) ~> ();
+    sysDequeue: () ~> [a];
+    sysQueueLength: () -> Int;
+    delayExecutionOfF: (Int, () ~> ()) ~> ();
+}
+
+typename Point = (x:Int, y:Int);
+typename Queue(a) = (rear: [a], front: [a]);
+typename PrioQueue(a) = (high: Queue(a), low: Queue(a));
+typename Priority = [|High|Low|];
+typename Co(e::Eff) = () {Fork: (Co({ |e}), Priority) => (), Yield:() |e}~> ();
+typename Fiber0(e::Eff) = (prio: Priority, f: () {Fork: (Fiber0({ |e})) => (), Yield:()|e}~> ());
+typename SchedulerState(a) = (runQ: PrioQueue(a), prio: Priority, startTime: Int);
+typename Fiber(e::Eff) = (prio:Priority, f: (SchedulerState(Fiber({ |e}))) ~e~> ());
+typename FiberQueue(e::Eff) = PrioQueue(Fiber({ |e}));
+typename Update = [|TextUpdate: String | LocationUpdate: Float|];
+typename STriangle(e::Eff) = (point: Point, targetSize: Int, text: String, children: [STriangle({ |e})]);
+
+var dotSize = 25;
+var hoverColor = "#ff0";
+var nonHoverColor = "#61dafb";
+
+sig setValue: (String, String) ~%~> ()
+fun setValue(newVal, id){
+    domSetAttributeFromRef(getNodeById(id), "value", newVal)
+}
+
+sig getValue: (String) ~> String
+fun getValue(id){
+    domGetAttributeFromRef(getNodeById(id), "value")
+}
+#Threading
+
+sig enqueue: (a, Queue(a)) -> Queue(a)
+fun enqueue(x, q){
+    (q with rear=x::q.rear)
+}
+
+sig dequeue: (Queue(a)) ~> (Maybe(a), Queue(a))
+fun dequeue(q){
+    switch(q) {
+        case (rear=[], front=[]) -> (Nothing, q)
+        case (rear=xs, front=[]) ->
+          var q0 = (rear=[], front=reverse(xs));
+          dequeue(q0)
+        case (rear=ys, front=(x :: xs)) ->
+          var q0 = (rear=ys, front=xs);
+          (Just(x), q0)
+    }
+}
+
+sig priorityEnqueue: (a, Priority, PrioQueue(a)) ~> PrioQueue(a)
+fun priorityEnqueue(x, prio, pq){
+    switch(prio){
+        case High -> (pq with high = enqueue(x, pq.high))
+        case Low -> (pq with low = enqueue(x, pq.low))
+    }
+}
+
+sig priorityDequeue: (PrioQueue(a)) ~> (Maybe((a, Priority)), PrioQueue(a) )
+fun priorityDequeue(pq){
+    switch(dequeue(pq.high)){
+        case (Just(x), q) -> (Just((x, High)), (pq with high= q))
+        case (Nothing,_) ->
+            switch(dequeue(pq.low)){
+                case (Nothing, _) -> (Nothing, pq)
+                case (Just(x), q) -> (Just((x, Low)), (pq with low=q))
+            }
+    }
+}
+
+sig fiberEnqueue: (Fiber({ |e}), FiberQueue({ |e})) ~> FiberQueue({ |e})
+fun fiberEnqueue(f, q){
+    priorityEnqueue(f, f.prio, q)
+}
+
+sig fiberBulkEnqueue: ([Fiber({ |e})], FiberQueue({ |e})) ~> FiberQueue({ |e})
+fun fiberBulkEnqueue(fibers, q){
+    switch(fibers){
+        case [] -> q
+        case x::xs ->
+            var pq = fiberEnqueue(x, q);
+            fiberBulkEnqueue(xs, pq)
+    }
+}
+
+sig fiberDequeue: (FiberQueue({ |e})) ~> (Maybe((Fiber({ |e}), Priority)), FiberQueue({ |e}))
+fun fiberDequeue(q){
+    priorityDequeue(q)
+}
+
+fun emptyQueue(){
+    (rear=[], front=[])
+}
+
+fun emptyPrioQueue(){
+    (high= emptyQueue(), low=emptyQueue())
+}
+
+sig queueLength: (Queue(a)) -> Int
+fun queueLength(q){
+    length(q.rear) + length(q.front)
+}
+
+sig fiberQueueLength: (FiberQueue({ |e}))  -> Int
+fun fiberQueueLength(q){
+    length(q.low.rear) + length(q.high.front) + length(q.high.rear) + length(q.low.front)
+}
+
+sig fork : (Fiber0({ |e})) {Fork: (Fiber0({ |e})) => (), Yield:() |e}~> ()
+fun fork(f){
+    do Fork(f)
+}
+
+sig yield: () {Yield:() |e}~> ()
+fun yield(){
+    do Yield
+}
+
+sig makeFiber: (Priority, () {Fork: (Fiber0({ |e})) => (), Yield:() |e}~> ()) -> Fiber0({ |e})
+fun makeFiber(prio, f){
+    (prio= prio, f=f)
+}
+
+
+sig tick: (String) ~> ()
+fun tick(nodeId){
+    var sec = intToString((clientTime()) `mod` 10);
+    var id = nodeId ^^ "-text";
+    domReplaceChildren(stringToXml(sec), getNodeById(id));
+    setValue(sec, nodeId)
+}
+
+sig prepareTick: (String) ~> () ~> ()
+fun prepareTick(nodeId){
+    fun(){
+        tick(nodeId)
+    }
+}
+
+sig getCircleStyleAttributeString: (Int, Int, Bool) -> String
+fun getCircleStyleAttributeString(x, y, hover){
+    var s = dotSize;
+    var color = {if(hover) hoverColor
+                else nonHoverColor};
+
+    (" width: " ^^ intToString(s) ^^ "px; " ^^
+    " height: " ^^ intToString(s) ^^ "px; " ^^
+    " left: " ^^ intToString(x) ^^ "px;" ^^
+    " top: " ^^ intToString(y) ^^ "px;" ^^
+    " border-radius: " ^^ intToString(s/2) ^^ "px;" ^^
+    " background-color: " ^^ color ^^";")
+}
+
+sig getScaleTransformAttributeString: ((Float, Float, Float)) -> String
+fun getScaleTransformAttributeString(scale){
+    #("transform: scaleX(" ^^ floatToString(scale.1) ^^ ");")
+    ("transform: scaleX(" ^^ floatToString(scale.1) ^^ ") scaleY(" ^^ floatToString(scale.2) ^^");")
+}
+
+sig getDotXml: (Int, Int, (Float, Float, Float), String, String) ~> Xml
+fun getDotXml(x, y, scale, id, text){
+    var style = getCircleStyleAttributeString(x, y, false);
+    var st =  getScaleTransformAttributeString(scale);
+    {<#>
+        <div value="{text}" id="{id}" class="containerStyle" style="{st}">
+            <div class="circle" style="{style}">
+                <span id="{id ^^ "-text"}">{stringToXml(text)}</span>
+            </div>
+        </div>
+    </#>}
+}
+
+sig calculateScale: (Int) ~> (Float, Float,Float)
+fun calculateScale(startTime){
+    var elapsed = clientTimeMilliseconds() - startTime;
+    var n = 70;
+    var t = (elapsed/100) `mod` (2*n);
+    var w = {
+        if(t > n) (2*n) - t
+        else t
+    };
+    var scale = 1.0 +.  (intToFloat(w) /. intToFloat(2*n));
+    #println("scale: " ^^ floatToString(scale/. 2.1));
+    (scale, 1.0, 1.0)
+}
+
+sig drawDot: (Int, Int, String) ~> ()
+fun drawDot(x, y, nodeId){
+    var xml = getDotXml(x, y, calculateScale(clientTimeMilliseconds()), nodeId, "1");
+    appendChildren(xml, getNodeById("container"))
+}
+
+sig replaceDot: (Int, Int, String, Int) ~> ()
+fun replaceDot(x, y, nodeId, startTime){
+    var xml = getDotXml(x, y, calculateScale(startTime), nodeId, getValue(nodeId));
+    domReplaceChildren(xml, getNodeById(nodeId))
+}
+
+sig prepareReplaceDot: (Int) -> (Int, Int, String) ~> ()
+fun prepareReplaceDot(startTime){
+    fun(x, y, nodeId){
+        replaceDot(x, y, nodeId, startTime)
+    }
+}
+
+
+sig makeDot: (Int, Int, Int) {Gensym: Int|e}~> ()
+fun makeDot(x, y, startTime) {
+    var nodeId = "dot-" ^^ intToString(do Gensym);
+    fun g(draw)() {
+        fun f(draw)(){
+            draw(x, y, nodeId):()
+        }
+        setIntervalForF(1000, fun(){sysEnqueue(makeFiber(Low, prepareTick(nodeId)))});                       # Set up a fiber that will update the number regularily
+        f(draw)();                      # Draw the initial triangle
+        setIntervalForF(95, fun () {sysEnqueue(makeFiber(High, f(prepareReplaceDot(startTime))))})          # set up a fiber to change the dots
+    }
+    sysEnqueue(makeFiber(High, g(drawDot)))
+}
+
+sig forever: () {Yield:() |e}~> ()
+fun forever(){ yield(); forever()}
+
+sig schedule: (Fiber0({ |e})) {Yield-, Fork- | e}~> ()
+fun schedule(main){
+
+  mutual {
+    fun runNext(q){
+        switch(fiberDequeue(q)){
+            case (Nothing, _) -> ()
+            case (Just((fiber, prio)), q) -> fiber.f(makeSchedulerState(prio, q))
+        }
+    }
+
+    fun runFiber(fiber, runQ){
+        #dump(self());
+        handle(fiber.f()) ( state <- (prio=fiber.prio, runQ=runQ, startTime=clientTimeMilliseconds()) ){
+            case x ->
+                runNext(poll(state.runQ))
+            case <Fork(f) => resume> ->
+                var q = poll(state.runQ);
+                switch ((f.prio, state.prio)) {
+                    case (High, _) ->
+                        var qq = fiberEnqueue(resumptionToFiber(resume, state.prio), q);
+                        runFiber(f, qq)
+                    case (_, High) ->
+                        var qq = fiberEnqueue(fiber0ToFiber(f), q);
+                        resume((), (state with runQ = qq))
+                    case (_,_) ->
+                        var qq = fiberEnqueue(resumptionToFiber(resume, state.prio), q);
+                        runFiber(f, qq)
+                }
+            case <Yield => resume> ->
+                var currentTime = clientTimeMilliseconds();
+                var buffer = switch(state.prio){
+                    case High -> 120
+                    case Low -> 30
+                };
+                if (currentTime - state.startTime <= buffer) resume((), state)
+                else{
+                    var q = fiberEnqueue(resumptionToFiber(resume, state.prio), state.runQ);
+                    runNext(poll(q))
+                }
+        }
+    }
+
+    #sig makeSchedulerState: (Priority, PrioQueue(a)) ~> SchedulerState(a)
+    fun makeSchedulerState(prio, q){
+        (runQ = q, prio = prio, startTime = clientTimeMilliseconds())
+    }
+
+    #sig fiber0ToFiber: (Fiber0({ |%e})) ~%~> Fiber({ |%e})
+    fun fiber0ToFiber(fiber){
+        (prio = fiber.prio, f = fun(state) { runFiber(fiber, state.runQ ) })
+    }
+
+    fun resumptionToFiber(resume, prio){
+        (prio = prio, f = fun(state) { resume((), state) })
+    }
+
+    #sig poll: (FiberQueue({ |e})) ~> FiberQueue({ |e})
+    fun poll(q){
+        var enqueue = map(fiber0ToFiber, sysDequeue());
+        fiberBulkEnqueue(enqueue, q)
+    }
+  }
+
+  runFiber(main, emptyPrioQueue())
+}
+
+fun gensymHandler(f){
+    handle(f())(counter <- 0) {
+        case <Gensym => resume> -> resume(counter, counter+1)
+    }
+}
+
+# Page Functionality
+
+
+sig makeSTriangle: (Point, Int, String, [STriangle({ |e})]) -> STriangle({ |e})
+fun makeSTriangle(p, s, text, children){
+    (point = p, targetSize = s, text=text, children=children)
+}
+
+sig drawTriangle: (STriangle({ |e}), Int) ~%~> ()
+fun drawTriangle(triangle, startTime){
+    switch(triangle.children){
+        case [] -> makeDot(triangle.point.x, triangle.point.y, startTime)
+        case x::y::z::xs -> drawTriangle(x, startTime); drawTriangle(y, startTime); drawTriangle(z, startTime)
+    }
+}
+
+sig setUpTriangle: (Int, String) ~> Maybe(STriangle({ |e}))
+fun setUpTriangle(s, text){
+    if (s >= dotSize){
+        fun getChildren(point, size){
+            var x = point.x;
+            var y = point.y;
+            var newS = size/2;
+            var yf = floatToInt(1.73 *. intToFloat(newS)) / 4;
+            if (newS >= (dotSize - (dotSize/4))) {
+                [
+                    makeSTriangle( (x = x, y = y - yf), newS, text, getChildren((x = x, y = y - yf), newS)),
+                    makeSTriangle( (x = x - (newS/2), y = y + yf), newS, text, getChildren((x = x - (newS/2), y = y + yf), newS)),
+                    makeSTriangle( (x = x + (newS/2), y = y + yf), newS, text, getChildren((x = x + (newS/2), y = y + yf), newS))
+                ]
+            }
+            else []
+        }
+        Just(makeSTriangle((x = 0, y = 0), s, "", getChildren((x = 0, y = 0), s)))
+    }
+    else Nothing
+}
+
+
+fun start(){
+    var tri = setUpTriangle(400, "1");
+    var startTime = clientTimeMilliseconds();
+    switch(tri){
+        case Nothing -> ()
+        case Just(triangle) ->
+            fork(makeFiber(Low, forever));
+            gensymHandler(fun(){drawTriangle(triangle, startTime)})
+    }
+}
+
+# Web interface
+
+sig main_page : (_) ~> Page
+fun main_page(_){
+
+    var pId = spawnClient{schedule(makeFiber(High, start))};
+
+    page
+    <html>
+    <head>
+        <style>
+        .center{{
+            margin: 0 auto;
+        }}
+        .block{{
+            display: block;
+        }}
+        .box{{
+            width: 50%;
+            height: 50%;
+            position: relative;
+            margin-top: 200px;
+        }}
+        .circle{{
+            position: absolute;
+            font: normal 15px sans-serif;
+            text-align: center;
+            display: block;
+        }}
+        .circle span{{
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }}
+        .containerStyle {{
+            position: absolute;
+            transform-origin: 0 0;
+            left: 50%;
+            top: 50%;
+            display: block;
+        }}
+        </style>
+    </head>
+    <body>
+        <div id="container" class="box center">
+        </div>
+    </body>
+    </html>
+}
+
+sig main: () ~> ()
+fun main() {
+    addRoute("/", main_page);
+    addStaticRoute("/examples/handlers/js", "examples/handlers/js", [("js", "text/javascript")]);
+
+    servePages()
+}
+
+main()

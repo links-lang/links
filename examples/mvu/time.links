@@ -1,0 +1,123 @@
+import Mvu;
+import MvuHTML;
+open import MvuAttrs;
+open import MvuEvents;
+open import MvuSubscriptions;
+import MvuCommands;
+
+typename Model = (seconds : Int, minutes : Int, paused: Bool);
+typename Msg = [| Tick | Reset | TogglePause | Stop | NoOp |];
+
+var pKey = "p";
+var rKey = "r";
+var sKey = "s";
+
+
+var resetHandler = onClick(fun() { Reset });
+var stopHandler = onClick(fun() { Stop });
+var togglePauseHandler = onClick(fun() { TogglePause });
+var secondsHandler =
+  getEvery(1000, fun() {
+    Tick
+  });
+var shortcutHandler =
+  MvuSubscriptions.onKeyDown(fun(evt) {
+    if (evt.key == pKey) {
+      TogglePause
+    } else if (evt.key == rKey) {
+      Reset
+    } else if (evt.key == sKey) {
+      Stop
+    } else {
+      NoOp
+    }
+  });
+
+fun pad(t) {
+  if (t < 10) {
+    "0"^^intToString(t)
+  } else {
+    intToString(t)
+  }
+}
+
+sig updt : (Msg, Model) ~> Model
+fun updt(msg, model) {
+  switch(msg) {
+    case Tick ->
+      if (model.seconds < 59) {
+        (model with seconds = model.seconds + 1)
+      } else {
+        (model with minutes = model.minutes + 1, seconds = 0)
+      }
+    case Reset ->
+      (model with minutes = 0, seconds = 0)
+    case TogglePause ->
+      (model with paused = not(model.paused))
+    case Stop ->
+      (model with minutes = 0, seconds = 0, paused = true)
+    case NoOp ->
+      model
+  }
+}
+
+fun ch(xs) { MvuHTML.concat(xs) }
+
+sig view : (Model) ~> MvuHTML.HTML(Msg)
+fun view(model) {
+    open MvuHTML;
+    open MvuAttrs;
+    var toggleText = if (model.paused) {
+      "Start"
+    } else {
+      "Pause"
+    };
+    div (id ("swatch") +@ class ("swatch"), ch([
+      h1 (a0, textNode(pad(model.minutes)) +* textNode(":" ^^ pad(model.seconds))),
+      button (id ("togglepause") +@ togglePauseHandler, textNode(toggleText)),
+      button (id ("reset") +@ resetHandler, textNode("Reset")),
+      button (id ("stop") +@ stopHandler, textNode("Stop")),
+      div (class ("footer"), ch([
+        b (a0, textNode("Keyboard shortcuts")),
+        br (a0, h0),
+        textNode("| p : start/pause | "),
+        textNode("r : reset | "),
+        textNode("s : stop |")
+      ]))
+    ]))
+}
+
+sig subscriptions : (Model) ~> MvuSubscriptions.Sub(Msg)
+fun subscriptions(model) {
+  if (model.paused) {
+    shortcutHandler
+  } else {
+    secondsHandler +^ shortcutHandler
+  }
+}
+
+
+fun mainPage(_) {
+  var initialModel = (seconds = 0, minutes = 0, paused = true);
+  var evtHandler = Mvu.run("placeholder", initialModel, view,
+      fun(msg, model) { (updt(msg, model), MvuCommands.empty) },
+      subscriptions, MvuCommands.empty);
+  page
+  <html>
+    <head>
+      <title>Stopwatch</title>
+      <link rel="stylesheet" href="css/stopwatch.css" type="text/css" />
+    </head>
+    <body>
+      <div id="placeholder"></div>
+    </body>
+  </html>
+}
+
+fun main() {
+  addRoute("/", mainPage);
+  addStaticRoute("/css", "css", [("css", "text/css")]);
+  servePages()
+}
+
+main()

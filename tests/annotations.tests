@@ -1,0 +1,71 @@
+Type annotation that matches inference
+fun (x) {x} : (a) -> a
+stdout : @fun : \(([a-z]+)\) -> \1
+
+More-specific type annotation with typevars
+fun (x) {x} : ((a) -b-> a) -> ((a) -b-> a)
+stdout : @fun : \(\(([a-z]+)\) -[a-z]+-> \1\) -> \(\1\) -[a-z]+-> \1
+
+Too-general type annotation
+fun (x) {x+1} : (a) -> a
+stderr : @.+
+exit : 1
+
+Annotations inside functions [1]
+fun (x:a) { x:a } : (a) -> a
+stdout : @fun : \(([a-z]+)\) -> \1
+
+Annotations inside functions [2]
+fun (x:a) { error("boo") } : (a) ~> b
+stdout : @.+
+
+Inferred kind
+fun (x : a) {x : a :: Base}
+stdout : fun : (a::Base) -> a::Base
+
+Kind mismatch [1]
+sig f(x) : (a) ~a~> a fun f(x) {f(x)}
+stderr : @.+
+exit : 1
+
+Kind mismatch [2]
+fun (x : a :: Any) {x : a :: Base}
+stderr : @.+
+exit : 1
+
+Close recursive patterns (issue #360)
+switch (Var(0)) { case (_ : (mu a . [|Lam:(Int, a)|Var:Int|])) -> 42 }
+stdout : 42 : Int
+
+Unsafe type annotations on non-recursive functions
+unsafe sig f : (String) -> () fun f(x) { print(x) } f
+stderr : @.+
+exit : 1
+
+Unsafe type annotations on recursive functions
+unsafe sig f : (String) -> () fun f(x) { f(x) } f
+stdout : fun : (String) -> ()
+
+Unsafe type annotations on mutually recursive functions
+mutual { unsafe sig even : (Int) -> Bool fun even(x) { x == 0 || odd(x -1) } unsafe sig odd : (Int) -> Bool fun odd(x) { x <> 0 && even(x - 1) } } even
+stdout : fun : (Int) -> Bool
+
+Invalid unsafe type annotations on non-recursive functions
+unsafe sig f : (Int) -> () fun f(x) { print(x) } f
+stderr : @.*
+exit : 1
+
+Invalid unsafe type annotations on recursive functions
+unsafe sig f : (String) -> () fun f(x) { f(x + 1) } f
+stderr : @.*
+exit : 1
+
+Invalid unsafe type annotations on mutually recursive functions
+mutual { unsafe sig even : (String) -> Bool fun even(x) { x == 0 || odd(x -1) } unsafe sig odd : (Int) -> Bool fun odd(x) { x <> 0 && even(x - 1) } } even
+stderr : @.*
+exit : 1
+
+Invalid unsafe type annotations on polymorphic types
+unsafe sig f : (a) -> () fun f(x) { print(x) } f
+stderr : @.*
+exit : 1

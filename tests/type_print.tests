@@ -1,0 +1,49 @@
+Effect sugar: Implicit effect variables (1)
+fun (f, x: Int) { f(x) + 0 } : ((Int) -e-> Int, Int) -e-> Int
+stdout : fun : ((Int) -> Int, Int) -> Int
+args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+
+Effect sugar: Implicit effect variables (2)
+fun (f)(x: Int) { f(x) + 0 } : ((Int) -e-> Int) -f-> (Int) -e-> Int
+stdout : fun : ((Int) -> Int) -> (Int) -> Int
+args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+
+Effect sugar: Implicit effect variables (3)
+(map, id) : (((a) -e-> b, [a]) -e-> [b], (c) -e-> c)
+stdout : (fun, fun) : (((a) -> c, [a]) -> [c], (d) -> d)
+args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+
+Effect sugar: Implicit effect variables (4)
+fun(_) {} : (() {F:()|_}-> ()) {F:()|_} -> ()
+stdout : fun : (() {F:() => ()|_}-> ()) {F:() => ()|_}-> ()
+args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+
+Effect sugar: Single-use variables
+fun(_) { } : (() -e-> ()) -f-> ()
+stdout : fun : (() -a-> ()) -> ()
+args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+
+Effect sugar: Shared variables
+fun()() { } : () -a-> () -a-> ()
+stdout : fun : () -_-> () -> ()
+args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+
+Effect sugar: Distinct variables
+(fun(){}, fun(){}) : (() -a-> (), () -b-> ())
+stdout : (fun, fun) : (() -> (), () -b-> ())
+args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+
+Effect sugar: Type aliases (1)
+fun() {} : Comp((), { | e })
+stdout : fun : Comp (())
+args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+
+Effect sugar: Type aliases (2)
+fun()() {} : () -e-> Comp((), { | f })
+stdout : fun : () -> Comp (())
+args : --set=types_pretty_printer_engine=old --set=effect_sugar=true
+
+Effect sugar: Type aliases (3)
+fun(x) {x} : (Comp(a, { | e })) -f-> Comp(a, { | e })
+stdout : fun : (Comp (a)) -> Comp (a)
+args : --set=types_pretty_printer_engine=old --set=effect_sugar=true

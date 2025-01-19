@@ -1,0 +1,18 @@
+Test that prelude is loaded
+map
+stdout : fun : ((a) -b-> c, [a]) -b-> [c]
+
+Test sysexit [0]
+fun () {print("before"); sysexit(0); print("after")}()
+stdout : before
+exit : 0
+
+Test sysexit [1]
+fun() {print("before"); sysexit(1); print("after")}()
+stdout : before
+exit : 1
+
+Test sysexit [2]
+fun() {print("before"); sysexit(2); print("after")}()
+stdout : before
+exit : 2

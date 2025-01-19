@@ -1,0 +1,17 @@
+fun go() {
+  var s = fork(fun(s) { close(send(5, s)) });
+  try {
+    raise; 10
+  } as (x) in {
+    var (res, s) = receive(s);
+    close(s);
+    x + res
+  } otherwise {
+    var (res, s) = receive(s);
+    close(s);
+    res
+  }
+}
+
+
+go()

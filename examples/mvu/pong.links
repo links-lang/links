@@ -1,0 +1,234 @@
+open import MvuHTML;
+open import MvuAttrs;
+open import MvuEvents;
+open import MvuSubscriptions;
+import Mvu;
+import MvuCommands;
+
+typename Ball = (x : Float, y: Float, vx : Float, vy : Float);
+
+typename Player = (x : Float, y: Float, vx : Float, vy : Float, score : Int);
+
+typename PaddleState = [| Up | Down | Still |];
+
+typename Msg =
+  [| NewFrame
+   | Paddle1 : PaddleState
+   | Paddle2 : PaddleState
+   | TogglePause | NoOp |];
+
+typename Game =
+  (paused : Bool, ball : Ball, player1 : Player, player2 : Player,
+   paddle1state : PaddleState, paddle2state: PaddleState);
+
+
+var width = 600.0;
+var height = 400.0;
+var halfWidth = 300.0;
+var halfHeight = 200.0;
+var paddleHeight = 45.0;
+var ballVelocity = 70.0;
+var playerVelocity = 2.0;
+
+# sig player : Float -> Player
+fun player(xPos) {
+  (x = xPos, y = halfHeight -. 22.0, vx = 50.0, vy = 50.0, score = 0)
+}
+
+var defaultGame =
+  (paused = true,
+    ball = (x = halfWidth, y = halfHeight, vx = ballVelocity, vy = ballVelocity),
+    player1 = player(width -. 37.0), player2 = player(20.0),
+    paddle1state = Still, paddle2state = Still);
+
+fun animFrameHandler() {
+  animationFrame(fun(_) { NewFrame })
+}
+
+var upKey = "ArrowUp";
+var downKey = "ArrowDown";
+var wKey = "w";
+var sKey = "s";
+var spaceKey = " ";
+
+
+fun keyDownHandler() {
+  open MvuSubscriptions;
+
+  onKeyDown(fun(evt) {
+    var keycode = evt.key;
+    if (keycode == upKey) {
+      Paddle1(Up)
+    } else if (keycode == downKey) {
+      Paddle1(Down)
+    } else if (keycode == wKey) {
+      Paddle2(Up)
+    } else if (keycode == sKey) {
+      Paddle2(Down)
+    } else if (keycode == spaceKey) {
+      TogglePause
+    } else {
+      NoOp
+    }
+  })
+}
+
+fun keyUpHandler() {
+  open MvuSubscriptions;
+
+  onKeyUp(fun(evt) {
+    var keycode = evt.key;
+    if (keycode == upKey || keycode == downKey) {
+      Paddle1(Still)
+    } else if (keycode == wKey || keycode == sKey) {
+      Paddle2(Still)
+    } else {
+      NoOp
+    }
+  })
+}
+
+# Rendering
+fun ch(xs) { MvuHTML.concat(xs) }
+
+sig drawCircle : (Float,Float) -> HTML(Msg)
+fun drawCircle(x,y) {
+  div (class ("circle") +@
+       style ("left:" ^^ floatToString(x) ^^ "px;top:" ^^ floatToString(y) ^^ "px;position:absolute;"),
+       h0)
+}
+
+sig drawPaddle : (Float, Float) -> HTML(Msg)
+fun drawPaddle(x,y) {
+  div (class ("paddle") +@
+       style ("left:" ^^ floatToString(x) ^^ "px;top:" ^^ floatToString(y) ^^ "px;position:absolute;"), h0)
+}
+
+fun physicsUpdate(ball) {
+  (ball with x = ball.x +. (ball.vx *. 0.0167), y = ball.y +. (ball.vy *. 0.0167))
+}
+
+fun absFloat(n) {
+  if (n < 0.0) {
+    n *. -.1.0
+  } else {
+    n
+  }
+}
+
+fun stepV(v, lowerCollision, upperCollision) {
+  if (lowerCollision) {
+    -.(absFloat(v))
+  } else if (upperCollision) {
+    absFloat(v)
+  } else {
+    v
+  }
+}
+
+fun near(paddleCoord,dist,ballCoord) {
+  (ballCoord >= paddleCoord -. dist && ballCoord <= paddleCoord +. dist)
+}
+
+fun within(paddle,ball) {
+  (near(paddle.x,8.0,ball.x) && near(paddle.y+.22.5,22.5,ball.y))
+}
+
+fun moveBall(ball, paddle1, paddle2) {
+  physicsUpdate((ball with
+    vy = stepV(ball.vy, (ball.y >= height -. 8.0), (ball.y <= 7.5)),
+    vx = stepV(ball.vx, within(paddle1,ball), within(paddle2,ball))))
+}
+
+fun movePaddle(player, direction, scoreUpdate) {
+  if (direction == Up) {
+    (player with y = player.y -. playerVelocity, score = player.score + scoreUpdate)
+  } else if (direction == Down) {
+    (player with y = player.y +. playerVelocity, score = player.score + scoreUpdate)
+  } else {
+    (player with score = player.score + scoreUpdate)
+  }
+}
+
+sig updt : (Msg, Game) ~> Game
+fun updt(msg, game) {
+  var score1 =
+    if (game.ball.x > width) { 1 } else { 0 };
+
+  var score2 =
+    if (game.ball.x < 0.0) { 1 }
+    else { 0 };
+
+  var newState =
+    if (score1 <> score2) {
+      true
+    } else {
+      game.paused
+    };
+
+  var newBall =
+    if (game.paused == true) {
+      (x=halfWidth,y=halfHeight,vx=ballVelocity,vy=ballVelocity)
+    } else {
+      moveBall(game.ball, game.player1, game.player2)
+    };
+
+    switch(msg) {
+      case NewFrame ->
+        (game with ball = newBall, paused = newState,
+          player1 = movePaddle(game.player1, game.paddle1state, score1),
+          player2 = movePaddle(game.player2, game.paddle2state, score2))
+      case TogglePause ->
+        (game with paused = not(game.paused))
+      case Paddle1(i) ->
+        (game with player1 = movePaddle(game.player1, i, score1),
+         ball = newBall, paused = newState, paddle1state = i)
+      case Paddle2(i) ->
+        (game with player2 = movePaddle(game.player2, i, score2),
+         ball = newBall, paused = newState, paddle2state = i)
+      case NoOp -> game
+    }
+}
+
+sig view : (Game) ~> HTML(Msg)
+fun view(game) {
+  div (class ("canvas"), ch([
+    drawCircle(game.ball.x,game.ball.y),
+    drawPaddle(game.player1.x,game.player1.y),
+    drawPaddle(game.player2.x,game.player2.y),
+    h1 (class ("scores"),
+      textNode(intToString(game.player1.score / 2) ^^ " " ^^ intToString(game.player2.score / 2))
+    ),
+    div (class ("instructions"), textNode("SPACE to start, W/S and UP/DOWN to move"))
+  ]))
+}
+
+sig subscriptions : (Game) -> Sub(Msg)
+fun subscriptions(model) {
+  animFrameHandler() +^ keyUpHandler() +^ keyDownHandler()
+}
+
+
+fun mainPage(_) {
+  Mvu.run("placeholder", defaultGame, view,
+      fun(msg, model) { (updt(msg, model), MvuCommands.empty) },
+      subscriptions, MvuCommands.empty);
+  page
+  <html>
+    <head>
+      <title>Pong</title>
+      <link rel="stylesheet" href="css/pong.css" type="text/css" />
+    </head>
+    <body>
+      <div id="placeholder"></div>
+    </body>
+  </html>
+}
+
+fun main() {
+  addRoute("/", mainPage);
+  addStaticRoute("/css", "css", [("css", "text/css")]);
+  servePages()
+}
+
+main()

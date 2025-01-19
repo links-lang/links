@@ -1,0 +1,6 @@
+# The force handler; it applies the identity transformation to outputs.
+fun force(m) {
+  handle(m()) {
+    case x -> x
+  }
+}

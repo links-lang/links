@@ -1,0 +1,13 @@
+unsafe sig concatMap : ((a) -b-> [c], [a]) -b-> [c]
+fun concatMap(f, l) {
+  switch (l) {
+    case [] -> []
+    case hd::tl -> f(hd) ++ concatMap(f, tl)
+  }
+}
+
+
+#The function we are actually interested in
+fun asList(t) server {
+  for (x <-- t) [x]
+}

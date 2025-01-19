@@ -1,0 +1,66 @@
+typename CalcSelect = [+|Add:!Int.!Int.?Int.End, Mul:!Int.!Int.?Int.End, Sub:!Int.!Int.?Int.End, Div:!Int.!Int.?Int.End|+];
+typename CalcOffer = [&|Add:?Int.?Int.!Int.End, Mul:?Int.?Int.!Int.End, Sub:?Int.?Int.!Int.End, Div:?Int.?Int.!Int.End|&];
+
+sig calc : (CalcOffer) ~> ()
+fun calc(s) client {
+  offer (s) {
+    case Add(s) ->
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      close(send(x+y,s))
+    case Mul(s) ->
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      close(send(x*y,s))
+
+    case Sub(s) ->
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      close(send(y-x,s))
+    case Div(s) ->
+      var (x,s) = receive(s);
+      var (y,s) = receive(s);
+      close(send(y/x,s))
+  }
+}
+
+sig user : (CalcSelect, Int, Int, String) ~> Int
+fun user(s, op1, op2, operation) client {
+  fun recvAndClose(s) { var (x, s) = receive(s); close(s); x}
+
+    switch(operation) {
+        case "add" ->  { var s = select Add s; recvAndClose(send(op1,send(op2,s))) }
+        case "mult" -> { var s = select Mul s; recvAndClose(send(op1,send(op2,s))) }
+        case "sub" -> { var s = select Sub s; recvAndClose(send(op1,send(op2,s))) }
+        case "div" -> { var s = select Div s; recvAndClose(send(op1,send(op2,s))) }
+    }
+}
+
+sig main : (String, String, String) ~> Int
+fun main(op1, op2, operation) client {
+  user(fork(calc), stringToInt(op1), stringToInt(op2), operation)
+}
+
+page
+  <html>
+  <head><title>[10] Cool Calculator </title></head>
+  <body>
+  <h3>Cool Integer Calculator</h3>
+
+   <form l:onsubmit="{domReplaceChildren(stringToXml(intToString(main(op1, op2, operation))), getNodeById("result"))}">
+    <input type="text" size="5" l:name="op1"/>
+    <select l:name="operation">
+     <option value="add">+</option>
+      <option value="mult">*</option>
+    <option value="sub">-</option>
+      <option value="div">/</option>
+   </select>
+    <input type="text" size="5" l:name="op2"/>
+    <button type="submit">Get Result!</button>
+   </form>
+
+   <p>The result is:</p>
+   <p id="result"></p>
+
+  </body>
+  </html>

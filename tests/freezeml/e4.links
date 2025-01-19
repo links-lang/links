@@ -1,0 +1,4 @@
+sig r : forall e::Row. ((forall a,f::Row. (a) -f-> forall b,g::Row. (b) -g-> b)) -e-> Int
+fun r(_) { 0 }
+
+r($(fun(x:a::(Unl,Any)) { $(fun(y:b::(Unl,Any)) { y }) }))

@@ -1,0 +1,16 @@
+unsafe sig concatMap : ((a) -b-> [c], [a]) -b-> [c]
+fun concatMap(f, l) {
+  switch (l) {
+    case [] -> []
+    case hd::tl -> f(hd) ++ concatMap(f, tl)
+  }
+}
+
+
+fun swap(xs, x1, x2) {
+ for (x <- xs) {
+  if (x == x1) [x2]
+  else if (x == x2) [x1]
+  else [x]
+ }
+}

@@ -1,0 +1,24 @@
+module Test {
+  alien javascript "lib/test.js" {
+    setTitle : (String) ~%~> ();
+    alertBox : (String) ~%~> ();
+  }
+}
+
+fun mainPage(_) {
+  var _ = spawnClient {
+    Test.setTitle("Hello!");
+    Test.alertBox("Hola!")
+  };
+
+  page
+    <html><body><h1>Hi!</h1></body></html>
+}
+
+fun main() {
+  addRoute("/", mainPage);
+  addStaticRoute("/lib", "js", [("js", "text/javascript")]);
+  servePages()
+}
+
+main()

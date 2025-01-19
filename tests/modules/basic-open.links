@@ -1,0 +1,10 @@
+module A {
+  fun foo() {
+    "hello!"
+  }
+}
+
+fun bar() { () }
+
+open A;
+foo()
