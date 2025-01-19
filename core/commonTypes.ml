@@ -55,7 +55,6 @@ module Restriction = struct
     | Mono
     | Session
     | Effect
-    | Name of string
     [@@deriving eq,show]
 
   let is_any = function
@@ -82,10 +81,6 @@ module Restriction = struct
     | Effect -> true
     | _      -> false
 
-  let is_named = function
-    | Name _ -> true
-    | _ -> false
-
   let to_string = function
     | Any      -> "Any"
     | Base     -> "Base"
@@ -93,7 +88,6 @@ module Restriction = struct
     | Mono     -> "Mono"
     | Session  -> "Session"
     | Effect   -> "Eff"
-    | Name name -> name
 
   let min l r =
     match l, r with
@@ -103,7 +97,6 @@ module Restriction = struct
     | Effect, Effect       -> Some Effect
     | Base, Base           -> Some Base
     | Numeric, Numeric     -> Some Numeric
-    | Name name1, Name name2 when name1 = name2 -> Some (Name name1)
     | x, Any | Any, x  -> Some x (* Any will narrow to anything. *)
     | Numeric, Mono | Mono, Numeric -> Some Numeric (* Mono can narrow to Numeric. *)
     | Base, Mono | Mono, Base -> Some Base (* Mono can narrow to Base. *)
@@ -333,11 +326,19 @@ end
 
 module Constant = struct
   type t =
+<<<<<<< HEAD
     | Float    of float
     | Int      of int
     | Bool     of bool
     | String   of string
     | Char     of char
+=======
+    | Float  of float
+    | Int    of int
+    | Bool   of bool
+    | String of string
+    | Char   of char
+>>>>>>> master
     | DateTime of Timestamp.t
       [@@deriving show, ord]
 

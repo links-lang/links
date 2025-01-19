@@ -172,14 +172,6 @@ fun zip(l, r) {
   }
 }
 
-sig empty : ([a]) -> Bool
-fun empty(l) {
-  switch (l) {
-    case [] -> true
-    case _ -> false
-  }
-}
-
 fun replicate(n, item) {
   if (n <= 0) []
   else item :: replicate(n-1, item)
@@ -423,6 +415,17 @@ fun fromMaybe(x, y) {
   switch (x) {
     case Just (x) -> x
     case Nothing -> y
+  }
+}
+
+
+# FIXME: for some reason placing this further up the file where it should be
+# leads to an error
+sig empty : ([a]) -> Bool
+fun empty(l) {
+  switch (l) {
+    case [] -> true
+    case _ -> false
   }
 }
 

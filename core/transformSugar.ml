@@ -29,7 +29,6 @@ let type_section env =
                 Function (Types.make_tuple_type [r], e, a))
   | Name var -> TyEnv.find var env
 
-
 let type_unary_op env tycon_env =
   let datatype = DesugarDatatypes.read ~aliases:tycon_env in function
     | UnaryOp.Minus      -> datatype "(a::Numeric) -> a"
@@ -67,7 +66,7 @@ let type_binary_op env tycon_env =
                 Function (Types.make_tuple_type [a; a], e,
                           Primitive Primitive.Bool ))
   | Name "!"     -> TyEnv.find "Send" env
-  | Name "+" 
+  | Name "+"
   | Name "*"
   | Name "/"     
   | Name "^"     -> datatype "(a::Numeric, a) -> a"

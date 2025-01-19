@@ -378,7 +378,7 @@ let any = any_pat dp
 %token <string> SLASHFLAGS
 %token UNDERSCORE AS
 %token <Operators.Associativity.t> FIXITY
-%token TYPENAME EFFECTNAME (*SUBKIND*)
+%token TYPENAME EFFECTNAME
 %token TRY OTHERWISE RAISE
 %token <string> OPERATOR
 %token USING
@@ -482,7 +482,10 @@ nofun_declaration:
                                                                  with_pos $loc node }
 | signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) $1 $2 }
 | typedecl SEMICOLON                                           { $1 }
+<<<<<<< HEAD
 (*| subkinddecl SEMICOLON                                        { $1 }*)
+=======
+>>>>>>> master
 | links_module | links_open SEMICOLON                          { $1 }
 | pollute = boption(OPEN) IMPORT CONSTRUCTOR SEMICOLON         { import ~ppos:$loc($2) ~pollute [$3] }
 
@@ -545,9 +548,6 @@ typedecl:
 | TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                 { alias $loc $2 $3 (Typename   ( $5     , None)) }
 | EFFECTNAME CONSTRUCTOR typeargs_opt EQ LBRACE erow RBRACE     { alias $loc $2 $3 (Effectname ( $6     , None)) }
 | EFFECTNAME CONSTRUCTOR typeargs_opt EQ effect_app             { alias $loc $2 $3 (Effectname (([], $5), None)) }
-
-(*subkinddecl:
-| SUBKIND CONSTRUCTOR typearg                                   { add_subkind $loc $2 $3}*)
 
 (* Lists of quantifiers in square brackets denote type abstractions *)
 type_abstracion_vars:
@@ -1020,7 +1020,7 @@ binding:
 | fun_kind VARIABLE arg_lists perhaps_location block           { fun_binding ~ppos:$loc None ($1, $2, $3, $4, $5) }
 | signatures fun_kind VARIABLE arg_lists perhaps_location switch_funlit_body    { switch_fun_binding ~ppos:$loc (fst $1) ~unsafe_sig:(snd $1) ($2, $3, $4, $5, $6) }
 | fun_kind VARIABLE arg_lists perhaps_location switch_funlit_body               { switch_fun_binding ~ppos:$loc None ($1, $2, $3, $4, $5) }
-| typedecl SEMICOLON | links_module (*| subkinddecl SEMICOLON*)
+| typedecl SEMICOLON | links_module
 | links_open SEMICOLON                                         { $1 }
 
 mutual_binding_block:

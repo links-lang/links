@@ -1041,7 +1041,6 @@ let get_restriction_constraint : Restriction.t -> (module Constraint) option =
   | Numeric -> Some (module Numeric)
   | Session -> Some (module Session)
   | Mono -> Some (module Mono)
-  | _ -> failwith "Unexpected Restriction"
 
 (* useful for debugging: types tend to be too big to read *)
 (*

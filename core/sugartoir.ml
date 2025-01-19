@@ -922,8 +922,7 @@ struct
           | InfixAppl ((_tyargs, BinaryOp.Or), e1, e2) ->
               I.condition (ev e1, cofv (I.constant (Constant.Bool true)), ec e2)
           | UnaryAppl ((tyargs, UnaryOp.Minus), e) ->
-              let v = ev e in
-              cofv (I.apply_pure (instantiate "negate" tyargs, [v]))
+              cofv (I.apply_pure (instantiate "negate" tyargs, [ev e]))
           | UnaryAppl ((_, UnaryOp.FloatMinus), e) -> (* NOTE for legacy purposes *)
               cofv (I.apply_pure(instantiate_mb "negatef", [ev e]))
           | UnaryAppl ((tyargs, UnaryOp.Name n), e) when Lib.is_pure_primitive n ->

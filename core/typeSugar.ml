@@ -1934,9 +1934,6 @@ let type_section pos context s =
     match s with
     | Minus         -> Utils.instantiate env "-", Usage.empty
     | FloatMinus    -> Utils.instantiate env "-.", Usage.empty
-    | Name "+"      -> Utils.instantiate env "+", Usage.empty
-    | Name "*"      -> Utils.instantiate env "*", Usage.empty
-    | Name "/"      -> Utils.instantiate env "/", Usage.empty
     | Project label ->
        let a = Types.fresh_type_variable (lin_unl, res_any) in
        let rho = Types.fresh_row_variable (lin_unl, res_any) in
@@ -1960,9 +1957,6 @@ let type_frozen_section context s =
     match s with
     | Minus         -> Env.find "-" env, Usage.empty
     | FloatMinus    -> Env.find "-." env, Usage.empty
-    | Name "+"      -> Env.find "+" env, Usage.empty
-    | Name "*"      -> Env.find "*" env, Usage.empty
-    | Name "/"      -> Env.find "/" env, Usage.empty
     | Project label ->
        let a = Types.fresh_rigid_type_variable (lin_unl, res_any) in
        let rho = Types.fresh_rigid_row_variable (lin_unl, res_any) in
@@ -3686,7 +3680,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             let tyargs, opt, op_usage = type_unary_op pos context op
             and p = tc p
             and rettyp = Types.fresh_type_variable (lin_any, res_any) in
-            unify ~handle:Gripers.unary_apply
+              unify ~handle:Gripers.unary_apply
                 ((UnaryOp.to_string op, opt),
                  no_pos (T.Function (Types.make_tuple_type [typ p], context.effect_row, rettyp)));
               UnaryAppl ((tyargs, op), erase p), rettyp, Usage.combine (usages p) op_usage

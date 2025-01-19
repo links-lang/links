@@ -55,7 +55,6 @@ let float_op impl pure : located_primitive * Types.datatype * pure =
   datatype "(a::Numeric, a) -> Float",
   pure
 
-
 let string_op impl pure : located_primitive * Types.datatype * pure =
   (`PFun (fun _ -> mk_binop_fn impl Value.unbox_string (fun x -> `String x))),
   datatype "(String, String) -> String",
@@ -241,7 +240,7 @@ let project_datetime (f: CalendarShow.t -> int) : located_primitive * Types.data
       | Timestamp.Timestamp ts -> Value.box_int (f ts)),
   datatype "(DateTime) -> Int",
   PURE)
-      
+
 
 let env : (string * (located_primitive * Types.datatype * pure)) list = [
   "+", numeric_op ( + ) ( +. ) PURE PURE;
@@ -751,7 +750,7 @@ let env : (string * (located_primitive * Types.datatype * pure)) list = [
   PURE);
 
   "negate",
-  (p1 (fun i -> match i with 
+  (p1 (fun i -> match i with
   | `Int _ -> Value.box_int (- (Value.unbox_int i))
   | `Float _ -> Value.box_float (-. (Value.unbox_float i))
   | _ -> raise (runtime_type_error ("Cannot negate: " ^ Value.string_of_value i))), 
