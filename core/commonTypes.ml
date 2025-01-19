@@ -326,19 +326,11 @@ end
 
 module Constant = struct
   type t =
-<<<<<<< HEAD
-    | Float    of float
-    | Int      of int
-    | Bool     of bool
-    | String   of string
-    | Char     of char
-=======
     | Float  of float
     | Int    of int
     | Bool   of bool
     | String of string
     | Char   of char
->>>>>>> master
     | DateTime of Timestamp.t
       [@@deriving show, ord]
 

@@ -482,10 +482,6 @@ nofun_declaration:
                                                                  with_pos $loc node }
 | signature? tlvarbinding SEMICOLON                            { val_binding' ~ppos:$loc($2) $1 $2 }
 | typedecl SEMICOLON                                           { $1 }
-<<<<<<< HEAD
-(*| subkinddecl SEMICOLON                                        { $1 }*)
-=======
->>>>>>> master
 | links_module | links_open SEMICOLON                          { $1 }
 | pollute = boption(OPEN) IMPORT CONSTRUCTOR SEMICOLON         { import ~ppos:$loc($2) ~pollute [$3] }
 
