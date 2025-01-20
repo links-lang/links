@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-links = './links'
+links = './_build/default/bin/links.exe'
 
 import sys, re, time, os, signal
 import concurrent.futures, threading, multiprocessing

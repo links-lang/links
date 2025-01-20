@@ -75,18 +75,18 @@ val fun_t :
   ?effects:Types.row t -> Types.typ t list -> Types.typ t -> Types.typ t
 
 (** Syntactic sugar for fun_t.
-  a .-->{e} b   becomes   Function(a,e,b).
+  a .-->{!e} b   becomes   Function(a,e,b).
   This operator is left-associative, use parantheses when nesting! *)
 val ( .-->{} ) : Types.typ t list -> Types.row t -> Types.typ t -> Types.typ t
 
-(** Equivalent to {}-> in Links' syntactic sugar for function types
+(** Equivalent to \{\}-> in Links' syntactic sugar for function types
 Shorthand for closed function types (using tuple for parameters) *)
 val fun_ct : Types.typ t list -> Types.typ t -> Types.typ t
 
 (** alias for fun_ct *)
 val ( |--> ) : Types.typ t list -> Types.typ t -> Types.typ t
 
-(** Equivalent to {}~> in Links' syntactic sugar for function types *)
+(** Equivalent to \{\}~> in Links' syntactic sugar for function types *)
 val wild_fun_ct : Types.typ t list -> Types.typ t -> Types.typ t
 
 (** alias for wild_fun_ct *)

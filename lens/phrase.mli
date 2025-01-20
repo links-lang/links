@@ -199,7 +199,7 @@ module Grouped_variables : sig
 
       Example:
 
-      When called on the set `{ A; A B; C D; }` with the cols `A B`, the
+      When called on the set `{! A; A B; C D; }` with the cols `A B`, the
       result is false because `A B` only occurs in groups without further
       variables. If it is called with cols `C`, then it returns true, because
       the group `C D` contains the column `D` in addition to the column `C`. *)

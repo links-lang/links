@@ -1,0 +1,100 @@
+Addition and multiplication [1]
+10 + 20 * 30
+stdout : 610 : Int
+
+Addition and multiplication [2]
+20.0 * 30.0 + 10.0
+stdout : 610.0 : Float
+
+Division by zero
+10 / 0
+stderr : @.
+exit : 1
+
+Addition, division, subtraction, and multiplication
+100.50 + 200.20 / 10.10 - 3.10 * 10.10
+stdout : 89.0117821782 : Float
+
+Inproper usage
+2 - 3.3
+stderr : @..*
+exit : 1
+
+Inproper usage [2]
+mod(6.3)
+stderr : @..*
+exit : 1
+
+Inproper usage [3]
+abs(54.2 / 4)
+stderr : @..*
+exit : 1
+
+Absolute value of integer
+abs(-9)
+stdout : 9 : Int
+
+Absolute value of float
+abs(-9.54)
+stdout : 9.54 : Float
+
+Prefix notation
+{var plus = (+); plus(1.5, (+)(2.5,3.5))}
+stdout : 7.5 : Float
+
+Unary minus
+(-1)
+stdout : -1 : Int
+
+Unary float minus
+(-1.0)
+stdout : -1.0 : Float
+
+Exponentiation and unary minus
+(-(2.5^4.0))
+stdout : -39.0625 : Float
+
+Modulo [1]
+mod(10, 3)
+stdout : 1 : Int
+
+Modulo [2]
+mod(10.4, 3.5)
+stderr : @..*
+exit : 1
+
+Very large float
+1.0e308 * 2.0
+stdout : inf : Float
+
+Very small float
+1.0e-308 / 2.0
+stdout : 5e-309 : Float
+
+NaN
+0.0 / 0.0
+stdout : -nan : Float
+
+Float division by zero [1]
+1.0 / 0.0
+stdout : inf : Float
+
+Float division by zero [2]
+(-1.0) / 0.0
+stdout : -inf : Float
+
+Large floating-point numbers
+1.0e308 + 1.0e308
+stdout : inf : Float
+
+Small floating-point numbers
+1.0e-308 + 1.0e-308
+stdout : 2e-308 : Float
+
+Additive identity
+5 + 0
+stdout : 5 : Int
+
+Multiplicative identity
+5.0 * 1.0
+stdout : 5.0 : Float

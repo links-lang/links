@@ -1,3 +1,4 @@
+
 fun assert(ok, msg) {
   if (not(ok)) debug("assertion failed: " ^^ msg) else ()
 }
@@ -307,10 +308,6 @@ fun dropWhile(pred, list) {
 #   else 0
 # }
 
-sig abs : (Int) -> Int
-fun abs(i) {
-  if (i < 0) -i else i
-}
 
 sig init : ([a]) ~> [a]
 fun init(list) {

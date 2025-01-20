@@ -79,6 +79,7 @@ let restriction_of_string p =
   function
   | "Any"     -> res_any
   | "Base"    -> res_base
+  | "Numeric" -> res_numeric
   | "Session" -> res_session
   | "Mono"    -> res_mono
   | rest      ->
@@ -148,6 +149,7 @@ let kind_of p =
   (* subkind of type abbreviations *)
   | "Any"      -> (Some pk_type, Some (lin_any, res_any))
   | "Base"     -> (Some pk_type, Some (lin_unl, res_base))
+  | "Numeric" ->  (Some pk_type, Some (lin_unl, res_numeric))
   | "Session"  -> (Some pk_type, Some (lin_any, res_session))
   | "Eff"      -> (Some pk_row , Some (default_effect_lin, res_effect))
   | k          -> raise (ConcreteSyntaxError (pos p, "Invalid kind: " ^ k))
@@ -158,6 +160,7 @@ let subkind_of p =
   | "Any"     -> Some (lin_any, res_any)
   | "Lin"     -> Some (lin_unl, res_any) (* for linear effect vars *)
   | "Base"    -> Some (lin_unl, res_base)
+  | "Numeric" -> Some (lin_unl, res_numeric)
   | "Session" -> Some (lin_any, res_session)
   | "Eff"     -> Some (default_effect_lin, res_effect)
   | sk        -> raise (ConcreteSyntaxError (pos p, "Invalid subkind: " ^ sk))
@@ -197,7 +200,6 @@ let attach_presence_subkind (t, subkind) =
        Datatype.Var stv'
     | _ -> assert false
   in attach_subkind_helper update subkind
-
 
 let alias p name args aliasbody =
     with_pos p (Aliases [with_pos p (name, args, aliasbody)])

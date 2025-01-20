@@ -45,8 +45,7 @@
     st))
 
 ;; Can be generated with `links --print-keywords`.
-;; TODO We should do that automatically as part of the build process somehow.
-(defconst links-keywords
+(defconst links-backup-keywords
   '(
     "alien"
     "as"
@@ -120,6 +119,19 @@
     "where"
     "with"
     ))
+
+(defconst links-keywords
+  ; Not the best test
+  (if (string-match
+				"Links version"
+        (shell-command-to-string (concat links-executable " --version"))
+      )
+  (split-string
+   (shell-command-to-string (concat links-executable " --print-keywords"))
+   "\n" " ")
+  links-backup-keywords)
+)
+
 
 (defconst links-font-lock-keywords
   (list

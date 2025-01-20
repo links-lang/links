@@ -799,6 +799,50 @@ module Base : Constraint = struct
   let make_type, make_row = make_restriction_transform Base
 end
 
+module Numeric : Constraint = struct
+  open Restriction
+  open Primitive
+
+  module NumericPredicate = struct
+    class klass = object
+      inherit type_predicate as super
+
+      method! point_satisfies f vars point =
+        match Unionfind.find point with
+        | Recursive _ -> false
+        | _ -> super#point_satisfies f vars point
+
+      method! type_satisfies vars = function
+        (* Unspecified kind *)
+        | Not_typed -> assert false
+        | Var _ | Recursive _ | Closed ->
+           failwith ("[3] freestanding Var / Recursive / Closed not implemented yet (must be inside Meta)")
+        | Alias _  as t  -> super#type_satisfies vars t
+        | (Application _ | RecursiveApplication _) -> false
+        | Meta _ as t  -> super#type_satisfies vars t
+        (* Type *)
+        | Primitive (Int | Float) -> true
+        | Primitive _ -> false
+        | (Function _ | Lolli _ | Record _ | Variant _ | Table _ | Lens _ | ForAll (_::_, _)) -> false
+        | ForAll ([], t) -> super#type_satisfies vars t
+        (* Effect *)
+        | Effect _ as t -> super#type_satisfies vars t
+        | Operation _ -> failwith "TODO types.ml/766"
+        (* Row *)
+        | Row _ as t -> super#type_satisfies vars t
+        (* Presence *)
+        | Absent -> true
+        | Present _ as t -> super#type_satisfies vars t
+        (* Session *)
+        | Input _ | Output _ | Select _ | Choice _ | Dual _ | End -> false
+    end
+  end
+
+  let type_satisfies, row_satisfies = make_restriction_predicate (module NumericPredicate) Numeric false
+  let can_type_be, can_row_be = make_restriction_predicate (module NumericPredicate) Numeric true
+  let make_type, make_row = make_restriction_transform Numeric
+end
+
 (* unl type stuff *)
 module Unl : Constraint = struct
   class unl_predicate = object(o)
@@ -994,6 +1038,7 @@ let get_restriction_constraint : Restriction.t -> (module Constraint) option =
   let open Restriction in function
   | Any | Effect -> None
   | Base -> Some (module Base)
+  | Numeric -> Some (module Numeric)
   | Session -> Some (module Session)
   | Mono -> Some (module Mono)
 
@@ -2395,6 +2440,7 @@ struct
        | (Linearity.Unl, Restriction.Any)     -> ""
        | (Linearity.Any, Restriction.Any)     -> "Any"
        | (Linearity.Unl, Restriction.Base)    -> Restriction.to_string res_base
+       | (Linearity.Unl, Restriction.Numeric) -> Restriction.to_string res_numeric
        | (Linearity.Any, Restriction.Session) -> Restriction.to_string res_session
        | (Linearity.Unl, Restriction.Effect)  -> Restriction.to_string res_effect
        | (l, r) -> full (l, r)
@@ -2411,6 +2457,8 @@ struct
       | PrimaryKind.Type, (Linearity.Unl, Restriction.Any) -> ""
       | PrimaryKind.Type, (Linearity.Unl, Restriction.Base) ->
          Restriction.to_string res_base
+      | PrimaryKind.Type, (Linearity.Unl, Restriction.Numeric) ->
+         Restriction.to_string res_numeric
       | PrimaryKind.Type, (Linearity.Any, Restriction.Session) ->
          Restriction.to_string res_session
       | PrimaryKind.Type, sk ->
@@ -3498,6 +3546,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
        | (L.Unl, R.Any)     -> if is_eff && lincont_enabled then constant "Lin" else Empty (* (1) see above *)
        | (L.Any, R.Any)     -> if is_eff && lincont_enabled then Empty else constant "Any"
        | (L.Unl, R.Base)    -> constant @@ R.to_string res_base
+       | (L.Unl, R.Numeric) -> constant @@ R.to_string res_numeric
        | (L.Any, R.Session) -> constant @@ R.to_string res_session
        | (L.Unl, R.Effect)  -> constant @@ R.to_string res_effect (* control-flow-linearity may also need changing this *)
        | _ -> full_name
@@ -3535,6 +3584,7 @@ module RoundtripPrinter : PRETTY_PRINTER = struct
                  match subknd with
                  | L.Unl, R.Any     -> assert false
                  | L.Unl, R.Base    -> StringBuffer.write buf (R.to_string res_base)
+                 | L.Unl, R.Numeric -> StringBuffer.write buf (R.to_string res_numeric)
                  | L.Any, R.Session -> StringBuffer.write buf (R.to_string res_session)
                  | subknd ->
                     let policy = Policy.set_kinds Policy.Full (Context.policy ctx) in
