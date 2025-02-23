@@ -51,6 +51,7 @@ module Restriction = struct
   type t =
     | Any
     | Base
+    | Numeric
     | Mono
     | Session
     | Effect
@@ -62,6 +63,10 @@ module Restriction = struct
 
   let is_base = function
     | Base -> true
+    | _    -> false
+
+  let is_numeric = function
+    | Numeric -> true
     | _    -> false
 
   let is_mono = function
@@ -77,20 +82,23 @@ module Restriction = struct
     | _      -> false
 
   let to_string = function
-    | Any     -> "Any"
-    | Base    -> "Base"
-    | Mono    -> "Mono"
-    | Session -> "Session"
-    | Effect  -> "Eff"
+    | Any      -> "Any"
+    | Base     -> "Base"
+    | Numeric  -> "Numeric"
+    | Mono     -> "Mono"
+    | Session  -> "Session"
+    | Effect   -> "Eff"
 
   let min l r =
     match l, r with
-    | Any, Any         -> Some Any
-    | Mono, Mono       -> Some Mono
-    | Session, Session -> Some Session
-    | Effect, Effect   -> Some Effect
-    | Base, Base       -> Some Base
+    | Any, Any             -> Some Any
+    | Mono, Mono           -> Some Mono
+    | Session, Session     -> Some Session
+    | Effect, Effect       -> Some Effect
+    | Base, Base           -> Some Base
+    | Numeric, Numeric     -> Some Numeric
     | x, Any | Any, x  -> Some x (* Any will narrow to anything. *)
+    | Numeric, Mono | Mono, Numeric -> Some Numeric (* Mono can narrow to Numeric. *)
     | Base, Mono | Mono, Base -> Some Base (* Mono can narrow to Base. *)
     | Session, Mono | Mono, Session -> Some Session (* Super dubious, but we don't have another way*)
     | _ -> None
@@ -99,6 +107,7 @@ end
 (* Convenient aliases for constructing values *)
 let res_any     = Restriction.Any
 let res_base    = Restriction.Base
+let res_numeric = Restriction.Numeric
 let res_mono    = Restriction.Mono
 let res_session = Restriction.Session
 let res_effect  = Restriction.Effect

@@ -1979,8 +1979,8 @@ let add_empty_usages (p, t) = (p, t, Usage.empty)
 let type_unary_op pos env =
   let datatype = datatype env.tycon_env in
   function
-  | UnaryOp.Minus      -> add_empty_usages (datatype "(Int) { |_::Any}-> Int")
-  | UnaryOp.FloatMinus -> add_empty_usages (datatype "(Float) { |_::Any}-> Float")
+  | UnaryOp.Minus      -> add_empty_usages (datatype "(a::Numeric) -> a")
+  | UnaryOp.FloatMinus -> add_empty_usages (datatype "(Float) -> Float") (* keeping for compatability with previous version *)
   | UnaryOp.Name n     ->
      try
        add_usages (Utils.instantiate env.var_env n) (Usage.singleton n)
@@ -1992,7 +1992,7 @@ let type_binary_op pos ctxt =
   let open BinaryOp in
   let open Types in
   let datatype = datatype ctxt.tycon_env in function
-  | Minus        -> add_empty_usages (Utils.instantiate ctxt.var_env "-")
+  | Minus        -> add_empty_usages (datatype "(a::Numeric, a) -> a")
   | FloatMinus   -> add_empty_usages (Utils.instantiate ctxt.var_env "-.")
   | RegexMatch flags ->
       let nativep  = List.exists ((=) RegexNative)  flags
@@ -2021,6 +2021,10 @@ let type_binary_op pos ctxt =
          Function (Types.make_tuple_type [a; a], eff, Primitive Primitive.Bool),
          Usage.empty)
   | Name "!"     -> add_empty_usages (Utils.instantiate ctxt.var_env "Send")
+  | Name "+"
+  | Name "*"
+  | Name "/"
+  | Name "^"     -> add_empty_usages (datatype "(a::Numeric, a) -> a")
   | Name n       ->
      try
        add_usages (Utils.instantiate ctxt.var_env n) (Usage.singleton n)

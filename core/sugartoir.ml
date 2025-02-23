@@ -909,10 +909,11 @@ struct
               I.apply (instantiate n tyargs, [ev e1; ev e2])
           | InfixAppl ((tyargs, BinaryOp.Cons), e1, e2) ->
               cofv (I.apply_pure (instantiate "Cons" tyargs, [ev e1; ev e2]))
-          | InfixAppl ((tyargs, BinaryOp.FloatMinus), e1, e2) ->
+          | InfixAppl ((tyargs, BinaryOp.FloatMinus), e1, e2) -> (* NOTE for legacy purposes *)
               cofv (I.apply_pure (instantiate "-." tyargs, [ev e1; ev e2]))
           | InfixAppl ((tyargs, BinaryOp.Minus), e1, e2) ->
-              cofv (I.apply_pure (instantiate "-" tyargs, [ev e1; ev e2]))
+              let v1 = (ev e1) and v2 = (ev e2) in
+              cofv (I.apply_pure (instantiate "-" tyargs, [v1; v2]))
           | InfixAppl ((_tyargs, BinaryOp.And), e1, e2) ->
               (* IMPORTANT: we compile boolean expressions to
                  conditionals in order to faithfully capture
@@ -920,9 +921,9 @@ struct
               I.condition (ev e1, ec e2, cofv (I.constant (Constant.Bool false)))
           | InfixAppl ((_tyargs, BinaryOp.Or), e1, e2) ->
               I.condition (ev e1, cofv (I.constant (Constant.Bool true)), ec e2)
-          | UnaryAppl ((_tyargs, UnaryOp.Minus), e) ->
-              cofv (I.apply_pure(instantiate_mb "negate", [ev e]))
-          | UnaryAppl ((_tyargs, UnaryOp.FloatMinus), e) ->
+          | UnaryAppl ((tyargs, UnaryOp.Minus), e) ->
+              cofv (I.apply_pure (instantiate "negate" tyargs, [ev e]))
+          | UnaryAppl ((_, UnaryOp.FloatMinus), e) -> (* NOTE for legacy purposes *)
               cofv (I.apply_pure(instantiate_mb "negatef", [ev e]))
           | UnaryAppl ((tyargs, UnaryOp.Name n), e) when Lib.is_pure_primitive n ->
               cofv (I.apply_pure(instantiate n tyargs, [ev e]))

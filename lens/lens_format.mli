@@ -16,7 +16,8 @@ val pp_comma : unit fmt_fn
 
 (** Format a list as comma separated values.
 
-    Example: {[
+    Example:
+    {[
       Format.asprintf "%a" (Format.pp_comma_list Format.pp_print_int) [5, 6, 7]
     ]}
 
@@ -26,7 +27,8 @@ val pp_comma_list : 'a fmt_fn -> 'a list fmt_fn
 
 (** Format a list of string as comma separated values.
 
-    Example: {[
+    Example:
+    {[
       Format.asprintf "%a" Format.pp_comma_string_list ["hello", "world"]
     ]}
 
@@ -39,7 +41,8 @@ val pp_newline_list : 'a fmt_fn -> 'a list fmt_fn
 
 (** Pad a string so it has [length] characters.
 
-    Example: {[
+    Example:
+    {[
       Format.asprintf "%a - %s"
         (Format.pp_padded ~length:8 Format.pp_print_string) "hello" "world"
     ]}

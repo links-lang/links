@@ -31,14 +31,14 @@ let type_section env =
 
 let type_unary_op env tycon_env =
   let datatype = DesugarDatatypes.read ~aliases:tycon_env in function
-    | UnaryOp.Minus      -> datatype "(Int) -> Int"
-    | UnaryOp.FloatMinus -> datatype "(Float) -> Float"
+    | UnaryOp.Minus      -> datatype "(a::Numeric) -> a"
+    | UnaryOp.FloatMinus -> datatype "(Float) -> Float" (* keeping for compatability with previous version *)
     | UnaryOp.Name n     -> TyEnv.find n env
 
 let type_binary_op env tycon_env =
   let open BinaryOp in
   let datatype = DesugarDatatypes.read ~aliases:tycon_env in function
-  | Minus        -> TyEnv.find "-" env
+  | Minus        -> datatype "(a::Numeric, a) -> a"
   | FloatMinus   -> TyEnv.find "-." env
   | RegexMatch flags ->
       let nativep  = List.exists ((=) RegexNative)  flags
@@ -66,6 +66,10 @@ let type_binary_op env tycon_env =
                 Function (Types.make_tuple_type [a; a], e,
                           Primitive Primitive.Bool ))
   | Name "!"     -> TyEnv.find "Send" env
+  | Name "+"
+  | Name "*"
+  | Name "/"
+  | Name "^"     -> datatype "(a::Numeric, a) -> a"
   | Name n       -> TyEnv.find n env
 
 let fun_effects t pss =

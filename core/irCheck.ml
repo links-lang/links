@@ -1053,11 +1053,11 @@ struct
           (* For each case branch, the corresponding entry goes directly into the field spec map of the inner effect row *)
           let inner_effects_map_from_branches = StringMap.map (fun x -> Present x) branch_presence_spec_types in
           (* We now add all entries from the outer effects that were not touched by the handler to the inner effects *)
-          let inner_effects_map = StringMap.fold (fun effect outer_presence_spec map ->
-              if StringMap.mem effect inner_effects_map_from_branches then
+          let inner_effects_map = StringMap.fold (fun effect' outer_presence_spec map ->
+              if StringMap.mem effect' inner_effects_map_from_branches then
                 map
               else
-                StringMap.add effect outer_presence_spec map
+                StringMap.add effect' outer_presence_spec map
             )  inner_effects_map_from_branches outer_effects_map in
           let inner_effects = Row (inner_effects_map, outer_effects_var, outer_effects_dualized) in
 

@@ -198,6 +198,7 @@ module type Constraint = sig
 end
 
 module Base : Constraint
+module Numeric : Constraint
 module Unl : Constraint
 module Session : Constraint
 module Mono : Constraint
