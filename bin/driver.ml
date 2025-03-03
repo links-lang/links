@@ -261,4 +261,37 @@ module Phases = struct
         close_out oc
       with Sys_error reason ->
         close_out oc; raise (Errors.object_file_write_error object_file reason)
+
+  let compile_wasm_only : Context.t -> string -> string -> unit
+    = fun initial_context source_file object_file ->
+      (* Process source file (and its dependencies. *)
+      let result =
+        Parse.run initial_context source_file
+        |> Desugar.run
+        |> (fun result -> if Settings.get typecheck_only then exit 0 else result)
+        |> Compile.IR.run
+        |> Transform.run
+      in
+      let context, program = result.Backend.context, result.Backend.program in
+      (* let valenv    = Context.value_environment context in *)
+      let nenv  = Context.name_environment context in
+      (* let tenv      = Context.typing_environment context in *)
+      let venv =
+        Env.String.fold
+        (fun name v venv -> Env.Int.bind v name venv)
+        nenv
+        Env.Int.empty
+      in
+      let res_mod = Irtowasm.compile program venv in
+      (* Prepare object file. *)
+      let oc =
+        try open_out object_file
+        with Sys_error reason -> raise (Errors.cannot_open_file object_file reason)
+      in
+      try
+        (* Emit the Wasm code produced by irtowasm. *)
+        Wasm_CodeGen.output oc res_mod;
+        close_out oc
+      with Sys_error reason ->
+        close_out oc; raise (Errors.object_file_write_error object_file reason)
 end
