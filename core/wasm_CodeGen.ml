@@ -164,12 +164,12 @@ let rec generate_instr buf i = match i with
   | Binop (Value.I64 IntOp.DivU) -> Buffer.add_uint8 buf 0x80
   | Binop (Value.I64 IntOp.RemS) -> Buffer.add_uint8 buf 0x81
   | Binop (Value.I64 IntOp.RemU) -> Buffer.add_uint8 buf 0x82
-  | Unop (Value.F32 _) -> .
+  | Unop (Value.F32 FloatOp.Neg) -> Buffer.add_uint8 buf 0x8C
   | Binop (Value.F32 FloatOp.Add) -> Buffer.add_uint8 buf 0x92
   | Binop (Value.F32 FloatOp.Sub) -> Buffer.add_uint8 buf 0x93
   | Binop (Value.F32 FloatOp.Mul) -> Buffer.add_uint8 buf 0x94
   | Binop (Value.F32 FloatOp.Div) -> Buffer.add_uint8 buf 0x95
-  | Unop (Value.F64 _) -> .
+  | Unop (Value.F64 FloatOp.Neg) -> Buffer.add_uint8 buf 0x9A
   | Binop (Value.F64 FloatOp.Add) -> Buffer.add_uint8 buf 0xA0
   | Binop (Value.F64 FloatOp.Sub) -> Buffer.add_uint8 buf 0xA1
   | Binop (Value.F64 FloatOp.Mul) -> Buffer.add_uint8 buf 0xA2

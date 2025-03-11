@@ -2,14 +2,14 @@ module Sexpr : sig
 	(* A LongNode is a Node with some arguments forced on the same line as the node type *)
 	type t = Atom of string | Node of string * t list | LongNode of string * t list * t list
 	
-	val format : int -> Format.formatter -> t -> unit
+	val pp : int -> Format.formatter -> t -> unit
 	val output : out_channel -> int -> t -> unit
 	val print : int -> t -> unit
 	val to_string : int -> t -> string
 end = struct
 	type t = Atom of string | Node of string * t list | LongNode of string * t list * t list
 	
-	let pp width s =
+	let _pp width s =
 		let rec inner off s = match s with
 			| Atom s -> String.length s, s
 			| LongNode (s, [], ss)
@@ -42,11 +42,11 @@ end = struct
 				cons_len, List.fold_left (fun acc s -> acc ^ sep ^ s) acc1 ss2 ^ fin
 		in snd (inner 0 s)
 	
-	let format width fmt s = Format.pp_print_string fmt (pp width s)
-	let output oc width s = output_string oc (pp width s); output_string oc "\n"
+	let pp width fmt s = Format.pp_print_string fmt (_pp width s)
+	let output oc width s = output_string oc (_pp width s); output_string oc "\n"
 	
 	let print = output stdout
-	let to_string width s = pp width s ^ "\n"
+	let to_string width s = _pp width s ^ "\n"
 end
 
 module Unicode = struct
@@ -676,13 +676,14 @@ module Instruction = struct
 		let cvtop _ (op : cvtop) : string = match op with _ -> .
 	end
 	module FloatOp = struct
-		type unop = |
+		type unop = Neg
 		type binop = Add | Sub | Mul | Div
 		type testop = |
 		type relop = Eq | Ne
 		type cvtop = |
 		
-		let unop _ (op : unop) : string = match op with _ -> .
+		let unop _ (op : unop) : string = match op with
+			| Neg -> "neg"
 		let binop _ (op : binop) : string = match op with
 			| Add -> "add"
 			| Sub -> "sub"
@@ -817,6 +818,6 @@ let sexpr_of_module (m : module_) =
 	let sinit = match m.init with Some init -> [Node ("start", [Atom (Int32.to_string init)])] | None -> [] in
 	Node ("module", styps @ sgbls @ sfuns @ sinit)
 
-let pp_raw_code width fmt v = Sexpr.format width fmt (sexpr_of_raw_code v)
-let pp_function width fmt v = Sexpr.format width fmt (sexpr_of_function 0 v)
-let pp_module width fmt v = Sexpr.format width fmt (sexpr_of_module v)
+let pp_raw_code width fmt v = Sexpr.pp width fmt (sexpr_of_raw_code v)
+let pp_function width fmt v = Sexpr.pp width fmt (sexpr_of_function 0 v)
+let pp_module width fmt v = Sexpr.pp width fmt (sexpr_of_module v)

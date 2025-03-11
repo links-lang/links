@@ -2,6 +2,7 @@ module Sexpr : sig
 	(* A LongNode is a Node with some arguments forced on the same line as the node type *)
 	type t = Atom of string | Node of string * t list | LongNode of string * t list * t list
 	
+	val pp : int -> Format.formatter -> t -> unit
 	val output : out_channel -> int -> t -> unit
 	val print : int -> t -> unit
 	val to_string : int -> t -> string
@@ -78,6 +79,8 @@ module Type : sig
 	type block_type = VarBlockType of int32 | ValBlockType of val_type option
 	
 	val string_of_val_type : val_type -> string
+	val string_of_rec_type : rec_type -> string
+	val sexpr_of_rec_type : rec_type -> Sexpr.t
 end
 
 module Value : sig
@@ -194,7 +197,7 @@ module Instruction : sig
 		type cvtop = |
 	end
 	module FloatOp : sig
-		type unop = |
+		type unop = Neg
 		type binop = Add | Sub | Mul | Div
 		type testop = |
 		type relop = Eq | Ne
