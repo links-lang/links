@@ -216,6 +216,7 @@ module Instruction : sig
 	type cvtop = (I32Op.cvtop, I64Op.cvtop, F32Op.cvtop, F64Op.cvtop) op
 	
 	type initop = Explicit | Implicit
+	type hdl = OnLabel of int32 | OnSwitch
 	
 	type t =
 		| Unreachable
@@ -231,7 +232,11 @@ module Instruction : sig
 		| LocalSet of int32
 		| GlobalGet of int32
 		| GlobalSet of int32
+		| Block of block_type * t list
+		| Loop of block_type * t list
 		| If of block_type * t list * t list
+		| Br of int32
+		| Return
 		| Call of int32
 		| CallRef of int32
 		| ReturnCall of int32
@@ -239,6 +244,9 @@ module Instruction : sig
 		| RefNull of heap_type
 		| RefCast of ref_type
 		| RefFunc of int32
+		| ContNew of int32
+		| Suspend of int32
+		| Resume of int32 * (int32 * hdl) list
 		| StructNew of int32 * initop
 		| StructGet of int32 * int32 * Pack.extension option
 		| StructSet of int32 * int32
@@ -257,6 +265,7 @@ type global = Type.global_type * Instruction.t list * string option
 type module_ = {
 	types  : Type.rec_type list;
 	globals: global list;
+	tags   : int32 list;
 	funs   : fundef list;
 	init   : int32 option;
 }

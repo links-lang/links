@@ -200,7 +200,7 @@ module Type = struct
 	and string_of_field_type = function
 		| FieldT (m, st) -> string_of_mut m (string_of_storage_type st)
 	and string_of_struct_type = function
-		| StructT fs -> "(struct " ^ String.concat " " (List.map (fun ft -> "(field " ^ string_of_field_type ft ^ ")") fs)
+		| StructT fs -> "(struct" ^ String.concat "" (List.map (fun ft -> " (field " ^ string_of_field_type ft ^ ")") fs) ^ ")"
 	and string_of_func_type = function
 		| FuncT (args, rets) ->
 			let rets = if rets = [] then ")" else " (result " ^ String.concat " " (List.map (fun t -> string_of_val_type t) rets) ^ "))" in
@@ -229,7 +229,7 @@ module Type = struct
 		| Final -> [Atom "final"]
 	let sexpr_of_mut m s = let open Sexpr in match m with
 		| Cons -> s
-		| Var -> Node ("mut", [s])
+		| Var -> match s with Atom s -> LongNode ("mut", [Atom s], []) | _ -> Node ("mut", [s])
 	
 	let sexpr_of_var = let open Sexpr in function
 		| StatX x -> Atom (Printf.sprintf "%lu" x)
@@ -260,7 +260,10 @@ module Type = struct
 		| VarHT v -> sexpr_of_var v
 		| DefHT d -> sexpr_of_def_type d
 		| BotHT -> Atom "something"
-	and sexpr_of_ref_type (n, h) = let open Sexpr in Node ("ref", sexpr_of_null n @ [sexpr_of_heap_type h])
+	and sexpr_of_ref_type (n, h) = let open Sexpr in
+		match sexpr_of_heap_type h with
+		| Atom s -> LongNode ("ref", sexpr_of_null n @ [Atom s], [])
+		| sh -> LongNode ("ref", sexpr_of_null n, [sh])
 	and sexpr_of_val_type = let open Sexpr in function
 		| NumT t -> sexpr_of_num_type t
 		| VecT t -> sexpr_of_vec_type t
@@ -275,14 +278,25 @@ module Type = struct
 		| StructT fs -> Node ("struct", List.map (fun ft -> Node ("field", [sexpr_of_field_type ft])) fs)
 	and sexpr_of_func_type = let open Sexpr in function
 		| FuncT (args, rets) ->
-			let rets = if rets = [] then [] else [Node ("result", List.map (fun t -> sexpr_of_val_type t) rets)] in
-			let argsrets = if args = [] then rets else Node ("param", List.map (fun t -> sexpr_of_val_type t) args) :: rets in
+			let rets = match rets with
+				| [] -> []
+				| [ret] -> [LongNode ("result", [sexpr_of_val_type ret], [])]
+				| _ -> [Node ("result", List.map (fun t -> sexpr_of_val_type t) rets)] in
+			let argsrets = match args with
+				| [] -> rets
+				| [arg] -> LongNode ("param", [sexpr_of_val_type arg], []) :: rets
+				| _ -> Node ("param", List.map (fun t -> sexpr_of_val_type t) args) :: rets in
 			Node ("func", argsrets)
+	and sexpr_of_cont_type = let open Sexpr in function
+		| ContT ht -> begin match sexpr_of_heap_type ht with
+			| Atom s -> LongNode ("cont", [Atom s], [])
+			| sh -> Node ("cont", [sh])
+			end
 	and sexpr_of_str_type = function
 		| DefStructT st -> sexpr_of_struct_type st
 		| DefArrayT _ -> failwith "TODO sexpr_of_str_type DefArrayT"
 		| DefFuncT ft -> sexpr_of_func_type ft
-		| DefContT _ -> failwith "TODO sexpr_of_str_type DefContT"
+		| DefContT ct -> sexpr_of_cont_type ct
 	and sexpr_of_sub_type = let open Sexpr in function
 		| SubT (Final, [], s) -> sexpr_of_str_type s
 		| SubT (f, hs, s) -> Node ("sub", sexpr_of_final f @ List.map sexpr_of_heap_type hs @ [sexpr_of_str_type s])
@@ -294,9 +308,11 @@ module Type = struct
 		| DefT (_r, _i) -> failwith "TODO sexpr_of_def_type generic"
 	
 	let sexpr_of_global_type (GlobalT (m, vt) : global_type) : Sexpr.t = let open Sexpr in
-		match m with Cons -> sexpr_of_val_type vt | Var -> Node ("mut", [sexpr_of_val_type vt])
+		match m with
+		| Cons -> sexpr_of_val_type vt
+		| Var -> match sexpr_of_val_type vt with Atom s -> LongNode ("mut", [Atom s], []) | sv -> Node ("mut", [sv])
 	let sexpr_of_block_type = let open Sexpr in function
-		| VarBlockType vt -> [Node ("type", [Atom (Int32.to_string vt)])]
+		| VarBlockType vt -> [LongNode ("type", [Atom (Int32.to_string vt)], [])]
 		| ValBlockType (Some vt) -> [Node ("result", [sexpr_of_val_type vt])]
 		| ValBlockType None -> []
 end
@@ -708,6 +724,7 @@ module Instruction = struct
 	type cvtop = (I32Op.cvtop, I64Op.cvtop, F32Op.cvtop, F64Op.cvtop) op
 	
 	type initop = Explicit | Implicit
+	type hdl = OnLabel of int32 | OnSwitch
 	
 	type t =
 		| Unreachable
@@ -723,7 +740,11 @@ module Instruction = struct
 		| LocalSet of int32
 		| GlobalGet of int32
 		| GlobalSet of int32
-		| If of Type.block_type * t list * t list
+		| Block of block_type * t list
+		| Loop of block_type * t list
+		| If of block_type * t list * t list
+		| Br of int32
+		| Return
 		| Call of int32
 		| CallRef of int32
 		| ReturnCall of int32
@@ -731,6 +752,9 @@ module Instruction = struct
 		| RefNull of heap_type
 		| RefCast of ref_type
 		| RefFunc of int32
+		| ContNew of int32
+		| Suspend of int32
+		| Resume of int32 * (int32 * hdl) list
 		| StructNew of int32 * initop
 		| StructGet of int32 * int32 * Pack.extension option
 		| StructSet of int32 * int32
@@ -743,8 +767,12 @@ module Instruction = struct
 		| F32 o -> fop "32" o
 		| F64 o -> fop "64" o)
 	
-	let rec to_sexpr i = let open Sexpr in
-		match i with
+	let sexpr_of_idxhdl (i, h) = let open Sexpr in LongNode ("on", [
+			Atom (Int32.to_string i);
+			Atom (match h with OnLabel l -> Int32.to_string l | OnSwitch -> "switch")
+		], [])
+	
+	let rec to_sexpr i = let open Sexpr in match i with
 		| Unreachable -> Node ("unreachable", [])
 		| Nop -> Node ("nop", [])
 		| Drop -> Node ("drop", [])
@@ -758,14 +786,21 @@ module Instruction = struct
 		| LocalSet i -> LongNode ("local.set", [Atom (Int32.to_string i)], [])
 		| GlobalGet i -> LongNode ("global.get", [Atom (Int32.to_string i)], [])
 		| GlobalSet i -> LongNode ("global.set", [Atom (Int32.to_string i)], [])
+		| Block (bt, b) -> LongNode ("block", sexpr_of_block_type bt, List.map to_sexpr b)
+		| Loop (bt, b) -> LongNode ("loop", sexpr_of_block_type bt, List.map to_sexpr b)
 		| If (b, t, f) -> LongNode ("if", sexpr_of_block_type b, [Node ("then", List.map to_sexpr t); Node ("else", List.map to_sexpr f)])
+		| Br i -> LongNode ("br", [Atom (Int32.to_string i)], [])
+		| Return -> Node ("return", [])
 		| Call i -> LongNode ("call", [Atom (Int32.to_string i)], [])
 		| CallRef i -> LongNode ("call_ref", [Atom (Int32.to_string i)], [])
 		| ReturnCall i -> LongNode ("return_call", [Atom (Int32.to_string i)], [])
 		| ReturnCallRef i -> LongNode ("return_call_ref", [Atom (Int32.to_string i)], [])
 		| RefNull ht -> LongNode ("ref.null", [sexpr_of_heap_type ht], [])
 		| RefCast rt -> LongNode ("ref.cast", [sexpr_of_ref_type rt], [])
-		| RefFunc ti -> LongNode ("ref.func", [Atom ("$" ^ Int32.to_string ti)], [])
+		| RefFunc ti -> LongNode ("ref.func", [Atom (Int32.to_string ti)], [])
+		| ContNew i -> LongNode ("cont.new", [Atom (Int32.to_string i)], [])
+		| Suspend i -> LongNode ("suspend", [Atom (Int32.to_string i)], [])
+		| Resume (i, hdls) -> LongNode ("resume", [Atom (Int32.to_string i)], List.map sexpr_of_idxhdl hdls)
 		| StructNew (i, Explicit) -> LongNode ("struct.new", [Atom (Int32.to_string i)], [])
 		| StructNew (i, Implicit) -> LongNode ("struct.new_default", [Atom (Int32.to_string i)], [])
 		| StructGet (i, j, None) -> LongNode ("struct.get", [Atom (Int32.to_string i); Atom (Int32.to_string j)], [])
@@ -785,6 +820,7 @@ type global = Type.global_type * Instruction.t list * string option
 type module_ = {
 	types  : Type.rec_type list;
 	globals: global list;
+	tags   : int32 list;
 	funs   : fundef list;
 	init   : int32 option;
 }
@@ -792,7 +828,7 @@ type module_ = {
 let sexpr_of_global ((gt, i, oname) : global) : Sexpr.t =
 	let online = Type.sexpr_of_global_type gt :: List.map Instruction.to_sexpr i in
 	let online = match oname with
-		| Some name -> Sexpr.(Node ("export", [Atom ("\"" ^ name ^ "\"")])) :: online
+		| Some name -> Sexpr.(LongNode ("export", [Atom ("\"" ^ name ^ "\"")], [])) :: online
 		| None -> online
 	in Sexpr.(Node ("global", online))
 
@@ -801,7 +837,7 @@ let sexpr_of_function funid ({ fn_name = ofname; fn_type = typeid; fn_locals = l
 	let locs = if locals = [] then [] else [Node ("local", List.map Type.sexpr_of_val_type locals)] in
 	let typeloc = Node ("type", [Atom (Int32.to_string typeid)]) :: locs in
 	let online = match ofname with
-		| Some fname -> Atom ("$" ^ string_of_int funid) :: Node ("export", [Atom ("\"" ^ fname ^ "\"")]) :: typeloc
+		| Some fname -> Atom ("$" ^ string_of_int funid) :: LongNode ("export", [Atom ("\"" ^ fname ^ "\"")], []) :: typeloc
 		| None -> Atom ("$" ^ string_of_int funid) :: typeloc
 	in
 	LongNode ("func", online, List.map Instruction.to_sexpr instrs)
@@ -812,11 +848,12 @@ let sexpr_of_raw_code ((ret, locals, instrs) : raw_code) =
 	LongNode ("raw_func", resloc, List.map Instruction.to_sexpr instrs)
 let sexpr_of_module (m : module_) =
 	let open Sexpr in
-	let styps = List.mapi (fun i rt -> Node ("type", [Atom ("$" ^ string_of_int i); Type.sexpr_of_rec_type rt])) m.types in
+	let styps = List.mapi (fun i rt -> LongNode ("type", [Atom ("$" ^ string_of_int i)], [Type.sexpr_of_rec_type rt])) m.types in
 	let sgbls = List.map sexpr_of_global m.globals in
 	let sfuns = List.mapi sexpr_of_function m.funs in
-	let sinit = match m.init with Some init -> [Node ("start", [Atom (Int32.to_string init)])] | None -> [] in
-	Node ("module", styps @ sgbls @ sfuns @ sinit)
+	let sinit = match m.init with Some init -> [LongNode ("start", [Atom (Int32.to_string init)], [])] | None -> [] in
+	let stags = List.map (fun t -> Node ("tag", [LongNode ("type", [Atom (Int32.to_string t)], [])])) m.tags in
+	Node ("module", styps @ sgbls @ sfuns @ sinit @ stags)
 
 let pp_raw_code width fmt v = Sexpr.pp width fmt (sexpr_of_raw_code v)
 let pp_function width fmt v = Sexpr.pp width fmt (sexpr_of_function 0 v)

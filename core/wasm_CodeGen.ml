@@ -115,14 +115,33 @@ let generate_types buf ts =
   generate_u 32 buf (Int64.of_int (Buffer.length auxbuf));
   Buffer.add_buffer buf auxbuf
 
+let generate_resumetable buf hdls =
+  let nhdls = List.length hdls in
+  let auxbuf = Buffer.create 80 in
+  generate_u 32 auxbuf (Int64.of_int (3 * nhdls));
+  List.iter (fun (i, h) -> match h with
+    | OnLabel l -> Buffer.add_uint8 auxbuf 0x00; generate_u 32 auxbuf (Int64.of_int32 i); generate_u 32 auxbuf (Int64.of_int32 l)
+    | OnSwitch -> Buffer.add_uint8 auxbuf 0x01; generate_u 32 auxbuf (Int64.of_int32 i)) hdls;
+  generate_u 32 buf (Int64.of_int (Buffer.length auxbuf));
+  Buffer.add_buffer buf auxbuf
 let rec generate_instr buf i = match i with
   | Unreachable -> Buffer.add_uint8 buf 0x00
   | Nop -> Buffer.add_uint8 buf 0x01
+  | Block (bt, b) ->
+      Buffer.add_uint8 buf 0x02; generate_block_type buf bt;
+      List.iter (generate_instr buf) b;
+      Buffer.add_uint8 buf 0x0B
+  | Loop (bt, b) ->
+      Buffer.add_uint8 buf 0x03; generate_block_type buf bt;
+      List.iter (generate_instr buf) b;
+      Buffer.add_uint8 buf 0x0B
   | If (b, t, f) ->
       Buffer.add_uint8 buf 0x04; generate_block_type buf b;
       List.iter (generate_instr buf) t;
       if f <> [] then (Buffer.add_uint8 buf 0x05; List.iter (generate_instr buf) f);
       Buffer.add_uint8 buf 0x0B
+  | Br i -> Buffer.add_uint8 buf 0x0C; generate_u 32 buf (Int64.of_int32 i)
+  | Return -> Buffer.add_uint8 buf 0x0F
   | Call i -> Buffer.add_uint8 buf 0x10; generate_u 32 buf (Int64.of_int32 i)
   | ReturnCall i -> Buffer.add_uint8 buf 0x12; generate_u 32 buf (Int64.of_int32 i)
   | CallRef i -> Buffer.add_uint8 buf 0x14; generate_u 32 buf (Int64.of_int32 i)
@@ -180,6 +199,9 @@ let rec generate_instr buf i = match i with
   | Cvtop (Value.F64 _) -> .
   | RefNull ht -> Buffer.add_uint8 buf 0xD0; generate_heap_type buf ht
   | RefFunc ti -> Buffer.add_uint8 buf 0xD2; generate_u 32 buf (Int64.of_int32 ti)
+  | ContNew ti -> Buffer.add_uint8 buf 0xE0; generate_u 32 buf (Int64.of_int32 ti)
+  | Suspend i -> Buffer.add_uint8 buf 0xE2; generate_u 32 buf (Int64.of_int32 i)
+  | Resume (i, hdls) -> Buffer.add_uint8 buf 0xE3; generate_u 32 buf (Int64.of_int32 i); generate_resumetable buf hdls
   | RefCast (NoNull, ht) -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 22L; generate_heap_type buf ht
   | RefCast (Null, ht) -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 23L; generate_heap_type buf ht
   | StructNew (i, Explicit) -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 0L; generate_u 32 buf (Int64.of_int32 i)
@@ -261,6 +283,16 @@ let generate_init buf oi = match oi with
       generate_u 32 buf (Int64.of_int (Buffer.length auxbuf));
       Buffer.add_buffer buf auxbuf
 
+let generate_tag buf tag = Buffer.add_uint8 buf 0x00; generate_u 32 buf tag
+let generate_tags buf tags =
+  Buffer.add_uint8 buf 0x0D;
+  let ntags = List.length tags in
+  let auxbuf = Buffer.create (2*ntags + 1) in
+  generate_u 32 auxbuf (Int64.of_int ntags);
+  List.iter (generate_tag auxbuf) tags;
+  generate_u 32 buf (Int64.of_int (Buffer.length auxbuf));
+  Buffer.add_buffer buf auxbuf
+
 let output (oc : out_channel) (m : module_) : unit =
   Sexpr.output oc 80 (sexpr_of_module m)
   (* let nfuns = List.length m.funs in
@@ -271,4 +303,5 @@ let output (oc : out_channel) (m : module_) : unit =
   generate_globals buf m.globals;  (* Section 6, Section 7 *)
   generate_init buf m.init;        (* Section 8 *)
   generate_codes buf m.funs nfuns; (* Section 10 *)
+  generate_tags buf m.tags;        (* Section 13 *)
   output_string oc (Buffer.contents buf) *)

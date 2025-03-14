@@ -1,8 +1,11 @@
-type mtypid                  (* Module type ID *)
+(* TODO: rethink how deep handlers work, so that we don't have to call another
+   function in the (most common?) case of tail resumption *)
+
+type mtypid                  (* Module type ID     *) (* TODO: remove this *)
 type mvarid = private int32  (* Module variable ID *)
-type closid = private int32  (* Closure member ID *)
+type closid = private int32  (* Closure member ID  *)
 type mfunid = private int32  (* Module function ID *)
-type meffid = private int32  (* Module effect ID *)
+type meffid = private int32  (* Module effect ID   *)
 module MTypMap : Utility.Map.S with type key = mtypid
 module FunIDMap : Utility.Map.S with type key = mfunid
 module EffectIDMap : Utility.Map.S with type key = meffid
@@ -14,7 +17,6 @@ type 'a closure_content = private ClosureContent of 'a
 type 'a continuation = private Continuation of 'a
 
 type 'a typ =
-  | TUnit : unit typ
   | TInt : int typ
   | TBool : bool typ
   | TFloat : float typ
@@ -24,7 +26,7 @@ type 'a typ =
   | TAbsClosArg : abs_closure_content typ
   | TClosArg : 'a typ_list -> 'a closure_content typ
   | TCont : 'a typ -> 'a continuation typ
-  | TPair : 'a typ * 'b typ -> ('a * 'b) typ
+  | TTuple : 'a typ_list -> 'a list typ
 and 'a typ_list =
   | TLnil : unit typ_list
   | TLcons : ('a typ * 'b typ_list) -> ('a * 'b) typ_list
@@ -56,8 +58,11 @@ type 'a varid = private ('a typ * mvarid)
 type ('a, 'b, 'c) funcid = private (('a, 'b) functyp typ * 'c typ_list * mtypid * mfunid)
   (* Function type, closure type, closure type ID, module-level function ID *)
 type ('a, 'b) effectid = private (('a -> 'b) typ * meffid)
-type handle_depth = Shallow | Deep
-  
+
+type 'a varid_list =
+  | VLnil : unit varid_list
+  | VLcons : 'a varid * 'b varid_list -> ('a * 'b) varid_list
+
 type ('a, 'b) finisher =
   | FId : 'a typ -> ('a, 'a) finisher
   | FMap of 'a varid * 'b typ * 'b block
@@ -65,7 +70,7 @@ and 'a block = assign list * 'a expr
 and assign = Assign : locality * 'a varid * 'a expr -> assign
 and 'a expr =
   | EConvertClosure : mvarid * 'a closure_content typ * mtypid -> 'a closure_content expr
-  | EConstUnit : unit expr
+  | EConstUnit : unit list expr
   | EConstInt : int64 -> int expr
   | EConstBool : bool -> bool expr
   | EConstFloat : float -> float expr
@@ -75,22 +80,25 @@ and 'a expr =
   | EClose : ('a, 'b, 'c) funcid * 'c expr_list -> ('a -> 'b) expr
   | ECallClosed : ('a -> 'b) expr * 'a expr_list * 'b typ -> 'b expr
   | ECond : 'a typ * bool expr * 'a block * 'a block -> 'a expr
-  (* | ELoop : 'a typ * bool expr * 'a block -> 'a expr *) (* TODO *)
   | EDo : ('a, 'b) effectid * 'a expr_list -> 'b expr
-  | EHandle : handle_depth * 'd continuation varid * (unit, 'b, 'c) funcid * 'c expr_list * ('b, 'd) finisher * 'd handler list -> 'd expr
-and 'a handler =
-  | HandlerRet : ('a, 'c) effectid * 'a varid_list * 'b block -> 'b handler
-  | HandlerCont : ('a, 'b) effectid * 'a varid_list * assign list * 'b expr_list * ('c, 'c) finisher -> 'c handler
+  | EShallowHandle : (unit, 'a, 'c) funcid * 'c expr_list * ('a, 'b) finisher * ('a, 'b) handler list -> 'b expr
+  | EDeepHandle : (unit, 'b, 'c) funcid * 'c expr_list * ('b continuation * ('c closure_content * unit), 'd, 'e) funcid * 'e expr_list -> 'd expr
+  (* FIXME: cannot use the following definition, as we don't know what 'e should be when building this expression
+     However, the funcid contain the correct mtypid.
+  | ECont : locality * 'b continuation varid * 'a expr_list *
+            ('b continuation * ('a closure_content * unit), 'd, 'e) funcid * locality * 'e closure_content varid -> 'd expr *)
+  | ECont : locality * 'b continuation varid * 'a expr_list *
+            ('b continuation * ('a list * unit), 'd, unit) funcid * locality * mvarid -> 'd expr
+and ('a, 'b) handler = (* The continuation itself returns 'a, the handler returns 'b *)
+  (* Note: we lose the information that the continuation takes 'b as parameter(s) *)
+  | Handler : ('a, 'b) effectid * ('d continuation * 'a) varid_list * 'c block -> ('d, 'c) handler
 and 'a expr_list =
   | ELnil : unit expr_list
   | ELcons : 'a expr * 'b expr_list -> ('a * 'b) expr_list
-and 'a varid_list =
-  | VLnil : unit varid_list
-  | VLcons : 'a varid * 'b varid_list -> ('a * 'b) varid_list
 
 type anyblock = Block : 'a typ * 'a block -> anyblock
 
-type func = {
+type func' = {
   fun_typ : mtypid;
   fun_id : mfunid;
   fun_export_data : (string * mtypid) option;
@@ -99,6 +107,14 @@ type func = {
   fun_locals: anytyp_list;
   fun_block : anyblock;
 }
+type ('a, 'b, 'c) fhandler = {
+  fh_contarg : 'a continuation varid * mvarid;
+  fh_closure : (mvarid * 'c closure_content varid) option;
+  fh_locals : anytyp_list;
+  fh_finisher : ('a, 'b) finisher;
+  fh_handlers : ('a, 'b) handler list;
+}
+type func = FFunction of func' | FHandler : ('a, 'b, 'c) fhandler -> func
 type modu = {
   mod_nfuns : int32;
   mod_funs : func list;
