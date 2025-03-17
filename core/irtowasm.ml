@@ -20,17 +20,22 @@ module TMap : sig
   
   val type_of_locals : t -> anytyp_list -> t * Wasm.Type.val_type list * int32
   
+  val type_of_exported_type : t -> anytyp -> t * int32
+  val type_of_exported_id : t -> mtypid -> t * int32
+  
   val to_wasm : t -> Wasm.Type.rec_type list
 end = struct
   type t = {
     menv: anytyp MTypMap.t;
     cenv: int32 TypeMap.t;
+    eenv: int32 TypeMap.t;
     nrefs: int32;
     reftyps: Wasm.Type.rec_type list;
   }
   let of_module (m : modu) : t = {
     menv = m.mod_typs;
     cenv = TypeMap.empty;
+    eenv = TypeMap.empty;
     nrefs = 2l;
     reftyps = Wasm.Type.[RecT [SubT (Final, [], DefFuncT (FuncT ([], [])))]; RecT [SubT (Final, [], DefStructT (StructT []))]];
   }
@@ -52,8 +57,7 @@ end = struct
     | TBool -> NumT I32T
     | TFloat -> NumT F64T
     | TFunc _ -> failwith "TODO: TMap.type_to_val TFunc"
-    | TClosedFun _ -> raise (internal_error "Unexpected value of IR type ClosedFun")
-    | TClosedVar _ -> RefT (NoNull, VarHT (StatX (type_of_type' env (Type t))))
+    | TClosed _ -> RefT (NoNull, VarHT (StatX (type_of_type' env (Type t))))
     | TAbsClosArg -> RefT (Null, StructHT)
     | TClosArg _ -> raise (internal_error "Unexpected value of IR type ClosArg")
     | TCont _ -> RefT (NoNull, VarHT (StatX (type_of_type' env (Type t))))
@@ -67,13 +71,13 @@ end = struct
     | TLcons (TBool, tl) -> NumT I32T :: type_to_val_list env (TypeList tl)
     | TLcons (TFloat, tl) -> NumT F64T :: type_to_val_list env (TypeList tl)
     | TLcons (TFunc _, _) -> failwith "TODO: TMap.type_to_val_list TFunc"
-    | TLcons (TClosedFun _, _) -> raise (internal_error "Unexpected value in list of IR type ClosedFun")
-    | TLcons (TClosedVar _ as hd, tl) -> RefT (NoNull, VarHT (StatX (type_of_type' env (Type hd)))) :: type_to_val_list env (TypeList tl)
+    | TLcons (TClosed _ as hd, tl) -> RefT (NoNull, VarHT (StatX (type_of_type' env (Type hd)))) :: type_to_val_list env (TypeList tl)
     | TLcons (TAbsClosArg, tl) -> RefT (Null, StructHT) :: type_to_val_list env (TypeList tl)
     | TLcons (TClosArg _, _) -> raise (internal_error "Unexpected value in list of IR type ClosArg")
     | TLcons (TCont _, _) -> failwith "TODO: TMap.type_to_val_list TCont"
     | TLcons (TTuple _, _) -> failwith "TODO: TMap.type_to_val_list TTuple"
-  and type_of_type' (env : t ref) (t : anytyp) : int32 = match TypeMap.find_opt t !env.cenv with
+  and type_of_type' (env : t ref) ?(is_exported : bool = false) (t : anytyp) : int32 =
+    match TypeMap.find_opt t (if is_exported then !env.eenv else !env.cenv) with
     | Some i -> i
     | None ->
         let newt =
@@ -86,12 +90,8 @@ end = struct
             | TFunc (args, ret) ->
                 let args = type_to_val_list env (TypeList args) in
                 let ret = type_to_val env (Type ret) in
-                RecT [SubT (Final, [], DefFuncT (FuncT (args @ [RefT (Null, StructHT)], [ret])))]
-            | TClosedFun (args, ret) ->
-                let args = type_to_val_list env (TypeList args) in
-                let ret = type_to_val_list env (TypeList (TLcons (ret, TLnil))) in
-                RecT [SubT (Final, [], DefFuncT (FuncT (args, ret)))]
-            | TClosedVar (args, ret) ->
+                RecT [SubT (Final, [], DefFuncT (FuncT ((if is_exported then args else (args @ [RefT (Null, StructHT)])), [ret])))]
+            | TClosed (args, ret) ->
                 let ftid = type_of_type' env (Type (TFunc (args, ret))) in
                 RecT [SubT (Final, [], DefStructT (StructT [
                   FieldT (Cons, ValStorageT (RefT (NoNull, VarHT (StatX ftid))));
@@ -107,7 +107,10 @@ end = struct
             | TTuple _ -> failwith "TODO: convert_rec_type TTuple"
           in convert_rec_type t
         in let env', ret = add_rectyp !env newt in
-        env := { env' with cenv = TypeMap.add t ret env'.cenv }; ret
+        let env' =
+          if is_exported then { env' with eenv = TypeMap.add t ret env'.eenv }
+          else { env' with cenv = TypeMap.add t ret env'.cenv } in
+        env := env'; ret
   
   let ovaltype_of_type (env : t) (t : anytyp) : t * Wasm.Type.val_type option =
     let env = ref env in
@@ -125,8 +128,7 @@ end = struct
     | TBool -> env, NumT I32T, [Const (Wasm.Value.(I32 (I32.of_bits 0l)))]
     | TFloat -> env, NumT F64T, [Const (Wasm.Value.(F64 (F64.of_float 0.)))]
     | TFunc _ -> failwith "TODO: TMap.type_of_global TFunc"
-    | TClosedFun _ -> raise (internal_error "Unexpected global of IR type ClosedFun")
-    | TClosedVar _ -> failwith "TODO: TMap.type_of_global TClosedVar"
+    | TClosed _ -> failwith "TODO: TMap.type_of_global TClosed"
     | TAbsClosArg -> raise (internal_error "Unexpected global of IR type AbsClosArg")
     | TClosArg _ -> raise (internal_error "Unexpected global of IR type ClosArg")
     | TCont _ -> failwith "TODO: TMap.type_of_global TCont"
@@ -190,6 +192,11 @@ end = struct
           Wasm.Type.(RefT (NoNull, VarHT (StatX hd))) :: inner (TypeList tl)
       | TLcons (hd, tl) -> type_to_val env (Type hd) :: inner (TypeList tl)
     in let ret = inner locs in !env, ret, !cid
+  
+  let type_of_exported_type (env : t) (t : anytyp) : t * int32 =
+    let env = ref env in let ret = type_of_type' env ~is_exported:true t in !env, ret
+  let type_of_exported_id (env : t) (t : mtypid) : t * int32 =
+    let t = MTypMap.find t env.menv in type_of_exported_type env t
   
   let to_wasm (env : t) : Wasm.Type.rec_type list = List.rev (env.reftyps)
 end
@@ -302,7 +309,7 @@ and convert_expr : 'a. _ -> 'a expr -> _ -> _ -> _ -> tinstr_conv =
       let tm, gen_new_struct = convert_new_struct tm cls fcid ctid cid in
       tm, Type tret, fun acc -> (if is_last then ReturnCall fid else Call fid) :: gen_new_struct (args acc)
   | ECallClosed (EVariable (loc, vid), args, _) ->
-      let (TClosedVar (targs, tret) as t), _ = (vid : _ varid :> _ typ * int32) in
+      let (TClosed (targs, tret) as t), _ = (vid : _ varid :> _ typ * int32) in
       let tm, vtid = TMap.type_of_type tm (Type t) in
       let tm, fid = TMap.type_of_type tm (Type (TFunc (targs, tret))) in
       let getv = convert_get_var loc vid ctid cid in
@@ -319,7 +326,7 @@ and convert_expr : 'a. _ -> 'a expr -> _ -> _ -> _ -> tinstr_conv =
       tm, Type rt, fun acc -> If (Wasm.Type.(ValBlockType rt'), List.rev (ti []), List.rev (fi []))
                            :: ei acc
   | EDo (eid, args) ->
-      let TClosedVar (_, tret), eid = (eid : _ effectid :> _ * int32) in
+      let TClosed (_, tret), eid = (eid : _ effectid :> _ * int32) in
       let tm, args = convert_exprs tm args ctid cid in
       let tm, ret = match tret with
         | TTuple TLnil -> tm, fun acc -> Const Wasm.Value.(I32 (I32.of_bits 0l)) :: Drop :: acc
@@ -409,7 +416,7 @@ let convert_hdl (tm : tmap) (type a b c) (f : (a, b, c) fhandler) : tmap * Wasm.
             in inner tm vars codehdl in
           let _, varc = (varc : _ varid :> _ * int32) in
           let codehdl = LocalSet varc :: codehdl in
-          let TClosedVar (eargs, _), _ = (eid : (ea, er) effectid :> (ea -> er) typ * int32) in
+          let TClosed (eargs, _), _ = (eid : (ea, er) effectid :> (ea -> er) typ * int32) in
           let tm, blkid = TMap.type_of_handler_block tm contid eargs in
           let code = Wasm.Instruction.Block (Wasm.Type.VarBlockType blkid, code) :: codehdl in
           do_cases tm (Int32.pred nblocks) tl code
@@ -438,8 +445,8 @@ let convert_fun (tm : tmap) (f : func') : tmap * int32 * Wasm.fundef =
   convert_fun_aux tm fun_typ f.fun_locals f.fun_block None (Option.value ~default:0l (f.fun_converted_closure :> int32 option))
 let convert_fun_step2 (tm : tmap) (f, clostyp : func' * int32) : tmap * Wasm.fundef option = match f.fun_export_data with
   | None -> tm, None
-  | Some (name, typid) ->
-      let tm, fn_type = TMap.type_of_typeid tm typid in
+  | Some name ->
+      let tm, fn_type = TMap.type_of_exported_id tm f.fun_typ in
       tm, Some Wasm.{
         fn_name = Some name;
         fn_type;
@@ -474,7 +481,7 @@ let convert_effects (tm : tmap) (es : anytyp_list EffectIDMap.t) : tmap * int32 
   let convert_effect (tm : tmap) (e : meffid * anytyp_list) : tmap * int32 =
     let _, TypeList targs = e in
     let tret = TAbsClosArg in
-    let tm, tid = TMap.type_of_type tm (Type (TClosedFun (targs, tret))) in
+    let tm, tid = TMap.type_of_exported_type tm (Type (TFunc (targs, tret))) in
     tm, tid
   in List.fold_left_map convert_effect tm es
 

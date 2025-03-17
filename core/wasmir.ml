@@ -30,8 +30,7 @@ type 'a typ =
   | TBool : bool typ
   | TFloat : float typ
   | TFunc : 'a typ_list * 'b typ -> ('a, 'b) functyp typ
-  | TClosedFun : 'a typ_list * 'b typ -> ('a, 'b) rawfunctyp typ
-  | TClosedVar : 'a typ_list * 'b typ -> ('a -> 'b) typ
+  | TClosed : 'a typ_list * 'b typ -> ('a -> 'b) typ
   | TAbsClosArg : abs_closure_content typ
   | TClosArg : 'a typ_list -> 'a closure_content typ
   | TCont : 'a typ -> 'a continuation typ
@@ -57,14 +56,10 @@ let rec compare_anytyp (Type t1) (Type t2) = match t1, t2 with
       let cret = compare_anytyp (Type ret1) (Type ret2) in if cret = 0 then compare_anytyp_list (TypeList args1) (TypeList args2) else cret
   | TFunc _, _ -> ~-1
   | _, TFunc _ -> 1
-  | TClosedFun (args1, ret1), TClosedFun (args2, ret2) ->
+  | TClosed (args1, ret1), TClosed (args2, ret2) ->
       let cret = compare_anytyp (Type ret1) (Type ret2) in if cret = 0 then compare_anytyp_list (TypeList args1) (TypeList args2) else cret
-  | TClosedFun _, _ -> ~-1
-  | _, TClosedFun _ -> 1
-  | TClosedVar (args1, ret1), TClosedVar (args2, ret2) ->
-      let cret = compare_anytyp (Type ret1) (Type ret2) in if cret = 0 then compare_anytyp_list (TypeList args1) (TypeList args2) else cret
-  | TClosedVar _, _ -> ~-1
-  | _, TClosedVar _ -> 1
+  | TClosed _, _ -> ~-1
+  | _, TClosed _ -> 1
   | TAbsClosArg, TAbsClosArg -> 0
   | TAbsClosArg, _ -> ~-1
   | _, TAbsClosArg -> 1
@@ -185,11 +180,11 @@ let typ_of_expr (type a) (e : a expr) : a typ = match e with
   | EBinop (BOEq, _, _) -> TBool
   | EBinop (BONe, _, _) -> TBool
   | EVariable (_, (t, _)) -> t
-  | EClose ((TFunc (args, ret), _, _, _), _) -> TClosedVar (args, ret)
+  | EClose ((TFunc (args, ret), _, _, _), _) -> TClosed (args, ret)
   | ECallRawHandler (_, _, _, _, _, _, t) -> t
   | ECallClosed (_, _, t) -> t
   | ECond (t, _, _, _) -> t
-  | EDo ((TClosedVar (_, t), _), _) -> t
+  | EDo ((TClosed (_, t), _), _) -> t
   | EShallowHandle (_, _, FId t, _) -> t
   | EShallowHandle (_, _, FMap (_, t, _), _) -> t
   | EDeepHandle (_, _, (TFunc (_, t), _, _, _), _) -> t
@@ -204,7 +199,7 @@ type anyexpr_list = ExprList : 'a typ_list * 'a expr_list -> anyexpr_list
 type func' = {
   fun_typ : mtypid;
   fun_id : mfunid;
-  fun_export_data : (string * mtypid) option;
+  fun_export_data : string option;
   fun_closure : anytyp_list * mtypid; fun_converted_closure : mvarid option;
   fun_args : anytyp_list;
   fun_locals: anytyp_list;
@@ -248,10 +243,8 @@ let rec assert_eq_typ : 'a 'b. 'a typ -> 'b typ -> string -> ('a, 'b) eq =
   | TFloat, _ | _, TFloat -> raise (internal_error onfail)
   | TFunc (tl1, r1), TFunc (tl2, r2) -> let Eq, Eq = assert_eq_typ_list tl1 tl2 onfail, assert_eq_typ r1 r2 onfail in Eq
   | TFunc _, _ | _, TFunc _ -> raise (internal_error onfail)
-  | TClosedFun (tl1, r1), TClosedFun (tl2, r2) -> let Eq, Eq = assert_eq_typ_list tl1 tl2 onfail, assert_eq_typ r1 r2 onfail in Eq
-  | TClosedFun _, _ | _, TClosedFun _ -> raise (internal_error onfail)
-  | TClosedVar (tl1, r1), TClosedVar (tl2, r2) -> let Eq, Eq = assert_eq_typ_list tl1 tl2 onfail, assert_eq_typ r1 r2 onfail in Eq
-  | TClosedVar _, _ | _, TClosedVar _ -> raise (internal_error onfail)
+  | TClosed (tl1, r1), TClosed (tl2, r2) -> let Eq, Eq = assert_eq_typ_list tl1 tl2 onfail, assert_eq_typ r1 r2 onfail in Eq
+  | TClosed _, _ | _, TClosed _ -> raise (internal_error onfail)
   | TAbsClosArg, TAbsClosArg -> Eq
   | TAbsClosArg, _ | _, TAbsClosArg -> raise (internal_error onfail)
   | TClosArg t1, TClosArg t2 -> let Eq = assert_eq_typ_list t1 t2 onfail in Eq
@@ -346,7 +339,7 @@ let rec convert_type (t : Types.typ) : anytyp =
     (fun args _eff ret ->
         let TypeList args = convert_type_list args in
         let Type ret = convert_type ret in
-        Type (TClosedVar (args, ret)))
+        Type (TClosed (args, ret)))
     (fun fsm _ _ -> let TypeList tl = _to_typelist convert_type fsm in Type (TTuple tl))
     (fun _ _ _ -> Type (TTuple TLnil)) (* TODO check if this is correct; this is used for eg never-called continuations *)
 and convert_type_list (t : Types.typ) : anytyp_list =
@@ -355,7 +348,7 @@ and convert_type_list (t : Types.typ) : anytyp_list =
     (fun args _eff ret ->
         let TypeList args = convert_type_list args in
         let Type ret = convert_type ret in
-        TypeList (TLcons (TClosedVar (args, ret), TLnil)))
+        TypeList (TLcons (TClosed (args, ret), TLnil)))
     (fun fsm _ _ -> _to_typelist convert_type fsm)
     (fun _ _ _ -> failwith "TODO convert_type_list Var")
 let convert_type_function_ret (t : Types.typ) : anytyp =
@@ -405,7 +398,7 @@ module LEnv : sig (* Contains the arguments, the local variables, etc *)
   val set_continuation : subt -> binder -> anytyp_list -> subt
   
   val locals_of_env : realt -> anytyp_list
-  val compile : realt -> mtypid -> mfunid -> string option -> ('a -> anytyp -> 'a * mtypid) -> 'a -> anyblock -> 'a * func'
+  val compile : realt -> mtypid -> mfunid -> string option -> anyblock -> func'
   val compile_sub : subt -> mtypid -> mfunid -> anyblock -> anytyp_list -> mtypid -> mvarid option -> func'
   val compile_handler : subt -> (meffid * meffid) option -> ('b, 'd) finisher -> ('b, 'd) handler list -> anyhandler
 end = struct
@@ -677,18 +670,13 @@ end = struct
   
   let locals_of_env (env : realt) : anytyp_list = extract_args env.locs (TypeList TLnil)
   
-  let compile (env : realt) (ftid : mtypid) (fid : mfunid) (export_name : string option)
-              (add_typ : 'a -> anytyp -> 'a * mtypid) (acc : 'a) (b : anyblock) : 'a * func' =
+  let compile (env : realt) (ftid : mtypid) (fid : mfunid) (export_name : string option) (b : anyblock) : func' =
     let closid, clostyp, has_converted_closure = env.clos in
-    let acc, export_data = match export_name with
-      | Some name ->
-          let TypeList args = env.args in
-          let Block (ret, _) = b in
-          let acc, exportidx = add_typ acc (Type (TClosedFun (args, ret))) in
-          acc, Some (name, exportidx)
-      | None -> acc, None
+    let export_data = match export_name with
+      | Some name -> Some name
+      | None -> None
     in let convclos = if has_converted_closure then Some closid else None
-    in let f = {
+    in {
       fun_typ = ftid;
       fun_id = fid;
       fun_export_data = export_data;
@@ -696,7 +684,7 @@ end = struct
       fun_args = env.args;
       fun_locals = extract_args env.locs (TypeList TLnil);
       fun_block = b;
-    } in acc, f
+    }
   
   let compile_sub (env : subt) (ftid : mtypid) (fid : mfunid) (b : anyblock) (ctype : anytyp_list) (ctypeid : mtypid) (cclosid : mvarid option) : func' =
     {
@@ -866,8 +854,7 @@ end = struct
               hdlcid))
         | None -> begin match find_var ge le v with
             | Some (Either.Left (le, loc, VarID ((t, _) as vid))) -> begin match t with
-                | TClosedFun _ -> raise (internal_error "Unexpected raw closed function")
-                | TClosedVar _ -> le, ClosedLike (Closure (loc, vid))
+                | TClosed _ -> le, ClosedLike (Closure (loc, vid))
                 | _ -> raise (internal_error "Unexpected variable type, expected closed function")
               end
             | Some (Either.Right (ACFunction (f, fid))) -> le, ClosedLike (Function (f, fid))
@@ -1027,14 +1014,14 @@ let rec of_value (ge : genv) (le: lenv) (v : value) : genv * lenv * anyexpr = ma
       | Some (Either.Left (le, loc, VarID (t, vid))) -> ge, le, Expr (t, EVariable (loc, (t, vid)))
       | Some (Either.Right (ACFunction ((TFunc (targs, tret), _, _, _) as f, fhandle))) ->
           let ge = GEnv.do_export_function ge fhandle in
-          ge, le, Expr (TClosedVar (targs, tret), EClose (f, ELnil))
+          ge, le, Expr (TClosed (targs, tret), EClose (f, ELnil))
       | None -> begin match LEnv.find_continuation le v with
           | Some (le, loc, TypeList (type a) (args : a typ_list), VarID (ret, vid), hdlfid, Type (type b) (tret : b typ), _, hdlcloc, hdlcid) ->
               let ge, (fid : mfunid) = GEnv.new_continuator ge hdlfid (Type ret) (TypeList args) (Type tret) in
               let fct = TLcons (TCont ret, TLcons (TAbsClosArg, TLnil)) in
               let ge, fctid = GEnv.add_typ ge (Type (TClosArg fct)) in
               let fid : (a, b, _) funcid = TFunc (args, tret), fct, fctid, fid in
-              ge, le, Expr (TClosedVar (args, tret),
+              ge, le, Expr (TClosed (args, tret),
                             EClose (fid, ELcons (EVariable (Local loc, (TCont ret, vid)),
                                          ELcons (EVariable (Local hdlcloc, (TAbsClosArg, hdlcid)),
                                          ELnil))))
@@ -1128,7 +1115,7 @@ let rec of_value (ge : genv) (le: lenv) (v : value) : genv * lenv * anyexpr = ma
         | Extend (_, Some _) -> failwith "TODO: of_value Closure Extend Some"
         | _ -> failwith "TODO: of_value Closure non-Extend" in
       let ge = GEnv.do_export_function ge fdata in
-      ge, le, Expr (TClosedVar (targs, tret), EClose (fid, cls))
+      ge, le, Expr (TClosed (targs, tret), EClose (fid, cls))
   | Coerce (v, _) -> of_value ge le v (* Assume coercion never needs to occur, which is unfortunately unlikely *)
 
 and convert_values : 'a. _ -> _ -> _ -> 'a typ_list -> _ * _ * 'a expr_list =
@@ -1180,7 +1167,7 @@ let rec of_tail_computation (ge : genv) (le: lenv) (tc : tail_computation) : gen
               let ge, le, args = convert_values ge le args targs in
               let ge = GEnv.do_export_function ge fdata in
               ge, le, Expr (tret, ECallClosed (EClose (fid, ELnil), args, tret))
-          | le, ClosedLike (Closure (loc, ((TClosedVar (targs, tret), _) as vid))) ->
+          | le, ClosedLike (Closure (loc, ((TClosed (targs, tret), _) as vid))) ->
               let ge, le, args = convert_values ge le args targs in
               ge, le, Expr (tret, ECallClosed (EVariable (loc, vid), args, tret))
           | le, ClosedLike (Contin (loc, vid, (TFunc (TLcons (_, TLcons (TTuple targs, _)), tret), _, _, _ as hdlfid), hdlcloc, hdlcid)) ->
@@ -1205,11 +1192,11 @@ let rec of_tail_computation (ge : genv) (le: lenv) (tc : tail_computation) : gen
           | Variable v -> begin match LEnv.find_closure le v n with
               | Some (le, lst, VarID (t, i)) ->
                   let TypeList targs, Type tret = match t with
-                    | TClosedVar (targs, tret) -> TypeList targs, Type tret
+                    | TClosed (targs, tret) -> TypeList targs, Type tret
                     | _ -> raise (internal_error "Unexpected type, expected a function")
                   in
                   let ge, le, args = convert_values ge le args targs in
-                  ge, le, Expr (tret, ECallClosed (EVariable (Local lst, (TClosedVar (targs, tret), i)), args, tret))
+                  ge, le, Expr (tret, ECallClosed (EVariable (Local lst, (TClosed (targs, tret), i)), args, tret))
               | None -> failwith "TODO of_tail_computation Apply Project with unregistered projection"
             end
           | _ -> failwith "TODO of_tail_computation Apply Project with non-Variable"
@@ -1220,7 +1207,7 @@ let rec of_tail_computation (ge : genv) (le: lenv) (tc : tail_computation) : gen
       let ge, le, ExprList (targs, args) = convert_values_unk ge le args in
       let ge, eid = GEnv.add_effect ge tagname (TypeList targs) in
       let Type tret = convert_type tret in
-      ge, le, Expr (tret, EDo ((TClosedVar (targs, tret), eid), args))
+      ge, le, Expr (tret, EDo ((TClosed (targs, tret), eid), args))
   | Special (Handle h) -> begin match h.ih_depth with
       | Shallow -> raise (Errors.RuntimeError "Wasm compilation of shallow handlers is currently not supported")
       | Deep bvs ->
@@ -1273,7 +1260,7 @@ let rec of_tail_computation (ge : genv) (le: lenv) (tc : tail_computation) : gen
                 let ge, handle_le, Block (t, b) = of_computation ge (LEnv.of_sub handle_le) p in
                 let handle_le = LEnv.to_sub handle_le in
                 let Eq = assert_eq_typ t tret "Expected the same type in the return branch as in all handler branches" in
-                ge, handle_le, Handler ((TClosedVar (eargs, TTuple rarg), eid), contid, vargs, b)
+                ge, handle_le, Handler ((TClosed (eargs, TTuple rarg), eid), contid, vargs, b)
               in let do_case ename (ec : effect_case) (ge, handle_le, acc) =
                 let ge, handle_le, hd = do_case ge handle_le ename ec in
                 ge, handle_le, hd :: acc
@@ -1311,7 +1298,7 @@ and of_computation (ge : genv) (le : lenv) ((bs, tc) : computation) : genv * len
           let ge, ctid = GEnv.add_typ ge (Type (TClosArg ctyp)) in
           ge, new_le, Block (t, (Assign (Local StorVariable, (TClosArg ctyp, concid), EConvertClosure (absid, TClosArg ctyp, ctid)) :: ass, e)) in
     let export_name = match fd.fn_closure with None -> Some (Js.name_binder fd.fn_binder) | Some _ -> None in
-    let ge, f = LEnv.compile new_le ftypid fid export_name GEnv.add_typ ge b in
+    let f = LEnv.compile new_le ftypid fid export_name b in
     let ge = GEnv.assign_function ge loc_fid f in
     ge in
   let rec inner (ge : genv) (le: lenv) (bs : binding list) (acc : assign list) = match bs with

@@ -21,8 +21,7 @@ type 'a typ =
   | TBool : bool typ
   | TFloat : float typ
   | TFunc : 'a typ_list * 'b typ -> ('a, 'b) functyp typ
-  | TClosedFun : 'a typ_list * 'b typ -> ('a, 'b) rawfunctyp typ
-  | TClosedVar : 'a typ_list * 'b typ -> ('a -> 'b) typ
+  | TClosed : 'a typ_list * 'b typ -> ('a -> 'b) typ
   | TAbsClosArg : abs_closure_content typ
   | TClosArg : 'a typ_list -> 'a closure_content typ
   | TCont : 'a typ -> 'a continuation typ
@@ -104,7 +103,7 @@ type anyblock = Block : 'a typ * 'a block -> anyblock
 type func' = {
   fun_typ : mtypid;
   fun_id : mfunid;
-  fun_export_data : (string * mtypid) option;
+  fun_export_data : string option;
   fun_closure : anytyp_list * mtypid; fun_converted_closure : mvarid option;
   fun_args : anytyp_list;
   fun_locals: anytyp_list;
