@@ -70,6 +70,7 @@ and 'a block = assign list * 'a expr
 and assign = Assign : locality * 'a varid * 'a expr -> assign
 and 'a expr =
   | EConvertClosure : mvarid * 'a closure_content typ * mtypid -> 'a closure_content expr
+  | EIgnore : 'a typ * 'a expr -> unit list expr
   | EConstUnit : unit list expr
   | EConstInt : int64 -> int expr
   | EConstBool : bool -> bool expr
@@ -78,6 +79,8 @@ and 'a expr =
   | EBinop : ('a, 'b, 'c) binop * 'a expr * 'b expr -> 'c expr
   | EVariable : locality * 'a varid -> 'a expr
   | EClose : ('a, 'b, 'c) funcid * 'c expr_list -> ('a -> 'b) expr
+  | ECallRawHandler : mfunid * 'a typ * 'a continuation expr * 'b typ_list * 'b expr_list * abs_closure_content expr * 'd typ -> 'd expr
+  (* ^ Internal use only: pass the arguments in a struct without modification (no closure de/construction) *)
   | ECallClosed : ('a -> 'b) expr * 'a expr_list * 'b typ -> 'b expr
   | ECond : 'a typ * bool expr * 'a block * 'a block -> 'a expr
   | EDo : ('a, 'b) effectid * 'a expr_list -> 'b expr
@@ -91,7 +94,7 @@ and 'a expr =
             ('b continuation * ('a list * unit), 'd, unit) funcid * locality * mvarid -> 'd expr
 and ('a, 'b) handler = (* The continuation itself returns 'a, the handler returns 'b *)
   (* Note: we lose the information that the continuation takes 'b as parameter(s) *)
-  | Handler : ('a, 'b) effectid * ('d continuation * 'a) varid_list * 'c block -> ('d, 'c) handler
+  | Handler : ('a, 'b) effectid * 'd continuation varid * 'a varid_list * 'c block -> ('d, 'c) handler
 and 'a expr_list =
   | ELnil : unit expr_list
   | ELcons : 'a expr * 'b expr_list -> ('a * 'b) expr_list
