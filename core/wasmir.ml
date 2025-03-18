@@ -219,6 +219,7 @@ type ('a, 'b, 'c) fhandler = {
   fh_locals : anytyp_list;
   fh_finisher : ('a, 'b) finisher;
   fh_handlers : ('a, 'b) handler list;
+  fh_id : mfunid;
 }
 type func = FFunction of func' | FHandler : ('a, 'b, 'c) fhandler -> func
 type modu = {
@@ -409,7 +410,7 @@ module LEnv : sig (* Contains the arguments, the local variables, etc *)
   val locals_of_env : realt -> anytyp_list
   val compile : realt -> mtypid -> mfunid -> string option -> anyblock -> func'
   val compile_sub : subt -> mtypid -> mfunid -> anyblock -> anytyp_list -> mtypid -> mvarid option -> func'
-  val compile_handler : subt -> (meffid * meffid) option -> ('b, 'd) finisher -> ('b, 'd) handler list -> anyhandler
+  val compile_handler : subt -> mfunid -> (meffid * meffid) option -> ('b, 'd) finisher -> ('b, 'd) handler list -> anyhandler
 end = struct
   module IntString = Env.Make(struct
     type t = int * string
@@ -706,7 +707,7 @@ end = struct
       fun_block = b;
     }
   
-  let compile_handler (type b d) (env : subt) (oabsconc : (meffid * meffid) option)
+  let compile_handler (type b d) (env : subt) (fid : mfunid) (oabsconc : (meffid * meffid) option)
                       (onret : (b, d) finisher) (ondo : (b, d) handler list) : anyhandler =
     let contarg, argcontidx = match env.contid with
       | Some (VarID (_, i), j, _, _, _, _) -> i, j
@@ -718,6 +719,7 @@ end = struct
       fh_locals   = extract_args env.locs (TypeList TLnil);
       fh_finisher = onret;
       fh_handlers = ondo;
+      fh_id       = fid;
     }
 end
 
@@ -748,7 +750,7 @@ module GEnv : sig (* Contains the functions, the types, etc *)
   val new_continuator : t -> mfunid -> anytyp -> anytyp_list -> anytyp -> t * mfunid
   val new_function : t -> LEnv.subt -> anytyp_list -> anyblock -> mvarid option -> t * mtypid * mfunid * funid
   val allocate_fhandler : t -> hid * mfunid * t
-  val assign_fhandler : t -> hid -> LEnv.subt -> (meffid * meffid) option -> ('b, 'd) finisher -> ('b, 'd) handler list -> t
+  val assign_fhandler : t -> hid -> mfunid -> LEnv.subt -> (meffid * meffid) option -> ('b, 'd) finisher -> ('b, 'd) handler list -> t
   
   val add_effect : t -> string -> anytyp_list -> t * meffid
   
@@ -956,10 +958,10 @@ end = struct
       ge_nfuns = Int32.succ env.ge_nfuns;
       ge_funs = Either.Right (Either.Left f) :: env.ge_funs;
     }
-  let assign_fhandler (env : t) (hid : hid) (args : LEnv.subt) (oabsconc : (meffid * meffid) option)
+  let assign_fhandler (env : t) (hid : hid) (self_mid : mfunid) (args : LEnv.subt) (oabsconc : (meffid * meffid) option)
                       (onret : ('b, 'd) finisher) (ondo : ('b, 'd) handler list) : t = match !hid with
     | Some _ -> raise (internal_error "double assignment of function")
-    | None -> hid := Some (LEnv.compile_handler args oabsconc onret ondo); env
+    | None -> hid := Some (LEnv.compile_handler args self_mid oabsconc onret ondo); env
   
   let add_effect (env : t) (ename : string) (eargs : anytyp_list) : t * meffid =
     let eff = (ename, eargs) in
@@ -1293,7 +1295,7 @@ let rec of_tail_computation (ge : genv) (le: lenv) (tc : tail_computation) : gen
             let handle_le, oabsconc, ExprList (type e) (hclosts, hcloses : _ * e expr_list) = LEnv.get_closure handle_le in
             (* let ge, hcltid = GEnv.add_typ ge (Type (TClosArg hclosts)) in *)
             let ge = GEnv.set_generic ge hcllocid (Type (TClosArg hclosts)) in
-            let ge = GEnv.assign_fhandler ge hid handle_le oabsconc onret ondo in
+            let ge = GEnv.assign_fhandler ge hid handler_id handle_le oabsconc onret ondo in
             ge, Type tret, hcltid, handler_id, ExprList (hclosts, hcloses) in
           let handler_id : (b continuation * (c closure_content * unit), d, e) funcid =
             (TFunc (TLcons (TCont cret, TLcons (TClosArg body_closts, TLnil)), tret), handler_closts, handler_cltid, handler_id) in

@@ -119,6 +119,7 @@ type ('a, 'b, 'c) fhandler = {
   fh_locals : anytyp_list;
   fh_finisher : ('a, 'b) finisher;
   fh_handlers : ('a, 'b) handler list;
+  fh_id : mfunid;
 }
 type func = FFunction of func' | FHandler : ('a, 'b, 'c) fhandler -> func
 type modu = {
