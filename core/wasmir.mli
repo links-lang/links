@@ -50,6 +50,10 @@ type ('a, 'b, 'r) binop =
   | BORemI : (int,   int,   int)   binop
   | BOEq : ('a, 'a, bool) binop
   | BONe : ('a, 'a, bool) binop
+  | BOLe : (int, int, bool) binop
+  | BOLt : (int, int, bool) binop
+  | BOGe : (int, int, bool) binop
+  | BOGt : (int, int, bool) binop
 
 type local_storage = StorVariable | StorClosure
 type locality = Global | Local of local_storage

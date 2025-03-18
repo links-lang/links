@@ -100,6 +100,10 @@ type ('a, 'b, 'r) binop =
   | BORemI : (int,   int,   int)   binop
   | BOEq : ('a, 'a, bool) binop
   | BONe : ('a, 'a, bool) binop
+  | BOLe : (int, int, bool) binop
+  | BOLt : (int, int, bool) binop
+  | BOGe : (int, int, bool) binop
+  | BOGt : (int, int, bool) binop
 type anybinop = Binop : ('a, 'b, 'c) binop -> anybinop
 
 type local_storage = StorVariable | StorClosure
@@ -179,6 +183,10 @@ let typ_of_expr (type a) (e : a expr) : a typ = match e with
   | EBinop (BORemI, _, _) -> TInt
   | EBinop (BOEq, _, _) -> TBool
   | EBinop (BONe, _, _) -> TBool
+  | EBinop (BOLe, _, _) -> TBool
+  | EBinop (BOLt, _, _) -> TBool
+  | EBinop (BOGe, _, _) -> TBool
+  | EBinop (BOGt, _, _) -> TBool
   | EVariable (_, (t, _)) -> t
   | EClose ((TFunc (args, ret), _, _, _), _) -> TClosed (args, ret)
   | ECallRawHandler (_, _, _, _, _, _, t) -> t
@@ -272,6 +280,7 @@ end = struct
     "+", Binop BOAddI; "+.", Binop BOAddF; "-", Binop BOSubI; "-.", Binop BOSubF;
     "*", Binop BOMulI; "*.", Binop BOMulF; "/", Binop BODivI; "/.", Binop BODivF;
     "%", Binop BORemI; "==", Binop BOEq; "<>", Binop BONe;
+    "<=", Binop BOLe; "<", Binop BOLt; ">=", Binop BOGe; ">", Binop BOGt;
   ]
   
   let get_unop op = StringMap.find_opt op unops
@@ -1101,6 +1110,22 @@ let rec of_value (ge : genv) (le: lenv) (v : value) : genv * lenv * anyexpr = ma
                 let ge, le, Expr (t, arg1) = of_value ge le arg1 in
                 let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 t in
                 ge, le, Expr (TBool, EBinop (BONe, arg1, arg2))
+            | Some (Binop BOLe) ->
+                let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 TInt in
+                let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 TInt in
+                ge, le, Expr (TBool, EBinop (BOLe, arg1, arg2))
+            | Some (Binop BOLt) ->
+                let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 TInt in
+                let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 TInt in
+                ge, le, Expr (TBool, EBinop (BOLt, arg1, arg2))
+            | Some (Binop BOGe) ->
+                let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 TInt in
+                let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 TInt in
+                ge, le, Expr (TBool, EBinop (BOGe, arg1, arg2))
+            | Some (Binop BOGt) ->
+                let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 TInt in
+                let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 TInt in
+                ge, le, Expr (TBool, EBinop (BOGt, arg1, arg2))
             end
           | _ -> raise (internal_error ("Function '" ^ name ^ "' is not a (supported) builtin n-ary operation"))
         end

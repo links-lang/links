@@ -246,6 +246,10 @@ let convert_binop (type a b c) (tm : tmap) (op : (a, b, c) binop) (arg1 : instr_
         | Type TFloat -> F64 FloatOp.Ne
         | _ -> raise (internal_error "Invalid operand type for builtin inequality")
       in tm, Type TBool, fun acc -> Relop op :: arg2 (arg1 acc)
+  | BOLe -> tm, Type TBool, fun acc -> Relop (Wasm.Value.I64 IntOp.LeS) :: arg2 (arg1 acc)
+  | BOLt -> tm, Type TBool, fun acc -> Relop (Wasm.Value.I64 IntOp.LtS) :: arg2 (arg1 acc)
+  | BOGe -> tm, Type TBool, fun acc -> Relop (Wasm.Value.I64 IntOp.GeS) :: arg2 (arg1 acc)
+  | BOGt -> tm, Type TBool, fun acc -> Relop (Wasm.Value.I64 IntOp.GtS) :: arg2 (arg1 acc)
 
 let convert_get_var' (loc : locality) (vid : int32) (ctid : int32) (cid : int32) : instr_conv =
   let open Wasm.Instruction in match loc with
@@ -346,14 +350,14 @@ and convert_expr : 'a. _ -> 'a expr -> _ -> _ -> _ -> tinstr_conv =
       let tm, contcid = TMap.type_of_closure_content tm (TypeList tcontcl) in
       let tm, gen_cont_struct = convert_new_struct tm contargs contcid ctid cid in
       let tm, tcontid = TMap.type_of_type tm (Type (TCont tcret)) in
-      tm, Type thdlret, fun acc -> Call hdlid :: gen_hdl_struct (gen_cont_struct (ContNew tcontid :: RefFunc contid :: acc))
+      tm, Type thdlret, fun acc -> (if is_last then ReturnCall hdlid else Call hdlid) :: gen_hdl_struct (gen_cont_struct (ContNew tcontid :: RefFunc contid :: acc))
   | ECont (loc, contid, contargs, hdlfid, hdlclloc, hdlclid) ->
       let TFunc (TLcons (_, TLcons (TTuple cats, _)), tret), _unusable, _thdlclid, hdlfid = (hdlfid : _ funcid :> _ * _ * _ * int32) in
       let hdlclid = (hdlclid :> int32) in
       let tm, fcid = TMap.type_of_closure_content tm (TypeList cats) in
       let tm, args = convert_new_struct tm contargs fcid ctid cid in
       tm, Type tret, fun acc ->
-        Call hdlfid ::
+        (if is_last then ReturnCall hdlfid else Call hdlfid) ::
         convert_get_var' hdlclloc hdlclid ctid cid (
         args (
         convert_get_var loc contid ctid cid acc))
@@ -434,7 +438,7 @@ let convert_fun_aux (tm : tmap) (ft : int32) (l : anytyp_list) (f : anyblock) (i
   let tm, fn_locals, clostyp = TMap.type_of_locals tm l in
   let tm, code = convert_anyblock tm f (Option.is_none init_dest) clostyp closid in
   tm, clostyp, Wasm.{
-    fn_name = None;
+    fn_name = (match init_dest with Some _ -> Some "main" | None -> None);
     fn_type = ft;
     fn_locals;
     fn_code = List.rev (match init_dest with Some gv -> Wasm.Instruction.GlobalSet gv :: code | None -> code);

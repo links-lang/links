@@ -81,12 +81,12 @@ and generate_struct_type buf t = match t with
 and generate_array_type buf t = ignore (buf, t); failwith "TODO array_type"
 and generate_func_type buf t = match t with
   | FuncT (args, rets) -> generate_result_type buf args; generate_result_type buf rets
-and generate_cont_type buf t = ignore (buf, t); failwith "TODO cont_type"
+and generate_cont_type buf (ContT t) = generate_heap_type buf t
 and generate_str_type buf t = match t with
   | DefStructT st -> Buffer.add_uint8 buf 0x5F; generate_struct_type buf st
   | DefArrayT at -> Buffer.add_uint8 buf 0x5E; generate_array_type buf at
   | DefFuncT ft -> Buffer.add_uint8 buf 0x60; generate_func_type buf ft
-  | DefContT _ct -> failwith "TODO generate DefContT"
+  | DefContT ct -> Buffer.add_uint8 buf 0x5D; generate_cont_type buf ct
 and generate_sub_type buf t = match t with
   | SubT (Final, [], st) -> generate_str_type buf st
   | SubT (Final, _hts, _st) -> failwith "TODO generate_sub_type 0x4F"
@@ -117,13 +117,10 @@ let generate_types buf ts =
 
 let generate_resumetable buf hdls =
   let nhdls = List.length hdls in
-  let auxbuf = Buffer.create 80 in
-  generate_u 32 auxbuf (Int64.of_int (3 * nhdls));
+  generate_u 32 buf (Int64.of_int nhdls);
   List.iter (fun (i, h) -> match h with
-    | OnLabel l -> Buffer.add_uint8 auxbuf 0x00; generate_u 32 auxbuf (Int64.of_int32 i); generate_u 32 auxbuf (Int64.of_int32 l)
-    | OnSwitch -> Buffer.add_uint8 auxbuf 0x01; generate_u 32 auxbuf (Int64.of_int32 i)) hdls;
-  generate_u 32 buf (Int64.of_int (Buffer.length auxbuf));
-  Buffer.add_buffer buf auxbuf
+    | OnLabel l -> Buffer.add_uint8 buf 0x00; generate_u 32 buf (Int64.of_int32 i); generate_u 32 buf (Int64.of_int32 l)
+    | OnSwitch -> Buffer.add_uint8 buf 0x01; generate_u 32 buf (Int64.of_int32 i)) hdls
 let rec generate_instr buf i = match i with
   | Unreachable -> Buffer.add_uint8 buf 0x00
   | Nop -> Buffer.add_uint8 buf 0x01
@@ -158,9 +155,25 @@ let rec generate_instr buf i = match i with
   | Testop (Value.I32 IntOp.Eqz) -> Buffer.add_uint8 buf 0x45
   | Relop (Value.I32 IntOp.Eq) -> Buffer.add_uint8 buf 0x46
   | Relop (Value.I32 IntOp.Ne) -> Buffer.add_uint8 buf 0x47
+	| Relop (Value.I32 IntOp.LtS) -> Buffer.add_uint8 buf 0x48
+  | Relop (Value.I32 IntOp.LtU) -> Buffer.add_uint8 buf 0x49
+  | Relop (Value.I32 IntOp.GtS) -> Buffer.add_uint8 buf 0x4A
+  | Relop (Value.I32 IntOp.GtU) -> Buffer.add_uint8 buf 0x4B
+  | Relop (Value.I32 IntOp.LeS) -> Buffer.add_uint8 buf 0x4C
+  | Relop (Value.I32 IntOp.LeU) -> Buffer.add_uint8 buf 0x4D
+  | Relop (Value.I32 IntOp.GeS) -> Buffer.add_uint8 buf 0x4E
+  | Relop (Value.I32 IntOp.GeU) -> Buffer.add_uint8 buf 0x4F
   | Testop (Value.I64 IntOp.Eqz) -> Buffer.add_uint8 buf 0x50
   | Relop (Value.I64 IntOp.Eq) -> Buffer.add_uint8 buf 0x51
   | Relop (Value.I64 IntOp.Ne) -> Buffer.add_uint8 buf 0x52
+	| Relop (Value.I64 IntOp.LtS) -> Buffer.add_uint8 buf 0x53
+  | Relop (Value.I64 IntOp.LtU) -> Buffer.add_uint8 buf 0x54
+  | Relop (Value.I64 IntOp.GtS) -> Buffer.add_uint8 buf 0x55
+  | Relop (Value.I64 IntOp.GtU) -> Buffer.add_uint8 buf 0x56
+  | Relop (Value.I64 IntOp.LeS) -> Buffer.add_uint8 buf 0x57
+  | Relop (Value.I64 IntOp.LeU) -> Buffer.add_uint8 buf 0x58
+  | Relop (Value.I64 IntOp.GeS) -> Buffer.add_uint8 buf 0x59
+  | Relop (Value.I64 IntOp.GeU) -> Buffer.add_uint8 buf 0x5A
   | Testop (Value.F32 _) -> .
   | Relop (Value.F32 FloatOp.Eq) -> Buffer.add_uint8 buf 0x5B
   | Relop (Value.F32 FloatOp.Ne) -> Buffer.add_uint8 buf 0x5C
@@ -222,14 +235,6 @@ let generate_global buf g =
   generate_global_type buf gt;
   generate_expr buf init;
   match oname with Some _ -> 1L | None -> 0L
-let generate_global_export buf idx g =
-  let (_, _, oname) = g in match oname with
-  | Some name ->
-    generate_u 32 buf (Int64.of_int (String.length name));
-    Buffer.add_bytes buf (Bytes.unsafe_of_string name);
-    Buffer.add_uint8 buf 0x03;
-    generate_u 32 buf (Int64.of_int idx)
-  | _ -> ()
 let generate_globals buf gs =
   Buffer.add_uint8 buf 0x06;
   let nglobals = List.length gs in
@@ -238,12 +243,7 @@ let generate_globals buf gs =
   let nexports = List.fold_left (fun acc v -> Int64.add acc (generate_global auxbuf v)) 0L gs in
   generate_u 32 buf (Int64.of_int (Buffer.length auxbuf));
   Buffer.add_buffer buf auxbuf;
-  Buffer.add_uint8 buf 0x07;
-  let auxbuf = Buffer.create 80 in
-  generate_u 32 auxbuf nexports;
-  List.iteri (generate_global_export auxbuf) gs;
-  generate_u 32 buf (Int64.of_int (Buffer.length auxbuf));
-  Buffer.add_buffer buf auxbuf
+  nexports
 
 let generate_fun buf auxbuf f =
   let { fn_locals = locs; fn_code = instrs; _ } = f in
@@ -262,9 +262,12 @@ let generate_funs buf fs nfuns =
   Buffer.add_uint8 buf 0x03;
   let auxbuf = Buffer.create (2 + nfuns) in
   generate_u 32 auxbuf (Int64.of_int nfuns);
-  List.iter (fun f -> generate_u 32 auxbuf (Int64.of_int32 f.fn_type)) fs;
+  let nfexports = List.fold_left (fun acc f ->
+      generate_u 32 auxbuf (Int64.of_int32 f.fn_type);
+      match f.fn_name with Some _ -> Int64.succ acc | None -> acc) 0L fs in
   generate_u 32 buf (Int64.of_int (Buffer.length auxbuf));
-  Buffer.add_buffer buf auxbuf
+  Buffer.add_buffer buf auxbuf;
+  nfexports
 let generate_codes buf fs nfuns =
   Buffer.add_uint8 buf 0x0A;
   let auxbuf = Buffer.create 80 in
@@ -283,7 +286,29 @@ let generate_init buf oi = match oi with
       generate_u 32 buf (Int64.of_int (Buffer.length auxbuf));
       Buffer.add_buffer buf auxbuf
 
-let generate_tag buf tag = Buffer.add_uint8 buf 0x00; generate_u 32 buf tag
+let generate_export buf name kid sid =
+  generate_u 32 buf (Int64.of_int (String.length name));
+  Buffer.add_bytes buf (Bytes.unsafe_of_string name);
+  Buffer.add_uint8 buf kid;
+  generate_u 32 buf sid
+let generate_global_export buf idx g =
+  let (_, _, oname) = g in match oname with
+  | Some name -> generate_export buf name 0x03 (Int64.of_int idx)
+  | _ -> ()
+let generate_function_export buf idx f =
+  match f.fn_name with
+  | Some name -> generate_export buf name 0x00 (Int64.of_int idx)
+  | _ -> ()
+let generate_exports buf fs gs nexports =
+  Buffer.add_uint8 buf 0x07;
+  let auxbuf = Buffer.create 80 in
+  generate_u 32 auxbuf nexports;
+  List.iteri (generate_global_export auxbuf) gs;
+  List.iteri (generate_function_export auxbuf) fs;
+  generate_u 32 buf (Int64.of_int (Buffer.length auxbuf));
+  Buffer.add_buffer buf auxbuf
+
+let generate_tag buf tag = Buffer.add_uint8 buf 0x00; generate_u 32 buf (Int64.of_int32 tag)
 let generate_tags buf tags =
   Buffer.add_uint8 buf 0x0D;
   let ntags = List.length tags in
@@ -294,14 +319,16 @@ let generate_tags buf tags =
   Buffer.add_buffer buf auxbuf
 
 let output (oc : out_channel) (m : module_) : unit =
-  Sexpr.output oc 80 (sexpr_of_module m)
-  (* let nfuns = List.length m.funs in
+  (* Sexpr.output oc 80 (sexpr_of_module m) *)
+  let nfuns = List.length m.funs in
   let buf = Buffer.create 80 in
   Buffer.add_int64_le buf 0x00000001_6D736100L;
-  generate_types buf m.types;      (* Section 1 *)
-  generate_funs buf m.funs nfuns;  (* Section 3 *)
-  generate_globals buf m.globals;  (* Section 6, Section 7 *)
-  generate_init buf m.init;        (* Section 8 *)
-  generate_codes buf m.funs nfuns; (* Section 10 *)
-  generate_tags buf m.tags;        (* Section 13 *)
-  output_string oc (Buffer.contents buf) *)
+  generate_types buf m.types;                       (* Section 1 *)
+  let nfexports = generate_funs buf m.funs nfuns in (* Section 3 *)
+  generate_tags buf m.tags;                         (* Section 13 *)
+  let ngexports = generate_globals buf m.globals in (* Section 6 *)
+  let nexports = Int64.add nfexports ngexports in
+  generate_exports buf m.funs m.globals nexports;   (* Section 7 *)
+  generate_init buf m.init;                         (* Section 8 *)
+  generate_codes buf m.funs nfuns;                  (* Section 10 *)
+  output_string oc (Buffer.contents buf)
