@@ -138,6 +138,11 @@ let rec generate_instr buf i = match i with
       if f <> [] then (Buffer.add_uint8 buf 0x05; List.iter (generate_instr buf) f);
       Buffer.add_uint8 buf 0x0B
   | Br i -> Buffer.add_uint8 buf 0x0C; generate_u 32 buf (Int64.of_int32 i)
+  | BrTable (is, id) ->
+      Buffer.add_uint8 buf 0x0E;
+      generate_u 32 buf (Int64.of_int (List.length is));
+      List.iter (fun i -> generate_u 32 buf (Int64.of_int32 i)) is;
+      generate_u 32 buf (Int64.of_int32 id)
   | Return -> Buffer.add_uint8 buf 0x0F
   | Call i -> Buffer.add_uint8 buf 0x10; generate_u 32 buf (Int64.of_int32 i)
   | ReturnCall i -> Buffer.add_uint8 buf 0x12; generate_u 32 buf (Int64.of_int32 i)

@@ -236,6 +236,7 @@ module Instruction : sig
     | Loop of block_type * t list
     | If of block_type * t list * t list
     | Br of int32
+    | BrTable of int32 list * int32
     | Return
     | Call of int32
     | CallRef of int32

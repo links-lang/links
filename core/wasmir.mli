@@ -84,7 +84,8 @@ and 'a expr =
   | EUnop : ('a, 'b) unop * 'a expr -> 'b expr
   | EBinop : ('a, 'b, 'c) binop * 'a expr * 'b expr -> 'c expr
   | EVariable : locality * 'a varid -> 'a expr
-  | EVariant : tagid * 'a typ_list * 'a expr_list -> variant expr
+  | EVariant : tagid * 'a typ * 'a expr -> variant expr
+  | ECase : variant varid * variant expr * 'a typ * (tagid * anytyp * mvarid * 'a block) list * (mvarid * 'a block) option -> 'a expr
   | EClose : ('a, 'b, 'c) funcid * 'c expr_list -> ('a -> 'b) expr
   | ECallRawHandler : mfunid * 'a typ * 'a continuation expr * 'b typ_list * 'b expr_list * abs_closure_content expr * 'd typ -> 'd expr
   (* ^ Internal use only: pass the arguments in a struct without modification (no closure de/construction) *)

@@ -153,7 +153,8 @@ and 'a expr =
   | EUnop : ('a, 'b) unop * 'a expr -> 'b expr
   | EBinop : ('a, 'b, 'c) binop * 'a expr * 'b expr -> 'c expr
   | EVariable : locality * 'a varid -> 'a expr
-  | EVariant : tagid * 'a typ_list * 'a expr_list -> variant expr
+  | EVariant : tagid * 'a typ * 'a expr -> variant expr
+  | ECase : variant varid * variant expr * 'a typ * (tagid * anytyp * mvarid * 'a block) list * (mvarid * 'a block) option -> 'a expr
   | EClose : ('a, 'b, 'c) funcid * 'c expr_list -> ('a -> 'b) expr
   | ECallRawHandler : mfunid * 'a typ * 'a continuation expr * 'b typ_list * 'b expr_list * abs_closure_content expr * 'd typ -> 'd expr
   | ECallClosed : ('a -> 'b) expr * 'a expr_list * 'b typ -> 'b expr
@@ -196,6 +197,7 @@ let typ_of_expr (type a) (e : a expr) : a typ = match e with
   | EBinop (BOGt, _, _) -> TBool
   | EVariable (_, (t, _)) -> t
   | EVariant _ -> TVariant
+  | ECase (_, _, t, _, _) -> t
   | EClose ((TFunc (args, ret), _, _), _) -> TClosed (args, ret)
   | ECallRawHandler (_, _, _, _, _, _, t) -> t
   | ECallClosed (_, _, t) -> t
@@ -409,6 +411,7 @@ module LEnv : sig (* Contains the arguments, the local variables, etc *)
   val env_of_args : args -> binder option -> (anytyp -> 'a * mtypid) -> 'a * realt (* closure binder is true if this is for the init function *)
   val add_closure : realt -> realt * mvarid * mvarid * anytyp_list
   
+  val add_local : t -> anytyp -> t * mvarid
   val add_var : t -> binder -> anytyp -> t * mvarid
   val find_var : t -> var -> (t * local_storage * anyvarid) option
   val find_closure : t -> var -> string -> (t * local_storage * anyvarid) option
@@ -605,6 +608,19 @@ end = struct
                 ELcons (EVariable (Local loc, (t, bid)), es)) in
     { env with base; nclos; clos }, VarID (t, cid)
   
+  let add_local (env : t) (Type t : anytyp) : t * mvarid = match env with
+    | Either.Left env ->
+        let vidx = Int32.add env.nargs env.nlocs in
+        Either.Left { env with
+          nlocs = Int32.succ env.nlocs;
+          locs = (let TypeList tl = env.locs in TypeList (TLcons (t, tl)));
+        }, vidx
+    | Either.Right env ->
+        let vidx = Int32.add env.nargs env.nlocs in
+        Either.Right { env with
+          nlocs = Int32.succ env.nlocs;
+          locs = (let TypeList tl = env.locs in TypeList (TLcons (t, tl)));
+        }, vidx
   let add_var (env : t) (b : binder) (Type t : anytyp) : t * mvarid = match env with
     | Either.Left env ->
         let vidx = Int32.add env.nargs env.nlocs in
@@ -1075,11 +1091,8 @@ let rec of_value (ge : genv) (le: lenv) (v : value) : genv * lenv * anyexpr = ma
   | Erase _ -> failwith "TODO: of_value Erase"
   | Inject (tname, args, _) ->
       let ge, tagid = GEnv.find_tag ge tname in
-      let ge, le, e = of_value ge le args in
-      let ExprList (targs, args) = match e with
-        (* | Expr (TTuple ts, ETuple es) -> ExprList (ts, es) *)
-        | Expr (t, e) -> ExprList (TLcons (t, TLnil), ELcons (e, ELnil))
-      in ge, le, Expr (TVariant, EVariant (tagid, targs, args))
+      let ge, le, Expr (targ, arg) = of_value ge le args in
+      ge, le, Expr (TVariant, EVariant (tagid, targ, arg))
   | TAbs (_, v)
   | TApp (v, _) -> of_value ge le v
   | XmlNode _ -> failwith "TODO: of_value XmlNode"
@@ -1331,7 +1344,33 @@ let rec of_tail_computation (ge : genv) (le: lenv) (tc : tail_computation) : gen
           ge, le, Expr (tret, EDeepHandle (body_id, body_closes, handler_id, handler_closes))
     end
   | Special _ -> failwith "TODO of_tail_computation Special"
-  | Case _ -> failwith "TODO of_tail_computation Case"
+  | Case (v, m, d) ->
+      let ge, le, Expr (vt, v) = of_value ge le v in
+      let Eq = assert_eq_typ vt TVariant "Unexpected non-variant type in case computation" in
+      let ge, le, m = Utility.StringMap.fold (fun tag (b, c) (ge, le, acc) ->
+        let ge, tagid = GEnv.find_tag ge tag in
+        let bt = convert_type (Var.type_of_binder b) in
+        let le, argid = LEnv.add_var le b bt in
+        let ge, le, blk = of_computation ge le c in
+        ge, le, (tagid, bt, argid, blk) :: acc) m (ge, le, []) in
+      let ge, le, d = match d with
+        | None -> ge, le, None
+        | Some (b, c) ->
+            let bt = convert_type (Var.type_of_binder b) in
+            let le, argid = LEnv.add_var le b bt in
+            let ge, le, blk = of_computation ge le c in
+            ge, le, Some (argid, blk) in
+      let Type (type r) (t : r typ) = match m with
+        | (_, _, _, Block (t, _)) :: _ -> Type t
+        | [] -> match d with
+            | Some (_, Block (t, _)) -> Type t
+            | None -> raise (internal_error "Empty case computation") in
+      let m = List.map (fun (tid, bindt, bv, Block (bt, bb)) ->
+          let Eq = assert_eq_typ t bt "Unexpected case return type" in tid, bindt, bv, (bb : r block)) m in
+      let d = Option.map (fun (bv, Block (bt, bb)) -> let Eq = assert_eq_typ t bt "Unexpected case return type" in bv, (bb : r block)) d in
+      let le, tmpvar = LEnv.add_local le (Type TVariant) in
+      let tmpvar = TVariant, tmpvar in
+      ge, le, Expr (t, ECase (tmpvar, v, t, m, d))
   | If (b, t, f) ->
       let ge, le, Expr (tb, eb) = of_value ge le b in
       let Eq = assert_eq_typ tb TBool "Expected a boolean expression" in

@@ -752,6 +752,7 @@ module Instruction = struct
     | Loop of block_type * t list
     | If of block_type * t list * t list
     | Br of int32
+    | BrTable of int32 list * int32
     | Return
     | Call of int32
     | CallRef of int32
@@ -798,6 +799,7 @@ module Instruction = struct
     | Loop (bt, b) -> LongNode ("loop", sexpr_of_block_type bt, List.map to_sexpr b)
     | If (b, t, f) -> LongNode ("if", sexpr_of_block_type b, [Node ("then", List.map to_sexpr t); Node ("else", List.map to_sexpr f)])
     | Br i -> LongNode ("br", [Atom (Int32.to_string i)], [])
+    | BrTable (is, id) -> LongNode ("br_table", List.map (fun i -> Atom (Int32.to_string i)) is @ [Atom (Int32.to_string id)], [])
     | Return -> Node ("return", [])
     | Call i -> LongNode ("call", [Atom (Int32.to_string i)], [])
     | CallRef i -> LongNode ("call_ref", [Atom (Int32.to_string i)], [])
