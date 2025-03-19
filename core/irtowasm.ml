@@ -10,6 +10,7 @@ module TMap : sig
   val of_module : modu -> t
   val default_closure : int32
   val init_func_type : int32
+  val variant_tid : int32
   
   val val_of_type : t -> 'a typ -> Wasm.Type.val_type
   val recid_of_type : t -> 'a typ -> int32
@@ -40,11 +41,19 @@ end = struct
     menv = m.mod_typs;
     cenv = TypeMap.empty;
     eenv = TypeMap.empty;
-    nrefs = 2l;
-    reftyps = Wasm.Type.[RecT [SubT (Final, [], DefFuncT (FuncT ([], [])))]; RecT [SubT (Final, [], DefStructT (StructT []))]];
+    nrefs = 3l;
+    reftyps = Wasm.Type.[
+      RecT [SubT (Final, [], DefStructT (StructT [
+        FieldT (Cons, ValStorageT (NumT I32T));
+        FieldT (Cons, ValStorageT (RefT (Null, AnyHT)));
+      ]))];
+      RecT [SubT (Final, [], DefFuncT (FuncT ([], [])))];
+      RecT [SubT (Final, [], DefStructT (StructT []))];
+    ];
   }
   let default_closure : int32 = 0l
   let init_func_type : int32 = 1l
+  let variant_tid : int32 = 2l
   
   let add_rectyp (env : t) (t : Wasm.Type.rec_type) : int32 = match List.find_index ((=) t) env.reftyps with
     | Some tidx -> Int32.sub env.nrefs (Int32.of_int (tidx + 1))
@@ -59,12 +68,13 @@ end = struct
     | TInt -> NumT I64T
     | TBool -> NumT I32T
     | TFloat -> NumT F64T
-    | TFunc _ -> failwith "TODO: TMap.val_of_typ TFunc"
+    | TFunc _ -> failwith "TODO: TMap.val_of_type TFunc"
     | TClosed _ -> RefT (NoNull, VarHT (StatX (recid_of_type env t)))
     | TAbsClosArg -> RefT (Null, StructHT)
     | TClosArg _ -> raise (internal_error "Unexpected value of IR type ClosArg")
     | TCont _ -> RefT (NoNull, VarHT (StatX (recid_of_type env t)))
-    | TTuple _ -> failwith "TODO: TMap.val_of_typ TTuple"
+    | TTuple _ -> failwith "TODO: TMap.val_of_type TTuple"
+    | TVariant -> RefT (NoNull, VarHT (StatX variant_tid))
   
   and [@tail_mod_cons] val_list_of_type_list : 'a. _ -> 'a typ_list -> _ = fun (type a) (env : t) (tl : a typ_list) : Wasm.Type.val_type list ->
     match tl with
@@ -77,10 +87,10 @@ end = struct
     | None ->
         let newt =
           let open Wasm.Type in match t with
-          | TTuple TLnil -> failwith "TODO: TMap.rec_of_typ TTuple"
-          | TInt -> failwith "TODO: TMap.rec_of_typ TInt"
-          | TBool -> failwith "TODO: TMap.rec_of_typ TBool"
-          | TFloat -> failwith "TODO: TMap.rec_of_typ TFloat"
+          | TTuple TLnil -> failwith "TODO: TMap.rec_of_type TTuple"
+          | TInt -> failwith "TODO: TMap.rec_of_type TInt"
+          | TBool -> failwith "TODO: TMap.rec_of_type TBool"
+          | TFloat -> failwith "TODO: TMap.rec_of_type TFloat"
           | TFunc (args, ret) ->
               let args = val_list_of_type_list env args in
               let ret = val_of_type env ret in
@@ -91,14 +101,20 @@ end = struct
                 FieldT (Cons, ValStorageT (RefT (NoNull, VarHT (StatX ftyp))));
                 FieldT (Cons, ValStorageT (RefT (Null, StructHT)))
               ]))]
-          | TAbsClosArg -> failwith "TODO: TMap.rec_of_typ TAbsClosArg"
+          | TAbsClosArg -> failwith "TODO: TMap.rec_of_type TAbsClosArg"
           | TClosArg clos ->
               let clos = val_list_of_type_list env clos in
               RecT [SubT (Final, [], DefStructT (StructT (List.map (fun t -> FieldT (Cons, ValStorageT t)) clos)))]
           | TCont cret ->
               let ftyp = recid_of_type env (TFunc (TLnil, cret)) in
               RecT [SubT (Final, [], DefContT (ContT (VarHT (StatX ftyp))))]
-          | TTuple _ -> failwith "TODO: TMap.rec_of_typ TTuple"
+          | TTuple elems ->
+              let elems = val_list_of_type_list env elems in
+              RecT [SubT (Final, [], DefStructT (StructT (List.map (fun t -> FieldT (Cons, ValStorageT t)) elems)))]
+          | TVariant -> RecT [SubT (Final, [], DefStructT (StructT [
+                FieldT (Cons, ValStorageT (NumT I32T));
+                FieldT (Cons, ValStorageT (RefT (Null, StructHT)))
+              ]))]
         in env.cenv <- TypeMap.add (Type t) newt env.cenv; newt
   
   and recid_of_type : 'a. _ -> 'a typ -> _ = fun (type a) (env : t) (t : a typ) : int32 ->
@@ -174,7 +190,12 @@ let convert_global (tm : tmap) ((_, Type t, name) : 'a * anytyp * string) : Wasm
     | TAbsClosArg -> raise (internal_error "Unexpected global of IR type AbsClosArg")
     | TClosArg _ -> raise (internal_error "Unexpected global of IR type ClosArg")
     | TCont _ -> failwith "TODO: convert_global TCont"
-    | TTuple _ -> failwith "TODO: convert_global TTuple" in
+    | TTuple _ -> failwith "TODO: convert_global TTuple"
+    | TVariant -> [
+          Const (Wasm.Value.(I32 (I32.of_bits 0l)));
+          RefNull Wasm.Type.StructHT;
+          StructNew (TMap.variant_tid, Explicit)
+        ] in
   let t = TMap.val_of_type tm t in
   Wasm.(Type.(GlobalT (Var, t)), init, Some name)
 let convert_globals (tm : tmap) (gs : (mvarid * anytyp * string) list) (tl : Wasm.global list) : Wasm.global list =
@@ -269,6 +290,10 @@ and convert_expr : 'a. _ -> 'a expr -> _ -> _ -> _ -> tinstr_conv =
       let argt2, arg2 = convert_expr tm e2 false cinfo None in
       convert_binop tm op arg1 argt1 arg2 argt2
   | EVariable (loc, vid) -> let t, _ = (vid : _ varid :> _ typ * _) in Type t, convert_get_var loc vid cinfo
+  | EVariant (tagid, targs, args) ->
+      let vctid = TMap.recid_of_type tm (TTuple targs) in
+      let args = convert_new_struct tm args vctid cinfo in
+      Type TVariant, fun acc -> StructNew (TMap.variant_tid, Explicit) :: args (Const Wasm.Value.(I32 (I32.of_int_u (tagid :> int))) :: acc)
   | EClose (f, cls) ->
       let (TFunc (_, tret) as funt), clts, fid = (f : _ funcid :> _ * _ * int32) in
       let fctid = TMap.recid_of_type tm (TClosArg clts) in

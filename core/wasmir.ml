@@ -1,5 +1,6 @@
 open Ir
 
+type tagid = int
 type mtypid = int    (* Module type ID *)
 type mvarid = int32  (* Module variable ID *)
 type closid = int32  (* Module variable ID *)
@@ -21,6 +22,7 @@ end)
 
 type ('a, 'b) rawfunctyp = private RawFunction of ('a -> 'b)
 type ('a, 'b) functyp = private Function of ('a -> 'b)
+type variant = private Variant
 type abs_closure_content = private AbsClosureContent
 type 'a closure_content = private ClosureContent of 'a
 type 'a continuation = private Continuation of 'a
@@ -35,6 +37,7 @@ type 'a typ =
   | TClosArg : 'a typ_list -> 'a closure_content typ
   | TCont : 'a typ -> 'a continuation typ
   | TTuple : 'a typ_list -> 'a list typ
+  | TVariant : variant typ
 and 'a typ_list =
   | TLnil : unit typ_list
   | TLcons : ('a typ * 'b typ_list) -> ('a * 'b) typ_list
@@ -70,6 +73,9 @@ let rec compare_anytyp (Type t1) (Type t2) = match t1, t2 with
   | TCont _, _ -> ~-1
   | _, TCont _ -> 1
   | TTuple tl1, TTuple tl2 -> compare_anytyp_list (TypeList tl1) (TypeList tl2)
+  | TTuple _, _ -> ~-1
+  | _, TTuple _ -> 1
+  | TVariant, TVariant -> 0
 and compare_anytyp_list (TypeList tl1) (TypeList tl2) = match tl1, tl2 with
   | TLnil, TLnil -> 0
   | TLnil, TLcons _ -> ~-1 | TLcons _, TLnil -> 1
@@ -147,6 +153,7 @@ and 'a expr =
   | EUnop : ('a, 'b) unop * 'a expr -> 'b expr
   | EBinop : ('a, 'b, 'c) binop * 'a expr * 'b expr -> 'c expr
   | EVariable : locality * 'a varid -> 'a expr
+  | EVariant : tagid * 'a typ_list * 'a expr_list -> variant expr
   | EClose : ('a, 'b, 'c) funcid * 'c expr_list -> ('a -> 'b) expr
   | ECallRawHandler : mfunid * 'a typ * 'a continuation expr * 'b typ_list * 'b expr_list * abs_closure_content expr * 'd typ -> 'd expr
   | ECallClosed : ('a -> 'b) expr * 'a expr_list * 'b typ -> 'b expr
@@ -188,6 +195,7 @@ let typ_of_expr (type a) (e : a expr) : a typ = match e with
   | EBinop (BOGe, _, _) -> TBool
   | EBinop (BOGt, _, _) -> TBool
   | EVariable (_, (t, _)) -> t
+  | EVariant _ -> TVariant
   | EClose ((TFunc (args, ret), _, _), _) -> TClosed (args, ret)
   | ECallRawHandler (_, _, _, _, _, _, t) -> t
   | ECallClosed (_, _, t) -> t
@@ -261,6 +269,8 @@ let rec assert_eq_typ : 'a 'b. 'a typ -> 'b typ -> string -> ('a, 'b) eq =
   | TCont t1, TCont t2 -> let Eq = assert_eq_typ t1 t2 onfail in Eq
   | TCont _, _ | _, TCont _ -> raise (internal_error onfail)
   | TTuple tl1, TTuple tl2 -> let Eq = assert_eq_typ_list tl1 tl2 onfail in Eq
+  | TTuple _, _ | _, TTuple _ -> raise (internal_error onfail)
+  | TVariant, TVariant -> Eq
 and assert_eq_typ_list : 'a 'b. 'a typ_list -> 'b typ_list -> string -> ('a, 'b) eq =
   fun (type a b) (t1 : a typ_list) (t2 : b typ_list) (onfail : string) : (a, b) eq -> match t1, t2 with
   | TLnil, TLnil -> Eq
@@ -322,7 +332,7 @@ let rec _convert_type (t : Types.typ)
   | Types.Function (args, eff, ret) -> func args eff ret
   | Types.Lolli (args, eff, ret) -> func args eff ret (* Assume Lolli and Function are the same thing *)
   | Types.Record t -> _convert_type t normal func row any
-  | Types.Variant _ -> failwith "TODO _convert_type Variant"
+  | Types.Variant _ -> normal (Type TVariant)
   | Types.Table _ -> failwith "TODO _convert_type Table"
   | Types.Lens _ -> failwith "TODO _convert_type Lens"
   | Types.ForAll (_, t) -> _convert_type t normal func row any (* Ignore polymorphism for now *)
@@ -729,6 +739,8 @@ module GEnv : sig (* Contains the functions, the types, etc *)
   type hid
   val empty : string Env.Int.t -> Utility.IntSet.t -> t
   
+  val find_tag : t -> string -> t * tagid
+  
   val add_typ : t -> anytyp -> t * mtypid
   val type_nilclosure : mtypid
   
@@ -773,6 +785,8 @@ end = struct
     ge_map : string Env.Int.t;
     ge_nfuns : mfunid;
     ge_funs : (func' option ref * mfunid * bool ref, (anyhandler option ref, func' * mfunid) Either.t) Either.t list;
+    ge_ntags : tagid;
+    ge_tagmap : tagid Env.String.t;
     ge_ntyps : mtypid;
     ge_typs : anytyp list;
     ge_typemap : mtypid TypeMap.t;
@@ -791,6 +805,8 @@ end = struct
       ge_nfuns = 0l;
       ge_funs = [];
       ge_ntyps = List.length tmap;
+      ge_ntags = 0;
+      ge_tagmap = Env.String.empty;
       ge_typs = List.rev_map fst tmap;
       ge_typemap = TypeMap.of_list tmap;
       ge_neffs = 0l;
@@ -803,6 +819,14 @@ end = struct
       ge_fmap = Env.Int.empty;
     }
   let type_nilclosure : mtypid = 0
+  
+  let find_tag (env : t) (tname : string) : t * tagid = match Env.String.find_opt tname env.ge_tagmap with
+    | Some i -> env, i
+    | None ->
+        let tagid = env.ge_ntags in
+        let ge_ntags = Int.succ tagid in
+        let ge_tagmap = Env.String.bind tname tagid env.ge_tagmap in
+        { env with ge_ntags; ge_tagmap }, tagid
   
   let add_typ (env : t) (typ : anytyp) : t * mtypid = match TypeMap.find_opt typ env.ge_typemap with
     | Some idx -> env, idx
@@ -1049,7 +1073,13 @@ let rec of_value (ge : genv) (le: lenv) (v : value) : genv * lenv * anyexpr = ma
       | _ -> ignore (n, ge); failwith "TODO: of_value Project with non-Variable"
       end
   | Erase _ -> failwith "TODO: of_value Erase"
-  | Inject _ -> failwith "TODO: of_value Inject"
+  | Inject (tname, args, _) ->
+      let ge, tagid = GEnv.find_tag ge tname in
+      let ge, le, e = of_value ge le args in
+      let ExprList (targs, args) = match e with
+        (* | Expr (TTuple ts, ETuple es) -> ExprList (ts, es) *)
+        | Expr (t, e) -> ExprList (TLcons (t, TLnil), ELcons (e, ELnil))
+      in ge, le, Expr (TVariant, EVariant (tagid, targs, args))
   | TAbs (_, v)
   | TApp (v, _) -> of_value ge le v
   | XmlNode _ -> failwith "TODO: of_value XmlNode"

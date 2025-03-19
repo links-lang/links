@@ -1,6 +1,7 @@
 (* TODO: rethink how deep handlers work, so that we don't have to call another
    function in the (most common?) case of tail resumption *)
 
+type tagid = private int
 type mtypid                  (* Module type ID     *)
 type mvarid = private int32  (* Module variable ID *)
 type closid = private int32  (* Closure member ID  *)
@@ -12,6 +13,7 @@ module EffectIDMap : Utility.Map.S with type key = meffid
 
 type ('a, 'b) rawfunctyp = private RawFunction of ('a -> 'b)
 type ('a, 'b) functyp = private Function of ('a -> 'b)
+type variant = private Variant
 type abs_closure_content = private AbsClosureContent
 type 'a closure_content = private ClosureContent of 'a
 type 'a continuation = private Continuation of 'a
@@ -26,6 +28,7 @@ type 'a typ =
   | TClosArg : 'a typ_list -> 'a closure_content typ
   | TCont : 'a typ -> 'a continuation typ
   | TTuple : 'a typ_list -> 'a list typ
+  | TVariant : variant typ
 and 'a typ_list =
   | TLnil : unit typ_list
   | TLcons : ('a typ * 'b typ_list) -> ('a * 'b) typ_list
@@ -81,6 +84,7 @@ and 'a expr =
   | EUnop : ('a, 'b) unop * 'a expr -> 'b expr
   | EBinop : ('a, 'b, 'c) binop * 'a expr * 'b expr -> 'c expr
   | EVariable : locality * 'a varid -> 'a expr
+  | EVariant : tagid * 'a typ_list * 'a expr_list -> variant expr
   | EClose : ('a, 'b, 'c) funcid * 'c expr_list -> ('a -> 'b) expr
   | ECallRawHandler : mfunid * 'a typ * 'a continuation expr * 'b typ_list * 'b expr_list * abs_closure_content expr * 'd typ -> 'd expr
   (* ^ Internal use only: pass the arguments in a struct without modification (no closure de/construction) *)
