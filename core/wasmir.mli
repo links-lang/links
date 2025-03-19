@@ -1,7 +1,7 @@
 (* TODO: rethink how deep handlers work, so that we don't have to call another
    function in the (most common?) case of tail resumption *)
 
-type mtypid                  (* Module type ID     *) (* TODO: remove this *)
+type mtypid                  (* Module type ID     *)
 type mvarid = private int32  (* Module variable ID *)
 type closid = private int32  (* Closure member ID  *)
 type mfunid = private int32  (* Module function ID *)
@@ -58,7 +58,7 @@ type ('a, 'b, 'r) binop =
 type local_storage = StorVariable | StorClosure
 type locality = Global | Local of local_storage
 type 'a varid = private ('a typ * mvarid)
-type ('a, 'b, 'c) funcid = private (('a, 'b) functyp typ * 'c typ_list * mtypid * mfunid)
+type ('a, 'b, 'c) funcid = private (('a, 'b) functyp typ * 'c typ_list * mfunid)
   (* Function type, closure type, closure type ID, module-level function ID *)
 type ('a, 'b) effectid = private (('a -> 'b) typ * meffid)
 
@@ -94,7 +94,7 @@ and 'a expr =
   | ECont : locality * 'b continuation varid * 'a expr_list *
             ('b continuation * ('a closure_content * unit), 'd, 'e) funcid * locality * 'e closure_content varid -> 'd expr *)
   | ECont : locality * 'b continuation varid * 'a expr_list *
-            ('b continuation * ('a list * unit), 'd, unit) funcid * locality * mvarid -> 'd expr
+            (('b continuation * ('a list * unit), 'd) functyp typ * mtypid * mfunid) * locality * mvarid -> 'd expr
 and ('a, 'b) handler = (* The continuation itself returns 'a, the handler returns 'b *)
   (* Note: we lose the information that the continuation takes 'b as parameter(s) *)
   | Handler : ('a, 'b) effectid * 'd continuation varid * 'a varid_list * 'c block -> ('d, 'c) handler
