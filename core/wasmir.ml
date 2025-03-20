@@ -34,16 +34,20 @@ type 'a typ =
   | TFunc : 'a typ_list * 'b typ -> ('a, 'b) functyp typ
   | TClosed : 'a typ_list * 'b typ -> ('a -> 'b) typ
   | TAbsClosArg : abs_closure_content typ
-  | TClosArg : 'a typ_list -> 'a closure_content typ
+  | TClosArg : 'a typ_list -> 'a closure_content typ (* TODO: merge this with TTuple? It still makes sense to keep them separate though *)
   | TCont : 'a typ -> 'a continuation typ
-  | TTuple : 'a typ_list -> 'a list typ
+  | TTuple : 'a named_typ_list -> 'a list typ
   | TVariant : variant typ
 and 'a typ_list =
   | TLnil : unit typ_list
-  | TLcons : ('a typ * 'b typ_list) -> ('a * 'b) typ_list
+  | TLcons : 'a typ * 'b typ_list -> ('a * 'b) typ_list
+and 'a named_typ_list =
+  | NTLnil : unit named_typ_list
+  | NTLcons : string * 'a typ * 'b named_typ_list -> ('a * 'b) named_typ_list
 
 type anytyp = Type : 'a typ -> anytyp
 type anytyp_list = TypeList : 'a typ_list -> anytyp_list
+type anyntyp_list = NamedTypeList : 'a named_typ_list -> anyntyp_list
 
 let rec compare_anytyp (Type t1) (Type t2) = match t1, t2 with
   | TInt, TInt -> 0
@@ -72,7 +76,7 @@ let rec compare_anytyp (Type t1) (Type t2) = match t1, t2 with
   | TCont t1, TCont t2 -> compare_anytyp (Type t1) (Type t2)
   | TCont _, _ -> ~-1
   | _, TCont _ -> 1
-  | TTuple tl1, TTuple tl2 -> compare_anytyp_list (TypeList tl1) (TypeList tl2)
+  | TTuple tl1, TTuple tl2 -> compare_named_typ_list tl1 tl2
   | TTuple _, _ -> ~-1
   | _, TTuple _ -> 1
   | TVariant, TVariant -> 0
@@ -81,6 +85,15 @@ and compare_anytyp_list (TypeList tl1) (TypeList tl2) = match tl1, tl2 with
   | TLnil, TLcons _ -> ~-1 | TLcons _, TLnil -> 1
   | TLcons (hd1, tl1), TLcons (hd2, tl2) ->
       let chd = compare_anytyp (Type hd1) (Type hd2) in if chd = 0 then compare_anytyp_list (TypeList tl1) (TypeList tl2) else chd
+and compare_named_typ_list : 'a 'b. 'a named_typ_list -> 'b named_typ_list -> _ = fun (type a b) (nl1 : a named_typ_list) (nl2 : b named_typ_list) ->
+  match nl1, nl2 with
+  | NTLnil, NTLnil -> 0
+  | NTLcons _, NTLnil -> ~-1
+  | NTLnil, NTLcons _ -> 1
+  | NTLcons (n1, t1, nl1), NTLcons (n2, t2, nl2) ->
+      let c = String.compare n1 n2 in if c <> 0 then c else
+      let c = compare_anytyp (Type t1) (Type t2) in if c <> 0 then c else
+      compare_named_typ_list nl1 nl2
 
 module TypeMap = Utility.Map.Make(struct
   type t = anytyp
@@ -88,6 +101,13 @@ module TypeMap = Utility.Map.Make(struct
   let show (_ : t) = "<some type>"
   let compare = compare_anytyp
 end)
+
+type ('a, 'b) extract_typ_check =
+  | ExtractO : ('a * 'b, 'a) extract_typ_check
+  | ExtractS : ('b, 'c) extract_typ_check -> ('a * 'b, 'c) extract_typ_check
+type ('a, 'b) extract_typ = int * 'b typ * ('a, 'b) extract_typ_check
+
+type 'a any_extract = Extract : ('a, 'b) extract_typ -> 'a any_extract
 
 type ('a, 'r) unop =
   | UONegI : (int,   int)   unop
@@ -122,7 +142,7 @@ type ('a, 'b, 'c) closed_like =
   (* FIXME: see ECont
   | Contin : locality * 'd continuation varid * ('d continuation * ('a closure_content * unit), 'b, 'e) funcid *
              locality * 'e closure_content varid -> ('a, 'b, 'c) closed_like *)
-  | Contin : locality * 'd continuation varid * (('d continuation * ('a list * unit), 'b) functyp typ * mtypid * mfunid) *
+  | Contin : locality * 'd continuation varid * (('d continuation * ('a closure_content * unit), 'b) functyp typ * mtypid * mfunid) *
              locality * mvarid -> ('a, 'b, 'c) closed_like
 type ('a, 'b) effectid = ('a -> 'b) typ * meffid
 
@@ -146,14 +166,15 @@ and assign = Assign : locality * 'a varid * 'a expr -> assign
 and 'a expr =
   | EConvertClosure : mvarid * 'a closure_content typ * mtypid -> 'a closure_content expr
   | EIgnore : 'a typ * 'a expr -> unit list expr
-  | EConstUnit : unit list expr
   | EConstInt : int64 -> int expr
   | EConstBool : bool -> bool expr
   | EConstFloat : float -> float expr
   | EUnop : ('a, 'b) unop * 'a expr -> 'b expr
   | EBinop : ('a, 'b, 'c) binop * 'a expr * 'b expr -> 'c expr
   | EVariable : locality * 'a varid -> 'a expr
-  | EVariant : tagid * 'a typ * 'a expr -> variant expr
+  | ETuple : 'a named_typ_list * 'a expr_list -> 'a list expr
+  | EExtract : 'a list expr * ('a, 'b) extract_typ -> 'b expr
+  | EVariant : tagid * 'a typ * 'a expr -> variant expr (* TODO: optimize this in the case of a TTuple *)
   | ECase : variant varid * variant expr * 'a typ * (tagid * anytyp * mvarid * 'a block) list * (mvarid * 'a block) option -> 'a expr
   | EClose : ('a, 'b, 'c) funcid * 'c expr_list -> ('a -> 'b) expr
   | ECallRawHandler : mfunid * 'a typ * 'a continuation expr * 'b typ_list * 'b expr_list * abs_closure_content expr * 'd typ -> 'd expr
@@ -167,7 +188,7 @@ and 'a expr =
   | ECont : locality * 'b continuation varid * 'a expr_list *
             ('b continuation * ('a closure_content * unit), 'd, 'e) funcid * locality * 'e closure_content varid -> 'd expr *)
   | ECont : locality * 'b continuation varid * 'a expr_list *
-            (('b continuation * ('a list * unit), 'd) functyp typ * mtypid * mfunid) * locality * mvarid -> 'd expr
+            (('b continuation * ('a closure_content * unit), 'd) functyp typ * mtypid * mfunid) * locality * mvarid -> 'd expr
 and ('a, 'b) handler = (* The continuation itself returns 'a, the handler returns 'b *)
   (* Note: we lose the information that the continuation takes 'b as parameter(s) *)
   | Handler : ('a, 'b) effectid * 'd continuation varid * 'a varid_list * 'c block -> ('d, 'c) handler
@@ -177,8 +198,7 @@ and 'a expr_list =
 
 let typ_of_expr (type a) (e : a expr) : a typ = match e with
   | EConvertClosure (_, t, _) -> t
-  | EIgnore _ -> TTuple TLnil
-  | EConstUnit -> TTuple TLnil
+  | EIgnore _ -> TTuple NTLnil
   | EConstInt _ -> TInt
   | EConstBool _ -> TBool
   | EConstFloat _ -> TFloat
@@ -198,6 +218,8 @@ let typ_of_expr (type a) (e : a expr) : a typ = match e with
   | EVariable (_, (t, _)) -> t
   | EVariant _ -> TVariant
   | ECase (_, _, t, _, _) -> t
+  | ETuple (ts, _) -> TTuple ts
+  | EExtract (_, (_, t, _)) -> t
   | EClose ((TFunc (args, ret), _, _), _) -> TClosed (args, ret)
   | ECallRawHandler (_, _, _, _, _, _, t) -> t
   | ECallClosed (_, _, t) -> t
@@ -270,7 +292,7 @@ let rec assert_eq_typ : 'a 'b. 'a typ -> 'b typ -> string -> ('a, 'b) eq =
   | TClosArg _, _ | _, TClosArg _ -> raise (internal_error onfail)
   | TCont t1, TCont t2 -> let Eq = assert_eq_typ t1 t2 onfail in Eq
   | TCont _, _ | _, TCont _ -> raise (internal_error onfail)
-  | TTuple tl1, TTuple tl2 -> let Eq = assert_eq_typ_list tl1 tl2 onfail in Eq
+  | TTuple ntl1, TTuple ntl2 -> let Eq = assert_eq_named_typ_list ntl1 ntl2 onfail in Eq
   | TTuple _, _ | _, TTuple _ -> raise (internal_error onfail)
   | TVariant, TVariant -> Eq
 and assert_eq_typ_list : 'a 'b. 'a typ_list -> 'b typ_list -> string -> ('a, 'b) eq =
@@ -278,8 +300,19 @@ and assert_eq_typ_list : 'a 'b. 'a typ_list -> 'b typ_list -> string -> ('a, 'b)
   | TLnil, TLnil -> Eq
   | TLcons _, TLnil | TLnil, TLcons _ -> raise (internal_error onfail)
   | TLcons (t1, tl1), TLcons (t2, tl2) -> let Eq, Eq = assert_eq_typ_list tl1 tl2 onfail, assert_eq_typ t1 t2 onfail in Eq
+and assert_eq_named_typ_list : 'a 'b. 'a named_typ_list -> 'b named_typ_list -> string -> ('a, 'b) eq =
+  fun (type a b) (t1 : a named_typ_list) (t2 : b named_typ_list) (onfail : string) : (a, b) eq -> match t1, t2 with
+  | NTLnil, NTLnil -> Eq
+  | NTLcons _, NTLnil | NTLnil, NTLcons _ -> raise (internal_error onfail)
+  | NTLcons (n1, t1, ntl1), NTLcons (n2, t2, ntl2) ->
+      if String.equal n1 n2 then let Eq, Eq = assert_eq_typ t1 t2 onfail, assert_eq_named_typ_list ntl1 ntl2 onfail in Eq
+      else raise (internal_error onfail)
 let target_expr (type a) (Expr (t1, e) : anyexpr) (t2 : a typ) : a expr = let Eq = assert_eq_typ t1 t2 "Unexpected type" in e
 let target_block (type a) (Block (t1, b) : anyblock) (t2 : a typ) : a block = let Eq = assert_eq_typ t1 t2 "Unexpected type" in b
+
+let rec extract_typ_check : 'a 'b. ('a, 'b) extract_typ -> _ = fun (type a b) ((n, t, chk) : (a, b) extract_typ) : unit -> match chk with
+  | ExtractO -> if n = 0 then () else raise (internal_error "Invalid type extraction data")
+  | ExtractS chk -> extract_typ_check (n - 1, t, chk)
 
 module Builtins : sig
   val get_unop : string -> anyunop option
@@ -302,7 +335,7 @@ end = struct
   let gen_impure op (ExprList (targs, args)) : anyexpr = match op with
     | "ignore" -> begin
         match targs, args with
-        | TLcons (targ, TLnil), ELcons (arg, ELnil) -> Expr (TTuple TLnil, EIgnore (targ, arg))
+        | TLcons (targ, TLnil), ELcons (arg, ELnil) -> Expr (TTuple NTLnil, EIgnore (targ, arg))
         | _, ELnil -> raise (internal_error ("Not enough arguments for builtin function 'ignore'"))
         | _, ELcons (_, ELcons _) -> raise (internal_error ("Too many arguments for builtin function 'ignore'"))
       end
@@ -322,10 +355,11 @@ let rec _convert_type (t : Types.typ)
     (any : Types.tid -> CommonTypes.Kind.t -> CommonTypes.Freedom.t -> 'a) : 'a = match t with
   | Types.Not_typed -> failwith "TODO _convert_type Not_typed"
   | Types.Var (id, k, f) -> any id k f
-  | Types.Recursive _ -> failwith "TODO _convert_type Recursive"
-  | Types.Alias _ -> failwith "TODO _convert_type Alias"
+  | Types.Recursive (_, _, t) -> _convert_type t normal func row any
+      (* Note: recursive types should always be broken by a Variant, otherwise we have an infinite object *)
+  | Types.Alias (_, _, t) -> _convert_type t normal func row any
   | Types.Application _ -> failwith "TODO _convert_type Application"
-  | Types.RecursiveApplication _ -> failwith "TODO _convert_type RecursiveApplication"
+  | Types.RecursiveApplication ra -> _convert_type (ra.Types.r_unwind ra.Types.r_args ra.Types.r_dual) normal func row any
   | Types.Meta t -> _convert_type (Unionfind.find t) normal func row any
   | Types.Primitive CommonTypes.Primitive.Bool -> normal (Type TBool)
   | Types.Primitive CommonTypes.Primitive.Int -> normal (Type TInt)
@@ -350,10 +384,10 @@ let rec _convert_type (t : Types.typ)
   | Types.Choice _ -> failwith "TODO _convert_type Choice"
   | Types.Dual _ -> failwith "TODO _convert_type Dual"
   | Types.End -> failwith "TODO _convert_type End"
-let _to_typelist (conv : Types.typ -> anytyp) (ts : Types.typ Ir.name_map) : anytyp_list =
+let _to_typelist (conv : Types.typ -> anytyp) (ts : Types.typ Ir.name_map) : anyntyp_list =
   let rec inner l = match l with
-    | [] -> TypeList TLnil
-    | (_, hd) :: tl -> let Type hd = conv hd in let TypeList tl = inner tl in TypeList (TLcons (hd, tl))
+    | [] -> NamedTypeList NTLnil
+    | (n, hd) :: tl -> let Type hd = conv hd in let NamedTypeList tl = inner tl in NamedTypeList (NTLcons (n, hd, tl))
   in inner (sort_name_map ts)
 let rec convert_type (t : Types.typ) : anytyp =
   _convert_type t
@@ -362,8 +396,8 @@ let rec convert_type (t : Types.typ) : anytyp =
         let TypeList args = convert_type_list args in
         let Type ret = convert_type ret in
         Type (TClosed (args, ret)))
-    (fun fsm _ _ -> let TypeList tl = _to_typelist convert_type fsm in Type (TTuple tl))
-    (fun _ _ _ -> Type (TTuple TLnil)) (* TODO check if this is correct; this is used for eg never-called continuations *)
+    (fun fsm _ _ -> let NamedTypeList tl = _to_typelist convert_type fsm in Type (TTuple tl))
+    (fun _ _ _ -> Type (TTuple NTLnil)) (* FIXME this is incorrect; note: this is used for eg never-called continuations *)
 and convert_type_list (t : Types.typ) : anytyp_list =
   _convert_type t
     (fun (Type t) -> TypeList (TLcons (t, TLnil)))
@@ -371,7 +405,11 @@ and convert_type_list (t : Types.typ) : anytyp_list =
         let TypeList args = convert_type_list args in
         let Type ret = convert_type ret in
         TypeList (TLcons (TClosed (args, ret), TLnil)))
-    (fun fsm _ _ -> _to_typelist convert_type fsm)
+    (fun fsm _ _ ->
+        let rec inner l = match l with
+          | [] -> TypeList TLnil
+          | (_, hd) :: tl -> let Type hd = convert_type hd in let TypeList tl = inner tl in TypeList (TLcons (hd, tl))
+        in inner (sort_name_map fsm))
     (fun _ _ _ -> failwith "TODO convert_type_list Var")
 let convert_type_function_ret (t : Types.typ) : anytyp =
   _convert_type t
@@ -900,7 +938,7 @@ end = struct
             le, ClosedLike (Contin (
               Local loc,
               (TCont ret, vid),
-              (TFunc (TLcons (TCont ret, TLcons (TTuple args, TLnil)), tret), thdlid, hdlfid),
+              (TFunc (TLcons (TCont ret, TLcons (TClosArg args, TLnil)), tret), thdlid, hdlfid),
               Local hdlcloc,
               hdlcid))
         | None -> begin match find_var ge le v with
@@ -1078,16 +1116,42 @@ let rec of_value (ge : genv) (le: lenv) (v : value) : genv * lenv * anyexpr = ma
           | None -> failwith ("TODO: of_value Variable (probable builtin: " ^ (string_of_int v) ^ ")")
         end
       end
-  | Extend (nm, None) -> if Utility.StringMap.is_empty nm then ge, le, Expr (TTuple TLnil, EConstUnit) else failwith "TODO: of_value Extend None"
+  | Extend (nm, None) ->
+      let sorted = sort_name_map nm in
+      let rec inner ge le sorted = match sorted with
+        | [] -> ge, le, Expr (TTuple NTLnil, ETuple (NTLnil, ELnil))
+        | (n, hd) :: tl -> begin
+            let ge, le, Expr (thd, ehd) = of_value ge le hd in
+            match inner ge le tl with
+            | ge, le, Expr (TTuple ttl, ETuple (_, etl)) ->
+                ge, le, Expr (TTuple (NTLcons (n, thd, ttl)), ETuple (NTLcons (n, thd, ttl), ELcons (ehd, etl)))
+            | _ -> assert false
+          end
+      in inner ge le sorted
   | Extend (_, Some _) -> failwith "TODO: of_value Extend Some"
-  | Project (n, v) -> begin match v with
+  | Project (n, v) -> begin match
+      match v with
       | Variable v -> begin match LEnv.find_closure le v n with
           | Some (le, lst, VarID (t, i)) ->
-              ge, le, Expr (t, EVariable (Local lst, (t, i)))
-          | None -> failwith "TODO: of_value Project Variable with unregistered projection"
+              Some (ge, le, Expr (t, EVariable (Local lst, (t, i))))
+          | None -> None
         end
-      | _ -> ignore (n, ge); failwith "TODO: of_value Project with non-Variable"
-      end
+      | _ -> None
+      with Some ret -> ret | None -> begin
+        let ge, le, Expr (t, e) = of_value ge le v in
+        match t with
+        | TTuple nt ->
+            let Extract (type b) ((_, ft, _) as field : (_, b) extract_typ) =
+              let rec inner : 'a. 'a named_typ_list -> 'a any_extract = fun (type a) (nt : a named_typ_list) : a any_extract -> match nt with
+                | NTLnil -> raise (internal_error "Missing field from type")
+                | NTLcons (fn, ft, tl) ->
+                    if String.equal n fn then Extract (0, ft, ExtractO) else
+                      let Extract (i, ft, e) = inner tl in Extract (Int.succ i, ft, ExtractS e)
+              in inner nt
+            in ge, le, Expr (ft, EExtract (e, field))
+        | _ -> raise (internal_error "Unexpected non-tuple expression in projection")
+        end
+    end
   | Erase _ -> failwith "TODO: of_value Erase"
   | Inject (tname, args, _) ->
       let ge, tagid = GEnv.find_tag ge tname in
@@ -1239,7 +1303,7 @@ let rec of_tail_computation (ge : genv) (le: lenv) (tc : tail_computation) : gen
           | le, ClosedLike (Closure (loc, ((TClosed (targs, tret), _) as vid))) ->
               let ge, le, args = convert_values ge le args targs in
               ge, le, Expr (tret, ECallClosed (EVariable (loc, vid), args, tret))
-          | le, ClosedLike (Contin (loc, vid, (TFunc (TLcons (_, TLcons (TTuple targs, _)), tret), _, _ as hdlfid), hdlcloc, hdlcid)) ->
+          | le, ClosedLike (Contin (loc, vid, (TFunc (TLcons (_, TLcons (TClosArg targs, _)), tret), _, _ as hdlfid), hdlcloc, hdlcid)) ->
               let ge, le, args = convert_values ge le args targs in
               ge, le, Expr (tret, ECont (loc, vid, args, hdlfid, hdlcloc, hdlcid))
           | le, CLBuiltin name ->
@@ -1317,19 +1381,16 @@ let rec of_tail_computation (ge : genv) (le: lenv) (tc : tail_computation) : gen
               let do_case (ge : genv) (handle_le : LEnv.subt) (ename : string) ((args, k, p) : effect_case) : genv * LEnv.subt * (b, d) handler =
                 let handle_le, VarIDList (eargs, vargs) = LEnv.set_handler_args handle_le args in
                 let ge, eid = GEnv.add_effect ge ename (TypeList eargs) in
-                let Type rarg = _convert_type (Var.type_of_binder k)
+                let TypeList rarg = _convert_type (Var.type_of_binder k)
                     (fun _ -> raise (internal_error "Expected a function type, got another type"))
-                    (fun args _ _ -> convert_type args)
+                    (fun args _ _ -> convert_type_list args)
                     (fun _ _ _ -> raise (internal_error "Expected a function type, got a row type"))
-                    (fun _ _ _ -> raise (internal_error "Expected a function type, got any type")) in (* TODO: replace by TUnit? *)
-                let TypeList rarg = match rarg with
-                  | TTuple tl -> TypeList tl
-                  | _ -> raise (internal_error "Expected a tuple type, got something else") in
+                    (fun _ _ _ -> raise (internal_error "Expected a function type, got any type")) in
                 let handle_le = LEnv.set_continuation handle_le k (TypeList rarg) in
                 let ge, handle_le, Block (t, b) = of_computation ge (LEnv.of_sub handle_le) p in
                 let handle_le = LEnv.to_sub handle_le in
                 let Eq = assert_eq_typ t tret "Expected the same type in the return branch as in all handler branches" in
-                ge, handle_le, Handler ((TClosed (eargs, TTuple rarg), eid), contid, vargs, b)
+                ge, handle_le, Handler ((TClosed (eargs, TClosArg rarg), eid), contid, vargs, b)
               in let do_case ename (ec : effect_case) (ge, handle_le, acc) =
                 let ge, handle_le, hd = do_case ge handle_le ename ec in
                 ge, handle_le, hd :: acc

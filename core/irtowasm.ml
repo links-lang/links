@@ -4,7 +4,7 @@ open Wasmir
 
 (* TODO: use cont.bind instead of struct.new *)
 
-(* TODO: make it so that TTuple TLnil becomes nothing *)
+(* TODO: make it so that TTuple NTLnil becomes nothing *)
 module TMap : sig
   type t
   val of_module : modu -> t
@@ -64,7 +64,7 @@ end = struct
   
   let rec val_of_type : 'a. _ -> 'a typ -> _ = fun (type a) (env : t) (t : a typ) : Wasm.Type.val_type ->
     let open Wasm.Type in match t with
-    | TTuple TLnil -> NumT I32T
+    | TTuple NTLnil -> NumT I32T
     | TInt -> NumT I64T
     | TBool -> NumT I32T
     | TFloat -> NumT F64T
@@ -80,6 +80,11 @@ end = struct
     match tl with
     | TLnil -> []
     | TLcons (hd, tl) -> let hd = val_of_type env hd in hd :: val_list_of_type_list env tl
+  and [@tail_mod_cons] val_list_of_named_type_list : 'a. _ -> 'a named_typ_list -> _ =
+    fun (type a) (env : t) (tl : a named_typ_list) : Wasm.Type.val_type list ->
+    match tl with
+    | NTLnil -> []
+    | NTLcons (_, hd, tl) -> let hd = val_of_type env hd in hd :: val_list_of_named_type_list env tl
   
   and rec_of_type : 'a. _ -> 'a typ -> _ = fun (type a) (env : t) (t : a typ) : Wasm.Type.rec_type ->
     match TypeMap.find_opt (Type t) env.cenv with
@@ -87,7 +92,7 @@ end = struct
     | None ->
         let newt =
           let open Wasm.Type in match t with
-          | TTuple TLnil -> failwith "TODO: TMap.rec_of_type TTuple"
+          | TTuple NTLnil -> failwith "TODO: TMap.rec_of_type TTuple NTLnil"
           | TInt -> failwith "TODO: TMap.rec_of_type TInt"
           | TBool -> failwith "TODO: TMap.rec_of_type TBool"
           | TFloat -> failwith "TODO: TMap.rec_of_type TFloat"
@@ -109,7 +114,7 @@ end = struct
               let ftyp = recid_of_type env (TFunc (TLnil, cret)) in
               RecT [SubT (Final, [], DefContT (ContT (VarHT (StatX ftyp))))]
           | TTuple elems ->
-              let elems = val_list_of_type_list env elems in
+              let elems = val_list_of_named_type_list env elems in
               RecT [SubT (Final, [], DefStructT (StructT (List.map (fun t -> FieldT (Cons, ValStorageT t)) elems)))]
           | TVariant -> RecT [SubT (Final, [], DefStructT (StructT [
                 FieldT (Cons, ValStorageT (NumT I32T));
@@ -181,7 +186,7 @@ type tmap = TMap.t
 let convert_global (tm : tmap) ((_, Type t, name) : 'a * anytyp * string) : Wasm.global =
   let init =
     let open Wasm.Instruction in match t with
-    | TTuple TLnil -> [Const (Wasm.Value.(I32 (I32.of_bits 0l)))]
+    | TTuple NTLnil -> [Const (Wasm.Value.(I32 (I32.of_bits 0l)))]
     | TInt -> [Const (Wasm.Value.(I64 (I64.of_bits 0L)))]
     | TBool -> [Const (Wasm.Value.(I32 (I32.of_bits 0l)))]
     | TFloat -> [Const (Wasm.Value.(F64 (F64.of_float 0.)))]
@@ -224,7 +229,7 @@ let convert_binop (type a b c) (_ : tmap) (op : (a, b, c) binop) (arg1 : instr_c
   | BORemI -> TInt, fun acc -> Binop (Wasm.Value.I64 IntOp.RemS) :: arg2 (arg1 acc)
   | BOEq ->
       let op : relop = let open Wasm.Value in match argt1 with
-        | TTuple TLnil -> I32 IntOp.Eq
+        | TTuple NTLnil -> I32 IntOp.Eq
         | TInt -> I64 IntOp.Eq
         | TBool -> I32 IntOp.Eq
         | TFloat -> F64 FloatOp.Eq
@@ -232,7 +237,7 @@ let convert_binop (type a b c) (_ : tmap) (op : (a, b, c) binop) (arg1 : instr_c
       in TBool, fun acc -> Relop op :: arg2 (arg1 acc)
   | BONe ->
       let op : relop = let open Wasm.Value in match argt1 with
-        | TTuple TLnil -> I32 IntOp.Ne
+        | TTuple NTLnil -> I32 IntOp.Ne
         | TInt -> I64 IntOp.Ne
         | TBool -> I32 IntOp.Ne
         | TFloat -> F64 FloatOp.Ne
@@ -277,8 +282,7 @@ and convert_expr : 'a. _ -> 'a expr -> _ -> _ -> _ -> 'a tinstr_conv =
       t, fun acc -> RefCast Wasm.Type.(NoNull, VarHT (StatX ctid)) :: LocalGet (src :> int32) :: acc
   | EIgnore (_, e) ->
       let _, e = convert_expr tm e false cinfo None in
-      TTuple TLnil, fun acc -> Const Wasm.Value.(I32 (I32.of_bits 0l)) :: Drop :: e acc
-  | EConstUnit -> (TTuple TLnil), fun acc -> Const Wasm.Value.(I32 (I32.of_bits 0l)) :: acc
+      TTuple NTLnil, fun acc -> Const Wasm.Value.(I32 (I32.of_bits 0l)) :: Drop :: e acc
   | EConstInt i -> TInt, fun acc -> Const Wasm.Value.(I64 (I64.of_bits i)) :: acc
   | EConstBool b -> TBool, fun acc -> Const Wasm.Value.(I32 (I32.of_bits (if b then 1l else 0l))) :: acc
   | EConstFloat f -> TFloat, fun acc -> Const Wasm.Value.(F64 (F64.of_float f)) :: acc
@@ -290,16 +294,29 @@ and convert_expr : 'a. _ -> 'a expr -> _ -> _ -> _ -> 'a tinstr_conv =
       let argt2, arg2 = convert_expr tm e2 false cinfo None in
       convert_binop tm op arg1 argt1 arg2 argt2
   | EVariable (loc, vid) -> let t, _ = (vid : _ varid :> _ typ * _) in t, convert_get_var loc vid cinfo
+  | ETuple (NTLnil, ELnil) ->
+      TTuple NTLnil, fun acc -> Const Wasm.Value.(I32 (I32.of_bits 0l)) :: acc
+  | ETuple (ntl, es) ->
+      let tid = TMap.recid_of_type tm (TTuple ntl) in
+      let es = convert_new_struct tm es tid cinfo in
+      TTuple ntl, fun acc -> es acc
+  | EExtract (e, (i, t, _)) ->
+      let ttup, e = convert_expr tm e false cinfo None in
+      let tid = TMap.recid_of_type tm ttup in
+      t, fun acc -> StructGet (tid, Int32.of_int i, None) :: (e acc)
   | EVariant (tagid, targ, arg) ->
-      let vctid = TMap.recid_of_type tm (TTuple (TLcons (targ, TLnil))) in
+      let vctid = TMap.recid_of_type tm (TTuple (NTLcons ("0", targ, NTLnil))) in
       let arg = convert_new_struct tm (ELcons (arg, ELnil)) vctid cinfo in
       TVariant, fun acc -> StructNew (TMap.variant_tid, Explicit) :: arg (Const Wasm.Value.(I32 (I32.of_int_u (tagid :> int))) :: acc)
   | ECase (tmpvar, v, t, cs, od) ->
       let loc, vid, stv = match v with
-        | EVariable (loc, vid) -> loc, vid, (fun acc -> acc)
+        | EVariable (loc, vid) ->
+            let _, vid = (vid : _ varid :> _ * int32) in
+            loc, vid, (fun acc -> acc)
         | _ ->
+            let _, tmpvar = (tmpvar : _ varid :> _ * int32) in
             let _, stv = convert_expr tm v false cinfo None in
-            Local StorVariable, tmpvar, (fun acc -> stv acc)
+            Local StorVariable, tmpvar, (fun acc -> LocalSet tmpvar :: stv acc)
       in
       let branches = ref (Array.make 0 None) in
       let ncases, min_id, code = List.fold_left (fun (i, min_id, code) (id, Type btyp, bid, blk) ->
@@ -308,10 +325,10 @@ and convert_expr : 'a. _ -> 'a expr -> _ -> _ -> _ -> 'a tinstr_conv =
           branches := Array.init (id + 1) (fun j -> if j < Array.length !branches then !branches.(j) else None);
         !branches.(id) <- Some i;
         let _, blk = convert_block tm blk is_last cinfo can_jmp in
-        let tid = TMap.recid_of_type tm (TTuple (TLcons (btyp, TLnil))) in
+        let tid = TMap.recid_of_type tm (TTuple (NTLcons ("0", btyp, NTLnil))) in
         Int32.succ i, Int.min min_id id, fun content depth ->
           Wasm.Instruction.Block (Wasm.Type.(ValBlockType None), code content (Int32.succ depth)) ::
-          convert_get_var loc vid cinfo (
+          convert_get_var' loc vid cinfo (
           StructGet (TMap.variant_tid, 1l, None) ::
           RefCast Wasm.Type.(NoNull, (VarHT (StatX tid))) ::
           StructGet (tid, 0l, None) ::
@@ -319,7 +336,7 @@ and convert_expr : 'a. _ -> 'a expr -> _ -> _ -> _ -> 'a tinstr_conv =
           List.rev_append (blk []) [Br depth])
       ) (0l, Int.max_int, fun content _ -> content) cs in
       let branches = !branches in
-      let min_id = if min_id < 3 then 0 else min_id in
+      let min_id = if min_id <= 3 then 0 else min_id in
       let code =
         let table = [
           BrTable (
@@ -331,15 +348,15 @@ and convert_expr : 'a. _ -> 'a expr -> _ -> _ -> _ -> 'a tinstr_conv =
         let table =
           if min_id = 0 then table
           else Const Wasm.Value.(I32 (I32.of_int_u min_id)) :: Binop Wasm.Value.(I32 IntOp.Sub) :: table in
-        code (convert_get_var loc vid cinfo (
-        StructGet (TMap.variant_tid, 0l, None) ::
-        table)) 1l in
+        code (convert_get_var' loc vid cinfo (
+          StructGet (TMap.variant_tid, 0l, None) ::
+          table)) 1l in
       let code = match od with
         | None -> Wasm.Instruction.Block (Wasm.Type.(ValBlockType None), code) :: [Unreachable]
         | Some (bid, blk) ->
           let _, blk = convert_block tm blk is_last cinfo can_jmp in
           Wasm.Instruction.Block (Wasm.Type.(ValBlockType None), code) ::
-          convert_get_var loc vid cinfo (
+          convert_get_var' loc vid cinfo (
           LocalSet (bid :> int32) ::
           List.rev (blk []))
       in
@@ -386,9 +403,9 @@ and convert_expr : 'a. _ -> 'a expr -> _ -> _ -> _ -> 'a tinstr_conv =
       let TClosed (_, tret), eid = (eid : _ effectid :> _ * int32) in
       let args = convert_exprs tm args cinfo in
       let ret = match tret with
-        | TTuple TLnil -> fun acc -> Const Wasm.Value.(I32 (I32.of_bits 0l)) :: Drop :: acc
+        | TTuple NTLnil -> fun acc -> Const Wasm.Value.(I32 (I32.of_bits 0l)) :: Drop :: acc
         | TTuple tl ->
-            let stid = TMap.recid_of_type tm (TClosArg tl) in
+            let stid = TMap.recid_of_type tm (TTuple tl) in
             fun acc -> RefCast Wasm.Type.(NoNull, (VarHT (StatX stid))) :: acc
         | _ ->
             let stid = TMap.recid_of_type tm (TClosArg (TLcons (tret, TLnil))) in
@@ -405,7 +422,7 @@ and convert_expr : 'a. _ -> 'a expr -> _ -> _ -> _ -> 'a tinstr_conv =
       let tcontid = TMap.recid_of_type tm (TCont tcret) in
       thdlret, fun acc -> (if is_last then ReturnCall hdlid else Call hdlid) :: gen_hdl_struct (gen_cont_struct (ContNew tcontid :: RefFunc contid :: acc))
   | ECont (loc, contid, contargs, hdlfid, hdlclloc, hdlclid) -> begin
-      let TFunc (TLcons (_, TLcons (TTuple cats, _)), tret), _thdlclid, hdlfid = (hdlfid : _ * _ * mfunid :> _ * _ * int32) in
+      let TFunc (TLcons (_, TLcons (TClosArg cats, _)), tret), _thdlclid, hdlfid = (hdlfid : _ * _ * mfunid :> _ * _ * int32) in
       match can_jmp with
       | Some (refid, jmplv) when Int32.equal hdlfid (refid :> int32) ->
           let fcid = TMap.recid_of_type tm (TClosArg cats) in
@@ -458,7 +475,7 @@ let convert_hdl (tm : tmap) (type a b c) (f : (a, b, c) fhandler) : Wasm.fundef 
     | None -> [], None
     | Some (src, dst) ->
         let _, dst = (dst : _ varid :> _ * int32) in
-        let cid = (Option.value ~default:2l (Option.map fst f.fh_closure :> int32 option)) in
+        let cid = (Option.value ~default:2l (Option.map (fun (_, v) -> snd (v : _ varid :> _ * int32)) f.fh_closure)) in
         [LocalSet dst; RefCast Wasm.Type.(NoNull, (VarHT (StatX clostyp))); LocalGet (src :> int32)], Some (clostyp, cid)
   in let code =
     let nblocks, handlers =

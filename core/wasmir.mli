@@ -27,15 +27,21 @@ type 'a typ =
   | TAbsClosArg : abs_closure_content typ
   | TClosArg : 'a typ_list -> 'a closure_content typ
   | TCont : 'a typ -> 'a continuation typ
-  | TTuple : 'a typ_list -> 'a list typ
+  | TTuple : 'a named_typ_list -> 'a list typ
   | TVariant : variant typ
 and 'a typ_list =
   | TLnil : unit typ_list
-  | TLcons : ('a typ * 'b typ_list) -> ('a * 'b) typ_list
+  | TLcons : 'a typ * 'b typ_list -> ('a * 'b) typ_list
+and 'a named_typ_list =
+  | NTLnil : unit named_typ_list
+  | NTLcons : string * 'a typ * 'b named_typ_list -> ('a * 'b) named_typ_list
 
 type anytyp = Type : 'a typ -> anytyp
 type anytyp_list = TypeList : 'a typ_list -> anytyp_list
 module TypeMap : Utility.Map.S with type key = anytyp
+
+type ('a, 'b) extract_typ_check
+type ('a, 'b) extract_typ = int * 'b typ * ('a, 'b) extract_typ_check
 
 type ('a, 'r) unop =
   | UONegI : (int,   int)   unop
@@ -77,13 +83,14 @@ and assign = Assign : locality * 'a varid * 'a expr -> assign
 and 'a expr =
   | EConvertClosure : mvarid * 'a closure_content typ * mtypid -> 'a closure_content expr
   | EIgnore : 'a typ * 'a expr -> unit list expr
-  | EConstUnit : unit list expr
   | EConstInt : int64 -> int expr
   | EConstBool : bool -> bool expr
   | EConstFloat : float -> float expr
   | EUnop : ('a, 'b) unop * 'a expr -> 'b expr
   | EBinop : ('a, 'b, 'c) binop * 'a expr * 'b expr -> 'c expr
   | EVariable : locality * 'a varid -> 'a expr
+  | ETuple : 'a named_typ_list * 'a expr_list -> 'a list expr
+  | EExtract : 'a list expr * ('a, 'b) extract_typ -> 'b expr
   | EVariant : tagid * 'a typ * 'a expr -> variant expr
   | ECase : variant varid * variant expr * 'a typ * (tagid * anytyp * mvarid * 'a block) list * (mvarid * 'a block) option -> 'a expr
   | EClose : ('a, 'b, 'c) funcid * 'c expr_list -> ('a -> 'b) expr
@@ -99,7 +106,7 @@ and 'a expr =
   | ECont : locality * 'b continuation varid * 'a expr_list *
             ('b continuation * ('a closure_content * unit), 'd, 'e) funcid * locality * 'e closure_content varid -> 'd expr *)
   | ECont : locality * 'b continuation varid * 'a expr_list *
-            (('b continuation * ('a list * unit), 'd) functyp typ * mtypid * mfunid) * locality * mvarid -> 'd expr
+            (('b continuation * ('a closure_content * unit), 'd) functyp typ * mtypid * mfunid) * locality * mvarid -> 'd expr
 and ('a, 'b) handler = (* The continuation itself returns 'a, the handler returns 'b *)
   (* Note: we lose the information that the continuation takes 'b as parameter(s) *)
   | Handler : ('a, 'b) effectid * 'd continuation varid * 'a varid_list * 'c block -> ('d, 'c) handler
