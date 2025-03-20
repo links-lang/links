@@ -166,7 +166,8 @@ struct
         let t = Var.type_of_binder b in
         let o = o#typ t in
         match Var.scope_of_binder b with
-        | Scope.Global -> o#global (Var.var_of_binder b), b
+        | Scope.PseudoGlobal
+          | Scope.Global -> o#global (Var.var_of_binder b), b
         | Scope.Local  -> o#bound_termvar (Var.var_of_binder b), b
 
       method super_binding = super#binding
@@ -405,7 +406,7 @@ end
 (* mark top-level bindings as global *)
 module Globalise =
 struct
-  let binder b = Var.globalise_binder b
+  let binder b = Var.pseudoglobalise_binder b
   let fun_def def = {def with fn_binder = binder def.fn_binder}
   let binding = function
     | Let (x, body) -> Let (binder x, body)

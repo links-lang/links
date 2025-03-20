@@ -287,7 +287,8 @@ module Env = struct
     match scope with
       Scope.Local ->
       { env with all = IntMap.add name (v,scope) env.all }
-    | Scope.Global ->
+    | Scope.PseudoGlobal
+      | Scope.Global ->
        { env with
          all = IntMap.add name (v,scope) env.all;
          globals = IntMap.add name (v,scope) env.globals;
@@ -316,6 +317,7 @@ module Env = struct
       (fun name locals ->
         match lookupS name env with
         | None
+          | Some (_, Scope.PseudoGlobal)
           | Some (_, Scope.Global) -> locals
         | Some (v, Scope.Local) ->
            bind name (v, Scope.Local) locals)
@@ -1158,5 +1160,3 @@ let row_columns_values v =
     | v -> raise (type_error ~action:"form query row from" "list" v)
   in
   (row_columns v, row_values v)
-
-

@@ -1385,7 +1385,8 @@ struct
                    List.fold_left
                      (fun (scope, nenv) {fn_binder = b'; _} ->
                        match Var.scope_of_binder b' with
-                       | Scope.Global ->
+                       | Scope.PseudoGlobal
+                         | Scope.Global ->
                           let nenv' =
                             Env.String.bind (Var.name_of_binder b') (Var.var_of_binder b') nenv
                           in
@@ -1395,7 +1396,8 @@ struct
                  in
                  begin
                    match scope with
-                   | Scope.Global ->
+                   | Scope.PseudoGlobal
+                     | Scope.Global ->
                       partition (b::locals @ globals, [], nenv) bs
                    | Scope.Local ->
                       partition (globals, b::locals, nenv) bs

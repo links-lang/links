@@ -1391,7 +1391,10 @@ and of_computation (ge : genv) (le : lenv) ((bs, tc) : computation) : genv * len
           let new_le, absid, concid, TypeList ctyp = LEnv.add_closure new_le in
           let ge, ctid = GEnv.add_typ ge (Type (TClosArg ctyp)) in
           ge, new_le, Block (t, (Assign (Local StorVariable, (TClosArg ctyp, concid), EConvertClosure (absid, TClosArg ctyp, ctid)) :: ass, e)) in
-    let export_name = match fd.fn_closure with None -> Some (Js.name_binder fd.fn_binder) | Some _ -> None in
+    let export_name =
+      if Var.Scope.is_real_global (Var.scope_of_binder fd.fn_binder)
+      then match fd.fn_closure with None -> Some (Var.name_of_binder fd.fn_binder) | Some _ -> None
+      else None in
     let f = LEnv.compile new_le ftypid fid export_name b in
     let ge = GEnv.assign_function ge loc_fid f in
     ge in

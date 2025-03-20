@@ -1,10 +1,11 @@
 (** {0 IR variables} *)
 
 module Scope: sig
-  type t = Local | Global
+  type t = Local | PseudoGlobal | Global
   [@@deriving show]
 
   val is_global : t -> bool
+  val is_real_global : t -> bool
   val is_local : t -> bool
 end
 
@@ -51,6 +52,7 @@ val type_of_binder : binder -> Types.datatype
 val name_of_binder : binder -> string
 val scope_of_binder : binder -> Scope.t
 
+val pseudoglobalise_binder : binder -> binder
 val globalise_binder : binder -> binder
 
 (** Create a copy of a type environment mapping vars (= ints) to types

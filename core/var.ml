@@ -3,10 +3,15 @@
 open Utility
 
 module Scope = struct
-  type t = Local | Global
+  type t = Local | PseudoGlobal | Global
   [@@deriving show]
 
   let is_global = function
+    | Global -> true
+    | PseudoGlobal -> true
+    | _      -> false
+
+  let is_real_global = function
     | Global -> true
     | _      -> false
 
@@ -72,6 +77,10 @@ let scope_of_binder (_, (_, _, scope) : binder) = scope
 
 let globalise_binder (var, (t, name, _)) =
   (var, (t, name, Scope.Global))
+
+let pseudoglobalise_binder (var, (t, name, scope) as b) =
+  if scope = Scope.Global then b
+  else (var, (t, name, Scope.PseudoGlobal))
 
 (** Create a copy of a type environment mapping vars (= ints) to types
     instead of strings to types
