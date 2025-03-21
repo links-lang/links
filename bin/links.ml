@@ -105,11 +105,17 @@ let run : string list -> string list -> unit
         | [], [] -> Repl.interact context''
         | _, _ -> ()
       end
+    | Some Wat ->
+      ignore (for_each context'
+        (fun context file ->
+           let output_file = val_of (Settings.get output_file) in
+           handle_errors (lazy (Driver.Phases.compile_wasm_only context file output_file false)); context)
+        file_list)
     | Some Wasm ->
       ignore (for_each context'
         (fun context file ->
            let output_file = val_of (Settings.get output_file) in
-           handle_errors (lazy (Driver.Phases.compile_wasm_only context file output_file)); context)
+           handle_errors (lazy (Driver.Phases.compile_wasm_only context file output_file true)); context)
         file_list)
     | Some Web ->
       ignore (for_each context' process_file file_list)

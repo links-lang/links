@@ -673,7 +673,7 @@ module Instruction = struct
     type binop = Add | Sub | Mul | DivS | DivU | RemS | RemU
     type testop = Eqz
     type relop = Eq | Ne | LtS | LtU | GtS | GtU | LeS | LeU | GeS | GeU
-    type cvtop = |
+    type cvtop = WrapI64
     
     let unop _ (op : unop) : string = match op with _ -> .
     let binop _ (op : binop) : string = match op with
@@ -697,7 +697,8 @@ module Instruction = struct
       | LeU -> "le_u"
       | GeS -> "ge_s"
       | GeU -> "ge_u"
-    let cvtop _ (op : cvtop) : string = match op with _ -> .
+    let cvtop _ (op : cvtop) : string = match op with
+      | WrapI64 -> "wrap_i64"
   end
   module FloatOp = struct
     type unop = Neg
@@ -752,6 +753,7 @@ module Instruction = struct
     | Loop of block_type * t list
     | If of block_type * t list * t list
     | Br of int32
+    | BrIf of int32
     | BrTable of int32 list * int32
     | Return
     | Call of int32
@@ -797,8 +799,10 @@ module Instruction = struct
     | GlobalSet i -> LongNode ("global.set", [Atom (Int32.to_string i)], [])
     | Block (bt, b) -> LongNode ("block", sexpr_of_block_type bt, List.map to_sexpr b)
     | Loop (bt, b) -> LongNode ("loop", sexpr_of_block_type bt, List.map to_sexpr b)
+    | If (b, t, []) -> LongNode ("if", sexpr_of_block_type b, [Node ("then", List.map to_sexpr t)])
     | If (b, t, f) -> LongNode ("if", sexpr_of_block_type b, [Node ("then", List.map to_sexpr t); Node ("else", List.map to_sexpr f)])
     | Br i -> LongNode ("br", [Atom (Int32.to_string i)], [])
+    | BrIf i -> LongNode ("br_if", [Atom (Int32.to_string i)], [])
     | BrTable (is, id) -> LongNode ("br_table", List.map (fun i -> Atom (Int32.to_string i)) is @ [Atom (Int32.to_string id)], [])
     | Return -> Node ("return", [])
     | Call i -> LongNode ("call", [Atom (Int32.to_string i)], [])
@@ -819,6 +823,16 @@ module Instruction = struct
     | StructSet (i, j) -> LongNode ("struct.new", [Atom (Int32.to_string i); Atom (Int32.to_string j)], [])
 end
 
+type import_desc =
+  | FuncImport of int32
+  | TagImport of int32
+
+type import = {
+  module_name : string;
+  item_name : string;
+  desc : import_desc;
+}
+
 type raw_code = Type.val_type * Type.val_type list * Instruction.t list
 type fundef = {
   fn_name  : string option;
@@ -832,6 +846,7 @@ type module_ = {
   globals: global list;
   tags   : int32 list;
   funs   : fundef list;
+  imports: import list;
   init   : int32 option;
 }
 
@@ -841,6 +856,15 @@ let sexpr_of_global ((gt, i, oname) : global) : Sexpr.t =
     | Some name -> Sexpr.(LongNode ("export", [Atom ("\"" ^ name ^ "\"")], [])) :: online
     | None -> online
   in Sexpr.(Node ("global", online))
+
+let sexpr_of_import_desc (nf, nt : int * int) (id : import_desc) : (int * int) * Sexpr.t = let open Sexpr in match id with
+  | FuncImport i -> (Int.succ nf, nt), LongNode ("func", [Atom ("$" ^ Int.to_string nf); LongNode ("type", [Atom (Int32.to_string i)], [])], [])
+  | TagImport i -> (nf, Int.succ nt), LongNode ("tag", [Atom ("$" ^ Int.to_string nt); LongNode ("type", [Atom (Int32.to_string i)], [])], [])
+let sexpr_of_import (acc : int * int) (i : import) : (int * int) * Sexpr.t =
+  let modname = "\"" ^ i.module_name ^ "\"" in
+  let itname = "\"" ^ i.item_name ^ "\"" in
+  let acc, sdesc = sexpr_of_import_desc acc i.desc in
+  acc, Sexpr.(Node ("import", [Atom modname; Atom itname; sdesc]))
 
 let sexpr_of_function funid ({ fn_name = ofname; fn_type = typeid; fn_locals = locals; fn_code = instrs } : fundef) =
   let open Sexpr in
@@ -860,10 +884,11 @@ let sexpr_of_module (m : module_) =
   let open Sexpr in
   let styps = List.mapi (fun i rt -> LongNode ("type", [Atom ("$" ^ string_of_int i)], [Type.sexpr_of_rec_type rt])) m.types in
   let sgbls = List.map sexpr_of_global m.globals in
-  let sfuns = List.mapi sexpr_of_function m.funs in
+  let (nf, _), simps = List.fold_left_map sexpr_of_import (0, 0) m.imports in
+  let sfuns = List.mapi (fun i -> sexpr_of_function (i + nf)) m.funs in
   let sinit = match m.init with Some init -> [LongNode ("start", [Atom (Int32.to_string init)], [])] | None -> [] in
   let stags = List.map (fun t -> Node ("tag", [LongNode ("type", [Atom (Int32.to_string t)], [])])) m.tags in
-  Node ("module", styps @ sgbls @ sfuns @ sinit @ stags)
+  Node ("module", styps @ simps @ sgbls @ sfuns @ sinit @ stags)
 
 let pp_raw_code width fmt v = Sexpr.pp width fmt (sexpr_of_raw_code v)
 let pp_function width fmt v = Sexpr.pp width fmt (sexpr_of_function 0 v)

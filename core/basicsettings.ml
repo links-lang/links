@@ -67,6 +67,7 @@ end
 module System = struct
   type mode = Interactive
             | Compile
+            | Wat
             | Wasm
             | Web
   let mode =
@@ -74,6 +75,7 @@ module System = struct
       match String.lowercase_ascii s with
       | "interact"    -> Some Interactive
       | "compile"     -> Some Compile
+      | "wat"         -> Some Wat
       | "wasm"        -> Some Wasm
       | "web"         -> Some Web
       | _ -> raise (Invalid_argument (Printf.sprintf "Unrecognised mode '%s'" s))
@@ -81,6 +83,7 @@ module System = struct
     let string_of_mode = function
       | Some Interactive -> "interact"
       | Some Compile -> "compile"
+      | Some Wat -> "wat"
       | Some Wasm -> "wasm"
       | Some Web -> "web"
       | None -> "<none>"

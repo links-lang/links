@@ -262,8 +262,8 @@ module Phases = struct
       with Sys_error reason ->
         close_out oc; raise (Errors.object_file_write_error object_file reason)
 
-  let compile_wasm_only : Context.t -> string -> string -> unit
-    = fun initial_context source_file object_file ->
+  let compile_wasm_only : Context.t -> string -> string -> bool -> unit
+    = fun initial_context source_file object_file is_binary ->
       (* Process source file (and its dependencies. *)
       let result =
         Parse.run initial_context source_file
@@ -290,7 +290,9 @@ module Phases = struct
       in
       try
         (* Emit the Wasm code produced by irtowasm. *)
-        Wasm_CodeGen.output oc res_mod;
+        if is_binary
+        then Wasm_CodeGen.output oc res_mod
+        else Wasm.Sexpr.output oc 80 (Wasm.sexpr_of_module res_mod);
         close_out oc
       with Sys_error reason ->
         close_out oc; raise (Errors.object_file_write_error object_file reason)

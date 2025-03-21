@@ -116,6 +116,8 @@ and 'a expr_list =
 
 type anyblock = Block : 'a typ * 'a block -> anyblock
 
+val typ_of_expr : 'a expr -> 'a typ
+
 type func' = {
   fun_typ : mtypid;
   fun_id : mfunid;
@@ -135,6 +137,7 @@ type ('a, 'b, 'c) fhandler = {
 }
 type func = FFunction of func' | FHandler : ('a, 'b, 'c) fhandler -> func
 type modu = {
+  mod_imports : (string * string) list;
   mod_nfuns : int32;
   mod_funs : func list;
   mod_needs_export : mtypid FunIDMap.t;
@@ -147,4 +150,4 @@ type modu = {
   mod_block : anyblock;
 }
 
-val module_of_ir : Ir.program -> string Env.Int.t -> modu
+val module_of_ir : Ir.program -> string Env.Int.t -> bool -> modu

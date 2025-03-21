@@ -194,7 +194,7 @@ module Instruction : sig
     type binop = Add | Sub | Mul | DivS | DivU | RemS | RemU
     type testop = Eqz
     type relop = Eq | Ne | LtS | LtU | GtS | GtU | LeS | LeU | GeS | GeU
-    type cvtop = |
+    type cvtop = WrapI64
   end
   module FloatOp : sig
     type unop = Neg
@@ -236,6 +236,7 @@ module Instruction : sig
     | Loop of block_type * t list
     | If of block_type * t list * t list
     | Br of int32
+    | BrIf of int32
     | BrTable of int32 list * int32
     | Return
     | Call of int32
@@ -255,6 +256,16 @@ module Instruction : sig
   val to_sexpr : t -> Sexpr.t
 end
 
+type import_desc =
+  | FuncImport of int32
+  | TagImport of int32
+
+type import = {
+  module_name : string;
+  item_name : string;
+  desc : import_desc;
+}
+
 type raw_code = Type.val_type * Type.val_type list * Instruction.t list
 type fundef = {
   fn_name  : string option;
@@ -268,6 +279,7 @@ type module_ = {
   globals: global list;
   tags   : int32 list;
   funs   : fundef list;
+  imports: import list;
   init   : int32 option;
 }
 

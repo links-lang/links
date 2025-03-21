@@ -255,6 +255,7 @@ type ('a, 'b, 'c) fhandler = {
 }
 type func = FFunction of func' | FHandler : ('a, 'b, 'c) fhandler -> func
 type modu = {
+  mod_imports : (string * string) list;
   mod_nfuns : int32;
   mod_funs : func list;
   mod_needs_export : mtypid FunIDMap.t;
@@ -791,7 +792,7 @@ module GEnv : sig (* Contains the functions, the types, etc *)
   type t
   type funid
   type hid
-  val empty : string Env.Int.t -> Utility.IntSet.t -> t
+  val empty : string Env.Int.t -> Utility.IntSet.t -> bool -> t
   
   val find_tag : t -> string -> t * tagid
   
@@ -836,6 +837,7 @@ end = struct
   end)
   
   type t = {
+    ge_imports : (string * string) list;
     ge_map : string Env.Int.t;
     ge_nfuns : mfunid;
     ge_funs : (func' option ref * mfunid * bool ref, (anyhandler option ref, func' * mfunid) Either.t) Either.t list;
@@ -853,13 +855,16 @@ end = struct
     ge_gblmap : anyvarid Env.Int.t;
     ge_fmap : funid anyfuncid Env.Int.t;
   }
-  let empty (m : string Env.Int.t) (global_binders : Utility.IntSet.t) : t =
-    let tmap = [Type (TClosArg TLnil), 0] in {
+  let empty (m : string Env.Int.t) (global_binders : Utility.IntSet.t) (is_binary : bool) : t =
+    let tmap = [Type (TClosArg TLnil), 0] in
+    let ge_nfuns = if is_binary then 2l else 0l in
+    let ge_ntags = if is_binary then 0 else 0 in {
+      ge_imports = if is_binary then ["wizeng", "puti"; "wizeng", "putc"] else [];
       ge_map = m;
-      ge_nfuns = 0l;
+      ge_nfuns;
       ge_funs = [];
       ge_ntyps = List.length tmap;
-      ge_ntags = 0;
+      ge_ntags;
       ge_tagmap = Env.String.empty;
       ge_typs = List.rev_map fst tmap;
       ge_typemap = TypeMap.of_list tmap;
@@ -1056,6 +1061,7 @@ end = struct
   let compile (ge : t) (le : LEnv.realt) (blk : anyblock) : modu =
     let lvs = LEnv.locals_of_env le in
     {
+      mod_imports = ge.ge_imports;
       mod_nfuns = ge.ge_nfuns;
       mod_funs =
         List.rev_map
@@ -1511,7 +1517,7 @@ let find_global_binders ((bs, _) : computation) =
     | Fun _ :: bs | Rec _ :: bs | Alien _ :: bs | Module _ :: bs -> inner bs acc
   in inner bs Utility.StringMap.empty
 
-let module_of_ir (c : computation) (map : string Env.Int.t) : modu =
-  let ge = GEnv.empty map (find_global_binders c) in
+let module_of_ir (c : computation) (map : string Env.Int.t) (is_binary : bool) : modu =
+  let ge = GEnv.empty map (find_global_binders c) is_binary in
   let ge, le, blk = of_computation ge (LEnv.of_real LEnv.toplevel) c in
   GEnv.compile ge (LEnv.to_real le) blk
