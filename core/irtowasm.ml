@@ -462,7 +462,7 @@ and convert_new_struct : 'a. _ -> 'a expr_list -> _ -> _ -> instr_conv =
   | ELnil -> fun acc -> RefNull Wasm.Type.(VarHT (StatX fcid)) :: acc
   | ELcons _ -> let f = convert_exprs tm cls cinfo in fun acc -> StructNew (fcid, Explicit) :: f acc
 
-(* This function returns the instruction in reverse order *)
+(* These two functions return the instructions in reverse order *)
 let convert_anyblock (tm : tmap) (Block (_, b) : anyblock) (is_last : bool) (cinfo : clos_info) : Wasm.Instruction.t list =
   let b = convert_block tm b (if is_last then Some None else None) cinfo in b []
 let convert_finisher (type a b) (tm : tmap) (f : (a, b) finisher) (is_last : last_info) (cinfo : clos_info) : Wasm.Instruction.t list =

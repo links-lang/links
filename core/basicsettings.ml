@@ -94,7 +94,7 @@ module System = struct
               |> convert parse_mode
               |> hidden
               |> to_string string_of_mode
-              |> hint "<compile|interact|wasm|web>"
+              |> hint "<compile|interact|wat|wasm|web>"
               |> CLI.(add (long "mode"))
               |> sync)
 

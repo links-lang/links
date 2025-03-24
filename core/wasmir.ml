@@ -344,7 +344,7 @@ end = struct
 end
 
 let sort_name_map (nm : 'a Ir.name_map) : (string * 'a) list =
-  Utility.StringMap.bindings nm (* Since binding names are unique, there is no issue with the given list as it is sorted *)
+  Utility.StringMap.bindings nm (* Since binding names are unique, there is no issue with using the given list *)
 
 let rec skip_toplevel_polymorphism v = match v with
 	| TAbs (_, v) | TApp (v, _) -> skip_toplevel_polymorphism v
@@ -360,7 +360,7 @@ let rec _convert_type (t : Types.typ)
       (* Note: recursive types should always be broken by a Variant, otherwise we have an infinite object *)
   | Types.Alias (_, _, t) -> _convert_type t normal func row any
   | Types.Application _ -> failwith "TODO _convert_type Application"
-  | Types.RecursiveApplication ra -> _convert_type (ra.Types.r_unwind ra.Types.r_args ra.Types.r_dual) normal func row any
+  | Types.RecursiveApplication ra -> _convert_type Types.(ra.r_unwind ra.r_args ra.r_dual) normal func row any
   | Types.Meta t -> _convert_type (Unionfind.find t) normal func row any
   | Types.Primitive CommonTypes.Primitive.Bool -> normal (Type TBool)
   | Types.Primitive CommonTypes.Primitive.Int -> normal (Type TInt)
