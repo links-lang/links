@@ -167,7 +167,7 @@ struct
           opt_app (value env) (Lwt.return (`Record [])) r >>= fun res ->
           match res with
             | `Record fs ->
-                let fields = StringMap.bindings fields in
+                let fields = Types.FieldEnv.bindings fields in
                 LwtHelpers.foldr_lwt
                    (fun (label, v) (fs: (string * Value.t) list)  ->
                       if List.mem_assoc label fs then
@@ -598,7 +598,7 @@ struct
     let get_fields t =
       match t with
         | `Record fields ->
-            StringMap.to_list (fun name p -> (name, Types.Primitive p)) fields
+            Types.FieldEnv.to_list (fun name p -> (name, Types.Primitive p)) fields
         | _ -> assert false
     in
     let execute_shredded_raw (q, t) =
@@ -783,7 +783,7 @@ struct
                         let r, _ = Types.unwrap_row (TypeUtils.extract_row t) in
                         TypeUtils.extract_row_parts r in
                       let fields =
-                        StringMap.fold
+                        Types.FieldEnv.fold
                           (fun name t fields ->
                             let open Types in
                             match t with
@@ -881,7 +881,7 @@ struct
           | `Table { Value.Table.database = (db, _); name = table;
                      row = (fields, _, _); temporal_fields; _ } ->
               let field_types =
-                StringMap.map
+                Types.FieldEnv.map
                     (function
                        | Types.Present t -> t
                        | _ -> assert false) fields
@@ -919,7 +919,7 @@ struct
             match source with
               | `Table { database = (db, _); name = table; row = (fields, _, _); temporal_fields; _ } ->
                   let field_types =
-                    StringMap.map
+                    Types.FieldEnv.map
                         (function
                            | Types.Present t -> t
                            | _ -> assert false) fields

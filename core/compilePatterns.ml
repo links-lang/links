@@ -33,7 +33,7 @@ struct
     | Variant  of Name.t * t
     | Operation of Name.t * t list * t
     | Negative of StringSet.t
-    | Record   of t StringMap.t * t option
+    | Record   of t Types.FieldEnv.t * t option
     | Constant of Constant.t
     | Variable of binder
     | As       of binder * t
@@ -144,9 +144,9 @@ let rec desugar_pattern : Types.row -> Sugartypes.Pattern.with_pos -> Pattern.t 
               List.fold_right
                 (fun (name, p) (bs, env) ->
                    let p, env' = desugar_pattern p in
-                     StringMap.add name p bs, env ++ env')
+                     Types.FieldEnv.add name p bs, env ++ env')
                 bs
-                (StringMap.empty, empty) in
+                (Types.FieldEnv.empty, empty) in
             let p, env =
               match p with
                 | None -> None, env
@@ -297,7 +297,7 @@ let let_pattern : raw_env -> Pattern.t -> value * Types.datatype -> computation 
                 | None -> body
                 | Some p ->
                     let names =
-                      StringMap.fold
+                      Types.FieldEnv.fold
                         (fun name _ names ->
                            StringSet.add name names)
                         fields
@@ -306,7 +306,7 @@ let let_pattern : raw_env -> Pattern.t -> value * Types.datatype -> computation 
                       lp rt p (Erase (names, value)) body
 (*                      lp rt p (`Coerce (value, rt)) body *)
             in
-              StringMap.fold
+              Types.FieldEnv.fold
                 (fun name p body ->
                    let t' = (TypeUtils.project_type name t) in
                      (lp t' p (Project (name, value)) body))
@@ -444,7 +444,7 @@ let arrange_constant_clauses
   This function flattens all the record clauses.
 *)
 let arrange_record_clauses
-    : clause list -> (annotated_pattern StringMap.t * annotated_pattern option * annotated_clause) list =
+    : clause list -> (annotated_pattern Types.FieldEnv.t * annotated_pattern option * annotated_clause) list =
   fun clauses ->
     let rec flatten =
       function
@@ -452,16 +452,16 @@ let arrange_record_clauses
             bs, None
         | Pattern.Record (bs, Some p) ->
             let bs', p' = flatten p in
-              StringMap.union_disjoint bs bs', p'
+              Types.FieldEnv.union_disjoint bs bs', p'
         | p ->
-            StringMap.empty, Some p
+            Types.FieldEnv.empty, Some p
     in
       List.fold_right
         (fun (ps, body) xs ->
            match ps with
              | (annotation, p)::ps ->
                  let bs, p = flatten p in
-                 let bs = StringMap.map reduce_pattern bs in
+                 let bs = Types.FieldEnv.map reduce_pattern bs in
                  let p = opt_map reduce_pattern p in
                    (bs, p, (annotation, (ps, body)))::xs
              | _ -> assert false
@@ -810,7 +810,7 @@ and match_constant
         | _ -> assert false
 
 and match_record
-    : var list -> (annotated_pattern StringMap.t * annotated_pattern option * annotated_clause) list ->
+    : var list -> (annotated_pattern Types.FieldEnv.t * annotated_pattern option * annotated_clause) list ->
     bound_computation -> var -> bound_computation =
   fun vars xs def var env ->
     let t = lookup_type var env in
@@ -818,7 +818,7 @@ and match_record
     let names =
       List.fold_right
         (fun (bs, _, _) names ->
-           StringMap.fold (fun name _ names -> StringSet.add name names) bs names) xs StringSet.empty in
+           Types.FieldEnv.fold (fun name _ names -> StringSet.add name names) bs names) xs StringSet.empty in
     let all_closed = List.for_all (function
                                      | (_, None, _) -> true
                                      | (_, Some _, _) -> false) xs in
@@ -838,17 +838,17 @@ and match_record
            let rps, fields =
              StringSet.fold
                (fun name (ps, fields) ->
-                  if StringMap.mem name bs then
-                    StringMap.find name bs :: ps, fields
+                  if Types.FieldEnv.mem name bs then
+                    Types.FieldEnv.find name bs :: ps, fields
                   else
                     if closed then
                       ([], Pattern.Any)::ps, fields
                     else
                       let xt = TypeUtils.project_type name t in
                       let xb, x = Var.fresh_var_of_type xt in
-                        ([], Pattern.Variable xb)::ps, StringMap.add name (Variable x) fields)
+                        ([], Pattern.Variable xb)::ps, Types.FieldEnv.add name (Variable x) fields)
                names
-               ([], StringMap.empty) in
+               ([], Types.FieldEnv.empty) in
            let rps, body =
              if all_closed then
                rps, body
@@ -856,7 +856,7 @@ and match_record
                ([], Pattern.Any)::List.rev rps, body
              else
                let original_names =
-                 StringMap.fold
+                 Types.FieldEnv.fold
                    (fun name _ names ->
                       StringSet.add name names)
                    bs
@@ -988,7 +988,7 @@ let compile_handle_cases
         let variant_type =
           let (fields,_,_) = comp_eff |> TypeUtils.extract_row_parts in
           let fields' =
-            StringMap.filter
+            Types.FieldEnv.filter
               (fun _ ->
                 function
                 | Types.Present _ -> true
@@ -998,9 +998,9 @@ let compile_handle_cases
           let rec extract t = match TypeUtils.concrete_type t with
             | Types.Operation (domain, _, _) ->
               let (fields, _, _) = TypeUtils.extract_row domain |> TypeUtils.extract_row_parts in
-              let arity = StringMap.size fields in
+              let arity = Types.FieldEnv.size fields in
               if arity = 1 then
-                match StringMap.find "1" fields with
+                match Types.FieldEnv.find "1" fields with
                 | Types.Present t -> t
                 | _ -> assert false
               else
@@ -1009,7 +1009,7 @@ let compile_handle_cases
             | _ -> Types.unit_type (* nullary operation *)
           in
           let fields'' =
-            StringMap.map
+            Types.FieldEnv.map
               (function
                 | Types.Present t ->
                   extract t
@@ -1033,7 +1033,7 @@ let compile_handle_cases
                        let fields =
                          List.mapi (fun i p -> (string_of_int (i+1), p)) ps
                        in
-                       Pattern.Record (StringMap.from_alist fields, None)
+                       Pattern.Record (Types.FieldEnv.from_alist fields, None)
                      in
                      Pattern.Variant (name, packaged_args)
                   | _ -> assert false

@@ -37,7 +37,7 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> Q.t -> Q.t =
       | Q.Concat vs -> Q.Concat (List.map ffb vs)
       | Q.Dedup t -> Q.Dedup (ffb t)
       | Q.Prom t -> Q.Prom (ffb t)
-      | Q.Record fields -> Q.Record (StringMap.map ffb fields)
+      | Q.Record fields -> Q.Record (Types.FieldEnv.map ffb fields)
       | Q.Variant (name, v) -> Q.Variant (name, ffb v)
       | Q.XML xmlitem -> Q.XML xmlitem
       | Q.Project (v, name) -> Q.Project (ffb v, name)
@@ -106,8 +106,8 @@ let rec reduce_eq (a, b) =
      List.fold_right2
        (fun (_, v1) (_, v2) e ->
          reduce_and (reduce_eq (v1, v2), e))
-       (StringMap.to_alist lfields)
-       (StringMap.to_alist rfields)
+       (Types.FieldEnv.to_alist lfields)
+       (Types.FieldEnv.to_alist rfields)
        (Q.Constant (Constant.Bool true))
   | (a, b) -> Q.Apply (Q.Primitive "==", [a; b])
 
@@ -180,10 +180,10 @@ let rec reduce_for_source : Q.t * (Q.t -> Q.t) -> Q.t =
                   let (from_field, to_field) = OptionUtils.val_of temporal_fields in
                   (* Transaction / Valid-time tables: Need to wrap as metadata *)
                   (* First, generate a fresh variable for the table *)
-                  let make_spec_map = StringMap.map (fun x -> Types.Present x) in
+                  let make_spec_map = Types.FieldEnv.map (fun x -> Types.Present x) in
                   let field_types = Q.table_field_types table in
                   let base_field_types =
-                    StringMap.filter
+                    Types.FieldEnv.filter
                       (fun x _ -> x <> from_field && x <> to_field)
                       field_types in
 
@@ -195,7 +195,7 @@ let rec reduce_for_source : Q.t * (Q.t -> Q.t) -> Q.t =
 
                   (* Second, generate a fresh variable for the metadata *)
                   let metadata_record =
-                    StringMap.from_alist [
+                    Types.FieldEnv.from_alist [
                       (TemporalField.data_field,
                         Q.eta_expand_var (table_raw_var, base_ty_elem));
                       (TemporalField.from_field,
@@ -213,14 +213,14 @@ let rec reduce_if_body (c, t, e) =
     | Q.Record then_fields ->
       begin match e with
         | Q.Record else_fields ->
-          assert (StringMap.equal (fun _ _ -> true) then_fields else_fields);
+          assert (Types.FieldEnv.equal (fun _ _ -> true) then_fields else_fields);
           Q.Record
-            (StringMap.fold
+            (Types.FieldEnv.fold
                 (fun name t fields ->
-                  let e = StringMap.find name else_fields in
-                    StringMap.add name (reduce_if_body (c, t, e)) fields)
+                  let e = Types.FieldEnv.find name else_fields in
+                    Types.FieldEnv.add name (reduce_if_body (c, t, e)) fields)
                 then_fields
-                StringMap.empty)
+                Types.FieldEnv.empty)
         (* NOTE: this relies on any record variables having
              been eta-expanded by this point *)
         | _ -> Q.query_error "Mismatched fields"
@@ -271,7 +271,7 @@ struct
     begin
         match x with
             | Q.Record r ->
-                StringMap.find TemporalField.data_field r
+                Types.FieldEnv.find TemporalField.data_field r
             | _ ->
                 Q.Project (x, TemporalField.data_field)
     end
@@ -280,7 +280,7 @@ struct
       begin
         match x with
             | Q.Record r ->
-                StringMap.find TemporalField.from_field r
+                Types.FieldEnv.find TemporalField.from_field r
             | _ ->
                 Q.Project (x, TemporalField.from_field)
       end
@@ -289,7 +289,7 @@ struct
       begin
         match x with
             | Q.Record r ->
-                StringMap.find TemporalField.to_field r
+                Types.FieldEnv.find TemporalField.to_field r
             | _ ->
                 Q.Project (x, TemporalField.to_field)
       end
@@ -338,16 +338,16 @@ struct
         end
     | Extend (ext_fields, r) ->
       begin
-        match opt_app (xlate env) (Q.Record StringMap.empty) r with
+        match opt_app (xlate env) (Q.Record Types.FieldEnv.empty) r with
           | Q.Record fields ->
-            Q.Record (StringMap.fold
+            Q.Record (Types.FieldEnv.fold
                        (fun label v fields ->
-                         if StringMap.mem label fields then
+                         if Types.FieldEnv.mem label fields then
                            Q.query_error
                              "Error adding fields: label %s already present"
                              label
                          else
-                           StringMap.add label (xlate env v) fields)
+                           Types.FieldEnv.add label (xlate env v) fields)
                        ext_fields
                        fields)
           | _ -> Q.query_error "Error adding fields: non-record"
@@ -462,19 +462,19 @@ struct
 
   let rec norm env : Q.t -> Q.t =
     function
-    | Q.Record fl -> Q.Record (StringMap.map (norm env) fl)
+    | Q.Record fl -> Q.Record (Types.FieldEnv.map (norm env) fl)
     | Q.Concat xs -> reduce_concat (List.map (norm env) xs)
     | Q.Project (r, label) ->
       let rec project (r, label) =
         match r with
           | Q.Record fields ->
-            assert (StringMap.mem label fields);
-            StringMap.find label fields
+            assert (Types.FieldEnv.mem label fields);
+            Types.FieldEnv.find label fields
           | Q.If (c, t, e) ->
             Q.If (c, project (t, label), project (e, label))
           | Q.Var (_x, Types.Record row) ->
             let field_types =  Q.field_types_of_row row in
-            assert (StringMap.mem label field_types);
+            assert (Types.FieldEnv.mem label field_types);
             Q.Project (r, label)
           | _ -> Q.query_error ("Error projecting from record: %s") (Q.string_of_t r)
       in
@@ -484,16 +484,16 @@ struct
           match r with
           | Q.Record fields ->
             assert (StringSet.for_all
-                      (fun label -> StringMap.mem label fields) labels);
+                      (fun label -> Types.FieldEnv.mem label fields) labels);
             Q.Record
-              (StringMap.fold
+              (Types.FieldEnv.fold
                  (fun label v fields ->
                    if StringSet.mem label labels then
                      fields
                    else
-                     StringMap.add label v fields)
+                     Types.FieldEnv.add label v fields)
                  fields
-                 StringMap.empty)
+                 Types.FieldEnv.empty)
           | Q.If (c, t, e) ->
             Q.If (c, erase (t, labels), erase (e, labels))
           | Q.Var (_x, Types.Record row) ->
@@ -589,7 +589,7 @@ struct
                               let o = norm_comp env os in
                                 match o with
                                   | Q.Record fields ->
-                                      List.rev (StringMap.fold (fun _ o os -> o::os) fields [])
+                                      List.rev (Types.FieldEnv.fold (fun _ o os -> o::os) fields [])
                                   | _ -> assert false
                           in
                             Q.For (None, gs, os @ os', body)
@@ -621,7 +621,7 @@ struct
 end
 
 let compile_update : Value.database -> Value.env ->
-  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> Sql.query =
+  ((Ir.var * string * Types.datatype Types.FieldEnv.t) * Ir.computation option * Ir.computation) -> Sql.query =
   fun db env ((x, table, field_types), where, body) ->
     let tyx = Types.make_record_type field_types in
     let env = Q.bind (Q.env_of_value_env QueryPolicy.Flat env) (x, Q.Var (x, tyx)) in
@@ -634,7 +634,7 @@ let compile_update : Value.database -> Value.env ->
       q
 
 let compile_delete : Value.database -> Value.env ->
-  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> Sql.query =
+  ((Ir.var * string * Types.datatype Types.FieldEnv.t) * Ir.computation option) -> Sql.query =
   fun db env ((x, table, field_types), where) ->
     let tyx = Types.make_record_type field_types in
     let env = Q.bind (Q.env_of_value_env QueryPolicy.Flat env) (x, Q.Var (x, tyx)) in

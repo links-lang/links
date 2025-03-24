@@ -46,7 +46,7 @@ let rew_delateralize genkind gs q1 x (q2,ty2) y (q3,ty3) =
        to a conjunction of equalities over their fields; however, here we are using a flattened version of the
        record p, so extracting p.1 really amounts to building a new record; maybe it wouldn't be much smarter, after all *)
     let eq_query =
-        StringMap.fold
+        Types.FieldEnv.fold
             (fun f _ acc -> and_query acc (eq_test (QL.Project (vx, f)) (QL.Project (vp, Q.flatfield "1" f))))
             (QL.recdty_field_types ty2)
             (QL.Constant (Constant.Bool true))
@@ -54,10 +54,10 @@ let rew_delateralize genkind gs q1 x (q2,ty2) y (q3,ty3) =
     (* eta-expanded p.2, with record flattening *)
     let rp =
         QL.Record
-            (StringMap.fold
-                (fun f _ acc -> StringMap.add f (QL.Project (vp, Q.flatfield "2" f)) acc)
+            (Types.FieldEnv.fold
+                (fun f _ acc -> Types.FieldEnv.add f (QL.Project (vp, Q.flatfield "2" f)) acc)
                 (QL.recdty_field_types ty3)
-                StringMap.empty)
+                Types.FieldEnv.empty)
     in
     let q1_rp = QL.subst q1 y rp
     in
@@ -119,8 +119,8 @@ let rec delateralize_step q =
     | QL.Dedup t -> ds t >>=? fun t' -> Some (QL.Dedup t')
     | QL.Prom t -> ds t >>=? fun t' -> Some (QL.Prom t')
     | QL.Record fl ->
-        let ofl = StringMap.to_alist fl >>==? fun (z,qz) -> ds qz >>=? fun qz' -> Some (z,qz') in
-        ofl >>=? fun fl' -> Some (QL.Record (StringMap.from_alist fl'))
+        let ofl = Types.FieldEnv.to_alist fl >>==? fun (z,qz) -> ds qz >>=? fun qz' -> Some (z,qz') in
+        ofl >>=? fun fl' -> Some (QL.Record (Types.FieldEnv.from_alist fl'))
     | QL.Project (t,f) ->
         ds t >>=? fun t' -> Some (QL.Project (t',f))
     (* XXX: assumes no Closures are left *)

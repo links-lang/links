@@ -28,6 +28,10 @@ sig
       'a.
       ('self_type -> 'a -> ('self_type * 'a * Types.datatype)) ->
       'a name_map -> 'self_type * 'a name_map * Types.datatype name_map
+    method st_name_map :
+      'a.
+      ('self_type -> 'a -> ('self_type * 'a * Types.datatype)) ->
+      'a st_name_map -> 'self_type * 'a st_name_map * Types.datatype st_name_map
     method var_map :
       'a.
       ('self_type -> 'a -> ('self_type * 'a * Types.datatype)) ->

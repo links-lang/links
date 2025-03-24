@@ -61,7 +61,7 @@ module TransactionTime = struct
   let insert = current_insertion
 
   let update :
-    Types.datatype StringMap.t ->
+    datatype FieldEnv.t ->
     ((Ir.var * string) * Q.t option * Q.t) ->
     string ->
     string ->
@@ -77,10 +77,10 @@ module TransactionTime = struct
     (* We need to augment table_types with the period-stamping columns. *)
     let table_types =
       table_types
-        |> StringMap.add tt_from (Primitive Primitive.DateTime)
-        |> StringMap.add tt_to (Primitive Primitive.DateTime) in
+        |> FieldEnv.add tt_from (Primitive Primitive.DateTime)
+        |> FieldEnv.add tt_to (Primitive Primitive.DateTime) in
     let field_names =
-      StringMap.to_alist table_types |> List.map fst in
+      FieldEnv.to_alist table_types |> List.map fst in
 
     (* The select query should either select the updated field if specified,
      * otherwise it should select a the field projection. *)
@@ -90,18 +90,18 @@ module TransactionTime = struct
       match body with
         | Q.Record fields ->
             fields
-            |> StringMap.add tt_from (Q.Constant now_const)
-            |> StringMap.add tt_to (Q.Constant forever_const)
+            |> FieldEnv.add tt_from (Q.Constant now_const)
+            |> FieldEnv.add tt_to (Q.Constant forever_const)
         | _ -> assert false in
-    let record_fields_list = StringMap.to_alist record_fields in
+    let record_fields_list = FieldEnv.to_alist record_fields in
 
     (* Select either the field name if unspecified, or the updated value
      * if it is. *)
     let select_fields =
-      StringMap.mapi (fun k _ ->
-        OptionUtils.opt_map (base []) (StringMap.lookup k record_fields)
+      FieldEnv.mapi (fun k _ ->
+        OptionUtils.opt_map (base []) (FieldEnv.lookup k record_fields)
         |> OptionUtils.from_option (Project (tbl_var, k))) table_types
-      |> StringMap.to_alist
+      |> FieldEnv.to_alist
       (* Need to swap (col, val) pairs to (val, col) to fit select_clause AST,
        * which mirrors "SELECT V as K" form in SQL *)
       |> List.map (fun (k, v) -> (v, k)) in
@@ -183,7 +183,7 @@ module TransactionTime = struct
 
   let compile_update :
     Value.env ->
-    ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) ->
+    ((Ir.var * string * Types.datatype FieldEnv.t) * Ir.computation option * Ir.computation) ->
     string -> (* transaction time from field *)
     string -> (* transaction time to field *)
     Sql.query =
@@ -200,7 +200,7 @@ module TransactionTime = struct
   let compile_delete :
    Value.database ->
     Value.env ->
-   ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) ->
+   ((Ir.var * string * Types.datatype FieldEnv.t) * Ir.computation option) ->
     string (* Transaction time 'to' field *) ->
     Sql.query =
       fun db env ((x, table, field_types), where) to_field ->
@@ -221,11 +221,11 @@ module ValidTime = struct
   let metadata x field_types from_field to_field =
     let extended_field_types =
         field_types
-          |> StringMap.add from_field Types.datetime_type
-          |> StringMap.add to_field Types.datetime_type in
+          |> Types.FieldEnv.add from_field Types.datetime_type
+          |> Types.FieldEnv.add to_field Types.datetime_type in
     let table_var = Q.Var (x, Types.make_record_type extended_field_types) in
     let metadata_record =
-      StringMap.from_alist [
+      Types.FieldEnv.from_alist [
         (TemporalField.data_field,
           Q.eta_expand_var (x, Types.make_record_type field_types));
         (TemporalField.from_field,
@@ -283,7 +283,7 @@ module ValidTime = struct
 
   module Update = struct
     let current :
-      Types.datatype StringMap.t ->
+      Types.datatype Types.FieldEnv.t ->
       ((Ir.var * string) * Q.t option * Q.t) ->
       string ->
       string ->
@@ -306,24 +306,24 @@ module ValidTime = struct
          * abstract it (in some nice way) *)
         let table_types =
           table_types
-            |> StringMap.add from_field (Primitive Primitive.DateTime)
-            |> StringMap.add to_field (Primitive Primitive.DateTime) in
+            |> Types.FieldEnv.add from_field (Primitive Primitive.DateTime)
+            |> Types.FieldEnv.add to_field (Primitive Primitive.DateTime) in
         let field_names =
-          StringMap.to_alist table_types |> List.map fst in
+          Types.FieldEnv.to_alist table_types |> List.map fst in
         let record_fields =
           match body with
             | Q.Record fields -> fields
             | _ -> assert false in
         let fields_with_time =
-            StringMap.add from_field (Q.Constant now_const) record_fields in
+            Types.FieldEnv.add from_field (Q.Constant now_const) record_fields in
 
         (* Select either the field name if unspecified, or the updated value
          * if it is. *)
         let select_fields =
-          StringMap.mapi (fun k _ ->
-            OptionUtils.opt_map (base []) (StringMap.lookup k fields_with_time)
+          Types.FieldEnv.mapi (fun k _ ->
+            OptionUtils.opt_map (base []) (Types.FieldEnv.lookup k fields_with_time)
             |> OptionUtils.from_option (Project (tbl_var, k))) table_types
-          |> StringMap.to_alist
+          |> Types.FieldEnv.to_alist
           (* Need to swap (col, val) pairs to (val, col) to fit select_clause AST,
            * which mirrors "SELECT V as K" form in SQL *)
           |> List.map (fun (k, v) -> (v, k)) in
@@ -371,7 +371,7 @@ module ValidTime = struct
           Update {
             upd_table = table;
             upd_fields =
-              StringMap.to_alist record_fields
+              Types.FieldEnv.to_alist record_fields
               |> List.map (fun (x, y) -> (x, base [] y));
             upd_where = Some pred
           } in
@@ -399,13 +399,13 @@ module ValidTime = struct
 
         let upd_fields =
           Q.unbox_record body
-          |> StringMap.map (base [])
-          |> StringMap.to_alist in
+          |> Types.FieldEnv.map (base [])
+          |> Types.FieldEnv.to_alist in
         let upd_fields = upd_fields @ upd_from @ upd_to in
         Update { upd_table = table; upd_fields; upd_where }
 
     let sequenced :
-      Types.datatype StringMap.t ->
+      Types.datatype Types.FieldEnv.t ->
       ((Ir.var * string) * Q.t option * Q.t * Q.t * Q.t) ->
       string (* valid from field *) ->
       string (* valid to field *) ->
@@ -420,11 +420,11 @@ module ValidTime = struct
           (* - Add the period-stamping fields to the table types *)
           let table_types =
             table_types
-              |> StringMap.add from_field (Primitive Primitive.DateTime)
-              |> StringMap.add to_field (Primitive Primitive.DateTime) in
+              |> Types.FieldEnv.add from_field (Primitive Primitive.DateTime)
+              |> Types.FieldEnv.add to_field (Primitive Primitive.DateTime) in
 
           let field_names =
-            StringMap.to_alist table_types |> List.map fst in
+            Types.FieldEnv.to_alist table_types |> List.map fst in
 
           let and_where pred =
             let open OpHelpers in
@@ -438,12 +438,12 @@ module ValidTime = struct
           (*  - Select either the field name if unspecified, or the updated value
            *    if it is. *)
           let make_select values where =
-            let values = StringMap.from_alist values in
+            let values = Types.FieldEnv.from_alist values in
             let fields =
-              StringMap.mapi (fun k _ ->
-                StringMap.lookup k values
+              Types.FieldEnv.mapi (fun k _ ->
+                Types.FieldEnv.lookup k values
                 |> OptionUtils.from_option (Project (tbl_var, k))) table_types
-              |> StringMap.to_alist
+              |> Types.FieldEnv.to_alist
               (* Need to swap (col, val) pairs to (val, col) to fit select_clause AST,
                * which mirrors "SELECT V as K" form in SQL *)
               |> List.map (fun (k, v) -> (v, k)) in
@@ -484,7 +484,7 @@ module ValidTime = struct
           let upd1 =
             let upd_fields =
               Q.unbox_record set
-              |> StringMap.to_alist
+              |> Types.FieldEnv.to_alist
               |> List.map (fun (k, v) -> (k, base [] v)) in
 
             let where =
@@ -583,7 +583,7 @@ module ValidTime = struct
 
 
     let sequenced :
-      Types.datatype StringMap.t ->
+      Types.datatype Types.FieldEnv.t ->
       ((Ir.var * string) * Q.t option * Q.t * Q.t) ->
       string (* valid from field *) ->
       string (* valid to field *) ->
@@ -602,14 +602,14 @@ module ValidTime = struct
           (* Add the period-stamping fields to the table types *)
           let table_types =
             table_types
-              |> StringMap.add from_field (Primitive Primitive.DateTime)
-              |> StringMap.add to_field (Primitive Primitive.DateTime) in
+              |> Types.FieldEnv.add from_field (Primitive Primitive.DateTime)
+              |> Types.FieldEnv.add to_field (Primitive Primitive.DateTime) in
 
           (* Select all fields, 'start' date is end of PA *)
           let select_fields =
-            StringMap.mapi (fun k _ ->
+            Types.FieldEnv.mapi (fun k _ ->
               if k = from_field then app_to else proj k) table_types
-            |> StringMap.to_alist
+            |> Types.FieldEnv.to_alist
             (* Need to swap (col, val) pairs to (val, col) to fit select_clause AST,
              * which mirrors "SELECT V as K" form in SQL *)
             |> List.map (fun (k, v) -> (v, k)) in
@@ -673,7 +673,7 @@ module ValidTime = struct
       Ir.valid_time_update ->
       Value.database ->
       Value.env ->
-      ((Ir.var * string * Types.datatype StringMap.t) *
+      ((Ir.var * string * Types.datatype Types.FieldEnv.t) *
         Ir.computation option * Ir.computation) ->
       string (* valid from field *) ->
       string (* valid to field *) ->
@@ -722,7 +722,7 @@ module ValidTime = struct
     Ir.valid_time_deletion ->
     Value.database ->
     Value.env ->
-    ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) ->
+    ((Ir.var * string * Types.datatype Types.FieldEnv.t) * Ir.computation option) ->
     string (* from field *) ->
     string (* to field *) ->
     Sql.query =
@@ -786,7 +786,7 @@ module TemporalJoin = struct
 
       method private project tbl field =
           match tbl with
-            | Q.Record x -> StringMap.find field x
+            | Q.Record x -> Types.FieldEnv.find field x
             | _ -> Q.Project (tbl, field)
 
       (* Start time: maximum of all start times *)
@@ -842,10 +842,10 @@ module TemporalJoin = struct
                     List.fold_left
                       (fun acc (k, x) ->
                         match x with
-                          | Present t -> StringMap.add k t acc
+                          | Present t -> Types.FieldEnv.add k t acc
                           | _ -> assert false)
-                      (StringMap.empty)
-                      (fst3 x.row |> StringMap.to_alist) in
+                      (Types.FieldEnv.empty)
+                      (fst3 x.row |> Types.FieldEnv.to_alist) in
                   (Q.Var (v, Types.make_record_type ty), from_field, to_field)
                 ) tables
               in
@@ -867,7 +867,7 @@ module TemporalJoin = struct
                  (TemporalField.from_field, o#start_time);
                  (TemporalField.to_field, o#end_time)]
               in
-              (o, Singleton (Record (StringMap.from_alist record_fields)))
+              (o, Singleton (Record (Types.FieldEnv.from_alist record_fields)))
           | q -> super#query q
     end
 

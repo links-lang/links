@@ -57,8 +57,8 @@ and aggregator ar q =
   let z = Var.fresh_raw_var () in
   let tyk, _tyv = q |> QL.type_of_expression |> Types.unwrap_map_type in
   let fsk, _, _ = tyk |> Types.extract_row |> Types.extract_row_parts in
-  let fields_k = fsk |> StringMap.to_alist |> List.map (fun (f,_) -> S.Project (z, "1@" ^ f), "1@" ^ f) in
-  let fields_v = ar |> StringMap.to_alist |> List.map (fun (f_out, (aggfun, f_in)) ->
+  let fields_k = fsk |> Types.FieldEnv.to_alist |> List.map (fun (f,_) -> S.Project (z, "1@" ^ f), "1@" ^ f) in
+  let fields_v = ar |> Types.FieldEnv.to_alist |> List.map (fun (f_out, (aggfun, f_in)) ->
     S.Apply (aggr aggfun, [S.Project (z, "2@" ^ f_in)]), "2@" ^ f_out)
   in
   let fields = fields_k @ fields_v in
@@ -72,7 +72,7 @@ and generator locvars = function
     S.Subquery (S.Standard, S.Select (S.Distinct, S.Star, [S.TableRef (name, v)], S.Constant (Constant.Bool true), [], []), v)
 | (QL.Keys, v, QL.GroupBy ((x, QL.Record gc), QL.Table Value.Table.{ name; _}))
 | (QL.Keys, v, QL.GroupBy ((x, QL.Record gc), QL.Dedup (QL.Table Value.Table.{ name; _}))) ->
-    let fields = List.map (fun (f,e) -> (base_exp e, f)) (StringMap.to_alist gc) in
+    let fields = List.map (fun (f,e) -> (base_exp e, f)) (Types.FieldEnv.to_alist gc) in
     S.Subquery (dependency_of_contains_free (E.contains_free locvars (QL.Record gc)),
       S.Select (S.Distinct, S.Fields fields, [S.TableRef (name, x)], S.Constant (Constant.Bool true), [], []), v)
 | (QL.Keys, v, q) ->
@@ -81,7 +81,7 @@ and generator locvars = function
     let fsk, _, _ = tyk |> Types.extract_row |> Types.extract_row_parts in
     let fields =
       fsk
-      |> StringMap.to_alist
+      |> Types.FieldEnv.to_alist
       |> List.map (fun (f,_) -> S.Project (z, "1@" ^ f), f)
     in
     S.Subquery (dependency_of_contains_free (E.contains_free locvars q),
@@ -107,21 +107,21 @@ and body is_set gs os j =
     | QL.Concat [] -> dummy_sql_empty_query
     | QL.Singleton (QL.Record fields) ->
         selquery
-        <| List.map (fun (f,x) -> (base_exp x, f)) (StringMap.to_alist fields)
+        <| List.map (fun (f,x) -> (base_exp x, f)) (Types.FieldEnv.to_alist fields)
         <| Sql.Constant (Constant.Bool true)
     | QL.Singleton (QL.MapEntry (QL.Record keys, QL.Record values)) ->
         selquery
-        <| List.map (fun (f,x) -> (base_exp x, "1@" ^ f)) (StringMap.to_alist keys)
-           @ List.map (fun (f,x) -> (base_exp x, "2@" ^ f)) (StringMap.to_alist values)
+        <| List.map (fun (f,x) -> (base_exp x, "1@" ^ f)) (Types.FieldEnv.to_alist keys)
+           @ List.map (fun (f,x) -> (base_exp x, "2@" ^ f)) (Types.FieldEnv.to_alist values)
         <| Sql.Constant (Constant.Bool true)
     | QL.If (c, QL.Singleton (QL.Record fields), QL.Concat []) ->
         selquery
-        <| List.map (fun (f,x) -> (base_exp x, f)) (StringMap.to_alist fields)
+        <| List.map (fun (f,x) -> (base_exp x, f)) (Types.FieldEnv.to_alist fields)
         <| base_exp c
     | QL.If (c, QL.Singleton (QL.MapEntry (QL.Record keys, QL.Record values)), QL.Concat []) ->
         selquery
-        <| List.map (fun (f,x) -> (base_exp x, "1@" ^ f)) (StringMap.to_alist keys)
-           @ List.map (fun (f,x) -> (base_exp x, "2@" ^ f)) (StringMap.to_alist values)
+        <| List.map (fun (f,x) -> (base_exp x, "1@" ^ f)) (Types.FieldEnv.to_alist keys)
+           @ List.map (fun (f,x) -> (base_exp x, "2@" ^ f)) (Types.FieldEnv.to_alist values)
         <| base_exp c
     | _ -> Debug.print ("error in EvalMixingQuery.body: unexpected j = " ^ QL.show j); failwith "body"
 
@@ -196,13 +196,13 @@ let compile_mixing : delateralize:QueryPolicy.t -> Value.env -> (int * int) opti
         let tyk, tyv = Types.unwrap_mapentry_type t_flat in
         let rowk, _, _ = tyk |> Types.extract_row |> Types.extract_row_parts in
         let rowv, _, _ = tyv |> Types.extract_row |> Types.extract_row_parts in
-        let row = StringMap.fold
-          <| (fun k v acc -> StringMap.add ("1@" ^ k) (strip_presence v) acc)
+        let row = Types.FieldEnv.fold
+          <| (fun k v acc -> Types.FieldEnv.add ("1@" ^ k) (strip_presence v) acc)
           <| rowk
-          <| StringMap.empty
+          <| Types.FieldEnv.empty
         in
-        let row = StringMap.fold
-          <| (fun k v acc -> StringMap.add ("2@" ^ k) (strip_presence v) acc)
+        let row = Types.FieldEnv.fold
+          <| (fun k v acc -> Types.FieldEnv.add ("2@" ^ k) (strip_presence v) acc)
           <| rowv
           <| row
         in

@@ -120,7 +120,7 @@ module Make_RealPage (C : JS_PAGE_COMPILER) (G : JS_CODEGEN) = struct
     let escaped_state_string = `String state_string |> Json.json_to_string in
 
     let printed_code =
-      let _venv, code = C.generate_program venv ([], Ir.Return (Ir.Extend (StringMap.empty, None))) in
+      let _venv, code = C.generate_program venv ([], Ir.Return (Ir.Extend (Types.FieldEnv.empty, None))) in
       let code = f code in
       let code =
         code |> (C.generate_stubs valenv defs) |> C.wrap_with_server_lib_stubs

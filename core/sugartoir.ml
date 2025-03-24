@@ -429,8 +429,8 @@ struct
   let record (fields, r) =
     let field_types =
       List.fold_left
-        (fun field_types (name, s) -> StringMap.add name (sem_type s) field_types)
-        StringMap.empty
+        (fun field_types (name, s) -> Types.FieldEnv.add name (sem_type s) field_types)
+        Types.FieldEnv.empty
         fields in
     let s' = lift_alist fields in
       match r with
@@ -438,13 +438,13 @@ struct
             let t = Types.make_record_type field_types in
               M.bind s'
                 (fun fields ->
-                   lift (Extend (StringMap.from_alist fields, None), t))
+                   lift (Extend (Types.FieldEnv.from_alist fields, None), t))
         | Some s ->
             let t = Types.Record (Types.extend_row field_types (TypeUtils.extract_row (sem_type s))) in
               bind s
                 (fun r ->
                    M.bind s'
-                     (fun fields -> lift (Extend (StringMap.from_alist fields, Some r), t)))
+                     (fun fields -> lift (Extend (Types.FieldEnv.from_alist fields, Some r), t)))
 
   let project (s, name) =
     let t = TypeUtils.project_type name (sem_type s) in

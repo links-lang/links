@@ -224,7 +224,7 @@ and eq_presence = fun (l, r) -> eq_types (l, r)
 
 and eq_field_envs (lfield_env, rfield_env) =
   let eq_specs lf rf = eq_presence (lf, rf) in
-    StringMap.equal eq_specs lfield_env rfield_env
+    FieldEnv.equal eq_specs lfield_env rfield_env
 and eq_row_vars (lpoint, rpoint) =
   (* QUESTION:
      Do we need to deal with closed rows specially?
@@ -803,7 +803,7 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
 
   let is_unguarded_recursive row =
     let rec is_unguarded rec_rows (field_env, row_var, _) =
-      StringMap.is_empty field_env &&
+      FieldEnv.is_empty field_env &&
         (match Unionfind.find row_var with
          | Closed
          | Var _ -> false
@@ -814,7 +814,7 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
     is_unguarded IntSet.empty row in
 
   let domain_of_env : field_spec_map -> StringSet.t =
-    fun env -> StringMap.fold (fun label _ labels -> StringSet.add label labels) env StringSet.empty in
+    fun env -> FieldEnv.fold (fun label _ labels -> StringSet.add label labels) env StringSet.empty in
 
   (* unify_field_envs closed rec_env (lenv, renv)
 
@@ -848,7 +848,7 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
           let kill_extras extras env =
             StringSet.iter
               (fun label ->
-                match StringMap.find label env with
+                match FieldEnv.find label env with
                 | (Absent | Meta _) as f ->
                    unify_presence' rec_env (f, Absent)
                 | _ ->
@@ -873,8 +873,8 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
     (* unify fields in shared domain *)
     StringSet.iter
       (fun label ->
-        let lf = StringMap.find label lenv in
-        let rf = StringMap.find label renv in
+        let lf = FieldEnv.find label lenv in
+        let rf = FieldEnv.find label renv in
         unify_presence' rec_env (lf, rf))
       shared_dom in
 
@@ -946,7 +946,7 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
            raise (Failure (`Msg ("Rigid row variable cannot be unified with non-empty row\n"
                                  ^string_of_row (Row extension_row))))
       | Var (var, ((_, (lin, rest)) as kind), `Flexible) ->
-         if not (StringMap.is_empty extension_field_env) &&
+         if not (FieldEnv.is_empty extension_field_env) &&
               TypeVarSet.mem var (free_row_type_vars (Row extension_row)) then
            begin
              if Restriction.is_base rest then
@@ -975,9 +975,9 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
                     in raise (Failure (`Msg message))
              end;
 
-             if StringMap.is_empty extension_field_env then
+             if FieldEnv.is_empty extension_field_env then
                if dual then
-                 Unionfind.change point (Row (StringMap.empty, extension_row_var, true))
+                 Unionfind.change point (Row (FieldEnv.empty, extension_row_var, true))
                else
                  Unionfind.union point extension_row_var
              else
@@ -987,7 +987,7 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
                  Unionfind.change point (Row extension_row)
            end
       | Recursive _ ->
-         unify_rows' rec_env ((StringMap.empty, point, dual), extension_row)
+         unify_rows' rec_env ((FieldEnv.empty, point, dual), extension_row)
       | row ->
          unify_rows' rec_env (TypeUtils.extract_row_parts (if dual then dual_row row else row), extension_row) in
     extend row_var in
@@ -1000,8 +1000,8 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
    *)
   let matching_labels : field_spec_map * field_spec_map -> StringSet.t =
     fun (big_field_env, small_field_env) ->
-    StringMap.fold (fun label _ labels ->
-        if StringMap.mem label small_field_env then
+    FieldEnv.fold (fun label _ labels ->
+        if FieldEnv.mem label small_field_env then
           StringSet.add label labels
         else
           labels) big_field_env StringSet.empty in
@@ -1010,7 +1010,7 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
     fun labels (field_env, row_var, dual) ->
     let restricted_field_env =
       StringSet.fold (fun label field_env ->
-          StringMap.remove label field_env) labels field_env in
+          FieldEnv.remove label field_env) labels field_env in
     (restricted_field_env, row_var, dual) in
 
   (*
@@ -1033,7 +1033,7 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
               if IntMap.mem var rec_rows then
                 IntMap.find var rec_rows
               else
-                [Row (StringMap.empty, row_var, false)] in
+                [Row (FieldEnv.empty, row_var, false)] in
             if List.exists (fun r -> eq_rows (r, Row restricted_row)) rs then
               None
             else
@@ -1111,9 +1111,9 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
     let (flexible_field_env', flexible_row_var', flexible_dual) as flexible_row' = TypeUtils.extract_row_parts flexible_row' in
     (* let (flexible_field_env', flexible_row_var', flexible_dual) as flexible_row', flexible_rec_row = unwrap_row flexible_row in *)
     (* check that the flexible row contains no extra fields *)
-    StringMap.iter
+    FieldEnv.iter
       (fun label f ->
-        if (StringMap.mem label rigid_field_env') then
+        if (FieldEnv.mem label rigid_field_env') then
           ()
         else
           match f with
@@ -1139,7 +1139,7 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
     | None -> ()
     | Some rec_env ->
        unify_field_envs ~closed:false ~rigid:false rec_env (rigid_field_env', flexible_field_env');
-       let flexible_extension = StringMap.filter (fun label _ -> not (StringMap.mem label flexible_field_env')) rigid_field_env' in
+       let flexible_extension = FieldEnv.filter (fun label _ -> not (FieldEnv.mem label flexible_field_env')) rigid_field_env' in
        unify_row_var_with_row rec_env (flexible_row_var', flexible_dual, (flexible_extension, rigid_row_var', rigid_dual')) in
 
   let unify_both_flexible ((lfield_env, _, ldual as lrow), (rfield_env, _, rdual as rrow)) =
@@ -1171,11 +1171,11 @@ and unify_rows' : ?var_sk:Subkind.t -> unify_env -> ((row' * row') -> unit) =
            let fresh_row_var = fresh_row_variable var_sk in
 
            (* each row can contain fields missing from the other *)
-           let rextension = StringMap.filter (fun label _ -> not (StringMap.mem label rfield_env')) lfield_env' in
+           let rextension = FieldEnv.filter (fun label _ -> not (FieldEnv.mem label rfield_env')) lfield_env' in
 (* Debug.print ("rext: "^string_of_row (Row (rextension, fresh_row_var, false))); *)
            unify_row_var_with_row rec_env (rrow_var', rdual', (rextension, fresh_row_var, false));
 
-           let lextension = StringMap.filter (fun label _ -> not (StringMap.mem label lfield_env')) rfield_env' in
+           let lextension = FieldEnv.filter (fun label _ -> not (FieldEnv.mem label lfield_env')) rfield_env' in
            unify_row_var_with_row rec_env (lrow_var', ldual', (lextension, fresh_row_var, false))
          end in
 

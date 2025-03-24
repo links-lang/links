@@ -2,8 +2,9 @@
 open CommonTypes
 
 (* field environments *)
+module FieldEnv : Utility.Map.S with type key = string
 type 'a stringmap = 'a Utility.StringMap.t [@@deriving show]
-type 'a field_env = 'a stringmap [@@deriving show]
+type 'a field_env = 'a FieldEnv.t [@@deriving show]
 
 (* type var sets *)
 module TypeVarSet : sig
@@ -164,7 +165,7 @@ and session_type = typ
 and datatype = typ
 and type_arg = PrimaryKind.t * typ
 and field_spec = typ
-and field_spec_map = field_spec Utility.StringMap.t
+and field_spec_map = field_spec field_env
 and meta_type_var = typ point
 and meta_row_var = row point
 and meta_presence_var = typ point

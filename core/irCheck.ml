@@ -222,7 +222,7 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
         row |> TypeUtils.extract_row_parts in
       if Types.is_closed_row row then
         let field_env' =
-          Utility.StringMap.filter
+          Types.FieldEnv.filter
             ( fun _ v -> match v with
               | T.Absent -> false
               | _ -> true )
@@ -434,12 +434,12 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
       | _, _ -> false
     and eq_field_envs (context, lfield_env, rfield_env) =
       let lfields_in_rfields =
-        StringMap.for_all  (fun field lp ->
-            match StringMap.find_opt field rfield_env with
+        Types.FieldEnv.for_all  (fun field lp ->
+            match Types.FieldEnv.find_opt field rfield_env with
               | Some rp -> eq_presence (context, lp, rp)
               | None -> false
           ) lfield_env in
-      lfields_in_rfields  && StringMap.cardinal lfield_env = StringMap.cardinal rfield_env
+      lfields_in_rfields  && Types.FieldEnv.cardinal lfield_env = Types.FieldEnv.cardinal rfield_env
     and eq_row_vars (context, lpoint, rpoint) =
       match Unionfind.find lpoint, Unionfind.find rpoint with
       | Closed, Closed ->  true
@@ -477,7 +477,7 @@ let check_eq_type_lists = fun (ctx : type_eq_context) exptl actl occurrence ->
 
 let ensure_effect_present_in_row ctx allowed_effects required_effect_name required_effect_type occurrence =
   let (map, _, _) = fst (Types.unwrap_row allowed_effects) |> TypeUtils.extract_row_parts in
-  match StringMap.find_opt required_effect_name map with
+  match Types.FieldEnv.find_opt required_effect_name map with
     | Some (T.Present et) -> check_eq_types ctx et required_effect_type occurrence
     | _ -> raise_ir_type_error ("Required effect " ^ required_effect_name ^ " not present in effect row " ^ Types.string_of_row allowed_effects) occurrence
 
@@ -572,7 +572,7 @@ struct
         | Ir.Constant c -> let (o, c, t) = o#constant c in o, Ir.Constant c, t
         | Variable x -> let (o, x, t) = o#var x in o, Variable x, t
         | Extend (fields, base) as orig ->
-            let (o, fields, field_types) = o#name_map (fun o -> o#value) fields in
+            let (o, fields, field_types) = o#st_name_map (fun o -> o#value) fields in
             let (o, base, base_type) = o#option (fun o -> o#value) base in
 
             let handle_extended_record = function
@@ -735,7 +735,7 @@ struct
             | Variant row as variant ->
                let unwrapped_row = fst (unwrap_row row) |> TypeUtils.extract_row_parts in
                let present_fields, has_bad_presence_polymorphism  =
-                 StringMap.fold (fun field field_spec (fields, poly) -> match field_spec with
+                 Types.FieldEnv.fold (fun field field_spec (fields, poly) -> match field_spec with
                                            | Present _  -> (StringSet.add field fields), poly
                                            | Meta _ -> fields, StringMap.mem field cases
                                            | Absent -> fields, poly
@@ -1057,12 +1057,12 @@ struct
               if StringMap.mem effect inner_effects_map_from_branches then
                 map
               else
-                StringMap.add effect outer_presence_spec map
+                Types.FieldEnv.add effect outer_presence_spec map
             )  inner_effects_map_from_branches outer_effects_map in
           let inner_effects = Row (inner_effects_map, outer_effects_var, outer_effects_dualized) in
 
         (if not (Types.is_closed_row outer_effects) then
-          let outer_effects_contain e = StringMap.mem e outer_effects_map in
+          let outer_effects_contain e = Types.FieldEnv.mem e outer_effects_map in
           ensure (StringMap.for_all (fun e _ -> outer_effects_contain e) cases) "Outer effects are open but do not mention an effect handled by handler" (SSpec special));
 
           (* comp_t  is A_c in the IR formalization *)

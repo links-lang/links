@@ -1,8 +1,6 @@
 open Utility
 open Types
 
-module FieldEnv = Utility.StringMap
-
 (* TODO
 
    - Actually make use of the bool argument to is_guarded_row.  We
@@ -93,7 +91,7 @@ let rec is_guarded : TypeVarSet.t -> StringSet.t -> int -> datatype -> bool =
         | Row (fields, row_var, _dual) ->
            let check_fields = false in
            (if check_fields then
-              (StringMap.fold
+              (FieldEnv.fold
                  (fun _ f b -> b && isg f)
                  fields
                  true)

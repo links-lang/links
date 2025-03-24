@@ -15,8 +15,8 @@ let extract_row_parts = Types.extract_row_parts
 let split_row name row =
   let (field_env, row_var, dual) = fst (unwrap_row row) |> extract_row_parts in
   let t =
-    if StringMap.mem name field_env then
-      match (StringMap.find name field_env) with
+    if FieldEnv.mem name field_env then
+      match (FieldEnv.find name field_env) with
         | Present t -> t
         | Absent ->
             error ("Attempt to split row "^string_of_row row ^" on absent field " ^ name)
@@ -28,9 +28,9 @@ let split_row name row =
   in
   let new_field_env =
     if is_closed_row row then
-      StringMap.remove name field_env
+      FieldEnv.remove name field_env
     else
-      StringMap.add name Absent field_env
+      FieldEnv.add name Absent field_env
    in
     t, Row (new_field_env, row_var, dual)
 
@@ -102,12 +102,12 @@ let rec erase_type ?(overstep_quantifiers=true) names t =
       let field_env =
         StringSet.fold
           (fun name field_env ->
-            match StringMap.lookup name field_env with
+            match FieldEnv.lookup name field_env with
             | Some (Present _) ->
               if closed then
-                StringMap.remove name field_env
+                FieldEnv.remove name field_env
               else
-                StringMap.add name Absent field_env
+                FieldEnv.add name Absent field_env
             | Some Absent ->
               error ("Attempt to remove absent field "^name^" from row "^string_of_row row)
             | Some (Meta _) ->
@@ -154,7 +154,7 @@ let rec effect_row ?(overstep_quantifiers=true) t = match (concrete_type t, over
 
 let iter_row (iter_func : string -> field_spec -> unit) row  =
   let (field_spec_map, _, _) = fst (unwrap_row row) |> extract_row_parts in
-  Utility.StringMap.iter iter_func field_spec_map
+  FieldEnv.iter iter_func field_spec_map
 
 let is_function_type t = match concrete_type t with
   | Lolli (_, _, _)
@@ -212,11 +212,11 @@ let record_without t names =
   match concrete_type t with
     | Record (Row (fields, row_var, dual) as row) ->
         if is_closed_row row then
-          let fieldm = StringSet.fold (fun name fields -> StringMap.remove name fields) names fields in
+          let fieldm = StringSet.fold (fun name fields -> FieldEnv.remove name fields) names fields in
           Record (Row (fieldm, row_var, dual))
         else
           let fieldm =
-            StringMap.mapi
+            FieldEnv.mapi
               (fun name f ->
                 if StringSet.mem name names then
                   Absent
@@ -370,7 +370,7 @@ let check_type_wellformedness primary_kind t : unit =
     (* Row *)
     | Row (field_spec_map, row_var, _dual) ->
        let handle_fs _label f = ifield_spec f in
-       StringMap.iter handle_fs field_spec_map;
+       FieldEnv.iter handle_fs field_spec_map;
        meta rec_env row_var
     (* Session *)
     | Input (t, s)
@@ -394,7 +394,7 @@ let row_present_types t =
   extract_row t
    |> extract_row_parts
    |> fst3
-   |> StringMap.filter_map
+   |> FieldEnv.filter_map
       (fun _ v ->
         match v with
           | Present t -> Some t

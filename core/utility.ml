@@ -962,14 +962,15 @@ struct
         | fa, fal ->
             Some (from_option a fa::from_option al fal)
 
-  let map_tryPick f m =
-    StringMap.fold
+  let unk_map_tryPick fold f m =
+    fold
       (fun k v acc -> lazy (match f k v with
         | None -> Lazy.force acc
         | y -> y))
       m
       (lazy None)
     |> Lazy.force
+  let map_tryPick f m = unk_map_tryPick StringMap.fold f m
 
   let rec list_tryPick f = function
     | [] -> None

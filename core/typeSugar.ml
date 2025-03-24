@@ -1689,7 +1689,7 @@ let bind_effects     context r      = {context with effect_row = Types.flatten_r
 let lookup_effect    context name   =
   match context.effect_row with
   | Types.Row (fields, _, _) ->
-    begin match Utility.StringMap.find_opt name fields with
+    begin match Types.FieldEnv.find_opt name fields with
       | Some (Types.Present t) -> Some t
       | _ -> None
     end
@@ -1938,8 +1938,8 @@ let type_section pos context s =
        let a = Types.fresh_type_variable (lin_unl, res_any) in
        let rho = Types.fresh_row_variable (lin_unl, res_any) in
        let effects = Types.make_empty_open_row default_effect_subkind in (* projection is pure! *)
-       let r = Record (Row (StringMap.add label (Present a) StringMap.empty, rho, false)) in
-         ([(PrimaryKind.Type, a); (PrimaryKind.Row, Row (StringMap.empty, rho, false)); (PrimaryKind.Row, effects)],
+       let r = Record (Row (FieldEnv.add label (Present a) FieldEnv.empty, rho, false)) in
+         ([(PrimaryKind.Type, a); (PrimaryKind.Row, Row (FieldEnv.empty, rho, false)); (PrimaryKind.Row, effects)],
           Function (Types.make_tuple_type [r], effects, a)),
          Usage.empty
     | Name var      ->
@@ -1960,11 +1960,11 @@ let type_frozen_section context s =
     | Project label ->
        let a = Types.fresh_rigid_type_variable (lin_unl, res_any) in
        let rho = Types.fresh_rigid_row_variable (lin_unl, res_any) in
-       let effects = StringMap.empty, Types.fresh_rigid_row_variable default_effect_subkind, false in
-       let r = Record (Row (StringMap.add label (Present a) StringMap.empty, rho, false)) in
+       let effects = FieldEnv.empty, Types.fresh_rigid_row_variable default_effect_subkind, false in
+       let r = Record (Row (FieldEnv.add label (Present a) FieldEnv.empty, rho, false)) in
        Types.for_all
          (Types.quantifiers_of_type_args [(PrimaryKind.Type, a);
-                                          (PrimaryKind.Row, Row (StringMap.empty, rho, false));
+                                          (PrimaryKind.Row, Row (FieldEnv.empty, rho, false));
                                           (PrimaryKind.Row, Row effects)],
           Function (Types.make_tuple_type [r], Row effects, a)),
        Usage.empty
@@ -2052,15 +2052,15 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
                   List.nth ps i
               | Nil | Cons _ | List _ | Record _ | Variant _ | Negative _ | Operation _ -> assert false in
           let fields =
-            StringMap.fold(* true if the row variable is dualised *)
+            FieldEnv.fold(* true if the row variable is dualised *)
 
               (fun name ->
                  function
                  | Present t ->
                        let pats = List.map (unwrap_at ((int_of_string name) - 1)) pats in
-                         StringMap.add name (Present (cpt pats t))
+                         FieldEnv.add name (Present (cpt pats t))
                  | (Absent | Meta _) -> assert false
-                 | _ -> raise Types.tag_expectation_mismatch) fields StringMap.empty in
+                 | _ -> raise Types.tag_expectation_mismatch) fields FieldEnv.empty in
             Record (Row (fields, row_var, dual))
       | Record row ->
           let fields, row_var, lr = (Types.unwrap_row row |> fst |> TypeUtils.extract_row_parts) in
@@ -2081,14 +2081,14 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
                     end
               | Nil | Cons _ | List _ | Tuple _ | Variant _ | Negative _ | Operation _ -> assert false in
           let fields =
-            StringMap.fold
+            FieldEnv.fold
               (fun name ->
                  function
                    | Present t ->
                        let pats = List.map (unwrap_at name) pats in
-                         StringMap.add name (Present (cpt pats t))
+                         FieldEnv.add name (Present (cpt pats t))
                    | (Absent | Meta _) -> assert false
-                   | _ -> raise Types.tag_expectation_mismatch) fields StringMap.empty in
+                   | _ -> raise Types.tag_expectation_mismatch) fields FieldEnv.empty in
             Record (Row (fields, row_var, false))
       | Variant row ->
           let fields, row_var, lr = (Types.unwrap_row row |> fst |> TypeUtils.extract_row_parts) in
@@ -2115,15 +2115,15 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
               | {node = (Variant _); _} :: ps -> are_open ps
               | {node = (Nil | Cons _ | List _ | Tuple _ | Record _ | Constant _ | Operation _); _} :: _ -> assert false in
           let fields =
-            StringMap.fold
+            FieldEnv.fold
               (fun name field_spec env ->
                  match field_spec with
                    | Present t ->
                        let pats = concat_map (unwrap_at name) pats in
                        let t = cpt pats t in
-                         (StringMap.add name (Present t)) env
+                         (FieldEnv.add name (Present t)) env
                    | (Absent | Meta _) -> assert false
-                   | _ -> raise Types.tag_expectation_mismatch) fields StringMap.empty
+                   | _ -> raise Types.tag_expectation_mismatch) fields FieldEnv.empty
           in
             if are_open pats then
               begin
@@ -2153,7 +2153,7 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
               | Variable _ | Any | As _ | HasType _ | Negative _
               | Nil | Cons _ | List _ | Tuple _ | Record _ | Variant _ | Constant _ -> assert false in
           let fields =
-            StringMap.fold
+            FieldEnv.fold
               (fun name field_spec env ->
                  match field_spec with
                  | Present t ->
@@ -2200,11 +2200,11 @@ let close_pattern_type : Pattern.with_pos list -> Types.datatype -> Types.dataty
                          Types.make_function_type domain effs codomain
                        in
                        (* Bind name |-> Pre(t) *)
-                       StringMap.add name (Present t) env
+                       FieldEnv.add name (Present t) env
                     | _ ->
-                       StringMap.add name (Present t) env
+                       FieldEnv.add name (Present t) env
                     end
-                 | t -> StringMap.add name t env) fields StringMap.empty
+                 | t -> FieldEnv.add name t env) fields FieldEnv.empty
           in
           let row = Row (fields, row_var, false) in
           (* NOTE: type annotations can lead to a closed type even though
@@ -2516,9 +2516,9 @@ let type_pattern ?(linear_vars=true) closed
           List.fold_right
             (fun name (positive, negative) ->
                let a = fresh_var () in
-               (StringMap.add name (Present a) positive,
-                StringMap.add name Absent negative))
-            names (StringMap.empty, StringMap.empty) in
+               (Types.FieldEnv.add name (Present a) positive,
+                Types.FieldEnv.add name Absent negative))
+            names (Types.FieldEnv.empty, Types.FieldEnv.empty) in
 
         let outer_type = Types.Variant (Row (positive, row_var, false)) in
         let inner_type = Types.Variant (Row (negative, row_var, false)) in
@@ -2901,10 +2901,10 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                    let e = tc e in
                    let t = typ e in
                      ((label, e)::fields,
-                      StringMap.add label (T.Present t) field_env,
-                      StringMap.add label T.Absent absent_field_env,
+                      Types.FieldEnv.add label (T.Present t) field_env,
+                      Types.FieldEnv.add label T.Absent absent_field_env,
                       Usage.combine field_usages (usages e)))
-                fields ([], StringMap.empty, StringMap.empty, Usage.empty) in
+                fields ([], Types.FieldEnv.empty, Types.FieldEnv.empty, Usage.empty) in
               begin match rest with
                 | None ->
                    let r = T.Row (field_env, Unionfind.fresh T.Closed, false) in
@@ -2939,22 +2939,22 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                          i.e. all the labels belonging to the record r
                       *)
                     let field_env' =
-                      StringMap.fold (fun label f field_env' ->
+                      Types.FieldEnv.fold (fun label f field_env' ->
                                         match f with
                                           | T.Absent ->
-                                              if StringMap.mem label field_env then
+                                              if Types.FieldEnv.mem label field_env then
                                                 field_env'
                                               else
-                                                StringMap.add label T.Absent field_env'
+                                                Types.FieldEnv.add label T.Absent field_env'
                                           | T.Present t ->
-                                              if StringMap.mem label field_env then
+                                              if Types.FieldEnv.mem label field_env then
                                                 failwith ("Could not extend record "^ expr_string (erase r)^" (of type "^
                                                             Types.string_of_datatype rtype^") with the label "^
                                                             label^
                                                             " (of type"^Types.string_of_datatype (T.Record (T.Row (field_env, Unionfind.fresh T.Closed, false)))^
                                                             ") because the labels overlap")
                                               else
-                                                StringMap.add label (T.Present t) field_env'
+                                                Types.FieldEnv.add label (T.Present t) field_env'
                                           | T.Meta _ -> assert false
                                           | _ -> raise Types.tag_expectation_mismatch)
                         rfield_env field_env in
@@ -3290,11 +3290,11 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             let field_env =
               List.fold_right
                 (fun name field_env ->
-                   if StringMap.mem name field_env then
+                   if Types.FieldEnv.mem name field_env then
                      Gripers.die pos "Duplicate labels in insert expression."
                    else
-                     StringMap.add name (T.Present (Types.fresh_type_variable (lin_any, res_base))) field_env)
-                labels StringMap.empty
+                     Types.FieldEnv.add name (T.Present (Types.fresh_type_variable (lin_any, res_base))) field_env)
+                labels Types.FieldEnv.empty
             in
 
             (* Check that the fields in the type of values match the declared labels *)
@@ -3314,7 +3314,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             in
 
             let needed_env =
-              StringMap.map
+              Types.FieldEnv.map
                 (fun _f -> Types.fresh_presence_variable (lin_any, res_base))
                 field_env in
 
@@ -3347,7 +3347,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                                the table.
                             *)
                            let row =
-                             T.Row (StringMap.singleton id (T.Present Types.int_type),
+                             T.Row (Types.FieldEnv.singleton id (T.Present Types.int_type),
                                Types.fresh_row_variable (lin_any, res_base), false) in
                             unify
                               ~handle:Gripers.insert_id
@@ -3414,14 +3414,14 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               List.fold_right
                 (fun (name, exp) (set, field_env) ->
                    let exp = type_check context' exp in
-                     if StringMap.mem name field_env then
+                     if Types.FieldEnv.mem name field_env then
                        Gripers.die pos "Duplicate fields in update expression."
                      else
-                       (name, exp)::set, StringMap.add name (T.Present (typ exp)) field_env)
-                set ([], StringMap.empty) in
+                       (name, exp)::set, Types.FieldEnv.add name (T.Present (typ exp)) field_env)
+                set ([], Types.FieldEnv.empty) in
 
             let needed_env =
-              StringMap.map
+              Types.FieldEnv.map
                 (fun _f -> Types.fresh_presence_variable (lin_any, res_base))
                 field_env in
 
@@ -3555,7 +3555,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                 | Flat  ->
                      let shape =
                        Types.make_list_type
-                         (T.Record (T.Row (StringMap.empty,
+                         (T.Record (T.Row (Types.FieldEnv.empty,
                             Types.fresh_row_variable (lin_any, res_base), false))) in
                      unify ~handle:Gripers.query_base_row (pos_and_typ p, no_pos shape)
             in
@@ -4092,7 +4092,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                       in
                       assert (not lr);
                       begin
-                        match StringMap.lookup l field_env with
+                        match Types.FieldEnv.lookup l field_env with
                         | Some (T.Present t) ->
                           (* the free type variables in the projected type *)
                           let vars = Types.free_type_vars t in
@@ -4150,7 +4150,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             let rfields, row_var, lr = (TypeUtils.extract_row (typ r)) |> Types.unwrap_row |> fst |> TypeUtils.extract_row_parts in
             assert (not lr);
             let rfields =
-              StringMap.mapi
+              Types.FieldEnv.mapi
                 (fun name t ->
                    if List.mem_assoc name fields then
                      T.Present (snd3 (List.assoc name fields))
@@ -4308,7 +4308,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
                            let kname = Binder.to_name bndr in
                            let kt =
                              let (fields,_,_) = TypeUtils.extract_row_parts (TypeUtils.extract_row effrow) in
-                             let kt = find_effect_type effname (StringMap.to_alist fields) in
+                             let kt = find_effect_type effname (Types.FieldEnv.to_alist fields) in
                              let op_param = TypeUtils.return_type kt in
                              let typ = Env.find kname env in
                              let domain =
@@ -4448,7 +4448,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             = fun row ->
              let (operations, rho, dual) = TypeUtils.extract_row_parts row in
              let operations' =
-               StringMap.mapi
+               Types.FieldEnv.mapi
                  (fun name p ->
                    if TypeUtils.is_builtin_effect name
                    then p
@@ -4625,17 +4625,17 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
               if Settings.get Basicsettings.Sessions.expose_session_fail then
                 Types.row_with
                   (Value.session_exception_operation, Types.fresh_presence_variable default_subkind)
-                  (T.Row (StringMap.empty, rho, false))
+                  (T.Row (Types.FieldEnv.empty, rho, false))
               else
-                T.Row (StringMap.empty, rho, false)
+                T.Row (Types.FieldEnv.empty, rho, false)
             in
             let try_effects =
               if Settings.get Basicsettings.Sessions.expose_session_fail then
                 Types.row_with
                   (Value.session_exception_operation, T.Present (LinCont.make_operation_type [] Types.empty_type))
-                  (T.Row (StringMap.empty, rho, false))
+                  (T.Row (Types.FieldEnv.empty, rho, false))
               else
-                T.Row (StringMap.empty, rho, false)
+                T.Row (Types.FieldEnv.empty, rho, false)
             in
 
             unify ~handle:Gripers.try_effect

@@ -479,7 +479,7 @@ let gather_mutual_info (tycon_env : simple_tycon_env) =
 
 let gather_operation_of_type tp
   = let open Types in
-    let module FieldEnv = Utility.StringMap in
+    let module FieldEnv = Types.FieldEnv in
     let is_effect_row_kind : Kind.t -> bool
       = fun (primary, (_, restriction)) ->
       primary = PrimaryKind.Row && restriction = Restriction.Effect
