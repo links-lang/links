@@ -4,7 +4,7 @@ stdout : (x = 1, y = "two") : (x:Int,y:String)
 
 Quote record labels that are also keywords
 ("client"=5, "fun"=7)
-stdout : ("client" = 5, "fun" = 7) : (client:Int,fun:Int)
+stdout : ("client" = 5, "fun" = 7) : (fun:Int,client:Int)
 
 Record comparisons
 (x=1, y="two") == (y="two", x=1)

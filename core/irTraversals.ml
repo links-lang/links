@@ -37,6 +37,10 @@ module type IR_VISITOR = sig
       'a.
       ('self_type -> 'a -> ('self_type * 'a * Types.datatype)) ->
       'a name_map -> 'self_type * 'a name_map * Types.datatype name_map
+    method st_name_map :
+      'a.
+      ('self_type -> 'a -> ('self_type * 'a * Types.datatype)) ->
+      'a st_name_map -> 'self_type * 'a st_name_map * Types.datatype st_name_map
     method var_map :
       'a.
       ('self_type -> 'a -> ('self_type * 'a * Types.datatype)) ->
@@ -138,6 +142,19 @@ struct
           vmap
           (o, StringMap.empty, StringMap.empty)
 
+    method st_name_map :
+      'a.
+      ('self_type -> 'a -> ('self_type * 'a * datatype)) ->
+      'a st_name_map -> 'self_type * 'a st_name_map * datatype st_name_map =
+      fun f vmap ->
+        Types.FieldEnv.fold
+          (fun name v (o, vmap, tmap) ->
+             let (o, v, t) = f o v in
+               (o, Types.FieldEnv.add name v vmap,
+                   Types.FieldEnv.add name t tmap))
+          vmap
+          (o, Types.FieldEnv.empty, Types.FieldEnv.empty)
+
     method var_map :
       'a.
       ('self_type -> 'a -> ('self_type * 'a * datatype)) ->
@@ -179,7 +196,7 @@ struct
         | Ir.Constant c -> let (o, c, t) = o#constant c in o, Ir.Constant c, t
         | Variable x -> let (o, x, t) = o#var x in o, Ir.Variable x, t
         | Extend (fields, base) ->
-            let (o, fields, field_types) = o#name_map (fun o -> o#value) fields in
+            let (o, fields, field_types) = o#st_name_map (fun o -> o#value) fields in
             let (o, base, base_type) = o#option (fun o -> o#value) base in
 
             let t =

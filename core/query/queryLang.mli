@@ -31,9 +31,9 @@ type t =
     | Dedup     of t
     | Prom      of t
     | GroupBy   of (Var.var * t) * t
-    | AggBy     of (t * string) StringMap.t * t
+    | AggBy     of (t * string) Types.FieldEnv.t * t
     | Lookup    of t * t
-    | Record    of t StringMap.t
+    | Record    of t Types.FieldEnv.t
     | Project   of t * string
     | Erase     of t * StringSet.t
     | Variant   of string * t
@@ -59,7 +59,7 @@ val expression_of_base_value : Value.t -> t
 
 val check_policies_compatible : CommonTypes.QueryPolicy.t -> CommonTypes.QueryPolicy.t -> unit
 
-val field_types_of_row : Types.datatype -> Types.datatype StringMap.t
+val field_types_of_row : Types.datatype -> Types.datatype Types.FieldEnv.t
 
 val unbox_xml : t -> Value.xmlitem
 
@@ -69,13 +69,13 @@ val unbox_list : t -> t list
 
 val unbox_pair : t -> t * t
 
-val unbox_record : t -> t StringMap.t
+val unbox_record : t -> t Types.FieldEnv.t
 
 val used_database : t -> Value.database option
 
 val string_of_t : t -> string
 
-val recdty_field_types : Types.datatype -> Types.datatype StringMap.t
+val recdty_field_types : Types.datatype -> Types.datatype Types.FieldEnv.t
 
 val env_of_value_env : CommonTypes.QueryPolicy.t ->  Value.env -> env
 
@@ -97,8 +97,8 @@ val default_of_base_type : Primitive.t -> t
 
 val value_of_expression : t -> Value.t
 
-val labels_of_field_types : 'a Utility.StringMap.t -> Utility.StringSet.t
-val table_field_types : Value.table -> Types.typ Utility.StringMap.t
+val labels_of_field_types : 'a Types.FieldEnv.t -> Utility.StringSet.t
+val table_field_types : Value.table -> Types.typ Types.FieldEnv.t
 val is_list : t -> bool
 
 val likeify : t -> t option

@@ -428,9 +428,9 @@ struct
   let close f zs tyargs =
     Closure (f, tyargs, Extend (List.fold_right
                             (fun (zname, zv) fields ->
-                               StringMap.add zname zv fields)
+                               Types.FieldEnv.add zname zv fields)
                             zs
-                            StringMap.empty, None))
+                            Types.FieldEnv.empty, None))
 
   class visitor tenv fenv =
     object (o : 'self) inherit IrTraversals.Transform.visitor(tenv) as super
@@ -539,8 +539,8 @@ struct
                      (fun fields b ->
                        let x = Var.var_of_binder b in
                        let xt = Var.type_of_binder b in
-                       StringMap.add (string_of_int x) xt fields)
-                     StringMap.empty
+                       Types.FieldEnv.add (string_of_int x) xt fields)
+                     Types.FieldEnv.empty
                      zs)
               in
               (* fresh variable for the closure environment *)
@@ -615,8 +615,8 @@ struct
                               (fun fields b ->
                                 let x = Var.var_of_binder b in
                                 let xt = Var.type_of_binder b in
-                                StringMap.add (string_of_int x) xt fields)
-                              StringMap.empty
+                                Types.FieldEnv.add (string_of_int x) xt fields)
+                              Types.FieldEnv.empty
                               zs)
                        in
                        (* fresh variable for the closure environment *)

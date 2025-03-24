@@ -59,7 +59,7 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> Q.t -> Q.t =
     | Q.Concat vs -> Q.Concat (List.map ffb vs)
     | Q.Dedup q -> Q.Dedup (ffb q)
     | Q.Prom q -> Q.Prom (ffb q)
-    | Q.Record fields -> Q.Record (StringMap.map ffb fields)
+    | Q.Record fields -> Q.Record (Types.FieldEnv.map ffb fields)
     | Q.Variant (name, v) -> Q.Variant (name, ffb v)
     | Q.XML xmlitem -> Q.XML xmlitem
     | Q.Project (v, name) -> Q.Project (ffb v, name)
@@ -83,7 +83,7 @@ let rec freshen_for_bindings : Var.var Env.Int.t -> Q.t -> Q.t =
       let env' = Env.Int.bind v y env in
       Q.GroupBy ((y, freshen_for_bindings env' i), ffb q)
     (* XXX: defensive programming; recursion on ar not needed now, but may be in the future *)
-    | Q.AggBy (ar, q) -> Q.AggBy (StringMap.map (fun (x,y) -> ffb x, y) ar, ffb q)
+    | Q.AggBy (ar, q) -> Q.AggBy (Types.FieldEnv.map (fun (x,y) -> ffb x, y) ar, ffb q)
     | Q.Lookup (q,k) -> Q.Lookup (ffb q, ffb k)
 
 let flatfield f1 f2 = f1 ^ "@" ^ f2
@@ -91,23 +91,23 @@ let flatfield f1 f2 = f1 ^ "@" ^ f2
 let rec flattened_pair x y =
   match x, y with
   | Q.Var (_nx, Types.Record row), _ ->
-      let x' = Q.Record (StringMap.fold (fun f _ acc -> StringMap.add f (Q.Project (x,f)) acc) (Q.field_types_of_row row) StringMap.empty)
+      let x' = Q.Record (Types.FieldEnv.fold (fun f _ acc -> Types.FieldEnv.add f (Q.Project (x,f)) acc) (Q.field_types_of_row row) Types.FieldEnv.empty)
       in flattened_pair x' y
   | _, Q.Var (_ny, Types.Record row) ->
-      let y' = Q.Record (StringMap.fold (fun f _ acc -> StringMap.add f (Q.Project (y,f)) acc) (Q.field_types_of_row row) StringMap.empty)
+      let y' = Q.Record (Types.FieldEnv.fold (fun f _ acc -> Types.FieldEnv.add f (Q.Project (y,f)) acc) (Q.field_types_of_row row) Types.FieldEnv.empty)
       in flattened_pair x y'
   (* We use a field with an empty name to deal with variables of non-record type *)
   | Q.Var (_nx, _), _ ->
-      let x' = Q.Record (StringMap.from_alist ["",x])
+      let x' = Q.Record (Types.FieldEnv.from_alist ["",x])
       in flattened_pair x' y
   | _, Q.Var (_ny, _) ->
-      let y' = Q.Record (StringMap.from_alist ["",y])
+      let y' = Q.Record (Types.FieldEnv.from_alist ["",y])
       in flattened_pair x y'
   | Q.Record fty1, Q.Record fty2 ->
       let out1 =
-          StringMap.fold (fun f v acc -> StringMap.add (flatfield "1" f) v acc) fty1 StringMap.empty
+          Types.FieldEnv.fold (fun f v acc -> Types.FieldEnv.add (flatfield "1" f) v acc) fty1 Types.FieldEnv.empty
       in
-      let out2 = StringMap.fold (fun f v acc -> StringMap.add (flatfield "2" f) v acc) fty2 out1
+      let out2 = Types.FieldEnv.fold (fun f v acc -> Types.FieldEnv.add (flatfield "2" f) v acc) fty2 out1
       in Q.Record out2
   | _ -> assert false
 
@@ -115,12 +115,12 @@ let rec flattened_pair_ft x y =
   match x, y with
   | Q.Var (_nx, Types.Record rowx), Q.Var (_ny, Types.Record rowy) ->
       let out1 =
-          StringMap.fold (fun f t acc -> StringMap.add (flatfield "1" f) t acc) (Q.field_types_of_row rowx) StringMap.empty
+          Types.FieldEnv.fold (fun f t acc -> Types.FieldEnv.add (flatfield "1" f) t acc) (Q.field_types_of_row rowx) Types.FieldEnv.empty
       in
-      StringMap.fold (fun f t acc -> StringMap.add (flatfield "2" f) t acc) (Q.field_types_of_row rowy) out1
+      Types.FieldEnv.fold (fun f t acc -> Types.FieldEnv.add (flatfield "2" f) t acc) (Q.field_types_of_row rowy) out1
   (* XXX: same as above, using a field with an empty name to deal with variables of non-record type *)
-  | Q.Var (nx, tyx), _ -> flattened_pair_ft (Q.Var (nx, Types.make_record_type (StringMap.from_alist ["", tyx]))) y
-  | _, Q.Var (ny, tyy) -> flattened_pair_ft x (Q.Var (ny, Types.make_record_type (StringMap.from_alist ["", tyy])))
+  | Q.Var (nx, tyx), _ -> flattened_pair_ft (Q.Var (nx, Types.make_record_type (Types.FieldEnv.from_alist ["", tyx]))) y
+  | _, Q.Var (ny, tyy) -> flattened_pair_ft x (Q.Var (ny, Types.make_record_type (Types.FieldEnv.from_alist ["", tyy])))
   | _ -> assert false
 
 (* gs must ALWAYS be non-empty, both input and output!*)
@@ -181,8 +181,8 @@ let rec reduce_eq (a, b) =
         List.fold_right2
           (fun (_, v1) (_, v2) e ->
             reduce_and (reduce_eq (v1, v2), e))
-          (StringMap.to_alist lfields)
-          (StringMap.to_alist rfields)
+          (Types.FieldEnv.to_alist lfields)
+          (Types.FieldEnv.to_alist rfields)
           (Q.Constant (Constant.Bool true))
       | (a, b) -> Q.Apply (Q.Primitive "==", [a; b])
 
@@ -221,14 +221,14 @@ let rec reduce_if_body (c, t, e) =
     | Q.Record then_fields ->
       begin match e with
         | Q.Record else_fields ->
-          assert (StringMap.equal (fun _ _ -> true) then_fields else_fields);
+          assert (Types.FieldEnv.equal (fun _ _ -> true) then_fields else_fields);
           Q.Record
-            (StringMap.fold
+            (Types.FieldEnv.fold
                 (fun name t fields ->
-                  let e = StringMap.find name else_fields in
-                    StringMap.add name (reduce_if_body (c, t, e)) fields)
+                  let e = Types.FieldEnv.find name else_fields in
+                    Types.FieldEnv.add name (reduce_if_body (c, t, e)) fields)
                 then_fields
-                StringMap.empty)
+                Types.FieldEnv.empty)
         (* NOTE: this relies on any record variables having
             been eta-expanded by this point *)
         | _ -> Q.query_error "Mismatched fields"
@@ -273,13 +273,13 @@ struct
   let rec reduce_project (r, label) =
     match r with
       | Q.Record fields ->
-        assert (StringMap.mem label fields);
-        StringMap.find label fields
+        assert (Types.FieldEnv.mem label fields);
+        Types.FieldEnv.find label fields
       | Q.If (c, t, e) ->
         Q.If (c, reduce_project (t, label), reduce_project (e, label))
       | Q.Var (_x, Types.Record row) ->
         let field_types =  Q.field_types_of_row row in
-        assert (StringMap.mem label field_types);
+        assert (Types.FieldEnv.mem label field_types);
         Q.Project (r, label)
       | _ -> Q.query_error ("Error projecting label %s from record: %s") label (Q.string_of_t r)
 
@@ -332,7 +332,7 @@ struct
     in
     let of_record _x = function
     | Q.Record fields ->
-      StringMap.fold (fun label v acc ->
+      Types.FieldEnv.fold (fun label v acc ->
         (* f is the aggregate function for this label *)
         let f, arg = of_apply v in
         let c, _q = of_map_project arg in
@@ -340,11 +340,11 @@ struct
         let y, cbody = of_closure c in
         match of_project (of_singleton cbody) with
         | l, Q.Var (var, _) when var = y ->
-          StringMap.add label (f, l) acc
+          Types.FieldEnv.add label (f, l) acc
         | l, q -> aggError ("of_record label " ^ l ^ ": " ^ (Q.show q))
         )
         fields
-        StringMap.empty
+        Types.FieldEnv.empty
     | q -> aggError ("of_record " ^ (Q.show q))
     in
     Debug.print ("Aggregating with: " ^ Q.show aggs);
@@ -394,16 +394,16 @@ struct
         end
     | Extend (ext_fields, r) ->
       begin
-        match opt_app (xlate env) (Q.Record StringMap.empty) r with
+        match opt_app (xlate env) (Q.Record Types.FieldEnv.empty) r with
           | Q.Record fields ->
-            Q.Record (StringMap.fold
+            Q.Record (Types.FieldEnv.fold
                        (fun label v fields ->
-                         if StringMap.mem label fields then
+                         if Types.FieldEnv.mem label fields then
                            Q.query_error
                              "Error adding fields: label %s already present"
                              label
                          else
-                           StringMap.add label (xlate env v) fields)
+                           Types.FieldEnv.add label (xlate env v) fields)
                        ext_fields
                        fields)
           | _ -> Q.query_error "Error adding fields: non-record"
@@ -536,7 +536,7 @@ struct
     | Q.For (_, gs, os, b) ->
         let bvs'', res = List.fold_left (fun (bvs',acc) (_genkind,w,q) -> w::bvs', acc || cfree bvs' q) (bvs, false) gs in
         res || cfree bvs'' b || List.exists (cfree bvs) os
-    | Q.Record fl -> StringMap.exists (fun _ t -> cfree bvs t) fl
+    | Q.Record fl -> Types.FieldEnv.exists (fun _ t -> cfree bvs t) fl
     | _ -> false
     in cfree []
 
@@ -558,10 +558,10 @@ struct
        let (from_field, to_field) = OptionUtils.val_of temporal_fields in
        (* Transaction / Valid-time tables: Need to wrap as metadata *)
        (* First, generate a fresh variable for the table *)
-       let make_spec_map = StringMap.map (fun x -> Types.Present x) in
+       let make_spec_map = Types.FieldEnv.map (fun x -> Types.Present x) in
        let field_types = Q.table_field_types table in
        let base_field_types =
-         StringMap.filter
+         Types.FieldEnv.filter
            (fun x _ -> x <> from_field && x <> to_field)
            field_types in
        let (_, row_var, dual) = row in
@@ -572,7 +572,7 @@ struct
 
        (* Second, generate a fresh variable for the metadata *)
        let metadata_record =
-         StringMap.from_alist [
+         Types.FieldEnv.from_alist [
            (TemporalField.data_field,
              Q.eta_expand_var (z, base_ty_elem));
            (TemporalField.from_field,
@@ -672,7 +672,7 @@ struct
           with
           | InternalError _ -> retn in_dedup orig
         end
-    | Q.Record fl -> Q.Record (StringMap.map (norm false env) fl)
+    | Q.Record fl -> Q.Record (Types.FieldEnv.map (norm false env) fl)
     | Q.Singleton v -> Q.Singleton (norm false env v)
     | Q.MapEntry (k,v) -> Q.MapEntry (norm false env k, norm false env v)
     | Q.Concat xs -> reduce_concat (List.map (norm in_dedup env) xs)
@@ -683,16 +683,16 @@ struct
           match r with
           | Q.Record fields ->
             assert (StringSet.for_all
-                      (fun label -> StringMap.mem label fields) labels);
+                      (fun label -> Types.FieldEnv.mem label fields) labels);
             Q.Record
-              (StringMap.fold
+              (Types.FieldEnv.fold
                  (fun label v fields ->
                    if StringSet.mem label labels then
                      fields
                    else
-                     StringMap.add label v fields)
+                     Types.FieldEnv.add label v fields)
                  fields
-                 StringMap.empty)
+                 Types.FieldEnv.empty)
           | Q.If (c, t, e) ->
             Q.If (c, erase (t, labels), erase (e, labels))
           | Q.Var (_x, Types.Record row) ->
@@ -771,8 +771,8 @@ struct
        let rcd_combine = function
        | Q.Record rx, Q.Record ry ->
            begin
-             try Q.Record (StringMap.union_disjoint rx ry)
-             with StringMap.Not_disjoint _ -> Q.query_error "rcd_combine: unnable to merge overlapping grouping criteria (buggy typechecker?)"
+             try Q.Record (Types.FieldEnv.union_disjoint rx ry)
+             with Types.FieldEnv.Not_disjoint _ -> Q.query_error "rcd_combine: unnable to merge overlapping grouping criteria (buggy typechecker?)"
            end
        | Q.Record _, z | z, _ -> Q.query_error "rcd_combine: unexpected non-record argument (buggy normaliser?): %s" (Q.show z)
        in
@@ -792,7 +792,7 @@ struct
        in
        let ql' = List.map (fun (b, c, gs, os) -> (reduce_groupby b, c, gs, os)) ql in
        pack_ncoll ql'
-    | Q.AggBy (ar, q) -> Q.AggBy (StringMap.map (fun (x,y) -> norm false env x, y) ar, norm in_dedup env q)
+    | Q.AggBy (ar, q) -> Q.AggBy (Types.FieldEnv.map (fun (x,y) -> norm false env x, y) ar, norm in_dedup env q)
     | Q.Lookup (q, k) ->
        let ql = unpack_ncoll (norm in_dedup env q) in
        let k' = norm false env k in
@@ -869,7 +869,7 @@ struct
                           let o = norm_comp false cenv os in
                             match o with
                               | Q.Record fields ->
-                                  List.rev (StringMap.fold (fun _ o os -> o::os) fields [])
+                                  List.rev (Types.FieldEnv.fold (fun _ o os -> o::os) fields [])
                               | _ -> assert false
                       in
                       (* this is unsmart: everything is normalized here, but we have to potentially
@@ -921,7 +921,7 @@ struct
 end
 
 let compile_update : Value.database -> Value.env ->
-  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> Sql.query =
+  ((Ir.var * string * Types.datatype Types.FieldEnv.t) * Ir.computation option * Ir.computation) -> Sql.query =
   fun db env ((x, table, field_types), where, body) ->
     let tyx = Types.make_record_type field_types in
     let env = Q.bind (Q.env_of_value_env QueryPolicy.Mixing env) (x, Q.Var (x, tyx)) in
@@ -934,7 +934,7 @@ let compile_update : Value.database -> Value.env ->
       q
 
 let compile_delete : Value.database -> Value.env ->
-  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> Sql.query =
+  ((Ir.var * string * Types.datatype Types.FieldEnv.t) * Ir.computation option) -> Sql.query =
   fun db env ((x, table, field_types), where) ->
     let tyx = Types.make_record_type field_types in
     let env = Q.bind (Q.env_of_value_env QueryPolicy.Mixing env) (x, Q.Var (x, tyx)) in

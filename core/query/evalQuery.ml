@@ -106,7 +106,7 @@ struct
         let field_types = QL.table_field_types t in
         let tyx = Types.make_record_type field_types in
         List.rev
-            (StringMap.fold
+            (Types.FieldEnv.fold
                (fun name _t es ->
                  QL.Project (QL.Var (x, tyx), name) :: es
                ) field_types [])
@@ -262,7 +262,7 @@ struct
         | []      -> fields
         | o :: os ->
           add_indexes
-            (StringMap.add ("order_" ^ string_of_int i) o fields)
+            (Types.FieldEnv.add ("order_" ^ string_of_int i) o fields)
             (i+1)
             os in
     let rec order =

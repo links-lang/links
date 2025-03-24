@@ -1813,7 +1813,7 @@ let rec function_arity =
   function
     | Function (Record row, _, _) ->
         let (l, _, _) = TypeUtils.extract_row_parts row in
-        (Some (StringMap.size l))
+        (Some (FieldEnv.size l))
     | ForAll (_, t) -> function_arity t
     | _ -> None
 

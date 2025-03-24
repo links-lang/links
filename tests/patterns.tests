@@ -148,7 +148,7 @@ stdout : Quux : [|Bar-|Baz-|Foo-|Quux|_|]
 
 Negative pattern [12]
 (fun(x) { switch(x) { case (-(Foo, Bar, Baz) as x) -> x case _ -> Quux }})(FooBar)
-stdout : FooBar : [|Bar-|Baz-|Foo-|FooBar|Quux|_|]
+stdout : FooBar : [|Bar-|Baz-|Foo-|Quux|FooBar|_|]
 
 Presence polymorphism 1 [13]
 (fun (x : [|Foo| Bar{p}|]) { switch(x) {case Foo -> 1 case _ -> 2  }} )

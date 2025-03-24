@@ -8,8 +8,8 @@ type 'a die = string -> 'a
 
 let to_links_map m =
   String.Map.fold
-    (fun k v m -> Utility.StringMap.add k v m)
-    m Utility.StringMap.empty
+    (fun k v m -> Types.FieldEnv.add k v m)
+    m Types.FieldEnv.empty
 
 let lookup_alias context ~alias =
   match Env.String.find_opt alias context with
@@ -50,7 +50,7 @@ let rec lens_phrase_type_of_type t =
   | T.Record r -> lens_phrase_type_of_type r
   | T.Row (fields, _, _) ->
       let fields =
-        Utility.StringMap.to_alist fields
+        Types.FieldEnv.to_alist fields
         |> String.Map.from_alist
         |> String.Map.map (fun v ->
                match v with

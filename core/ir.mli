@@ -22,6 +22,8 @@ type name_set = Utility.stringset
   [@@deriving show]
 type 'a name_map = 'a Utility.stringmap
   [@@deriving show]
+type 'a st_name_map = 'a Types.field_env
+  [@@deriving show]
 
 type 'a var_map = 'a Utility.intmap
   [@@deriving show]
@@ -35,23 +37,23 @@ type location = CommonTypes.Location.t
 (* INVARIANT: all IR binders have unique names *)
 
 type value =
-  | Constant   of Constant.t                      (* constant: c *)
-  | Variable   of var                             (* variable use: x *)
-  | Extend     of value name_map * value option   (* record extension: (l1=v1, ..., lk=vk|r) or (l1=v1, ..., lk=vk) *)
+  | Constant   of Constant.t                        (* constant: c *)
+  | Variable   of var                               (* variable use: x *)
+  | Extend     of value st_name_map * value option  (* record extension: (l1=v1, ..., lk=vk|r) or (l1=v1, ..., lk=vk) *)
   | Project    of Name.t * value                    (* record projection: r.l *)
-  | Erase      of name_set * value                (* erase fields from a record: r\{ls} *)
-  | Inject     of Name.t * value * Types.t   (* variant injection: L(v) *)
+  | Erase      of name_set * value                  (* erase fields from a record: r\{ls} *)
+  | Inject     of Name.t * value * Types.t          (* variant injection: L(v) *)
 
-  | TAbs       of tyvar list * value       (* type abstraction: /\xs.v *)
-  | TApp       of value * tyarg list       (* type application: v ts *)
+  | TAbs       of tyvar list * value                (* type abstraction: /\xs.v *)
+  | TApp       of value * tyarg list                (* type application: v ts *)
 
   | XmlNode    of Name.t * value name_map * value list
-                                       (* XML node construction: <tag attributes>body</tag> *)
-  | ApplyPure  of value * value list   (* non-side-effecting application: v ws *)
+                                                    (* XML node construction: <tag attributes>body</tag> *)
+  | ApplyPure  of value * value list                (* non-side-effecting application: v ws *)
 
-  | Closure    of var * tyarg list * value           (* closure creation: f env *)
+  | Closure    of var * tyarg list * value          (* closure creation: f env *)
 
-  | Coerce     of value * Types.t             (* type coercion: v:A *)
+  | Coerce     of value * Types.t                   (* type coercion: v:A *)
 
 and tail_computation =
   | Return     of value

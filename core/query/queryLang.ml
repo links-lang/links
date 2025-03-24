@@ -47,9 +47,9 @@ type t =
     | Dedup     of t
     | Prom      of t
     | GroupBy   of (Var.var * t) * t
-    | AggBy     of (t * string) StringMap.t * t
+    | AggBy     of (t * string) Types.FieldEnv.t * t
     | Lookup    of t * t
-    | Record    of t StringMap.t
+    | Record    of t Types.FieldEnv.t
     | Project   of t * string
     | Erase     of t * StringSet.t
     | Variant   of string * t
@@ -78,9 +78,9 @@ struct
     | Dedup     of pt
     | Prom      of pt
     | GroupBy   of (Var.var * pt) * pt
-    | AggBy     of (pt * string) StringMap.t * pt
+    | AggBy     of (pt * string) Types.FieldEnv.t * pt
     | Lookup    of pt * pt
-    | Record    of pt StringMap.t
+    | Record    of pt Types.FieldEnv.t
     | Project   of pt * string
     | Erase     of pt * StringSet.t
     | Variant   of string * pt
@@ -108,7 +108,7 @@ let rec pt_of_t : 't -> S.pt = fun v ->
       | Concat vs -> S.Concat (List.map bt vs)
       | Dedup q -> S.Dedup (bt q)
       | Prom q -> S.Prom (bt q)
-      | Record fields -> S.Record (StringMap.map bt fields)
+      | Record fields -> S.Record (Types.FieldEnv.map bt fields)
       | Variant (name, v) -> S.Variant (name, bt v)
       | XML xmlitem -> S.XML xmlitem
       | Project (v, name) -> S.Project (bt v, name)
@@ -120,7 +120,7 @@ let rec pt_of_t : 't -> S.pt = fun v ->
       | Var (v, t) -> S.Var (v, t)
       | Constant c -> S.Constant c
       | GroupBy ((x,k), q) -> S.GroupBy ((x, bt k), bt q)
-      | AggBy (ar, q) -> S.AggBy (StringMap.map (fun (x,y) -> bt x, y) ar, bt q)
+      | AggBy (ar, q) -> S.AggBy (Types.FieldEnv.map (fun (x,y) -> bt x, y) ar, bt q)
       | Lookup (q,k) -> S.Lookup (bt q, bt k)
       | Database _ -> assert false
 
@@ -160,7 +160,7 @@ let rec value_of_expression = fun v ->
       | Variant (name, v) -> `Variant (name, ve v)
       | XML xmlitem -> `XML xmlitem
       | Record fields ->
-          `Record (List.rev (StringMap.fold (fun name v fields ->
+          `Record (List.rev (Types.FieldEnv.fold (fun name v fields ->
                                                 (name, ve v)::fields)
                                 fields []))
       | _ -> assert false
@@ -175,7 +175,7 @@ let rec expression_of_base_value : Value.t -> t = function
       let fields =
         fields
         |> List.map (fun (k, v) -> (k, expression_of_base_value v))
-        |> StringMap.from_alist in
+        |> Types.FieldEnv.from_alist in
       Record fields
   | `DateTime dt -> Constant (Constant.DateTime dt)
   | other ->
@@ -183,7 +183,7 @@ let rec expression_of_base_value : Value.t -> t = function
         Value.string_of_value other))
 
 let field_types_of_spec_map =
-        StringMap.map (function
+        Types.FieldEnv.map (function
           | Types.Present t -> t
           | _ -> assert false)
 
@@ -200,7 +200,7 @@ let table_field_types Value.Table.{ row = (fields, _, _); temporal_fields; _ } =
     in
     let declared_fields = field_types_of_spec_map fields in
     (* Add metadata fields *)
-    StringMap.superimpose (StringMap.from_alist metadata_fields) declared_fields
+    Types.FieldEnv.superimpose (Types.FieldEnv.from_alist metadata_fields) declared_fields
 
 let unbox_xml =
   function
@@ -210,8 +210,8 @@ let unbox_xml =
 let unbox_pair =
   function
     | Record fields ->
-        let x = StringMap.find "1" fields in
-        let y = StringMap.find "2" fields in
+        let x = Types.FieldEnv.find "1" fields in
+        let y = Types.FieldEnv.find "2" fields in
           x, y
     | _ -> raise (runtime_type_error "failed to unbox pair")
 
@@ -240,14 +240,14 @@ let unbox_string =
               (unbox_list v))
     | _ -> raise (runtime_type_error "failed to unbox string")
 
-let recdty_field_types (t : Types.datatype) : Types.datatype StringMap.t =
+let recdty_field_types (t : Types.datatype) : Types.datatype Types.FieldEnv.t =
       field_types_of_row (TypeUtils.extract_row t)
 
 let rec subst t x u =
   let srec t = subst t x u in
   match t with
   | Var (var, _) when var = x -> u
-  | Record fl -> Record (StringMap.map srec fl)
+  | Record fl -> Record (Types.FieldEnv.map srec fl)
   | Singleton v -> Singleton (srec v)
   | MapEntry (k, v) -> MapEntry (srec k, srec v)
   | Concat xs -> Concat (List.map srec xs)
@@ -273,7 +273,7 @@ let rec subst t x u =
   | Closure (c, closure_env) ->
       let cenv = bind closure_env (x,u) in
       Closure (c, cenv)
-  | AggBy (ar, q) -> AggBy (StringMap.map (fun (t0,l) -> srec t0, l) ar, srec q)
+  | AggBy (ar, q) -> AggBy (Types.FieldEnv.map (fun (t0,l) -> srec t0, l) ar, srec q)
   | GroupBy ((v,i), q) ->
       let i' = if v = x then i else srec i in
       let q' = srec q in
@@ -307,9 +307,9 @@ let occurs_free (v : Var.var) =
       (* FIXME: do we need to check os as well? *)
       let bvs'', res = List.fold_left (fun (bvs',acc) (_genkind,w,q) -> w::bvs', acc ||=? occf bvs' q) (bvs, None) gs in
       res ||=? occf bvs'' b
-  | Record fl -> map_tryPick (fun _ t -> occf bvs t) fl
+  | Record fl -> unk_map_tryPick Types.FieldEnv.fold (fun _ t -> occf bvs t) fl
   | GroupBy ((v,i), q) -> occf (v::bvs) i ||=? occf bvs q
-  | AggBy (ar, q) -> map_tryPick (fun _ (t, _) -> occf bvs t) ar ||=? occf bvs q
+  | AggBy (ar, q) -> unk_map_tryPick Types.FieldEnv.fold (fun _ (t, _) -> occf bvs t) ar ||=? occf bvs q
   | _ -> None
   in occf []
 
@@ -328,7 +328,7 @@ let rec occurs_free_gens (gs : (genkind * Var.var * t) list) q =
 let rec type_of_expression : t -> Types.datatype = fun v ->
   let te = type_of_expression in
   let record fields : Types.datatype =
-    Types.make_record_type (StringMap.map te fields)
+    Types.make_record_type (Types.FieldEnv.map te fields)
   in
   match v with
   | Var (_,ty) -> ty
@@ -342,7 +342,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
       |> Types.make_list_type
   | AggBy (aggs,q) ->
       let tyk = te q |> Types.unwrap_map_type |> fst in
-      let ty = StringMap.map (function (Primitive f,_) -> TypeUtils.return_type (Env.String.find f Lib.type_env) | _ -> assert false) aggs
+      let ty = Types.FieldEnv.map (function (Primitive f,_) -> TypeUtils.return_type (Env.String.find f Lib.type_env) | _ -> assert false) aggs
         |> Types.make_record_type
       in
       Types.make_mapentry_type tyk ty |> Types.make_list_type
@@ -368,7 +368,7 @@ let rec type_of_expression : t -> Types.datatype = fun v ->
   | Project (w, name) ->
       begin
         match te w with
-        | Types.Record _ as rty -> StringMap.find name (recdty_field_types rty)
+        | Types.Record _ as rty -> Types.FieldEnv.find name (recdty_field_types rty)
         | ty ->
             failwith
               (Format.asprintf ("term:\n" ^^
@@ -398,11 +398,11 @@ let eta_expand_var (x, ty) =
   | Types.Record row ->
       let field_types = field_types_of_row row in
       Record
-        (StringMap.fold
+        (Types.FieldEnv.fold
           (fun name _t fields ->
-              StringMap.add name (Project (Var (x, ty), name)) fields)
+              Types.FieldEnv.add name (Project (Var (x, ty), name)) fields)
           field_types
-          StringMap.empty)
+          Types.FieldEnv.empty)
   | _ -> Var (x, ty)
 
 let eta_expand_list xs =
@@ -446,7 +446,7 @@ let used_database : t -> Value.database option =
       | Singleton v -> used_item v
       | MapEntry (k,v) -> used_item v ||=? used_item k
       | Record v ->
-          StringMap.to_alist v
+          Types.FieldEnv.to_alist v
           |> List.map snd
           |> traverse
       | Apply (_, args) ->
@@ -460,7 +460,7 @@ let used_database : t -> Value.database option =
       | Erase (x, _) -> used x
       | Variant (_, x) -> used x
       | AggBy (aggs, q) ->
-          let aggs' = StringMap.to_alist aggs |> List.map (fun (_,(x,_)) -> x) in
+          let aggs' = Types.FieldEnv.to_alist aggs |> List.map (fun (_,(x,_)) -> x) in
           traverse (q::aggs')
       | GroupBy ((_,i), q) -> traverse [q;i]
       | _ -> None
@@ -473,13 +473,13 @@ let used_database : t -> Value.database option =
 let string_of_t = string_of_t
 
 let labels_of_field_types field_types =
-  StringMap.fold
+  Types.FieldEnv.fold
     (fun name _ labels' ->
       StringSet.add name labels')
     field_types
     StringSet.empty
 
-let recdty_field_types (t : Types.datatype) : Types.datatype StringMap.t =
+let recdty_field_types (t : Types.datatype) : Types.datatype Types.FieldEnv.t =
   field_types_of_row (TypeUtils.extract_row t)
 
 let env_of_value_env policy value_env =
@@ -577,8 +577,8 @@ let rec expression_of_value : env -> Value.t -> t = fun env v ->
     | `Record fields ->
         Record
           (List.fold_left
-              (fun fields (name, v) -> StringMap.add name (expression_of_value env v) fields)
-              StringMap.empty
+              (fun fields (name, v) -> Types.FieldEnv.add name (expression_of_value env v) fields)
+              Types.FieldEnv.empty
               fields)
     | `Variant (name, v) -> Variant (name, expression_of_value env v)
     | `XML xmlitem -> XML xmlitem
@@ -724,7 +724,7 @@ let rec select_clause : Sql.index -> bool -> t -> Sql.select_clause =
       let fields =
         Sql.Fields
           (List.rev
-            (StringMap.fold
+            (Types.FieldEnv.fold
               (fun name _ fields ->
                 (Sql.Project (var, name), name)::fields)
               fields
@@ -742,7 +742,7 @@ let rec select_clause : Sql.index -> bool -> t -> Sql.select_clause =
       let fields =
         Sql.Fields
           (List.rev
-            (StringMap.fold
+            (Types.FieldEnv.fold
               (fun name v fields ->
                 (base index v, name)::fields)
               fields
@@ -866,8 +866,8 @@ let update : ((Ir.var * string) * t option * t) -> Sql.query =
       OptionUtils.opt_map (base []) where in
     let upd_fields =
       unbox_record body
-      |> StringMap.map (base [])
-      |> StringMap.to_alist in
+      |> Types.FieldEnv.map (base [])
+      |> Types.FieldEnv.to_alist in
     Update { upd_table = table; upd_fields; upd_where }
 
 let delete : ((Ir.var * string) * t option) -> Sql.query =
@@ -969,9 +969,9 @@ struct
           (o, Prom q)
       | Record fields ->
         let (o, fields) =
-          StringMap.fold (fun k v (o, acc)->
+          Types.FieldEnv.fold (fun k v (o, acc)->
             let (o, v) = o#query v in
-            (o, StringMap.add k v acc)) fields (o, StringMap.empty) in
+            (o, Types.FieldEnv.add k v acc)) fields (o, Types.FieldEnv.empty) in
         (o, Record fields)
       | Project (x, field) -> let (o, x) = o#query x in (o, Project (x, field))
       | Erase  (x, fields) ->
@@ -1007,9 +1007,9 @@ struct
           let (o,q) = o#query q in
           (o, GroupBy ((v,i),q))
       | AggBy (ar,q) ->
-          let (o,ar) = StringMap.fold (fun l_in (v, l_out) (o, acc) ->
+          let (o,ar) = Types.FieldEnv.fold (fun l_in (v, l_out) (o, acc) ->
                   let (o, v) = o#query v in
-                  (o, StringMap.add l_in (v, l_out) acc)) ar (o, StringMap.empty)
+                  (o, Types.FieldEnv.add l_in (v, l_out) acc)) ar (o, Types.FieldEnv.empty)
           in
           let (o,q) = o#query q in
           (o, AggBy (ar, q))
@@ -1029,20 +1029,20 @@ struct
   | Types.Primitive _ as t -> t
   | Types.Record fields ->
     Types.make_record_type
-      (StringMap.fold
+      (Types.FieldEnv.fold
          (fun name t fields ->
            match flatten_base_type t with
              | Types.Record inner_fields ->
-               StringMap.fold
+               Types.FieldEnv.fold
                  (fun name' t fields ->
-                   StringMap.add (name ^ "@" ^ name') t fields)
+                   Types.FieldEnv.add (name ^ "@" ^ name') t fields)
                  (field_types_of_row inner_fields)
                  fields
              | Types.Primitive _ as t ->
-               StringMap.add name t fields
+               Types.FieldEnv.add name t fields
              | _ -> assert false)
          (field_types_of_row fields)
-         StringMap.empty)
+         Types.FieldEnv.empty)
   | t (* MapEntry *) ->
     let kty, vty = Types.unwrap_mapentry_type t in
     let kty' = flatten_base_type kty in
@@ -1053,7 +1053,7 @@ struct
     let t' = Types.unwrap_list_type t |> flatten_base_type in
     match t' with
     | Types.Record _ -> Types.make_list_type t'
-    | _ -> StringMap.add "@" t' StringMap.empty |> Types.make_record_type |> Types.make_list_type
+    | _ -> Types.FieldEnv.add "@" t' Types.FieldEnv.empty |> Types.make_record_type |> Types.make_list_type
 
   let rec flatten_inner : t -> t =
     let is_aggr_primitive = function
@@ -1087,19 +1087,19 @@ struct
         let extend name name' = name ^ "@" ^ name' in
         (* concatenate labels of nested records *)
         Record
-          (StringMap.fold
+          (Types.FieldEnv.fold
              (fun name body fields ->
                match flatten_inner body with
                  | Record inner_fields ->
-                   StringMap.fold
+                   Types.FieldEnv.fold
                      (fun name' body fields ->
-                       StringMap.add (extend name name') body fields)
+                       Types.FieldEnv.add (extend name name') body fields)
                      inner_fields
                      fields
                  | body ->
-                   StringMap.add name body fields)
+                   Types.FieldEnv.add name body fields)
              fields
-             StringMap.empty)
+             Types.FieldEnv.empty)
       | Variant ("Simply", x) ->
           Variant ("Simply", flatten_inner x)
       | Variant ("Seq", Singleton r) ->
@@ -1139,7 +1139,7 @@ struct
           | MapEntry (Record _, Record _)
           | Record _ as p -> p
           | MapEntry (_, _) -> assert false (* we don't want to handle the case of MapEntries not containing records *)
-          | p -> Record (StringMap.add "@" p StringMap.empty)
+          | p -> Record (Types.FieldEnv.add "@" p Types.FieldEnv.empty)
         in
         Singleton e'
       (* HACK: not sure if Concat is supposed to appear here...
@@ -1164,7 +1164,7 @@ struct
     | Types.Primitive _ -> List.assoc base_label frow
     | Types.Record nrow ->
         let nfields =
-          StringMap.fold
+          Types.FieldEnv.fold
           <| (fun k v acc -> (k, ur ~prefix:(extend_label k) v frow)::acc)
           <| field_types_of_row nrow
           <| []
@@ -1202,8 +1202,7 @@ struct
      * and need to be inferred from the nested type when unflattening -- we're not doing that here
      *
      * or maybe we are? we proceed by case analysis on the nested type and, from the looks of it,
-     * the code, not finding any matching attribute in the DB result, should conjure a `Record StringMap.empty
+     * the code, not finding any matching attribute in the DB result, should conjure a `Record Types.FieldEnv.empty
      * i.e. the unit value! *)
 
 end
-

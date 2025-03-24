@@ -22,6 +22,8 @@ type name_set = Utility.stringset
   [@@deriving show]
 type 'a name_map = 'a Utility.stringmap
   [@@deriving show]
+type 'a st_name_map = 'a Types.field_env
+  [@@deriving show]
 
 type 'a var_map = 'a Utility.intmap
   [@@deriving show]
@@ -35,7 +37,7 @@ type location = CommonTypes.Location.t
 type value =
   | Constant   of Constant.t
   | Variable   of var
-  | Extend     of value name_map * value option
+  | Extend     of value st_name_map * value option
   | Project    of Name.t * value
   | Erase      of name_set * value
   | Inject     of Name.t * value * Types.t
@@ -174,7 +176,7 @@ let rec is_atom =
 
 let with_bindings bs' (bs, tc) = (bs' @ bs, tc)
 
-let unit = Extend (Utility.StringMap.empty, None)
+let unit = Extend (Types.FieldEnv.empty, None)
 let unit_comp = ([], Return unit)
 
 type program = computation

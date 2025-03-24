@@ -1,4 +1,3 @@
-open Utility
 open CommonTypes
 
 val reduce_and : QueryLang.t * QueryLang.t -> QueryLang.t
@@ -17,7 +16,7 @@ sig
 end
 
 val compile_update : Value.database -> Value.env ->
-  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> Sql.query
+  ((Ir.var * string * Types.datatype Types.FieldEnv.t) * Ir.computation option * Ir.computation) -> Sql.query
 
 val compile_delete : Value.database -> Value.env ->
-  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> Sql.query
+  ((Ir.var * string * Types.datatype Types.FieldEnv.t) * Ir.computation option) -> Sql.query

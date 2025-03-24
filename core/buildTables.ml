@@ -255,7 +255,7 @@ struct
 
   let bindings tyenv bound_vars cont_vars bs =
     let o = new visitor tyenv bound_vars cont_vars in
-    let _ = o#computation (bs, Return (Extend (StringMap.empty, None))) in ()
+    let _ = o#computation (bs, Return (Extend (Types.FieldEnv.empty, None))) in ()
 
   let program tyenv bound_vars cont_vars e =
     let _ = (new visitor tyenv bound_vars cont_vars)#computation e in ()

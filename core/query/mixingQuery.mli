@@ -13,7 +13,7 @@ open CommonTypes
 
 val flatfield : string -> string -> string
 val flattened_pair : QueryLang.t -> QueryLang.t -> QueryLang.t
-val flattened_pair_ft : QueryLang.t -> QueryLang.t -> Types.datatype stringmap
+val flattened_pair_ft : QueryLang.t -> QueryLang.t -> Types.datatype Types.field_env
 val type_of_for_var : QueryLang.genkind -> QueryLang.t -> Types.datatype
 
 val reduce_where_then : QueryLang.t * QueryLang.t -> QueryLang.t
@@ -29,7 +29,7 @@ sig
 end
 
 val compile_update : Value.database -> Value.env ->
-  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option * Ir.computation) -> Sql.query
+  ((Ir.var * string * Types.datatype Types.FieldEnv.t) * Ir.computation option * Ir.computation) -> Sql.query
 
 val compile_delete : Value.database -> Value.env ->
-  ((Ir.var * string * Types.datatype StringMap.t) * Ir.computation option) -> Sql.query
+  ((Ir.var * string * Types.datatype Types.FieldEnv.t) * Ir.computation option) -> Sql.query

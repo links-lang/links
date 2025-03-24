@@ -28,7 +28,7 @@ let tag_query : QL.t -> QL.t =
           Concat (List.map tag es)
         | Dedup t -> Dedup (tag t)
         | Prom t -> Prom (tag t)
-        | Record fields -> Record (StringMap.map tag fields)
+        | Record fields -> Record (Types.FieldEnv.map tag fields)
         | Project (e, l) -> Project (tag e, l)
         | Erase (e, fields) -> Erase (tag e, fields)
         | Variant (l, e) -> Variant (l, tag e)
@@ -42,7 +42,7 @@ let tag_query : QL.t -> QL.t =
         | Database db -> Database db
         | GroupBy ((x,k), q) -> GroupBy ((x,tag k), tag q)
         (* XXX: defensive programming: recursion on ar not needed now, but might be in the future *)
-        | AggBy (ar, q) -> AggBy (StringMap.map (fun (x,y) -> tag x, y) ar, tag q)
+        | AggBy (ar, q) -> AggBy (Types.FieldEnv.map (fun (x,y) -> tag x, y) ar, tag q)
         | Lookup (q,k) -> Lookup (tag q, tag k)
     in
       tag e
@@ -50,8 +50,8 @@ let tag_query : QL.t -> QL.t =
 let tuple xs = QL.Record (snd
                           (List.fold_left
                              (fun (i, fields) x ->
-                               (i+1, StringMap.add (string_of_int i) x fields))
-                             (1, StringMap.empty)
+                               (i+1, Types.FieldEnv.add (string_of_int i) x fields))
+                             (1, Types.FieldEnv.empty)
                              xs))
 let pair x y = tuple [x; y]
 
@@ -59,11 +59,11 @@ module Shred =
 struct
   type nested_type =
     [ `Primitive of Primitive.t
-    | `Record of nested_type StringMap.t
+    | `Record of nested_type Types.FieldEnv.t
     | `List of nested_type ]
       [@@deriving show]
 
-  type 'a shredded = [`Primitive of 'a | `Record of ('a shredded) StringMap.t]
+  type 'a shredded = [`Primitive of 'a | `Record of ('a shredded) Types.FieldEnv.t]
       [@@deriving show]
   type shredded_type = Primitive.t shredded
       [@@deriving show]
@@ -72,12 +72,12 @@ struct
 
   type flat_type =
     [ `Primitive of Primitive.t
-    | `Record of Primitive.t StringMap.t ]
+    | `Record of Primitive.t Types.FieldEnv.t ]
       [@@deriving show]
 
   type 'a package =
     [ `Primitive of Primitive.t
-    | `Record of 'a package StringMap.t
+    | `Record of 'a package Types.FieldEnv.t
     | `List of 'a package * 'a ]
       [@@deriving show]
 
@@ -96,7 +96,7 @@ struct
     | Types.Primitive t -> `Primitive t
     | Types.Record row ->
         let (fields, _, _) = TypeUtils.extract_row_parts row in
-        `Record (StringMap.map
+        `Record (Types.FieldEnv.map
           (function
              | Present t -> nested_type_of_type t
              | _ -> assert false) fields)
@@ -111,7 +111,7 @@ struct
   let rec erase : 'a package -> nested_type =
     function
       | `Primitive t   -> `Primitive t
-      | `Record fields -> `Record (StringMap.map erase fields)
+      | `Record fields -> `Record (Types.FieldEnv.map erase fields)
       | `List (t, _)   -> `List (erase t)
 
   (* map over a package *)
@@ -119,7 +119,7 @@ struct
     fun f ->
       function
         | `Primitive t   -> `Primitive t
-        | `Record fields -> `Record (StringMap.map (pmap f) fields)
+        | `Record fields -> `Record (Types.FieldEnv.map (pmap f) fields)
         | `List (t, a)   -> `List (pmap f t, f a)
 
   (* construct a package using a shredding function f *)
@@ -127,11 +127,11 @@ struct
     let rec package f p =
       function
         | `Primitive t   -> `Primitive t
-        | `Record fields -> `Record (StringMap.fold
+        | `Record fields -> `Record (Types.FieldEnv.fold
                                        (fun name t fields ->
-                                         StringMap.add name (package f (p @ [`Record name]) t) fields)
+                                         Types.FieldEnv.add name (package f (p @ [`Record name]) t) fields)
                                        fields
-                                       StringMap.empty)
+                                       Types.FieldEnv.empty)
         | `List t        -> `List (package f (p @ [`List]) t, f p)
     in
       package f []
@@ -142,12 +142,12 @@ struct
         | `Primitive t1, `Primitive _ -> `Primitive t1
         | `Record fields1, `Record fields2 ->
           `Record
-            (StringMap.fold
+            (Types.FieldEnv.fold
                (fun name t1 fields ->
-                 let t2 = StringMap.find name fields2 in
-                   StringMap.add name (pzip t1 t2) fields)
+                 let t2 = Types.FieldEnv.find name fields2 in
+                   Types.FieldEnv.add name (pzip t1 t2) fields)
                fields1
-               StringMap.empty)
+               Types.FieldEnv.empty)
         | `List (t1, a1), `List (t2, a2) ->
           `List
             (pzip t1 t2, (a1, a2))
@@ -179,7 +179,7 @@ struct
       | Apply (Primitive "length", [e]) -> Apply (Primitive "length", [shred_outer e []])
       | Apply (f, vs) -> Apply (f, List.map (shinner a) vs)
       | Record fields ->
-        Record (StringMap.map (shinner a) fields)
+        Record (Types.FieldEnv.map (shinner a) fields)
       | e when QL.is_list e ->
         in_index a
       | e -> e
@@ -194,7 +194,7 @@ struct
         begin
           match p with
             | (`Record l :: p) ->
-              shouter a p (StringMap.find l fields)
+              shouter a p (Types.FieldEnv.find l fields)
             | _ -> assert false
         end
       | For (Some b, gs, os, body) ->
@@ -222,28 +222,28 @@ struct
   let rec shred_inner_type : nested_type -> shredded_type =
     function
       | `Primitive p   -> `Primitive p
-      | `Record fields -> `Record (StringMap.map shred_inner_type fields)
+      | `Record fields -> `Record (Types.FieldEnv.map shred_inner_type fields)
       | `List _        ->
         `Record
-          (StringMap.add "1" (`Primitive Primitive.Int)
-            (StringMap.add "2" (`Primitive Primitive.Int) StringMap.empty))
+          (Types.FieldEnv.add "1" (`Primitive Primitive.Int)
+            (Types.FieldEnv.add "2" (`Primitive Primitive.Int) Types.FieldEnv.empty))
 
   let rec shred_outer_type : nested_type -> path -> shredded_type =
     fun t p ->
       match t, p with
         | `List t, [] ->
           `Record
-            (StringMap.add "1"
+            (Types.FieldEnv.add "1"
                (`Record
-                   (StringMap.add "1" (`Primitive Primitive.Int)
-                      (StringMap.add "2" (`Primitive Primitive.Int)
-                         StringMap.empty)))
-               (StringMap.add "2" (shred_inner_type t)
-                  StringMap.empty))
+                   (Types.FieldEnv.add "1" (`Primitive Primitive.Int)
+                      (Types.FieldEnv.add "2" (`Primitive Primitive.Int)
+                         Types.FieldEnv.empty)))
+               (Types.FieldEnv.add "2" (shred_inner_type t)
+                  Types.FieldEnv.empty))
         | `List t, `List :: p ->
           shred_outer_type t p
         | `Record fields, `Record l :: p ->
-          shred_outer_type (StringMap.find l fields) p
+          shred_outer_type (Types.FieldEnv.find l fields) p
         | _ -> assert false
 
   let shred_query_type : nested_type -> shredded_type package =
@@ -286,7 +286,7 @@ struct
     function
       | If (c, t, e) ->
         If (inner c, inner t, inner e)
-      | Record fields -> Record (StringMap.map inner fields)
+      | Record fields -> Record (Types.FieldEnv.map inner fields)
       | Project (e, l) -> Project (inner e, l)
       | Apply (f, es) -> Apply (f, List.map inner es)
       | Primitive p -> Primitive p
@@ -404,7 +404,7 @@ struct
       | Apply (Primitive f, es) ->
         Apply (Primitive f, List.map li es)
       | Record fields ->
-        Record (StringMap.map li fields)
+        Record (Types.FieldEnv.map li fields)
       | Primitive "out" ->
         (* z.2 *)
         Project (Var (z, z_fields), "2")
@@ -443,7 +443,7 @@ struct
              For Empty and length we don't care about what the body
              returns.
           *)
-          | Singleton _ -> Singleton (Record StringMap.empty)
+          | Singleton _ -> Singleton (Record Types.FieldEnv.empty)
           | e ->
             Debug.print ("Can't apply lins_inner_query to: " ^ QL.show e);
             assert false
@@ -536,19 +536,19 @@ struct
       | Record fields ->
         (* concatenate labels of nested records *)
         Record
-          (StringMap.fold
+          (Types.FieldEnv.fold
              (fun name body fields ->
                match flatten_inner body with
                  | Record inner_fields ->
-                   StringMap.fold
+                   Types.FieldEnv.fold
                      (fun name' body fields ->
-                       StringMap.add (name ^ "@" ^ name') body fields)
+                       Types.FieldEnv.add (name ^ "@" ^ name') body fields)
                      inner_fields
                      fields
                  | body ->
-                   StringMap.add name body fields)
+                   Types.FieldEnv.add name body fields)
              fields
-             StringMap.empty)
+             Types.FieldEnv.empty)
       | Variant ("Simply", x) ->
           Variant ("Simply", flatten_inner x)
       | Variant ("Seq", Singleton r) ->
@@ -580,7 +580,7 @@ struct
           (* lift base expressions to records *)
           match flatten_inner e with
             | Record fields -> Record fields
-            | p -> Record (StringMap.add "@" p StringMap.empty)
+            | p -> Record (Types.FieldEnv.add "@" p Types.FieldEnv.empty)
         in
           Singleton e'
       (* HACK: not sure if Concat is supposed to appear here...
@@ -608,39 +608,39 @@ struct
       | `Primitive p -> `Primitive p
       | `Record fields ->
         `Record
-          (StringMap.fold
+          (Types.FieldEnv.fold
              (fun name t fields ->
                match flatten_type t with
                  | `Record inner_fields ->
-                   StringMap.fold
+                   Types.FieldEnv.fold
                      (fun name' t fields ->
-                       StringMap.add (name ^ "@" ^ name') t fields)
+                       Types.FieldEnv.add (name ^ "@" ^ name') t fields)
                      inner_fields
                      fields
                  | `Primitive p ->
-                   StringMap.add name p fields)
+                   Types.FieldEnv.add name p fields)
              fields
-             StringMap.empty)
+             Types.FieldEnv.empty)
 
 
   let flatten_query_type : shredded_type -> flat_type = flatten_type
 
   (* add a flattened field to an unflattened record (type or value) *)
-  let rec unflatten_field : string list -> 'a -> ('a shredded) StringMap.t -> ('a shredded) StringMap.t =
+  let rec unflatten_field : string list -> 'a -> ('a shredded) Types.FieldEnv.t -> ('a shredded) Types.FieldEnv.t =
     fun names v fields ->
       match names with
-        | [name] -> StringMap.add name (`Primitive v) fields
+        | [name] -> Types.FieldEnv.add name (`Primitive v) fields
         | name::name'::names ->
           let fields' =
-            if StringMap.mem name fields then
-              let w = StringMap.find name fields in
+            if Types.FieldEnv.mem name fields then
+              let w = Types.FieldEnv.find name fields in
                 match w with
                   | `Record fields' -> fields'
                   | _ -> assert false
             else
-              StringMap.empty in
+              Types.FieldEnv.empty in
           let fields' = unflatten_field (name'::names) v fields' in
-            StringMap.add name (`Record fields') fields
+            Types.FieldEnv.add name (`Record fields') fields
         | [] -> assert false
 
   (* fill in any unit fields that are apparent from the type but not
@@ -651,17 +651,17 @@ struct
         | `Primitive _, `Primitive v -> `Primitive v
         | `Record fts, `Record fs ->
           `Record
-            (StringMap.fold
+            (Types.FieldEnv.fold
                (fun name t fields ->
                  let v =
-                   if StringMap.mem name fs then
-                     StringMap.find name fs
+                   if Types.FieldEnv.mem name fs then
+                     Types.FieldEnv.find name fs
                    else
-                     `Record (StringMap.empty)
+                     `Record (Types.FieldEnv.empty)
                  in
-                   StringMap.add name (fill t v) fields)
+                   Types.FieldEnv.add name (fill t v) fields)
                fts
-               StringMap.empty)
+               Types.FieldEnv.empty)
         | _ -> assert false
 
   let unflatten_type : flat_type -> shredded_type =
@@ -669,12 +669,12 @@ struct
       | `Primitive p -> `Primitive p
       | `Record fields ->
         `Record
-          (StringMap.fold
+          (Types.FieldEnv.fold
              (fun name p fields ->
                let names = split_string name '@' in
                  unflatten_field names p fields)
              fields
-             StringMap.empty)
+             Types.FieldEnv.empty)
 
 (*
 Fast unflattening.
@@ -702,13 +702,13 @@ Fast unflattening.
     | `Record rcd ->
     `Record (List.map (fun (nm,t') ->
       (nm,make_tmpl_inner (name ^"@"^nm) t'))
-           (StringMap.to_alist rcd))
+           (Types.FieldEnv.to_alist rcd))
     and make_tmpl_outer t =
       match t with
     `Primitive _ -> `Primitive ""
       |    `Record rcd -> `Record (List.map (fun (nm,t') ->
       (nm,make_tmpl_inner nm t'))
-           (StringMap.to_alist rcd))
+           (Types.FieldEnv.to_alist rcd))
     in make_tmpl_outer ty
 
   let build_unflattened_record : string template -> Value.t -> Value.t =
@@ -760,7 +760,7 @@ struct
         | c, `Primitive _ -> c
         | `Record fs, `Record fts ->
           `Record
-            (List.map (fun (l, v) -> (l, stitch v (StringMap.find l fts))) fs)
+            (List.map (fun (l, v) -> (l, stitch v (Types.FieldEnv.find l fts))) fs)
         | `Record [("1", `Int a); ("2", `Int d)], `List (t, m) ->
           (*`List (List.map (fun w -> stitch w t)
            (lookup (a, d) m))*)

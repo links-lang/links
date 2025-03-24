@@ -14,6 +14,9 @@ let variables_in_computation comp =
   let rec traverse_stringmap : 'a . ('a -> unit) -> 'a stringmap -> unit =
     fun proj_fn smap -> (* (proj_fn: 'a . 'a -> 'b) (smap: 'a stringmap) : unit = *)
       StringMap.fold (fun _ v _ -> proj_fn v) smap ()
+  and traverse_ststringmap : 'a . ('a -> unit) -> 'a st_name_map -> unit =
+    fun proj_fn smap -> (* (proj_fn: 'a . 'a -> 'b) (smap: 'a st_name_map) : unit = *)
+      Types.FieldEnv.fold (fun _ v _ -> proj_fn v) smap ()
   and traverse_value = function
     | Variable v -> add_variable v
     | Closure (_, _, value)
@@ -30,7 +33,7 @@ let variables_in_computation comp =
         traverse_value v;
         List.iter traverse_value vs
     | Extend (v_map, v_opt) ->
-        traverse_stringmap (traverse_value) v_map;
+        traverse_ststringmap (traverse_value) v_map;
         begin match v_opt with | Some v -> traverse_value v | None -> () end
     | Constant _ -> ()
   and traverse_tail_computation = function

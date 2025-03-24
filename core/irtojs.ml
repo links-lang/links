@@ -861,7 +861,7 @@ end = functor (K : CONTINUATION) -> struct
     | Ir.Extend (field_map, rest) ->
        let dict =
          Dict
-           (StringMap.fold
+           (Types.FieldEnv.fold
               (fun name v dict ->
                 (name, gv v) :: dict)
               field_map [])
@@ -1242,8 +1242,8 @@ end = functor (K : CONTINUATION) -> struct
                 let name_map =
                   List.fold_left
                     (fun box (i, _, initial_value) ->
-                      StringMap.add (string_of_int i) initial_value box)
-                    StringMap.empty params
+                      Types.FieldEnv.add (string_of_int i) initial_value box)
+                    Types.FieldEnv.empty params
                 in
                 (Ir.Let (param_ptr_binder, ([], Ir.Return (Ir.Extend (name_map, None)))) :: bs, tc)
               in
