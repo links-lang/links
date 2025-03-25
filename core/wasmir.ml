@@ -236,8 +236,8 @@ type anyblock = Block : 'a typ * 'a block -> anyblock
 type anyexpr = Expr : 'a typ * 'a expr -> anyexpr
 type anyexpr_list = ExprList : 'a typ_list * 'a expr_list -> anyexpr_list
 
-type func' = {
-  fun_typ : mtypid;
+type ('a, 'b) func' = {
+  fun_typ : ('a, 'b) functyp typ;
   fun_id : mfunid;
   fun_export_data : string option;
   fun_closure : anytyp_list * mtypid; fun_converted_closure : mvarid option;
@@ -253,7 +253,7 @@ type ('a, 'b, 'c) fhandler = {
   fh_handlers : ('a, 'b) handler list;
   fh_id : mfunid;
 }
-type func = FFunction of func' | FHandler : ('a, 'b, 'c) fhandler -> func
+type func = FFunction : ('a, 'b) func' -> func | FHandler : ('a, 'b, 'c) fhandler -> func
 type modu = {
   mod_imports : (string * string) list;
   mod_nfuns : int32;
@@ -460,8 +460,8 @@ module LEnv : sig (* Contains the arguments, the local variables, etc *)
   val set_continuation : subt -> binder -> anytyp_list -> subt
   
   val locals_of_env : realt -> anytyp_list
-  val compile : realt -> mtypid -> mfunid -> string option -> anyblock -> func'
-  val compile_sub : subt -> mtypid -> mfunid -> anyblock -> anytyp_list -> mtypid -> mvarid option -> func'
+  val compile : realt -> ('a, 'b) functyp typ -> mfunid -> string option -> anyblock -> ('a, 'b) func'
+  val compile_sub : subt -> ('a, 'b) functyp typ -> mfunid -> anyblock -> anytyp_list -> mtypid -> mvarid option -> ('a, 'b) func'
   val compile_handler : subt -> mfunid -> (meffid * meffid) option -> ('b, 'd) finisher -> ('b, 'd) handler list -> anyhandler
 end = struct
   module IntString = Env.Make(struct
@@ -745,14 +745,14 @@ end = struct
   
   let locals_of_env (env : realt) : anytyp_list = extract_args env.locs (TypeList TLnil)
   
-  let compile (env : realt) (ftid : mtypid) (fid : mfunid) (export_name : string option) (b : anyblock) : func' =
+  let compile (env : realt) (ft : ('a, 'b) functyp typ) (fid : mfunid) (export_name : string option) (b : anyblock) : ('a, 'b) func' =
     let closid, clostyp, has_converted_closure = env.clos in
     let export_data = match export_name with
       | Some name -> Some name
       | None -> None
     in let convclos = if has_converted_closure then Some closid else None
     in {
-      fun_typ = ftid;
+      fun_typ = ft;
       fun_id = fid;
       fun_export_data = export_data;
       fun_closure = clostyp; fun_converted_closure = convclos;
@@ -761,9 +761,10 @@ end = struct
       fun_block = b;
     }
   
-  let compile_sub (env : subt) (ftid : mtypid) (fid : mfunid) (b : anyblock) (ctype : anytyp_list) (ctypeid : mtypid) (cclosid : mvarid option) : func' =
+  let compile_sub (env : subt) (ft : ('a, 'b) functyp typ) (fid : mfunid) (b : anyblock)
+                  (ctype : anytyp_list) (ctypeid : mtypid) (cclosid : mvarid option) : ('a, 'b) func' =
     {
-      fun_typ = ftid;
+      fun_typ = ft;
       fun_id = fid;
       fun_export_data = None;
       fun_closure = (ctype, ctypeid); fun_converted_closure = cclosid;
@@ -810,8 +811,8 @@ module GEnv : sig (* Contains the functions, the types, etc *)
   val add_var : t -> LEnv.t -> binder -> anytyp -> t * LEnv.t * locality * mvarid
   val find_var : t -> LEnv.t -> var -> (LEnv.t * locality * anyvarid, funid anycfuncid) Either.t option
   
-  val allocate_function : t -> LEnv.realt -> binder -> funid * mfunid * mtypid * t
-  val assign_function : t -> funid -> func' -> t
+  val allocate_function : t -> LEnv.realt -> binder -> funid * mfunid * anytyp_list * anytyp * t
+  val assign_function : t -> funid -> ('a, 'b) func' -> t
   val do_export_function : t -> funid -> t
   
   val new_continuator : t -> mfunid -> anytyp -> anytyp_list -> anytyp -> t * mfunid
@@ -824,7 +825,8 @@ module GEnv : sig (* Contains the functions, the types, etc *)
   val compile : t -> LEnv.realt -> anyblock -> modu
 end = struct
   (* In-place function emplacement in the environment *)
-  type funid = func' option ref * bool ref
+  type anyfunc' = AFFnc : ('a, 'b) func' -> anyfunc'
+  type funid = anyfunc' option ref * bool ref
   type hid = anyhandler option ref
   
   module EffectMap = Utility.Map.Make(struct
@@ -840,7 +842,7 @@ end = struct
     ge_imports : (string * string) list;
     ge_map : string Env.Int.t;
     ge_nfuns : mfunid;
-    ge_funs : (func' option ref * mfunid * bool ref, (anyhandler option ref, func' * mfunid) Either.t) Either.t list;
+    ge_funs : (anyfunc' option ref * mfunid * bool ref, (anyhandler option ref, anyfunc' * mfunid) Either.t) Either.t list;
     ge_ntags : tagid;
     ge_tagmap : tagid Env.String.t;
     ge_ntyps : mtypid;
@@ -959,24 +961,23 @@ end = struct
       end
   let find_closable_fun (ge : t) (_ : LEnv.t) (v : var) : funid anyfuncid = Env.Int.find v ge.ge_fmap
   
-  let allocate_function (env : t) (args : LEnv.realt) (b : binder) : funid * mfunid * mtypid * t =
+  let allocate_function (env : t) (args : LEnv.realt) (b : binder) : funid * mfunid * anytyp_list * anytyp * t =
     let f = ref None in
-    let TypeList args, TypeList ctyp = LEnv.args_typ args in
-    let Type ret = convert_type_function_ret (Var.type_of_binder b) in
-    let ftyp = TFunc (args, ret) in
-    let env, ftypid = add_typ env (Type ftyp) in
+    let TypeList targs, TypeList ctyp = LEnv.args_typ args in
+    let Type tret = convert_type_function_ret (Var.type_of_binder b) in
+    let ftyp = TFunc (targs, tret) in
     let fid = env.ge_nfuns in
     let needs_export = ref false in
     let fdata = (f, needs_export) in
     let ge_fmap = Env.Int.bind (Var.var_of_binder b) (FuncID ((ftyp, ctyp, fid), fdata)) env.ge_fmap in
-    fdata, fid, ftypid, { env with
+    fdata, fid, TypeList targs, Type tret, { env with
       ge_nfuns = Int32.succ env.ge_nfuns;
       ge_funs = Either.Left (f, fid, needs_export) :: env.ge_funs;
       ge_fmap;
     }
-  let assign_function (env : t) ((fid, _) : funid) (f : func') : t = match !fid with
+  let assign_function (env : t) ((fid, _) : funid) (f : ('a, 'b) func') : t = match !fid with
     | Some _ -> raise (internal_error "double assignment of function")
-    | None -> fid := Some f; env
+    | None -> fid := Some (AFFnc f); env
   let do_export_function (env : t) ((_, fref) : funid) : t = fref := true; env
   
   let new_continuator (env : t) (hdlfid : mfunid) (Type cret : anytyp) (TypeList targs : anytyp_list) (Type tret : anytyp) : t * mfunid =
@@ -1003,9 +1004,8 @@ end = struct
                                targs, args,
                                EVariable (Local StorClosure, (TAbsClosArg, 1l)), tret))) in
     let ftyp = TFunc (targs, tret) in
-    let env, ftypid = add_typ env (Type ftyp) in
     let f = {
-      fun_typ = ftypid;
+      fun_typ = ftyp;
       fun_id = fid;
       fun_export_data = None;
       fun_closure = TypeList ct, ctid;
@@ -1016,7 +1016,7 @@ end = struct
     } in
     { env with
       ge_nfuns;
-      ge_funs = Either.Right (Either.Right (f, fid)) :: env.ge_funs;
+      ge_funs = Either.Right (Either.Right (AFFnc f, fid)) :: env.ge_funs;
     }, fid
   let new_function (env : t) (args : LEnv.subt) (TypeList body_closts : anytyp_list) (b : anyblock) (cclosid : mvarid option)
       : t * mtypid * mfunid * funid =
@@ -1025,9 +1025,8 @@ end = struct
     let Block (tret, _) = b in
     let env, body_ctid = add_typ env (Type (TClosArg body_closts)) in
     let ftyp = TFunc (TLnil, tret) in
-    let env, ftypid = add_typ env (Type ftyp) in
-    let f = LEnv.compile_sub args ftypid fid b (TypeList body_closts) body_ctid cclosid in
-    let f, export = ref (Some f), ref false in
+    let f = LEnv.compile_sub args ftyp fid b (TypeList body_closts) body_ctid cclosid in
+    let f, export = ref (Some (AFFnc f)), ref false in
     let fun_data = f, export in
     { env with
       ge_nfuns;
@@ -1060,6 +1059,20 @@ end = struct
   
   let compile (ge : t) (le : LEnv.realt) (blk : anyblock) : modu =
     let lvs = LEnv.locals_of_env le in
+    let ge, mod_needs_export = List.fold_left (fun (ge, acc) -> function
+          | Either.Left (fo, fid, rb) ->
+              if !rb then
+                match !fo with
+                | None -> raise (internal_error "function was allocated but never assigned")
+                | Some (AFFnc f) ->
+                    let ge, ftypid = add_typ ge (Type f.fun_typ) in
+                    ge, FunIDMap.add fid ftypid acc
+              else ge, acc
+          | Either.Right (Either.Left _) -> ge, acc (* We don't need to export handlers *)
+          | Either.Right (Either.Right (AFFnc f, fid)) ->
+              let ge, ftypid = add_typ ge (Type f.fun_typ) in
+              ge, FunIDMap.add fid ftypid acc (* We do need to export continuators *))
+        (ge, FunIDMap.empty) ge.ge_funs in
     {
       mod_imports = ge.ge_imports;
       mod_nfuns = ge.ge_nfuns;
@@ -1067,22 +1080,12 @@ end = struct
         List.rev_map
           (fun f -> match f with
             | Either.Left ({ contents = None }, _, _) -> raise (internal_error "function was allocated but never assigned")
-            | Either.Left ({ contents = Some f }, _, _) -> FFunction f
+            | Either.Left ({ contents = Some (AFFnc f) }, _, _) -> FFunction f
             | Either.Right (Either.Left { contents = None }) -> raise (internal_error "handler was allocated but never assigned")
             | Either.Right (Either.Left { contents = Some (AHandler f) }) -> FHandler f
-            | Either.Right (Either.Right (f, _)) -> FFunction f)
+            | Either.Right (Either.Right (AFFnc f, _)) -> FFunction f)
           ge.ge_funs;
-      mod_needs_export =
-        List.fold_left (fun acc -> function
-          | Either.Left (fo, fid, rb) ->
-              if !rb then
-                match !fo with
-                | None -> raise (internal_error "function was allocated but never assigned")
-                | Some f -> FunIDMap.add fid f.fun_typ acc
-              else acc
-          | Either.Right (Either.Left _) -> acc (* We don't need to export handlers *)
-          | Either.Right (Either.Right (f, fid)) -> FunIDMap.add fid f.fun_typ acc (* We do need to export continuators *))
-        FunIDMap.empty ge.ge_funs;
+      mod_needs_export;
       mod_typs = MTypMap.of_seq (Seq.mapi (fun i v -> i, v) (List.to_seq (List.rev ge.ge_typs)));
       mod_neffs = ge.ge_neffs;
       mod_effs = ge.ge_effs;
@@ -1284,7 +1287,8 @@ let convert_values_unk (ge : genv) (le : lenv) (vs : value list) : genv * lenv *
         ExprList (TLcons (t, tl), ELcons (e, el))
   in let ret = convert_args vs in !ge, !le, ret
 
-let allocate_function (ge : genv) (args : binder list) (b : binder) (closure : binder option) : genv * GEnv.funid * mfunid * mtypid * LEnv.realt =
+let allocate_function (ge : genv) (args : binder list) (b : binder) (closure : binder option)
+    : genv * GEnv.funid * mfunid * anytyp_list * anytyp * LEnv.realt =
   let le_args =
     let rec inner args acc = match args with
       | [] -> acc
@@ -1292,8 +1296,8 @@ let allocate_function (ge : genv) (args : binder list) (b : binder) (closure : b
     in inner args LEnv.no_arg
   in
   let ge, le = LEnv.env_of_args le_args closure (GEnv.add_typ ge) in
-  let loc_fid, fid, ftid, ge = GEnv.allocate_function ge le b in
-  ge, loc_fid, fid, ftid, le
+  let loc_fid, fid, targs, tret, ge = GEnv.allocate_function ge le b in
+  ge, loc_fid, fid, targs, tret, le
 
 type 'a transformer = Transformer : ('a, 'b) finisher -> 'a transformer
 
@@ -1446,7 +1450,7 @@ let rec of_tail_computation (ge : genv) (le: lenv) (tc : tail_computation) : gen
       let Eq = assert_eq_typ tt tf "Expected the same type in both branches" in
       ge, le, Expr (tt, ECond (tt, eb, bt, bf))
 and of_computation (ge : genv) (le : lenv) ((bs, tc) : computation) : genv * lenv * anyblock =
-  let finish_computation ge fd loc_fid fid ftypid (new_le : LEnv.realt) =
+  let finish_computation ge fd loc_fid fid ftyp (new_le : LEnv.realt) =
     let new_le = LEnv.of_real new_le in
     let ge, new_le, b = of_computation ge new_le fd.fn_body in
     let new_le = LEnv.to_real new_le in
@@ -1462,7 +1466,7 @@ and of_computation (ge : genv) (le : lenv) ((bs, tc) : computation) : genv * len
       if Var.Scope.is_real_global (Var.scope_of_binder fd.fn_binder)
       then match fd.fn_closure with None -> Some (Var.name_of_binder fd.fn_binder) | Some _ -> None
       else None in
-    let f = LEnv.compile new_le ftypid fid export_name b in
+    let f = LEnv.compile new_le ftyp fid export_name b in
     let ge = GEnv.assign_function ge loc_fid f in
     ge in
   let rec inner (ge : genv) (le: lenv) (bs : binding list) (acc : assign list) = match bs with
@@ -1476,20 +1480,22 @@ and of_computation (ge : genv) (le : lenv) ((bs, tc) : computation) : genv * len
         let a = Assign (loc, v, e) in
         inner ge le bs (a :: acc)
     | Fun fd :: bs ->
-        let ge, loc_fid, fid, ftypid, new_le = allocate_function ge fd.fn_params fd.fn_binder fd.fn_closure in
-        let ge = finish_computation ge fd loc_fid fid ftypid new_le in
+        let ge, loc_fid, fid, TypeList targs, Type tret, new_le = allocate_function ge fd.fn_params fd.fn_binder fd.fn_closure in
+        let ftyp = TFunc (targs, tret) in
+        let ge = finish_computation ge fd loc_fid fid ftyp new_le in
         inner ge le bs acc
     | Rec fds :: bs ->
         let rec compute ge fds = match fds with
           | [] -> inner ge le bs acc
-          | (fd, loc_fid, fid, ftypid, new_le) :: fds ->
-              let ge = finish_computation ge fd loc_fid fid ftypid new_le in
+          | (fd, loc_fid, fid, TypeList targs, Type tret, new_le) :: fds ->
+              let ftyp = TFunc (targs, tret) in
+              let ge = finish_computation ge fd loc_fid fid ftyp new_le in
               compute ge fds
         in let rec allocate ge fds acc' = match fds with
           | [] -> compute ge acc'
           | fd :: fds ->
-              let ge, loc_fid, fid, ftypid, new_le = allocate_function ge fd.fn_params fd.fn_binder fd.fn_closure in
-              allocate ge fds ((fd, loc_fid, fid, ftypid, new_le) :: acc')
+              let ge, loc_fid, fid, targs, tret, new_le = allocate_function ge fd.fn_params fd.fn_binder fd.fn_closure in
+              allocate ge fds ((fd, loc_fid, fid, targs, tret, new_le) :: acc')
         in allocate ge fds []
     | Alien _ :: bs -> ignore bs; failwith "TODO of_computation Alien"
     | Module _ :: bs -> ignore bs; failwith "TODO of_computation Module"

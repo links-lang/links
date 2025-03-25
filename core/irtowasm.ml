@@ -27,7 +27,6 @@ module TMap : sig
   val recid_of_handler_finish : t -> int32 -> 'a typ -> int32
   
   val recid_of_exported_type : t -> 'a typ_list -> 'b typ -> int32
-  val recid_of_exported_typeid : t -> mtypid -> int32
   
   val to_wasm : t -> Wasm.Type.rec_type list
 end = struct
@@ -175,10 +174,6 @@ end = struct
         let ret = recid_of_rec_type env (RecT [SubT (Final, [], DefFuncT (FuncT (targs', [tret'])))]) in
         env.eenv <- TypeMap.add (Type (TFunc (targs, tret))) ret env.eenv;
         ret
-  let recid_of_exported_typeid (env : t) (tid : mtypid) : int32 =
-    match MTypMap.find tid env.menv with
-    | Type (TFunc (targs, tret)) -> recid_of_exported_type env targs tret
-    | _ -> raise (internal_error "Attempting to export non-function type")
   
   let to_wasm (env : t) : Wasm.Type.rec_type list = List.rev (env.reftyps)
 end
@@ -534,13 +529,15 @@ let convert_fun_aux (tm : tmap) (ft : int32) (l : anytyp_list) (f : anyblock) (i
     fn_code = List.rev (match init_dest with Some app_code -> app_code @ code | None -> code);
   }
 
-let convert_fun (tm : tmap) (f : func') : int32 * Wasm.fundef =
-  let fun_typ = TMap.recid_of_typeid tm f.fun_typ in
+let convert_fun (tm : tmap) (f : ('a, 'b) func') : int32 * Wasm.fundef =
+  let fun_typ = TMap.recid_of_type tm f.fun_typ in
   convert_fun_aux tm fun_typ f.fun_locals f.fun_block None (f.fun_converted_closure :> int32 option)
-let convert_fun_step2 (tm : tmap) (f, clostyp : func' * int32) : Wasm.fundef option = match f.fun_export_data with
+let convert_fun_step2 (tm : tmap) (f, clostyp : func * int32) : Wasm.fundef option = match f with FHandler _ -> None | FFunction f ->
+  match f.fun_export_data with
   | None -> None
   | Some name ->
-      let fn_type = TMap.recid_of_exported_typeid tm f.fun_typ in
+      let TFunc (targs, tret) = f.fun_typ in
+      let fn_type = TMap.recid_of_exported_type tm targs tret in
       Some Wasm.{
         fn_name = Some name;
         fn_type;
@@ -556,7 +553,7 @@ let convert_fun_step2 (tm : tmap) (f, clostyp : func' * int32) : Wasm.fundef opt
 let convert_funs (tm : tmap) (fs : func list) (is : Wasm.fundef list) : Wasm.fundef list =
   let [@tail_mod_cons] rec inner fs acc = match fs with
     | [] -> is @ List.filter_map (convert_fun_step2 tm) acc
-    | FFunction hd :: tl -> let ctid, fhd = convert_fun tm hd in fhd :: inner tl ((hd, ctid) :: acc)
+    | FFunction hd :: tl -> let ctid, fhd = convert_fun tm hd in fhd :: inner tl ((FFunction hd, ctid) :: acc)
     | FHandler hd :: tl -> let fhd = convert_hdl tm hd in fhd :: inner tl acc
   in inner fs []
 

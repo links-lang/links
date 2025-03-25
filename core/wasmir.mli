@@ -118,8 +118,8 @@ type anyblock = Block : 'a typ * 'a block -> anyblock
 
 val typ_of_expr : 'a expr -> 'a typ
 
-type func' = {
-  fun_typ : mtypid;
+type ('a, 'b) func' = {
+  fun_typ : ('a, 'b) functyp typ;
   fun_id : mfunid;
   fun_export_data : string option;
   fun_closure : anytyp_list * mtypid; fun_converted_closure : mvarid option;
@@ -135,7 +135,7 @@ type ('a, 'b, 'c) fhandler = {
   fh_handlers : ('a, 'b) handler list;
   fh_id : mfunid;
 }
-type func = FFunction of func' | FHandler : ('a, 'b, 'c) fhandler -> func
+type func = FFunction : ('a, 'b) func' -> func | FHandler : ('a, 'b, 'c) fhandler -> func
 type modu = {
   mod_imports : (string * string) list;
   mod_nfuns : int32;
