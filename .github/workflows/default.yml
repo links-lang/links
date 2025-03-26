@@ -33,8 +33,6 @@ jobs:
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
-      - run: opam install -y ocamlformat
-
       - name: Ad-hoc rule check
         run: |
           eval $(opam config env)
