@@ -15,9 +15,9 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - ubuntu-20.04
+          - ubuntu-latest
         ocaml-compiler:
-          - 5.1.1
+          - 5.3.0
 
     runs-on: ${{ matrix.os }}
 
@@ -29,11 +29,9 @@ jobs:
         shell: bash
 
       - name: Use OCaml ${{ matrix.ocaml-compiler }}
-        uses: ocaml/setup-ocaml@v2
+        uses: ocaml/setup-ocaml@v3
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
-
-      - run: opam install -y ocamlformat.0.25.1
 
       - name: Ad-hoc rule check
         run: |
@@ -46,7 +44,7 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - ubuntu-20.04
+          - ubuntu-latest
 
     runs-on: ${{ matrix.os }}
 
@@ -69,9 +67,9 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - ubuntu-20.04
+          - ubuntu-latest
         ocaml-compiler:
-          - 5.1.1
+          - 5.3.0
 
     runs-on: ${{ matrix.os }}
 
@@ -80,7 +78,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Use OCaml ${{ matrix.ocaml-compiler }}
-        uses: ocaml/setup-ocaml@v2
+        uses: ocaml/setup-ocaml@v3
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
@@ -110,9 +108,9 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - ubuntu-20.04
+          - ubuntu-latest
         ocaml-compiler:
-          - 5.1.1
+          - 5.3.0
 
     runs-on: ${{ matrix.os }}
 
@@ -149,7 +147,7 @@ jobs:
         shell: bash
 
       - name: Use OCaml ${{ matrix.ocaml-compiler }}
-        uses: ocaml/setup-ocaml@v2
+        uses: ocaml/setup-ocaml@v3
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
@@ -198,9 +196,9 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - ubuntu-20.04
+          - ubuntu-latest
         ocaml-compiler:
-          - 5.1.1
+          - 5.3.0
 
     runs-on: ${{ matrix.os }}
 
@@ -236,7 +234,7 @@ jobs:
         shell: bash
 
       - name: Use OCaml ${{ matrix.ocaml-compiler }}
-        uses: ocaml/setup-ocaml@v2
+        uses: ocaml/setup-ocaml@v3
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
 
