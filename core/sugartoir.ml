@@ -993,7 +993,7 @@ struct
                   | None -> failwith "Operation with no name"
 
                 method! phrasenode = function
-                  | Operation name -> opname <- Some name ; o
+                  | Operation (name, _, _) -> opname <- Some name ; o
                   | p -> super#phrasenode p
               end)#phrase op in
               o#opname

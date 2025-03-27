@@ -483,7 +483,7 @@ and phrasenode =
   | Generalise       of phrase
   | ConstructorLit   of Name.t * phrase option * Types.datatype option
   | DoOperation      of phrase * phrase list * Types.datatype option * DeclaredLinearity.t
-  | Operation        of Name.t
+  | Operation        of Name.t * datatype' option * Types.datatype option
   | Handle           of handler
   | Unlet            of phrase
   | Linlet           of phrase

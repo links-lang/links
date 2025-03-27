@@ -88,7 +88,14 @@ object (o : 'self_type)
           Types.fresh_type_variable (CommonTypes.lin_any, CommonTypes.res_any) in
         let with_pos x = SourceCode.WithPos.make ~pos x in
         (* FIXME: WT: I don't know whether should it be lindo or not *)
-        let doOp = DoOperation (with_pos (Operation failure_op_name), [], Some (Types.empty_type), DeclaredLinearity.Lin) in
+        let op =
+          let syntype = Datatype.Operation ([with_pos Datatype.Unit], with_pos (Datatype.Variant ([], Datatype.Closed)), DeclaredLinearity.Lin) in
+          let semtype = Types.Operation (Types.unit_type, Types.empty_type, DeclaredLinearity.Lin) in
+          Operation (failure_op_name,
+                     Some (with_pos syntype
+                          , Some semtype), Some semtype)
+        in
+        let doOp = DoOperation (with_pos op, [], Some (Types.empty_type), DeclaredLinearity.Lin) in
         (o, with_pos (Switch (with_pos doOp, [], Some ty)), ty)
     | { node = TryInOtherwise (_, _, _, _, None); _} -> assert false
     | { node = TryInOtherwise (try_phr, pat, as_phr, otherwise_phr, (Some dt)); pos }

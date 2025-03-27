@@ -136,6 +136,8 @@ let rec arg_types ?(overstep_quantifiers=true) t = match (concrete_type t, overs
       extract_tuple row
   | (Lolli (Record row, _, _), _) ->
      extract_tuple row
+  | (Operation (Record row, _, _), _) ->
+     extract_tuple row
 (*   | Function (t', _, _) when is_thunk_type t' -> [Types.unit_type] (\* THIS IS A HACK. TODO: Trace down cause of bug. At some point during the compilation process the formal parameter to (() {Op: a -> b} -> c) -> d gets unwrapped yielding a function type composed internally as *)
 (*  Function ((Function (), {Op: a -> b}, c) *)
 (*            , <empty effects>, d) *)

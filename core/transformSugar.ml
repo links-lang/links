@@ -491,9 +491,15 @@ class transform (env : Types.typing_environment) =
           let (o, e, _) = option o (fun o -> o#phrase) e in
           let (o, t) = o#datatype t in
           (o, ConstructorLit (name, e, Some t), t)
-      | DoOperation (name, ps, Some t, b) ->
+      | DoOperation (p, ps, t, b) ->
+         let (o, p, _) = o#phrase p in
          let (o, ps, _) = list o (fun o -> o#phrase) ps in
-         (o, DoOperation (name, ps, Some t, b), t)
+         let (o, t) = optionu o (fun o -> o#datatype) t in
+         (o, DoOperation (p, ps, t, b), val_of t)
+      | Operation (name, t, t') ->
+         let (o, t) = optionu o (fun o -> o#datatype') t in
+         let (o, t') = optionu o (fun o -> o#datatype) t' in
+         (o, Operation (name, t, t'), val_of t')
       | Handle { sh_expr; sh_effect_cases; sh_value_cases; sh_descr } ->
          let (input_row, input_t, output_row, output_t) = sh_descr.shd_types in
          let (o, expr, _) = o#phrase sh_expr in
