@@ -244,14 +244,18 @@ module Instruction : sig
     | ReturnCall of int32
     | ReturnCallRef of int32
     | RefNull of heap_type
-    | RefCast of ref_type
+    | RefI31
     | RefFunc of int32
+    | RefCast of ref_type
+    | I31Get of Pack.extension
     | ContNew of int32
     | Suspend of int32
     | Resume of int32 * (int32 * hdl) list
     | StructNew of int32 * initop
     | StructGet of int32 * int32 * Pack.extension option
     | StructSet of int32 * int32
+    | ArrayNewFixed of int32 * int32
+    | ArrayGet of int32 * Pack.extension option
   
   val to_sexpr : t -> Sexpr.t
 end

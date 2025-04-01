@@ -82,7 +82,7 @@ and generate_struct_type buf t = match t with
   | StructT fts ->
       generate_u 32 buf (Int64.of_int (List.length fts));
       List.iter (generate_field_type buf) fts
-and generate_array_type buf t = ignore (buf, t); failwith "TODO array_type"
+and generate_array_type buf (ArrayT t) = generate_field_type buf t
 and generate_func_type buf t = match t with
   | FuncT (args, rets) -> generate_result_type buf args; generate_result_type buf rets
 and generate_cont_type buf (ContT t) = generate_heap_type buf t
@@ -255,6 +255,16 @@ let rec generate_instr buf i = match i with
         Buffer.add_uint8 buf 0xFB; generate_u 32 buf 4L; generate_u 32 buf (Int64.of_int32 i); generate_u 32 buf (Int64.of_int32 j)
   | StructSet (i, j) ->
         Buffer.add_uint8 buf 0xFB; generate_u 32 buf 5L; generate_u 32 buf (Int64.of_int32 i); generate_u 32 buf (Int64.of_int32 j)
+  | ArrayNewFixed (i, n) -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 8L; generate_u 32 buf (Int64.of_int32 i); generate_u 32 buf (Int64.of_int32 n)
+  | ArrayGet (i, None) ->
+        Buffer.add_uint8 buf 0xFB; generate_u 32 buf 11L; generate_u 32 buf (Int64.of_int32 i)
+  | ArrayGet (i, Some Pack.SX) ->
+        Buffer.add_uint8 buf 0xFB; generate_u 32 buf 12L; generate_u 32 buf (Int64.of_int32 i)
+  | ArrayGet (i, Some Pack.ZX) ->
+        Buffer.add_uint8 buf 0xFB; generate_u 32 buf 13L; generate_u 32 buf (Int64.of_int32 i)
+  | RefI31 -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 28L
+  | I31Get Pack.SX -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 29L
+  | I31Get Pack.ZX -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 30L
 let generate_instrs buf is = List.iter (generate_instr buf) is
 let generate_expr buf e = generate_instrs buf e; Buffer.add_uint8 buf 0x0B
 

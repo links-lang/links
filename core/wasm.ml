@@ -276,6 +276,8 @@ module Type = struct
     | FieldT (m, st) -> sexpr_of_mut m (sexpr_of_storage_type st)
   and sexpr_of_struct_type = let open Sexpr in function
     | StructT fs -> Node ("struct", List.map (fun ft -> Node ("field", [sexpr_of_field_type ft])) fs)
+  and sexpr_of_array_type = let open Sexpr in function
+    | ArrayT ft -> Node ("array", [sexpr_of_field_type ft])
   and sexpr_of_func_type = let open Sexpr in function
     | FuncT (args, rets) ->
       let rets = match rets with
@@ -294,7 +296,7 @@ module Type = struct
       end
   and sexpr_of_str_type = function
     | DefStructT st -> sexpr_of_struct_type st
-    | DefArrayT _ -> failwith "TODO sexpr_of_str_type DefArrayT"
+    | DefArrayT at -> sexpr_of_array_type at
     | DefFuncT ft -> sexpr_of_func_type ft
     | DefContT ct -> sexpr_of_cont_type ct
   and sexpr_of_sub_type = let open Sexpr in function
@@ -761,14 +763,18 @@ module Instruction = struct
     | ReturnCall of int32
     | ReturnCallRef of int32
     | RefNull of heap_type
-    | RefCast of ref_type
+    | RefI31
     | RefFunc of int32
+    | RefCast of ref_type
+    | I31Get of Pack.extension
     | ContNew of int32
     | Suspend of int32
     | Resume of int32 * (int32 * hdl) list
     | StructNew of int32 * initop
     | StructGet of int32 * int32 * Pack.extension option
     | StructSet of int32 * int32
+    | ArrayNewFixed of int32 * int32
+    | ArrayGet of int32 * Pack.extension option
   
   let constop v = string_of_num_type (type_of_num v) ^ ".const"
   let vec_constop v = string_of_vec_type (type_of_vec v) ^ ".const i32x4"
@@ -810,8 +816,11 @@ module Instruction = struct
     | ReturnCall i -> LongNode ("return_call", [Atom (Int32.to_string i)], [])
     | ReturnCallRef i -> LongNode ("return_call_ref", [Atom (Int32.to_string i)], [])
     | RefNull ht -> LongNode ("ref.null", [sexpr_of_heap_type ht], [])
-    | RefCast rt -> LongNode ("ref.cast", [sexpr_of_ref_type rt], [])
+    | RefI31 -> LongNode ("ref.i31", [], [])
     | RefFunc ti -> LongNode ("ref.func", [Atom (Int32.to_string ti)], [])
+    | RefCast rt -> LongNode ("ref.cast", [sexpr_of_ref_type rt], [])
+    | I31Get Pack.SX -> LongNode ("i31.get_s", [], [])
+    | I31Get Pack.ZX -> LongNode ("i31.get_u", [], [])
     | ContNew i -> LongNode ("cont.new", [Atom (Int32.to_string i)], [])
     | Suspend i -> LongNode ("suspend", [Atom (Int32.to_string i)], [])
     | Resume (i, hdls) -> LongNode ("resume", [Atom (Int32.to_string i)], List.map sexpr_of_idxhdl hdls)
@@ -821,6 +830,10 @@ module Instruction = struct
     | StructGet (i, j, Some Pack.SX) -> LongNode ("struct.get_s", [Atom (Int32.to_string i); Atom (Int32.to_string j)], [])
     | StructGet (i, j, Some Pack.ZX) -> LongNode ("struct.get_u", [Atom (Int32.to_string i); Atom (Int32.to_string j)], [])
     | StructSet (i, j) -> LongNode ("struct.new", [Atom (Int32.to_string i); Atom (Int32.to_string j)], [])
+    | ArrayNewFixed (i, n) -> LongNode ("array.new_fixed", [Atom (Int32.to_string i); Atom (Int32.to_string n)], [])
+    | ArrayGet (i, None) -> LongNode ("array.get", [Atom (Int32.to_string i)], [])
+    | ArrayGet (i, Some Pack.SX) -> LongNode ("array.get_s", [Atom (Int32.to_string i)], [])
+    | ArrayGet (i, Some Pack.ZX) -> LongNode ("array.get_u", [Atom (Int32.to_string i)], [])
 end
 
 type import_desc =
