@@ -283,14 +283,27 @@ let do_box (type a b) (tm : tmap) (box : (a, b) box) (v : instr_conv) : instr_co
       fun acc -> StructNew (TMap.boxed_tid, Explicit) :: v (rtt acc)
   | _ -> ignore tm; failwith "TODO do_box"
 let do_unbox (type a b) (tm : tmap) (t : b typ) (box : (a, b) box) (get_val : instr_conv) : a typ * instr_conv =
+  let rec is_simple_unbox : type a. a typ -> bool = fun t -> match t with
+    | TInt -> true
+    | TBool -> true
+    | TFloat -> true
+    | TClosed _ -> false (* FIXME: this is sometimes true *)
+    | TAbsClosArg -> true
+    | TClosArg _ -> false (* FIXME: this is sometimes true *)
+    | TCont _ -> false (* FIXME: this is sometimes true *)
+    | TTuple ts -> is_simple_unbox_named_list ts
+    | TVariant -> true
+    | TVar -> false
+  and is_simple_unbox_named_list : type a. a named_typ_list -> bool = fun t -> match t with
+    | NTLnil -> true
+    | NTLcons (_, hd, tl) -> is_simple_unbox hd && is_simple_unbox_named_list tl in
   let open Wasm.Instruction in match box with
   | BNone -> t, get_val
   | BClosed _ -> failwith "TODO do_unbox BClosed"
   | BCont _ -> failwith "TODO do_unbox BCont"
   | BTuple _ -> failwith "TODO do_unbox BTuple"
   | BBox TVar -> t, get_val
-  | BBox ((TInt : a typ) | (TBool : a typ) | (TFloat : a typ)
-          | (TClosed _ : a typ) | (TAbsClosArg : a typ) | (TCont _ : a typ) | (TVariant : a typ) as t) ->
+  | BBox t when is_simple_unbox t ->
       let tid = TMap.recid_of_type tm (TTuple (NTLcons ("1", t, NTLnil))) in
       t, fun acc -> StructGet (tid, 0l, None) :: RefCast Wasm.Type.(NoNull, VarHT (StatX tid)) :: StructGet (TMap.boxed_tid, 1l, None) :: get_val acc
   | BBox t -> t, failwith "TODO do_unbox BBox" (* t, fun acc -> StructGet (_, 1l, None) :: get_val acc *)
