@@ -215,7 +215,7 @@ and 'a expr =
   | ETuple : 'a named_typ_list * 'a expr_list -> 'a list expr
   | EExtract : 'a list expr * ('a, 'b) extract_typ -> 'b expr
   | EVariant : tagid * 'a typ * 'a expr -> variant expr
-  | ECase : variant varid * variant expr * 'a typ * (tagid * anytyp * mvarid * 'a block) list * (mvarid * 'a block) option -> 'a expr
+  | ECase : variant expr * 'a typ * (tagid * anytyp * mvarid * 'a block) list * (mvarid * 'a block) option -> 'a expr
   | EClose : ('a, 'b, 'c) funcid * ('d, 'c) box_list * 'd expr_list -> ('g * 'a -> 'b) expr
   | EUnbox : (_ * 'c -> 'd) expr * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b) expr
   | ECallRawHandler : mfunid * 'c continuation typ * 'c continuation expr * 'a typ * 'a expr * abs_closure_content expr * 'b typ -> 'b expr
@@ -278,14 +278,14 @@ and [@tail_mod_cons] convert_expr : type a. _ -> a Wasmir.expr -> a expr =
   | Wasmir.ETuple (ts, es) -> ETuple (convert_named_typ_list ts, (convert_expr_list[@tailcall]) tmap es)
   | Wasmir.EExtract (e, f) -> EExtract (convert_expr tmap e, convert_extract_typ f)
   | Wasmir.EVariant (tag, t, e) -> EVariant (tag, convert_typ t, (convert_expr[@tailcall]) tmap e)
-  | Wasmir.ECase (v, e, t, l, d) ->
+  | Wasmir.ECase (e, t, l, d) ->
       let convert_l (l : (tagid * Wasmir.anytyp * mvarid * _ Wasmir.block) list) =
         let convert (i, t, v, b) = i, convert_anytyp t, v, convert_block tmap b
         in List.map convert l
       in let convert_d (o : (mvarid * _ Wasmir.block) option) =
         let convert (i, b) = i, convert_block tmap b
         in Option.map convert o
-      in ECase (convert_varid v, (convert_expr[@tailcall]) tmap e, convert_typ t, convert_l l, convert_d d)
+      in ECase ((convert_expr[@tailcall]) tmap e, convert_typ t, convert_l l, convert_d d)
   | Wasmir.EClose (f, b, cl) -> EClose (convert_funcid f, convert_box_list b, (convert_expr_list[@tailcall]) tmap cl)
   | Wasmir.(EUnbox (EUnbox (e, s1, bargs1, bret1), s2, bargs2, bret2)) ->
       let open Wasmir in
@@ -332,16 +332,16 @@ let convert_anyblock (tmap : tenv) (Wasmir.Block (t, b)) = Block (convert_typ t,
 type ('a, 'b) func' = {
   fun_id               : mfunid;
   fun_export_data      : string option;
-  fun_converted_closure: mvarid option;
+  fun_converted_closure: (anytyp_list * mvarid) option;
   fun_args             : 'a typ_list;
-  fun_locals           : anytyp_list;
+  fun_locals           : anytyp list;
   fun_ret              : 'b typ;
   fun_block            : 'b block;
 }
 type ('a, 'b, 'c) fhandler = {
   fh_contarg : 'a continuation varid * mvarid;
   fh_closure : (mvarid * 'c closure_content varid) option;
-  fh_locals  : anytyp_list;
+  fh_locals  : anytyp list;
   fh_finisher: ('a, 'b) finisher;
   fh_handlers: ('a, 'b) handler list;
   fh_id      : mfunid;
@@ -356,7 +356,7 @@ type 'a modu = {
   mod_effs        : anytyp_list EffectIDMap.t;
   mod_nglobals    : int32;
   mod_global_vars : (mvarid * anytyp * string) list;
-  mod_locals      : anytyp_list;
+  mod_locals      : anytyp list;
   mod_main        : 'a typ;
   mod_block       : 'a block;
 }
@@ -364,9 +364,9 @@ type 'a modu = {
 let convert_func' (tmap : tenv) (f : ('a, 'b) Wasmir.func') : ('a, 'b) func' = {
   fun_id                = f.Wasmir.fun_id;
   fun_export_data       = f.Wasmir.fun_export_data;
-  fun_converted_closure = f.Wasmir.fun_converted_closure;
+  fun_converted_closure = Option.map (fun (t, v) -> convert_anytyp_list t, v) f.Wasmir.fun_converted_closure;
   fun_args              = convert_typ_list f.Wasmir.fun_args;
-  fun_locals            = convert_anytyp_list f.Wasmir.fun_locals;
+  fun_locals            = List.map convert_anytyp f.Wasmir.fun_locals;
   fun_ret               = convert_typ f.Wasmir.fun_ret;
   fun_block             = convert_block tmap f.Wasmir.fun_block;
 }
@@ -380,7 +380,7 @@ let convert_fhandler (tmap : tenv) (f : ('a, 'b, 'c) Wasmir.fhandler) : ('a, 'b,
   in {
   fh_contarg  = convert_contarg f.Wasmir.fh_contarg;
   fh_closure  = convert_closure f.Wasmir.fh_closure;
-  fh_locals   = convert_anytyp_list f.Wasmir.fh_locals;
+  fh_locals   = List.map convert_anytyp f.Wasmir.fh_locals;
   fh_finisher = convert_finisher tmap f.Wasmir.fh_finisher;
   fh_handlers = List.map (convert_handler tmap) f.Wasmir.fh_handlers;
   fh_id       = f.Wasmir.fh_id;
@@ -401,7 +401,7 @@ let convert_module (m : 'a Wasmir.modu) : 'a modu =
     mod_effs = EffectIDMap.map convert_anytyp_list m.Wasmir.mod_effs;
     mod_nglobals = m.Wasmir.mod_nglobals;
     mod_global_vars = List.map convert_global m.Wasmir.mod_global_vars;
-    mod_locals = convert_anytyp_list m.Wasmir.mod_locals;
+    mod_locals = List.map convert_anytyp m.Wasmir.mod_locals;
     mod_main = convert_typ m.Wasmir.mod_main;
     mod_block = convert_block tmap m.Wasmir.mod_block;
   }
