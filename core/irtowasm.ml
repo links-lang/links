@@ -242,41 +242,61 @@ let convert_globals (tm : tmap) (gs : (mvarid * anytyp * string) list) (tl : Was
 (* The following functions build the instructions in reverse order *)
 type instr_conv = Wasm.Instruction.t list -> Wasm.Instruction.t list
 
-let rec generate_rtt : type a. tmap -> a typ -> int32 option * instr_conv = fun (tm : tmap) (t : a typ) : (int32 option * instr_conv) ->
+let rtt_wrapping (type a) (tm : tmap) (t : a typ) : int32 option =
   let convt tm t = Some (TMap.recid_of_type tm (TTuple (NTLcons ("1", t, NTLnil)))) in
   let open Wasm.Instruction in match t with
-  | TInt -> convt tm t, fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits int_rtt)) :: acc
-  | TBool -> convt tm t, fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits bool_rtt)) :: acc
-  | TFloat -> convt tm t, fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits float_rtt)) :: acc
-  | TClosed _ -> convt tm t, fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits func_rtt)) :: acc
-  | TAbsClosArg -> convt tm t, fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits absclosarg_rtt)) :: acc
-  | TClosArg ts -> let gen = generate_rtt_array tm ts 0l in None, fun acc -> StructNew (TMap.rtt_array_tid, Explicit) :: gen acc
-  | TCont _ -> convt tm t, fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits cont_rtt)) :: acc
-  | TTuple ts -> let gen = generate_rtt_array_named tm ts 0l in None, fun acc -> StructNew (TMap.rtt_array_tid, Explicit) :: gen acc
-  | TVariant -> convt tm t, fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits variant_rtt)) :: acc
-  | TVar -> failwith "TODO: load RTT from value"
-and generate_rtt_array : type a. tmap -> a typ_list -> int32 -> instr_conv =
-  fun (tm : tmap) (ts : a typ_list) (nbefore : int32) : instr_conv -> let open Wasm.Instruction in match ts with
-  | TLnil -> fun acc -> ArrayNewFixed (TMap.rtt_array_tid, nbefore) :: acc
-  | TLcons (thd, ttl) ->
-      let _, genhd = generate_rtt tm thd in
-      let gentl = generate_rtt_array tm ttl (Int32.succ nbefore) in
-      fun acc -> gentl (genhd acc)
-and generate_rtt_array_named : type a. tmap -> a named_typ_list -> int32 -> instr_conv =
-  fun (tm : tmap) (ts : a named_typ_list) (nbefore : int32) : instr_conv -> let open Wasm.Instruction in match ts with
-  | NTLnil -> fun acc -> ArrayNewFixed (TMap.rtt_array_tid, nbefore) :: acc
-  | NTLcons (_, thd, ttl) ->
-      let _, genhd = generate_rtt tm thd in
-      let gentl = generate_rtt_array_named tm ttl (Int32.succ nbefore) in
-      fun acc -> gentl (genhd acc)
+  | TInt -> convt tm t
+  | TBool -> convt tm t
+  | TFloat -> convt tm t
+  | TClosed _ -> convt tm t
+  | TAbsClosArg -> convt tm t
+  | TClosArg _ -> None
+  | TCont _ -> convt tm t
+  | TTuple _ -> None
+  | TVariant -> convt tm t
+  | TVar -> None
+
+let rec generate_rtt : type a. a typ -> instr_conv =
+  fun (t : a typ) : instr_conv ->
+  let open Wasm.Instruction in match t with
+  | TInt -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits int_rtt)) :: acc
+  | TBool -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits bool_rtt)) :: acc
+  | TFloat -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits float_rtt)) :: acc
+  | TClosed _ -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits func_rtt)) :: acc
+  | TAbsClosArg -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits absclosarg_rtt)) :: acc
+  | TClosArg ts -> let gen = generate_rtt_array ts in fun acc -> StructNew (TMap.rtt_array_tid, Explicit) :: gen acc
+  | TCont _ -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits cont_rtt)) :: acc
+  | TTuple ts -> let gen = generate_rtt_array_named ts in fun acc -> StructNew (TMap.rtt_array_tid, Explicit) :: gen acc
+  | TVariant -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits variant_rtt)) :: acc
+  | TVar -> failwith "TODO: generate_rtt TVar: load RTT from value"
+and generate_rtt_array : type a. a typ_list -> instr_conv =
+  fun (ts : a typ_list) : instr_conv -> let open Wasm.Instruction in
+  let rec inner : type a. a typ_list -> int32 -> _ =
+    fun ts nbefore -> match ts with
+    | TLnil -> fun acc -> ArrayNewFixed (TMap.rtt_array_tid, nbefore) :: acc
+    | TLcons (thd, ttl) ->
+        let genhd = generate_rtt thd in
+        let gentl = inner ttl (Int32.succ nbefore) in
+        fun acc -> gentl (genhd acc) in
+  inner ts 0l
+and generate_rtt_array_named : type a. a named_typ_list -> instr_conv =
+  fun (ts : a named_typ_list) : instr_conv -> let open Wasm.Instruction in
+  let rec inner : type a. a named_typ_list -> int32 -> _ =
+    fun ts nbefore -> match ts with
+    | NTLnil -> fun acc -> ArrayNewFixed (TMap.rtt_array_tid, nbefore) :: acc
+    | NTLcons (_, thd, ttl) ->
+        let genhd = generate_rtt thd in
+        let gentl = inner ttl (Int32.succ nbefore) in
+        fun acc -> gentl (genhd acc) in
+  inner ts 0l
 
 let do_box (type a b) (tm : tmap) (box : (a, b) box) (v : instr_conv) : instr_conv = match box with
   | BNone -> v
   | BBox TVar -> v
   | BBox t ->
-      let needs_boxing, rtt = generate_rtt tm t in
+      let rtt = generate_rtt t in
       let open Wasm.Instruction in
-      let v = match needs_boxing with
+      let v = match rtt_wrapping tm t with
         | None -> v
         | Some boxed -> fun acc -> StructNew (boxed, Explicit) :: v acc
       in
@@ -397,8 +417,10 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ =
       do_box tm box (fun acc -> Const Wasm.Value.(I32 (I32.of_bits 0l)) :: acc)
   | ETuple (ntl, es) ->
       let tid = TMap.recid_of_type tm (TTuple ntl) in
-      let es = match box with BNone | BBox _ -> convert_new_struct tm new_locals es BLnone tid cinfo | BTuple box -> convert_new_struct tm new_locals es box tid cinfo in
-      do_box tm box (fun acc -> es acc)
+      begin match box with
+        | BNone | BBox _ -> do_box tm box (convert_new_struct tm new_locals es BLnone tid cinfo)
+        | BTuple box -> convert_new_struct tm new_locals es box tid cinfo
+      end
   | EExtract (e, (ttup, i, _)) ->
       let e = convert_expr tm new_locals e BNone None cinfo in
       let tid = TMap.recid_of_type tm (TTuple ttup) in
