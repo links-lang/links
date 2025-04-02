@@ -343,53 +343,52 @@ type anyhandler = AHandler : ('a, 'b, 'c) fhandler -> anyhandler
 
 let internal_error message = Errors.internal_error ~filename:"irtowasm.ml" ~message
 
-type ('a, 'b) eq = Eq : 'a. ('a, 'a) eq
-let rec assert_eq_generalization : 'a 'b. 'a generalization -> 'b generalization -> string -> ('a, 'b) eq =
-  fun (type a b) (t1 : a generalization) (t2 : b generalization) (onfail : string) : (a, b) eq -> match t1, t2 with
-  | Gnil, Gnil -> Eq
+let rec assert_eq_generalization : 'a 'b. 'a generalization -> 'b generalization -> string -> ('a, 'b) Type.eq =
+  fun (type a b) (t1 : a generalization) (t2 : b generalization) (onfail : string) : (a, b) Type.eq -> match t1, t2 with
+  | Gnil, Gnil -> Type.Equal
   | Gnil, _ | _, Gnil -> raise (internal_error onfail)
   | Gcons (hd1, tl1), Gcons (hd2, tl2) ->
-      if hd1 <> hd2 then raise (internal_error onfail) else let Eq = assert_eq_generalization tl1 tl2 onfail in Eq
-and assert_eq_typ : 'a 'b. 'a typ -> 'b typ -> string -> ('a, 'b) eq =
-  fun (type a b) (t1 : a typ) (t2 : b typ) (onfail : string) : (a, b) eq -> match t1, t2 with
-  | TInt, TInt -> Eq
+      if hd1 <> hd2 then raise (internal_error onfail) else let Type.Equal = assert_eq_generalization tl1 tl2 onfail in Type.Equal
+and assert_eq_typ : 'a 'b. 'a typ -> 'b typ -> string -> ('a, 'b) Type.eq =
+  fun (type a b) (t1 : a typ) (t2 : b typ) (onfail : string) : (a, b) Type.eq -> match t1, t2 with
+  | TInt, TInt -> Type.Equal
   | TInt, _ | _, TInt -> raise (internal_error onfail)
-  | TBool, TBool -> Eq
+  | TBool, TBool -> Type.Equal
   | TBool, _ | _, TBool -> raise (internal_error onfail)
-  | TFloat, TFloat -> Eq
+  | TFloat, TFloat -> Type.Equal
   | TFloat, _ | _, TFloat -> raise (internal_error onfail)
   | TClosed (g1, tl1, r1), TClosed (g2, tl2, r2) ->
-      let Eq, Eq, Eq = assert_eq_generalization g1 g2 onfail, assert_eq_typ_list tl1 tl2 onfail, assert_eq_typ r1 r2 onfail in Eq
+      let Type.Equal, Type.Equal, Type.Equal = assert_eq_generalization g1 g2 onfail, assert_eq_typ_list tl1 tl2 onfail, assert_eq_typ r1 r2 onfail in Type.Equal
   | TClosed _, _ | _, TClosed _ -> raise (internal_error onfail)
-  | TAbsClosArg, TAbsClosArg -> Eq
+  | TAbsClosArg, TAbsClosArg -> Type.Equal
   | TAbsClosArg, _ | _, TAbsClosArg -> raise (internal_error onfail)
-  | TClosArg t1, TClosArg t2 -> let Eq = assert_eq_typ_list t1 t2 onfail in Eq
+  | TClosArg t1, TClosArg t2 -> let Type.Equal = assert_eq_typ_list t1 t2 onfail in Type.Equal
   | TClosArg _, _ | _, TClosArg _ -> raise (internal_error onfail)
-  | TCont t1, TCont t2 -> let Eq = assert_eq_typ t1 t2 onfail in Eq
+  | TCont t1, TCont t2 -> let Type.Equal = assert_eq_typ t1 t2 onfail in Type.Equal
   | TCont _, _ | _, TCont _ -> raise (internal_error onfail)
-  | TTuple ntl1, TTuple ntl2 -> let Eq = assert_eq_named_typ_list ntl1 ntl2 onfail in Eq
+  | TTuple ntl1, TTuple ntl2 -> let Type.Equal = assert_eq_named_typ_list ntl1 ntl2 onfail in Type.Equal
   | TTuple _, _ | _, TTuple _ -> raise (internal_error onfail)
-  | TVariant, TVariant -> Eq
+  | TVariant, TVariant -> Type.Equal
   | TVariant, _ | _, TVariant -> raise (internal_error onfail)
-  | TVar i1, TVar i2 -> if i1 = i2 then Eq else raise (internal_error onfail)
-and assert_eq_typ_list : 'a 'b. 'a typ_list -> 'b typ_list -> string -> ('a, 'b) eq =
-  fun (type a b) (t1 : a typ_list) (t2 : b typ_list) (onfail : string) : (a, b) eq -> match t1, t2 with
-  | TLnil, TLnil -> Eq
+  | TVar i1, TVar i2 -> if i1 = i2 then Type.Equal else raise (internal_error onfail)
+and assert_eq_typ_list : 'a 'b. 'a typ_list -> 'b typ_list -> string -> ('a, 'b) Type.eq =
+  fun (type a b) (t1 : a typ_list) (t2 : b typ_list) (onfail : string) : (a, b) Type.eq -> match t1, t2 with
+  | TLnil, TLnil -> Type.Equal
   | TLcons _, TLnil | TLnil, TLcons _ -> raise (internal_error onfail)
-  | TLcons (t1, tl1), TLcons (t2, tl2) -> let Eq, Eq = assert_eq_typ_list tl1 tl2 onfail, assert_eq_typ t1 t2 onfail in Eq
-and assert_eq_named_typ_list : 'a 'b. 'a named_typ_list -> 'b named_typ_list -> string -> ('a, 'b) eq =
-  fun (type a b) (t1 : a named_typ_list) (t2 : b named_typ_list) (onfail : string) : (a, b) eq -> match t1, t2 with
-  | NTLnil, NTLnil -> Eq
+  | TLcons (t1, tl1), TLcons (t2, tl2) -> let Type.Equal, Type.Equal = assert_eq_typ_list tl1 tl2 onfail, assert_eq_typ t1 t2 onfail in Type.Equal
+and assert_eq_named_typ_list : 'a 'b. 'a named_typ_list -> 'b named_typ_list -> string -> ('a, 'b) Type.eq =
+  fun (type a b) (t1 : a named_typ_list) (t2 : b named_typ_list) (onfail : string) : (a, b) Type.eq -> match t1, t2 with
+  | NTLnil, NTLnil -> Type.Equal
   | NTLcons _, NTLnil | NTLnil, NTLcons _ -> raise (internal_error onfail)
   | NTLcons (n1, t1, ntl1), NTLcons (n2, t2, ntl2) ->
-      if String.equal n1 n2 then let Eq, Eq = assert_eq_typ t1 t2 onfail, assert_eq_named_typ_list ntl1 ntl2 onfail in Eq
+      if String.equal n1 n2 then let Type.Equal, Type.Equal = assert_eq_typ t1 t2 onfail, assert_eq_named_typ_list ntl1 ntl2 onfail in Type.Equal
       else raise (internal_error onfail)
-let target_expr (type a) (Expr (t1, e) : anyexpr) (t2 : a typ) : a expr = let Eq = assert_eq_typ t1 t2 "Unexpected type" in e
-let target_block (type a) (Block (t1, b) : anyblock) (t2 : a typ) : a block = let Eq = assert_eq_typ t1 t2 "Unexpected type" in b
+let target_expr (type a) (Expr (t1, e) : anyexpr) (t2 : a typ) : a expr = let Type.Equal = assert_eq_typ t1 t2 "Unexpected type" in e
+let target_block (type a) (Block (t1, b) : anyblock) (t2 : a typ) : a block = let Type.Equal = assert_eq_typ t1 t2 "Unexpected type" in b
 
 (* let rec extract_typ_check : 'a 'b. ('a, 'b) extract_typ -> _ = fun (type a b) ((s, n, t, chk) : (a, b) extract_typ) : unit -> match s, chk with
   | TTuple (NTLcons (_, hd, _)), ExtractO ->
-      if n = 0 then let Eq = assert_eq_typ hd t "Invalid type extraction data" in ()
+      if n = 0 then let Type.Equal = assert_eq_typ hd t "Invalid type extraction data" in ()
       else raise (internal_error "Invalid type extraction data")
   | TTuple (NTLcons (_, _, tl)), ExtractS chk -> extract_typ_check (TTuple tl, n - 1, t, chk)
   | TTuple NTLnil, _ -> . *)
@@ -610,17 +609,17 @@ and convert_type_list (t : Types.typ) : anytyp_list =
         in inner (sort_name_map fsm))
     t
 
-let rec box_list_none : type a b. (a, b) box_list -> ((a, b) eq * a typ_list * b typ_list) option = function
-  | BLnil -> Some (Eq, TLnil, TLnil)
+let rec box_list_none : type a b. (a, b) box_list -> ((a, b) Type.eq * a typ_list * b typ_list) option = function
+  | BLnil -> Some (Type.Equal, TLnil, TLnil)
   | BLcons (BNone (s, d), btl) -> begin match box_list_none btl with
-      | Some (Eq, ss, ds) -> Some (Eq, TLcons (s, ss), TLcons (d, ds))
+      | Some (Type.Equal, ss, ds) -> Some (Type.Equal, TLcons (s, ss), TLcons (d, ds))
       | None -> None
     end
   | BLcons _ -> None
-let rec box_named_list_none : type a b. (a, b) box_named_list -> ((a, b) eq * a named_typ_list * b named_typ_list) option = function
-  | BNLnil -> Some (Eq, NTLnil, NTLnil)
+let rec box_named_list_none : type a b. (a, b) box_named_list -> ((a, b) Type.eq * a named_typ_list * b named_typ_list) option = function
+  | BNLnil -> Some (Type.Equal, NTLnil, NTLnil)
   | BNLcons (n, BNone (s, d), btl) -> begin match box_named_list_none btl with
-      | Some (Eq, ss, ds) -> Some (Eq, NTLcons (n, s, ss), NTLcons (n, d, ds))
+      | Some (Type.Equal, ss, ds) -> Some (Type.Equal, NTLcons (n, s, ss), NTLcons (n, d, ds))
       | None -> None
     end
   | BNLcons _ -> None
@@ -637,13 +636,13 @@ let rec specialize_typ : type a. _ -> a typ -> a specialize = fun tmap t -> matc
       let SpecL (targs, bargs) = specialize_typ_list tmap targs in
       let Spec (tret, bret) = specialize_typ tmap tret in
       begin match box_list_none bargs, bret with
-      | Some (Eq, sargs, dargs), BNone (src, dst) -> Spec (TClosed (g, targs, tret), BNone (TClosed (g, sargs, src), TClosed (g, dargs, dst)))
+      | Some (Type.Equal, sargs, dargs), BNone (src, dst) -> Spec (TClosed (g, targs, tret), BNone (TClosed (g, sargs, src), TClosed (g, dargs, dst)))
       | _ -> Spec (TClosed (g, targs, tret), BClosed (g, bargs, bret))
     end
   | TAbsClosArg -> Spec (TAbsClosArg, BNone (t, t))
   | TClosArg ts -> begin let SpecL (ts, bs) = specialize_typ_list tmap ts in
       match box_list_none bs with
-      | Some (Eq, sb, db) -> Spec (TClosArg ts, BNone (TClosArg sb, TClosArg db))
+      | Some (Type.Equal, sb, db) -> Spec (TClosArg ts, BNone (TClosArg sb, TClosArg db))
       | None -> raise (internal_error "Cannot box in closure argument yet")
     end
   | TCont tret -> begin let Spec (tret, bret) = specialize_typ tmap tret in
@@ -653,7 +652,7 @@ let rec specialize_typ : type a. _ -> a typ -> a specialize = fun tmap t -> matc
     end
   | TTuple ts -> let SpecNL (ts, bs) = specialize_typ_named_list tmap ts in
       begin match box_named_list_none bs with
-      | Some (Eq, ss, ds) -> Spec (TTuple ts, BNone (TTuple (ss), TTuple (ds)))
+      | Some (Type.Equal, ss, ds) -> Spec (TTuple ts, BNone (TTuple (ss), TTuple (ds)))
       | None -> Spec (TTuple ts, BTuple bs)
     end
   | TVariant -> Spec (TVariant, BNone (t, t))
@@ -1620,7 +1619,7 @@ and convert_values : type a. _ -> _ -> _ -> a typ_list -> _ * _ * a expr_list =
     | _ :: _, TLnil -> raise (internal_error "Type mismatch: too many expressions")
     | ehd :: etl, TLcons (thd, ttl) ->
         let ge', le', Expr (t, e) = of_value !ge !le ehd in
-        let Eq = assert_eq_typ t thd "Type mismatch: the argument does not have the correct type" in
+        let Type.Equal = assert_eq_typ t thd "Type mismatch: the argument does not have the correct type" in
         ge := ge'; le := le'; ELcons (e, convert_args etl ttl)
   in let ret = convert_args vs ts in !ge, !le, ret
 
@@ -1776,7 +1775,7 @@ let rec of_tail_computation : type args. _ -> args lenv -> _ -> genv * args lenv
                 let handle_le = LEnv.set_continuation handle_le k (Type rarg) in
                 let ge, handle_le, Block (t, b) = of_computation ge (LEnv.of_sub handle_le) p in
                 let handle_le = LEnv.to_sub handle_le in
-                let Eq = assert_eq_typ t tret "Expected the same type in the return branch as in all handler branches" in
+                let Type.Equal = assert_eq_typ t tret "Expected the same type in the return branch as in all handler branches" in
                 ge, handle_le, Handler ((TClosed (Gnil, eargs, rarg), eid), contid, vargs, b)
               in let do_case ename (ec : effect_case) (ge, handle_le, acc) =
                 let ge, handle_le, hd = do_case ge handle_le ename ec in
@@ -1794,7 +1793,7 @@ let rec of_tail_computation : type args. _ -> args lenv -> _ -> genv * args lenv
   | Special _ -> failwith "TODO of_tail_computation Special"
   | Case (v, m, d) ->
       let ge, le, Expr (vt, v) = of_value ge le v in
-      let Eq = assert_eq_typ vt TVariant "Unexpected non-variant type in case computation" in
+      let Type.Equal = assert_eq_typ vt TVariant "Unexpected non-variant type in case computation" in
       let ge, le, m = Utility.StringMap.fold (fun tag (b, c) (ge, le, acc) ->
         let ge, tagid = GEnv.find_tag ge tag in
         let bt = convert_type (Var.type_of_binder b) in
@@ -1814,17 +1813,17 @@ let rec of_tail_computation : type args. _ -> args lenv -> _ -> genv * args lenv
             | Some (_, Block (t, _)) -> Type t
             | None -> raise (internal_error "Empty case computation") in
       let m = List.map (fun (tid, bindt, bv, Block (bt, bb)) ->
-          let Eq = assert_eq_typ t bt "Unexpected case return type" in tid, bindt, bv, (bb : r block)) m in
-      let d = Option.map (fun (bv, Block (bt, bb)) -> let Eq = assert_eq_typ t bt "Unexpected case return type" in bv, (bb : r block)) d in
+          let Type.Equal = assert_eq_typ t bt "Unexpected case return type" in tid, bindt, bv, (bb : r block)) m in
+      let d = Option.map (fun (bv, Block (bt, bb)) -> let Type.Equal = assert_eq_typ t bt "Unexpected case return type" in bv, (bb : r block)) d in
       let le, tmpvar = LEnv.add_local le (Type TVariant) in
       let tmpvar = TVariant, tmpvar in
       ge, le, Expr (t, ECase (tmpvar, v, t, m, d))
   | If (b, t, f) ->
       let ge, le, Expr (tb, eb) = of_value ge le b in
-      let Eq = assert_eq_typ tb TBool "Expected a boolean expression" in
+      let Type.Equal = assert_eq_typ tb TBool "Expected a boolean expression" in
       let ge, le, Block (tt, bt) = of_computation ge le t in
       let ge, le, Block (tf, bf) = of_computation ge le f in
-      let Eq = assert_eq_typ tt tf "Expected the same type in both branches" in
+      let Type.Equal = assert_eq_typ tt tf "Expected the same type in both branches" in
       ge, le, Expr (tt, ECond (tt, eb, bt, bf))
 and of_computation : type args. _ -> args lenv -> _ -> _ * args lenv * _ =
   fun (ge : genv) (le : args lenv) ((bs, tc) : computation) : (genv * args lenv * anyblock) ->
