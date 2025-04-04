@@ -253,7 +253,7 @@ module NewMetadata : sig
   
   val add_local : t -> 'a typ -> int32
   val add_specialization : tmap -> t -> 'a typ_list -> 'b typ -> ('a, 'c) box_list -> ('b, 'd) box -> int32
-  val add_unspecialization : tmap -> t -> ('a, 'c) box_list -> ('b, 'd) box -> int32
+  val add_unspecialization : tmap -> t -> 'a typ_list -> 'b typ -> ('a, 'c) box_list -> ('b, 'd) box -> 'c typ_list * 'd typ * int32
   val maybe_do_box : tmap -> t -> ('a, 'b) box -> instr_conv -> ('b typ * instr_conv, ('a, 'b) Type.eq) Either.t
   val maybe_do_unbox : tmap -> t -> ('a, 'b) box -> instr_conv -> ('a typ * instr_conv, ('a, 'b) Type.eq) Either.t
 end = struct
@@ -282,13 +282,76 @@ end = struct
     new_meta := Type t :: loc, Int32.succ i;
     i
   
-  let add_unspecialization (tm : tmap) (glob, _ as new_meta : t) (bargs : ('a, 'c) box_list) (bret : ('b, 'd) box) : int32 =
-    ignore (tm, glob, new_meta, bargs, bret); failwith "TODO add_unspecialization"
+  (* Warning: not the same ABI (the closure content is not wrapped again) *)
+  let rec add_unspecialization : type a b c d. tmap -> t -> a typ_list -> b typ -> (a, c) box_list -> (b, d) box -> c typ_list * d typ * int32 =
+    fun tm (glob, _ as new_meta) targs tret bargs bret ->
+    let fid, eacc, facc = !glob in
+    let clvid, fargs =
+      let rec inner : type a b. a typ_list -> (a, b) box_list -> int32 * b typ_list = fun targs bargs -> match targs, bargs with
+        | TLnil, BLnone -> 0l, TLnil
+        | TLnil, BLnil -> 0l, TLnil
+        | TLcons (hd, tl), BLnone -> let n, tl = inner tl BLnone in Int32.succ n, TLcons (hd, tl)
+        | TLcons (thd, tl), BLcons (bhd, btl) ->
+            let n, tl = inner tl btl in
+            let hd = dst_of_box thd bhd in
+            Int32.succ n, TLcons (hd, tl) in
+      inner targs bargs in
+    let fret = dst_of_box tret bret in
+    let cltid = TMap.recid_of_type tm (TClosed (targs, tret)) in
+    let ftid = TMap.recid_of_functyp tm fargs fret in
+    (* TODO: optimize the next two lines (caching is possible) *)
+    let inner_ftid = TMap.recid_of_type tm (TClosed (targs, tret)) in
+    let inner_fid = TMap.recid_of_functyp tm targs tret in
+    let inner_fval = Wasm.Type.(RefT (NoNull, VarHT (StatX inner_ftid))) in
+    let conv_closure = Wasm.Instruction.[
+      LocalSet (Int32.succ clvid);
+      RefCast Wasm.Type.(NoNull, VarHT (StatX cltid));
+      LocalGet clvid
+    ] in
+    let load_args =
+      let open Wasm.Instruction in
+      let rec inner : type a b. a typ_list -> (a, b) box_list -> int32 -> t list -> t list =
+        fun t box i acc -> match t, box with
+        | TLnil, _ -> acc
+        | TLcons (_, ttl), BLnone -> inner ttl BLnone (Int32.succ i) (LocalGet i :: acc)
+        | TLcons (_, ttl), BLcons (bhd, btl) ->
+          let arg = match maybe_do_unbox tm new_meta bhd (fun acc -> LocalGet i :: acc) with
+            | Either.Right Type.Equal -> LocalGet i :: acc
+            | Either.Left (_, arg) -> arg acc
+          in inner ttl btl (Int32.succ i) arg in
+      inner targs bargs 0l conv_closure in
+    let do_unbox =
+      let do_call = Wasm.Instruction.(fun acc ->
+          CallRef inner_fid ::
+          StructGet (inner_ftid, 0l, None) :: LocalGet (Int32.succ clvid) ::
+          StructGet (inner_ftid, 1l, None) :: LocalGet (Int32.succ clvid) ::
+          load_args @ acc) in
+      match maybe_do_box tm new_meta bret do_call with
+      | Either.Right Type.Equal -> do_call []
+      | Either.Left (_, conv) -> conv [] in
+    let f = Wasm.{
+      fn_name = None;
+      fn_type = ftid;
+      fn_locals = [inner_fval];
+      fn_code = List.rev do_unbox;
+    } in
+    let nfuns, eacc, facc = Int32.succ fid, (ftid, fid) :: eacc, f :: facc in
+    glob := nfuns, eacc, facc;
+    fargs, fret, fid
   
-  let rec maybe_do_box : type a b. tmap -> t -> (a, b) box -> instr_conv -> (b typ * instr_conv, (a, b) Type.eq) Either.t =
-    fun (tm : tmap) (glob, _ as new_meta : t) box get_val ->
+  and maybe_do_box : type a b. tmap -> t -> (a, b) box -> instr_conv -> (b typ * instr_conv, (a, b) Type.eq) Either.t =
+    fun tm new_meta box get_val ->
     let open Wasm.Instruction in match box with
     | BNone -> Either.Right Type.Equal
+    | BClosed (_, BLnone, BNone) -> Either.Right Type.Equal
+    | BClosed (_, BLnil, BNone) -> Either.Right Type.Equal
+    | BClosed (_, BLcons (BNone, BLnil), BNone) -> Either.Right Type.Equal
+    | BClosed (TClosed (targs, tret), bargs, bret) ->
+        let targs, tret, convfid = add_unspecialization tm new_meta targs tret bargs bret in
+        let new_ctid = TMap.recid_of_type tm (TClosed (targs, tret)) in
+        Either.Left (TClosed (targs, tret), fun acc -> StructNew (new_ctid, Explicit) :: get_val (RefFunc convfid :: acc))
+    | BCont _ -> failwith "TODO maybe_do_box"
+    | BTuple _ -> failwith "TODO maybe_do_box"
     | BBox t ->
         let rtt = generate_rtt t in
         begin match rtt_wrapping tm t with
@@ -297,11 +360,10 @@ end = struct
           | Either.Left (Some boxed) ->
               Either.Left (TVar, fun acc -> StructNew (TMap.boxed_tid, Explicit) :: StructNew (boxed, Explicit) :: get_val (rtt acc))
       end
-    | _ -> ignore (glob, new_meta); failwith "TODO maybe_do_box"
   
   (* Warning: not the same ABI (the closure content is not wrapped again) *)
   and add_specialization : type a b c d. tmap -> t -> a typ_list -> b typ -> (a, c) box_list -> (b, d) box -> int32 =
-    fun (tm : tmap) (glob, _ as new_meta : t) (targs : a typ_list) (tret : b typ) (bargs : (a, c) box_list) (bret : (b, d) box) : int32 ->
+    fun tm (glob, _ as new_meta) targs tret bargs bret ->
     let fid, eacc, facc = !glob in
     let ftid = TMap.recid_of_functyp tm targs tret in
     let clvid, fargs =
@@ -337,18 +399,20 @@ end = struct
             | Either.Left (_, arg) -> arg acc
           in inner ttl btl (Int32.succ i) arg in
       inner targs bargs 0l conv_closure in
-    let do_unbox = match maybe_do_unbox tm new_meta bret Fun.id with
-      | Either.Right Type.Equal -> []
+    let do_unbox =
+      let do_call = Wasm.Instruction.(fun acc ->
+        CallRef inner_fid ::
+        StructGet (inner_ftid, 0l, None) :: LocalGet (Int32.succ clvid) ::
+        StructGet (inner_ftid, 1l, None) :: LocalGet (Int32.succ clvid) ::
+        load_args @ acc) in
+      match maybe_do_unbox tm new_meta bret do_call with
+      | Either.Right Type.Equal -> do_call []
       | Either.Left (_, conv) -> conv [] in
     let f = Wasm.{
       fn_name = None;
       fn_type = ftid;
       fn_locals = [inner_fval];
-      fn_code = List.rev_append load_args Wasm.Instruction.(
-        LocalGet (Int32.succ clvid) :: StructGet (inner_ftid, 1l, None) ::
-        LocalGet (Int32.succ clvid) :: StructGet (inner_ftid, 0l, None) ::
-        CallRef inner_fid ::
-        List.rev do_unbox);
+      fn_code = List.rev do_unbox;
     } in
     let nfuns, eacc, facc = Int32.succ fid, (ftid, fid) :: eacc, f :: facc in
     glob := nfuns, eacc, facc;
