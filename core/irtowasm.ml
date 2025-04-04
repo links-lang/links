@@ -5,14 +5,15 @@ open Wasmuir
 (* TODO: use cont.bind instead of struct.new *)
 (* TODO: do_deep_box and do_deep_unbox for effects *)
 
-let int_rtt = 1l
-let bool_rtt = 2l
-let float_rtt = 3l
-let string_rtt = 4l
-let absclosarg_rtt = 5l
-let variant_rtt = 6l
-let func_rtt = 7l
-let cont_rtt = 8l
+let unit_rtt = 1l
+let int_rtt = 2l
+let bool_rtt = 3l
+let float_rtt = 4l
+let string_rtt = 5l
+let absclosarg_rtt = 6l
+let variant_rtt = 7l
+let func_rtt = 8l
+let cont_rtt = 9l
 
 (* TODO: make it so that TTuple NTLnil becomes nothing *)
 module TMap : sig
@@ -206,6 +207,7 @@ let rtt_wrapping (type a) (tm : tmap) (t : a typ) : (int32 option, (a, unit) Typ
   | TAbsClosArg -> convt tm t
   | TClosArg _ -> Either.Left None
   | TCont _ -> convt tm t
+  | TTuple NTLnil -> convt tm t
   | TTuple _ -> Either.Left None
   | TVariant -> convt tm t
   | TVar -> Either.Right Type.Equal
@@ -216,15 +218,16 @@ type instr_conv = Wasm.Instruction.t list -> Wasm.Instruction.t list
 let rec generate_rtt : type a. a typ -> instr_conv =
   fun (t : a typ) : instr_conv ->
   let open Wasm.Instruction in match t with
+  | TTuple NTLnil -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits unit_rtt)) :: acc
   | TInt -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits int_rtt)) :: acc
   | TBool -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits bool_rtt)) :: acc
   | TFloat -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits float_rtt)) :: acc
   | TString -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits string_rtt)) :: acc
   | TClosed _ -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits func_rtt)) :: acc
   | TAbsClosArg -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits absclosarg_rtt)) :: acc
-  | TClosArg ts -> let gen = generate_rtt_array ts in fun acc -> StructNew (TMap.rtt_array_tid, Explicit) :: gen acc
+  | TClosArg ts -> generate_rtt_array ts
   | TCont _ -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits cont_rtt)) :: acc
-  | TTuple ts -> let gen = generate_rtt_array_named ts in fun acc -> StructNew (TMap.rtt_array_tid, Explicit) :: gen acc
+  | TTuple ts -> generate_rtt_array_named ts
   | TVariant -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits variant_rtt)) :: acc
   | TVar -> failwith "TODO: generate_rtt TVar: load RTT from value"
 and generate_rtt_array : type a. a typ_list -> instr_conv =
@@ -472,7 +475,7 @@ let convert_global (tm : tmap) ((_, Type t, name) : 'a * anytyp * string) : Wasm
     | TTuple _ -> failwith "TODO: convert_global TTuple"
     | TVariant -> [
           Const (Wasm.Value.(I32 (I32.of_bits 0l)));
-          RefNull Wasm.Type.StructHT;
+          StructNew (TMap.boxed_tid, Implicit);
           StructNew (TMap.variant_tid, Explicit)
         ]
     | TVar -> raise (internal_error "Unexpected global of IR type Var") in
@@ -622,8 +625,7 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ =
       let tid = TMap.recid_of_type tm (TTuple ttup) in
       do_box tm new_meta box (fun acc -> StructGet (tid, Int32.of_int i, None) :: (e acc))
   | EVariant (tagid, targ, arg) ->
-      let arg = convert_expr tm new_meta arg BNone None cinfo in
-      let arg = do_box tm new_meta (BBox targ) arg in
+      let arg = convert_expr tm new_meta arg (BBox targ) None cinfo in
       do_box tm new_meta box (fun acc -> StructNew (TMap.variant_tid, Explicit) :: arg (Const Wasm.Value.(I32 (I32.of_int_u (tagid :> int))) :: acc))
   | ECase (v, t, cs, od) ->
       let loc, vid, stv = match v with
