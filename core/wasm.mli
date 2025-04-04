@@ -254,8 +254,11 @@ module Instruction : sig
     | StructNew of int32 * initop
     | StructGet of int32 * int32 * Pack.extension option
     | StructSet of int32 * int32
+    | ArrayNew of int32 * initop
     | ArrayNewFixed of int32 * int32
     | ArrayGet of int32 * Pack.extension option
+    | ArrayLen
+    | ArrayCopy of int32 * int32
   
   val to_sexpr : t -> Sexpr.t
 end

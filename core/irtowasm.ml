@@ -8,10 +8,11 @@ open Wasmuir
 let int_rtt = 1l
 let bool_rtt = 2l
 let float_rtt = 3l
-let absclosarg_rtt = 4l
-let variant_rtt = 5l
-let func_rtt = 6l
-let cont_rtt = 7l
+let string_rtt = 4l
+let absclosarg_rtt = 5l
+let variant_rtt = 6l
+let func_rtt = 7l
+let cont_rtt = 8l
 
 (* TODO: make it so that TTuple NTLnil becomes nothing *)
 module TMap : sig
@@ -22,6 +23,7 @@ module TMap : sig
   val rtt_array_tid : int32
   val boxed_tid : int32
   val variant_tid : int32
+  val string_tid : int32
   
   val recid_of_rec_type : t -> Wasm.Type.rec_type -> int32
   val val_of_type : t -> 'a typ -> Wasm.Type.val_type
@@ -52,6 +54,7 @@ end = struct
         FieldT (Cons, ValStorageT (RefT (Null, StructHT)));
       ]))]) in
     let reftyps = Wasm.Type.[
+      RecT [SubT (Final, [], DefArrayT (ArrayT (FieldT (Var, PackStorageT Wasm.Pack.Pack8))))];
       RecT [SubT (Final, [], DefStructT (StructT [
         FieldT (Cons, ValStorageT (NumT I32T));
         FieldT (Cons, ValStorageT (RefT (NoNull, VarHT (StatX 3l))));
@@ -71,6 +74,7 @@ end = struct
   let rtt_array_tid : int32 = 2l
   let boxed_tid : int32 = 3l
   let variant_tid : int32 = 4l
+  let string_tid : int32 = 5l
   
   let recid_of_rec_type (env : t) (t : Wasm.Type.rec_type) : int32 = match List.find_index ((=) t) env.reftyps with
     | Some tidx -> Int32.sub env.nrefs (Int32.of_int (tidx + 1))
@@ -85,6 +89,7 @@ end = struct
     | TInt -> NumT I64T
     | TBool -> NumT I32T
     | TFloat -> NumT F64T
+    | TString -> RefT (NoNull, VarHT (StatX string_tid))
     | TClosed _ -> RefT (NoNull, VarHT (StatX (recid_of_type env t)))
     | TAbsClosArg -> RefT (Null, StructHT)
     | TClosArg _ -> RefT (NoNull, VarHT (StatX (recid_of_type env t)))
@@ -113,6 +118,7 @@ end = struct
           | TInt -> failwith "TODO: TMap.rec_of_type TInt"
           | TBool -> failwith "TODO: TMap.rec_of_type TBool"
           | TFloat -> failwith "TODO: TMap.rec_of_type TFloat"
+          | TString -> failwith "TODO: TMap.rec_of_type TString"
           | TClosed (args, ret) ->
               let ftyp = recid_of_functyp env args ret in
               RecT [SubT (Final, [], DefStructT (StructT [
@@ -195,6 +201,7 @@ let rtt_wrapping (type a) (tm : tmap) (t : a typ) : (int32 option, (a, unit) Typ
   | TInt -> convt tm t
   | TBool -> convt tm t
   | TFloat -> convt tm t
+  | TString -> convt tm t
   | TClosed _ -> Either.Left None
   | TAbsClosArg -> convt tm t
   | TClosArg _ -> Either.Left None
@@ -212,6 +219,7 @@ let rec generate_rtt : type a. a typ -> instr_conv =
   | TInt -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits int_rtt)) :: acc
   | TBool -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits bool_rtt)) :: acc
   | TFloat -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits float_rtt)) :: acc
+  | TString -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits string_rtt)) :: acc
   | TClosed _ -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits func_rtt)) :: acc
   | TAbsClosArg -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits absclosarg_rtt)) :: acc
   | TClosArg ts -> let gen = generate_rtt_array ts in fun acc -> StructNew (TMap.rtt_array_tid, Explicit) :: gen acc
@@ -456,6 +464,7 @@ let convert_global (tm : tmap) ((_, Type t, name) : 'a * anytyp * string) : Wasm
     | TInt -> [Const (Wasm.Value.(I64 (I64.of_bits 0L)))]
     | TBool -> [Const (Wasm.Value.(I32 (I32.of_bits 0l)))]
     | TFloat -> [Const (Wasm.Value.(F64 (F64.of_float 0.)))]
+    | TString -> [ArrayNewFixed (TMap.string_tid, 0l)]
     | TClosed _ -> let idx = TMap.recid_of_type tm t in [StructNew (idx, Implicit)]
     | TAbsClosArg -> raise (internal_error "Unexpected global of IR type AbsClosArg")
     | TClosArg _ -> raise (internal_error "Unexpected global of IR type ClosArg")
@@ -487,10 +496,11 @@ let do_unbox (type a b) (tm : tmap) (new_meta : new_meta) (box : (a, b) box) (ge
   | Either.Left (_, v) -> v
   | Either.Right Type.Equal -> get_val
 
-let convert_unop (type a b) (_ : tmap) (op : (a, b) unop) (arg : instr_conv) : instr_conv = let open Wasm.Instruction in match op with
+let convert_unop (type a b) (_ : tmap) (_ : new_meta) (op : (a, b) unop) (arg : instr_conv) : instr_conv =
+  let open Wasm.Instruction in match op with
     | UONegI -> fun acc -> Binop (Wasm.Value.I64 IntOp.Sub) :: arg (Const Wasm.Value.(I64 (I64.of_bits 0L)) :: acc)
     | UONegF -> fun acc -> Unop (Wasm.Value.F64 FloatOp.Neg) :: arg acc
-let convert_binop (type a b c) (_ : tmap) (op : (a, b, c) binop) (arg1 : instr_conv) (arg2 : instr_conv) : instr_conv =
+let convert_binop (type a b c) (_ : tmap) (new_meta : new_meta) (op : (a, b, c) binop) (arg1 : instr_conv) (arg2 : instr_conv) : instr_conv =
   let open Wasm.Instruction in match op with
   | BOAddI -> fun acc -> Binop (Wasm.Value.I64 IntOp.Add) :: arg2 (arg1 acc)
   | BOAddF -> fun acc -> Binop (Wasm.Value.F64 FloatOp.Add) :: arg2 (arg1 acc)
@@ -521,6 +531,30 @@ let convert_binop (type a b c) (_ : tmap) (op : (a, b, c) binop) (arg1 : instr_c
   | BOLt -> fun acc -> Relop (Wasm.Value.I64 IntOp.LtS) :: arg2 (arg1 acc)
   | BOGe -> fun acc -> Relop (Wasm.Value.I64 IntOp.GeS) :: arg2 (arg1 acc)
   | BOGt -> fun acc -> Relop (Wasm.Value.I64 IntOp.GtS) :: arg2 (arg1 acc)
+  | BOConcat ->
+      let tmparg1 = NewMetadata.add_local new_meta TString in
+      let tmparg2 = NewMetadata.add_local new_meta TString in
+      let tmpret = NewMetadata.add_local new_meta TString in
+      fun acc ->
+        LocalGet tmpret ::
+        ArrayCopy (TMap.string_tid, TMap.string_tid) ::
+        ArrayLen :: LocalGet tmparg2 ::
+        Const Wasm.Value.(I32 (I32.of_bits 0l)) ::
+        LocalGet tmparg2 ::
+        ArrayLen :: LocalGet tmparg1 ::
+        LocalGet tmpret ::
+        ArrayCopy (TMap.string_tid, TMap.string_tid) ::
+        ArrayLen :: LocalGet tmparg1 ::
+        Const Wasm.Value.(I32 (I32.of_bits 0l)) ::
+        LocalGet tmparg1 ::
+        Const Wasm.Value.(I32 (I32.of_bits 0l)) ::
+        LocalGet tmpret ::
+        LocalSet tmpret ::
+        ArrayNew (TMap.string_tid, Implicit) ::
+        Binop (Wasm.Value.I32 IntOp.Add) ::
+        ArrayLen :: LocalGet tmparg2 ::
+        ArrayLen :: LocalGet tmparg1 ::
+        LocalSet tmparg2 :: arg2 (LocalSet tmparg1 :: arg1 acc)
 
 type last_info = (mfunid * int32) option option
 type clos_info = (int32 * mvarid) option (* Closure type ID, closure ID *)
@@ -562,14 +596,17 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ =
   | EConstInt i -> do_box tm new_meta box (fun acc -> Const Wasm.Value.(I64 (I64.of_bits i)) :: acc)
   | EConstBool b -> do_box tm new_meta box (fun acc -> Const Wasm.Value.(I32 (I32.of_bits (if b then 1l else 0l))) :: acc)
   | EConstFloat f -> do_box tm new_meta box (fun acc -> Const Wasm.Value.(F64 (F64.of_float f)) :: acc)
+  | EConstString s -> do_box tm new_meta box (fun acc ->
+        ArrayNewFixed (TMap.string_tid, Int32.of_int (String.length s)) ::
+        String.fold_left (fun acc c -> Const Wasm.Value.(I32 (I32.of_int_u (Char.code c))) :: acc) acc s)
   | EUnop (op, e) ->
       let arg = convert_expr tm new_meta e BNone None cinfo in
-      let v = convert_unop tm op arg in
+      let v = convert_unop tm new_meta op arg in
       do_box tm new_meta box v
   | EBinop (op, e1, e2) ->
       let arg1 = convert_expr tm new_meta e1 BNone None cinfo in
       let arg2 = convert_expr tm new_meta e2 BNone None cinfo in
-      let v = convert_binop tm op arg1 arg2 in
+      let v = convert_binop tm new_meta op arg1 arg2 in
       do_box tm new_meta box v
   | EVariable (loc, vid) -> do_box tm new_meta box (convert_get_var loc vid cinfo)
   | ETuple (NTLnil, ELnil) ->
@@ -895,17 +932,17 @@ let convert_effects (tm : tmap) (es : anytyp_list EffectIDMap.t) : int32 list =
 
 type import_info = {
   impinfo_putc : int32 option;
-  impinfo_puti : int32 option;
+  impinfo_puts : int32 option;
 }
 let impinfo_empty : import_info = {
   impinfo_putc = None;
-  impinfo_puti = None;
+  impinfo_puts = None;
 }
 let convert_import (tm : tmap) ((fidx, tidx, impinfo) : int32 * int32 * import_info) ((m, i) : string * string) : (int32 * int32 * import_info) * Wasm.import =
   let acc, desc = match m, i with
-  | "wizeng", "puti" ->
-      let fid = TMap.recid_of_rec_type tm Wasm.Type.(RecT [SubT (Final, [], DefFuncT (FuncT ([NumT I32T], [])))]) in
-      (Int32.succ fidx, tidx, { impinfo with impinfo_puti = Some fidx }), Wasm.FuncImport fid
+  | "wizeng", "puts" ->
+      let fid = TMap.recid_of_rec_type tm Wasm.Type.(RecT [SubT (Final, [], DefFuncT (FuncT ([NumT I32T; NumT I32T], [])))]) in
+      (Int32.succ fidx, tidx, { impinfo with impinfo_puts = Some fidx }), Wasm.FuncImport fid
   | "wizeng", "putc" ->
       let fid = TMap.recid_of_rec_type tm Wasm.Type.(RecT [SubT (Final, [], DefFuncT (FuncT ([NumT I32T], [])))]) in
       (Int32.succ fidx, tidx, { impinfo with impinfo_putc = Some fidx }), Wasm.FuncImport fid
@@ -927,7 +964,7 @@ let compile (prog : Ir.program) (env : string Env.Int.t) : Wasm.module_ =
     let cg = convert_global tm (0, Type m.mod_main, "_init_result") in
     cg in
   let (_, _, impinfo), imports = List.fold_left_map (convert_import tm) (0l, 0l, impinfo_empty) m.mod_imports in
-  let init_code, extra_funs, nfuns =
+  let init_code, extra_locals, extra_funs, nfuns =
     let mainid = m.mod_nfuns in
     let open Wasm in
     match m.mod_main, impinfo with
@@ -941,7 +978,7 @@ let compile (prog : Ir.program) (env : string Env.Int.t) : Wasm.module_ =
           Call putc; Const Value.(I32 (I32.of_int_s (Char.code ')')));
           Call putc; Const Value.(I32 (I32.of_int_s (Char.code '(')));
           GlobalSet m.mod_nglobals;
-        ], [], Int32.succ mainid
+        ], [], [], Int32.succ mainid
     | TInt, { impinfo_putc = Some putc; _ } ->
         let auxfuntid = TMap.recid_of_rec_type tm Type.(RecT [SubT (Final, [], DefFuncT (FuncT ([NumT I64T], [])))]) in
         let auxfunid = Int32.succ mainid in
@@ -972,7 +1009,7 @@ let compile (prog : Ir.program) (env : string Env.Int.t) : Wasm.module_ =
           Const (I64 (I64.of_bits 0L));
           GlobalGet m.mod_nglobals;
           GlobalSet m.mod_nglobals;
-        ], [
+        ], [], [
           { fn_name = None; fn_type = auxfuntid; fn_locals = []; fn_code = Instruction.[
             LocalGet 0l;
             Testop (I64 IntOp.Eqz);
@@ -1020,12 +1057,46 @@ let compile (prog : Ir.program) (env : string Env.Int.t) : Wasm.module_ =
           ]);
           GlobalGet m.mod_nglobals;
           GlobalSet m.mod_nglobals;
-        ], [], Int32.succ mainid
+        ], [], [], Int32.succ mainid
+    | TString, { impinfo_putc = Some putc; _ } ->
+        let locid = Int32.of_int (List.length m.mod_locals) in
+        let open Value in Instruction.[
+          ReturnCall putc; Const (I32 (I32.of_int_s (Char.code '\n')));
+          Call putc; Const (I32 (I32.of_int_s (Char.code 'g')));
+          Call putc; Const (I32 (I32.of_int_s (Char.code 'n')));
+          Call putc; Const (I32 (I32.of_int_s (Char.code 'i')));
+          Call putc; Const (I32 (I32.of_int_s (Char.code 'r')));
+          Call putc; Const (I32 (I32.of_int_s (Char.code 't')));
+          Call putc; Const (I32 (I32.of_int_s (Char.code 'S')));
+          Call putc; Const (I32 (I32.of_int_s (Char.code ' ')));
+          Call putc; Const (I32 (I32.of_int_s (Char.code ':')));
+          Call putc; Const (I32 (I32.of_int_s (Char.code ' ')));
+          Call putc; Const (I32 (I32.of_int_s (Char.code '"')));
+          Block (Type.(ValBlockType None), [ Loop (Type.(ValBlockType None), [
+            LocalGet locid;
+            GlobalGet m.mod_nglobals; ArrayLen;
+            Relop Wasm.Value.(I32 IntOp.GeU);
+            BrIf 1l;
+            GlobalGet m.mod_nglobals;
+            LocalGet locid;
+            ArrayGet (TMap.string_tid, Some Pack.ZX); Call putc;
+            LocalGet locid; Const (I32 (I32.of_bits 1l)); Binop Wasm.Value.(I32 IntOp.Add); LocalSet locid;
+            Br 0l;
+          ])]);
+          Call putc; Const (I32 (I32.of_int_s (Char.code '"')));
+          GlobalSet m.mod_nglobals;
+        ], [Type TBool (* TBool = i32 *)], [], Int32.succ mainid
     | _ -> Instruction.[
           GlobalSet m.mod_nglobals;
-        ], [], Int32.succ mainid in
+        ], [], [], Int32.succ mainid in
   let glob = NewMetadata.empty_global nfuns in
-  let _, init = convert_fun_aux tm glob TMap.init_func_type m.mod_locals m.mod_block (Some init_code) None in
+  let _, init =
+    convert_fun_aux tm glob
+      TMap.init_func_type
+      (if extra_locals = [] then m.mod_locals else m.mod_locals @ extra_locals)
+      m.mod_block
+      (Some init_code)
+      None in
   let funs = convert_funs tm glob m.mod_funs (fun () -> init :: extra_funs @ NewMetadata.wasm_of_funs glob) in
   let frgbls = convert_fun_refs tm m.mod_needs_export (NewMetadata.wasm_of_exports glob) in
   let globals = convert_globals tm m.mod_global_vars (init_res :: frgbls) in

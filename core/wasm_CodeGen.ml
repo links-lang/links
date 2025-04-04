@@ -28,8 +28,8 @@ let generate_mut buf m = match m with
   | Var -> Buffer.add_uint8 buf 0x01
 
 let generate_pack_size buf s = match s with
-  | Pack.Pack8 -> Buffer.add_uint8 buf 0x00
-  | Pack.Pack16 -> Buffer.add_uint8 buf 0x01
+  | Pack.Pack8 -> Buffer.add_uint8 buf 0x78
+  | Pack.Pack16 -> Buffer.add_uint8 buf 0x79
   | Pack.Pack32 | Pack.Pack64 -> raise (internal_error "invalid pack size")
 
 let generate_num_type buf t = match t with
@@ -255,6 +255,8 @@ let rec generate_instr buf i = match i with
         Buffer.add_uint8 buf 0xFB; generate_u 32 buf 4L; generate_u 32 buf (Int64.of_int32 i); generate_u 32 buf (Int64.of_int32 j)
   | StructSet (i, j) ->
         Buffer.add_uint8 buf 0xFB; generate_u 32 buf 5L; generate_u 32 buf (Int64.of_int32 i); generate_u 32 buf (Int64.of_int32 j)
+  | ArrayNew (i, Explicit) -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 6L; generate_u 32 buf (Int64.of_int32 i)
+  | ArrayNew (i, Implicit) -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 7L; generate_u 32 buf (Int64.of_int32 i)
   | ArrayNewFixed (i, n) -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 8L; generate_u 32 buf (Int64.of_int32 i); generate_u 32 buf (Int64.of_int32 n)
   | ArrayGet (i, None) ->
         Buffer.add_uint8 buf 0xFB; generate_u 32 buf 11L; generate_u 32 buf (Int64.of_int32 i)
@@ -262,6 +264,8 @@ let rec generate_instr buf i = match i with
         Buffer.add_uint8 buf 0xFB; generate_u 32 buf 12L; generate_u 32 buf (Int64.of_int32 i)
   | ArrayGet (i, Some Pack.ZX) ->
         Buffer.add_uint8 buf 0xFB; generate_u 32 buf 13L; generate_u 32 buf (Int64.of_int32 i)
+  | ArrayLen -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 15L
+  | ArrayCopy (d, s) -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 17L; generate_u 32 buf (Int64.of_int32 d); generate_u 32 buf (Int64.of_int32 s)
   | RefI31 -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 28L
   | I31Get Pack.SX -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 29L
   | I31Get Pack.ZX -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 30L

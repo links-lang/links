@@ -14,6 +14,7 @@ type 'a typ =
   | TInt : int typ
   | TBool : bool typ
   | TFloat : float typ
+  | TString : string typ
   | TClosed : 'a typ_list * 'b typ -> ('c * 'a -> 'b) typ
   | TAbsClosArg : abs_closure_content typ
   | TClosArg : 'a typ_list -> 'a closure_content typ
@@ -49,6 +50,7 @@ type ('a, 'b, 'r) binop =
   | BONe : 'a typ -> ('a, 'a, bool) binop
   | BOLe : (int, int, bool) binop | BOLt : (int, int, bool) binop
   | BOGe : (int, int, bool) binop | BOGt : (int, int, bool) binop
+  | BOConcat : (string, string, string) binop
 
 type local_storage = StorVariable | StorClosure
 type locality = Global | Local of local_storage
@@ -85,6 +87,7 @@ and 'a expr =
   | EConstInt : int64 -> int expr
   | EConstBool : bool -> bool expr
   | EConstFloat : float -> float expr
+  | EConstString : string -> string expr
   | EUnop : ('a, 'b) unop * 'a expr -> 'b expr
   | EBinop : ('a, 'b, 'c) binop * 'a expr * 'b expr -> 'c expr
   | EVariable : locality * 'a varid -> 'a expr

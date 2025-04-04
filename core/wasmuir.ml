@@ -14,6 +14,7 @@ type 'a typ =
   | TInt : int typ
   | TBool : bool typ
   | TFloat : float typ
+  | TString : string typ
   | TClosed : 'a typ_list * 'b typ -> ('c * 'a -> 'b) typ
   | TAbsClosArg : abs_closure_content typ
   | TClosArg : 'a typ_list -> 'a closure_content typ
@@ -36,6 +37,7 @@ let [@tail_mod_cons] rec convert_typ : type a. a Wasmir.typ -> a typ = fun (t : 
   | Wasmir.TInt -> TInt
   | Wasmir.TBool -> TBool
   | Wasmir.TFloat -> TFloat
+  | Wasmir.TString -> TString
   | Wasmir.TClosed (_, targs, tret) -> TClosed ((convert_typ_list[@tailcall]) targs, convert_typ tret)
   | Wasmir.TAbsClosArg -> TAbsClosArg
   | Wasmir.TClosArg ts -> TClosArg (convert_typ_list ts)
@@ -63,6 +65,9 @@ let rec compare_typ (Type t1 : anytyp) (Type t2 : anytyp) = match t1, t2 with
   | TFloat, TFloat -> 0
   | TFloat, _ -> ~-1
   | _, TFloat -> 1
+  | TString, TString -> 0
+  | TString, _ -> ~-1
+  | _, TString -> 1
   | TClosed (args1, ret1), TClosed (args2, ret2) ->
       let c = compare_typ (Type ret1) (Type ret2) in if c <> 0 then c else
       compare_typ_list (TypeList args1) (TypeList args2)
@@ -124,6 +129,7 @@ type ('a, 'b, 'r) binop =
   | BONe : 'a typ -> ('a, 'a, bool) binop
   | BOLe : (int, int, bool) binop | BOLt : (int, int, bool) binop
   | BOGe : (int, int, bool) binop | BOGt : (int, int, bool) binop
+  | BOConcat : (string, string, string) binop
 
 type local_storage = Wasmir.local_storage =
   | StorVariable
@@ -230,6 +236,7 @@ and 'a expr =
   | EConstInt : int64 -> int expr
   | EConstBool : bool -> bool expr
   | EConstFloat : float -> float expr
+  | EConstString : string -> string expr
   | EUnop : ('a, 'b) unop * 'a expr -> 'b expr
   | EBinop : ('a, 'b, 'c) binop * 'a expr * 'b expr -> 'c expr
   | EVariable : locality * 'a varid -> 'a expr
@@ -274,6 +281,7 @@ and [@tail_mod_cons] convert_expr : type a. _ -> a Wasmir.expr -> a expr =
   | Wasmir.EConstInt c -> EConstInt c
   | Wasmir.EConstBool c -> EConstBool c
   | Wasmir.EConstFloat c -> EConstFloat c
+  | Wasmir.EConstString c -> EConstString c
   | Wasmir.EUnop (op, arg) -> begin match op with
       | Wasmir.UONegI -> EUnop (UONegI, convert_expr tmap arg)
       | Wasmir.UONegF -> EUnop (UONegF, convert_expr tmap arg)
@@ -294,6 +302,7 @@ and [@tail_mod_cons] convert_expr : type a. _ -> a Wasmir.expr -> a expr =
       | Wasmir.BOLt -> EBinop (BOLt, (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
       | Wasmir.BOGe -> EBinop (BOGe, (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
       | Wasmir.BOGt -> EBinop (BOGt, (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
+      | Wasmir.BOConcat -> EBinop (BOConcat, (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
     end
   | Wasmir.EVariable (loc, v) -> EVariable (loc, convert_varid v)
   | Wasmir.ETuple (ts, es) -> ETuple (convert_named_typ_list ts, (convert_expr_list[@tailcall]) tmap es)

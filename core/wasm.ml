@@ -196,7 +196,7 @@ module Type = struct
     | BotT -> "bot"
   and string_of_storage_type = function
     | ValStorageT vt -> string_of_val_type vt
-    | PackStorageT ps -> "i" ^ string_of_int (Pack.packed_size ps)
+    | PackStorageT ps -> "i" ^ string_of_int (8 * Pack.packed_size ps)
   and string_of_field_type = function
     | FieldT (m, st) -> string_of_mut m (string_of_storage_type st)
   and string_of_struct_type = function
@@ -271,7 +271,7 @@ module Type = struct
     | BotT -> Atom "bot"
   and sexpr_of_storage_type = let open Sexpr in function
     | ValStorageT vt -> sexpr_of_val_type vt
-    | PackStorageT ps -> Atom ("i" ^ string_of_int (Pack.packed_size ps))
+    | PackStorageT ps -> Atom ("i" ^ string_of_int (8 * Pack.packed_size ps))
   and sexpr_of_field_type = function
     | FieldT (m, st) -> sexpr_of_mut m (sexpr_of_storage_type st)
   and sexpr_of_struct_type = let open Sexpr in function
@@ -773,8 +773,11 @@ module Instruction = struct
     | StructNew of int32 * initop
     | StructGet of int32 * int32 * Pack.extension option
     | StructSet of int32 * int32
+    | ArrayNew of int32 * initop
     | ArrayNewFixed of int32 * int32
     | ArrayGet of int32 * Pack.extension option
+    | ArrayLen
+    | ArrayCopy of int32 * int32
   
   let constop v = string_of_num_type (type_of_num v) ^ ".const"
   let vec_constop v = string_of_vec_type (type_of_vec v) ^ ".const i32x4"
@@ -830,10 +833,14 @@ module Instruction = struct
     | StructGet (i, j, Some Pack.SX) -> LongNode ("struct.get_s", [Atom (Int32.to_string i); Atom (Int32.to_string j)], [])
     | StructGet (i, j, Some Pack.ZX) -> LongNode ("struct.get_u", [Atom (Int32.to_string i); Atom (Int32.to_string j)], [])
     | StructSet (i, j) -> LongNode ("struct.new", [Atom (Int32.to_string i); Atom (Int32.to_string j)], [])
+    | ArrayNew (i, Explicit) -> LongNode ("array.new", [Atom (Int32.to_string i)], [])
+    | ArrayNew (i, Implicit) -> LongNode ("array.new_default", [Atom (Int32.to_string i)], [])
     | ArrayNewFixed (i, n) -> LongNode ("array.new_fixed", [Atom (Int32.to_string i); Atom (Int32.to_string n)], [])
     | ArrayGet (i, None) -> LongNode ("array.get", [Atom (Int32.to_string i)], [])
     | ArrayGet (i, Some Pack.SX) -> LongNode ("array.get_s", [Atom (Int32.to_string i)], [])
     | ArrayGet (i, Some Pack.ZX) -> LongNode ("array.get_u", [Atom (Int32.to_string i)], [])
+    | ArrayLen -> Node ("array.len", [])
+    | ArrayCopy (d, s) -> LongNode ("array.copy", [Atom (Int32.to_string d); Atom (Int32.to_string s)], [])
 end
 
 type import_desc =

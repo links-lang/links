@@ -34,6 +34,7 @@ type 'a typ =
   | TInt : int typ
   | TBool : bool typ
   | TFloat : float typ
+  | TString : string typ
   | TClosed : 'c generalization * 'a typ_list * 'b typ -> ('c * 'a -> 'b) typ
   | TAbsClosArg : abs_closure_content typ
   | TClosArg : 'a typ_list -> 'a closure_content typ (* TODO: merge this with TTuple? It still makes sense to keep them separate though *)
@@ -69,6 +70,9 @@ let rec compare_anytyp (Type t1) (Type t2) = match t1, t2 with
   | TFloat, TFloat -> 0
   | TFloat, _ -> ~-1
   | _, TFloat -> 1
+  | TString, TString -> 0
+  | TString, _ -> ~-1
+  | _, TString -> 1
   | TClosed (g1, args1, ret1), TClosed (g2, args2, ret2) ->
       let c = compare_generalization g1 g2 in if c <> 0 then c else
       let c = compare_anytyp (Type ret1) (Type ret2) in if c <> 0 then c else
@@ -141,6 +145,7 @@ type ('a, 'b, 'r) binop =
   | BOLt : (int, int, bool) binop
   | BOGe : (int, int, bool) binop
   | BOGt : (int, int, bool) binop
+  | BOConcat : (string, string, string) binop
 type anybinop = Binop : ('a, 'b, 'c) binop -> anybinop
 
 type local_storage = StorVariable | StorClosure
@@ -204,6 +209,7 @@ and 'a expr =
   | EConstInt : int64 -> int expr
   | EConstBool : bool -> bool expr
   | EConstFloat : float -> float expr
+  | EConstString : string -> string expr
   | EUnop : ('a, 'b) unop * 'a expr -> 'b expr
   | EBinop : ('a, 'b, 'c) binop * 'a expr * 'b expr -> 'c expr
   | EVariable : locality * 'a varid -> 'a expr
@@ -265,6 +271,7 @@ let typ_of_expr (type a) (e : a expr) : a typ = match e with
   | EConstInt _ -> TInt
   | EConstBool _ -> TBool
   | EConstFloat _ -> TFloat
+  | EConstString _ -> TString
   | EUnop (UONegI, _) -> TInt
   | EUnop (UONegF, _) -> TFloat
   | EBinop (BOAddI, _, _) -> TInt | EBinop (BOAddF, _, _) -> TFloat
@@ -278,6 +285,7 @@ let typ_of_expr (type a) (e : a expr) : a typ = match e with
   | EBinop (BOLt, _, _) -> TBool
   | EBinop (BOGe, _, _) -> TBool
   | EBinop (BOGt, _, _) -> TBool
+  | EBinop (BOConcat, _, _) -> TString
   | EVariable (_, (t, _)) -> t
   | EVariant _ -> TVariant
   | ECase (_, t, _, _) -> t
@@ -357,6 +365,8 @@ and assert_eq_typ : 'a 'b. 'a typ -> 'b typ -> string -> ('a, 'b) Type.eq =
   | TBool, _ | _, TBool -> raise (internal_error onfail)
   | TFloat, TFloat -> Type.Equal
   | TFloat, _ | _, TFloat -> raise (internal_error onfail)
+  | TString, TString -> Type.Equal
+  | TString, _ | _, TString -> raise (internal_error onfail)
   | TClosed (g1, tl1, r1), TClosed (g2, tl2, r2) ->
       let Type.Equal, Type.Equal, Type.Equal = assert_eq_generalization g1 g2 onfail, assert_eq_typ_list tl1 tl2 onfail, assert_eq_typ r1 r2 onfail in Type.Equal
   | TClosed _, _ | _, TClosed _ -> raise (internal_error onfail)
@@ -418,6 +428,7 @@ end = struct
     "*", Binop BOMulI; "*.", Binop BOMulF; "/", Binop BODivI; "/.", Binop BODivF;
     "%", Binop BORemI; "==", Binop BOEq; "<>", Binop BONe;
     "<=", Binop BOLe; "<", Binop BOLt; ">=", Binop BOGe; ">", Binop BOGt;
+    "^^", Binop BOConcat;
   ]
   
   let get_unop op _tyargs = StringMap.find_opt op unops
@@ -557,6 +568,7 @@ let rec _convert_type (normal : anytyp -> 'a)
   | Types.Primitive CommonTypes.Primitive.Bool -> normal (Type TBool)
   | Types.Primitive CommonTypes.Primitive.Int -> normal (Type TInt)
   | Types.Primitive CommonTypes.Primitive.Float -> normal (Type TFloat)
+  | Types.Primitive CommonTypes.Primitive.String -> normal (Type TString)
   | Types.Primitive _ -> failwith "TODO _convert_type Primitive"
   | Types.Function (args, eff, ret) -> func [] args eff ret
   | Types.Lolli (args, eff, ret) -> func [] args eff ret (* Assume Lolli and Function are the same thing *)
@@ -632,6 +644,7 @@ let rec specialize_typ : type a. _ -> a typ -> a specialize = fun tmap t -> matc
   | TInt -> Spec (TInt, BNone (t, t))
   | TBool -> Spec (TBool, BNone (t, t))
   | TFloat -> Spec (TFloat, BNone (t, t))
+  | TString -> Spec (TString, BNone (t, t))
   | TClosed (g, targs, tret) ->
       let SpecL (targs, bargs) = specialize_typ_list tmap targs in
       let Spec (tret, bret) = specialize_typ tmap tret in
@@ -1121,7 +1134,7 @@ end = struct
     let tmap = [TypeList TLnil, 0] in
     let ge_nfuns = if is_binary then 2l else 0l in
     let ge_ntags = if is_binary then 0 else 0 in {
-      ge_imports = if is_binary then ["wizeng", "puti"; "wizeng", "putc"] else [];
+      ge_imports = if is_binary then ["wizeng", "puts"; "wizeng", "putc"] else [];
       ge_map = m;
       ge_nfuns;
       ge_funs = [];
@@ -1241,6 +1254,7 @@ end = struct
           | TInt -> TInt
           | TBool -> TBool
           | TFloat -> TFloat
+          | TString -> TString
           | TClosed (g, targs, tret) -> TClosed (g, inner_list map targs, inner map tret)
           | TAbsClosArg -> TAbsClosArg
           | TClosArg ts -> TClosArg (inner_list map ts)
@@ -1383,7 +1397,7 @@ let of_constant (c : CommonTypes.Constant.t) : anyexpr = let open CommonTypes.Co
   | Float f -> Expr (TFloat, EConstFloat f)
   | Int i -> Expr (TInt, EConstInt (Int64.of_int i))
   | Bool b -> Expr (TBool, EConstBool b)
-  | String _ -> failwith "TODO: of_constant String"
+  | String s -> Expr (TString, EConstString s)
   | Char _ -> failwith "TODO: of_constant Char"
   | DateTime _ -> failwith "TODO: of_constant DateTime"
 
@@ -1576,6 +1590,10 @@ let rec of_value (ge : genv) (le: 'args lenv) (v : value) : genv * 'args lenv * 
                 let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 TInt in
                 let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 TInt in
                 ge, le, Expr (TBool, EBinop (BOGt, arg1, arg2))
+            | Some (Binop BOConcat) ->
+                let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 TString in
+                let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 TString in
+                ge, le, Expr (TString, EBinop (BOConcat, arg1, arg2))
             end
           | _ -> raise (internal_error ("Function '" ^ name ^ "' is not a (supported) builtin n-ary operation"))
         end
