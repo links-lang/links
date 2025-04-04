@@ -212,7 +212,7 @@ and 'a expr =
   | EVariant : tagid * 'a typ * 'a expr -> variant expr (* TODO: optimize this in the case of a TTuple? *)
   | ECase : variant expr * 'a typ * (tagid * anytyp * mvarid * 'a block) list * (mvarid * 'a block) option -> 'a expr
   | EClose : ('a, 'b, 'c, 'ga, 'gc) funcid * ('d, 'c) box_list * 'd expr_list -> ('ga * 'a -> 'b) expr
-  | EUnbox : ('ga * 'a -> 'b) expr * ('gc, 'ga) specialization * ('c, 'a) box_list * ('d, 'b) box -> ('gc * 'c -> 'd) expr
+  | ESpecialize : ('ga * 'a -> 'b) expr * ('gc, 'ga) specialization * ('c, 'a) box_list * ('d, 'b) box -> ('gc * 'c -> 'd) expr
   | ECallRawHandler : mfunid * 'a typ * 'a continuation expr * 'b typ * 'b expr * abs_closure_content expr * 'd typ -> 'd expr
       (* FIXME: add information in the continuation that it takes a 'b *)
   | ECallClosed : (unit * 'a -> 'b) expr * 'a expr_list * 'b typ -> 'b expr
@@ -284,7 +284,7 @@ let typ_of_expr (type a) (e : a expr) : a typ = match e with
   | ETuple (ts, _) -> TTuple ts
   | EExtract (_, (_, _, t, _)) -> t
   | EClose ((g, _, args, ret, _, _), _, _) -> TClosed (g, args, ret)
-  | EUnbox (_, s, bargs, bret) -> TClosed (src_of_specialization s, src_of_box_list bargs, src_of_box bret)
+  | ESpecialize (_, s, bargs, bret) -> TClosed (src_of_specialization s, src_of_box_list bargs, src_of_box bret)
   | ECallRawHandler (_, _, _, _, _, _, t) -> t
   | ECallClosed (_, _, t) -> t
   | ECond (t, _, _, _) -> t
@@ -656,9 +656,10 @@ let rec specialize_typ : type a. _ -> a typ -> a specialize = fun tmap t -> matc
       | None -> Spec (TTuple ts, BTuple bs)
     end
   | TVariant -> Spec (TVariant, BNone (t, t))
-  | TVar i -> begin match TVarMap.find i tmap with
-      | Type (TVar _ as src) -> Spec (src, BNone (src, t))
-      | Type src -> Spec (src, BBox (src, i))
+  | TVar i -> begin match TVarMap.find_opt i tmap with
+      | Some (Type (TVar _ as src)) -> Spec (src, BNone (src, t))
+      | Some (Type src) -> Spec (src, BBox (src, i))
+      | None -> Spec (t, BNone (t, t))
     end
 and specialize_typ_list : type a. _ -> a typ_list -> a specialize_list = fun tmap ts -> match ts with
   | TLnil -> SpecL (TLnil, BLnil)
@@ -1496,7 +1497,7 @@ let rec of_value (ge : genv) (le: 'args lenv) (v : value) : genv * 'args lenv * 
       | TClosed (ga, targs, tret) ->
           let SpecFrom (ga, s), SpecL (targs, bargs), Spec (tret, bret) = specialize_some ga ts targs tret in
           let t = TClosed (ga, targs, tret) in
-          let closed_applied = EUnbox (e, s, bargs, bret) in
+          let closed_applied = ESpecialize (e, s, bargs, bret) in
           ge, le, Expr (t, closed_applied)
       | _ -> raise (internal_error "Cannot apply type to non-functional (non-TClosed) expression")
     end
@@ -1602,7 +1603,7 @@ let rec of_value (ge : genv) (le: 'args lenv) (v : value) : genv * 'args lenv * 
             convert_values ge le cls tc
         | Extend (_, Some _) -> failwith "TODO: of_value Closure Extend Some"
         | _ -> failwith "TODO: of_value Closure non-Extend" in
-      let e = EUnbox (EClose (fid, bc, cls), Snil ga, bargs, bret) in
+      let e = ESpecialize (EClose (fid, bc, cls), Snil ga, bargs, bret) in
       let ge = GEnv.do_export_function ge fdata in
       ge, le, Expr (TClosed (ga, targs, tret), e)
   | Coerce (v, t) ->
@@ -1662,12 +1663,12 @@ let rec of_tail_computation : type args. _ -> args lenv -> _ -> genv * args lenv
               let s, SpecL (targs, bargs), Spec (tret, bret) = specialize_to_apply ga ts targs tret in
               let ge, le, args = convert_values ge le args targs in
               let ge = GEnv.do_export_function ge fdata in
-              let closed_applied = ECallClosed (EUnbox (EClose (fid, BLnil, ELnil), s, bargs, bret), args, tret) in
+              let closed_applied = ECallClosed (ESpecialize (EClose (fid, BLnil, ELnil), s, bargs, bret), args, tret) in
               ge, le, Expr (tret, closed_applied)
           | le, Closure (loc, ((TClosed (ga, targs, tret), _) as vid)) ->
               let s, SpecL (targs, bargs), Spec (tret, bret) = specialize_to_apply ga ts targs tret in
               let ge, le, args = convert_values ge le args targs in
-              let closed_applied = ECallClosed (EUnbox (EVariable (loc, vid), s, bargs, bret), args, tret) in
+              let closed_applied = ECallClosed (ESpecialize (EVariable (loc, vid), s, bargs, bret), args, tret) in
               ge, le, Expr (tret, closed_applied)
           | le, Contin (loc, vid, (TLcons (_, TLcons (targ, _)), tret, _, _ as hdlfid), hdlcloc, hdlcid) ->
               if ts = [] then begin
@@ -1704,14 +1705,14 @@ let rec of_tail_computation : type args. _ -> args lenv -> _ -> genv * args lenv
           let ge = GEnv.do_export_function ge fdata in
           let s, SpecL (targs, bargs2), Spec (tret, bret2) = specialize_to_apply ga ts targs tret in
           let ge, le, args = convert_values ge le args targs in
-          let closed_applied = ECallClosed (EUnbox (EClose (fid, bc, cls), s, compose_box_list bargs2 bargs, compose_box bret2 bret), args, tret) in
+          let closed_applied = ECallClosed (ESpecialize (EClose (fid, bc, cls), s, compose_box_list bargs2 bargs, compose_box bret2 bret), args, tret) in
           ge, le, Expr (tret, closed_applied)
       | ts, Project (n, v) -> begin match v with
           | Variable v -> begin match LEnv.find_closure le v n with
               | Some (le, lst, VarID (TClosed (ga, targs, tret) as t, i)) ->
                   let s, SpecL (targs, bargs), Spec (tret, bret) = specialize_to_apply ga ts targs tret in
                   let ge, le, args = convert_values ge le args targs in
-                  let closed_applied = ECallClosed (EUnbox (EVariable (Local lst, (t, i)), s, bargs, bret), args, tret) in
+                  let closed_applied = ECallClosed (ESpecialize (EVariable (Local lst, (t, i)), s, bargs, bret), args, tret) in
                   ge, le, Expr (tret, closed_applied)
               | Some (_, _, VarID (_, _)) -> raise (internal_error "Unexpected type, expected a function")
               | None -> failwith "TODO of_tail_computation Apply Project with unregistered projection"

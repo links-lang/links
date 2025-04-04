@@ -155,7 +155,7 @@ let [@tail_mod_cons] rec convert_varid_list : type a. a Wasmir.varid_list -> a v
 
 type (_, _) box =
   | BNone : ('a, 'a) box
-  | BClosed : ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b, 'g * 'c -> 'd) box
+  | BClosed : ('g * 'a -> 'b) typ * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b, 'g * 'c -> 'd) box
   | BCont : ('a, 'b) box -> ('a continuation, 'b continuation) box
   | BTuple : ('a, 'b) box_list -> ('a list, 'b list) box
   | BBox : 'a typ -> ('a, unit) box
@@ -169,7 +169,10 @@ type (_, _) conv_box_list =
 
 let [@tail_mod_cons] rec convert_box : type a b. (a, b) Wasmir.box -> (a, b) box = fun (b : (a, b) Wasmir.box) : (a, b) box -> match b with
   | Wasmir.BNone (_, _) -> BNone
-  | Wasmir.BClosed (_, bargs, bret) -> BClosed (convert_box_list bargs, convert_box bret)
+  | Wasmir.BClosed (_, bargs, bret) ->
+      let targs = Wasmir.src_of_box_list bargs in
+      let tret = Wasmir.src_of_box bret in
+      BClosed (TClosed (convert_typ_list targs, convert_typ tret), convert_box_list bargs, (convert_box[@tailcall]) bret)
   | Wasmir.BCont bret -> BCont (convert_box bret)
   | Wasmir.BTuple bs -> BTuple (convert_box_named_list bs)
   | Wasmir.BBox (src, _) -> BBox (convert_typ src)
@@ -198,6 +201,24 @@ and convert_box_named_list : type a b. (a, b) Wasmir.box_named_list -> (a, b) bo
   | CBLnone _ -> BLnone
   | CBLcons (hd, tl) -> BLcons (hd, tl)
 
+let [@tail_mod_cons] rec dst_of_box : type a b. a typ -> (a, b) box -> b typ =
+  fun src box -> match src, box with
+  | _, BNone -> src
+  | TClosed (targs, tret), BClosed (_, bargs, bret) -> TClosed ((dst_of_box_list[@tailcall]) targs bargs, dst_of_box tret bret)
+  | TCont tret, BCont bret -> TCont (dst_of_box tret bret)
+  | TTuple ts, BTuple bs -> TTuple (dst_of_box_named_list ts bs)
+  | _, BBox _ -> TVar
+and [@tail_mod_cons] dst_of_box_list : type a b. a typ_list -> (a, b) box_list -> b typ_list =
+  fun (t : a typ_list) (bs : (a, b) box_list) : b typ_list -> match t, bs with
+  | _, BLnone -> t
+  | _, BLnil -> t
+  | TLcons (thd, ttl), BLcons (hd, tl) -> TLcons (dst_of_box thd hd, (dst_of_box_list[@tailcall]) ttl tl)
+and [@tail_mod_cons] dst_of_box_named_list : type a b. a named_typ_list -> (a, b) box_list -> b named_typ_list =
+  fun (t : a named_typ_list) (bs : (a, b) box_list) : b named_typ_list -> match t, bs with
+  | _, BLnone -> t
+  | _, BLnil -> t
+  | NTLcons (n, thd, ttl), BLcons (hd, tl) -> NTLcons (n, dst_of_box thd hd, (dst_of_box_named_list[@tailcall]) ttl tl)
+
 type (_, _) finisher =
   | FId : 'a typ -> ('a, 'a) finisher
   | FMap : 'a varid * 'b typ * 'b block -> ('a, 'b) finisher
@@ -217,7 +238,7 @@ and 'a expr =
   | EVariant : tagid * 'a typ * 'a expr -> variant expr
   | ECase : variant expr * 'a typ * (tagid * anytyp * mvarid * 'a block) list * (mvarid * 'a block) option -> 'a expr
   | EClose : ('a, 'b, 'c) funcid * ('d, 'c) box_list * 'd expr_list -> ('g * 'a -> 'b) expr
-  | EUnbox : (_ * 'c -> 'd) expr * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b) expr
+  | ESpecialize : (_ * 'c -> 'd) expr * ('g * 'a -> 'b) typ * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b) expr
   | ECallRawHandler : mfunid * 'c continuation typ * 'c continuation expr * 'a typ * 'a expr * abs_closure_content expr * 'b typ -> 'b expr
   | ECallClosed : ('g * 'a -> 'b) expr * 'a expr_list -> 'b expr
   | ECond : bool expr * 'a typ * 'a block * 'a block -> 'a expr
@@ -287,7 +308,7 @@ and [@tail_mod_cons] convert_expr : type a. _ -> a Wasmir.expr -> a expr =
         in Option.map convert o
       in ECase ((convert_expr[@tailcall]) tmap e, convert_typ t, convert_l l, convert_d d)
   | Wasmir.EClose (f, b, cl) -> EClose (convert_funcid f, convert_box_list b, (convert_expr_list[@tailcall]) tmap cl)
-  | Wasmir.(EUnbox (EUnbox (e, s1, bargs1, bret1), s2, bargs2, bret2)) ->
+  | Wasmir.(ESpecialize (ESpecialize (e, s1, bargs1, bret1), s2, bargs2, bret2)) ->
       let open Wasmir in
       let s =
         let [@tail_mod_cons] rec inner : type a b c. (b, c) specialization -> (a, b) specialization -> (a, c) specialization
@@ -296,8 +317,13 @@ and [@tail_mod_cons] convert_expr : type a. _ -> a Wasmir.expr -> a expr =
           | Scons (t1, v1, s1) -> Scons (t1, v1, inner s1 s2)
         in inner s1 s2 in
       let bargs, bret = compose_box_list bargs2 bargs1, compose_box bret2 bret1 in
-      convert_expr tmap (EUnbox (e, s, bargs, bret))
-  | Wasmir.EUnbox (e, _, bargs, bret) -> EUnbox ((convert_expr[@tailcall]) tmap e, convert_box_list bargs, convert_box bret)
+      convert_expr tmap (ESpecialize (e, s, bargs, bret))
+  | Wasmir.ESpecialize (e, _, bargs, bret) ->
+      ESpecialize (
+        (convert_expr[@tailcall]) tmap e,
+        TClosed (convert_typ_list (Wasmir.src_of_box_list bargs), convert_typ (Wasmir.src_of_box bret)),
+        convert_box_list bargs,
+        convert_box bret)
   | Wasmir.ECallRawHandler (f, tc, c, ta, a, cl, tr) ->
       ECallRawHandler (f, TCont (convert_typ tc), convert_expr tmap c, convert_typ ta, (convert_expr[@tailcall]) tmap a, convert_expr tmap cl, convert_typ tr)
   | Wasmir.ECallClosed (f, e, _) -> ECallClosed (convert_expr tmap f, (convert_expr_list[@tailcall]) tmap e)

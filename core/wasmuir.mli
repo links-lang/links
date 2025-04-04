@@ -63,7 +63,7 @@ type 'a varid_list =
 
 type (_, _) box =
   | BNone : ('a, 'a) box
-  | BClosed : ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b, 'g * 'c -> 'd) box
+  | BClosed : ('g * 'a -> 'b) typ * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b, 'g * 'c -> 'd) box
   | BCont : ('a, 'b) box -> ('a continuation, 'b continuation) box
   | BTuple : ('a, 'b) box_list -> ('a list, 'b list) box
   | BBox : 'a typ -> ('a, unit) box
@@ -71,6 +71,8 @@ and (_, _) box_list =
   | BLnone : ('a, 'a) box_list
   | BLnil : (unit, unit) box_list
   | BLcons : ('a, 'c) box * ('b, 'd) box_list -> ('a * 'b, 'c * 'd) box_list
+
+val dst_of_box : 'a typ -> ('a, 'b) box -> 'b typ
 
 type (_, _) finisher =
   | FId : 'a typ -> ('a, 'a) finisher
@@ -91,7 +93,7 @@ and 'a expr =
   | EVariant : tagid * 'a typ * 'a expr -> variant expr
   | ECase : variant expr * 'a typ * (tagid * anytyp * mvarid * 'a block) list * (mvarid * 'a block) option -> 'a expr
   | EClose : ('a, 'b, 'c) funcid * ('d, 'c) box_list * 'd expr_list -> ('g * 'a -> 'b) expr
-  | EUnbox : (_ * 'c -> 'd) expr * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b) expr
+  | ESpecialize : (_ * 'c -> 'd) expr * ('g * 'a -> 'b) typ * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b) expr
   | ECallRawHandler : mfunid * 'c continuation typ * 'c continuation expr * 'a typ * 'a expr * abs_closure_content expr * 'b typ -> 'b expr
   | ECallClosed : ('g * 'a -> 'b) expr * 'a expr_list -> 'b expr
   | ECond : bool expr * 'a typ * 'a block * 'a block -> 'a expr
