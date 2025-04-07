@@ -756,6 +756,8 @@ module Instruction = struct
     | If of block_type * t list * t list
     | Br of int32
     | BrIf of int32
+    | BrOnNull of int32
+    | BrOnNonNull of int32
     | BrTable of int32 list * int32
     | Return
     | Call of int32
@@ -766,6 +768,8 @@ module Instruction = struct
     | RefI31
     | RefFunc of int32
     | RefCast of ref_type
+    | RefIsNull
+    | RefAsNonNull
     | I31Get of Pack.extension
     | ContNew of int32
     | Suspend of int32
@@ -812,6 +816,8 @@ module Instruction = struct
     | If (b, t, f) -> LongNode ("if", sexpr_of_block_type b, [Node ("then", List.map to_sexpr t); Node ("else", List.map to_sexpr f)])
     | Br i -> LongNode ("br", [Atom (Int32.to_string i)], [])
     | BrIf i -> LongNode ("br_if", [Atom (Int32.to_string i)], [])
+    | BrOnNull i -> LongNode ("br_on_null", [Atom (Int32.to_string i)], [])
+    | BrOnNonNull i -> LongNode ("br_on_non_null", [Atom (Int32.to_string i)], [])
     | BrTable (is, id) -> LongNode ("br_table", List.map (fun i -> Atom (Int32.to_string i)) is @ [Atom (Int32.to_string id)], [])
     | Return -> Node ("return", [])
     | Call i -> LongNode ("call", [Atom (Int32.to_string i)], [])
@@ -822,6 +828,8 @@ module Instruction = struct
     | RefI31 -> LongNode ("ref.i31", [], [])
     | RefFunc ti -> LongNode ("ref.func", [Atom (Int32.to_string ti)], [])
     | RefCast rt -> LongNode ("ref.cast", [sexpr_of_ref_type rt], [])
+    | RefIsNull -> Node ("ref.is_null", [])
+    | RefAsNonNull -> Node ("ref.as_non_null", [])
     | I31Get Pack.SX -> LongNode ("i31.get_s", [], [])
     | I31Get Pack.ZX -> LongNode ("i31.get_u", [], [])
     | ContNew i -> LongNode ("cont.new", [Atom (Int32.to_string i)], [])

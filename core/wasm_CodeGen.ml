@@ -239,7 +239,11 @@ let rec generate_instr buf i = match i with
   | Cvtop (Value.F32 _) -> .
   | Cvtop (Value.F64 _) -> .
   | RefNull ht -> Buffer.add_uint8 buf 0xD0; generate_heap_type buf ht
+  | RefIsNull -> Buffer.add_uint8 buf 0xD1
   | RefFunc ti -> Buffer.add_uint8 buf 0xD2; generate_u 32 buf (Int64.of_int32 ti)
+  | RefAsNonNull -> Buffer.add_uint8 buf 0xD4
+  | BrOnNull i -> Buffer.add_uint8 buf 0xD5; generate_u 32 buf (Int64.of_int32 i)
+  | BrOnNonNull i -> Buffer.add_uint8 buf 0xD6; generate_u 32 buf (Int64.of_int32 i)
   | ContNew ti -> Buffer.add_uint8 buf 0xE0; generate_u 32 buf (Int64.of_int32 ti)
   | Suspend i -> Buffer.add_uint8 buf 0xE2; generate_u 32 buf (Int64.of_int32 i)
   | Resume (i, hdls) -> Buffer.add_uint8 buf 0xE3; generate_u 32 buf (Int64.of_int32 i); generate_resumetable buf hdls

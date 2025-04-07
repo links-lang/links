@@ -237,6 +237,8 @@ module Instruction : sig
     | If of block_type * t list * t list
     | Br of int32
     | BrIf of int32
+    | BrOnNull of int32
+    | BrOnNonNull of int32
     | BrTable of int32 list * int32
     | Return
     | Call of int32
@@ -247,6 +249,8 @@ module Instruction : sig
     | RefI31
     | RefFunc of int32
     | RefCast of ref_type
+    | RefIsNull
+    | RefAsNonNull
     | I31Get of Pack.extension
     | ContNew of int32
     | Suspend of int32
