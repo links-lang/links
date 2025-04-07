@@ -144,12 +144,12 @@ type ('a, 'b, 'r) binop =
   | BODivI : (int,   int,   int)   binop
   | BODivF : (float, float, float) binop
   | BORemI : (int,   int,   int)   binop
-  | BOEq : ('a, 'a, bool) binop
-  | BONe : ('a, 'a, bool) binop
-  | BOLe : (int, int, bool) binop
-  | BOLt : (int, int, bool) binop
-  | BOGe : (int, int, bool) binop
-  | BOGt : (int, int, bool) binop
+  | BOEq : 'a typ -> ('a, 'a, bool) binop
+  | BONe : 'a typ -> ('a, 'a, bool) binop
+  | BOLe : 'a typ -> ('a, 'a, bool) binop
+  | BOLt : 'a typ -> ('a, 'a, bool) binop
+  | BOGe : 'a typ -> ('a, 'a, bool) binop
+  | BOGt : 'a typ -> ('a, 'a, bool) binop
   | BOConcat : (string, string, string) binop
   | BOCons : 'a typ -> ('a, 'a llist, 'a llist) binop
   | BOConcatList : 'a typ -> ('a llist, 'a llist, 'a llist) binop
@@ -289,12 +289,12 @@ let typ_of_expr (type a) (e : a expr) : a typ = match e with
   | EBinop (BOMulI, _, _) -> TInt | EBinop (BOMulF, _, _) -> TFloat
   | EBinop (BODivI, _, _) -> TInt | EBinop (BODivF, _, _) -> TFloat
   | EBinop (BORemI, _, _) -> TInt
-  | EBinop (BOEq, _, _) -> TBool
-  | EBinop (BONe, _, _) -> TBool
-  | EBinop (BOLe, _, _) -> TBool
-  | EBinop (BOLt, _, _) -> TBool
-  | EBinop (BOGe, _, _) -> TBool
-  | EBinop (BOGt, _, _) -> TBool
+  | EBinop (BOEq _, _, _) -> TBool
+  | EBinop (BONe _, _, _) -> TBool
+  | EBinop (BOLe _, _, _) -> TBool
+  | EBinop (BOLt _, _, _) -> TBool
+  | EBinop (BOGe _, _, _) -> TBool
+  | EBinop (BOGt _, _, _) -> TBool
   | EBinop (BOConcat, _, _) -> TString
   | EBinop (BOCons t, _, _) -> TList t
   | EBinop (BOConcatList t, _, _) -> TList t
@@ -423,14 +423,14 @@ let target_block (type a) (Block (t1, b) : anyblock) (t2 : a typ) : a block = le
 module Builtins : sig
   val ntags : tagid
   
-  val get_unop : string -> Ir.tyarg list -> anyunop option
-  val get_binop : string -> Ir.tyarg list -> anybinop option
+  val get_unop : string -> anytyp list -> anyunop option
+  val get_binop : string -> anytyp list -> anybinop option
   val gen_impure : (Types.typ -> anytyp) -> string -> Ir.tyarg list -> anyexpr_list -> anyexpr
   
   val get_var : string -> anyexpr option
   
   val apply_type :
-    Types.Abstype.t -> tyarg list -> (anytyp -> 'a) -> (tyvar list -> Types.typ -> Types.typ -> Types.typ -> 'a) ->
+    Types.Abstype.t -> anytyp list -> (anytyp -> 'a) -> (tyvar list -> Types.typ -> Types.typ -> Types.typ -> 'a) ->
     (Types.field_spec_map -> Types.meta_row_var -> bool -> 'a) -> 'a
 end = struct
   open Utility
@@ -452,8 +452,9 @@ end = struct
     StringMap.from_alist [
       "+", zero (Binop BOAddI); "+.", zero (Binop BOAddF); "-", zero (Binop BOSubI); "-.", zero (Binop BOSubF);
       "*", zero (Binop BOMulI); "*.", zero (Binop BOMulF); "/", zero (Binop BODivI); "/.", zero (Binop BODivF);
-      "%", zero (Binop BORemI); "==", zero (Binop BOEq); "<>", zero (Binop BONe);
-      "<=", zero (Binop BOLe); "<", zero (Binop BOLt); ">=", zero (Binop BOGe); ">", zero (Binop BOGt);
+      "%", zero (Binop BORemI); "==", one (fun (Type t) -> Binop (BOEq t)); "<>", one (fun (Type t) -> Binop (BONe t));
+      "<=", one (fun (Type t) -> Binop (BOLe t)); "<", one (fun (Type t) -> Binop (BOLt t));
+      ">=", one (fun (Type t) -> Binop (BOGe t)); ">", one (fun (Type t) -> Binop (BOGt t));
       "^^", zero (Binop BOConcat);
       "Cons", one (fun (Type t) -> Binop (BOCons t));
       "Concat", one (fun (Type t) -> Binop (BOConcatList t));
@@ -1629,30 +1630,30 @@ let rec of_value (ge : genv) (le: 'args lenv) (v : value) : genv * 'args lenv * 
                 let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 TInt in
                 let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 TInt in
                 ge, le, Expr (TInt, EBinop (BORemI, arg1, arg2))
-            | Some (Binop BOEq) ->
-                let ge, le, Expr (t, arg1) = of_value ge le arg1 in
+            | Some (Binop (BOEq t)) ->
+                let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 t in
                 let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 t in
-                ge, le, Expr (TBool, EBinop (BOEq, arg1, arg2))
-            | Some (Binop BONe) ->
-                let ge, le, Expr (t, arg1) = of_value ge le arg1 in
+                ge, le, Expr (TBool, EBinop (BOEq t, arg1, arg2))
+            | Some (Binop (BONe t)) ->
+                let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 t in
                 let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 t in
-                ge, le, Expr (TBool, EBinop (BONe, arg1, arg2))
-            | Some (Binop BOLe) ->
-                let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 TInt in
-                let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 TInt in
-                ge, le, Expr (TBool, EBinop (BOLe, arg1, arg2))
-            | Some (Binop BOLt) ->
-                let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 TInt in
-                let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 TInt in
-                ge, le, Expr (TBool, EBinop (BOLt, arg1, arg2))
-            | Some (Binop BOGe) ->
-                let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 TInt in
-                let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 TInt in
-                ge, le, Expr (TBool, EBinop (BOGe, arg1, arg2))
-            | Some (Binop BOGt) ->
-                let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 TInt in
-                let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 TInt in
-                ge, le, Expr (TBool, EBinop (BOGt, arg1, arg2))
+                ge, le, Expr (TBool, EBinop (BONe t, arg1, arg2))
+            | Some (Binop (BOLe t)) ->
+                let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 t in
+                let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 t in
+                ge, le, Expr (TBool, EBinop (BOLe t, arg1, arg2))
+            | Some (Binop (BOLt t)) ->
+                let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 t in
+                let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 t in
+                ge, le, Expr (TBool, EBinop (BOLt t, arg1, arg2))
+            | Some (Binop (BOGe t)) ->
+                let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 t in
+                let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 t in
+                ge, le, Expr (TBool, EBinop (BOGe t, arg1, arg2))
+            | Some (Binop (BOGt t)) ->
+                let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 t in
+                let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 t in
+                ge, le, Expr (TBool, EBinop (BOGt t, arg1, arg2))
             | Some (Binop BOConcat) ->
                 let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 TString in
                 let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 TString in

@@ -688,10 +688,26 @@ let convert_binop (type a b c) (tm : tmap) (new_meta : new_meta) (op : (a, b, c)
       | Either.Left op -> fun acc -> Relop op :: arg2 (arg1 acc)
       | Either.Right f -> f arg1 arg2
     end
-  | BOLe -> fun acc -> Relop (Wasm.Value.I64 IntOp.LeS) :: arg2 (arg1 acc)
-  | BOLt -> fun acc -> Relop (Wasm.Value.I64 IntOp.LtS) :: arg2 (arg1 acc)
-  | BOGe -> fun acc -> Relop (Wasm.Value.I64 IntOp.GeS) :: arg2 (arg1 acc)
-  | BOGt -> fun acc -> Relop (Wasm.Value.I64 IntOp.GtS) :: arg2 (arg1 acc)
+  | BOLe t -> begin let open Wasm.Value in
+      match t with
+      | TInt -> fun acc -> Relop (I64 IntOp.LeS) :: arg2 (arg1 acc)
+      | _ -> raise (internal_error "Unknown binary operation Le on non-integer")
+    end
+  | BOLt t -> begin let open Wasm.Value in
+      match t with
+      | TInt -> fun acc -> Relop (I64 IntOp.LtS) :: arg2 (arg1 acc)
+      | _ -> raise (internal_error "Unknown binary operation Lt on non-integer")
+    end
+  | BOGe t -> begin let open Wasm.Value in
+      match t with
+      | TInt -> fun acc -> Relop (I64 IntOp.GeS) :: arg2 (arg1 acc)
+      | _ -> raise (internal_error "Unknown binary operation Ge on non-integer")
+    end
+  | BOGt t -> begin let open Wasm.Value in
+      match t with
+      | TInt -> fun acc -> Relop (I64 IntOp.GtS) :: arg2 (arg1 acc)
+      | _ -> raise (internal_error "Unknown binary operation Gt on non-integer")
+    end
   | BOConcat ->
       let tmparg1 = NewMetadata.add_local tm new_meta TString in
       let tmparg2 = NewMetadata.add_local tm new_meta TString in

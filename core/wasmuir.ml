@@ -131,10 +131,9 @@ type ('a, 'b, 'r) binop =
   | BOMulI : (int, int, int) binop | BOMulF : (float, float, float) binop
   | BODivI : (int, int, int) binop | BODivF : (float, float, float) binop
   | BORemI : (int, int, int) binop
-  | BOEq : 'a typ -> ('a, 'a, bool) binop
-  | BONe : 'a typ -> ('a, 'a, bool) binop
-  | BOLe : (int, int, bool) binop | BOLt : (int, int, bool) binop
-  | BOGe : (int, int, bool) binop | BOGt : (int, int, bool) binop
+  | BOEq : 'a typ -> ('a, 'a, bool) binop | BONe : 'a typ -> ('a, 'a, bool) binop
+  | BOLe : 'a typ -> ('a, 'a, bool) binop | BOLt : 'a typ -> ('a, 'a, bool) binop
+  | BOGe : 'a typ -> ('a, 'a, bool) binop | BOGt : 'a typ -> ('a, 'a, bool) binop
   | BOConcat : (string, string, string) binop
   | BOCons : 'a typ -> ('a, 'a llist, 'a llist) binop
   | BOConcatList : 'a typ -> ('a llist, 'a llist, 'a llist) binop
@@ -307,12 +306,12 @@ and [@tail_mod_cons] convert_expr : type a. _ -> a Wasmir.expr -> a expr =
       | Wasmir.BODivI -> EBinop (BODivI, (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
       | Wasmir.BODivF -> EBinop (BODivF, (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
       | Wasmir.BORemI -> EBinop (BORemI, (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
-      | Wasmir.BOEq -> EBinop (BOEq (convert_typ (Wasmir.typ_of_expr arg1)), (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
-      | Wasmir.BONe -> EBinop (BONe (convert_typ (Wasmir.typ_of_expr arg1)), (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
-      | Wasmir.BOLe -> EBinop (BOLe, (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
-      | Wasmir.BOLt -> EBinop (BOLt, (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
-      | Wasmir.BOGe -> EBinop (BOGe, (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
-      | Wasmir.BOGt -> EBinop (BOGt, (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
+      | Wasmir.BOEq t -> EBinop (BOEq (convert_typ t), (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
+      | Wasmir.BONe t -> EBinop (BONe (convert_typ t), (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
+      | Wasmir.BOLe t -> EBinop (BOLe (convert_typ t), (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
+      | Wasmir.BOLt t -> EBinop (BOLt (convert_typ t), (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
+      | Wasmir.BOGe t -> EBinop (BOGe (convert_typ t), (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
+      | Wasmir.BOGt t -> EBinop (BOGt (convert_typ t), (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
       | Wasmir.BOConcat -> EBinop (BOConcat, (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
       | Wasmir.BOCons t -> EBinop (BOCons (convert_typ t), convert_expr tmap arg1, (convert_expr[@tailcall]) tmap arg2)
       | Wasmir.BOConcatList t -> EBinop (BOConcatList (convert_typ t), convert_expr tmap arg1, (convert_expr[@tailcall]) tmap arg2)

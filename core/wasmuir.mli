@@ -48,10 +48,9 @@ type ('a, 'b, 'r) binop =
   | BOMulI : (int, int, int) binop | BOMulF : (float, float, float) binop
   | BODivI : (int, int, int) binop | BODivF : (float, float, float) binop
   | BORemI : (int, int, int) binop
-  | BOEq : 'a typ -> ('a, 'a, bool) binop
-  | BONe : 'a typ -> ('a, 'a, bool) binop
-  | BOLe : (int, int, bool) binop | BOLt : (int, int, bool) binop
-  | BOGe : (int, int, bool) binop | BOGt : (int, int, bool) binop
+  | BOEq : 'a typ -> ('a, 'a, bool) binop | BONe : 'a typ -> ('a, 'a, bool) binop
+  | BOLe : 'a typ -> ('a, 'a, bool) binop | BOLt : 'a typ -> ('a, 'a, bool) binop
+  | BOGe : 'a typ -> ('a, 'a, bool) binop | BOGt : 'a typ -> ('a, 'a, bool) binop
   | BOConcat : (string, string, string) binop
   | BOCons : 'a typ -> ('a, 'a llist, 'a llist) binop
   | BOConcatList : 'a typ -> ('a llist, 'a llist, 'a llist) binop
