@@ -71,6 +71,7 @@ type ('a, 'b, 'r) binop =
   | BOGt : (int, int, bool) binop
   | BOConcat : (string, string, string) binop
   | BOCons : 'a typ -> ('a, 'a llist, 'a llist) binop
+  | BOConcatList : 'a typ -> ('a llist, 'a llist, 'a llist) binop
 
 type local_storage = StorVariable | StorClosure
 type locality = Global | Local of local_storage

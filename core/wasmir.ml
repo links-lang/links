@@ -152,6 +152,7 @@ type ('a, 'b, 'r) binop =
   | BOGt : (int, int, bool) binop
   | BOConcat : (string, string, string) binop
   | BOCons : 'a typ -> ('a, 'a llist, 'a llist) binop
+  | BOConcatList : 'a typ -> ('a llist, 'a llist, 'a llist) binop
 type anybinop = Binop : ('a, 'b, 'c) binop -> anybinop
 
 type local_storage = StorVariable | StorClosure
@@ -296,6 +297,7 @@ let typ_of_expr (type a) (e : a expr) : a typ = match e with
   | EBinop (BOGt, _, _) -> TBool
   | EBinop (BOConcat, _, _) -> TString
   | EBinop (BOCons t, _, _) -> TList t
+  | EBinop (BOConcatList t, _, _) -> TList t
   | EVariable (_, (t, _)) -> t
   | EVariant _ -> TVariant
   | ECase (_, t, _, _) -> t
@@ -362,7 +364,7 @@ type anymodule = Module : 'a modu -> anymodule
 
 type anyhandler = AHandler : ('a, 'b, 'c) fhandler -> anyhandler
 
-let internal_error message = Errors.internal_error ~filename:"irtowasm.ml" ~message
+let internal_error message = Errors.internal_error ~filename:"wasmir.ml" ~message
 
 let rec assert_eq_generalization : 'a 'b. 'a generalization -> 'b generalization -> string -> ('a, 'b) Type.eq =
   fun (type a b) (t1 : a generalization) (t2 : b generalization) (onfail : string) : (a, b) Type.eq -> match t1, t2 with
@@ -438,17 +440,29 @@ end = struct
   let find_tag t = Option.get @@ List.find_index ((=) t) tags
   
   let unops = StringMap.from_alist ["-", Unop UONegI; "-.", Unop UONegF]
-  let binops = StringMap.from_alist [
-    "+", Binop BOAddI; "+.", Binop BOAddF; "-", Binop BOSubI; "-.", Binop BOSubF;
-    "*", Binop BOMulI; "*.", Binop BOMulF; "/", Binop BODivI; "/.", Binop BODivF;
-    "%", Binop BORemI; "==", Binop BOEq; "<>", Binop BONe;
-    "<=", Binop BOLe; "<", Binop BOLt; ">=", Binop BOGe; ">", Binop BOGt;
-    "^^", Binop BOConcat;
-    "Cons", Binop (BOCons (TVar 0));
-  ]
+  let binops =
+    let zero op : string -> anytyp list -> anybinop = fun opname tyargs ->
+      if tyargs <> [] then raise (internal_error ("Invalid type application to builtin binary operator '" ^ opname ^ "'"))
+      else op in
+    let one op : string -> anytyp list -> anybinop = fun opname tyargs ->
+      match tyargs with
+      | [] -> raise (internal_error ("Missing type application to builtin binary operator '" ^ opname ^ "'"))
+      | [t] -> op t
+      | _ :: _ :: _ -> raise (internal_error ("Too many type applications to builtin binary operator '" ^ opname ^ "'")) in
+    StringMap.from_alist [
+      "+", zero (Binop BOAddI); "+.", zero (Binop BOAddF); "-", zero (Binop BOSubI); "-.", zero (Binop BOSubF);
+      "*", zero (Binop BOMulI); "*.", zero (Binop BOMulF); "/", zero (Binop BODivI); "/.", zero (Binop BODivF);
+      "%", zero (Binop BORemI); "==", zero (Binop BOEq); "<>", zero (Binop BONe);
+      "<=", zero (Binop BOLe); "<", zero (Binop BOLt); ">=", zero (Binop BOGe); ">", zero (Binop BOGt);
+      "^^", zero (Binop BOConcat);
+      "Cons", one (fun (Type t) -> Binop (BOCons t));
+      "Concat", one (fun (Type t) -> Binop (BOConcatList t));
+    ]
   
   let get_unop op _tyargs = StringMap.find_opt op unops
-  let get_binop op _tyargs = StringMap.find_opt op binops
+  let get_binop op tyargs = match StringMap.find_opt op binops with
+    | None -> None
+    | Some f -> Some (f op tyargs)
   
   let gen_impure (convert_type : Types.typ -> anytyp) op tyargs (ExprList (targs, args)) : anyexpr = match op with
     | "ignore" -> begin
@@ -481,12 +495,14 @@ end = struct
     | "Nil" -> Some (Expr (TList (TVar ~-1), EListNil (TVar ~-1)))
     | _ -> None
   
-  let apply_type (at : Types.Abstype.t) (ts : tyarg list)
+  let apply_type (at : Types.Abstype.t) (ts : anytyp list)
       (normal : anytyp -> 'a) (func : tyvar list -> Types.typ -> Types.typ -> Types.typ -> 'a)
       (row : Types.field_spec_map -> Types.meta_row_var -> bool -> 'a) : 'a =
     let is at2 = Types.Abstype.compare at at2 = 0 in
-    ignore (ts, func, row);
-    if is Types.list then normal (Type TVariant)
+    ignore (func, row);
+    if is Types.list then match ts with
+      | [Type t] -> normal (Type (TList t))
+      | _ -> raise (internal_error ("Unknown abstract type " ^ (Types.Abstype.show at)))
     else raise (internal_error ("Unknown abstract type " ^ (Types.Abstype.show at)))
 end
 
@@ -583,10 +599,17 @@ let rec generalize_of_tyvars (tvs : tyvar list) : anygeneralization = match tvs 
   | (hd, (CommonTypes.PrimaryKind.Type, _)) :: tl -> let AG tl = generalize_of_tyvars tl in AG (Gcons (hd, tl))
   | _ :: tl -> generalize_of_tyvars tl
 
-let rec _convert_type (normal : anytyp -> 'a)
-    (func : tyvar list -> Types.typ -> Types.typ -> Types.typ -> 'a)
-    (row : Types.field_spec_map -> Types.meta_row_var -> bool -> 'a)
-    (t : Types.typ) : 'a = match t with
+let _to_typelist (conv : Types.typ -> anytyp) (ts : Types.typ Ir.name_map) : anyntyp_list =
+  let rec inner l = match l with
+    | [] -> NamedTypeList NTLnil
+    | (n, hd) :: tl -> let Type hd = conv hd in let NamedTypeList tl = inner tl in NamedTypeList (NTLcons (n, hd, tl))
+  in inner (sort_name_map ts)
+
+let rec _convert_type : type a. (_ -> a) -> (_ -> _ -> _ -> _ -> a) -> (_ -> _ -> _ -> a) -> _ -> a =
+  fun (normal : anytyp -> a)
+    (func : tyvar list -> Types.typ -> Types.typ -> Types.typ -> a)
+    (row : Types.field_spec_map -> Types.meta_row_var -> bool -> a)
+    (t : Types.typ) : a -> match t with
   | Types.Not_typed -> failwith "TODO _convert_type Not_typed"
   (* FIXME: what's the difference? *)
   | Types.Var (id, (CommonTypes.PrimaryKind.Type, (_, _)), `Flexible)
@@ -596,7 +619,9 @@ let rec _convert_type (normal : anytyp -> 'a)
   | Types.Recursive (_, _, t) -> _convert_type normal func row t
       (* Note: recursive types should always be broken by a Variant, otherwise we have an infinite object *)
   | Types.Alias (_, _, t) -> _convert_type normal func row t
-  | Types.Application (at, ts) -> Builtins.apply_type at ts normal func row
+  | Types.Application (at, ts) ->
+      let ts = List.filter_map (fun (k, t) -> if k = CommonTypes.PrimaryKind.Type then Some (convert_type t) else None) ts in
+      Builtins.apply_type at ts normal func row
   | Types.RecursiveApplication ra -> _convert_type normal func row Types.(ra.r_unwind ra.r_args ra.r_dual)
   | Types.Meta t -> _convert_type normal func row (Unionfind.find t)
   | Types.Primitive CommonTypes.Primitive.Bool -> normal (Type TBool)
@@ -625,12 +650,7 @@ let rec _convert_type (normal : anytyp -> 'a)
   | Types.Choice _ -> failwith "TODO _convert_type Choice"
   | Types.Dual _ -> failwith "TODO _convert_type Dual"
   | Types.End -> failwith "TODO _convert_type End"
-let _to_typelist (conv : Types.typ -> anytyp) (ts : Types.typ Ir.name_map) : anyntyp_list =
-  let rec inner l = match l with
-    | [] -> NamedTypeList NTLnil
-    | (n, hd) :: tl -> let Type hd = conv hd in let NamedTypeList tl = inner tl in NamedTypeList (NTLcons (n, hd, tl))
-  in inner (sort_name_map ts)
-let rec convert_type (t : Types.typ) : anytyp =
+and convert_type (t : Types.typ) : anytyp =
   _convert_type
     (fun t -> t)
     (fun tvs args _eff ret ->
@@ -1560,6 +1580,7 @@ let rec of_value (ge : genv) (le: 'args lenv) (v : value) : genv * 'args lenv * 
   | XmlNode _ -> failwith "TODO: of_value XmlNode"
   | ApplyPure (f, args) -> begin match collect_toplevel_polymorphism f with
       | ts, Variable v -> begin
+          let ts = List.filter_map (fun (k, t) -> if k = CommonTypes.PrimaryKind.Type then Some (convert_type t) else None) ts in
           let name = GEnv.get_var_name ge v in match args with
           | [arg] -> begin match Builtins.get_unop name ts with
             | None -> raise (internal_error ("Function '" ^ name ^ "' is not a (supported) builtin unary operation"))
@@ -1636,10 +1657,14 @@ let rec of_value (ge : genv) (le: 'args lenv) (v : value) : genv * 'args lenv * 
                 let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 TString in
                 let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 TString in
                 ge, le, Expr (TString, EBinop (BOConcat, arg1, arg2))
-            | Some (Binop (BOCons _)) ->
-                let ge, le, Expr (t1, arg1) = of_value ge le arg1 in
-                let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 (TList t1) in
-                ge, le, Expr (TList t1, EBinop (BOCons t1, arg1, arg2))
+            | Some (Binop (BOCons t)) ->
+                let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 t in
+                let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 (TList t) in
+                ge, le, Expr (TList t, EBinop (BOCons t, arg1, arg2))
+            | Some (Binop (BOConcatList t)) ->
+                let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 (TList t) in
+                let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 (TList t) in
+                ge, le, Expr (TList t, EBinop (BOConcatList t, arg1, arg2))
             end
           | _ -> raise (internal_error ("Function '" ^ name ^ "' is not a (supported) builtin n-ary operation"))
         end

@@ -277,7 +277,8 @@ module NewMetadata : sig
   val extend : g -> Wasm.Type.val_type list -> t
   val wasm_of_locals : tmap -> t -> Wasm.Type.val_type list
   
-  val add_eq_fun : tmap -> t -> 'a typ -> int32
+  val find_list_concat : tmap -> t -> int32
+  val find_eq_fun : tmap -> t -> 'a typ -> int32
   
   val add_local : tmap -> t -> 'a typ -> int32
   val add_specialization : tmap -> t -> 'a typ_list -> 'b typ -> ('a, 'c) box_list -> ('b, 'd) box -> int32
@@ -285,17 +286,28 @@ module NewMetadata : sig
   val maybe_do_box : tmap -> t -> ('a, 'b) box -> instr_conv -> ('b typ * instr_conv, ('a, 'b) Type.eq) Either.t
   val maybe_do_unbox : tmap -> t -> ('a, 'b) box -> instr_conv -> ('a typ * instr_conv, ('a, 'b) Type.eq) Either.t
 end = struct
-  type g = (int32 * (int32 * int32) list * Wasm.fundef list * int32 TypeMap.t) ref
+  type g = {
+    mutable nfuns: int32;
+    mutable exps: (int32 * int32) list;
+    mutable funs: Wasm.fundef list;
+    mutable eqfuns: int32 TypeMap.t;
+    mutable list_concat: int32 option;
+  }
   type t = g * (Wasm.Type.val_type list * int32) ref
   
-  let empty_global (nfuns : int32) : g = ref (nfuns, [], [], TypeMap.empty)
+  let empty_global (nfuns : int32) : g = {
+    nfuns;
+    exps = [];
+    funs =  [];
+    eqfuns = TypeMap.empty;
+    list_concat = None;
+  }
   
-  let wasm_of_funs (glob : g) : Wasm.fundef list =
-    let _, _, funs, _ = !glob in
+  let wasm_of_funs ({ funs; _ } : g) : Wasm.fundef list =
     List.rev funs
-  let wasm_of_exports (glob : g) : Wasm.global list =
-    let _, exps, _, _ = !glob in
-    List.rev_map (fun (ftid, fid) -> Wasm.Type.(GlobalT (Cons, RefT (NoNull, VarHT (StatX ftid)))), Wasm.Instruction.[RefFunc fid], None) exps
+  let wasm_of_exports ({ exps; _ } : g) : Wasm.global list =
+    List.rev_map (fun (ftid, fid) ->
+      Wasm.Type.(GlobalT (Cons, RefT (NoNull, VarHT (StatX ftid)))), Wasm.Instruction.[RefFunc fid], None) exps
   
   let extend (glob : g) (base : Wasm.Type.val_type list) : t =
     let rec inner glob base acc n : t = match base with
@@ -312,8 +324,7 @@ end = struct
   
   (* Warning: not the same ABI (the closure content is not wrapped again) *)
   let rec add_unspecialization : type a b c d. tmap -> t -> a typ_list -> b typ -> (a, c) box_list -> (b, d) box -> c typ_list * d typ * int32 =
-    fun tm (glob, _ as new_meta) targs tret bargs bret ->
-    let fid, eacc, facc, eqfuns = !glob in
+    fun tm ({ nfuns = fid; exps = eacc; funs = facc; _ } as glob, _ as new_meta) targs tret bargs bret ->
     let clvid, fargs =
       let rec inner : type a b. a typ_list -> (a, b) box_list -> int32 * b typ_list = fun targs bargs -> match targs, bargs with
         | TLnil, BLnone -> 0l, TLnil
@@ -364,7 +375,9 @@ end = struct
       fn_code = List.rev do_unbox;
     } in
     let nfuns, eacc, facc = Int32.succ fid, (ftid, fid) :: eacc, f :: facc in
-    glob := nfuns, eacc, facc, eqfuns;
+    glob.nfuns <- nfuns;
+    glob.exps <- eacc;
+    glob.funs <- facc;
     fargs, fret, fid
   
   and maybe_do_box : type a b. tmap -> t -> (a, b) box -> instr_conv -> (b typ * instr_conv, (a, b) Type.eq) Either.t =
@@ -391,8 +404,7 @@ end = struct
   
   (* Warning: not the same ABI (the closure content is not wrapped again) *)
   and add_specialization : type a b c d. tmap -> t -> a typ_list -> b typ -> (a, c) box_list -> (b, d) box -> int32 =
-    fun tm (glob, _ as new_meta) targs tret bargs bret ->
-    let fid, eacc, facc, eqfuns = !glob in
+    fun tm ({ nfuns = fid; exps = eacc; funs = facc; _ } as glob, _ as new_meta) targs tret bargs bret ->
     let ftid = TMap.recid_of_functyp tm targs tret in
     let clvid, fargs =
       let rec inner : type a b. a typ_list -> (a, b) box_list -> int32 * b typ_list = fun targs bargs -> match targs, bargs with
@@ -443,7 +455,9 @@ end = struct
       fn_code = List.rev do_unbox;
     } in
     let nfuns, eacc, facc = Int32.succ fid, (ftid, fid) :: eacc, f :: facc in
-    glob := nfuns, eacc, facc, eqfuns;
+    glob.nfuns <- nfuns;
+    glob.exps <- eacc;
+    glob.funs <- facc;
     fid
   
   (* get_val is affine *)
@@ -475,8 +489,34 @@ end = struct
             acc)
       end
   
-  let add_eq_fun (tm : tmap) (glob, _ as new_meta : t) (t : 'a typ) : int32 =
-    let (nfuns, exps, funs, eqfuns) = !glob in
+  let find_list_concat (tm : tmap) ({ list_concat; _ } as glob, _ : t) : int32 = match list_concat with
+    | Some i -> i
+    | None ->
+        let fid = glob.nfuns in
+        let ftid = TMap.recid_of_exported_type tm (TLcons (TList TVar, TLcons (TList TVar, TLnil))) (TList TVar) in
+        let f = Wasm.{
+          fn_name = None; fn_type = ftid; fn_locals = []; fn_code = Instruction.[
+            Block (Type.ValBlockType None, [
+              LocalGet 0l;
+              BrOnNull 0l;
+              StructGet (TMap.list_tid, 0l, None);
+              LocalGet 0l;
+              RefAsNonNull;
+              StructGet (TMap.list_tid, 1l, None);
+              LocalGet 1l;
+              Call fid;
+              StructNew (TMap.list_tid, Explicit);
+              Return;
+            ]);
+            LocalGet 1l;
+          ]
+        } in
+        glob.nfuns <- Int32.succ fid;
+        glob.funs <- f :: glob.funs;
+        glob.list_concat <- Some fid;
+        fid
+  
+  let find_eq_fun (tm : tmap) ({ nfuns; funs; eqfuns; _ } as glob, _ as new_meta : t) (t : 'a typ) : int32 =
     match TypeMap.find_opt (Type t) eqfuns with
     | Some i -> i
     | None ->
@@ -556,11 +596,13 @@ end = struct
                     Const (I32 (I32.of_bits 0l));
                   ]));
                 } :: fs, eqfuns
-            | _ -> failwith "TODO NewMetadata.add_eq_fun" in
+            | _ -> failwith "TODO NewMetadata.find_eq_fun" in
           nfuns, fs, eqfuns, funid in
         let nfuns, add_funs, eqfuns, retid = prepare t nfuns eqfuns in
         let funs = List.rev_append add_funs funs in
-        glob := (nfuns, exps, funs, eqfuns);
+        glob.nfuns <- nfuns;
+        glob.funs <- funs;
+        glob.eqfuns <- eqfuns;
         retid
 end
 type new_meta = NewMetadata.t
@@ -627,7 +669,7 @@ let convert_binop (type a b c) (tm : tmap) (new_meta : new_meta) (op : (a, b, c)
         | TBool -> Either.Left (I32 IntOp.Eq)
         | TFloat -> Either.Left (F64 FloatOp.Eq)
         | _ ->
-            let fid = NewMetadata.add_eq_fun tm new_meta t in
+            let fid = NewMetadata.find_eq_fun tm new_meta t in
             Either.Right (fun arg1 arg2 -> fun acc -> Call fid :: arg2 (arg1 acc)))
       with
       | Either.Left op -> fun acc -> Relop op :: arg2 (arg1 acc)
@@ -640,7 +682,7 @@ let convert_binop (type a b c) (tm : tmap) (new_meta : new_meta) (op : (a, b, c)
         | TBool -> Either.Left (I32 IntOp.Ne)
         | TFloat -> Either.Left (F64 FloatOp.Ne)
         | _ ->
-            let fid = NewMetadata.add_eq_fun tm new_meta t in
+            let fid = NewMetadata.find_eq_fun tm new_meta t in
             Either.Right (fun arg1 arg2 -> fun acc -> Testop (I32 IntOp.Eqz) :: Call fid :: arg2 (arg1 acc)))
       with
       | Either.Left op -> fun acc -> Relop op :: arg2 (arg1 acc)
@@ -677,6 +719,9 @@ let convert_binop (type a b c) (tm : tmap) (new_meta : new_meta) (op : (a, b, c)
   | BOCons t ->
       let arg1 = do_box tm new_meta (BBox t) arg1 in
       fun acc -> StructNew (TMap.list_tid, Explicit) :: arg2 (arg1 acc)
+  | BOConcatList _ ->
+      let fid = NewMetadata.find_list_concat tm new_meta in
+      fun acc -> Call fid :: arg2 (arg1 acc)
 
 type last_info = (mfunid * int32) option option
 type clos_info = (int32 * mvarid) option (* Closure type ID, closure ID *)
@@ -837,7 +882,7 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ =
       let args = convert_exprs tm new_meta args bargs cinfo in
       let gen_new_struct = convert_new_struct tm new_meta cls bcl fcid cinfo in
       let unbox = do_unbox tm new_meta bret (fun acc ->
-          (if can_early_ret then ReturnCall fid else Call fid) ::
+          (if can_early_ret && (match bret with BNone -> true | _ -> false) then ReturnCall fid else Call fid) ::
           gen_new_struct (args acc)) in
       do_box tm new_meta box unbox
   | ECallClosed (EVariable (loc, vid), args) ->

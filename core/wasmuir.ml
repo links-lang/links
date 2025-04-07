@@ -137,6 +137,7 @@ type ('a, 'b, 'r) binop =
   | BOGe : (int, int, bool) binop | BOGt : (int, int, bool) binop
   | BOConcat : (string, string, string) binop
   | BOCons : 'a typ -> ('a, 'a llist, 'a llist) binop
+  | BOConcatList : 'a typ -> ('a llist, 'a llist, 'a llist) binop
 
 type local_storage = Wasmir.local_storage =
   | StorVariable
@@ -314,6 +315,7 @@ and [@tail_mod_cons] convert_expr : type a. _ -> a Wasmir.expr -> a expr =
       | Wasmir.BOGt -> EBinop (BOGt, (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
       | Wasmir.BOConcat -> EBinop (BOConcat, (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
       | Wasmir.BOCons t -> EBinop (BOCons (convert_typ t), convert_expr tmap arg1, (convert_expr[@tailcall]) tmap arg2)
+      | Wasmir.BOConcatList t -> EBinop (BOConcatList (convert_typ t), convert_expr tmap arg1, (convert_expr[@tailcall]) tmap arg2)
     end
   | Wasmir.EVariable (loc, v) -> EVariable (loc, convert_varid v)
   | Wasmir.ETuple (ts, es) -> ETuple (convert_named_typ_list ts, (convert_expr_list[@tailcall]) tmap es)
