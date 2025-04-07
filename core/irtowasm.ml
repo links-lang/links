@@ -626,10 +626,9 @@ let convert_binop (type a b c) (tm : tmap) (new_meta : new_meta) (op : (a, b, c)
         | TInt -> Either.Left (I64 IntOp.Eq)
         | TBool -> Either.Left (I32 IntOp.Eq)
         | TFloat -> Either.Left (F64 FloatOp.Eq)
-        | TList t ->
-            let fid = NewMetadata.add_eq_fun tm new_meta (TList t) in
-            Either.Right (fun arg1 arg2 -> fun acc -> Call fid :: arg2 (arg1 acc))
-        | _ -> raise (internal_error "Invalid operand type for builtin equality"))
+        | _ ->
+            let fid = NewMetadata.add_eq_fun tm new_meta t in
+            Either.Right (fun arg1 arg2 -> fun acc -> Call fid :: arg2 (arg1 acc)))
       with
       | Either.Left op -> fun acc -> Relop op :: arg2 (arg1 acc)
       | Either.Right f -> f arg1 arg2
@@ -640,10 +639,9 @@ let convert_binop (type a b c) (tm : tmap) (new_meta : new_meta) (op : (a, b, c)
         | TInt -> Either.Left (I64 IntOp.Ne)
         | TBool -> Either.Left (I32 IntOp.Ne)
         | TFloat -> Either.Left (F64 FloatOp.Ne)
-        | TList t ->
-            let fid = NewMetadata.add_eq_fun tm new_meta (TList t) in
-            Either.Right (fun arg1 arg2 -> fun acc -> Testop (I32 IntOp.Eqz) :: Call fid :: arg2 (arg1 acc))
-        | _ -> raise (internal_error "Invalid operand type for builtin inequality"))
+        | _ ->
+            let fid = NewMetadata.add_eq_fun tm new_meta t in
+            Either.Right (fun arg1 arg2 -> fun acc -> Testop (I32 IntOp.Eqz) :: Call fid :: arg2 (arg1 acc)))
       with
       | Either.Left op -> fun acc -> Relop op :: arg2 (arg1 acc)
       | Either.Right f -> f arg1 arg2
