@@ -282,7 +282,7 @@ module Phases = struct
         nenv
         Env.Int.empty
       in
-      let res_mod = Irtowasm.compile program venv in
+      let res_mod = Irtowasm.compile program venv (Types.string_of_datatype result.Backend.datatype) in
       (* Prepare object file. *)
       let oc =
         try open_out object_file

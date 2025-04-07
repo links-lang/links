@@ -1,1 +1,1 @@
-val compile : Ir.computation -> string Env.Int.t -> Wasm.module_
+val compile : Ir.computation -> string Env.Int.t -> string -> Wasm.module_

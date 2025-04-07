@@ -720,7 +720,7 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ =
   | EConstFloat f -> do_box tm new_meta box (fun acc -> Const Wasm.Value.(F64 (F64.of_float f)) :: acc)
   | EConstString s -> do_box tm new_meta box (fun acc ->
         ArrayNewFixed (TMap.string_tid, Int32.of_int (String.length s)) ::
-        String.fold_left (fun acc c -> Const Wasm.Value.(I32 (I32.of_int_u (Char.code c))) :: acc) acc s)
+        String.fold_left (fun acc c -> Const Wasm.Value.(I32 (I32.of_int_s (Char.code c))) :: acc) acc s)
   | EUnop (op, e) ->
       let arg = convert_expr tm new_meta e BNone None cinfo in
       let v = convert_unop tm new_meta op arg in
@@ -1058,15 +1058,16 @@ let convert_effects (tm : tmap) (es : anytyp_list EffectIDMap.t) : int32 list =
     tid
   in List.map convert_effect es
 
-type import_info = {
-  impinfo_putc : int32 option;
-  impinfo_puts : int32 option;
+type 'a import_info = {
+  impinfo_putc : 'a;
+  impinfo_puts : 'a;
 }
-let impinfo_empty : import_info = {
+let impinfo_empty : int32 option import_info = {
   impinfo_putc = None;
   impinfo_puts = None;
 }
-let convert_import (tm : tmap) ((fidx, tidx, impinfo) : int32 * int32 * import_info) ((m, i) : string * string) : (int32 * int32 * import_info) * Wasm.import =
+let convert_import (tm : tmap) ((fidx, tidx, impinfo) : int32 * int32 * int32 option import_info) ((m, i) : string * string)
+    : (int32 * int32 * int32 option import_info) * Wasm.import =
   let acc, desc = match m, i with
   | "wizeng", "puts" ->
       let fid = TMap.recid_of_rec_type tm Wasm.Type.(RecT [SubT (Final, [], DefFuncT (FuncT ([NumT I32T; NumT I32T], [])))]) in
@@ -1076,6 +1077,11 @@ let convert_import (tm : tmap) ((fidx, tidx, impinfo) : int32 * int32 * import_i
       (Int32.succ fidx, tidx, { impinfo with impinfo_putc = Some fidx }), Wasm.FuncImport fid
   | _ -> raise (internal_error ("Unknown import '" ^ m ^ "'.'" ^ i ^ "'"))
   in acc, Wasm.{ module_name = m; item_name = i; desc }
+let finish_import_info (impinfo : int32 option import_info) : int32 import_info option = match impinfo with
+  | { impinfo_putc = Some putc; impinfo_puts = Some puts; } ->
+    Some { impinfo_putc = putc; impinfo_puts = puts; }
+  | { impinfo_putc = None; _ }
+  | { impinfo_putc = Some _; impinfo_puts = None } -> None
 
 let generate_wizard
   = Settings.(flag ~default:true "generate_wizard"
@@ -1083,7 +1089,7 @@ let generate_wizard
               |> convert parse_bool
               |> sync)
 
-let compile (prog : Ir.program) (env : string Env.Int.t) : Wasm.module_ =
+let compile (prog : Ir.program) (env : string Env.Int.t) (main_typ_name : string) : Wasm.module_ =
   let gen_wizeng = Settings.get generate_wizard in
   let Wasmir.Module m = Wasmir.module_of_ir prog env gen_wizeng in
   let m = module_of_ir m in
@@ -1092,182 +1098,170 @@ let compile (prog : Ir.program) (env : string Env.Int.t) : Wasm.module_ =
     let cg = convert_global tm (0, Type m.mod_main, "_init_result") in
     cg in
   let (_, _, impinfo), imports = List.fold_left_map (convert_import tm) (0l, 0l, impinfo_empty) m.mod_imports in
+  let impinfo = finish_import_info impinfo in
   let init_code, extra_locals, extra_funs, nfuns =
     let mainid = m.mod_nfuns in
     let open Wasm in
-    match m.mod_main, impinfo with
-    | TTuple NTLnil, { impinfo_putc = Some putc; _ } -> Instruction.[
-          ReturnCall putc; Const Value.(I32 (I32.of_int_s (Char.code '\n')));
-          Call putc; Const Value.(I32 (I32.of_int_s (Char.code ')')));
-          Call putc; Const Value.(I32 (I32.of_int_s (Char.code '(')));
-          Call putc; Const Value.(I32 (I32.of_int_s (Char.code ' ')));
-          Call putc; Const Value.(I32 (I32.of_int_s (Char.code ':')));
-          Call putc; Const Value.(I32 (I32.of_int_s (Char.code ' ')));
-          Call putc; Const Value.(I32 (I32.of_int_s (Char.code ')')));
-          Call putc; Const Value.(I32 (I32.of_int_s (Char.code '(')));
+    let open Value in
+    let open Instruction in
+    match impinfo with
+    | None -> [
           GlobalSet m.mod_nglobals;
         ], [], [], Int32.succ mainid
-    | TInt, { impinfo_putc = Some putc; _ } ->
-        let auxfuntid = TMap.recid_of_rec_type tm Type.(RecT [SubT (Final, [], DefFuncT (FuncT ([NumT I64T], [])))]) in
-        let auxfunid = Int32.succ mainid in
-        let open Value in Instruction.[
-          ReturnCall putc; Const (I32 (I32.of_int_s (Char.code '\n')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code 't')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code 'n')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code 'I')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code ' ')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code ':')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code ' ')));
-          Call auxfunid;
-          If (Type.(ValBlockType (Some (NumT I64T))), [
-            GlobalGet m.mod_nglobals;
-            Testop (I64 IntOp.Eqz);
-            If (Type.(ValBlockType None), [
-              Const (I32 (I32.of_int_s (Char.code '0'))); Call putc;
-            ], []);
-            GlobalGet m.mod_nglobals;
-          ], [
-            Const (I32 (I32.of_int_s (Char.code '-')));
-            Call putc;
-            Const (I64 (I64.of_bits 0L));
-            GlobalGet m.mod_nglobals;
-            Binop (I64 IntOp.Sub);
-          ]);
-          Relop (I64 IntOp.GeS);
-          Const (I64 (I64.of_bits 0L));
-          GlobalGet m.mod_nglobals;
-          GlobalSet m.mod_nglobals;
-        ], [], [
-          { fn_name = None; fn_type = auxfuntid; fn_locals = []; fn_code = Instruction.[
-            LocalGet 0l;
-            Testop (I64 IntOp.Eqz);
-            BrIf 0l;
-            LocalGet 0l;
-            Const (I64 (I64.of_bits 10L));
-            Relop (I64 IntOp.LtU);
-            If (Type.(ValBlockType (Some (NumT I64T))), [
-              LocalGet 0l;
-            ], [
-              LocalGet 0l;
-              Const (I64 (I64.of_bits 10L));
-              Binop (I64 IntOp.DivU);
-              Call auxfunid;
-              LocalGet 0l;
-              Const (I64 (I64.of_bits 10L));
-              Binop (I64 IntOp.RemU);
-            ]);
-            Cvtop (I32 IntOp.WrapI64);
-            Const Value.(I32 (I32.of_int_s (Char.code '0')));
-            Binop (I32 IntOp.Add);
-            Call putc;
-          ] };
-        ], Int32.succ auxfunid
-    | TBool, { impinfo_putc = Some putc; _ } ->
-        let open Value in Instruction.[
-          ReturnCall putc; Const (I32 (I32.of_int_s (Char.code '\n')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code 'l')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code 'o')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code 'o')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code 'B')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code ' ')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code ':')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code ' ')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code 'e')));
-          If (Type.(ValBlockType None), [
-            Const (I32 (I32.of_int_s (Char.code 't'))); Call putc;
-            Const (I32 (I32.of_int_s (Char.code 'r'))); Call putc;
-            Const (I32 (I32.of_int_s (Char.code 'u'))); Call putc;
-          ], [
-            Const (I32 (I32.of_int_s (Char.code 'f'))); Call putc;
-            Const (I32 (I32.of_int_s (Char.code 'a'))); Call putc;
-            Const (I32 (I32.of_int_s (Char.code 'l'))); Call putc;
-            Const (I32 (I32.of_int_s (Char.code 's'))); Call putc;
-          ]);
-          GlobalGet m.mod_nglobals;
-          GlobalSet m.mod_nglobals;
-        ], [], [], Int32.succ mainid
-    | TString, { impinfo_putc = Some putc; _ } ->
-        let locid = Int32.of_int (List.length m.mod_locals) in
-        let open Value in Instruction.[
-          ReturnCall putc; Const (I32 (I32.of_int_s (Char.code '\n')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code 'g')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code 'n')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code 'i')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code 'r')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code 't')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code 'S')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code ' ')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code ':')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code ' ')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code '"')));
-          Block (Type.(ValBlockType None), [ Loop (Type.(ValBlockType None), [
-            LocalGet locid;
-            GlobalGet m.mod_nglobals; ArrayLen;
-            Relop Wasm.Value.(I32 IntOp.GeU);
-            BrIf 1l;
-            GlobalGet m.mod_nglobals;
-            LocalGet locid;
-            ArrayGet (TMap.string_tid, Some Pack.ZX); Call putc;
-            LocalGet locid; Const (I32 (I32.of_bits 1l)); Binop Wasm.Value.(I32 IntOp.Add); LocalSet locid;
-            Br 0l;
-          ])]);
-          Call putc; Const (I32 (I32.of_int_s (Char.code '"')));
-          GlobalSet m.mod_nglobals;
-        ], Wasm.Type.[NumT I32T], [], Int32.succ mainid
-    | TList TBool, { impinfo_putc = Some putc; _ } ->
-        let locid = Int32.of_int (List.length m.mod_locals) in
-        let boxed_bool_tid = match rtt_wrapping tm TBool with
-          | Either.Right _ -> assert false
-          | Either.Left None -> assert false
-          | Either.Left (Some tid) -> tid in
-        let open Value in Instruction.[
-          ReturnCall putc; Const (I32 (I32.of_int_s (Char.code '\n')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code ']')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code 'l')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code 'o')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code 'o')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code 'B')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code '[')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code ' ')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code ':')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code ' ')));
-          Call putc; Const (I32 (I32.of_int_s (Char.code ']')));
-          Block (Type.(ValBlockType None), [
-            GlobalGet m.mod_nglobals;
-            BrOnNull 0l;
-            LocalSet locid;
-            Loop (Type.(ValBlockType None), [
-              LocalGet locid;
-              StructGet (TMap.list_tid, 0l, None);
-              StructGet (TMap.boxed_tid, 1l, None);
-              RefCast Wasm.Type.(NoNull, VarHT (StatX boxed_bool_tid));
-              StructGet (boxed_bool_tid, 0l, None);
-              If (Type.(ValBlockType None), [
-                Const (I32 (I32.of_int_s (Char.code 't'))); Call putc;
-                Const (I32 (I32.of_int_s (Char.code 'r'))); Call putc;
-                Const (I32 (I32.of_int_s (Char.code 'u'))); Call putc;
-              ], [
-                Const (I32 (I32.of_int_s (Char.code 'f'))); Call putc;
-                Const (I32 (I32.of_int_s (Char.code 'a'))); Call putc;
-                Const (I32 (I32.of_int_s (Char.code 'l'))); Call putc;
-                Const (I32 (I32.of_int_s (Char.code 's'))); Call putc;
-              ]);
-              Const (I32 (I32.of_int_s (Char.code 'e'))); Call putc;
-              LocalGet locid;
-              StructGet (TMap.list_tid, 1l, None);
-              BrOnNull 1l;
-              LocalSet locid;
-              Const (I32 (I32.of_int_s (Char.code ','))); Call putc;
-              Const (I32 (I32.of_int_s (Char.code ' '))); Call putc;
-              Br 0l;
-            ]);
-          ]);
-          Call putc; Const (I32 (I32.of_int_s (Char.code '[')));
-          GlobalSet m.mod_nglobals;
-        ], Wasm.Type.[RefT (NoNull, VarHT (StatX TMap.list_tid))], [], Int32.succ mainid
-    | _ -> Instruction.[
-          GlobalSet m.mod_nglobals;
-        ], [], [], Int32.succ mainid in
+    | Some { impinfo_putc = putc; impinfo_puts = _puts } ->
+        let rec prepare : type a. a typ -> _ = fun (t : a typ) (nlocs : int32) (nfuns : int32) -> match t with
+          | TTuple NTLnil ->
+              Either.Left [
+                Drop;
+                Const (I32 (I32.of_int_s (Char.code '('))); Call putc;
+                Const (I32 (I32.of_int_s (Char.code ')'))); Call putc;
+              ], [], [], nfuns
+          | TInt ->
+              let funtid = TMap.recid_of_rec_type tm Type.(RecT [SubT (Final, [], DefFuncT (FuncT ([NumT I64T], [])))]) in
+              let funid = nfuns in
+              let auxfunid = Int32.succ funid in
+              let nfuns = Int32.succ auxfunid in
+              Either.Right funid, [], [
+                { fn_name = None; fn_type = funtid; fn_locals = []; fn_code = [
+                  LocalGet 0l;
+                  Const (I64 (I64.of_bits 0L));
+                  Relop (I64 IntOp.GeS);
+                  If (Type.(ValBlockType (Some (NumT I64T))), [
+                    LocalGet 0l;
+                    Testop (I64 IntOp.Eqz);
+                    If (Type.(ValBlockType None), [
+                      Const (I32 (I32.of_int_s (Char.code '0'))); ReturnCall putc;
+                    ], []);
+                    LocalGet 0l;
+                  ], [
+                    Const (I32 (I32.of_int_s (Char.code '-')));
+                    Call putc;
+                    Const (I64 (I64.of_bits 0L));
+                    LocalGet 0l;
+                    Binop (I64 IntOp.Sub);
+                  ]);
+                  Call auxfunid;
+                ]};
+                { fn_name = None; fn_type = funtid; fn_locals = []; fn_code = [
+                  LocalGet 0l;
+                  Testop (I64 IntOp.Eqz);
+                  BrIf 0l;
+                  LocalGet 0l;
+                  Const (I64 (I64.of_bits 10L));
+                  Relop (I64 IntOp.LtU);
+                  If (Type.(ValBlockType (Some (NumT I64T))), [
+                    LocalGet 0l;
+                  ], [
+                    LocalGet 0l;
+                    Const (I64 (I64.of_bits 10L));
+                    Binop (I64 IntOp.DivU);
+                    Call auxfunid;
+                    LocalGet 0l;
+                    Const (I64 (I64.of_bits 10L));
+                    Binop (I64 IntOp.RemU);
+                  ]);
+                  Cvtop (I32 IntOp.WrapI64);
+                  Const (I32 (I32.of_int_s (Char.code '0')));
+                  Binop (I32 IntOp.Add);
+                  Call putc;
+                ] };
+              ], nfuns
+          | TBool ->
+              Either.Left [
+                If (Type.(ValBlockType None), [
+                  Const (I32 (I32.of_int_s (Char.code 't'))); Call putc;
+                  Const (I32 (I32.of_int_s (Char.code 'r'))); Call putc;
+                  Const (I32 (I32.of_int_s (Char.code 'u'))); Call putc;
+                ], [
+                  Const (I32 (I32.of_int_s (Char.code 'f'))); Call putc;
+                  Const (I32 (I32.of_int_s (Char.code 'a'))); Call putc;
+                  Const (I32 (I32.of_int_s (Char.code 'l'))); Call putc;
+                  Const (I32 (I32.of_int_s (Char.code 's'))); Call putc;
+                ]);
+                Const (I32 (I32.of_int_s (Char.code 'e'))); Call putc;
+              ], [], [], Int32.succ mainid
+          | TString ->
+              let funtid = TMap.recid_of_rec_type tm Type.(RecT [SubT (Final, [],
+                    DefFuncT (FuncT ([RefT (NoNull, VarHT (StatX TMap.string_tid))], [])))]) in
+              let funid = nfuns in
+              let nfuns = Int32.succ funid in
+              Either.Right funid, [], [
+                { fn_name = None; fn_type = funtid; fn_locals = Type.[NumT I32T]; fn_code = [
+                  Const (I32 (I32.of_int_s (Char.code '"'))); Call putc;
+                  Const (I32 (I32.of_bits 0l)); LocalSet 1l;
+                  Block (Type.(ValBlockType None), [ Loop (Type.(ValBlockType None), [
+                    LocalGet 1l;
+                    LocalGet 0l; ArrayLen;
+                    Relop (I32 IntOp.GeU);
+                    BrIf 1l;
+                    LocalGet 0l;
+                    LocalGet 1l;
+                    ArrayGet (TMap.string_tid, Some Pack.ZX); Call putc;
+                    LocalGet 1l; Const (I32 (I32.of_bits 1l)); Binop (I32 IntOp.Add); LocalSet 1l;
+                    Br 0l;
+                  ])]);
+                  Const (I32 (I32.of_int_s (Char.code '"'))); Call putc;
+                ]}
+              ], nfuns
+          | TList t ->
+              let mainblocktid = TMap.recid_of_rec_type tm Type.(RecT [SubT (Final, [],
+                    DefFuncT (FuncT ([RefT (Null, VarHT (StatX TMap.list_tid))], [])))]) in
+              let locid = nlocs in
+              let nlocs = Int32.succ locid in
+              let unbox = match rtt_wrapping tm t with
+                | Either.Right Stdlib.Type.Equal -> (* failwith "TODO: print variadic lists" *) fun _ -> [Unreachable]
+                | Either.Left None -> let tid = TMap.recid_of_type tm t in fun acc ->
+                    LocalGet locid ::
+                    StructGet (TMap.list_tid, 0l, None) ::
+                    StructGet (TMap.boxed_tid, 1l, None) ::
+                    RefCast Wasm.Type.(NoNull, VarHT (StatX tid)) ::
+                    acc
+                | Either.Left (Some tid) -> fun acc ->
+                    LocalGet locid ::
+                    StructGet (TMap.list_tid, 0l, None) ::
+                    StructGet (TMap.boxed_tid, 1l, None) ::
+                    RefCast Wasm.Type.(NoNull, VarHT (StatX tid)) ::
+                    StructGet (tid, 0l, None) ::
+                    acc in
+              let elem, locs, funs, nfuns = prepare t nlocs nfuns in
+              let print_elem = match elem with
+                | Either.Left code -> fun acc -> code @ acc
+                | Either.Right fid -> fun acc -> Call fid :: acc
+                in
+              let locs = Type.(RefT (NoNull, VarHT (StatX TMap.list_tid))) :: locs in
+              Either.Left [
+                Const (I32 (I32.of_int_s (Char.code '['))); Call putc;
+                Block (Type.(VarBlockType mainblocktid), [
+                  BrOnNull 0l;
+                  LocalSet locid;
+                  Loop (Type.(ValBlockType None),
+                    unbox (
+                    print_elem [
+                    LocalGet locid;
+                    StructGet (TMap.list_tid, 1l, None);
+                    BrOnNull 1l;
+                    LocalSet locid;
+                    Const (I32 (I32.of_int_s (Char.code ','))); Call putc;
+                    Const (I32 (I32.of_int_s (Char.code ' '))); Call putc;
+                    Br 0l;
+                  ]));
+                ]);
+                Const (I32 (I32.of_int_s (Char.code ']'))); Call putc;
+              ], locs, funs, nfuns
+          | _ -> failwith "TODO: Irtowasm.compile.prepare for this type"
+        in
+        let code, add_locs, add_funs, nfuns = prepare m.mod_main (Int32.of_int (List.length m.mod_locals)) (Int32.succ mainid) in
+        let code = match code with
+            | Either.Left code ->
+                List.rev_append code [GlobalGet m.mod_nglobals; GlobalSet m.mod_nglobals]
+            | Either.Right fid ->
+                [Call fid; GlobalGet m.mod_nglobals; GlobalSet m.mod_nglobals] in
+        let code =
+          let add_string code s =
+            String.fold_left (fun acc c -> Call putc :: Const (I32 (I32.of_int_s (Char.code c))) :: acc)
+              code s in
+          add_string (add_string code " : ") main_typ_name in
+        ReturnCall putc :: Const (I32 (I32.of_int_s (Char.code '\n'))) :: code, add_locs, add_funs, nfuns in
   let glob = NewMetadata.empty_global nfuns in
   let _, init =
     let locals =
