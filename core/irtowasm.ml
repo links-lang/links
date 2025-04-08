@@ -635,10 +635,10 @@ let convert_globals (tm : tmap) (gs : (mvarid * anytyp * string) list) (tl : Was
     | hd :: tl -> let hd = convert_global tm hd in hd :: inner tl
   in let ret = inner gs in ret
 
-(* v is affine *)
-let do_box (type a b) (tm : tmap) (new_meta : new_meta) (box : (a, b) box) (v : instr_conv) : instr_conv =
-  match NewMetadata.maybe_do_box tm new_meta box v with
-  | Either.Right Type.Equal -> v
+(* get_val is affine *)
+let do_box (type a b) (tm : tmap) (new_meta : new_meta) (box : (a, b) box) (get_val : instr_conv) : instr_conv =
+  match NewMetadata.maybe_do_box tm new_meta box get_val with
+  | Either.Right Type.Equal -> get_val
   | Either.Left (_, v) -> v
 
 (* get_val is affine *)
@@ -751,63 +751,62 @@ let convert_get_var' (loc : locality) (vid : int32) (cinfo : clos_info) : instr_
     end
 let convert_get_var (loc : locality) (vid : 'a varid) (cinfo : clos_info) : instr_conv =
   let _, vid = (vid : _ varid :> _ typ * int32) in convert_get_var' loc vid cinfo
-let rec convert_block : type a b. _ -> _ -> a block -> (a, b) box -> _ =
-  fun (tm : tmap) (new_meta : new_meta) ((ass, e) : a block) box (is_last : last_info) (cinfo : clos_info) : instr_conv ->
+let rec convert_block : type a b. _ -> _ -> a block -> (a, b) box -> _ -> _ -> instr_conv =
+  fun (tm : tmap) (new_meta : new_meta) ((ass, e) : a block) (box : (a, b) box) (is_last : last_info) (cinfo : clos_info) acc ->
   let open Wasm.Instruction in
-  let rec inner (ass : assign list) : instr_conv = match ass with
-    | [] -> convert_expr tm new_meta e box is_last cinfo
+  let rec inner (ass : assign list) acc = match ass with
+    | [] -> convert_expr tm new_meta e box is_last cinfo acc
     | Assign (l, v, e) :: tl ->
         let _, v = (v : _ varid :> _ typ * int32) in
-        let f = inner tl in
         let e = convert_expr tm new_meta e BNone None cinfo in
-        fun acc -> f ((match l with
+        inner tl ((match l with
           | Global -> GlobalSet v
           | Local StorVariable -> LocalSet v
           | Local StorClosure -> raise (internal_error "unexpected assignment to closure variable")
           ) :: e acc)
-  in inner ass
-and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ =
-  fun (tm : tmap) (new_meta : new_meta) (e : a expr) (box : (a, b) box) (is_last : last_info) (cinfo : clos_info) : instr_conv ->
+  in inner ass acc
+and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ -> _ -> instr_conv =
+  fun (tm : tmap) (new_meta : new_meta) (e : a expr) (box : (a, b) box) (is_last : last_info) (cinfo : clos_info) acc ->
   let can_early_ret = (match box with BNone -> true | _ -> false) && (Option.is_some is_last) in
   let open Wasm.Instruction in match e with
-  | EUnreachable _ -> fun acc -> Unreachable :: acc
+  | EUnreachable _ -> Unreachable :: acc
   | EConvertClosure (src, _) ->
       let ctid = match cinfo with None -> raise (internal_error "Closure conversion without closure info") | Some (ctid, _) -> ctid in
-      fun acc -> RefCast Wasm.Type.(NoNull, VarHT (StatX ctid)) :: LocalGet (src :> int32) :: acc
+      RefCast Wasm.Type.(NoNull, VarHT (StatX ctid)) :: LocalGet (src :> int32) :: acc
   | EIgnore (_, e) ->
       let e = convert_expr tm new_meta e BNone None cinfo in
-      fun acc -> Const Wasm.Value.(I32 (I32.of_bits 0l)) :: Drop :: e acc
-  | EConstInt i -> do_box tm new_meta box (fun acc -> Const Wasm.Value.(I64 (I64.of_bits i)) :: acc)
-  | EConstBool b -> do_box tm new_meta box (fun acc -> Const Wasm.Value.(I32 (I32.of_bits (if b then 1l else 0l))) :: acc)
-  | EConstFloat f -> do_box tm new_meta box (fun acc -> Const Wasm.Value.(F64 (F64.of_float f)) :: acc)
+      Const Wasm.Value.(I32 (I32.of_bits 0l)) :: Drop :: e acc
+  | EConstInt i -> do_box tm new_meta box (fun acc -> Const Wasm.Value.(I64 (I64.of_bits i)) :: acc) acc
+  | EConstBool b -> do_box tm new_meta box (fun acc -> Const Wasm.Value.(I32 (I32.of_bits (if b then 1l else 0l))) :: acc) acc
+  | EConstFloat f -> do_box tm new_meta box (fun acc -> Const Wasm.Value.(F64 (F64.of_float f)) :: acc) acc
   | EConstString s -> do_box tm new_meta box (fun acc ->
         ArrayNewFixed (TMap.string_tid, Int32.of_int (String.length s)) ::
-        String.fold_left (fun acc c -> Const Wasm.Value.(I32 (I32.of_int_s (Char.code c))) :: acc) acc s)
+        String.fold_left (fun acc c -> Const Wasm.Value.(I32 (I32.of_int_s (Char.code c))) :: acc) acc s) acc
   | EUnop (op, e) ->
       let arg = convert_expr tm new_meta e BNone None cinfo in
       let v = convert_unop tm new_meta op arg in
-      do_box tm new_meta box v
+      do_box tm new_meta box v acc
   | EBinop (op, e1, e2) ->
       let arg1 = convert_expr tm new_meta e1 BNone None cinfo in
       let arg2 = convert_expr tm new_meta e2 BNone None cinfo in
       let v = convert_binop tm new_meta op arg1 arg2 in
-      do_box tm new_meta box v
-  | EVariable (loc, vid) -> do_box tm new_meta box (convert_get_var loc vid cinfo)
+      do_box tm new_meta box v acc
+  | EVariable (loc, vid) -> do_box tm new_meta box (convert_get_var loc vid cinfo) acc
   | ETuple (NTLnil, ELnil) ->
-      do_box tm new_meta box (fun acc -> Const Wasm.Value.(I32 (I32.of_bits 0l)) :: acc)
+      do_box tm new_meta box (fun acc -> Const Wasm.Value.(I32 (I32.of_bits 0l)) :: acc) acc
   | ETuple (ntl, es) ->
       let tid = TMap.recid_of_type tm (TTuple ntl) in
       begin match box with
-        | BNone | BBox _ -> do_box tm new_meta box (convert_new_struct tm new_meta es BLnone tid cinfo)
-        | BTuple box -> convert_new_struct tm new_meta es box tid cinfo
+        | BNone | BBox _ -> do_box tm new_meta box (convert_new_struct tm new_meta es BLnone tid cinfo) acc
+        | BTuple box -> convert_new_struct tm new_meta es box tid cinfo acc
       end
   | EExtract (e, (ttup, i, _)) ->
       let e = convert_expr tm new_meta e BNone None cinfo in
       let tid = TMap.recid_of_type tm (TTuple ttup) in
-      do_box tm new_meta box (fun acc -> StructGet (tid, Int32.of_int i, None) :: (e acc))
+      do_box tm new_meta box (fun acc -> StructGet (tid, Int32.of_int i, None) :: (e acc)) acc
   | EVariant (tagid, targ, arg) ->
       let arg = convert_expr tm new_meta arg (BBox targ) None cinfo in
-      do_box tm new_meta box (fun acc -> StructNew (TMap.variant_tid, Explicit) :: arg (Const Wasm.Value.(I32 (I32.of_int_u (tagid :> int))) :: acc))
+      do_box tm new_meta box (fun acc -> StructNew (TMap.variant_tid, Explicit) :: arg (Const Wasm.Value.(I32 (I32.of_int_u (tagid :> int))) :: acc)) acc
   | ECase (v, t, cs, od) ->
       let loc, vid, stv = match v with
         | EVariable (loc, vid) ->
@@ -858,27 +857,27 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ =
           List.rev (blk []))
       in
       let tret = TMap.val_of_type tm t in
-      do_box tm new_meta box (fun acc -> Wasm.Instruction.Block (Wasm.Type.(ValBlockType (Some tret)), code) :: stv acc)
-  | EListNil _ -> do_box tm new_meta box (fun acc -> RefNull Wasm.Type.(VarHT (StatX TMap.list_tid)) :: acc)
+      do_box tm new_meta box (fun acc -> Wasm.Instruction.Block (Wasm.Type.(ValBlockType (Some tret)), code) :: stv acc) acc
+  | EListNil _ -> do_box tm new_meta box (fun acc -> RefNull Wasm.Type.(VarHT (StatX TMap.list_tid)) :: acc) acc
   | EListHd (l, t) ->
       let l = convert_expr tm new_meta l BNone None cinfo in
-      do_box tm new_meta box (do_unbox tm new_meta (BBox t) (fun acc -> StructGet (TMap.list_tid, 0l, None) :: l acc))
+      do_box tm new_meta box (do_unbox tm new_meta (BBox t) (fun acc -> StructGet (TMap.list_tid, 0l, None) :: l acc)) acc
   | EListTl (_, l) ->
       let l = convert_expr tm new_meta l BNone None cinfo in
-      do_box tm new_meta box (fun acc -> StructGet (TMap.list_tid, 1l, None) :: l acc)
+      do_box tm new_meta box (fun acc -> StructGet (TMap.list_tid, 1l, None) :: l acc) acc
   | EClose (f, bcl, cls) ->
       let targs, tret, clts, fid = (f : _ funcid :> _ * _ * _ * int32) in
       let fctid = TMap.recid_of_type tm (TClosArg clts) in
       let new_ctid = TMap.recid_of_type tm (TClosed (targs, tret)) in
       let gen_new_struct = convert_new_struct tm new_meta cls bcl fctid cinfo in
-      do_box tm new_meta box (fun acc -> StructNew (new_ctid, Explicit) :: gen_new_struct (RefFunc fid :: acc))
+      do_box tm new_meta box (fun acc -> StructNew (new_ctid, Explicit) :: gen_new_struct (RefFunc fid :: acc)) acc
   | ESpecialize (e, _, BLnone, BNone) -> begin match box with
-      | BNone -> convert_expr tm new_meta e BNone is_last cinfo
-      | BClosed (TClosed (targs, tret), bargs, bret) -> convert_expr tm new_meta e (BClosed (TClosed (targs, tret), bargs, bret)) is_last cinfo
-      | BBox (TClosed (bargs, bret)) -> convert_expr tm new_meta e (BBox (TClosed (bargs, bret))) is_last cinfo
+      | BNone -> convert_expr tm new_meta e BNone is_last cinfo acc
+      | BClosed (TClosed (targs, tret), bargs, bret) -> convert_expr tm new_meta e (BClosed (TClosed (targs, tret), bargs, bret)) is_last cinfo acc
+      | BBox (TClosed (bargs, bret)) -> convert_expr tm new_meta e (BBox (TClosed (bargs, bret))) is_last cinfo acc
     end
   | ESpecialize (e, tdst, bargs, bret) ->
-      do_box tm new_meta box (do_unbox tm new_meta (BClosed (tdst, bargs, bret)) (convert_expr tm new_meta e BNone None cinfo))
+      do_box tm new_meta box (do_unbox tm new_meta (BClosed (tdst, bargs, bret)) (convert_expr tm new_meta e BNone None cinfo)) acc
   | ECallRawHandler (fid, _, contarg, targ, arg, hdlarg, _) ->
       let fid = (fid :> int32) in
       let fcid = TMap.recid_of_type tm (TTuple (NTLcons ("1", targ, NTLnil))) in
@@ -886,13 +885,13 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ =
       let hdlarg = convert_expr tm new_meta hdlarg BNone None cinfo in
       let contarg = convert_expr tm new_meta contarg BNone None cinfo in
       do_box tm new_meta box
-        (fun acc -> (if can_early_ret then ReturnCall fid else Call fid) :: hdlarg (args (contarg acc)))
+        (fun acc -> (if can_early_ret then ReturnCall fid else Call fid) :: hdlarg (args (contarg acc))) acc
   | ECallClosed (EClose (f, bcl, cls), args) ->
       let _, _, clts, fid = (f : _ funcid :> _ * _ * _ * int32) in
       let fcid = TMap.recid_of_type tm (TClosArg clts) in
       let args = convert_exprs tm new_meta args BLnone cinfo in
       let gen_new_struct = convert_new_struct tm new_meta cls bcl fcid cinfo in
-      do_box tm new_meta box (fun acc -> (if can_early_ret then ReturnCall fid else Call fid) :: gen_new_struct (args acc))
+      do_box tm new_meta box (fun acc -> (if can_early_ret then ReturnCall fid else Call fid) :: gen_new_struct (args acc)) acc
   | ECallClosed (ESpecialize (EClose (f, bcl, cls), _, bargs, bret), args) ->
       let _, _, clts, fid = (f : _ funcid :> _ * _ * _ * int32) in
       let fcid = TMap.recid_of_type tm (TClosArg clts) in
@@ -901,7 +900,7 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ =
       let unbox = do_unbox tm new_meta bret (fun acc ->
           (if can_early_ret && (match bret with BNone -> true | _ -> false) then ReturnCall fid else Call fid) ::
           gen_new_struct (args acc)) in
-      do_box tm new_meta box unbox
+      do_box tm new_meta box unbox acc
   | ECallClosed (EVariable (loc, vid), args) ->
       let (TClosed (targs, tret) as t), _ = (vid : _ varid :> _ typ * int32) in
       (* TODO: optimize the next two lines (caching is possible) *)
@@ -911,7 +910,7 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ =
       let args = convert_exprs tm new_meta args BLnone cinfo in
       do_box tm new_meta box (fun acc -> (if can_early_ret then ReturnCallRef fid else CallRef fid) ::
           StructGet (vtid, 0l, None) :: getv (
-          StructGet (vtid, 1l, None) :: getv (args acc)))
+          StructGet (vtid, 1l, None) :: getv (args acc))) acc
   | ECallClosed (ESpecialize (EVariable (loc, vid), _, bargs, bret), args) ->
       let (TClosed (targs, tret) as t), _ = (vid : _ varid :> _ typ * int32) in
       let vtid = TMap.recid_of_type tm t in
@@ -923,15 +922,14 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ =
         else (if can_early_ret then ReturnCallRef fid else CallRef fid) ::
           StructGet (vtid, 0l, None) :: getv (
           StructGet (vtid, 1l, None) :: getv (args acc))) in
-      do_box tm new_meta box unbox
+      do_box tm new_meta box unbox acc
   | ECallClosed (_f, _args) -> failwith "TODO: convert_expr ECallClosed non-Function and non-Variable"
   | ECond (e, rt, t, f) ->
-      let ti = convert_block tm new_meta t box is_last cinfo in
-      let fi = convert_block tm new_meta f box is_last cinfo in
-      let ei = convert_expr tm new_meta e BNone None cinfo in
+      let ti = convert_block tm new_meta t box is_last cinfo [] in
+      let fi = convert_block tm new_meta f box is_last cinfo [] in
+      let ei = convert_expr tm new_meta e BNone None cinfo acc in
       let rt' = TMap.oval_of_type tm rt in
-      fun acc -> If (Wasm.Type.(ValBlockType rt'), List.rev (ti []), List.rev (fi []))
-                           :: ei acc
+      If (Wasm.Type.(ValBlockType rt'), List.rev ti, List.rev fi) :: ei
   | EDo (eid, args) ->
       let _, tret, eid = (eid : _ effectid :> _ * _ * int32) in
       let args = convert_exprs tm new_meta args BLnone cinfo in
@@ -943,7 +941,7 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ =
         | _ ->
             let stid = TMap.recid_of_type tm (TClosArg (TLcons (tret, TLnil))) in
             fun acc -> StructGet (stid, 0l, None) :: RefCast Wasm.Type.(NoNull, (VarHT (StatX stid))) :: acc in
-      do_box tm new_meta box (fun acc -> ret (Suspend eid :: args acc))
+      do_box tm new_meta box (fun acc -> ret (Suspend eid :: args acc)) acc
   | EShallowHandle _ -> failwith "TODO: convert_expr EShallowHandle"
   | EDeepHandle (contid, contargs, hdlid, hdlargs) ->
       let _, _, thdlcl, hdlid = (hdlid : _ funcid :> _ * _ * _ * int32) in
@@ -959,7 +957,7 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ =
         gen_cont_struct (
         ContNew tcontid ::
         RefFunc contid ::
-        acc)))
+        acc))) acc
   | ECont (loc, contid, contarg, hdlfid, (hdlclloc, hdlclid)) -> begin
       let TLcons (_, TLcons (carg, TLnil)), _, _, hdlfid = (hdlfid : _ funcid :> _ * _ * _ * int32) in
       match is_last with
@@ -969,7 +967,7 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ =
           do_box tm new_meta box (fun acc ->
             Br jmplv ::
             convert_get_var loc contid cinfo (
-            args acc))
+            args acc)) acc
       | _ ->
           let _, hdlclid = (hdlclid : _ varid :> _ * int32) in
           let fcid = TMap.recid_of_type tm (TTuple (NTLcons ("1", carg, NTLnil))) in
@@ -978,25 +976,25 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ =
             (if can_early_ret then ReturnCall hdlfid else Call hdlfid) ::
             convert_get_var' hdlclloc hdlclid cinfo (
             args (
-            convert_get_var loc contid cinfo acc)))
+            convert_get_var loc contid cinfo acc))) acc
     end
-and convert_exprs : type a b. _ -> _ -> a expr_list -> (a, b) box_list -> _ =
-  fun (tm : tmap) (new_meta : new_meta) (es : a expr_list) box (cinfo : clos_info) : instr_conv -> match box, es with
-  | _, ELnil -> fun acc -> acc
+and convert_exprs : type a b. _ -> _ -> a expr_list -> (a, b) box_list -> _ -> instr_conv =
+  fun (tm : tmap) (new_meta : new_meta) (es : a expr_list) box (cinfo : clos_info) acc -> match box, es with
+  | _, ELnil -> acc
   | BLnone, ELcons (ehd, etl) ->
       let f = convert_expr tm new_meta ehd BNone None cinfo in
       let f2 = convert_exprs tm new_meta etl BLnone cinfo in
-      fun acc -> f2 (f acc)
+      f2 (f acc)
   | BLcons (bhd, btl), ELcons (ehd, etl) ->
       let f = convert_expr tm new_meta ehd bhd None cinfo in
       let f2 = convert_exprs tm new_meta etl btl cinfo in
-      fun acc -> f2 (f acc)
-and convert_new_struct : type a b. _ -> _ -> a expr_list -> (a, b) box_list -> _ =
-  fun (tm : tmap) (new_meta : new_meta) (cls : a expr_list) box (fcid : int32) (cinfo : clos_info) : instr_conv ->
+      f2 (f acc)
+and convert_new_struct : type a b. _ -> _ -> a expr_list -> (a, b) box_list -> _ -> _ -> instr_conv =
+  fun (tm : tmap) (new_meta : new_meta) (cls : a expr_list) box (fcid : int32) (cinfo : clos_info) acc ->
   let open Wasm.Instruction in
   match cls with
-  | ELnil -> fun acc -> RefNull Wasm.Type.(VarHT (StatX fcid)) :: acc
-  | ELcons _ -> let f = convert_exprs tm new_meta cls box cinfo in fun acc -> StructNew (fcid, Explicit) :: f acc
+  | ELnil -> RefNull Wasm.Type.(VarHT (StatX fcid)) :: acc
+  | ELcons _ -> let f = convert_exprs tm new_meta cls box cinfo in StructNew (fcid, Explicit) :: f acc
 
 (* These two functions return the instructions in reverse order *)
 let convert_anyblock (tm : tmap) (new_meta : new_meta) (b : 'a block) (is_last : bool) (cinfo : clos_info) : Wasm.Instruction.t list =
