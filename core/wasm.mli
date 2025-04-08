@@ -261,6 +261,7 @@ module Instruction : sig
     | ArrayNew of int32 * initop
     | ArrayNewFixed of int32 * int32
     | ArrayGet of int32 * Pack.extension option
+    | ArraySet of int32
     | ArrayLen
     | ArrayCopy of int32 * int32
   

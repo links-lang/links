@@ -20,7 +20,7 @@ module EffectIDMap = Utility.Map.Make(struct
   let compare = Int32.compare
 end)
 
-type 'a llist = private LinksList of 'a
+type llist = private LinksList
 type variant = private Variant
 type abs_closure_content = private AbsClosureContent
 type 'a closure_content = private ClosureContent of 'a
@@ -42,7 +42,7 @@ type 'a typ =
   | TCont : 'a typ -> 'a continuation typ
   | TTuple : 'a named_typ_list -> 'a list typ
   | TVariant : variant typ
-  | TList : 'a typ -> 'a llist typ
+  | TList : llist typ
   | TVar : tvarid -> unit typ
 and 'a typ_list =
   | TLnil : unit typ_list
@@ -96,9 +96,9 @@ let rec compare_anytyp (Type t1) (Type t2) = match t1, t2 with
   | TVariant, TVariant -> 0
   | TVariant, _ -> ~-1
   | _, TVariant -> 1
-  | TList t1, TList t2 -> compare_anytyp (Type t1) (Type t2)
-  | TList _, _ -> ~-1
-  | _, TList _ -> 1
+  | TList, TList -> 0
+  | TList, _ -> ~-1
+  | _, TList -> 1
   | TVar i1, TVar i2 -> Int.compare i1 i2
 and compare_anytyp_list (TypeList tl1) (TypeList tl2) = match tl1, tl2 with
   | TLnil, TLnil -> 0
@@ -151,8 +151,8 @@ type ('a, 'b, 'r) binop =
   | BOGe : 'a typ -> ('a, 'a, bool) binop
   | BOGt : 'a typ -> ('a, 'a, bool) binop
   | BOConcat : (string, string, string) binop
-  | BOCons : 'a typ -> ('a, 'a llist, 'a llist) binop
-  | BOConcatList : 'a typ -> ('a llist, 'a llist, 'a llist) binop
+  | BOCons : 'a typ -> ('a, llist, llist) binop
+  | BOConcatList : 'a typ -> (llist, llist, llist) binop
 type anybinop = Binop : ('a, 'b, 'c) binop -> anybinop
 
 type local_storage = StorVariable | StorClosure
@@ -224,9 +224,9 @@ and 'a expr =
   | ETuple : 'a named_typ_list * 'a expr_list -> 'a list expr
   | EExtract : 'a list expr * ('a, 'b) extract_typ -> 'b expr
   | EVariant : tagid * 'a typ * 'a expr -> variant expr (* TODO: optimize this in the case of a TTuple? *)
-  | EListNil : 'a typ -> 'a llist expr
-  | EListHd : 'a llist expr * 'a typ -> 'a expr
-  | EListTl : 'a typ * 'a llist expr -> 'a llist expr
+  | EListNil : llist expr
+  | EListHd : llist expr * 'a typ -> 'a expr
+  | EListTl : llist expr -> llist expr
   | ECase : variant expr * 'a typ * (tagid * anytyp * mvarid * 'a block) list * (mvarid * 'a block) option -> 'a expr
   | EClose : ('a, 'b, 'c, 'ga, 'gc) funcid * ('d, 'c) box_list * 'd expr_list -> ('ga * 'a -> 'b) expr
   | ESpecialize : ('ga * 'a -> 'b) expr * ('gc, 'ga) specialization * ('c, 'a) box_list * ('d, 'b) box -> ('gc * 'c -> 'd) expr
@@ -298,16 +298,16 @@ let typ_of_expr (type a) (e : a expr) : a typ = match e with
   | EBinop (BOGe _, _, _) -> TBool
   | EBinop (BOGt _, _, _) -> TBool
   | EBinop (BOConcat, _, _) -> TString
-  | EBinop (BOCons t, _, _) -> TList t
-  | EBinop (BOConcatList t, _, _) -> TList t
+  | EBinop (BOCons _, _, _) -> TList
+  | EBinop (BOConcatList _, _, _) -> TList
   | EVariable (_, (t, _)) -> t
   | EVariant _ -> TVariant
   | ECase (_, t, _, _) -> t
   | ETuple (ts, _) -> TTuple ts
   | EExtract (_, (_, _, t, _)) -> t
-  | EListNil t -> TList t
+  | EListNil -> TList
   | EListHd (_, t) -> t
-  | EListTl (t, _) -> TList t
+  | EListTl _ -> TList
   | EClose ((g, _, args, ret, _, _), _, _) -> TClosed (g, args, ret)
   | ESpecialize (_, s, bargs, bret) -> TClosed (src_of_specialization s, src_of_box_list bargs, src_of_box bret)
   | ECallRawHandler (_, _, _, _, _, _, t) -> t
@@ -397,8 +397,8 @@ and assert_eq_typ : 'a 'b. 'a typ -> 'b typ -> string -> ('a, 'b) Type.eq =
   | TTuple _, _ | _, TTuple _ -> raise (internal_error onfail)
   | TVariant, TVariant -> Type.Equal
   | TVariant, _ | _, TVariant -> raise (internal_error onfail)
-  | TList t1, TList t2 -> let Type.Equal = assert_eq_typ t1 t2 onfail in Type.Equal
-  | TList _, _ | _, TList _ -> raise (internal_error onfail)
+  | TList, TList -> Type.Equal
+  | TList, _ | _, TList -> raise (internal_error onfail)
   | TVar i1, TVar i2 -> if i1 = i2 then Type.Equal else raise (internal_error onfail)
 and assert_eq_typ_list : 'a 'b. 'a typ_list -> 'b typ_list -> string -> ('a, 'b) Type.eq =
   fun (type a b) (t1 : a typ_list) (t2 : b typ_list) (onfail : string) : (a, b) Type.eq -> match t1, t2 with
@@ -441,7 +441,7 @@ end = struct
   let ntags = List.length tags
   let find_tag t = Option.get @@ List.find_index ((=) t) tags
   
-  let unops = StringMap.from_alist ["-", Unop UONegI; "-.", Unop UONegF]
+  let unops = StringMap.from_alist ["negate", Unop UONegI; "negatef", Unop UONegF]
   let binops =
     let zero op : string -> anytyp list -> anybinop = fun opname tyargs ->
       if tyargs <> [] then raise (internal_error ("Invalid type application to builtin binary operator '" ^ opname ^ "'"))
@@ -492,23 +492,22 @@ end = struct
         | [CommonTypes.PrimaryKind.Type, t; CommonTypes.PrimaryKind.Row, _], ELcons (arg, ELnil) ->
             let Type t = convert_type t in
             let argt = typ_of_expr arg in
-            let Type.Equal = assert_eq_typ argt (TList t) "Invalid type of argument of $$hd" in
+            let Type.Equal = assert_eq_typ argt TList "Invalid type of argument of $$hd" in
             Expr (t, EListHd (arg, t))
         | _, _ -> raise (internal_error ("Invalid usage of builtin '$$hd'"))
       end
     | "$$tl" -> begin match tyargs, args with
         | [], _ -> failwith "TODO $$tl without TApp"
-        | [CommonTypes.PrimaryKind.Type, t; CommonTypes.PrimaryKind.Row, _], ELcons (arg, ELnil) ->
-            let Type t = convert_type t in
+        | [CommonTypes.PrimaryKind.Type, _; CommonTypes.PrimaryKind.Row, _], ELcons (arg, ELnil) ->
             let argt = typ_of_expr arg in
-            let Type.Equal = assert_eq_typ argt (TList t) "Invalid type of argument of $$tl" in
-            Expr (TList t, EListTl (t, arg))
+            let Type.Equal = assert_eq_typ argt TList "Invalid type of argument of $$tl" in
+            Expr (TList, EListTl arg)
         | _, _ -> raise (internal_error ("Invalid usage of builtin '$$tl'"))
       end
     | _ -> ignore tyargs; raise (internal_error ("Unknown builtin impure function " ^ op))
   
   let get_var v : anyexpr option = match v with
-    | "Nil" -> Some (Expr (TList (TVar ~-1), EListNil (TVar ~-1)))
+    | "Nil" -> Some (Expr (TList, EListNil))
     | _ -> None
   
   let apply_type (at : Types.Abstype.t) (ts : anytyp list)
@@ -517,7 +516,7 @@ end = struct
     let is at2 = Types.Abstype.compare at at2 = 0 in
     ignore (func, row);
     if is Types.list then match ts with
-      | [Type t] -> normal (Type (TList t))
+      | [Type _] -> normal (Type TList)
       | _ -> raise (internal_error ("Unknown abstract type " ^ (Types.Abstype.show at)))
     else raise (internal_error ("Unknown abstract type " ^ (Types.Abstype.show at)))
 end
@@ -739,7 +738,7 @@ let rec specialize_typ : type a. _ -> a typ -> a specialize = fun tmap t -> matc
       | None -> Spec (TTuple ts, BTuple bs)
     end
   | TVariant -> Spec (TVariant, BNone (t, t))
-  | TList t1 -> Spec (TList t1, BNone (t, t))
+  | TList -> Spec (TList, BNone (t, t))
   | TVar i -> begin match TVarMap.find_opt i tmap with
       | Some (Type (TVar _ as src)) -> Spec (src, BNone (src, t))
       | Some (Type src) -> Spec (src, BBox (src, i))
@@ -1332,7 +1331,7 @@ end = struct
           | TCont tret -> TCont (inner map tret)
           | TTuple ts -> TTuple (inner_named_list map ts)
           | TVariant -> TVariant
-          | TList t -> TList (inner map t)
+          | TList -> TList
           | TVar i -> TVar (TVarMap.find i map)
         and inner_list : type a. _ -> a typ_list -> a typ_list = fun map ts -> match ts with
           | TLnil -> TLnil
@@ -1585,10 +1584,9 @@ let rec of_value (ge : genv) (le: 'args lenv) (v : value) : genv * 'args lenv * 
           let t = TClosed (ga, targs, tret) in
           let closed_applied = ESpecialize (e, s, bargs, bret) in
           ge, le, Expr (t, closed_applied)
-      | TList (TVar -1) -> begin match ts, e with
-          | [CommonTypes.PrimaryKind.Type, t], EListNil (TVar -1) ->
-              let Type t = convert_type t in
-              ge, le, Expr (TList t, EListNil t)
+      | TList -> begin match ts, e with
+          | [CommonTypes.PrimaryKind.Type, _], EListNil -> (* Probably the Links [] value *)
+              ge, le, Expr (TList, EListNil)
           | _, _ -> raise (internal_error "Incoherent state TApp (? : TList -1, ?)")
         end
       | _ -> raise (internal_error "Cannot apply type to non-functional (non-TClosed) expression")
@@ -1675,12 +1673,12 @@ let rec of_value (ge : genv) (le: 'args lenv) (v : value) : genv * 'args lenv * 
                 ge, le, Expr (TString, EBinop (BOConcat, arg1, arg2))
             | Some (Binop (BOCons t)) ->
                 let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 t in
-                let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 (TList t) in
-                ge, le, Expr (TList t, EBinop (BOCons t, arg1, arg2))
+                let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 TList in
+                ge, le, Expr (TList, EBinop (BOCons t, arg1, arg2))
             | Some (Binop (BOConcatList t)) ->
-                let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 (TList t) in
-                let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 (TList t) in
-                ge, le, Expr (TList t, EBinop (BOConcatList t, arg1, arg2))
+                let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 TList in
+                let ge, le, arg2 = of_value ge le arg2 in let arg2 = target_expr arg2 TList in
+                ge, le, Expr (TList, EBinop (BOConcatList t, arg1, arg2))
             end
           | _ -> raise (internal_error ("Function '" ^ name ^ "' is not a (supported) builtin n-ary operation"))
         end

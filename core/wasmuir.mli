@@ -5,7 +5,7 @@ type meffid = private int32  (* Module effect ID   *)
 module FunIDMap : Utility.Map.S with type key = mfunid
 module EffectIDMap : Utility.Map.S with type key = meffid
 
-type 'a llist = 'a Wasmir.llist
+type llist = Wasmir.llist
 type variant = Wasmir.variant
 type abs_closure_content = Wasmir.abs_closure_content
 type 'a closure_content = 'a Wasmir.closure_content
@@ -22,7 +22,7 @@ type 'a typ =
   | TCont : 'a typ -> 'a continuation typ
   | TTuple : 'a named_typ_list -> 'a list typ
   | TVariant : variant typ
-  | TList : 'a typ -> 'a llist typ
+  | TList : llist typ
   | TVar : unit typ
 and 'a typ_list =
   | TLnil : unit typ_list
@@ -52,8 +52,8 @@ type ('a, 'b, 'r) binop =
   | BOLe : 'a typ -> ('a, 'a, bool) binop | BOLt : 'a typ -> ('a, 'a, bool) binop
   | BOGe : 'a typ -> ('a, 'a, bool) binop | BOGt : 'a typ -> ('a, 'a, bool) binop
   | BOConcat : (string, string, string) binop
-  | BOCons : 'a typ -> ('a, 'a llist, 'a llist) binop
-  | BOConcatList : 'a typ -> ('a llist, 'a llist, 'a llist) binop
+  | BOCons : 'a typ -> ('a, llist, llist) binop
+  | BOConcatList : 'a typ -> ( llist, llist, llist) binop
 
 type local_storage = StorVariable | StorClosure
 type locality = Global | Local of local_storage
@@ -99,9 +99,9 @@ and 'a expr =
   | EExtract : 'a list expr * ('a, 'b) extract_typ -> 'b expr
   | EVariant : tagid * 'a typ * 'a expr -> variant expr
   | ECase : variant expr * 'a typ * (tagid * anytyp * mvarid * 'a block) list * (mvarid * 'a block) option -> 'a expr
-  | EListNil : 'a typ -> 'a llist expr
-  | EListHd : 'a llist expr * 'a typ -> 'a expr
-  | EListTl : 'a typ * 'a llist expr -> 'a llist expr
+  | EListNil : llist expr
+  | EListHd : llist expr * 'a typ -> 'a expr
+  | EListTl : llist expr -> llist expr
   | EClose : ('a, 'b, 'c) funcid * ('d, 'c) box_list * 'd expr_list -> ('g * 'a -> 'b) expr
   | ESpecialize : (_ * 'c -> 'd) expr * ('g * 'a -> 'b) typ * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b) expr
   | ECallRawHandler : mfunid * 'c continuation typ * 'c continuation expr * 'a typ * 'a expr * abs_closure_content expr * 'b typ -> 'b expr

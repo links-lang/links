@@ -268,6 +268,7 @@ let rec generate_instr buf i = match i with
         Buffer.add_uint8 buf 0xFB; generate_u 32 buf 12L; generate_u 32 buf (Int64.of_int32 i)
   | ArrayGet (i, Some Pack.ZX) ->
         Buffer.add_uint8 buf 0xFB; generate_u 32 buf 13L; generate_u 32 buf (Int64.of_int32 i)
+  | ArraySet i -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 14L; generate_u 32 buf (Int64.of_int32 i)
   | ArrayLen -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 15L
   | ArrayCopy (d, s) -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 17L; generate_u 32 buf (Int64.of_int32 d); generate_u 32 buf (Int64.of_int32 s)
   | RefI31 -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 28L

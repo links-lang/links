@@ -780,6 +780,7 @@ module Instruction = struct
     | ArrayNew of int32 * initop
     | ArrayNewFixed of int32 * int32
     | ArrayGet of int32 * Pack.extension option
+    | ArraySet of int32
     | ArrayLen
     | ArrayCopy of int32 * int32
   
@@ -847,6 +848,7 @@ module Instruction = struct
     | ArrayGet (i, None) -> LongNode ("array.get", [Atom (Int32.to_string i)], [])
     | ArrayGet (i, Some Pack.SX) -> LongNode ("array.get_s", [Atom (Int32.to_string i)], [])
     | ArrayGet (i, Some Pack.ZX) -> LongNode ("array.get_u", [Atom (Int32.to_string i)], [])
+    | ArraySet i -> LongNode ("array.set", [Atom (Int32.to_string i)], [])
     | ArrayLen -> Node ("array.len", [])
     | ArrayCopy (d, s) -> LongNode ("array.copy", [Atom (Int32.to_string d); Atom (Int32.to_string s)], [])
 end

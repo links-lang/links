@@ -11,7 +11,7 @@ module MTypMap : Utility.Map.S with type key = mtypid
 module FunIDMap : Utility.Map.S with type key = mfunid
 module EffectIDMap : Utility.Map.S with type key = meffid
 
-type 'a llist = private LinksList of 'a
+type llist = private LinksList
 type variant = private Variant
 type abs_closure_content = private AbsClosureContent
 type 'a closure_content = private ClosureContent of 'a
@@ -33,7 +33,7 @@ type 'a typ =
   | TCont : 'a typ -> 'a continuation typ
   | TTuple : 'a named_typ_list -> 'a list typ
   | TVariant : variant typ
-  | TList : 'a typ -> 'a llist typ
+  | TList : llist typ
   | TVar : tvarid -> unit typ
 and 'a typ_list =
   | TLnil : unit typ_list
@@ -70,8 +70,8 @@ type ('a, 'b, 'r) binop =
   | BOGe : 'a typ -> ('a, 'a, bool) binop
   | BOGt : 'a typ -> ('a, 'a, bool) binop
   | BOConcat : (string, string, string) binop
-  | BOCons : 'a typ -> ('a, 'a llist, 'a llist) binop
-  | BOConcatList : 'a typ -> ('a llist, 'a llist, 'a llist) binop
+  | BOCons : 'a typ -> ('a, llist, llist) binop
+  | BOConcatList : 'a typ -> (llist, llist, llist) binop
 
 type local_storage = StorVariable | StorClosure
 type locality = Global | Local of local_storage
@@ -126,9 +126,9 @@ and 'a expr =
   | ETuple : 'a named_typ_list * 'a expr_list -> 'a list expr
   | EExtract : 'a list expr * ('a, 'b) extract_typ -> 'b expr
   | EVariant : tagid * 'a typ * 'a expr -> variant expr
-  | EListNil : 'a typ -> 'a llist expr
-  | EListHd : 'a llist expr * 'a typ -> 'a expr
-  | EListTl : 'a typ * 'a llist expr -> 'a llist expr
+  | EListNil : llist expr
+  | EListHd : llist expr * 'a typ -> 'a expr
+  | EListTl : llist expr -> llist expr
   | ECase : variant expr * 'a typ * (tagid * anytyp * mvarid * 'a block) list * (mvarid * 'a block) option -> 'a expr
   | EClose : ('a, 'b, 'c, 'ga, 'gc) funcid * ('d, 'c) box_list * 'd expr_list -> ('ga * 'a -> 'b) expr
   | ESpecialize : ('ga * 'a -> 'b) expr * ('gc, 'ga) specialization * ('c, 'a) box_list * ('d, 'b) box -> ('gc * 'c -> 'd) expr

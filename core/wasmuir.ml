@@ -5,7 +5,7 @@ type meffid = Wasmir.meffid
 module FunIDMap = Wasmir.FunIDMap
 module EffectIDMap = Wasmir.EffectIDMap
 
-type 'a llist = 'a Wasmir.llist
+type llist = Wasmir.llist
 type variant = Wasmir.variant
 type abs_closure_content = Wasmir.abs_closure_content
 type 'a closure_content = 'a Wasmir.closure_content
@@ -22,7 +22,7 @@ type 'a typ =
   | TCont : 'a typ -> 'a continuation typ
   | TTuple : 'a named_typ_list -> 'a list typ
   | TVariant : variant typ
-  | TList : 'a typ -> 'a llist typ
+  | TList : llist typ
   | TVar : unit typ
 and 'a typ_list =
   | TLnil : unit typ_list
@@ -46,7 +46,7 @@ let [@tail_mod_cons] rec convert_typ : type a. a Wasmir.typ -> a typ = fun (t : 
   | Wasmir.TCont tret -> TCont (convert_typ tret)
   | Wasmir.TTuple ts -> TTuple (convert_named_typ_list ts)
   | Wasmir.TVariant -> TVariant
-  | Wasmir.TList t -> TList (convert_typ t)
+  | Wasmir.TList -> TList
   | Wasmir.TVar _ -> TVar
 and [@tail_mod_cons] convert_typ_list : type a. a Wasmir.typ_list -> a typ_list = fun (t : a Wasmir.typ_list) : a typ_list -> match t with
   | Wasmir.TLnil -> TLnil
@@ -91,9 +91,9 @@ let rec compare_typ (Type t1 : anytyp) (Type t2 : anytyp) = match t1, t2 with
   | TVariant, TVariant -> 0
   | TVariant, _ -> ~-1
   | _, TVariant -> 1
-  | TList t1, TList t2 -> compare_typ (Type t1) (Type t2)
-  | TList _, _ -> ~-1
-  | _, TList _ -> 1
+  | TList, TList -> 0
+  | TList, _ -> ~-1
+  | _, TList -> 1
   | TVar, TVar -> 0
 and compare_typ_list (TypeList tl1 : anytyp_list) (TypeList tl2 : anytyp_list) = match tl1, tl2 with
   | TLnil, TLnil -> 0
@@ -135,8 +135,8 @@ type ('a, 'b, 'r) binop =
   | BOLe : 'a typ -> ('a, 'a, bool) binop | BOLt : 'a typ -> ('a, 'a, bool) binop
   | BOGe : 'a typ -> ('a, 'a, bool) binop | BOGt : 'a typ -> ('a, 'a, bool) binop
   | BOConcat : (string, string, string) binop
-  | BOCons : 'a typ -> ('a, 'a llist, 'a llist) binop
-  | BOConcatList : 'a typ -> ('a llist, 'a llist, 'a llist) binop
+  | BOCons : 'a typ -> ('a, llist, llist) binop
+  | BOConcatList : 'a typ -> ( llist, llist, llist) binop
 
 type local_storage = Wasmir.local_storage =
   | StorVariable
@@ -252,9 +252,9 @@ and 'a expr =
   | EExtract : 'a list expr * ('a, 'b) extract_typ -> 'b expr
   | EVariant : tagid * 'a typ * 'a expr -> variant expr
   | ECase : variant expr * 'a typ * (tagid * anytyp * mvarid * 'a block) list * (mvarid * 'a block) option -> 'a expr
-  | EListNil : 'a typ -> 'a llist expr
-  | EListHd : 'a llist expr * 'a typ -> 'a expr
-  | EListTl : 'a typ * 'a llist expr -> 'a llist expr
+  | EListNil : llist expr
+  | EListHd : llist expr * 'a typ -> 'a expr
+  | EListTl : llist expr -> llist expr
   | EClose : ('a, 'b, 'c) funcid * ('d, 'c) box_list * 'd expr_list -> ('g * 'a -> 'b) expr
   | ESpecialize : (_ * 'c -> 'd) expr * ('g * 'a -> 'b) typ * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b) expr
   | ECallRawHandler : mfunid * 'c continuation typ * 'c continuation expr * 'a typ * 'a expr * abs_closure_content expr * 'b typ -> 'b expr
@@ -330,9 +330,9 @@ and [@tail_mod_cons] convert_expr : type a. _ -> a Wasmir.expr -> a expr =
         let convert (i, b) = i, convert_block tmap b
         in Option.map convert o
       in ECase ((convert_expr[@tailcall]) tmap e, convert_typ t, convert_l l, convert_d d)
-  | Wasmir.EListNil t -> EListNil (convert_typ t)
+  | Wasmir.EListNil -> EListNil
   | Wasmir.EListHd (e, t) -> EListHd ((convert_expr[@tailcall]) tmap e, convert_typ t)
-  | Wasmir.EListTl (t, e) -> EListTl (convert_typ t, (convert_expr[@tailcall]) tmap e)
+  | Wasmir.EListTl e -> EListTl (convert_expr tmap e)
   | Wasmir.EClose (f, b, cl) -> EClose (convert_funcid f, convert_box_list b, (convert_expr_list[@tailcall]) tmap cl)
   | Wasmir.(ESpecialize (ESpecialize (e, s1, bargs1, bret1), s2, bargs2, bret2)) ->
       let open Wasmir in
