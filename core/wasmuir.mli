@@ -85,6 +85,7 @@ type (_, _) finisher =
 and 'a block = assign list * 'a expr
 and assign = Assign : locality * 'a varid * 'a expr -> assign
 and 'a expr =
+  | EUnreachable : 'a typ -> 'a expr
   | EConvertClosure : mvarid * 'a closure_content typ -> 'a closure_content expr
   | EIgnore : 'a typ * 'a expr -> unit list expr
   | EConstInt : int64 -> int expr

@@ -238,6 +238,7 @@ type (_, _) finisher =
 and 'a block = assign list * 'a expr
 and assign = Assign : locality * 'a varid * 'a expr -> assign
 and 'a expr =
+  | EUnreachable : 'a typ -> 'a expr
   | EConvertClosure : mvarid * 'a closure_content typ -> 'a closure_content expr
   | EIgnore : 'a typ * 'a expr -> unit list expr
   | EConstInt : int64 -> int expr
@@ -286,6 +287,7 @@ and [@tail_mod_cons] convert_block : type a. _ -> a Wasmir.block -> a block =
   in (List.map convert_assign ass, convert_expr tmap e)
 and [@tail_mod_cons] convert_expr : type a. _ -> a Wasmir.expr -> a expr =
   fun (tmap : tenv) (e : a Wasmir.expr) -> match e with
+  | Wasmir.EUnreachable t -> EUnreachable (convert_typ t)
   | Wasmir.EConvertClosure (v, t) -> EConvertClosure (v, convert_typ t)
   | Wasmir.EIgnore (t, e) -> EIgnore (convert_typ t, (convert_expr[@tailcall]) tmap e)
   | Wasmir.EConstInt c -> EConstInt c

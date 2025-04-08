@@ -211,6 +211,7 @@ type ('a, 'b) finisher =
 and 'a block = assign list * 'a expr
 and assign = Assign : locality * 'a varid * 'a expr -> assign
 and 'a expr =
+  | EUnreachable : 'a typ -> 'a expr
   | EConvertClosure : mvarid * 'a closure_content typ -> 'a closure_content expr
   | EIgnore : 'a typ * 'a expr -> unit list expr
   | EConstInt : int64 -> int expr
@@ -276,6 +277,7 @@ and dst_of_box_named_list : 'a 'b. ('a, 'b) box_named_list -> 'b named_typ_list 
   | BNLcons (n, hd, tl) -> NTLcons (n, dst_of_box hd, dst_of_box_named_list tl)
 
 let typ_of_expr (type a) (e : a expr) : a typ = match e with
+  | EUnreachable t -> t
   | EConvertClosure (_, t) -> t
   | EIgnore _ -> TTuple NTLnil
   | EConstInt _ -> TInt
@@ -471,6 +473,19 @@ end = struct
         | TLcons (targ, TLnil), ELcons (arg, ELnil) -> Expr (TTuple NTLnil, EIgnore (targ, arg))
         | _, ELnil -> raise (internal_error ("Not enough arguments for builtin function 'ignore'"))
         | _, ELcons (_, ELcons _) -> raise (internal_error ("Too many arguments for builtin function 'ignore'"))
+      end
+    | "error" -> begin match tyargs with
+        | [] | [_] -> raise (internal_error "Not enough type argument for builtin function 'error'")
+        | _ :: _ :: _ :: _ -> raise (internal_error "Too many type argument for builtin function 'error'")
+        | [CommonTypes.PrimaryKind.(Presence | Type), _; _, _]
+        | [CommonTypes.PrimaryKind.Row, _; CommonTypes.PrimaryKind.(Presence | Row), _] ->
+             raise (internal_error "Invalid kind of type argument for builtin function 'error'")
+        | [CommonTypes.PrimaryKind.Row, _; CommonTypes.PrimaryKind.Type, t] ->
+        let Type t = convert_type t in
+        match targs, args with
+        | TLcons (_, TLnil), ELcons (_, ELnil) -> Expr (t, EUnreachable t) (* TODO: add an error message *)
+        | _, ELnil -> raise (internal_error ("Not enough arguments for builtin function 'error'"))
+        | _, ELcons (_, ELcons _) -> raise (internal_error ("Too many arguments for builtin function 'error'"))
       end
     | "$$hd" -> begin match tyargs, args with
         | [], _ -> failwith "TODO $$hd without TApp"
@@ -1885,6 +1900,7 @@ let rec of_tail_computation : type args. _ -> args lenv -> _ -> genv * args lenv
           (* All done! *)
           ge, le, Expr (tret, EDeepHandle (body_id, body_closes, handler_id, handler_closes))
     end
+  | Special (Wrong t) -> let Type t = convert_type t in ge, le, Expr (t, EUnreachable t)
   | Special _ -> failwith "TODO of_tail_computation Special"
   | Case (v, m, d) ->
       let ge, le, Expr (vt, v) = of_value ge le v in
