@@ -175,7 +175,9 @@ type ('a, 'b, 'c) fhandler = {
   fh_handlers: ('a, 'b) handler list;
   fh_id      : mfunid;
 }
-type func = FFunction : ('a, 'b) func' -> func | FHandler : ('a, 'b, 'c) fhandler -> func
+type fbuiltin =
+  | FBIntToString
+type func = FFunction : ('a, 'b) func' -> func | FHandler : ('a, 'b, 'c) fhandler -> func | FBuiltin of fbuiltin
 type 'a modu = {
   mod_imports     : (string * string) list;
   mod_nfuns       : int32;

@@ -398,7 +398,9 @@ type ('a, 'b, 'c) fhandler = {
   fh_handlers: ('a, 'b) handler list;
   fh_id      : mfunid;
 }
-type func = FFunction : ('a, 'b) func' -> func | FHandler : ('a, 'b, 'c) fhandler -> func
+type fbuiltin = Wasmir.fbuiltin =
+  | FBIntToString
+type func = FFunction : ('a, 'b) func' -> func | FHandler : ('a, 'b, 'c) fhandler -> func | FBuiltin of fbuiltin
 type 'a modu = {
   mod_imports     : (string * string) list;
   mod_nfuns       : int32;
@@ -440,6 +442,7 @@ let convert_fhandler (tmap : tenv) (f : ('a, 'b, 'c) Wasmir.fhandler) : ('a, 'b,
 let convert_func (tmap : tenv) (f : Wasmir.func) : func = match f with
   | Wasmir.FFunction f -> FFunction (convert_func' tmap f)
   | Wasmir.FHandler f -> FHandler (convert_fhandler tmap f)
+  | Wasmir.FBuiltin fb -> FBuiltin fb
 let convert_module (m : 'a Wasmir.modu) : 'a modu =
   let convert_global (v, t, n : mvarid * Wasmir.anytyp * string) =
     v, convert_anytyp t, n in

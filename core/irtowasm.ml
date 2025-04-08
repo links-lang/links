@@ -1019,6 +1019,93 @@ let convert_hdl (tm : tmap) (glob : NewMetadata.g) (type a b c) (f : (a, b, c) f
     fn_code = List.rev_append convert_clos [LocalGet contcl; LocalGet contidx; Loop (Wasm.Type.VarBlockType finalblk, code)];
   }
 
+let convert_builtin (tm : tmap) (_ : NewMetadata.g) (fb : fbuiltin) : Wasm.fundef = match fb with
+  | FBIntToString ->
+    let fun_typ = TMap.recid_of_functyp tm (TLcons (TInt, TLnil)) TString in
+    let i32toi32 = TMap.recid_of_rec_type tm Wasm.Type.(RecT [SubT (Final, [], DefFuncT (FuncT ([NumT I32T], [NumT I32T])))]) in
+    Wasm.{
+      fn_name = None;
+      fn_type = fun_typ;
+      fn_locals = Type.[NumT I64T; NumT I32T; RefT (NoNull, VarHT (StatX TMap.string_tid))];
+      fn_code = let open Value in let open Type in Instruction.[
+        LocalGet 0l;
+        Const (I64 (I64.of_bits 0L));
+        Relop (I64 IntOp.LtS);
+        If (ValBlockType (Some (NumT I32T)), [
+          Const (I64 (I64.of_bits 0L));
+          LocalGet 0l;
+          Binop (I64 IntOp.Sub);
+          Const (I64 (I64.of_bits 10L));
+          Binop (I64 IntOp.DivU);
+          LocalSet 2l;
+          Const (I32 (I32.of_bits 2l));
+        ], [
+          LocalGet 0l;
+          Const (I64 (I64.of_bits 10L));
+          Binop (I64 IntOp.DivU);
+          LocalSet 2l;
+          Const (I32 (I32.of_bits 1l));
+        ]);
+        Block (VarBlockType i32toi32, [
+          Loop (VarBlockType i32toi32, [
+            LocalGet 2l;
+            Testop (I64 IntOp.Eqz);
+            BrIf 1l;
+            Const (I32 (I32.of_bits 1l));
+            Binop (I32 IntOp.Add);
+            LocalGet 2l;
+            Const (I64 (I64.of_bits 10L));
+            Binop (I64 IntOp.DivU);
+            LocalSet 2l;
+            Br 0l;
+          ]);
+        ]);
+        LocalSet 3l;
+        Const (I32 (I32.of_int_s (Char.code '0')));
+        LocalGet 3l;
+        ArrayNew (TMap.string_tid, Explicit);
+        LocalSet 4l;
+        LocalGet 0l;
+        Const (I64 (I64.of_bits 0L));
+        Relop (I64 IntOp.LtS);
+        If (ValBlockType (Some (NumT I64T)), [
+          LocalGet 4l;
+          Const (I32 (I32.of_bits 0l));
+          Const (I32 (I32.of_int_s (Char.code '-')));
+          ArraySet TMap.string_tid;
+          Const (I64 (I64.of_bits 0L));
+          LocalGet 0l;
+          Binop (I64 IntOp.Sub);
+        ], [
+          LocalGet 0l;
+        ]);
+        LocalSet 2l;
+        Loop (ValBlockType (Some (RefT (NoNull, VarHT (StatX TMap.string_tid)))), [
+          LocalGet 4l;
+          LocalGet 2l;
+          Testop (I64 IntOp.Eqz);
+          BrIf 1l;
+          LocalGet 3l;
+          Const (I32 (I32.of_bits 1l));
+          Binop (I32 IntOp.Sub);
+          LocalSet 3l;
+          LocalGet 3l;
+          LocalGet 2l;
+          Const (I64 (I64.of_bits 10L));
+          Binop (I64 IntOp.RemU);
+          Cvtop (I32 IntOp.WrapI64);
+          Const (I32 (I32.of_int_s (Char.code '0')));
+          Binop (I32 IntOp.Add);
+          ArraySet TMap.string_tid;
+          LocalGet 2l;
+          Const (I64 (I64.of_bits 10L));
+          Binop (I64 IntOp.DivU);
+          LocalSet 2l;
+          Br 0l;
+        ]);
+      ];
+    }
+
 let convert_fun_aux (tm : tmap) (glob : NewMetadata.g) (ft : int32) (nparams : int32) (locals : Wasm.Type.val_type list) (f : 'a block)
     (init_dest : Wasm.Instruction.t list option) (closid : (anytyp_list * mvarid) option) : int32 * Wasm.fundef =
   let new_meta = NewMetadata.extend glob nparams locals in
@@ -1043,7 +1130,9 @@ let convert_fun (tm : tmap) (glob : NewMetadata.g) (f : ('a, 'b) func') : int32 
       | TLcons (_, tl) -> inner tl (Int32.succ acc) in
     inner f.fun_args 1l in
   convert_fun_aux tm glob fun_typ nparams (List.map (fun (Type t) -> TMap.val_of_type tm t) f.fun_locals) f.fun_block None f.fun_converted_closure
-let convert_fun_step2 (tm : tmap) (f, clostyp : func * int32) : Wasm.fundef option = match f with FHandler _ -> None | FFunction f ->
+let convert_fun_step2 (tm : tmap) (f, clostyp : func * int32) : Wasm.fundef option = match f with
+  | FHandler _ | FBuiltin _ -> None
+  | FFunction f ->
   match f.fun_export_data with
   | None -> None
   | Some name ->
@@ -1067,6 +1156,7 @@ let convert_funs (tm : tmap) (glob : NewMetadata.g) (fs : func list) (is : unit 
     | [] -> is () @ List.filter_map (convert_fun_step2 tm) acc
     | FFunction hd :: tl -> let ctid, fhd = convert_fun tm glob hd in fhd :: inner glob tl ((FFunction hd, ctid) :: acc)
     | FHandler hd :: tl -> let fhd = convert_hdl tm glob hd in fhd :: inner glob tl acc
+    | FBuiltin hd :: tl -> let fhd = convert_builtin tm glob hd in fhd :: inner glob tl acc
   in inner glob fs []
 
 let generate_type_map (_ : 'a modu) : tmap = TMap.empty

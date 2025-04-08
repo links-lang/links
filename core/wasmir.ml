@@ -344,7 +344,9 @@ type ('a, 'b, 'c) fhandler = {
   fh_handlers: ('a, 'b) handler list;
   fh_id      : mfunid;
 }
-type func = FFunction : ('a, 'b) func' -> func | FHandler : ('a, 'b, 'c) fhandler -> func
+type fbuiltin =
+  | FBIntToString
+type func = FFunction : ('a, 'b) func' -> func | FHandler : ('a, 'b, 'c) fhandler -> func | FBuiltin of fbuiltin
 type 'a modu = {
   mod_imports     : (string * string) list;
   mod_nfuns       : int32;
@@ -427,7 +429,7 @@ module Builtins : sig
   
   val get_unop : string -> anytyp list -> anyunop option
   val get_binop : string -> anytyp list -> anybinop option
-  val gen_impure : (Types.typ -> anytyp) -> string -> Ir.tyarg list -> anyexpr_list -> anyexpr
+  val gen_impure : 'a -> ('a -> fbuiltin -> 'a * mfunid) -> (Types.typ -> anytyp) -> string -> Ir.tyarg list -> anyexpr_list -> 'a * anyexpr
   
   val get_var : string -> anyexpr option
   
@@ -467,10 +469,12 @@ end = struct
     | None -> None
     | Some f -> Some (f op tyargs)
   
-  let gen_impure (convert_type : Types.typ -> anytyp) op tyargs (ExprList (targs, args)) : anyexpr = match op with
+  let gen_impure (acc : 'a) (find_fbuiltin : 'a -> fbuiltin -> 'a * mfunid)
+                 (convert_type : Types.typ -> anytyp) (op : string) (tyargs : Ir.tyarg list)
+                 (ExprList (targs, args) : anyexpr_list) : 'a * anyexpr = match op with
     | "ignore" -> begin
         match targs, args with
-        | TLcons (targ, TLnil), ELcons (arg, ELnil) -> Expr (TTuple NTLnil, EIgnore (targ, arg))
+        | TLcons (targ, TLnil), ELcons (arg, ELnil) -> acc, Expr (TTuple NTLnil, EIgnore (targ, arg))
         | _, ELnil -> raise (internal_error ("Not enough arguments for builtin function 'ignore'"))
         | _, ELcons (_, ELcons _) -> raise (internal_error ("Too many arguments for builtin function 'ignore'"))
       end
@@ -483,7 +487,7 @@ end = struct
         | [CommonTypes.PrimaryKind.Row, _; CommonTypes.PrimaryKind.Type, t] ->
         let Type t = convert_type t in
         match targs, args with
-        | TLcons (_, TLnil), ELcons (_, ELnil) -> Expr (t, EUnreachable t) (* TODO: add an error message *)
+        | TLcons (_, TLnil), ELcons (_, ELnil) -> acc, Expr (t, EUnreachable t) (* TODO: add an error message *)
         | _, ELnil -> raise (internal_error ("Not enough arguments for builtin function 'error'"))
         | _, ELcons (_, ELcons _) -> raise (internal_error ("Too many arguments for builtin function 'error'"))
       end
@@ -493,7 +497,7 @@ end = struct
             let Type t = convert_type t in
             let argt = typ_of_expr arg in
             let Type.Equal = assert_eq_typ argt TList "Invalid type of argument of $$hd" in
-            Expr (t, EListHd (arg, t))
+            acc, Expr (t, EListHd (arg, t))
         | _, _ -> raise (internal_error ("Invalid usage of builtin '$$hd'"))
       end
     | "$$tl" -> begin match tyargs, args with
@@ -501,8 +505,18 @@ end = struct
         | [CommonTypes.PrimaryKind.Type, _; CommonTypes.PrimaryKind.Row, _], ELcons (arg, ELnil) ->
             let argt = typ_of_expr arg in
             let Type.Equal = assert_eq_typ argt TList "Invalid type of argument of $$tl" in
-            Expr (TList, EListTl arg)
+            acc, Expr (TList, EListTl arg)
         | _, _ -> raise (internal_error ("Invalid usage of builtin '$$tl'"))
+      end
+    | "intToString" -> begin match tyargs, args with
+        | [], _ -> failwith "TODO intToString without TApp"
+        | [CommonTypes.PrimaryKind.Row, _], ELcons (arg, ELnil) ->
+            let argt = typ_of_expr arg in
+            let Type.Equal = assert_eq_typ argt TInt "Invalid type of argument of intToString" in
+            let acc, fid = find_fbuiltin acc FBIntToString in
+            let fid : (int * unit, string, unit, unit, unit) funcid = (Gnil, Gnil, TLcons (TInt, TLnil), TString, TLnil, fid) in
+            acc, Expr (TString, ECallClosed (EClose (fid, BLnil, ELnil), ELcons (arg, ELnil), TString))
+        | _, _ -> raise (internal_error ("Invalid usage of builtin 'intToString'"))
       end
     | _ -> ignore tyargs; raise (internal_error ("Unknown builtin impure function " ^ op))
   
@@ -1164,6 +1178,8 @@ module GEnv : sig (* Contains the functions, the types, etc *)
   val allocate_fhandler : t -> hid * mfunid * t
   val assign_fhandler : t -> hid -> mfunid -> LEnv.subt -> (meffid * meffid) option -> ('b, 'd) finisher -> ('b, 'd) handler list -> t
   
+  val find_fbuiltin : t -> fbuiltin -> t * mfunid
+  
   val add_effect : t -> string -> anytyp_list -> t * meffid
   
   val compile : t -> unit LEnv.realt -> anyblock -> anymodule
@@ -1186,7 +1202,10 @@ end = struct
     ge_imports : (string * string) list;
     ge_map : string Env.Int.t;
     ge_nfuns : mfunid;
-    ge_funs : (anyfunc' option ref * mfunid * bool ref, (anyhandler option ref, anyfunc' * mfunid) Either.t) Either.t list;
+    ge_funs : (anyfunc' option ref * mfunid * bool ref,
+               (anyhandler option ref,
+                (anyfunc' * mfunid,
+                 fbuiltin) Either.t) Either.t) Either.t list;
     ge_ntags : tagid;
     ge_tagmap : tagid Env.String.t;
     ge_ntyps : mtypid;
@@ -1199,6 +1218,7 @@ end = struct
     ge_gblbinders : Utility.IntSet.t;
     ge_gblmap : anyvarid Env.Int.t;
     ge_fmap : funid anyfuncid Env.Int.t;
+    ge_fbs : mfunid option;
   }
   let empty (m : string Env.Int.t) (global_binders : Utility.IntSet.t) (is_binary : bool) : t =
     let tmap = [TypeList TLnil, 0] in
@@ -1220,6 +1240,7 @@ end = struct
       ge_gblbinders = global_binders;
       ge_gblmap = Env.Int.empty;
       ge_fmap = Env.Int.empty;
+      ge_fbs = None;
     }
   
   let find_tag (env : t) (tname : string) : t * tagid = match Env.String.find_opt tname env.ge_tagmap with
@@ -1385,7 +1406,7 @@ end = struct
     } in
     { env with
       ge_nfuns;
-      ge_funs = Either.Right (Either.Right (AFFnc f, fid)) :: env.ge_funs;
+      ge_funs = Either.Right (Either.Right (Either.Left (AFFnc f, fid))) :: env.ge_funs;
     }, fid
   let new_function (env : t) (args : LEnv.subt) (b : anyblock) (cclosid : (anytyp_list * mvarid) option)
       : t * mfunid * funid =
@@ -1412,6 +1433,15 @@ end = struct
     | Some _ -> raise (internal_error "double assignment of function")
     | None -> hid := Some (LEnv.compile_handler args self_mid oabsconc onret ondo); env
   
+  let find_fbuiltin (env : t) (fb : fbuiltin) : t * mfunid = match env, fb with
+    | { ge_fbs = Some i; _ }, FBIntToString -> env, i
+    | { ge_fbs = None; _ }, FBIntToString ->
+        let i = env.ge_nfuns in
+        let ge_funs = Either.Right (Either.Right (Either.Right FBIntToString)) :: env.ge_funs in
+        let ge_nfuns = Int32.succ i in
+        let ge_fbs = Some i in
+        { env with ge_funs; ge_nfuns; ge_fbs; }, i
+  
   let add_effect (env : t) (ename : string) (eargs : anytyp_list) : t * meffid =
     let eff = (ename, eargs) in
     match EffectMap.find_opt eff env.ge_effmap with
@@ -1435,8 +1465,9 @@ end = struct
                     ge, FunIDMap.add fid (TypeList f.fun_args, Type f.fun_ret) acc
               else ge, acc
           | Either.Right (Either.Left _) -> ge, acc (* We don't need to export handlers *)
-          | Either.Right (Either.Right (AFFnc f, fid)) ->
-              ge, FunIDMap.add fid (TypeList f.fun_args, Type f.fun_ret) acc (* We do need to export continuators *))
+          | Either.Right (Either.Right (Either.Left (AFFnc f, fid))) ->
+              ge, FunIDMap.add fid (TypeList f.fun_args, Type f.fun_ret) acc (* We do need to export continuators *)
+          | Either.Right (Either.Right (Either.Right _)) -> ge, acc (* We don't need to export builtin functions *))
         (ge, FunIDMap.empty) ge.ge_funs in
     Module {
       mod_imports = ge.ge_imports;
@@ -1448,7 +1479,8 @@ end = struct
             | Either.Left ({ contents = Some (AFFnc f) }, _, _) -> FFunction f
             | Either.Right (Either.Left { contents = None }) -> raise (internal_error "handler was allocated but never assigned")
             | Either.Right (Either.Left { contents = Some (AHandler f) }) -> FHandler f
-            | Either.Right (Either.Right (AFFnc f, _)) -> FFunction f)
+            | Either.Right (Either.Right (Either.Left (AFFnc f, _))) -> FFunction f
+            | Either.Right (Either.Right (Either.Right fb)) -> FBuiltin fb)
           ge.ge_funs;
       mod_needs_export;
       mod_typs = MTypMap.of_seq (Seq.mapi (fun i v -> i, v) (List.to_seq (List.rev ge.ge_typs)));
@@ -1780,7 +1812,8 @@ let rec of_tail_computation : type args. _ -> args lenv -> _ -> genv * args lenv
               end else raise (internal_error "Invalid continuation: receives type applications")
           | le, ClosedBuiltin name ->
               let ge, le, args = convert_values_unk ge le args in
-              ge, le, Builtins.gen_impure convert_type name ts args
+              let ge, e = Builtins.gen_impure ge GEnv.find_fbuiltin convert_type name ts args in
+              ge, le, e
         end
       | ts, Closure (f, tcl, cls) ->
           let FuncID (type a0 b0 c0 ga gc) ((ga, gc, targs, tret, tc, _) as fid, fdata : (a0, b0, c0, ga, gc) funcid * _) =
