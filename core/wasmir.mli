@@ -33,7 +33,7 @@ type 'a typ =
   | TCont : 'a typ -> 'a continuation typ
   | TTuple : 'a named_typ_list -> 'a list typ
   | TVariant : variant typ
-  | TList : llist typ
+  | TList : 'a typ -> llist typ
   | TVar : tvarid -> unit typ
 and 'a typ_list =
   | TLnil : unit typ_list
@@ -126,9 +126,9 @@ and 'a expr =
   | ETuple : 'a named_typ_list * 'a expr_list -> 'a list expr
   | EExtract : 'a list expr * ('a, 'b) extract_typ -> 'b expr
   | EVariant : tagid * 'a typ * 'a expr -> variant expr
-  | EListNil : llist expr
+  | EListNil : 'a typ -> llist expr
   | EListHd : llist expr * 'a typ -> 'a expr
-  | EListTl : llist expr -> llist expr
+  | EListTl : 'a typ * llist expr -> llist expr
   | ECase : variant expr * 'a typ * (tagid * anytyp * mvarid * 'a block) list * (mvarid * 'a block) option -> 'a expr
   | EClose : ('a, 'b, 'c, 'ga, 'gc) funcid * ('d, 'c) box_list * 'd expr_list -> ('ga * 'a -> 'b) expr
   | ESpecialize : ('ga * 'a -> 'b) expr * ('gc, 'ga) specialization * ('c, 'a) box_list * ('d, 'b) box -> ('gc * 'c -> 'd) expr

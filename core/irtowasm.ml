@@ -77,7 +77,6 @@ end = struct
     cenv = TypeMap.of_list [
       Type TString, string_typ;
       Type TVariant, variant_typ;
-      Type TList, list_typ;
       Type TVar, boxed_typ;
     ];
     eenv = TypeMap.empty;
@@ -112,7 +111,7 @@ end = struct
     | TCont _ -> RefT (NoNull, VarHT (StatX (recid_of_type env t)))
     | TTuple _ -> RefT (NoNull, VarHT (StatX (recid_of_type env t)))
     | TVariant -> RefT (NoNull, VarHT (StatX variant_tid))
-    | TList -> RefT (Null, VarHT (StatX list_tid))
+    | TList _ -> RefT (Null, VarHT (StatX list_tid))
     | TVar -> RefT (NoNull, VarHT (StatX boxed_tid))
   
   and [@tail_mod_cons] val_list_of_type_list : type a. t -> a typ_list -> Wasm.Type.val_type list =
@@ -149,7 +148,7 @@ end = struct
               let elems = val_list_of_type_list env elems in
               RecT [SubT (Final, [], DefStructT (StructT (List.map (fun t -> FieldT (Cons, ValStorageT t)) elems)))]
           | TVariant -> variant_typ (* cached *)
-          | TList -> list_typ (* cached *)
+          | TList _ -> list_typ
           | TVar -> boxed_typ (* cached *)
         in env.cenv <- TypeMap.add (Type t) newt env.cenv; newt
   
@@ -220,7 +219,7 @@ let rtt_wrapping (type a) (tm : tmap) (t : a typ) : (int32 option, (a, unit) Typ
   | TTuple TLnil -> convt tm t
   | TTuple _ -> Either.Left None
   | TVariant -> convt tm t
-  | TList -> convt tm t
+  | TList _ -> Either.Left None
   | TVar -> Either.Right Type.Equal
 
 (* The following functions build the instructions in reverse order *)
@@ -240,7 +239,7 @@ let rec generate_rtt : type a. a typ -> instr_conv =
   | TCont _ -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits cont_rtt)) :: acc
   | TTuple ts -> generate_rtt_array_named ts
   | TVariant -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits variant_rtt)) :: acc
-  | TList -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits list_rtt)) :: acc
+  | TList _ -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits list_rtt)) :: acc
   | TVar -> failwith "TODO: generate_rtt TVar: load RTT from value"
 and generate_rtt_array : type a. a typ_list -> instr_conv =
   fun (ts : a typ_list) : instr_conv -> let open Wasm.Instruction in
@@ -480,7 +479,7 @@ end = struct
     | Some i -> i
     | None ->
         let fid = glob.nfuns in
-        let ftid = TMap.recid_of_exported_type tm (TLcons (TList, TLcons (TList, TLnil))) TList in
+        let ftid = TMap.recid_of_exported_type tm (TLcons (TList TVar, TLcons (TList TVar, TLnil))) (TList TVar) in
         let f = Wasm.{
           fn_name = None; fn_type = ftid; fn_locals = []; fn_code = Instruction.[
             Block (Type.ValBlockType None, [
@@ -541,7 +540,7 @@ end = struct
                   fn_locals = [];
                   fn_code = Instruction.[LocalGet 0l; LocalGet 1l; Relop (Value.F64 FloatOp.Eq)];
                 }], eqfuns
-            | TList -> ignore new_meta; failwith "TODO NewMetadata.find_eq_fun.prepare TList"
+            | TList _ -> ignore new_meta; failwith "TODO NewMetadata.find_eq_fun.prepare TList"
             | _ -> failwith "TODO NewMetadata.find_eq_fun" in
           nfuns, fs, eqfuns, funid in
         let nfuns, add_funs, eqfuns, retid = prepare t nfuns eqfuns in
@@ -571,7 +570,7 @@ let convert_global (tm : tmap) ((_, Type t, name) : 'a * anytyp * string) : Wasm
           StructNew (TMap.boxed_tid, Implicit);
           StructNew (TMap.variant_tid, Explicit)
         ]
-    | TList -> [RefNull Wasm.Type.(VarHT (StatX TMap.list_tid))]
+    | TList _ -> [RefNull Wasm.Type.(VarHT (StatX TMap.list_tid))]
     | TVar -> raise (internal_error "Unexpected global of IR type Var") in
   let t = TMap.val_of_type tm t in
   Wasm.(Type.(GlobalT (Var, t)), init, Some name)
@@ -806,11 +805,11 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ -> _ -> instr_c
       in
       let tret = TMap.val_of_type tm t in
       do_box tm new_meta box (fun acc -> Wasm.Instruction.Block (Wasm.Type.(ValBlockType (Some tret)), code) :: stv acc) acc
-  | EListNil -> do_box tm new_meta box (fun acc -> RefNull Wasm.Type.(VarHT (StatX TMap.list_tid)) :: acc) acc
+  | EListNil _ -> do_box tm new_meta box (fun acc -> RefNull Wasm.Type.(VarHT (StatX TMap.list_tid)) :: acc) acc
   | EListHd (l, t) ->
       let l = convert_expr tm new_meta l BNone None cinfo in
       do_box tm new_meta box (do_unbox tm new_meta (BBox t) (fun acc -> StructGet (TMap.list_tid, 0l, None) :: l acc)) acc
-  | EListTl l ->
+  | EListTl (_, l) ->
       let l = convert_expr tm new_meta l BNone None cinfo in
       do_box tm new_meta box (fun acc -> StructGet (TMap.list_tid, 1l, None) :: l acc) acc
   | EClose (f, bcl, cls) ->

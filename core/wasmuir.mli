@@ -22,7 +22,7 @@ type 'a typ =
   | TCont : 'a typ -> 'a continuation typ
   | TTuple : 'a typ_list -> 'a list typ
   | TVariant : variant typ
-  | TList : llist typ
+  | TList : 'a typ -> llist typ
   | TVar : unit typ
 and 'a typ_list =
   | TLnil : unit typ_list
@@ -95,9 +95,9 @@ and 'a expr =
   | EExtract : 'a list expr * ('a, 'b) extract_typ -> 'b expr
   | EVariant : tagid * 'a typ * 'a expr -> variant expr
   | ECase : variant expr * 'a typ * (tagid * anytyp * mvarid * 'a block) list * (mvarid * 'a block) option -> 'a expr
-  | EListNil : llist expr
+  | EListNil : 'a typ -> llist expr
   | EListHd : llist expr * 'a typ -> 'a expr
-  | EListTl : llist expr -> llist expr
+  | EListTl : 'a typ * llist expr -> llist expr
   | EClose : ('a, 'b, 'c) funcid * ('d, 'c) box_list * 'd expr_list -> ('g * 'a -> 'b) expr
   | ESpecialize : (_ * 'c -> 'd) expr * ('g * 'a -> 'b) typ * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b) expr
   | ECallRawHandler : mfunid * 'c continuation typ * 'c continuation expr * 'a typ * 'a expr * abs_closure_content expr * 'b typ -> 'b expr
