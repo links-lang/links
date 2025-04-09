@@ -16,7 +16,7 @@ let list_rtt       =  8l
 let func_rtt       =  9l
 let cont_rtt       = 10l
 
-(* TODO: make it so that TTuple NTLnil becomes nothing *)
+(* TODO: make it so that TTuple TLnil becomes nothing *)
 module TMap : sig
   type t
   val empty : t
@@ -101,7 +101,7 @@ end = struct
   
   let rec val_of_type : type a. t -> a typ -> Wasm.Type.val_type = fun (env : t) (t : a typ) : Wasm.Type.val_type ->
     let open Wasm.Type in match t with
-    | TTuple NTLnil -> NumT I32T
+    | TTuple TLnil -> NumT I32T
     | TInt -> NumT I64T
     | TBool -> NumT I32T
     | TFloat -> NumT F64T
@@ -120,10 +120,6 @@ end = struct
     match tl with
     | TLnil -> []
     | TLcons (hd, tl) -> let hd = val_of_type env hd in hd :: val_list_of_type_list env tl
-  and [@tail_mod_cons] val_list_of_named_type_list : type a. t -> a named_typ_list -> Wasm.Type.val_type list =
-    fun (env : t) (tl : a named_typ_list) : Wasm.Type.val_type list -> match tl with
-    | NTLnil -> []
-    | NTLcons (_, hd, tl) -> let hd = val_of_type env hd in hd :: val_list_of_named_type_list env tl
   
   and rec_of_type : type a. t -> a typ -> Wasm.Type.rec_type = fun (env : t) (t : a typ) : Wasm.Type.rec_type ->
     match TypeMap.find_opt (Type t) env.cenv with
@@ -131,7 +127,7 @@ end = struct
     | None ->
         let newt =
           let open Wasm.Type in match t with
-          | TTuple NTLnil -> failwith "TODO: TMap.rec_of_type TTuple NTLnil"
+          | TTuple TLnil -> failwith "TODO: TMap.rec_of_type TTuple TLnil"
           | TInt -> failwith "TODO: TMap.rec_of_type TInt"
           | TBool -> failwith "TODO: TMap.rec_of_type TBool"
           | TFloat -> failwith "TODO: TMap.rec_of_type TFloat"
@@ -150,7 +146,7 @@ end = struct
               let ftyp = recid_of_functyp env TLnil cret in
               RecT [SubT (Final, [], DefContT (ContT (VarHT (StatX ftyp))))]
           | TTuple elems ->
-              let elems = val_list_of_named_type_list env elems in
+              let elems = val_list_of_type_list env elems in
               RecT [SubT (Final, [], DefStructT (StructT (List.map (fun t -> FieldT (Cons, ValStorageT t)) elems)))]
           | TVariant -> variant_typ (* cached *)
           | TList -> list_typ (* cached *)
@@ -211,7 +207,7 @@ end
 type tmap = TMap.t
 
 let rtt_wrapping (type a) (tm : tmap) (t : a typ) : (int32 option, (a, unit) Type.eq) Either.t =
-  let convt tm t = Either.Left (Some (TMap.recid_of_type tm (TTuple (NTLcons ("1", t, NTLnil))))) in
+  let convt tm t = Either.Left (Some (TMap.recid_of_type tm (TTuple (TLcons (t, TLnil))))) in
   match t with
   | TInt -> convt tm t
   | TBool -> convt tm t
@@ -221,7 +217,7 @@ let rtt_wrapping (type a) (tm : tmap) (t : a typ) : (int32 option, (a, unit) Typ
   | TAbsClosArg -> convt tm t
   | TClosArg _ -> Either.Left None
   | TCont _ -> convt tm t
-  | TTuple NTLnil -> convt tm t
+  | TTuple TLnil -> convt tm t
   | TTuple _ -> Either.Left None
   | TVariant -> convt tm t
   | TList -> convt tm t
@@ -252,16 +248,6 @@ and generate_rtt_array : type a. a typ_list -> instr_conv =
     fun ts nbefore -> match ts with
     | TLnil -> fun acc -> ArrayNewFixed (TMap.rtt_array_tid, nbefore) :: acc
     | TLcons (thd, ttl) ->
-        let genhd = generate_rtt thd in
-        let gentl = inner ttl (Int32.succ nbefore) in
-        fun acc -> gentl (genhd acc) in
-  inner ts 0l
-and generate_rtt_array_named : type a. a named_typ_list -> instr_conv =
-  fun (ts : a named_typ_list) : instr_conv -> let open Wasm.Instruction in
-  let rec inner : type a. a named_typ_list -> int32 -> _ =
-    fun ts nbefore -> match ts with
-    | NTLnil -> fun acc -> ArrayNewFixed (TMap.rtt_array_tid, nbefore) :: acc
-    | NTLcons (_, thd, ttl) ->
         let genhd = generate_rtt thd in
         let gentl = inner ttl (Int32.succ nbefore) in
         fun acc -> gentl (genhd acc) in
@@ -527,7 +513,7 @@ end = struct
           let eqfuns = TypeMap.add (Type t) funid eqfuns in
           let ft = TMap.recid_of_exported_type tm (TLcons (t, TLcons (t, TLnil))) TBool in
           let nfuns, fs, eqfuns = match t with
-            | TTuple NTLnil ->
+            | TTuple TLnil ->
                 nfuns, [Wasm.{
                   fn_type = ft;
                   fn_name = None;
@@ -570,7 +556,7 @@ type new_meta = NewMetadata.t
 let convert_global (tm : tmap) ((_, Type t, name) : 'a * anytyp * string) : Wasm.global =
   let init =
     let open Wasm.Instruction in match t with
-    | TTuple NTLnil -> [Const (Wasm.Value.(I32 (I32.of_bits 0l)))]
+    | TTuple TLnil -> [Const (Wasm.Value.(I32 (I32.of_bits 0l)))]
     | TInt -> [Const (Wasm.Value.(I64 (I64.of_bits 0L)))]
     | TBool -> [Const (Wasm.Value.(I32 (I32.of_bits 0l)))]
     | TFloat -> [Const (Wasm.Value.(F64 (F64.of_float 0.)))]
@@ -624,7 +610,7 @@ let convert_binop (type a b c) (tm : tmap) (new_meta : new_meta) (op : (a, b, c)
   | BORemI -> fun acc -> Binop (Wasm.Value.I64 IntOp.RemS) :: arg2 (arg1 acc)
   | BOEq t -> begin let open Wasm.Value in
       match (match t with
-        | TTuple NTLnil -> Either.Left (I32 IntOp.Eq)
+        | TTuple TLnil -> Either.Left (I32 IntOp.Eq)
         | TInt -> Either.Left (I64 IntOp.Eq)
         | TBool -> Either.Left (I32 IntOp.Eq)
         | TFloat -> Either.Left (F64 FloatOp.Eq)
@@ -637,7 +623,7 @@ let convert_binop (type a b c) (tm : tmap) (new_meta : new_meta) (op : (a, b, c)
     end
   | BONe t -> begin let open Wasm.Value in
       match (match t with
-        | TTuple NTLnil -> Either.Left (I32 IntOp.Ne)
+        | TTuple TLnil -> Either.Left (I32 IntOp.Ne)
         | TInt -> Either.Left (I64 IntOp.Ne)
         | TBool -> Either.Left (I32 IntOp.Ne)
         | TFloat -> Either.Left (F64 FloatOp.Ne)
@@ -752,7 +738,7 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ -> _ -> instr_c
       let v = convert_binop tm new_meta op arg1 arg2 in
       do_box tm new_meta box v acc
   | EVariable (loc, vid) -> do_box tm new_meta box (convert_get_var loc vid cinfo) acc
-  | ETuple (NTLnil, ELnil) ->
+  | ETuple (TLnil, ELnil) ->
       do_box tm new_meta box (fun acc -> Const Wasm.Value.(I32 (I32.of_bits 0l)) :: acc) acc
   | ETuple (ntl, es) ->
       let tid = TMap.recid_of_type tm (TTuple ntl) in
@@ -842,7 +828,7 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ -> _ -> instr_c
       do_box tm new_meta box (do_unbox tm new_meta (BClosed (tdst, bargs, bret)) (convert_expr tm new_meta e BNone None cinfo)) acc
   | ECallRawHandler (fid, _, contarg, targ, arg, hdlarg, _) ->
       let fid = (fid :> int32) in
-      let fcid = TMap.recid_of_type tm (TTuple (NTLcons ("1", targ, NTLnil))) in
+      let fcid = TMap.recid_of_type tm (TTuple (TLcons (targ, TLnil))) in
       let args = convert_new_struct tm new_meta (ELcons (arg, ELnil)) BLnone fcid cinfo in
       let hdlarg = convert_expr tm new_meta hdlarg BNone None cinfo in
       let contarg = convert_expr tm new_meta contarg BNone None cinfo in
@@ -896,7 +882,7 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ -> _ -> instr_c
       let _, tret, eid = (eid : _ effectid :> _ * _ * int32) in
       let args = convert_exprs tm new_meta args BLnone cinfo in
       let ret = match tret with
-        | TTuple NTLnil -> fun acc -> Const Wasm.Value.(I32 (I32.of_bits 0l)) :: Drop :: acc
+        | TTuple TLnil -> fun acc -> Const Wasm.Value.(I32 (I32.of_bits 0l)) :: Drop :: acc
         | TTuple tl ->
             let stid = TMap.recid_of_type tm (TTuple tl) in
             fun acc -> RefCast Wasm.Type.(NoNull, (VarHT (StatX stid))) :: acc
@@ -924,7 +910,7 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ -> _ -> instr_c
       let TLcons (_, TLcons (carg, TLnil)), _, _, hdlfid = (hdlfid : _ funcid :> _ * _ * _ * int32) in
       match is_last with
       | Some (Some (refid, jmplv)) when Int32.equal hdlfid (refid :> int32) ->
-          let fcid = TMap.recid_of_type tm (TTuple (NTLcons ("1", carg, NTLnil))) in
+          let fcid = TMap.recid_of_type tm (TTuple (TLcons (carg, TLnil))) in
           let args = convert_new_struct tm new_meta (ELcons (contarg, ELnil)) BLnone fcid cinfo in
           do_box tm new_meta box (fun acc ->
             Br jmplv ::
@@ -932,7 +918,7 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ -> _ -> instr_c
             args acc)) acc
       | _ ->
           let _, hdlclid = (hdlclid : _ varid :> _ * int32) in
-          let fcid = TMap.recid_of_type tm (TTuple (NTLcons ("1", carg, NTLnil))) in
+          let fcid = TMap.recid_of_type tm (TTuple (TLcons (carg, TLnil))) in
           let args = convert_new_struct tm new_meta (ELcons (contarg, ELnil)) BLnone fcid cinfo in
           do_box tm new_meta box (fun acc ->
             (if can_early_ret then ReturnCall hdlfid else Call hdlfid) ::
@@ -1227,7 +1213,7 @@ let compile (prog : Ir.program) (env : string Env.Int.t) (main_typ_name : string
         ], [], [], Int32.succ mainid
     | Some { impinfo_putc = putc; impinfo_puts = _puts } ->
         let (* rec *) prepare : type a. a typ -> _ = fun (t : a typ) (nlocs : int32) (nfuns : int32) -> match t with
-          | TTuple NTLnil ->
+          | TTuple TLnil ->
               Either.Left [
                 Drop;
                 Const (I32 (I32.of_int_s (Char.code '('))); Call putc;

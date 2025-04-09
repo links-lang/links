@@ -20,20 +20,16 @@ type 'a typ =
   | TAbsClosArg : abs_closure_content typ
   | TClosArg : 'a typ_list -> 'a closure_content typ
   | TCont : 'a typ -> 'a continuation typ
-  | TTuple : 'a named_typ_list -> 'a list typ
+  | TTuple : 'a typ_list -> 'a list typ
   | TVariant : variant typ
   | TList : llist typ
   | TVar : unit typ
 and 'a typ_list =
   | TLnil : unit typ_list
   | TLcons : 'a typ * 'b typ_list -> ('a * 'b) typ_list
-and 'a named_typ_list =
-  | NTLnil : unit named_typ_list
-  | NTLcons : string * 'a typ * 'b named_typ_list -> ('a * 'b) named_typ_list
 
 type anytyp = Type : 'a typ -> anytyp
 type anytyp_list = TypeList : 'a typ_list -> anytyp_list
-type anynamed_typ_list = NamedTypeList : 'a named_typ_list -> anynamed_typ_list
 
 let [@tail_mod_cons] rec convert_typ : type a. a Wasmir.typ -> a typ = fun (t : a Wasmir.typ) : a typ -> match t with
   | Wasmir.TInt -> TInt
@@ -51,10 +47,10 @@ let [@tail_mod_cons] rec convert_typ : type a. a Wasmir.typ -> a typ = fun (t : 
 and [@tail_mod_cons] convert_typ_list : type a. a Wasmir.typ_list -> a typ_list = fun (t : a Wasmir.typ_list) : a typ_list -> match t with
   | Wasmir.TLnil -> TLnil
   | Wasmir.TLcons (hd, tl) -> TLcons (convert_typ hd, (convert_typ_list[@tailcall]) tl)
-and [@tail_mod_cons] convert_named_typ_list : type a. a Wasmir.named_typ_list -> a named_typ_list =
-  fun (t : a Wasmir.named_typ_list) : a named_typ_list -> match t with
-  | Wasmir.NTLnil -> NTLnil
-  | Wasmir.NTLcons (n, hd, tl) -> NTLcons (n, convert_typ hd, (convert_named_typ_list[@tailcall]) tl)
+and [@tail_mod_cons] convert_named_typ_list : type a. a Wasmir.named_typ_list -> a typ_list =
+  fun (t : a Wasmir.named_typ_list) : a typ_list -> match t with
+  | Wasmir.NTLnil -> TLnil
+  | Wasmir.NTLcons (_, hd, tl) -> TLcons (convert_typ hd, (convert_named_typ_list[@tailcall]) tl)
 
 let convert_anytyp (Wasmir.Type t : Wasmir.anytyp) : anytyp = Type (convert_typ t)
 let convert_anytyp_list (Wasmir.TypeList t : Wasmir.anytyp_list) : anytyp_list = TypeList (convert_typ_list t)
@@ -85,7 +81,7 @@ let rec compare_typ (Type t1 : anytyp) (Type t2 : anytyp) = match t1, t2 with
   | TCont t1, TCont t2 -> compare_typ (Type t1) (Type t2)
   | TCont _, _ -> ~-1
   | _, TCont _ -> 1
-  | TTuple tl1, TTuple tl2 -> compare_named_typ_list tl1 tl2
+  | TTuple tl1, TTuple tl2 -> compare_typ_list (TypeList tl1) (TypeList tl2)
   | TTuple _, _ -> ~-1
   | _, TTuple _ -> 1
   | TVariant, TVariant -> 0
@@ -100,15 +96,6 @@ and compare_typ_list (TypeList tl1 : anytyp_list) (TypeList tl2 : anytyp_list) =
   | TLnil, TLcons _ -> ~-1 | TLcons _, TLnil -> 1
   | TLcons (hd1, tl1), TLcons (hd2, tl2) ->
       let chd = compare_typ (Type hd1) (Type hd2) in if chd = 0 then compare_typ_list (TypeList tl1) (TypeList tl2) else chd
-and compare_named_typ_list : type a b. a named_typ_list -> b named_typ_list -> _ =
-  fun (nl1 : a named_typ_list) (nl2 : b named_typ_list) -> match nl1, nl2 with
-  | NTLnil, NTLnil -> 0
-  | NTLcons _, NTLnil -> ~-1
-  | NTLnil, NTLcons _ -> 1
-  | NTLcons (n1, t1, nl1), NTLcons (n2, t2, nl2) ->
-      let c = String.compare n1 n2 in if c <> 0 then c else
-      let c = compare_typ (Type t1) (Type t2) in if c <> 0 then c else
-      compare_named_typ_list nl1 nl2
 
 module TypeMap = Utility.Map.Make(struct
   type t = anytyp
@@ -117,7 +104,7 @@ module TypeMap = Utility.Map.Make(struct
   let compare = compare_typ
 end)
 
-type ('a, 'b) extract_typ = 'a named_typ_list * int * 'b typ
+type ('a, 'b) extract_typ = 'a typ_list * int * 'b typ
 
 let convert_extract_typ (Wasmir.TTuple s, n, t, _ : ('a, 'b) Wasmir.extract_typ) : ('a, 'b) extract_typ =
   convert_named_typ_list s, n, convert_typ t
@@ -219,18 +206,13 @@ let [@tail_mod_cons] rec dst_of_box : type a b. a typ -> (a, b) box -> b typ =
   | _, BNone -> src
   | TClosed (targs, tret), BClosed (_, bargs, bret) -> TClosed ((dst_of_box_list[@tailcall]) targs bargs, dst_of_box tret bret)
   | TCont tret, BCont bret -> TCont (dst_of_box tret bret)
-  | TTuple ts, BTuple bs -> TTuple (dst_of_box_named_list ts bs)
+  | TTuple ts, BTuple bs -> TTuple (dst_of_box_list ts bs)
   | _, BBox _ -> TVar
 and [@tail_mod_cons] dst_of_box_list : type a b. a typ_list -> (a, b) box_list -> b typ_list =
   fun (t : a typ_list) (bs : (a, b) box_list) : b typ_list -> match t, bs with
   | _, BLnone -> t
   | _, BLnil -> t
   | TLcons (thd, ttl), BLcons (hd, tl) -> TLcons (dst_of_box thd hd, (dst_of_box_list[@tailcall]) ttl tl)
-and [@tail_mod_cons] dst_of_box_named_list : type a b. a named_typ_list -> (a, b) box_list -> b named_typ_list =
-  fun (t : a named_typ_list) (bs : (a, b) box_list) : b named_typ_list -> match t, bs with
-  | _, BLnone -> t
-  | _, BLnil -> t
-  | NTLcons (n, thd, ttl), BLcons (hd, tl) -> NTLcons (n, dst_of_box thd hd, (dst_of_box_named_list[@tailcall]) ttl tl)
 
 type (_, _) finisher =
   | FId : 'a typ -> ('a, 'a) finisher
@@ -248,7 +230,7 @@ and 'a expr =
   | EUnop : ('a, 'b) unop * 'a expr -> 'b expr
   | EBinop : ('a, 'b, 'c) binop * 'a expr * 'b expr -> 'c expr
   | EVariable : locality * 'a varid -> 'a expr
-  | ETuple : 'a named_typ_list * 'a expr_list -> 'a list expr
+  | ETuple : 'a typ_list * 'a expr_list -> 'a list expr
   | EExtract : 'a list expr * ('a, 'b) extract_typ -> 'b expr
   | EVariant : tagid * 'a typ * 'a expr -> variant expr
   | ECase : variant expr * 'a typ * (tagid * anytyp * mvarid * 'a block) list * (mvarid * 'a block) option -> 'a expr

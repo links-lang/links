@@ -20,24 +20,20 @@ type 'a typ =
   | TAbsClosArg : abs_closure_content typ
   | TClosArg : 'a typ_list -> 'a closure_content typ
   | TCont : 'a typ -> 'a continuation typ
-  | TTuple : 'a named_typ_list -> 'a list typ
+  | TTuple : 'a typ_list -> 'a list typ
   | TVariant : variant typ
   | TList : llist typ
   | TVar : unit typ
 and 'a typ_list =
   | TLnil : unit typ_list
   | TLcons : 'a typ * 'b typ_list -> ('a * 'b) typ_list
-and 'a named_typ_list =
-  | NTLnil : unit named_typ_list
-  | NTLcons : string * 'a typ * 'b named_typ_list -> ('a * 'b) named_typ_list
 
 type anytyp = Type : 'a typ -> anytyp
 type anytyp_list = TypeList : 'a typ_list -> anytyp_list
-type anynamed_typ_list = NamedTypeList : 'a named_typ_list -> anynamed_typ_list
 
 module TypeMap : Utility.Map.S with type key = anytyp
 
-type ('a, 'b) extract_typ = 'a named_typ_list * int * 'b typ
+type ('a, 'b) extract_typ = 'a typ_list * int * 'b typ
 
 type ('a, 'r) unop =
   | UONegI : (int,   int)   unop
@@ -95,7 +91,7 @@ and 'a expr =
   | EUnop : ('a, 'b) unop * 'a expr -> 'b expr
   | EBinop : ('a, 'b, 'c) binop * 'a expr * 'b expr -> 'c expr
   | EVariable : locality * 'a varid -> 'a expr
-  | ETuple : 'a named_typ_list * 'a expr_list -> 'a list expr
+  | ETuple : 'a typ_list * 'a expr_list -> 'a list expr
   | EExtract : 'a list expr * ('a, 'b) extract_typ -> 'b expr
   | EVariant : tagid * 'a typ * 'a expr -> variant expr
   | ECase : variant expr * 'a typ * (tagid * anytyp * mvarid * 'a block) list * (mvarid * 'a block) option -> 'a expr
