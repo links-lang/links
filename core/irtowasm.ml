@@ -228,7 +228,7 @@ type instr_conv = Wasm.Instruction.t list -> Wasm.Instruction.t list
 let rec generate_rtt : type a. a typ -> instr_conv =
   fun (t : a typ) : instr_conv ->
   let open Wasm.Instruction in match t with
-  | TTuple NTLnil -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits unit_rtt)) :: acc
+  | TTuple TLnil -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits unit_rtt)) :: acc
   | TInt -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits int_rtt)) :: acc
   | TBool -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits bool_rtt)) :: acc
   | TFloat -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits float_rtt)) :: acc
@@ -237,7 +237,7 @@ let rec generate_rtt : type a. a typ -> instr_conv =
   | TAbsClosArg -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits absclosarg_rtt)) :: acc
   | TClosArg ts -> generate_rtt_array ts
   | TCont _ -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits cont_rtt)) :: acc
-  | TTuple ts -> generate_rtt_array_named ts
+  | TTuple ts -> generate_rtt_array ts
   | TVariant -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits variant_rtt)) :: acc
   | TList _ -> fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits list_rtt)) :: acc
   | TVar -> failwith "TODO: generate_rtt TVar: load RTT from value"
