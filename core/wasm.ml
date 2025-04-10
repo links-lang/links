@@ -672,10 +672,10 @@ module Instruction = struct
   
   module IntOp = struct
     type unop = |
-    type binop = Add | Sub | Mul | DivS | DivU | RemS | RemU
+    type binop = Add | Sub | Mul | DivS | DivU | RemS | RemU | And | Or | Xor | Shl | ShrS | ShrU | Rotl | Rotr
     type testop = Eqz
     type relop = Eq | Ne | LtS | LtU | GtS | GtU | LeS | LeU | GeS | GeU
-    type cvtop = WrapI64
+    type cvtop = WrapI64 | ReinterpretFloat
     
     let unop _ (op : unop) : string = match op with _ -> .
     let binop _ (op : binop) : string = match op with
@@ -686,6 +686,14 @@ module Instruction = struct
       | DivU -> "div_u"
       | RemS -> "rem_s"
       | RemU -> "rem_u"
+      | And -> "and"
+      | Or -> "or"
+      | Xor -> "xor"
+      | Shl -> "shl"
+      | ShrS -> "shr_s"
+      | ShrU -> "shr_u"
+      | Rotl -> "rotl"
+      | Rotr -> "rotr"
     let testop _ (op : testop) : string = match op with
       | Eqz -> "eqz"
     let relop _ (op : relop) : string = match op with
@@ -699,15 +707,16 @@ module Instruction = struct
       | LeU -> "le_u"
       | GeS -> "ge_s"
       | GeU -> "ge_u"
-    let cvtop _ (op : cvtop) : string = match op with
+    let cvtop sz (op : cvtop) : string = match op with
       | WrapI64 -> "wrap_i64"
+      | ReinterpretFloat -> "reinterpret_f" ^ sz
   end
   module FloatOp = struct
     type unop = Neg
     type binop = Add | Sub | Mul | Div
     type testop = |
     type relop = Eq | Ne
-    type cvtop = |
+    type cvtop = ReinterpretInt
     
     let unop _ (op : unop) : string = match op with
       | Neg -> "neg"
@@ -720,7 +729,8 @@ module Instruction = struct
     let relop _ (op : relop) : string = match op with
       | Eq -> "eq"
       | Ne -> "ne"
-    let cvtop _ (op : cvtop) : string = match op with _ -> .
+    let cvtop sz (op : cvtop) : string = match op with
+      | ReinterpretInt -> "reinterpret_i" ^ sz
   end
   
   module I32Op = IntOp

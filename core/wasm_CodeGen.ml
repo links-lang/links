@@ -216,6 +216,14 @@ let rec generate_instr buf i = match i with
   | Binop (Value.I32 IntOp.DivU) -> Buffer.add_uint8 buf 0x6E
   | Binop (Value.I32 IntOp.RemS) -> Buffer.add_uint8 buf 0x6F
   | Binop (Value.I32 IntOp.RemU) -> Buffer.add_uint8 buf 0x70
+  | Binop (Value.I32 IntOp.And) -> Buffer.add_uint8 buf 0x71
+  | Binop (Value.I32 IntOp.Or) -> Buffer.add_uint8 buf 0x72
+  | Binop (Value.I32 IntOp.Xor) -> Buffer.add_uint8 buf 0x73
+  | Binop (Value.I32 IntOp.Shl) -> Buffer.add_uint8 buf 0x74
+  | Binop (Value.I32 IntOp.ShrS) -> Buffer.add_uint8 buf 0x75
+  | Binop (Value.I32 IntOp.ShrU) -> Buffer.add_uint8 buf 0x76
+  | Binop (Value.I32 IntOp.Rotl) -> Buffer.add_uint8 buf 0x77
+  | Binop (Value.I32 IntOp.Rotr) -> Buffer.add_uint8 buf 0x78
   | Unop (Value.I64 _) -> .
   | Binop (Value.I64 IntOp.Add) -> Buffer.add_uint8 buf 0x7C
   | Binop (Value.I64 IntOp.Sub) -> Buffer.add_uint8 buf 0x7D
@@ -224,6 +232,15 @@ let rec generate_instr buf i = match i with
   | Binop (Value.I64 IntOp.DivU) -> Buffer.add_uint8 buf 0x80
   | Binop (Value.I64 IntOp.RemS) -> Buffer.add_uint8 buf 0x81
   | Binop (Value.I64 IntOp.RemU) -> Buffer.add_uint8 buf 0x82
+  | Binop (Value.I64 IntOp.And) -> Buffer.add_uint8 buf 0x83
+  | Binop (Value.I64 IntOp.Or) -> Buffer.add_uint8 buf 0x84
+  | Binop (Value.I64 IntOp.Xor) -> Buffer.add_uint8 buf 0x85
+  | Binop (Value.I64 IntOp.Shl) -> Buffer.add_uint8 buf 0x86
+  | Binop (Value.I64 IntOp.ShrS) -> Buffer.add_uint8 buf 0x87
+  | Binop (Value.I64 IntOp.ShrU) -> Buffer.add_uint8 buf 0x88
+  | Binop (Value.I64 IntOp.Rotl) -> Buffer.add_uint8 buf 0x89
+  | Binop (Value.I64 IntOp.Rotr) -> Buffer.add_uint8 buf 0x8A
+  
   | Unop (Value.F32 FloatOp.Neg) -> Buffer.add_uint8 buf 0x8C
   | Binop (Value.F32 FloatOp.Add) -> Buffer.add_uint8 buf 0x92
   | Binop (Value.F32 FloatOp.Sub) -> Buffer.add_uint8 buf 0x93
@@ -236,8 +253,10 @@ let rec generate_instr buf i = match i with
   | Binop (Value.F64 FloatOp.Div) -> Buffer.add_uint8 buf 0xA3
   | Cvtop (Value.I32 IntOp.WrapI64) -> Buffer.add_uint8 buf 0xA7
   | Cvtop (Value.I64 IntOp.WrapI64) -> raise (internal_error "Cannot wrap-convert from i64 to i64")
-  | Cvtop (Value.F32 _) -> .
-  | Cvtop (Value.F64 _) -> .
+  | Cvtop (Value.I32 IntOp.ReinterpretFloat) -> Buffer.add_uint8 buf 0xBC
+  | Cvtop (Value.I64 IntOp.ReinterpretFloat) -> Buffer.add_uint8 buf 0xBD
+  | Cvtop (Value.F32 FloatOp.ReinterpretInt) -> Buffer.add_uint8 buf 0xBE
+  | Cvtop (Value.F64 FloatOp.ReinterpretInt) -> Buffer.add_uint8 buf 0xBF
   | RefNull ht -> Buffer.add_uint8 buf 0xD0; generate_heap_type buf ht
   | RefIsNull -> Buffer.add_uint8 buf 0xD1
   | RefFunc ti -> Buffer.add_uint8 buf 0xD2; generate_u 32 buf (Int64.of_int32 ti)

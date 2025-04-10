@@ -191,17 +191,17 @@ module Instruction : sig
   
   module IntOp : sig
     type unop = |
-    type binop = Add | Sub | Mul | DivS | DivU | RemS | RemU
+    type binop = Add | Sub | Mul | DivS | DivU | RemS | RemU | And | Or | Xor | Shl | ShrS | ShrU | Rotl | Rotr
     type testop = Eqz
     type relop = Eq | Ne | LtS | LtU | GtS | GtU | LeS | LeU | GeS | GeU
-    type cvtop = WrapI64
+    type cvtop = WrapI64 | ReinterpretFloat
   end
   module FloatOp : sig
     type unop = Neg
     type binop = Add | Sub | Mul | Div
     type testop = |
     type relop = Eq | Ne
-    type cvtop = |
+    type cvtop = ReinterpretInt
   end
   
   module I32Op = IntOp
