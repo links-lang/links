@@ -154,8 +154,6 @@ and 'a expr_list =
   | ELnil : unit expr_list
   | ELcons : 'a expr * 'b expr_list -> ('a * 'b) expr_list
 
-type anyblock = Block : 'a typ * 'a block -> anyblock
-
 val typ_of_expr : 'a expr -> 'a typ
 
 type ('a, 'b) func' = {
@@ -167,9 +165,16 @@ type ('a, 'b) func' = {
   fun_locals           : anytyp list;
   fun_block            : 'b block;
 }
-type ('a, 'b, 'c) fhandler = {
+type 'b fstart = {
+  fst_id               : mfunid;
+  fst_converted_closure: (anytyp_list * mvarid) option;
+  fst_ret              : 'b typ;
+  fst_locals           : anytyp list;
+  fst_block            : 'b block;
+}
+type ('a, 'b) fhandler = {
   fh_contarg : 'a continuation varid * mvarid;
-  fh_closure : (mvarid * 'c closure_content varid) option;
+  fh_closure : (mvarid * (anytyp_list * mvarid)) option;
   fh_locals  : anytyp list;
   fh_finisher: ('a, 'b) finisher;
   fh_handlers: ('a, 'b) handler list;
@@ -177,12 +182,16 @@ type ('a, 'b, 'c) fhandler = {
 }
 type fbuiltin =
   | FBIntToString
-type func = FFunction : ('a, 'b) func' -> func | FHandler : ('a, 'b, 'c) fhandler -> func | FBuiltin of fbuiltin
+type func =
+  | FFunction : ('a, 'b) func' -> func
+  | FContinuationStart : 'b fstart -> func
+  | FHandler : ('a, 'b) fhandler -> func
+  | FBuiltin of fbuiltin
 type 'a modu = {
   mod_imports     : (string * string) list;
   mod_nfuns       : int32;
   mod_funs        : func list;
-  mod_needs_export: (anytyp_list * anytyp) FunIDMap.t;
+  mod_needs_export: (anytyp_list option * anytyp) FunIDMap.t;
   mod_typs        : anytyp_list MTypMap.t;
   mod_neffs       : int32;
   mod_effs        : anytyp_list EffectIDMap.t;

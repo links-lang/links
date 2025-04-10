@@ -359,10 +359,6 @@ and [@tail_mod_cons] convert_expr_list : type a. _ -> a Wasmir.expr_list -> a ex
   | Wasmir.ELnil -> ELnil
   | Wasmir.ELcons (hd, tl) -> ELcons (convert_expr tmap hd, (convert_expr_list[@tailcall]) tmap tl)
 
-type anyblock = Block : 'a typ * 'a block -> anyblock
-
-let convert_anyblock (tmap : tenv) (Wasmir.Block (t, b)) = Block (convert_typ t, convert_block tmap b)
-
 type ('a, 'b) func' = {
   fun_id               : mfunid;
   fun_export_data      : string option;
@@ -372,9 +368,16 @@ type ('a, 'b) func' = {
   fun_ret              : 'b typ;
   fun_block            : 'b block;
 }
-type ('a, 'b, 'c) fhandler = {
+type 'b fstart = {
+  fst_id               : mfunid;
+  fst_converted_closure: (anytyp_list * mvarid) option;
+  fst_ret              : 'b typ;
+  fst_locals           : anytyp list;
+  fst_block            : 'b block;
+}
+type ('a, 'b) fhandler = {
   fh_contarg : 'a continuation varid * mvarid;
-  fh_closure : (mvarid * 'c closure_content varid) option;
+  fh_closure : (mvarid * (anytyp_list * mvarid)) option;
   fh_locals  : anytyp list;
   fh_finisher: ('a, 'b) finisher;
   fh_handlers: ('a, 'b) handler list;
@@ -382,12 +385,16 @@ type ('a, 'b, 'c) fhandler = {
 }
 type fbuiltin = Wasmir.fbuiltin =
   | FBIntToString
-type func = FFunction : ('a, 'b) func' -> func | FHandler : ('a, 'b, 'c) fhandler -> func | FBuiltin of fbuiltin
+type func =
+  | FFunction : ('a, 'b) func' -> func
+  | FContinuationStart : 'b fstart -> func
+  | FHandler : ('a, 'b) fhandler -> func
+  | FBuiltin of fbuiltin
 type 'a modu = {
   mod_imports     : (string * string) list;
   mod_nfuns       : int32;
   mod_funs        : func list;
-  mod_needs_export: (anytyp_list * anytyp) FunIDMap.t;
+  mod_needs_export: (anytyp_list option * anytyp) FunIDMap.t;
   mod_neffs       : int32;
   mod_effs        : anytyp_list EffectIDMap.t;
   mod_nglobals    : int32;
@@ -406,13 +413,20 @@ let convert_func' (tmap : tenv) (f : ('a, 'b) Wasmir.func') : ('a, 'b) func' = {
   fun_ret               = convert_typ f.Wasmir.fun_ret;
   fun_block             = convert_block tmap f.Wasmir.fun_block;
 }
-let convert_fhandler (tmap : tenv) (f : ('a, 'b, 'c) Wasmir.fhandler) : ('a, 'b, 'c) fhandler =
+let convert_fstart (tmap : tenv) (f : 'b Wasmir.fstart) : 'b fstart = {
+  fst_id                = f.Wasmir.fst_id;
+  fst_converted_closure = Option.map (fun (t, v) -> convert_anytyp_list t, v) f.Wasmir.fst_converted_closure;
+  fst_locals            = List.map convert_anytyp f.Wasmir.fst_locals;
+  fst_ret               = convert_typ f.Wasmir.fst_ret;
+  fst_block             = convert_block tmap f.Wasmir.fst_block;
+}
+let convert_fhandler (tmap : tenv) (f : ('a, 'b) Wasmir.fhandler) : ('a, 'b) fhandler =
   let convert_contarg (c, a : 'a Wasmir.continuation Wasmir.varid * mvarid) =
     let t, c = (c : _ Wasmir.varid :> _ * _) in
     (convert_typ t, c), a
   in
-  let convert_closure (o : (mvarid * 'c Wasmir.closure_content Wasmir.varid) option) =
-    Option.map (fun (a, c) -> a, convert_varid c) o
+  let convert_closure (o : (mvarid * (Wasmir.anytyp_list * Wasmir.mvarid)) option) =
+    Option.map (fun (a, (l, c)) -> a, (convert_anytyp_list l, c)) o
   in {
   fh_contarg  = convert_contarg f.Wasmir.fh_contarg;
   fh_closure  = convert_closure f.Wasmir.fh_closure;
@@ -423,6 +437,7 @@ let convert_fhandler (tmap : tenv) (f : ('a, 'b, 'c) Wasmir.fhandler) : ('a, 'b,
 }
 let convert_func (tmap : tenv) (f : Wasmir.func) : func = match f with
   | Wasmir.FFunction f -> FFunction (convert_func' tmap f)
+  | Wasmir.FContinuationStart f -> FContinuationStart (convert_fstart tmap f)
   | Wasmir.FHandler f -> FHandler (convert_fhandler tmap f)
   | Wasmir.FBuiltin fb -> FBuiltin fb
 let convert_module (m : 'a Wasmir.modu) : 'a modu =
@@ -433,7 +448,7 @@ let convert_module (m : 'a Wasmir.modu) : 'a modu =
     mod_imports = m.Wasmir.mod_imports;
     mod_nfuns = m.Wasmir.mod_nfuns;
     mod_funs = List.map (convert_func tmap) m.Wasmir.mod_funs;
-    mod_needs_export = FunIDMap.map (fun (targs, tret) -> convert_anytyp_list targs, convert_anytyp tret) m.Wasmir.mod_needs_export;
+    mod_needs_export = FunIDMap.map (fun (targs, tret) -> Option.map convert_anytyp_list targs, convert_anytyp tret) m.Wasmir.mod_needs_export;
     mod_neffs = m.Wasmir.mod_neffs;
     mod_effs = EffectIDMap.map convert_anytyp_list m.Wasmir.mod_effs;
     mod_nglobals = m.Wasmir.mod_nglobals;

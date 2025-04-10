@@ -53,7 +53,6 @@ and 'a named_typ_list =
 
 type anytyp = Type : 'a typ -> anytyp
 type anytyp_list = TypeList : 'a typ_list -> anytyp_list
-type anyntyp_list = NamedTypeList : 'a named_typ_list -> anyntyp_list
 
 let rec compare_generalization : type a b. a generalization -> b generalization -> _ = fun g1 g2 -> match g1, g2 with
   | Gnil, Gnil -> 0
@@ -127,12 +126,9 @@ type ('a, 'b) extract_typ_check =
   | ExtractS : ('b, 'c) extract_typ_check -> ('a * 'b, 'c) extract_typ_check
 type ('a, 'b) extract_typ = 'a list typ * int * 'b typ * ('a, 'b) extract_typ_check
 
-type 'a any_extract = Extract : int * 'b typ * ('a, 'b) extract_typ_check -> 'a any_extract
-
 type ('a, 'r) unop =
   | UONegI : (int,   int)   unop
   | UONegF : (float, float) unop
-type anyunop = Unop : ('a, 'b) unop -> anyunop
 
 type ('a, 'b, 'r) binop =
   | BOAddI : (int,   int,   int)   binop
@@ -153,31 +149,16 @@ type ('a, 'b, 'r) binop =
   | BOConcat : (string, string, string) binop
   | BOCons : 'a typ -> ('a, llist, llist) binop
   | BOConcatList : 'a typ -> (llist, llist, llist) binop
-type anybinop = Binop : ('a, 'b, 'c) binop -> anybinop
 
 type local_storage = StorVariable | StorClosure
 type locality = Global | Local of local_storage
 type 'a varid = 'a typ * mvarid
 type ('a, 'b, 'c, 'ga, 'gc) funcid = 'ga generalization * 'gc generalization * 'a typ_list * 'b typ * 'c typ_list * mfunid
-type 'a closed_like =
-  | Function : ('a, 'b, unit, 'ga, unit) funcid * 'c -> 'c closed_like
-  | Closure : locality * ('ga * 'a -> 'b) varid -> 'c closed_like
-  (* FIXME: see ECont
-  | Contin : locality * 'd continuation varid * ('d continuation * ('a closure_content * unit), 'b, 'e) funcid *
-             locality * 'e closure_content varid -> ('a, 'b, 'c) closed_like *)
-  | Contin : locality * 'd continuation varid * (('d continuation * ('a * unit)) typ_list * 'b typ * mtypid * mfunid) *
-             locality * mvarid -> 'c closed_like
-  | ClosedBuiltin of string
 type ('a, 'b) effectid = (unit * 'a -> 'b) typ * meffid
-
-type anyvarid = VarID : 'a varid -> anyvarid
-type 'a anyfuncid = FuncID : ('b, 'c, 'd, 'gb, 'gd) funcid * 'a -> 'a anyfuncid
-type 'a anycfuncid = ACFunction : ('b, 'c, unit, 'ga, unit) funcid * 'a -> 'a anycfuncid
 
 type 'a varid_list =
   | VLnil : unit varid_list
   | VLcons : 'a varid * 'b varid_list -> ('a * 'b) varid_list
-type anyvarid_list = VarIDList : 'a typ_list * 'a varid_list -> anyvarid_list
 
 type ('a, 'b) box =
   | BNone : 'a typ * 'a typ -> ('a, 'a) box
@@ -192,6 +173,33 @@ and ('a, 'b) box_named_list =
   | BNLnil : (unit, unit) box_named_list
   | BNLcons : string * ('a, 'b) box * ('c, 'd) box_named_list -> ('a * 'c, 'b * 'd) box_named_list
 
+let rec src_of_box : 'a 'b. ('a, 'b) box -> 'a typ = fun (type a b) (b : (a, b) box) : a typ -> match b with
+  | BNone (src, _) -> src
+  | BClosed (gen, bargs, bret) -> TClosed (gen, src_of_box_list bargs, src_of_box bret)
+  | BCont bret -> TCont (src_of_box bret)
+  | BTuple bs -> TTuple (src_of_box_named_list bs)
+  | BBox (src, _) -> src
+and src_of_box_list : 'a 'b. ('a, 'b) box_list -> 'a typ_list = fun (type a b) (b : (a, b) box_list) : a typ_list -> match b with
+  | BLnil -> TLnil
+  | BLcons (hd, tl) -> TLcons (src_of_box hd, src_of_box_list tl)
+and src_of_box_named_list : 'a 'b. ('a, 'b) box_named_list -> 'a named_typ_list =
+  fun (type a b) (b : (a, b) box_named_list) : a named_typ_list -> match b with
+  | BNLnil -> NTLnil
+  | BNLcons (n, hd, tl) -> NTLcons (n, src_of_box hd, src_of_box_named_list tl)
+let rec dst_of_box : 'a 'b. ('a, 'b) box -> 'b typ = fun (type a b) (b : (a, b) box) : b typ -> match b with
+  | BNone (_, dst) -> dst
+  | BClosed (gen, bargs, bret) -> TClosed (gen, dst_of_box_list bargs, dst_of_box bret)
+  | BCont bret -> TCont (dst_of_box bret)
+  | BTuple bs -> TTuple (dst_of_box_named_list bs)
+  | BBox (_, dst) -> TVar dst
+and dst_of_box_list : 'a 'b. ('a, 'b) box_list -> 'b typ_list = fun (type a b) (b : (a, b) box_list) : b typ_list -> match b with
+  | BLnil -> TLnil
+  | BLcons (hd, tl) -> TLcons (dst_of_box hd, dst_of_box_list tl)
+and dst_of_box_named_list : 'a 'b. ('a, 'b) box_named_list -> 'b named_typ_list =
+  fun (type a b) (b : (a, b) box_named_list) : b named_typ_list -> match b with
+  | BNLnil -> NTLnil
+  | BNLcons (n, hd, tl) -> NTLcons (n, dst_of_box hd, dst_of_box_named_list tl)
+
 type ('a, 'b) specialization =
   | Snil : 'a generalization -> ('a, 'a) specialization
   | Scons : anytyp * tvarid * ('a, 'b) specialization -> ('a, 'b option) specialization
@@ -200,10 +208,6 @@ let [@tail_mod_cons] rec src_of_specialization : 'a 'b. ('a, 'b) specialization 
   fun (type a b) (b : (a, b) specialization) : a generalization -> match b with
   | Snil g -> g
   | Scons (_, _, s) -> src_of_specialization s
-let rec dst_of_specialization : 'a 'b. ('a, 'b) specialization -> 'b generalization =
-  fun (type a b) (b : (a, b) specialization) : b generalization -> match b with
-  | Snil g -> g
-  | Scons (_, t, s) -> Gcons (t, dst_of_specialization s)
 
 type ('a, 'b) finisher =
   | FId : 'a typ -> ('a, 'a) finisher
@@ -249,33 +253,6 @@ and 'a expr_list =
   | ELnil : unit expr_list
   | ELcons : 'a expr * 'b expr_list -> ('a * 'b) expr_list
 
-let rec src_of_box : 'a 'b. ('a, 'b) box -> 'a typ = fun (type a b) (b : (a, b) box) : a typ -> match b with
-  | BNone (src, _) -> src
-  | BClosed (gen, bargs, bret) -> TClosed (gen, src_of_box_list bargs, src_of_box bret)
-  | BCont bret -> TCont (src_of_box bret)
-  | BTuple bs -> TTuple (src_of_box_named_list bs)
-  | BBox (src, _) -> src
-and src_of_box_list : 'a 'b. ('a, 'b) box_list -> 'a typ_list = fun (type a b) (b : (a, b) box_list) : a typ_list -> match b with
-  | BLnil -> TLnil
-  | BLcons (hd, tl) -> TLcons (src_of_box hd, src_of_box_list tl)
-and src_of_box_named_list : 'a 'b. ('a, 'b) box_named_list -> 'a named_typ_list =
-  fun (type a b) (b : (a, b) box_named_list) : a named_typ_list -> match b with
-  | BNLnil -> NTLnil
-  | BNLcons (n, hd, tl) -> NTLcons (n, src_of_box hd, src_of_box_named_list tl)
-let rec dst_of_box : 'a 'b. ('a, 'b) box -> 'b typ = fun (type a b) (b : (a, b) box) : b typ -> match b with
-  | BNone (_, dst) -> dst
-  | BClosed (gen, bargs, bret) -> TClosed (gen, dst_of_box_list bargs, dst_of_box bret)
-  | BCont bret -> TCont (dst_of_box bret)
-  | BTuple bs -> TTuple (dst_of_box_named_list bs)
-  | BBox (_, dst) -> TVar dst
-and dst_of_box_list : 'a 'b. ('a, 'b) box_list -> 'b typ_list = fun (type a b) (b : (a, b) box_list) : b typ_list -> match b with
-  | BLnil -> TLnil
-  | BLcons (hd, tl) -> TLcons (dst_of_box hd, dst_of_box_list tl)
-and dst_of_box_named_list : 'a 'b. ('a, 'b) box_named_list -> 'b named_typ_list =
-  fun (type a b) (b : (a, b) box_named_list) : b named_typ_list -> match b with
-  | BNLnil -> NTLnil
-  | BNLcons (n, hd, tl) -> NTLcons (n, dst_of_box hd, dst_of_box_named_list tl)
-
 let typ_of_expr (type a) (e : a expr) : a typ = match e with
   | EUnreachable t -> t
   | EConvertClosure (_, t) -> t
@@ -318,14 +295,6 @@ let typ_of_expr (type a) (e : a expr) : a typ = match e with
   | EShallowHandle (_, _, FMap (_, t, _), _) -> t
   | EDeepHandle (_, _, (_, _, _, t, _, _), _) -> t
   | ECont (_, _, _, (_, t, _, _), _, _) -> t
-let [@tail_mod_cons] rec typ_of_expr_list : type a. a expr_list -> a typ_list = function
-  | ELnil -> TLnil
-  | ELcons (e, es) -> TLcons (typ_of_expr e, typ_of_expr_list es)
-(* val typ_of_varid_list : 'a varid_list -> 'a typ_list *)
-
-type anyblock = Block : 'a typ * 'a block -> anyblock
-type anyexpr = Expr : 'a typ * 'a expr -> anyexpr
-type anyexpr_list = ExprList : 'a typ_list * 'a expr_list -> anyexpr_list
 
 type ('a, 'b) func' = {
   fun_id               : mfunid;
@@ -336,9 +305,16 @@ type ('a, 'b) func' = {
   fun_locals           : anytyp list;
   fun_block            : 'b block;
 }
-type ('a, 'b, 'c) fhandler = {
+type 'b fstart = {
+  fst_id               : mfunid;
+  fst_converted_closure: (anytyp_list * mvarid) option;
+  fst_ret              : 'b typ;
+  fst_locals           : anytyp list;
+  fst_block            : 'b block;
+}
+type ('a, 'b) fhandler = {
   fh_contarg : 'a continuation varid * mvarid;
-  fh_closure : (mvarid * 'c closure_content varid) option;
+  fh_closure : (mvarid * (anytyp_list * mvarid)) option;
   fh_locals  : anytyp list;
   fh_finisher: ('a, 'b) finisher;
   fh_handlers: ('a, 'b) handler list;
@@ -346,12 +322,16 @@ type ('a, 'b, 'c) fhandler = {
 }
 type fbuiltin =
   | FBIntToString
-type func = FFunction : ('a, 'b) func' -> func | FHandler : ('a, 'b, 'c) fhandler -> func | FBuiltin of fbuiltin
+type func =
+  | FFunction : ('a, 'b) func' -> func
+  | FContinuationStart : 'b fstart -> func
+  | FHandler : ('a, 'b) fhandler -> func
+  | FBuiltin of fbuiltin
 type 'a modu = {
   mod_imports     : (string * string) list;
   mod_nfuns       : int32;
   mod_funs        : func list;
-  mod_needs_export: (anytyp_list * anytyp) FunIDMap.t;
+  mod_needs_export: (anytyp_list option * anytyp) FunIDMap.t;
   mod_typs        : anytyp_list MTypMap.t;
   mod_neffs       : int32;
   mod_effs        : anytyp_list EffectIDMap.t;
@@ -366,7 +346,9 @@ type anymodule = Module : 'a modu -> anymodule
 
 (* TRANSLATION *)
 
-type anyhandler = AHandler : ('a, 'b, 'c) fhandler -> anyhandler
+type anyblock = Block : 'a typ * 'a block -> anyblock
+type anyexpr = Expr : 'a typ * 'a expr -> anyexpr
+type anyexpr_list = ExprList : 'a typ_list * 'a expr_list -> anyexpr_list
 
 let internal_error message = Errors.internal_error ~filename:"wasmir.ml" ~message
 
@@ -416,6 +398,9 @@ and assert_eq_named_typ_list : 'a 'b. 'a named_typ_list -> 'b named_typ_list -> 
       else raise (internal_error onfail)
 let target_expr (type a) (Expr (t1, e) : anyexpr) (t2 : a typ) : a expr = let Type.Equal = assert_eq_typ t1 t2 "Unexpected type" in e
 let target_block (type a) (Block (t1, b) : anyblock) (t2 : a typ) : a block = let Type.Equal = assert_eq_typ t1 t2 "Unexpected type" in b
+
+type anyunop = Unop : ('a, 'b) unop -> anyunop
+type anybinop = Binop : ('a, 'b, 'c) binop -> anybinop
 
 (* let rec extract_typ_check : 'a 'b. ('a, 'b) extract_typ -> _ = fun (type a b) ((s, n, t, chk) : (a, b) extract_typ) : unit -> match s, chk with
   | TTuple (NTLcons (_, hd, _)), ExtractO ->
@@ -628,6 +613,8 @@ let rec generalize_of_tyvars (tvs : tyvar list) : anygeneralization = match tvs 
   | (hd, (CommonTypes.PrimaryKind.Type, _)) :: tl -> let AG tl = generalize_of_tyvars tl in AG (Gcons (hd, tl))
   | _ :: tl -> generalize_of_tyvars tl
 
+type anyntyp_list = NamedTypeList : 'a named_typ_list -> anyntyp_list
+
 let _to_typelist (conv : Types.typ -> anytyp) (ts : Types.typ Ir.name_map) : anyntyp_list =
   let rec inner l = match l with
     | [] -> NamedTypeList NTLnil
@@ -771,6 +758,22 @@ and specialize_typ_named_list : type a. _ -> a named_typ_list -> a specialize_na
       let SpecNL (tl, btl) = specialize_typ_named_list tmap tl in
       SpecNL (NTLcons (n, hd, tl), BNLcons (n, bhd, btl))
 
+type anyvarid = VarID : 'a varid -> anyvarid
+type 'a anyfuncid = FuncID : ('b, 'c, 'd, 'gb, 'gd) funcid * 'a -> 'a anyfuncid
+type 'a anycfuncid = ACFunction : ('b, 'c, unit, 'ga, unit) funcid * 'a -> 'a anycfuncid
+
+type anyvarid_list = VarIDList : 'a typ_list * 'a varid_list -> anyvarid_list
+
+type 'a closed_like =
+  | Function : ('a, 'b, unit, 'ga, unit) funcid * 'c -> 'c closed_like
+  | Closure : locality * ('ga * 'a -> 'b) varid -> 'c closed_like
+  (* FIXME: see ECont
+  | Contin : locality * 'd continuation varid * ('d continuation * ('a closure_content * unit), 'b, 'e) funcid *
+             locality * 'e closure_content varid -> ('a, 'b, 'c) closed_like *)
+  | Contin : locality * 'd continuation varid * (('d continuation * ('a * unit)) typ_list * 'b typ * mtypid * mfunid) *
+             locality * mvarid -> 'c closed_like
+  | ClosedBuiltin of string
+
 module LEnv : sig (* Contains the arguments, the local variables, etc *)
   type 'a t
   type 'a realt
@@ -808,8 +811,8 @@ module LEnv : sig (* Contains the arguments, the local variables, etc *)
   
   val locals_of_env : 'a realt -> anytyp list
   val compile : 'a realt -> mfunid -> string option -> 'b typ -> 'b block -> ('a, 'b) func'
-  val compile_sub : subt -> mfunid -> 'b typ -> 'b block -> (anytyp_list * mvarid) option -> (unit, 'b) func'
-  val compile_handler : subt -> mfunid -> (meffid * meffid) option -> ('b, 'd) finisher -> ('b, 'd) handler list -> anyhandler
+  val compile_cont_start : subt -> mfunid -> 'b typ -> 'b block -> (anytyp_list * mvarid) option -> 'b fstart
+  val compile_handler : subt -> mfunid -> (meffid * meffid) option -> ('b, 'd) finisher -> ('b, 'd) handler list -> ('b, 'd) fhandler
 end = struct
   module IntString = Env.Make(struct
     type t = int * string
@@ -1123,26 +1126,24 @@ end = struct
       fun_block = b;
     }
   
-  let compile_sub (env : subt) (fid : mfunid) (tret : 'b typ) (b : 'b block) (cclosid : (anytyp_list * mvarid) option) : (unit, 'b) func' =
+  let compile_cont_start (env : subt) (fid : mfunid) (tret : 'b typ) (b : 'b block) (cclosid : (anytyp_list * mvarid) option) : 'b fstart =
     {
-      fun_id = fid;
-      fun_export_data = None;
-      fun_converted_closure = cclosid;
-      fun_args = TLnil;
-      fun_ret = tret;
-      fun_locals = extract_to_list env.locs [];
-      fun_block = b;
+      fst_id = fid;
+      fst_converted_closure = cclosid;
+      fst_ret = tret;
+      fst_locals = extract_to_list env.locs [];
+      fst_block = b;
     }
   
   let compile_handler (type b d) (env : subt) (fid : mfunid) (oabsconc : (meffid * meffid) option)
-                      (onret : (b, d) finisher) (ondo : (b, d) handler list) : anyhandler =
+                      (onret : (b, d) finisher) (ondo : (b, d) handler list) : (b, d) fhandler =
     let contarg, argcontidx = match env.contid with
       | Some (VarID (_, i), j, _, _, _, _) -> i, j
       | None -> raise (internal_error "Handlers must have a continuation added") in
     let tcont = match onret with FId t | FMap ((t, _), _, _) -> t in
-    let ExprList (clostyp, _) = env.clos in AHandler {
+    let ExprList (clostyp, _) = env.clos in {
       fh_contarg  = (TCont tcont, contarg), argcontidx;
-      fh_closure  = Option.map (fun (absid, concid) -> absid, (TClosArg clostyp, concid)) oabsconc;
+      fh_closure  = Option.map (fun (absid, concid) -> absid, (TypeList clostyp, concid)) oabsconc;
       fh_locals   = extract_to_list env.locs [];
       fh_finisher = onret;
       fh_handlers = ondo;
@@ -1174,7 +1175,7 @@ module GEnv : sig (* Contains the functions, the types, etc *)
   val do_export_function : t -> funid -> t
   
   val new_continuator : t -> mfunid -> anytyp -> anytyp -> anytyp -> t * mfunid
-  val new_function : t -> LEnv.subt -> anyblock -> (anytyp_list * mvarid) option -> t * mfunid * funid
+  val new_cont_start : t -> LEnv.subt -> anyblock -> (anytyp_list * mvarid) option -> t * mfunid * funid
   val allocate_fhandler : t -> hid * mfunid * t
   val assign_fhandler : t -> hid -> mfunid -> LEnv.subt -> (meffid * meffid) option -> ('b, 'd) finisher -> ('b, 'd) handler list -> t
   
@@ -1185,9 +1186,10 @@ module GEnv : sig (* Contains the functions, the types, etc *)
   val compile : t -> unit LEnv.realt -> anyblock -> anymodule
 end = struct
   (* In-place function emplacement in the environment *)
-  type anyfunc' = AFFnc : ('a, 'b) func' -> anyfunc'
+  type anyfunc' = AFFnc : ('a, 'b) func' -> anyfunc' | AFSt : 'b fstart -> anyfunc'
+  type anyfhandler = AFHdl : ('a, 'b) fhandler -> anyfhandler
   type funid = anyfunc' option ref * bool ref
-  type hid = anyhandler option ref
+  type hid = anyfhandler option ref
   
   module EffectMap = Utility.Map.Make(struct
     type t = string * anytyp_list
@@ -1203,7 +1205,7 @@ end = struct
     ge_map : string Env.Int.t;
     ge_nfuns : mfunid;
     ge_funs : (anyfunc' option ref * mfunid * bool ref,
-               (anyhandler option ref,
+               (anyfhandler option ref,
                 (anyfunc' * mfunid,
                  fbuiltin) Either.t) Either.t) Either.t list;
     ge_ntags : tagid;
@@ -1408,13 +1410,12 @@ end = struct
       ge_nfuns;
       ge_funs = Either.Right (Either.Right (Either.Left (AFFnc f, fid))) :: env.ge_funs;
     }, fid
-  let new_function (env : t) (args : LEnv.subt) (b : anyblock) (cclosid : (anytyp_list * mvarid) option)
-      : t * mfunid * funid =
+  let new_cont_start (env : t) (args : LEnv.subt) (b : anyblock) (cclosid : (anytyp_list * mvarid) option) : t * mfunid * funid =
     let fid = env.ge_nfuns in
     let ge_nfuns = Int32.succ env.ge_nfuns in
     let Block (tret, b) = b in
-    let f = LEnv.compile_sub args fid tret b cclosid in
-    let f, export = ref (Some (AFFnc f)), ref false in
+    let f = LEnv.compile_cont_start args fid tret b cclosid in
+    let f, export = ref (Some (AFSt f)), ref false in
     let fun_data = f, export in
     { env with
       ge_nfuns;
@@ -1431,7 +1432,7 @@ end = struct
   let assign_fhandler (env : t) (hid : hid) (self_mid : mfunid) (args : LEnv.subt) (oabsconc : (meffid * meffid) option)
                       (onret : ('b, 'd) finisher) (ondo : ('b, 'd) handler list) : t = match !hid with
     | Some _ -> raise (internal_error "double assignment of function")
-    | None -> hid := Some (LEnv.compile_handler args self_mid oabsconc onret ondo); env
+    | None -> hid := Some (AFHdl (LEnv.compile_handler args self_mid oabsconc onret ondo)); env
   
   let find_fbuiltin (env : t) (fb : fbuiltin) : t * mfunid = match env, fb with
     | { ge_fbs = Some i; _ }, FBIntToString -> env, i
@@ -1462,11 +1463,15 @@ end = struct
                 match !fo with
                 | None -> raise (internal_error "function was allocated but never assigned")
                 | Some (AFFnc f) ->
-                    ge, FunIDMap.add fid (TypeList f.fun_args, Type f.fun_ret) acc
+                    ge, FunIDMap.add fid (Some (TypeList f.fun_args), Type f.fun_ret) acc
+                | Some (AFSt f) ->
+                    ge, FunIDMap.add fid (None, Type f.fst_ret) acc
               else ge, acc
           | Either.Right (Either.Left _) -> ge, acc (* We don't need to export handlers *)
           | Either.Right (Either.Right (Either.Left (AFFnc f, fid))) ->
-              ge, FunIDMap.add fid (TypeList f.fun_args, Type f.fun_ret) acc (* We do need to export continuators *)
+              ge, FunIDMap.add fid (Some (TypeList f.fun_args), Type f.fun_ret) acc (* We do need to export continuators *)
+          | Either.Right (Either.Right (Either.Left (AFSt f, fid))) ->
+              ge, FunIDMap.add fid (None, Type f.fst_ret) acc (* We do need to export continuators *)
           | Either.Right (Either.Right (Either.Right _)) -> ge, acc (* We don't need to export builtin functions *))
         (ge, FunIDMap.empty) ge.ge_funs in
     Module {
@@ -1477,9 +1482,11 @@ end = struct
           (fun f -> match f with
             | Either.Left ({ contents = None }, _, _) -> raise (internal_error "function was allocated but never assigned")
             | Either.Left ({ contents = Some (AFFnc f) }, _, _) -> FFunction f
+            | Either.Left ({ contents = Some (AFSt f) }, _, _) -> FContinuationStart f
             | Either.Right (Either.Left { contents = None }) -> raise (internal_error "handler was allocated but never assigned")
-            | Either.Right (Either.Left { contents = Some (AHandler f) }) -> FHandler f
+            | Either.Right (Either.Left { contents = Some (AFHdl f) }) -> FHandler f
             | Either.Right (Either.Right (Either.Left (AFFnc f, _))) -> FFunction f
+            | Either.Right (Either.Right (Either.Left (AFSt f, _))) -> FContinuationStart f
             | Either.Right (Either.Right (Either.Right fb)) -> FBuiltin fb)
           ge.ge_funs;
       mod_needs_export;
@@ -1542,6 +1549,8 @@ let specialize_some (ga : 'ga generalization) (ts : tyarg list)
     in inner ga ts TVarMap.empty
   in
   s, specialize_typ_list tmap targs, specialize_typ tmap tret
+
+type 'a any_extract = Extract : int * 'b typ * ('a, 'b) extract_typ_check -> 'a any_extract
 
 let rec of_value (ge : genv) (le: 'args lenv) (v : value) : genv * 'args lenv * anyexpr = match v with
   | Constant c -> let Expr (ct, cv) = of_constant c in ge, le, Expr (ct, cv)
@@ -1884,7 +1893,7 @@ let rec of_tail_computation : type args. _ -> args lenv -> _ -> genv * args lenv
             let b = Block (cret, (ass, e)) in
             (* Done, now add the "body" function to the global environment *)
             let ge, body_id, body_locid =
-              GEnv.new_function ge body_le b (Option.map (fun (_, v) -> TypeList body_closts, v) oabsconc) in
+              GEnv.new_cont_start ge body_le b (Option.map (fun (_, v) -> TypeList body_closts, v) oabsconc) in
             let ge = GEnv.do_export_function ge body_locid in
             ge, Type cret, body_id, ExprList (body_closts, body_closes) in
           let body_id : (unit, b, c, unit, unit) funcid = (Gnil, Gnil, TLnil, cret, body_closts, body_id) in
