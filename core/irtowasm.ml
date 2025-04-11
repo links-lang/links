@@ -148,7 +148,7 @@ end = struct
     let t = RecT [SubT (Final, [], DefFuncT (FuncT (args @ [RefT (Null, StructHT)], [ret])))] in
     recid_of_rec_type env t
   
-  and recid_of_cfunctyp : type a b. t -> b typ -> int32 = fun (env : t) (ret : b typ) : int32 ->
+  and recid_of_cfunctyp : type b. t -> b typ -> int32 = fun (env : t) (ret : b typ) : int32 ->
     let ret = val_of_type env ret in
     let open Wasm.Type in
     let t = RecT [SubT (Final, [], DefFuncT (FuncT ([RefT (Null, EqHT)], [ret])))] in
@@ -961,7 +961,7 @@ let convert_finisher : type a b. _ -> _ -> (a, b) finisher -> _ =
       let b = convert_block tm new_meta b BNone is_last cinfo in
       b Wasm.Instruction.[LocalSet v]
 
-let convert_hdl (tm : tmap) (glob : NewMetadata.g) (type a b c) (f : (a, b) fhandler) : Wasm.fundef =
+let convert_hdl (tm : tmap) (glob : NewMetadata.g) (type a b) (f : (a, b) fhandler) : Wasm.fundef =
   let new_meta = NewMetadata.extend glob 2l (List.map (fun (Type t) -> TMap.val_of_type tm t) f.fh_locals) in
   let (tcont, contidx), contcl = (f.fh_contarg : _ varid * mvarid :> (_ * int32) * int32) in
   let tret = match f.fh_finisher with FId t -> (t : b typ) | FMap (_, t, _) -> t in
