@@ -3,7 +3,7 @@ type mvarid = Wasmir.mvarid
 type mfunid = Wasmir.mfunid
 type meffid = Wasmir.meffid
 module FunIDMap = Wasmir.FunIDMap
-module EffectIDMap = Wasmir.EffectIDMap
+module EffectIDSet = Wasmir.EffectIDSet
 
 type llist = Wasmir.llist
 type variant = Wasmir.variant
@@ -146,7 +146,7 @@ let convert_effectid (e : ('a, 'b) Wasmir.effectid) : ('a, 'b) effectid =
   (convert_typ_list targs, convert_typ tret, e)
 
 type 'a varid_list =
-  | VLnil
+  | VLnil : unit varid_list
   | VLcons : 'a varid * 'b varid_list -> ('a * 'b) varid_list
 
 let [@tail_mod_cons] rec convert_varid_list : type a. a Wasmir.varid_list -> a varid_list = function
@@ -396,7 +396,7 @@ type 'a modu = {
   mod_funs        : func list;
   mod_needs_export: (anytyp_list option * anytyp) FunIDMap.t;
   mod_neffs       : int32;
-  mod_effs        : anytyp_list EffectIDMap.t;
+  mod_effs        : EffectIDSet.t;
   mod_nglobals    : int32;
   mod_global_vars : (mvarid * anytyp * string) list;
   mod_locals      : anytyp list;
@@ -450,7 +450,7 @@ let convert_module (m : 'a Wasmir.modu) : 'a modu =
     mod_funs = List.map (convert_func tmap) m.Wasmir.mod_funs;
     mod_needs_export = FunIDMap.map (fun (targs, tret) -> Option.map convert_anytyp_list targs, convert_anytyp tret) m.Wasmir.mod_needs_export;
     mod_neffs = m.Wasmir.mod_neffs;
-    mod_effs = EffectIDMap.map convert_anytyp_list m.Wasmir.mod_effs;
+    mod_effs = m.Wasmir.mod_effs;
     mod_nglobals = m.Wasmir.mod_nglobals;
     mod_global_vars = List.map convert_global m.Wasmir.mod_global_vars;
     mod_locals = List.map convert_anytyp m.Wasmir.mod_locals;

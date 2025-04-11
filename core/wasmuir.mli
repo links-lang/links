@@ -3,7 +3,7 @@ type mvarid = private int32  (* Module variable ID *)
 type mfunid = private int32  (* Module function ID *)
 type meffid = private int32  (* Module effect ID   *)
 module FunIDMap : Utility.Map.S with type key = mfunid
-module EffectIDMap : Utility.Map.S with type key = meffid
+module EffectIDSet : Utility.Set.S with type elt = meffid
 
 type llist = Wasmir.llist
 type variant = Wasmir.variant
@@ -59,7 +59,7 @@ type ('a, 'b, 'c) funcid = private ('a typ_list * 'b typ * 'c typ_list * mfunid)
 type ('a, 'b) effectid = private ('a typ_list * 'b typ * meffid)
 
 type 'a varid_list =
-  | VLnil
+  | VLnil : unit varid_list
   | VLcons : 'a varid * 'b varid_list -> ('a * 'b) varid_list
 
 type (_, _) box =
@@ -152,7 +152,7 @@ type 'a modu = {
   mod_funs        : func list;
   mod_needs_export: (anytyp_list option * anytyp) FunIDMap.t;
   mod_neffs       : int32;
-  mod_effs        : anytyp_list EffectIDMap.t;
+  mod_effs        : EffectIDSet.t;
   mod_nglobals    : int32;
   mod_global_vars : (mvarid * anytyp * string) list;
   mod_locals      : anytyp list;

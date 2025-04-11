@@ -171,9 +171,9 @@ end = struct
       [RefT (NoNull, VarHT (StatX contid)); RefT (Null, EqHT); RefT (Null, StructHT)],
       [tret])))]) in
     contid, hdlid
-  let recid_of_handler_block (env : t) (contid : int32) (eargs : 'a typ_list) : int32 =
+  let recid_of_handler_block (env : t) (contid : int32) (_ : 'a typ_list) : int32 =
     let open Wasm.Type in
-    let eargs = val_list_of_type_list env eargs @ [RefT (NoNull, VarHT (StatX contid))] in
+    let eargs = [RefT (Null, EqHT); RefT (NoNull, VarHT (StatX contid))] in
     recid_of_rec_type env (RecT [SubT (Final, [], DefFuncT (FuncT ([RefT (Null, EqHT); RefT (NoNull, VarHT (StatX contid))], eargs)))])
   let recid_of_handler_finish (env : t) (contid : int32) (eret : 'a typ) : int32 =
     let eret = val_of_type env eret in
@@ -893,8 +893,18 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ -> _ -> instr_c
       let rt' = TMap.oval_of_type tm rt in
       If (Wasm.Type.(ValBlockType rt'), List.rev ti, List.rev fi) :: ei
   | EDo (eid, args) ->
-      let _, tret, eid = (eid : _ effectid :> _ * _ * int32) in
-      let args = convert_exprs tm new_meta args BLnone cinfo in
+      let targs, tret, eid = (eid : _ effectid :> _ * _ * int32) in
+      let args = match targs, args with
+        | TLnil, ELnil -> fun acc -> RefNull Wasm.Type.NoneHT :: acc
+        | TLcons (targ, TLnil), ELcons (arg, ELnil) -> convert_expr tm new_meta arg (BBox targ) None cinfo
+        | TLcons (_, TLcons (_, _)), ELcons (_, ELcons (_, _)) ->
+            let tid = TMap.recid_of_type tm (TTuple targs) in
+            let AnyBoxList bcontent =
+              let rec inner : type a. a typ_list -> a anybox_list = function
+                | TLnil -> AnyBoxList BLnil
+                | TLcons (thd, ttl) -> let AnyBoxList btl = inner ttl in AnyBoxList (BLcons (BBox thd, btl)) in
+              inner targs in
+            convert_new_struct tm new_meta args bcontent tid cinfo in
       let ret = do_unbox tm new_meta (BBox tret) (fun acc -> Suspend eid :: args acc) in
       do_box tm new_meta box ret acc
   | EShallowHandle _ -> failwith "TODO: convert_expr EShallowHandle"
@@ -962,7 +972,7 @@ let convert_finisher : type a b. _ -> _ -> (a, b) finisher -> _ =
       b Wasm.Instruction.[LocalSet v]
 
 let convert_hdl (tm : tmap) (glob : NewMetadata.g) (type a b) (f : (a, b) fhandler) : Wasm.fundef =
-  let new_meta = NewMetadata.extend glob 2l (List.map (fun (Type t) -> TMap.val_of_type tm t) f.fh_locals) in
+  let new_meta = NewMetadata.extend glob 3l (List.map (fun (Type t) -> TMap.val_of_type tm t) f.fh_locals) in
   let (tcont, contidx), contcl = (f.fh_contarg : _ varid * mvarid :> (_ * int32) * int32) in
   let tret = match f.fh_finisher with FId t -> (t : b typ) | FMap (_, t, _) -> t in
   let contid, fun_typ = TMap.recids_of_handler tm tcont tret in
@@ -987,13 +997,28 @@ let convert_hdl (tm : tmap) (glob : NewMetadata.g) (type a b) (f : (a, b) fhandl
           let codehdl =
             let b = convert_block tm new_meta blk BNone (Some (Some (f.fh_id, nblocks))) cinfo in
             List.rev_append (b []) [Return] in
-          let codehdl =
-            let rec inner : type a. a varid_list -> _ = fun (vars : a varid_list) codehdl -> match vars with
-              | VLnil -> codehdl
-              | VLcons (vhd, vtl) ->
-                  let _, v = (vhd : _ varid :> _ * int32) in
-                  inner vtl (LocalSet v :: codehdl)
-            in inner vars codehdl in
+          let codehdl = match vars with
+            | VLnil -> Drop :: codehdl
+            | VLcons (v, VLnil) ->
+                let _, v = (v : _ varid :> _ * int32) in
+                LocalSet v :: codehdl
+            | VLcons (_, VLcons (_, _)) ->
+                let ts =
+                  let [@tail_mod_cons] rec inner : type a. a varid_list -> a typ_list = fun (vars : a varid_list) : a typ_list -> match vars with
+                    | VLnil -> TLnil
+                    | VLcons (vhd, vtl) ->
+                        let thd, _ = (vhd : _ varid :> _ * int32) in
+                        (TLcons (thd, inner vtl)) in
+                  inner vars in
+                let tid = TMap.recid_of_type tm (TTuple ts) in
+                let tmpv = NewMetadata.add_local tm new_meta (TTuple ts) in
+                let rec inner : type a. a varid_list -> _ = fun (vars : a varid_list) i codehdl -> match vars with
+                  | VLnil -> codehdl
+                  | VLcons (vhd, vtl) ->
+                      let t, v = (vhd : _ varid :> _ * int32) in
+                      let get = do_unbox tm new_meta (BBox t) (fun acc -> StructGet (tid, i, None) :: LocalGet tmpv :: acc) in
+                      inner vtl (Int32.succ i) (List.rev_append (get []) (LocalSet v :: codehdl)) in
+                RefCast Wasm.Type.(NoNull, VarHT (StatX tid)) :: LocalSet tmpv :: inner vars 0l codehdl in
           let _, varc = (varc : _ varid :> _ * int32) in
           let codehdl = LocalSet varc :: codehdl in
           let eargs, _, _ = (eid : _ effectid :> _ * _ * _) in
@@ -1161,12 +1186,12 @@ let convert_fun_refs (tm : tmap) (fs : (anytyp_list option * anytyp) FunIDMap.t)
     Wasm.Type.(GlobalT (Cons, RefT (NoNull, VarHT (StatX gt))), Wasm.Instruction.[RefFunc (fid :> int32)], None)
   in FunIDMap.fold (fun fid ft acc -> let hd = convert_fun_ref fid ft in hd :: acc) fs init
 
-let convert_effects (tm : tmap) (es : anytyp_list EffectIDMap.t) : int32 list =
-  let es = EffectIDMap.bindings es in
-  let convert_effect (_, TypeList targs : meffid * anytyp_list) : int32 =
+let convert_effects (tm : tmap) (es : EffectIDSet.t) : int32 list =
+  let es = EffectIDSet.elements es in
+  let convert_effect (_ : meffid) : int32 =
     let tid =
       let open Wasm.Type in
-      let targs' = TMap.val_list_of_type_list tm targs in
+      let targs' = [RefT (Null, EqHT)] in
       let tret' = RefT (Null, EqHT) in
       let ret = TMap.recid_of_rec_type tm (RecT [SubT (Final, [], DefFuncT (FuncT (targs', [tret'])))]) in
       ret in

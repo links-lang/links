@@ -13,7 +13,7 @@ module FunIDMap = Utility.Map.Make(struct
   let show v = Int32.unsigned_to_int v |> Option.get |> Int.to_string
   let compare = Int32.compare
 end)
-module EffectIDMap = Utility.Map.Make(struct
+module EffectIDSet = Utility.Set.Make(struct
   type t = meffid
   let pp fmt v = Format.fprintf fmt "%lu" v
   let show v = Int32.unsigned_to_int v |> Option.get |> Int.to_string
@@ -334,7 +334,7 @@ type 'a modu = {
   mod_needs_export: (anytyp_list option * anytyp) FunIDMap.t;
   mod_typs        : anytyp_list MTypMap.t;
   mod_neffs       : int32;
-  mod_effs        : anytyp_list EffectIDMap.t;
+  mod_effs        : EffectIDSet.t;
   mod_nglobals    : int32;
   mod_global_vars : (mvarid * anytyp * string) list;
   mod_locals      : anytyp list;
@@ -812,7 +812,7 @@ module LEnv : sig (* Contains the arguments, the local variables, etc *)
   val locals_of_env : 'a realt -> anytyp list
   val compile : 'a realt -> mfunid -> string option -> 'b typ -> 'b block -> ('a, 'b) func'
   val compile_cont_start : subt -> mfunid -> 'b typ -> 'b block -> (anytyp_list * mvarid) option -> 'b fstart
-  val compile_handler : subt -> mfunid -> (meffid * meffid) option -> ('b, 'd) finisher -> ('b, 'd) handler list -> ('b, 'd) fhandler
+  val compile_handler : subt -> mfunid -> (mvarid * mvarid) option -> ('b, 'd) finisher -> ('b, 'd) handler list -> ('b, 'd) fhandler
 end = struct
   module IntString = Env.Make(struct
     type t = int * string
@@ -1135,7 +1135,7 @@ end = struct
       fst_block = b;
     }
   
-  let compile_handler (type b d) (env : subt) (fid : mfunid) (oabsconc : (meffid * meffid) option)
+  let compile_handler (type b d) (env : subt) (fid : mfunid) (oabsconc : (mvarid * mvarid) option)
                       (onret : (b, d) finisher) (ondo : (b, d) handler list) : (b, d) fhandler =
     let contarg, argcontidx = match env.contid with
       | Some (VarID (_, i), j, _, _, _, _) -> i, j
@@ -1177,11 +1177,11 @@ module GEnv : sig (* Contains the functions, the types, etc *)
   val new_continuator : t -> mfunid -> anytyp -> anytyp -> anytyp -> t * mfunid
   val new_cont_start : t -> LEnv.subt -> anyblock -> (anytyp_list * mvarid) option -> t * mfunid * funid
   val allocate_fhandler : t -> hid * mfunid * t
-  val assign_fhandler : t -> hid -> mfunid -> LEnv.subt -> (meffid * meffid) option -> ('b, 'd) finisher -> ('b, 'd) handler list -> t
+  val assign_fhandler : t -> hid -> mfunid -> LEnv.subt -> (mvarid * mvarid) option -> ('b, 'd) finisher -> ('b, 'd) handler list -> t
   
   val find_fbuiltin : t -> fbuiltin -> t * mfunid
   
-  val add_effect : t -> string -> anytyp_list -> t * meffid
+  val add_effect : t -> string -> t * meffid
   
   val compile : t -> unit LEnv.realt -> anyblock -> anymodule
 end = struct
@@ -1191,14 +1191,7 @@ end = struct
   type funid = anyfunc' option ref * bool ref
   type hid = anyfhandler option ref
   
-  module EffectMap = Utility.Map.Make(struct
-    type t = string * anytyp_list
-    let pp _ = failwith "TODO Wasmir.GEnv.EffectMap pp"
-    let show _ = failwith "TODO Wasmir.GEnv.EffectMap show"
-    let compare (n1, ea1) (n2, ea2) =
-      let c = String.compare n1 n2 in if c <> 0 then c else
-      compare_anytyp_list ea1 ea2
-  end)
+  module EffectMap = Utility.StringMap
   
   type t = {
     ge_imports : (string * string) list;
@@ -1213,7 +1206,7 @@ end = struct
     ge_ntyps : mtypid;
     ge_typs : anytyp_list list;
     ge_neffs : meffid;
-    ge_effs : anytyp_list EffectIDMap.t;
+    ge_effs : EffectIDSet.t;
     ge_effmap : meffid EffectMap.t;
     ge_ngbls : mvarid;
     ge_gbls : (mvarid * anytyp * string) list;
@@ -1235,7 +1228,7 @@ end = struct
       ge_tagmap = Env.String.empty;
       ge_typs = List.rev_map fst tmap;
       ge_neffs = 0l;
-      ge_effs = EffectIDMap.empty;
+      ge_effs = EffectIDSet.empty;
       ge_effmap = EffectMap.empty;
       ge_ngbls = 0l;
       ge_gbls = [];
@@ -1429,7 +1422,7 @@ end = struct
       ge_nfuns = Int32.succ env.ge_nfuns;
       ge_funs = Either.Right (Either.Left f) :: env.ge_funs;
     }
-  let assign_fhandler (env : t) (hid : hid) (self_mid : mfunid) (args : LEnv.subt) (oabsconc : (meffid * meffid) option)
+  let assign_fhandler (env : t) (hid : hid) (self_mid : mfunid) (args : LEnv.subt) (oabsconc : (mvarid * mvarid) option)
                       (onret : ('b, 'd) finisher) (ondo : ('b, 'd) handler list) : t = match !hid with
     | Some _ -> raise (internal_error "double assignment of function")
     | None -> hid := Some (AFHdl (LEnv.compile_handler args self_mid oabsconc onret ondo)); env
@@ -1443,14 +1436,14 @@ end = struct
         let ge_fbs = Some i in
         { env with ge_funs; ge_nfuns; ge_fbs; }, i
   
-  let add_effect (env : t) (ename : string) (eargs : anytyp_list) : t * meffid =
-    let eff = (ename, eargs) in
+  let add_effect (env : t) (ename : string) : t * meffid =
+    let eff = ename in
     match EffectMap.find_opt eff env.ge_effmap with
     | Some i -> env, i
     | None ->
         let i = env.ge_neffs in
         let ge_neffs = Int32.succ env.ge_neffs in
-        let ge_effs = EffectIDMap.add i eargs env.ge_effs in
+        let ge_effs = EffectIDSet.add i env.ge_effs in
         let ge_effmap = EffectMap.add eff i env.ge_effmap in
         let env = { env with ge_neffs; ge_effs; ge_effmap; } in
         env, i
@@ -1869,7 +1862,7 @@ let rec of_tail_computation : type args. _ -> args lenv -> _ -> genv * args lenv
       end
   | Special (DoOperation (tagname, args, tret)) ->
       let ge, le, ExprList (targs, args) = convert_values_unk ge le args in
-      let ge, eid = GEnv.add_effect ge tagname (TypeList targs) in
+      let ge, eid = GEnv.add_effect ge tagname in
       let Type tret = convert_type tret in
       ge, le, Expr (tret, EDo ((TClosed (Gnil, targs, tret), eid), args))
   | Special (Handle h) -> begin match h.ih_depth with
@@ -1911,7 +1904,7 @@ let rec of_tail_computation : type args. _ -> args lenv -> _ -> genv * args lenv
             let ge, handle_le, ondo =
               let do_case (ge : genv) (handle_le : LEnv.subt) (ename : string) ((args, k, p) : effect_case) : genv * LEnv.subt * (b, d) handler =
                 let handle_le, VarIDList (eargs, vargs) = LEnv.set_handler_args handle_le args in
-                let ge, eid = GEnv.add_effect ge ename (TypeList eargs) in
+                let ge, eid = GEnv.add_effect ge ename in
                 let TypeList rarg = _convert_type
                     (fun _ -> raise (internal_error "Expected a function type, got another type"))
                     (fun g args _ _ ->

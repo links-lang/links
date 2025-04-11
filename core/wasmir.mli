@@ -9,7 +9,7 @@ type mfunid = private int32  (* Module function ID *)
 type meffid = private int32  (* Module effect ID   *)
 module MTypMap : Utility.Map.S with type key = mtypid
 module FunIDMap : Utility.Map.S with type key = mfunid
-module EffectIDMap : Utility.Map.S with type key = meffid
+module EffectIDSet : Utility.Set.S with type elt = meffid
 
 type llist = private LinksList
 type variant = private Variant
@@ -194,7 +194,7 @@ type 'a modu = {
   mod_needs_export: (anytyp_list option * anytyp) FunIDMap.t;
   mod_typs        : anytyp_list MTypMap.t;
   mod_neffs       : int32;
-  mod_effs        : anytyp_list EffectIDMap.t;
+  mod_effs        : EffectIDSet.t;
   mod_nglobals    : int32;
   mod_global_vars : (mvarid * anytyp * string) list;
   mod_locals      : anytyp list;
