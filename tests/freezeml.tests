@@ -210,7 +210,6 @@ Do not infer polymorphic arguments (3)
 tests/freezeml/session1.links
 exit : 1
 stderr : @.*Type error:.*
-ignore : Failing test case, as Mono kinds get converted to Session.
 
 Do not infer polymorphic arguments (4)
 tests/freezeml/session2.links

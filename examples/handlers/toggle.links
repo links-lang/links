@@ -8,7 +8,7 @@ sig put : (s) {Put:(s) {}-> () |_}-> ()
 fun put(st) {do Put(st)}
 
 # Stateful computation
-sig toggle : Comp({Get:Bool,Put:(Bool) {}-> () |_}, Bool)
+sig toggle : Comp(Bool, {Get:Bool,Put:(Bool) {}-> () |_})
 fun toggle() client {
   var bit = get();
   put(not(bit));
@@ -16,9 +16,9 @@ fun toggle() client {
 }
 
 # State handler
-sig runState : (Comp({Get:s ,Put:(s) {}-> () |e},  a  )) -> # Stateful computation
-               (s)                                       -> # Initial state
-                Comp({Get{_},Put{_}          |e}, (a,s))    # Stateless computation
+sig runState : (Comp( a   , {Get:s ,Put:(s) {}-> () |e})) -> # Stateful computation
+               (s)                                        -> # Initial state
+                Comp((a,s), {Get{_},Put{_}          |e})     # Stateless computation
 fun runState(m)(st)() client {
   var run = handle(m()) {
     case x      -> fun(ret_st) { (x,ret_st) }

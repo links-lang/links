@@ -1,6 +1,6 @@
 # A port of the simple counting benchmark from Kammar et al. (2013)
 
-sig evalState : (Comp({Get:s ,Put:(s) {}-> ()|e}, a)) -> # Stateful computation
+sig evalState : (Comp(a, {Get:s ,Put:(s) {}-> ()|e})) -> # Stateful computation
                 (s) {Get{_},Put{_} |e}~> a
 fun evalState(m)(st) client {
   var run =
@@ -12,7 +12,7 @@ fun evalState(m)(st) client {
   run(st)
 }
 
-sig count : Comp({Get:Int,Put:(Int) {}-> ()|e}, Int)
+sig count : Comp(Int, {Get:Int,Put:(Int) {}-> ()|e})
 fun count() client {
   var n = do Get;
   if (n == 0) n

@@ -841,6 +841,7 @@ conditional_expression:
 
 case:
 | CASE pattern RARROW case_contents                           { $2, block ~ppos:$loc($4) $4 }
+| CASE OTHERWISE RARROW case_contents                         { any_pat $loc($2), block ~ppos:$loc($4) $4 }
 
 case_expression:
 | SWITCH LPAREN exp RPAREN LBRACE case* RBRACE                 { with_pos $loc (Switch ($3, $6, None)) }
