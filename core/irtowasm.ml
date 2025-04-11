@@ -14,7 +14,8 @@ module TMap : sig
   val variant_tid : int32
   val list_tid : int32
   val string_tid : int32
-  val float_tid : int32
+  val boxed_int_tid : int32
+  val boxed_float_tid : int32
   
   val recid_of_rec_type : t -> Wasm.Type.rec_type -> int32
   val val_list_of_type_list : t -> 'a typ_list -> Wasm.Type.val_type list
@@ -46,7 +47,8 @@ end = struct
   let variant_tid : int32 = 2l
   let list_tid : int32 = 3l
   let string_tid : int32 = 4l
-  let float_tid : int32 = 5l
+  let boxed_int_tid : int32 = 5l
+  let boxed_float_tid : int32 = 6l
   let string_typ = Wasm.Type.(RecT [SubT (Final, [], DefArrayT (ArrayT (FieldT (Var, PackStorageT Wasm.Pack.Pack8))))])
   let variant_typ = Wasm.Type.(RecT [SubT (Final, [], DefStructT (StructT [
     FieldT (Cons, ValStorageT (NumT I32T));
@@ -59,7 +61,8 @@ end = struct
   
   let empty : t =
     let reftyps = Wasm.Type.[
-      (* 5 *) RecT [SubT (Final, [], DefStructT (StructT [FieldT (Cons, ValStorageT (NumT F64T))]))];
+      (* 6 *) RecT [SubT (Final, [], DefStructT (StructT [FieldT (Cons, ValStorageT (NumT F64T))]))];
+      (* 5 *) RecT [SubT (Final, [], DefStructT (StructT [FieldT (Cons, ValStorageT (NumT I64T))]))];
       (* 4 *) string_typ;
       (* 3 *) list_typ;
       (* 2 *) variant_typ;
@@ -69,7 +72,6 @@ end = struct
     cenv = TypeMap.of_list [
       Type TString, string_tid;
       Type TVariant, variant_tid;
-      Type TFloat, float_tid;
     ];
     eenv = TypeMap.empty;
     nrefs = Int32.of_int (List.length reftyps);
@@ -86,9 +88,9 @@ end = struct
   let rec val_of_type : type a. t -> a typ -> Wasm.Type.val_type = fun (env : t) (t : a typ) : Wasm.Type.val_type ->
     let open Wasm.Type in match t with
     | TTuple TLnil -> RefT (Null, NoneHT)
-    | TInt -> RefT (NoNull, I31HT)
-    | TBool -> RefT (NoNull, I31HT)
-    | TFloat -> RefT (NoNull, VarHT (StatX float_tid))
+    | TInt -> NumT I64T
+    | TBool -> NumT I32T
+    | TFloat -> NumT F64T
     | TString -> RefT (NoNull, VarHT (StatX string_tid))
     | TClosed _ -> RefT (NoNull, VarHT (StatX (recid_of_type env t)))
     | TAbsClosArg -> RefT (Null, StructHT)
@@ -323,6 +325,9 @@ end = struct
     | BCont _ -> failwith "TODO maybe_do_box"
     | BTuple _ -> failwith "TODO maybe_do_box"
     | BBox TVar -> Either.Right Type.Equal
+    | BBox TInt -> Either.Left (TVar, fun acc -> StructNew (TMap.boxed_int_tid, Explicit) :: get_val acc)
+    | BBox TBool -> Either.Left (TVar, fun acc -> RefI31 :: get_val acc)
+    | BBox TFloat -> Either.Left (TVar, fun acc -> StructNew (TMap.boxed_float_tid, Explicit) :: get_val acc)
     | BBox _ -> Either.Left (TVar, get_val)
   
   (* Warning: not the same ABI (the closure content is not wrapped again) *)
@@ -398,15 +403,15 @@ end = struct
     | BCont _ -> failwith "TODO maybe_do_unbox BCont"
     | BTuple _ -> failwith "TODO maybe_do_unbox BTuple"
     | BBox TVar -> Either.Right Type.Equal
-    | BBox t -> begin match TMap.recid_of_type tm t with
-        | tid -> Either.Left (t, fun acc -> RefCast Wasm.Type.(NoNull, VarHT (StatX tid)) :: get_val acc)
-        | exception _ -> match t with
-            | TTuple TLnil -> Either.Left (t, fun acc -> RefCast Wasm.Type.(Null, NoneHT) :: get_val acc)
-            | TInt -> Either.Left (t, fun acc -> RefCast Wasm.Type.(NoNull, I31HT) :: get_val acc)
-            | TBool -> Either.Left (t, fun acc -> RefCast Wasm.Type.(NoNull, I31HT) :: get_val acc)
-            | TFloat -> Either.Left (t, fun acc -> RefCast Wasm.Type.(NoNull, VarHT (StatX TMap.float_tid)) :: get_val acc)
-            | _ -> failwith "TODO maybe_do_unbox BBox"
-      end
+    | BBox TInt -> Either.Left (TInt, fun acc ->
+        StructGet (TMap.boxed_int_tid, 0l, None) :: RefCast Wasm.Type.(NoNull, VarHT (StatX TMap.boxed_int_tid)) :: get_val acc)
+    | BBox TBool -> Either.Left (TBool, fun acc -> I31Get Wasm.Pack.ZX :: RefCast Wasm.Type.(NoNull, I31HT) :: get_val acc)
+    | BBox TFloat -> Either.Left (TFloat, fun acc ->
+        StructGet (TMap.boxed_float_tid, 0l, None) :: RefCast Wasm.Type.(NoNull, VarHT (StatX TMap.boxed_float_tid)) :: get_val acc)
+    | BBox (TTuple TLnil) -> Either.Left (TTuple TLnil, fun acc -> RefNull Wasm.Type.NoneHT :: Drop :: get_val acc)
+        (* fun acc -> RefCast Wasm.Type.(Null, NoneHT) :: get_val acc) *)
+    | BBox t ->
+        let tid = TMap.recid_of_type tm t in Either.Left (t, fun acc -> RefCast Wasm.Type.(NoNull, VarHT (StatX tid)) :: get_val acc)
   
   let find_list_concat (tm : tmap) ({ list_concat; _ } as glob, _ : t) : int32 = match list_concat with
     | Some i -> i
@@ -450,35 +455,28 @@ end = struct
                   fn_type = ft;
                   fn_name = None;
                   fn_locals = [];
-                  fn_code = Instruction.[LocalGet 0l; LocalGet 1l; Relop (Value.I32 IntOp.Eq)];
+                  fn_code = Instruction.[Const Value.(I32 (I32.of_bits 1l))];
                 }], eqfuns
             | TInt ->
                 nfuns, [Wasm.{
                   fn_type = ft;
                   fn_name = None;
                   fn_locals = [];
-                  fn_code = Instruction.[LocalGet 0l; I31Get Pack.SX;
-                  LocalGet 1l; I31Get Pack.SX;
-                  Relop (Value.I32 IntOp.Eq); RefI31];
+                  fn_code = Instruction.[LocalGet 0l; LocalGet 1l; Relop (Value.I64 IntOp.Eq)];
                 }], eqfuns
             | TBool ->
                 nfuns, [Wasm.{
                   fn_type = ft;
                   fn_name = None;
                   fn_locals = [];
-                  fn_code = Instruction.[LocalGet 0l; I31Get Pack.SX;
-                  LocalGet 1l; I31Get Pack.SX;
-                  Relop (Value.I32 IntOp.Eq); RefI31];
+                  fn_code = Instruction.[LocalGet 0l; LocalGet 1l; Relop (Value.I32 IntOp.Eq)];
                 }], eqfuns
             | TFloat ->
                 nfuns, [Wasm.{
                   fn_type = ft;
                   fn_name = None;
                   fn_locals = [];
-                  fn_code = Instruction.[
-                    LocalGet 0l; StructGet (TMap.float_tid, 0l, None);
-                    LocalGet 1l; StructGet (TMap.float_tid, 0l, None);
-                    Relop (Value.F64 FloatOp.Eq); RefI31];
+                  fn_code = Instruction.[LocalGet 0l; LocalGet 1l; Relop (Value.F64 FloatOp.Eq)];
                 }], eqfuns
             | TList _ -> ignore new_meta; failwith "TODO NewMetadata.find_eq_fun.prepare TList"
             | _ -> failwith "TODO NewMetadata.find_eq_fun" in
@@ -496,9 +494,9 @@ let convert_global (tm : tmap) ((_, Type t, name) : 'a * anytyp * string) : Wasm
   let init =
     let open Wasm.Instruction in match t with
     | TTuple TLnil -> [RefNull Wasm.Type.NoneHT]
-    | TInt -> [Const (Wasm.Value.(I32 (I32.of_bits 0l))); RefI31]
-    | TBool -> [Const (Wasm.Value.(I32 (I32.of_bits 0l))); RefI31]
-    | TFloat -> [Const (Wasm.Value.(F64 (F64.of_float 0.))); StructNew (TMap.float_tid, Explicit)]
+    | TInt -> [Const (Wasm.Value.(I64 (I64.of_bits 0L)))]
+    | TBool -> [Const (Wasm.Value.(I32 (I32.of_bits 0l)))]
+    | TFloat -> [Const (Wasm.Value.(F64 (F64.of_float 0.)))]
     | TString -> [ArrayNewFixed (TMap.string_tid, 0l)]
     | TClosed _ -> let idx = TMap.recid_of_type tm t in [StructNew (idx, Implicit)]
     | TAbsClosArg -> raise (internal_error "Unexpected global of IR type AbsClosArg")
@@ -533,80 +531,56 @@ let do_unbox (type a b) (tm : tmap) (new_meta : new_meta) (box : (a, b) box) (ge
   | Either.Right Type.Equal -> get_val
 
 let convert_unop (type a b) (_ : tmap) (_ : new_meta) (op : (a, b) unop) (arg : instr_conv) : instr_conv =
-  let open Wasm in let open Instruction in let open Value in let open Pack in match op with
-    | UONegI -> fun acc ->
-        RefI31 :: Binop (I32 IntOp.Sub) :: I31Get SX :: arg (Const (I32 (I32.of_bits 0l)) :: acc)
-    | UONegF -> fun acc ->
-        RefI31 :: Unop (F64 FloatOp.Neg) :: I31Get SX :: arg acc
+  let open Wasm in let open Instruction in let open Value in match op with
+    | UONegI -> fun acc -> Binop (I64 IntOp.Sub) :: arg (Const (I64 (I64.of_bits 0L)) :: acc)
+    | UONegF -> fun acc -> Unop (F64 FloatOp.Neg) :: arg acc
 let convert_binop (type a b c) (tm : tmap) (new_meta : new_meta) (op : (a, b, c) binop) (arg1 : instr_conv) (arg2 : instr_conv) : instr_conv =
-  let open Wasm in let open Instruction in let open Value in let open Pack in match op with
-  | BOAddI -> fun acc -> RefI31 :: Binop (I32 IntOp.Add) :: I31Get SX :: arg2 (I31Get SX :: arg1 acc)
-  | BOAddF ->
-      fun acc ->
-        StructNew (TMap.float_tid, Explicit) :: Binop (F64 FloatOp.Add) ::
-        StructGet (TMap.float_tid, 0l, None) :: arg2 (
-        StructGet (TMap.float_tid, 0l, None) :: arg1 acc)
-  | BOSubI -> fun acc -> RefI31 :: Binop (I32 IntOp.Sub) :: I31Get SX :: arg2 (I31Get SX :: arg1 acc)
-  | BOSubF ->
-      fun acc ->
-        StructNew (TMap.float_tid, Explicit) :: Binop (F64 FloatOp.Sub) ::
-        StructGet (TMap.float_tid, 0l, None) :: arg2 (
-        StructGet (TMap.float_tid, 0l, None) :: arg1 acc)
-  | BOMulI -> fun acc -> RefI31 :: Binop (I32 IntOp.Mul) :: I31Get SX :: arg2 (I31Get SX :: arg1 acc)
-  | BOMulF ->
-      fun acc ->
-        StructNew (TMap.float_tid, Explicit) :: Binop (F64 FloatOp.Mul) ::
-        StructGet (TMap.float_tid, 0l, None) :: arg2 (
-        StructGet (TMap.float_tid, 0l, None) :: arg1 acc)
-  | BODivI -> fun acc -> RefI31 :: Binop (I32 IntOp.DivS) :: I31Get SX :: arg2 (I31Get SX :: arg1 acc)
-  | BODivF ->
-      fun acc ->
-        StructNew (TMap.float_tid, Explicit) :: Binop (F64 FloatOp.Div) ::
-        StructGet (TMap.float_tid, 0l, None) :: arg2 (
-        StructGet (TMap.float_tid, 0l, None) :: arg1 acc)
-  | BORemI -> fun acc -> RefI31 :: Binop (I32 IntOp.RemS) :: I31Get SX :: arg2 (I31Get SX :: arg1 acc)
+  let open Wasm in let open Instruction in let open Value in match op with
+  | BOAddI -> fun acc -> Binop (I64   IntOp.Add)  :: arg2 (arg1 acc)
+  | BOAddF -> fun acc -> Binop (F64 FloatOp.Add)  :: arg2 (arg1 acc)
+  | BOSubI -> fun acc -> Binop (I64   IntOp.Sub)  :: arg2 (arg1 acc)
+  | BOSubF -> fun acc -> Binop (F64 FloatOp.Sub)  :: arg2 (arg1 acc)
+  | BOMulI -> fun acc -> Binop (I64   IntOp.Mul)  :: arg2 (arg1 acc)
+  | BOMulF -> fun acc -> Binop (F64 FloatOp.Mul)  :: arg2 (arg1 acc)
+  | BODivI -> fun acc -> Binop (I64   IntOp.DivS) :: arg2 (arg1 acc)
+  | BODivF -> fun acc -> Binop (F64 FloatOp.Div)  :: arg2 (arg1 acc)
+  | BORemI -> fun acc -> Binop (I64   IntOp.RemS) :: arg2 (arg1 acc)
   | BOEq t -> begin match t with
-        | TTuple TLnil -> fun acc -> RefI31 :: Const (I32 (I32.of_bits 1l)) :: Drop :: arg2 (Drop :: arg1 acc)
-        | TInt -> fun acc -> RefI31 :: Relop (I32 IntOp.Eq) :: I31Get SX :: arg2 (I31Get SX :: arg1 acc)
-        | TBool -> fun acc -> RefI31 :: Relop (I32 IntOp.Eq) :: I31Get SX :: arg2 (I31Get SX :: arg1 acc)
-        | TFloat -> fun acc ->
-            RefI31 :: Relop (F64 FloatOp.Eq) ::
-            StructGet (TMap.float_tid, 0l, None) :: arg2 (
-            StructGet (TMap.float_tid, 0l, None) :: arg1 acc)
+        | TTuple TLnil -> fun acc -> Const (I32 (I32.of_bits 1l)) :: Drop :: arg2 (Drop :: arg1 acc)
+        | TInt -> fun acc -> Relop (I64 IntOp.Eq) :: arg2 (arg1 acc)
+        | TBool -> fun acc -> Relop (I32 IntOp.Eq) :: arg2 (arg1 acc)
+        | TFloat -> fun acc -> Relop (F64 FloatOp.Eq) :: arg2 (arg1 acc)
         | _ ->
             let fid = NewMetadata.find_eq_fun tm new_meta t in
             fun acc -> Call fid :: arg2 (arg1 acc)
     end
   | BONe t -> begin match t with
-        | TTuple TLnil -> fun acc -> RefI31 :: Const (I32 (I32.of_bits 0l)) :: Drop :: arg2 (Drop :: arg1 acc)
-        | TInt -> fun acc -> RefI31 :: Relop (I32 IntOp.Ne) :: I31Get SX :: arg2 (I31Get SX :: arg1 acc)
-        | TBool -> fun acc -> RefI31 :: Relop (I32 IntOp.Ne) :: I31Get SX :: arg2 (I31Get SX :: arg1 acc)
-        | TFloat -> fun acc ->
-            RefI31 :: Relop (F64 FloatOp.Ne) ::
-            StructGet (TMap.float_tid, 0l, None) :: arg2 (
-            StructGet (TMap.float_tid, 0l, None) :: arg1 acc)
+        | TTuple TLnil -> fun acc -> Const (I32 (I32.of_bits 0l)) :: Drop :: arg2 (Drop :: arg1 acc)
+        | TInt -> fun acc -> Relop (I32 IntOp.Ne) :: arg2 (arg1 acc)
+        | TBool -> fun acc -> Relop (I32 IntOp.Ne) :: arg2 (arg1 acc)
+        | TFloat -> fun acc -> Relop (F64 FloatOp.Ne) :: arg2 (arg1 acc)
         | _ ->
             let fid = NewMetadata.find_eq_fun tm new_meta t in
             fun acc -> Testop (I32 IntOp.Eqz) :: Call fid :: arg2 (arg1 acc)
     end
   | BOLe t -> begin
       match t with
-      | TInt -> fun acc -> RefI31 :: Relop (I32 IntOp.LeS) :: I31Get SX :: arg2 (I31Get SX :: arg1 acc)
+      | TInt -> fun acc -> Relop (I32 IntOp.LeS) :: arg2 (arg1 acc)
       | _ -> raise (internal_error "Unknown binary operation Le on non-integer")
     end
   | BOLt t -> begin
       match t with
-      | TInt -> fun acc -> RefI31 :: Relop (I32 IntOp.LtS) :: I31Get SX :: arg2 (I31Get SX :: arg1 acc)
+      | TInt -> fun acc -> Relop (I32 IntOp.LtS) :: arg2 (arg1 acc)
       | _ -> raise (internal_error "Unknown binary operation Lt on non-integer")
     end
   | BOGe t -> begin
       match t with
-      | TInt -> fun acc -> RefI31 :: Relop (I32 IntOp.GeS) :: I31Get SX :: arg2 (I31Get SX :: arg1 acc)
+      | TInt -> fun acc -> Relop (I32 IntOp.GeS) :: arg2 (arg1 acc)
       | _ -> raise (internal_error "Unknown binary operation Ge on non-integer")
     end
   | BOGt t -> begin
       match t with
-      | TInt -> fun acc -> RefI31 :: Relop (I32 IntOp.GtS) :: I31Get SX :: arg2 (I31Get SX :: arg1 acc)
+      | TInt -> fun acc -> Relop (I32 IntOp.GtS) :: arg2 (arg1 acc)
       | _ -> raise (internal_error "Unknown binary operation Gt on non-integer")
     end
   | BOConcat ->
@@ -679,9 +653,9 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ -> _ -> instr_c
   | EIgnore (_, e) ->
       let e = convert_expr tm new_meta e BNone None cinfo in
       RefNull Wasm.Type.NoneHT :: Drop :: e acc
-  | EConstInt i -> do_box tm new_meta box (fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits (Int64.to_int32 i))) :: acc) acc
-  | EConstBool b -> do_box tm new_meta box (fun acc -> RefI31 :: Const Wasm.Value.(I32 (I32.of_bits (if b then 1l else 0l))) :: acc) acc
-  | EConstFloat f -> do_box tm new_meta box (fun acc -> StructNew (TMap.float_tid, Explicit) :: Const Wasm.Value.(F64 (F64.of_float f)) :: acc) acc
+  | EConstInt i -> do_box tm new_meta box (fun acc -> Const Wasm.Value.(I64 (I64.of_bits i)) :: acc) acc
+  | EConstBool b -> do_box tm new_meta box (fun acc -> Const Wasm.Value.(I32 (I32.of_bits (if b then 1l else 0l))) :: acc) acc
+  | EConstFloat f -> do_box tm new_meta box (fun acc -> Const Wasm.Value.(F64 (F64.of_float f)) :: acc) acc
   | EConstString s -> do_box tm new_meta box (fun acc ->
         ArrayNewFixed (TMap.string_tid, Int32.of_int (String.length s)) ::
         String.fold_left (fun acc c -> Const Wasm.Value.(I32 (I32.of_int_s (Char.code c))) :: acc) acc s) acc
@@ -838,7 +812,7 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ -> _ -> instr_c
       let fi = convert_block tm new_meta f box is_last cinfo [] in
       let ei = convert_expr tm new_meta e BNone None cinfo acc in
       let rt' = TMap.oval_of_type tm rt in
-      If (Wasm.Type.(ValBlockType rt'), List.rev ti, List.rev fi) :: I31Get Wasm.Pack.ZX :: ei
+      If (Wasm.Type.(ValBlockType rt'), List.rev ti, List.rev fi) :: ei
   | EDo (eid, args) ->
       let _, tret, eid = (eid : _ effectid :> _ * _ * int32) in
       let args = convert_exprs tm new_meta args BLnone cinfo in
@@ -963,36 +937,36 @@ let convert_builtin (tm : tmap) (_ : NewMetadata.g) (fb : fbuiltin) : Wasm.funde
     Wasm.{
       fn_name = None;
       fn_type = fun_typ;
-      fn_locals = Type.[NumT I32T; NumT I32T; RefT (NoNull, VarHT (StatX TMap.string_tid))];
+      fn_locals = Type.[NumT I64T; NumT I32T; RefT (NoNull, VarHT (StatX TMap.string_tid))];
       fn_code = let open Value in let open Type in Instruction.[
-        LocalGet 0l; I31Get Pack.SX;
-        Const (I32 (I32.of_bits 0l));
-        Relop (I32 IntOp.LtS);
+        LocalGet 0l;
+        Const (I64 (I64.of_bits 0L));
+        Relop (I64 IntOp.LtS);
         If (ValBlockType (Some (NumT I32T)), [
-          Const (I32 (I32.of_bits 0l));
-          LocalGet 0l; I31Get Pack.SX;
-          Binop (I32 IntOp.Sub);
-          Const (I32 (I32.of_bits 10l));
-          Binop (I32 IntOp.DivU);
+          Const (I64 (I64.of_bits 0L));
+          LocalGet 0l;
+          Binop (I64 IntOp.Sub);
+          Const (I64 (I64.of_bits 10L));
+          Binop (I64 IntOp.DivU);
           LocalSet 2l;
           Const (I32 (I32.of_bits 2l));
         ], [
-          LocalGet 0l; I31Get Pack.SX;
-          Const (I32 (I32.of_bits 10l));
-          Binop (I32 IntOp.DivU);
+          LocalGet 0l;
+          Const (I64 (I64.of_bits 10L));
+          Binop (I64 IntOp.DivU);
           LocalSet 2l;
           Const (I32 (I32.of_bits 1l));
         ]);
         Block (VarBlockType i32toi32, [
           Loop (VarBlockType i32toi32, [
             LocalGet 2l;
-            Testop (I32 IntOp.Eqz);
+            Testop (I64 IntOp.Eqz);
             BrIf 1l;
             Const (I32 (I32.of_bits 1l));
             Binop (I32 IntOp.Add);
             LocalGet 2l;
-            Const (I32 (I32.of_bits 10l));
-            Binop (I32 IntOp.DivU);
+            Const (I64 (I64.of_bits 10L));
+            Binop (I64 IntOp.DivU);
             LocalSet 2l;
             Br 0l;
           ]);
@@ -1002,25 +976,25 @@ let convert_builtin (tm : tmap) (_ : NewMetadata.g) (fb : fbuiltin) : Wasm.funde
         LocalGet 3l;
         ArrayNew (TMap.string_tid, Explicit);
         LocalSet 4l;
-        LocalGet 0l; I31Get Pack.SX;
-        Const (I32 (I32.of_bits 0l));
-        Relop (I32 IntOp.LtS);
-        If (ValBlockType (Some (NumT I32T)), [
+        LocalGet 0l;
+        Const (I64 (I64.of_bits 0L));
+        Relop (I64 IntOp.LtS);
+        If (ValBlockType (Some (NumT I64T)), [
           LocalGet 4l;
           Const (I32 (I32.of_bits 0l));
           Const (I32 (I32.of_int_s (Char.code '-')));
           ArraySet TMap.string_tid;
-          Const (I32 (I32.of_bits 0l));
-          LocalGet 0l; I31Get Pack.SX;
-          Binop (I32 IntOp.Sub);
+          Const (I64 (I64.of_bits 0L));
+          LocalGet 0l;
+          Binop (I64 IntOp.Sub);
         ], [
-          LocalGet 0l; I31Get Pack.SX;
+          LocalGet 0l;
         ]);
         LocalSet 2l;
         Loop (ValBlockType (Some (RefT (NoNull, VarHT (StatX TMap.string_tid)))), [
           LocalGet 4l;
           LocalGet 2l;
-          Testop (I32 IntOp.Eqz);
+          Testop (I64 IntOp.Eqz);
           BrIf 1l;
           LocalGet 3l;
           Const (I32 (I32.of_bits 1l));
@@ -1028,14 +1002,15 @@ let convert_builtin (tm : tmap) (_ : NewMetadata.g) (fb : fbuiltin) : Wasm.funde
           LocalSet 3l;
           LocalGet 3l;
           LocalGet 2l;
-          Const (I32 (I32.of_bits 10l));
-          Binop (I32 IntOp.RemU);
+          Const (I64 (I64.of_bits 10L));
+          Binop (I64 IntOp.RemU);
+          Cvtop (I32 IntOp.WrapI64);
           Const (I32 (I32.of_int_s (Char.code '0')));
           Binop (I32 IntOp.Add);
           ArraySet TMap.string_tid;
           LocalGet 2l;
-          Const (I32 (I32.of_bits 10l));
-          Binop (I32 IntOp.DivU);
+          Const (I64 (I64.of_bits 10L));
+          Binop (I64 IntOp.DivU);
           LocalSet 2l;
           Br 0l;
         ]);
@@ -1178,18 +1153,18 @@ let compile (prog : Ir.program) (env : string Env.Int.t) (main_typ_name : string
                 Const (I32 (I32.of_int_s (Char.code ')'))); Call putc;
               ], [], [], nfuns
           | TInt ->
-              let funtid = TMap.recid_of_rec_type tm Type.(RecT [SubT (Final, [], DefFuncT (FuncT ([NumT I32T], [])))]) in
+              let funtid = TMap.recid_of_rec_type tm Type.(RecT [SubT (Final, [], DefFuncT (FuncT ([NumT I64T], [])))]) in
               let funid = nfuns in
               let auxfunid = Int32.succ funid in
               let nfuns = Int32.succ auxfunid in
-              Either.Right ([I31Get Pack.SX], funid), [], [
+              Either.Right funid, [], [
                 { fn_name = None; fn_type = funtid; fn_locals = []; fn_code = [
                   LocalGet 0l;
-                  Const (I32 (I32.of_bits 0l));
-                  Relop (I32 IntOp.GeS);
-                  If (Type.(ValBlockType (Some (NumT I32T))), [
+                  Const (I64 (I64.of_bits 0L));
+                  Relop (I64 IntOp.GeS);
+                  If (Type.(ValBlockType (Some (NumT I64T))), [
                     LocalGet 0l;
-                    Testop (I32 IntOp.Eqz);
+                    Testop (I64 IntOp.Eqz);
                     If (Type.(ValBlockType None), [
                       Const (I32 (I32.of_int_s (Char.code '0'))); ReturnCall putc;
                     ], []);
@@ -1197,30 +1172,31 @@ let compile (prog : Ir.program) (env : string Env.Int.t) (main_typ_name : string
                   ], [
                     Const (I32 (I32.of_int_s (Char.code '-')));
                     Call putc;
-                    Const (I32 (I32.of_bits 0l));
+                    Const (I64 (I64.of_bits 0L));
                     LocalGet 0l;
-                    Binop (I32 IntOp.Sub);
+                    Binop (I64 IntOp.Sub);
                   ]);
                   Call auxfunid;
                 ]};
                 { fn_name = None; fn_type = funtid; fn_locals = []; fn_code = [
                   LocalGet 0l;
-                  Testop (I32 IntOp.Eqz);
+                  Testop (I64 IntOp.Eqz);
                   BrIf 0l;
                   LocalGet 0l;
-                  Const (I32 (I32.of_bits 10l));
-                  Relop (I32 IntOp.LtU);
-                  If (Type.(ValBlockType (Some (NumT I32T))), [
+                  Const (I64 (I64.of_bits 10L));
+                  Relop (I64 IntOp.LtU);
+                  If (Type.(ValBlockType (Some (NumT I64T))), [
                     LocalGet 0l;
                   ], [
                     LocalGet 0l;
-                    Const (I32 (I32.of_bits 10l));
-                    Binop (I32 IntOp.DivU);
+                    Const (I64 (I64.of_bits 10L));
+                    Binop (I64 IntOp.DivU);
                     Call auxfunid;
                     LocalGet 0l;
-                    Const (I32 (I32.of_bits 10l));
-                    Binop (I32 IntOp.RemU);
+                    Const (I64 (I64.of_bits 10L));
+                    Binop (I64 IntOp.RemU);
                   ]);
+                  Cvtop (I32 IntOp.WrapI64);
                   Const (I32 (I32.of_int_s (Char.code '0')));
                   Binop (I32 IntOp.Add);
                   Call putc;
@@ -1228,7 +1204,6 @@ let compile (prog : Ir.program) (env : string Env.Int.t) (main_typ_name : string
               ], nfuns
           | TBool ->
               Either.Left [
-                I31Get Pack.SX;
                 If (Type.(ValBlockType None), [
                   Const (I32 (I32.of_int_s (Char.code 't'))); Call putc;
                   Const (I32 (I32.of_int_s (Char.code 'r'))); Call putc;
@@ -1246,7 +1221,7 @@ let compile (prog : Ir.program) (env : string Env.Int.t) (main_typ_name : string
                     DefFuncT (FuncT ([RefT (NoNull, VarHT (StatX TMap.string_tid))], [])))]) in
               let funid = nfuns in
               let nfuns = Int32.succ funid in
-              Either.Right ([], funid), [], [
+              Either.Right funid, [], [
                 { fn_name = None; fn_type = funtid; fn_locals = Type.[NumT I32T]; fn_code = [
                   Const (I32 (I32.of_int_s (Char.code '"'))); Call putc;
                   Const (I32 (I32.of_bits 0l)); LocalSet 1l;
@@ -1313,10 +1288,8 @@ let compile (prog : Ir.program) (env : string Env.Int.t) (main_typ_name : string
         in
         let code, add_locs, add_funs, nfuns = prepare m.mod_main (Int32.of_int (List.length m.mod_locals)) (Int32.succ mainid) in
         let code = match code with
-            | Either.Left code ->
-                List.rev_append code [GlobalGet m.mod_nglobals; GlobalSet m.mod_nglobals]
-            | Either.Right (add, fid) ->
-                Call fid :: add @ [GlobalGet m.mod_nglobals; GlobalSet m.mod_nglobals] in
+            | Either.Left code -> List.rev_append code [GlobalGet m.mod_nglobals; GlobalSet m.mod_nglobals]
+            | Either.Right fid -> [Call fid; GlobalGet m.mod_nglobals; GlobalSet m.mod_nglobals] in
         let code =
           let add_string code s =
             String.fold_left (fun acc c -> Call putc :: Const (I32 (I32.of_int_s (Char.code c))) :: acc)
