@@ -201,6 +201,8 @@ module NewMetadata : sig
   type g
   type t
   
+  val g_of_t : t -> g
+  
   val empty_global : int32 -> g
   val wasm_of_funs : g -> Wasm.fundef list
   val wasm_of_exports : g -> Wasm.global list
@@ -211,31 +213,38 @@ module NewMetadata : sig
   val find_list_concat : tmap -> t -> int32
   val find_eq_fun : tmap -> t -> 'a typ -> int32
   
+  val add_function : g -> Wasm.fundef option ref * int32
   val add_local : tmap -> t -> 'a typ -> int32
-  val add_specialization : tmap -> t -> 'a typ_list -> 'b typ -> ('a, 'c) box_list -> ('b, 'd) box -> int32
-  val add_unspecialization : tmap -> t -> 'a typ_list -> 'b typ -> ('a, 'c) box_list -> ('b, 'd) box -> 'c typ_list * 'd typ * int32
-  val maybe_do_box : tmap -> t -> ('a, 'b) box -> instr_conv -> ('b typ * instr_conv, ('a, 'b) Type.eq) Either.t
-  val maybe_do_unbox : tmap -> t -> ('a, 'b) box -> instr_conv -> ('a typ * instr_conv, ('a, 'b) Type.eq) Either.t
+  val add_specialization : tmap -> g -> 'a typ_list -> 'b typ -> ('a, 'c) box_list -> ('b, 'd) box -> int32
+  val add_unspecialization : tmap -> g -> 'a typ_list -> 'b typ -> ('a, 'c) box_list -> ('b, 'd) box -> 'c typ_list * 'd typ * int32
+  val maybe_do_box : tmap -> g -> ('a, 'b) box -> instr_conv -> ('b typ * instr_conv, ('a, 'b) Type.eq) Either.t
+  val maybe_do_unbox : tmap -> g -> ('a, 'b) box -> instr_conv -> ('a typ * instr_conv, ('a, 'b) Type.eq) Either.t
 end = struct
   type g = {
     mutable nfuns: int32;
     mutable exps: (int32 * int32) list;
-    mutable funs: Wasm.fundef list;
+    mutable funs: (Wasm.fundef, Wasm.fundef option ref) Either.t list;
     mutable eqfuns: int32 TypeMap.t;
     mutable list_concat: int32 option;
   }
   type t = g * (Wasm.Type.val_type list * int32) ref
   
+  let g_of_t : t -> g = fst
+  
   let empty_global (nfuns : int32) : g = {
     nfuns;
     exps = [];
-    funs =  [];
+    funs = [];
     eqfuns = TypeMap.empty;
     list_concat = None;
   }
   
   let wasm_of_funs ({ funs; _ } : g) : Wasm.fundef list =
-    List.rev funs
+    List.rev_map
+      (Either.fold
+        ~left:Fun.id
+        ~right:(function {contents = Some f} -> f | {contents = None} -> raise (internal_error "Function was not assigned")))
+      funs
   let wasm_of_exports ({ exps; _ } : g) : Wasm.global list =
     List.rev_map (fun (ftid, fid) ->
       Wasm.Type.(GlobalT (Cons, RefT (NoNull, VarHT (StatX ftid)))), Wasm.Instruction.[RefFunc fid], None) exps
@@ -248,14 +257,21 @@ end = struct
   let wasm_of_locals (_ : tmap) (_, { contents = (l, _) } : t) : Wasm.Type.val_type list =
     List.rev l
   
+  let add_function (glob : g) : Wasm.fundef option ref * int32 =
+    let fref = ref None in
+    let fid = glob.nfuns in
+    glob.nfuns <- Int32.succ fid;
+    glob.funs <- Either.Right fref :: glob.funs;
+    fref, fid
+  
   let add_local (tm : tmap) (_, new_meta : t) (t : 'a typ) : int32 =
     let loc, i = !new_meta in
     new_meta := TMap.val_of_type tm t :: loc, Int32.succ i;
     i
   
   (* Warning: not the same ABI (the closure content is not wrapped again) *)
-  let rec add_unspecialization : type a b c d. tmap -> t -> a typ_list -> b typ -> (a, c) box_list -> (b, d) box -> c typ_list * d typ * int32 =
-    fun tm ({ nfuns = fid; exps = eacc; funs = facc; _ } as glob, _ as new_meta) targs tret bargs bret ->
+  let rec add_unspecialization : type a b c d. tmap -> g -> a typ_list -> b typ -> (a, c) box_list -> (b, d) box -> c typ_list * d typ * int32 =
+    fun tm ({ nfuns = fid; exps = eacc; funs = facc; _ } as glob) targs tret bargs bret ->
     let clvid, fargs =
       let rec inner : type a b. a typ_list -> (a, b) box_list -> int32 * b typ_list = fun targs bargs -> match targs, bargs with
         | TLnil, BLnone -> 0l, TLnil
@@ -285,7 +301,7 @@ end = struct
         | TLnil, _ -> acc
         | TLcons (_, ttl), BLnone -> inner ttl BLnone (Int32.succ i) (LocalGet i :: acc)
         | TLcons (_, ttl), BLcons (bhd, btl) ->
-          let arg = match maybe_do_unbox tm new_meta bhd (fun acc -> LocalGet i :: acc) with
+          let arg = match maybe_do_unbox tm glob bhd (fun acc -> LocalGet i :: acc) with
             | Either.Right Type.Equal -> LocalGet i :: acc
             | Either.Left (_, arg) -> arg acc
           in inner ttl btl (Int32.succ i) arg in
@@ -296,7 +312,7 @@ end = struct
           StructGet (inner_ftid, 0l, None) :: LocalGet (Int32.succ clvid) ::
           StructGet (inner_ftid, 1l, None) :: LocalGet (Int32.succ clvid) ::
           load_args @ acc) in
-      match maybe_do_box tm new_meta bret do_call with
+      match maybe_do_box tm glob bret do_call with
       | Either.Right Type.Equal -> do_call []
       | Either.Left (_, conv) -> conv [] in
     let f = Wasm.{
@@ -305,21 +321,21 @@ end = struct
       fn_locals = [inner_fval];
       fn_code = List.rev do_unbox;
     } in
-    let nfuns, eacc, facc = Int32.succ fid, (ftid, fid) :: eacc, f :: facc in
+    let nfuns, eacc, facc = Int32.succ fid, (ftid, fid) :: eacc, Either.Left f :: facc in
     glob.nfuns <- nfuns;
     glob.exps <- eacc;
     glob.funs <- facc;
     fargs, fret, fid
   
-  and maybe_do_box : type a b. tmap -> t -> (a, b) box -> instr_conv -> (b typ * instr_conv, (a, b) Type.eq) Either.t =
-    fun tm new_meta box get_val ->
+  and maybe_do_box : type a b. tmap -> g -> (a, b) box -> instr_conv -> (b typ * instr_conv, (a, b) Type.eq) Either.t =
+    fun tm glob box get_val ->
     let open Wasm.Instruction in match box with
     | BNone -> Either.Right Type.Equal
     | BClosed (_, BLnone, BNone) -> Either.Right Type.Equal
     | BClosed (_, BLnil, BNone) -> Either.Right Type.Equal
     | BClosed (_, BLcons (BNone, BLnil), BNone) -> Either.Right Type.Equal
     | BClosed (TClosed (targs, tret), bargs, bret) ->
-        let targs, tret, convfid = add_unspecialization tm new_meta targs tret bargs bret in
+        let targs, tret, convfid = add_unspecialization tm glob targs tret bargs bret in
         let new_ctid = TMap.recid_of_type tm (TClosed (targs, tret)) in
         Either.Left (TClosed (targs, tret), fun acc -> StructNew (new_ctid, Explicit) :: get_val (RefFunc convfid :: acc))
     | BCont _ -> failwith "TODO maybe_do_box"
@@ -331,8 +347,8 @@ end = struct
     | BBox _ -> Either.Left (TVar, get_val)
   
   (* Warning: not the same ABI (the closure content is not wrapped again) *)
-  and add_specialization : type a b c d. tmap -> t -> a typ_list -> b typ -> (a, c) box_list -> (b, d) box -> int32 =
-    fun tm ({ nfuns = fid; exps = eacc; funs = facc; _ } as glob, _ as new_meta) targs tret bargs bret ->
+  and add_specialization : type a b c d. tmap -> g -> a typ_list -> b typ -> (a, c) box_list -> (b, d) box -> int32 =
+    fun tm ({ nfuns = fid; exps = eacc; funs = facc; _ } as glob) targs tret bargs bret ->
     let ftid = TMap.recid_of_functyp tm targs tret in
     let clvid, fargs =
       let rec inner : type a b. a typ_list -> (a, b) box_list -> int32 * b typ_list = fun targs bargs -> match targs, bargs with
@@ -362,7 +378,7 @@ end = struct
         | TLnil, _ -> acc
         | TLcons (_, ttl), BLnone -> inner ttl BLnone (Int32.succ i) (LocalGet i :: acc)
         | TLcons (_, ttl), BLcons (bhd, btl) ->
-          let arg = match maybe_do_box tm new_meta bhd (fun acc -> LocalGet i :: acc) with
+          let arg = match maybe_do_box tm glob bhd (fun acc -> LocalGet i :: acc) with
             | Either.Right Type.Equal -> LocalGet i :: acc
             | Either.Left (_, arg) -> arg acc
           in inner ttl btl (Int32.succ i) arg in
@@ -373,7 +389,7 @@ end = struct
         StructGet (inner_ftid, 0l, None) :: LocalGet (Int32.succ clvid) ::
         StructGet (inner_ftid, 1l, None) :: LocalGet (Int32.succ clvid) ::
         load_args @ acc) in
-      match maybe_do_unbox tm new_meta bret do_call with
+      match maybe_do_unbox tm glob bret do_call with
       | Either.Right Type.Equal -> do_call []
       | Either.Left (_, conv) -> conv [] in
     let f = Wasm.{
@@ -382,24 +398,46 @@ end = struct
       fn_locals = [inner_fval];
       fn_code = List.rev do_unbox;
     } in
-    let nfuns, eacc, facc = Int32.succ fid, (ftid, fid) :: eacc, f :: facc in
+    let nfuns, eacc, facc = Int32.succ fid, (ftid, fid) :: eacc, Either.Left f :: facc in
     glob.nfuns <- nfuns;
     glob.exps <- eacc;
     glob.funs <- facc;
     fid
   
   (* get_val is affine *)
-  and maybe_do_unbox : type a b. tmap -> t -> (a, b) box -> instr_conv -> (a typ * instr_conv, (a, b) Type.eq) Either.t =
-    fun tm new_meta box get_val ->
+  and maybe_do_unbox : type a b. tmap -> g -> (a, b) box -> instr_conv -> (a typ * instr_conv, (a, b) Type.eq) Either.t =
+    fun tm glob box get_val ->
     let open Wasm.Instruction in match box with
     | BNone -> Either.Right Type.Equal
-    | BClosed (_, BLnone, BNone) -> Either.Right Type.Equal
-    | BClosed (_, BLnil, BNone) -> Either.Right Type.Equal
-    | BClosed (_, BLcons (BNone, BLnil), BNone) -> Either.Right Type.Equal
     | BClosed (TClosed (targs, tret) as tsrc, bargs, bret) ->
-        let convfid = add_specialization tm new_meta targs tret bargs bret in
-        let new_ctid = TMap.recid_of_type tm tsrc in
-        Either.Left (tsrc, fun acc -> StructNew (new_ctid, Explicit) :: get_val (RefFunc convfid :: acc))
+        let canon_box : type a b. (a, b) box -> ((a, b) box, (a, b) Type.eq) Either.t = function
+          | BNone -> Either.Right Type.Equal
+          | BBox TVar -> Either.Right Type.Equal
+          | b -> Either.Left b in
+        let rec canon_box_list : type a b. (a, b) box_list -> ((a, b) box_list, (a, b) Type.eq) Either.t = function
+          | BLnone -> Either.Right Type.Equal
+          | BLnil -> Either.Right Type.Equal
+          | BLcons (bhd, btl) -> begin match canon_box bhd, canon_box_list btl with
+              | Either.Left bhd, Either.Left btl -> Either.Left (BLcons (bhd, btl))
+              | Either.Left bhd, Either.Right Type.Equal -> Either.Left (BLcons (bhd, BLnone))
+              | Either.Right Type.Equal, Either.Left btl -> Either.Left (BLcons (BNone, btl))
+              | Either.Right Type.Equal, Either.Right Type.Equal -> Either.Right Type.Equal
+            end in
+        begin match canon_box_list bargs, canon_box bret with
+        | Either.Right Type.Equal, Either.Right Type.Equal -> Either.Right Type.Equal
+        | Either.Left bargs, Either.Right Type.Equal ->
+            let convfid = add_specialization tm glob targs tret bargs BNone in
+            let new_ctid = TMap.recid_of_type tm tsrc in
+            Either.Left (tsrc, fun acc -> StructNew (new_ctid, Explicit) :: get_val (RefFunc convfid :: acc))
+        | Either.Right Type.Equal, Either.Left bret ->
+            let convfid = add_specialization tm glob targs tret BLnone bret in
+            let new_ctid = TMap.recid_of_type tm tsrc in
+            Either.Left (tsrc, fun acc -> StructNew (new_ctid, Explicit) :: get_val (RefFunc convfid :: acc))
+        | Either.Left bargs, Either.Left bret ->
+            let convfid = add_specialization tm glob targs tret bargs bret in
+            let new_ctid = TMap.recid_of_type tm tsrc in
+            Either.Left (tsrc, fun acc -> StructNew (new_ctid, Explicit) :: get_val (RefFunc convfid :: acc))
+      end
     | BCont _ -> failwith "TODO maybe_do_unbox BCont"
     | BTuple _ -> failwith "TODO maybe_do_unbox BTuple"
     | BBox TVar -> Either.Right Type.Equal
@@ -436,49 +474,90 @@ end = struct
           ]
         } in
         glob.nfuns <- Int32.succ fid;
-        glob.funs <- f :: glob.funs;
+        glob.funs <- Either.Left f :: glob.funs;
         glob.list_concat <- Some fid;
         fid
   
-  let find_eq_fun (tm : tmap) ({ nfuns; funs; eqfuns; _ } as glob, _ as new_meta : t) (t : 'a typ) : int32 =
+  let find_eq_fun (tm : tmap) ({ nfuns; funs; eqfuns; _ } as glob, _ : t) (t : 'a typ) : int32 =
     match TypeMap.find_opt (Type t) eqfuns with
     | Some i -> i
     | None ->
-        let (* rec *) prepare : type a. a typ -> _ = fun t nfuns eqfuns ->
+        let rec prepare : type a. a typ -> _ = fun t nfuns eqfuns ->
           let funid = nfuns in
           let nfuns = Int32.succ funid in
           let eqfuns = TypeMap.add (Type t) funid eqfuns in
           let ft = TMap.recid_of_exported_type tm (TLcons (t, TLcons (t, TLnil))) TBool in
           let nfuns, fs, eqfuns = match t with
             | TTuple TLnil ->
-                nfuns, [Wasm.{
+                nfuns, [Either.Left Wasm.{
                   fn_type = ft;
                   fn_name = None;
                   fn_locals = [];
                   fn_code = Instruction.[Const Value.(I32 (I32.of_bits 1l))];
                 }], eqfuns
             | TInt ->
-                nfuns, [Wasm.{
+                nfuns, [Either.Left Wasm.{
                   fn_type = ft;
                   fn_name = None;
                   fn_locals = [];
                   fn_code = Instruction.[LocalGet 0l; LocalGet 1l; Relop (Value.I64 IntOp.Eq)];
                 }], eqfuns
             | TBool ->
-                nfuns, [Wasm.{
+                nfuns, [Either.Left Wasm.{
                   fn_type = ft;
                   fn_name = None;
                   fn_locals = [];
                   fn_code = Instruction.[LocalGet 0l; LocalGet 1l; Relop (Value.I32 IntOp.Eq)];
                 }], eqfuns
             | TFloat ->
-                nfuns, [Wasm.{
+                nfuns, [Either.Left Wasm.{
                   fn_type = ft;
                   fn_name = None;
                   fn_locals = [];
                   fn_code = Instruction.[LocalGet 0l; LocalGet 1l; Relop (Value.F64 FloatOp.Eq)];
                 }], eqfuns
-            | TList _ -> ignore new_meta; failwith "TODO NewMetadata.find_eq_fun.prepare TList"
+            | TList t ->
+                let nfuns, fs, eqfuns, recid = prepare t nfuns eqfuns in
+                let unbox i =
+                  let get_val = Wasm.Instruction.(fun acc -> StructGet (TMap.list_tid, 0l, None) :: LocalGet i :: acc) in
+                  match maybe_do_unbox tm glob (BBox t) get_val with
+                  | Either.Left (_, v) -> v
+                  | Either.Right Type.Equal -> get_val in
+                nfuns, Either.Left Wasm.{
+                  fn_type = ft;
+                  fn_name = None;
+                  fn_locals = Type.[RefT (NoNull, VarHT (StatX TMap.list_tid)); RefT (NoNull, VarHT (StatX TMap.list_tid))];
+                  fn_code = Type.(Value.(Instruction.[
+                    Block (ValBlockType None, [
+                      Block (ValBlockType None, List.rev (
+                        If (ValBlockType None, [
+                          LocalGet 2l;
+                          StructGet (TMap.list_tid, 1l, None);
+                          LocalGet 3l;
+                          StructGet (TMap.list_tid, 1l, None);
+                          ReturnCall funid;
+                        ], [
+                          Const (I32 (I32.of_bits 0l));
+                          Return;
+                        ]) ::
+                        Call recid ::
+                        unbox 3l (
+                        unbox 2l [
+                        LocalSet 3l;
+                        BrOnNull 1l;
+                        LocalGet 1l;
+                        LocalSet 2l;
+                        BrOnNull 0l;
+                        LocalGet 0l;
+                        ])
+                      ));
+                      LocalGet 1l;
+                      RefIsNull;
+                      Return;
+                    ]);
+                    Const (I32 (I32.of_bits 0l));
+                  ]));
+                } :: fs, eqfuns
             | _ -> failwith "TODO NewMetadata.find_eq_fun" in
           nfuns, fs, eqfuns, funid in
         let nfuns, add_funs, eqfuns, retid = prepare t nfuns eqfuns in
@@ -520,13 +599,13 @@ let convert_globals (tm : tmap) (gs : (mvarid * anytyp * string) list) (tl : Was
 
 (* get_val is affine *)
 let do_box (type a b) (tm : tmap) (new_meta : new_meta) (box : (a, b) box) (get_val : instr_conv) : instr_conv =
-  match NewMetadata.maybe_do_box tm new_meta box get_val with
+  match NewMetadata.maybe_do_box tm (NewMetadata.g_of_t new_meta) box get_val with
   | Either.Right Type.Equal -> get_val
   | Either.Left (_, v) -> v
 
 (* get_val is affine *)
 let do_unbox (type a b) (tm : tmap) (new_meta : new_meta) (box : (a, b) box) (get_val : instr_conv) : instr_conv =
-  match NewMetadata.maybe_do_unbox tm new_meta box get_val with
+  match NewMetadata.maybe_do_unbox tm (NewMetadata.g_of_t new_meta) box get_val with
   | Either.Left (_, v) -> v
   | Either.Right Type.Equal -> get_val
 
@@ -556,7 +635,7 @@ let convert_binop (type a b c) (tm : tmap) (new_meta : new_meta) (op : (a, b, c)
     end
   | BONe t -> begin match t with
         | TTuple TLnil -> fun acc -> Const (I32 (I32.of_bits 0l)) :: Drop :: arg2 (Drop :: arg1 acc)
-        | TInt -> fun acc -> Relop (I32 IntOp.Ne) :: arg2 (arg1 acc)
+        | TInt -> fun acc -> Relop (I64 IntOp.Ne) :: arg2 (arg1 acc)
         | TBool -> fun acc -> Relop (I32 IntOp.Ne) :: arg2 (arg1 acc)
         | TFloat -> fun acc -> Relop (F64 FloatOp.Ne) :: arg2 (arg1 acc)
         | _ ->
@@ -565,22 +644,22 @@ let convert_binop (type a b c) (tm : tmap) (new_meta : new_meta) (op : (a, b, c)
     end
   | BOLe t -> begin
       match t with
-      | TInt -> fun acc -> Relop (I32 IntOp.LeS) :: arg2 (arg1 acc)
+      | TInt -> fun acc -> Relop (I64 IntOp.LeS) :: arg2 (arg1 acc)
       | _ -> raise (internal_error "Unknown binary operation Le on non-integer")
     end
   | BOLt t -> begin
       match t with
-      | TInt -> fun acc -> Relop (I32 IntOp.LtS) :: arg2 (arg1 acc)
+      | TInt -> fun acc -> Relop (I64 IntOp.LtS) :: arg2 (arg1 acc)
       | _ -> raise (internal_error "Unknown binary operation Lt on non-integer")
     end
   | BOGe t -> begin
       match t with
-      | TInt -> fun acc -> Relop (I32 IntOp.GeS) :: arg2 (arg1 acc)
+      | TInt -> fun acc -> Relop (I64 IntOp.GeS) :: arg2 (arg1 acc)
       | _ -> raise (internal_error "Unknown binary operation Ge on non-integer")
     end
   | BOGt t -> begin
       match t with
-      | TInt -> fun acc -> Relop (I32 IntOp.GtS) :: arg2 (arg1 acc)
+      | TInt -> fun acc -> Relop (I64 IntOp.GtS) :: arg2 (arg1 acc)
       | _ -> raise (internal_error "Unknown binary operation Gt on non-integer")
     end
   | BOConcat ->
@@ -1135,7 +1214,10 @@ let compile (prog : Ir.program) (env : string Env.Int.t) (main_typ_name : string
     cg in
   let (_, _, impinfo), imports = List.fold_left_map (convert_import tm) (0l, 0l, impinfo_empty) m.mod_imports in
   let impinfo = finish_import_info impinfo in
-  let init_code, extra_locals, extra_funs, nfuns =
+  let glob =
+    let nfuns = Int32.succ m.mod_nfuns in
+    NewMetadata.empty_global nfuns in
+  let init_code, extra_locals =
     let mainid = m.mod_nfuns in
     let open Wasm in
     let open Value in
@@ -1143,65 +1225,63 @@ let compile (prog : Ir.program) (env : string Env.Int.t) (main_typ_name : string
     match impinfo with
     | None -> [
           GlobalSet m.mod_nglobals;
-        ], [], [], Int32.succ mainid
+        ], []
     | Some { impinfo_putc = putc; impinfo_puts = _puts } ->
-        let (* rec *) prepare : type a. a typ -> _ = fun (t : a typ) (nlocs : int32) (nfuns : int32) -> match t with
+        let rec prepare : type a. a typ -> _ = fun (t : a typ) (nlocs : int32) (nfuns : int32) -> match t with
           | TTuple TLnil ->
               Either.Left [
                 Drop;
                 Const (I32 (I32.of_int_s (Char.code '('))); Call putc;
                 Const (I32 (I32.of_int_s (Char.code ')'))); Call putc;
-              ], [], [], nfuns
+              ], []
           | TInt ->
               let funtid = TMap.recid_of_rec_type tm Type.(RecT [SubT (Final, [], DefFuncT (FuncT ([NumT I64T], [])))]) in
-              let funid = nfuns in
-              let auxfunid = Int32.succ funid in
-              let nfuns = Int32.succ auxfunid in
-              Either.Right funid, [], [
-                { fn_name = None; fn_type = funtid; fn_locals = []; fn_code = [
-                  LocalGet 0l;
-                  Const (I64 (I64.of_bits 0L));
-                  Relop (I64 IntOp.GeS);
-                  If (Type.(ValBlockType (Some (NumT I64T))), [
-                    LocalGet 0l;
-                    Testop (I64 IntOp.Eqz);
-                    If (Type.(ValBlockType None), [
-                      Const (I32 (I32.of_int_s (Char.code '0'))); ReturnCall putc;
-                    ], []);
-                    LocalGet 0l;
-                  ], [
-                    Const (I32 (I32.of_int_s (Char.code '-')));
-                    Call putc;
-                    Const (I64 (I64.of_bits 0L));
-                    LocalGet 0l;
-                    Binop (I64 IntOp.Sub);
-                  ]);
-                  Call auxfunid;
-                ]};
-                { fn_name = None; fn_type = funtid; fn_locals = []; fn_code = [
+              let fref, funid = NewMetadata.add_function glob in
+              let auxfref, auxfunid = NewMetadata.add_function glob in
+              fref := Some { fn_name = None; fn_type = funtid; fn_locals = []; fn_code = [
+                LocalGet 0l;
+                Const (I64 (I64.of_bits 0L));
+                Relop (I64 IntOp.GeS);
+                If (Type.(ValBlockType (Some (NumT I64T))), [
                   LocalGet 0l;
                   Testop (I64 IntOp.Eqz);
-                  BrIf 0l;
+                  If (Type.(ValBlockType None), [
+                    Const (I32 (I32.of_int_s (Char.code '0'))); ReturnCall putc;
+                  ], []);
+                  LocalGet 0l;
+                ], [
+                  Const (I32 (I32.of_int_s (Char.code '-')));
+                  Call putc;
+                  Const (I64 (I64.of_bits 0L));
+                  LocalGet 0l;
+                  Binop (I64 IntOp.Sub);
+                ]);
+                Call auxfunid;
+              ]};
+              auxfref := Some { fn_name = None; fn_type = funtid; fn_locals = []; fn_code = [
+                LocalGet 0l;
+                Testop (I64 IntOp.Eqz);
+                BrIf 0l;
+                LocalGet 0l;
+                Const (I64 (I64.of_bits 10L));
+                Relop (I64 IntOp.LtU);
+                If (Type.(ValBlockType (Some (NumT I64T))), [
+                  LocalGet 0l;
+                ], [
                   LocalGet 0l;
                   Const (I64 (I64.of_bits 10L));
-                  Relop (I64 IntOp.LtU);
-                  If (Type.(ValBlockType (Some (NumT I64T))), [
-                    LocalGet 0l;
-                  ], [
-                    LocalGet 0l;
-                    Const (I64 (I64.of_bits 10L));
-                    Binop (I64 IntOp.DivU);
-                    Call auxfunid;
-                    LocalGet 0l;
-                    Const (I64 (I64.of_bits 10L));
-                    Binop (I64 IntOp.RemU);
-                  ]);
-                  Cvtop (I32 IntOp.WrapI64);
-                  Const (I32 (I32.of_int_s (Char.code '0')));
-                  Binop (I32 IntOp.Add);
-                  Call putc;
-                ] };
-              ], nfuns
+                  Binop (I64 IntOp.DivU);
+                  Call auxfunid;
+                  LocalGet 0l;
+                  Const (I64 (I64.of_bits 10L));
+                  Binop (I64 IntOp.RemU);
+                ]);
+                Cvtop (I32 IntOp.WrapI64);
+                Const (I32 (I32.of_int_s (Char.code '0')));
+                Binop (I32 IntOp.Add);
+                Call putc;
+              ] };
+              Either.Right funid, []
           | TBool ->
               Either.Left [
                 If (Type.(ValBlockType None), [
@@ -1215,51 +1295,41 @@ let compile (prog : Ir.program) (env : string Env.Int.t) (main_typ_name : string
                   Const (I32 (I32.of_int_s (Char.code 's'))); Call putc;
                 ]);
                 Const (I32 (I32.of_int_s (Char.code 'e'))); Call putc;
-              ], [], [], Int32.succ mainid
+              ], []
           | TString ->
               let funtid = TMap.recid_of_rec_type tm Type.(RecT [SubT (Final, [],
                     DefFuncT (FuncT ([RefT (NoNull, VarHT (StatX TMap.string_tid))], [])))]) in
-              let funid = nfuns in
-              let nfuns = Int32.succ funid in
-              Either.Right funid, [], [
-                { fn_name = None; fn_type = funtid; fn_locals = Type.[NumT I32T]; fn_code = [
-                  Const (I32 (I32.of_int_s (Char.code '"'))); Call putc;
-                  Const (I32 (I32.of_bits 0l)); LocalSet 1l;
-                  Block (Type.(ValBlockType None), [ Loop (Type.(ValBlockType None), [
-                    LocalGet 1l;
-                    LocalGet 0l; ArrayLen;
-                    Relop (I32 IntOp.GeU);
-                    BrIf 1l;
-                    LocalGet 0l;
-                    LocalGet 1l;
-                    ArrayGet (TMap.string_tid, Some Pack.ZX); Call putc;
-                    LocalGet 1l; Const (I32 (I32.of_bits 1l)); Binop (I32 IntOp.Add); LocalSet 1l;
-                    Br 0l;
-                  ])]);
-                  Const (I32 (I32.of_int_s (Char.code '"'))); Call putc;
-                ]}
-              ], nfuns
-          (* | TList ->
+              let fref, funid = NewMetadata.add_function glob in
+              fref := Some { fn_name = None; fn_type = funtid; fn_locals = Type.[NumT I32T]; fn_code = [
+                Const (I32 (I32.of_int_s (Char.code '"'))); Call putc;
+                Const (I32 (I32.of_bits 0l)); LocalSet 1l;
+                Block (Type.(ValBlockType None), [ Loop (Type.(ValBlockType None), [
+                  LocalGet 1l;
+                  LocalGet 0l; ArrayLen;
+                  Relop (I32 IntOp.GeU);
+                  BrIf 1l;
+                  LocalGet 0l;
+                  LocalGet 1l;
+                  ArrayGet (TMap.string_tid, Some Pack.ZX); Call putc;
+                  LocalGet 1l; Const (I32 (I32.of_bits 1l)); Binop (I32 IntOp.Add); LocalSet 1l;
+                  Br 0l;
+                ])]);
+                Const (I32 (I32.of_int_s (Char.code '"'))); Call putc;
+              ]};
+              Either.Right funid, []
+          | TList t ->
               let mainblocktid = TMap.recid_of_rec_type tm Type.(RecT [SubT (Final, [],
                     DefFuncT (FuncT ([RefT (Null, VarHT (StatX TMap.list_tid))], [])))]) in
               let locid = nlocs in
               let nlocs = Int32.succ locid in
-              let unbox = match rtt_wrapping tm t with
-                | Either.Right Stdlib.Type.Equal -> (* failwith "TODO: print variadic lists" *) fun _ -> [Unreachable]
-                | Either.Left None -> let tid = TMap.recid_of_type tm t in fun acc ->
-                    LocalGet locid ::
-                    StructGet (TMap.list_tid, 0l, None) ::
-                    StructGet (TMap.boxed_tid, 1l, None) ::
-                    RefCast Wasm.Type.(NoNull, VarHT (StatX tid)) ::
-                    acc
-                | Either.Left (Some tid) -> fun acc ->
-                    LocalGet locid ::
-                    StructGet (TMap.list_tid, 0l, None) ::
-                    StructGet (TMap.boxed_tid, 1l, None) ::
-                    RefCast Wasm.Type.(NoNull, VarHT (StatX tid)) ::
-                    StructGet (tid, 0l, None) ::
-                    acc in
-              let elem, locs, funs, nfuns = prepare t nlocs nfuns in
+              let unbox =
+                let unbox =
+                  let get_val = fun acc -> StructGet (TMap.list_tid, 0l, None) :: LocalGet locid :: acc in
+                  match NewMetadata.maybe_do_unbox tm glob (BBox t) get_val with
+                  | Either.Left (_, v) -> v
+                  | Either.Right Stdlib.Type.Equal -> get_val in
+                List.rev_append (unbox []) in
+              let elem, locs = prepare t nlocs nfuns in
               let print_elem = match elem with
                 | Either.Left code -> fun acc -> code @ acc
                 | Either.Right fid -> fun acc -> Call fid :: acc
@@ -1283,10 +1353,11 @@ let compile (prog : Ir.program) (env : string Env.Int.t) (main_typ_name : string
                   ]));
                 ]);
                 Const (I32 (I32.of_int_s (Char.code ']'))); Call putc;
-              ], locs, funs, nfuns *)
-          | _ -> ignore nlocs; failwith "TODO: Irtowasm.compile.prepare for this type"
+              ], locs
+          | TVariant -> failwith "TODO: Irtowasm.compile.prepare for variant"
+          | _ -> failwith "TODO: Irtowasm.compile.prepare for this type"
         in
-        let code, add_locs, add_funs, nfuns = prepare m.mod_main (Int32.of_int (List.length m.mod_locals)) (Int32.succ mainid) in
+        let code, add_locs = prepare m.mod_main (Int32.of_int (List.length m.mod_locals)) (Int32.succ mainid) in
         let code = match code with
             | Either.Left code -> List.rev_append code [GlobalGet m.mod_nglobals; GlobalSet m.mod_nglobals]
             | Either.Right fid -> [Call fid; GlobalGet m.mod_nglobals; GlobalSet m.mod_nglobals] in
@@ -1295,8 +1366,7 @@ let compile (prog : Ir.program) (env : string Env.Int.t) (main_typ_name : string
             String.fold_left (fun acc c -> Call putc :: Const (I32 (I32.of_int_s (Char.code c))) :: acc)
               code s in
           add_string (add_string code " : ") main_typ_name in
-        ReturnCall putc :: Const (I32 (I32.of_int_s (Char.code '\n'))) :: code, add_locs, add_funs, nfuns in
-  let glob = NewMetadata.empty_global nfuns in
+        ReturnCall putc :: Const (I32 (I32.of_int_s (Char.code '\n'))) :: code, add_locs in
   let _, init =
     let locals =
       let [@tail_mod_cons] rec inner tm l tl = match l with
@@ -1304,7 +1374,7 @@ let compile (prog : Ir.program) (env : string Env.Int.t) (main_typ_name : string
         | Type hd :: l -> TMap.val_of_type tm hd :: inner tm l tl in
       inner tm m.mod_locals extra_locals in
     convert_fun_aux tm glob TMap.init_func_type 0l locals m.mod_block (Some init_code) None in
-  let funs = convert_funs tm glob m.mod_funs (fun () -> init :: extra_funs @ NewMetadata.wasm_of_funs glob) in
+  let funs = convert_funs tm glob m.mod_funs (fun () -> init :: NewMetadata.wasm_of_funs glob) in
   let frgbls = convert_fun_refs tm m.mod_needs_export (NewMetadata.wasm_of_exports glob) in
   let globals = convert_globals tm m.mod_global_vars (init_res :: frgbls) in
   let tags = convert_effects tm m.mod_effs in
