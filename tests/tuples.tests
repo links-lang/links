@@ -45,5 +45,4 @@ stdout : (1 = "one") : (1:String)
 
 Quasituples
 (1="foo", 3="bar")
-stdout : (1 = "foo", 3 = "bar") : (1:String, 3:String)
-ignore : The type is currently printed as (String, String). Is this really what we want?
+stdout : (1 = "foo", 3 = "bar") : (1:String,3:String)

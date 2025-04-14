@@ -34,15 +34,15 @@ fun main() {
   addStaticRoute("/examplessrc/", "examples/", [("links", "text/plain")]);
 
   addRoute("/examples/dictionary/dictSuggestUpdate.links", fun(_){DictSuggestUpdate.main()});
-  addRoute("/examples/draggable.links", fun(_) {Draggable.main()});
-  addRoute("/examples/progress.links", fun(_) {Progress.main()});
+  addRoute("/examples/draggable.links", fun(_) {Draggable.mainPage((), ())});
+  addRoute("/examples/progress.links", Progress.mainPage);
 
   addRoute("/examples/factorial.links", fun(_) {Factorial.main()});
   addRoute("/examples/dictionary/dictSuggest.links", fun(_){DictSuggest.main()});
   addRoute("/examples/dictionary/dictSuggestLite.links", fun(_){DictSuggestLite.main()});
   addRoute("/examples/draggableDb.links", fun(_) {DraggableDb.main()});
 
-  addRoute("/examples/buttons.links", fun(_) {Buttons.main()});
+  addRoute("/examples/buttons.links", Buttons.mainpage);
   addRoute("/examples/formsTest.links", fun(_) {FormsTest.main()});
 
   addRoute("/examples/validate.links", fun(_) {Validate.main()});

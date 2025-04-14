@@ -34,7 +34,7 @@ type term_shadow_table = string list stringmap
 type type_shadow_table = string list stringmap
 type shadow_table = string list stringmap
 
-let try_parse_file filename =
+let try_parse_file ~root filename =
   (* First, get the list of directories, with trailing slashes stripped *)
   let check_n_chop path =
     let dir_sep = Filename.dir_sep in
@@ -57,7 +57,7 @@ let try_parse_file filename =
 
   let poss_dirs =
     let paths = Settings.get links_file_paths in
-    "" :: poss_stdlib_dir @ (List.map (check_n_chop) paths)
+    root :: poss_stdlib_dir @ (List.map (check_n_chop) paths)
   in
 
   (* Loop through, trying to open the module with each path *)

@@ -9,13 +9,16 @@ fun succ(n) {fun (z)(s){s(n(z)(s))}}
 sig add : (Nat) {}-> (Nat) {}-> Nat
 fun add(m)(n) {fun (z)(s) {m(n(z)(s))(s)}}
 
+sig coerceToplevel : ((a) {}-> b) -f-> ((a) -e-> b)
+fun coerceToplevel(f) {f : ((a) -e-> b) <- ((a) {}-> b)}
+
 sig two : Nat
-var two = succ(succ(zero));
+var two = coerceToplevel(succ)(coerceToplevel(succ)(zero));
 
 sig four : Nat
-var four = add(two)(two);
+var four = coerceToplevel(coerceToplevel(add)(two))(two);
 
 sig natToInt : (Nat) {}-> Int
 fun natToInt(n) {n(0)(fun (x) {x+1})}
 
-natToInt(four)
+coerceToplevel(natToInt)(four)

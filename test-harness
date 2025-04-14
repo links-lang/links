@@ -7,7 +7,7 @@ import concurrent.futures, threading, multiprocessing
 from os import path
 from subprocess import Popen, PIPE
 
-successes = failures = ignored = 0
+successes = failures = skipsuccesses = ignored = 0
 TIMEOUT = 15 # seconds before a test is timed out.
 
 the_lock = threading.Lock()
@@ -71,6 +71,11 @@ def OK(name):
     global successes
     successes+=1
     print(' SUCCESS: %s' % name)
+def OK_skip(name):
+    global successes, skipsuccesses
+    successes+=1
+    skipsuccesses+=1
+    print('?IGNORED: %s (test passed, but marked as skip)' % name)
 
 def parse(stream):
     """Read test information separated by blank lines.  The first line
@@ -180,9 +185,12 @@ def evaluate(name, code, config_file, stdout='', stderr='', exit = '0', env = No
             passed &= check_expected(name, 'stderr', str(proc.stderr.read().decode('ascii')), stderr, errors)
             if passed:
                 with the_lock:
-                    OK(name)
+                    if ignore is None:
+                        OK(name)
+                    else:
+                        OK_skip(name)
             else:
-                if ignore != None:
+                if ignore is not None:
                     global ignored
                     with the_lock:
                         ignored += 1
@@ -274,7 +282,7 @@ def main():
                               "the following exception:\n%s")
                              % (job_name, result.exception()))
 
-    print("%d failures (+%d ignored)\n%d successes\n" % (failures, ignored, successes))
+    print("%d failures (+%d ignored)\n%d successes%s\n" % (failures, ignored, successes, ("" if skipsuccesses == 0 else " (with %d ignored)" % skipsuccesses)))
     if failures > 0:
         sys.exit(1)
     else:

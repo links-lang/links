@@ -12,7 +12,7 @@ type type_shadow_table = string list stringmap
 type shadow_table = string list stringmap
 
 val module_sep : string
-val try_parse_file : string -> (Sugartypes.program * Scanner.position_context)
+val try_parse_file : root:string -> string -> (Sugartypes.program * Scanner.position_context)
 val contains_modules : Sugartypes.program -> bool
 val separate_modules : Sugartypes.binding list -> (Sugartypes.binding list * Sugartypes.binding list)
 val get_ffi_files : Sugartypes.program -> string list
