@@ -1215,11 +1215,11 @@ end = struct
     ge_fmap : funid anyfuncid Env.Int.t;
     ge_fbs : mfunid option;
   }
-  let empty (m : string Env.Int.t) (global_binders : Utility.IntSet.t) (is_binary : bool) : t =
+  let empty (m : string Env.Int.t) (global_binders : Utility.IntSet.t) (import_wizard : bool) : t =
     let tmap = [TypeList TLnil, 0] in
-    let ge_nfuns = if is_binary then 2l else 0l in
-    let ge_ntags = if is_binary then 0 else 0 in {
-      ge_imports = if is_binary then ["wizeng", "puts"; "wizeng", "putc"] else [];
+    let ge_nfuns = if import_wizard then 2l else 0l in
+    let ge_ntags = if import_wizard then 0 else 0 in {
+      ge_imports = if import_wizard then ["wizeng", "puts"; "wizeng", "putc"] else [];
       ge_map = m;
       ge_nfuns;
       ge_funs = [];
@@ -2042,7 +2042,7 @@ let find_global_binders ((bs, _) : computation) =
 
 (* MAIN FUNCTION *)
 
-let module_of_ir (c : Ir.program) (map : string Env.Int.t) (is_binary : bool) : anymodule =
-  let ge = GEnv.empty map (find_global_binders c) is_binary in
+let module_of_ir (c : Ir.program) (map : string Env.Int.t) (import_wizard : bool) : anymodule =
+  let ge = GEnv.empty map (find_global_binders c) import_wizard in
   let ge, le, blk = of_computation ge (LEnv.of_real LEnv.toplevel) c in
   GEnv.compile ge (LEnv.to_real le) blk
