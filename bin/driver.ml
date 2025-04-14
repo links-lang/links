@@ -30,6 +30,7 @@ module Phases = struct
           Parse.program
           source_code
       in
+      let program = (ResolvePositions.resolve_positions pos_context)#program program in
       let program = Chaser.add_dependencies "" program in
       let context' = Context.({ context with source_code = pos_context }) in
       Loader.({ program_ = program; context = context' })
@@ -39,6 +40,7 @@ module Phases = struct
       let program, pos_context =
         Parse.Readline.parse ps1
       in
+      let program = (ResolvePositions.resolve_positions pos_context)#sentence program in
       let program = Chaser.add_dependencies_sentence program in
       let context' = Context.({ context with source_code = pos_context }) in
       Loader.({ program_ = program; context = context' })
