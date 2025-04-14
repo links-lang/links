@@ -41,7 +41,7 @@ fun stringToBool(s) {
   switch (s) {
     case "true"  -> true
     case "false" -> false
-    case otherwise -> error("Input '" ^^ s ^^ "' was not recognised as a boolean value.")
+    case _ -> error("Input '" ^^ s ^^ "' was not recognised as a boolean value.")
   }
 }
 
