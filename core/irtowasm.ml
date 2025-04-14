@@ -405,6 +405,7 @@ end = struct
     fid
   
   (* get_val is affine *)
+  (* If box is BBox _, get_val is called on the accumulator *)
   and maybe_do_unbox : type a b. tmap -> g -> (a, b) box -> instr_conv -> (a typ * instr_conv, (a, b) Type.eq) Either.t =
     fun tm glob box get_val ->
     let open Wasm.Instruction in match box with
@@ -604,6 +605,7 @@ let do_box (type a b) (tm : tmap) (new_meta : new_meta) (box : (a, b) box) (get_
   | Either.Left (_, v) -> v
 
 (* get_val is affine *)
+(* If box is BBox _, get_val is called on the accumulator *)
 let do_unbox (type a b) (tm : tmap) (new_meta : new_meta) (box : (a, b) box) (get_val : instr_conv) : instr_conv =
   match NewMetadata.maybe_do_unbox tm (NewMetadata.g_of_t new_meta) box get_val with
   | Either.Left (_, v) -> v
@@ -1000,8 +1002,9 @@ let convert_hdl (tm : tmap) (glob : NewMetadata.g) (type a b) (f : (a, b) fhandl
           let codehdl = match vars with
             | VLnil -> Drop :: codehdl
             | VLcons (v, VLnil) ->
-                let _, v = (v : _ varid :> _ * int32) in
-                LocalSet v :: codehdl
+                let t, v = (v : _ varid :> _ * int32) in
+                let unbox = do_unbox tm new_meta (BBox t) (fun acc -> acc) in
+                List.rev_append (unbox []) (LocalSet v :: codehdl)
             | VLcons (_, VLcons (_, _)) ->
                 let ts =
                   let [@tail_mod_cons] rec inner : type a. a varid_list -> a typ_list = fun (vars : a varid_list) : a typ_list -> match vars with
