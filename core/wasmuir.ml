@@ -246,9 +246,6 @@ and 'a expr =
   | EShallowHandle : (unit, 'b, 'c) funcid * 'c expr_list * ('b, 'd) finisher * ('b, 'd) handler list -> 'd expr
   | EDeepHandle : (unit, 'b, 'c) funcid * 'c expr_list *
                   ('b continuation * ('c closure_content * unit), 'd, 'e) funcid * 'e expr_list -> 'd expr
-  | ECont : locality * 'b continuation varid * 'a expr *
-            ('b continuation * ('a * unit), 'd, 'c) funcid * (locality * 'c closure_content varid) -> 'd expr
-      (* TODO: check if it is possible (and how) to merge ECallRawHandler and ECont *)
 and (_, _) handler =
   | Handler : ('a, 'b) effectid * 'd continuation varid * 'a varid_list * 'c block -> ('d, 'c) handler
 and _ expr_list =
@@ -344,13 +341,6 @@ and [@tail_mod_cons] convert_expr : type a. _ -> a Wasmir.expr -> a expr =
       EShallowHandle (convert_funcid f, convert_expr_list tmap e, convert_finisher tmap d, List.map (convert_handler tmap) h)
   | Wasmir.EDeepHandle (c, cl, h, a) ->
       EDeepHandle (convert_funcid c, convert_expr_list tmap cl, convert_funcid h, (convert_expr_list[@tailcall]) tmap a)
-  | Wasmir.ECont (loc, c, v, Wasmir.(TLcons (cret, TLcons (targ, TLnil)), tret, i, f), l, cl) ->
-      let TypeList fcltyp = convert_anytyp_list (Wasmir.MTypMap.find i tmap) in
-      ECont (
-        loc, convert_varid c,
-        (convert_expr[@tailcall]) tmap v,
-        (TLcons (convert_typ cret, TLcons (convert_typ targ, TLnil)), convert_typ tret, fcltyp, f),
-        (l, (TClosArg fcltyp, cl)))
 and convert_handler : type a b. _ -> (a, b) Wasmir.handler -> (a, b) handler =
   fun (tmap : tenv) (h : (a, b) Wasmir.handler) -> match h with
   | Wasmir.Handler (e, c, v, b) -> Handler (convert_effectid e, convert_varid c, convert_varid_list v, convert_block tmap b)

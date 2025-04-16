@@ -141,12 +141,6 @@ and 'a expr =
   | EShallowHandle : (unit, 'a, 'c, unit, unit) funcid * 'c expr_list * ('a, 'b) finisher * ('a, 'b) handler list -> 'b expr
   | EDeepHandle : (unit, 'b, 'c, unit, unit) funcid * 'c expr_list *
                   ('b continuation * ('c closure_content * unit), 'd, 'e, unit, unit) funcid * 'e expr_list -> 'd expr
-  (* FIXME: cannot use funcid, as we don't know what the closure should be when building this expression
-     However, we do know the correct mtypid.
-  | ECont : locality * 'b continuation varid * 'a expr_list *
-            ('b continuation * ('a closure_content * unit), 'd, 'e, unit, unit) funcid * locality * 'e closure_content varid -> 'd expr *)
-  | ECont : locality * 'b continuation varid * 'a expr *
-            (('b continuation * ('a * unit)) typ_list * 'd typ * mtypid * mfunid) * locality * mvarid -> 'd expr
 and ('a, 'b) handler = (* The continuation itself returns 'a, the handler returns 'b *)
   (* Note: we lose the information that the continuation takes 'b as parameter(s) *)
   | Handler : ('a, 'b) effectid * 'd continuation varid * 'a varid_list * 'c block -> ('d, 'c) handler

@@ -242,10 +242,6 @@ and 'a expr =
   | EShallowHandle : (unit, 'a, 'c, unit, unit) funcid * 'c expr_list * ('a, 'b) finisher * ('a, 'b) handler list -> 'b expr
   | EDeepHandle : (unit, 'b, 'c, unit, unit) funcid * 'c expr_list *
                   ('b continuation * ('c closure_content * unit), 'd, 'e, unit, unit) funcid * 'e expr_list -> 'd expr
-  (* FIXME: cannot use funcid, as we don't know what the closure should be when building this expression
-     However, we do know the correct mtypid. *)
-  | ECont : locality * 'b continuation varid * 'a expr *
-            (('b continuation * ('a * unit)) typ_list * 'd typ * mtypid * mfunid) * locality * mvarid -> 'd expr
 and ('a, 'b) handler = (* The continuation itself returns 'a, the handler returns 'b *)
   (* Note: we lose the information that the continuation takes 'b as parameter(s) *)
   | Handler : ('a, 'b) effectid * 'd continuation varid * 'a varid_list * 'c block -> ('d, 'c) handler
@@ -294,7 +290,6 @@ let typ_of_expr (type a) (e : a expr) : a typ = match e with
   | EShallowHandle (_, _, FId t, _) -> t
   | EShallowHandle (_, _, FMap (_, t, _), _) -> t
   | EDeepHandle (_, _, (_, _, _, t, _, _), _) -> t
-  | ECont (_, _, _, (_, t, _, _), _, _) -> t
 
 type ('a, 'b) func' = {
   fun_id               : mfunid;
@@ -1808,10 +1803,10 @@ let rec of_tail_computation : type args. _ -> args lenv -> _ -> genv * args lenv
               let ge, le, args = convert_values ge le args targs in
               let closed_applied = ECallClosed (ESpecialize (EVariable (loc, vid), s, bargs, bret), args, tret) in
               ge, le, Expr (tret, closed_applied)
-          | le, Contin (loc, vid, (TLcons (_, TLcons (targ, _)), tret, _, _ as hdlfid), hdlcloc, hdlcid) ->
+          | le, Contin (loc, ((TCont tc, _) as vid), (TLcons (_, TLcons (targ, _)), tret, _, hdlfid), hdlcloc, hdlcid) ->
               if ts = [] then begin
                 let ge, le, ELcons (arg, ELnil) = convert_values ge le args (TLcons (targ, TLnil)) in
-                ge, le, Expr (tret, ECont (loc, vid, arg, hdlfid, hdlcloc, hdlcid))
+                ge, le, Expr (tret, ECallRawHandler (hdlfid, tc, EVariable (loc, vid), targ, arg, EVariable (hdlcloc, (TAbsClosArg, hdlcid)), tret))
               end else raise (internal_error "Invalid continuation: receives type applications")
           | le, ClosedBuiltin name ->
               let ge, le, args = convert_values_unk ge le args in

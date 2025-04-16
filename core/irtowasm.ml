@@ -846,10 +846,16 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ -> _ -> instr_c
   | ECallRawHandler (fid, _, contarg, targ, arg, hdlarg, _) ->
       let fid = (fid :> int32) in
       let arg = convert_expr tm new_meta arg (BBox targ) None cinfo in
-      let hdlarg = convert_expr tm new_meta hdlarg BNone None cinfo in
       let contarg = convert_expr tm new_meta contarg BNone None cinfo in
-      do_box tm new_meta box
-        (fun acc -> (if can_early_ret then ReturnCall fid else Call fid) :: hdlarg (arg (contarg acc))) acc
+      begin match is_last with
+      | Some (Some (refid, jmplv)) when Int32.equal fid (refid :> int32) ->
+          do_box tm new_meta box
+            (fun acc -> Br jmplv :: contarg (arg acc)) acc
+      | _ ->
+          let hdlarg = convert_expr tm new_meta hdlarg BNone None cinfo in
+          do_box tm new_meta box
+            (fun acc -> (if can_early_ret then ReturnCall fid else Call fid) :: hdlarg (arg (contarg acc))) acc
+    end
   | ECallClosed (EClose (f, bcl, cls), args) ->
       let _, _, clts, fid = (f : _ funcid :> _ * _ * _ * int32) in
       let fcid = TMap.recid_of_type tm (TClosArg clts) in
@@ -925,24 +931,6 @@ and convert_expr : type a b. _ -> _ -> a expr -> (a, b) box -> _ -> _ -> instr_c
         ContNew tcontid ::
         RefFunc contid ::
         acc))) acc
-  | ECont (loc, contid, contarg, hdlfid, (hdlclloc, hdlclid)) -> begin
-      let TLcons (_, TLcons (carg, TLnil)), _, _, hdlfid = (hdlfid : _ funcid :> _ * _ * _ * int32) in
-      match is_last with
-      | Some (Some (refid, jmplv)) when Int32.equal hdlfid (refid :> int32) ->
-          let args = convert_expr tm new_meta contarg (BBox carg) None cinfo in
-          do_box tm new_meta box (fun acc ->
-            Br jmplv ::
-            convert_get_var loc contid cinfo (
-            args acc)) acc
-      | _ ->
-          let _, hdlclid = (hdlclid : _ varid :> _ * int32) in
-          let args = convert_expr tm new_meta contarg (BBox carg) None cinfo in
-          do_box tm new_meta box (fun acc ->
-            (if can_early_ret then ReturnCall hdlfid else Call hdlfid) ::
-            convert_get_var' hdlclloc hdlclid cinfo (
-            args (
-            convert_get_var loc contid cinfo acc))) acc
-    end
 and convert_exprs : type a b. _ -> _ -> a expr_list -> (a, b) box_list -> _ -> instr_conv =
   fun (tm : tmap) (new_meta : new_meta) (es : a expr_list) box (cinfo : clos_info) acc -> match box, es with
   | _, ELnil -> acc

@@ -107,8 +107,6 @@ and 'a expr =
   | EShallowHandle : (unit, 'b, 'c) funcid * 'c expr_list * ('b, 'd) finisher * ('b, 'd) handler list -> 'd expr
   | EDeepHandle : (unit, 'b, 'c) funcid * 'c expr_list *
                   ('b continuation * ('c closure_content * unit), 'd, 'e) funcid * 'e expr_list -> 'd expr
-  | ECont : locality * 'b continuation varid * 'a expr *
-            ('b continuation * ('a * unit), 'd, 'c) funcid * (locality * 'c closure_content varid) -> 'd expr
 and (_, _) handler =
   | Handler : ('a, 'b) effectid * 'd continuation varid * 'a varid_list * 'c block -> ('d, 'c) handler
 and _ expr_list =
