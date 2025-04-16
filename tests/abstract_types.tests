@@ -1,0 +1,38 @@
+Abstract type declaration
+typename Foo;
+stdout : () : ()
+
+Abstract type unification
+typename Foo; sig foo : (Foo) -> Foo fun foo(x) { x }
+stdout : () : ()
+
+Abstract type identities (1)
+typename Foo; typename Bar; sig foobar : (Foo) -> Bar fun foobar(x) { x }
+stderr : @.
+exit : 1
+
+Abstract type identities (2)
+typename Foo; sig foo : () -> Foo fun foo() { error("I cannot materialise a foo") }; typename Foo; sig foo' : (Foo) -> () fun foo'(_) { () }; foo'(foo())
+stderr : @.
+exit : 1
+
+Parameterised abstract types (1)
+typename Foo(a,b,c); sig foo : (Foo(a,b,c)) -> Foo(String,Int,Float) fun foo(x) { x }
+stderr : @.
+exit : 1
+
+Parameterised abstract types (2)
+typename Foo(a,b); sig foo : (Foo(Int,String)) -> Foo(Int,String) fun foo(x) { x }
+stdout : () : ()
+
+Parameterised abstract types (3)
+typename Foo(a,b); sig foo : (a, b) ~> Foo(a,b) fun foo(_,_) { error("cannot materialise Foo") }
+stdout : () : ()
+
+Parameterised abstract types (4)
+typename Foo(a,b); sig foo : (Foo(a,b)) ~> Foo(b,a) fun foo(_) { error("cannot materialise Foo") }
+stdout : () : ()
+
+Alien
+typename A; alien javascript "" f : () -> A;
+stdout : () : ()

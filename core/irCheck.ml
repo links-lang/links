@@ -344,6 +344,11 @@ let eq_types occurrence : type_eq_context -> (Types.datatype * Types.datatype) -
             else false
          | _ -> false
          end
+      | Abstract abs ->
+         begin match t2 with
+         | Abstract abs' -> abs == abs' (* pointer equality *)
+         | _ -> false
+         end
       (* Effect *)
       | Effect l ->
          begin match t2 with

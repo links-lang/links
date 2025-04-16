@@ -539,6 +539,7 @@ signature:
 | SIG sigop COLON datatype                                     { with_pos $loc ($2, datatype $4) }
 
 typedecl:
+| TYPENAME CONSTRUCTOR typeargs_opt                             { alias $loc $2 $3 (Typename   ( WithPos.make (Datatype.Abstract (Gensym.gensym ())), None)) }
 | TYPENAME CONSTRUCTOR typeargs_opt EQ datatype                 { alias $loc $2 $3 (Typename   ( $5     , None)) }
 | EFFECTNAME CONSTRUCTOR typeargs_opt EQ LBRACE erow RBRACE     { alias $loc $2 $3 (Effectname ( $6     , None)) }
 | EFFECTNAME CONSTRUCTOR typeargs_opt EQ effect_app             { alias $loc $2 $3 (Effectname (([], $5), None)) }
