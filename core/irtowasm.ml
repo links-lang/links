@@ -3,7 +3,6 @@ let internal_error message = Errors.internal_error ~filename:"irtowasm.ml" ~mess
 open Wasmuir
 
 (* TODO: use cont.bind instead of struct.new *)
-(* TODO: do_deep_box and do_deep_unbox for effects *)
 
 (* TODO: make it so that TTuple TLnil becomes nothing *)
 module TMap : sig
@@ -25,7 +24,6 @@ module TMap : sig
   val recid_of_cfunctyp : t -> 'b typ -> int32
   
   val oval_of_type : t -> 'a typ -> Wasm.Type.val_type option
-  val recid_of_closed : t -> 'a typ_list -> 'b typ -> int32 -> int32
   
   val recids_of_handler : t -> 'a continuation typ -> 'b typ -> int32 * int32
   val recid_of_handler_block : t -> int32 -> 'a typ_list -> int32
@@ -157,9 +155,6 @@ end = struct
   (* TODO: optimize ()s away? *)
   let oval_of_type (env : t) (t : 'a typ) : Wasm.Type.val_type option =
     Some (val_of_type env t)
-  
-  let recid_of_closed (env : t) (targs : 'a typ_list) (tret : 'b typ) (_clostid : int32) : int32 =
-    recid_of_type env (TClosed (targs, tret))
   
   let recids_of_handler (env : t) (TCont cret : 'a continuation typ) (tret : 'b typ) : int32 * int32 =
     let open Wasm.Type in

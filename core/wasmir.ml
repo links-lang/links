@@ -2,11 +2,9 @@ open Ir
 
 type tagid = int
 type tvarid = Types.tid  (* Type variable ID   *)
-type mtypid = int        (* Module type ID     *)
 type mvarid = int32      (* Module variable ID *)
 type mfunid = int32      (* Module function ID *)
 type meffid = int32      (* Module effect ID   *)
-module MTypMap = Utility.IntMap
 module FunIDMap = Utility.Map.Make(struct
   type t = mfunid
   let pp fmt v = Format.fprintf fmt "%lu" v
@@ -327,7 +325,6 @@ type 'a modu = {
   mod_nfuns       : int32;
   mod_funs        : func list;
   mod_needs_export: (anytyp_list option * anytyp) FunIDMap.t;
-  mod_typs        : anytyp_list MTypMap.t;
   mod_neffs       : int32;
   mod_effs        : EffectIDSet.t;
   mod_nglobals    : int32;
@@ -762,10 +759,7 @@ type anyvarid_list = VarIDList : 'a typ_list * 'a varid_list -> anyvarid_list
 type 'a closed_like =
   | Function : ('a, 'b, unit, 'ga, unit) funcid * 'c -> 'c closed_like
   | Closure : locality * ('ga * 'a -> 'b) varid -> 'c closed_like
-  (* FIXME: see ECont
-  | Contin : locality * 'd continuation varid * ('d continuation * ('a closure_content * unit), 'b, 'e) funcid *
-             locality * 'e closure_content varid -> ('a, 'b, 'c) closed_like *)
-  | Contin : locality * 'd continuation varid * (('d continuation * ('a * unit)) typ_list * 'b typ * mtypid * mfunid) *
+  | Contin : locality * 'd continuation varid * (('d continuation * ('a * unit)) typ_list * 'b typ * mfunid) *
              locality * mvarid -> 'c closed_like
   | ClosedBuiltin of string
 
@@ -786,7 +780,7 @@ module LEnv : sig (* Contains the arguments, the local variables, etc *)
   (* Internal use by the global env only *)
   val args_typ : 'a realt -> 'a typ_list * anytyp_list
   val find_continuation :
-    'a t -> var -> ('a t * local_storage * anytyp * anyvarid * mfunid * anytyp * mtypid * local_storage * mvarid) option
+    'a t -> var -> ('a t * local_storage * anytyp * anyvarid * mfunid * anytyp * local_storage * mvarid) option
   
   type args
   type anyrealt = AR : 'a realt -> anyrealt
@@ -801,7 +795,7 @@ module LEnv : sig (* Contains the arguments, the local variables, etc *)
   val find_closure : 'a t -> var -> string -> ('a t * local_storage * anyvarid) option
   
   val set_handler_args : subt -> binder -> subt * anyvarid_list
-  val add_cont : subt -> anytyp -> mfunid -> anytyp -> mtypid -> subt * mvarid
+  val add_cont : subt -> anytyp -> mfunid -> anytyp -> subt * mvarid
   val set_continuation : subt -> binder -> anytyp -> subt
   
   val locals_of_env : 'a realt -> anytyp list
@@ -833,11 +827,11 @@ end = struct
     nlocs          : int32;
     locs           : anytyp_list;
     varmap         : (local_storage * anyvarid) Env.Int.t;
-    contmap        : (anytyp * anyvarid * mfunid * anytyp * mtypid * mvarid) Env.Int.t;
+    contmap        : (anytyp * anyvarid * mfunid * anytyp * mvarid) Env.Int.t;
     nclos          : int32;
     clos           : anyexpr_list;
     cvarmap        : (local_storage * anyvarid) IntString.t;
-    mutable contid : (anyvarid * mvarid * mfunid * anytyp * mtypid * mvarid) option;
+    mutable contid : (anyvarid * mvarid * mfunid * anytyp * mvarid) option;
     mutable contv  : anytyp * var;
     mutable hdlb   : var;
   }
@@ -903,23 +897,23 @@ end = struct
   
   let args_typ (env : 'a realt) : 'a typ_list * anytyp_list =
     env.args, (let (_, cat, _) = env.clos in cat)
-  let rec find_continuation : type a. a t -> _ -> (a t * _ * _ * _ * _ * _ * _ * _ * _) option = fun (env : a t) (v : var)
-      : (a t * local_storage * anytyp * anyvarid * mfunid * anytyp * mtypid * local_storage * mvarid) option ->
+  let rec find_continuation : type a. a t -> _ -> (a t * _ * _ * _ * _ * _ * _ * _) option = fun (env : a t) (v : var)
+      : (a t * local_storage * anytyp * anyvarid * mfunid * anytyp * local_storage * mvarid) option ->
     match env with
     | Either.Left _ -> None
     | Either.Right ({ base = AT base; contid; contv = targ, contv; contmap; _ } as env) -> begin match Env.Int.find_opt v contmap with
-        | Some (targ, VarID (t, cid), hdlfid, thdlret, thdlid, hdlcid) ->
-            Some (Either.Right env, StorClosure, targ, VarID (t, cid), hdlfid, thdlret, thdlid, StorClosure, hdlcid)
+        | Some (targ, VarID (t, cid), hdlfid, thdlret, hdlcid) ->
+            Some (Either.Right env, StorClosure, targ, VarID (t, cid), hdlfid, thdlret, StorClosure, hdlcid)
         | None -> begin match
-              match contid with None -> None | Some (VarID (t, cid), _, hdlfid, thdlret, thdlid, hdlcid) ->
+              match contid with None -> None | Some (VarID (t, cid), _, hdlfid, thdlret, hdlcid) ->
                 if Var.equal_var v contv then
                   Some (Either.Right env, StorVariable, targ, VarID (t, cid),
-                        hdlfid, thdlret, thdlid, StorVariable, hdlcid)
+                        hdlfid, thdlret, StorVariable, hdlcid)
                 else None
               with Some v -> Some v | None ->
             match find_continuation base v with
             | None -> None
-            | Some (base, loc, targ, VarID (t, bid), hdlfid, thdlret, thdlid, hdlcloc, hdlbcid) ->
+            | Some (base, loc, targ, VarID (t, bid), hdlfid, thdlret, hdlcloc, hdlbcid) ->
                 let cid = env.nclos in
                 let hdlcid = Int32.succ cid in
                 let nclos = Int32.succ hdlcid in
@@ -927,9 +921,9 @@ end = struct
                   let ExprList (tl, es) = env.clos in
                   ExprList (TLcons (TClosArg TLnil, TLcons (TCont t, tl)),
                             ELcons (EVariable (Local hdlcloc, (TClosArg TLnil, hdlbcid)), ELcons (EVariable (Local loc, (TCont t, bid)), es))) in
-                let contmap = Env.Int.bind v (targ, VarID (t, cid), hdlfid, thdlret, thdlid, hdlcid) env.contmap in
+                let contmap = Env.Int.bind v (targ, VarID (t, cid), hdlfid, thdlret, hdlcid) env.contmap in
                 Some (Either.Right { env with base = AT base; nclos; clos; contmap }, StorClosure, targ, VarID (t, cid),
-                      hdlfid, thdlret, thdlid, StorClosure, hdlcid)
+                      hdlfid, thdlret, StorClosure, hdlcid)
           end
         end
   
@@ -1090,14 +1084,14 @@ end = struct
           in let ret = inner eargs 0 in !env, ret in
         env, VarIDList (eargs, vargs)
   (* Modifies in-place the environment *)
-  let add_cont (env : subt) (Type tcontret : anytyp) (hdlfid : mfunid) (thdlret : anytyp) (thdlclid : mtypid) : subt * mvarid =
+  let add_cont (env : subt) (Type tcontret : anytyp) (hdlfid : mfunid) (thdlret : anytyp) : subt * mvarid =
     match env.contid with
     | Some _ -> raise (internal_error "Cannot add multiple continuations")
     | None ->
         let env, id = env, 0l in   (* Continuation argument *)
         let env, ccid = env, 1l in (* Argument of the continuation argument *)
         let env, hcid = env, 2l in (* Closure of the current handler function *)
-        env.contid <- Some (VarID (tcontret, id), ccid, hdlfid, thdlret, thdlclid, hcid);
+        env.contid <- Some (VarID (tcontret, id), ccid, hdlfid, thdlret, hcid);
         env, id
   let set_continuation (env : subt) (b : binder) (targ : anytyp) : subt = match env.contid with
     | None -> raise (internal_error "Cannot set missing continuation")
@@ -1133,7 +1127,7 @@ end = struct
   let compile_handler (type b d) (env : subt) (fid : mfunid) (oabsconc : (mvarid * mvarid) option)
                       (onret : (b, d) finisher) (ondo : (b, d) handler list) : (b, d) fhandler =
     let contarg, argcontidx = match env.contid with
-      | Some (VarID (_, i), j, _, _, _, _) -> i, j
+      | Some (VarID (_, i), j, _, _, _) -> i, j
       | None -> raise (internal_error "Handlers must have a continuation added") in
     let tcont = match onret with FId t | FMap ((t, _), _, _) -> t in
     let ExprList (clostyp, _) = env.clos in {
@@ -1153,10 +1147,6 @@ module GEnv : sig (* Contains the functions, the types, etc *)
   val empty : string Env.Int.t -> Utility.IntSet.t -> bool -> t
   
   val find_tag : t -> string -> t * tagid
-  
-  type typid_list
-  val new_generic_list : t -> t * typid_list * mtypid
-  val set_generic_list : t -> typid_list -> anytyp_list -> t
   
   val get_var_name : t -> var -> string
   val find_fun : t -> 'a LEnv.t -> var -> 'a LEnv.t * funid closed_like
@@ -1198,8 +1188,6 @@ end = struct
                  fbuiltin) Either.t) Either.t) Either.t list;
     ge_ntags : tagid;
     ge_tagmap : tagid Env.String.t;
-    ge_ntyps : mtypid;
-    ge_typs : anytyp_list list;
     ge_neffs : meffid;
     ge_effs : EffectIDSet.t;
     ge_effmap : meffid EffectMap.t;
@@ -1211,17 +1199,14 @@ end = struct
     ge_fbs : mfunid option;
   }
   let empty (m : string Env.Int.t) (global_binders : Utility.IntSet.t) (import_wizard : bool) : t =
-    let tmap = [TypeList TLnil, 0] in
     let ge_nfuns = if import_wizard then 2l else 0l in
     let ge_ntags = if import_wizard then 0 else 0 in {
       ge_imports = if import_wizard then ["wizeng", "puts"; "wizeng", "putc"] else [];
       ge_map = m;
       ge_nfuns;
       ge_funs = [];
-      ge_ntyps = List.length tmap;
       ge_ntags;
       ge_tagmap = Env.String.empty;
-      ge_typs = List.rev_map fst tmap;
       ge_neffs = 0l;
       ge_effs = EffectIDSet.empty;
       ge_effmap = EffectMap.empty;
@@ -1240,21 +1225,6 @@ end = struct
         let ge_ntags = Int.succ tagid in
         let ge_tagmap = Env.String.bind tname tagid env.ge_tagmap in
         { env with ge_ntags; ge_tagmap }, tagid
-  
-  type typid_list = int
-  let new_generic_list (env : t) : t * typid_list * mtypid =
-    let typid = env.ge_ntyps in
-    let ge_ntyps = Int.succ typid in
-    let ge_typs = TypeList TLnil :: env.ge_typs in
-    { env with ge_ntyps; ge_typs }, typid, typid
-  let set_generic_list (env : t) (typid : typid_list) (typ : anytyp_list) : t =
-    let ge_typs =
-      let rec inner i typs acc = match i, typs with
-        | _, [] -> raise (internal_error "Invalid typid in Wasmir.GEnv.set_generic_list")
-        | 0, _ :: tl -> List.rev_append acc (typ :: tl)
-        | _, hd :: tl -> inner (i - 1) tl (hd :: acc)
-      in inner (env.ge_ntyps - typid - 1) env.ge_typs [] in
-    { env with ge_typs }
   
   let get_var_name (ge : t) (v : var) = Env.Int.find v ge.ge_map
   
@@ -1286,11 +1256,11 @@ end = struct
         | _, TLcons _ -> raise (internal_error "Unexpected open function, expected closed function")
       end
     | None -> begin match LEnv.find_continuation le v with
-        | Some (le, loc, Type arg, VarID (ret, vid), hdlfid, Type tret, thdlid, hdlcloc, hdlcid) ->
+        | Some (le, loc, Type arg, VarID (ret, vid), hdlfid, Type tret, hdlcloc, hdlcid) ->
             le, Contin (
               Local loc,
               (TCont ret, vid),
-              (TLcons (TCont ret, TLcons (arg, TLnil)), tret, thdlid, hdlfid),
+              (TLcons (TCont ret, TLcons (arg, TLnil)), tret, hdlfid),
               Local hdlcloc,
               hdlcid)
         | None -> begin match find_var ge le v with
@@ -1478,7 +1448,6 @@ end = struct
             | Either.Right (Either.Right (Either.Right fb)) -> FBuiltin fb)
           ge.ge_funs;
       mod_needs_export;
-      mod_typs = MTypMap.of_seq (Seq.mapi (fun i v -> i, v) (List.to_seq (List.rev ge.ge_typs)));
       mod_neffs = ge.ge_neffs;
       mod_effs = ge.ge_effs;
       mod_nglobals = ge.ge_ngbls;
@@ -1549,7 +1518,7 @@ let rec of_value (ge : genv) (le: 'args lenv) (v : value) : genv * 'args lenv * 
           ge, le, Expr (TClosed (ga, targs, tret), EClose (f, BLnil, ELnil))
       | None -> begin match LEnv.find_continuation le v with
           | Some (le, loc, Type (type a) (arg : a typ), VarID (type c) (ret, vid : c typ * _),
-                  hdlfid, Type (type b) (tret : b typ), _, hdlcloc, hdlcid) ->
+                  hdlfid, Type (type b) (tret : b typ), hdlcloc, hdlcid) ->
               let ge, (fid : mfunid) = GEnv.new_continuator ge hdlfid (Type ret) (Type arg) (Type tret) in
               let fct = TLcons (TCont ret, TLcons (TAbsClosArg, TLnil)) in
               let fid : (a * unit, b, c continuation * (abs_closure_content * unit), _, _) funcid = Gnil, Gnil, TLcons (arg, TLnil), tret, fct, fid in
@@ -1803,7 +1772,7 @@ let rec of_tail_computation : type args. _ -> args lenv -> _ -> genv * args lenv
               let ge, le, args = convert_values ge le args targs in
               let closed_applied = ECallClosed (ESpecialize (EVariable (loc, vid), s, bargs, bret), args, tret) in
               ge, le, Expr (tret, closed_applied)
-          | le, Contin (loc, ((TCont tc, _) as vid), (TLcons (_, TLcons (targ, _)), tret, _, hdlfid), hdlcloc, hdlcid) ->
+          | le, Contin (loc, ((TCont tc, _) as vid), (TLcons (_, TLcons (targ, _)), tret, hdlfid), hdlcloc, hdlcid) ->
               if ts = [] then begin
                 let ge, le, ELcons (arg, ELnil) = convert_values ge le args (TLcons (targ, TLnil)) in
                 ge, le, Expr (tret, ECallRawHandler (hdlfid, tc, EVariable (loc, vid), targ, arg, EVariable (hdlcloc, (TAbsClosArg, hdlcid)), tret))
@@ -1893,8 +1862,7 @@ let rec of_tail_computation : type args. _ -> args lenv -> _ -> genv * args lenv
               of_finisher ge (LEnv.of_sub handle_le) h.ih_return cret in
             let handle_le = LEnv.to_sub handle_le in
             let tret = match onret with FId t -> (t : d typ) | FMap (_, t, _) -> t in
-            let ge, hcllocid, hcltid = GEnv.new_generic_list ge in
-            let handle_le, contid = LEnv.add_cont handle_le (Type cret) handler_id (Type tret) hcltid in
+            let handle_le, contid = LEnv.add_cont handle_le (Type cret) handler_id (Type tret) in
             let contid : b continuation varid = TCont cret, contid in
             let ge, handle_le, ondo =
               let do_case (ge : genv) (handle_le : LEnv.subt) (ename : string) ((args, k, p) : effect_case) : genv * LEnv.subt * (b, d) handler =
@@ -1921,7 +1889,6 @@ let rec of_tail_computation : type args. _ -> args lenv -> _ -> genv * args lenv
                 ge, handle_le, hd :: acc
               in Utility.StringMap.fold do_case h.ih_cases (ge, handle_le, []) in
             let handle_le, oabsconc, ExprList (type e) (hclosts, hcloses : _ * e expr_list) = LEnv.get_closure handle_le in
-            let ge = GEnv.set_generic_list ge hcllocid (TypeList hclosts) in
             let ge = GEnv.assign_fhandler ge hid handler_id handle_le oabsconc onret ondo in
             ge, Type tret, handler_id, ExprList (hclosts, hcloses) in
           let handler_id : (b continuation * (c closure_content * unit), d, e, unit, unit) funcid =
@@ -2031,7 +1998,8 @@ let find_global_binders ((bs, _) : computation) =
   let rec inner bs acc = match bs with
     | [] -> Utility.StringMap.fold (fun _ b acc -> Utility.IntSet.add b acc) acc Utility.IntSet.empty
     | Let (b, _) :: bs ->
-        let name = Var.name_of_binder b in inner bs (if name = "" then acc else Utility.StringMap.add name (Var.var_of_binder b) acc)
+        if not (Var.Scope.is_real_global (Var.scope_of_binder b)) then inner bs acc
+        else let name = Var.name_of_binder b in inner bs (if name = "" then acc else Utility.StringMap.add name (Var.var_of_binder b) acc)
     | Fun _ :: bs | Rec _ :: bs | Alien _ :: bs | Module _ :: bs -> inner bs acc
   in inner bs Utility.StringMap.empty
 

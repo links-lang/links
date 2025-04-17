@@ -252,67 +252,65 @@ and _ expr_list =
   | ELnil : unit expr_list
   | ELcons : 'a expr * 'b expr_list -> ('a * 'b) expr_list
 
-type tenv = Wasmir.anytyp_list Wasmir.MTypMap.t
-
-let rec convert_finisher : type a b. _ -> (a, b) Wasmir.finisher -> (a, b) finisher =
-  fun (tmap : tenv) (f : (a, b) Wasmir.finisher) ->
+let rec convert_finisher : type a b. (a, b) Wasmir.finisher -> (a, b) finisher =
+  fun (f : (a, b) Wasmir.finisher) ->
   match f with
   | Wasmir.FId t -> FId (convert_typ t)
-  | Wasmir.FMap (v, t, b) -> FMap (convert_varid v, convert_typ t, convert_block tmap b)
-and [@tail_mod_cons] convert_block : type a. _ -> a Wasmir.block -> a block =
-  fun (tmap : tenv) (ass, e : a Wasmir.block) ->
+  | Wasmir.FMap (v, t, b) -> FMap (convert_varid v, convert_typ t, convert_block b)
+and [@tail_mod_cons] convert_block : type a. a Wasmir.block -> a block =
+  fun (ass, e : a Wasmir.block) ->
   let convert_assign (Wasmir.Assign (loc, v, e) : Wasmir.assign) : assign =
-    Assign (loc, convert_varid v, convert_expr tmap e)
-  in (List.map convert_assign ass, convert_expr tmap e)
-and [@tail_mod_cons] convert_expr : type a. _ -> a Wasmir.expr -> a expr =
-  fun (tmap : tenv) (e : a Wasmir.expr) -> match e with
+    Assign (loc, convert_varid v, convert_expr e)
+  in (List.map convert_assign ass, convert_expr e)
+and [@tail_mod_cons] convert_expr : type a. a Wasmir.expr -> a expr =
+  fun (e : a Wasmir.expr) -> match e with
   | Wasmir.EUnreachable t -> EUnreachable (convert_typ t)
   | Wasmir.EConvertClosure (v, t) -> EConvertClosure (v, convert_typ t)
-  | Wasmir.EIgnore (t, e) -> EIgnore (convert_typ t, (convert_expr[@tailcall]) tmap e)
+  | Wasmir.EIgnore (t, e) -> EIgnore (convert_typ t, (convert_expr[@tailcall]) e)
   | Wasmir.EConstInt c -> EConstInt c
   | Wasmir.EConstBool c -> EConstBool c
   | Wasmir.EConstFloat c -> EConstFloat c
   | Wasmir.EConstString c -> EConstString c
   | Wasmir.EUnop (op, arg) -> begin match op with
-      | Wasmir.UONegI -> EUnop (UONegI, convert_expr tmap arg)
-      | Wasmir.UONegF -> EUnop (UONegF, convert_expr tmap arg)
+      | Wasmir.UONegI -> EUnop (UONegI, convert_expr arg)
+      | Wasmir.UONegF -> EUnop (UONegF, convert_expr arg)
     end
   | Wasmir.EBinop (op, arg1, arg2) -> begin match op with
-      | Wasmir.BOAddI -> EBinop (BOAddI, (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
-      | Wasmir.BOAddF -> EBinop (BOAddF, (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
-      | Wasmir.BOSubI -> EBinop (BOSubI, (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
-      | Wasmir.BOSubF -> EBinop (BOSubF, (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
-      | Wasmir.BOMulI -> EBinop (BOMulI, (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
-      | Wasmir.BOMulF -> EBinop (BOMulF, (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
-      | Wasmir.BODivI -> EBinop (BODivI, (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
-      | Wasmir.BODivF -> EBinop (BODivF, (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
-      | Wasmir.BORemI -> EBinop (BORemI, (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
-      | Wasmir.BOEq t -> EBinop (BOEq (convert_typ t), (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
-      | Wasmir.BONe t -> EBinop (BONe (convert_typ t), (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
-      | Wasmir.BOLe t -> EBinop (BOLe (convert_typ t), (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
-      | Wasmir.BOLt t -> EBinop (BOLt (convert_typ t), (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
-      | Wasmir.BOGe t -> EBinop (BOGe (convert_typ t), (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
-      | Wasmir.BOGt t -> EBinop (BOGt (convert_typ t), (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
-      | Wasmir.BOConcat -> EBinop (BOConcat, (convert_expr[@tailcall]) tmap arg1, convert_expr tmap arg2)
-      | Wasmir.BOCons t -> EBinop (BOCons (convert_typ t), convert_expr tmap arg1, (convert_expr[@tailcall]) tmap arg2)
-      | Wasmir.BOConcatList t -> EBinop (BOConcatList (convert_typ t), convert_expr tmap arg1, (convert_expr[@tailcall]) tmap arg2)
+      | Wasmir.BOAddI -> EBinop (BOAddI, (convert_expr[@tailcall]) arg1, convert_expr arg2)
+      | Wasmir.BOAddF -> EBinop (BOAddF, (convert_expr[@tailcall]) arg1, convert_expr arg2)
+      | Wasmir.BOSubI -> EBinop (BOSubI, (convert_expr[@tailcall]) arg1, convert_expr arg2)
+      | Wasmir.BOSubF -> EBinop (BOSubF, (convert_expr[@tailcall]) arg1, convert_expr arg2)
+      | Wasmir.BOMulI -> EBinop (BOMulI, (convert_expr[@tailcall]) arg1, convert_expr arg2)
+      | Wasmir.BOMulF -> EBinop (BOMulF, (convert_expr[@tailcall]) arg1, convert_expr arg2)
+      | Wasmir.BODivI -> EBinop (BODivI, (convert_expr[@tailcall]) arg1, convert_expr arg2)
+      | Wasmir.BODivF -> EBinop (BODivF, (convert_expr[@tailcall]) arg1, convert_expr arg2)
+      | Wasmir.BORemI -> EBinop (BORemI, (convert_expr[@tailcall]) arg1, convert_expr arg2)
+      | Wasmir.BOEq t -> EBinop (BOEq (convert_typ t), (convert_expr[@tailcall]) arg1, convert_expr arg2)
+      | Wasmir.BONe t -> EBinop (BONe (convert_typ t), (convert_expr[@tailcall]) arg1, convert_expr arg2)
+      | Wasmir.BOLe t -> EBinop (BOLe (convert_typ t), (convert_expr[@tailcall]) arg1, convert_expr arg2)
+      | Wasmir.BOLt t -> EBinop (BOLt (convert_typ t), (convert_expr[@tailcall]) arg1, convert_expr arg2)
+      | Wasmir.BOGe t -> EBinop (BOGe (convert_typ t), (convert_expr[@tailcall]) arg1, convert_expr arg2)
+      | Wasmir.BOGt t -> EBinop (BOGt (convert_typ t), (convert_expr[@tailcall]) arg1, convert_expr arg2)
+      | Wasmir.BOConcat -> EBinop (BOConcat, (convert_expr[@tailcall]) arg1, convert_expr arg2)
+      | Wasmir.BOCons t -> EBinop (BOCons (convert_typ t), convert_expr arg1, (convert_expr[@tailcall]) arg2)
+      | Wasmir.BOConcatList t -> EBinop (BOConcatList (convert_typ t), convert_expr arg1, (convert_expr[@tailcall]) arg2)
     end
   | Wasmir.EVariable (loc, v) -> EVariable (loc, convert_varid v)
-  | Wasmir.ETuple (ts, es) -> ETuple (convert_named_typ_list ts, (convert_expr_list[@tailcall]) tmap es)
-  | Wasmir.EExtract (e, f) -> EExtract (convert_expr tmap e, convert_extract_typ f)
-  | Wasmir.EVariant (tag, t, e) -> EVariant (tag, convert_typ t, (convert_expr[@tailcall]) tmap e)
+  | Wasmir.ETuple (ts, es) -> ETuple (convert_named_typ_list ts, (convert_expr_list[@tailcall]) es)
+  | Wasmir.EExtract (e, f) -> EExtract (convert_expr e, convert_extract_typ f)
+  | Wasmir.EVariant (tag, t, e) -> EVariant (tag, convert_typ t, (convert_expr[@tailcall]) e)
   | Wasmir.ECase (e, t, l, d) ->
       let convert_l (l : (tagid * Wasmir.anytyp * mvarid * _ Wasmir.block) list) =
-        let convert (i, t, v, b) = i, convert_anytyp t, v, convert_block tmap b
+        let convert (i, t, v, b) = i, convert_anytyp t, v, convert_block b
         in List.map convert l
       in let convert_d (o : (mvarid * _ Wasmir.block) option) =
-        let convert (i, b) = i, convert_block tmap b
+        let convert (i, b) = i, convert_block b
         in Option.map convert o
-      in ECase ((convert_expr[@tailcall]) tmap e, convert_typ t, convert_l l, convert_d d)
+      in ECase ((convert_expr[@tailcall]) e, convert_typ t, convert_l l, convert_d d)
   | Wasmir.EListNil t -> EListNil (convert_typ t)
-  | Wasmir.EListHd (e, t) -> EListHd ((convert_expr[@tailcall]) tmap e, convert_typ t)
-  | Wasmir.EListTl (t, e) -> EListTl (convert_typ t, (convert_expr[@tailcall]) tmap e)
-  | Wasmir.EClose (f, b, cl) -> EClose (convert_funcid f, convert_box_list b, (convert_expr_list[@tailcall]) tmap cl)
+  | Wasmir.EListHd (e, t) -> EListHd ((convert_expr[@tailcall]) e, convert_typ t)
+  | Wasmir.EListTl (t, e) -> EListTl (convert_typ t, (convert_expr[@tailcall]) e)
+  | Wasmir.EClose (f, b, cl) -> EClose (convert_funcid f, convert_box_list b, (convert_expr_list[@tailcall]) cl)
   | Wasmir.(ESpecialize (ESpecialize (e, s1, bargs1, bret1), s2, bargs2, bret2)) ->
       let open Wasmir in
       let s =
@@ -322,32 +320,32 @@ and [@tail_mod_cons] convert_expr : type a. _ -> a Wasmir.expr -> a expr =
           | Scons (t1, v1, s1) -> Scons (t1, v1, inner s1 s2)
         in inner s1 s2 in
       let bargs, bret = compose_box_list bargs2 bargs1, compose_box bret2 bret1 in
-      convert_expr tmap (ESpecialize (e, s, bargs, bret))
+      convert_expr (ESpecialize (e, s, bargs, bret))
   | Wasmir.ESpecialize (e, _, bargs, bret) ->
       ESpecialize (
-        (convert_expr[@tailcall]) tmap e,
+        (convert_expr[@tailcall]) e,
         TClosed (convert_typ_list (Wasmir.src_of_box_list bargs), convert_typ (Wasmir.src_of_box bret)),
         convert_box_list bargs,
         convert_box bret)
   | Wasmir.ECallRawHandler (f, tc, c, ta, a, cl, tr) ->
-      ECallRawHandler (f, TCont (convert_typ tc), convert_expr tmap c, convert_typ ta, (convert_expr[@tailcall]) tmap a, convert_expr tmap cl, convert_typ tr)
-  | Wasmir.ECallClosed (f, e, _) -> ECallClosed (convert_expr tmap f, (convert_expr_list[@tailcall]) tmap e)
+      ECallRawHandler (f, TCont (convert_typ tc), convert_expr c, convert_typ ta, (convert_expr[@tailcall]) a, convert_expr cl, convert_typ tr)
+  | Wasmir.ECallClosed (f, e, _) -> ECallClosed (convert_expr f, (convert_expr_list[@tailcall]) e)
   | Wasmir.ECond (r, c, t, f) ->
       ECond (
-        (convert_expr[@tailcall false]) tmap c, (convert_typ[@tailcall false]) r,
-        convert_block tmap t, (convert_block[@tailcall false]) tmap f) (* For some reason this one cannot be @tailcall-ed *)
-  | Wasmir.EDo (e, v) -> EDo (convert_effectid e, convert_expr_list tmap v)
+        (convert_expr[@tailcall false]) c, (convert_typ[@tailcall false]) r,
+        convert_block t, (convert_block[@tailcall false]) f) (* For some reason this one cannot be @tailcall-ed *)
+  | Wasmir.EDo (e, v) -> EDo (convert_effectid e, convert_expr_list v)
   | Wasmir.EShallowHandle (f, e, d, h) ->
-      EShallowHandle (convert_funcid f, convert_expr_list tmap e, convert_finisher tmap d, List.map (convert_handler tmap) h)
+      EShallowHandle (convert_funcid f, convert_expr_list e, convert_finisher d, List.map (convert_handler) h)
   | Wasmir.EDeepHandle (c, cl, h, a) ->
-      EDeepHandle (convert_funcid c, convert_expr_list tmap cl, convert_funcid h, (convert_expr_list[@tailcall]) tmap a)
-and convert_handler : type a b. _ -> (a, b) Wasmir.handler -> (a, b) handler =
-  fun (tmap : tenv) (h : (a, b) Wasmir.handler) -> match h with
-  | Wasmir.Handler (e, c, v, b) -> Handler (convert_effectid e, convert_varid c, convert_varid_list v, convert_block tmap b)
-and [@tail_mod_cons] convert_expr_list : type a. _ -> a Wasmir.expr_list -> a expr_list =
-  fun (tmap : tenv) (e : a Wasmir.expr_list) -> match e with
+      EDeepHandle (convert_funcid c, convert_expr_list cl, convert_funcid h, (convert_expr_list[@tailcall]) a)
+and convert_handler : type a b. (a, b) Wasmir.handler -> (a, b) handler =
+  fun (h : (a, b) Wasmir.handler) -> match h with
+  | Wasmir.Handler (e, c, v, b) -> Handler (convert_effectid e, convert_varid c, convert_varid_list v, convert_block b)
+and [@tail_mod_cons] convert_expr_list : type a. a Wasmir.expr_list -> a expr_list =
+  fun (e : a Wasmir.expr_list) -> match e with
   | Wasmir.ELnil -> ELnil
-  | Wasmir.ELcons (hd, tl) -> ELcons (convert_expr tmap hd, (convert_expr_list[@tailcall]) tmap tl)
+  | Wasmir.ELcons (hd, tl) -> ELcons (convert_expr hd, (convert_expr_list[@tailcall]) tl)
 
 type ('a, 'b) func' = {
   fun_id               : mfunid;
@@ -394,23 +392,23 @@ type 'a modu = {
   mod_block       : 'a block;
 }
 
-let convert_func' (tmap : tenv) (f : ('a, 'b) Wasmir.func') : ('a, 'b) func' = {
+let convert_func' (f : ('a, 'b) Wasmir.func') : ('a, 'b) func' = {
   fun_id                = f.Wasmir.fun_id;
   fun_export_data       = f.Wasmir.fun_export_data;
   fun_converted_closure = Option.map (fun (t, v) -> convert_anytyp_list t, v) f.Wasmir.fun_converted_closure;
   fun_args              = convert_typ_list f.Wasmir.fun_args;
   fun_locals            = List.map convert_anytyp f.Wasmir.fun_locals;
   fun_ret               = convert_typ f.Wasmir.fun_ret;
-  fun_block             = convert_block tmap f.Wasmir.fun_block;
+  fun_block             = convert_block f.Wasmir.fun_block;
 }
-let convert_fstart (tmap : tenv) (f : 'b Wasmir.fstart) : 'b fstart = {
+let convert_fstart (f : 'b Wasmir.fstart) : 'b fstart = {
   fst_id                = f.Wasmir.fst_id;
   fst_converted_closure = Option.map (fun (t, v) -> convert_anytyp_list t, v) f.Wasmir.fst_converted_closure;
   fst_locals            = List.map convert_anytyp f.Wasmir.fst_locals;
   fst_ret               = convert_typ f.Wasmir.fst_ret;
-  fst_block             = convert_block tmap f.Wasmir.fst_block;
+  fst_block             = convert_block f.Wasmir.fst_block;
 }
-let convert_fhandler (tmap : tenv) (f : ('a, 'b) Wasmir.fhandler) : ('a, 'b) fhandler =
+let convert_fhandler (f : ('a, 'b) Wasmir.fhandler) : ('a, 'b) fhandler =
   let convert_contarg (c, a : 'a Wasmir.continuation Wasmir.varid * mvarid) =
     let t, c = (c : _ Wasmir.varid :> _ * _) in
     (convert_typ t, c), a
@@ -421,23 +419,22 @@ let convert_fhandler (tmap : tenv) (f : ('a, 'b) Wasmir.fhandler) : ('a, 'b) fha
   fh_contarg  = convert_contarg f.Wasmir.fh_contarg;
   fh_closure  = convert_closure f.Wasmir.fh_closure;
   fh_locals   = List.map convert_anytyp f.Wasmir.fh_locals;
-  fh_finisher = convert_finisher tmap f.Wasmir.fh_finisher;
-  fh_handlers = List.map (convert_handler tmap) f.Wasmir.fh_handlers;
+  fh_finisher = convert_finisher f.Wasmir.fh_finisher;
+  fh_handlers = List.map convert_handler f.Wasmir.fh_handlers;
   fh_id       = f.Wasmir.fh_id;
 }
-let convert_func (tmap : tenv) (f : Wasmir.func) : func = match f with
-  | Wasmir.FFunction f -> FFunction (convert_func' tmap f)
-  | Wasmir.FContinuationStart f -> FContinuationStart (convert_fstart tmap f)
-  | Wasmir.FHandler f -> FHandler (convert_fhandler tmap f)
+let convert_func (f : Wasmir.func) : func = match f with
+  | Wasmir.FFunction f -> FFunction (convert_func' f)
+  | Wasmir.FContinuationStart f -> FContinuationStart (convert_fstart f)
+  | Wasmir.FHandler f -> FHandler (convert_fhandler f)
   | Wasmir.FBuiltin fb -> FBuiltin fb
 let convert_module (m : 'a Wasmir.modu) : 'a modu =
   let convert_global (v, t, n : mvarid * Wasmir.anytyp * string) =
     v, convert_anytyp t, n in
-  let tmap = m.Wasmir.mod_typs in
   {
     mod_imports = m.Wasmir.mod_imports;
     mod_nfuns = m.Wasmir.mod_nfuns;
-    mod_funs = List.map (convert_func tmap) m.Wasmir.mod_funs;
+    mod_funs = List.map convert_func m.Wasmir.mod_funs;
     mod_needs_export = FunIDMap.map (fun (targs, tret) -> Option.map convert_anytyp_list targs, convert_anytyp tret) m.Wasmir.mod_needs_export;
     mod_neffs = m.Wasmir.mod_neffs;
     mod_effs = m.Wasmir.mod_effs;
@@ -445,7 +442,7 @@ let convert_module (m : 'a Wasmir.modu) : 'a modu =
     mod_global_vars = List.map convert_global m.Wasmir.mod_global_vars;
     mod_locals = List.map convert_anytyp m.Wasmir.mod_locals;
     mod_main = convert_typ m.Wasmir.mod_main;
-    mod_block = convert_block tmap m.Wasmir.mod_block;
+    mod_block = convert_block m.Wasmir.mod_block;
   }
 
 let module_of_ir (m : 'a Wasmir.modu) : 'a modu =
