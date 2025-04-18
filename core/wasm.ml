@@ -309,6 +309,13 @@ module Type = struct
     | DefT (RecT [s], 0l) -> sexpr_of_sub_type s
     | DefT (_r, _i) -> failwith "TODO sexpr_of_def_type generic"
   
+  let sexpr_of_num_rec_type i = let open Sexpr in function
+    | RecT [s] -> Int32.succ i, LongNode ("type", [Atom ("$" ^ Int32.to_string i)], [sexpr_of_sub_type s])
+    | RecT ss ->
+        let i, ss = List.fold_left_map
+          (fun i s -> Int32.succ i, LongNode ("type", [Atom ("$" ^ Int32.to_string i)], [sexpr_of_sub_type s])) i ss in
+        i, Node ("rec", ss)
+  
   let sexpr_of_global_type (GlobalT (m, vt) : global_type) : Sexpr.t = let open Sexpr in
     match m with
     | Cons -> sexpr_of_val_type vt
@@ -777,11 +784,15 @@ module Instruction = struct
     | RefNull of heap_type
     | RefI31
     | RefFunc of int32
+    | RefTest of ref_type
     | RefCast of ref_type
     | RefIsNull
     | RefAsNonNull
+    | BrOnCast of int32 * ref_type * ref_type
+    | BrOnCastFail of int32 * ref_type * ref_type
     | I31Get of Pack.extension
     | ContNew of int32
+    | ContBind of int32 * int32
     | Suspend of int32
     | Resume of int32 * (int32 * hdl) list
     | StructNew of int32 * initop
@@ -838,12 +849,16 @@ module Instruction = struct
     | RefNull ht -> LongNode ("ref.null", [sexpr_of_heap_type ht], [])
     | RefI31 -> LongNode ("ref.i31", [], [])
     | RefFunc ti -> LongNode ("ref.func", [Atom (Int32.to_string ti)], [])
+    | RefTest rt -> LongNode ("ref.test", [sexpr_of_ref_type rt], [])
     | RefCast rt -> LongNode ("ref.cast", [sexpr_of_ref_type rt], [])
     | RefIsNull -> Node ("ref.is_null", [])
     | RefAsNonNull -> Node ("ref.as_non_null", [])
+    | BrOnCast (i, t1, t2) -> LongNode ("br_on_cast", [Atom (Int32.to_string i); sexpr_of_ref_type t1; sexpr_of_ref_type t2], [])
+    | BrOnCastFail (i, t1, t2) -> LongNode ("br_on_cast_fail", [Atom (Int32.to_string i); sexpr_of_ref_type t1; sexpr_of_ref_type t2], [])
     | I31Get Pack.SX -> LongNode ("i31.get_s", [], [])
     | I31Get Pack.ZX -> LongNode ("i31.get_u", [], [])
     | ContNew i -> LongNode ("cont.new", [Atom (Int32.to_string i)], [])
+    | ContBind (i, j) -> LongNode ("cont.bind", [Atom (Int32.to_string i); Atom (Int32.to_string j)], [])
     | Suspend i -> LongNode ("suspend", [Atom (Int32.to_string i)], [])
     | Resume (i, hdls) -> LongNode ("resume", [Atom (Int32.to_string i)], List.map sexpr_of_idxhdl hdls)
     | StructNew (i, Explicit) -> LongNode ("struct.new", [Atom (Int32.to_string i)], [])
@@ -851,7 +866,7 @@ module Instruction = struct
     | StructGet (i, j, None) -> LongNode ("struct.get", [Atom (Int32.to_string i); Atom (Int32.to_string j)], [])
     | StructGet (i, j, Some Pack.SX) -> LongNode ("struct.get_s", [Atom (Int32.to_string i); Atom (Int32.to_string j)], [])
     | StructGet (i, j, Some Pack.ZX) -> LongNode ("struct.get_u", [Atom (Int32.to_string i); Atom (Int32.to_string j)], [])
-    | StructSet (i, j) -> LongNode ("struct.new", [Atom (Int32.to_string i); Atom (Int32.to_string j)], [])
+    | StructSet (i, j) -> LongNode ("struct.set", [Atom (Int32.to_string i); Atom (Int32.to_string j)], [])
     | ArrayNew (i, Explicit) -> LongNode ("array.new", [Atom (Int32.to_string i)], [])
     | ArrayNew (i, Implicit) -> LongNode ("array.new_default", [Atom (Int32.to_string i)], [])
     | ArrayNewFixed (i, n) -> LongNode ("array.new_fixed", [Atom (Int32.to_string i); Atom (Int32.to_string n)], [])
@@ -922,7 +937,7 @@ let sexpr_of_raw_code ((ret, locals, instrs) : raw_code) =
   LongNode ("raw_func", resloc, List.map Instruction.to_sexpr instrs)
 let sexpr_of_module (m : module_) =
   let open Sexpr in
-  let styps = List.mapi (fun i rt -> LongNode ("type", [Atom ("$" ^ string_of_int i)], [Type.sexpr_of_rec_type rt])) m.types in
+  let _, styps = List.fold_left_map (fun i rt -> Type.sexpr_of_num_rec_type i rt) 0l m.types in
   let sgbls = List.map sexpr_of_global m.globals in
   let (nf, _), simps = List.fold_left_map sexpr_of_import (0, 0) m.imports in
   let sfuns = List.mapi (fun i -> sexpr_of_function (i + nf)) m.funs in

@@ -248,11 +248,15 @@ module Instruction : sig
     | RefNull of heap_type
     | RefI31
     | RefFunc of int32
+    | RefTest of ref_type
     | RefCast of ref_type
     | RefIsNull
     | RefAsNonNull
+    | BrOnCast of int32 * ref_type * ref_type
+    | BrOnCastFail of int32 * ref_type * ref_type
     | I31Get of Pack.extension
     | ContNew of int32
+    | ContBind of int32 * int32
     | Suspend of int32
     | Resume of int32 * (int32 * hdl) list
     | StructNew of int32 * initop

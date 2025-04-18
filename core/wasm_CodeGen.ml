@@ -159,6 +159,7 @@ let rec generate_instr buf i = match i with
       List.iter (generate_instr buf) t;
       if f <> [] then (Buffer.add_uint8 buf 0x05; List.iter (generate_instr buf) f);
       Buffer.add_uint8 buf 0x0B
+  
   | Br i -> Buffer.add_uint8 buf 0x0C; generate_u 32 buf (Int64.of_int32 i)
   | BrIf i -> Buffer.add_uint8 buf 0x0D; generate_u 32 buf (Int64.of_int32 i)
   | BrTable (is, id) ->
@@ -168,14 +169,20 @@ let rec generate_instr buf i = match i with
       generate_u 32 buf (Int64.of_int32 id)
   | Return -> Buffer.add_uint8 buf 0x0F
   | Call i -> Buffer.add_uint8 buf 0x10; generate_u 32 buf (Int64.of_int32 i)
+  
   | ReturnCall i -> Buffer.add_uint8 buf 0x12; generate_u 32 buf (Int64.of_int32 i)
+  
   | CallRef i -> Buffer.add_uint8 buf 0x14; generate_u 32 buf (Int64.of_int32 i)
   | ReturnCallRef i -> Buffer.add_uint8 buf 0x15; generate_u 32 buf (Int64.of_int32 i)
+  
   | Drop -> Buffer.add_uint8 buf 0x1A
+  
   | LocalGet i -> Buffer.add_uint8 buf 0x20; generate_u 32 buf (Int64.of_int32 i)
   | LocalSet i -> Buffer.add_uint8 buf 0x21; generate_u 32 buf (Int64.of_int32 i)
+  
   | GlobalGet i -> Buffer.add_uint8 buf 0x23; generate_u 32 buf (Int64.of_int32 i)
   | GlobalSet i -> Buffer.add_uint8 buf 0x24; generate_u 32 buf (Int64.of_int32 i)
+  
   | Const (Value.I32 c) -> Buffer.add_uint8 buf 0x41; generate_i 32 buf (Int64.of_int32 (Value.I32.to_bits c))
   | Const (Value.I64 c) -> Buffer.add_uint8 buf 0x42; generate_i 64 buf (Value.I64.to_bits c)
   | Const (Value.F32 c) -> Buffer.add_uint8 buf 0x43; Buffer.add_int32_le buf (Value.F32.to_bits c)
@@ -206,9 +213,11 @@ let rec generate_instr buf i = match i with
   | Relop (Value.F32 FloatOp.Eq) -> Buffer.add_uint8 buf 0x5B
   | Relop (Value.F32 FloatOp.Ne) -> Buffer.add_uint8 buf 0x5C
   | Testop (Value.F64 _) -> .
+  
   | Relop (Value.F64 FloatOp.Eq) -> Buffer.add_uint8 buf 0x61
   | Relop (Value.F64 FloatOp.Ne) -> Buffer.add_uint8 buf 0x62
   | Unop (Value.I32 _) -> .
+  
   | Binop (Value.I32 IntOp.Add) -> Buffer.add_uint8 buf 0x6A
   | Binop (Value.I32 IntOp.Sub) -> Buffer.add_uint8 buf 0x6B
   | Binop (Value.I32 IntOp.Mul) -> Buffer.add_uint8 buf 0x6C
@@ -225,6 +234,7 @@ let rec generate_instr buf i = match i with
   | Binop (Value.I32 IntOp.Rotl) -> Buffer.add_uint8 buf 0x77
   | Binop (Value.I32 IntOp.Rotr) -> Buffer.add_uint8 buf 0x78
   | Unop (Value.I64 _) -> .
+  
   | Binop (Value.I64 IntOp.Add) -> Buffer.add_uint8 buf 0x7C
   | Binop (Value.I64 IntOp.Sub) -> Buffer.add_uint8 buf 0x7D
   | Binop (Value.I64 IntOp.Mul) -> Buffer.add_uint8 buf 0x7E
@@ -242,32 +252,40 @@ let rec generate_instr buf i = match i with
   | Binop (Value.I64 IntOp.Rotr) -> Buffer.add_uint8 buf 0x8A
   
   | Unop (Value.F32 FloatOp.Neg) -> Buffer.add_uint8 buf 0x8C
+  
   | Binop (Value.F32 FloatOp.Add) -> Buffer.add_uint8 buf 0x92
   | Binop (Value.F32 FloatOp.Sub) -> Buffer.add_uint8 buf 0x93
   | Binop (Value.F32 FloatOp.Mul) -> Buffer.add_uint8 buf 0x94
   | Binop (Value.F32 FloatOp.Div) -> Buffer.add_uint8 buf 0x95
+  
   | Unop (Value.F64 FloatOp.Neg) -> Buffer.add_uint8 buf 0x9A
+  
   | Binop (Value.F64 FloatOp.Add) -> Buffer.add_uint8 buf 0xA0
   | Binop (Value.F64 FloatOp.Sub) -> Buffer.add_uint8 buf 0xA1
   | Binop (Value.F64 FloatOp.Mul) -> Buffer.add_uint8 buf 0xA2
   | Binop (Value.F64 FloatOp.Div) -> Buffer.add_uint8 buf 0xA3
+  
   | Cvtop (Value.I32 IntOp.WrapI64) -> Buffer.add_uint8 buf 0xA7
   | Cvtop (Value.I64 IntOp.WrapI64) -> raise (internal_error "Cannot wrap-convert from i64 to i64")
+  
   | Cvtop (Value.I32 IntOp.ReinterpretFloat) -> Buffer.add_uint8 buf 0xBC
   | Cvtop (Value.I64 IntOp.ReinterpretFloat) -> Buffer.add_uint8 buf 0xBD
   | Cvtop (Value.F32 FloatOp.ReinterpretInt) -> Buffer.add_uint8 buf 0xBE
   | Cvtop (Value.F64 FloatOp.ReinterpretInt) -> Buffer.add_uint8 buf 0xBF
+  
   | RefNull ht -> Buffer.add_uint8 buf 0xD0; generate_heap_type buf ht
   | RefIsNull -> Buffer.add_uint8 buf 0xD1
   | RefFunc ti -> Buffer.add_uint8 buf 0xD2; generate_u 32 buf (Int64.of_int32 ti)
+  
   | RefAsNonNull -> Buffer.add_uint8 buf 0xD4
   | BrOnNull i -> Buffer.add_uint8 buf 0xD5; generate_u 32 buf (Int64.of_int32 i)
   | BrOnNonNull i -> Buffer.add_uint8 buf 0xD6; generate_u 32 buf (Int64.of_int32 i)
+  
   | ContNew ti -> Buffer.add_uint8 buf 0xE0; generate_u 32 buf (Int64.of_int32 ti)
+  | ContBind (i, j) -> Buffer.add_uint8 buf 0xE1; generate_u 32 buf (Int64.of_int32 i); generate_u 32 buf (Int64.of_int32 j)
   | Suspend i -> Buffer.add_uint8 buf 0xE2; generate_u 32 buf (Int64.of_int32 i)
   | Resume (i, hdls) -> Buffer.add_uint8 buf 0xE3; generate_u 32 buf (Int64.of_int32 i); generate_resumetable buf hdls
-  | RefCast (NoNull, ht) -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 22L; generate_heap_type buf ht
-  | RefCast (Null, ht) -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 23L; generate_heap_type buf ht
+  
   | StructNew (i, Explicit) -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 0L; generate_u 32 buf (Int64.of_int32 i)
   | StructNew (i, Implicit) -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 1L; generate_u 32 buf (Int64.of_int32 i)
   | StructGet (i, j, None) ->
@@ -281,6 +299,7 @@ let rec generate_instr buf i = match i with
   | ArrayNew (i, Explicit) -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 6L; generate_u 32 buf (Int64.of_int32 i)
   | ArrayNew (i, Implicit) -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 7L; generate_u 32 buf (Int64.of_int32 i)
   | ArrayNewFixed (i, n) -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 8L; generate_u 32 buf (Int64.of_int32 i); generate_u 32 buf (Int64.of_int32 n)
+  
   | ArrayGet (i, None) ->
         Buffer.add_uint8 buf 0xFB; generate_u 32 buf 11L; generate_u 32 buf (Int64.of_int32 i)
   | ArrayGet (i, Some Pack.SX) ->
@@ -289,7 +308,22 @@ let rec generate_instr buf i = match i with
         Buffer.add_uint8 buf 0xFB; generate_u 32 buf 13L; generate_u 32 buf (Int64.of_int32 i)
   | ArraySet i -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 14L; generate_u 32 buf (Int64.of_int32 i)
   | ArrayLen -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 15L
+  
   | ArrayCopy (d, s) -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 17L; generate_u 32 buf (Int64.of_int32 d); generate_u 32 buf (Int64.of_int32 s)
+  
+  | RefTest (NoNull, ht) -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 20L; generate_heap_type buf ht
+  | RefTest (Null, ht) -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 21L; generate_heap_type buf ht
+  | RefCast (NoNull, ht) -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 22L; generate_heap_type buf ht
+  | RefCast (Null, ht) -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 23L; generate_heap_type buf ht
+  | BrOnCast (i, (n1, t1), (n2, t2)) ->
+      let flags = (if n1 = Null then 1 else 0) + (if n2 = Null then 2 else 0) in
+      Buffer.add_uint8 buf 0xFB; generate_u 32 buf 24L; Buffer.add_uint8 buf flags;
+      generate_u 32 buf (Int64.of_int32 i); generate_heap_type buf t1; generate_heap_type buf t2
+  | BrOnCastFail (i, (n1, t1), (n2, t2)) ->
+      let flags = (if n1 = Null then 1 else 0) + (if n2 = Null then 2 else 0) in
+      Buffer.add_uint8 buf 0xFB; generate_u 32 buf 25L; Buffer.add_uint8 buf flags;
+      generate_u 32 buf (Int64.of_int32 i); generate_heap_type buf t1; generate_heap_type buf t2
+  
   | RefI31 -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 28L
   | I31Get Pack.SX -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 29L
   | I31Get Pack.ZX -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 30L
