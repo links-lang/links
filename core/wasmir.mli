@@ -178,6 +178,7 @@ type ('g, 'a, 'b) fbuiltin =
   | FBHere : (unit, unit, Value.spawn_location) fbuiltin
   | FBIntToString : (unit, int * unit, string) fbuiltin
   | FBRecv : (unit option, unit, unit) fbuiltin
+  | FBSelf : (unit, unit, process) fbuiltin
   | FBSend : (unit option, process * (unit * unit), unit list) fbuiltin
   | FBSpawnAt : (unit option, Value.spawn_location * ((unit * unit -> unit) * unit), process) fbuiltin
   | FBWait : (unit option, process * unit, unit) fbuiltin

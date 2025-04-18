@@ -253,6 +253,7 @@ type ('g, 'a, 'b) fbuiltin =
   | FBHere : (unit, unit, Value.spawn_location) fbuiltin
   | FBIntToString : (unit, int * unit, string) fbuiltin
   | FBRecv : (unit option, unit, unit) fbuiltin
+  | FBSelf : (unit, unit, process) fbuiltin
   | FBSend : (unit option, process * (unit * unit), unit list) fbuiltin
   | FBSpawnAt : (unit option, Value.spawn_location * ((unit * unit -> unit) * unit), process) fbuiltin
   | FBWait : (unit option, process * unit, unit) fbuiltin
@@ -393,6 +394,7 @@ end = struct
     bt_here: (unit, Value.spawn_location, unit, unit, unit) funcid option;
     bt_i2s: (int * unit, string, unit, unit, unit) funcid option;
     bt_recv: (unit, unit, unit, unit option, unit) funcid option;
+    bt_self: (unit, process, unit, unit, unit) funcid option;
     bt_send: (process * (unit * unit), unit list, unit, unit option, unit) funcid option;
     bt_spawnat: (Value.spawn_location * ((unit * unit -> unit) * unit), process, unit, unit option, unit) funcid option;
     bt_wait: (process * unit, unit, unit, unit option, unit) funcid option;
@@ -401,6 +403,7 @@ end = struct
     bt_here = None;
     bt_i2s = None;
     bt_recv = None;
+    bt_self = None;
     bt_send = None;
     bt_spawnat = None;
     bt_wait = None;
@@ -423,6 +426,11 @@ end = struct
         let acc, fid = add_builtin acc (AFBt FBRecv) in
         let f = (Gcons (0, Gnil), Gnil, TLnil, TVar 0, TLnil, fid) in
         { env with bt_recv = Some f; }, acc, f
+    | { bt_self = Some f; _ }, FBSelf -> env, acc, f
+    | { bt_self = None; _ }, FBSelf ->
+        let acc, fid = add_builtin acc (AFBt FBSelf) in
+        let f = (Gnil, Gnil, TLnil, TProcess, TLnil, fid) in
+        { env with bt_self = Some f; }, acc, f
     | { bt_send = Some f; _ }, FBSend -> env, acc, f
     | { bt_send = None; _ }, FBSend ->
         let acc, fid = add_builtin acc (AFBt FBSend) in
@@ -523,6 +531,13 @@ end = struct
             env, acc, Expr (TSpawnLocation, ECallClosed (EClose (fid, BLnil, ELnil), ELnil, TSpawnLocation))
         | _, _ -> raise (internal_error ("Invalid usage of builtin 'here'"))
       end
+    | "self" -> begin match tyargs, args with
+        | [], _ -> failwith "TODO self without TApp"
+        | [CommonTypes.PrimaryKind.Presence, _; CommonTypes.PrimaryKind.Row, _], ELnil ->
+            let env, acc, fid = find_fbuiltin env acc add_builtin FBSelf in
+            env, acc, Expr (TProcess, ECallClosed (EClose (fid, BLnil, ELnil), ELnil, TProcess))
+        | _, _ -> raise (internal_error ("Invalid usage of builtin 'self'"))
+      end
     | "recv" -> begin match tyargs, args with
         | [], _ -> failwith "TODO recv without TApp"
         | [CommonTypes.PrimaryKind.Type, t; CommonTypes.PrimaryKind.Row, _], ELnil ->
@@ -592,6 +607,38 @@ end = struct
                 ELcons (l, ELcons (f, ELnil)),
                 TProcess))
         | _, _, _ -> raise (internal_error ("Invalid usage of builtin 'spawnAt'"))
+      end
+    | "spawnWait" -> begin match tyargs, targs, args with
+        | [], _, _ -> failwith "TODO spawnWait without TApp"
+        | [CommonTypes.PrimaryKind.Row, _; CommonTypes.PrimaryKind.Type, t; CommonTypes.PrimaryKind.Row, _],
+          TLcons (tf, TLnil), ELcons (f, ELnil) ->
+            let acc = has_process acc in
+            let Type t = convert_type t in
+            let Type.Equal = assert_eq_typ tf (TClosed (Gnil, TLnil, t)) "Invalid type of argument of spawnWait" in
+            let env, acc, hereid = find_fbuiltin env acc add_builtin FBHere in
+            let env, acc, spawnid = find_fbuiltin env acc add_builtin FBSpawnAt in
+            let env, acc, waitid = find_fbuiltin env acc add_builtin FBWait in
+            env, acc, Expr (t,
+              ECallClosed (
+                ESpecialize (
+                  EClose (waitid, BLnil, ELnil),
+                  Scons (Type t, 0, Snil Gnil),
+                  BLcons (BNone (TProcess, TProcess), BLnil),
+                  BBox (t, 0)),
+                ELcons (
+                  ECallClosed (
+                    ESpecialize (
+                      EClose (spawnid, BLnil, ELnil),
+                      Scons (Type t, 0, Snil Gnil),
+                      BLcons (BNone (TSpawnLocation, TSpawnLocation), (BLcons (BClosed (Gnil, BLnil, BBox (t, 0)), BLnil))),
+                      BNone (TProcess, TProcess)),
+                    ELcons (ECallClosed (EClose (hereid, BLnil, ELnil), ELnil, TSpawnLocation),
+                      ELcons (f,
+                      ELnil)),
+                    TProcess),
+                  ELnil),
+                t))
+        | _, _, _ -> raise (internal_error ("Invalid usage of builtin 'spawnWait'"))
       end
     | _ -> ignore tyargs; raise (internal_error ("Unknown builtin impure function " ^ op))
   
