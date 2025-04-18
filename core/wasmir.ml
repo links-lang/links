@@ -339,6 +339,28 @@ let target_block (type a) (Block (t1, b) : anyblock) (t2 : a typ) : a block = le
 
 type anyunop = Unop : ('a, 'b) unop -> anyunop
 type anybinop = Binop : ('a, 'b, 'c) binop -> anybinop
+let assert_eq_typ_unop (Unop op) (Type tc) = match op with
+  | UONegI -> let Type.Equal = assert_eq_typ tc TInt "Invalid type coercion" in ()
+  | UONegF -> let Type.Equal = assert_eq_typ tc TFloat "Invalid type coercion" in ()
+let assert_eq_typ_binop (Binop op) (Type tc) = match op with
+  | BOAddI -> let Type.Equal = assert_eq_typ tc TInt   "Invalid type coercion" in ()
+  | BOAddF -> let Type.Equal = assert_eq_typ tc TFloat "Invalid type coercion" in ()
+  | BOSubI -> let Type.Equal = assert_eq_typ tc TInt   "Invalid type coercion" in ()
+  | BOSubF -> let Type.Equal = assert_eq_typ tc TFloat "Invalid type coercion" in ()
+  | BOMulI -> let Type.Equal = assert_eq_typ tc TInt   "Invalid type coercion" in ()
+  | BOMulF -> let Type.Equal = assert_eq_typ tc TFloat "Invalid type coercion" in ()
+  | BODivI -> let Type.Equal = assert_eq_typ tc TInt   "Invalid type coercion" in ()
+  | BODivF -> let Type.Equal = assert_eq_typ tc TFloat "Invalid type coercion" in ()
+  | BORemI -> let Type.Equal = assert_eq_typ tc TInt   "Invalid type coercion" in ()
+  | BOEq _ -> let Type.Equal = assert_eq_typ tc TBool "Invalid type coercion" in ()
+  | BONe _ -> let Type.Equal = assert_eq_typ tc TBool "Invalid type coercion" in ()
+  | BOLe _ -> let Type.Equal = assert_eq_typ tc TBool "Invalid type coercion" in ()
+  | BOLt _ -> let Type.Equal = assert_eq_typ tc TBool "Invalid type coercion" in ()
+  | BOGe _ -> let Type.Equal = assert_eq_typ tc TBool "Invalid type coercion" in ()
+  | BOGt _ -> let Type.Equal = assert_eq_typ tc TBool "Invalid type coercion" in ()
+  | BOConcat -> let Type.Equal = assert_eq_typ tc TString "Invalid type coercion" in ()
+  | BOCons t -> let Type.Equal = assert_eq_typ tc (TList t) "Invalid type coercion" in ()
+  | BOConcatList t -> let Type.Equal = assert_eq_typ tc (TList t) "Invalid type coercion" in ()
 
 (* let rec extract_typ_check : 'a 'b. ('a, 'b) extract_typ -> _ = fun (type a b) ((s, n, t, chk) : (a, b) extract_typ) : unit -> match s, chk with
   | TTuple (NTLcons (_, hd, _)), ExtractO ->
@@ -354,8 +376,8 @@ module Builtins : sig
   
   val ntags : tagid
   
-  val get_unop : string -> anytyp list -> anyunop option
-  val get_binop : string -> anytyp list -> anybinop option
+  val get_unop : string -> anytyp list -> anytyp option -> anyunop option
+  val get_binop : string -> anytyp list -> anytyp option -> anybinop option
   val gen_impure : t -> 'a -> ('a -> anyfbuiltin -> 'a * mfunid) -> ('a -> 'a) -> (Types.typ -> anytyp) ->
                    string -> Ir.tyarg list -> anyexpr_list -> t * 'a * anyexpr
   
@@ -442,10 +464,12 @@ end = struct
       "Concat", one (fun (Type t) -> Binop (BOConcatList t));
     ]
   
-  let get_unop op _tyargs = StringMap.find_opt op unops
-  let get_binop op tyargs = match StringMap.find_opt op binops with
+  let get_unop op _tyargs otc = match StringMap.find_opt op unops with
     | None -> None
-    | Some f -> Some (f op tyargs)
+    | Some u -> Option.iter (assert_eq_typ_unop u) otc; Some u
+  let get_binop op tyargs otc = match StringMap.find_opt op binops with
+    | None -> None
+    | Some f -> let b = f op tyargs in Option.iter (assert_eq_typ_binop b) otc; Some b
   
   let gen_impure (env : t) (acc : 'c) (add_builtin : 'a -> anyfbuiltin -> 'a * mfunid) (has_process : 'a -> 'a)
                  (convert_type : Types.typ -> anytyp) (op : string) (tyargs : Ir.tyarg list)
@@ -587,7 +611,7 @@ end = struct
       | [] -> normal (Type TSpawnLocation)
       | _ -> raise (internal_error ("Unknown abstract type " ^ (Types.Abstype.show at)))
     else if is Types.process then match ts with
-      | [Type _] -> normal (Type TProcess)
+      | [] -> normal (Type TProcess)
       | _ -> raise (internal_error ("Unknown abstract type " ^ (Types.Abstype.show at)))
     else raise (internal_error ("Unknown abstract type " ^ (Types.Abstype.show at)))
 end
@@ -1315,7 +1339,9 @@ end = struct
   let add_var (ge : t) (le : 'a LEnv.t) (b : binder) (t : anytyp) : t * 'a LEnv.t * locality * mvarid =
     if Utility.IntSet.mem (Var.var_of_binder b) ge.ge_gblbinders then begin
       let ge_ngbls = Int32.succ ge.ge_ngbls in
-      let ge_gbls = (ge.ge_ngbls, t, Some (Var.name_of_binder b)) :: ge.ge_gbls in
+      let name = Var.name_of_binder b in
+      let name = if name = "main" then "main'" else name in
+      let ge_gbls = (ge.ge_ngbls, t, Some name) :: ge.ge_gbls in
       let Type t = t in
       let newvar = VarID (t, ge.ge_ngbls) in
       let ge_gblmap = Env.Int.bind (Var.var_of_binder b) newvar ge.ge_gblmap in
@@ -1562,12 +1588,18 @@ let of_constant (c : CommonTypes.Constant.t) : anyexpr = let open CommonTypes.Co
   | Char _ -> failwith "TODO: of_constant Char"
   | DateTime _ -> failwith "TODO: of_constant DateTime"
 
-let collect_toplevel_polymorphism (v : value) : Ir.tyarg list * value =
-  let rec inner v acc = match v with
-    | TApp (v, ts) -> inner v (acc @ ts)
+let collect_toplevel_polymorphism (v : value) : Ir.tyarg list * value * anytyp option =
+  let rec inner v acc otc = match v with
+    | TApp (v, ts) -> inner v (acc @ ts) otc
     | TAbs _ -> failwith "TODO TAbs"
-    | _ -> acc, v
-  in inner v []
+    | Coerce (v, t) -> begin
+        let t = convert_type t in
+        match otc with
+        | None -> inner v acc (Some t)
+        | Some _ -> failwith "TODO collect_toplevel_polymorphism with multiple Coerce in a row"
+      end
+    | _ -> acc, v, otc
+  in inner v [] None
 
 let specialize_to_apply (ga : 'ga generalization) (ts : tyarg list)
     (targs : 'a typ_list) (tret : 'b typ) : (unit, 'ga) specialization * 'a specialize_list * 'b specialize =
@@ -1686,10 +1718,10 @@ let rec of_value (ge : genv) (le: 'args lenv) (v : value) : genv * 'args lenv * 
     end
   | XmlNode _ -> failwith "TODO: of_value XmlNode"
   | ApplyPure (f, args) -> begin match collect_toplevel_polymorphism f with
-      | ts, Variable v -> begin
+      | ts, Variable v, otc -> begin
           let ts = List.filter_map (fun (k, t) -> if k = CommonTypes.PrimaryKind.Type then Some (convert_type t) else None) ts in
           let name = GEnv.get_var_name ge v in match args with
-          | [arg] -> begin match Builtins.get_unop name ts with
+          | [arg] -> begin match Builtins.get_unop name ts otc with
             | None -> raise (internal_error ("Function '" ^ name ^ "' is not a (supported) builtin unary operation"))
             | Some (Unop UONegI) ->
                 let ge, le, arg = of_value ge le arg in let arg = target_expr arg TInt in
@@ -1698,7 +1730,7 @@ let rec of_value (ge : genv) (le: 'args lenv) (v : value) : genv * 'args lenv * 
                 let ge, le, arg = of_value ge le arg in let arg = target_expr arg TFloat in
                 ge, le, Expr (TFloat, EUnop (UONegF, arg))
             end
-          | [arg1; arg2] -> begin match Builtins.get_binop name ts with
+          | [arg1; arg2] -> begin match Builtins.get_binop name ts otc with
             | None -> raise (internal_error ("Function '" ^ name ^ "' is not a (supported) builtin binary operation"))
             | Some (Binop BOAddI) ->
                 let ge, le, arg1 = of_value ge le arg1 in let arg1 = target_expr arg1 TInt in
@@ -1854,29 +1886,35 @@ let rec of_tail_computation : type args. _ -> args lenv -> _ -> genv * args lenv
   | Return v -> let ge, le, v = of_value ge le v in ge, le, v
   | Apply (f, args) -> begin
       match collect_toplevel_polymorphism f with
-      | ts, Variable v -> begin match GEnv.find_fun ge le v with
+      | ts, Variable v, otc -> begin match GEnv.find_fun ge le v with
           | le, Function ((ga, Gnil, targs, tret, TLnil, _) as fid, fdata) ->
               let s, SpecL (targs, bargs), Spec (tret, bret) = specialize_to_apply ga ts targs tret in
               let ge, le, args = convert_values ge le args targs in
               let ge = GEnv.do_export_function ge fdata in
+              let () = match otc with None -> () | Some (Type t) -> ignore (assert_eq_typ t (TClosed (Gnil, targs, tret)) "Invalid type coercion") in
               let closed_applied = ECallClosed (ESpecialize (EClose (fid, BLnil, ELnil), s, bargs, bret), args, tret) in
               ge, le, Expr (tret, closed_applied)
           | le, Closure (loc, ((TClosed (ga, targs, tret), _) as vid)) ->
               let s, SpecL (targs, bargs), Spec (tret, bret) = specialize_to_apply ga ts targs tret in
               let ge, le, args = convert_values ge le args targs in
+              let () = match otc with None -> () | Some (Type t) -> ignore (assert_eq_typ t (TClosed (Gnil, targs, tret)) "Invalid type coercion") in
               let closed_applied = ECallClosed (ESpecialize (EVariable (loc, vid), s, bargs, bret), args, tret) in
               ge, le, Expr (tret, closed_applied)
           | le, Contin (loc, ((TCont tc, _) as vid), (TLcons (_, TLcons (targ, _)), tret, hdlfid), hdlcloc, hdlcid) ->
               if ts = [] then begin
-                let ge, le, ELcons (arg, ELnil) = convert_values ge le args (TLcons (targ, TLnil)) in
+                let targs = TLcons (targ, TLnil) in
+                let ge, le, ELcons (arg, ELnil) = convert_values ge le args targs in
+                let () = match otc with None -> () | Some (Type t) -> ignore (assert_eq_typ t (TClosed (Gnil, targs, tret)) "Invalid type coercion") in
                 ge, le, Expr (tret, ECallRawHandler (hdlfid, tc, EVariable (loc, vid), targ, arg, EVariable (hdlcloc, (TAbsClosArg, hdlcid)), tret))
               end else raise (internal_error "Invalid continuation: receives type applications")
           | le, ClosedBuiltin name ->
               let ge, le, args = convert_values_unk ge le args in
               let ge, e = GEnv.gen_impure ge name ts args in
+              let () = match otc, e with None, _ -> ()
+                       | Some (Type t), Expr (tret, _) -> ignore (assert_eq_typ t tret "Invalid type coercion") in
               ge, le, e
         end
-      | ts, Closure (f, tcl, cls) ->
+      | ts, Closure (f, tcl, cls), otc ->
           let FuncID (type a0 b0 c0 ga gc) ((ga, gc, targs, tret, tc, _) as fid, fdata : (a0, b0, c0, ga, gc) funcid * _) =
             GEnv.find_closable_fun ge le f in
           let tmap =
@@ -1902,13 +1940,15 @@ let rec of_tail_computation : type args. _ -> args lenv -> _ -> genv * args lenv
           let ge = GEnv.do_export_function ge fdata in
           let s, SpecL (targs, bargs2), Spec (tret, bret2) = specialize_to_apply ga ts targs tret in
           let ge, le, args = convert_values ge le args targs in
+          let () = match otc with None -> () | Some (Type t) -> ignore (assert_eq_typ t (TClosed (Gnil, targs, tret)) "Invalid type coercion") in
           let closed_applied = ECallClosed (ESpecialize (EClose (fid, bc, cls), s, compose_box_list bargs2 bargs, compose_box bret2 bret), args, tret) in
           ge, le, Expr (tret, closed_applied)
-      | ts, Project (n, v) -> begin match v with
+      | ts, Project (n, v), otc -> begin match v with
           | Variable v -> begin match LEnv.find_closure le v n with
               | Some (le, lst, VarID (TClosed (ga, targs, tret) as t, i)) ->
                   let s, SpecL (targs, bargs), Spec (tret, bret) = specialize_to_apply ga ts targs tret in
                   let ge, le, args = convert_values ge le args targs in
+                  let () = match otc with None -> () | Some (Type t) -> ignore (assert_eq_typ t (TClosed (Gnil, targs, tret)) "Invalid type coercion") in
                   let closed_applied = ECallClosed (ESpecialize (EVariable (Local lst, (t, i)), s, bargs, bret), args, tret) in
                   ge, le, Expr (tret, closed_applied)
               | Some (_, _, VarID (_, _)) -> raise (internal_error "Unexpected type, expected a function")
@@ -2039,7 +2079,9 @@ and of_computation : type args. _ -> args lenv -> _ -> _ * args lenv * _ =
           ge, new_le, (Assign (Local StorVariable, (TClosArg ctyp, concid), EConvertClosure (absid, TClosArg ctyp)) :: ass, e) in
     let export_name =
       if Var.Scope.is_real_global (Var.scope_of_binder fd.fn_binder)
-      then match fd.fn_closure with None -> Some (Var.name_of_binder fd.fn_binder) | Some _ -> None
+      then match fd.fn_closure with None ->
+        let n = Var.name_of_binder fd.fn_binder in
+        if n = "main" then Some "main'" else Some n | Some _ -> None
       else None in
     let f = LEnv.compile new_le fid export_name tret b in
     let ge = GEnv.assign_function ge loc_fid f in
