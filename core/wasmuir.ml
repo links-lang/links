@@ -5,6 +5,7 @@ type meffid = Wasmir.meffid
 module FunIDMap = Wasmir.FunIDMap
 module EffectIDSet = Wasmir.EffectIDSet
 
+type process = Wasmir.process
 type llist = Wasmir.llist
 type variant = Wasmir.variant
 type abs_closure_content = Wasmir.abs_closure_content
@@ -24,6 +25,8 @@ type 'a typ =
   | TVariant : variant typ
   | TList : 'a typ -> llist typ
   | TVar : unit typ
+  | TSpawnLocation : Value.spawn_location typ
+  | TProcess : process typ
 and 'a typ_list =
   | TLnil : unit typ_list
   | TLcons : 'a typ * 'b typ_list -> ('a * 'b) typ_list
@@ -44,6 +47,8 @@ let [@tail_mod_cons] rec convert_typ : type a. a Wasmir.typ -> a typ = fun (t : 
   | Wasmir.TVariant -> TVariant
   | Wasmir.TList t -> TList (convert_typ t)
   | Wasmir.TVar _ -> TVar
+  | Wasmir.TSpawnLocation -> TSpawnLocation
+  | Wasmir.TProcess -> TProcess
 and [@tail_mod_cons] convert_typ_list : type a. a Wasmir.typ_list -> a typ_list = fun (t : a Wasmir.typ_list) : a typ_list -> match t with
   | Wasmir.TLnil -> TLnil
   | Wasmir.TLcons (hd, tl) -> TLcons (convert_typ hd, (convert_typ_list[@tailcall]) tl)
@@ -91,6 +96,12 @@ let rec compare_typ (Type t1 : anytyp) (Type t2 : anytyp) = match t1, t2 with
   | TList _, _ -> ~-1
   | _, TList _ -> 1
   | TVar, TVar -> 0
+  | TVar, _ -> ~-1
+  | _, TVar -> 1
+  | TSpawnLocation, TSpawnLocation -> 0
+  | TSpawnLocation, _ -> ~-1
+  | _, TSpawnLocation -> 1
+  | TProcess, TProcess -> 0
 and compare_typ_list (TypeList tl1 : anytyp_list) (TypeList tl2 : anytyp_list) = match tl1, tl2 with
   | TLnil, TLnil -> 0
   | TLnil, TLcons _ -> ~-1 | TLcons _, TLnil -> 1
@@ -371,13 +382,18 @@ type ('a, 'b) fhandler = {
   fh_handlers: ('a, 'b) handler list;
   fh_id      : mfunid;
 }
-type fbuiltin = Wasmir.fbuiltin =
-  | FBIntToString
+type ('g, 'a, 'b) fbuiltin = ('g, 'a, 'b) Wasmir.fbuiltin =
+  | FBHere : (unit, unit, Value.spawn_location) fbuiltin
+  | FBIntToString : (unit, int * unit, string) fbuiltin
+  | FBRecv : (unit option, unit, unit) fbuiltin
+  | FBSend : (unit option, process * (unit * unit), unit list) fbuiltin
+  | FBSpawnAt : (unit option, Value.spawn_location * ((unit * unit -> unit) * unit), process) fbuiltin
+  | FBWait : (unit option, process * unit, unit) fbuiltin
 type func =
   | FFunction : ('a, 'b) func' -> func
   | FContinuationStart : 'b fstart -> func
   | FHandler : ('a, 'b) fhandler -> func
-  | FBuiltin of fbuiltin
+  | FBuiltin : mfunid * ('g, 'a, 'b) fbuiltin -> func
 type 'a modu = {
   mod_imports     : (string * string) list;
   mod_nfuns       : int32;
@@ -386,10 +402,11 @@ type 'a modu = {
   mod_neffs       : int32;
   mod_effs        : EffectIDSet.t;
   mod_nglobals    : int32;
-  mod_global_vars : (mvarid * anytyp * string) list;
+  mod_global_vars : (mvarid * anytyp * string option) list;
   mod_locals      : anytyp list;
   mod_main        : 'a typ;
   mod_block       : 'a block;
+  mod_global_counter : mvarid option;
 }
 
 let convert_func' (f : ('a, 'b) Wasmir.func') : ('a, 'b) func' = {
@@ -427,9 +444,9 @@ let convert_func (f : Wasmir.func) : func = match f with
   | Wasmir.FFunction f -> FFunction (convert_func' f)
   | Wasmir.FContinuationStart f -> FContinuationStart (convert_fstart f)
   | Wasmir.FHandler f -> FHandler (convert_fhandler f)
-  | Wasmir.FBuiltin fb -> FBuiltin fb
+  | Wasmir.FBuiltin (i, fb) -> FBuiltin (i, fb)
 let convert_module (m : 'a Wasmir.modu) : 'a modu =
-  let convert_global (v, t, n : mvarid * Wasmir.anytyp * string) =
+  let convert_global (v, t, n : mvarid * Wasmir.anytyp * string option) =
     v, convert_anytyp t, n in
   {
     mod_imports = m.Wasmir.mod_imports;
@@ -443,6 +460,7 @@ let convert_module (m : 'a Wasmir.modu) : 'a modu =
     mod_locals = List.map convert_anytyp m.Wasmir.mod_locals;
     mod_main = convert_typ m.Wasmir.mod_main;
     mod_block = convert_block m.Wasmir.mod_block;
+    mod_global_counter = m.Wasmir.mod_global_counter;
   }
 
 let module_of_ir (m : 'a Wasmir.modu) : 'a modu =

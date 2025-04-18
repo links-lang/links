@@ -18,6 +18,7 @@ module EffectIDSet = Utility.Set.Make(struct
   let compare = Int32.compare
 end)
 
+type process = private Process
 type llist = private LinksList
 type variant = private Variant
 type abs_closure_content = private AbsClosureContent
@@ -42,6 +43,8 @@ type 'a typ =
   | TVariant : variant typ
   | TList : 'a typ -> llist typ
   | TVar : tvarid -> unit typ
+  | TSpawnLocation : Value.spawn_location typ
+  | TProcess : process typ
 and 'a typ_list =
   | TLnil : unit typ_list
   | TLcons : 'a typ * 'b typ_list -> ('a * 'b) typ_list
@@ -51,73 +54,6 @@ and 'a named_typ_list =
 
 type anytyp = Type : 'a typ -> anytyp
 type anytyp_list = TypeList : 'a typ_list -> anytyp_list
-
-let rec compare_generalization : type a b. a generalization -> b generalization -> _ = fun g1 g2 -> match g1, g2 with
-  | Gnil, Gnil -> 0
-  | Gnil, _ -> ~-1
-  | _, Gnil -> 1
-  | Gcons (hd1, tl1), Gcons (hd2, tl2) ->
-      let c = Int.compare hd1 hd2 in if c <> 0 then c else
-      compare_generalization tl1 tl2
-let rec compare_anytyp (Type t1) (Type t2) = match t1, t2 with
-  | TInt, TInt -> 0
-  | TInt, _ -> ~-1
-  | _, TInt -> 1
-  | TBool, TBool -> 0
-  | TBool, _ -> ~-1
-  | _, TBool -> 1
-  | TFloat, TFloat -> 0
-  | TFloat, _ -> ~-1
-  | _, TFloat -> 1
-  | TString, TString -> 0
-  | TString, _ -> ~-1
-  | _, TString -> 1
-  | TClosed (g1, args1, ret1), TClosed (g2, args2, ret2) ->
-      let c = compare_generalization g1 g2 in if c <> 0 then c else
-      let c = compare_anytyp (Type ret1) (Type ret2) in if c <> 0 then c else
-      compare_anytyp_list (TypeList args1) (TypeList args2)
-  | TClosed _, _ -> ~-1
-  | _, TClosed _ -> 1
-  | TAbsClosArg, TAbsClosArg -> 0
-  | TAbsClosArg, _ -> ~-1
-  | _, TAbsClosArg -> 1
-  | TClosArg t1, TClosArg t2 -> compare_anytyp_list (TypeList t1) (TypeList t2)
-  | TClosArg _, _ -> ~-1
-  | _, TClosArg _ -> 1
-  | TCont t1, TCont t2 -> compare_anytyp (Type t1) (Type t2)
-  | TCont _, _ -> ~-1
-  | _, TCont _ -> 1
-  | TTuple tl1, TTuple tl2 -> compare_named_typ_list tl1 tl2
-  | TTuple _, _ -> ~-1
-  | _, TTuple _ -> 1
-  | TVariant, TVariant -> 0
-  | TVariant, _ -> ~-1
-  | _, TVariant -> 1
-  | TList t1, TList t2 -> compare_anytyp (Type t1) (Type t2)
-  | TList _, _ -> ~-1
-  | _, TList _ -> 1
-  | TVar i1, TVar i2 -> Int.compare i1 i2
-and compare_anytyp_list (TypeList tl1) (TypeList tl2) = match tl1, tl2 with
-  | TLnil, TLnil -> 0
-  | TLnil, TLcons _ -> ~-1 | TLcons _, TLnil -> 1
-  | TLcons (hd1, tl1), TLcons (hd2, tl2) ->
-      let chd = compare_anytyp (Type hd1) (Type hd2) in if chd = 0 then compare_anytyp_list (TypeList tl1) (TypeList tl2) else chd
-and compare_named_typ_list : 'a 'b. 'a named_typ_list -> 'b named_typ_list -> _ = fun (type a b) (nl1 : a named_typ_list) (nl2 : b named_typ_list) ->
-  match nl1, nl2 with
-  | NTLnil, NTLnil -> 0
-  | NTLcons _, NTLnil -> ~-1
-  | NTLnil, NTLcons _ -> 1
-  | NTLcons (n1, t1, nl1), NTLcons (n2, t2, nl2) ->
-      let c = String.compare n1 n2 in if c <> 0 then c else
-      let c = compare_anytyp (Type t1) (Type t2) in if c <> 0 then c else
-      compare_named_typ_list nl1 nl2
-
-module TypeMap = Utility.Map.Make(struct
-  type t = anytyp
-  let pp fmt (_ : t) = Format.fprintf fmt "<some type>"
-  let show (_ : t) = "<some type>"
-  let compare = compare_anytyp
-end)
 
 type ('a, 'b) extract_typ_check =
   | ExtractO : ('a * 'b, 'a) extract_typ_check
@@ -313,13 +249,18 @@ type ('a, 'b) fhandler = {
   fh_handlers: ('a, 'b) handler list;
   fh_id      : mfunid;
 }
-type fbuiltin =
-  | FBIntToString
+type ('g, 'a, 'b) fbuiltin =
+  | FBHere : (unit, unit, Value.spawn_location) fbuiltin
+  | FBIntToString : (unit, int * unit, string) fbuiltin
+  | FBRecv : (unit option, unit, unit) fbuiltin
+  | FBSend : (unit option, process * (unit * unit), unit list) fbuiltin
+  | FBSpawnAt : (unit option, Value.spawn_location * ((unit * unit -> unit) * unit), process) fbuiltin
+  | FBWait : (unit option, process * unit, unit) fbuiltin
 type func =
   | FFunction : ('a, 'b) func' -> func
   | FContinuationStart : 'b fstart -> func
   | FHandler : ('a, 'b) fhandler -> func
-  | FBuiltin of fbuiltin
+  | FBuiltin : mfunid * ('g, 'a, 'b) fbuiltin -> func
 type 'a modu = {
   mod_imports     : (string * string) list;
   mod_nfuns       : int32;
@@ -328,10 +269,11 @@ type 'a modu = {
   mod_neffs       : int32;
   mod_effs        : EffectIDSet.t;
   mod_nglobals    : int32;
-  mod_global_vars : (mvarid * anytyp * string) list;
+  mod_global_vars : (mvarid * anytyp * string option) list;
   mod_locals      : anytyp list;
   mod_main        : 'a typ;
   mod_block       : 'a block;
+  mod_global_counter : mvarid option;
 }
 
 type anymodule = Module : 'a modu -> anymodule
@@ -376,6 +318,10 @@ and assert_eq_typ : 'a 'b. 'a typ -> 'b typ -> string -> ('a, 'b) Type.eq =
   | TList _, TList _ -> Type.Equal
   | TList _, _ | _, TList _ -> raise (internal_error onfail)
   | TVar i1, TVar i2 -> if i1 = i2 then Type.Equal else raise (internal_error onfail)
+  | TVar _, _ | _, TVar _ -> raise (internal_error onfail)
+  | TSpawnLocation, TSpawnLocation -> Type.Equal
+  | TSpawnLocation, _ | _, TSpawnLocation -> raise (internal_error onfail)
+  | TProcess, TProcess -> Type.Equal
 and assert_eq_typ_list : 'a 'b. 'a typ_list -> 'b typ_list -> string -> ('a, 'b) Type.eq =
   fun (type a b) (t1 : a typ_list) (t2 : b typ_list) (onfail : string) : (a, b) Type.eq -> match t1, t2 with
   | TLnil, TLnil -> Type.Equal
@@ -401,12 +347,17 @@ type anybinop = Binop : ('a, 'b, 'c) binop -> anybinop
   | TTuple (NTLcons (_, _, tl)), ExtractS chk -> extract_typ_check (TTuple tl, n - 1, t, chk)
   | TTuple NTLnil, _ -> . *)
 
+type anyfbuiltin = AFBt : ('g, 'a, 'b) fbuiltin -> anyfbuiltin
 module Builtins : sig
+  type t
+  val empty : t
+  
   val ntags : tagid
   
   val get_unop : string -> anytyp list -> anyunop option
   val get_binop : string -> anytyp list -> anybinop option
-  val gen_impure : 'a -> ('a -> fbuiltin -> 'a * mfunid) -> (Types.typ -> anytyp) -> string -> Ir.tyarg list -> anyexpr_list -> 'a * anyexpr
+  val gen_impure : t -> 'a -> ('a -> anyfbuiltin -> 'a * mfunid) -> ('a -> 'a) -> (Types.typ -> anytyp) ->
+                   string -> Ir.tyarg list -> anyexpr_list -> t * 'a * anyexpr
   
   val get_var : string -> anyexpr option
   
@@ -415,6 +366,56 @@ module Builtins : sig
     (Types.field_spec_map -> Types.meta_row_var -> bool -> 'a) -> 'a
 end = struct
   open Utility
+  
+  type t = {
+    bt_here: (unit, Value.spawn_location, unit, unit, unit) funcid option;
+    bt_i2s: (int * unit, string, unit, unit, unit) funcid option;
+    bt_recv: (unit, unit, unit, unit option, unit) funcid option;
+    bt_send: (process * (unit * unit), unit list, unit, unit option, unit) funcid option;
+    bt_spawnat: (Value.spawn_location * ((unit * unit -> unit) * unit), process, unit, unit option, unit) funcid option;
+    bt_wait: (process * unit, unit, unit, unit option, unit) funcid option;
+  }
+  let empty : t = {
+    bt_here = None;
+    bt_i2s = None;
+    bt_recv = None;
+    bt_send = None;
+    bt_spawnat = None;
+    bt_wait = None;
+  }
+  
+  let find_fbuiltin (env : t) (acc : 'c) (add_builtin : 'c -> anyfbuiltin -> 'c * mfunid)
+                    (type g a b) (fb : (g, a, b) fbuiltin) : t * 'c * (a, b, unit, g, unit) funcid = match env, fb with
+    | { bt_here = Some f; _ }, FBHere -> env, acc, f
+    | { bt_here = None; _ }, FBHere ->
+        let acc, fid = add_builtin acc (AFBt FBHere) in
+        let f = (Gnil, Gnil, TLnil, TSpawnLocation, TLnil, fid) in
+        { env with bt_here = Some f; }, acc, f
+    | { bt_i2s = Some f; _ }, FBIntToString -> env, acc, f
+    | { bt_i2s = None; _ }, FBIntToString ->
+        let acc, fid = add_builtin acc (AFBt FBIntToString) in
+        let f = (Gnil, Gnil, TLcons (TInt, TLnil), TString, TLnil, fid) in
+        { env with bt_i2s = Some f; }, acc, f
+    | { bt_recv = Some f; _ }, FBRecv -> env, acc, f
+    | { bt_recv = None; _ }, FBRecv ->
+        let acc, fid = add_builtin acc (AFBt FBRecv) in
+        let f = (Gcons (0, Gnil), Gnil, TLnil, TVar 0, TLnil, fid) in
+        { env with bt_recv = Some f; }, acc, f
+    | { bt_send = Some f; _ }, FBSend -> env, acc, f
+    | { bt_send = None; _ }, FBSend ->
+        let acc, fid = add_builtin acc (AFBt FBSend) in
+        let f = (Gcons (0, Gnil), Gnil, TLcons (TProcess, TLcons (TVar 0, TLnil)), TTuple NTLnil, TLnil, fid) in
+        { env with bt_send = Some f; }, acc, f
+    | { bt_spawnat = Some f; _ }, FBSpawnAt -> env, acc, f
+    | { bt_spawnat = None; _ }, FBSpawnAt ->
+        let acc, fid = add_builtin acc (AFBt FBSpawnAt) in
+        let f = (Gcons (0, Gnil), Gnil, TLcons (TSpawnLocation, TLcons (TClosed (Gnil, TLnil, TVar 0), TLnil)), TProcess, TLnil, fid) in
+        { env with bt_spawnat = Some f; }, acc, f
+    | { bt_wait = Some f; _ }, FBWait -> env, acc, f
+    | { bt_wait = None; _ }, FBWait ->
+        let acc, fid = add_builtin acc (AFBt FBWait) in
+        let f = (Gcons (0, Gnil), Gnil, TLcons (TProcess, TLnil), TVar 0, TLnil, fid) in
+        { env with bt_wait = Some f; }, acc, f
   
   let tags = []
   let ntags = List.length tags
@@ -446,12 +447,12 @@ end = struct
     | None -> None
     | Some f -> Some (f op tyargs)
   
-  let gen_impure (acc : 'a) (find_fbuiltin : 'a -> fbuiltin -> 'a * mfunid)
+  let gen_impure (env : t) (acc : 'c) (add_builtin : 'a -> anyfbuiltin -> 'a * mfunid) (has_process : 'a -> 'a)
                  (convert_type : Types.typ -> anytyp) (op : string) (tyargs : Ir.tyarg list)
-                 (ExprList (targs, args) : anyexpr_list) : 'a * anyexpr = match op with
+                 (ExprList (targs, args) : anyexpr_list) : t * 'c * anyexpr = match op with
     | "ignore" -> begin
         match targs, args with
-        | TLcons (targ, TLnil), ELcons (arg, ELnil) -> acc, Expr (TTuple NTLnil, EIgnore (targ, arg))
+        | TLcons (targ, TLnil), ELcons (arg, ELnil) -> env, acc, Expr (TTuple NTLnil, EIgnore (targ, arg))
         | _, ELnil -> raise (internal_error ("Not enough arguments for builtin function 'ignore'"))
         | _, ELcons (_, ELcons _) -> raise (internal_error ("Too many arguments for builtin function 'ignore'"))
       end
@@ -464,36 +465,109 @@ end = struct
         | [CommonTypes.PrimaryKind.Row, _; CommonTypes.PrimaryKind.Type, t] ->
         let Type t = convert_type t in
         match targs, args with
-        | TLcons (_, TLnil), ELcons (_, ELnil) -> acc, Expr (t, EUnreachable t) (* TODO: add an error message *)
+        | TLcons (_, TLnil), ELcons (_, ELnil) -> env, acc, Expr (t, EUnreachable t) (* TODO: add an error message *)
         | _, ELnil -> raise (internal_error ("Not enough arguments for builtin function 'error'"))
         | _, ELcons (_, ELcons _) -> raise (internal_error ("Too many arguments for builtin function 'error'"))
       end
-    | "$$hd" -> begin match tyargs, args with
-        | [], _ -> failwith "TODO $$hd without TApp"
-        | [CommonTypes.PrimaryKind.Type, t; CommonTypes.PrimaryKind.Row, _], ELcons (arg, ELnil) ->
+    | "$$hd" -> begin match tyargs, targs, args with
+        | [], _, _ -> failwith "TODO $$hd without TApp"
+        | [CommonTypes.PrimaryKind.Type, t; CommonTypes.PrimaryKind.Row, _], TLcons (argt, TLnil), ELcons (arg, ELnil) ->
             let Type t = convert_type t in
-            let argt = typ_of_expr arg in
             let Type.Equal = assert_eq_typ argt (TList t) "Invalid type of argument of $$hd" in
-            acc, Expr (t, EListHd (arg, t))
-        | _, _ -> raise (internal_error ("Invalid usage of builtin '$$hd'"))
+            env, acc, Expr (t, EListHd (arg, t))
+        | _, _, _ -> raise (internal_error ("Invalid usage of builtin '$$hd'"))
       end
-    | "$$tl" -> begin match tyargs, args with
-        | [], _ -> failwith "TODO $$tl without TApp"
-        | [CommonTypes.PrimaryKind.Type, _; CommonTypes.PrimaryKind.Row, _], ELcons (arg, ELnil) ->
-            let argt = typ_of_expr arg in
+    | "$$tl" -> begin match tyargs, targs, args with
+        | [], _, _ -> failwith "TODO $$tl without TApp"
+        | [CommonTypes.PrimaryKind.Type, _; CommonTypes.PrimaryKind.Row, _], TLcons (argt, TLnil), ELcons (arg, ELnil) ->
             let Type.Equal = assert_eq_typ argt (TList argt) "Invalid type of argument of $$tl" in
-            acc, Expr (TList argt, EListTl (argt, arg))
-        | _, _ -> raise (internal_error ("Invalid usage of builtin '$$tl'"))
+            env, acc, Expr (TList argt, EListTl (argt, arg))
+        | _, _, _ -> raise (internal_error ("Invalid usage of builtin '$$tl'"))
       end
-    | "intToString" -> begin match tyargs, args with
-        | [], _ -> failwith "TODO intToString without TApp"
-        | [CommonTypes.PrimaryKind.Row, _], ELcons (arg, ELnil) ->
-            let argt = typ_of_expr arg in
+    | "intToString" -> begin match tyargs, targs, args with
+        | [], _, _ -> failwith "TODO intToString without TApp"
+        | [CommonTypes.PrimaryKind.Row, _], TLcons (argt, TLnil), ELcons (arg, ELnil) ->
             let Type.Equal = assert_eq_typ argt TInt "Invalid type of argument of intToString" in
-            let acc, fid = find_fbuiltin acc FBIntToString in
-            let fid : (int * unit, string, unit, unit, unit) funcid = (Gnil, Gnil, TLcons (TInt, TLnil), TString, TLnil, fid) in
-            acc, Expr (TString, ECallClosed (EClose (fid, BLnil, ELnil), ELcons (arg, ELnil), TString))
-        | _, _ -> raise (internal_error ("Invalid usage of builtin 'intToString'"))
+            let env, acc, fid = find_fbuiltin env acc add_builtin FBIntToString in
+            env, acc, Expr (TString, ECallClosed (EClose (fid, BLnil, ELnil), ELcons (arg, ELnil), TString))
+        | _, _, _ -> raise (internal_error ("Invalid usage of builtin 'intToString'"))
+      end
+    | "here" -> begin match tyargs, args with
+        | [], _ -> failwith "TODO here without TApp"
+        | [CommonTypes.PrimaryKind.Row, _], ELnil ->
+            let env, acc, fid = find_fbuiltin env acc add_builtin FBHere in
+            env, acc, Expr (TSpawnLocation, ECallClosed (EClose (fid, BLnil, ELnil), ELnil, TSpawnLocation))
+        | _, _ -> raise (internal_error ("Invalid usage of builtin 'here'"))
+      end
+    | "recv" -> begin match tyargs, args with
+        | [], _ -> failwith "TODO recv without TApp"
+        | [CommonTypes.PrimaryKind.Type, t; CommonTypes.PrimaryKind.Row, _], ELnil ->
+            let acc = has_process acc in
+            let Type t = convert_type t in
+            let env, acc, fid = find_fbuiltin env acc add_builtin FBRecv in
+            env, acc, Expr (t, ECallClosed (ESpecialize (EClose (fid, BLnil, ELnil), Scons (Type t, 0, Snil Gnil), BLnil, BBox (t, 0)), ELnil, t))
+        | _, _ -> raise (internal_error ("Invalid usage of builtin 'recv'"))
+      end
+    | "Send" -> begin match tyargs, targs, args with
+        | [], _, _ -> failwith "TODO Send without TApp"
+        | [CommonTypes.PrimaryKind.Type, t; CommonTypes.PrimaryKind.Row, _; CommonTypes.PrimaryKind.Row, _],
+          TLcons (proct, TLcons (argt, TLnil)), ELcons (proc, ELcons (arg, ELnil)) ->
+            let acc = has_process acc in
+            let Type t = convert_type t in
+            let Type.Equal = assert_eq_typ proct TProcess "Invalid type of argument of Send" in
+            let Type.Equal = assert_eq_typ argt t "Invalid type of argument of Send" in
+            let env, acc, fid = find_fbuiltin env acc add_builtin FBSend in
+            env, acc, Expr (TTuple NTLnil, ECallClosed (
+              ESpecialize (
+                EClose (fid, BLnil, ELnil),
+                Scons (Type t, 0, Snil Gnil),
+                BLcons (BNone (TProcess, TProcess), BLcons (BBox (argt, 1), BLnil)),
+                BNone (TTuple NTLnil, TTuple NTLnil)),
+              ELcons (proc, ELcons (arg, ELnil)),
+              TTuple NTLnil))
+        | _, _, _ -> raise (internal_error ("Invalid usage of builtin 'Send'"))
+      end
+    | "spawn" -> begin match tyargs, targs, args with
+        | [], _, _ -> failwith "TODO spawn without TApp"
+        | [CommonTypes.PrimaryKind.Row, _; CommonTypes.PrimaryKind.Type, t; CommonTypes.PrimaryKind.Row, _],
+          TLcons (tf, TLnil), ELcons (f, ELnil) ->
+            let acc = has_process acc in
+            let Type t = convert_type t in
+            let Type.Equal = assert_eq_typ tf (TClosed (Gnil, TLnil, t)) "Invalid type of argument of spawn" in
+            let env, acc, hereid = find_fbuiltin env acc add_builtin FBHere in
+            let env, acc, spawnid = find_fbuiltin env acc add_builtin FBSpawnAt in
+            env, acc, Expr (TProcess,
+              ECallClosed (
+                ESpecialize (
+                  EClose (spawnid, BLnil, ELnil),
+                  Scons (Type t, 0, Snil Gnil),
+                  BLcons (BNone (TSpawnLocation, TSpawnLocation), (BLcons (BClosed (Gnil, BLnil, BBox (t, 0)), BLnil))),
+                  BNone (TProcess, TProcess)),
+                ELcons (ECallClosed (EClose (hereid, BLnil, ELnil), ELnil, TSpawnLocation),
+                  ELcons (f,
+                  ELnil)),
+                TProcess))
+        | _, _, _ -> raise (internal_error ("Invalid usage of builtin 'spawn'"))
+      end
+    | "spawnAt" -> begin match tyargs, targs, args with
+        | [], _, _ -> failwith "TODO spawnAt without TApp"
+        | [CommonTypes.PrimaryKind.Row, _; CommonTypes.PrimaryKind.Type, t; CommonTypes.PrimaryKind.Row, _],
+          TLcons (tl, TLcons (tf, TLnil)), ELcons (l, ELcons (f, ELnil)) ->
+            let acc = has_process acc in
+            let Type t = convert_type t in
+            let Type.Equal = assert_eq_typ tl TSpawnLocation "Invalid type of argument of spawnAt" in
+            let Type.Equal = assert_eq_typ tf (TClosed (Gnil, TLnil, t)) "Invalid type of argument of spawnAt" in
+            let env, acc, spawnid = find_fbuiltin env acc add_builtin FBSpawnAt in
+            env, acc, Expr (TProcess,
+              ECallClosed (
+                ESpecialize (
+                  EClose (spawnid, BLnil, ELnil),
+                  Scons (Type t, 0, Snil Gnil),
+                  BLcons (BNone (TSpawnLocation, TSpawnLocation), (BLcons (BClosed (Gnil, BLnil, BBox (t, 0)), BLnil))),
+                  BNone (TProcess, TProcess)),
+                ELcons (l, ELcons (f, ELnil)),
+                TProcess))
+        | _, _, _ -> raise (internal_error ("Invalid usage of builtin 'spawnAt'"))
       end
     | _ -> ignore tyargs; raise (internal_error ("Unknown builtin impure function " ^ op))
   
@@ -508,6 +582,12 @@ end = struct
     ignore (func, row);
     if is Types.list then match ts with
       | [Type t] -> normal (Type (TList t))
+      | _ -> raise (internal_error ("Unknown abstract type " ^ (Types.Abstype.show at)))
+    else if is Types.spawn_location then match ts with
+      | [] -> normal (Type TSpawnLocation)
+      | _ -> raise (internal_error ("Unknown abstract type " ^ (Types.Abstype.show at)))
+    else if is Types.process then match ts with
+      | [Type _] -> normal (Type TProcess)
       | _ -> raise (internal_error ("Unknown abstract type " ^ (Types.Abstype.show at)))
     else raise (internal_error ("Unknown abstract type " ^ (Types.Abstype.show at)))
 end
@@ -737,6 +817,8 @@ let rec specialize_typ : type a. _ -> a typ -> a specialize = fun tmap t -> matc
       | Some (Type src) -> Spec (src, BBox (src, i))
       | None -> Spec (t, BNone (t, t))
     end
+  | TSpawnLocation -> Spec (TSpawnLocation, BNone (t, t))
+  | TProcess -> Spec (TProcess, BNone (t, t))
 and specialize_typ_list : type a. _ -> a typ_list -> a specialize_list = fun tmap ts -> match ts with
   | TLnil -> SpecL (TLnil, BLnil)
   | TLcons (hd, tl) ->
@@ -1164,7 +1246,7 @@ module GEnv : sig (* Contains the functions, the types, etc *)
   val allocate_fhandler : t -> hid * mfunid * t
   val assign_fhandler : t -> hid -> mfunid -> LEnv.subt -> (mvarid * mvarid) option -> ('b, 'd) finisher -> ('b, 'd) handler list -> t
   
-  val find_fbuiltin : t -> fbuiltin -> t * mfunid
+  val gen_impure : t -> string -> tyarg list -> anyexpr_list -> t * anyexpr
   
   val add_effect : t -> string -> t * meffid
   
@@ -1179,29 +1261,31 @@ end = struct
   module EffectMap = Utility.StringMap
   
   type t = {
+    ge_builtins : Builtins.t;
     ge_imports : (string * string) list;
     ge_map : string Env.Int.t;
     ge_nfuns : mfunid;
     ge_funs : (anyfunc' option ref * mfunid * bool ref,
                (anyfhandler option ref,
                 (anyfunc' * mfunid,
-                 fbuiltin) Either.t) Either.t) Either.t list;
+                 anyfbuiltin * mfunid) Either.t) Either.t) Either.t list;
     ge_ntags : tagid;
     ge_tagmap : tagid Env.String.t;
     ge_neffs : meffid;
     ge_effs : EffectIDSet.t;
     ge_effmap : meffid EffectMap.t;
     ge_ngbls : mvarid;
-    ge_gbls : (mvarid * anytyp * string) list;
+    ge_gbls : (mvarid * anytyp * string option) list;
     ge_gblbinders : Utility.IntSet.t;
     ge_gblmap : anyvarid Env.Int.t;
     ge_fmap : funid anyfuncid Env.Int.t;
-    ge_fbs : mfunid option;
+    ge_global_counter : mvarid option;
   }
   let empty (m : string Env.Int.t) (global_binders : Utility.IntSet.t) (import_wizard : bool) : t =
     let ge_nfuns = if import_wizard then 2l else 0l in
     let ge_ntags = if import_wizard then 0 else 0 in {
-      ge_imports = if import_wizard then ["wizeng", "puts"; "wizeng", "putc"] else [];
+      ge_builtins = Builtins.empty;
+      ge_imports = if import_wizard then ["wizeng", "puta"; "wizeng", "putc"] else [];
       ge_map = m;
       ge_nfuns;
       ge_funs = [];
@@ -1215,7 +1299,7 @@ end = struct
       ge_gblbinders = global_binders;
       ge_gblmap = Env.Int.empty;
       ge_fmap = Env.Int.empty;
-      ge_fbs = None;
+      ge_global_counter = None;
     }
   
   let find_tag (env : t) (tname : string) : t * tagid = match Env.String.find_opt tname env.ge_tagmap with
@@ -1231,7 +1315,7 @@ end = struct
   let add_var (ge : t) (le : 'a LEnv.t) (b : binder) (t : anytyp) : t * 'a LEnv.t * locality * mvarid =
     if Utility.IntSet.mem (Var.var_of_binder b) ge.ge_gblbinders then begin
       let ge_ngbls = Int32.succ ge.ge_ngbls in
-      let ge_gbls = (ge.ge_ngbls, t, Var.name_of_binder b) :: ge.ge_gbls in
+      let ge_gbls = (ge.ge_ngbls, t, Some (Var.name_of_binder b)) :: ge.ge_gbls in
       let Type t = t in
       let newvar = VarID (t, ge.ge_ngbls) in
       let ge_gblmap = Env.Int.bind (Var.var_of_binder b) newvar ge.ge_gblmap in
@@ -1314,6 +1398,8 @@ end = struct
           | TVariant -> TVariant
           | TList t -> TList (inner map t)
           | TVar i -> TVar (TVarMap.find i map)
+          | TSpawnLocation -> TSpawnLocation
+          | TProcess -> TProcess
         and inner_list : type a. _ -> a typ_list -> a typ_list = fun map ts -> match ts with
           | TLnil -> TLnil
           | TLcons (hd, tl) -> TLcons (inner map hd, inner_list map tl)
@@ -1392,14 +1478,21 @@ end = struct
     | Some _ -> raise (internal_error "double assignment of function")
     | None -> hid := Some (AFHdl (LEnv.compile_handler args self_mid oabsconc onret ondo)); env
   
-  let find_fbuiltin (env : t) (fb : fbuiltin) : t * mfunid = match env, fb with
-    | { ge_fbs = Some i; _ }, FBIntToString -> env, i
-    | { ge_fbs = None; _ }, FBIntToString ->
-        let i = env.ge_nfuns in
-        let ge_funs = Either.Right (Either.Right (Either.Right FBIntToString)) :: env.ge_funs in
-        let ge_nfuns = Int32.succ i in
-        let ge_fbs = Some i in
-        { env with ge_funs; ge_nfuns; ge_fbs; }, i
+  let set_has_process (env : t) : t =
+    if Option.is_none env.ge_global_counter then
+      let vid = env.ge_ngbls in
+      let ge_ngbls = Int32.succ vid in
+      let ge_gbls = (vid, Type TInt, None) :: env.ge_gbls in
+      { env with ge_ngbls; ge_gbls; ge_global_counter = Some vid }
+    else env
+  let add_builtin (env : t) (fb : anyfbuiltin) : t * mfunid =
+    let i = env.ge_nfuns in
+    let ge_funs = Either.Right (Either.Right (Either.Right (fb, i))) :: env.ge_funs in
+    let ge_nfuns = Int32.succ i in
+    { env with ge_funs; ge_nfuns; }, i
+  let gen_impure (ge : t) (name : string) (ts : tyarg list) (args : anyexpr_list) : t * anyexpr =
+    let ge_builtins, ge, e = Builtins.gen_impure ge.ge_builtins ge add_builtin set_has_process convert_type name ts args in
+    { ge with ge_builtins }, e
   
   let add_effect (env : t) (ename : string) : t * meffid =
     let eff = ename in
@@ -1445,7 +1538,7 @@ end = struct
             | Either.Right (Either.Left { contents = Some (AFHdl f) }) -> FHandler f
             | Either.Right (Either.Right (Either.Left (AFFnc f, _))) -> FFunction f
             | Either.Right (Either.Right (Either.Left (AFSt f, _))) -> FContinuationStart f
-            | Either.Right (Either.Right (Either.Right fb)) -> FBuiltin fb)
+            | Either.Right (Either.Right (Either.Right (AFBt fb, i))) -> FBuiltin (i, fb))
           ge.ge_funs;
       mod_needs_export;
       mod_neffs = ge.ge_neffs;
@@ -1455,6 +1548,7 @@ end = struct
       mod_locals = lvs;
       mod_main = t;
       mod_block = blk;
+      mod_global_counter = ge.ge_global_counter;
     }
 end
 type genv = GEnv.t
@@ -1779,7 +1873,7 @@ let rec of_tail_computation : type args. _ -> args lenv -> _ -> genv * args lenv
               end else raise (internal_error "Invalid continuation: receives type applications")
           | le, ClosedBuiltin name ->
               let ge, le, args = convert_values_unk ge le args in
-              let ge, e = Builtins.gen_impure ge GEnv.find_fbuiltin convert_type name ts args in
+              let ge, e = GEnv.gen_impure ge name ts args in
               ge, le, e
         end
       | ts, Closure (f, tcl, cls) ->

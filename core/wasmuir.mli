@@ -5,6 +5,7 @@ type meffid = private int32  (* Module effect ID   *)
 module FunIDMap : Utility.Map.S with type key = mfunid
 module EffectIDSet : Utility.Set.S with type elt = meffid
 
+type process = Wasmir.process
 type llist = Wasmir.llist
 type variant = Wasmir.variant
 type abs_closure_content = Wasmir.abs_closure_content
@@ -24,6 +25,8 @@ type 'a typ =
   | TVariant : variant typ
   | TList : 'a typ -> llist typ
   | TVar : unit typ
+  | TSpawnLocation : Value.spawn_location typ
+  | TProcess : process typ
 and 'a typ_list =
   | TLnil : unit typ_list
   | TLcons : 'a typ * 'b typ_list -> ('a * 'b) typ_list
@@ -137,13 +140,18 @@ type ('a, 'b) fhandler = {
   fh_handlers: ('a, 'b) handler list;
   fh_id      : mfunid;
 }
-type fbuiltin = Wasmir.fbuiltin =
-  | FBIntToString
+type ('g, 'a, 'b) fbuiltin = ('g, 'a, 'b) Wasmir.fbuiltin =
+  | FBHere : (unit, unit, Value.spawn_location) fbuiltin
+  | FBIntToString : (unit, int * unit, string) fbuiltin
+  | FBRecv : (unit option, unit, unit) fbuiltin
+  | FBSend : (unit option, process * (unit * unit), unit list) fbuiltin
+  | FBSpawnAt : (unit option, Value.spawn_location * ((unit * unit -> unit) * unit), process) fbuiltin
+  | FBWait : (unit option, process * unit, unit) fbuiltin
 type func =
   | FFunction : ('a, 'b) func' -> func
   | FContinuationStart : 'b fstart -> func
   | FHandler : ('a, 'b) fhandler -> func
-  | FBuiltin of fbuiltin
+  | FBuiltin : mfunid * ('g, 'a, 'b) fbuiltin -> func
 type 'a modu = {
   mod_imports     : (string * string) list;
   mod_nfuns       : int32;
@@ -152,10 +160,11 @@ type 'a modu = {
   mod_neffs       : int32;
   mod_effs        : EffectIDSet.t;
   mod_nglobals    : int32;
-  mod_global_vars : (mvarid * anytyp * string) list;
+  mod_global_vars : (mvarid * anytyp * string option) list;
   mod_locals      : anytyp list;
   mod_main        : 'a typ;
   mod_block       : 'a block;
+  mod_global_counter : mvarid option;
 }
 
 val module_of_ir : 'a Wasmir.modu -> 'a modu
