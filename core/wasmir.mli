@@ -78,7 +78,7 @@ type locality = Global | Local of local_storage
 type 'a varid = private ('a typ * mvarid)
 type ('a, 'b, 'c, 'ga, 'gc) funcid = private ('ga generalization * 'gc generalization * 'a typ_list * 'b typ * 'c typ_list * mfunid)
   (* Top abstraction, closure abstraction, arguments type, return type, closure type, closure type ID, module-level function ID *)
-type ('a, 'b) effectid = private ((unit * 'a -> 'b) typ * meffid)
+type 'a effectid = private ('a typ_list * meffid)
 
 type 'a varid_list =
   | VLnil : unit varid_list
@@ -137,13 +137,13 @@ and 'a expr =
       (* FIXME: add information in the continuation that it takes a 'b *)
   | ECallClosed : (unit * 'a -> 'b) expr * 'a expr_list * 'b typ -> 'b expr
   | ECond : 'a typ * bool expr * 'a block * 'a block -> 'a expr
-  | EDo : ('a, 'b) effectid * 'a expr_list -> 'b expr
+  | EDo : 'a effectid * 'b typ * 'a expr_list -> 'b expr
   | EShallowHandle : (unit, 'a, 'c, unit, unit) funcid * 'c expr_list * ('a, 'b) finisher * ('a, 'b) handler list -> 'b expr
   | EDeepHandle : (unit, 'b, 'c, unit, unit) funcid * 'c expr_list *
                   ('b continuation * ('c closure_content * unit), 'd, 'e, unit, unit) funcid * 'e expr_list -> 'd expr
 and ('a, 'b) handler = (* The continuation itself returns 'a, the handler returns 'b *)
   (* Note: we lose the information that the continuation takes 'b as parameter(s) *)
-  | Handler : ('a, 'b) effectid * 'd continuation varid * 'a varid_list * 'c block -> ('d, 'c) handler
+  | Handler : 'a effectid * 'd continuation varid * 'a varid_list * 'c block -> ('d, 'c) handler
 and 'a expr_list =
   | ELnil : unit expr_list
   | ELcons : 'a expr * 'b expr_list -> ('a * 'b) expr_list

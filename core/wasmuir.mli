@@ -59,7 +59,7 @@ type locality = Global | Local of local_storage
 type 'a varid = private ('a typ * mvarid)
 type ('a, 'b, 'c) funcid = private ('a typ_list * 'b typ * 'c typ_list * mfunid)
   (* Function type, closure type, closure type ID, module-level function ID *)
-type ('a, 'b) effectid = private ('a typ_list * 'b typ * meffid)
+type 'a effectid = private ('a typ_list * meffid)
 
 type 'a varid_list =
   | VLnil : unit varid_list
@@ -106,12 +106,12 @@ and 'a expr =
   | ECallRawHandler : mfunid * 'c continuation typ * 'c continuation expr * 'a typ * 'a expr * abs_closure_content expr * 'b typ -> 'b expr
   | ECallClosed : ('g * 'a -> 'b) expr * 'a expr_list -> 'b expr
   | ECond : bool expr * 'a typ * 'a block * 'a block -> 'a expr
-  | EDo : ('a, 'b) effectid * 'a expr_list -> 'b expr
+  | EDo : 'a effectid * 'b typ * 'a expr_list -> 'b expr
   | EShallowHandle : (unit, 'b, 'c) funcid * 'c expr_list * ('b, 'd) finisher * ('b, 'd) handler list -> 'd expr
   | EDeepHandle : (unit, 'b, 'c) funcid * 'c expr_list *
                   ('b continuation * ('c closure_content * unit), 'd, 'e) funcid * 'e expr_list -> 'd expr
 and (_, _) handler =
-  | Handler : ('a, 'b) effectid * 'd continuation varid * 'a varid_list * 'c block -> ('d, 'c) handler
+  | Handler : 'a effectid * 'd continuation varid * 'a varid_list * 'c block -> ('d, 'c) handler
 and _ expr_list =
   | ELnil : unit expr_list
   | ELcons : 'a expr * 'b expr_list -> ('a * 'b) expr_list

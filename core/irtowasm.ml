@@ -1071,8 +1071,8 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
       let ei = convert_expr tm new_meta procinfo e BNone None cinfo acc in
       let rt' = TMap.oval_of_type tm rt in
       If (Wasm.Type.(ValBlockType rt'), List.rev ti, List.rev fi) :: ei
-  | EDo (eid, args) ->
-      let targs, tret, eid = (eid : _ effectid :> _ * _ * int32) in
+  | EDo (eid, tret, args) ->
+      let targs, eid = (eid : _ effectid :> _ * int32) in
       let args = match targs, args with
         | TLnil, ELnil -> fun acc -> RefNull Wasm.Type.NoneHT :: acc
         | TLcons (targ, TLnil), ELcons (arg, ELnil) -> convert_expr tm new_meta procinfo arg (BBox targ) None cinfo
@@ -1151,7 +1151,7 @@ let convert_hdl (tm : tmap) (glob : NewMetadata.g) (procinfo : has_processes) (t
     let nblocks, handlers =
       let rec inner (hdls : _ handler list) len acc = match hdls with
         | [] -> len, acc
-        | Handler (eid, _, _, _) :: tl -> inner tl (Int32.succ len) ((let _, _, eid = (eid : _ effectid :> _ * _ * int32) in eid, OnLabel len) :: acc)
+        | Handler (eid, _, _, _) :: tl -> inner tl (Int32.succ len) ((let _, eid = (eid : _ effectid :> _ * int32) in eid, OnLabel len) :: acc)
       in inner f.fh_handlers 0l [] in
     let code = convert_finisher tm new_meta procinfo f.fh_finisher (Some None) cinfo in
     let code = Resume (contid, handlers) :: List.rev_append code [Return] in
@@ -1187,7 +1187,7 @@ let convert_hdl (tm : tmap) (glob : NewMetadata.g) (procinfo : has_processes) (t
                 RefCast Wasm.Type.(NoNull, VarHT (StatX tid)) :: LocalSet tmpv :: inner vars 0l codehdl in
           let _, varc = (varc : _ varid :> _ * int32) in
           let codehdl = LocalSet varc :: codehdl in
-          let eargs, _, _ = (eid : _ effectid :> _ * _ * _) in
+          let eargs, _ = (eid : _ effectid :> _ * _) in
           let blkid = TMap.recid_of_handler_block tm contid eargs in
           let code = Wasm.Instruction.Block (Wasm.Type.VarBlockType blkid, code) :: codehdl in
           do_cases nblocks tl code

@@ -144,7 +144,7 @@ type locality = Wasmir.locality =
   | Local of local_storage
 type 'a varid = 'a typ * mvarid
 type ('a, 'b, 'c) funcid = 'a typ_list * 'b typ * 'c typ_list * mfunid
-type ('a, 'b) effectid = 'a typ_list * 'b typ * meffid
+type 'a effectid = 'a typ_list * meffid
 
 let convert_varid (v : 'a Wasmir.varid) : 'a varid =
   let t, v = (v : 'a Wasmir.varid :> _ * _) in
@@ -152,9 +152,9 @@ let convert_varid (v : 'a Wasmir.varid) : 'a varid =
 let convert_funcid (f : ('a, 'b, 'c, 'ga, 'gc) Wasmir.funcid) : ('a, 'b, 'c) funcid =
   let _, _, targs, tret, tc, i = (f : ('a, 'b, 'c, 'ga, 'gc) Wasmir.funcid :> _ * _ * _ * _ * _ * _) in
   (convert_typ_list targs, convert_typ tret, convert_typ_list tc, i)
-let convert_effectid (e : ('a, 'b) Wasmir.effectid) : ('a, 'b) effectid =
-  let Wasmir.(TClosed (Gnil, targs, tret)), e = (e : ('a, 'b) Wasmir.effectid :> _ * _) in
-  (convert_typ_list targs, convert_typ tret, e)
+let convert_effectid (e : 'a Wasmir.effectid) : 'a effectid =
+  let targs, e = (e : 'a Wasmir.effectid :> _ * _) in
+  (convert_typ_list targs, e)
 
 type 'a varid_list =
   | VLnil : unit varid_list
@@ -253,12 +253,12 @@ and 'a expr =
   | ECallRawHandler : mfunid * 'c continuation typ * 'c continuation expr * 'a typ * 'a expr * abs_closure_content expr * 'b typ -> 'b expr
   | ECallClosed : ('g * 'a -> 'b) expr * 'a expr_list -> 'b expr
   | ECond : bool expr * 'a typ * 'a block * 'a block -> 'a expr
-  | EDo : ('a, 'b) effectid * 'a expr_list -> 'b expr
+  | EDo : 'a effectid * 'b typ * 'a expr_list -> 'b expr
   | EShallowHandle : (unit, 'b, 'c) funcid * 'c expr_list * ('b, 'd) finisher * ('b, 'd) handler list -> 'd expr
   | EDeepHandle : (unit, 'b, 'c) funcid * 'c expr_list *
                   ('b continuation * ('c closure_content * unit), 'd, 'e) funcid * 'e expr_list -> 'd expr
 and (_, _) handler =
-  | Handler : ('a, 'b) effectid * 'd continuation varid * 'a varid_list * 'c block -> ('d, 'c) handler
+  | Handler : 'a effectid * 'd continuation varid * 'a varid_list * 'c block -> ('d, 'c) handler
 and _ expr_list =
   | ELnil : unit expr_list
   | ELcons : 'a expr * 'b expr_list -> ('a * 'b) expr_list
@@ -345,7 +345,7 @@ and [@tail_mod_cons] convert_expr : type a. a Wasmir.expr -> a expr =
       ECond (
         (convert_expr[@tailcall false]) c, (convert_typ[@tailcall false]) r,
         convert_block t, (convert_block[@tailcall false]) f) (* For some reason this one cannot be @tailcall-ed *)
-  | Wasmir.EDo (e, v) -> EDo (convert_effectid e, convert_expr_list v)
+  | Wasmir.EDo (e, t, v) -> EDo (convert_effectid e, convert_typ t, (convert_expr_list[@tailcall]) v)
   | Wasmir.EShallowHandle (f, e, d, h) ->
       EShallowHandle (convert_funcid f, convert_expr_list e, convert_finisher d, List.map (convert_handler) h)
   | Wasmir.EDeepHandle (c, cl, h, a) ->
