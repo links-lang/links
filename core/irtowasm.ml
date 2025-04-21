@@ -705,7 +705,7 @@ let convert_global (tm : tmap) ((_, Type t, name) : 'a * anytyp * string option)
     | TBool -> [Const (Wasm.Value.(I32 I32.zero))]
     | TFloat -> [Const (Wasm.Value.(F64 (F64.of_float 0.)))]
     | TString -> [ArrayNewFixed (TMap.string_tid, 0l)]
-    | TClosed _ -> let idx = TMap.recid_of_type tm t in [StructNew (idx, Implicit)]
+    | TClosed _ -> let idx = TMap.recid_of_type tm t in [RefNull Wasm.Type.(VarHT (StatX idx))]
     | TAbsClosArg -> raise (internal_error "Unexpected global of IR type AbsClosArg")
     | TClosArg _ -> raise (internal_error "Unexpected global of IR type ClosArg")
     | TCont _ -> failwith "TODO: convert_global TCont"
@@ -719,7 +719,12 @@ let convert_global (tm : tmap) ((_, Type t, name) : 'a * anytyp * string option)
     | TVar -> raise (internal_error "Unexpected global of IR type Var")
     | TSpawnLocation -> [RefNull Wasm.Type.NoneHT]
     | TProcess -> [StructNew (TMap.pid_tid, Implicit)] in
-  let t = TMap.val_of_type tm t in
+  let t = match t with
+    | TClosed _ -> begin let open Wasm.Type in match TMap.val_of_type tm t with
+        | RefT (NoNull, ht) -> RefT (Null, ht)
+        | _ -> raise (internal_error "Unexpected val_of_type of TClosed")
+      end
+    | _ -> TMap.val_of_type tm t in
   Wasm.(Type.(GlobalT (Var, t)), init, name)
 let convert_globals (tm : tmap) (gs : (mvarid * anytyp * string option) list) (tl : Wasm.global list) : Wasm.global list =
   let [@tail_mod_cons] rec inner gs = match gs with
@@ -1691,6 +1696,11 @@ let compile (prog : Ir.program) (env : string Env.Int.t) (main_typ_name : string
                   Const (I32 (I32.of_int_s (Char.code ']'))); Call putc;
                 ]
             | TVariant -> failwith "TODO: Irtowasm.compile.prepare for variant"
+            | TClosed _ ->
+                let add_string code s =
+                  String.fold_right (fun c acc -> Const (I32 (I32.of_int_s (Char.code c))) :: Call putc :: acc)
+                    s code in
+                Either.Left (Drop :: add_string [] "fun")
             | _ -> failwith "TODO: Irtowasm.compile.prepare for this type"
           in
           let code = prepare m.mod_main new_meta in
