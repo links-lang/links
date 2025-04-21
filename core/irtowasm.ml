@@ -709,7 +709,7 @@ let convert_global (tm : tmap) ((_, Type t, name) : 'a * anytyp * string option)
     | TAbsClosArg -> raise (internal_error "Unexpected global of IR type AbsClosArg")
     | TClosArg _ -> raise (internal_error "Unexpected global of IR type ClosArg")
     | TCont _ -> failwith "TODO: convert_global TCont"
-    | TTuple _ -> failwith "TODO: convert_global TTuple"
+    | TTuple _ -> let idx = TMap.recid_of_type tm t in [StructNew (idx, Implicit)]
     | TVariant -> [
           Const (Wasm.Value.(I32 I32.zero));
           RefNull Wasm.Type.NoneHT;
