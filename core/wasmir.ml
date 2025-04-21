@@ -255,6 +255,7 @@ type ('g, 'a, 'b) fbuiltin =
   | FBRecv : (unit option, unit, unit) fbuiltin
   | FBSelf : (unit, unit, process) fbuiltin
   | FBSend : (unit option, process * (unit * unit), unit list) fbuiltin
+  | FBSpawnAngelAt : (unit option, Value.spawn_location * ((unit * unit -> unit) * unit), process) fbuiltin
   | FBSpawnAt : (unit option, Value.spawn_location * ((unit * unit -> unit) * unit), process) fbuiltin
   | FBWait : (unit option, process * unit, unit) fbuiltin
 type func =
@@ -396,6 +397,7 @@ end = struct
     bt_recv: (unit, unit, unit, unit option, unit) funcid option;
     bt_self: (unit, process, unit, unit, unit) funcid option;
     bt_send: (process * (unit * unit), unit list, unit, unit option, unit) funcid option;
+    bt_spawnangelat: (Value.spawn_location * ((unit * unit -> unit) * unit), process, unit, unit option, unit) funcid option;
     bt_spawnat: (Value.spawn_location * ((unit * unit -> unit) * unit), process, unit, unit option, unit) funcid option;
     bt_wait: (process * unit, unit, unit, unit option, unit) funcid option;
   }
@@ -405,6 +407,7 @@ end = struct
     bt_recv = None;
     bt_self = None;
     bt_send = None;
+    bt_spawnangelat = None;
     bt_spawnat = None;
     bt_wait = None;
   }
@@ -436,6 +439,11 @@ end = struct
         let acc, fid = add_builtin acc (AFBt FBSend) in
         let f = (Gcons (0, Gnil), Gnil, TLcons (TProcess, TLcons (TVar 0, TLnil)), TTuple NTLnil, TLnil, fid) in
         { env with bt_send = Some f; }, acc, f
+    | { bt_spawnangelat = Some f; _ }, FBSpawnAngelAt -> env, acc, f
+    | { bt_spawnangelat = None; _ }, FBSpawnAngelAt ->
+        let acc, fid = add_builtin acc (AFBt FBSpawnAngelAt) in
+        let f = (Gcons (0, Gnil), Gnil, TLcons (TSpawnLocation, TLcons (TClosed (Gnil, TLnil, TVar 0), TLnil)), TProcess, TLnil, fid) in
+        { env with bt_spawnangelat = Some f; }, acc, f
     | { bt_spawnat = Some f; _ }, FBSpawnAt -> env, acc, f
     | { bt_spawnat = None; _ }, FBSpawnAt ->
         let acc, fid = add_builtin acc (AFBt FBSpawnAt) in
@@ -587,6 +595,48 @@ end = struct
                   ELnil)),
                 TProcess))
         | _, _, _ -> raise (internal_error ("Invalid usage of builtin 'spawn'"))
+      end
+    | "spawnAngel" -> begin match tyargs, targs, args with
+        | [], _, _ -> failwith "TODO spawnAngel without TApp"
+        | [CommonTypes.PrimaryKind.Row, _; CommonTypes.PrimaryKind.Type, t; CommonTypes.PrimaryKind.Row, _],
+          TLcons (tf, TLnil), ELcons (f, ELnil) ->
+            let acc = has_process acc in
+            let Type t = convert_type t in
+            let Type.Equal = assert_eq_typ tf (TClosed (Gnil, TLnil, t)) "Invalid type of argument of spawnAngel" in
+            let env, acc, hereid = find_fbuiltin env acc add_builtin FBHere in
+            let env, acc, spawnid = find_fbuiltin env acc add_builtin FBSpawnAngelAt in
+            env, acc, Expr (TProcess,
+              ECallClosed (
+                ESpecialize (
+                  EClose (spawnid, BLnil, ELnil),
+                  Scons (Type t, 0, Snil Gnil),
+                  BLcons (BNone (TSpawnLocation, TSpawnLocation), (BLcons (BClosed (Gnil, BLnil, BBox (t, 0)), BLnil))),
+                  BNone (TProcess, TProcess)),
+                ELcons (ECallClosed (EClose (hereid, BLnil, ELnil), ELnil, TSpawnLocation),
+                  ELcons (f,
+                  ELnil)),
+                TProcess))
+        | _, _, _ -> raise (internal_error ("Invalid usage of builtin 'spawnAngel'"))
+      end
+    | "spawnAngelAt" -> begin match tyargs, targs, args with
+        | [], _, _ -> failwith "TODO spawnAngelAt without TApp"
+        | [CommonTypes.PrimaryKind.Row, _; CommonTypes.PrimaryKind.Type, t; CommonTypes.PrimaryKind.Row, _],
+          TLcons (tl, TLcons (tf, TLnil)), ELcons (l, ELcons (f, ELnil)) ->
+            let acc = has_process acc in
+            let Type t = convert_type t in
+            let Type.Equal = assert_eq_typ tl TSpawnLocation "Invalid type of argument of spawnAngelAt" in
+            let Type.Equal = assert_eq_typ tf (TClosed (Gnil, TLnil, t)) "Invalid type of argument of spawnAngelAt" in
+            let env, acc, spawnid = find_fbuiltin env acc add_builtin FBSpawnAngelAt in
+            env, acc, Expr (TProcess,
+              ECallClosed (
+                ESpecialize (
+                  EClose (spawnid, BLnil, ELnil),
+                  Scons (Type t, 0, Snil Gnil),
+                  BLcons (BNone (TSpawnLocation, TSpawnLocation), (BLcons (BClosed (Gnil, BLnil, BBox (t, 0)), BLnil))),
+                  BNone (TProcess, TProcess)),
+                ELcons (l, ELcons (f, ELnil)),
+                TProcess))
+        | _, _, _ -> raise (internal_error ("Invalid usage of builtin 'spawnAngelAt'"))
       end
     | "spawnAt" -> begin match tyargs, targs, args with
         | [], _, _ -> failwith "TODO spawnAt without TApp"
