@@ -372,6 +372,7 @@ let assert_eq_typ_binop (Binop op) (Type tc) = match op with
   | TTuple NTLnil, _ -> . *)
 
 type anyfbuiltin = AFBt : ('g, 'a, 'b) fbuiltin -> anyfbuiltin
+type anyfunc' = AF' : ('a, 'b) func' -> anyfunc'
 module Builtins : sig
   type t
   val empty : t
@@ -383,7 +384,9 @@ module Builtins : sig
   val gen_impure : t -> 'a -> ('a -> anyfbuiltin -> 'a * mfunid) -> ('a -> 'a) -> (Types.typ -> anytyp) ->
                    string -> Ir.tyarg list -> anyexpr_list -> t * 'a * anyexpr
   
-  val get_var : string -> anyexpr option
+  val get_var : t -> 'a -> ('a -> 'a * mfunid * 'b) -> ('a -> 'b -> anyfunc' -> 'a) ->
+                ('a -> anyfbuiltin -> 'a * mfunid) -> ('a -> 'a) -> (Types.typ -> anytyp) ->
+                string -> (t * 'a * anyexpr) option
   
   val apply_type :
     Types.Abstype.t -> anytyp list -> (anytyp -> 'a) -> (tyvar list -> Types.typ -> Types.typ -> Types.typ -> 'a) ->
@@ -400,6 +403,9 @@ end = struct
     bt_spawnangelat: (Value.spawn_location * ((unit * unit -> unit) * unit), process, unit, unit option, unit) funcid option;
     bt_spawnat: (Value.spawn_location * ((unit * unit -> unit) * unit), process, unit, unit option, unit) funcid option;
     bt_wait: (process * unit, unit, unit, unit option, unit) funcid option;
+    
+    bt_add: (int * (int * unit), int, unit, unit, unit) funcid option;
+    bt_id: (unit * unit, unit, unit, unit option, unit) funcid option;
   }
   let empty : t = {
     bt_here = None;
@@ -410,6 +416,9 @@ end = struct
     bt_spawnangelat = None;
     bt_spawnat = None;
     bt_wait = None;
+    
+    bt_add = None;
+    bt_id = None;
   }
   
   let find_fbuiltin (env : t) (acc : 'c) (add_builtin : 'c -> anyfbuiltin -> 'c * mfunid)
@@ -490,11 +499,10 @@ end = struct
   let gen_impure (env : t) (acc : 'c) (add_builtin : 'a -> anyfbuiltin -> 'a * mfunid) (has_process : 'a -> 'a)
                  (convert_type : Types.typ -> anytyp) (op : string) (tyargs : Ir.tyarg list)
                  (ExprList (targs, args) : anyexpr_list) : t * 'c * anyexpr = match op with
-    | "ignore" -> begin
-        match targs, args with
-        | TLcons (targ, TLnil), ELcons (arg, ELnil) -> env, acc, Expr (TTuple NTLnil, EIgnore (targ, arg))
-        | _, ELnil -> raise (internal_error ("Not enough arguments for builtin function 'ignore'"))
-        | _, ELcons (_, ELcons _) -> raise (internal_error ("Too many arguments for builtin function 'ignore'"))
+    | "ignore" -> begin match tyargs, targs, args with
+        | _, TLcons (targ, TLnil), ELcons (arg, ELnil) -> env, acc, Expr (TTuple NTLnil, EIgnore (targ, arg))
+        | _, _, ELnil -> raise (internal_error ("Not enough arguments for builtin function 'ignore'"))
+        | _, _, ELcons (_, ELcons _) -> raise (internal_error ("Too many arguments for builtin function 'ignore'"))
       end
     | "error" -> begin match tyargs with
         | [] | [_] -> raise (internal_error "Not enough type argument for builtin function 'error'")
@@ -523,6 +531,11 @@ end = struct
             let Type.Equal = assert_eq_typ argt (TList argt) "Invalid type of argument of $$tl" in
             env, acc, Expr (TList argt, EListTl (argt, arg))
         | _, _, _ -> raise (internal_error ("Invalid usage of builtin '$$tl'"))
+      end
+    | "id" -> begin match tyargs, targs, args with
+        | _, TLcons (targ, TLnil), ELcons (arg, ELnil) -> env, acc, Expr (targ, arg)
+        | _, _, ELnil -> raise (internal_error ("Not enough arguments for builtin function 'id'"))
+        | _, _, ELcons (_, ELcons _) -> raise (internal_error ("Too many arguments for builtin function 'id'"))
       end
     | "intToString" -> begin match tyargs, targs, args with
         | [], _, _ -> failwith "TODO intToString without TApp"
@@ -692,8 +705,45 @@ end = struct
       end
     | _ -> ignore tyargs; raise (internal_error ("Unknown builtin impure function " ^ op))
   
-  let get_var v : anyexpr option = match v with
-    | "Nil" -> Some (Expr (TList (TVar ~-1), EListNil (TVar ~-1)))
+  let get_var (env : t) (acc : 'a) (new_fun : 'a -> 'a * mfunid * 'b) (set_fun : 'a -> 'b -> anyfunc' -> 'a)
+              (add_builtin : 'a -> anyfbuiltin -> 'a * mfunid)
+              (has_process : 'a -> 'a) (convert_type : Types.typ -> anytyp)
+              (v : string) : (t * 'a * anyexpr) option =
+    ignore (add_builtin, has_process, convert_type);
+    match v with
+    | "Nil" -> Some (env, acc, Expr (TList (TVar ~-1), EListNil (TVar ~-1)))
+    | "+" ->
+        let env, acc, fid = match env.bt_add with Some f -> env, acc, f | None ->
+              let acc, fid, fref = new_fun acc in
+              let f = (Gnil, Gnil, TLcons (TInt, TLcons (TInt, TLnil)), TInt, TLnil, fid) in
+              let fdef = {
+                fun_id = fid;
+                fun_export_data = None;
+                fun_converted_closure = None;
+                fun_args = TLcons (TInt, TLcons (TInt, TLnil));
+                fun_ret = TInt;
+                fun_locals = [];
+                fun_block = ([], EBinop (BOAddI, EVariable (Local StorVariable, (TInt, 0l)), EVariable (Local StorVariable, (TInt, 1l))));
+              } in
+              let acc = set_fun acc fref (AF' fdef) in
+              { env with bt_add = Some f; }, acc, f in
+        Some (env, acc, Expr (TClosed (Gnil, TLcons (TInt, TLcons (TInt, TLnil)), TInt), EClose (fid, BLnil, ELnil)))
+    | "id" ->
+        let env, acc, fid = match env.bt_id with Some f -> env, acc, f | None ->
+              let acc, fid, fref = new_fun acc in
+              let f = (Gcons (0, Gnil), Gnil, TLcons (TVar 0, TLnil), TVar 0, TLnil, fid) in
+              let fdef = {
+                fun_id = fid;
+                fun_export_data = None;
+                fun_converted_closure = None;
+                fun_args = TLcons (TVar 0, TLnil);
+                fun_ret = TVar 0;
+                fun_locals = [];
+                fun_block = ([], EVariable (Local StorVariable, (TVar 0, 0l)));
+              } in
+              let acc = set_fun acc fref (AF' fdef) in
+              { env with bt_id = Some f; }, acc, f in
+        Some (env, acc, Expr (TClosed (Gcons (0, Gnil), TLcons (TVar 0, TLnil), TVar 0), EClose (fid, BLnil, ELnil)))
     | _ -> None
   
   let apply_type (at : Types.Abstype.t) (ts : anytyp list)
@@ -1371,8 +1421,9 @@ module GEnv : sig (* Contains the functions, the types, etc *)
   
   val add_var : t -> 'a LEnv.t -> binder -> anytyp -> t * 'a LEnv.t * locality * mvarid
   val find_var : t -> 'a LEnv.t -> var -> ('a LEnv.t * locality * anyvarid, funid anycfuncid) Either.t option
+  val find_builtin_var : t -> string -> (t * anyexpr) option
   
-  val allocate_function : t -> 'a LEnv.realt -> binder -> tyvar list -> anygeneralization -> funid * mfunid * t
+  val allocate_function : t -> 'a LEnv.realt -> binder -> tyvar list -> anygeneralization -> t * mfunid * funid
   val assign_function : t -> funid -> ('a, 'b) func' -> t
   val do_export_function : t -> funid -> t
   
@@ -1498,7 +1549,7 @@ end = struct
   let find_closable_fun (ge : t) (_ : 'a LEnv.t) (v : var) : funid anyfuncid = Env.Int.find v ge.ge_fmap
   
   let allocate_function (env : t) (args : 'a LEnv.realt) (b : binder) (tyvars : tyvar list)
-      (AG gc : anygeneralization) : funid * mfunid * t =
+      (AG gc : anygeneralization) : t * mfunid * funid =
     let f = ref None in
     let targs, TypeList ctyp = LEnv.args_typ args in
     let AG ga, Type tret =
@@ -1554,14 +1605,14 @@ end = struct
         inner ga gc in
       ga, Type tret in
     let fid = env.ge_nfuns in
-    let needs_export = ref false in
-    let fdata = (f, needs_export) in
+    let needs_gbl_pointer = ref false in
+    let fdata = (f, needs_gbl_pointer) in
     let ge_fmap = Env.Int.bind (Var.var_of_binder b) (FuncID ((ga, gc, targs, tret, ctyp, fid), fdata)) env.ge_fmap in
-    fdata, fid, { env with
+    { env with
       ge_nfuns = Int32.succ env.ge_nfuns;
-      ge_funs = Either.Left (f, fid, needs_export) :: env.ge_funs;
+      ge_funs = Either.Left (f, fid, needs_gbl_pointer) :: env.ge_funs;
       ge_fmap;
-    }
+    }, fid, fdata
   let assign_function (env : t) ((fid, _) : funid) (f : ('a, 'b) func') : t = match !fid with
     | Some _ -> raise (internal_error "double assignment of function")
     | None -> fid := Some (AFFnc f); env
@@ -1630,6 +1681,20 @@ end = struct
   let gen_impure (ge : t) (name : string) (ts : tyarg list) (args : anyexpr_list) : t * anyexpr =
     let ge_builtins, ge, e = Builtins.gen_impure ge.ge_builtins ge add_builtin set_has_process convert_type name ts args in
     { ge with ge_builtins }, e
+  
+  let declare_function (env : t) : t * mfunid * funid =
+    let f = ref None in
+    let needs_gbl_pointer = ref true in (* Functions requested by the Builtins module need to have a global pointer *)
+    let fdata = (f, needs_gbl_pointer) in
+    let fid = env.ge_nfuns in
+    let ge_funs = Either.Left (f, fid, needs_gbl_pointer) :: env.ge_funs in
+    let ge_nfuns = Int32.succ fid in
+    { env with ge_funs; ge_nfuns; }, fid, fdata
+  let find_builtin_var (ge : t) (name : string) : (t * anyexpr) option =
+    match Builtins.get_var ge.ge_builtins ge declare_function (fun ge fid (AF' f) -> assign_function ge fid f)
+                           add_builtin set_has_process convert_type name with
+    | Some (ge_builtins, ge, e) -> Some ({ ge with ge_builtins }, e)
+    | None -> None
   
   let add_effect (env : t) (ename : string) : t * meffid =
     let eff = ename in
@@ -1764,9 +1829,9 @@ let rec of_value (ge : genv) (le: 'args lenv) (v : value) : genv * 'args lenv * 
                                          BLcons (BNone (TAbsClosArg, TAbsClosArg), BLnil)),
                                          ELcons (EVariable (Local loc, (TCont ret, vid)),
                                          ELcons (EVariable (Local hdlcloc, (TAbsClosArg, hdlcid)), ELnil))))
-          | None -> begin match Builtins.get_var (GEnv.get_var_name ge v) with
-            | Some v -> ge, le, v
-            | None -> failwith ("TODO: of_value Variable (probable builtin: " ^ (string_of_int v) ^ ": " ^ (GEnv.get_var_name ge v) ^ ")")
+          | None -> begin match GEnv.find_builtin_var ge (GEnv.get_var_name ge v) with
+              | Some (ge, v) -> ge, le, v
+              | None -> failwith ("TODO: of_value Variable (probable builtin: " ^ (string_of_int v) ^ ": " ^ (GEnv.get_var_name ge v) ^ ")")
             end
         end
       end
@@ -1987,7 +2052,7 @@ let allocate_function (ge : genv) (tvars : tyvar list) (args : binder list) (b :
     in inner args LEnv.no_arg
   in
   let LEnv.AR le, tenv_clos = LEnv.env_of_args le_args closure in
-  let loc_fid, fid, ge = GEnv.allocate_function ge le b tvars tenv_clos in
+  let ge, fid, loc_fid = GEnv.allocate_function ge le b tvars tenv_clos in
   ge, loc_fid, fid, LEnv.AR le
 
 type 'a transformer = Transformer : ('a, 'b) finisher -> 'a transformer
