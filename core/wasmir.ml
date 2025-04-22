@@ -382,7 +382,7 @@ module Builtins : sig
   val get_unop : string -> anytyp list -> anytyp option -> anyunop option
   val get_binop : string -> anytyp list -> anytyp option -> anybinop option
   val gen_impure : t -> 'a -> ('a -> anyfbuiltin -> 'a * mfunid) -> ('a -> 'a) -> (Types.typ -> anytyp) ->
-                   string -> Ir.tyarg list -> anyexpr_list -> t * 'a * anyexpr
+                   string -> tyarg list -> anyexpr_list -> t * 'a * anyexpr
   
   val get_var : t -> 'a -> ('a -> 'a * mfunid * 'b) -> ('a -> 'b -> anyfunc' -> 'a) ->
                 ('a -> anyfbuiltin -> 'a * mfunid) -> ('a -> 'a) -> (Types.typ -> anytyp) ->
@@ -497,7 +497,7 @@ end = struct
     | Some f -> let b = f op tyargs in Option.iter (assert_eq_typ_binop b) otc; Some b
   
   let gen_impure (env : t) (acc : 'c) (add_builtin : 'a -> anyfbuiltin -> 'a * mfunid) (has_process : 'a -> 'a)
-                 (convert_type : Types.typ -> anytyp) (op : string) (tyargs : Ir.tyarg list)
+                 (convert_type : Types.typ -> anytyp) (op : string) (tyargs : tyarg list)
                  (ExprList (targs, args) : anyexpr_list) : t * 'c * anyexpr = match op with
     | "ignore" -> begin match tyargs, targs, args with
         | _, TLcons (targ, TLnil), ELcons (arg, ELnil) -> env, acc, Expr (TTuple NTLnil, EIgnore (targ, arg))
@@ -763,7 +763,7 @@ end = struct
     else raise (internal_error ("Unknown abstract type " ^ (Types.Abstype.show at)))
 end
 
-let sort_name_map (nm : 'a Ir.name_map) : (string * 'a) list =
+let sort_name_map (nm : 'a name_map) : (string * 'a) list =
   Utility.StringMap.bindings nm (* Since binding names are unique, there is no issue with using the given list *)
 
 let rec override_box_src : 'a 'b. 'a typ -> ('a, 'b) box -> ('a, 'b) box =
@@ -858,7 +858,7 @@ let rec generalize_of_tyvars (tvs : tyvar list) : anygeneralization = match tvs 
 
 type anyntyp_list = NamedTypeList : 'a named_typ_list -> anyntyp_list
 
-let _to_typelist (conv : Types.typ -> anytyp) (ts : Types.typ Ir.name_map) : anyntyp_list =
+let _to_typelist (conv : Types.typ -> anytyp) (ts : Types.typ name_map) : anyntyp_list =
   let rec inner l = match l with
     | [] -> NamedTypeList NTLnil
     | (n, hd) :: tl -> let Type hd = conv hd in let NamedTypeList tl = inner tl in NamedTypeList (NTLcons (n, hd, tl))
@@ -1766,7 +1766,7 @@ let of_constant (c : CommonTypes.Constant.t) : anyexpr = let open CommonTypes.Co
   | Char _ -> failwith "TODO: of_constant Char"
   | DateTime _ -> failwith "TODO: of_constant DateTime"
 
-let collect_toplevel_polymorphism (v : value) : Ir.tyarg list * value * anytyp option =
+let collect_toplevel_polymorphism (v : value) : tyarg list * value * anytyp option =
   let rec inner v acc otc = match v with
     | TApp (v, ts) -> inner v (acc @ ts) otc
     | TAbs _ -> failwith "TODO TAbs"
@@ -2234,30 +2234,7 @@ let rec of_tail_computation : type args. _ -> args lenv -> _ -> genv * args lenv
       ge, le, Expr (tt, ECond (tt, eb, bt, bf))
 and of_computation : type args. _ -> args lenv -> _ -> _ * args lenv * _ =
   fun (ge : genv) (le : args lenv) ((bs, tc) : computation) : (genv * args lenv * anyblock) ->
-  let finish_computation : type args. _ -> _ -> _ -> _ -> args LEnv.realt -> _ = fun ge fd loc_fid fid (new_le : args LEnv.realt) ->
-    let new_le = LEnv.of_real new_le in
-    let ge, new_le, Block (tret, b) = of_computation ge new_le fd.fn_body in
-    let new_le = LEnv.to_real new_le in
-    let ge, new_le, b =
-      match fd.fn_closure with
-      | None -> ge, new_le, b
-      | Some _ ->
-          let new_le, absid, concid, TypeList ctyp = LEnv.add_closure new_le in
-          match ctyp with
-          | TLnil -> ge, new_le, b (* Prevent empty closure conversion (unsupported by the WasmUIR -> WasmFX translation) *)
-          | _ ->
-              let (ass, e) = b in
-              ge, new_le, (Assign (Local StorVariable, (TClosArg ctyp, concid), EConvertClosure (absid, TClosArg ctyp)) :: ass, e) in
-    let export_name =
-      if Var.Scope.is_real_global (Var.scope_of_binder fd.fn_binder)
-      then match fd.fn_closure with None ->
-        let n = Var.name_of_binder fd.fn_binder in
-        if n = "main" then Some "main'" else Some n | Some _ -> None
-      else None in
-    let f = LEnv.compile new_le fid export_name tret b in
-    let ge = GEnv.assign_function ge loc_fid f in
-    ge in
-  let rec inner (ge : genv) (le: args lenv) (bs : binding list) (acc : assign list) = match bs with
+  let rec inner (ge : genv) (le : args lenv) (bs : binding list) (acc : assign list) = match bs with
     | [] ->
         let ge, le, Expr (t, e) = of_tail_computation ge le tc in
         ge, le, Block (t, (List.rev acc, e))
@@ -2298,6 +2275,31 @@ and of_finisher : 'a. _ -> _ -> _ -> 'a typ -> _ * _ * 'a transformer =
       let le, bid = LEnv.add_var le bind t in
       let ge, le, Block (t, b) = of_computation ge le comp in
       ge, le, Transformer (FMap (bid, t, b))
+
+and finish_computation : type args. genv -> fun_def -> GEnv.funid -> mfunid -> args LEnv.realt -> genv =
+  fun ge fd loc_fid fid (new_le : args LEnv.realt) ->
+  let new_le = LEnv.of_real new_le in
+  let ge, new_le, Block (tret, b) = of_computation ge new_le fd.fn_body in
+  let new_le = LEnv.to_real new_le in
+  let ge, new_le, b =
+    match fd.fn_closure with
+    | None -> ge, new_le, b
+    | Some _ ->
+        let new_le, absid, concid, TypeList ctyp = LEnv.add_closure new_le in
+        match ctyp with
+        | TLnil -> ge, new_le, b (* Prevent empty closure conversion (unsupported by the WasmUIR -> WasmFX translation) *)
+        | _ ->
+            let (ass, e) = b in
+            ge, new_le, (Assign (Local StorVariable, (TClosArg ctyp, concid), EConvertClosure (absid, TClosArg ctyp)) :: ass, e) in
+  let export_name =
+    if Var.Scope.is_real_global (Var.scope_of_binder fd.fn_binder)
+    then match fd.fn_closure with None ->
+      let n = Var.name_of_binder fd.fn_binder in
+      if n = "main" then Some "main'" else Some n | Some _ -> None
+    else None in
+  let f = LEnv.compile new_le fid export_name tret b in
+  let ge = GEnv.assign_function ge loc_fid f in
+  ge
 
 let find_global_binders ((bs, _) : computation) =
   let rec inner bs acc = match bs with
