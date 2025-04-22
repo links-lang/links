@@ -1547,16 +1547,7 @@ let finish_import_info (impinfo : int32 option import_info) : int32 import_info 
   | { impinfo_putc = None; _ }
   | { impinfo_putc = Some _; impinfo_puta = None } -> None
 
-let generate_wizard
-  = Settings.(flag ~default:true "generate_wizard"
-              |> synopsis "Generate WizardEngine-style outputs"
-              |> convert parse_bool
-              |> sync)
-
-let compile (prog : Ir.program) (env : string Env.Int.t) (main_typ_name : string) : Wasm.module_ =
-  let gen_wizeng = Settings.get generate_wizard in
-  let Wasmir.Module m = Wasmir.module_of_ir prog env gen_wizeng in
-  let m = module_of_ir m in
+let compile (m : 'a modu) (use_init : bool) (main_typ_name : string) : Wasm.module_ =
   let tm = generate_type_map m in
   let main_res =
     let cg = convert_global tm (0, Type m.mod_main, Some "_init_result") in
@@ -2033,4 +2024,4 @@ let compile (prog : Ir.program) (env : string Env.Int.t) (main_typ_name : string
   let globals = convert_globals tm m.mod_global_vars (main_res :: frgbls) in
   let tags = convert_effects tm m.mod_effs (Option.is_some has_processes) in
   let types = TMap.to_wasm tm in
-  Wasm.{ types; globals; tags; imports; funs; init = if gen_wizeng then None else Some mainid }
+  Wasm.{ types; globals; tags; imports; funs; init = if use_init then None else Some mainid }

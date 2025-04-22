@@ -2309,7 +2309,8 @@ let find_global_binders ((bs, _) : computation) =
 
 (* MAIN FUNCTION *)
 
-let module_of_ir (c : Ir.program) (map : string Env.Int.t) (import_wizard : bool) : anymodule =
+let module_of_ir (c : Ir.program) (map : string Env.Int.t) (prelude : Ir.binding list) (import_wizard : bool) : anymodule =
+  ignore prelude;
   let ge = GEnv.empty map (find_global_binders c) import_wizard in
   let ge, le, blk = of_computation ge (LEnv.of_real LEnv.toplevel) c in
   GEnv.compile ge (LEnv.to_real le) blk

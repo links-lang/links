@@ -204,4 +204,4 @@ type 'a modu = {
 }
 
 type anymodule = Module : 'a modu -> anymodule
-val module_of_ir : Ir.program -> string Env.Int.t -> bool -> anymodule
+val module_of_ir : Ir.program -> string Env.Int.t -> Ir.binding list -> bool -> anymodule

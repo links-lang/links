@@ -17,6 +17,12 @@ let typecheck_only
               |> convert parse_bool
               |> sync)
 
+let generate_wizard
+  = Settings.(flag ~default:true "generate_wizard"
+              |> synopsis "Generate WizardEngine-style outputs"
+              |> convert parse_bool
+              |> sync)
+
 module Phases = struct
   module Parse = struct
     let run : Context.t -> string -> Sugartypes.program Loader.result
@@ -282,7 +288,10 @@ module Phases = struct
         nenv
         Env.Int.empty
       in
-      let res_mod = Irtowasm.compile program venv (Types.string_of_datatype result.Backend.datatype) in
+      (* TODO: Same hack as the JS backend. *)
+      let Wasmir.Module m = Wasmir.module_of_ir program venv (Webserver.get_prelude ()) (Settings.get generate_wizard) in
+      let m = Wasmuir.module_of_ir m in
+      let res_mod = Irtowasm.compile m (Settings.get generate_wizard) (Types.string_of_datatype result.Backend.datatype) in
       (* Prepare object file. *)
       let oc =
         try open_out object_file
