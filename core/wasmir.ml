@@ -1043,7 +1043,7 @@ module LEnv : sig (* Contains the arguments, the local variables, etc *)
   val add_closure : 'a realt -> 'a realt * mvarid * mvarid * anytyp_list
   
   val add_local : 'a t -> anytyp -> 'a t * mvarid
-  val add_var : 'a t -> binder -> anytyp -> 'a t * mvarid
+  val add_var : 'a t -> binder -> 'b typ -> 'a t * 'b varid
   val find_var : 'a t -> var -> ('a t * local_storage * anyvarid) option
   val find_closure : 'a t -> var -> string -> ('a t * local_storage * anyvarid) option
   
@@ -1275,21 +1275,23 @@ end = struct
           nlocs = Int32.succ env.nlocs;
           locs = (let TypeList tl = env.locs in TypeList (TLcons (t, tl)));
         }, vidx
-  let add_var (env : 'a t) (b : binder) (Type t : anytyp) : 'a t * mvarid = match env with
+  let add_var (env : 'a t) (b : binder) (t : 'b typ) : 'a t * 'b varid = match env with
     | Either.Left env ->
         let vidx = Int32.add env.nargs env.nlocs in
+        let v = t, vidx in
         Either.Left { env with
           nlocs = Int32.succ env.nlocs;
           locs = (let TypeList tl = env.locs in TypeList (TLcons (t, tl)));
-          varmap = Env.Int.bind (Var.var_of_binder b) (VarID (t, vidx)) env.varmap;
-        }, vidx
+          varmap = Env.Int.bind (Var.var_of_binder b) (VarID v) env.varmap;
+        }, v
     | Either.Right env ->
         let vidx = Int32.add env.nargs env.nlocs in
+        let v = t, vidx in
         Either.Right { env with
           nlocs = Int32.succ env.nlocs;
           locs = (let TypeList tl = env.locs in TypeList (TLcons (t, tl)));
-          varmap = Env.Int.bind (Var.var_of_binder b) (StorVariable, VarID (t, vidx)) env.varmap;
-        }, vidx
+          varmap = Env.Int.bind (Var.var_of_binder b) (StorVariable, VarID v) env.varmap;
+        }, v
   let rec find_var : type a. a t -> _ -> (a t * _ * _) option =
     fun (env : a t) (v : var) : (a t * local_storage * anyvarid) option -> match env with
     | Either.Left env' -> Option.map (fun i -> env, StorVariable, i) (Env.Int.find_opt v env'.varmap)
@@ -1334,8 +1336,8 @@ end = struct
     let TypeList (type v) (eargs : v typ_list) = convert_type_list (Var.type_of_binder b) in
     match eargs with
     | TLcons (t, TLnil) ->
-        let env, varid = add_var (of_sub env) b (Type t) in
-        to_sub env, VarIDList (eargs, VLcons ((t, varid), VLnil))
+        let env, varid = add_var (of_sub env) b t in
+        to_sub env, VarIDList (eargs, VLcons (varid, VLnil))
     | _ ->
         let argsb = Var.var_of_binder b in
         let env, (vargs : v varid_list) =
@@ -1419,7 +1421,7 @@ module GEnv : sig (* Contains the functions, the types, etc *)
   val find_fun : t -> 'a LEnv.t -> var -> 'a LEnv.t * funid closed_like
   val find_closable_fun : t -> 'a LEnv.t -> var -> funid anyfuncid
   
-  val add_var : t -> 'a LEnv.t -> binder -> anytyp -> t * 'a LEnv.t * locality * mvarid
+  val add_var : t -> 'a LEnv.t -> binder -> 'b typ -> t * 'a LEnv.t * locality * 'b varid
   val find_var : t -> 'a LEnv.t -> var -> ('a LEnv.t * locality * anyvarid, funid anycfuncid) Either.t option
   val find_builtin_var : t -> string -> (t * anyexpr) option
   
@@ -1461,7 +1463,7 @@ end = struct
     ge_effs : EffectIDSet.t;
     ge_effmap : meffid EffectMap.t;
     ge_ngbls : mvarid;
-    ge_gbls : (mvarid * anytyp * string option) list;
+    ge_gbls : (anyvarid * string option) list;
     ge_gblbinders : Utility.IntSet.t;
     ge_gblmap : anyvarid Env.Int.t;
     ge_fmap : funid anyfuncid Env.Int.t;
@@ -1498,16 +1500,16 @@ end = struct
   
   let get_var_name (ge : t) (v : var) = Env.Int.find v ge.ge_map
   
-  let add_var (ge : t) (le : 'a LEnv.t) (b : binder) (t : anytyp) : t * 'a LEnv.t * locality * mvarid =
+  let add_var (ge : t) (le : 'a LEnv.t) (b : binder) (t : 'b typ) : t * 'a LEnv.t * locality * 'b varid =
     if Utility.IntSet.mem (Var.var_of_binder b) ge.ge_gblbinders then begin
+      let vid = ge.ge_ngbls in
       let ge_ngbls = Int32.succ ge.ge_ngbls in
       let name = Var.name_of_binder b in
       let name = if name = "main" then "main'" else name in
-      let ge_gbls = (ge.ge_ngbls, t, Some name) :: ge.ge_gbls in
-      let Type t = t in
-      let newvar = VarID (t, ge.ge_ngbls) in
-      let ge_gblmap = Env.Int.bind (Var.var_of_binder b) newvar ge.ge_gblmap in
-      { ge with ge_ngbls; ge_gbls; ge_gblmap }, le, Global, ge.ge_ngbls
+      let newvar = (t, vid) in
+      let ge_gbls = (VarID newvar, Some name) :: ge.ge_gbls in
+      let ge_gblmap = Env.Int.bind (Var.var_of_binder b) (VarID newvar) ge.ge_gblmap in
+      { ge with ge_ngbls; ge_gbls; ge_gblmap }, le, Global, newvar
     end else let le, v = LEnv.add_var le b t in ge, le, Local StorVariable, v
   let find_var (ge : t) (le : 'a LEnv.t) (v : var) : ('a LEnv.t * locality * anyvarid, funid anycfuncid) Either.t option =
     match LEnv.find_var le v with
@@ -1670,7 +1672,7 @@ end = struct
     if Option.is_none env.ge_global_counter then
       let vid = env.ge_ngbls in
       let ge_ngbls = Int32.succ vid in
-      let ge_gbls = (vid, Type TInt, None) :: env.ge_gbls in
+      let ge_gbls = (VarID (TInt, vid), None) :: env.ge_gbls in
       { env with ge_ngbls; ge_gbls; ge_global_counter = Some vid }
     else env
   let add_builtin (env : t) (fb : anyfbuiltin) : t * mfunid =
@@ -1746,7 +1748,7 @@ end = struct
       mod_neffs = ge.ge_neffs;
       mod_effs = ge.ge_effs;
       mod_nglobals = ge.ge_ngbls;
-      mod_global_vars = List.rev ge.ge_gbls;
+      mod_global_vars = List.rev_map (fun (VarID (t, v), n) -> (v, Type t, n)) ge.ge_gbls;
       mod_locals = lvs;
       mod_main = t;
       mod_block = blk;
@@ -2202,25 +2204,26 @@ let rec of_tail_computation : type args. _ -> args lenv -> _ -> genv * args lenv
       let Type.Equal = assert_eq_typ vt TVariant "Unexpected non-variant type in case computation" in
       let ge, le, m = Utility.StringMap.fold (fun tag (b, c) (ge, le, acc) ->
         let ge, tagid = GEnv.find_tag ge tag in
-        let bt = convert_type (Var.type_of_binder b) in
+        let Type bt = convert_type (Var.type_of_binder b) in
         let le, argid = LEnv.add_var le b bt in
         let ge, le, blk = of_computation ge le c in
-        ge, le, (tagid, bt, argid, blk) :: acc) m (ge, le, []) in
+        ge, le, (tagid, VarID argid, blk) :: acc) m (ge, le, []) in
       let ge, le, d = match d with
         | None -> ge, le, None
         | Some (b, c) ->
-            let bt = convert_type (Var.type_of_binder b) in
+            let Type bt = convert_type (Var.type_of_binder b) in
             let le, argid = LEnv.add_var le b bt in
             let ge, le, blk = of_computation ge le c in
-            ge, le, Some (argid, blk) in
+            ge, le, Some (VarID argid, blk) in
       let Type (type r) (t : r typ) = match m with
-        | (_, _, _, Block (t, _)) :: _ -> Type t
+        | (_, _, Block (t, _)) :: _ -> Type t
         | [] -> match d with
             | Some (_, Block (t, _)) -> Type t
             | None -> raise (internal_error "Empty case computation") in
-      let m = List.map (fun (tid, bindt, bv, Block (bt, bb)) ->
-          let Type.Equal = assert_eq_typ t bt "Unexpected case return type" in tid, bindt, bv, (bb : r block)) m in
-      let d = Option.map (fun (bv, Block (bt, bb)) -> let Type.Equal = assert_eq_typ t bt "Unexpected case return type" in bv, (bb : r block)) d in
+      let m = List.map (fun (tid, VarID (bindt, bv), Block (bt, bb)) ->
+          let Type.Equal = assert_eq_typ bt t "Unexpected case return type" in tid, Type bindt, bv, (bb : r block)) m in
+      let d = Option.map (fun (VarID (_, bv), Block (bt, bb)) ->
+                            let Type.Equal = assert_eq_typ bt t "Unexpected case return type" in bv, (bb : r block)) d in
       ge, le, Expr (t, ECase (v, t, m, d))
   | If (b, t, f) ->
       let ge, le, Expr (tb, eb) = of_value ge le b in
@@ -2260,8 +2263,7 @@ and of_computation : type args. _ -> args lenv -> _ -> _ * args lenv * _ =
         ge, le, Block (t, (List.rev acc, e))
     | Let (b, (_, tc)) :: bs ->
         let ge, le, Expr (t, e) = of_tail_computation ge le tc in
-        let ge, le, loc, v = GEnv.add_var ge le b (Type t) in
-        let v : _ varid = t, v in
+        let ge, le, loc, v = GEnv.add_var ge le b t in
         let a = Assign (loc, v, e) in
         inner ge le bs (a :: acc)
     | Fun fd :: bs ->
@@ -2293,10 +2295,9 @@ and of_finisher : 'a. _ -> _ -> _ -> 'a typ -> _ * _ * 'a transformer =
         when Var.equal_var bvar v1 && Var.equal_var (Var.var_of_binder b2) v2 ->
       ge, le, Transformer (FId t)
   | _, _ ->
-      let le, bid = LEnv.add_var le bind (Type t) in
-      let bid' : a varid = t, bid in
+      let le, bid = LEnv.add_var le bind t in
       let ge, le, Block (t, b) = of_computation ge le comp in
-      ge, le, Transformer (FMap (bid', t, b))
+      ge, le, Transformer (FMap (bid, t, b))
 
 let find_global_binders ((bs, _) : computation) =
   let rec inner bs acc = match bs with
