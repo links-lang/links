@@ -544,6 +544,7 @@ end = struct
         StructGet (TMap.boxed_float_tid, 0l, None) :: RefCast Wasm.Type.(NoNull, VarHT (StatX TMap.boxed_float_tid)) :: get_val acc)
     | (TTuple TLnil) -> Either.Left (fun acc -> RefNull Wasm.Type.NoneHT :: Drop :: get_val acc)
         (* fun acc -> RefCast Wasm.Type.(Null, NoneHT) :: get_val acc) *)
+    | TList _ -> Either.Left (fun acc -> RefCast Wasm.Type.(Null, VarHT (StatX TMap.list_tid)) :: get_val acc)
     | t -> let tid = TMap.recid_of_type tm t in Either.Left (fun acc -> RefCast Wasm.Type.(NoNull, VarHT (StatX tid)) :: get_val acc)
   (* get_val is affine *)
   and maybe_do_unbox : type a b. tmap -> t -> (a, b) box -> instr_conv -> (instr_conv, (a, b) Type.eq) Either.t =

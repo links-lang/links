@@ -617,6 +617,33 @@ end = struct
         | _, ELnil -> raise (internal_error ("Not enough arguments for builtin function 'error'"))
         | _, ELcons (_, ELcons _) -> raise (internal_error ("Too many arguments for builtin function 'error'"))
       end
+    | "debug" -> begin match tyargs, targs, args with
+        | ([] | [CommonTypes.PrimaryKind.Row, _]), TLcons (argt, TLnil), ELcons (arg, ELnil) ->
+            let Type.Equal = assert_eq_typ argt TString "Invalid type of argument of debug" in
+            (* FIXME: allow debugging *)
+            env, acc, Expr (TTuple NTLnil, EIgnore (TString, arg))
+        | _, _, _ -> raise (internal_error ("Invalid usage of builtin 'debug'"))
+      end
+    | "not" -> begin match tyargs, targs, args with
+        | ([] | [CommonTypes.PrimaryKind.Row, _]), TLcons (argt, TLnil), ELcons (arg, ELnil) ->
+            let Type.Equal = assert_eq_typ argt TBool "Invalid type of argument of not" in
+            env, acc, Expr (TBool, EUnop (UONot, arg))
+        | _, _, _ -> raise (internal_error ("Invalid usage of builtin 'not'"))
+      end
+    | "/" -> begin match tyargs, targs, args with
+        | ([] | [CommonTypes.PrimaryKind.Row, _]), TLcons (argtl, TLcons (argtr, TLnil)), ELcons (argl, ELcons (argr, ELnil)) ->
+            let Type.Equal = assert_eq_typ argtl TInt "Invalid type of argument of /" in
+            let Type.Equal = assert_eq_typ argtr TInt "Invalid type of argument of /" in
+            env, acc, Expr (TInt, EBinop (BODivI, argl, argr))
+        | _, _, _ -> raise (internal_error ("Invalid usage of builtin '/'"))
+      end
+    | "mod" -> begin match tyargs, targs, args with
+        | ([] | [CommonTypes.PrimaryKind.Row, _]), TLcons (argtl, TLcons (argtr, TLnil)), ELcons (argl, ELcons (argr, ELnil)) ->
+            let Type.Equal = assert_eq_typ argtl TInt "Invalid type of argument of mod" in
+            let Type.Equal = assert_eq_typ argtr TInt "Invalid type of argument of mod" in
+            env, acc, Expr (TInt, EBinop (BORemI, argl, argr))
+        | _, _, _ -> raise (internal_error ("Invalid usage of builtin 'mod'"))
+      end
     | "$$hd" -> begin match tyargs, targs, args with
         | [], _, _ -> failwith "TODO $$hd without TApp"
         | [CommonTypes.PrimaryKind.Type, t; CommonTypes.PrimaryKind.Row, _], TLcons (argt, TLnil), ELcons (arg, ELnil) ->
@@ -627,9 +654,10 @@ end = struct
       end
     | "$$tl" -> begin match tyargs, targs, args with
         | [], _, _ -> failwith "TODO $$tl without TApp"
-        | [CommonTypes.PrimaryKind.Type, _; CommonTypes.PrimaryKind.Row, _], TLcons (argt, TLnil), ELcons (arg, ELnil) ->
-            let Type.Equal = assert_eq_typ argt (TList argt) "Invalid type of argument of $$tl" in
-            env, acc, Expr (TList argt, EListTl (argt, arg))
+        | [CommonTypes.PrimaryKind.Type, t; CommonTypes.PrimaryKind.Row, _], TLcons (argt, TLnil), ELcons (arg, ELnil) ->
+            let Type t = convert_type t in
+            let Type.Equal = assert_eq_typ argt (TList t) "Invalid type of argument of $$tl" in
+            env, acc, Expr (TList t, EListTl (argt, arg))
         | _, _, _ -> raise (internal_error ("Invalid usage of builtin '$$tl'"))
       end
     | "intToString" -> begin match tyargs, targs, args with
