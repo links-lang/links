@@ -1661,10 +1661,8 @@ end = struct
     size = 0;
     heap = [||];
   }
-  let extend (q : 'a t) : 'a t = {
-    size = q.size;
-    heap = Array.append q.heap q.heap;
-  }
+  let extend (q : 'a t) : unit =
+    q.heap <- Array.append q.heap q.heap
   
   let size {size; _} : int = size
   let idx_left n = (n lsl 1) + 1
@@ -1675,9 +1673,10 @@ end = struct
     if q.size = 0 then begin
       q.size <- 1;
       q.heap <- [|k, v|]
-    end else
+    end else begin
+      if q.size = Array.length q.heap then extend q;
+      let pos = q.size in
       q.size <- q.size + 1;
-      let q = if q.size = Array.length q.heap then extend q else q in
       let rec inner q pos =
         if pos = 0 then q.heap.(0) <- (k, v)
         else
@@ -1686,7 +1685,8 @@ end = struct
             q.heap.(pos) <- q.heap.(ppar);
             inner q ppar
           end else q.heap.(pos) <- (k, v) in
-      inner q q.size
+      inner q pos
+    end
   
   let push q k v = add q k v
   
