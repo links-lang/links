@@ -25,12 +25,12 @@ type abs_closure_content = private AbsClosureContent
 type 'a closure_content = private ClosureContent of 'a
 type 'a continuation = private Continuation of 'a
 
-type 'a generalization =
+type !'a generalization =
   | Gnil : unit generalization
   | Gcons : tvarid * 'a generalization -> 'a option generalization
 type anygeneralization = AG : 'a generalization -> anygeneralization
 
-type 'a typ =
+type !'a typ =
   | TInt : int typ
   | TBool : bool typ
   | TFloat : float typ
@@ -45,20 +45,20 @@ type 'a typ =
   | TVar : tvarid -> unit typ
   | TSpawnLocation : Value.spawn_location typ
   | TProcess : process typ
-and 'a typ_list =
+and !'a typ_list =
   | TLnil : unit typ_list
   | TLcons : 'a typ * 'b typ_list -> ('a * 'b) typ_list
-and 'a named_typ_list =
+and !'a named_typ_list =
   | NTLnil : unit named_typ_list
   | NTLcons : string * 'a typ * 'b named_typ_list -> ('a * 'b) named_typ_list
 
 type anytyp = Type : 'a typ -> anytyp
 type anytyp_list = TypeList : 'a typ_list -> anytyp_list
 
-type ('a, 'b) extract_typ_check =
+type (!'a, !'b) extract_typ_check =
   | ExtractO : ('a * 'b, 'a) extract_typ_check
   | ExtractS : ('b, 'c) extract_typ_check -> ('a * 'b, 'c) extract_typ_check
-type ('a, 'b) extract_typ = 'a list typ * int * 'b typ * ('a, 'b) extract_typ_check
+type (!'a, !'b) extract_typ = 'a list typ * int * 'b typ * ('a, 'b) extract_typ_check
 
 type ('a, 'r) unop =
   | UONegI : (int,   int)   unop
@@ -94,16 +94,16 @@ type 'a varid_list =
   | VLnil : unit varid_list
   | VLcons : 'a varid * 'b varid_list -> ('a * 'b) varid_list
 
-type ('a, 'b) box =
+type (!'a, !'b) box =
   | BNone : 'a typ * 'a typ -> ('a, 'a) box
   | BClosed : 'g generalization * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b, 'g * 'c -> 'd) box
   | BCont : ('b, 'd) box -> ('b continuation, 'd continuation) box
   | BTuple : ('a, 'b) box_named_list -> ('a list, 'b list) box
   | BBox : 'a typ * tvarid -> ('a, unit) box
-and ('a, 'b) box_list =
+and (!'a, !'b) box_list =
   | BLnil : (unit, unit) box_list
   | BLcons : ('a, 'b) box * ('c, 'd) box_list -> ('a * 'c, 'b * 'd) box_list
-and ('a, 'b) box_named_list =
+and (!'a, !'b) box_named_list =
   | BNLnil : (unit, unit) box_named_list
   | BNLcons : string * ('a, 'b) box * ('c, 'd) box_named_list -> ('a * 'c, 'b * 'd) box_named_list
 
@@ -134,7 +134,7 @@ and dst_of_box_named_list : 'a 'b. ('a, 'b) box_named_list -> 'b named_typ_list 
   | BNLnil -> NTLnil
   | BNLcons (n, hd, tl) -> NTLcons (n, dst_of_box hd, dst_of_box_named_list tl)
 
-type ('a, 'b) specialization =
+type (!'a, !'b) specialization =
   | Snil : 'a generalization -> ('a, 'a) specialization
   | Scons : anytyp * tvarid * ('a, 'b) specialization -> ('a, 'b option) specialization
 
@@ -1448,9 +1448,9 @@ end = struct
     ge_gblmap : anyvarid Env.Int.t;
     ge_fmap : funid anyfuncid Env.Int.t;
     ge_global_counter : mvarid option;
-    mutable ge_pmap : 'pi;
-    mutable ge_pmap_find : ('pi, 'pa) t -> 'pi -> var -> (('pi, 'pa) t * 'pi * 'pa) option;
-    mutable ge_pmap_acc : 'pa list;
+    ge_pmap : 'pi;
+    ge_pmap_find : ('pi, 'pa) t -> 'pi -> var -> (('pi, 'pa) t * 'pi * 'pa) option;
+    ge_pmap_acc : 'pa list;
   }
   let empty (m : string Env.Int.t) (global_binders : Utility.IntSet.t) (import_wizard : bool)
             (prelude_init : 'pi) (find_prelude : ('pi, 'pa) t -> 'pi -> var -> (('pi, 'pa) t * 'pi * 'pa) option) : ('pi, 'pa) t =
@@ -1497,6 +1497,13 @@ end = struct
     let ge_gblmap = Env.Int.bind (Var.var_of_binder b) (VarID newvar) ge.ge_gblmap in
     { ge with ge_ngbls; ge_gbls; ge_gblmap }, newvar
   
+  let try_find_in_prelude ge v = match ge.ge_pmap_find ge ge.ge_pmap v with
+    | Some (ge, ge_pmap, pv) ->
+        (* If we found something, it has been added to the corresponding map *)
+        let ge = { ge with ge_pmap; ge_pmap_acc = pv :: ge.ge_pmap_acc } in
+        Some ge
+    | None -> None
+  
   let add_var (ge : ('pi, 'pa) t) (le : 'a LEnv.t) (b : binder) (t : 'b typ) : ('pi, 'pa) t * 'a LEnv.t * locality * 'b varid =
     if Utility.IntSet.mem (Var.var_of_binder b) ge.ge_gblbinders
     then let ge, v =      add_gbl ge b t in ge, le, Global,             v
@@ -1511,12 +1518,8 @@ end = struct
             | Gcons _, TLnil -> raise (internal_error "Unexpected generalization of closure with no value")
             | _, TLcons _ -> raise (internal_error "Unexpected open function, expected closed function")
           end
-        | None -> begin match ge.ge_pmap_find ge ge.ge_pmap v with
-            | Some (ge, ge_pmap, pv) ->
-                (* If we found a function, it has been added to the function map *)
-                ge.ge_pmap <- ge_pmap;
-                ge.ge_pmap_acc <- pv :: ge.ge_pmap_acc;
-                find_var ge le v
+        | None -> begin match try_find_in_prelude ge v with
+            | Some ge -> find_var ge le v
             | None -> ge, Option.map (fun v -> Either.Left (le, Global, v)) (Env.Int.find_opt v ge.ge_gblmap)
           end
       end
@@ -1536,12 +1539,8 @@ end = struct
               (TLcons (TCont ret, TLcons (arg, TLnil)), tret, hdlfid),
               Local hdlcloc,
               hdlcid)
-        | None -> begin match ge.ge_pmap_find ge ge.ge_pmap v with
-            | Some (ge, ge_pmap, pv) ->
-                (* If we found a function, it has been added to the function map *)
-                ge.ge_pmap <- ge_pmap;
-                ge.ge_pmap_acc <- pv :: ge.ge_pmap_acc;
-                find_fun ge le v
+        | None -> begin match try_find_in_prelude ge v with
+            | Some ge -> find_fun ge le v
             | None -> match find_var ge le v with
                 | ge, Some (Either.Left (le, loc, VarID ((t, _) as vid))) -> begin match t with
                     | TClosed _ -> ge, le, Closure (loc, vid)

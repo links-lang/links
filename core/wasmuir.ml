@@ -12,7 +12,7 @@ type abs_closure_content = Wasmir.abs_closure_content
 type 'a closure_content = 'a Wasmir.closure_content
 type 'a continuation = 'a Wasmir.continuation
 
-type 'a typ =
+type !'a typ =
   | TInt : int typ
   | TBool : bool typ
   | TFloat : float typ
@@ -27,7 +27,7 @@ type 'a typ =
   | TVar : unit typ
   | TSpawnLocation : Value.spawn_location typ
   | TProcess : process typ
-and 'a typ_list =
+and !'a typ_list =
   | TLnil : unit typ_list
   | TLcons : 'a typ * 'b typ_list -> ('a * 'b) typ_list
 
@@ -115,7 +115,7 @@ module TypeMap = Utility.Map.Make(struct
   let compare = compare_typ
 end)
 
-type ('a, 'b) extract_typ = 'a typ_list * int * 'b typ
+type (!'a, !'b) extract_typ = 'a typ_list * int * 'b typ
 
 let convert_extract_typ (Wasmir.TTuple s, n, t, _ : ('a, 'b) Wasmir.extract_typ) : ('a, 'b) extract_typ =
   convert_named_typ_list s, n, convert_typ t
@@ -164,17 +164,17 @@ let [@tail_mod_cons] rec convert_varid_list : type a. a Wasmir.varid_list -> a v
   | Wasmir.VLnil -> VLnil
   | Wasmir.VLcons (hd, tl) -> VLcons (convert_varid hd, convert_varid_list tl)
 
-type (_, _) box =
+type (!_, !_) box =
   | BNone : ('a, 'a) box
   | BClosed : ('g * 'a -> 'b) typ * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b, 'g * 'c -> 'd) box
   | BCont : ('a, 'b) box -> ('a continuation, 'b continuation) box
   | BTuple : ('a, 'b) box_list -> ('a list, 'b list) box
   | BBox : 'a typ -> ('a, unit) box
-and (_, _) box_list =
+and (!_, !_) box_list =
   | BLnone : ('a, 'a) box_list
   | BLnil : (unit, unit) box_list
   | BLcons : ('a, 'c) box * ('b, 'd) box_list -> ('a * 'b, 'c * 'd) box_list
-type (_, _) conv_box_list =
+type (!_, !_) conv_box_list =
   | CBLnone : ('a, 'a) box_list -> ('a, 'a) conv_box_list
   | CBLcons : ('a, 'c) box * ('b, 'd) box_list -> ('a * 'b, 'c * 'd) conv_box_list
 
@@ -187,10 +187,8 @@ let [@tail_mod_cons] rec convert_box : type a b. (a, b) Wasmir.box -> (a, b) box
   | Wasmir.BCont bret -> BCont (convert_box bret)
   | Wasmir.BTuple bs -> BTuple (convert_box_named_list bs)
   | Wasmir.BBox (src, _) -> BBox (convert_typ src)
-and convert_box_list : type a b. (a, b) Wasmir.box_list -> (a, b) box_list =
-  fun (type a b) (b : (a, b) Wasmir.box_list) : (a, b) box_list ->
-  let rec inner : type a b. (a, b) Wasmir.box_list -> (a, b) conv_box_list =
-    fun (type a b) (b : (a, b) Wasmir.box_list) : (a, b) conv_box_list -> match b with
+and convert_box_list : type a b. (a, b) Wasmir.box_list -> (a, b) box_list = fun b ->
+  let rec inner : type a b. (a, b) Wasmir.box_list -> (a, b) conv_box_list = fun b -> match b with
     | Wasmir.BLnil -> CBLnone BLnil
     | Wasmir.BLcons (hd, tl) -> match convert_box hd, inner tl with
         | BNone, CBLnone tl -> CBLnone (BLcons (BNone, tl))
@@ -199,10 +197,8 @@ and convert_box_list : type a b. (a, b) Wasmir.box_list -> (a, b) box_list =
   in match inner b with
   | CBLnone _ -> BLnone
   | CBLcons (hd, tl) -> BLcons (hd, tl)
-and convert_box_named_list : type a b. (a, b) Wasmir.box_named_list -> (a, b) box_list =
-  fun (type a b) (b : (a, b) Wasmir.box_named_list) : (a, b) box_list ->
-  let rec inner : type a b. (a, b) Wasmir.box_named_list -> (a, b) conv_box_list =
-    fun (type a b) (b : (a, b) Wasmir.box_named_list) : (a, b) conv_box_list -> match b with
+and convert_box_named_list : type a b. (a, b) Wasmir.box_named_list -> (a, b) box_list = fun b ->
+  let rec inner : type a b. (a, b) Wasmir.box_named_list -> (a, b) conv_box_list = fun b -> match b with
     | Wasmir.BNLnil -> CBLnone BLnil
     | Wasmir.BNLcons (_, hd, tl) -> match convert_box hd, inner tl with
         | BNone, CBLnone tl -> CBLnone (BLcons (BNone, tl))

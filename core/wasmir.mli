@@ -16,12 +16,12 @@ type abs_closure_content = private AbsClosureContent
 type 'a closure_content = private ClosureContent of 'a
 type 'a continuation = private Continuation of 'a
 
-type 'a generalization =
+type !'a generalization =
   | Gnil : unit generalization
   | Gcons : tvarid * 'a generalization -> 'a option generalization
 type anygeneralization = AG : 'a generalization -> anygeneralization
 
-type 'a typ =
+type !'a typ =
   | TInt : int typ
   | TBool : bool typ
   | TFloat : float typ
@@ -36,18 +36,18 @@ type 'a typ =
   | TVar : tvarid -> unit typ
   | TSpawnLocation : Value.spawn_location typ
   | TProcess : process typ
-and 'a typ_list =
+and !'a typ_list =
   | TLnil : unit typ_list
   | TLcons : 'a typ * 'b typ_list -> ('a * 'b) typ_list
-and 'a named_typ_list =
+and !'a named_typ_list =
   | NTLnil : unit named_typ_list
   | NTLcons : string * 'a typ * 'b named_typ_list -> ('a * 'b) named_typ_list
 
 type anytyp = Type : 'a typ -> anytyp
 type anytyp_list = TypeList : 'a typ_list -> anytyp_list
 
-type ('a, 'b) extract_typ_check
-type ('a, 'b) extract_typ = 'a list typ * int * 'b typ * ('a, 'b) extract_typ_check
+type (!'a, !'b) extract_typ_check
+type (!'a, !'b) extract_typ = 'a list typ * int * 'b typ * ('a, 'b) extract_typ_check
 
 type ('a, 'r) unop =
   | UONegI : (int,   int)   unop
@@ -84,16 +84,16 @@ type 'a varid_list =
   | VLnil : unit varid_list
   | VLcons : 'a varid * 'b varid_list -> ('a * 'b) varid_list
 
-type ('a, 'b) box =
+type (!'a, !'b) box =
   | BNone : 'a typ * 'a typ -> ('a, 'a) box
   | BClosed : 'g generalization * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b, 'g * 'c -> 'd) box
   | BCont : ('b, 'd) box -> ('b continuation, 'd continuation) box
   | BTuple : ('a, 'b) box_named_list -> ('a list, 'b list) box
   | BBox : 'a typ * tvarid -> ('a, unit) box
-and ('a, 'b) box_list =
+and (!'a, !'b) box_list =
   | BLnil : (unit, unit) box_list
   | BLcons : ('a, 'b) box * ('c, 'd) box_list -> ('a * 'c, 'b * 'd) box_list
-and ('a, 'b) box_named_list =
+and (!'a, !'b) box_named_list =
   | BNLnil : (unit, unit) box_named_list
   | BNLcons : string * ('a, 'b) box * ('c, 'd) box_named_list -> ('a * 'c, 'b * 'd) box_named_list
 
@@ -103,7 +103,7 @@ val src_of_box_list : 'a 'b. ('a, 'b) box_list -> 'a typ_list
 val compose_box : ('a, 'b) box -> ('b, 'c) box -> ('a, 'c) box
 val compose_box_list : ('a, 'b) box_list -> ('b, 'c) box_list -> ('a, 'c) box_list
 
-type ('a, 'b) specialization =
+type (!'a, !'b) specialization =
   | Snil : 'a generalization -> ('a, 'a) specialization
   | Scons : anytyp * tvarid * ('a, 'b) specialization -> ('a, 'b option) specialization
 
