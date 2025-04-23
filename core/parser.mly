@@ -709,7 +709,8 @@ unary_expression:
 | OPERATOR unary_expression                                    { unary_appl ~ppos:$loc (UnaryOp.Name $1)  $2 }
 | postfix_expression | constructor_expression                  { $1 }
 | DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (DoOperation (with_pos $loc($2) (Operation $2), $3, None, DeclaredLinearity.Unl)) }
-| LINDOOP CONSTRUCTOR loption(arg_spec)                        { with_pos $loc (DoOperation (with_pos $loc($2) (Operation $2), $3, None, DeclaredLinearity.Lin)) }
+| LINDOOP CONSTRUCTOR loption(arg_spec)                        { with_pos $loc (DoOperation (with_pos $loc($2) (Operation $2), $3, None,
+  if lincont_enabled then DeclaredLinearity.Lin else DeclaredLinearity.Unl)) }
 
 infix_appl:
 | unary_expression                                             { $1 }
