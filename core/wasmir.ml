@@ -85,6 +85,40 @@ type ('a, 'b, 'r) binop =
   | BOCons : 'a typ -> ('a, llist, llist) binop
   | BOConcatList : 'a typ -> (llist, llist, llist) binop
 
+let unop_arg_typ (type a r) (op : (a, r) unop) : a typ = match op with
+  | UONot -> TBool
+  | UONegI -> TInt | UONegF -> TFloat
+let unop_ret_typ (type a r) (op : (a, r) unop) : r typ = match op with
+  | UONot -> TBool
+  | UONegI -> TInt | UONegF -> TFloat
+let binop_argl_typ (type a b r) (op : (a, b, r) binop) : a typ = match op with
+  | BOAddI -> TInt | BOAddF -> TFloat | BOSubI -> TInt | BOSubF -> TFloat
+  | BOMulI -> TInt | BOMulF -> TFloat | BODivI -> TInt | BODivF -> TFloat
+  | BORemI -> TInt
+  | BOEq t -> t | BONe t -> t | BOLe t -> t
+  | BOLt t -> t | BOGe t -> t | BOGt t -> t
+  | BOConcat -> TString
+  | BOCons t -> t
+  | BOConcatList t -> TList t
+let binop_argr_typ (type a b r) (op : (a, b, r) binop) : b typ = match op with
+  | BOAddI -> TInt | BOAddF -> TFloat | BOSubI -> TInt | BOSubF -> TFloat
+  | BOMulI -> TInt | BOMulF -> TFloat | BODivI -> TInt | BODivF -> TFloat
+  | BORemI -> TInt
+  | BOEq t -> t | BONe t -> t | BOLe t -> t
+  | BOLt t -> t | BOGe t -> t | BOGt t -> t
+  | BOConcat -> TString
+  | BOCons t -> TList t
+  | BOConcatList t -> TList t
+let binop_ret_typ (type a b r) (op : (a, b, r) binop) : r typ = match op with
+  | BOAddI -> TInt | BOAddF -> TFloat | BOSubI -> TInt | BOSubF -> TFloat
+  | BOMulI -> TInt | BOMulF -> TFloat | BODivI -> TInt | BODivF -> TFloat
+  | BORemI -> TInt
+  | BOEq _ -> TBool | BONe _ -> TBool | BOLe _ -> TBool
+  | BOLt _ -> TBool | BOGe _ -> TBool | BOGt _ -> TBool
+  | BOConcat -> TString
+  | BOCons t -> TList t
+  | BOConcatList t -> TList t
+
 type local_storage = StorVariable | StorClosure
 type locality = Global | Local of local_storage
 type 'a varid = 'a typ * mvarid
@@ -343,29 +377,6 @@ let target_block (type a) (Block (t1, b) : anyblock) (t2 : a typ) : a block = le
 
 type anyunop = Unop : ('a, 'b) unop -> anyunop
 type anybinop = Binop : ('a, 'b, 'c) binop -> anybinop
-let assert_eq_typ_unop (Unop op) (Type tc) = match op with
-  | UONot -> let Type.Equal = assert_eq_typ tc TBool "Invalid type coercion" in ()
-  | UONegI -> let Type.Equal = assert_eq_typ tc TInt "Invalid type coercion" in ()
-  | UONegF -> let Type.Equal = assert_eq_typ tc TFloat "Invalid type coercion" in ()
-let assert_eq_typ_binop (Binop op) (Type tc) = match op with
-  | BOAddI -> let Type.Equal = assert_eq_typ tc TInt   "Invalid type coercion" in ()
-  | BOAddF -> let Type.Equal = assert_eq_typ tc TFloat "Invalid type coercion" in ()
-  | BOSubI -> let Type.Equal = assert_eq_typ tc TInt   "Invalid type coercion" in ()
-  | BOSubF -> let Type.Equal = assert_eq_typ tc TFloat "Invalid type coercion" in ()
-  | BOMulI -> let Type.Equal = assert_eq_typ tc TInt   "Invalid type coercion" in ()
-  | BOMulF -> let Type.Equal = assert_eq_typ tc TFloat "Invalid type coercion" in ()
-  | BODivI -> let Type.Equal = assert_eq_typ tc TInt   "Invalid type coercion" in ()
-  | BODivF -> let Type.Equal = assert_eq_typ tc TFloat "Invalid type coercion" in ()
-  | BORemI -> let Type.Equal = assert_eq_typ tc TInt   "Invalid type coercion" in ()
-  | BOEq _ -> let Type.Equal = assert_eq_typ tc TBool "Invalid type coercion" in ()
-  | BONe _ -> let Type.Equal = assert_eq_typ tc TBool "Invalid type coercion" in ()
-  | BOLe _ -> let Type.Equal = assert_eq_typ tc TBool "Invalid type coercion" in ()
-  | BOLt _ -> let Type.Equal = assert_eq_typ tc TBool "Invalid type coercion" in ()
-  | BOGe _ -> let Type.Equal = assert_eq_typ tc TBool "Invalid type coercion" in ()
-  | BOGt _ -> let Type.Equal = assert_eq_typ tc TBool "Invalid type coercion" in ()
-  | BOConcat -> let Type.Equal = assert_eq_typ tc TString "Invalid type coercion" in ()
-  | BOCons t -> let Type.Equal = assert_eq_typ tc (TList t) "Invalid type coercion" in ()
-  | BOConcatList t -> let Type.Equal = assert_eq_typ tc (TList t) "Invalid type coercion" in ()
 
 (* let rec extract_typ_check : 'a 'b. ('a, 'b) extract_typ -> _ = fun (type a b) ((s, n, t, chk) : (a, b) extract_typ) : unit -> match s, chk with
   | TTuple (NTLcons (_, hd, _)), ExtractO ->
@@ -397,6 +408,95 @@ module Builtins : sig
 end = struct
   open Utility
   
+  let rec compare_generalization : type a b. a generalization -> b generalization -> int = fun g1 g2 -> match g1, g2 with
+    | Gnil, Gnil -> 0 | Gnil, _ -> ~-1 | _, Gnil -> 1
+    | Gcons (n1, g1), Gcons (n2, g2) ->
+        let c = Int.compare n1 n2 in if c <> 0 then c else
+        compare_generalization g1 g2
+  let rec compare_typ (Type t1 : anytyp) (Type t2 : anytyp) = match t1, t2 with
+    | TInt, TInt -> 0 | TInt, _ -> ~-1 | _, TInt -> 1
+    | TBool, TBool -> 0 | TBool, _ -> ~-1 | _, TBool -> 1
+    | TFloat, TFloat -> 0 | TFloat, _ -> ~-1 | _, TFloat -> 1
+    | TString, TString -> 0 | TString, _ -> ~-1 | _, TString -> 1
+    | TClosed (gen1, args1, ret1), TClosed (gen2, args2, ret2) ->
+        let c = compare_generalization gen1 gen2 in if c <> 0 then c else
+        let c = compare_typ (Type ret1) (Type ret2) in if c <> 0 then c else
+        compare_typ_list (TypeList args1) (TypeList args2)
+    | TClosed _, _ -> ~-1 | _, TClosed _ -> 1
+    | TAbsClosArg, TAbsClosArg -> 0 | TAbsClosArg, _ -> ~-1 | _, TAbsClosArg -> 1
+    | TClosArg t1, TClosArg t2 -> compare_typ_list (TypeList t1) (TypeList t2) | TClosArg _, _ -> ~-1 | _, TClosArg _ -> 1
+    | TCont t1, TCont t2 -> compare_typ (Type t1) (Type t2) | TCont _, _ -> ~-1 | _, TCont _ -> 1
+    | TTuple tl1, TTuple tl2 -> compare_named_typ_list tl1 tl2 | TTuple _, _ -> ~-1 | _, TTuple _ -> 1
+    | TVariant, TVariant -> 0 | TVariant, _ -> ~-1 | _, TVariant -> 1
+    | TList t1, TList t2 -> compare_typ (Type t1) (Type t2) | TList _, _ -> ~-1 | _, TList _ -> 1
+    | TVar i1, TVar i2 -> Int.compare i1 i2 | TVar _, _ -> ~-1 | _, TVar _ -> 1
+    | TSpawnLocation, TSpawnLocation -> 0 | TSpawnLocation, _ -> ~-1 | _, TSpawnLocation -> 1
+    | TProcess, TProcess -> 0
+  and compare_typ_list (TypeList tl1 : anytyp_list) (TypeList tl2 : anytyp_list) = match tl1, tl2 with
+    | TLnil, TLnil -> 0
+    | TLnil, TLcons _ -> ~-1 | TLcons _, TLnil -> 1
+    | TLcons (hd1, tl1), TLcons (hd2, tl2) ->
+        let chd = compare_typ (Type hd1) (Type hd2) in if chd = 0 then compare_typ_list (TypeList tl1) (TypeList tl2) else chd
+  and compare_named_typ_list : type a b. a named_typ_list -> b named_typ_list -> int = fun ntl1 ntl2 -> match ntl1, ntl2 with
+    | NTLnil, NTLnil -> 0
+    | NTLnil, NTLcons _ -> ~-1 | NTLcons _, NTLnil -> 1
+    | NTLcons (_, hd1, ntl1), NTLcons (_, hd2, ntl2) -> (* Assume name keys are equal *)
+        let chd = compare_typ (Type hd1) (Type hd2) in if chd = 0 then compare_named_typ_list ntl1 ntl2 else chd
+  module Unop_map = Map.Make(struct
+    type t = anyunop
+    let compare (Unop l) (Unop r) = match l, r with
+      | UONot,  UONot  -> 0 | UONot,  _ -> ~-1 | _, UONot  -> 1
+      | UONegI, UONegI -> 0 | UONegI, _ -> ~-1 | _, UONegI -> 1
+      | UONegF, UONegF -> 0
+    let show (Unop op) = match op with
+      | UONot -> "not"
+      | UONegI -> "negate"
+      | UONegF -> "negatef"
+    let pp fmt op = Format.pp_print_string fmt (show op)
+  end)
+  module Binop_map = Map.Make(struct
+    type t = anybinop
+    let compare (Binop l) (Binop r) = match l, r with
+      | BOAddI, BOAddI -> 0 | BOAddI, _ -> ~-1 | _, BOAddI -> 1
+      | BOAddF, BOAddF -> 0 | BOAddF, _ -> ~-1 | _, BOAddF -> 1
+      | BOSubI, BOSubI -> 0 | BOSubI, _ -> ~-1 | _, BOSubI -> 1
+      | BOSubF, BOSubF -> 0 | BOSubF, _ -> ~-1 | _, BOSubF -> 1
+      | BOMulI, BOMulI -> 0 | BOMulI, _ -> ~-1 | _, BOMulI -> 1
+      | BOMulF, BOMulF -> 0 | BOMulF, _ -> ~-1 | _, BOMulF -> 1
+      | BODivI, BODivI -> 0 | BODivI, _ -> ~-1 | _, BODivI -> 1
+      | BODivF, BODivF -> 0 | BODivF, _ -> ~-1 | _, BODivF -> 1
+      | BORemI, BORemI -> 0 | BORemI, _ -> ~-1 | _, BORemI -> 1
+      | BOEq t1, BOEq t2 -> compare_typ (Type t1) (Type t2) | BOEq _, _ -> ~-1 | _, BOEq _ -> 1
+      | BONe t1, BONe t2 -> compare_typ (Type t1) (Type t2) | BONe _, _ -> ~-1 | _, BONe _ -> 1
+      | BOLe t1, BOLe t2 -> compare_typ (Type t1) (Type t2) | BOLe _, _ -> ~-1 | _, BOLe _ -> 1
+      | BOLt t1, BOLt t2 -> compare_typ (Type t1) (Type t2) | BOLt _, _ -> ~-1 | _, BOLt _ -> 1
+      | BOGe t1, BOGe t2 -> compare_typ (Type t1) (Type t2) | BOGe _, _ -> ~-1 | _, BOGe _ -> 1
+      | BOGt t1, BOGt t2 -> compare_typ (Type t1) (Type t2) | BOGt _, _ -> ~-1 | _, BOGt _ -> 1
+      | BOConcat, BOConcat -> 0 | BOConcat, _ -> ~-1 | _, BOConcat -> 1
+      | BOCons t1, BOCons t2 -> compare_typ (Type t1) (Type t2) | BOCons _, _ -> ~-1 | _, BOCons _ -> 1
+      | BOConcatList t1, BOConcatList t2 -> compare_typ (Type t1) (Type t2)
+    let show (Binop op) = match op with
+      | BOAddI -> "+"
+      | BOAddF -> "+."
+      | BOSubI -> "-"
+      | BOSubF -> "-."
+      | BOMulI -> "*"
+      | BOMulF -> "*."
+      | BODivI -> "/"
+      | BODivF -> "/."
+      | BORemI -> "%"
+      | BOEq _ -> "=="
+      | BONe _ -> "<>"
+      | BOLe _ -> "<="
+      | BOLt _ -> "<"
+      | BOGe _ -> ">="
+      | BOGt _ -> ">"
+      | BOConcat -> "^^"
+      | BOCons _ -> "Cons"
+      | BOConcatList _ -> "Concat"
+    let pp fmt op = Format.pp_print_string fmt (show op)
+  end)
+  
   type t = {
     bt_here: (unit, Value.spawn_location, unit, unit, unit) funcid option;
     bt_i2s: (int * unit, string, unit, unit, unit) funcid option;
@@ -407,8 +507,8 @@ end = struct
     bt_spawnat: (Value.spawn_location * ((unit * unit -> unit) * unit), process, unit, unit option, unit) funcid option;
     bt_wait: (process * unit, unit, unit, unit option, unit) funcid option;
     
-    bt_add: (int * (int * unit), int, unit, unit, unit) funcid option;
-    bt_id: (unit * unit, unit, unit, unit option, unit) funcid option;
+    bt_unop: mfunid Unop_map.t;
+    bt_binop: mfunid Binop_map.t;
   }
   let empty : t = {
     bt_here = None;
@@ -420,8 +520,8 @@ end = struct
     bt_spawnat = None;
     bt_wait = None;
     
-    bt_add = None;
-    bt_id = None;
+    bt_unop = Unop_map.empty;
+    bt_binop = Binop_map.empty;
   }
   
   let find_fbuiltin (env : t) (acc : 'c) (add_builtin : 'c -> anyfbuiltin -> 'c * mfunid)
@@ -472,32 +572,34 @@ end = struct
   let find_tag t = Option.get @@ List.find_index ((=) t) tags
   
   let unops = StringMap.from_alist ["not", Unop UONot; "negate", Unop UONegI; "negatef", Unop UONegF]
+  
+  type binops_val =
+    | ZeroTArgs of anybinop
+    | OneTArg of (anytyp -> anybinop)
   let binops =
-    let zero op : string -> anytyp list -> anybinop = fun opname tyargs ->
-      if tyargs <> [] then raise (internal_error ("Invalid type application to builtin binary operator '" ^ opname ^ "'"))
-      else op in
-    let one op : string -> anytyp list -> anybinop = fun opname tyargs ->
-      match tyargs with
-      | [] -> raise (internal_error ("Missing type application to builtin binary operator '" ^ opname ^ "'"))
-      | [t] -> op t
-      | _ :: _ :: _ -> raise (internal_error ("Too many type applications to builtin binary operator '" ^ opname ^ "'")) in
     StringMap.from_alist [
-      "+", zero (Binop BOAddI); "+.", zero (Binop BOAddF); "-", zero (Binop BOSubI); "-.", zero (Binop BOSubF);
-      "*", zero (Binop BOMulI); "*.", zero (Binop BOMulF); "/", zero (Binop BODivI); "/.", zero (Binop BODivF);
-      "%", zero (Binop BORemI); "==", one (fun (Type t) -> Binop (BOEq t)); "<>", one (fun (Type t) -> Binop (BONe t));
-      "<=", one (fun (Type t) -> Binop (BOLe t)); "<", one (fun (Type t) -> Binop (BOLt t));
-      ">=", one (fun (Type t) -> Binop (BOGe t)); ">", one (fun (Type t) -> Binop (BOGt t));
-      "^^", zero (Binop BOConcat);
-      "Cons", one (fun (Type t) -> Binop (BOCons t));
-      "Concat", one (fun (Type t) -> Binop (BOConcatList t));
+      "+", ZeroTArgs (Binop BOAddI); "+.", ZeroTArgs (Binop BOAddF); "-", ZeroTArgs (Binop BOSubI); "-.", ZeroTArgs (Binop BOSubF);
+      "*", ZeroTArgs (Binop BOMulI); "*.", ZeroTArgs (Binop BOMulF); "/", ZeroTArgs (Binop BODivI); "/.", ZeroTArgs (Binop BODivF);
+      "%", ZeroTArgs (Binop BORemI); "==", OneTArg (fun (Type t) -> Binop (BOEq t)); "<>", OneTArg (fun (Type t) -> Binop (BONe t));
+      "<=", OneTArg (fun (Type t) -> Binop (BOLe t)); "<", OneTArg (fun (Type t) -> Binop (BOLt t));
+      ">=", OneTArg (fun (Type t) -> Binop (BOGe t)); ">", OneTArg (fun (Type t) -> Binop (BOGt t));
+      "^^", ZeroTArgs (Binop BOConcat);
+      "Cons", OneTArg (fun (Type t) -> Binop (BOCons t));
+      "Concat", OneTArg (fun (Type t) -> Binop (BOConcatList t));
     ]
   
+  let assert_eq_typ_unop  (Unop  op) (Type tc) = let Type.Equal = assert_eq_typ tc (unop_ret_typ  op) "Invalid type coercion" in ()
+  let assert_eq_typ_binop (Binop op) (Type tc) = let Type.Equal = assert_eq_typ tc (binop_ret_typ op) "Invalid type coercion" in ()
   let get_unop op _tyargs otc = match StringMap.find_opt op unops with
     | None -> None
     | Some u -> Option.iter (assert_eq_typ_unop u) otc; Some u
-  let get_binop op tyargs otc = match StringMap.find_opt op binops with
-    | None -> None
-    | Some f -> let b = f op tyargs in Option.iter (assert_eq_typ_binop b) otc; Some b
+  let get_binop op tyargs otc = match StringMap.find_opt op binops, tyargs with
+    | None, _ -> None
+    | Some (ZeroTArgs bo), [] -> Option.iter (assert_eq_typ_binop bo) otc; Some bo
+    | Some (ZeroTArgs _), _ :: _ -> raise (internal_error ("Too many type applications to builtin binary operator '" ^ op ^ "'"))
+    | Some (OneTArg bo), [t] -> let bo = bo t in Option.iter (assert_eq_typ_binop bo) otc; Some bo
+    | Some (OneTArg _), [] -> raise (internal_error ("Missing type application to builtin binary operator '" ^ op ^ "'"))
+    | Some (OneTArg _), _ :: _ :: _ -> raise (internal_error ("Too many type applications to builtin binary operator '" ^ op ^ "'"))
   
   let gen_impure (env : t) (acc : 'c) (add_builtin : 'a -> anyfbuiltin -> 'a * mfunid) (has_process : 'a -> 'a)
                  (convert_type : Types.typ -> anytyp) (op : string) (tyargs : tyarg list)
@@ -703,24 +805,54 @@ end = struct
               (has_process : 'a -> 'a) (convert_type : Types.typ -> anytyp)
               (v : string) : (t * 'a * anyexpr) option =
     ignore (add_builtin, has_process, convert_type);
-    match v with
+    match
+      match StringMap.find_opt v binops with
+      | Some (ZeroTArgs bo) -> Some (bo, AG Gnil)
+      | Some (OneTArg bo) -> Some (bo (Type (TVar 0)), AG Gnil)
+      | None -> None
+    with Some (Binop bo, AG gargs) ->
+        let tl = binop_argl_typ bo in
+        let tr = binop_argr_typ bo in
+        let tret = binop_ret_typ bo in
+        let targs = TLcons (tl, TLcons (tr, TLnil)) in
+        let env, acc, fid = match Binop_map.find_opt (Binop bo) env.bt_binop with Some f -> env, acc, f | None ->
+            let acc, fid, fref = new_fun acc in
+            let fdef = {
+              fun_id = fid;
+              fun_export_data = None;
+              fun_converted_closure = None;
+              fun_args = targs;
+              fun_ret = tret;
+              fun_locals = [];
+              fun_block = ([], EBinop (bo, EVariable (Local StorVariable, (tl, 0l)), EVariable (Local StorVariable, (tr, 1l))));
+            } in
+            let acc = set_fun acc fref (AF' fdef) in
+            let bt_binop = Binop_map.add (Binop bo) fid env.bt_binop in
+            { env with bt_binop; }, acc, fid in
+        let fid : (_ * (_ * unit), _, unit, _, unit) funcid = gargs, Gnil, targs, tret, TLnil, fid in
+        Some (env, acc, Expr (TClosed (gargs, targs, tret), EClose (fid, BLnil, ELnil)))
+    | None -> match StringMap.find_opt v unops with
+    | Some (Unop uo) ->
+        let targ = unop_arg_typ uo in
+        let tret = unop_ret_typ uo in
+        let env, acc, fid = match Unop_map.find_opt (Unop uo) env.bt_unop with Some f -> env, acc, f | None ->
+            let acc, fid, fref = new_fun acc in
+            let fdef = {
+              fun_id = fid;
+              fun_export_data = None;
+              fun_converted_closure = None;
+              fun_args = TLcons (targ, TLnil);
+              fun_ret = tret;
+              fun_locals = [];
+              fun_block = ([], EUnop (uo, EVariable (Local StorVariable, (targ, 0l))));
+            } in
+            let acc = set_fun acc fref (AF' fdef) in
+            let bt_unop = Unop_map.add (Unop uo) fid env.bt_unop in
+            { env with bt_unop; }, acc, fid in
+        let fid : (_ * unit, _, unit, unit, unit) funcid = Gnil, Gnil, TLcons (targ, TLnil), tret, TLnil, fid in
+        Some (env, acc, Expr (TClosed (Gnil, TLcons (targ, TLnil), tret), EClose (fid, BLnil, ELnil)))
+    | None -> match v with
     | "Nil" -> Some (env, acc, Expr (TList (TVar ~-1), EListNil (TVar ~-1)))
-    | "+" ->
-        let env, acc, fid = match env.bt_add with Some f -> env, acc, f | None ->
-              let acc, fid, fref = new_fun acc in
-              let f = (Gnil, Gnil, TLcons (TInt, TLcons (TInt, TLnil)), TInt, TLnil, fid) in
-              let fdef = {
-                fun_id = fid;
-                fun_export_data = None;
-                fun_converted_closure = None;
-                fun_args = TLcons (TInt, TLcons (TInt, TLnil));
-                fun_ret = TInt;
-                fun_locals = [];
-                fun_block = ([], EBinop (BOAddI, EVariable (Local StorVariable, (TInt, 0l)), EVariable (Local StorVariable, (TInt, 1l))));
-              } in
-              let acc = set_fun acc fref (AF' fdef) in
-              { env with bt_add = Some f; }, acc, f in
-        Some (env, acc, Expr (TClosed (Gnil, TLcons (TInt, TLcons (TInt, TLnil)), TInt), EClose (fid, BLnil, ELnil)))
     | _ -> None
   
   let apply_type (at : Types.Abstype.t) (ts : anytyp list)
