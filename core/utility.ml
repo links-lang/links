@@ -1636,3 +1636,83 @@ module IO = struct
       with End_of_file -> ()
   end
 end
+
+(* Priority queues aka min-heaps *)
+module PQueue(T : sig type t val compare : t -> t -> int end) : sig
+  type key = T.t
+  type 'a t
+  
+  val empty : unit -> 'a t
+  
+  val size : 'a t -> int
+  
+  val add : 'a t -> key -> 'a -> unit
+  val push : 'a t -> key -> 'a -> unit
+  val pop_min : 'a t -> key * 'a
+  val pop_min_opt : 'a t -> (key * 'a) option
+end = struct
+  type key = T.t
+  type 'a t = {
+    mutable size : int;
+    mutable heap : (key * 'a) array;
+  }
+  
+  let empty () : 'a t = {
+    size = 0;
+    heap = [||];
+  }
+  let extend (q : 'a t) : 'a t = {
+    size = q.size;
+    heap = Array.append q.heap q.heap;
+  }
+  
+  let size {size; _} : int = size
+  let idx_left n = (n lsl 1) + 1
+  let idx_right n = (n lsl 1) + 2
+  let idx_parent n = (n - 1) asr 1
+  
+  let add (q : 'a t) (k : key) (v : 'a) : unit =
+    if q.size = 0 then begin
+      q.size <- 1;
+      q.heap <- [|k, v|]
+    end else
+      q.size <- q.size + 1;
+      let q = if q.size = Array.length q.heap then extend q else q in
+      let rec inner q pos =
+        if pos = 0 then q.heap.(0) <- (k, v)
+        else
+          let ppar = idx_parent pos in
+          if T.compare k (fst q.heap.(ppar)) < 0 then begin
+            q.heap.(pos) <- q.heap.(ppar);
+            inner q ppar
+          end else q.heap.(pos) <- (k, v) in
+      inner q q.size
+  
+  let push q k v = add q k v
+  
+  let pop_min_opt (q : 'a t) : (key * 'a) option =
+    if q.size = 0 then None else
+    let ret = q.heap.(0) in
+    q.size <- q.size - 1;
+    q.heap.(0) <- q.heap.(q.size);
+    let rec inner q pos =
+      let l = idx_left pos in
+      let r = idx_right pos in
+      if l >= q.size then ()
+      else
+        let idx_swap =
+          if r >= q.size then l
+          else if T.compare (fst q.heap.(l)) (fst q.heap.(r)) > 0 then r
+          else l in
+        if T.compare (fst q.heap.(pos)) (fst q.heap.(idx_swap)) >= 0 then ()
+        else
+          let tmp = q.heap.(pos) in
+          q.heap.(pos) <- q.heap.(idx_swap);
+          q.heap.(idx_swap) <- tmp;
+          inner q idx_swap in
+    inner q 0;
+    Some ret
+  let pop_min (q : 'a t) : key * 'a = match pop_min_opt q with
+    | None -> raise (not_found "pop_min" q)
+    | Some ret -> ret
+end

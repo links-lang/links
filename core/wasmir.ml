@@ -1428,6 +1428,8 @@ end = struct
   
   module EffectMap = Utility.StringMap
   
+  module VarQueue = Utility.PQueue(struct type t = var let compare l r = Int.compare r l end)
+  
   type ('pi, 'pa) t = {
     ge_builtins : Builtins.t;
     ge_imports : (string * string) list;
@@ -1450,7 +1452,7 @@ end = struct
     ge_global_counter : mvarid option;
     ge_pmap : 'pi;
     ge_pmap_find : ('pi, 'pa) t -> 'pi -> var -> (('pi, 'pa) t * 'pi * 'pa) option;
-    ge_pmap_acc : 'pa list;
+    ge_pmap_acc : 'pa VarQueue.t; (* Changes in-place *)
   }
   let empty (m : string Env.Int.t) (global_binders : Utility.IntSet.t) (import_wizard : bool)
             (prelude_init : 'pi) (find_prelude : ('pi, 'pa) t -> 'pi -> var -> (('pi, 'pa) t * 'pi * 'pa) option) : ('pi, 'pa) t =
@@ -1474,7 +1476,7 @@ end = struct
       ge_global_counter = None;
       ge_pmap = prelude_init;
       ge_pmap_find = find_prelude;
-      ge_pmap_acc = [];
+      ge_pmap_acc = VarQueue.empty ();
     }
   
   let find_tag (env : ('pi, 'pa) t) (tname : string) : ('pi, 'pa) t * tagid = match Env.String.find_opt tname env.ge_tagmap with
@@ -1500,7 +1502,8 @@ end = struct
   let try_find_in_prelude ge v = match ge.ge_pmap_find ge ge.ge_pmap v with
     | Some (ge, ge_pmap, pv) ->
         (* If we found something, it has been added to the corresponding map *)
-        let ge = { ge with ge_pmap; ge_pmap_acc = pv :: ge.ge_pmap_acc } in
+        let ge = { ge with ge_pmap } in
+        VarQueue.add ge.ge_pmap_acc v pv; (* Changes in-place *)
         Some ge
     | None -> None
   
@@ -1716,9 +1719,9 @@ end = struct
   
   let rec compile (ge : ('pi, 'pa) t) (le : unit LEnv.realt) (Block (t, (ass, e)) : anyblock)
                   (compile_prelude : ('pi, 'pa) t -> unit LEnv.realt -> 'pa -> ('pi, 'pa) t * unit LEnv.realt * assign list) : anymodule =
-    match ge.ge_pmap_acc with
-    | hd :: tl ->
-        let ge = { ge with ge_pmap_acc = tl } in
+    match VarQueue.pop_min_opt ge.ge_pmap_acc with
+    | Some (_, hd) ->
+        (* Accumulator changed in-place *)
         let ge, le, ahd = compile_prelude ge le hd in
         let b = Block (t, (ahd @ ass, e)) in
         compile ge le b compile_prelude
