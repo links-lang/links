@@ -1721,7 +1721,7 @@ end = struct
   let find_closable_fun (ge : ('pi, 'pa) t) (_ : 'a LEnv.t) (v : var) : funid anyfuncid = Env.Int.find v ge.ge_fmap
   
   let allocate_function (env : ('pi, 'pa) t) (args : 'a LEnv.realt) (b : binder) (tyvars : tyvar list)
-      (AG gc : anygeneralization) : ('pi, 'pa) t * mfunid * funid =
+      (gc : anygeneralization) : ('pi, 'pa) t * mfunid * funid =
     let f = ref None in
     let targs, TypeList ctyp = LEnv.args_typ args in
     let AG ga, Type tret =
@@ -1768,14 +1768,14 @@ end = struct
           | NTLcons (n, hd, tl) -> NTLcons (n, inner map hd, inner_named_list map tl)
         in ga, inner map tret in
       let ga =
-        let rec inner : type a c. a generalization -> c generalization -> anygeneralization = fun ga gc -> match gc with
+        let rec inner (AG ga) (AG gc) = match gc with
           | Gnil -> AG ga
           | Gcons (_, tl) -> match ga with
               | Gnil -> raise (internal_error "Invalid type: closure has more type variables than the function")
-              | Gcons (_, tlc) -> inner tl tlc in
-        let AG ga = ga in
+              | Gcons (_, tlc) -> inner (AG tlc) (AG tl) in
         inner ga gc in
       ga, Type tret in
+    let AG gc = gc in
     let fid = env.ge_nfuns in
     let needs_gbl_pointer = ref false in
     let fdata = (f, needs_gbl_pointer) in
