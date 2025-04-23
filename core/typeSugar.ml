@@ -683,16 +683,16 @@ end
                   "while the computation can perform effects" ^ nl() ^
                   tab() ^ code (show_type rt))
 
-    let do_operation ~pos ~t1:(_,lt) ~t2:(rexpr,rt) ~error:_ =
+    let do_operation ~pos ~t1:(resume,lt) ~t2:(_,rt) ~error:_ =
       build_tyvar_names [lt;rt];
-      let dropDoPrefix = Str.substitute_first (Str.regexp "do ") (fun _ -> "") in
-      let operation = dropDoPrefix (code rexpr) in
-      die pos ("Invocation of the operation " ^ nl() ^
-          tab() ^ operation ^ nl() ^
-          "requires an effect context " ^ nl() ^
-          tab() ^ code (show_effectrow (TypeUtils.extract_row rt)) ^ nl() ^
-          "but, the currently allowed effects are" ^ nl()
-               ^ tab() ^ code ( show_effectrow (TypeUtils.extract_row lt)))
+      let dropDoPrefix = Str.substitute_first (Str.regexp {|^\(lin\)?do |}) (fun _ -> "") in
+      let operation = code (dropDoPrefix resume) in
+      die pos ("Invocation of the operation" ^ nli() ^
+          operation ^ nl() ^
+          "requires an effect context" ^ nli() ^
+          code (show_type lt) ^ nl() ^
+          "but, the currently allowed effect is" ^ nli()
+               ^ code (show_type rt))
 
     let try_effect ~pos ~t1:(_,lt) ~t2:(_,rt) ~error:_ =
       build_tyvar_names [lt;rt];
@@ -4592,7 +4592,7 @@ let rec type_check : context -> phrase -> phrase * Types.datatype * Usage.t =
             unify ~handle:Gripers.do_operation
               (term, infer_opt) ;
             unify ~handle:Gripers.do_operation
-              (no_pos (T.Effect context.effect_row), (p, T.Effect row))
+              ((p, T.Effect row), no_pos (T.Effect context.effect_row))
           in
           (* postponed *)
           (* let () = if is_lindo then () *)
