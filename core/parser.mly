@@ -1400,7 +1400,8 @@ resumable_operation_pattern:
 | operation_pattern FATRARROW pattern
     { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3, DeclaredLinearity.Unl)) }
 | operation_pattern FATLOLLI pattern
-    { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3, DeclaredLinearity.Lin)) }
+    { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3,
+      if lincont_enabled then DeclaredLinearity.Lin else DeclaredLinearity.Unl)) }
 | operation_pattern RARROW pattern
     { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3, DeclaredLinearity.Unl)) }
 | operation_pattern
