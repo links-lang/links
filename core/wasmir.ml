@@ -2029,13 +2029,17 @@ let rec of_value (ge : ('pi, 'pa) genv) (le: 'args lenv) (v : value) : ('pi, 'pa
       let ge, le, Expr (targ, arg) = of_value ge le args in
       ge, le, Expr (TVariant, EVariant (tagid, targ, arg))
   | TAbs (_, _v) -> failwith "TODO: of_value TAbs"
-  | TApp (v, ts) ->
-      let ge, le, Expr (t, e) = of_value ge le v in begin match t with
+  | TApp (v, ts) -> begin
+      let ge, le, Expr (t, e) = of_value ge le v in match t with
       | TClosed (ga, targs, tret) ->
           let SpecFrom (ga, s), SpecL (targs, bargs), Spec (tret, bret) = specialize_some ga ts targs tret in
           let t = TClosed (ga, targs, tret) in
           let closed_applied = ESpecialize (e, s, bargs, bret) in
           ge, le, Expr (t, closed_applied)
+      | TVariant -> begin match ts with
+          | [CommonTypes.PrimaryKind.Row, _] -> ge, le, Expr (t, e)
+          | _ -> raise (internal_error "Cannot apply non-Row-only type(s) to TVariant expression")
+        end
       | TList (TVar -1) -> begin match ts, e with
           | [CommonTypes.PrimaryKind.Type, t], EListNil _ -> (* Probably the Links [] value *)
               let Type t = convert_type t in
