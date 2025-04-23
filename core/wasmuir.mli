@@ -84,7 +84,7 @@ type (_, _) finisher =
   | FMap : 'a varid * 'b typ * 'b block -> ('a, 'b) finisher
 and 'a block = assign list * 'a expr
 and assign = Assign : locality * 'a varid * 'a expr -> assign
-and 'a expr =
+and _ expr =
   | EUnreachable : 'a typ -> 'a expr
   | EConvertClosure : mvarid * 'a closure_content typ -> 'a closure_content expr
   | EIgnore : 'a typ * 'a expr -> unit list expr
@@ -105,7 +105,7 @@ and 'a expr =
   | EClose : ('a, 'b, 'c) funcid * ('d, 'c) box_list * 'd expr_list -> ('g * 'a -> 'b) expr
   | ESpecialize : (_ * 'c -> 'd) expr * ('g * 'a -> 'b) typ * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b) expr
   | ECallRawHandler : mfunid * 'c continuation typ * 'c continuation expr * 'a typ * 'a expr * abs_closure_content expr * 'b typ -> 'b expr
-  | ECallClosed : ('g * 'a -> 'b) expr * 'a expr_list -> 'b expr
+  | ECallClosed : ('g * 'a -> 'b) expr * 'a expr_list * 'b typ -> 'b expr
   | ECond : bool expr * 'a typ * 'a block * 'a block -> 'a expr
   | EDo : 'a effectid * 'b typ * 'a expr_list -> 'b expr
   | EShallowHandle : (unit, 'b, 'c) funcid * 'c expr_list * ('b, 'd) finisher * ('b, 'd) handler list -> 'd expr
@@ -116,6 +116,8 @@ and (_, _) handler =
 and _ expr_list =
   | ELnil : unit expr_list
   | ELcons : 'a expr * 'b expr_list -> ('a * 'b) expr_list
+
+val typ_of_expr : 'a expr -> 'a typ
 
 type ('a, 'b) func' = {
   fun_id               : mfunid;

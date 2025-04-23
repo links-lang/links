@@ -227,7 +227,7 @@ type (_, _) finisher =
   | FMap : 'a varid * 'b typ * 'b block -> ('a, 'b) finisher
 and 'a block = assign list * 'a expr
 and assign = Assign : locality * 'a varid * 'a expr -> assign
-and 'a expr =
+and _ expr =
   | EUnreachable : 'a typ -> 'a expr
   | EConvertClosure : mvarid * 'a closure_content typ -> 'a closure_content expr
   | EIgnore : 'a typ * 'a expr -> unit list expr
@@ -248,7 +248,7 @@ and 'a expr =
   | EClose : ('a, 'b, 'c) funcid * ('d, 'c) box_list * 'd expr_list -> ('g * 'a -> 'b) expr
   | ESpecialize : (_ * 'c -> 'd) expr * ('g * 'a -> 'b) typ * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b) expr
   | ECallRawHandler : mfunid * 'c continuation typ * 'c continuation expr * 'a typ * 'a expr * abs_closure_content expr * 'b typ -> 'b expr
-  | ECallClosed : ('g * 'a -> 'b) expr * 'a expr_list -> 'b expr
+  | ECallClosed : ('g * 'a -> 'b) expr * 'a expr_list * 'b typ -> 'b expr
   | ECond : bool expr * 'a typ * 'a block * 'a block -> 'a expr
   | EDo : 'a effectid * 'b typ * 'a expr_list -> 'b expr
   | EShallowHandle : (unit, 'b, 'c) funcid * 'c expr_list * ('b, 'd) finisher * ('b, 'd) handler list -> 'd expr
@@ -338,7 +338,7 @@ and [@tail_mod_cons] convert_expr : type a. a Wasmir.expr -> a expr =
         convert_box bret)
   | Wasmir.ECallRawHandler (f, tc, c, ta, a, cl, tr) ->
       ECallRawHandler (f, TCont (convert_typ tc), convert_expr c, convert_typ ta, (convert_expr[@tailcall]) a, convert_expr cl, convert_typ tr)
-  | Wasmir.ECallClosed (f, e, _) -> ECallClosed (convert_expr f, (convert_expr_list[@tailcall]) e)
+  | Wasmir.ECallClosed (f, e, t) -> ECallClosed (convert_expr f, (convert_expr_list[@tailcall]) e, convert_typ t)
   | Wasmir.ECond (r, c, t, f) ->
       ECond (
         (convert_expr[@tailcall false]) c, (convert_typ[@tailcall false]) r,
@@ -355,6 +355,49 @@ and [@tail_mod_cons] convert_expr_list : type a. a Wasmir.expr_list -> a expr_li
   fun (e : a Wasmir.expr_list) -> match e with
   | Wasmir.ELnil -> ELnil
   | Wasmir.ELcons (hd, tl) -> ELcons (convert_expr hd, (convert_expr_list[@tailcall]) tl)
+
+let typ_of_expr : type a. a expr -> a typ = function
+  | EUnreachable t -> t
+  | EConvertClosure (_, t) -> t
+  | EIgnore _ -> TTuple TLnil
+  | EConstInt _ -> TInt
+  | EConstBool _ -> TBool
+  | EConstFloat _ -> TFloat
+  | EConstString _ -> TString
+  | EUnop (UONot, _) -> TBool
+  | EUnop (UONegI, _) -> TInt
+  | EUnop (UONegF, _) -> TFloat
+  | EBinop (BOAddI, _, _) -> TInt | EBinop (BOAddF, _, _) -> TFloat
+  | EBinop (BOSubI, _, _) -> TInt | EBinop (BOSubF, _, _) -> TFloat
+  | EBinop (BOMulI, _, _) -> TInt | EBinop (BOMulF, _, _) -> TFloat
+  | EBinop (BODivI, _, _) -> TInt | EBinop (BODivF, _, _) -> TFloat
+  | EBinop (BORemI, _, _) -> TInt
+  | EBinop (BOEq _, _, _) -> TBool
+  | EBinop (BONe _, _, _) -> TBool
+  | EBinop (BOLe _, _, _) -> TBool
+  | EBinop (BOLt _, _, _) -> TBool
+  | EBinop (BOGe _, _, _) -> TBool
+  | EBinop (BOGt _, _, _) -> TBool
+  | EBinop (BOConcat, _, _) -> TString
+  | EBinop (BOCons t, _, _) -> TList t
+  | EBinop (BOConcatList t, _, _) -> TList t
+  | EVariable (_, (t, _)) -> t
+  | EVariant _ -> TVariant
+  | ECase (_, t, _, _) -> t
+  | ETuple (ts, _) -> TTuple ts
+  | EExtract (_, (_, _, t)) -> t
+  | EListNil t -> TList t
+  | EListHd (_, t) -> t
+  | EListTl (t, _) -> TList t
+  | EClose ((args, ret, _, _), _, _) -> TClosed (args, ret)
+  | ESpecialize (_, t, _, _) -> t
+  | ECallRawHandler (_, _, _, _, _, _, t) -> t
+  | ECallClosed (_, _, t) -> t
+  | ECond (_, t, _, _) -> t
+  | EDo ((_, _), t, _) -> t
+  | EShallowHandle (_, _, FId t, _) -> t
+  | EShallowHandle (_, _, FMap (_, t, _), _) -> t
+  | EDeepHandle (_, _, (_, t, _, _), _) -> t
 
 type ('a, 'b) func' = {
   fun_id               : mfunid;

@@ -1025,14 +1025,7 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
           do_box tm new_meta box
             (fun acc -> (if can_early_ret then ReturnCall fid else Call fid) :: hdlarg (arg (contarg acc))) acc
     end
-  | ECallClosed (EClose (f, bcl, cls), args) ->
-      let _, _, clts, fid = (f : _ funcid :> _ * _ * _ * int32) in
-      let fcid = TMap.recid_of_type tm (TClosArg clts) in
-      let args = convert_exprs tm new_meta procinfo args BLnone cinfo in
-      let gen_new_struct = convert_new_struct tm new_meta procinfo cls bcl fcid cinfo in
-      do_box tm new_meta box (fun acc -> (if can_early_ret then ReturnCall fid else Call fid) ::
-        generate_yield (NewMetadata.g_of_t new_meta) procinfo (gen_new_struct (args acc))) acc
-  | ECallClosed (ESpecialize (EClose (f, bcl, cls), _, bargs, bret), args) ->
+  | ECallClosed (ESpecialize (EClose (f, bcl, cls), _, bargs, bret), args, _) ->
       let _, _, clts, fid = (f : _ funcid :> _ * _ * _ * int32) in
       let fcid = TMap.recid_of_type tm (TClosArg clts) in
       let args = convert_exprs tm new_meta procinfo args bargs cinfo in
@@ -1041,21 +1034,27 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
           (if can_early_ret && (match bret with BNone -> true | _ -> false) then ReturnCall fid else Call fid) ::
           generate_yield (NewMetadata.g_of_t new_meta) procinfo (gen_new_struct (args acc))) in
       do_box tm new_meta box unbox acc
-  | ECallClosed (EVariable (loc, vid), args) ->
-      let (TClosed (targs, tret) as t), _ = (vid : _ varid :> _ typ * int32) in
+  | ECallClosed (EClose (f, bcl, cls), args, _) ->
+      let _, _, clts, fid = (f : _ funcid :> _ * _ * _ * int32) in
+      let fcid = TMap.recid_of_type tm (TClosArg clts) in
+      let args = convert_exprs tm new_meta procinfo args BLnone cinfo in
+      let gen_new_struct = convert_new_struct tm new_meta procinfo cls bcl fcid cinfo in
+      do_box tm new_meta box (fun acc -> (if can_early_ret then ReturnCall fid else Call fid) ::
+        generate_yield (NewMetadata.g_of_t new_meta) procinfo (gen_new_struct (args acc))) acc
+  | ECallClosed (ESpecialize (e, _, bargs, bret), args, _) ->
+      let loc, (TClosed (targs, tret) as t, vid), acc = match e with
+        | EVariable (loc, vid) ->
+            let t, vid = (vid : _ varid :> _ * int32) in
+            loc, (t, vid), acc
+        | _ ->
+            let t = typ_of_expr e in
+            let vid = NewMetadata.add_local tm new_meta t in
+            let acc = convert_expr tm new_meta procinfo e BNone None cinfo acc in
+            Local StorVariable, (t, vid), LocalSet vid :: acc in
       (* TODO: optimize the next two lines (caching is possible) *)
       let vtid = TMap.recid_of_type tm t in
       let fid = TMap.recid_of_functyp tm targs tret in
-      let getv = convert_get_var loc vid cinfo in
-      let args = convert_exprs tm new_meta procinfo args BLnone cinfo in
-      do_box tm new_meta box (fun acc -> (if can_early_ret then ReturnCallRef fid else CallRef fid) ::
-          generate_yield (NewMetadata.g_of_t new_meta) procinfo (StructGet (vtid, 0l, None) :: getv (
-          StructGet (vtid, 1l, None) :: getv (args acc)))) acc
-  | ECallClosed (ESpecialize (EVariable (loc, vid), _, bargs, bret), args) ->
-      let (TClosed (targs, tret) as t), _ = (vid : _ varid :> _ typ * int32) in
-      let vtid = TMap.recid_of_type tm t in
-      let fid = TMap.recid_of_functyp tm targs tret in
-      let getv = convert_get_var loc vid cinfo in
+      let getv = convert_get_var' loc vid cinfo in
       let args = convert_exprs tm new_meta procinfo args bargs cinfo in
       let unbox = do_unbox tm new_meta bret
         (let test = ref false in fun acc -> if !test then failwith "TODO: convert_expr ECallClosed w/ non-simple bret"
@@ -1063,7 +1062,24 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
           StructGet (vtid, 0l, None) :: getv (
           StructGet (vtid, 1l, None) :: getv (args acc))) in
       do_box tm new_meta box unbox (generate_yield (NewMetadata.g_of_t new_meta) procinfo acc)
-  | ECallClosed (_f, _args) -> failwith "TODO: convert_expr ECallClosed non-Function and non-Variable"
+  | ECallClosed (e, args, _) ->
+      let loc, (TClosed (targs, tret) as t, vid), acc = match e with
+        | EVariable (loc, vid) ->
+            let t, vid = (vid : _ varid :> _ * int32) in
+            loc, (t, vid), acc
+        | _ ->
+            let t = typ_of_expr e in
+            let vid = NewMetadata.add_local tm new_meta t in
+            let acc = convert_expr tm new_meta procinfo e BNone None cinfo acc in
+            Local StorVariable, (t, vid), LocalSet vid :: acc in
+      (* TODO: optimize the next two lines (caching is possible) *)
+      let vtid = TMap.recid_of_type tm t in
+      let fid = TMap.recid_of_functyp tm targs tret in
+      let getv = convert_get_var' loc vid cinfo in
+      let args = convert_exprs tm new_meta procinfo args BLnone cinfo in
+      do_box tm new_meta box (fun acc -> (if can_early_ret then ReturnCallRef fid else CallRef fid) ::
+          generate_yield (NewMetadata.g_of_t new_meta) procinfo (StructGet (vtid, 0l, None) :: getv (
+          StructGet (vtid, 1l, None) :: getv (args acc)))) acc
   | ECond (e, rt, t, f) ->
       let ti = convert_block tm new_meta procinfo t box is_last cinfo [] in
       let fi = convert_block tm new_meta procinfo f box is_last cinfo [] in
