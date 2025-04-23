@@ -747,6 +747,7 @@ let do_unbox (type a b) (tm : tmap) (new_meta : new_meta) (box : (a, b) box) (ge
 
 let convert_unop (type a b) (_ : tmap) (_ : new_meta) (op : (a, b) unop) (arg : instr_conv) : instr_conv =
   let open Wasm in let open Instruction in let open Value in match op with
+    | UONot -> fun acc -> Testop (I32 IntOp.Eqz) :: arg acc
     | UONegI -> fun acc -> Binop (I64 IntOp.Sub) :: arg (Const (I64 I64.zero) :: acc)
     | UONegF -> fun acc -> Unop (F64 FloatOp.Neg) :: arg acc
 let convert_binop (type a b c) (tm : tmap) (new_meta : new_meta) (op : (a, b, c) binop) (arg1 : instr_conv) (arg2 : instr_conv) : instr_conv =
@@ -1028,17 +1029,16 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
       let fcid = TMap.recid_of_type tm (TClosArg clts) in
       let args = convert_exprs tm new_meta procinfo args BLnone cinfo in
       let gen_new_struct = convert_new_struct tm new_meta procinfo cls bcl fcid cinfo in
-      let acc = generate_yield (NewMetadata.g_of_t new_meta) procinfo acc in
-      do_box tm new_meta box (fun acc -> (if can_early_ret then ReturnCall fid else Call fid) :: gen_new_struct (args acc)) acc
+      do_box tm new_meta box (fun acc -> (if can_early_ret then ReturnCall fid else Call fid) ::
+        generate_yield (NewMetadata.g_of_t new_meta) procinfo (gen_new_struct (args acc))) acc
   | ECallClosed (ESpecialize (EClose (f, bcl, cls), _, bargs, bret), args) ->
       let _, _, clts, fid = (f : _ funcid :> _ * _ * _ * int32) in
       let fcid = TMap.recid_of_type tm (TClosArg clts) in
       let args = convert_exprs tm new_meta procinfo args bargs cinfo in
       let gen_new_struct = convert_new_struct tm new_meta procinfo cls bcl fcid cinfo in
-      let acc = generate_yield (NewMetadata.g_of_t new_meta) procinfo acc in
       let unbox = do_unbox tm new_meta bret (fun acc ->
           (if can_early_ret && (match bret with BNone -> true | _ -> false) then ReturnCall fid else Call fid) ::
-          gen_new_struct (args acc)) in
+          generate_yield (NewMetadata.g_of_t new_meta) procinfo (gen_new_struct (args acc))) in
       do_box tm new_meta box unbox acc
   | ECallClosed (EVariable (loc, vid), args) ->
       let (TClosed (targs, tret) as t), _ = (vid : _ varid :> _ typ * int32) in
@@ -1047,10 +1047,9 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
       let fid = TMap.recid_of_functyp tm targs tret in
       let getv = convert_get_var loc vid cinfo in
       let args = convert_exprs tm new_meta procinfo args BLnone cinfo in
-      let acc = generate_yield (NewMetadata.g_of_t new_meta) procinfo acc in
       do_box tm new_meta box (fun acc -> (if can_early_ret then ReturnCallRef fid else CallRef fid) ::
-          StructGet (vtid, 0l, None) :: getv (
-          StructGet (vtid, 1l, None) :: getv (args acc))) acc
+          generate_yield (NewMetadata.g_of_t new_meta) procinfo (StructGet (vtid, 0l, None) :: getv (
+          StructGet (vtid, 1l, None) :: getv (args acc)))) acc
   | ECallClosed (ESpecialize (EVariable (loc, vid), _, bargs, bret), args) ->
       let (TClosed (targs, tret) as t), _ = (vid : _ varid :> _ typ * int32) in
       let vtid = TMap.recid_of_type tm t in
@@ -1062,8 +1061,7 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
         else (if can_early_ret then ReturnCallRef fid else CallRef fid) ::
           StructGet (vtid, 0l, None) :: getv (
           StructGet (vtid, 1l, None) :: getv (args acc))) in
-      let acc = generate_yield (NewMetadata.g_of_t new_meta) procinfo acc in
-      do_box tm new_meta box unbox acc
+      do_box tm new_meta box unbox (generate_yield (NewMetadata.g_of_t new_meta) procinfo acc)
   | ECallClosed (_f, _args) -> failwith "TODO: convert_expr ECallClosed non-Function and non-Variable"
   | ECond (e, rt, t, f) ->
       let ti = convert_block tm new_meta procinfo t box is_last cinfo [] in
@@ -1084,7 +1082,7 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
                 | TLcons (thd, ttl) -> let AnyBoxList btl = inner ttl in AnyBoxList (BLcons (BBox thd, btl)) in
               inner targs in
             convert_new_struct tm new_meta procinfo args bcontent tid cinfo in
-      let ret = do_unbox tm new_meta (BBox tret) (fun acc -> Suspend eid :: args acc) in
+      let ret = do_unbox tm new_meta (BBox tret) (fun acc -> Suspend eid :: generate_yield (NewMetadata.g_of_t new_meta) procinfo (args acc)) in
       do_box tm new_meta box ret acc
   | EShallowHandle _ -> failwith "TODO: convert_expr EShallowHandle"
   | EDeepHandle (contid, contargs, hdlid, hdlargs) ->

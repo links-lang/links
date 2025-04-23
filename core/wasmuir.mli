@@ -39,6 +39,7 @@ module TypeMap : Utility.Map.S with type key = anytyp
 type (!'a, !'b) extract_typ = 'a typ_list * int * 'b typ
 
 type ('a, 'r) unop =
+  | UONot  : (bool,  bool)  unop
   | UONegI : (int,   int)   unop
   | UONegF : (float, float) unop
 type ('a, 'b, 'r) binop =

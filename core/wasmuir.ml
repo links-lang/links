@@ -121,6 +121,7 @@ let convert_extract_typ (Wasmir.TTuple s, n, t, _ : ('a, 'b) Wasmir.extract_typ)
   convert_named_typ_list s, n, convert_typ t
 
 type ('a, 'r) unop =
+  | UONot  : (bool,  bool)  unop
   | UONegI : (int,   int)   unop
   | UONegF : (float, float) unop
 type ('a, 'b, 'r) binop =
@@ -279,6 +280,7 @@ and [@tail_mod_cons] convert_expr : type a. a Wasmir.expr -> a expr =
   | Wasmir.EConstFloat c -> EConstFloat c
   | Wasmir.EConstString c -> EConstString c
   | Wasmir.EUnop (op, arg) -> begin match op with
+      | Wasmir.UONot  -> EUnop (UONot,  convert_expr arg)
       | Wasmir.UONegI -> EUnop (UONegI, convert_expr arg)
       | Wasmir.UONegF -> EUnop (UONegF, convert_expr arg)
     end

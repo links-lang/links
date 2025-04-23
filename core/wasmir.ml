@@ -61,6 +61,7 @@ type (!'a, !'b) extract_typ_check =
 type (!'a, !'b) extract_typ = 'a list typ * int * 'b typ * ('a, 'b) extract_typ_check
 
 type ('a, 'r) unop =
+  | UONot  : (bool,  bool)  unop
   | UONegI : (int,   int)   unop
   | UONegF : (float, float) unop
 
@@ -191,6 +192,7 @@ let typ_of_expr (type a) (e : a expr) : a typ = match e with
   | EConstBool _ -> TBool
   | EConstFloat _ -> TFloat
   | EConstString _ -> TString
+  | EUnop (UONot, _) -> TBool
   | EUnop (UONegI, _) -> TInt
   | EUnop (UONegF, _) -> TFloat
   | EBinop (BOAddI, _, _) -> TInt | EBinop (BOAddF, _, _) -> TFloat
@@ -342,6 +344,7 @@ let target_block (type a) (Block (t1, b) : anyblock) (t2 : a typ) : a block = le
 type anyunop = Unop : ('a, 'b) unop -> anyunop
 type anybinop = Binop : ('a, 'b, 'c) binop -> anybinop
 let assert_eq_typ_unop (Unop op) (Type tc) = match op with
+  | UONot -> let Type.Equal = assert_eq_typ tc TBool "Invalid type coercion" in ()
   | UONegI -> let Type.Equal = assert_eq_typ tc TInt "Invalid type coercion" in ()
   | UONegF -> let Type.Equal = assert_eq_typ tc TFloat "Invalid type coercion" in ()
 let assert_eq_typ_binop (Binop op) (Type tc) = match op with
@@ -468,7 +471,7 @@ end = struct
   let ntags = List.length tags
   let find_tag t = Option.get @@ List.find_index ((=) t) tags
   
-  let unops = StringMap.from_alist ["negate", Unop UONegI; "negatef", Unop UONegF]
+  let unops = StringMap.from_alist ["not", Unop UONot; "negate", Unop UONegI; "negatef", Unop UONegF]
   let binops =
     let zero op : string -> anytyp list -> anybinop = fun opname tyargs ->
       if tyargs <> [] then raise (internal_error ("Invalid type application to builtin binary operator '" ^ opname ^ "'"))
@@ -1916,6 +1919,9 @@ let rec of_value (ge : ('pi, 'pa) genv) (le: 'args lenv) (v : value) : ('pi, 'pa
           let name = GEnv.get_var_name ge v in match args with
           | [arg] -> begin match Builtins.get_unop name ts otc with
             | None -> raise (internal_error ("Function '" ^ name ^ "' is not a (supported) builtin unary operation"))
+            | Some (Unop UONot) ->
+                let ge, le, arg = of_value ge le arg in let arg = target_expr arg TBool in
+                ge, le, Expr (TBool, EUnop (UONot, arg))
             | Some (Unop UONegI) ->
                 let ge, le, arg = of_value ge le arg in let arg = target_expr arg TInt in
                 ge, le, Expr (TInt, EUnop (UONegI, arg))

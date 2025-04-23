@@ -50,6 +50,7 @@ type (!'a, !'b) extract_typ_check
 type (!'a, !'b) extract_typ = 'a list typ * int * 'b typ * ('a, 'b) extract_typ_check
 
 type ('a, 'r) unop =
+  | UONot  : (bool,  bool)  unop
   | UONegI : (int,   int)   unop
   | UONegF : (float, float) unop
 
