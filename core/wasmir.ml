@@ -202,6 +202,7 @@ and 'a expr =
   | EListTl : 'a typ * llist expr -> llist expr
   | ECase : variant expr * 'a typ * (tagid * anytyp * mvarid * 'a block) list * (mvarid * 'a block) option -> 'a expr
   | EClose : ('a, 'b, 'c, 'ga, 'gc) funcid * ('d, 'c) box_list * 'd expr_list -> ('ga * 'a -> 'b) expr
+  | ERawClose : ('a, 'b, 'c, 'ga, 'gc) funcid * abs_closure_content expr -> ('ga * 'a -> 'b) expr
   | ESpecialize : ('ga * 'a -> 'b) expr * ('gc, 'ga) specialization * ('c, 'a) box_list * ('d, 'b) box -> ('gc * 'c -> 'd) expr
   | ECallRawHandler : mfunid * 'a typ * 'a continuation expr * 'b typ * 'b expr * abs_closure_content expr * 'd typ -> 'd expr
       (* FIXME: add information in the continuation that it takes a 'b *)
@@ -252,6 +253,7 @@ let typ_of_expr (type a) (e : a expr) : a typ = match e with
   | EListHd (_, t) -> t
   | EListTl (t, _) -> TList t
   | EClose ((g, _, args, ret, _, _), _, _) -> TClosed (g, args, ret)
+  | ERawClose ((g, _, args, ret, _, _), _) -> TClosed (g, args, ret)
   | ESpecialize (_, s, bargs, bret) -> TClosed (src_of_specialization s, src_of_box_list bargs, src_of_box bret)
   | ECallRawHandler (_, _, _, _, _, _, t) -> t
   | ECallClosed (_, _, t) -> t
@@ -1183,6 +1185,7 @@ module LEnv : sig (* Contains the arguments, the local variables, etc *)
   val add_var : 'a t -> binder -> 'b typ -> 'a t * 'b varid
   val find_var : 'a t -> var -> ('a t * local_storage * anyvarid) option
   val find_closure : 'a t -> var -> string -> ('a t * local_storage * anyvarid) option
+  val find_raw_closure : 'a t -> var -> ('a t * local_storage * abs_closure_content varid) option
   
   val set_handler_args : subt -> binder -> subt * anyvarid_list
   val add_cont : subt -> anytyp -> mfunid -> anytyp -> subt * mvarid
@@ -1391,8 +1394,7 @@ end = struct
   
   let add_sub_to_env (env : subt) (base : 'a t) (loc : local_storage) (VarID (t, bid) : anyvarid) : subt * anyvarid =
     let cid = env.nclos in
-    let hdlcid = Int32.succ cid in
-    let nclos = Int32.succ hdlcid in
+    let nclos = Int32.succ cid in
     let clos =
       let ExprList (tl, es) = env.clos in
       ExprList (TLcons (t, tl),
@@ -1451,14 +1453,36 @@ end = struct
         | Some cbid -> if Int.equal cbid v then Some (Either.Left env, StorClosure, Env.String.find n env.cvarmap) else None
       end
     | Either.Right env -> begin match IntString.find_opt (v, n) env.cvarmap with
-        | Some (lst, ret) -> Some (Either.Right env, lst, ret)
+        | Some (loc, ret) -> Some (Either.Right env, loc, ret)
         | None -> begin
             let AT base = env.base in
             match find_closure base v n with
-            | Some (base, lst, bid) ->
-                let env, cid = add_sub_to_env env base lst bid in
-                let cvarmap = IntString.bind (v, n) (lst, cid) env.cvarmap in
-                Some (Either.Right { env with base = AT base; cvarmap }, lst, cid)
+            | Some (base, loc, bid) ->
+                let env, cid = add_sub_to_env env base loc bid in
+                let cvarmap = IntString.bind (v, n) (StorClosure, cid) env.cvarmap in
+                Some (Either.Right { env with base = AT base; cvarmap }, StorClosure, cid)
+            | None -> None
+          end
+      end
+  let rec find_raw_closure : type a. a t -> _ -> (a t * _ * _) option =
+    fun (env : a t) (v : var) : (a t * local_storage * abs_closure_content varid) option -> match env with
+    | Either.Left env -> begin match env.cbid with
+        | None -> None
+        | Some cbid -> if Int.equal cbid v then Some (Either.Left env, StorVariable, (TAbsClosArg, Int32.pred env.nargs)) else None
+      end
+    | Either.Right env -> begin match Env.Int.find_opt v env.varmap with
+        | Some (loc, VarID (TAbsClosArg, i)) -> Some (Either.Right env, loc, (TAbsClosArg, i))
+        | Some (_, VarID (_, _)) -> failwith "TODO: LEnv.find_raw_closure with non-TAbsClosArg"
+        | None -> begin
+            let AT base = env.base in
+            match find_raw_closure base v with
+            | Some (base, loc, bid) ->
+                let env, cid = add_sub_to_env env base loc (VarID bid) in
+                let varmap = Env.Int.bind v (StorClosure, cid) env.varmap in
+                let vid = match cid with
+                  | VarID (TAbsClosArg, vid) -> vid
+                  | _ -> failwith "TODO: LEnv.find_raw_closure with non-TAbsClosArg" in
+                Some (Either.Right { env with base = AT base; varmap }, StorClosure, (TAbsClosArg, vid))
             | None -> None
           end
       end
@@ -1991,7 +2015,38 @@ let specialize_some (ga : 'ga generalization) (ts : tyarg list)
 
 type 'a any_extract = Extract : int * 'b typ * ('a, 'b) extract_typ_check -> 'a any_extract
 
-let rec of_value (ge : ('pi, 'pa) genv) (le: 'args lenv) (v : value) : ('pi, 'pa) genv * 'args lenv * anyexpr = match v with
+type anyconvclosed = ACC : 'ga generalization * ('a, 'a0) box_list * ('b, 'b0) box * 'a typ_list * 'b typ * ('ga * 'a0 -> 'b0) expr -> anyconvclosed
+let rec convert_closure (ge : ('pi, 'pa) genv) (le: 'args lenv) (f : var) (tcl : tyarg list) (cls : value)
+    : ('pi, 'pa) genv * 'args lenv * GEnv.funid * anyconvclosed =
+  let FuncID (type a0 b0 c0 ga gc) ((ga, gc, targs, tret, tc, _) as fid, fdata : (a0, b0, c0, ga, gc) funcid * _) =
+    GEnv.find_closable_fun ge le f in
+  let tmap =
+    let rec inner (AG gc) tcl acc = match gc, tcl with
+      | _, (CommonTypes.PrimaryKind.(Row | Presence), _) :: tl -> inner (AG gc) tl acc
+      | Gnil, [] -> acc
+      | Gnil, _ :: _ -> raise (internal_error "Invalid closure type: too many type arguments")
+      | Gcons _, [] -> raise (internal_error "Invalid closure type: not enough type arguments")
+      | Gcons (ghd, gtl), (CommonTypes.PrimaryKind.Type, thd) :: ttl ->
+          inner (AG gtl) ttl (TVarMap.add ghd (convert_type thd) acc)
+    in inner (AG gc) tcl TVarMap.empty
+  in
+  let SpecL (type a) (targs, bargs : _ * (a, a0) box_list) = specialize_typ_list tmap targs in
+  let Spec (type b) (tret, bret : _ * (b, b0) box) = specialize_typ tmap tret in
+  let SpecL (type c) (tc, bc : _ * (c, c0) box_list) = specialize_typ_list tmap tc in
+  let ge, le, (closed : (ga * a0 -> b0) expr) = match cls with
+    | Extend (vm, None) ->
+        let cls = sort_name_map vm |> List.map snd in
+        let ge, le, cls = convert_values ge le cls tc in
+        ge, le, EClose (fid, bc, cls)
+    | Extend (_, Some _) -> failwith "TODO: convert_closure Extend Some"
+    | Variable v -> begin match LEnv.find_raw_closure le v with
+        | Some (le, loc, v) -> ge, le, ERawClose (fid, EVariable (Local loc, v))
+        | None -> failwith "TODO: convert_closure Variable non-raw_closure"
+      end
+    | _ -> failwith "TODO: convert_closure non-Extend" in
+  ge, le, fdata, ACC (ga, bargs, bret, targs, tret, closed)
+
+and of_value (ge : ('pi, 'pa) genv) (le: 'args lenv) (v : value) : ('pi, 'pa) genv * 'args lenv * anyexpr = match v with
   | Constant c -> let Expr (ct, cv) = of_constant c in ge, le, Expr (ct, cv)
   | Variable v -> begin match GEnv.find_var ge le v with
       | ge, Some (Either.Left (le, loc, VarID (t, vid))) -> ge, le, Expr (t, EVariable (loc, (t, vid)))
@@ -2173,28 +2228,8 @@ let rec of_value (ge : ('pi, 'pa) genv) (le: 'args lenv) (v : value) : ('pi, 'pa
       | _ -> failwith "TODO: of_value ApplyPure for non-Variable"
     end
   | Closure (f, tcl, cls) ->
-      let FuncID (type a0 b0 c0 ga gc) ((ga, gc, targs, tret, tc, _) as fid, fdata : (a0, b0, c0, ga, gc) funcid * _) =
-        GEnv.find_closable_fun ge le f in
-      let tmap =
-        let rec inner (AG gc) tcl acc = match gc, tcl with
-          | _, (CommonTypes.PrimaryKind.(Row | Presence), _) :: tl -> inner (AG gc) tl acc
-          | Gnil, [] -> acc
-          | Gnil, _ :: _ -> raise (internal_error "Invalid closure type: too many type arguments")
-          | Gcons _, [] -> raise (internal_error "Invalid closure type: not enough type arguments")
-          | Gcons (ghd, gtl), (CommonTypes.PrimaryKind.Type, thd) :: ttl ->
-              inner (AG gtl) ttl (TVarMap.add ghd (convert_type thd) acc)
-        in inner (AG gc) tcl TVarMap.empty
-      in
-      let SpecL (type a) (targs, bargs : _ * (a, a0) box_list) = specialize_typ_list tmap targs in
-      let Spec (type b) (tret, bret : _ * (b, b0) box) = specialize_typ tmap tret in
-      let SpecL (type c) (tc, bc : _ * (c, c0) box_list) = specialize_typ_list tmap tc in
-      let ge, le, (cls : c expr_list) = match cls with
-        | Extend (vm, None) ->
-            let cls = sort_name_map vm |> List.map snd in
-            convert_values ge le cls tc
-        | Extend (_, Some _) -> failwith "TODO: of_value Closure Extend Some"
-        | _ -> failwith "TODO: of_value Closure non-Extend" in
-      let e = ESpecialize (EClose (fid, bc, cls), Snil ga, bargs, bret) in
+      let ge, le, fdata, ACC (ga, bargs, bret, targs, tret, closed) = convert_closure ge le f tcl cls in
+      let e = ESpecialize (closed, Snil ga, bargs, bret) in
       let ge = GEnv.do_export_function ge fdata in
       ge, le, Expr (TClosed (ga, targs, tret), e)
   | Coerce (v, t) ->
@@ -2278,33 +2313,13 @@ let rec of_tail_computation : type args. _ -> args lenv -> _ -> ('pi, 'pa) genv 
               ge, le, e
         end
       | ts, Closure (f, tcl, cls), otc ->
-          let FuncID (type a0 b0 c0 ga gc) ((ga, gc, targs, tret, tc, _) as fid, fdata : (a0, b0, c0, ga, gc) funcid * _) =
-            GEnv.find_closable_fun ge le f in
-          let tmap =
-            let rec inner (AG gc) tcl acc = match gc, tcl with
-              | _, (CommonTypes.PrimaryKind.(Row | Presence), _) :: tl -> inner (AG gc) tl acc
-              | Gnil, [] -> acc
-              | Gnil, _ :: _ -> raise (internal_error "Invalid closure type: too many type arguments")
-              | Gcons _, [] -> raise (internal_error "Invalid closure type: not enough type arguments")
-              | Gcons (ghd, gtl), (CommonTypes.PrimaryKind.Type, thd) :: ttl ->
-                  inner (AG gtl) ttl (TVarMap.add ghd (convert_type thd) acc)
-            in inner (AG gc) tcl TVarMap.empty
-          in
-          let SpecL (type a) (targs, bargs : _ * (a, a0) box_list) = specialize_typ_list tmap targs in
-          let Spec (type b) (tret, bret : _ * (b, b0) box) = specialize_typ tmap tret in
-          let SpecL (type c) (tc, bc : _ * (c, c0) box_list) = specialize_typ_list tmap tc in
-          let ge, le, (cls : c expr_list) = match cls with
-            | Extend (vm, None) ->
-                let cls = sort_name_map vm |> List.map snd in
-                convert_values ge le cls tc
-            | Extend (_, Some _) -> failwith "TODO: of_value Closure Extend Some"
-            | _ -> failwith "TODO: of_value Closure non-Extend" in
-          (* TODO: try to remove this in some cases (i.e. no unboxing) *)
+          let ge, le, fdata, ACC (ga, bargs, bret, targs, tret, closed) = convert_closure ge le f tcl cls in
+          (* TODO: try to remove this in some cases (i.e. if there is no unboxing) *)
           let ge = GEnv.do_export_function ge fdata in
           let s, SpecL (targs, bargs2), Spec (tret, bret2) = specialize_to_apply ga ts targs tret in
           let ge, le, args = convert_values ge le args targs in
           let () = match otc with None -> () | Some (Type t) -> ignore (assert_eq_typ t (TClosed (Gnil, targs, tret)) "Invalid type coercion") in
-          let closed_applied = ECallClosed (ESpecialize (EClose (fid, bc, cls), s, compose_box_list bargs2 bargs, compose_box bret2 bret), args, tret) in
+          let closed_applied = ECallClosed (ESpecialize (closed, s, compose_box_list bargs2 bargs, compose_box bret2 bret), args, tret) in
           ge, le, Expr (tret, closed_applied)
       | ts, Project (n, v), otc -> begin match v with
           | Variable v -> begin match LEnv.find_closure le v n with

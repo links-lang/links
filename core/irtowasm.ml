@@ -1005,6 +1005,11 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
       let new_ctid = TMap.recid_of_type tm (TClosed (targs, tret)) in
       let gen_new_struct = convert_new_struct tm new_meta procinfo cls bcl fctid cinfo in
       do_box tm new_meta box (fun acc -> StructNew (new_ctid, Explicit) :: gen_new_struct (RefFunc fid :: acc)) acc
+  | ERawClose (f, cl) ->
+      let targs, tret, _, fid = (f : _ funcid :> _ * _ * _ * int32) in
+      let new_ctid = TMap.recid_of_type tm (TClosed (targs, tret)) in
+      let get_cl = convert_expr tm new_meta procinfo cl BNone None cinfo in
+      do_box tm new_meta box (fun acc -> StructNew (new_ctid, Explicit) :: get_cl (RefFunc fid :: acc)) acc
   | ESpecialize (e, _, BLnone, BNone) -> begin match box with
       | BNone -> convert_expr tm new_meta procinfo e BNone is_last cinfo acc
       | BClosed (TClosed (targs, tret), bargs, bret) -> convert_expr tm new_meta procinfo e (BClosed (TClosed (targs, tret), bargs, bret)) is_last cinfo acc
@@ -1041,6 +1046,21 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
       let gen_new_struct = convert_new_struct tm new_meta procinfo cls bcl fcid cinfo in
       do_box tm new_meta box (fun acc -> (if can_early_ret then ReturnCall fid else Call fid) ::
         generate_yield (NewMetadata.g_of_t new_meta) procinfo (gen_new_struct (args acc))) acc
+  | ECallClosed (ESpecialize (ERawClose (f, cl), _, bargs, bret), args, _) ->
+      let _, _, _, fid = (f : _ funcid :> _ * _ * _ * int32) in
+      let args = convert_exprs tm new_meta procinfo args bargs cinfo in
+      let get_cl = convert_expr tm new_meta procinfo cl BNone None cinfo in
+      let can_early_ret = can_early_ret && (match bret with BNone -> true | _ -> false) in
+      let unbox = do_unbox tm new_meta bret (fun acc ->
+          (if can_early_ret then ReturnCall fid else Call fid) ::
+          generate_yield (NewMetadata.g_of_t new_meta) procinfo (get_cl (args acc))) in
+      do_box tm new_meta box unbox acc
+  | ECallClosed (ERawClose (f, cl), args, _) ->
+      let _, _, _, fid = (f : _ funcid :> _ * _ * _ * int32) in
+      let args = convert_exprs tm new_meta procinfo args BLnone cinfo in
+      let get_cl = convert_expr tm new_meta procinfo cl BNone None cinfo in
+      do_box tm new_meta box (fun acc -> (if can_early_ret then ReturnCall fid else Call fid) ::
+        generate_yield (NewMetadata.g_of_t new_meta) procinfo (get_cl (args acc))) acc
   | ECallClosed (ESpecialize (e, _, bargs, bret), args, _) ->
       let loc, (TClosed (targs, tret) as t, vid), acc = match e with
         | EVariable (loc, vid) ->
@@ -1056,6 +1076,7 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
       let fid = TMap.recid_of_functyp tm targs tret in
       let getv = convert_get_var' loc vid cinfo in
       let args = convert_exprs tm new_meta procinfo args bargs cinfo in
+      let can_early_ret = can_early_ret && (match bret with BNone -> true | _ -> false) in
       let unbox = do_unbox tm new_meta bret
         (let test = ref false in fun acc -> if !test then failwith "TODO: convert_expr ECallClosed w/ non-simple bret"
         else (if can_early_ret then ReturnCallRef fid else CallRef fid) ::

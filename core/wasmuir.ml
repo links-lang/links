@@ -246,6 +246,7 @@ and _ expr =
   | EListHd : llist expr * 'a typ -> 'a expr
   | EListTl : 'a typ * llist expr -> llist expr
   | EClose : ('a, 'b, 'c) funcid * ('d, 'c) box_list * 'd expr_list -> ('g * 'a -> 'b) expr
+  | ERawClose : ('a, 'b, 'c) funcid * abs_closure_content expr -> ('g * 'a -> 'b) expr
   | ESpecialize : (_ * 'c -> 'd) expr * ('g * 'a -> 'b) typ * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b) expr
   | ECallRawHandler : mfunid * 'c continuation typ * 'c continuation expr * 'a typ * 'a expr * abs_closure_content expr * 'b typ -> 'b expr
   | ECallClosed : ('g * 'a -> 'b) expr * 'a expr_list * 'b typ -> 'b expr
@@ -320,6 +321,7 @@ and [@tail_mod_cons] convert_expr : type a. a Wasmir.expr -> a expr =
   | Wasmir.EListHd (e, t) -> EListHd ((convert_expr[@tailcall]) e, convert_typ t)
   | Wasmir.EListTl (t, e) -> EListTl (convert_typ t, (convert_expr[@tailcall]) e)
   | Wasmir.EClose (f, b, cl) -> EClose (convert_funcid f, convert_box_list b, (convert_expr_list[@tailcall]) cl)
+  | Wasmir.ERawClose (f, cl) -> ERawClose (convert_funcid f, convert_expr cl)
   | Wasmir.(ESpecialize (ESpecialize (e, s1, bargs1, bret1), s2, bargs2, bret2)) ->
       let open Wasmir in
       let s =
@@ -390,6 +392,7 @@ let typ_of_expr : type a. a expr -> a typ = function
   | EListHd (_, t) -> t
   | EListTl (t, _) -> TList t
   | EClose ((args, ret, _, _), _, _) -> TClosed (args, ret)
+  | ERawClose ((args, ret, _, _), _) -> TClosed (args, ret)
   | ESpecialize (_, t, _, _) -> t
   | ECallRawHandler (_, _, _, _, _, _, t) -> t
   | ECallClosed (_, _, t) -> t
