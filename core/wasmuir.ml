@@ -444,7 +444,6 @@ type 'a modu = {
   mod_imports     : (string * string) list;
   mod_nfuns       : int32;
   mod_funs        : func list;
-  mod_needs_export: (anytyp_list option * anytyp) FunIDMap.t;
   mod_neffs       : int32;
   mod_effs        : EffectIDSet.t;
   mod_nglobals    : int32;
@@ -498,7 +497,6 @@ let convert_module (m : 'a Wasmir.modu) : 'a modu =
     mod_imports = m.Wasmir.mod_imports;
     mod_nfuns = m.Wasmir.mod_nfuns;
     mod_funs = List.map convert_func m.Wasmir.mod_funs;
-    mod_needs_export = FunIDMap.map (fun (targs, tret) -> Option.map convert_anytyp_list targs, convert_anytyp tret) m.Wasmir.mod_needs_export;
     mod_neffs = m.Wasmir.mod_neffs;
     mod_effs = m.Wasmir.mod_effs;
     mod_nglobals = m.Wasmir.mod_nglobals;

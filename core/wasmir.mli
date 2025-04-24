@@ -194,7 +194,6 @@ type 'a modu = {
   mod_imports     : (string * string) list;
   mod_nfuns       : int32;
   mod_funs        : func list;
-  mod_needs_export: (anytyp_list option * anytyp) FunIDMap.t;
   mod_neffs       : int32;
   mod_effs        : EffectIDSet.t;
   mod_nglobals    : int32;
