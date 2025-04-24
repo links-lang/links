@@ -834,13 +834,11 @@ let convert_binop (type a b c) (tm : tmap) (new_meta : new_meta) (op : (a, b, c)
 type 'a anybox_list = AnyBoxList : ('a, 'b) box_list -> 'a anybox_list
 
 type has_processes = (mvarid * int32) option (* global counter variable ID, angel threads list variable ID *)
-let gbl_count_reset = 2L (* Yield every [gbl_count_reset] calls *)
+let gbl_count_reset = 100L (* Yield every [gbl_count_reset] calls *)
 let generate_yield (glob : NewMetadata.g) (procinfo : has_processes) : instr_conv = match procinfo with
   | None -> Fun.id
   | Some (procinfo, _) -> let open Wasm in let open Value in let open Type in let open Instruction in fun acc ->
       If (ValBlockType None, [
-        Const (I64 (I64.of_bits (Int64.pred gbl_count_reset)));
-        GlobalSet (procinfo :> int32);
         Suspend (Int32.add (NewMetadata.effect_offset glob) TMap.yield_offset);
       ], [
         GlobalGet (procinfo :> int32);
@@ -1760,14 +1758,16 @@ let compile (m : 'a modu) (use_init : bool) (main_typ_name : string) : Wasm.modu
         fn_type = spawn_fid;
         fn_locals = [];
         fn_code = Instruction.[
+          (* Run main *)
           Call m.mod_nfuns;
+          (* Wait until all angels are done *)
           Block (ValBlockType None, [
             Loop (ValBlockType None, [
               Block (ValBlockType (Some (RefT (Null, EqHT))), [
                 GlobalGet angel_list; (* Get next angel PID *)
                 BrOnNull 2l; (* Is there no next angel? *)
                 StructGet (TMap.pid_list_tid, 0l, None); (* There is a next angel *)
-                GlobalGet angel_list; (* Mark next angel PID as finished *)
+                GlobalGet angel_list; (* Mark next angel PID as finished (remove it from the list of angels) *)
                 StructGet (TMap.pid_list_tid, 1l, None);
                 GlobalSet angel_list;
                 (* Wait for the PID in the stack to finish, then loop *)
@@ -1822,26 +1822,24 @@ let compile (m : 'a modu) (use_init : bool) (main_typ_name : string) : Wasm.modu
           RefT (NoNull, VarHT (StatX TMap.pid_active_tid));      (* 8: $spawn/$wait PID / main/returned process PID *)
         ];
         fn_code = Value.(Instruction.[
-          Const (I64 (I64.of_bits (Int64.pred gbl_count_reset)));
-          GlobalSet (procinfo :> int32);
+          (* Next PID *)
           Const (I32 I32.one);
           LocalSet 0l;
-          Const (I32 I32.zero);
-          Const (I32 I32.zero);
+          (* Create main process *)
+          Const (I32 I32.zero); (* PID *)
+          Const (I32 I32.zero); (* Unblocked by default *)
+          RefNull (VarHT (StatX TMap.list_tid)); (* Mailbox *)
           RefNull (VarHT (StatX TMap.list_tid));
-          RefNull (VarHT (StatX TMap.list_tid));
-          RefNull (VarHT (StatX TMap.waiting_list_tid));
+          RefNull (VarHT (StatX TMap.waiting_list_tid)); (* Processes waiting on main *)
           StructNew (TMap.pid_active_tid, Explicit);
-          LocalSet 8l;
-          LocalGet 8l;
           StructNew (TMap.pid_tid, Explicit);
-          RefFunc aux_mainid;
+          RefFunc aux_mainid; (* Wrapper function *)
           ContNew TMap.process_active_tid;
-          RefNull (VarHT (StatX TMap.process_list_tid));
+          RefNull (VarHT (StatX TMap.process_list_tid)); (* Next processes *)
           StructNew (TMap.process_list_tid, Explicit);
-          LocalSet 1l;
+          LocalSet 1l; (* All processes *)
           LocalGet 1l;
-          LocalSet 2l;
+          LocalSet 2l; (* Process list iterator *)
           Block (ValBlockType None, [
             Loop (ValBlockType None, [
               Block (ValBlockType None, [                                                               (* Load next process *)
@@ -1850,12 +1848,16 @@ let compile (m : 'a modu) (use_init : bool) (main_typ_name : string) : Wasm.modu
                     Block (VarBlockType spawn_bt, [                                                     (* $spawn *)
                       Block (ValBlockType (Some (RefT (Null, EqHT))), [                                 (* (returned) *)
                         Block (ValBlockType (Some (RefT (NoNull, VarHT (StatX self_ctid)))), [          (* $self *)
+                          (* Run the process pointed by the iterator if it is unblocked *)
                           LocalGet 2l;
                           StructGet (TMap.process_list_tid, 0l, None);
                           StructGet (TMap.pid_tid, 1l, None);
                           RefCast (NoNull, VarHT (StatX TMap.pid_active_tid));
                           StructGet (TMap.pid_active_tid, 0l, Some Pack.ZX);
                           BrIf 5l; (* Blocked *)
+                          (* OK, reset yield timer then resume process *)
+                          Const (I64 (I64.of_bits (Int64.pred gbl_count_reset)));
+                          GlobalSet (procinfo :> int32);
                           LocalGet 2l;
                           StructGet (TMap.process_list_tid, 1l, None);
                           Resume (TMap.process_active_tid, [self_eid, OnLabel 0l; spawn_eid, OnLabel 2l; yield_eid, OnLabel 3l; wait_eid, OnLabel 4l]);
