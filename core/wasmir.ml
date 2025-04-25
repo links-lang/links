@@ -2407,6 +2407,7 @@ and of_computation : type args. _ -> args lenv -> _ -> _ * args lenv * _ =
     | [] ->
         let ge, le, Expr (t, e) = of_tail_computation ge le tc in
         ge, le, Block (t, (List.rev acc, e))
+    (* FIXME: also support Let constructions with tyvar(s) *)
     | Let (b, (_, tc)) :: bs ->
         let ge, le, Expr (t, e) = of_tail_computation ge le tc in
         let ge, le, loc, v = GEnv.add_var ge le b t in
@@ -2495,6 +2496,12 @@ type prelude_info =
 type pgenv = (prelude_map, prelude_info) genv
 
 let split_prelude (prelude : binding list) : binding list * prelude_map =
+  let is_pure_tail (tc : tail_computation) : bool = match tc with
+    | Return _ -> true
+    | Apply _ -> false
+    | Special _ -> false
+    | Case _ -> false
+    | If _ -> false in
   let rec inner l acc m = match l with
     | [] -> acc, m
     | Fun fd :: tl ->
@@ -2503,8 +2510,7 @@ let split_prelude (prelude : binding list) : binding list * prelude_map =
     | Rec rd :: tl ->
         let m = VarMap.add_seq (Seq.map (fun fd -> Var.var_of_binder fd.fn_binder, PreludeFun fd) (List.to_seq rd)) m in
         inner tl acc m
-    (* FIXME: also support Let constructions with tyvar(s) *)
-    | Let (b, ([], tc)) :: tl ->
+    | Let (b, ([], tc)) :: tl when is_pure_tail tc ->
         let m = VarMap.add (Var.var_of_binder b) (PreludeLet (b, tc)) m in
         inner tl acc m
     | (Let _ | Alien _ | Module _ as hd) :: tl -> inner tl (hd :: acc) m in
