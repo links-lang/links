@@ -176,6 +176,7 @@ type ('a, 'b) fhandler = {
 type ('g, 'a, 'b) fbuiltin =
   | FBHere : (unit, unit, Value.spawn_location) fbuiltin
   | FBIntToString : (unit, int * unit, string) fbuiltin
+  | FBLength : (unit option, llist * unit, int) fbuiltin
   | FBRecv : (unit option, unit, unit) fbuiltin
   | FBSelf : (unit, unit, process) fbuiltin
   | FBSend : (unit option, process * (unit * unit), unit list) fbuiltin

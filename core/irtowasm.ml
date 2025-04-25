@@ -1350,6 +1350,26 @@ let convert_builtin (tm : tmap) (glob : NewMetadata.g) (procinfo : has_processes
         ]);
       ];
     }
+  | FBLength ->
+    let fun_typ = TMap.recid_of_functyp tm (TLcons (TList TVar, TLnil)) TInt in
+    let i64toi64 = TMap.recid_of_sub_type tm Wasm.Type.(SubT (Final, [], DefFuncT (FuncT ([NumT I64T], [NumT I64T])))) in
+    Wasm.{
+      fn_name = None;
+      fn_type = fun_typ;
+      fn_locals = [];
+      fn_code = let open Value in let open Type in Instruction.[
+        Const (I64 (I64.of_bits 0L));
+        Loop (VarBlockType i64toi64, [
+          LocalGet 0l;
+          BrOnNull 1l;
+          StructGet (TMap.list_tid, 1l, None);
+          LocalSet 0l;
+          Const (I64 I64.one);
+          Binop (I64 IntOp.Add);
+          Br 0l;
+        ]);
+      ];
+    }
   | FBRecv ->
     let fun_typ = TMap.recid_of_functyp tm TLnil TVar in
     Wasm.{

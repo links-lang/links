@@ -290,6 +290,7 @@ type ('a, 'b) fhandler = {
 type ('g, 'a, 'b) fbuiltin =
   | FBHere : (unit, unit, Value.spawn_location) fbuiltin
   | FBIntToString : (unit, int * unit, string) fbuiltin
+  | FBLength : (unit option, llist * unit, int) fbuiltin
   | FBRecv : (unit option, unit, unit) fbuiltin
   | FBSelf : (unit, unit, process) fbuiltin
   | FBSend : (unit option, process * (unit * unit), unit list) fbuiltin
@@ -501,6 +502,7 @@ end = struct
   type t = {
     bt_here: (unit, Value.spawn_location, unit, unit, unit) funcid option;
     bt_i2s: (int * unit, string, unit, unit, unit) funcid option;
+    bt_len: (llist * unit, int, unit, unit option, unit) funcid option;
     bt_recv: (unit, unit, unit, unit option, unit) funcid option;
     bt_self: (unit, process, unit, unit, unit) funcid option;
     bt_send: (process * (unit * unit), unit list, unit, unit option, unit) funcid option;
@@ -514,6 +516,7 @@ end = struct
   let empty : t = {
     bt_here = None;
     bt_i2s = None;
+    bt_len = None;
     bt_recv = None;
     bt_self = None;
     bt_send = None;
@@ -537,6 +540,11 @@ end = struct
         let acc, fid = add_builtin acc (AFBt FBIntToString) in
         let f = (Gnil, Gnil, TLcons (TInt, TLnil), TString, TLnil, fid) in
         { env with bt_i2s = Some f; }, acc, f
+    | { bt_len = Some f; _ }, FBLength -> env, acc, f
+    | { bt_len = None; _ }, FBLength ->
+        let acc, fid = add_builtin acc (AFBt FBLength) in
+        let f = (Gcons (0, Gnil), Gnil, TLcons (TList (TVar 0), TLnil), TInt, TLnil, fid) in
+        { env with bt_len = Some f; }, acc, f
     | { bt_recv = Some f; _ }, FBRecv -> env, acc, f
     | { bt_recv = None; _ }, FBRecv ->
         let acc, fid = add_builtin acc (AFBt FBRecv) in
@@ -833,7 +841,7 @@ end = struct
               (add_builtin : 'a -> anyfbuiltin -> 'a * mfunid)
               (has_process : 'a -> 'a) (convert_type : Types.typ -> anytyp)
               (v : string) : (t * 'a * anyexpr) option =
-    ignore (add_builtin, has_process, convert_type);
+    ignore (has_process, convert_type);
     match
       match StringMap.find_opt v binops with
       | Some (ZeroTArgs bo) -> Some (bo, AG Gnil)
@@ -882,6 +890,11 @@ end = struct
         Some (env, acc, Expr (TClosed (Gnil, TLcons (targ, TLnil), tret), EClose (fid, BLnil, ELnil)))
     | None -> match v with
     | "Nil" -> Some (env, acc, Expr (TList (TVar ~-1), EListNil (TVar ~-1)))
+    | "length" ->
+        let env, acc, fid = find_fbuiltin env acc add_builtin FBLength in
+        Some (env, acc,
+          Expr (TClosed (Gcons (0, Gnil), TLcons (TList (TVar 0), TLnil), TInt),
+          EClose (fid, BLnil, ELnil)))
     | _ -> None
   
   let apply_type (at : Types.Abstype.t) (ts : anytyp list)
