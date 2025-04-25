@@ -766,6 +766,7 @@ module Instruction = struct
     | Cvtop of cvtop
     | LocalGet of int32
     | LocalSet of int32
+    | LocalTee of int32
     | GlobalGet of int32
     | GlobalSet of int32
     | Block of block_type * t list
@@ -830,6 +831,7 @@ module Instruction = struct
     | Cvtop op -> Node (oper (IntOp.cvtop, FloatOp.cvtop) op, [])
     | LocalGet i -> LongNode ("local.get", [Atom (Int32.to_string i)], [])
     | LocalSet i -> LongNode ("local.set", [Atom (Int32.to_string i)], [])
+    | LocalTee i -> LongNode ("local.tee", [Atom (Int32.to_string i)], [])
     | GlobalGet i -> LongNode ("global.get", [Atom (Int32.to_string i)], [])
     | GlobalSet i -> LongNode ("global.set", [Atom (Int32.to_string i)], [])
     | Block (bt, b) -> LongNode ("block", sexpr_of_block_type bt, List.map to_sexpr b)

@@ -179,7 +179,7 @@ let rec generate_instr buf i = match i with
   
   | LocalGet i -> Buffer.add_uint8 buf 0x20; generate_u 32 buf (Int64.of_int32 i)
   | LocalSet i -> Buffer.add_uint8 buf 0x21; generate_u 32 buf (Int64.of_int32 i)
-  
+  | LocalTee i -> Buffer.add_uint8 buf 0x22; generate_u 32 buf (Int64.of_int32 i)
   | GlobalGet i -> Buffer.add_uint8 buf 0x23; generate_u 32 buf (Int64.of_int32 i)
   | GlobalSet i -> Buffer.add_uint8 buf 0x24; generate_u 32 buf (Int64.of_int32 i)
   

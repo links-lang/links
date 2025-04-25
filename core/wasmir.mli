@@ -1,6 +1,3 @@
-(* TODO: rethink how deep handlers work, so that we don't have to call another
-   function in the (most common?) case of tail resumption *)
-
 type tagid = private int
 type tvarid = Types.tid      (* Type variable ID   *)
 type mvarid = private int32  (* Module variable ID *)

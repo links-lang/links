@@ -230,6 +230,7 @@ module Instruction : sig
     | Cvtop of cvtop
     | LocalGet of int32
     | LocalSet of int32
+    | LocalTee of int32
     | GlobalGet of int32
     | GlobalSet of int32
     | Block of block_type * t list
