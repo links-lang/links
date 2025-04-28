@@ -34,7 +34,6 @@ open Wasmuir
 module TMap : sig
   type t
   val empty : bool -> t
-  val default_closure : int32
   val main_func_type : int32
   val variant_tid : int32
   val list_tid : int32
@@ -79,37 +78,36 @@ end = struct
     mutable reftyps: Wasm.Type.rec_type list;
   }
   
-  let default_closure : int32 = 0l
-  let main_func_type : int32 = 1l
-  let variant_tid : int32 = 2l
+  let main_func_type : int32 = 0l
+  let variant_tid : int32 = 1l
   let variant_typ = Wasm.Type.(SubT (Final, [], DefStructT (StructT [
     FieldT (Cons, ValStorageT (NumT I32T));
     FieldT (Cons, ValStorageT (RefT (Null, EqHT)));
   ])))
-  let list_tid : int32 = 3l
+  let list_tid : int32 = 2l
   let list_typ = Wasm.Type.(SubT (Final, [], DefStructT (StructT [
     FieldT (Cons, ValStorageT (RefT (Null, EqHT)));
     FieldT (Cons, ValStorageT (RefT (Null, VarHT (StatX list_tid))));
   ])))
-  let string_tid : int32 = 4l
+  let string_tid : int32 = 3l
   let string_typ = Wasm.Type.(SubT (Final, [], DefArrayT (ArrayT (FieldT (Var, PackStorageT Wasm.Pack.Pack8)))))
-  let boxed_int_tid : int32 = 5l
-  let boxed_float_tid : int32 = 6l
-  let pid_tid : int32 = 7l
+  let boxed_int_tid : int32 = 4l
+  let boxed_float_tid : int32 = 5l
+  let pid_tid : int32 = 6l
   let pid_typ = Wasm.Type.(SubT (Final, [], DefStructT (StructT [
     FieldT (Cons, ValStorageT (NumT I32T)); (* "Real" process ID *)
     FieldT (Var, ValStorageT (RefT (Null, EqHT))); (* boxed or pid_active (note: pid_active cannot be the boxed value) *)
   ])))
-  let process_active_ftid : int32 = 8l
+  let process_active_ftid : int32 = 7l
   let process_active_ftyp = Wasm.Type.(SubT (Final, [], DefFuncT (FuncT ([], [RefT (Null, EqHT)]))))
-  let process_active_tid : int32 = 9l
+  let process_active_tid : int32 = 8l
   let process_active_typ = Wasm.Type.(SubT (Final, [], DefContT (ContT (VarHT (StatX process_active_ftid)))))
-  let process_waiting_ftid : int32 = 10l
+  let process_waiting_ftid : int32 = 9l
   let process_waiting_ftyp = Wasm.Type.(SubT (Final, [], DefFuncT (FuncT ([RefT (Null, EqHT)], [RefT (Null, EqHT)]))))
-  let process_waiting_tid : int32 = 11l
+  let process_waiting_tid : int32 = 10l
   let process_waiting_typ = Wasm.Type.(SubT (Final, [], DefContT (ContT (VarHT (StatX process_waiting_ftid)))))
-  let pid_active_tid : int32 = 12l
-  let waiting_list_tid : int32 = 13l
+  let pid_active_tid : int32 = 11l
+  let waiting_list_tid : int32 = 12l
   let pid_active_typ = Wasm.Type.(SubT (Final, [], DefStructT (StructT [
     FieldT (Var, PackStorageT Wasm.Pack.Pack8); (* Blocked? *)
     FieldT (Var, ValStorageT (RefT (Null, VarHT (StatX list_tid)))); (* Push mailbox (Send) *)
@@ -121,13 +119,13 @@ end = struct
     FieldT (Var, ValStorageT (RefT (NoNull, VarHT (StatX process_waiting_tid))));
     FieldT (Var, ValStorageT (RefT (Null, VarHT (StatX waiting_list_tid))));
   ])))
-  let process_list_tid : int32 = 14l
+  let process_list_tid : int32 = 13l
   let process_list_typ = Wasm.Type.(SubT (Final, [], DefStructT (StructT [
     FieldT (Cons, ValStorageT (RefT (NoNull, VarHT (StatX pid_tid))));
     FieldT (Var, ValStorageT (RefT (Null, VarHT (StatX process_active_tid))));
     FieldT (Var, ValStorageT (RefT (Null, VarHT (StatX process_list_tid))));
   ])))
-  let pid_list_tid : int32 = 15l
+  let pid_list_tid : int32 = 14l
   let pid_list_typ = Wasm.Type.(SubT (Final, [], DefStructT (StructT [
     FieldT (Cons, ValStorageT (RefT (NoNull, VarHT (StatX pid_tid))));
     FieldT (Cons, ValStorageT (RefT (Null, VarHT (StatX pid_list_tid))));
@@ -136,29 +134,27 @@ end = struct
   let empty (has_process : bool) : t =
     let reftyps =
       if has_process then Wasm.Type.[
-        (* 15 *) RecT [pid_list_typ];
-        (* 14 *) RecT [process_list_typ];
-        (* 12-13 *) RecT [pid_active_typ; waiting_list_typ];
-        (* 11 *) RecT [process_waiting_typ];
-        (* 10 *) RecT [process_waiting_ftyp];
-        (* 9 *) RecT [process_active_typ];
-        (* 8 *) RecT [process_active_ftyp];
-        (* 7 *) RecT [pid_typ];
-        (* 6 *) RecT [SubT (Final, [], DefStructT (StructT [FieldT (Cons, ValStorageT (NumT F64T))]))];
-        (* 5 *) RecT [SubT (Final, [], DefStructT (StructT [FieldT (Cons, ValStorageT (NumT I64T))]))];
-        (* 4 *) RecT [string_typ];
-        (* 3 *) RecT [list_typ];
-        (* 2 *) RecT [variant_typ];
-        (* 1 *) RecT [SubT (Final, [], DefFuncT (FuncT ([], [])))];
-        (* 0 *) RecT [SubT (Final, [], DefStructT (StructT []))];
+        (* 14 *) RecT [pid_list_typ];
+        (* 13 *) RecT [process_list_typ];
+        (* 11-12 *) RecT [pid_active_typ; waiting_list_typ];
+        (* 10 *) RecT [process_waiting_typ];
+        (* 9 *) RecT [process_waiting_ftyp];
+        (* 8 *) RecT [process_active_typ];
+        (* 7 *) RecT [process_active_ftyp];
+        (* 6 *) RecT [pid_typ];
+        (* 5 *) RecT [SubT (Final, [], DefStructT (StructT [FieldT (Cons, ValStorageT (NumT F64T))]))];
+        (* 4 *) RecT [SubT (Final, [], DefStructT (StructT [FieldT (Cons, ValStorageT (NumT I64T))]))];
+        (* 3 *) RecT [string_typ];
+        (* 2 *) RecT [list_typ];
+        (* 1 *) RecT [variant_typ];
+        (* 0 *) RecT [SubT (Final, [], DefFuncT (FuncT ([], [])))];
       ] else Wasm.Type.[
-        (* 6 *) RecT [SubT (Final, [], DefStructT (StructT [FieldT (Cons, ValStorageT (NumT F64T))]))];
-        (* 5 *) RecT [SubT (Final, [], DefStructT (StructT [FieldT (Cons, ValStorageT (NumT I64T))]))];
-        (* 4 *) RecT [string_typ];
-        (* 3 *) RecT [list_typ];
-        (* 2 *) RecT [variant_typ];
-        (* 1 *) RecT [SubT (Final, [], DefFuncT (FuncT ([], [])))];
-        (* 0 *) RecT [SubT (Final, [], DefStructT (StructT []))];
+        (* 5 *) RecT [SubT (Final, [], DefStructT (StructT [FieldT (Cons, ValStorageT (NumT F64T))]))];
+        (* 4 *) RecT [SubT (Final, [], DefStructT (StructT [FieldT (Cons, ValStorageT (NumT I64T))]))];
+        (* 3 *) RecT [string_typ];
+        (* 2 *) RecT [list_typ];
+        (* 1 *) RecT [variant_typ];
+        (* 0 *) RecT [SubT (Final, [], DefFuncT (FuncT ([], [])))];
       ] in {
     cenv = TypeMap.of_list [
       Type TString, string_tid;
@@ -849,22 +845,49 @@ let convert_binop (type a b c) (tm : tmap) (new_meta : new_meta) (op : (a, b, c)
 
 type 'a anybox_list = AnyBoxList : ('a, 'b) box_list -> 'a anybox_list
 
-type has_processes = (mvarid * int32) option (* global counter variable ID, angel threads list variable ID *)
+let optimize_size
+  = Settings.(flag ~default:true "optimize_size"
+              |> synopsis "Generate a smaller output, at the cost of runtime speed"
+              |> convert parse_bool
+              |> sync)
+
+type has_processes = (mvarid * int32 * int32 option ref) option (* global counter variable ID, angel threads list variable ID *)
 let gbl_count_reset = 100L (* Yield every [gbl_count_reset] calls *)
+let generate_real_yield (glob : NewMetadata.g) : instr_conv =
+  let open Wasm in let open Instruction in fun acc ->
+    Suspend (Int32.add (NewMetadata.effect_offset glob) TMap.yield_offset) :: acc
 let generate_yield (glob : NewMetadata.g) (procinfo : has_processes) : instr_conv = match procinfo with
   | None -> Fun.id
-  | Some (procinfo, _) -> let open Wasm in let open Value in let open Type in let open Instruction in fun acc ->
-      If (ValBlockType None, [
-        Suspend (Int32.add (NewMetadata.effect_offset glob) TMap.yield_offset);
-      ], [
-        GlobalGet (procinfo :> int32);
-        Const (I64 I64.one);
-        Binop (I64 IntOp.Sub);
-        GlobalSet (procinfo :> int32);
-      ]) ::
-      Testop (I64 IntOp.Eqz) ::
-      GlobalGet (procinfo :> int32) ::
-      acc
+  | Some (procinfo, _, yield_fun) -> let open Wasm in let open Value in let open Type in let open Instruction in
+      let do_check_yield = fun acc ->
+        If (ValBlockType None,
+          List.rev (generate_real_yield glob [])
+        , [
+          GlobalGet (procinfo :> int32);
+          Const (I64 I64.one);
+          Binop (I64 IntOp.Sub);
+          GlobalSet (procinfo :> int32);
+        ]) ::
+        Testop (I64 IntOp.Eqz) ::
+        GlobalGet (procinfo :> int32) ::
+        acc in
+      if Settings.get optimize_size then
+        let yield_fun = match !yield_fun with
+          | None ->
+              let fref, fid = NewMetadata.add_function glob in
+              yield_fun := Some fid;
+              let ftid = TMap.main_func_type in
+              fref := Some {
+                fn_name = None;
+                fn_type = ftid;
+                fn_locals = [];
+                fn_code = List.rev (do_check_yield [])
+              };
+              NewMetadata.register_function glob ~fid ~ftid;
+              fid
+          | Some fid -> fid in
+        fun acc -> Call yield_fun :: acc
+      else do_check_yield
 
 type last_info = (mfunid * int32) option option
 type clos_info = (int32 * mvarid) option (* Closure type ID, closure ID *)
@@ -1472,7 +1495,7 @@ let convert_builtin (tm : tmap) (glob : NewMetadata.g) (procinfo : has_processes
     }
   | FBSpawnAngelAt ->
     let fun_typ = TMap.recid_of_functyp tm (TLcons (TSpawnLocation, TLcons (TClosed (TLnil, TVar), TLnil))) TProcess in
-    let _, angels_vid = Option.get procinfo in
+    let _, angels_vid, _ = Option.get procinfo in
     Wasm.{
       fn_name = None;
       fn_type = fun_typ;
@@ -1514,13 +1537,13 @@ let convert_builtin (tm : tmap) (glob : NewMetadata.g) (procinfo : has_processes
 
 let convert_fun_aux (tm : tmap) (glob : NewMetadata.g) (procinfo : has_processes)
                     (ft : int32) (nparams : int32) (locals : Wasm.Type.val_type list) (f : 'a block)
-    (init_dest : (bool * Wasm.Instruction.t list) option) (closid : (anytyp_list * mvarid) option) : int32 * Wasm.fundef =
+    (init_dest : (bool * Wasm.Instruction.t list) option) (closid : (anytyp_list * mvarid) option) : int32 option * Wasm.fundef =
   let new_meta = NewMetadata.extend glob nparams locals in
   let clostid, cinfo = match closid with
-    | None -> TMap.default_closure, None
+    | None -> None, None
     | Some (TypeList ct, cid) ->
         let ctid = TMap.recid_of_type tm (TClosArg ct) in
-        ctid, Some (ctid, cid) in
+        Some ctid, Some (ctid, cid) in
   let code = convert_anyblock tm new_meta procinfo f (Option.is_none init_dest) cinfo in
   clostid, Wasm.{
     fn_name = (match init_dest with Some (true, _) -> Some "main" | Some (false, _) | None -> None);
@@ -1529,7 +1552,7 @@ let convert_fun_aux (tm : tmap) (glob : NewMetadata.g) (procinfo : has_processes
     fn_code = List.rev (match init_dest with Some (_, app_code) -> app_code @ code | None -> code);
   }
 
-let convert_fun (tm : tmap) (glob : NewMetadata.g) (procinfo : has_processes) (f : ('a, 'b) func') : int32 * Wasm.fundef =
+let convert_fun (tm : tmap) (glob : NewMetadata.g) (procinfo : has_processes) (f : ('a, 'b) func') : int32 option * Wasm.fundef =
   let fun_typ = TMap.recid_of_functyp tm f.fun_args f.fun_ret in
   let nparams =
     let rec inner : type a. a typ_list -> _ = fun tl acc -> match tl with
@@ -1537,10 +1560,10 @@ let convert_fun (tm : tmap) (glob : NewMetadata.g) (procinfo : has_processes) (f
       | TLcons (_, tl) -> inner tl (Int32.succ acc) in
     inner f.fun_args 1l in
   convert_fun_aux tm glob procinfo fun_typ nparams (List.map (fun (Type t) -> TMap.val_of_type tm t) f.fun_locals) f.fun_block None f.fun_converted_closure
-let convert_fst (tm : tmap) (glob : NewMetadata.g) (procinfo : has_processes) (f : 'b fstart) : int32 * Wasm.fundef =
+let convert_fst (tm : tmap) (glob : NewMetadata.g) (procinfo : has_processes) (f : 'b fstart) : int32 option * Wasm.fundef =
   let fun_typ = TMap.recid_of_cfunctyp tm f.fst_ret in
   convert_fun_aux tm glob procinfo fun_typ 1l (List.map (fun (Type t) -> TMap.val_of_type tm t) f.fst_locals) f.fst_block None f.fst_converted_closure
-let convert_fun_step2 (tm : tmap) (f, clostyp : func * int32) : Wasm.fundef option = match f with
+let convert_fun_step2 (tm : tmap) (f, clostyp : func * int32 option) : Wasm.fundef option = match f with
   | FContinuationStart _ | FHandler _ | FBuiltin _ -> None
   | FFunction f ->
   match f.fun_export_data with
@@ -1549,13 +1572,14 @@ let convert_fun_step2 (tm : tmap) (f, clostyp : func * int32) : Wasm.fundef opti
       let targs = f.fun_args in
       let tret = f.fun_ret in
       let fn_type = TMap.recid_of_exported_type tm targs tret in
+      let clostyp = let open Wasm.Type in match clostyp with None -> NoneHT | Some clostid -> VarHT (StatX clostid) in
       Some Wasm.{
         fn_name = Some name;
         fn_type;
         fn_locals = [];
         fn_code = List.rev Wasm.Instruction.(
           ReturnCall (f.fun_id :> int32) ::
-          RefNull Wasm.Type.(VarHT (StatX clostyp)) ::
+          RefNull clostyp ::
           let rec inner : type a. _ -> _ -> a typ_list -> _ = fun i acc (ls : a typ_list) -> match ls with
             | TLnil -> acc
             | TLcons (_, ls) -> inner (Int32.succ i) (LocalGet i :: acc) ls
@@ -1625,7 +1649,7 @@ let compile (m : 'a modu) (use_init : bool) (main_typ_name : string) : Wasm.modu
     cg in
   let has_processes = match m.mod_global_counter with
     | None -> None
-    | Some procinfo -> Some (procinfo, Int32.succ m.mod_nglobals) in
+    | Some procinfo -> Some (procinfo, Int32.succ m.mod_nglobals, ref None) in
   let (_, _, impinfo), imports = List.fold_left_map (convert_import tm) (0l, 0l, impinfo_empty) m.mod_imports in
   let impinfo = finish_import_info impinfo in
   let glob, main =
@@ -1790,7 +1814,7 @@ let compile (m : 'a modu) (use_init : bool) (main_typ_name : string) : Wasm.modu
   let mainid =
     match has_processes with
     | None -> m.mod_nfuns
-    | Some (procinfo, angel_list) ->
+    | Some (procinfo, angel_list, _) ->
       let open Wasm in let open Type in
       let spawn_fid = TMap.recid_of_exported_type tm TLnil TVar in
       (* Wrap the main function *)
