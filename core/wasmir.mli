@@ -189,17 +189,17 @@ type func =
   | FHandler : ('a, 'b) fhandler -> func
   | FBuiltin : mfunid * ('g, 'a, 'b) fbuiltin -> func
 type 'a modu = {
-  mod_imports     : (string * string) list;
-  mod_nfuns       : int32;
-  mod_funs        : func list;
-  mod_neffs       : int32;
-  mod_effs        : EffectIDSet.t;
-  mod_nglobals    : int32;
-  mod_global_vars : (mvarid * anytyp * string option) list;
-  mod_locals      : anytyp list;
-  mod_main        : 'a typ;
-  mod_block       : 'a block;
-  mod_global_counter : mvarid option;
+  mod_imports       : (string * string) list;
+  mod_nfuns         : int32;
+  mod_funs          : func list;
+  mod_neffs         : int32;
+  mod_effs          : EffectIDSet.t;
+  mod_nglobals      : int32;
+  mod_global_vars   : (mvarid * anytyp * string option) list;
+  mod_locals        : anytyp list;
+  mod_main          : 'a typ;
+  mod_block         : 'a block;
+  mod_has_processes : bool;
 }
 
 type anymodule = Module : 'a modu -> anymodule

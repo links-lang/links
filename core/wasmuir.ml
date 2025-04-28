@@ -442,17 +442,17 @@ type func =
   | FHandler : ('a, 'b) fhandler -> func
   | FBuiltin : mfunid * ('g, 'a, 'b) fbuiltin -> func
 type 'a modu = {
-  mod_imports     : (string * string) list;
-  mod_nfuns       : int32;
-  mod_funs        : func list;
-  mod_neffs       : int32;
-  mod_effs        : EffectIDSet.t;
-  mod_nglobals    : int32;
-  mod_global_vars : (mvarid * anytyp * string option) list;
-  mod_locals      : anytyp list;
-  mod_main        : 'a typ;
-  mod_block       : 'a block;
-  mod_global_counter : mvarid option;
+  mod_imports       : (string * string) list;
+  mod_nfuns         : int32;
+  mod_funs          : func list;
+  mod_neffs         : int32;
+  mod_effs          : EffectIDSet.t;
+  mod_nglobals      : int32;
+  mod_global_vars   : (mvarid * anytyp * string option) list;
+  mod_locals        : anytyp list;
+  mod_main          : 'a typ;
+  mod_block         : 'a block;
+  mod_has_processes : bool;
 }
 
 let convert_func' (f : ('a, 'b) Wasmir.func') : ('a, 'b) func' = {
@@ -505,7 +505,7 @@ let convert_module (m : 'a Wasmir.modu) : 'a modu =
     mod_locals = List.map convert_anytyp m.Wasmir.mod_locals;
     mod_main = convert_typ m.Wasmir.mod_main;
     mod_block = convert_block m.Wasmir.mod_block;
-    mod_global_counter = m.Wasmir.mod_global_counter;
+    mod_has_processes = m.Wasmir.mod_has_processes;
   }
 
 let module_of_ir (m : 'a Wasmir.modu) : 'a modu =

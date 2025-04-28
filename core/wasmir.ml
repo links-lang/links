@@ -303,17 +303,17 @@ type func =
   | FHandler : ('a, 'b) fhandler -> func
   | FBuiltin : mfunid * ('g, 'a, 'b) fbuiltin -> func
 type 'a modu = {
-  mod_imports     : (string * string) list;
-  mod_nfuns       : int32;
-  mod_funs        : func list;
-  mod_neffs       : int32;
-  mod_effs        : EffectIDSet.t;
-  mod_nglobals    : int32;
-  mod_global_vars : (mvarid * anytyp * string option) list;
-  mod_locals      : anytyp list;
-  mod_main        : 'a typ;
-  mod_block       : 'a block;
-  mod_global_counter : mvarid option;
+  mod_imports       : (string * string) list;
+  mod_nfuns         : int32;
+  mod_funs          : func list;
+  mod_neffs         : int32;
+  mod_effs          : EffectIDSet.t;
+  mod_nglobals      : int32;
+  mod_global_vars   : (mvarid * anytyp * string option) list;
+  mod_locals        : anytyp list;
+  mod_main          : 'a typ;
+  mod_block         : 'a block;
+  mod_has_processes : bool;
 }
 
 type anymodule = Module : 'a modu -> anymodule
@@ -1649,7 +1649,7 @@ end = struct
     ge_gblbinders : Utility.IntSet.t;
     ge_gblmap : anyvarid Env.Int.t;
     ge_fmap : anyfuncid Env.Int.t;
-    ge_global_counter : mvarid option;
+    ge_has_processes : bool;
     ge_pmap : 'pi;
     ge_pmap_find : ('pi, 'pa) t -> 'pi -> var -> (('pi, 'pa) t * 'pi * 'pa) option;
     ge_pmap_acc : 'pa VarQueue.t; (* Changes in-place *)
@@ -1673,7 +1673,7 @@ end = struct
       ge_gblbinders = global_binders;
       ge_gblmap = Env.Int.empty;
       ge_fmap = Env.Int.empty;
-      ge_global_counter = None;
+      ge_has_processes = false;
       ge_pmap = prelude_init;
       ge_pmap_find = find_prelude;
       ge_pmap_acc = VarQueue.empty ();
@@ -1870,11 +1870,8 @@ end = struct
     | None -> hid := Some (AFHdl (LEnv.compile_handler args self_mid oabsconc onret ondo)); env
   
   let set_has_process (env : ('pi, 'pa) t) : ('pi, 'pa) t =
-    if Option.is_none env.ge_global_counter then
-      let vid = env.ge_ngbls in
-      let ge_ngbls = Int32.succ vid in
-      let ge_gbls = (VarID (TInt, vid), None) :: env.ge_gbls in
-      { env with ge_ngbls; ge_gbls; ge_global_counter = Some vid }
+    if not env.ge_has_processes then
+      { env with ge_has_processes = true }
     else env
   let add_builtin (env : ('pi, 'pa) t) (fb : anyfbuiltin) : ('pi, 'pa) t * mfunid =
     let i = env.ge_nfuns in
@@ -1940,7 +1937,7 @@ end = struct
         mod_locals = lvs;
         mod_main = t;
         mod_block = (ass, e);
-        mod_global_counter = ge.ge_global_counter;
+        mod_has_processes = ge.ge_has_processes;
       }
 end
 type ('pi, 'pa) genv = ('pi, 'pa) GEnv.t
