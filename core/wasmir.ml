@@ -1191,7 +1191,7 @@ module LEnv : sig (* Contains the arguments, the local variables, etc *)
   val no_arg : args
   val add_arg : args -> binder -> args
   val env_of_args : args -> binder option -> anyrealt * anygeneralization
-  val add_closure : 'a realt -> 'a realt * mvarid * mvarid * anytyp_list
+  val add_closure : 'a realt -> 'a realt * (mvarid * mvarid * anytyp_list) option
   
   val add_local : 'a t -> anytyp -> 'a t * mvarid
   val add_var : 'a t -> binder -> 'b typ -> 'a t * 'b varid
@@ -1393,16 +1393,18 @@ end = struct
       cbid;
     }, gcl
   
-  let add_closure (env : 'a realt) : 'a realt * mvarid * mvarid * anytyp_list =
+  let add_closure (env : 'a realt) : 'a realt * (mvarid * mvarid * anytyp_list) option =
     let acid, TypeList cat = match env.clos with
       | _, _, true -> raise (internal_error "Double add_closure call")
       | acid, cat, false -> acid, cat
-    in let ccid = Int32.add env.nargs env.nlocs in
+    in match cat with
+    | TLnil -> { env with clos = acid, TypeList cat, true; }, None
+    | TLcons _ -> let ccid = Int32.add env.nargs env.nlocs in
     { env with
       nlocs = Int32.succ env.nlocs;
       locs = (let TypeList tl = env.locs in TypeList (TLcons (TClosArg cat, tl)));
       clos = ccid, TypeList cat, true;
-    }, acid, ccid, TypeList cat
+    }, Some (acid, ccid, TypeList cat)
   
   let add_sub_to_env (env : subt) (base : 'a t) (loc : local_storage) (VarID (t, bid) : anyvarid) : subt * anyvarid =
     let cid = env.nclos in
@@ -1546,7 +1548,7 @@ end = struct
     let export_data = match export_name with
       | Some name -> Some name
       | None -> None
-    in let convclos = if has_converted_closure then Some (clt, closid) else None
+    in let convclos = if has_converted_closure then match clt with TypeList TLnil -> None | TypeList (TLcons _) -> Some (clt, closid) else None
     in {
       fun_id = fid;
       fun_export_data = export_data;
@@ -2466,10 +2468,11 @@ and finish_computation : type args. ('pi, 'pa) genv -> fun_def -> GEnv.funid -> 
     match fd.fn_closure with
     | None -> ge, new_le, b
     | Some _ ->
-        let new_le, absid, concid, TypeList ctyp = LEnv.add_closure new_le in
-        match ctyp with
-        | TLnil -> ge, new_le, b (* Prevent empty closure conversion (unsupported by the WasmUIR -> WasmFX translation) *)
-        | _ ->
+        let new_le, oval = LEnv.add_closure new_le in
+        match oval with
+        | None -> ge, new_le, b
+        | Some (_, _, TypeList TLnil) -> ge, new_le, b (* Prevent empty closure conversion (unsupported by the WasmUIR -> WasmFX translation) *)
+        | Some (absid, concid, TypeList ctyp) ->
             let (ass, e) = b in
             ge, new_le, (Assign (Local StorVariable, (TClosArg ctyp, concid), EConvertClosure (absid, TClosArg ctyp)) :: ass, e) in
   let export_name =
