@@ -1082,7 +1082,7 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
       let arg = convert_expr tm new_meta procinfo arg (BBox targ) None cinfo in
       let contarg = convert_expr tm new_meta procinfo contarg BNone None cinfo in
       begin match is_last with
-      | Some (refid, jmplv) when Int32.equal fid (refid :> int32) ->
+      | Some (refid, jmplv) when can_early_ret && Int32.equal fid (refid :> int32) ->
           do_box tm new_meta box
             (fun acc -> Br jmplv :: contarg (arg acc))
       | _ ->
