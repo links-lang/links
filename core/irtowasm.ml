@@ -1442,7 +1442,7 @@ let convert_builtin (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (_f
           LocalGet 2l;
           Const (I64 (I64.of_bits 10L));
           Binop (I64 IntOp.RemU);
-          Cvtop (I32 IntOp.WrapI64);
+          Cvtop (I32 I32Op.WrapI64);
           Const (I32 (I32.of_int_s (Char.code '0')));
           Binop (I32 IntOp.Add);
           ArraySet TMap.string_tid;
@@ -1798,7 +1798,7 @@ let compile (m : 'a modu) (use_init : bool) (main_typ_name : string) : Wasm.modu
                     Const (I64 (I64.of_bits 10L));
                     Binop (I64 IntOp.RemU);
                   ]);
-                  Cvtop (I32 IntOp.WrapI64);
+                  Cvtop (I32 I32Op.WrapI64);
                   Const (I32 (I32.of_int_s (Char.code '0')));
                   Binop (I32 IntOp.Add);
                   Call putc;

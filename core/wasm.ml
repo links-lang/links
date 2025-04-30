@@ -671,7 +671,6 @@ module Instruction = struct
     type binop = Add | Sub | Mul | DivS | DivU | RemS | RemU | And | Or | Xor | Shl | ShrS | ShrU | Rotl | Rotr
     type testop = Eqz
     type relop = Eq | Ne | LtS | LtU | GtS | GtU | LeS | LeU | GeS | GeU
-    type cvtop = WrapI64 | ReinterpretFloat
     
     let unop _ (op : unop) : string = match op with _ -> .
     let binop _ (op : binop) : string = match op with
@@ -703,9 +702,6 @@ module Instruction = struct
       | LeU -> "le_u"
       | GeS -> "ge_s"
       | GeU -> "ge_u"
-    let cvtop sz (op : cvtop) : string = match op with
-      | WrapI64 -> "wrap_i64"
-      | ReinterpretFloat -> "reinterpret_f" ^ sz
   end
   module FloatOp = struct
     type unop = Neg
@@ -729,8 +725,21 @@ module Instruction = struct
       | ReinterpretInt -> "reinterpret_i" ^ sz
   end
   
-  module I32Op = IntOp
-  module I64Op = IntOp
+  module I32Op = struct
+    include IntOp
+    
+    type cvtop = WrapI64 | ReinterpretFloat
+    let cvtop (op : cvtop) : string = match op with
+      | WrapI64 -> "wrap_i64"
+      | ReinterpretFloat -> "reinterpret_f32"
+  end
+  module I64Op = struct
+    include IntOp
+    
+    type cvtop = ReinterpretFloat
+    let cvtop (op : cvtop) : string = match op with
+      | ReinterpretFloat -> "reinterpret_f64"
+  end
   module F32Op = FloatOp
   module F64Op = FloatOp
   
@@ -802,6 +811,11 @@ module Instruction = struct
     | I64 o -> iop "64" o
     | F32 o -> fop "32" o
     | F64 o -> fop "64" o)
+  let operi (i32op, i64op, fop) op = string_of_num_type (type_of_op op) ^ "." ^ (match op with
+    | I32 o -> i32op o
+    | I64 o -> i64op o
+    | F32 o -> fop "32" o
+    | F64 o -> fop "64" o)
   
   let sexpr_of_idxhdl (i, h) = let open Sexpr in LongNode ("on", [
       Atom (Int32.to_string i);
@@ -817,7 +831,7 @@ module Instruction = struct
     | Binop op -> Node (oper (IntOp.binop, FloatOp.binop) op, [])
     | Testop op -> Node (oper (IntOp.testop, FloatOp.testop) op, [])
     | Relop op -> Node (oper (IntOp.relop, FloatOp.relop) op, [])
-    | Cvtop op -> Node (oper (IntOp.cvtop, FloatOp.cvtop) op, [])
+    | Cvtop op -> Node (operi (I32Op.cvtop, I64Op.cvtop, FloatOp.cvtop) op, [])
     | LocalGet i -> LongNode ("local.get", [Atom (Int32.to_string i)], [])
     | LocalSet i -> LongNode ("local.set", [Atom (Int32.to_string i)], [])
     | LocalTee i -> LongNode ("local.tee", [Atom (Int32.to_string i)], [])

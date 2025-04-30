@@ -261,11 +261,10 @@ let rec generate_instr buf i = match i with
   | Binop (Value.F64 FloatOp.Mul) -> Buffer.add_uint8 buf 0xA2
   | Binop (Value.F64 FloatOp.Div) -> Buffer.add_uint8 buf 0xA3
   
-  | Cvtop (Value.I32 IntOp.WrapI64) -> Buffer.add_uint8 buf 0xA7
-  | Cvtop (Value.I64 IntOp.WrapI64) -> raise (internal_error "Cannot wrap-convert from i64 to i64")
+  | Cvtop (Value.I32 I32Op.WrapI64) -> Buffer.add_uint8 buf 0xA7
   
-  | Cvtop (Value.I32 IntOp.ReinterpretFloat) -> Buffer.add_uint8 buf 0xBC
-  | Cvtop (Value.I64 IntOp.ReinterpretFloat) -> Buffer.add_uint8 buf 0xBD
+  | Cvtop (Value.I32 I32Op.ReinterpretFloat) -> Buffer.add_uint8 buf 0xBC
+  | Cvtop (Value.I64 I64Op.ReinterpretFloat) -> Buffer.add_uint8 buf 0xBD
   | Cvtop (Value.F32 FloatOp.ReinterpretInt) -> Buffer.add_uint8 buf 0xBE
   | Cvtop (Value.F64 FloatOp.ReinterpretInt) -> Buffer.add_uint8 buf 0xBF
   
