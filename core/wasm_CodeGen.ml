@@ -90,8 +90,12 @@ and generate_str_type buf t = match t with
   | DefContT ct -> Buffer.add_uint8 buf 0x5D; generate_cont_type buf ct
 and generate_sub_type buf t = match t with
   | SubT (Final, [], st) -> generate_str_type buf st
-  | SubT (Final, _hts, _st) -> failwith "TODO generate_sub_type 0x4F"
-  | SubT (NoFinal, _hts, _st) -> failwith "TODO generate_sub_type 0x50"
+  | SubT (Final, hts, st) ->
+      Buffer.add_uint8 buf 0x4F;
+      generate_u 32 buf (Int64.of_int (List.length hts)); List.iter (generate_heap_type buf) hts; generate_str_type buf st
+  | SubT (NoFinal, hts, st) ->
+      Buffer.add_uint8 buf 0x50;
+      generate_u 32 buf (Int64.of_int (List.length hts)); List.iter (generate_heap_type buf) hts; generate_str_type buf st
 and generate_rec_type buf t = match t with
   | RecT [st] -> generate_sub_type buf st
   | RecT sts ->
