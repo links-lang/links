@@ -43,7 +43,7 @@ module Type : sig
   type final = NoFinal | Final
   type limits = {min: int64; max: int64 option}
 
-  type var = StatX of type_idx | RecX of int32
+  type var = type_idx
 
   type num_type = I32T | I64T | F32T | F64T
   type vec_type = V128T

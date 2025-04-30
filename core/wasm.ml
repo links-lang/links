@@ -114,7 +114,7 @@ module Type = struct
   type final = NoFinal | Final
   type limits = {min: int64; max: int64 option}
   
-  type var = StatX of type_idx | RecX of int32
+  type var = type_idx
   
   type num_type = I32T | I64T | F32T | F64T
   type vec_type = V128T
@@ -159,9 +159,7 @@ module Type = struct
     | Cons -> s
     | Var -> "(mut " ^ s ^ ")"
   
-  let string_of_var = function
-    | StatX x -> Printf.sprintf "%lu" x
-    | RecX x -> "rec." ^ Printf.sprintf "%lu" x
+  let string_of_var x = Printf.sprintf "%lu" x
   
   let string_of_num_type = function
     | I32T -> "i32"
@@ -231,9 +229,7 @@ module Type = struct
     | Cons -> s
     | Var -> match s with Atom s -> LongNode ("mut", [Atom s], []) | _ -> Node ("mut", [s])
   
-  let sexpr_of_var = let open Sexpr in function
-    | StatX x -> Atom (Printf.sprintf "%lu" x)
-    | RecX x -> Atom ("rec." ^ Printf.sprintf "%lu" x)
+  let sexpr_of_var x = let open Sexpr in Atom (Printf.sprintf "%lu" x)
   
   let sexpr_of_num_type = let open Sexpr in function
     | I32T -> Atom "i32"

@@ -87,7 +87,7 @@ end = struct
   let list_tid : int32 = 2l
   let list_typ = Wasm.Type.(SubT (Final, [], DefStructT (StructT [
     FieldT (Cons, ValStorageT (RefT (Null, EqHT)));
-    FieldT (Cons, ValStorageT (RefT (Null, VarHT (StatX list_tid))));
+    FieldT (Cons, ValStorageT (RefT (Null, VarHT list_tid)));
   ])))
   let string_tid : int32 = 3l
   let string_typ = Wasm.Type.(SubT (Final, [], DefArrayT (ArrayT (FieldT (Var, PackStorageT Wasm.Pack.Pack8)))))
@@ -101,34 +101,34 @@ end = struct
   let process_active_ftid : int32 = 7l
   let process_active_ftyp = Wasm.Type.(SubT (Final, [], DefFuncT (FuncT ([], [RefT (Null, EqHT)]))))
   let process_active_tid : int32 = 8l
-  let process_active_typ = Wasm.Type.(SubT (Final, [], DefContT (ContT (VarHT (StatX process_active_ftid)))))
+  let process_active_typ = Wasm.Type.(SubT (Final, [], DefContT (ContT (VarHT process_active_ftid))))
   let process_waiting_ftid : int32 = 9l
   let process_waiting_ftyp = Wasm.Type.(SubT (Final, [], DefFuncT (FuncT ([RefT (Null, EqHT)], [RefT (Null, EqHT)]))))
   let process_waiting_tid : int32 = 10l
-  let process_waiting_typ = Wasm.Type.(SubT (Final, [], DefContT (ContT (VarHT (StatX process_waiting_ftid)))))
+  let process_waiting_typ = Wasm.Type.(SubT (Final, [], DefContT (ContT (VarHT process_waiting_ftid))))
   let pid_active_tid : int32 = 11l
   let waiting_list_tid : int32 = 12l
   let pid_active_typ = Wasm.Type.(SubT (Final, [], DefStructT (StructT [
     FieldT (Var, PackStorageT Wasm.Pack.Pack8); (* Blocked? *)
-    FieldT (Var, ValStorageT (RefT (Null, VarHT (StatX list_tid)))); (* Push mailbox (Send) *)
-    FieldT (Var, ValStorageT (RefT (Null, VarHT (StatX list_tid)))); (* Pop mailbox (recv) *)
-    FieldT (Var, ValStorageT (RefT (Null, VarHT (StatX waiting_list_tid)))); (* Waiting list *)
+    FieldT (Var, ValStorageT (RefT (Null, VarHT list_tid))); (* Push mailbox (Send) *)
+    FieldT (Var, ValStorageT (RefT (Null, VarHT list_tid))); (* Pop mailbox (recv) *)
+    FieldT (Var, ValStorageT (RefT (Null, VarHT waiting_list_tid))); (* Waiting list *)
   ])))
   let waiting_list_typ = Wasm.Type.(SubT (Final, [], DefStructT (StructT [
-    FieldT (Var, ValStorageT (RefT (NoNull, VarHT (StatX pid_tid))));
-    FieldT (Var, ValStorageT (RefT (NoNull, VarHT (StatX process_waiting_tid))));
-    FieldT (Var, ValStorageT (RefT (Null, VarHT (StatX waiting_list_tid))));
+    FieldT (Var, ValStorageT (RefT (NoNull, VarHT pid_tid)));
+    FieldT (Var, ValStorageT (RefT (NoNull, VarHT process_waiting_tid)));
+    FieldT (Var, ValStorageT (RefT (Null, VarHT waiting_list_tid)));
   ])))
   let process_list_tid : int32 = 13l
   let process_list_typ = Wasm.Type.(SubT (Final, [], DefStructT (StructT [
-    FieldT (Cons, ValStorageT (RefT (NoNull, VarHT (StatX pid_tid))));
-    FieldT (Var, ValStorageT (RefT (Null, VarHT (StatX process_active_tid))));
-    FieldT (Var, ValStorageT (RefT (Null, VarHT (StatX process_list_tid))));
+    FieldT (Cons, ValStorageT (RefT (NoNull, VarHT pid_tid)));
+    FieldT (Var, ValStorageT (RefT (Null, VarHT process_active_tid)));
+    FieldT (Var, ValStorageT (RefT (Null, VarHT process_list_tid)));
   ])))
   let pid_list_tid : int32 = 14l
   let pid_list_typ = Wasm.Type.(SubT (Final, [], DefStructT (StructT [
-    FieldT (Cons, ValStorageT (RefT (NoNull, VarHT (StatX pid_tid))));
-    FieldT (Cons, ValStorageT (RefT (Null, VarHT (StatX pid_list_tid))));
+    FieldT (Cons, ValStorageT (RefT (NoNull, VarHT pid_tid)));
+    FieldT (Cons, ValStorageT (RefT (Null, VarHT pid_list_tid)));
   ])))
   
   let empty (has_process : bool) : t =
@@ -186,17 +186,17 @@ end = struct
     | TInt -> NumT I64T
     | TBool -> NumT I32T
     | TFloat -> NumT F64T
-    | TString -> RefT (NoNull, VarHT (StatX string_tid))
-    | TClosed _ -> RefT (NoNull, VarHT (StatX (recid_of_type env t)))
+    | TString -> RefT (NoNull, VarHT string_tid)
+    | TClosed _ -> RefT (NoNull, VarHT (recid_of_type env t))
     | TAbsClosArg -> RefT (Null, StructHT)
-    | TClosArg _ -> RefT (NoNull, VarHT (StatX (recid_of_type env t)))
-    | TCont _ -> RefT (NoNull, VarHT (StatX (recid_of_type env t)))
-    | TTuple _ -> RefT (NoNull, VarHT (StatX (recid_of_type env t)))
-    | TVariant -> RefT (NoNull, VarHT (StatX variant_tid))
-    | TList _ -> RefT (Null, VarHT (StatX list_tid))
+    | TClosArg _ -> RefT (NoNull, VarHT (recid_of_type env t))
+    | TCont _ -> RefT (NoNull, VarHT (recid_of_type env t))
+    | TTuple _ -> RefT (NoNull, VarHT (recid_of_type env t))
+    | TVariant -> RefT (NoNull, VarHT variant_tid)
+    | TList _ -> RefT (Null, VarHT list_tid)
     | TVar -> RefT (Null, EqHT)
     | TSpawnLocation -> RefT (Null, NoneHT) (* SpawnLocation is isomorphic to an empty tuple for now *)
-    | TProcess -> RefT (Null, VarHT (StatX pid_tid))
+    | TProcess -> RefT (Null, VarHT pid_tid)
   
   and [@tail_mod_cons] val_list_of_type_list : type a. t -> a typ_list -> Wasm.Type.val_type list =
     fun (env : t) (tl : a typ_list) : Wasm.Type.val_type list ->
@@ -218,7 +218,7 @@ end = struct
           | TClosed (args, ret) ->
               let ftyp = recid_of_functyp env args ret in
               Some (SubT (Final, [], DefStructT (StructT [
-                FieldT (Cons, ValStorageT (RefT (NoNull, VarHT (StatX ftyp))));
+                FieldT (Cons, ValStorageT (RefT (NoNull, VarHT ftyp)));
                 FieldT (Cons, ValStorageT (RefT (Null, StructHT)));
               ])))
           | TAbsClosArg -> failwith "TODO: TMap.recid_of_type TAbsClosArg"
@@ -228,7 +228,7 @@ end = struct
               Some (SubT (Final, [], DefStructT (StructT (List.map (fun t -> FieldT (Cons, ValStorageT t)) clos))))
           | TCont cret ->
               let ftyp = recid_of_cfunctyp env cret in
-              Some (SubT (Final, [], DefContT (ContT (VarHT (StatX ftyp)))))
+              Some (SubT (Final, [], DefContT (ContT (VarHT ftyp))))
           | TTuple elems ->
               let elems = val_list_of_type_list env elems in
               Some (SubT (Final, [], DefStructT (StructT (List.map (fun _ -> FieldT (Cons, ValStorageT (RefT (Null, EqHT)))) elems))))
@@ -267,19 +267,19 @@ end = struct
     let cret = val_of_type env cret in
     let tret = val_of_type env tret in
     let rawid = recid_of_sub_type env (SubT (Final, [], DefFuncT (FuncT ([RefT (Null, EqHT)], [cret])))) in
-    let contid = recid_of_sub_type env (SubT (Final, [], DefContT (ContT (VarHT (StatX rawid))))) in
+    let contid = recid_of_sub_type env (SubT (Final, [], DefContT (ContT (VarHT rawid)))) in
     let hdlid = recid_of_sub_type env (SubT (Final, [], DefFuncT (FuncT (
-      [RefT (NoNull, VarHT (StatX contid)); RefT (Null, EqHT); RefT (Null, StructHT)],
+      [RefT (NoNull, VarHT contid); RefT (Null, EqHT); RefT (Null, StructHT)],
       [tret])))) in
     contid, hdlid
   let recid_of_handler_block (env : t) (contid : int32) (_ : 'a typ_list) : int32 =
     let open Wasm.Type in
-    let eargs = [RefT (Null, EqHT); RefT (NoNull, VarHT (StatX contid))] in
-    recid_of_sub_type env (SubT (Final, [], DefFuncT (FuncT ([RefT (Null, EqHT); RefT (NoNull, VarHT (StatX contid))], eargs))))
+    let eargs = [RefT (Null, EqHT); RefT (NoNull, VarHT contid)] in
+    recid_of_sub_type env (SubT (Final, [], DefFuncT (FuncT ([RefT (Null, EqHT); RefT (NoNull, VarHT contid)], eargs))))
   let recid_of_handler_finish (env : t) (contid : int32) (eret : 'a typ) : int32 =
     let eret = val_of_type env eret in
     let open Wasm.Type in
-    recid_of_sub_type env (SubT (Final, [], DefFuncT (FuncT ([RefT (Null, EqHT); RefT (NoNull, VarHT (StatX contid))], [eret]))))
+    recid_of_sub_type env (SubT (Final, [], DefFuncT (FuncT ([RefT (Null, EqHT); RefT (NoNull, VarHT contid)], [eret]))))
   
   let recid_of_exported_type (env : t) (targs : 'a typ_list) (tret : 'b typ) : int32 =
     match TypeMap.find_opt (Type (TClosed (targs, tret))) env.eenv with
@@ -299,10 +299,10 @@ end = struct
   let wait_offset : int32 = 3l
   let sched_effects (env : t) : int32 list = let open Wasm.Type in [
     (* spawn *) recid_of_sub_type env (SubT (Final, [], DefFuncT (
-      FuncT ([RefT (NoNull, VarHT (StatX (recid_of_type env (TClosed (TLnil, TVar)))))], [RefT (NoNull, VarHT (StatX pid_tid))]))));
-    (* self *) recid_of_sub_type env (SubT (Final, [], DefFuncT (FuncT ([], [RefT (NoNull, VarHT (StatX pid_tid))]))));
+      FuncT ([RefT (NoNull, VarHT (recid_of_type env (TClosed (TLnil, TVar))))], [RefT (NoNull, VarHT pid_tid)]))));
+    (* self *) recid_of_sub_type env (SubT (Final, [], DefFuncT (FuncT ([], [RefT (NoNull, VarHT pid_tid)]))));
     (* yield *) recid_of_sub_type env (SubT (Final, [], DefFuncT (FuncT ([], []))));
-    (* wait *) recid_of_sub_type env (SubT (Final, [], DefFuncT (FuncT ([RefT (NoNull, VarHT (StatX pid_active_tid))], [RefT (Null, EqHT)]))));
+    (* wait *) recid_of_sub_type env (SubT (Final, [], DefFuncT (FuncT ([RefT (NoNull, VarHT pid_active_tid)], [RefT (Null, EqHT)]))));
   ]
 end
 type tmap = TMap.t
@@ -385,7 +385,7 @@ end = struct
     let fglobals =
       Int32Map.fold
         (fun fid (b, ftid) acc ->
-          if b then (Wasm.Type.(GlobalT (Cons, RefT (NoNull, VarHT (StatX ftid)))), Wasm.Instruction.[RefFunc fid], None) :: acc
+          if b then (Wasm.Type.(GlobalT (Cons, RefT (NoNull, VarHT ftid))), Wasm.Instruction.[RefFunc fid], None) :: acc
           else acc)
         exps []
         |> List.rev in
@@ -451,11 +451,11 @@ end = struct
     (* TODO: optimize the next two lines (caching is possible) *)
     let inner_ftid = TMap.recid_of_type tm (TClosed (targs, tret)) in
     let inner_fid = TMap.recid_of_functyp tm targs tret in
-    let inner_fval = Wasm.Type.(RefT (NoNull, VarHT (StatX inner_ftid))) in
+    let inner_fval = Wasm.Type.(RefT (NoNull, VarHT inner_ftid)) in
     let new_meta = extend glob (Int32.succ clvid) [inner_fval] in
     let conv_closure = Wasm.Instruction.[
       LocalSet (Int32.succ clvid);
-      RefCast Wasm.Type.(NoNull, VarHT (StatX inner_ftid));
+      RefCast Wasm.Type.(NoNull, VarHT inner_ftid);
       LocalGet clvid
     ] in
     let load_args =
@@ -535,11 +535,11 @@ end = struct
     (* TODO: optimize the next two lines (caching is possible) *)
     let inner_ftid = TMap.recid_of_type tm (TClosed (fargs, fret)) in
     let inner_fid = TMap.recid_of_functyp tm fargs fret in
-    let inner_fval = Wasm.Type.(RefT (NoNull, VarHT (StatX inner_ftid))) in
+    let inner_fval = Wasm.Type.(RefT (NoNull, VarHT inner_ftid)) in
     let new_meta = extend glob (Int32.succ clvid) [inner_fval] in
     let conv_closure = Wasm.Instruction.[
       LocalSet (Int32.succ clvid);
-      RefCast Wasm.Type.(NoNull, VarHT (StatX inner_ftid));
+      RefCast Wasm.Type.(NoNull, VarHT inner_ftid);
       LocalGet clvid
     ] in
     let load_args =
@@ -577,14 +577,14 @@ end = struct
     let open Wasm.Instruction in match box with
     | TVar -> Either.Right Type.Equal
     | TInt -> Either.Left (fun acc ->
-        StructGet (TMap.boxed_int_tid, 0l, None) :: RefCast Wasm.Type.(NoNull, VarHT (StatX TMap.boxed_int_tid)) :: get_val acc)
+        StructGet (TMap.boxed_int_tid, 0l, None) :: RefCast Wasm.Type.(NoNull, VarHT TMap.boxed_int_tid) :: get_val acc)
     | TBool -> Either.Left (fun acc -> I31Get Wasm.Pack.ZX :: RefCast Wasm.Type.(NoNull, I31HT) :: get_val acc)
     | TFloat -> Either.Left (fun acc ->
-        StructGet (TMap.boxed_float_tid, 0l, None) :: RefCast Wasm.Type.(NoNull, VarHT (StatX TMap.boxed_float_tid)) :: get_val acc)
+        StructGet (TMap.boxed_float_tid, 0l, None) :: RefCast Wasm.Type.(NoNull, VarHT TMap.boxed_float_tid) :: get_val acc)
     | (TTuple TLnil) -> Either.Left (fun acc -> RefNull Wasm.Type.NoneHT :: Drop :: get_val acc)
         (* fun acc -> RefCast Wasm.Type.(Null, NoneHT) :: get_val acc) *)
-    | TList _ -> Either.Left (fun acc -> RefCast Wasm.Type.(Null, VarHT (StatX TMap.list_tid)) :: get_val acc)
-    | t -> let tid = TMap.recid_of_type tm t in Either.Left (fun acc -> RefCast Wasm.Type.(NoNull, VarHT (StatX tid)) :: get_val acc)
+    | TList _ -> Either.Left (fun acc -> RefCast Wasm.Type.(Null, VarHT TMap.list_tid) :: get_val acc)
+    | t -> let tid = TMap.recid_of_type tm t in Either.Left (fun acc -> RefCast Wasm.Type.(NoNull, VarHT tid) :: get_val acc)
   (* get_val is affine *)
   and maybe_do_unbox : type a b. tmap -> t -> (a, b) box -> instr_conv -> (instr_conv, (a, b) Type.eq) Either.t =
     fun tm new_meta box get_val ->
@@ -694,7 +694,7 @@ end = struct
               }
           | TList t ->
               let recid = find_eq_fun tm glob t in
-              let new_meta = extend glob 3l Wasm.Type.[RefT (NoNull, VarHT (StatX TMap.list_tid)); RefT (NoNull, VarHT (StatX TMap.list_tid))] in
+              let new_meta = extend glob 3l Wasm.Type.[RefT (NoNull, VarHT TMap.list_tid); RefT (NoNull, VarHT TMap.list_tid)] in
               let unbox i =
                 let get_val = Wasm.Instruction.(fun acc -> StructGet (TMap.list_tid, 0l, None) :: LocalGet i :: acc) in
                 match maybe_do_unbox tm new_meta (BBox t) get_val with
@@ -748,7 +748,7 @@ let convert_global (tm : tmap) ((_, Type t, name) : 'a * anytyp * string option)
     | TBool -> [Const (Wasm.Value.(I32 I32.zero))]
     | TFloat -> [Const (Wasm.Value.(F64 (F64.of_float 0.)))]
     | TString -> [ArrayNewFixed (TMap.string_tid, 0l)]
-    | TClosed _ -> let idx = TMap.recid_of_type tm t in [RefNull Wasm.Type.(VarHT (StatX idx))]
+    | TClosed _ -> let idx = TMap.recid_of_type tm t in [RefNull Wasm.Type.(VarHT idx)]
     | TAbsClosArg -> raise (internal_error "Unexpected global of IR type AbsClosArg")
     | TClosArg _ -> raise (internal_error "Unexpected global of IR type ClosArg")
     | TCont _ -> failwith "TODO: convert_global TCont"
@@ -758,7 +758,7 @@ let convert_global (tm : tmap) ((_, Type t, name) : 'a * anytyp * string option)
           RefNull Wasm.Type.NoneHT;
           StructNew (TMap.variant_tid, Explicit)
         ]
-    | TList _ -> [RefNull Wasm.Type.(VarHT (StatX TMap.list_tid))]
+    | TList _ -> [RefNull Wasm.Type.(VarHT TMap.list_tid)]
     | TVar -> raise (internal_error "Unexpected global of IR type Var")
     | TSpawnLocation -> [RefNull Wasm.Type.NoneHT]
     | TProcess -> [StructNew (TMap.pid_tid, Implicit)] in
@@ -956,7 +956,7 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
   | EUnreachable _ -> fun acc -> Unreachable :: acc
   | EConvertClosure (src, _) ->
       let ctid = match cinfo with None -> raise (internal_error "Closure conversion without closure info") | Some (ctid, _) -> ctid in
-      fun acc -> RefCast Wasm.Type.(NoNull, VarHT (StatX ctid)) :: LocalGet (src :> int32) :: acc
+      fun acc -> RefCast Wasm.Type.(NoNull, VarHT ctid) :: LocalGet (src :> int32) :: acc
   | EIgnore (_, e) ->
       let e = convert_expr tm new_meta procinfo e BNone None cinfo in
       fun acc -> RefNull Wasm.Type.NoneHT :: Drop :: e acc
@@ -1061,7 +1061,7 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
       in
       let tret = TMap.val_of_type tm t in
       do_box tm new_meta box (fun acc -> Wasm.Instruction.Block (Wasm.Type.(ValBlockType (Some tret)), code) :: stv acc)
-  | EListNil _ -> do_box tm new_meta box (fun acc -> RefNull Wasm.Type.(VarHT (StatX TMap.list_tid)) :: acc)
+  | EListNil _ -> do_box tm new_meta box (fun acc -> RefNull Wasm.Type.(VarHT TMap.list_tid) :: acc)
   | EListHd (l, t) ->
       let l = convert_expr tm new_meta procinfo l BNone None cinfo in
       do_box tm new_meta box (do_unbox tm new_meta (BBox t) (fun acc -> StructGet (TMap.list_tid, 0l, None) :: l acc))
@@ -1277,7 +1277,7 @@ and convert_new_struct : type a b. _ -> _ -> _ -> a expr_list -> (a, b) box_list
       (cls : a expr_list) box (fcid : int32) (needs_exact_id : bool) (cinfo : clos_info) ->
   let open Wasm.Instruction in
   match cls with
-  | ELnil -> fun acc -> RefNull Wasm.Type.(if needs_exact_id then VarHT (StatX fcid) else NoneHT) :: acc
+  | ELnil -> fun acc -> RefNull Wasm.Type.(if needs_exact_id then VarHT fcid else NoneHT) :: acc
   | ELcons _ -> let f = convert_exprs tm new_meta procinfo cls box cinfo in fun acc -> StructNew (fcid, Explicit) :: f acc
 
 (* These two functions return the instructions in reverse order *)
@@ -1305,7 +1305,7 @@ let convert_hdl (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (type a
     | Some (_, (TypeList TLnil, _)) -> raise (internal_error "Invalid handler with empty closure")
     | Some (src, (TypeList clt, dst)) ->
         let clostyp = TMap.recid_of_type tm (TClosArg clt) in
-        [LocalSet (dst :> int32); RefCast Wasm.Type.(NoNull, (VarHT (StatX clostyp))); LocalGet (src :> int32)], Some (clostyp, dst)
+        [LocalSet (dst :> int32); RefCast Wasm.Type.(NoNull, (VarHT clostyp)); LocalGet (src :> int32)], Some (clostyp, dst)
   in let code =
     let nblocks, handlers =
       let rec inner (hdls : _ handler list) len acc = match hdls with
@@ -1343,7 +1343,7 @@ let convert_hdl (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (type a
                       let t, v = (vhd : _ varid :> _ * int32) in
                       let get = do_unbox tm new_meta (BBox t) (fun acc -> StructGet (tid, i, None) :: LocalGet tmpv :: acc) in
                       inner vtl (Int32.succ i) (List.rev_append (get []) (LocalSet v :: codehdl)) in
-                RefCast Wasm.Type.(NoNull, VarHT (StatX tid)) :: LocalSet tmpv :: inner vars 0l codehdl in
+                RefCast Wasm.Type.(NoNull, VarHT tid) :: LocalSet tmpv :: inner vars 0l codehdl in
           let _, varc = (varc : _ varid :> _ * int32) in
           let codehdl = LocalSet varc :: codehdl in
           let eargs, _ = (eid : _ effectid :> _ * _) in
@@ -1377,7 +1377,7 @@ let convert_builtin (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (_f
     Wasm.{
       fn_name = None;
       fn_type = fun_typ;
-      fn_locals = Type.[NumT I64T; NumT I32T; RefT (NoNull, VarHT (StatX TMap.string_tid))];
+      fn_locals = Type.[NumT I64T; NumT I32T; RefT (NoNull, VarHT TMap.string_tid)];
       fn_code = let open Value in let open Type in Instruction.[
         Const (I32 (I32.of_int_s (Char.code '0')));
         LocalGet 0l;
@@ -1430,7 +1430,7 @@ let convert_builtin (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (_f
           LocalGet 0l;
         ]);
         LocalSet 2l;
-        Loop (ValBlockType (Some (RefT (NoNull, VarHT (StatX TMap.string_tid)))), [
+        Loop (ValBlockType (Some (RefT (NoNull, VarHT TMap.string_tid))), [
           LocalGet 4l;
           LocalGet 2l;
           Testop (I64 IntOp.Eqz);
@@ -1480,22 +1480,22 @@ let convert_builtin (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (_f
       fn_name = None;
       fn_type = fun_typ;
       fn_locals = Type.[
-        RefT (NoNull, VarHT (StatX TMap.pid_active_tid));
-        RefT (NoNull, VarHT (StatX TMap.list_tid));
+        RefT (NoNull, VarHT TMap.pid_active_tid);
+        RefT (NoNull, VarHT TMap.list_tid);
       ];
       fn_code = let open Value in let open Type in Instruction.[
         Suspend (Int32.add (NewMetadata.effect_offset glob) TMap.self_offset);
         StructGet (TMap.pid_tid, 1l, None);
-        RefCast (NoNull, VarHT (StatX TMap.pid_active_tid));
+        RefCast (NoNull, VarHT TMap.pid_active_tid);
         LocalTee 1l;
-        Block (ValBlockType (Some (RefT (NoNull, VarHT (StatX TMap.list_tid)))), [
+        Block (ValBlockType (Some (RefT (NoNull, VarHT TMap.list_tid))), [
           LocalGet 1l;
           StructGet (TMap.pid_active_tid, 2l, None); (* Is the pop queue empty? *)
           BrOnNonNull 0l;
           (* Yes, transfer the push queue to the pop queue *)
-          Loop (ValBlockType (Some (RefT (NoNull, VarHT (StatX TMap.list_tid)))), [
-            Block (ValBlockType (Some (RefT (NoNull, VarHT (StatX TMap.pid_active_tid)))), [
-              Loop (ValBlockType (Some (RefT (NoNull, VarHT (StatX TMap.pid_active_tid)))), [
+          Loop (ValBlockType (Some (RefT (NoNull, VarHT TMap.list_tid))), [
+            Block (ValBlockType (Some (RefT (NoNull, VarHT TMap.pid_active_tid))), [
+              Loop (ValBlockType (Some (RefT (NoNull, VarHT TMap.pid_active_tid))), [
                 LocalGet 1l;
                 LocalGet 1l;
                 StructGet (TMap.pid_active_tid, 1l, None);
@@ -1549,14 +1549,14 @@ let convert_builtin (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (_f
       fn_name = None;
       fn_type = fun_typ;
       fn_locals = Type.[
-        RefT (NoNull, VarHT (StatX TMap.pid_active_tid));
+        RefT (NoNull, VarHT TMap.pid_active_tid);
       ];
       fn_code = let open Value in let open Type in Instruction.[
         (* If the process is inactive, drop the message; otherwise, find the pid_active_tid and cache it *)
-        Block (ValBlockType (Some (RefT (NoNull, VarHT (StatX TMap.pid_active_tid)))), [
+        Block (ValBlockType (Some (RefT (NoNull, VarHT TMap.pid_active_tid))), [
           LocalGet 0l;
           StructGet (TMap.pid_tid, 1l, None);
-          BrOnCast (0l, (Null, EqHT), (NoNull, VarHT (StatX TMap.pid_active_tid)));
+          BrOnCast (0l, (Null, EqHT), (NoNull, VarHT TMap.pid_active_tid));
           Drop;
           RefNull NoneHT;
           Return;
@@ -1611,7 +1611,7 @@ let convert_builtin (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (_f
       fn_code = let open Type in Instruction.[
         LocalGet 0l;
         StructGet (TMap.pid_tid, 1l, None);
-        BrOnCastFail (0l, (Null, EqHT), (NoNull, VarHT (StatX TMap.pid_active_tid)));
+        BrOnCastFail (0l, (Null, EqHT), (NoNull, VarHT TMap.pid_active_tid));
         Suspend (Int32.add (NewMetadata.effect_offset glob) TMap.wait_offset);
       ];
     }
@@ -1663,7 +1663,7 @@ let convert_fun_step2 (tm : tmap) (f, clostyp : func * int32 option) : Wasm.fund
       let targs = f.fun_args in
       let tret = f.fun_ret in
       let fn_type = TMap.recid_of_exported_type tm targs tret in
-      let clostyp = let open Wasm.Type in match clostyp with None -> NoneHT | Some clostid -> VarHT (StatX clostid) in
+      let clostyp = let open Wasm.Type in match clostyp with None -> NoneHT | Some clostid -> VarHT clostid in
       Some Wasm.{
         fn_name = Some name;
         fn_type;
@@ -1720,7 +1720,7 @@ let convert_import (tm : tmap) ((fidx, tidx, impinfo) : int32 * int32 * int32 op
   let acc, desc = match m, i with
   | "wizeng", "puta" ->
       let fid = TMap.recid_of_sub_type tm Wasm.Type.(SubT (Final, [], DefFuncT (
-        FuncT ([RefT (Null, VarHT (StatX TMap.string_tid)); NumT I32T; NumT I32T], [])))) in
+        FuncT ([RefT (Null, VarHT TMap.string_tid); NumT I32T; NumT I32T], [])))) in
       (Int32.succ fidx, tidx, { impinfo with impinfo_puta = Some fidx }), Wasm.FuncImport fid
   | "wizeng", "putc" ->
       let fid = TMap.recid_of_sub_type tm Wasm.Type.(SubT (Final, [], DefFuncT (FuncT ([NumT I32T], [])))) in
@@ -1749,8 +1749,8 @@ let compile (m : 'a modu) (use_init : bool) (main_typ_name : string) : Wasm.modu
       let open Wasm in
       let procinfo_vid = NewMetadata.add_global tm glob None TInt Instruction.[Const Value.(I64 (I64.of_bits Int64.zero))] in
       let angels_vid = NewMetadata.add_raw_global glob (
-        Type.(GlobalT (Var, RefT (Null, VarHT (StatX TMap.pid_list_tid)))),
-        Instruction.[RefNull Type.(VarHT (StatX TMap.pid_list_tid))],
+        Type.(GlobalT (Var, RefT (Null, VarHT TMap.pid_list_tid))),
+        Instruction.[RefNull Type.(VarHT TMap.pid_list_tid)],
         None) in
       Some (procinfo_vid, angels_vid, ref None)
     end else None in
@@ -1841,7 +1841,7 @@ let compile (m : 'a modu) (use_init : bool) (main_typ_name : string) : Wasm.modu
                 ]
             | TString ->
                 let funtid = TMap.recid_of_sub_type tm Type.(SubT (Final, [],
-                      DefFuncT (FuncT ([RefT (NoNull, VarHT (StatX TMap.string_tid))], [])))) in
+                      DefFuncT (FuncT ([RefT (NoNull, VarHT TMap.string_tid)], [])))) in
                 let fref, funid = NewMetadata.add_function glob in
                 NewMetadata.register_function glob ~fid:funid ~ftid:funtid;
                 fref := Some { fn_name = None; fn_type = funtid; fn_locals = Type.[NumT I32T]; fn_code = [
@@ -1855,8 +1855,8 @@ let compile (m : 'a modu) (use_init : bool) (main_typ_name : string) : Wasm.modu
                 Either.Right funid
             | TList t ->
                 let mainblocktid = TMap.recid_of_sub_type tm Type.(SubT (Final, [],
-                      DefFuncT (FuncT ([RefT (Null, VarHT (StatX TMap.list_tid))], [])))) in
-                let locid = NewMetadata.add_raw_local new_meta Type.(RefT (NoNull, VarHT (StatX TMap.list_tid))) in
+                      DefFuncT (FuncT ([RefT (Null, VarHT TMap.list_tid)], [])))) in
+                let locid = NewMetadata.add_raw_local new_meta Type.(RefT (NoNull, VarHT TMap.list_tid)) in
                 let unbox =
                   List.rev_append (do_unbox tm new_meta (BBox t) (fun acc -> StructGet (TMap.list_tid, 0l, None) :: LocalGet locid :: acc) []) in
                 let elem = prepare t new_meta in
@@ -1939,7 +1939,7 @@ let compile (m : 'a modu) (use_init : bool) (main_typ_name : string) : Wasm.modu
                 GlobalSet angel_list;
                 (* Wait for the PID in the stack to finish, then loop *)
                 StructGet (TMap.pid_tid, 1l, None);
-                BrOnCastFail (0l, (Null, EqHT), (NoNull, VarHT (StatX TMap.pid_active_tid))); (* Already done? *)
+                BrOnCastFail (0l, (Null, EqHT), (NoNull, VarHT TMap.pid_active_tid)); (* Already done? *)
                 (* Angel has not returned *)
                 Suspend (Int32.add (NewMetadata.effect_offset glob) TMap.wait_offset);
               ]);
@@ -1958,31 +1958,31 @@ let compile (m : 'a modu) (use_init : bool) (main_typ_name : string) : Wasm.modu
       let yield_eid = Int32.add (NewMetadata.effect_offset glob) TMap.yield_offset in
       let wait_eid = Int32.add (NewMetadata.effect_offset glob) TMap.wait_offset in
       let self_ftid = TMap.recid_of_sub_type tm (SubT (Final, [], DefFuncT (
-        FuncT ([RefT (NoNull, VarHT (StatX TMap.pid_tid))], [RefT (Null, EqHT)])))) in
-      let self_ctid = TMap.recid_of_sub_type tm (SubT (Final, [], DefContT (ContT (VarHT (StatX self_ftid))))) in
+        FuncT ([RefT (NoNull, VarHT TMap.pid_tid)], [RefT (Null, EqHT)])))) in
+      let self_ctid = TMap.recid_of_sub_type tm (SubT (Final, [], DefContT (ContT (VarHT self_ftid)))) in
       let spawn_cbid = TMap.recid_of_type tm (TClosed (TLnil, TVar)) in
       let spawn_cbfid = TMap.recid_of_functyp tm TLnil TVar in
-      let spawn_cbcid = TMap.recid_of_sub_type tm (SubT (Final, [], DefContT (ContT (VarHT (StatX spawn_cbfid))))) in
+      let spawn_cbcid = TMap.recid_of_sub_type tm (SubT (Final, [], DefContT (ContT (VarHT spawn_cbfid)))) in
       let spawn_contid = self_ctid in
       let spawn_bt = TMap.recid_of_sub_type tm (SubT (Final, [], DefFuncT (
-        FuncT ([], [RefT (NoNull, VarHT (StatX spawn_cbid)); RefT (NoNull, VarHT (StatX spawn_contid))])))) in
+        FuncT ([], [RefT (NoNull, VarHT spawn_cbid); RefT (NoNull, VarHT spawn_contid)])))) in
       let wait_bt = TMap.recid_of_sub_type tm (SubT (Final, [], DefFuncT (
-        FuncT ([], [RefT (NoNull, VarHT (StatX TMap.pid_active_tid)); RefT (NoNull, VarHT (StatX TMap.process_waiting_tid))])))) in
+        FuncT ([], [RefT (NoNull, VarHT TMap.pid_active_tid); RefT (NoNull, VarHT TMap.process_waiting_tid)])))) in
       let self_bt = TMap.recid_of_sub_type tm (SubT (Final, [], DefFuncT (
-        FuncT ([RefT (NoNull, VarHT (StatX self_ctid))], [RefT (Null, EqHT)])))) in
+        FuncT ([RefT (NoNull, VarHT self_ctid)], [RefT (Null, EqHT)])))) in
       initref := Some {
         fn_name = Some "main";
         fn_type = TMap.main_func_type;
         fn_locals = [
           NumT I32T;                                             (* 0: next pid *)
-          RefT (NoNull, VarHT (StatX TMap.process_list_tid));    (* 1: all active and zombie processes *)
-          RefT (NoNull, VarHT (StatX TMap.process_list_tid));    (* 2: active processes cache *)
+          RefT (NoNull, VarHT TMap.process_list_tid);    (* 1: all active and zombie processes *)
+          RefT (NoNull, VarHT TMap.process_list_tid);    (* 2: active processes cache *)
           RefT (Null, EqHT);                                     (* 3: boxed value *)
-          RefT (NoNull, VarHT (StatX self_ctid));                (* 4: $self/$spawn effect continuation *)
-          RefT (NoNull, VarHT (StatX spawn_cbid));               (* 5: $spawn callback *)
-          RefT (NoNull, VarHT (StatX TMap.process_active_tid));  (* 6: $yield continuation *)
-          RefT (NoNull, VarHT (StatX TMap.process_waiting_tid)); (* 7: $wait continuation *)
-          RefT (NoNull, VarHT (StatX TMap.pid_active_tid));      (* 8: $spawn/$wait PID / main/returned process PID *)
+          RefT (NoNull, VarHT self_ctid);                (* 4: $self/$spawn effect continuation *)
+          RefT (NoNull, VarHT spawn_cbid);               (* 5: $spawn callback *)
+          RefT (NoNull, VarHT TMap.process_active_tid);  (* 6: $yield continuation *)
+          RefT (NoNull, VarHT TMap.process_waiting_tid); (* 7: $wait continuation *)
+          RefT (NoNull, VarHT TMap.pid_active_tid);      (* 8: $spawn/$wait PID / main/returned process PID *)
         ];
         fn_code = Value.(Instruction.[
           (* Next PID *)
@@ -1991,14 +1991,14 @@ let compile (m : 'a modu) (use_init : bool) (main_typ_name : string) : Wasm.modu
           (* Create main process *)
           Const (I32 I32.zero); (* PID *)
           Const (I32 I32.zero); (* Unblocked by default *)
-          RefNull (VarHT (StatX TMap.list_tid)); (* Mailbox *)
-          RefNull (VarHT (StatX TMap.list_tid));
-          RefNull (VarHT (StatX TMap.waiting_list_tid)); (* Processes waiting on main *)
+          RefNull (VarHT TMap.list_tid); (* Mailbox *)
+          RefNull (VarHT TMap.list_tid);
+          RefNull (VarHT TMap.waiting_list_tid); (* Processes waiting on main *)
           StructNew (TMap.pid_active_tid, Explicit);
           StructNew (TMap.pid_tid, Explicit);
           RefFunc aux_mainid; (* Wrapper function *)
           ContNew TMap.process_active_tid;
-          RefNull (VarHT (StatX TMap.process_list_tid)); (* Next processes *)
+          RefNull (VarHT TMap.process_list_tid); (* Next processes *)
           StructNew (TMap.process_list_tid, Explicit);
           LocalTee 1l; (* All processes *)
           LocalSet 2l; (* Process list iterator *)
@@ -2006,15 +2006,15 @@ let compile (m : 'a modu) (use_init : bool) (main_typ_name : string) : Wasm.modu
             Loop (ValBlockType None, [
               Block (ValBlockType None, [                                                               (* Load next process *)
                 Block (VarBlockType wait_bt, [                                                          (* $wait *)
-                  Block (ValBlockType (Some (RefT (NoNull, VarHT (StatX TMap.process_active_tid)))), [  (* $yield *)
+                  Block (ValBlockType (Some (RefT (NoNull, VarHT TMap.process_active_tid))), [  (* $yield *)
                     Block (VarBlockType spawn_bt, [                                                     (* $spawn *)
                       Block (ValBlockType (Some (RefT (Null, EqHT))), [                                 (* (returned) *)
-                        Block (ValBlockType (Some (RefT (NoNull, VarHT (StatX self_ctid)))), [          (* $self *)
+                        Block (ValBlockType (Some (RefT (NoNull, VarHT self_ctid))), [          (* $self *)
                           (* Run the process pointed by the iterator if it is unblocked *)
                           LocalGet 2l;
                           StructGet (TMap.process_list_tid, 0l, None);
                           StructGet (TMap.pid_tid, 1l, None);
-                          RefCast (NoNull, VarHT (StatX TMap.pid_active_tid));
+                          RefCast (NoNull, VarHT TMap.pid_active_tid);
                           StructGet (TMap.pid_active_tid, 0l, Some Pack.ZX);
                           BrIf 5l; (* Blocked *)
                           (* OK, reset yield timer then resume process *)
@@ -2040,11 +2040,11 @@ let compile (m : 'a modu) (use_init : bool) (main_typ_name : string) : Wasm.modu
                       LocalGet 2l;
                       StructGet (TMap.process_list_tid, 0l, None);
                       StructGet (TMap.pid_tid, 1l, None);
-                      RefCast (NoNull, VarHT (StatX TMap.pid_active_tid));
+                      RefCast (NoNull, VarHT TMap.pid_active_tid);
                       LocalSet 8l;
                       (* Unwait all waiting processes *)
-                      Block (ValBlockType (Some (RefT (NoNull, VarHT (StatX TMap.process_list_tid)))), [
-                        Loop (ValBlockType (Some (RefT (NoNull, VarHT (StatX TMap.process_list_tid)))), [
+                      Block (ValBlockType (Some (RefT (NoNull, VarHT TMap.process_list_tid))), [
+                        Loop (ValBlockType (Some (RefT (NoNull, VarHT TMap.process_list_tid))), [
                           LocalGet 2l;
                           LocalGet 8l;
                           StructGet (TMap.pid_active_tid, 3l, None);
@@ -2076,7 +2076,7 @@ let compile (m : 'a modu) (use_init : bool) (main_typ_name : string) : Wasm.modu
                       StructSet (TMap.pid_tid, 1l);
                       (* Update the process (remove the continuation) *)
                       LocalGet 2l;
-                      RefNull (VarHT (StatX TMap.process_active_tid));
+                      RefNull (VarHT TMap.process_active_tid);
                       StructSet (TMap.process_list_tid, 1l);
                       Br 3l; (* Go to the next active process *)
                     ]);
@@ -2092,9 +2092,9 @@ let compile (m : 'a modu) (use_init : bool) (main_typ_name : string) : Wasm.modu
                     Binop (I32 IntOp.Add);
                     LocalSet 0l;
                     Const (I32 I32.zero);
-                    RefNull (VarHT (StatX TMap.list_tid));
-                    RefNull (VarHT (StatX TMap.list_tid));
-                    RefNull (VarHT (StatX TMap.waiting_list_tid));
+                    RefNull (VarHT TMap.list_tid);
+                    RefNull (VarHT TMap.list_tid);
+                    RefNull (VarHT TMap.waiting_list_tid);
                     StructNew (TMap.pid_active_tid, Explicit);
                     LocalTee 8l;
                     StructNew (TMap.pid_tid, Explicit);
@@ -2132,7 +2132,7 @@ let compile (m : 'a modu) (use_init : bool) (main_typ_name : string) : Wasm.modu
                 LocalSet 7l;
                 LocalSet 8l;
                 LocalGet 2l;
-                RefNull (VarHT (StatX TMap.process_active_tid));
+                RefNull (VarHT TMap.process_active_tid);
                 StructSet (TMap.process_list_tid, 1l);
                 LocalGet 8l;
                 LocalGet 2l;
@@ -2192,7 +2192,7 @@ let compile (m : 'a modu) (use_init : bool) (main_typ_name : string) : Wasm.modu
                 LocalGet 1l;
                 StructGet (TMap.process_list_tid, 0l, None);
                 StructGet (TMap.pid_tid, 1l, None);
-                RefTest (NoNull, VarHT (StatX TMap.pid_active_tid));
+                RefTest (NoNull, VarHT TMap.pid_active_tid);
                 Testop (I32 IntOp.Eqz);
                 BrIf 2l; (* Main is a zombie, exit *)
                 (* Main is just waiting, check the next processes *)

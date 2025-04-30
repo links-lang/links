@@ -59,8 +59,7 @@ let ovalue_heap_type t = match t with
   | BotHT -> raise (internal_error "invalid heap type BotHT")
 let rec generate_heap_type buf t = match ovalue_heap_type t with
   | Ok v -> Buffer.add_uint8 buf v
-  | Error (StatX v) -> generate_s 33 buf (Int64.of_int32 v)
-  | Error (RecX _) -> failwith "invalid heap type VarHT RecX _"
+  | Error v -> generate_s 33 buf (Int64.of_int32 v)
 and generate_ref_type buf t = match t with
   | (NoNull, ht) -> Buffer.add_uint8 buf 0x64; generate_heap_type buf ht
   | (Null, ht) -> match ovalue_heap_type ht with
