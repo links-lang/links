@@ -101,6 +101,8 @@ module Pack = struct
   
   let packed_size = function Pack8 -> 1 | Pack16 -> 2 | Pack32 -> 4 | Pack64 -> 8
   let packed_shape_size = function Pack8x8 | Pack16x4 | Pack32x2 -> 8
+  
+  let pack_size ps = string_of_int (8 * packed_size ps)
 end
 
 module Type = struct
@@ -190,7 +192,7 @@ module Type = struct
     | BotT -> "bot"
   and string_of_storage_type = function
     | ValStorageT vt -> string_of_val_type vt
-    | PackStorageT ps -> "i" ^ string_of_int (8 * Pack.packed_size ps)
+    | PackStorageT ps -> "i" ^ Pack.pack_size ps
   and string_of_field_type = function
     | FieldT (m, st) -> string_of_mut m (string_of_storage_type st)
   and string_of_struct_type = function
@@ -667,12 +669,20 @@ module Instruction = struct
   open Value
   
   module IntOp = struct
-    type unop = |
+    type unop = Clz | Ctz | Popcnt | ExtendS of Pack.pack_size
     type binop = Add | Sub | Mul | DivS | DivU | RemS | RemU | And | Or | Xor | Shl | ShrS | ShrU | Rotl | Rotr
     type testop = Eqz
     type relop = Eq | Ne | LtS | LtU | GtS | GtU | LeS | LeU | GeS | GeU
+    type cvtop =
+      | TruncF32 of Pack.extension | TruncF64 of Pack.extension
+      | TruncSatF32 of Pack.extension | TruncSatF64 of Pack.extension
+      | ReinterpretFloat
     
-    let unop _ (op : unop) : string = match op with _ -> .
+    let unop _ (op : unop) : string = match op with
+      | Clz -> "clz"
+      | Ctz -> "ctz"
+      | Popcnt -> "popcnt"
+      | ExtendS sz -> "extend" ^ Pack.pack_size sz ^ "_s"
     let binop _ (op : binop) : string = match op with
       | Add -> "add"
       | Sub -> "sub"
@@ -702,46 +712,89 @@ module Instruction = struct
       | LeU -> "le_u"
       | GeS -> "ge_s"
       | GeU -> "ge_u"
+    let cvtop sz (op : cvtop) : string = match op with
+      | TruncF32 Pack.SX -> "trunc_f32_s"
+      | TruncF32 Pack.ZX -> "trunc_f32_u"
+      | TruncF64 Pack.SX -> "trunc_f64_s"
+      | TruncF64 Pack.ZX -> "trunc_f64_u"
+      | TruncSatF32 Pack.SX -> "trunc_sat_f32_s"
+      | TruncSatF32 Pack.ZX -> "trunc_sat_f32_u"
+      | TruncSatF64 Pack.SX -> "trunc_sat_f64_s"
+      | TruncSatF64 Pack.ZX -> "trunc_sat_f64_u"
+      | ReinterpretFloat -> "reinterpret_f" ^ sz
   end
   module FloatOp = struct
-    type unop = Neg
-    type binop = Add | Sub | Mul | Div
+    type unop = Abs | Neg | Ceil | Floor | Trunc | Nearest | Sqrt
+    type binop = Add | Sub | Mul | Div | Min | Max | Copysign
     type testop = |
-    type relop = Eq | Ne
-    type cvtop = ReinterpretInt
+    type relop = Eq | Ne | Lt | Gt | Le | Ge
+    type cvtop = ConvertI32 of Pack.extension | ConvertI64 of Pack.extension | ReinterpretInt
     
     let unop _ (op : unop) : string = match op with
+      | Abs -> "abs"
       | Neg -> "neg"
+      | Ceil -> "ceil"
+      | Floor -> "floor"
+      | Trunc -> "trunc"
+      | Nearest -> "nearest"
+      | Sqrt -> "sqrt"
     let binop _ (op : binop) : string = match op with
       | Add -> "add"
       | Sub -> "sub"
       | Mul -> "mul"
       | Div -> "div"
+      | Min -> "min"
+      | Max -> "max"
+      | Copysign -> "copysign"
     let testop _ (op : testop) : string = match op with _ -> .
     let relop _ (op : relop) : string = match op with
       | Eq -> "eq"
       | Ne -> "ne"
+      | Lt -> "lt"
+      | Gt -> "gt"
+      | Le -> "le"
+      | Ge -> "ge"
     let cvtop sz (op : cvtop) : string = match op with
+      | ConvertI32 Pack.SX -> "convert_i32_s"
+      | ConvertI32 Pack.ZX -> "convert_i32_u"
+      | ConvertI64 Pack.SX -> "convert_i64_s"
+      | ConvertI64 Pack.ZX -> "convert_i64_u"
       | ReinterpretInt -> "reinterpret_i" ^ sz
   end
   
   module I32Op = struct
     include IntOp
     
-    type cvtop = WrapI64 | ReinterpretFloat
+    type nonrec cvtop = Common of cvtop | WrapI64
     let cvtop (op : cvtop) : string = match op with
+      | Common op -> IntOp.cvtop "32" op
       | WrapI64 -> "wrap_i64"
-      | ReinterpretFloat -> "reinterpret_f32"
   end
   module I64Op = struct
     include IntOp
     
-    type cvtop = ReinterpretFloat
+    type nonrec cvtop = Common of cvtop | ExtendI32 of Pack.extension
     let cvtop (op : cvtop) : string = match op with
-      | ReinterpretFloat -> "reinterpret_f64"
+      | Common op -> IntOp.cvtop "64" op
+      | ExtendI32 Pack.SX -> "extend_i32_s"
+      | ExtendI32 Pack.ZX -> "extend_i32_u"
   end
-  module F32Op = FloatOp
-  module F64Op = FloatOp
+  module F32Op = struct
+    include FloatOp
+    
+    type nonrec cvtop = Common of cvtop | DemoteF64
+    let cvtop (op : cvtop) : string = match op with
+      | Common op -> cvtop "32" op
+      | DemoteF64 -> "demote_f64"
+  end
+  module F64Op = struct
+    include FloatOp
+    
+    type nonrec cvtop = Common of cvtop | PromoteF32
+    let cvtop (op : cvtop) : string = match op with
+      | Common op -> cvtop "64" op
+      | PromoteF32 -> "promote_f32"
+  end
   
   type unop = (I32Op.unop, I64Op.unop, F32Op.unop, F64Op.unop) op
   type binop = (I32Op.binop, I64Op.binop, F32Op.binop, F64Op.binop) op
@@ -755,41 +808,36 @@ module Instruction = struct
   type t =
     | Unreachable
     | Nop
-    | Drop
-    | Const of num
-    | Unop of unop
-    | Binop of binop
-    | Testop of testop
-    | Relop of relop
-    | Cvtop of cvtop
-    | LocalGet of int32
-    | LocalSet of int32
-    | LocalTee of int32
-    | GlobalGet of int32
-    | GlobalSet of int32
     | Block of block_type * t list
     | Loop of block_type * t list
     | If of block_type * t list * t list
     | Br of int32
     | BrIf of int32
-    | BrOnNull of int32
-    | BrOnNonNull of int32
     | BrTable of int32 list * int32
     | Return
     | Call of int32
-    | CallRef of int32
     | ReturnCall of int32
+    | CallRef of int32
     | ReturnCallRef of int32
+    | Drop
+    | LocalGet of int32
+    | LocalSet of int32
+    | LocalTee of int32
+    | GlobalGet of int32
+    | GlobalSet of int32
+    | Const of num
+    | Testop of testop
+    | Relop of relop
+    | Unop of unop
+    | Binop of binop
+    | Cvtop of cvtop
     | RefNull of heap_type
-    | RefI31
-    | RefFunc of int32
-    | RefTest of ref_type
-    | RefCast of ref_type
     | RefIsNull
+    | RefFunc of int32
+    | RefEq
     | RefAsNonNull
-    | BrOnCast of int32 * ref_type * ref_type
-    | BrOnCastFail of int32 * ref_type * ref_type
-    | I31Get of Pack.extension
+    | BrOnNull of int32
+    | BrOnNonNull of int32
     | ContNew of int32
     | ContBind of int32 * int32
     | Suspend of int32
@@ -803,6 +851,12 @@ module Instruction = struct
     | ArraySet of int32
     | ArrayLen
     | ArrayCopy of int32 * int32
+    | RefTest of ref_type
+    | RefCast of ref_type
+    | BrOnCast of int32 * ref_type * ref_type
+    | BrOnCastFail of int32 * ref_type * ref_type
+    | RefI31
+    | I31Get of Pack.extension
   
   let constop v = string_of_num_type (type_of_num v) ^ ".const"
   let vec_constop v = string_of_vec_type (type_of_vec v) ^ ".const i32x4"
@@ -811,11 +865,11 @@ module Instruction = struct
     | I64 o -> iop "64" o
     | F32 o -> fop "32" o
     | F64 o -> fop "64" o)
-  let operi (i32op, i64op, fop) op = string_of_num_type (type_of_op op) ^ "." ^ (match op with
+  let operif (i32op, i64op, f32op, f64op) op = string_of_num_type (type_of_op op) ^ "." ^ (match op with
     | I32 o -> i32op o
     | I64 o -> i64op o
-    | F32 o -> fop "32" o
-    | F64 o -> fop "64" o)
+    | F32 o -> f32op o
+    | F64 o -> f64op o)
   
   let sexpr_of_idxhdl (i, h) = let open Sexpr in LongNode ("on", [
       Atom (Int32.to_string i);
@@ -825,43 +879,37 @@ module Instruction = struct
   let rec to_sexpr i = let open Sexpr in match i with
     | Unreachable -> Node ("unreachable", [])
     | Nop -> Node ("nop", [])
-    | Drop -> Node ("drop", [])
-    | Const n -> Node (constop n ^ " " ^ string_of_num n, [])
-    | Unop op -> Node (oper (IntOp.unop, FloatOp.unop) op, [])
-    | Binop op -> Node (oper (IntOp.binop, FloatOp.binop) op, [])
-    | Testop op -> Node (oper (IntOp.testop, FloatOp.testop) op, [])
-    | Relop op -> Node (oper (IntOp.relop, FloatOp.relop) op, [])
-    | Cvtop op -> Node (operi (I32Op.cvtop, I64Op.cvtop, FloatOp.cvtop) op, [])
-    | LocalGet i -> LongNode ("local.get", [Atom (Int32.to_string i)], [])
-    | LocalSet i -> LongNode ("local.set", [Atom (Int32.to_string i)], [])
-    | LocalTee i -> LongNode ("local.tee", [Atom (Int32.to_string i)], [])
-    | GlobalGet i -> LongNode ("global.get", [Atom (Int32.to_string i)], [])
-    | GlobalSet i -> LongNode ("global.set", [Atom (Int32.to_string i)], [])
     | Block (bt, b) -> LongNode ("block", sexpr_of_block_type bt, List.map to_sexpr b)
     | Loop (bt, b) -> LongNode ("loop", sexpr_of_block_type bt, List.map to_sexpr b)
     | If (b, t, []) -> LongNode ("if", sexpr_of_block_type b, [Node ("then", List.map to_sexpr t)])
     | If (b, t, f) -> LongNode ("if", sexpr_of_block_type b, [Node ("then", List.map to_sexpr t); Node ("else", List.map to_sexpr f)])
     | Br i -> LongNode ("br", [Atom (Int32.to_string i)], [])
     | BrIf i -> LongNode ("br_if", [Atom (Int32.to_string i)], [])
-    | BrOnNull i -> LongNode ("br_on_null", [Atom (Int32.to_string i)], [])
-    | BrOnNonNull i -> LongNode ("br_on_non_null", [Atom (Int32.to_string i)], [])
     | BrTable (is, id) -> LongNode ("br_table", List.map (fun i -> Atom (Int32.to_string i)) is @ [Atom (Int32.to_string id)], [])
     | Return -> Node ("return", [])
     | Call i -> LongNode ("call", [Atom (Int32.to_string i)], [])
-    | CallRef i -> LongNode ("call_ref", [Atom (Int32.to_string i)], [])
     | ReturnCall i -> LongNode ("return_call", [Atom (Int32.to_string i)], [])
+    | CallRef i -> LongNode ("call_ref", [Atom (Int32.to_string i)], [])
     | ReturnCallRef i -> LongNode ("return_call_ref", [Atom (Int32.to_string i)], [])
+    | Drop -> Node ("drop", [])
+    | LocalGet i -> LongNode ("local.get", [Atom (Int32.to_string i)], [])
+    | LocalSet i -> LongNode ("local.set", [Atom (Int32.to_string i)], [])
+    | LocalTee i -> LongNode ("local.tee", [Atom (Int32.to_string i)], [])
+    | GlobalGet i -> LongNode ("global.get", [Atom (Int32.to_string i)], [])
+    | GlobalSet i -> LongNode ("global.set", [Atom (Int32.to_string i)], [])
+    | Const n -> Node (constop n ^ " " ^ string_of_num n, [])
+    | Testop op -> Node (oper (IntOp.testop, FloatOp.testop) op, [])
+    | Relop op -> Node (oper (IntOp.relop, FloatOp.relop) op, [])
+    | Unop op -> Node (oper (IntOp.unop, FloatOp.unop) op, [])
+    | Binop op -> Node (oper (IntOp.binop, FloatOp.binop) op, [])
+    | Cvtop op -> Node (operif (I32Op.cvtop, I64Op.cvtop, F32Op.cvtop, F64Op.cvtop) op, [])
     | RefNull ht -> LongNode ("ref.null", [sexpr_of_heap_type ht], [])
-    | RefI31 -> LongNode ("ref.i31", [], [])
-    | RefFunc ti -> LongNode ("ref.func", [Atom (Int32.to_string ti)], [])
-    | RefTest rt -> LongNode ("ref.test", [sexpr_of_ref_type rt], [])
-    | RefCast rt -> LongNode ("ref.cast", [sexpr_of_ref_type rt], [])
     | RefIsNull -> Node ("ref.is_null", [])
+    | RefFunc ti -> LongNode ("ref.func", [Atom (Int32.to_string ti)], [])
+    | RefEq -> Node ("ref.eq", [])
     | RefAsNonNull -> Node ("ref.as_non_null", [])
-    | BrOnCast (i, t1, t2) -> LongNode ("br_on_cast", [Atom (Int32.to_string i); sexpr_of_ref_type t1; sexpr_of_ref_type t2], [])
-    | BrOnCastFail (i, t1, t2) -> LongNode ("br_on_cast_fail", [Atom (Int32.to_string i); sexpr_of_ref_type t1; sexpr_of_ref_type t2], [])
-    | I31Get Pack.SX -> LongNode ("i31.get_s", [], [])
-    | I31Get Pack.ZX -> LongNode ("i31.get_u", [], [])
+    | BrOnNull i -> LongNode ("br_on_null", [Atom (Int32.to_string i)], [])
+    | BrOnNonNull i -> LongNode ("br_on_non_null", [Atom (Int32.to_string i)], [])
     | ContNew i -> LongNode ("cont.new", [Atom (Int32.to_string i)], [])
     | ContBind (i, j) -> LongNode ("cont.bind", [Atom (Int32.to_string i); Atom (Int32.to_string j)], [])
     | Suspend i -> LongNode ("suspend", [Atom (Int32.to_string i)], [])
@@ -881,6 +929,13 @@ module Instruction = struct
     | ArraySet i -> LongNode ("array.set", [Atom (Int32.to_string i)], [])
     | ArrayLen -> Node ("array.len", [])
     | ArrayCopy (d, s) -> LongNode ("array.copy", [Atom (Int32.to_string d); Atom (Int32.to_string s)], [])
+    | RefTest rt -> LongNode ("ref.test", [sexpr_of_ref_type rt], [])
+    | RefCast rt -> LongNode ("ref.cast", [sexpr_of_ref_type rt], [])
+    | BrOnCast (i, t1, t2) -> LongNode ("br_on_cast", [Atom (Int32.to_string i); sexpr_of_ref_type t1; sexpr_of_ref_type t2], [])
+    | BrOnCastFail (i, t1, t2) -> LongNode ("br_on_cast_fail", [Atom (Int32.to_string i); sexpr_of_ref_type t1; sexpr_of_ref_type t2], [])
+    | RefI31 -> LongNode ("ref.i31", [], [])
+    | I31Get Pack.SX -> LongNode ("i31.get_s", [], [])
+    | I31Get Pack.ZX -> LongNode ("i31.get_u", [], [])
 end
 
 type import_desc =

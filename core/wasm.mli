@@ -187,17 +187,21 @@ module Instruction : sig
   open Value
   
   module IntOp : sig
-    type unop = |
+    type unop = Clz | Ctz | Popcnt | ExtendS of Pack.pack_size
     type binop = Add | Sub | Mul | DivS | DivU | RemS | RemU | And | Or | Xor | Shl | ShrS | ShrU | Rotl | Rotr
     type testop = Eqz
     type relop = Eq | Ne | LtS | LtU | GtS | GtU | LeS | LeU | GeS | GeU
+    type cvtop =
+      | TruncF32 of Pack.extension | TruncF64 of Pack.extension
+      | TruncSatF32 of Pack.extension | TruncSatF64 of Pack.extension
+      | ReinterpretFloat
   end
   module FloatOp : sig
-    type unop = Neg
-    type binop = Add | Sub | Mul | Div
+    type unop = Abs | Neg | Ceil | Floor | Trunc | Nearest | Sqrt
+    type binop = Add | Sub | Mul | Div | Min | Max | Copysign
     type testop = |
-    type relop = Eq | Ne
-    type cvtop = ReinterpretInt
+    type relop = Eq | Ne | Lt | Gt | Le | Ge
+    type cvtop = ConvertI32 of Pack.extension | ConvertI64 of Pack.extension | ReinterpretInt
   end
   
   module I32Op : sig
@@ -205,17 +209,29 @@ module Instruction : sig
     type binop = IntOp.binop
     type testop = IntOp.testop
     type relop = IntOp.relop
-    type cvtop = WrapI64 | ReinterpretFloat
+    type cvtop = Common of IntOp.cvtop | WrapI64
   end
   module I64Op : sig
     type unop = IntOp.unop
     type binop = IntOp.binop
     type testop = IntOp.testop
     type relop = IntOp.relop
-    type cvtop = ReinterpretFloat
+    type cvtop = Common of IntOp.cvtop | ExtendI32 of Pack.extension
   end
-  module F32Op = FloatOp
-  module F64Op = FloatOp
+  module F32Op : sig
+    type unop = FloatOp.unop
+    type binop = FloatOp.binop
+    type testop = FloatOp.testop
+    type relop = FloatOp.relop
+    type cvtop = Common of FloatOp.cvtop | DemoteF64
+  end
+  module F64Op : sig
+    type unop = FloatOp.unop
+    type binop = FloatOp.binop
+    type testop = FloatOp.testop
+    type relop = FloatOp.relop
+    type cvtop = Common of FloatOp.cvtop | PromoteF32
+  end
   
   type unop = (I32Op.unop, I64Op.unop, F32Op.unop, F64Op.unop) op
   type binop = (I32Op.binop, I64Op.binop, F32Op.binop, F64Op.binop) op
@@ -229,41 +245,36 @@ module Instruction : sig
   type t =
     | Unreachable
     | Nop
-    | Drop
-    | Const of num
-    | Unop of unop
-    | Binop of binop
-    | Testop of testop
-    | Relop of relop
-    | Cvtop of cvtop
-    | LocalGet of int32
-    | LocalSet of int32
-    | LocalTee of int32
-    | GlobalGet of int32
-    | GlobalSet of int32
     | Block of block_type * t list
     | Loop of block_type * t list
     | If of block_type * t list * t list
     | Br of int32
     | BrIf of int32
-    | BrOnNull of int32
-    | BrOnNonNull of int32
     | BrTable of int32 list * int32
     | Return
     | Call of int32
-    | CallRef of int32
     | ReturnCall of int32
+    | CallRef of int32
     | ReturnCallRef of int32
+    | Drop
+    | LocalGet of int32
+    | LocalSet of int32
+    | LocalTee of int32
+    | GlobalGet of int32
+    | GlobalSet of int32
+    | Const of num
+    | Testop of testop
+    | Relop of relop
+    | Unop of unop
+    | Binop of binop
+    | Cvtop of cvtop
     | RefNull of heap_type
-    | RefI31
-    | RefFunc of int32
-    | RefTest of ref_type
-    | RefCast of ref_type
     | RefIsNull
+    | RefFunc of int32
+    | RefEq
     | RefAsNonNull
-    | BrOnCast of int32 * ref_type * ref_type
-    | BrOnCastFail of int32 * ref_type * ref_type
-    | I31Get of Pack.extension
+    | BrOnNull of int32
+    | BrOnNonNull of int32
     | ContNew of int32
     | ContBind of int32 * int32
     | Suspend of int32
@@ -277,6 +288,12 @@ module Instruction : sig
     | ArraySet of int32
     | ArrayLen
     | ArrayCopy of int32 * int32
+    | RefTest of ref_type
+    | RefCast of ref_type
+    | BrOnCast of int32 * ref_type * ref_type
+    | BrOnCastFail of int32 * ref_type * ref_type
+    | RefI31
+    | I31Get of Pack.extension
   
   val to_sexpr : t -> Sexpr.t
 end
