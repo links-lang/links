@@ -54,12 +54,10 @@ module Type : sig
     | ExternHT | NoExternHT
     | ContHT | NoContHT
     | VarHT of var
-    | DefHT of def_type
     | BotHT
   and ref_type = null * heap_type
   and val_type = NumT of num_type | VecT of vec_type | RefT of ref_type | BotT
   and result_type = val_type list
-  and instr_type = InstrT of result_type * result_type * local_idx list
   and storage_type = ValStorageT of val_type | PackStorageT of Pack.pack_size
   and field_type = FieldT of mut * storage_type
   and struct_type = StructT of field_type list
@@ -73,7 +71,6 @@ module Type : sig
   | DefContT of cont_type
   and sub_type = SubT of final * heap_type list * str_type
   and rec_type = RecT of sub_type list
-  and def_type = DefT of rec_type * int32
   
   type global_type = GlobalT of mut * val_type
   type block_type = VarBlockType of int32 | ValBlockType of val_type option

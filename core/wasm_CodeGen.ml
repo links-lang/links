@@ -55,7 +55,6 @@ let ovalue_heap_type t = match t with
   | ContHT     -> Ok 0x67 (* s8 -0x18 = 0b01100111 *)
   | NoContHT   -> Ok 0x75 (* s8 -0x0B = 0b01110101 *)
   | VarHT v -> Error v
-  | DefHT _ -> raise (internal_error "invalud heap type DefHT _")
   | BotHT -> raise (internal_error "invalid heap type BotHT")
 let rec generate_heap_type buf t = match ovalue_heap_type t with
   | Ok v -> Buffer.add_uint8 buf v
@@ -71,7 +70,6 @@ and generate_val_type buf t = match t with
   | RefT rt -> generate_ref_type buf rt
   | BotT -> raise (internal_error "invalid value type BotT")
 and generate_result_type buf t = generate_u 32 buf (Int64.of_int (List.length t)); List.iter (generate_val_type buf) t
-and generate_instr_type buf t = ignore (buf, t); failwith "TODO instr_type"
 and generate_storage_type buf t = match t with
   | ValStorageT vt -> generate_val_type buf vt
   | PackStorageT ps -> generate_pack_size buf ps
@@ -100,7 +98,6 @@ and generate_rec_type buf t = match t with
       Buffer.add_uint8 buf 0x4E;
       generate_u 32 buf (Int64.of_int (List.length sts));
       List.iter (generate_sub_type buf) sts
-and generate_def_type buf t = ignore (buf, t); failwith "TODO def_type"
 
 let generate_global_type buf t = match t with
   | GlobalT (m, vt) -> generate_val_type buf vt; generate_mut buf m

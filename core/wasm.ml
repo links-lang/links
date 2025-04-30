@@ -125,12 +125,10 @@ module Type = struct
     | ExternHT | NoExternHT
     | ContHT | NoContHT
     | VarHT of var
-    | DefHT of def_type
     | BotHT
   and ref_type = null * heap_type
   and val_type = NumT of num_type | VecT of vec_type | RefT of ref_type | BotT
   and result_type = val_type list
-  and instr_type = InstrT of result_type * result_type * local_idx list
   and storage_type = ValStorageT of val_type | PackStorageT of Pack.pack_size
   and field_type = FieldT of mut * storage_type
   and struct_type = StructT of field_type list
@@ -144,7 +142,6 @@ module Type = struct
   | DefContT of cont_type
   and sub_type = SubT of final * heap_type list * str_type
   and rec_type = RecT of sub_type list
-  and def_type = DefT of rec_type * int32
   
   type global_type = GlobalT of mut * val_type
   type block_type = VarBlockType of int32 | ValBlockType of val_type option
@@ -184,7 +181,6 @@ module Type = struct
     | ContHT -> "cont"
     | NoContHT -> "nocont"
     | VarHT v -> string_of_var v
-    | DefHT d -> "(" ^ string_of_def_type d ^ ")"
     | BotHT -> "something"
   and string_of_ref_type (n, h) = "(ref " ^ string_of_null n ^ string_of_heap_type h ^ ")"
   and string_of_val_type = function
@@ -199,25 +195,26 @@ module Type = struct
     | FieldT (m, st) -> string_of_mut m (string_of_storage_type st)
   and string_of_struct_type = function
     | StructT fs -> "(struct" ^ String.concat "" (List.map (fun ft -> " (field " ^ string_of_field_type ft ^ ")") fs) ^ ")"
+  and string_of_array_type = function
+    | ArrayT ft -> "(array " ^ string_of_field_type ft ^ ")"
   and string_of_func_type = function
     | FuncT (args, rets) ->
       let rets = if rets = [] then ")" else " (result " ^ String.concat " " (List.map (fun t -> string_of_val_type t) rets) ^ "))" in
       let argsrets = if args = [] then rets else " (param " ^ String.concat " " (List.map (fun t -> string_of_val_type t) args) ^ ")" ^ rets in
       "(func" ^ argsrets
+  and string_of_cont_type = function
+    | ContT ht -> "(cont " ^ string_of_heap_type ht ^ ")"
   and string_of_str_type = function
     | DefStructT st -> string_of_struct_type st
-    | DefArrayT _ -> failwith "TODO string_of_str_type DefArrayT"
+    | DefArrayT at -> string_of_array_type at
     | DefFuncT ft -> string_of_func_type ft
-    | DefContT _ -> failwith "TODO string_of_str_type DefContT"
+    | DefContT ct -> string_of_cont_type ct
   and string_of_sub_type = function
     | SubT (Final, [], s) -> string_of_str_type s
     | SubT (f, hs, s) -> String.concat " " (("sub" ^ string_of_final f) :: List.map string_of_heap_type hs) ^ " (" ^ string_of_str_type s ^ ")"
   and string_of_rec_type = function
     | RecT [s] -> string_of_sub_type s
     | RecT ss -> "rec (" ^ String.concat " " (List.map string_of_sub_type ss) ^ ")"
-  and string_of_def_type = function
-    | DefT (RecT [s], 0l) -> string_of_sub_type s
-    | DefT (r, i) -> "(" ^ string_of_rec_type r ^ ")." ^ Printf.sprintf "%lu" i
   
   let sexpr_of_null = let open Sexpr in function
     | NoNull -> []
@@ -254,7 +251,6 @@ module Type = struct
     | ContHT -> Atom "cont"
     | NoContHT -> Atom "nocont"
     | VarHT v -> sexpr_of_var v
-    | DefHT d -> sexpr_of_def_type d
     | BotHT -> Atom "something"
   and sexpr_of_ref_type (n, h) = let open Sexpr in
     match sexpr_of_heap_type h with
@@ -301,9 +297,6 @@ module Type = struct
   and sexpr_of_rec_type = let open Sexpr in function
     | RecT [s] -> sexpr_of_sub_type s
     | RecT ss -> Node ("rec", List.map sexpr_of_sub_type ss)
-  and sexpr_of_def_type = function
-    | DefT (RecT [s], 0l) -> sexpr_of_sub_type s
-    | DefT (_r, _i) -> failwith "TODO sexpr_of_def_type generic"
   
   let sexpr_of_num_rec_type i = let open Sexpr in function
     | RecT [s] -> Int32.succ i, LongNode ("type", [Atom ("$" ^ Int32.to_string i)], [sexpr_of_sub_type s])
