@@ -131,7 +131,8 @@ and 'a expr =
   | EClose : ('a, 'b, 'c, 'ga, 'gc) funcid * ('d, 'c) box_list * 'd expr_list -> ('ga * 'a -> 'b) expr
   | ERawClose : ('a, 'b, 'c, 'ga, 'gc) funcid * abs_closure_content expr -> ('ga * 'a -> 'b) expr
   | ESpecialize : ('ga * 'a -> 'b) expr * ('gc, 'ga) specialization * ('c, 'a) box_list * ('d, 'b) box -> ('gc * 'c -> 'd) expr
-  | ECallRawHandler : mfunid * 'a typ * 'a continuation expr * 'b typ * 'b expr * abs_closure_content expr * 'd typ -> 'd expr
+  | ECallRawHandler : mfunid * 'a typ * 'a continuation expr * 'b typ * 'b expr * 'c typ_list * 'c expr_list *
+                      abs_closure_content expr * 'd typ -> 'd expr
   (* ^ Internal use only: pass the arguments in a struct without modification (no closure de/construction) *)
       (* FIXME: add information in the continuation that it takes a 'b *)
   | ECallClosed : (unit * 'a -> 'b) expr * 'a expr_list * 'b typ -> 'b expr
@@ -139,7 +140,7 @@ and 'a expr =
   | EDo : 'a effectid * 'b typ * 'a expr_list -> 'b expr
   | EShallowHandle : (unit, 'a, 'c, unit, unit) funcid * 'c expr_list * ('a, 'b) finisher * ('a, 'b) handler list -> 'b expr
   | EDeepHandle : (unit, 'b, 'c, unit, unit) funcid * 'c expr_list *
-                  ('b continuation * ('c closure_content * unit), 'd, 'e, unit, unit) funcid * 'e expr_list -> 'd expr
+                  ('b continuation * ('c closure_content * 'f), 'd, 'e, unit, unit) funcid * 'e expr_list * 'f expr_list -> 'd expr
 and ('a, 'b) handler = (* The continuation itself returns 'a, the handler returns 'b *)
   (* Note: we lose the information that the continuation takes 'b as parameter(s) *)
   | Handler : 'a effectid * 'd continuation varid * 'a varid_list * 'c block -> ('d, 'c) handler
@@ -165,8 +166,9 @@ type 'b fstart = {
   fst_locals           : anytyp list;
   fst_block            : 'b block;
 }
-type ('a, 'b) fhandler = {
+type ('a, 'c, 'b) fhandler = {
   fh_contarg : 'a continuation varid * mvarid;
+  fh_tis     : 'c typ_list;
   fh_closure : (mvarid * (anytyp_list * mvarid)) option;
   fh_locals  : anytyp list;
   fh_finisher: ('a, 'b) finisher;
@@ -186,7 +188,7 @@ type ('g, 'a, 'b) fbuiltin =
 type func =
   | FFunction : ('a, 'b) func' -> func
   | FContinuationStart : 'b fstart -> func
-  | FHandler : ('a, 'b) fhandler -> func
+  | FHandler : ('a, 'c, 'b) fhandler -> func
   | FBuiltin : mfunid * ('g, 'a, 'b) fbuiltin -> func
 type 'a modu = {
   mod_imports       : (string * string) list;

@@ -105,13 +105,14 @@ and _ expr =
   | EClose : ('a, 'b, 'c) funcid * ('d, 'c) box_list * 'd expr_list -> ('g * 'a -> 'b) expr
   | ERawClose : ('a, 'b, 'c) funcid * abs_closure_content expr -> ('g * 'a -> 'b) expr
   | ESpecialize : (_ * 'c -> 'd) expr * ('g * 'a -> 'b) typ * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b) expr
-  | ECallRawHandler : mfunid * 'c continuation typ * 'c continuation expr * 'a typ * 'a expr * abs_closure_content expr * 'b typ -> 'b expr
+  | ECallRawHandler : mfunid * 'c continuation typ * 'c continuation expr * 'a typ * 'a expr * 'd typ_list * 'd expr_list *
+                      abs_closure_content expr * 'b typ -> 'b expr
   | ECallClosed : ('g * 'a -> 'b) expr * 'a expr_list * 'b typ -> 'b expr
   | ECond : bool expr * 'a typ * 'a block * 'a block -> 'a expr
   | EDo : 'a effectid * 'b typ * 'a expr_list -> 'b expr
   | EShallowHandle : (unit, 'b, 'c) funcid * 'c expr_list * ('b, 'd) finisher * ('b, 'd) handler list -> 'd expr
   | EDeepHandle : (unit, 'b, 'c) funcid * 'c expr_list *
-                  ('b continuation * ('c closure_content * unit), 'd, 'e) funcid * 'e expr_list -> 'd expr
+                  ('b continuation * ('c closure_content * 'f), 'd, 'e) funcid * 'e expr_list * 'f expr_list -> 'd expr
 and (_, _) handler =
   | Handler : 'a effectid * 'd continuation varid * 'a varid_list * 'c block -> ('d, 'c) handler
 and _ expr_list =
@@ -136,8 +137,9 @@ type 'b fstart = {
   fst_locals           : anytyp list;
   fst_block            : 'b block;
 }
-type ('a, 'b) fhandler = {
+type ('a, 'c, 'b) fhandler = {
   fh_contarg : 'a continuation varid * mvarid;
+  fh_tis     : 'c typ_list;
   fh_closure : (mvarid * (anytyp_list * mvarid)) option;
   fh_locals  : anytyp list;
   fh_finisher: ('a, 'b) finisher;
@@ -157,7 +159,7 @@ type ('g, 'a, 'b) fbuiltin = ('g, 'a, 'b) Wasmir.fbuiltin =
 type func =
   | FFunction : ('a, 'b) func' -> func
   | FContinuationStart : 'b fstart -> func
-  | FHandler : ('a, 'b) fhandler -> func
+  | FHandler : ('a, 'c, 'b) fhandler -> func
   | FBuiltin : mfunid * ('g, 'a, 'b) fbuiltin -> func
 type 'a modu = {
   mod_imports       : (string * string) list;

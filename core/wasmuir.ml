@@ -248,13 +248,14 @@ and _ expr =
   | EClose : ('a, 'b, 'c) funcid * ('d, 'c) box_list * 'd expr_list -> ('g * 'a -> 'b) expr
   | ERawClose : ('a, 'b, 'c) funcid * abs_closure_content expr -> ('g * 'a -> 'b) expr
   | ESpecialize : (_ * 'c -> 'd) expr * ('g * 'a -> 'b) typ * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b) expr
-  | ECallRawHandler : mfunid * 'c continuation typ * 'c continuation expr * 'a typ * 'a expr * abs_closure_content expr * 'b typ -> 'b expr
+  | ECallRawHandler : mfunid * 'c continuation typ * 'c continuation expr * 'a typ * 'a expr * 'd typ_list * 'd expr_list *
+                      abs_closure_content expr * 'b typ -> 'b expr
   | ECallClosed : ('g * 'a -> 'b) expr * 'a expr_list * 'b typ -> 'b expr
   | ECond : bool expr * 'a typ * 'a block * 'a block -> 'a expr
   | EDo : 'a effectid * 'b typ * 'a expr_list -> 'b expr
   | EShallowHandle : (unit, 'b, 'c) funcid * 'c expr_list * ('b, 'd) finisher * ('b, 'd) handler list -> 'd expr
   | EDeepHandle : (unit, 'b, 'c) funcid * 'c expr_list *
-                  ('b continuation * ('c closure_content * unit), 'd, 'e) funcid * 'e expr_list -> 'd expr
+                  ('b continuation * ('c closure_content * 'f), 'd, 'e) funcid * 'e expr_list * 'f expr_list -> 'd expr
 and (_, _) handler =
   | Handler : 'a effectid * 'd continuation varid * 'a varid_list * 'c block -> ('d, 'c) handler
 and _ expr_list =
@@ -338,8 +339,9 @@ and [@tail_mod_cons] convert_expr : type a. a Wasmir.expr -> a expr =
         TClosed (convert_typ_list (Wasmir.src_of_box_list bargs), convert_typ (Wasmir.src_of_box bret)),
         convert_box_list bargs,
         convert_box bret)
-  | Wasmir.ECallRawHandler (f, tc, c, ta, a, cl, tr) ->
-      ECallRawHandler (f, TCont (convert_typ tc), convert_expr c, convert_typ ta, (convert_expr[@tailcall]) a, convert_expr cl, convert_typ tr)
+  | Wasmir.ECallRawHandler (f, tc, c, ta, a, ti, i, cl, tr) ->
+      ECallRawHandler (f, TCont (convert_typ tc), convert_expr c, convert_typ ta, (convert_expr[@tailcall]) a,
+                       convert_typ_list ti, convert_expr_list i, convert_expr cl, convert_typ tr)
   | Wasmir.ECallClosed (f, e, t) -> ECallClosed (convert_expr f, (convert_expr_list[@tailcall]) e, convert_typ t)
   | Wasmir.ECond (r, c, t, f) ->
       ECond (
@@ -348,8 +350,8 @@ and [@tail_mod_cons] convert_expr : type a. a Wasmir.expr -> a expr =
   | Wasmir.EDo (e, t, v) -> EDo (convert_effectid e, convert_typ t, (convert_expr_list[@tailcall]) v)
   | Wasmir.EShallowHandle (f, e, d, h) ->
       EShallowHandle (convert_funcid f, convert_expr_list e, convert_finisher d, List.map (convert_handler) h)
-  | Wasmir.EDeepHandle (c, cl, h, a) ->
-      EDeepHandle (convert_funcid c, convert_expr_list cl, convert_funcid h, (convert_expr_list[@tailcall]) a)
+  | Wasmir.EDeepHandle (c, cl, h, a, i) ->
+      EDeepHandle (convert_funcid c, convert_expr_list cl, convert_funcid h, (convert_expr_list[@tailcall]) a, convert_expr_list i)
 and convert_handler : type a b. (a, b) Wasmir.handler -> (a, b) handler =
   fun (h : (a, b) Wasmir.handler) -> match h with
   | Wasmir.Handler (e, c, v, b) -> Handler (convert_effectid e, convert_varid c, convert_varid_list v, convert_block b)
@@ -394,13 +396,13 @@ let typ_of_expr : type a. a expr -> a typ = function
   | EClose ((args, ret, _, _), _, _) -> TClosed (args, ret)
   | ERawClose ((args, ret, _, _), _) -> TClosed (args, ret)
   | ESpecialize (_, t, _, _) -> t
-  | ECallRawHandler (_, _, _, _, _, _, t) -> t
+  | ECallRawHandler (_, _, _, _, _, _, _, _, t) -> t
   | ECallClosed (_, _, t) -> t
   | ECond (_, t, _, _) -> t
   | EDo ((_, _), t, _) -> t
   | EShallowHandle (_, _, FId t, _) -> t
   | EShallowHandle (_, _, FMap (_, t, _), _) -> t
-  | EDeepHandle (_, _, (_, t, _, _), _) -> t
+  | EDeepHandle (_, _, (_, t, _, _), _, _) -> t
 
 type ('a, 'b) func' = {
   fun_id               : mfunid;
@@ -418,8 +420,9 @@ type 'b fstart = {
   fst_locals           : anytyp list;
   fst_block            : 'b block;
 }
-type ('a, 'b) fhandler = {
+type ('a, 'c, 'b) fhandler = {
   fh_contarg : 'a continuation varid * mvarid;
+  fh_tis     : 'c typ_list;
   fh_closure : (mvarid * (anytyp_list * mvarid)) option;
   fh_locals  : anytyp list;
   fh_finisher: ('a, 'b) finisher;
@@ -439,7 +442,7 @@ type ('g, 'a, 'b) fbuiltin = ('g, 'a, 'b) Wasmir.fbuiltin =
 type func =
   | FFunction : ('a, 'b) func' -> func
   | FContinuationStart : 'b fstart -> func
-  | FHandler : ('a, 'b) fhandler -> func
+  | FHandler : ('a, 'c, 'b) fhandler -> func
   | FBuiltin : mfunid * ('g, 'a, 'b) fbuiltin -> func
 type 'a modu = {
   mod_imports       : (string * string) list;
@@ -471,7 +474,7 @@ let convert_fstart (f : 'b Wasmir.fstart) : 'b fstart = {
   fst_ret               = convert_typ f.Wasmir.fst_ret;
   fst_block             = convert_block f.Wasmir.fst_block;
 }
-let convert_fhandler (f : ('a, 'b) Wasmir.fhandler) : ('a, 'b) fhandler =
+let convert_fhandler (f : ('a, 'c, 'b) Wasmir.fhandler) : ('a, 'c, 'b) fhandler =
   let convert_contarg (c, a : 'a Wasmir.continuation Wasmir.varid * mvarid) =
     let t, c = (c : _ Wasmir.varid :> _ * _) in
     (convert_typ t, c), a
@@ -480,6 +483,7 @@ let convert_fhandler (f : ('a, 'b) Wasmir.fhandler) : ('a, 'b) fhandler =
     Option.map (fun (a, (l, c)) -> a, (convert_anytyp_list l, c)) o
   in {
   fh_contarg  = convert_contarg f.Wasmir.fh_contarg;
+  fh_tis      = convert_typ_list f.Wasmir.fh_tis;
   fh_closure  = convert_closure f.Wasmir.fh_closure;
   fh_locals   = List.map convert_anytyp f.Wasmir.fh_locals;
   fh_finisher = convert_finisher f.Wasmir.fh_finisher;

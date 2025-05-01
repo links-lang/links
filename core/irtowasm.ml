@@ -63,7 +63,7 @@ module TMap : sig
   
   val oval_of_type : t -> 'a typ -> Wasm.Type.val_type option
   
-  val recids_of_handler : t -> 'a continuation typ -> 'b typ -> int32 * int32
+  val recids_of_handler : t -> 'a continuation typ -> 'c typ_list -> 'b typ -> int32 * int32
   val recid_of_handler_block : t -> int32 -> 'a typ_list -> int32
   val recid_of_handler_finish : t -> int32 -> 'a typ -> int32
   
@@ -262,14 +262,15 @@ end = struct
   let oval_of_type (env : t) (t : 'a typ) : Wasm.Type.val_type option =
     Some (val_of_type env t)
   
-  let recids_of_handler (env : t) (TCont cret : 'a continuation typ) (tret : 'b typ) : int32 * int32 =
+  let recids_of_handler (env : t) (TCont cret : 'a continuation typ) (tis : 'c typ_list) (tret : 'b typ) : int32 * int32 =
     let open Wasm.Type in
     let cret = val_of_type env cret in
     let tret = val_of_type env tret in
+    let tis = val_list_of_type_list env tis in
     let rawid = recid_of_sub_type env (SubT (Final, [], DefFuncT (FuncT ([RefT (Null, EqHT)], [cret])))) in
     let contid = recid_of_sub_type env (SubT (Final, [], DefContT (ContT (VarHT rawid)))) in
     let hdlid = recid_of_sub_type env (SubT (Final, [], DefFuncT (FuncT (
-      [RefT (NoNull, VarHT contid); RefT (Null, EqHT); RefT (Null, StructHT)],
+      RefT (NoNull, VarHT contid) :: RefT (Null, EqHT) :: tis @ [RefT (Null, StructHT)],
       [tret])))) in
     contid, hdlid
   let recid_of_handler_block (env : t) (contid : int32) (_ : 'a typ_list) : int32 =
@@ -1028,7 +1029,7 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
         !branches.(id) <- Some i;
         let unbox = do_unbox tm new_meta (BBox btyp) (fun acc -> StructGet (TMap.variant_tid, 1l, None) :: convert_get_var' loc vid cinfo acc) in
         Int32.succ i, Int.min min_id id, fun content depth ->
-          let blk = convert_block tm new_meta procinfo blk BNone (incr_depth_n is_last depth) cinfo in
+          let blk = convert_block tm new_meta procinfo blk BNone (incr_depth_n is_last (Int32.succ depth)) cinfo in
           Wasm.Instruction.Block (Wasm.Type.(ValBlockType None), code content (Int32.succ depth)) ::
           List.rev_append (unbox []) (
           LocalSet (bid : mvarid :> int32) ::
@@ -1088,18 +1089,24 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
     end
   | ESpecialize (e, tdst, bargs, bret) ->
       do_box tm new_meta box (do_unbox tm new_meta (BClosed (tdst, bargs, bret)) (convert_expr tm new_meta procinfo e BNone None cinfo))
-  | ECallRawHandler (fid, _, contarg, targ, arg, hdlarg, _) ->
+  | ECallRawHandler (fid, _, contarg, targ, arg, tiargs, iargs, hdlarg, _) ->
       let fid = (fid :> int32) in
       let arg = convert_expr tm new_meta procinfo arg (BBox targ) None cinfo in
+      let iargs = convert_exprs tm new_meta procinfo iargs BLnone cinfo in
       let contarg = convert_expr tm new_meta procinfo contarg BNone None cinfo in
       begin match is_last with
       | Some (refid, jmplv) when can_early_ret && Int32.equal fid (refid :> int32) ->
+          let set_args =
+            let rec inner : type a. _ -> a typ_list -> instr_conv = fun narg ts -> match ts with
+              | TLnil -> Fun.id
+              | TLcons (_, ts) -> let set_tl = inner (Int32.succ narg) ts in fun acc -> LocalSet narg :: set_tl acc in
+            inner 2l tiargs in
           do_box tm new_meta box
-            (fun acc -> Br jmplv :: contarg (arg acc))
+            (fun acc -> Br jmplv :: contarg (arg (set_args (iargs acc))))
       | _ ->
           let hdlarg = convert_expr tm new_meta procinfo hdlarg BNone None cinfo in
           do_box tm new_meta box
-            (fun acc -> (if can_early_ret then ReturnCall fid else Call fid) :: hdlarg (arg (contarg acc)))
+            (fun acc -> (if can_early_ret then ReturnCall fid else Call fid) :: hdlarg (iargs (arg (contarg acc))))
     end
   | ECallClosed (ESpecialize (EClose (f, bcl, cls), _, bargs, bret), args, _) ->
       let targs, _, clts, fid = (f : _ funcid :> _ * _ * _ * int32) in
@@ -1108,7 +1115,6 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
       let gen_new_struct = convert_new_struct tm new_meta procinfo cls bcl fcid false cinfo in
       begin match is_last with
       | Some (refid, jmplv) when can_early_ret && Int32.equal fid (refid :> int32) ->
-          assert (match box, bret with BNone, BNone -> true | _ -> false);
           NewMetadata.mark_recursive new_meta;
           let set_args acc =
             let [@tail_mod_cons] rec inner : type a. a typ_list -> _ = fun targs d acc -> match targs with
@@ -1129,7 +1135,6 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
       let gen_new_struct = convert_new_struct tm new_meta procinfo cls bcl fcid false cinfo in
       begin match is_last with
       | Some (refid, jmplv) when can_early_ret && Int32.equal fid (refid :> int32) ->
-          assert (match box with BNone -> true | _ -> false);
           NewMetadata.mark_recursive new_meta;
           let set_args acc =
             let [@tail_mod_cons] rec inner : type a. a typ_list -> _ = fun targs d acc -> match targs with
@@ -1148,7 +1153,6 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
       let can_early_ret = can_early_ret && (match bret with BNone -> true | _ -> false) in
       begin match is_last with
       | Some (refid, jmplv) when can_early_ret && Int32.equal fid (refid :> int32) ->
-          assert (match box, bret with BNone, BNone -> true | _ -> false);
           NewMetadata.mark_recursive new_meta;
           let set_args acc =
             let [@tail_mod_cons] rec inner : type a. a typ_list -> _ = fun targs d acc -> match targs with
@@ -1168,7 +1172,6 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
       let get_cl = convert_expr tm new_meta procinfo cl BNone None cinfo in
       begin match is_last with
       | Some (refid, jmplv) when can_early_ret && Int32.equal fid (refid :> int32) ->
-          assert (match box with BNone -> true | _ -> false);
           NewMetadata.mark_recursive new_meta;
           let set_args acc =
             let [@tail_mod_cons] rec inner : type a. a typ_list -> _ = fun targs d acc -> match targs with
@@ -1244,10 +1247,11 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
       let ret = do_unbox tm new_meta (BBox tret) (fun acc -> Suspend eid :: generate_yield (NewMetadata.g_of_t new_meta) procinfo (args acc)) in
       do_box tm new_meta box ret
   | EShallowHandle _ -> failwith "TODO: convert_expr EShallowHandle"
-  | EDeepHandle (contid, contargs, hdlid, hdlargs) ->
+  | EDeepHandle (contid, contargs, hdlid, hdlargs, iargs) ->
       let _, _, thdlcl, hdlid = (hdlid : _ funcid :> _ * _ * _ * int32) in
       let hdlcid = TMap.recid_of_type tm (TClosArg thdlcl) in
       let gen_hdl_struct = convert_new_struct tm new_meta procinfo hdlargs BLnone hdlcid false cinfo in
+      let iargs = convert_exprs tm new_meta procinfo iargs BLnone cinfo in
       let _, tcret, tcontcl, contid = (contid : _ funcid :> _ * _ * _ * int32) in
       NewMetadata.add_export_function (NewMetadata.g_of_t new_meta) contid;
       let contcid = TMap.recid_of_type tm (TClosArg tcontcl) in
@@ -1256,10 +1260,11 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
       do_box tm new_meta box (fun acc ->
         (if can_early_ret then ReturnCall hdlid else Call hdlid) ::
         gen_hdl_struct (
+        iargs (
         gen_cont_struct (
         ContNew tcontid ::
         RefFunc contid ::
-        acc)))
+        acc))))
 and convert_exprs : type a b. _ -> _ -> _ -> a expr_list -> (a, b) box_list -> _ -> instr_conv =
   fun (tm : tmap) (new_meta : new_meta) (procinfo : procinfo)
       (es : a expr_list) box (cinfo : clos_info) -> match box, es with
@@ -1294,11 +1299,15 @@ let convert_finisher : type a b. _ -> _ -> _ -> (a, b) finisher -> _ =
       let b = convert_block tm new_meta procinfo b BNone is_last cinfo in
       b Wasm.Instruction.[LocalSet v]
 
-let convert_hdl (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (type a b) (f : (a, b) fhandler) : Wasm.fundef =
-  let new_meta = NewMetadata.extend glob 3l (List.map (fun (Type t) -> TMap.val_of_type tm t) f.fh_locals) in
+let convert_hdl (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (type a b c) (f : (a, c, b) fhandler) : Wasm.fundef =
+  let tis = f.fh_tis in
+  let nargs =
+    let rec inner : type a. a typ_list -> int32 -> int32 = fun ts n -> match ts with TLnil -> n | TLcons (_, ts) -> inner ts (Int32.succ n) in
+    inner tis 3l in
+  let new_meta = NewMetadata.extend glob nargs (List.map (fun (Type t) -> TMap.val_of_type tm t) f.fh_locals) in
   let (tcont, contidx), contcl = (f.fh_contarg : _ varid * mvarid :> (_ * int32) * int32) in
   let tret = match f.fh_finisher with FId t -> (t : b typ) | FMap (_, t, _) -> t in
-  let contid, fun_typ = TMap.recids_of_handler tm tcont tret in
+  let contid, fun_typ = TMap.recids_of_handler tm tcont tis tret in
   let open Wasm.Instruction in
   let convert_clos, cinfo = match f.fh_closure with
     | None -> [], None
