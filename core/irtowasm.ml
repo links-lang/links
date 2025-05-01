@@ -1011,6 +1011,18 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
       do_box tm new_meta box (fun acc ->
         StructNew (TMap.variant_tid, Explicit) ::
         arg (Const Wasm.Value.(I32 (I32.of_int_u (tagid :> int))) :: acc))
+  | ECase (v, _, [_, Type btyp, bid, blk], None) -> (* Optimization: assume value has the correct tag *)
+      let v = convert_expr tm new_meta procinfo v BNone None cinfo in
+      let unbox = do_unbox tm new_meta (BBox btyp) (fun acc -> StructGet (TMap.variant_tid, 1l, None) :: v acc) in
+      let blk = convert_block tm new_meta procinfo blk BNone is_last cinfo in
+      do_box tm new_meta box (fun acc -> blk (LocalSet (bid :> int32) :: unbox acc))
+  | ECase (v, _, [], None) -> (* Optimization: get the value, then unreachable *)
+      let v = convert_expr tm new_meta procinfo v BNone None cinfo in
+      do_box tm new_meta box (fun acc -> Unreachable :: v acc)
+  | ECase (v, _, [], Some (bid, blk)) -> (* Optimization: get the value, then evaluate the default branch *)
+      let v = convert_expr tm new_meta procinfo v BNone None cinfo in
+      let blk = convert_block tm new_meta procinfo blk BNone is_last cinfo in
+      do_box tm new_meta box (fun acc -> blk (LocalSet (bid :> int32) :: v acc))
   | ECase (v, t, cs, od) ->
       let loc, vid, stv = match v with
         | EVariable (loc, vid) ->
@@ -1048,15 +1060,15 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
         let table =
           if min_id = 0 then table
           else Const Wasm.Value.(I32 (I32.of_int_u min_id)) :: Binop Wasm.Value.(I32 IntOp.Sub) :: table in
-        code (convert_get_var' loc vid cinfo (
+        code (List.rev_append (convert_get_var' loc vid cinfo []) (
           StructGet (TMap.variant_tid, 0l, None) ::
           table)) 1l in
       let code = match od with
         | None -> Wasm.Instruction.Block (Wasm.Type.(ValBlockType None), code) :: [Unreachable]
         | Some (bid, blk) ->
-          let blk = convert_block tm new_meta procinfo blk BNone is_last cinfo in
+          let blk = convert_block tm new_meta procinfo blk BNone (incr_depth is_last) cinfo in
           Wasm.Instruction.Block (Wasm.Type.(ValBlockType None), code) ::
-          convert_get_var' loc vid cinfo (
+          List.rev_append (convert_get_var' loc vid cinfo []) (
           LocalSet (bid :> int32) ::
           List.rev (blk []))
       in
