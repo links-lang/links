@@ -19,7 +19,7 @@ module Unicode : sig
 end
 
 module Pack : sig
-  type pack_size = Pack8 | Pack16 | Pack32 | Pack64
+  type pack_size = Pack8 | Pack16
   type extension = SX | ZX
   
   type pack_shape = Pack8x8 | Pack16x4 | Pack32x2
@@ -57,10 +57,10 @@ module Type : sig
     | BotHT
   and ref_type = null * heap_type
   and val_type = NumT of num_type | VecT of vec_type | RefT of ref_type | BotT
-  and result_type = val_type list
+  and result_type = val_type array
   and storage_type = ValStorageT of val_type | PackStorageT of Pack.pack_size
   and field_type = FieldT of mut * storage_type
-  and struct_type = StructT of field_type list
+  and struct_type = StructT of field_type array
   and array_type = ArrayT of field_type
   and func_type = FuncT of result_type * result_type
   and cont_type = ContT of heap_type
@@ -69,8 +69,8 @@ module Type : sig
   | DefArrayT of array_type
   | DefFuncT of func_type
   | DefContT of cont_type
-  and sub_type = SubT of final * heap_type list * str_type
-  and rec_type = RecT of sub_type list
+  and sub_type = SubT of final * heap_type array * str_type
+  and rec_type = RecT of sub_type array
   
   type global_type = GlobalT of mut * val_type
   type block_type = VarBlockType of int32 | ValBlockType of val_type option
@@ -205,32 +205,32 @@ module Instruction : sig
   end
   
   module I32Op : sig
-    type unop = IntOp.unop
+    type unop = CommonUn of IntOp.unop
     type binop = IntOp.binop
     type testop = IntOp.testop
     type relop = IntOp.relop
-    type cvtop = Common of IntOp.cvtop | WrapI64
+    type cvtop = CommonCvt of IntOp.cvtop | WrapI64
   end
   module I64Op : sig
-    type unop = IntOp.unop
+    type unop = CommonUn of IntOp.unop | ExtendS32
     type binop = IntOp.binop
     type testop = IntOp.testop
     type relop = IntOp.relop
-    type cvtop = Common of IntOp.cvtop | ExtendI32 of Pack.extension
+    type cvtop = CommonCvt of IntOp.cvtop | ExtendI32 of Pack.extension
   end
   module F32Op : sig
     type unop = FloatOp.unop
     type binop = FloatOp.binop
     type testop = FloatOp.testop
     type relop = FloatOp.relop
-    type cvtop = Common of FloatOp.cvtop | DemoteF64
+    type cvtop = CommonCvt of FloatOp.cvtop | DemoteF64
   end
   module F64Op : sig
     type unop = FloatOp.unop
     type binop = FloatOp.binop
     type testop = FloatOp.testop
     type relop = FloatOp.relop
-    type cvtop = Common of FloatOp.cvtop | PromoteF32
+    type cvtop = CommonCvt of FloatOp.cvtop | PromoteF32
   end
   
   type unop = (I32Op.unop, I64Op.unop, F32Op.unop, F64Op.unop) op
@@ -245,12 +245,12 @@ module Instruction : sig
   type t =
     | Unreachable
     | Nop
-    | Block of block_type * t list
-    | Loop of block_type * t list
-    | If of block_type * t list * t list
+    | Block of block_type * t array
+    | Loop of block_type * t array
+    | If of block_type * t array * t array
     | Br of int32
     | BrIf of int32
-    | BrTable of int32 list * int32
+    | BrTable of int32 array * int32
     | Return
     | Call of int32
     | ReturnCall of int32
@@ -278,7 +278,7 @@ module Instruction : sig
     | ContNew of int32
     | ContBind of int32 * int32
     | Suspend of int32
-    | Resume of int32 * (int32 * hdl) list
+    | Resume of int32 * (int32 * hdl) array
     | StructNew of int32 * initop
     | StructGet of int32 * int32 * Pack.extension option
     | StructSet of int32 * int32
@@ -297,6 +297,8 @@ module Instruction : sig
   
   val to_sexpr : t -> Sexpr.t
 end
+type instr = Instruction.t
+type instrs = instr array
 
 type import_desc =
   | FuncImport of int32
@@ -308,20 +310,20 @@ type import = {
   desc : import_desc;
 }
 
-type raw_code = Type.val_type * Type.val_type list * Instruction.t list
+type raw_code = Type.val_type * Type.val_type array * instrs
 type fundef = {
   fn_name  : string option;
   fn_type  : int32;
-  fn_locals: Type.val_type list;
-  fn_code  : Instruction.t list;
+  fn_locals: Type.val_type array;
+  fn_code  : instrs;
 }
-type global = Type.global_type * Instruction.t list * string option
+type global = Type.global_type * instrs * string option
 type module_ = {
-  types  : Type.rec_type list;
-  globals: global list;
-  tags   : int32 list;
-  funs   : fundef list;
-  imports: import list;
+  types  : Type.rec_type array;
+  globals: global array;
+  tags   : int32 array;
+  funs   : fundef array;
+  imports: import array;
   init   : int32 option;
 }
 

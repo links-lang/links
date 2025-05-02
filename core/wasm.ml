@@ -90,7 +90,7 @@ module Unicode = struct
 end
 
 module Pack = struct
-  type pack_size = Pack8 | Pack16 | Pack32 | Pack64
+  type pack_size = Pack8 | Pack16
   type extension = SX | ZX
   
   type pack_shape = Pack8x8 | Pack16x4 | Pack32x2
@@ -99,7 +99,7 @@ module Pack = struct
     | ExtSplat
     | ExtZero
   
-  let packed_size = function Pack8 -> 1 | Pack16 -> 2 | Pack32 -> 4 | Pack64 -> 8
+  let packed_size = function Pack8 -> 1 | Pack16 -> 2
   let packed_shape_size = function Pack8x8 | Pack16x4 | Pack32x2 -> 8
   
   let pack_size ps = string_of_int (8 * packed_size ps)
@@ -130,10 +130,10 @@ module Type = struct
     | BotHT
   and ref_type = null * heap_type
   and val_type = NumT of num_type | VecT of vec_type | RefT of ref_type | BotT
-  and result_type = val_type list
+  and result_type = val_type array
   and storage_type = ValStorageT of val_type | PackStorageT of Pack.pack_size
   and field_type = FieldT of mut * storage_type
-  and struct_type = StructT of field_type list
+  and struct_type = StructT of field_type array
   and array_type = ArrayT of field_type
   and func_type = FuncT of result_type * result_type
   and cont_type = ContT of heap_type
@@ -142,8 +142,8 @@ module Type = struct
   | DefArrayT of array_type
   | DefFuncT of func_type
   | DefContT of cont_type
-  and sub_type = SubT of final * heap_type list * str_type
-  and rec_type = RecT of sub_type list
+  and sub_type = SubT of final * heap_type array * str_type
+  and rec_type = RecT of sub_type array
   
   type global_type = GlobalT of mut * val_type
   type block_type = VarBlockType of int32 | ValBlockType of val_type option
@@ -196,13 +196,17 @@ module Type = struct
   and string_of_field_type = function
     | FieldT (m, st) -> string_of_mut m (string_of_storage_type st)
   and string_of_struct_type = function
-    | StructT fs -> "(struct" ^ String.concat "" (List.map (fun ft -> " (field " ^ string_of_field_type ft ^ ")") fs) ^ ")"
+    | StructT fs -> "(struct" ^ String.concat "" (Array.to_list (Array.map (fun ft -> " (field " ^ string_of_field_type ft ^ ")") fs)) ^ ")"
   and string_of_array_type = function
     | ArrayT ft -> "(array " ^ string_of_field_type ft ^ ")"
   and string_of_func_type = function
     | FuncT (args, rets) ->
-      let rets = if rets = [] then ")" else " (result " ^ String.concat " " (List.map (fun t -> string_of_val_type t) rets) ^ "))" in
-      let argsrets = if args = [] then rets else " (param " ^ String.concat " " (List.map (fun t -> string_of_val_type t) args) ^ ")" ^ rets in
+      let rets =
+        if rets = [||] then ")"
+        else " (result " ^ String.concat " " (Array.to_list (Array.map (fun t -> string_of_val_type t) rets)) ^ "))" in
+      let argsrets =
+        if args = [||] then rets
+        else " (param " ^ String.concat " " (Array.to_list (Array.map (fun t -> string_of_val_type t) args)) ^ ")" ^ rets in
       "(func" ^ argsrets
   and string_of_cont_type = function
     | ContT ht -> "(cont " ^ string_of_heap_type ht ^ ")"
@@ -212,11 +216,13 @@ module Type = struct
     | DefFuncT ft -> string_of_func_type ft
     | DefContT ct -> string_of_cont_type ct
   and string_of_sub_type = function
-    | SubT (Final, [], s) -> string_of_str_type s
-    | SubT (f, hs, s) -> String.concat " " (("sub" ^ string_of_final f) :: List.map string_of_heap_type hs) ^ " (" ^ string_of_str_type s ^ ")"
+    | SubT (Final, [||], s) -> string_of_str_type s
+    | SubT (f, hs, s) ->
+        String.concat " "
+          (("sub" ^ string_of_final f) :: Array.to_list (Array.map string_of_heap_type hs)) ^ " (" ^ string_of_str_type s ^ ")"
   and string_of_rec_type = function
-    | RecT [s] -> string_of_sub_type s
-    | RecT ss -> "rec (" ^ String.concat " " (List.map string_of_sub_type ss) ^ ")"
+    | RecT [|s|] -> string_of_sub_type s
+    | RecT ss -> "rec (" ^ String.concat " " (Array.to_list (Array.map string_of_sub_type ss)) ^ ")"
   
   let sexpr_of_null = let open Sexpr in function
     | NoNull -> []
@@ -269,19 +275,19 @@ module Type = struct
   and sexpr_of_field_type = function
     | FieldT (m, st) -> sexpr_of_mut m (sexpr_of_storage_type st)
   and sexpr_of_struct_type = let open Sexpr in function
-    | StructT fs -> Node ("struct", List.map (fun ft -> Node ("field", [sexpr_of_field_type ft])) fs)
+    | StructT fs -> Node ("struct", Array.to_list (Array.map (fun ft -> Node ("field", [sexpr_of_field_type ft])) fs))
   and sexpr_of_array_type = let open Sexpr in function
     | ArrayT ft -> Node ("array", [sexpr_of_field_type ft])
   and sexpr_of_func_type = let open Sexpr in function
     | FuncT (args, rets) ->
       let rets = match rets with
-        | [] -> []
-        | [ret] -> [LongNode ("result", [sexpr_of_val_type ret], [])]
-        | _ -> [Node ("result", List.map (fun t -> sexpr_of_val_type t) rets)] in
+        | [||] -> []
+        | [|ret|] -> [LongNode ("result", [sexpr_of_val_type ret], [])]
+        | _ -> [Node ("result", Array.to_list (Array.map (fun t -> sexpr_of_val_type t) rets))] in
       let argsrets = match args with
-        | [] -> rets
-        | [arg] -> LongNode ("param", [sexpr_of_val_type arg], []) :: rets
-        | _ -> Node ("param", List.map (fun t -> sexpr_of_val_type t) args) :: rets in
+        | [||] -> rets
+        | [|arg|] -> LongNode ("param", [sexpr_of_val_type arg], []) :: rets
+        | _ -> Node ("param", Array.to_list (Array.map (fun t -> sexpr_of_val_type t) args)) :: rets in
       Node ("func", argsrets)
   and sexpr_of_cont_type = let open Sexpr in function
     | ContT ht -> begin match sexpr_of_heap_type ht with
@@ -294,17 +300,18 @@ module Type = struct
     | DefFuncT ft -> sexpr_of_func_type ft
     | DefContT ct -> sexpr_of_cont_type ct
   and sexpr_of_sub_type = let open Sexpr in function
-    | SubT (Final, [], s) -> sexpr_of_str_type s
-    | SubT (f, hs, s) -> Node ("sub", sexpr_of_final f @ List.map sexpr_of_heap_type hs @ [sexpr_of_str_type s])
+    | SubT (Final, [||], s) -> sexpr_of_str_type s
+    | SubT (f, hs, s) -> Node ("sub", sexpr_of_final f @ Array.fold_right (fun ht acc -> sexpr_of_heap_type ht :: acc) hs [sexpr_of_str_type s])
   and sexpr_of_rec_type = let open Sexpr in function
-    | RecT [s] -> sexpr_of_sub_type s
-    | RecT ss -> Node ("rec", List.map sexpr_of_sub_type ss)
+    | RecT [|s|] -> sexpr_of_sub_type s
+    | RecT ss -> Node ("rec", Array.to_list (Array.map sexpr_of_sub_type ss))
   
   let sexpr_of_num_rec_type i = let open Sexpr in function
-    | RecT [s] -> Int32.succ i, LongNode ("type", [Atom ("$" ^ Int32.to_string i)], [sexpr_of_sub_type s])
+    | RecT [|s|] -> Int32.succ i, LongNode ("type", [Atom ("$" ^ Int32.to_string i)], [sexpr_of_sub_type s])
     | RecT ss ->
-        let i, ss = List.fold_left_map
-          (fun i s -> Int32.succ i, LongNode ("type", [Atom ("$" ^ Int32.to_string i)], [sexpr_of_sub_type s])) i ss in
+        let i = Int32.(add i (of_int (Array.length ss))) in
+        let _, ss = Array.fold_right
+          (fun s (i, acc) -> let i = Int32.pred i in i, LongNode ("type", [Atom ("$" ^ Int32.to_string i)], [sexpr_of_sub_type s]) :: acc) ss (i, []) in
         i, Node ("rec", ss)
   
   let sexpr_of_global_type (GlobalT (m, vt) : global_type) : Sexpr.t = let open Sexpr in
@@ -765,34 +772,43 @@ module Instruction = struct
   module I32Op = struct
     include IntOp
     
-    type nonrec cvtop = Common of cvtop | WrapI64
+    type nonrec unop = CommonUn of unop
+    let unop (op : unop) : string = match op with
+      | CommonUn op -> IntOp.unop "32" op
+    
+    type nonrec cvtop = CommonCvt of cvtop | WrapI64
     let cvtop (op : cvtop) : string = match op with
-      | Common op -> IntOp.cvtop "32" op
+      | CommonCvt op -> IntOp.cvtop "32" op
       | WrapI64 -> "wrap_i64"
   end
   module I64Op = struct
     include IntOp
     
-    type nonrec cvtop = Common of cvtop | ExtendI32 of Pack.extension
+    type nonrec unop = CommonUn of unop | ExtendS32
+    let unop (op : unop) : string = match op with
+      | CommonUn op -> IntOp.unop "64" op
+      | ExtendS32 -> "extend32_s"
+    
+    type nonrec cvtop = CommonCvt of cvtop | ExtendI32 of Pack.extension
     let cvtop (op : cvtop) : string = match op with
-      | Common op -> IntOp.cvtop "64" op
+      | CommonCvt op -> IntOp.cvtop "64" op
       | ExtendI32 Pack.SX -> "extend_i32_s"
       | ExtendI32 Pack.ZX -> "extend_i32_u"
   end
   module F32Op = struct
     include FloatOp
     
-    type nonrec cvtop = Common of cvtop | DemoteF64
+    type nonrec cvtop = CommonCvt of cvtop | DemoteF64
     let cvtop (op : cvtop) : string = match op with
-      | Common op -> cvtop "32" op
+      | CommonCvt op -> cvtop "32" op
       | DemoteF64 -> "demote_f64"
   end
   module F64Op = struct
     include FloatOp
     
-    type nonrec cvtop = Common of cvtop | PromoteF32
+    type nonrec cvtop = CommonCvt of cvtop | PromoteF32
     let cvtop (op : cvtop) : string = match op with
-      | Common op -> cvtop "64" op
+      | CommonCvt op -> cvtop "64" op
       | PromoteF32 -> "promote_f32"
   end
   
@@ -808,12 +824,12 @@ module Instruction = struct
   type t =
     | Unreachable
     | Nop
-    | Block of block_type * t list
-    | Loop of block_type * t list
-    | If of block_type * t list * t list
+    | Block of block_type * t array
+    | Loop of block_type * t array
+    | If of block_type * t array * t array
     | Br of int32
     | BrIf of int32
-    | BrTable of int32 list * int32
+    | BrTable of int32 array * int32
     | Return
     | Call of int32
     | ReturnCall of int32
@@ -841,7 +857,7 @@ module Instruction = struct
     | ContNew of int32
     | ContBind of int32 * int32
     | Suspend of int32
-    | Resume of int32 * (int32 * hdl) list
+    | Resume of int32 * (int32 * hdl) array
     | StructNew of int32 * initop
     | StructGet of int32 * int32 * Pack.extension option
     | StructSet of int32 * int32
@@ -865,6 +881,11 @@ module Instruction = struct
     | I64 o -> iop "64" o
     | F32 o -> fop "32" o
     | F64 o -> fop "64" o)
+  let operi (i32op, i64op, fop) op = string_of_num_type (type_of_op op) ^ "." ^ (match op with
+    | I32 o -> i32op o
+    | I64 o -> i64op o
+    | F32 o -> fop "32" o
+    | F64 o -> fop "64" o)
   let operif (i32op, i64op, f32op, f64op) op = string_of_num_type (type_of_op op) ^ "." ^ (match op with
     | I32 o -> i32op o
     | I64 o -> i64op o
@@ -879,13 +900,16 @@ module Instruction = struct
   let rec to_sexpr i = let open Sexpr in match i with
     | Unreachable -> Node ("unreachable", [])
     | Nop -> Node ("nop", [])
-    | Block (bt, b) -> LongNode ("block", sexpr_of_block_type bt, List.map to_sexpr b)
-    | Loop (bt, b) -> LongNode ("loop", sexpr_of_block_type bt, List.map to_sexpr b)
-    | If (b, t, []) -> LongNode ("if", sexpr_of_block_type b, [Node ("then", List.map to_sexpr t)])
-    | If (b, t, f) -> LongNode ("if", sexpr_of_block_type b, [Node ("then", List.map to_sexpr t); Node ("else", List.map to_sexpr f)])
+    | Block (bt, b) -> LongNode ("block", sexpr_of_block_type bt, Array.to_list (Array.map to_sexpr b))
+    | Loop (bt, b) -> LongNode ("loop", sexpr_of_block_type bt, Array.to_list (Array.map to_sexpr b))
+    | If (b, t, [||]) -> LongNode ("if", sexpr_of_block_type b, [Node ("then", Array.to_list (Array.map to_sexpr t))])
+    | If (b, t, f) ->
+        LongNode ("if", sexpr_of_block_type b,
+          [Node ("then", Array.to_list (Array.map to_sexpr t));
+           Node ("else", Array.to_list (Array.map to_sexpr f))])
     | Br i -> LongNode ("br", [Atom (Int32.to_string i)], [])
     | BrIf i -> LongNode ("br_if", [Atom (Int32.to_string i)], [])
-    | BrTable (is, id) -> LongNode ("br_table", List.map (fun i -> Atom (Int32.to_string i)) is @ [Atom (Int32.to_string id)], [])
+    | BrTable (is, id) -> LongNode ("br_table", Array.to_list (Array.map (fun i -> Atom (Int32.to_string i)) is) @ [Atom (Int32.to_string id)], [])
     | Return -> Node ("return", [])
     | Call i -> LongNode ("call", [Atom (Int32.to_string i)], [])
     | ReturnCall i -> LongNode ("return_call", [Atom (Int32.to_string i)], [])
@@ -900,7 +924,7 @@ module Instruction = struct
     | Const n -> Node (constop n ^ " " ^ string_of_num n, [])
     | Testop op -> Node (oper (IntOp.testop, FloatOp.testop) op, [])
     | Relop op -> Node (oper (IntOp.relop, FloatOp.relop) op, [])
-    | Unop op -> Node (oper (IntOp.unop, FloatOp.unop) op, [])
+    | Unop op -> Node (operi (I32Op.unop, I64Op.unop, FloatOp.unop) op, [])
     | Binop op -> Node (oper (IntOp.binop, FloatOp.binop) op, [])
     | Cvtop op -> Node (operif (I32Op.cvtop, I64Op.cvtop, F32Op.cvtop, F64Op.cvtop) op, [])
     | RefNull ht -> LongNode ("ref.null", [sexpr_of_heap_type ht], [])
@@ -913,7 +937,7 @@ module Instruction = struct
     | ContNew i -> LongNode ("cont.new", [Atom (Int32.to_string i)], [])
     | ContBind (i, j) -> LongNode ("cont.bind", [Atom (Int32.to_string i); Atom (Int32.to_string j)], [])
     | Suspend i -> LongNode ("suspend", [Atom (Int32.to_string i)], [])
-    | Resume (i, hdls) -> LongNode ("resume", [Atom (Int32.to_string i)], List.map sexpr_of_idxhdl hdls)
+    | Resume (i, hdls) -> LongNode ("resume", [Atom (Int32.to_string i)], Array.to_list (Array.map sexpr_of_idxhdl hdls))
     | StructNew (i, Explicit) -> LongNode ("struct.new", [Atom (Int32.to_string i)], [])
     | StructNew (i, Implicit) -> LongNode ("struct.new_default", [Atom (Int32.to_string i)], [])
     | StructGet (i, j, None) -> LongNode ("struct.get", [Atom (Int32.to_string i); Atom (Int32.to_string j)], [])
@@ -937,6 +961,8 @@ module Instruction = struct
     | I31Get Pack.SX -> LongNode ("i31.get_s", [], [])
     | I31Get Pack.ZX -> LongNode ("i31.get_u", [], [])
 end
+type instr = Instruction.t
+type instrs = instr array
 
 type import_desc =
   | FuncImport of int32
@@ -948,25 +974,25 @@ type import = {
   desc : import_desc;
 }
 
-type raw_code = Type.val_type * Type.val_type list * Instruction.t list
+type raw_code = Type.val_type * Type.val_type array * instrs
 type fundef = {
   fn_name  : string option;
   fn_type  : int32;
-  fn_locals: Type.val_type list;
-  fn_code  : Instruction.t list;
+  fn_locals: Type.val_type array;
+  fn_code  : instrs;
 }
-type global = Type.global_type * Instruction.t list * string option
+type global = Type.global_type * instrs * string option
 type module_ = {
-  types  : Type.rec_type list;
-  globals: global list;
-  tags   : int32 list;
-  funs   : fundef list;
-  imports: import list;
+  types  : Type.rec_type array;
+  globals: global array;
+  tags   : int32 array;
+  funs   : fundef array;
+  imports: import array;
   init   : int32 option;
 }
 
 let sexpr_of_global ((gt, i, oname) : global) : Sexpr.t =
-  let online = Type.sexpr_of_global_type gt :: List.map Instruction.to_sexpr i in
+  let online = Type.sexpr_of_global_type gt :: Array.to_list (Array.map Instruction.to_sexpr i) in
   let online = match oname with
     | Some name -> Sexpr.(LongNode ("export", [Atom ("\"" ^ name ^ "\"")], [])) :: online
     | None -> online
@@ -983,27 +1009,27 @@ let sexpr_of_import (acc : int * int) (i : import) : (int * int) * Sexpr.t =
 
 let sexpr_of_function funid ({ fn_name = ofname; fn_type = typeid; fn_locals = locals; fn_code = instrs } : fundef) =
   let open Sexpr in
-  let locs = if locals = [] then [] else [Node ("local", List.map Type.sexpr_of_val_type locals)] in
+  let locs = if locals = [||] then [] else [Node ("local", Array.to_list (Array.map Type.sexpr_of_val_type locals))] in
   let typeloc = Node ("type", [Atom (Int32.to_string typeid)]) :: locs in
   let online = match ofname with
     | Some fname -> Atom ("$" ^ string_of_int funid) :: LongNode ("export", [Atom ("\"" ^ fname ^ "\"")], []) :: typeloc
     | None -> Atom ("$" ^ string_of_int funid) :: typeloc
   in
-  LongNode ("func", online, List.map Instruction.to_sexpr instrs)
+  LongNode ("func", online, Array.to_list (Array.map Instruction.to_sexpr instrs))
 let sexpr_of_raw_code ((ret, locals, instrs) : raw_code) =
   let open Sexpr in
-  let locs = if locals = [] then [] else [Node ("local", List.map (fun t -> Atom (Type.string_of_val_type t)) locals)] in
+  let locs = if locals = [||] then [] else [Node ("local", Array.to_list (Array.map (fun t -> Atom (Type.string_of_val_type t)) locals))] in
   let resloc = Node ("result", [Type.sexpr_of_val_type ret]) :: locs in
-  LongNode ("raw_func", resloc, List.map Instruction.to_sexpr instrs)
+  LongNode ("raw_func", resloc, Array.to_list (Array.map Instruction.to_sexpr instrs))
 let sexpr_of_module (m : module_) =
   let open Sexpr in
-  let _, styps = List.fold_left_map (fun i rt -> Type.sexpr_of_num_rec_type i rt) 0l m.types in
-  let sgbls = List.map sexpr_of_global m.globals in
-  let (nf, _), simps = List.fold_left_map sexpr_of_import (0, 0) m.imports in
-  let sfuns = List.mapi (fun i -> sexpr_of_function (i + nf)) m.funs in
-  let sinit = match m.init with Some init -> [LongNode ("start", [Atom (Int32.to_string init)], [])] | None -> [] in
-  let stags = List.map (fun t -> Node ("tag", [LongNode ("type", [Atom (Int32.to_string t)], [])])) m.tags in
-  Node ("module", styps @ simps @ sgbls @ sfuns @ sinit @ stags)
+  let _, styps = Array.fold_left_map (fun i rt -> Type.sexpr_of_num_rec_type i rt) 0l m.types in
+  let sgbls = Array.map sexpr_of_global m.globals in
+  let (nf, _), simps = Array.fold_left_map sexpr_of_import (0, 0) m.imports in
+  let sfuns = Array.mapi (fun i -> sexpr_of_function (i + nf)) m.funs in
+  let sinit = match m.init with Some init -> [|LongNode ("start", [Atom (Int32.to_string init)], [])|] | None -> [||] in
+  let stags = Array.map (fun t -> Node ("tag", [LongNode ("type", [Atom (Int32.to_string t)], [])])) m.tags in
+  Node ("module", Array.to_list (Array.concat [styps; simps; sgbls; sfuns; sinit; stags]))
 
 let pp_raw_code width fmt v = Sexpr.pp width fmt (sexpr_of_raw_code v)
 let pp_function width fmt v = Sexpr.pp width fmt (sexpr_of_function 0 v)

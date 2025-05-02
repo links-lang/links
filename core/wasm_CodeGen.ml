@@ -4,6 +4,13 @@ open Wasm
 open Wasm.Type
 open Wasm.Instruction
 
+let len_u n (x : int64) =
+  let rec inner n x acc =
+    let open Int64 in
+    if unsigned_compare x 0x80L < 0 then Int64.succ acc
+    else inner (n - 7) (shift_right_logical x 7) (Int64.succ acc) in
+  inner n x 0L
+
 let rec generate_u n buf (x : int64) =
   let open Int64 in
   assert (equal (shift_right_logical x n) 0L);
@@ -30,7 +37,6 @@ let generate_mut buf m = match m with
 let generate_pack_size buf s = match s with
   | Pack.Pack8 -> Buffer.add_uint8 buf 0x78
   | Pack.Pack16 -> Buffer.add_uint8 buf 0x79
-  | Pack.Pack32 | Pack.Pack64 -> raise (internal_error "invalid pack size")
 
 let generate_num_type buf t = match t with
   | I32T -> Buffer.add_uint8 buf 0x7F
@@ -69,7 +75,7 @@ and generate_val_type buf t = match t with
   | VecT vt -> generate_vec_type buf vt
   | RefT rt -> generate_ref_type buf rt
   | BotT -> raise (internal_error "invalid value type BotT")
-and generate_result_type buf t = generate_u 32 buf (Int64.of_int (List.length t)); List.iter (generate_val_type buf) t
+and generate_result_type buf t = generate_u 32 buf (Int64.of_int (Array.length t)); Array.iter (generate_val_type buf) t
 and generate_storage_type buf t = match t with
   | ValStorageT vt -> generate_val_type buf vt
   | PackStorageT ps -> generate_pack_size buf ps
@@ -77,8 +83,8 @@ and generate_field_type buf t = match t with
   | FieldT (m, st) -> generate_storage_type buf st; generate_mut buf m
 and generate_struct_type buf t = match t with
   | StructT fts ->
-      generate_u 32 buf (Int64.of_int (List.length fts));
-      List.iter (generate_field_type buf) fts
+      generate_u 32 buf (Int64.of_int (Array.length fts));
+      Array.iter (generate_field_type buf) fts
 and generate_array_type buf (ArrayT t) = generate_field_type buf t
 and generate_func_type buf t = match t with
   | FuncT (args, rets) -> generate_result_type buf args; generate_result_type buf rets
@@ -89,19 +95,19 @@ and generate_str_type buf t = match t with
   | DefFuncT ft -> Buffer.add_uint8 buf 0x60; generate_func_type buf ft
   | DefContT ct -> Buffer.add_uint8 buf 0x5D; generate_cont_type buf ct
 and generate_sub_type buf t = match t with
-  | SubT (Final, [], st) -> generate_str_type buf st
+  | SubT (Final, [||], st) -> generate_str_type buf st
   | SubT (Final, hts, st) ->
       Buffer.add_uint8 buf 0x4F;
-      generate_u 32 buf (Int64.of_int (List.length hts)); List.iter (generate_heap_type buf) hts; generate_str_type buf st
+      generate_u 32 buf (Int64.of_int (Array.length hts)); Array.iter (generate_heap_type buf) hts; generate_str_type buf st
   | SubT (NoFinal, hts, st) ->
       Buffer.add_uint8 buf 0x50;
-      generate_u 32 buf (Int64.of_int (List.length hts)); List.iter (generate_heap_type buf) hts; generate_str_type buf st
+      generate_u 32 buf (Int64.of_int (Array.length hts)); Array.iter (generate_heap_type buf) hts; generate_str_type buf st
 and generate_rec_type buf t = match t with
-  | RecT [st] -> generate_sub_type buf st
+  | RecT [|st|] -> generate_sub_type buf st
   | RecT sts ->
       Buffer.add_uint8 buf 0x4E;
-      generate_u 32 buf (Int64.of_int (List.length sts));
-      List.iter (generate_sub_type buf) sts
+      generate_u 32 buf (Int64.of_int (Array.length sts));
+      Array.iter (generate_sub_type buf) sts
 
 let generate_global_type buf t = match t with
   | GlobalT (m, vt) -> generate_val_type buf vt; generate_mut buf m
@@ -110,12 +116,12 @@ let generate_block_type buf t = match t with
   | ValBlockType None -> Buffer.add_uint8 buf 0x40
   | ValBlockType (Some t) -> generate_val_type buf t
 
-let generate_types buf ts = match ts with [] -> () | _ ->
+let generate_types buf ts = match ts with [||] -> () | _ ->
   Buffer.add_uint8 buf 0x01;
-  let ntypes = List.length ts in
+  let ntypes = Array.length ts in
   let auxbuf = Buffer.create 80 in
   generate_u 32 auxbuf (Int64.of_int ntypes);
-  List.iter (generate_rec_type auxbuf) ts;
+  Array.iter (generate_rec_type auxbuf) ts;
   generate_u 32 buf (Int64.of_int (Buffer.length auxbuf));
   Buffer.add_buffer buf auxbuf
 
@@ -127,20 +133,20 @@ let generate_import buf nfimports i =
   match i.desc with
   | FuncImport i -> Buffer.add_uint8 buf 0x00; generate_u 32 buf (Int64.of_int32 i); Int.succ nfimports
   | TagImport i -> Buffer.add_uint8 buf 0x04; generate_tag buf i; nfimports
-let generate_imports buf is = match is with [] -> 0 | _ ->
+let generate_imports buf is = match is with [||] -> 0 | _ ->
   Buffer.add_uint8 buf 0x02;
-  let nimports = List.length is in
+  let nimports = Array.length is in
   let auxbuf = Buffer.create (2 + nimports) in
   generate_u 32 auxbuf (Int64.of_int nimports);
-  let ret = List.fold_left (generate_import auxbuf) 0 is in
+  let ret = Array.fold_left (generate_import auxbuf) 0 is in
   generate_u 32 buf (Int64.of_int (Buffer.length auxbuf));
   Buffer.add_buffer buf auxbuf;
   ret
 
 let generate_resumetable buf hdls =
-  let nhdls = List.length hdls in
+  let nhdls = Array.length hdls in
   generate_u 32 buf (Int64.of_int nhdls);
-  List.iter (fun (i, h) -> match h with
+  Array.iter (fun (i, h) -> match h with
     | OnLabel l -> Buffer.add_uint8 buf 0x00; generate_u 32 buf (Int64.of_int32 i); generate_u 32 buf (Int64.of_int32 l)
     | OnSwitch -> Buffer.add_uint8 buf 0x01; generate_u 32 buf (Int64.of_int32 i)) hdls
 let rec generate_instr buf i = match i with
@@ -148,16 +154,16 @@ let rec generate_instr buf i = match i with
   | Nop -> Buffer.add_uint8 buf 0x01
   | Block (bt, b) ->
       Buffer.add_uint8 buf 0x02; generate_block_type buf bt;
-      List.iter (generate_instr buf) b;
+      Array.iter (generate_instr buf) b;
       Buffer.add_uint8 buf 0x0B
   | Loop (bt, b) ->
       Buffer.add_uint8 buf 0x03; generate_block_type buf bt;
-      List.iter (generate_instr buf) b;
+      Array.iter (generate_instr buf) b;
       Buffer.add_uint8 buf 0x0B
   | If (b, t, f) ->
       Buffer.add_uint8 buf 0x04; generate_block_type buf b;
-      List.iter (generate_instr buf) t;
-      if f <> [] then (Buffer.add_uint8 buf 0x05; List.iter (generate_instr buf) f);
+      Array.iter (generate_instr buf) t;
+      if f <> [||] then (Buffer.add_uint8 buf 0x05; Array.iter (generate_instr buf) f);
       Buffer.add_uint8 buf 0x0B
   
   (* 0x08 Throw *)
@@ -168,8 +174,8 @@ let rec generate_instr buf i = match i with
   | BrIf i -> Buffer.add_uint8 buf 0x0D; generate_u 32 buf (Int64.of_int32 i)
   | BrTable (is, id) ->
       Buffer.add_uint8 buf 0x0E;
-      generate_u 32 buf (Int64.of_int (List.length is));
-      List.iter (fun i -> generate_u 32 buf (Int64.of_int32 i)) is;
+      generate_u 32 buf (Int64.of_int (Array.length is));
+      Array.iter (fun i -> generate_u 32 buf (Int64.of_int32 i)) is;
       generate_u 32 buf (Int64.of_int32 id)
   | Return -> Buffer.add_uint8 buf 0x0F
   | Call i -> Buffer.add_uint8 buf 0x10; generate_u 32 buf (Int64.of_int32 i)
@@ -256,9 +262,9 @@ let rec generate_instr buf i = match i with
   | Relop (Value.F64 FloatOp.Gt) -> Buffer.add_uint8 buf 0x64
   | Relop (Value.F64 FloatOp.Le) -> Buffer.add_uint8 buf 0x65
   | Relop (Value.F64 FloatOp.Ge) -> Buffer.add_uint8 buf 0x66
-  | Unop (Value.I32 IntOp.Clz) -> Buffer.add_uint8 buf 0x67
-  | Unop (Value.I32 IntOp.Ctz) -> Buffer.add_uint8 buf 0x68
-  | Unop (Value.I32 IntOp.Popcnt) -> Buffer.add_uint8 buf 0x69
+  | Unop (Value.I32 (I32Op.CommonUn IntOp.Clz)) -> Buffer.add_uint8 buf 0x67
+  | Unop (Value.I32 (I32Op.CommonUn IntOp.Ctz)) -> Buffer.add_uint8 buf 0x68
+  | Unop (Value.I32 (I32Op.CommonUn IntOp.Popcnt)) -> Buffer.add_uint8 buf 0x69
   | Binop (Value.I32 IntOp.Add) -> Buffer.add_uint8 buf 0x6A
   | Binop (Value.I32 IntOp.Sub) -> Buffer.add_uint8 buf 0x6B
   | Binop (Value.I32 IntOp.Mul) -> Buffer.add_uint8 buf 0x6C
@@ -274,9 +280,9 @@ let rec generate_instr buf i = match i with
   | Binop (Value.I32 IntOp.ShrU) -> Buffer.add_uint8 buf 0x76
   | Binop (Value.I32 IntOp.Rotl) -> Buffer.add_uint8 buf 0x77
   | Binop (Value.I32 IntOp.Rotr) -> Buffer.add_uint8 buf 0x78
-  | Unop (Value.I64 IntOp.Clz) -> Buffer.add_uint8 buf 0x79
-  | Unop (Value.I64 IntOp.Ctz) -> Buffer.add_uint8 buf 0x7A
-  | Unop (Value.I64 IntOp.Popcnt) -> Buffer.add_uint8 buf 0x7B
+  | Unop (Value.I64 (I64Op.CommonUn IntOp.Clz)) -> Buffer.add_uint8 buf 0x79
+  | Unop (Value.I64 (I64Op.CommonUn IntOp.Ctz)) -> Buffer.add_uint8 buf 0x7A
+  | Unop (Value.I64 (I64Op.CommonUn IntOp.Popcnt)) -> Buffer.add_uint8 buf 0x7B
   | Binop (Value.I64 IntOp.Add) -> Buffer.add_uint8 buf 0x7C
   | Binop (Value.I64 IntOp.Sub) -> Buffer.add_uint8 buf 0x7D
   | Binop (Value.I64 IntOp.Mul) -> Buffer.add_uint8 buf 0x7E
@@ -321,38 +327,35 @@ let rec generate_instr buf i = match i with
   | Binop (Value.F64 FloatOp.Max) -> Buffer.add_uint8 buf 0xA5
   | Binop (Value.F64 FloatOp.Copysign) -> Buffer.add_uint8 buf 0xA6
   | Cvtop (Value.I32 I32Op.WrapI64) -> Buffer.add_uint8 buf 0xA7
-  | Cvtop (Value.I32 (I32Op.Common IntOp.TruncF32 Pack.SX)) -> Buffer.add_uint8 buf 0xA8
-  | Cvtop (Value.I32 (I32Op.Common IntOp.TruncF32 Pack.ZX)) -> Buffer.add_uint8 buf 0xA9
-  | Cvtop (Value.I32 (I32Op.Common IntOp.TruncF64 Pack.SX)) -> Buffer.add_uint8 buf 0xAA
-  | Cvtop (Value.I32 (I32Op.Common IntOp.TruncF64 Pack.ZX)) -> Buffer.add_uint8 buf 0xAB
+  | Cvtop (Value.I32 (I32Op.CommonCvt (IntOp.TruncF32 Pack.SX))) -> Buffer.add_uint8 buf 0xA8
+  | Cvtop (Value.I32 (I32Op.CommonCvt (IntOp.TruncF32 Pack.ZX))) -> Buffer.add_uint8 buf 0xA9
+  | Cvtop (Value.I32 (I32Op.CommonCvt (IntOp.TruncF64 Pack.SX))) -> Buffer.add_uint8 buf 0xAA
+  | Cvtop (Value.I32 (I32Op.CommonCvt (IntOp.TruncF64 Pack.ZX))) -> Buffer.add_uint8 buf 0xAB
   | Cvtop (Value.I64 (I64Op.ExtendI32 Pack.SX)) -> Buffer.add_uint8 buf 0xAC
   | Cvtop (Value.I64 (I64Op.ExtendI32 Pack.ZX)) -> Buffer.add_uint8 buf 0xAD
-  | Cvtop (Value.I64 (I64Op.Common IntOp.TruncF32 Pack.SX)) -> Buffer.add_uint8 buf 0xAE
-  | Cvtop (Value.I64 (I64Op.Common IntOp.TruncF32 Pack.ZX)) -> Buffer.add_uint8 buf 0xAF
-  | Cvtop (Value.I64 (I64Op.Common IntOp.TruncF64 Pack.SX)) -> Buffer.add_uint8 buf 0xB0
-  | Cvtop (Value.I64 (I64Op.Common IntOp.TruncF64 Pack.ZX)) -> Buffer.add_uint8 buf 0xB1
-  | Cvtop (Value.F32 (F32Op.Common (FloatOp.ConvertI32 Pack.SX))) -> Buffer.add_uint8 buf 0xB2
-  | Cvtop (Value.F32 (F32Op.Common (FloatOp.ConvertI32 Pack.ZX))) -> Buffer.add_uint8 buf 0xB3
-  | Cvtop (Value.F32 (F32Op.Common (FloatOp.ConvertI64 Pack.SX))) -> Buffer.add_uint8 buf 0xB4
-  | Cvtop (Value.F32 (F32Op.Common (FloatOp.ConvertI64 Pack.ZX))) -> Buffer.add_uint8 buf 0xB5
+  | Cvtop (Value.I64 (I64Op.CommonCvt (IntOp.TruncF32 Pack.SX))) -> Buffer.add_uint8 buf 0xAE
+  | Cvtop (Value.I64 (I64Op.CommonCvt (IntOp.TruncF32 Pack.ZX))) -> Buffer.add_uint8 buf 0xAF
+  | Cvtop (Value.I64 (I64Op.CommonCvt (IntOp.TruncF64 Pack.SX))) -> Buffer.add_uint8 buf 0xB0
+  | Cvtop (Value.I64 (I64Op.CommonCvt (IntOp.TruncF64 Pack.ZX))) -> Buffer.add_uint8 buf 0xB1
+  | Cvtop (Value.F32 (F32Op.CommonCvt (FloatOp.ConvertI32 Pack.SX))) -> Buffer.add_uint8 buf 0xB2
+  | Cvtop (Value.F32 (F32Op.CommonCvt (FloatOp.ConvertI32 Pack.ZX))) -> Buffer.add_uint8 buf 0xB3
+  | Cvtop (Value.F32 (F32Op.CommonCvt (FloatOp.ConvertI64 Pack.SX))) -> Buffer.add_uint8 buf 0xB4
+  | Cvtop (Value.F32 (F32Op.CommonCvt (FloatOp.ConvertI64 Pack.ZX))) -> Buffer.add_uint8 buf 0xB5
   | Cvtop (Value.F32 F32Op.DemoteF64) -> Buffer.add_uint8 buf 0xB6
-  | Cvtop (Value.F64 (F64Op.Common (FloatOp.ConvertI32 Pack.SX))) -> Buffer.add_uint8 buf 0xB7
-  | Cvtop (Value.F64 (F64Op.Common (FloatOp.ConvertI32 Pack.ZX))) -> Buffer.add_uint8 buf 0xB8
-  | Cvtop (Value.F64 (F64Op.Common (FloatOp.ConvertI64 Pack.SX))) -> Buffer.add_uint8 buf 0xB9
-  | Cvtop (Value.F64 (F64Op.Common (FloatOp.ConvertI64 Pack.ZX))) -> Buffer.add_uint8 buf 0xBA
+  | Cvtop (Value.F64 (F64Op.CommonCvt (FloatOp.ConvertI32 Pack.SX))) -> Buffer.add_uint8 buf 0xB7
+  | Cvtop (Value.F64 (F64Op.CommonCvt (FloatOp.ConvertI32 Pack.ZX))) -> Buffer.add_uint8 buf 0xB8
+  | Cvtop (Value.F64 (F64Op.CommonCvt (FloatOp.ConvertI64 Pack.SX))) -> Buffer.add_uint8 buf 0xB9
+  | Cvtop (Value.F64 (F64Op.CommonCvt (FloatOp.ConvertI64 Pack.ZX))) -> Buffer.add_uint8 buf 0xBA
   | Cvtop (Value.F64 F64Op.PromoteF32) -> Buffer.add_uint8 buf 0xBB
-  | Cvtop (Value.I32 (I32Op.Common IntOp.ReinterpretFloat)) -> Buffer.add_uint8 buf 0xBC
-  | Cvtop (Value.I64 (I64Op.Common IntOp.ReinterpretFloat)) -> Buffer.add_uint8 buf 0xBD
-  | Cvtop (Value.F32 (F32Op.Common FloatOp.ReinterpretInt)) -> Buffer.add_uint8 buf 0xBE
-  | Cvtop (Value.F64 (F64Op.Common FloatOp.ReinterpretInt)) -> Buffer.add_uint8 buf 0xBF
-  | Unop (Value.I32 (IntOp.ExtendS Pack.Pack8)) -> Buffer.add_uint8 buf 0xC0
-  | Unop (Value.I32 (IntOp.ExtendS Pack.Pack16)) -> Buffer.add_uint8 buf 0xC1
-  | Unop (Value.I32 (IntOp.ExtendS Pack.Pack32)) -> raise (internal_error "Cannot extend from 32 to 32")
-  | Unop (Value.I32 (IntOp.ExtendS Pack.Pack64)) -> raise (internal_error "Cannot extend from 64 to 32")
-  | Unop (Value.I64 (IntOp.ExtendS Pack.Pack8)) -> Buffer.add_uint8 buf 0xC2
-  | Unop (Value.I64 (IntOp.ExtendS Pack.Pack16)) -> Buffer.add_uint8 buf 0xC3
-  | Unop (Value.I64 (IntOp.ExtendS Pack.Pack32)) -> Buffer.add_uint8 buf 0xC4
-  | Unop (Value.I64 (IntOp.ExtendS Pack.Pack64)) -> raise (internal_error "Cannot extend from 64 to 64")
+  | Cvtop (Value.I32 (I32Op.CommonCvt IntOp.ReinterpretFloat)) -> Buffer.add_uint8 buf 0xBC
+  | Cvtop (Value.I64 (I64Op.CommonCvt IntOp.ReinterpretFloat)) -> Buffer.add_uint8 buf 0xBD
+  | Cvtop (Value.F32 (F32Op.CommonCvt FloatOp.ReinterpretInt)) -> Buffer.add_uint8 buf 0xBE
+  | Cvtop (Value.F64 (F64Op.CommonCvt FloatOp.ReinterpretInt)) -> Buffer.add_uint8 buf 0xBF
+  | Unop (Value.I32 (I32Op.CommonUn (IntOp.ExtendS Pack.Pack8))) -> Buffer.add_uint8 buf 0xC0
+  | Unop (Value.I32 (I32Op.CommonUn (IntOp.ExtendS Pack.Pack16))) -> Buffer.add_uint8 buf 0xC1
+  | Unop (Value.I64 (I64Op.CommonUn (IntOp.ExtendS Pack.Pack8))) -> Buffer.add_uint8 buf 0xC2
+  | Unop (Value.I64 (I64Op.CommonUn (IntOp.ExtendS Pack.Pack16))) -> Buffer.add_uint8 buf 0xC3
+  | Unop (Value.I64 (I64Op.ExtendS32)) -> Buffer.add_uint8 buf 0xC4
   
   | RefNull ht -> Buffer.add_uint8 buf 0xD0; generate_heap_type buf ht
   | RefIsNull -> Buffer.add_uint8 buf 0xD1
@@ -413,14 +416,14 @@ let rec generate_instr buf i = match i with
   | RefI31 -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 28L
   | I31Get Pack.SX -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 29L
   | I31Get Pack.ZX -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 30L
-  | Cvtop (Value.I32 (I32Op.Common IntOp.TruncSatF32 Pack.SX)) -> Buffer.add_uint8 buf 0xFC; generate_u 32 buf 0L
-  | Cvtop (Value.I32 (I32Op.Common IntOp.TruncSatF32 Pack.ZX)) -> Buffer.add_uint8 buf 0xFC; generate_u 32 buf 1L
-  | Cvtop (Value.I32 (I32Op.Common IntOp.TruncSatF64 Pack.SX)) -> Buffer.add_uint8 buf 0xFC; generate_u 32 buf 2L
-  | Cvtop (Value.I32 (I32Op.Common IntOp.TruncSatF64 Pack.ZX)) -> Buffer.add_uint8 buf 0xFC; generate_u 32 buf 3L
-  | Cvtop (Value.I64 (I64Op.Common IntOp.TruncSatF32 Pack.SX)) -> Buffer.add_uint8 buf 0xFC; generate_u 32 buf 4L
-  | Cvtop (Value.I64 (I64Op.Common IntOp.TruncSatF32 Pack.ZX)) -> Buffer.add_uint8 buf 0xFC; generate_u 32 buf 5L
-  | Cvtop (Value.I64 (I64Op.Common IntOp.TruncSatF64 Pack.SX)) -> Buffer.add_uint8 buf 0xFC; generate_u 32 buf 6L
-  | Cvtop (Value.I64 (I64Op.Common IntOp.TruncSatF64 Pack.ZX)) -> Buffer.add_uint8 buf 0xFC; generate_u 32 buf 7L
+  | Cvtop (Value.I32 (I32Op.CommonCvt (IntOp.TruncSatF32 Pack.SX))) -> Buffer.add_uint8 buf 0xFC; generate_u 32 buf 0L
+  | Cvtop (Value.I32 (I32Op.CommonCvt (IntOp.TruncSatF32 Pack.ZX))) -> Buffer.add_uint8 buf 0xFC; generate_u 32 buf 1L
+  | Cvtop (Value.I32 (I32Op.CommonCvt (IntOp.TruncSatF64 Pack.SX))) -> Buffer.add_uint8 buf 0xFC; generate_u 32 buf 2L
+  | Cvtop (Value.I32 (I32Op.CommonCvt (IntOp.TruncSatF64 Pack.ZX))) -> Buffer.add_uint8 buf 0xFC; generate_u 32 buf 3L
+  | Cvtop (Value.I64 (I64Op.CommonCvt (IntOp.TruncSatF32 Pack.SX))) -> Buffer.add_uint8 buf 0xFC; generate_u 32 buf 4L
+  | Cvtop (Value.I64 (I64Op.CommonCvt (IntOp.TruncSatF32 Pack.ZX))) -> Buffer.add_uint8 buf 0xFC; generate_u 32 buf 5L
+  | Cvtop (Value.I64 (I64Op.CommonCvt (IntOp.TruncSatF64 Pack.SX))) -> Buffer.add_uint8 buf 0xFC; generate_u 32 buf 6L
+  | Cvtop (Value.I64 (I64Op.CommonCvt (IntOp.TruncSatF64 Pack.ZX))) -> Buffer.add_uint8 buf 0xFC; generate_u 32 buf 7L
   (* 0xFC 8L MemoryInit *)
   (* 0xFC 9L DataDrop *)
   (* 0xFC 10L MemoryCopy *)
@@ -432,7 +435,7 @@ let rec generate_instr buf i = match i with
   (* 0xFC 16L TableSize *)
   (* 0xFC 17L TableFill *)
   (* 0xFD Vector opcodes *)
-let generate_instrs buf is = List.iter (generate_instr buf) is
+let generate_instrs buf is = Array.iter (generate_instr buf) is
 let generate_expr buf e = generate_instrs buf e; Buffer.add_uint8 buf 0x0B
 
 let generate_global buf g =
@@ -440,12 +443,12 @@ let generate_global buf g =
   generate_global_type buf gt;
   generate_expr buf init;
   match oname with Some _ -> 1L | None -> 0L
-let generate_globals buf gs = match gs with [] -> 0L | _ ->
+let generate_globals buf gs = match gs with [||] -> 0L | _ ->
   Buffer.add_uint8 buf 0x06;
-  let nglobals = List.length gs in
+  let nglobals = Array.length gs in
   let auxbuf = Buffer.create 80 in
   generate_u 32 auxbuf (Int64.of_int nglobals);
-  let nexports = List.fold_left (fun acc v -> Int64.add acc (generate_global auxbuf v)) 0L gs in
+  let nexports = Array.fold_left (fun acc v -> Int64.add acc (generate_global auxbuf v)) 0L gs in
   generate_u 32 buf (Int64.of_int (Buffer.length auxbuf));
   Buffer.add_buffer buf auxbuf;
   nexports
@@ -453,32 +456,36 @@ let generate_globals buf gs = match gs with [] -> 0L | _ ->
 let generate_fun buf auxbuf f =
   let { fn_locals = locs; fn_code = instrs; _ } = f in
   Buffer.reset auxbuf;
-  let rec inner locs aux sz ret = match aux, locs with
-    | Some (i, t), u :: locs when t = u -> inner locs (Some (Int64.succ i, t)) sz ret
-    | Some (i, t), _ -> inner locs None (Int64.succ sz) ((i, t) :: ret)
-    | None, t :: locs -> inner locs (Some (1L, t)) sz ret
-    | None, [] -> sz, List.rev ret
-  in let nlocvecs, locvecs = inner locs None 0L [] in
-  generate_u 32 auxbuf nlocvecs; List.iter (fun (i, t) -> generate_u 32 auxbuf i; generate_val_type auxbuf t) locvecs;
+  let emit_locals auxbuf aux sz = match aux with
+    | None -> sz
+    | Some (i, t) -> generate_u 32 auxbuf i; generate_val_type auxbuf t; Int64.succ sz in
+  let rec inner auxbuf locs i aux sz =
+    if i >= Array.length locs then emit_locals auxbuf aux sz
+    else match aux, locs.(i) with
+      | Some (j, t), u when t = u -> inner auxbuf locs (Int.succ i) (Some (Int64.succ j, t)) sz
+      | _, t -> let sz = emit_locals auxbuf aux sz in inner auxbuf locs (Int.succ i) (Some (1L, t)) sz in
+  let nlocvecs = inner auxbuf locs 0 None 0L in
   generate_expr auxbuf instrs;
-  generate_u 32 buf (Int64.of_int (Buffer.length auxbuf));
+  let lenaux = Int64.(add (len_u 32 nlocvecs) (of_int (Buffer.length auxbuf))) in
+  generate_u 32 buf lenaux;
+  generate_u 32 buf nlocvecs;
   Buffer.add_buffer buf auxbuf
-let generate_funs buf fs nfuns = match fs with [] -> 0L | _ ->
+let generate_funs buf fs nfuns = match fs with [||] -> 0L | _ ->
   Buffer.add_uint8 buf 0x03;
   let auxbuf = Buffer.create (2 + nfuns) in
   generate_u 32 auxbuf (Int64.of_int nfuns);
-  let nfexports = List.fold_left (fun acc f ->
+  let nfexports = Array.fold_left (fun acc f ->
       generate_u 32 auxbuf (Int64.of_int32 f.fn_type);
       match f.fn_name with Some _ -> Int64.succ acc | None -> acc) 0L fs in
   generate_u 32 buf (Int64.of_int (Buffer.length auxbuf));
   Buffer.add_buffer buf auxbuf;
   nfexports
-let generate_codes buf fs nfuns = match fs with [] -> () | _ ->
+let generate_codes buf fs nfuns = match fs with [||] -> () | _ ->
   Buffer.add_uint8 buf 0x0A;
   let auxbuf = Buffer.create 80 in
   generate_u 32 auxbuf (Int64.of_int nfuns);
   let auxbuf2 = Buffer.create 80 in
-  List.iter (generate_fun auxbuf auxbuf2) fs;
+  Array.iter (generate_fun auxbuf auxbuf2) fs;
   generate_u 32 buf (Int64.of_int (Buffer.length auxbuf));
   Buffer.add_buffer buf auxbuf
 
@@ -503,26 +510,26 @@ let generate_function_export buf idx f =
   match f.fn_name with
   | Some name -> generate_export buf name 0x00 (Int64.of_int idx)
   | _ -> ()
-let generate_exports buf fs gs nfimports nexports = match fs, gs with [], [] -> () | _ ->
+let generate_exports buf fs gs nfimports nexports = match fs, gs with [||], [||] -> () | _ ->
   Buffer.add_uint8 buf 0x07;
   let auxbuf = Buffer.create 80 in
   generate_u 32 auxbuf nexports;
-  List.iteri (generate_global_export auxbuf) gs;
-  List.iteri (fun i -> generate_function_export auxbuf (nfimports + i)) fs;
+  Array.iteri (generate_global_export auxbuf) gs;
+  Array.iteri (fun i -> generate_function_export auxbuf (nfimports + i)) fs;
   generate_u 32 buf (Int64.of_int (Buffer.length auxbuf));
   Buffer.add_buffer buf auxbuf
 
 let generate_tags buf tags =
   Buffer.add_uint8 buf 0x0D;
-  let ntags = List.length tags in
+  let ntags = Array.length tags in
   let auxbuf = Buffer.create (2*ntags + 1) in
   generate_u 32 auxbuf (Int64.of_int ntags);
-  List.iter (generate_tag auxbuf) tags;
+  Array.iter (generate_tag auxbuf) tags;
   generate_u 32 buf (Int64.of_int (Buffer.length auxbuf));
   Buffer.add_buffer buf auxbuf
 
 let output (oc : out_channel) (m : module_) : unit =
-  let nfuns = List.length m.funs in
+  let nfuns = Array.length m.funs in
   let buf = Buffer.create 80 in
   Buffer.add_int64_le buf 0x00000001_6D736100L;
   generate_types buf m.types;                               (* Section 1 *)
