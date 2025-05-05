@@ -709,7 +709,8 @@ unary_expression:
 | OPERATOR unary_expression                                    { unary_appl ~ppos:$loc (UnaryOp.Name $1)  $2 }
 | postfix_expression | constructor_expression                  { $1 }
 | DOOP CONSTRUCTOR loption(arg_spec)                           { with_pos $loc (DoOperation (with_pos $loc($2) (Operation $2), $3, None, DeclaredLinearity.Unl)) }
-| LINDOOP CONSTRUCTOR loption(arg_spec)                        { with_pos $loc (DoOperation (with_pos $loc($2) (Operation $2), $3, None, DeclaredLinearity.Lin)) }
+| LINDOOP CONSTRUCTOR loption(arg_spec)                        { with_pos $loc (DoOperation (with_pos $loc($2) (Operation $2), $3, None,
+  if lincont_enabled then DeclaredLinearity.Lin else DeclaredLinearity.Unl)) }
 
 infix_appl:
 | unary_expression                                             { $1 }
@@ -1399,7 +1400,8 @@ resumable_operation_pattern:
 | operation_pattern FATRARROW pattern
     { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3, DeclaredLinearity.Unl)) }
 | operation_pattern FATLOLLI pattern
-    { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3, DeclaredLinearity.Lin)) }
+    { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3,
+      if lincont_enabled then DeclaredLinearity.Lin else DeclaredLinearity.Unl)) }
 | operation_pattern RARROW pattern
     { with_pos $loc (Pattern.Operation (fst $1, snd $1, $3, DeclaredLinearity.Unl)) }
 | operation_pattern
