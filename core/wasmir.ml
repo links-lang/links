@@ -155,19 +155,6 @@ and src_of_box_named_list : 'a 'b. ('a, 'b) box_named_list -> 'a named_typ_list 
   fun (type a b) (b : (a, b) box_named_list) : a named_typ_list -> match b with
   | BNLnil -> NTLnil
   | BNLcons (n, hd, tl) -> NTLcons (n, src_of_box hd, src_of_box_named_list tl)
-let rec dst_of_box : 'a 'b. ('a, 'b) box -> 'b typ = fun (type a b) (b : (a, b) box) : b typ -> match b with
-  | BNone (_, dst) -> dst
-  | BClosed (gen, bargs, bret) -> TClosed (gen, dst_of_box_list bargs, dst_of_box bret)
-  | BCont bret -> TCont (dst_of_box bret)
-  | BTuple bs -> TTuple (dst_of_box_named_list bs)
-  | BBox (_, dst) -> TVar dst
-and dst_of_box_list : 'a 'b. ('a, 'b) box_list -> 'b typ_list = fun (type a b) (b : (a, b) box_list) : b typ_list -> match b with
-  | BLnil -> TLnil
-  | BLcons (hd, tl) -> TLcons (dst_of_box hd, dst_of_box_list tl)
-and dst_of_box_named_list : 'a 'b. ('a, 'b) box_named_list -> 'b named_typ_list =
-  fun (type a b) (b : (a, b) box_named_list) : b named_typ_list -> match b with
-  | BNLnil -> NTLnil
-  | BNLcons (n, hd, tl) -> NTLcons (n, dst_of_box hd, dst_of_box_named_list tl)
 
 type (!'a, !'b) specialization =
   | Snil : 'a generalization -> ('a, 'a) specialization
@@ -377,7 +364,6 @@ and assert_eq_named_typ_list : 'a 'b. 'a named_typ_list -> 'b named_typ_list -> 
       if String.equal n1 n2 then let Type.Equal, Type.Equal = assert_eq_typ t1 t2 onfail, assert_eq_named_typ_list ntl1 ntl2 onfail in Type.Equal
       else raise (internal_error onfail)
 let target_expr (type a) (Expr (t1, e) : anyexpr) (t2 : a typ) : a expr = let Type.Equal = assert_eq_typ t1 t2 "Unexpected type" in e
-let target_block (type a) (Block (t1, b) : anyblock) (t2 : a typ) : a block = let Type.Equal = assert_eq_typ t1 t2 "Unexpected type" in b
 
 type anyunop = Unop : ('a, 'b) unop -> anyunop
 type anybinop = Binop : ('a, 'b, 'c) binop -> anybinop
@@ -394,8 +380,6 @@ type anyfunc' = AF' : ('a, 'b) func' -> anyfunc'
 module Builtins : sig
   type t
   val empty : t
-  
-  val ntags : tagid
   
   val get_unop : string -> anytyp list -> anytyp option -> anyunop option
   val get_binop : string -> anytyp list -> anytyp option -> anybinop option
@@ -577,10 +561,6 @@ end = struct
         let acc, fid = add_builtin acc (AFBt FBWait) in
         let f = (Gcons (0, Gnil), Gnil, TLcons (TProcess, TLnil), TVar 0, TLnil, fid) in
         { env with bt_wait = Some f; }, acc, f
-  
-  let tags = []
-  let ntags = List.length tags
-  let find_tag t = Option.get @@ List.find_index ((=) t) tags
   
   let unops = StringMap.from_alist ["not", Unop UONot; "negate", Unop UONegI; "negatef", Unop UONegF]
   
@@ -1196,7 +1176,7 @@ module LEnv : sig (* Contains the arguments, the local variables, etc *)
   val env_of_args : args -> binder option -> anyrealt * anygeneralization
   val add_closure : 'a realt -> 'a realt * (mvarid * mvarid * anytyp_list) option
   
-  val add_local : 'a t -> anytyp -> 'a t * mvarid
+  val [@warning "-32"] add_local : 'a t -> anytyp -> 'a t * mvarid
   val add_var : 'a t -> binder -> 'b typ -> 'a t * 'b varid
   val find_var : 'a t -> var -> ('a t * local_storage * anyvarid) option
   val find_closure : 'a t -> var -> string -> ('a t * local_storage * anyvarid) option
@@ -1242,7 +1222,6 @@ end = struct
     its            : anytyp_list;
     mutable contid : (anyvarid * mvarid * mfunid * anytyp * mvarid) option;
     mutable contv  : (Types.t, anytyp) Either.t * var;
-    mutable hdlb   : var;
   }
   and 'a t = ('a realt, subt) Either.t
   and anyt = AT : 'a t -> anyt
@@ -1298,7 +1277,6 @@ end = struct
       its;
       contid = None;
       contv = (Either.Left Types.Not_typed, ~-1);
-      hdlb = ~-1;
     }
   
   let of_real (env : 'a realt) : 'a t = Either.Left env

@@ -158,7 +158,7 @@ module Type = struct
     | Cons -> s
     | Var -> "(mut " ^ s ^ ")"
   
-  let string_of_var x = Printf.sprintf "%lu" x
+  let string_of_var x = Format.sprintf "%lu" x
   
   let string_of_num_type = function
     | I32T -> "i32"
@@ -234,7 +234,7 @@ module Type = struct
     | Cons -> s
     | Var -> match s with Atom s -> LongNode ("mut", [Atom s], []) | _ -> Node ("mut", [s])
   
-  let sexpr_of_var x = let open Sexpr in Atom (Printf.sprintf "%lu" x)
+  let sexpr_of_var x = let open Sexpr in Atom (Format.sprintf "%lu" x)
   
   let sexpr_of_num_type = let open Sexpr in function
     | I32T -> Atom "i32"
@@ -358,7 +358,7 @@ module Value = struct
       val to_string : t -> string
       val to_hex_string : t -> string
       val bitwidth : int
-    end
+    end [@warning "-32"]
     module type S = sig
       type t
       type bits
@@ -445,20 +445,20 @@ module Value = struct
         in add_digits off;
         Buffer.contents buf
       let to_string_s i = group_digits (Rep.to_string i)
-    end
+    end [@warning "-32"]
   end
   module I32 = Ixx.Make(struct
     include Int32
     let of_int64 = Int64.to_int32
     let to_int64 = Int64.of_int32
-    let to_hex_string = Printf.sprintf "%lx"
+    let to_hex_string = Format.sprintf "%lx"
     let bitwidth = 32
   end)
   module I64 = Ixx.Make(struct
     include Int64
     let of_int64 x = x
     let to_int64 x = x
-    let to_hex_string = Printf.sprintf "%Lx"
+    let to_hex_string = Format.sprintf "%Lx"
     let bitwidth = 64
   end)
   
@@ -481,7 +481,7 @@ module Value = struct
       val logand : t -> t -> t
       val logor : t -> t -> t
       val logxor : t -> t -> t
-    end
+    end [@warning "-32"]
     module type S = sig
       type t
       type bits
@@ -605,18 +605,23 @@ module Value = struct
         (if x < Rep.zero then "-" else "") ^
         if is_nan x then
           let payload = Rep.logand (abs x) (Rep.lognot bare_nan) in
-          "nan:0x" ^ group_digits is_hex_digit 4 (Rep.to_hex_string payload)
+          let s = (Rep.to_hex_string payload) in
+          let len = String.length s in
+          let buf = Buffer.create (6 + (len * 5 / 4)) in
+          Buffer.add_string buf "nan:0x";
+          add_digits buf s 0 len len 4;
+          Buffer.contents buf
         else
           let s = convert (to_float (abs x)) in
           group_digits is_digit n
             (if s.[String.length s - 1] = '.' then s ^ "0" else s)
           
       let of_string (_ : string) : t = failwith "TODO of_string"
-      let to_string : t -> string = to_string' (Printf.sprintf "%.17g") is_digit 3
+      let to_string : t -> string = to_string' (Format.sprintf "%.17g") is_digit 3
       let to_hex_string (f : t) : string =
         if is_inf f then to_string f else
-        to_string' (Printf.sprintf "%h") is_hex_digit 4 f
-    end
+        to_string' (Format.sprintf "%h") is_hex_digit 4 f
+    end [@warning "-32"]
   end
   module F32 = Fxx.Make(struct
     include Int32
@@ -624,7 +629,7 @@ module Value = struct
     let pos_nan = 0x7FF8_0000l
     let neg_nan = 0xFFF8_0000l
     let bare_nan = 0xFFF8_0000l
-    let to_hex_string = Printf.sprintf "%lx"
+    let to_hex_string = Format.sprintf "%lx"
   end)
   module F64 = Fxx.Make(struct
     include Int64
@@ -632,7 +637,7 @@ module Value = struct
     let pos_nan = 0x7FF8_0000_0000_0000L
     let neg_nan = 0xFFF8_0000_0000_0000L
     let bare_nan = 0x7FF0_0000_0000_0000L
-    let to_hex_string = Printf.sprintf "%Lx"
+    let to_hex_string = Format.sprintf "%Lx"
   end)
   
   module V128 : sig
@@ -875,7 +880,7 @@ module Instruction = struct
     | I31Get of Pack.extension
   
   let constop v = string_of_num_type (type_of_num v) ^ ".const"
-  let vec_constop v = string_of_vec_type (type_of_vec v) ^ ".const i32x4"
+  (* let vec_constop v = string_of_vec_type (type_of_vec v) ^ ".const i32x4" *)
   let oper (iop, fop) op = string_of_num_type (type_of_op op) ^ "." ^ (match op with
     | I32 o -> iop "32" o
     | I64 o -> iop "64" o
