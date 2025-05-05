@@ -1051,55 +1051,64 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
       let blk = convert_block tm new_meta procinfo blk BNone is_last cinfo in
       do_box tm new_meta box (fun acc -> blk (LocalSet (bid :> int32) ^+ v acc))
   | ECase (v, t, cs, od) ->
-      let loc, vid, stv = match v with
+      let loc, vid, stgv = match v with
         | EVariable (loc, vid) ->
             let _, vid = (vid : _ varid :> _ * int32) in
-            loc, vid, (fun acc -> acc)
+            loc, vid, (fun acc -> LocalGet vid ^+ acc)
         | _ ->
             let tmpvar = NewMetadata.add_local tm new_meta TVariant in
-            let stv = convert_expr tm new_meta procinfo v BNone None cinfo in
-            Local StorVariable, tmpvar, (fun acc -> LocalSet tmpvar ^+ stv acc)
+            let v = convert_expr tm new_meta procinfo v BNone None cinfo in
+            Local StorVariable, tmpvar, (fun acc -> LocalTee tmpvar ^+ v acc)
       in
-      let branches = ref (Array.make 0 None) in
-      let ncases, min_id, code = List.fold_left (fun (i, min_id, code) (id, Type btyp, bid, blk) ->
-        let id = (id : tagid :> int) in
-        if Array.length !branches <= id then
-          branches := Array.init (id + 1) (fun j -> if j < Array.length !branches then !branches.(j) else None);
-        !branches.(id) <- Some i;
-        let unbox = do_unbox tm new_meta (BBox btyp) (fun acc -> StructGet (TMap.variant_tid, 1l, None) ^+ convert_get_var' loc vid cinfo acc) in
-        Int32.succ i, Int.min min_id id, fun content depth ->
-          let blk = convert_block tm new_meta procinfo blk BNone (incr_depth_n is_last (Int32.succ depth)) cinfo in
-          convert_nlist (
-          Br depth ^+
-          blk (
-          LocalSet (bid : mvarid :> int32) ^+
-          unbox (nlist_of_list [
-          Wasm.Instruction.Block (Wasm.Type.(ValBlockType None), code content (Int32.succ depth))])))
-      ) (0l, Int.max_int, fun content _ -> content) cs in
-      let branches = !branches in
+      let branches, ncases, min_id =
+        List.fold_left
+          (fun (branches, ncases, min_id) (id, _, _, _) ->
+            let id = (id : tagid :> int) in
+            let branches =
+              if Array.length branches <= id then Array.init (id + 1) (fun j -> if j < Array.length branches then branches.(j) else None)
+              else branches in
+            branches.(id) <- Some ncases;
+            let ncases = Int32.succ ncases in
+            let min_id = Int.min min_id id in
+            branches, ncases, min_id)
+          ([||], 0l, Int.max_int) cs in
       let min_id = if min_id <= 3 then 0 else min_id in
-      let code =
-        let table = fun acc ->
+      let block_content =
+        StructGet (TMap.variant_tid, 0l, None) ^+
+        stgv empty_nlist in
+      let block_content =
+        if min_id = 0 then BrTable (Array.map (Option.value ~default:ncases) branches, ncases) ^+ block_content
+        else
           BrTable (
             Array.init
               (Array.length branches - min_id)
               (fun i -> match branches.(i + min_id) with None -> ncases | Some v -> v),
-            ncases) ^+ acc in
-        let table =
-          if min_id = 0 then table
-          else fun acc -> table (Binop Wasm.Value.(I32 IntOp.Sub) ^+ Const Wasm.Value.(I32 (I32.of_int_u min_id)) ^+ acc) in
-        code (convert_nlist (table (StructGet (TMap.variant_tid, 0l, None) ^+ convert_get_var' loc vid cinfo empty_nlist))) 1l in
-      let code = match od with
-        | None -> nlist_of_list [Unreachable; Wasm.Instruction.Block (Wasm.Type.(ValBlockType None), code)]
+            ncases) ^+
+          Binop Wasm.Value.(I32 IntOp.Sub) ^+
+          Const Wasm.Value.(I32 (I32.of_int_u min_id)) ^+
+          block_content in
+      let block_content, _ = List.fold_left
+        (fun (block_content, depth) (_, Type btyp, bid, blk) ->
+          let br = Int32.sub ncases depth in
+          let depth = Int32.succ depth in
+          let block_content = nlist_of_list [Block (Wasm.Type.ValBlockType None, convert_nlist block_content)] in
+          let unbox = do_unbox tm new_meta (BBox btyp) (fun acc -> StructGet (TMap.variant_tid, 1l, None) ^+ convert_get_var' loc vid cinfo acc) in
+          let new_block =
+            LocalSet (bid : mvarid :> int32) ^+
+            unbox block_content in
+          let blk = convert_block tm new_meta procinfo blk BNone (incr_depth_n is_last (Int32.succ br)) cinfo in
+          Br br ^+ blk new_block, depth)
+        (block_content, 0l) cs in
+      let block_content =
+        let block_content = nlist_of_list [Block (Wasm.Type.ValBlockType None, convert_nlist block_content)] in
+        match od with
+        | None -> Unreachable ^+ block_content
         | Some (bid, blk) ->
           let blk = convert_block tm new_meta procinfo blk BNone (incr_depth is_last) cinfo in
-          blk (
-          LocalSet (bid :> int32) ^+
-          convert_get_var' loc vid cinfo (nlist_of_list [
-          Wasm.Instruction.Block (Wasm.Type.(ValBlockType None), code)]))
-      in
+            blk (LocalSet (bid :> int32) ^+ convert_get_var' loc vid cinfo block_content) in
       let tret = TMap.val_of_type tm t in
-      do_box tm new_meta box (fun acc -> Wasm.Instruction.Block (Wasm.Type.(ValBlockType (Some tret)), convert_nlist code) ^+ stv acc)
+      let block_content = convert_nlist block_content in
+      fun acc -> Block (Wasm.Type.ValBlockType (Some tret), block_content) ^+ acc
   | EListNil _ -> do_box tm new_meta box (fun acc -> RefNull Wasm.Type.(VarHT TMap.list_tid) ^+ acc)
   | EListHd (l, t) ->
       let l = convert_expr tm new_meta procinfo l BNone None cinfo in
