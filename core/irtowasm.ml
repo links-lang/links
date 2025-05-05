@@ -1375,17 +1375,19 @@ let convert_hdl (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (type a
     let code = Return ^+ code @+ nlist_of_list [Resume (contid, handlers)] in
     let rec do_cases nblocks (cases : _ handler list) code = match cases with
       | [] -> code
-      | Handler (eid, varc, vars, blk) :: tl ->
+      | Handler (eid, vcid, vars, blk) :: tl ->
           let nblocks = Int32.pred nblocks in
-          let codehdl =
-            let b = convert_block tm new_meta procinfo blk BNone (Some (f.fh_id, nblocks)) cinfo in
-            fun acc -> Return ^+ b acc in
-          let codehdl = match vars with
-            | VLnil -> fun acc -> codehdl (Drop ^+ acc)
+          let _, vcid = (vcid : _ varid :> _ * int32) in
+          let eargs, _ = (eid : _ effectid :> _ * _) in
+          let blkid = TMap.recid_of_handler_block tm contid eargs in
+          let code = nlist_of_list Wasm.Instruction.[LocalSet vcid; Block (Wasm.Type.VarBlockType blkid, convert_nlist code)] in
+          let blk = convert_block tm new_meta procinfo blk BNone (Some (f.fh_id, nblocks)) cinfo in
+          let code = match vars with
+            | VLnil -> Drop ^+ code
             | VLcons (v, VLnil) ->
                 let t, v = (v : _ varid :> _ * int32) in
                 let unbox = do_unbox tm new_meta (BBox t) (fun acc -> acc) in
-                fun acc -> codehdl (LocalSet v ^+ unbox acc)
+                LocalSet v ^+ unbox code
             | VLcons (_, VLcons (_, _)) ->
                 let ts =
                   let [@tail_mod_cons] rec inner : type a. a varid_list -> a typ_list = fun (vars : a varid_list) : a typ_list -> match vars with
@@ -1396,17 +1398,22 @@ let convert_hdl (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (type a
                   inner vars in
                 let tid = TMap.recid_of_type tm (TTuple ts) in
                 let tmpv = NewMetadata.add_local tm new_meta (TTuple ts) in
-                let rec inner : type a. a varid_list -> _ = fun (vars : a varid_list) i codehdl -> match vars with
-                  | VLnil -> codehdl
+                let rec acc_vars : type a. a varid_list -> _ = fun (vars : a varid_list) i acc -> match vars with
+                  | VLnil -> acc
                   | VLcons (vhd, vtl) ->
                       let t, v = (vhd : _ varid :> _ * int32) in
-                      let get = do_unbox tm new_meta (BBox t) (fun acc -> StructGet (tid, i, None) ^+ LocalGet tmpv ^+ acc) in
-                      inner vtl (Int32.succ i) (fun acc -> codehdl (LocalSet v ^+ get acc)) in
-                fun acc -> inner vars 0l codehdl (LocalSet tmpv ^+ RefCast Wasm.Type.(NoNull, VarHT tid) ^+ acc) in
-          let _, varc = (varc : _ varid :> _ * int32) in
-          let eargs, _ = (eid : _ effectid :> _ * _) in
-          let blkid = TMap.recid_of_handler_block tm contid eargs in
-          let code = codehdl (nlist_of_list Wasm.Instruction.[LocalSet varc; Block (Wasm.Type.VarBlockType blkid, convert_nlist code)]) in
+                      acc_vars vtl (Int32.succ i) ((Type t, v, i) :: acc) in
+                let rec convert_back acc code = match acc with
+                  | [] -> raise (internal_error "Invalid convert_back argument")
+                  | (Type t, v, i) :: tl ->
+                      let get = do_unbox tm new_meta (BBox t) (fun acc -> StructGet (tid, i, None) ^+ acc) in
+                      let code = LocalSet v ^+ get code in
+                      match tl with
+                      | [] -> code
+                      | _ :: _ -> convert_back tl (LocalGet tmpv ^+ code) in
+                let vars = acc_vars vars 0l [] in
+                convert_back vars (LocalTee tmpv ^+ RefCast Wasm.Type.(NoNull, VarHT tid) ^+ code) in
+          let code = Return ^+ blk code in
           do_cases nblocks tl code
     in do_cases nblocks f.fh_handlers code
   in let finalblk = TMap.recid_of_handler_finish tm contid tret
