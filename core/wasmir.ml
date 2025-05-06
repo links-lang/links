@@ -309,6 +309,10 @@ type anymodule = Module : 'a modu -> anymodule
 
 (* TRANSLATION *)
 
+type backend =
+  | BackendNone
+  | BackendWizard
+
 type anyblock = Block : 'a typ * 'a block -> anyblock
 type anyexpr = Expr : 'a typ * 'a expr -> anyexpr
 type anyexpr_list = ExprList : 'a typ_list * 'a expr_list -> anyexpr_list
@@ -1586,7 +1590,7 @@ module GEnv : sig (* Contains the functions, the types, etc *)
   type funid
   type hid
   
-  val empty : string Env.Int.t -> Utility.IntSet.t -> bool ->
+  val empty : string Env.Int.t -> Utility.IntSet.t -> backend ->
               'pi -> (('pi, 'pa) t -> 'pi -> var -> (('pi, 'pa) t * 'pi * 'pa) option) -> ('pi, 'pa) t
   
   val find_tag : ('pi, 'pa) t -> string -> ('pi, 'pa) t * tagid
@@ -1653,12 +1657,15 @@ end = struct
     ge_pmap_find : ('pi, 'pa) t -> 'pi -> var -> (('pi, 'pa) t * 'pi * 'pa) option;
     ge_pmap_acc : 'pa VarQueue.t; (* Changes in-place *)
   }
-  let empty (m : string Env.Int.t) (global_binders : Utility.IntSet.t) (import_wizard : bool)
+  let empty (m : string Env.Int.t) (global_binders : Utility.IntSet.t) (backend : backend)
             (prelude_init : 'pi) (find_prelude : ('pi, 'pa) t -> 'pi -> var -> (('pi, 'pa) t * 'pi * 'pa) option) : ('pi, 'pa) t =
-    let ge_nfuns = if import_wizard then 2l else 0l in
-    let ge_ntags = if import_wizard then 0 else 0 in {
+    let ge_imports = match backend with
+      | BackendNone -> []
+      | BackendWizard -> ["wizeng", "puta"; "wizeng", "putc"] in
+    let ge_nfuns = Int32.of_int (List.length ge_imports) in
+    let ge_ntags = match backend with BackendNone | BackendWizard -> 0 in {
       ge_builtins = Builtins.empty;
-      ge_imports = if import_wizard then ["wizeng", "puta"; "wizeng", "putc"] else [];
+      ge_imports;
       ge_map = m;
       ge_nfuns;
       ge_funs = [];
@@ -2566,13 +2573,47 @@ let finish_prelude (ge : pgenv) (le : unit LEnv.realt) (pi : prelude_info) : pge
       let a = Assign (Global, (t, vid), e) in
       ge, le, [a]
 
+(* BACKEND AND FINAL VALUE PRINTER *)
+
+let wasm_backend =
+  let parse_backend s =
+    match String.lowercase_ascii s with
+    | "none"   -> Some BackendNone
+    | "wizeng" -> Some BackendWizard
+    | _ -> raise (Invalid_argument (Printf.sprintf "Unrecognised WebAssembly backend '%s'" s))
+  in
+  let string_of_backend = function
+    | Some BackendNone -> "none"
+    | Some BackendWizard -> "wizeng"
+    | None -> "<none>"
+  in
+  (* TODO: change the default backend? *)
+  Settings.(option ~default:(Some BackendWizard) "wasm_backend"
+            |> privilege `System
+            |> synopsis "Select the WebAssembly backend"
+            |> convert parse_backend
+            |> hidden
+            |> to_string string_of_backend
+            |> hint "<none|wizeng>"
+            |> CLI.(add (long "wasm-backend"))
+            |> sync)
+
+let default_use_init () = match Settings.get wasm_backend with
+  | Some BackendNone -> true
+  | Some BackendWizard -> false
+  | None -> true
+let allow_use_init () = match Settings.get wasm_backend with
+  | Some BackendNone -> true
+  | Some BackendWizard -> false
+  | None -> false
+
 (* MAIN FUNCTION *)
 
-let module_of_ir (c : program) (map : string Env.Int.t) (prelude : binding list) (import_wizard : bool) : anymodule =
+let module_of_ir (c : program) (map : string Env.Int.t) (prelude : binding list) : anymodule =
   let rev_add_bs, prelude_funs = split_prelude prelude in
   let c =
     let (bs, tc) = c in
     (List.rev_append rev_add_bs bs, tc) in
-  let ge = GEnv.empty map (find_global_binders c) import_wizard prelude_funs locate_in_prelude in
+  let ge = GEnv.empty map (find_global_binders c) (Option.get (Settings.get wasm_backend)) prelude_funs locate_in_prelude in
   let ge, le, blk = of_computation ge (LEnv.of_real LEnv.toplevel) c in
   GEnv.compile ge (LEnv.to_real le) blk finish_prelude

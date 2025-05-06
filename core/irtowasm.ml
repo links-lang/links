@@ -1811,7 +1811,23 @@ let finish_import_info (impinfo : int32 option import_info) : int32 import_info 
   | { impinfo_putc = None; _ }
   | { impinfo_putc = Some _; impinfo_puta = None } -> None
 
-let compile (m : 'a modu) (use_init : bool) (main_typ_name : string) : Wasm.module_ =
+let use_init
+  = Settings.(option "use_init"
+              |> synopsis "Generate WizardEngine-style outputs"
+              |> convert (fun x -> Some (parse_bool x))
+              |> sync)
+let use_init =
+  let ret = ref None in
+  fun () -> match !ret with
+    | Some v -> v
+    | None ->
+        let ret' = Wasmir.allow_use_init () && match Settings.get use_init with
+          | Some b -> b
+          | None -> Wasmir.default_use_init () in
+        ret := Some ret';
+        ret'
+
+let compile (m : 'a modu) (main_typ_name : string) : Wasm.module_ =
   let tm = generate_type_map m in
   let main_res =
     let cg = convert_global tm (0, Type m.mod_main, Some "_init_result") in
@@ -2296,4 +2312,4 @@ let compile (m : 'a modu) (use_init : bool) (main_typ_name : string) : Wasm.modu
   let tags = Array.of_list tags in
   let imports = Array.of_list imports in
   let funs = Array.of_list funs in
-  Wasm.{ types; globals; tags; imports; funs; init = if use_init then None else Some mainid }
+  Wasm.{ types; globals; tags; imports; funs; init = if use_init () then None else Some mainid }

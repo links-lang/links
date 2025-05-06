@@ -1,1 +1,1 @@
-val compile : 'a Wasmuir.modu -> bool -> string -> Wasm.module_
+val compile : 'a Wasmuir.modu -> string -> Wasm.module_
