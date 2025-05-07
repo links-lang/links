@@ -285,7 +285,7 @@ module Phases = struct
       (* TODO: Same hack as the JS backend. *)
       let Wasmir.Module m = Wasmir.module_of_ir program venv (Webserver.get_prelude ()) in
       let m = Wasmuir.module_of_ir m in
-      let res_mod = Irtowasm.compile m (Types.string_of_datatype result.Backend.datatype) in
+      let res_mod = Irtowasm.compile m result.Backend.datatype in
       (* Prepare object file. *)
       let oc =
         try open_out object_file

@@ -84,6 +84,9 @@ sig
   val filter_map : (key -> 'a -> 'b option) -> 'a t -> 'b t
   (** filters and applies a function -- None values discarded *)
 
+  val fold_map : ('acc -> key -> 'a -> 'acc * 'b) -> 'acc -> 'a t -> 'acc * 'b t
+  (** fold_left_map is a combination of fold_left and map that threads an accumulator through calls to f. *)
+
   val show : (Format.formatter -> 'a -> unit) -> 'a t -> string
   val pp : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
 end
@@ -237,6 +240,9 @@ struct
     let filter f =
       filter_map (fun k v ->
         if f k v then Some v else None)
+
+    let fold_map f acc m =
+      fold (fun k v (acc, m) -> let acc, x = f acc k v in acc, add k x m) m (acc, empty)
 
     let pp af formatter map =
       Format.pp_open_box formatter 0;

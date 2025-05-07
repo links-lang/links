@@ -514,3 +514,5 @@ let convert_module (m : 'a Wasmir.modu) : 'a modu =
 
 let module_of_ir (m : 'a Wasmir.modu) : 'a modu =
   convert_module m
+
+let convert_datatype (t : Types.datatype) : anytyp = convert_anytyp (Wasmir.convert_datatype t)

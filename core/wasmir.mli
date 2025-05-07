@@ -207,5 +207,4 @@ type 'a modu = {
 type anymodule = Module : 'a modu -> anymodule
 val module_of_ir : Ir.program -> string Env.Int.t -> Ir.binding list -> anymodule
 
-val default_use_init : unit -> bool
-val allow_use_init : unit -> bool
+val convert_datatype : Types.datatype -> anytyp

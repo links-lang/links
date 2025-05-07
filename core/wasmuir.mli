@@ -176,3 +176,5 @@ type 'a modu = {
 }
 
 val module_of_ir : 'a Wasmir.modu -> 'a modu
+
+val convert_datatype : Types.datatype -> anytyp
