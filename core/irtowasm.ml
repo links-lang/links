@@ -1963,8 +1963,8 @@ let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (
                 LocalSet 1l;
                 Loop (Type.(ValBlockType None), convert_nlist (
                   Br 0l ^+
-                  Const (I32 (I32.of_int_s (Char.code ' '))) ^+ Call (Option.get paux.paux_putc) ^+
-                  Const (I32 (I32.of_int_s (Char.code ','))) ^+ Call (Option.get paux.paux_putc) ^+
+                  Call (Option.get paux.paux_putc) ^+ Const (I32 (I32.of_int_s (Char.code ' '))) ^+
+                  Call (Option.get paux.paux_putc) ^+ Const (I32 (I32.of_int_s (Char.code ','))) ^+
                   LocalSet 1l ^+
                   BrOnNull 1l ^+
                   StructGet (TMap.list_tid, 1l, None) ^+
