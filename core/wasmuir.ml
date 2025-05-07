@@ -445,6 +445,7 @@ type func =
   | FHandler : ('a, 'c, 'b) fhandler -> func
   | FBuiltin : mfunid * ('g, 'a, 'b) fbuiltin -> func
 type 'a modu = {
+  mod_tags          : tagid Env.String.t;
   mod_imports       : (string * string) list;
   mod_nfuns         : int32;
   mod_funs          : func list;
@@ -499,6 +500,7 @@ let convert_module (m : 'a Wasmir.modu) : 'a modu =
   let convert_global (v, t, n : mvarid * Wasmir.anytyp * string option) =
     v, convert_anytyp t, n in
   {
+    mod_tags = m.Wasmir.mod_tags;
     mod_imports = m.Wasmir.mod_imports;
     mod_nfuns = m.Wasmir.mod_nfuns;
     mod_funs = List.map convert_func m.Wasmir.mod_funs;

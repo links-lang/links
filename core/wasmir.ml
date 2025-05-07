@@ -292,6 +292,7 @@ type func =
   | FHandler : ('a, 'c, 'b) fhandler -> func
   | FBuiltin : mfunid * ('g, 'a, 'b) fbuiltin -> func
 type 'a modu = {
+  mod_tags          : tagid Env.String.t;
   mod_imports       : (string * string) list;
   mod_nfuns         : int32;
   mod_funs          : func list;
@@ -1923,6 +1924,7 @@ end = struct
     | _ ->
       let lvs = LEnv.locals_of_env le in
       Module {
+        mod_tags = ge.ge_tagmap;
         mod_imports = ge.ge_imports;
         mod_nfuns = ge.ge_nfuns;
         mod_funs =
