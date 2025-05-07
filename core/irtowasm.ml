@@ -329,7 +329,6 @@ let convert_nlist ((len, is) : 'a nlist) : 'a array =
   ret
 let (^+) (hd : 'a) ((n, tl) : 'a nlist) : 'a nlist = (Int.succ n, hd :: tl)
 let (@+) ((nl, ll) : 'a nlist) ((nr, lr) : 'a nlist) : 'a nlist = (nl + nr, ll @ lr)
-let (@<) ((nl, ll) : 'a nlist) ((nr, lr) : 'a nlist) : 'a nlist = (nl + nr, List.rev_append ll lr)
 
 type instr_builder = Wasm.instr nlist
 type instr_conv = instr_builder -> instr_builder
@@ -1934,6 +1933,9 @@ let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (
     : Wasm.instr nlist =
   let open Wasm in let open Type in let open Value in let open Instruction in
   match paux with None -> nlist_of_list [GlobalSet gid] | Some paux ->
+  let convert_printer (p : (instr nlist, int32) Either.t) : instr_conv = match p with
+    | Either.Left il -> fun acc -> il @+ acc
+    | Either.Right fid -> fun acc -> Call (Int32.add (NewMetadata.fun_offset glob) fid) ^+ acc in
   let rec inner glob typ (sm : int32 Utility.stringmap) : int32 Utility.stringmap * (instr nlist, int32) Either.t = match typ with
     | Types.Not_typed -> failwith "TODO Irtowasm.generate_printer.inner Not_typed"
     | Types.Var _ -> failwith "TODO Irtowasm.generate_printer.inner Var"
@@ -1942,14 +1944,12 @@ let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (
     | Types.Application (at, ts) ->
         if Types.Abstype.equal at Types.list then
           let sm, innerp = inner glob (snd (List.hd ts)) sm in
-          let innerp = match innerp with
-            | Either.Left il -> fun acc -> il @+ acc
-            | Either.Right fid -> fun acc -> Call fid ^+ acc in
+          let innerp = convert_printer innerp in
           let Type t = match ts with
             | [CommonTypes.PrimaryKind.Type, t] -> convert_datatype t
             | _ -> raise (internal_error "Invalid type application in generate_printer") in
           let unbox =
-            (@<) (really_unbox tm t (fun acc -> StructGet (TMap.list_tid, 0l, None) ^+ LocalGet 1l ^+ acc) empty_nlist) in
+            really_unbox tm t (fun acc -> StructGet (TMap.list_tid, 0l, None) ^+ LocalGet 1l ^+ acc) in
           let fref, fid = NewMetadata.add_function glob in
           fref := Some {
             fn_name = None;
@@ -1983,9 +1983,7 @@ let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (
             let tv = TMap.val_of_type tm t in
             let fref, fid = NewMetadata.add_function glob in
             let sm, innerp = inner glob (ra.r_unwind ra.r_args ra.r_dual) (Utility.StringMap.add ra.r_unique_name fid sm) in
-            let innerp = match innerp with
-              | Either.Left il -> fun acc -> il @+ acc
-              | Either.Right fid -> fun acc -> ReturnCall fid ^+ acc in
+            let innerp = convert_printer innerp in
             let funtid = TMap.recid_of_sub_type tm (SubT (Final, [||], DefFuncT (FuncT ([|tv|], [||])))) in
             (* NewMetadata.register_function glob ~fid:funid ~ftid:funtid; *)
             fref := Some {
@@ -2089,12 +2087,54 @@ let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (
           Drop;
         ])
     | Types.Record (Types.Row (fsm, _, _)) ->
-        let sm, _fsm = Utility.StringMap.fold_map (fun sm _ t -> inner glob t sm) sm fsm in
-        sm, failwith "TODO Irtowasm.generate_printer.inner Record"
+        if Utility.StringMap.is_empty fsm then sm, Either.Left (nlist_of_list [
+          Call (Option.get paux.paux_putc); Const (I32 (I32.of_int_s (Char.code ')')));
+          Call (Option.get paux.paux_putc); Const (I32 (I32.of_int_s (Char.code '(')));
+          Drop;
+        ]) else
+        let Type t = convert_datatype typ in
+        let tl = match t with TTuple tl -> TypeList tl | _ -> raise (internal_error "Invalid main type") in
+        let tv = TMap.val_of_type tm t in
+        let tid = match tv with
+          | RefT (Null, NoneHT) -> 0l (* TTuple TLnil *)
+          | RefT (NoNull, VarHT tid) -> tid (* Anything else *)
+          | _ -> raise (internal_error "Invalid type conversion") in
+        let funtid = TMap.recid_of_sub_type tm Type.(SubT (Final, [||], DefFuncT (FuncT ([|tv|], [||])))) in
+        let fref, funid = NewMetadata.add_function glob in
+        (* NewMetadata.register_function glob ~fid:funid ~ftid:funtid; *)
+        let sm, fields = Utility.StringMap.fold (fun n t (sm, acc) -> let sm, p = inner glob t sm in sm, (n, p) :: acc) fsm (sm, []) in
+        let is_tuple =
+          let rec inner acc fields = match fields with
+            | [] -> Some (List.rev acc)
+            | (x, y) :: fields -> match int_of_string_opt x with Some x -> inner ((x, y) :: acc) fields | None -> None in
+          match inner [] fields with None -> None | Some fields ->
+          let sorted = List.sort (fun (x, _) (y, _) -> Int.compare x y) fields in
+          let numbers, values = List.split sorted in
+          if Utility.ordered_consecutive numbers && match numbers with [] | 1 :: _ :: _ -> true | _ :: _ -> false then
+            Some values
+          else None in
+        fref := Some {
+          fn_name = None;
+          fn_type = funtid;
+          fn_locals = [||];
+          fn_code = (match is_tuple with
+            | Some fs -> convert_nlist @@
+                Call (Option.get paux.paux_putc) ^+ Const (I32 (I32.of_int_s (Char.code ')'))) ^+
+                snd (List.fold_left (fun ((i, TypeList tl), acc) p -> match tl with
+                    | TLnil -> raise (internal_error "Invalid type conversion")
+                    | TLcons (thd, ttl) -> (Int32.succ i, TypeList ttl),
+                    let unbox = really_unbox tm thd (fun acc -> StructGet (tid, i, None) ^+ LocalGet 0l ^+ acc) in
+                    convert_printer p (unbox acc)
+                  ) ((0l, tl), nlist_of_list [
+                Call (Option.get paux.paux_putc); Const (I32 (I32.of_int_s (Char.code '(')));
+              ]) fs);
+            | None -> failwith "TODO Irtowasm.generate_printer.inner Record [non-tuple]");
+        };
+        sm, Either.Right funid
     | Types.Record _ -> failwith "TODO Irtowasm.generate_printer.inner Record"
     | Types.Variant (Types.Row (fsm, _, _)) ->
         let sm, _fsm = Utility.StringMap.fold_map (fun sm _ t -> inner glob t sm) sm fsm in
-        sm, failwith "TODO Irtowasm.generate_printer.inner Variant"
+        sm, failwith "TODO Irtowasm.generate_printer.inner Variant Row"
     | Types.Variant _ -> failwith "TODO Irtowasm.generate_printer.inner Variant"
     | Types.Table _ -> failwith "TODO Irtowasm.generate_printer.inner Table"
     | Types.Lens _ -> failwith "TODO Irtowasm.generate_printer.inner Lens"
@@ -2113,9 +2153,7 @@ let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (
     | Types.End -> failwith "TODO Irtowasm.generate_printer.inner End" in
   let _, innerp = inner glob typ Utility.StringMap.empty in
   let code = nlist_of_list [GlobalGet gid; GlobalSet gid] in
-  let code = match innerp with
-    | Either.Left il -> il @+ code
-    | Either.Right fid -> Call fid ^+ code in
+  let code = convert_printer innerp code in
   let code =
     let add_string code s =
       String.fold_left (fun acc c -> Call (Option.get paux.paux_putc) ^+ Const (I32 (I32.of_int_s (Char.code c))) ^+ acc)
