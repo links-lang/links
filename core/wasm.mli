@@ -310,6 +310,17 @@ type import = {
   desc : import_desc;
 }
 
+type segment_mode =
+  | Passive
+  | Active of int32 * instrs
+  | Declarative
+
+type elem_segment = {
+  es_type : Type.ref_type;
+  es_init : instrs array;
+  es_mode : segment_mode;
+}
+
 type raw_code = Type.val_type * Type.val_type array * instrs
 type fundef = {
   fn_name  : string option;
@@ -324,6 +335,7 @@ type module_ = {
   tags   : int32 array;
   funs   : fundef array;
   imports: import array;
+  elems  : elem_segment array;
   init   : int32 option;
 }
 

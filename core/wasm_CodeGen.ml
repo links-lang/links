@@ -438,6 +438,36 @@ let rec generate_instr buf i = match i with
 let generate_instrs buf is = Array.iter (generate_instr buf) is
 let generate_expr buf e = generate_instrs buf e; Buffer.add_uint8 buf 0x0B
 
+let generate_elem buf e =
+  let isfunc = let open Type in match e.es_type with
+    | (NoNull, FuncHT) -> true
+    | _ -> false in
+  let isfunc = isfunc && Array.for_all (function [|Instruction.RefFunc _|] -> true | _ -> false) e.es_init in
+  begin match isfunc, e.es_mode, e.es_type with
+  | true, Active (0l, is), (NoNull, FuncHT) -> generate_u 32 buf 0L; generate_expr buf is
+  | true, Passive, _ -> generate_u 32 buf 1L; Buffer.add_uint8 buf 0x00
+  | true, Active (n, is), _ -> generate_u 32 buf 2L; generate_u 32 buf (Int64.of_int32 n); generate_expr buf is; Buffer.add_uint8 buf 0x00
+  | true, Declarative, _ -> generate_u 32 buf 3L; Buffer.add_uint8 buf 0x00
+  | false, Active (0l, is), (Null, FuncHT) -> generate_u 32 buf 4L; generate_expr buf is
+  | false, Passive, _ -> generate_u 32 buf 5L; generate_ref_type buf e.es_type
+  | false, Active (n, is), _ -> generate_u 32 buf 6L; generate_u 32 buf (Int64.of_int32 n); generate_expr buf is; generate_ref_type buf e.es_type
+  | false, Declarative, _ -> generate_u 32 buf 7L; generate_ref_type buf e.es_type end;
+  if isfunc then begin
+    generate_u 32 buf (Int64.of_int (Array.length e.es_init));
+    Array.iter (function [|Instruction.RefFunc f|] -> generate_u 32 buf (Int64.of_int32 f) | _ -> assert false) e.es_init
+  end else  begin
+    generate_u 32 buf (Int64.of_int (Array.length e.es_init));
+    Array.iter (generate_expr buf) e.es_init
+  end
+let generate_elems buf ess = match ess with [||] -> () | _ ->
+  Buffer.add_uint8 buf 0x09;
+  let nelems = Array.length ess in
+  let auxbuf = Buffer.create (4 * nelems) in
+  generate_u 32 auxbuf (Int64.of_int nelems);
+  Array.iter (generate_elem auxbuf) ess;
+  generate_u 32 buf (Int64.of_int (Buffer.length auxbuf));
+  Buffer.add_buffer buf auxbuf
+
 let generate_global buf g =
   let (gt, init, oname) = g in
   generate_global_type buf gt;
@@ -540,5 +570,6 @@ let output (oc : out_channel) (m : module_) : unit =
   let nexports = Int64.add nfexports ngexports in
   generate_exports buf m.funs m.globals nfimports nexports; (* Section 7 *)
   generate_init buf m.init;                                 (* Section 8 *)
+  generate_elems buf m.elems;                               (* Section 9 *)
   generate_codes buf m.funs nfuns;                          (* Section 10 *)
   output_string oc (Buffer.contents buf)

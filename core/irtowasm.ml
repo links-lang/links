@@ -343,8 +343,9 @@ module NewMetadata : sig
   val effect_offset : g -> int32
   
   val empty_global : nimports:int32 -> nfuns:int32 -> neffects:int32 -> nglob:int32 -> g
-  val wasm_of_funs : g -> Wasm.fundef list
-  val wasm_of_exports : g -> Wasm.global list
+  val wasm_funs : g -> Wasm.fundef list
+  val wasm_globals : g -> Wasm.global list
+  val wasm_elems : g -> Wasm.elem_segment list
   
   val extend : g -> int32 -> Wasm.Type.val_type list -> t
   val wasm_locals : tmap -> t -> Wasm.Type.val_type array
@@ -353,7 +354,6 @@ module NewMetadata : sig
   val find_eq_fun : tmap -> g -> 'a typ -> int32
   
   val add_function : g -> Wasm.fundef option ref * int32
-  val register_function : g -> fid:int32 -> ftid:int32 -> unit
   val add_export_function : g -> int32 -> unit
   
   val mark_recursive : t -> unit
@@ -377,7 +377,7 @@ end = struct
     nimports: int32;
     mutable nfuns: int32;
     mutable funs: Wasm.fundef option ref list;
-    mutable exps: (bool * int32) Int32Map.t;
+    mutable exps: bool Int32Map.t;
     mutable eqfuns: int32 TypeMap.t;
     mutable list_concat: int32 option;
     mutable nglob: int32;
@@ -403,19 +403,27 @@ end = struct
     neffects;
   }
   
-  let wasm_of_funs ({ funs; _ } : g) : Wasm.fundef list =
+  let wasm_funs ({ funs; _ } : g) : Wasm.fundef list =
     List.rev_map
       (function {contents = Some f} -> f | {contents = None} -> raise (internal_error "Function was not assigned"))
       funs
-  let wasm_of_exports ({ nimports; exps; gbls; _ } : g) : Wasm.global list =
-    let fglobals =
-      Int32Map.fold
-        (fun fid (b, ftid) acc ->
-          if b then (Wasm.Type.(GlobalT (Cons, RefT (NoNull, VarHT ftid))), Wasm.Instruction.[|RefFunc (Int32.add nimports fid)|], None) :: acc
-          else acc)
-        exps []
-        |> List.rev in
-    List.rev_append gbls fglobals
+  let wasm_globals ({ gbls; _ } : g) : Wasm.global list =
+    List.rev gbls
+  let wasm_elems ({ nimports; exps; _ } : g) : Wasm.elem_segment list =
+    let felems =
+      if Int32Map.is_empty exps then [] else [Wasm.{
+        es_type = Type.(NoNull, FuncHT);
+        es_init = Int32Map.fold
+            (fun fid b acc ->
+              if b then Instruction.[|RefFunc (Int32.add nimports fid)|] :: acc
+              else acc)
+            exps []
+            |> List.rev
+            |> Array.of_list;
+          es_mode = Declarative;
+        }
+      ] in
+    felems
   
   let extend (glob : g) (nparams : int32) (base : Wasm.Type.val_type list) : t =
     let rec inner glob base acc n : t = match base with
@@ -432,11 +440,7 @@ end = struct
     glob.funs <- fref :: glob.funs;
     fref, fid
   
-  let register_function (glob : g) ~(fid:int32) ~(ftid:int32) : unit =
-    glob.exps <- Int32Map.update fid (function None -> Some (false, ftid) | Some (b, _) -> Some (b, ftid)) glob.exps
-  
-  let add_export_function (glob : g) (fid : int32) : unit =
-    glob.exps <- Int32Map.update fid (function None -> Some (true, 0l) | Some (_, ftid) -> Some (true, ftid)) glob.exps
+  let add_export_function (glob : g) (fid : int32) : unit = glob.exps <- Int32Map.add fid true glob.exps
   
   let mark_recursive (_, _, recursive : t) : unit = recursive := true
   let is_recursive (_, _, recursive : t) : bool = !recursive
@@ -473,7 +477,7 @@ end = struct
       inner targs bargs in
     let fret = dst_of_box tret bret in
     let ftid = TMap.recid_of_functyp tm fargs fret in
-    glob.exps <- Int32Map.add fid (false, ftid) glob.exps;
+    glob.exps <- Int32Map.add fid false glob.exps;
     (* TODO: optimize the next two lines (caching is possible) *)
     let inner_ftid = TMap.recid_of_type tm (TClosed (targs, tret)) in
     let inner_fid = TMap.recid_of_functyp tm targs tret in
@@ -546,7 +550,7 @@ end = struct
     fun tm glob targs tret bargs bret ->
     let fref, fid = add_function glob in
     let ftid = TMap.recid_of_functyp tm targs tret in
-    glob.exps <- Int32Map.add fid (false, ftid) glob.exps;
+    glob.exps <- Int32Map.add fid false glob.exps;
     let clvid, fargs =
       let rec inner : type a b. a typ_list -> (a, b) box_list -> int32 * b typ_list = fun targs bargs -> match targs, bargs with
         | TLnil, BLnone -> 0l, TLnil
@@ -688,7 +692,6 @@ end = struct
         let eqfuns = TypeMap.add (Type t) funid glob.eqfuns in
         glob.eqfuns <- eqfuns;
         let ft = TMap.recid_of_exported_type tm (TLcons (t, TLcons (t, TLnil))) TBool in
-        register_function glob ~fid:funid ~ftid:ft;
         let () = match t with
           | TTuple TLnil ->
               fref := Some Wasm.{
@@ -949,7 +952,6 @@ let generate_yield (glob : NewMetadata.g) (procinfo : procinfo) : instr_conv = m
                 fn_locals = [||];
                 fn_code = convert_nlist (do_check_yield empty_nlist)
               };
-              NewMetadata.register_function glob ~fid ~ftid;
               fid
           | Some fid -> fid in
         fun acc -> Call (Int32.add (NewMetadata.fun_offset glob) yield_fun) ^+ acc
@@ -1781,7 +1783,7 @@ let convert_funs (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo)
   let [@tail_mod_cons] rec inner glob fs acc = match fs with
     | [] -> is glob @ List.filter_map (convert_fun_step2 tm glob) acc
     | hd :: tl ->
-        let fid, fhd, acc = match hd with
+        let _fid, fhd, acc = match hd with
           | FFunction hd ->
               let ctid, fhd = convert_fun tm glob procinfo hd in (hd.fun_id :> int32), fhd, ((FFunction hd, ctid) :: acc)
           | FContinuationStart hd ->
@@ -1790,7 +1792,6 @@ let convert_funs (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo)
               let fhd = convert_hdl tm glob procinfo hd in (hd.fh_id :> int32), fhd, acc
           | FBuiltin (fid, hd) ->
               let fhd = convert_builtin tm glob procinfo fid hd in (fid :> int32), fhd, acc in
-        NewMetadata.register_function glob ~fid ~ftid:fhd.Wasm.fn_type;
         fhd :: inner glob tl acc
   in inner glob fs []
 
@@ -1986,7 +1987,6 @@ let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (
             let sm, innerp = inner glob (ra.r_unwind ra.r_args ra.r_dual) (Utility.StringMap.add ra.r_unique_name fid sm) in
             let innerp = convert_printer innerp in
             let funtid = TMap.recid_of_sub_type tm (SubT (Final, [||], DefFuncT (FuncT ([|tv|], [||])))) in
-            (* NewMetadata.register_function glob ~fid:funid ~ftid:funtid; *)
             fref := Some {
               fn_name = None;
               fn_type = funtid;
@@ -2017,7 +2017,6 @@ let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (
         let funtid = TMap.recid_of_sub_type tm Type.(SubT (Final, [||], DefFuncT (FuncT ([|NumT I64T|], [||])))) in
         let auxfref, auxfunid = NewMetadata.add_function glob in
         let fref, funid = NewMetadata.add_function glob in
-        (* NewMetadata.register_function glob ~fid:auxfunid ~ftid:funtid; *)
         auxfref := Some { fn_name = None; fn_type = funtid; fn_locals = [||]; fn_code = [|
           LocalGet 0l;
           Testop (I64 IntOp.Eqz);
@@ -2041,7 +2040,6 @@ let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (
           Binop (I32 IntOp.Add);
           Call (Option.get paux.paux_putc);
         |] };
-        (* NewMetadata.register_function glob ~fid:funid ~ftid:funtid; *)
         fref := Some { fn_name = None; fn_type = funtid; fn_locals = [||]; fn_code = [|
           LocalGet 0l;
           Const (I64 I64.zero);
@@ -2068,7 +2066,6 @@ let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (
         let funtid = TMap.recid_of_sub_type tm Type.(SubT (Final, [||],
               DefFuncT (FuncT ([|RefT (NoNull, VarHT TMap.string_tid)|], [||])))) in
         let fref, funid = NewMetadata.add_function glob in
-        (* NewMetadata.register_function glob ~fid:funid ~ftid:funtid; *)
         fref := Some { fn_name = None; fn_type = funtid; fn_locals = Type.[|NumT I32T|]; fn_code = [|
           Const (I32 (I32.of_int_s (Char.code '"'))); Call (Option.get paux.paux_putc);
           LocalGet 0l;
@@ -2102,7 +2099,6 @@ let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (
           | _ -> raise (internal_error "Invalid type conversion") in
         let funtid = TMap.recid_of_sub_type tm Type.(SubT (Final, [||], DefFuncT (FuncT ([|tv|], [||])))) in
         let fref, funid = NewMetadata.add_function glob in
-        (* NewMetadata.register_function glob ~fid:funid ~ftid:funtid; *)
         let sm, fields = Utility.StringMap.fold (fun n t (sm, acc) -> let sm, p = inner glob t sm in sm, (n, p) :: acc) fsm (sm, []) in
         let is_tuple =
           let rec inner acc fields = match fields with
@@ -2137,7 +2133,6 @@ let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (
     | Types.Variant (Types.Row (fsm, _, _)) ->
         let fref, fid = NewMetadata.add_function glob in
         let funtid = TMap.recid_of_sub_type tm (SubT (Final, [||], DefFuncT (FuncT ([|RefT (NoNull, VarHT TMap.variant_tid)|], [||])))) in
-        (* NewMetadata.register_function glob ~fid:funid ~ftid:funtid; *)
         let sm, cs = Utility.StringMap.fold (fun n t (sm, cs) -> match Env.String.find_opt n tags with
           | None -> sm, cs
           | Some id -> match t with
@@ -2245,7 +2240,6 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
     let main_code = generate_printer tm glob main_typ paux m.mod_nglobals m.mod_tags in
     let is_init = (Option.is_none procinfo, main_code) in
     let _, main = convert_fun_aux tm new_meta procinfo TMap.main_func_type m.mod_block (Either.Left is_init) None in
-    (* NewMetadata.register_function glob ~fid:m.mod_nfuns ~ftid:TMap.main_func_type; *)
     glob, main in
   let mainid =
     match procinfo with
@@ -2255,7 +2249,6 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
       let spawn_fid = TMap.recid_of_exported_type tm TLnil TVar in
       (* Wrap the main function *)
       let aux_mainref, aux_mainid = NewMetadata.add_function glob in
-      NewMetadata.register_function glob ~fid:aux_mainid ~ftid:spawn_fid;
       NewMetadata.add_export_function glob aux_mainid;
       aux_mainref := Some {
         fn_name = None;
@@ -2289,7 +2282,6 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
         |];
       };
       let initref, mainid = NewMetadata.add_function glob in
-      (* NewMetadata.register_function glob ~fid:mainid ~ftid:TMap.main_func_type; *)
       let self_eid = Int32.add (NewMetadata.effect_offset glob) TMap.self_offset in
       let spawn_eid = Int32.add (NewMetadata.effect_offset glob) TMap.spawn_offset in
       let yield_eid = Int32.add (NewMetadata.effect_offset glob) TMap.yield_offset in
@@ -2547,11 +2539,21 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
         |]);
       };
       mainid in
-  let funs = convert_funs tm glob procinfo m.mod_funs (fun glob -> main :: NewMetadata.wasm_of_funs glob) in
-  let frgbls = NewMetadata.wasm_of_exports glob in
-  let globals = convert_globals tm m.mod_global_vars (main_res :: frgbls) in
+  let funs = convert_funs tm glob procinfo m.mod_funs (fun glob -> main :: NewMetadata.wasm_funs glob) in
+  let globals = NewMetadata.wasm_globals glob in
+  let elems = NewMetadata.wasm_elems glob in
+  let globals = convert_globals tm m.mod_global_vars (main_res :: globals) in
   let tags = convert_effects tm m.mod_effs (Option.is_some procinfo) in
   let types = TMap.to_wasm tm in
   let tags = Array.of_list tags in
+  let elems = Array.of_list elems in
   let funs = Array.of_list funs in
-  Wasm.{ types; globals; tags; imports; funs; init = if use_init () then Some (Int32.add (NewMetadata.fun_offset glob) mainid) else None }
+  Wasm.{
+    types;
+    globals;
+    tags;
+    funs;
+    imports;
+    elems;
+    init = if use_init () then Some (Int32.add (NewMetadata.fun_offset glob) mainid) else None
+  }

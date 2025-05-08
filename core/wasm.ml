@@ -979,6 +979,17 @@ type import = {
   desc : import_desc;
 }
 
+type segment_mode =
+  | Passive
+  | Active of int32 * instrs
+  | Declarative
+
+type elem_segment = {
+  es_type : Type.ref_type;
+  es_init : instrs array;
+  es_mode : segment_mode;
+}
+
 type raw_code = Type.val_type * Type.val_type array * instrs
 type fundef = {
   fn_name  : string option;
@@ -993,6 +1004,7 @@ type module_ = {
   tags   : int32 array;
   funs   : fundef array;
   imports: import array;
+  elems  : elem_segment array;
   init   : int32 option;
 }
 
@@ -1011,6 +1023,30 @@ let sexpr_of_import (acc : int * int) (i : import) : (int * int) * Sexpr.t =
   let itname = "\"" ^ i.item_name ^ "\"" in
   let acc, sdesc = sexpr_of_import_desc acc i.desc in
   acc, Sexpr.(Node ("import", [Atom modname; Atom itname; sdesc]))
+
+let sexpr_of_segment_mode (cat : string) (sm : segment_mode) : Sexpr.t list = let open Sexpr in match sm with
+  | Passive -> []
+  | Active (n, is) ->
+      let tl = let open Instruction in
+        match is with [|i|] -> to_sexpr i | is -> Node ("item", List.map to_sexpr (Array.to_list is)) in
+      if Int32.equal n 0l then [tl]
+      else [Node (cat, [Atom ("$" ^ Int32.to_string n)]); tl]
+  | Declarative -> [Atom "declare"]
+let sexpr_of_elem_segment (acc : int) (e : elem_segment) : int * Sexpr.t = let open Sexpr in
+  let acc = Int.succ acc in
+  let sdesc = sexpr_of_segment_mode "table" e.es_mode in
+  let rest =
+    let isfunc = let open Type in match e.es_type with
+      | (NoNull, FuncHT) -> true
+      | _ -> false in
+    let isfunc = isfunc && Array.for_all (function [|Instruction.RefFunc _|] -> true | _ -> false) e.es_init in
+    if isfunc
+    then Atom "func" :: List.map (function [|Instruction.RefFunc f|] -> Atom (Int32.to_string f) | _ -> assert false) (Array.to_list e.es_init)
+    else Type.sexpr_of_ref_type e.es_type ::
+         List.map
+           Instruction.(function [|i|] -> to_sexpr i | is -> Node ("item", List.map to_sexpr (Array.to_list is)))
+           (Array.to_list e.es_init) in
+  acc, Sexpr.(LongNode ("elem", [Atom ("$" ^ string_of_int acc)], sdesc @ rest))
 
 let sexpr_of_function funid ({ fn_name = ofname; fn_type = typeid; fn_locals = locals; fn_code = instrs } : fundef) =
   let open Sexpr in
@@ -1033,8 +1069,9 @@ let sexpr_of_module (m : module_) =
   let (nf, _), simps = Array.fold_left_map sexpr_of_import (0, 0) m.imports in
   let sfuns = Array.mapi (fun i -> sexpr_of_function (i + nf)) m.funs in
   let sinit = match m.init with Some init -> [|LongNode ("start", [Atom (Int32.to_string init)], [])|] | None -> [||] in
+  let _, selems = Array.fold_left_map sexpr_of_elem_segment 0 m.elems in
   let stags = Array.map (fun t -> Node ("tag", [LongNode ("type", [Atom (Int32.to_string t)], [])])) m.tags in
-  Node ("module", Array.to_list (Array.concat [styps; simps; sgbls; sfuns; sinit; stags]))
+  Node ("module", Array.to_list (Array.concat [styps; simps; sgbls; sfuns; sinit; selems; stags]))
 
 let pp_raw_code width fmt v = Sexpr.pp width fmt (sexpr_of_raw_code v)
 let pp_function width fmt v = Sexpr.pp width fmt (sexpr_of_function 0 v)
