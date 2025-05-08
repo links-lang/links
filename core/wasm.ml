@@ -863,6 +863,7 @@ module Instruction = struct
     | ContBind of int32 * int32
     | Suspend of int32
     | Resume of int32 * (int32 * hdl) array
+    | Switch of int32 * int32
     | StructNew of int32 * initop
     | StructGet of int32 * int32 * Pack.extension option
     | StructSet of int32 * int32
@@ -943,6 +944,7 @@ module Instruction = struct
     | ContBind (i, j) -> LongNode ("cont.bind", [Atom (Int32.to_string i); Atom (Int32.to_string j)], [])
     | Suspend i -> LongNode ("suspend", [Atom (Int32.to_string i)], [])
     | Resume (i, hdls) -> LongNode ("resume", [Atom (Int32.to_string i)], Array.to_list (Array.map sexpr_of_idxhdl hdls))
+    | Switch (i, j) -> LongNode ("switch", [Atom (Int32.to_string i); Atom (Int32.to_string j)], [])
     | StructNew (i, Explicit) -> LongNode ("struct.new", [Atom (Int32.to_string i)], [])
     | StructNew (i, Implicit) -> LongNode ("struct.new_default", [Atom (Int32.to_string i)], [])
     | StructGet (i, j, None) -> LongNode ("struct.get", [Atom (Int32.to_string i); Atom (Int32.to_string j)], [])

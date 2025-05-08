@@ -370,7 +370,7 @@ let rec generate_instr buf i = match i with
   | Suspend i -> Buffer.add_uint8 buf 0xE2; generate_u 32 buf (Int64.of_int32 i)
   | Resume (i, hdls) -> Buffer.add_uint8 buf 0xE3; generate_u 32 buf (Int64.of_int32 i); generate_resumetable buf hdls
   (* 0xE4 ResumeThrow *)
-  (* 0xE5 Switch *)
+  | Switch (i, j) -> Buffer.add_uint8 buf 0xE5; generate_u 32 buf (Int64.of_int32 i); generate_u 32 buf (Int64.of_int32 j)
   
   | StructNew (i, Explicit) -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 0L; generate_u 32 buf (Int64.of_int32 i)
   | StructNew (i, Implicit) -> Buffer.add_uint8 buf 0xFB; generate_u 32 buf 1L; generate_u 32 buf (Int64.of_int32 i)

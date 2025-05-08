@@ -279,6 +279,7 @@ module Instruction : sig
     | ContBind of int32 * int32
     | Suspend of int32
     | Resume of int32 * (int32 * hdl) array
+    | Switch of int32 * int32
     | StructNew of int32 * initop
     | StructGet of int32 * int32 * Pack.extension option
     | StructSet of int32 * int32
