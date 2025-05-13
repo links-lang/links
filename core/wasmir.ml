@@ -52,6 +52,42 @@ and !'a named_typ_list =
   | NTLnil : unit named_typ_list
   | NTLcons : string * 'a typ * 'b named_typ_list -> ('a * 'b) named_typ_list
 
+let pp_generalization : type a. _ -> a generalization -> _ = fun fmt g -> match g with
+  | Gnil -> ()
+  | Gcons (hd, tl) ->
+      let rec inner : type a. _ -> a generalization -> _ = fun fmt g -> match g with
+        | Gnil -> ()
+        | Gcons (hd, tl) -> Format.fprintf fmt ", %u%a" hd inner tl
+      in Format.fprintf fmt "%u%a. " hd inner tl
+let rec pp_typ : 'a. _ -> 'a typ -> _ = fun (type a) fmt (tl : a typ) -> match tl with
+  | TInt -> Format.fprintf fmt "TInt"
+  | TBool -> Format.fprintf fmt "TBool"
+  | TFloat -> Format.fprintf fmt "TFloat"
+  | TString -> Format.fprintf fmt "TString"
+  | TClosed (g, TLnil, ret) -> Format.fprintf fmt "TClosed %a[] -> %a" pp_generalization g pp_typ ret
+  | TClosed (g, TLcons (arg1, args), ret) -> Format.fprintf fmt "TClosed %a[%a%a] -> %a" pp_generalization g pp_typ arg1 pp_typ_list args pp_typ ret
+  | TAbsClosArg -> Format.fprintf fmt "TAbsClosArg"
+  | TClosArg TLnil -> Format.fprintf fmt "TClosArg ()"
+  | TClosArg (TLcons (cl1, cls)) -> Format.fprintf fmt "TClosArg (%a%a)" pp_typ cl1 pp_typ_list cls
+  | TCont t -> Format.fprintf fmt "TCont %a" pp_typ t
+  | TTuple NTLnil -> Format.fprintf fmt "TTuple []"
+  | TTuple (NTLcons (n, hd, tl)) -> Format.fprintf fmt "TTuple [%s: %a%a]" n pp_typ hd pp_named_typ_list tl
+  | TVariant -> Format.fprintf fmt "TVariant"
+  | TList t -> Format.fprintf fmt "TList %a" pp_typ t
+  | TVar i -> Format.fprintf fmt "TVar %u" i
+  | TSpawnLocation -> Format.fprintf fmt "TSpawnLocation"
+  | TProcess -> Format.fprintf fmt "TProcess"
+and pp_typ_list : 'a. _ -> 'a typ_list -> _ = fun (type a) fmt (tl : a typ_list) -> match tl with
+  | TLnil -> ()
+  | TLcons (t, tl) -> Format.fprintf fmt "; %a%a" pp_typ t pp_typ_list tl
+and pp_named_typ_list : 'a. _ -> 'a named_typ_list -> _ = fun (type a) fmt (tl : a named_typ_list) -> match tl with
+  | NTLnil -> ()
+  | NTLcons (n, t, tl) -> Format.fprintf fmt "; %s: %a%a" n pp_typ t pp_named_typ_list tl
+let pp_typ fmt t = pp_typ fmt t
+let pp_typ_list (type a) fmt (tl : a typ_list) = match tl with
+  | TLnil -> Format.fprintf fmt "[]"
+  | TLcons (hd, tl) -> Format.fprintf fmt "[%a%a]" pp_typ hd pp_typ_list tl
+
 type anytyp = Type : 'a typ -> anytyp
 type anytyp_list = TypeList : 'a typ_list -> anytyp_list
 
@@ -59,6 +95,8 @@ type (!'a, !'b) extract_typ_check =
   | ExtractO : ('a * 'b, 'a) extract_typ_check
   | ExtractS : ('b, 'c) extract_typ_check -> ('a * 'b, 'c) extract_typ_check
 type (!'a, !'b) extract_typ = 'a list typ * int * 'b typ * ('a, 'b) extract_typ_check
+
+let pp_anytyp fmt (Type t) = pp_typ fmt t
 
 type ('a, 'r) unop =
   | UONot  : (bool,  bool)  unop
@@ -250,6 +288,124 @@ let typ_of_expr (type a) (e : a expr) : a typ = match e with
   | EShallowHandle (_, _, FId t, _) -> t
   | EShallowHandle (_, _, FMap (_, t, _), _) -> t
   | EDeepHandle (_, _, (_, _, _, t, _, _), _, _) -> t
+
+let pp_specialization : type a b. _ -> (a, b) specialization -> _ = fun fmt : ((a, b) specialization -> _) -> function
+  | Snil g -> pp_generalization fmt g
+  | Scons (t, i, tl) ->
+      let rec inner : type a b. _ -> (a, b) specialization -> _ = fun fmt : ((a, b) specialization -> _) -> function
+        | Snil Gnil -> Format.fprintf fmt ". "
+        | Snil g -> Format.fprintf fmt "; %a" pp_generalization g
+        | Scons (t, i, tl) -> Format.fprintf fmt "; %u:=%a%a" i pp_anytyp t inner tl
+      in Format.fprintf fmt "%u:=%a%a" i pp_anytyp t inner tl
+let rec pp_box : type a b. _ -> (a, b) box -> _ = fun fmt : ((a, b) box -> _) -> function
+  | BNone _ -> Format.fprintf fmt "<>"
+  | BClosed (g, bargs, bret) -> Format.fprintf fmt "(%a[%a] -> %a)" pp_generalization g pp_box_list bargs pp_box bret
+  | BCont bret -> Format.fprintf fmt "~> %a" pp_box bret
+  | BTuple bs -> Format.fprintf fmt "{ %a }" pp_box_named_list bs
+  | BBox (t, i) -> Format.fprintf fmt "%a ~ %u" pp_typ t i
+and pp_box_list : type a b. _ -> (a, b) box_list -> _ = fun fmt : ((a, b) box_list -> _) -> function
+  | BLnil -> ()
+  | BLcons (hd, tl) ->
+      let rec inner : type a b. _ -> (a, b) box_list -> _ = fun fmt : ((a, b) box_list -> _) -> function
+        | BLnil -> ()
+        | BLcons (hd, tl) -> Format.fprintf fmt "; %a%a" pp_box hd inner tl
+      in Format.fprintf fmt "%a%a" pp_box hd inner tl
+and pp_box_named_list : type a b. _ -> (a, b) box_named_list -> _ = fun fmt : ((a, b) box_named_list -> _) -> function
+  | BNLnil -> ()
+  | BNLcons (n, hd, tl) ->
+      let rec inner : type a b. _ -> (a, b) box_named_list -> _ = fun fmt : ((a, b) box_named_list -> _) -> function
+        | BNLnil -> ()
+        | BNLcons (n, hd, tl) -> Format.fprintf fmt "; %s: %a%a" n pp_box hd inner tl
+      in Format.fprintf fmt "%s: %a%a" n pp_box hd inner tl
+let pp_local_storage fmt = function
+  | StorVariable -> Format.fprintf fmt "StorVariable"
+  | StorClosure -> Format.fprintf fmt "StorClosure"
+let pp_locality fmt = function
+  | Global -> Format.fprintf fmt "Global"
+  | Local loc -> Format.fprintf fmt "Local %a" pp_local_storage loc
+let rec pp_block : type a. _ -> a block -> _ = fun fmt (al, e : a block) ->
+  let pp_assign fmt (Assign (loc, (_, v), e)) =
+    Format.fprintf fmt "  %ld(%s) <- %a@\n"
+      v (match loc with Global -> "gbl" | Local StorVariable -> "var" | Local StorClosure -> "cls") pp_expr e in
+  Format.fprintf fmt "@[[@\n%a],@\n%a@]" (Format.pp_print_list ~pp_sep:(fun _ () -> ()) pp_assign) al pp_expr e
+and pp_expr : 'a. _ -> 'a expr -> _ = fun (type a) fmt (tl : a expr) ->
+  let pp_expr_list' : 'a. _ -> 'a expr_list -> _ = fun fmt (type a) (es : a expr_list) -> match es with
+      | ELnil -> ()
+      | ELcons (hd, tl) -> Format.fprintf fmt "%a%a" pp_expr hd pp_expr_list tl in
+  match tl with
+  | EUnreachable t -> Format.fprintf fmt "EUnreachable %a" pp_typ t
+  | EConvertClosure (acid, ct) -> Format.fprintf fmt "EConvertClosure (%ld, %a)" acid pp_typ ct
+  | EIgnore (_, e) -> Format.fprintf fmt "EIgnore (%a)" pp_expr e
+  | EConstInt i -> Format.fprintf fmt "EConstInt %Ld" i
+  | EConstBool b -> Format.fprintf fmt "EConstBool %b" b
+  | EConstFloat f -> Format.fprintf fmt "EConstFloat %f" f
+  | EConstString s -> Format.fprintf fmt "EConstString %S" s
+  | EUnop (op, e) -> begin match op with
+    | UONot -> Format.fprintf fmt "EUnop (!, %a)" pp_expr e
+    | UONegI -> Format.fprintf fmt "EUnop (-, %a)" pp_expr e
+    | UONegF -> Format.fprintf fmt "EUnop (-., %a)" pp_expr e
+    end
+  | EBinop (op, el, er) -> begin match op with
+    | BOAddI -> Format.fprintf fmt "EBinop (+, %a, %a)" pp_expr el pp_expr er
+    | BOAddF -> Format.fprintf fmt "EBinop (+., %a, %a)" pp_expr el pp_expr er
+    | BOSubI -> Format.fprintf fmt "EBinop (-, %a, %a)" pp_expr el pp_expr er
+    | BOSubF -> Format.fprintf fmt "EBinop (-., %a, %a)" pp_expr el pp_expr er
+    | BOMulI -> Format.fprintf fmt "EBinop (*, %a, %a)" pp_expr el pp_expr er
+    | BOMulF -> Format.fprintf fmt "EBinop (*., %a, %a)" pp_expr el pp_expr er
+    | BODivI -> Format.fprintf fmt "EBinop (/, %a, %a)" pp_expr el pp_expr er
+    | BODivF -> Format.fprintf fmt "EBinop (/., %a, %a)" pp_expr el pp_expr er
+    | BORemI -> Format.fprintf fmt "EBinop (%, %a, %a)" pp_expr el pp_expr er
+    | BOEq t -> Format.fprintf fmt "EBinop (= <%a>, %a, %a)" pp_typ t pp_expr el pp_expr er
+    | BONe t -> Format.fprintf fmt "EBinop (<> <%a>, %a, %a)" pp_typ t pp_expr el pp_expr er
+    | BOLe t -> Format.fprintf fmt "EBinop (<= <%a>, %a, %a)" pp_typ t pp_expr el pp_expr er
+    | BOLt t -> Format.fprintf fmt "EBinop (< <%a>, %a, %a)" pp_typ t pp_expr el pp_expr er
+    | BOGe t -> Format.fprintf fmt "EBinop (>= <%a>, %a, %a)" pp_typ t pp_expr el pp_expr er
+    | BOGt t -> Format.fprintf fmt "EBinop (> <%a>, %a, %a)" pp_typ t pp_expr el pp_expr er
+    | BOConcat -> Format.fprintf fmt "EBinop (^^, %a, %a)" pp_expr el pp_expr er
+    | BOCons t -> Format.fprintf fmt "EBinop (:: <%a>, %a, %a)" pp_typ t pp_expr el pp_expr er
+    | BOConcatList t -> Format.fprintf fmt "EBinop (++ <%a>, %a, %a)" pp_typ t pp_expr el pp_expr er
+    end
+  | EVariable (loc, (t, v)) -> Format.fprintf fmt "EVariable (%a, (%a, %ld))" pp_locality loc pp_typ t v
+  | EVariant (t, _, v) -> Format.fprintf fmt "EVariant (%u, %a)" t pp_expr v
+  | ECase (e, _, cs, d) ->
+      Format.fprintf fmt "@[ECase (@[%a@]) {@\n%a%a}@]"
+        pp_expr e
+        (Format.pp_print_list ~pp_sep:(fun _ () -> ())
+          (fun fmt (tag, typ, v, b) -> Format.fprintf fmt "  @[<hov 2>%u(%lu : %a) ->@ @[%a@]@]@\n" tag v pp_anytyp typ pp_block b)) cs
+        (Format.pp_print_option ~none:(fun _ () -> ()) (fun fmt (v, b) -> Format.fprintf fmt "  @[<hov 2>_ as %lu ->@ @[%a@]@]@\n" v pp_block b)) d
+  | ETuple (_, es) -> Format.fprintf fmt "ETuple [%a]" pp_expr_list' es
+  | EExtract (e, (_, i, _, _)) -> Format.fprintf fmt "EExtract (@[%a@]).%u" pp_expr e i
+  | EListNil t -> Format.fprintf fmt "EListNil %a" pp_typ t
+  | EListHd (e, t) -> Format.fprintf fmt "EListHd<%a> %a" pp_typ t pp_expr e
+  | EListTl (t, e) -> Format.fprintf fmt "EListTl<%a> %a" pp_typ t pp_expr e
+  | EClose ((ga, Gnil, fargs, fret, clt, fid), bcl, cl) ->
+      Format.fprintf fmt "EClose %ld{%a%a -> %a / %a} with [%a] boxed:%a"
+        fid pp_generalization ga pp_typ_list fargs pp_typ fret
+        pp_typ_list clt pp_expr_list' cl pp_box_list bcl
+  | EClose ((ga, gc, fargs, fret, clt, fid), bcl, cl) ->
+      Format.fprintf fmt "EClose %ld{%a %a%a -> %a / %a} with [%a] boxed:%a"
+        fid pp_generalization gc pp_generalization ga pp_typ_list fargs pp_typ fret
+        pp_typ_list clt pp_expr_list' cl pp_box_list bcl
+  | ERawClose ((ga, Gnil, fargs, fret, clt, fid), cl) ->
+      Format.fprintf fmt "ERawClose %ld{%a%a -> %a / %a} with %a"
+        fid pp_generalization ga pp_typ_list fargs pp_typ fret
+        pp_typ_list clt pp_expr cl
+  | ERawClose ((ga, gc, fargs, fret, clt, fid), cl) ->
+      Format.fprintf fmt "ERawClose %ld{%a %a%a -> %a / %a} with %a"
+        fid pp_generalization gc pp_generalization ga pp_typ_list fargs pp_typ fret
+        pp_typ_list clt pp_expr cl
+  | ESpecialize (f, s, bargs, bret) -> Format.fprintf fmt "ESpecialize (%a) %a[%a] ~> %a" pp_expr f pp_specialization s pp_box_list bargs pp_box bret
+  | ECallRawHandler (f, _, c, _, a, _, i, cl, tret) ->
+      Format.fprintf fmt "ECallRawHandler (%lu, %a, %a, %a, %a) ~> %a" f pp_expr c pp_expr a pp_expr_list' i pp_expr cl pp_typ tret
+  | ECallClosed (f, args, _) -> Format.fprintf fmt "ECallClosed (%a)(%a)" pp_expr f pp_expr_list' args
+  | ECond (_, c, t, f) -> Format.fprintf fmt "ECond (@[<hv>@[%a@],@ then @[%a@],@ else @[%a@]@])" pp_expr c pp_block t pp_block f
+  | EDo ((_, e), _, v) -> Format.fprintf fmt "EDo %lu (%a)" e pp_expr_list' v
+  | EShallowHandle _ -> Format.fprintf fmt "<EShallowHandle>"
+  | EDeepHandle ((_, _, _, _, _, c), cl, (_, _, TLcons (_, TLcons (_, tis)), _, _, h), a, i) ->
+      Format.fprintf fmt "EDeepHandle %lu by %lu[%a](%a) (%a)(%a)" c h pp_expr_list' cl pp_typ_list tis pp_expr_list' a pp_expr_list' i
+and pp_expr_list : 'a. _ -> 'a expr_list -> _ = fun (type a) fmt (el : a expr_list) -> match el with
+  | ELnil -> ()
+  | ELcons (hd, el) -> Format.fprintf fmt "; %a%a" pp_expr hd pp_expr_list el
 
 type ('a, 'b) func' = {
   fun_id               : mfunid;
@@ -2569,6 +2725,8 @@ let finish_prelude (ge : pgenv) (le : unit LEnv.realt) (pi : prelude_info) : pge
 
 (* MAIN FUNCTION *)
 
+let debug_wasmir = false
+
 let module_of_ir (c : program) (map : string Env.Int.t) (prelude : binding list) : anymodule =
   let rev_add_bs, prelude_funs = split_prelude prelude in
   let c =
@@ -2576,6 +2734,72 @@ let module_of_ir (c : program) (map : string Env.Int.t) (prelude : binding list)
     (List.rev_append rev_add_bs bs, tc) in
   let ge = GEnv.empty map (find_global_binders c) prelude_funs locate_in_prelude in
   let ge, le, blk = of_computation ge (LEnv.of_real LEnv.toplevel) c in
-  GEnv.compile ge (LEnv.to_real le) blk finish_prelude
+  let Module ret = GEnv.compile ge (LEnv.to_real le) blk finish_prelude in
+  if debug_wasmir then begin
+    let pp_var_list : type a. _ -> a varid_list -> _ = fun fmt -> function
+      | VLnil -> ()
+      | VLcons ((_, vhd), vtl) ->
+          let rec inner : type a. _ -> a varid_list -> _ = fun fmt -> function
+            | VLnil -> ()
+            | VLcons ((_, vhd), vtl) ->
+                Format.fprintf fmt ", %lu%a" vhd inner vtl in
+          Format.fprintf fmt "%lu%a" vhd inner vtl in
+    let pp_handler fmt (Handler ((_, e), (_, c), l, b)) =
+      Format.fprintf fmt "%lu : %lu, w/ %a@\n  %a@\n" e c pp_var_list l pp_block b in
+    let pp_finisher : type a b. _ -> (a, b) finisher -> _ = fun fmt -> function
+      | FId t -> Format.fprintf fmt "(nothing : %a)" pp_typ t
+      | FMap ((tv, v), _, b) -> Format.fprintf fmt "%lu: %a@ %a@\n" v pp_typ tv pp_block b in
+    Format.printf
+      "%a@\nMain function: %a w/ %a =@\n%a@\nGlobals: %a (with global counter: %b)@."
+      (Format.pp_print_list
+        ~pp_sep:Format.pp_print_newline
+        (fun fmt v -> match v with
+          | FFunction f ->
+              Format.fprintf fmt
+                "Function %lu: %a ~> %a w/ %a =@.  %a@."
+                f.fun_id
+                pp_typ_list f.fun_args
+                pp_typ f.fun_ret
+                (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ") pp_anytyp) f.fun_locals
+                pp_block f.fun_block
+          | FContinuationStart f ->
+              Format.fprintf fmt
+                "FStart %lu: ~> %a w/ %a =@.  %a@."
+                f.fst_id
+                pp_typ f.fst_ret
+                (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ") pp_anytyp) f.fst_locals
+                pp_block f.fst_block
+          | FHandler h ->
+              Format.fprintf fmt
+                "Handler %lu: %a w/ %a =@.  @[%a%a@]@."
+                h.fh_id
+                pp_typ (fst (fst h.fh_contarg))
+                (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ") pp_anytyp) h.fh_locals
+                (Format.pp_print_list ~pp_sep:(fun _ () -> ()) pp_handler) h.fh_handlers
+                pp_finisher h.fh_finisher
+          |FBuiltin (i, h) ->
+              Format.fprintf fmt
+                "Function %lu: builtin %s" i
+                (match h with
+                | FBHere -> "here"
+                | FBIntToString -> "i2s"
+                | FBLength -> "len"
+                | FBRecv -> "recv"
+                | FBSelf -> "self"
+                | FBSend -> "Send"
+                | FBSpawnAngelAt -> "spawnAngelAt"
+                | FBSpawnAt -> "spawnAt"
+                | FBWait -> "wait")))
+       ret.mod_funs
+      pp_typ ret.mod_main
+      (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ") pp_anytyp) ret.mod_locals
+      pp_block ret.mod_block
+      (Format.pp_print_list
+        ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
+        (fun fmt (i, t, v) -> Format.fprintf fmt "%lu(%s): %a" i (Option.value ~default:"<not exported>" v) pp_anytyp t))
+       ret.mod_global_vars
+    ret.mod_has_processes
+  end;
+  Module ret
 
 let convert_datatype : Types.datatype -> anytyp = convert_type

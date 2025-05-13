@@ -2303,10 +2303,10 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
         fn_name = Some "main";
         fn_type = TMap.main_func_type;
         fn_locals = [|
-          NumT I32T;                                             (* 0: next pid *)
+          NumT I32T;                                     (* 0: next pid *)
           RefT (NoNull, VarHT TMap.process_list_tid);    (* 1: all active and zombie processes *)
           RefT (NoNull, VarHT TMap.process_list_tid);    (* 2: active processes cache *)
-          RefT (Null, EqHT);                                     (* 3: boxed value *)
+          RefT (Null, EqHT);                             (* 3: boxed value *)
           RefT (NoNull, VarHT self_ctid);                (* 4: $self/$spawn effect continuation *)
           RefT (NoNull, VarHT spawn_cbid);               (* 5: $spawn callback *)
           RefT (NoNull, VarHT TMap.process_active_tid);  (* 6: $yield continuation *)
