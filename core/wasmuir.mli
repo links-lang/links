@@ -21,7 +21,7 @@ type !'a typ =
   | TAbsClosArg : abs_closure_content typ
   | TClosArg : 'a typ_list -> 'a closure_content typ
   | TCont : 'a typ -> 'a continuation typ
-  | TTuple : 'a typ_list -> 'a list typ
+  | TTuple : int -> 'a list typ
   | TVariant : variant typ
   | TList : 'a typ -> llist typ
   | TVar : unit typ
@@ -36,7 +36,7 @@ type anytyp_list = TypeList : 'a typ_list -> anytyp_list
 
 module TypeMap : Utility.Map.S with type key = anytyp
 
-type (!'a, !'b) extract_typ = 'a typ_list * int * 'b typ
+type (!'a, !'b) extract_typ = 'a typ_list * int * int * 'b typ
 
 type ('a, 'r) unop =
   | UONot  : (bool,  bool)  unop
@@ -60,7 +60,7 @@ type locality = Global | Local of local_storage
 type 'a varid = private ('a typ * mvarid)
 type ('a, 'b, 'c) funcid = private ('a typ_list * 'b typ * 'c typ_list * mfunid)
   (* Function type, closure type, closure type ID, module-level function ID *)
-type 'a effectid = private ('a typ_list * meffid)
+type 'a effectid = private ('a typ_list * int * meffid)
 
 type 'a varid_list =
   | VLnil : unit varid_list
@@ -70,7 +70,7 @@ type (!_, !_) box =
   | BNone : ('a, 'a) box
   | BClosed : ('g * 'a -> 'b) typ * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b, 'g * 'c -> 'd) box
   | BCont : ('a, 'b) box -> ('a continuation, 'b continuation) box
-  | BTuple : ('a, 'b) box_list -> ('a list, 'b list) box
+  | BTuple : int -> ('a list, 'b list) box
   | BBox : 'a typ -> ('a, unit) box
 and (!_, !_) box_list =
   | BLnone : ('a, 'a) box_list
@@ -95,7 +95,7 @@ and _ expr =
   | EUnop : ('a, 'b) unop * 'a expr -> 'b expr
   | EBinop : ('a, 'b, 'c) binop * 'a expr * 'b expr -> 'c expr
   | EVariable : locality * 'a varid -> 'a expr
-  | ETuple : 'a typ_list * 'a expr_list -> 'a list expr
+  | ETuple : 'a typ_list * int * 'a expr_list -> 'a list expr
   | EExtract : 'a list expr * ('a, 'b) extract_typ -> 'b expr
   | EVariant : tagid * 'a typ * 'a expr -> variant expr
   | ECase : variant expr * 'a typ * (tagid * anytyp * mvarid * 'a block) list * (mvarid * 'a block) option -> 'a expr
@@ -179,3 +179,4 @@ type 'a modu = {
 val module_of_ir : 'a Wasmir.modu -> 'a modu
 
 val convert_datatype : Types.datatype -> anytyp
+val convert_field_spec_map : Types.field_spec_map -> int * anytyp_list

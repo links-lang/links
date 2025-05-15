@@ -182,7 +182,7 @@ end = struct
   
   let rec val_of_type : type a. t -> a typ -> Wasm.Type.val_type = fun (env : t) (t : a typ) : Wasm.Type.val_type ->
     let open Wasm.Type in match t with
-    | TTuple TLnil -> RefT (Null, NoneHT)
+    | TTuple 0 -> RefT (Null, NoneHT)
     | TInt -> NumT I64T
     | TBool -> NumT I32T
     | TFloat -> NumT F64T
@@ -210,7 +210,7 @@ end = struct
     | None ->
         let st =
           let open Wasm.Type in match t with
-          | TTuple TLnil -> failwith "TODO: TMap.recid_of_type TTuple TLnil"
+          | TTuple 0 -> failwith "TODO: TMap.recid_of_type TTuple 0"
           | TInt -> failwith "TODO: TMap.recid_of_type TInt"
           | TBool -> failwith "TODO: TMap.recid_of_type TBool"
           | TFloat -> failwith "TODO: TMap.recid_of_type TFloat" (* cached *)
@@ -229,9 +229,8 @@ end = struct
           | TCont cret ->
               let ftyp = recid_of_cfunctyp env cret in
               Some (SubT (Final, [||], DefContT (ContT (VarHT ftyp))))
-          | TTuple elems ->
-              let elems = val_list_of_type_list env elems in
-              Some (SubT (Final, [||], DefStructT (StructT (Array.map (fun _ -> FieldT (Cons, ValStorageT (RefT (Null, EqHT)))) (Array.of_list elems)))))
+          | TTuple n ->
+              Some (SubT (Final, [||], DefStructT (StructT (Array.make n (FieldT (Cons, ValStorageT (RefT (Null, EqHT))))))))
           | TVariant -> Some variant_typ (* cached *)
           | TList _ -> Some list_typ
           | TVar -> failwith "TODO: TMap.recid_of_type TVar"
@@ -540,7 +539,6 @@ end = struct
         let new_ctid = TMap.recid_of_type tm (TClosed (targs, tret)) in
         Either.Left (fun acc -> StructNew (new_ctid, Explicit) ^+ get_val (RefFunc (Int32.add (fun_offset (g_of_t new_meta)) convfid) ^+ acc))
     | BCont _ -> failwith "TODO maybe_do_box BCont"
-    | BTuple BLnone -> Either.Right Type.Equal
     | BTuple _ -> Either.Left get_val (* Tuples always have their values boxed *)
     | BBox t -> do_box tm t get_val
   
@@ -611,7 +609,7 @@ end = struct
     | TBool -> Either.Left (fun acc -> I31Get Wasm.Pack.ZX ^+ RefCast Wasm.Type.(NoNull, I31HT) ^+ get_val acc)
     | TFloat -> Either.Left (fun acc ->
         StructGet (TMap.boxed_float_tid, 0l, None) ^+ RefCast Wasm.Type.(NoNull, VarHT TMap.boxed_float_tid) ^+ get_val acc)
-    | (TTuple TLnil) -> Either.Left (fun acc -> RefNull Wasm.Type.NoneHT ^+ Drop ^+ get_val acc)
+    | (TTuple 0) -> Either.Left (fun acc -> RefNull Wasm.Type.NoneHT ^+ Drop ^+ get_val acc)
         (* fun acc -> RefCast Wasm.Type.(Null, NoneHT) ^+ get_val acc) *)
     | TList _ -> Either.Left (fun acc -> RefCast Wasm.Type.(Null, VarHT TMap.list_tid) ^+ get_val acc)
     | t -> let tid = TMap.recid_of_type tm t in Either.Left (fun acc -> RefCast Wasm.Type.(NoNull, VarHT tid) ^+ get_val acc)
@@ -653,7 +651,6 @@ end = struct
             Either.Left (fun acc -> StructNew (new_ctid, Explicit) ^+ get_val (RefFunc (Int32.add (fun_offset (g_of_t new_meta)) convfid) ^+ acc))
       end
     | BCont _ -> failwith "TODO maybe_do_unbox BCont"
-    | BTuple BLnone -> Either.Right Type.Equal
     | BTuple _ -> Either.Left get_val (* Tuples always have their values boxed *)
     | BBox t -> do_unbox tm t get_val
   
@@ -693,7 +690,7 @@ end = struct
         glob.eqfuns <- eqfuns;
         let ft = TMap.recid_of_exported_type tm (TLcons (t, TLcons (t, TLnil))) TBool in
         let () = match t with
-          | TTuple TLnil ->
+          | TTuple 0 ->
               fref := Some Wasm.{
                 fn_type = ft;
                 fn_name = None;
@@ -772,7 +769,7 @@ type new_meta = NewMetadata.t
 let convert_global (tm : tmap) ((_, Type t, name) : 'a * anytyp * string option) : Wasm.global =
   let init =
     let open Wasm.Instruction in match t with
-    | TTuple TLnil -> [|RefNull Wasm.Type.NoneHT|]
+    | TTuple 0 -> [|RefNull Wasm.Type.NoneHT|]
     | TInt -> [|Const (Wasm.Value.(I64 I64.zero))|]
     | TBool -> [|Const (Wasm.Value.(I32 I32.zero))|]
     | TFloat -> [|Const (Wasm.Value.(F64 (F64.of_float 0.)))|]
@@ -846,7 +843,7 @@ let convert_binop (type a b c) (tm : tmap) (new_meta : new_meta) (op : (a, b, c)
   | BODivF -> fun acc -> Binop (F64 FloatOp.Div)  ^+ arg2 (arg1 acc)
   | BORemI -> fun acc -> Binop (I64   IntOp.RemS) ^+ arg2 (arg1 acc)
   | BOEq t -> begin match t with
-        | TTuple TLnil -> fun acc -> Const (I32 I32.one) ^+ Drop ^+ arg2 (Drop ^+ arg1 acc)
+        | TTuple 0 -> fun acc -> Const (I32 I32.one) ^+ Drop ^+ arg2 (Drop ^+ arg1 acc)
         | TInt -> fun acc -> Relop (I64 IntOp.Eq) ^+ arg2 (arg1 acc)
         | TBool -> fun acc -> Relop (I32 IntOp.Eq) ^+ arg2 (arg1 acc)
         | TFloat -> fun acc -> Relop (F64 FloatOp.Eq) ^+ arg2 (arg1 acc)
@@ -855,7 +852,7 @@ let convert_binop (type a b c) (tm : tmap) (new_meta : new_meta) (op : (a, b, c)
             fun acc -> Call (Int32.add (NewMetadata.fun_offset (NewMetadata.g_of_t new_meta)) fid) ^+ arg2 (arg1 acc)
     end
   | BONe t -> begin match t with
-        | TTuple TLnil -> fun acc -> Const (I32 I32.zero) ^+ Drop ^+ arg2 (Drop ^+ arg1 acc)
+        | TTuple 0 -> fun acc -> Const (I32 I32.zero) ^+ Drop ^+ arg2 (Drop ^+ arg1 acc)
         | TInt -> fun acc -> Relop (I64 IntOp.Ne) ^+ arg2 (arg1 acc)
         | TBool -> fun acc -> Relop (I32 IntOp.Ne) ^+ arg2 (arg1 acc)
         | TFloat -> fun acc -> Relop (F64 FloatOp.Ne) ^+ arg2 (arg1 acc)
@@ -1028,10 +1025,10 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
       let v = convert_binop tm new_meta op arg1 arg2 in
       do_box tm new_meta box v
   | EVariable (loc, vid) -> do_box tm new_meta box (convert_get_var loc vid cinfo)
-  | ETuple (TLnil, ELnil) ->
+  | ETuple (TLnil, _, ELnil) ->
       do_box tm new_meta box (fun acc -> RefNull Wasm.Type.NoneHT ^+ acc)
-  | ETuple (ts, es) ->
-      let tid = TMap.recid_of_type tm (TTuple ts) in
+  | ETuple (ts, n, es) ->
+      let tid = TMap.recid_of_type tm (TTuple n) in
       let AnyBoxList bcontent =
         let rec inner : type a. a typ_list -> a anybox_list = function
           | TLnil -> AnyBoxList BLnil
@@ -1041,9 +1038,9 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
         | BNone | BBox _ -> do_box tm new_meta box (convert_new_struct tm new_meta procinfo es bcontent tid false cinfo)
         | BTuple _ -> convert_new_struct tm new_meta procinfo es bcontent tid false cinfo
       end
-  | EExtract (e, (ttup, i, t)) ->
+  | EExtract (e, (_, n, i, t)) ->
       let e = convert_expr tm new_meta procinfo e BNone None cinfo in
-      let tid = TMap.recid_of_type tm (TTuple ttup) in
+      let tid = TMap.recid_of_type tm (TTuple n) in
       do_box tm new_meta box (really_unbox tm t (fun acc -> StructGet (tid, Int32.of_int i, None) ^+ (e acc)))
   | EVariant (tagid, targ, arg) ->
       let arg = convert_expr tm new_meta procinfo arg (BBox targ) None cinfo in
@@ -1316,12 +1313,12 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
       let rt' = TMap.oval_of_type tm rt in
       fun acc -> If (Wasm.Type.(ValBlockType rt'), convert_nlist ti, convert_nlist fi) ^+ ei acc
   | EDo (eid, tret, args) ->
-      let targs, eid = (eid : _ effectid :> _ * int32) in
+      let targs, n, eid = (eid : _ effectid :> _ * int * int32) in
       let args = match targs, args with
         | TLnil, ELnil -> fun acc -> RefNull Wasm.Type.NoneHT ^+ acc
         | TLcons (targ, TLnil), ELcons (arg, ELnil) -> convert_expr tm new_meta procinfo arg (BBox targ) None cinfo
         | TLcons (_, TLcons (_, _)), ELcons (_, ELcons (_, _)) ->
-            let tid = TMap.recid_of_type tm (TTuple targs) in
+            let tid = TMap.recid_of_type tm (TTuple n) in
             let AnyBoxList bcontent =
               let rec inner : type a. a typ_list -> a anybox_list = function
                 | TLnil -> AnyBoxList BLnil
@@ -1404,7 +1401,7 @@ let convert_hdl (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (type a
     let nblocks, handlers =
       let rec inner (hdls : _ handler list) len acc = match hdls with
         | [] -> len, convert_straight_nlist acc
-        | Handler (eid, _, _, _) :: tl -> inner tl (Int32.succ len) ((let _, eid = (eid : _ effectid :> _ * int32) in eid, OnLabel len) ^+ acc)
+        | Handler (eid, _, _, _) :: tl -> inner tl (Int32.succ len) ((let _, _, eid = (eid : _ effectid :> _ * _ * int32) in eid, OnLabel len) ^+ acc)
       in inner f.fh_handlers 0l empty_nlist in
     let code = convert_finisher tm new_meta procinfo f.fh_finisher (Some (f.fh_id, nblocks)) cinfo in
     let code = Return ^+ code @+ nlist_of_list [Resume (contid, handlers)] in
@@ -1413,7 +1410,7 @@ let convert_hdl (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (type a
       | Handler (eid, vcid, vars, blk) :: tl ->
           let nblocks = Int32.pred nblocks in
           let _, vcid = (vcid : _ varid :> _ * int32) in
-          let eargs, _ = (eid : _ effectid :> _ * _) in
+          let eargs, _, _ = (eid : _ effectid :> _ * _ * _) in
           let blkid = TMap.recid_of_handler_block tm contid eargs in
           let code = nlist_of_list Wasm.Instruction.[LocalSet vcid; Block (Wasm.Type.VarBlockType blkid, convert_nlist code)] in
           let blk = convert_block tm new_meta procinfo blk BNone (Some (f.fh_id, nblocks)) cinfo in
@@ -1424,15 +1421,13 @@ let convert_hdl (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (type a
                 let unbox = really_unbox tm t (fun acc -> acc) in
                 LocalSet v ^+ unbox code
             | VLcons (_, VLcons (_, _)) ->
-                let ts =
-                  let [@tail_mod_cons] rec inner : type a. a varid_list -> a typ_list = fun (vars : a varid_list) : a typ_list -> match vars with
-                    | VLnil -> TLnil
-                    | VLcons (vhd, vtl) ->
-                        let thd, _ = (vhd : _ varid :> _ * int32) in
-                        (TLcons (thd, inner vtl)) in
-                  inner vars in
-                let tid = TMap.recid_of_type tm (TTuple ts) in
-                let tmpv = NewMetadata.add_local tm new_meta (TTuple ts) in
+                let n =
+                  let rec inner : type a. a varid_list -> int -> int = fun vars acc -> match vars with
+                    | VLnil -> acc
+                    | VLcons (_, vtl) -> inner vtl (Int.succ acc) in
+                  inner vars 0 in
+                let tid = TMap.recid_of_type tm (TTuple n) in
+                let tmpv = NewMetadata.add_local tm new_meta (TTuple n) in
                 let rec acc_vars : type a. a varid_list -> _ = fun (vars : a varid_list) i acc -> match vars with
                   | VLnil -> acc
                   | VLcons (vhd, vtl) ->
@@ -1646,7 +1641,7 @@ let convert_builtin (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (_f
       |];
     }
   | FBSend ->
-    let fun_typ = TMap.recid_of_functyp tm (TLcons (TProcess, TLcons (TVar, TLnil))) (TTuple TLnil) in
+    let fun_typ = TMap.recid_of_functyp tm (TLcons (TProcess, TLcons (TVar, TLnil))) (TTuple 0) in
     Wasm.{
       fn_name = None;
       fn_type = fun_typ;
@@ -2090,9 +2085,8 @@ let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (
           Call (Option.get paux.paux_putc); Const (I32 (I32.of_int_s (Char.code '(')));
           Drop;
         ]) else
-        let Type t = convert_datatype typ in
-        let tl = match t with TTuple tl -> TypeList tl | _ -> raise (internal_error "Invalid main type") in
-        let tv = TMap.val_of_type tm t in
+        let n, tl = convert_field_spec_map fsm in
+        let tv = TMap.val_of_type tm (TTuple n) in
         let tid = match tv with
           | RefT (Null, NoneHT) -> 0l (* TTuple TLnil *)
           | RefT (NoNull, VarHT tid) -> tid (* Anything else *)
@@ -2138,7 +2132,7 @@ let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (
           | Some id -> match t with
               | Types.Record (Types.Row (fsm, _, _))
               | Types.Present Types.Record (Types.Row (fsm, _, _)) when Utility.StringMap.is_empty fsm ->
-                  sm, (n, id, Type (TTuple TLnil), Either.Left (nlist_of_list [Drop])) :: cs
+                  sm, (n, id, Type (TTuple 0), Either.Left (nlist_of_list [Drop])) :: cs
               | Types.Record _
               | Types.Present Types.Record _ -> let sm, p = inner glob t sm in sm, (n, id, Wasmuir.convert_datatype t, p) :: cs
               | _ ->

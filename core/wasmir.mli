@@ -42,6 +42,7 @@ and !'a named_typ_list =
 
 type anytyp = Type : 'a typ -> anytyp
 type anytyp_list = TypeList : 'a typ_list -> anytyp_list
+type anynamed_typ_list = NamedTypeList : 'a named_typ_list -> anynamed_typ_list
 
 type (!'a, !'b) extract_typ_check
 type (!'a, !'b) extract_typ = 'a list typ * int * 'b typ * ('a, 'b) extract_typ_check
@@ -86,14 +87,11 @@ type (!'a, !'b) box =
   | BNone : 'a typ * 'a typ -> ('a, 'a) box
   | BClosed : 'g generalization * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b, 'g * 'c -> 'd) box
   | BCont : ('b, 'd) box -> ('b continuation, 'd continuation) box
-  | BTuple : ('a, 'b) box_named_list -> ('a list, 'b list) box
+  | BTuple : 'a named_typ_list * 'b named_typ_list -> ('a list, 'b list) box
   | BBox : 'a typ * tvarid -> ('a, unit) box
 and (!'a, !'b) box_list =
   | BLnil : (unit, unit) box_list
   | BLcons : ('a, 'b) box * ('c, 'd) box_list -> ('a * 'c, 'b * 'd) box_list
-and (!'a, !'b) box_named_list =
-  | BNLnil : (unit, unit) box_named_list
-  | BNLcons : string * ('a, 'b) box * ('c, 'd) box_named_list -> ('a * 'c, 'b * 'd) box_named_list
 
 val src_of_box : 'a 'b. ('a, 'b) box -> 'a typ
 val src_of_box_list : 'a 'b. ('a, 'b) box_list -> 'a typ_list
@@ -209,3 +207,4 @@ type anymodule = Module : 'a modu -> anymodule
 val module_of_ir : Ir.program -> string Env.Int.t -> Ir.binding list -> anymodule
 
 val convert_datatype : Types.datatype -> anytyp
+val convert_field_spec_map : Types.field_spec_map -> anynamed_typ_list
