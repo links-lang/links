@@ -1035,7 +1035,6 @@ let sexpr_of_segment_mode (cat : string) (sm : segment_mode) : Sexpr.t list = le
       else [Node (cat, [Atom ("$" ^ Int32.to_string n)]); tl]
   | Declarative -> [Atom "declare"]
 let sexpr_of_elem_segment (acc : int) (e : elem_segment) : int * Sexpr.t = let open Sexpr in
-  let acc = Int.succ acc in
   let sdesc = sexpr_of_segment_mode "table" e.es_mode in
   let rest =
     let isfunc = let open Type in match e.es_type with
@@ -1048,7 +1047,7 @@ let sexpr_of_elem_segment (acc : int) (e : elem_segment) : int * Sexpr.t = let o
          List.map
            Instruction.(function [|i|] -> to_sexpr i | is -> Node ("item", List.map to_sexpr (Array.to_list is)))
            (Array.to_list e.es_init) in
-  acc, Sexpr.(LongNode ("elem", [Atom ("$" ^ string_of_int acc)], sdesc @ rest))
+  Int.succ acc, Sexpr.(LongNode ("elem", [Atom ("$" ^ string_of_int acc)], sdesc @ rest))
 
 let sexpr_of_function funid ({ fn_name = ofname; fn_type = typeid; fn_locals = locals; fn_code = instrs } : fundef) =
   let open Sexpr in
