@@ -188,6 +188,16 @@ type func =
   | FContinuationStart : 'b fstart -> func
   | FHandler : ('a, 'c, 'b) fhandler -> func
   | FBuiltin : mfunid * ('g, 'a, 'b) fbuiltin -> func
+
+type process_level =
+  | PL_NoProcess
+  | PL_MessageBox
+  | PL_SingleThread
+  | PL_MultiThread
+  | PL_MultiWait
+  | PL_MultiAngel
+  | PL_MultiAngelWait
+
 type 'a modu = {
   mod_tags          : tagid Env.String.t;
   mod_imports       : (string * string) list;
@@ -200,7 +210,7 @@ type 'a modu = {
   mod_locals        : anytyp list;
   mod_main          : 'a typ;
   mod_block         : 'a block;
-  mod_has_processes : bool;
+  mod_process_level : process_level;
 }
 
 type anymodule = Module : 'a modu -> anymodule

@@ -434,6 +434,16 @@ type func =
   | FContinuationStart : 'b fstart -> func
   | FHandler : ('a, 'c, 'b) fhandler -> func
   | FBuiltin : mfunid * ('g, 'a, 'b) fbuiltin -> func
+
+type process_level =
+  | PL_NoProcess
+  | PL_MessageBox     (* only recv/Send *)
+  | PL_SingleThread   (* only spawnWait *)
+  | PL_MultiThread    (* spawn(At) *)
+  | PL_MultiWait      (* spawn(At) and spawnWait *)
+  | PL_MultiAngel     (* spawn(At)/spawnAngel(At) *)
+  | PL_MultiAngelWait (* spawn(At)/spawnAngel(At) and spawnWait *)
+
 type 'a modu = {
   mod_tags          : tagid Env.String.t;
   mod_imports       : (string * string) list;
@@ -446,7 +456,7 @@ type 'a modu = {
   mod_locals        : anytyp list;
   mod_main          : 'a typ;
   mod_block         : 'a block;
-  mod_has_processes : bool;
+  mod_process_level : process_level;
 }
 
 type anymodule = Module : 'a modu -> anymodule
@@ -527,11 +537,11 @@ module Builtins : sig
   
   val get_unop : string -> anytyp list -> anytyp option -> anyunop option
   val get_binop : string -> anytyp list -> anytyp option -> anybinop option
-  val gen_impure : t -> 'a -> ('a -> anyfbuiltin -> 'a * mfunid) -> ('a -> 'a) -> (Types.typ -> anytyp) ->
+  val gen_impure : t -> 'a -> ('a -> anyfbuiltin -> 'a * mfunid) -> ('a -> process_level -> 'a) -> (Types.typ -> anytyp) ->
                    string -> tyarg list -> anyexpr_list -> t * 'a * anyexpr
   
   val get_var : t -> 'a -> ('a -> 'a * mfunid * 'b) -> ('a -> 'b -> anyfunc' -> 'a) ->
-                ('a -> anyfbuiltin -> 'a * mfunid) -> ('a -> 'a) -> (Types.typ -> anytyp) ->
+                ('a -> anyfbuiltin -> 'a * mfunid) -> ('a -> process_level -> 'a) -> (Types.typ -> anytyp) ->
                 string -> (t * 'a * anyexpr) option
   
   val apply_type :
@@ -736,7 +746,7 @@ end = struct
     | Some (OneTArg _), [] -> raise (internal_error ("Missing type application to builtin binary operator '" ^ op ^ "'"))
     | Some (OneTArg _), _ :: _ :: _ -> raise (internal_error ("Too many type applications to builtin binary operator '" ^ op ^ "'"))
   
-  let gen_impure (env : t) (acc : 'c) (add_builtin : 'a -> anyfbuiltin -> 'a * mfunid) (has_process : 'a -> 'a)
+  let gen_impure (env : t) (acc : 'c) (add_builtin : 'a -> anyfbuiltin -> 'a * mfunid) (has_process : 'a -> process_level -> 'a)
                  (convert_type : Types.typ -> anytyp) (op : string) (tyargs : tyarg list)
                  (ExprList (targs, args) : anyexpr_list) : t * 'c * anyexpr = match op with
     | "error" -> begin match tyargs with
@@ -820,7 +830,7 @@ end = struct
     | "recv" -> begin match tyargs, args with
         | [], _ -> failwith "TODO recv without TApp"
         | [CommonTypes.PrimaryKind.Type, t; CommonTypes.PrimaryKind.Row, _], ELnil ->
-            let acc = has_process acc in
+            let acc = has_process acc PL_MessageBox in
             let Type t = convert_type t in
             let env, acc, fid = find_fbuiltin env acc add_builtin FBRecv in
             env, acc, Expr (t, ECallClosed (ESpecialize (EClose (fid, BLnil, ELnil), Scons (Type t, 0, Snil Gnil), BLnil, BBox (t, 0)), ELnil, t))
@@ -830,7 +840,7 @@ end = struct
         | [], _, _ -> failwith "TODO Send without TApp"
         | [CommonTypes.PrimaryKind.Type, t; CommonTypes.PrimaryKind.Row, _; CommonTypes.PrimaryKind.Row, _],
           TLcons (proct, TLcons (argt, TLnil)), ELcons (proc, ELcons (arg, ELnil)) ->
-            let acc = has_process acc in
+            let acc = has_process acc PL_MessageBox in
             let Type t = convert_type t in
             let Type.Equal = assert_eq_typ proct TProcess "Invalid type of argument of Send" in
             let Type.Equal = assert_eq_typ argt t "Invalid type of argument of Send" in
@@ -849,7 +859,7 @@ end = struct
         | [], _, _ -> failwith "TODO spawn without TApp"
         | [CommonTypes.PrimaryKind.Row, _; CommonTypes.PrimaryKind.Type, t; CommonTypes.PrimaryKind.Row, _],
           TLcons (tf, TLnil), ELcons (f, ELnil) ->
-            let acc = has_process acc in
+            let acc = has_process acc PL_MultiThread in
             let Type t = convert_type t in
             let Type.Equal = assert_eq_typ tf (TClosed (Gnil, TLnil, t)) "Invalid type of argument of spawn" in
             let env, acc, hereid = find_fbuiltin env acc add_builtin FBHere in
@@ -871,7 +881,7 @@ end = struct
         | [], _, _ -> failwith "TODO spawnAngel without TApp"
         | [CommonTypes.PrimaryKind.Row, _; CommonTypes.PrimaryKind.Type, t; CommonTypes.PrimaryKind.Row, _],
           TLcons (tf, TLnil), ELcons (f, ELnil) ->
-            let acc = has_process acc in
+            let acc = has_process acc PL_MultiAngel in
             let Type t = convert_type t in
             let Type.Equal = assert_eq_typ tf (TClosed (Gnil, TLnil, t)) "Invalid type of argument of spawnAngel" in
             let env, acc, hereid = find_fbuiltin env acc add_builtin FBHere in
@@ -893,7 +903,7 @@ end = struct
         | [], _, _ -> failwith "TODO spawnAngelAt without TApp"
         | [CommonTypes.PrimaryKind.Row, _; CommonTypes.PrimaryKind.Type, t; CommonTypes.PrimaryKind.Row, _],
           TLcons (tl, TLcons (tf, TLnil)), ELcons (l, ELcons (f, ELnil)) ->
-            let acc = has_process acc in
+            let acc = has_process acc PL_MultiAngel in
             let Type t = convert_type t in
             let Type.Equal = assert_eq_typ tl TSpawnLocation "Invalid type of argument of spawnAngelAt" in
             let Type.Equal = assert_eq_typ tf (TClosed (Gnil, TLnil, t)) "Invalid type of argument of spawnAngelAt" in
@@ -913,7 +923,7 @@ end = struct
         | [], _, _ -> failwith "TODO spawnAt without TApp"
         | [CommonTypes.PrimaryKind.Row, _; CommonTypes.PrimaryKind.Type, t; CommonTypes.PrimaryKind.Row, _],
           TLcons (tl, TLcons (tf, TLnil)), ELcons (l, ELcons (f, ELnil)) ->
-            let acc = has_process acc in
+            let acc = has_process acc PL_MultiThread in
             let Type t = convert_type t in
             let Type.Equal = assert_eq_typ tl TSpawnLocation "Invalid type of argument of spawnAt" in
             let Type.Equal = assert_eq_typ tf (TClosed (Gnil, TLnil, t)) "Invalid type of argument of spawnAt" in
@@ -933,7 +943,7 @@ end = struct
         | [], _, _ -> failwith "TODO spawnWait without TApp"
         | [CommonTypes.PrimaryKind.Row, _; CommonTypes.PrimaryKind.Type, t; CommonTypes.PrimaryKind.Row, _],
           TLcons (tf, TLnil), ELcons (f, ELnil) ->
-            let acc = has_process acc in
+            let acc = has_process acc PL_SingleThread in
             let Type t = convert_type t in
             let Type.Equal = assert_eq_typ tf (TClosed (Gnil, TLnil, t)) "Invalid type of argument of spawnWait" in
             let env, acc, hereid = find_fbuiltin env acc add_builtin FBHere in
@@ -965,7 +975,7 @@ end = struct
   
   let get_var (env : t) (acc : 'a) (new_fun : 'a -> 'a * mfunid * 'b) (set_fun : 'a -> 'b -> anyfunc' -> 'a)
               (add_builtin : 'a -> anyfbuiltin -> 'a * mfunid)
-              (has_process : 'a -> 'a) (convert_type : Types.typ -> anytyp)
+              (has_process : 'a -> process_level -> 'a) (convert_type : Types.typ -> anytyp)
               (v : string) : (t * 'a * anyexpr) option =
     ignore (has_process, convert_type);
     match
@@ -1762,7 +1772,7 @@ end = struct
     ge_gblbinders : Utility.IntSet.t;
     ge_gblmap : anyvarid Env.Int.t;
     ge_fmap : anyfuncid Env.Int.t;
-    ge_has_processes : bool;
+    ge_process_level : process_level;
     ge_pmap : 'pi;
     ge_pmap_find : ('pi, 'pa) t -> 'pi -> var -> (('pi, 'pa) t * 'pi * 'pa) option;
     ge_pmap_acc : 'pa VarQueue.t; (* Changes in-place *)
@@ -1785,7 +1795,7 @@ end = struct
       ge_gblbinders = global_binders;
       ge_gblmap = Env.Int.empty;
       ge_fmap = Env.Int.empty;
-      ge_has_processes = false;
+      ge_process_level = PL_NoProcess;
       ge_pmap = prelude_init;
       ge_pmap_find = find_prelude;
       ge_pmap_acc = VarQueue.empty ();
@@ -1989,10 +1999,18 @@ end = struct
     | Some _ -> raise (internal_error "double assignment of function")
     | None -> hid := Some (LEnv.compile_handler args self_mid oabsconc onret ondo); env
   
-  let set_has_process (env : ('pi, 'pa) t) : ('pi, 'pa) t =
-    if not env.ge_has_processes then
-      { env with ge_has_processes = true }
-    else env
+  let max_pl (pl1 : process_level) (pl2 : process_level) : process_level = match pl1, pl2 with
+    | PL_MultiAngelWait, _ | _, PL_MultiAngelWait -> PL_MultiAngelWait
+    | PL_MultiAngel, (PL_SingleThread | PL_MultiWait) | (PL_SingleThread | PL_MultiWait), PL_MultiAngel -> PL_MultiAngelWait
+    | PL_MultiAngel, _ | _, PL_MultiAngel -> PL_MultiAngel
+    | PL_MultiWait, _ | _, PL_MultiWait -> PL_MultiWait
+    | PL_MultiThread, PL_SingleThread | PL_SingleThread, PL_MultiThread -> PL_MultiWait
+    | PL_MultiThread, _ | _, PL_MultiThread -> PL_MultiThread
+    | PL_SingleThread, _ | _, PL_SingleThread -> PL_SingleThread
+    | PL_MessageBox, _ | _, PL_MessageBox -> PL_MessageBox
+    | PL_NoProcess, PL_NoProcess -> PL_NoProcess
+  let set_has_process (env : ('pi, 'pa) t) (new_pl : process_level) : ('pi, 'pa) t =
+    { env with ge_process_level = max_pl env.ge_process_level new_pl }
   let add_builtin (env : ('pi, 'pa) t) (fb : anyfbuiltin) : ('pi, 'pa) t * mfunid =
     let i = env.ge_nfuns in
     let ge_funs = (Either.Right (Either.Right (Either.Right fb)), i) :: env.ge_funs in
@@ -2058,7 +2076,7 @@ end = struct
         mod_locals = lvs;
         mod_main = t;
         mod_block = (ass, e);
-        mod_has_processes = ge.ge_has_processes;
+        mod_process_level = ge.ge_process_level;
       }
 end
 type ('pi, 'pa) genv = ('pi, 'pa) GEnv.t
@@ -2706,8 +2724,16 @@ let module_of_ir (c : program) (map : string Env.Int.t) (prelude : binding list)
     let pp_finisher : type a b. _ -> (a, b) finisher -> _ = fun fmt -> function
       | FId t -> Format.fprintf fmt "(nothing : %a)" pp_typ t
       | FMap ((tv, v), _, b) -> Format.fprintf fmt "%lu: %a@ %a@\n" v pp_typ tv pp_block b in
+    let pp_process_level fmt pl = match pl with
+      | PL_NoProcess -> Format.fprintf fmt "none"
+      | PL_MessageBox -> Format.fprintf fmt "messages only"
+      | PL_SingleThread -> Format.fprintf fmt "spawnWait and messages only"
+      | PL_MultiThread -> Format.fprintf fmt "spawn only"
+      | PL_MultiWait -> Format.fprintf fmt "spawn and spawnWait only"
+      | PL_MultiAngel -> Format.fprintf fmt "spawnAngel but no spawnWait"
+      | PL_MultiAngelWait -> Format.fprintf fmt "full" in
     Format.printf
-      "%a@\nMain function: %a w/ %a =@\n%a@\nGlobals: %a (with global counter: %b)@."
+      "%a@\nMain function: %a w/ %a =@\n%a@\nGlobals: %a (with process level: %a)@."
       (Format.pp_print_list
         ~pp_sep:Format.pp_print_newline
         (fun fmt v -> match v with
@@ -2755,7 +2781,7 @@ let module_of_ir (c : program) (map : string Env.Int.t) (prelude : binding list)
         ~pp_sep:(fun fmt () -> Format.fprintf fmt "; ")
         (fun fmt (i, t, v) -> Format.fprintf fmt "%lu(%s): %a" i (Option.value ~default:"<not exported>" v) pp_anytyp t))
        ret.mod_global_vars
-    ret.mod_has_processes
+      pp_process_level ret.mod_process_level
   end;
   Module ret
 

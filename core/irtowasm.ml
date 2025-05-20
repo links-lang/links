@@ -33,7 +33,7 @@ open Wasmuir
 (* TODO: make it so that TTuple TLnil becomes nothing *)
 module TMap : sig
   type t
-  val empty : bool -> bool -> t
+  val empty : process_level -> bool -> t
   val main_func_type : int32
   val variant_tid : int32
   val list_tid : int32
@@ -74,11 +74,12 @@ module TMap : sig
 end = struct
   type t = {
     use_switch: bool;
+    process_level: process_level;
     mutable cenv: int32 TypeMap.t;
     mutable eenv: int32 TypeMap.t;
     mutable nrefs: int32;
     mutable reftyps: Wasm.Type.rec_type list;
-  }
+  } [@@warning "-69"] (* TODO: make use of the process_level field to remove unused tags *)
   
   let main_func_type : int32 = 0l
   let variant_tid : int32 = 1l
@@ -136,9 +137,18 @@ end = struct
     FieldT (Cons, ValStorageT (RefT (Null, VarHT pid_list_tid)));
   |])))
   
-  let empty (has_process : bool) (use_switch : bool) : t =
+  let empty (process_level : process_level) (use_switch : bool) : t =
     let reftyps =
-      if has_process then Wasm.Type.[
+      match process_level with
+      | PL_NoProcess -> Wasm.Type.[
+        (* 5 *) RecT [|SubT (Final, [||], DefStructT (StructT [|FieldT (Cons, ValStorageT (NumT F64T))|]))|];
+        (* 4 *) RecT [|SubT (Final, [||], DefStructT (StructT [|FieldT (Cons, ValStorageT (NumT I64T))|]))|];
+        (* 3 *) RecT [|string_typ|];
+        (* 2 *) RecT [|list_typ|];
+        (* 1 *) RecT [|variant_typ|];
+        (* 0 *) RecT [|SubT (Final, [||], DefFuncT (FuncT ([||], [||])))|];
+      ]
+      | _ -> Wasm.Type.[
         (* 14 *) RecT [|pid_list_typ|];
         (* 13 *) RecT [|process_list_typ|];
         (* 12 *) RecT [|pid_active_typ|];
@@ -153,16 +163,10 @@ end = struct
         (* 2 *) RecT [|list_typ|];
         (* 1 *) RecT [|variant_typ|];
         (* 0 *) RecT [|SubT (Final, [||], DefFuncT (FuncT ([||], [||])))|];
-      ] else Wasm.Type.[
-        (* 5 *) RecT [|SubT (Final, [||], DefStructT (StructT [|FieldT (Cons, ValStorageT (NumT F64T))|]))|];
-        (* 4 *) RecT [|SubT (Final, [||], DefStructT (StructT [|FieldT (Cons, ValStorageT (NumT I64T))|]))|];
-        (* 3 *) RecT [|string_typ|];
-        (* 2 *) RecT [|list_typ|];
-        (* 1 *) RecT [|variant_typ|];
-        (* 0 *) RecT [|SubT (Final, [||], DefFuncT (FuncT ([||], [||])))|];
       ] in
     {
       use_switch;
+      process_level;
       cenv = TypeMap.of_list [
         Type TString, string_tid;
         Type TVariant, variant_tid;
@@ -1866,7 +1870,7 @@ let wasm_yield_is_switch
               |> convert parse_bool
               |> sync)
 
-let generate_type_map (m : 'a modu) : tmap = TMap.empty m.mod_has_processes (Settings.get wasm_yield_is_switch)
+let generate_type_map (m : 'a modu) : tmap = TMap.empty m.mod_process_level (Settings.get wasm_yield_is_switch)
 
 type 'a printer_aux = {
   paux_putc : 'a;
@@ -2225,7 +2229,7 @@ let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (
   let code = nlist_of_list [GlobalGet gid; GlobalSet gid] in
   let code = convert_printer innerp code in
   let code = add_string (Types.string_of_datatype typ) (add_string " : " code) in
-  ReturnCall (Option.get paux.paux_putc) ^+ Const (I32 (I32.of_int_s (Char.code '\n'))) ^+ code
+  Call (Option.get paux.paux_putc) ^+ Const (I32 (I32.of_int_s (Char.code '\n'))) ^+ code
 
 let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
   let wasm_yield_is_switch = Settings.get wasm_yield_is_switch in
@@ -2240,8 +2244,12 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
     let neffects = m.mod_neffs in
     let nglob = Int32.succ m.mod_nglobals in
     NewMetadata.empty_global ~nimports:(Int32.of_int (Array.length imports)) ~nfuns ~neffects ~nglob in
-  let procinfo, mainid =
-    if m.mod_has_processes then begin
+  let procinfo, main_tid, generate_exit_code, mainid =
+    if m.mod_process_level = PL_NoProcess then None, TMap.main_func_type, Fun.id, m.mod_nfuns
+    else begin
+      let needs_angels = match m.mod_process_level with
+        | PL_NoProcess | PL_MessageBox | PL_SingleThread | PL_MultiThread | PL_MultiWait -> false
+        | PL_MultiAngel | PL_MultiAngelWait -> true in
       let open Wasm in let open Value in let open Type in let open Instruction in
       let self_eid = Int32.add (NewMetadata.effect_offset glob) TMap.self_offset in
       let self_ftid = TMap.recid_of_sub_type tm (SubT (Final, [||], DefFuncT (
@@ -2269,10 +2277,10 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
       let exit_ftid = TMap.recid_of_sub_type tm (SubT (Final, [||], DefFuncT (FuncT ([|RefT (Null, EqHT)|], [|RefT (Null, EqHT)|])))) in
       let exit_ctid = TMap.recid_of_sub_type tm (SubT (Final, [||], DefContT (ContT (VarHT exit_ftid)))) in
       let procinfo_vid = NewMetadata.add_global tm glob None TInt [|Const (I64 (I64.of_bits Int64.zero))|] in
-      let angels_vid = NewMetadata.add_raw_global glob (
+      let angels_vid = if needs_angels then NewMetadata.add_raw_global glob (
         (GlobalT (Var, RefT (Null, VarHT TMap.pid_list_tid))),
         [|RefNull (VarHT TMap.pid_list_tid)|],
-        None) in
+        None) else 0l in
       let select_next_process, _all_set, _all_get, all_tee, cache_set, cache_get, _cache_tee, nlocals =
         let do_select = fun vbt (_all_set, all_get) (cache_set, cache_get, cache_tee) on_selected on_selected_if ->
           (* Load the next active process
@@ -2449,15 +2457,11 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
         else do_check_yield in
       let procinfo = Some (angels_vid, check_yield_fun, do_yield_fun, oadd_loc, do_update) in
       (* Wrap the main function *)
-      let aux_mainref, aux_mainid = NewMetadata.add_function glob in
-      NewMetadata.add_export_function glob aux_mainid;
-      aux_mainref := Some {
-        fn_name = None;
-        fn_type = TMap.process_active_ftid;
-        fn_locals = [||];
-        fn_code = let angel_list = procinfo_angels_vid procinfo in Instruction.[|
-          (* Run main *)
-          Call (Int32.add (NewMetadata.fun_offset glob) m.mod_nfuns);
+      NewMetadata.add_export_function glob m.mod_nfuns;
+      let generate_exit_code =
+        if needs_angels then
+          let angel_list = procinfo_angels_vid procinfo in fun trf ->
+          Suspend exit_eid ^+
           (* Wait until all angels are done *)
           Block (ValBlockType None, [|
             Loop (ValBlockType None, [|
@@ -2479,10 +2483,8 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
               Drop;
               Br 0l; (* Wait for the next angel *)
             |]);
-          |]);
-          Suspend exit_eid;
-        |];
-      };
+          |]) ^+ trf
+        else fun trf -> Suspend exit_eid ^+ trf in
       let initref, mainid = NewMetadata.add_function glob in
       let locals, loc2off = if wasm_yield_is_switch then [|
           NumT I32T;                                     (*         0: next pid *)
@@ -2707,7 +2709,7 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
           StructNew (TMap.process_list_tid, Explicit);
           RefNull (VarHT TMap.process_list_tid); (* Next processes *)
           ContNew TMap.process_active_tid;
-          RefFunc (Int32.add (NewMetadata.fun_offset glob) aux_mainid); (* Wrapper function *)
+          RefFunc (Int32.add (NewMetadata.fun_offset glob) m.mod_nfuns); (* Wrapper function *)
           StructNew (TMap.pid_tid, Explicit);
           StructNew (TMap.pid_active_tid, Explicit);
           RefNull (VarHT TMap.waiting_list_tid); (* Processes waiting on main *)
@@ -2721,13 +2723,14 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
           (* Next PID *)
         ];
       };
-      procinfo, mainid
-    end else None, m.mod_nfuns in
+      procinfo, TMap.process_active_ftid, generate_exit_code, mainid
+    end in
   let glob, main =
     let new_meta = NewMetadata.extend glob 0l (List.map (fun (Type t) -> TMap.val_of_type tm t) m.mod_locals) in
     let main_code = generate_printer tm glob main_typ paux m.mod_nglobals m.mod_tags in
+    let main_code = generate_exit_code main_code in
     let is_init = (Option.is_none procinfo, main_code) in
-    let _, main = convert_fun_aux tm new_meta procinfo TMap.main_func_type m.mod_block (Either.Left is_init) None in
+    let _, main = convert_fun_aux tm new_meta procinfo main_tid m.mod_block (Either.Left is_init) None in
     glob, main in
   let funs = convert_funs tm glob procinfo m.mod_funs (fun glob -> main :: NewMetadata.wasm_funs glob) in
   let globals = NewMetadata.wasm_globals glob in
