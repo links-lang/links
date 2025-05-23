@@ -461,7 +461,7 @@ end = struct
   
   (* Warning: not the same ABI (the closure content is not wrapped again) *)
   (* TODO: add caching *)
-  let rec add_unspecialization : type a b c d. tmap -> t -> a typ_list -> b typ -> (a, c) box_list -> (b, d) box -> c typ_list * d typ * int32 =
+  let add_unspecialization : type a b c d. tmap -> t -> a typ_list -> b typ -> (a, c) box_list -> (b, d) box -> c typ_list * d typ * int32 =
     fun tm genv targs tret bargs bret ->
     let fref, fid = add_function genv in
     let clvid, fargs =
@@ -518,7 +518,7 @@ end = struct
   
   (* Warning: not the same ABI (the closure content is not wrapped again) *)
   (* TODO: add caching *)
-  and add_specialization : type a b c d. tmap -> t -> a typ_list -> b typ -> (a, c) box_list -> (b, d) box -> int32 =
+  let add_specialization : type a b c d. tmap -> t -> a typ_list -> b typ -> (a, c) box_list -> (b, d) box -> int32 =
     fun tm genv targs tret bargs bret ->
     let fref, fid = add_function genv in
     let ftid = TMap.recid_of_functyp tm targs tret in
@@ -1411,7 +1411,7 @@ let convert_finisher : type a b. _ -> _ -> _ -> (a, b) finisher -> _ =
       let b = convert_block tm lenv procinfo b BNone is_last cinfo in
       b (nlist_of_list Wasm.Instruction.[LocalSet v])
 
-let convert_hdl (tm : tmap) (genv : GEnv.t) (procinfo : procinfo) (type a b c) (f : (a, c, b) fhandler) : Wasm.fundef =
+let convert_hdl (tm : tmap) (genv : genv) (procinfo : procinfo) (type a b c) (f : (a, c, b) fhandler) : Wasm.fundef =
   let tis = f.fh_tis in
   let nargs =
     let rec inner : type a. a typ_list -> int32 -> int32 = fun ts n -> match ts with TLnil -> n | TLcons (_, ts) -> inner ts (Int32.succ n) in
@@ -1486,7 +1486,7 @@ let convert_hdl (tm : tmap) (genv : GEnv.t) (procinfo : procinfo) (type a b c) (
       LocalGet contcl; LocalGet contidx; Loop (Wasm.Type.VarBlockType finalblk, convert_nlist code)]));
   }
 
-let convert_builtin (tm : tmap) (genv : GEnv.t) (procinfo : procinfo) (_fid : mfunid)
+let convert_builtin (tm : tmap) (genv : genv) (procinfo : procinfo) (_fid : mfunid)
                     (type g a b) (fb : (g, a, b) fbuiltin) : Wasm.fundef = match fb with
   | FBHere ->
     let fun_typ = TMap.recid_of_functyp tm TLnil TSpawnLocation in
@@ -1772,7 +1772,7 @@ let convert_fun_aux (tm : tmap) (lenv : lenv) (procinfo : procinfo) (ft : int32)
       | Either.Right _ -> convert_nlist code);
   }
 
-let convert_fun (tm : tmap) (genv : GEnv.t) (procinfo : procinfo) (f : ('a, 'b) func') : int32 option * Wasm.fundef =
+let convert_fun (tm : tmap) (genv : genv) (procinfo : procinfo) (f : ('a, 'b) func') : int32 option * Wasm.fundef =
   let fun_typ = TMap.recid_of_functyp tm f.fun_args f.fun_ret in
   let nparams =
     let rec inner : type a. a typ_list -> _ = fun tl acc -> match tl with
@@ -1783,13 +1783,13 @@ let convert_fun (tm : tmap) (genv : GEnv.t) (procinfo : procinfo) (f : ('a, 'b) 
   convert_fun_aux
     tm lenv procinfo fun_typ f.fun_block
     (Either.Right (f.fun_id, f.fun_ret)) f.fun_converted_closure
-let convert_fst (tm : tmap) (genv : GEnv.t) (procinfo : procinfo) (f : 'b fstart) : int32 option * Wasm.fundef =
+let convert_fst (tm : tmap) (genv : genv) (procinfo : procinfo) (f : 'b fstart) : int32 option * Wasm.fundef =
   let fun_typ = TMap.recid_of_cfunctyp tm f.fst_ret in
   let lenv = LEnv.extend genv 1l (List.map (fun (Type t) -> TMap.val_of_type tm t) f.fst_locals) in
   convert_fun_aux
     tm lenv procinfo fun_typ f.fst_block
     (Either.Right (f.fst_id, f.fst_ret)) f.fst_converted_closure
-let convert_fun_step2 (tm : tmap) (genv : GEnv.t) (f, clostyp : func * int32 option) : Wasm.fundef option = match f with
+let convert_fun_step2 (tm : tmap) (genv : genv) (f, clostyp : func * int32 option) : Wasm.fundef option = match f with
   | FContinuationStart _ | FHandler _ | FBuiltin _ -> None
   | FFunction f ->
   match f.fun_export_data with
@@ -1811,8 +1811,8 @@ let convert_fun_step2 (tm : tmap) (genv : GEnv.t) (f, clostyp : func * int32 opt
             | TLcons (_, ls) -> inner (Int32.succ i) (LocalGet i ^+ acc) ls
           in inner 0l empty_nlist f.fun_args);
       }
-let convert_funs (tm : tmap) (genv : GEnv.t) (procinfo : procinfo)
-                 (fs : func list) (is : GEnv.t -> Wasm.fundef list) : Wasm.fundef list =
+let convert_funs (tm : tmap) (genv : genv) (procinfo : procinfo)
+                 (fs : func list) (is : genv -> Wasm.fundef list) : Wasm.fundef list =
   let [@tail_mod_cons] rec inner genv fs acc = match fs with
     | [] -> is genv @ List.filter_map (convert_fun_step2 tm genv) acc
     | hd :: tl ->
@@ -1969,7 +1969,7 @@ let prepare_imports (tm : tmap) (typ : Types.datatype) : Wasm.import array * int
     imports_ret.(nimports - 1 - i) <- { module_name = mn; item_name = fn; desc = FuncImport tid } in
   List.iteri convert_import imports;
   imports_ret, Some paux
-let generate_printer (tm : tmap) (genv : GEnv.t) (typ : Types.datatype) (paux : int32 option printer_aux option) (gid : int32)
+let generate_printer (tm : tmap) (genv : genv) (typ : Types.datatype) (paux : int32 option printer_aux option) (gid : int32)
     (tags : tagid Env.String.t) : Wasm.instr nlist =
   let open Wasm in let open Type in let open Value in let open Instruction in
   match paux with None -> nlist_of_list [GlobalSet gid] | Some paux ->
