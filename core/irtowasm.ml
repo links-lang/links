@@ -313,6 +313,7 @@ end = struct
   let wait_offset (env : t) : int32 = if env.use_switch then 2l else 3l
   let exit_offset (env : t) : int32 = if env.use_switch then 3l else 4l
   let sched_effects (env : t) : int32 list = let open Wasm.Type in
+    if env.process_level = PL_NoProcess then [] else
     let spawn_tid = recid_of_sub_type env (SubT (Final, [||], DefFuncT (FuncT (
         [|RefT (NoNull, VarHT (recid_of_type env (TClosed (TLnil, TVar))))|],
         (if env.use_switch then [|RefT (NoNull, VarHT pid_tid); RefT (Null, VarHT process_active_tid)|] else [|RefT (NoNull, VarHT pid_tid)|])
@@ -367,47 +368,32 @@ let (@+) ((nl, ll) : 'a nlist) ((nr, lr) : 'a nlist) : 'a nlist = (nl + nr, ll @
 type instr_builder = Wasm.instr nlist
 type instr_conv = instr_builder -> instr_builder
 
-module NewMetadata : sig
-  type g
+module rec GEnv : sig
   type t
   
-  val g_of_t : t -> g
+  val fun_offset : t -> int32
+  val effect_offset : t -> int32
   
-  val fun_offset : g -> int32
-  val effect_offset : g -> int32
+  val empty_global : nimports:int32 -> nfuns:int32 -> neffects:int32 -> nglob:int32 -> t
+  val wasm_funs : t -> Wasm.fundef list
+  val wasm_globals : t -> Wasm.global list
+  val wasm_elems : t -> Wasm.elem_segment list
   
-  val empty_global : nimports:int32 -> nfuns:int32 -> neffects:int32 -> nglob:int32 -> g
-  val wasm_funs : g -> Wasm.fundef list
-  val wasm_globals : g -> Wasm.global list
-  val wasm_elems : g -> Wasm.elem_segment list
+  val find_list_concat : tmap -> t -> int32
+  val find_eq_fun : tmap -> t -> 'a typ -> int32
   
-  val extend : g -> int32 -> Wasm.Type.val_type list -> t
-  val wasm_locals : tmap -> t -> Wasm.Type.val_type array
+  val add_function : t -> Wasm.fundef option ref * int32
+  val add_export_function : t -> int32 -> unit
   
-  val find_list_concat : tmap -> g -> int32
-  val find_eq_fun : tmap -> g -> 'a typ -> int32
+  val add_global : tmap -> t -> string option -> 'a typ -> Wasm.instrs -> int32
+  val add_raw_global : t -> Wasm.global -> int32
   
-  val add_function : g -> Wasm.fundef option ref * int32
-  val add_export_function : g -> int32 -> unit
-  
-  val mark_recursive : t -> unit
-  val is_recursive : t -> bool
-  
-  val add_local : tmap -> t -> 'a typ -> int32
-  
-  val add_global : tmap -> g -> string option -> 'a typ -> Wasm.instrs -> int32
-  val add_raw_global : g -> Wasm.global -> int32
-  
-  val [@warning "-32"] add_specialization : tmap -> g -> 'a typ_list -> 'b typ -> ('a, 'c) box_list -> ('b, 'd) box -> int32
-  val [@warning "-32"] add_unspecialization : tmap -> g -> 'a typ_list -> 'b typ -> ('a, 'c) box_list -> ('b, 'd) box -> 'c typ_list * 'd typ * int32
-  val maybe_do_box : tmap -> t -> ('a, 'b) box -> instr_conv -> (instr_conv, ('a, 'b) Type.eq) Either.t
-  val do_box : tmap -> 'a typ -> instr_conv -> (instr_conv, ('a, unit) Type.eq) Either.t
-  val maybe_do_unbox : tmap -> t -> ('a, 'b) box -> instr_conv -> (instr_conv, ('a, 'b) Type.eq) Either.t
-  val do_unbox : tmap -> 'a typ -> instr_conv -> (instr_conv, ('a, unit) Type.eq) Either.t
+  val [@warning "-32"] add_specialization : tmap -> t -> 'a typ_list -> 'b typ -> ('a, 'c) box_list -> ('b, 'd) box -> int32
+  val [@warning "-32"] add_unspecialization : tmap -> t -> 'a typ_list -> 'b typ -> ('a, 'c) box_list -> ('b, 'd) box -> 'c typ_list * 'd typ * int32
 end = struct
   module Int32Map = Map.Make(Int32)
   
-  type g = {
+  type t = {
     nimports: int32;
     mutable nfuns: int32;
     mutable funs: Wasm.fundef option ref list;
@@ -418,14 +404,11 @@ end = struct
     mutable gbls: Wasm.global list;
     neffects: int32;
   }
-  type t = g * (Wasm.Type.val_type list * int32) ref * bool ref
   
-  let g_of_t (glob, _, _ : t) : g = glob
+  let fun_offset ({ nimports; _ } : t) : int32 = nimports
+  let effect_offset ({ neffects; _ } : t) : int32 = neffects
   
-  let fun_offset ({ nimports; _ } : g) : int32 = nimports
-  let effect_offset ({ neffects; _ } : g) : int32 = neffects
-  
-  let empty_global ~(nimports : int32) ~(nfuns : int32) ~(neffects : int32) ~(nglob : int32) : g = {
+  let empty_global ~(nimports : int32) ~(nfuns : int32) ~(neffects : int32) ~(nglob : int32) : t = {
     nimports;
     nfuns;
     funs = [];
@@ -437,13 +420,13 @@ end = struct
     neffects;
   }
   
-  let wasm_funs ({ funs; _ } : g) : Wasm.fundef list =
+  let wasm_funs ({ funs; _ } : t) : Wasm.fundef list =
     List.rev_map
       (function {contents = Some f} -> f | {contents = None} -> raise (internal_error "Function was not assigned"))
       funs
-  let wasm_globals ({ gbls; _ } : g) : Wasm.global list =
+  let wasm_globals ({ gbls; _ } : t) : Wasm.global list =
     List.rev gbls
-  let wasm_elems ({ nimports; exps; _ } : g) : Wasm.elem_segment list =
+  let wasm_elems ({ nimports; exps; _ } : t) : Wasm.elem_segment list =
     let felems =
       if Int32Map.is_empty exps then [] else [Wasm.{
         es_type = Type.(NoNull, FuncHT);
@@ -459,46 +442,28 @@ end = struct
       ] in
     felems
   
-  let extend (glob : g) (nparams : int32) (base : Wasm.Type.val_type list) : t =
-    let rec inner glob base acc n : t = match base with
-      | [] -> glob, ref (acc, n), ref false
-      | hd :: tl -> inner glob tl (hd :: acc) (Int32.succ n)
-    in inner glob base [] nparams
-  let wasm_locals (_ : tmap) (_, { contents = (l, _) }, _ : t) : Wasm.Type.val_type array =
-    Array.of_list (List.rev l)
-  
-  let add_function (glob : g) : Wasm.fundef option ref * int32 =
+  let add_function (genv : t) : Wasm.fundef option ref * int32 =
     let fref = ref None in
-    let fid = glob.nfuns in
-    glob.nfuns <- Int32.succ fid;
-    glob.funs <- fref :: glob.funs;
+    let fid = genv.nfuns in
+    genv.nfuns <- Int32.succ fid;
+    genv.funs <- fref :: genv.funs;
     fref, fid
   
-  let add_export_function (glob : g) (fid : int32) : unit = glob.exps <- Int32Map.add fid true glob.exps
+  let add_export_function (genv : t) (fid : int32) : unit = genv.exps <- Int32Map.add fid true genv.exps
   
-  let mark_recursive (_, _, recursive : t) : unit = recursive := true
-  let is_recursive (_, _, recursive : t) : bool = !recursive
-  
-  let add_raw_local (_, new_meta, _ : t) (t : Wasm.Type.val_type) : int32 =
-    let loc, i = !new_meta in
-    new_meta := t :: loc, Int32.succ i;
+  let add_raw_global (genv : t) (g : Wasm.global) : int32 =
+    let i = genv.nglob in
+    genv.gbls <- g :: genv.gbls;
+    genv.nglob <- Int32.succ i;
     i
-  let add_local (tm : tmap) (new_meta : t) (t : 'a typ) : int32 =
-    add_raw_local new_meta (TMap.val_of_type tm t)
-  
-  let add_raw_global (glob : g) (g : Wasm.global) : int32 =
-    let i = glob.nglob in
-    glob.gbls <- g :: glob.gbls;
-    glob.nglob <- Int32.succ i;
-    i
-  let add_global (tm : tmap) (glob : g) (oname : string option) (t : 'a typ) (init : Wasm.instrs) : int32 =
-    add_raw_global glob (Wasm.Type.(GlobalT (Var, TMap.val_of_type tm t)), init, oname)
+  let add_global (tm : tmap) (genv : t) (oname : string option) (t : 'a typ) (init : Wasm.instrs) : int32 =
+    add_raw_global genv (Wasm.Type.(GlobalT (Var, TMap.val_of_type tm t)), init, oname)
   
   (* Warning: not the same ABI (the closure content is not wrapped again) *)
   (* TODO: add caching *)
-  let rec add_unspecialization : type a b c d. tmap -> g -> a typ_list -> b typ -> (a, c) box_list -> (b, d) box -> c typ_list * d typ * int32 =
-    fun tm glob targs tret bargs bret ->
-    let fref, fid = add_function glob in
+  let rec add_unspecialization : type a b c d. tmap -> t -> a typ_list -> b typ -> (a, c) box_list -> (b, d) box -> c typ_list * d typ * int32 =
+    fun tm genv targs tret bargs bret ->
+    let fref, fid = add_function genv in
     let clvid, fargs =
       let rec inner : type a b. a typ_list -> (a, b) box_list -> int32 * b typ_list = fun targs bargs -> match targs, bargs with
         | TLnil, BLnone -> 0l, TLnil
@@ -511,12 +476,12 @@ end = struct
       inner targs bargs in
     let fret = dst_of_box tret bret in
     let ftid = TMap.recid_of_functyp tm fargs fret in
-    glob.exps <- Int32Map.add fid false glob.exps;
+    genv.exps <- Int32Map.add fid false genv.exps;
     (* TODO: optimize the next two lines (caching is possible) *)
     let inner_ftid = TMap.recid_of_type tm (TClosed (targs, tret)) in
     let inner_fid = TMap.recid_of_functyp tm targs tret in
     let inner_fval = Wasm.Type.(RefT (NoNull, VarHT inner_ftid)) in
-    let new_meta = extend glob (Int32.succ clvid) [inner_fval] in
+    let lenv = LEnv.extend genv (Int32.succ clvid) [inner_fval] in
     let conv_closure = nlist_of_list Wasm.Instruction.[
       LocalSet (Int32.succ clvid);
       RefCast Wasm.Type.(NoNull, VarHT inner_ftid);
@@ -529,7 +494,7 @@ end = struct
         | TLnil, _ -> acc
         | TLcons (_, ttl), BLnone -> inner ttl BLnone (Int32.succ i) (LocalGet i ^+ acc)
         | TLcons (_, ttl), BLcons (bhd, btl) ->
-          let arg = match maybe_do_unbox tm new_meta bhd (fun acc -> LocalGet i ^+ acc) with
+          let arg = match LEnv.maybe_do_unbox tm lenv bhd (fun acc -> LocalGet i ^+ acc) with
             | Either.Right Type.Equal -> LocalGet i ^+ acc
             | Either.Left arg -> arg acc
           in inner ttl btl (Int32.succ i) arg in
@@ -540,50 +505,24 @@ end = struct
           StructGet (inner_ftid, 0l, None) ^+ LocalGet (Int32.succ clvid) ^+
           StructGet (inner_ftid, 1l, None) ^+ LocalGet (Int32.succ clvid) ^+
           load_args @+ acc) in
-      match maybe_do_box tm new_meta bret do_call with
+      match LEnv.maybe_do_box tm lenv bret do_call with
       | Either.Right Type.Equal -> do_call empty_nlist
       | Either.Left conv -> conv empty_nlist in
     fref := Some Wasm.{
       fn_name = None;
       fn_type = ftid;
-      fn_locals = wasm_locals tm new_meta;
+      fn_locals = LEnv.wasm_locals tm lenv;
       fn_code = convert_nlist do_unbox;
     };
     fargs, fret, fid
   
-  (* get_val is affine and only called on the accumulator *)
-  and do_box : type a. tmap -> a typ -> instr_conv -> (instr_conv, (a, unit) Type.eq) Either.t =
-    fun _tm box get_val ->
-    let open Wasm.Instruction in match box with
-    | TVar -> Either.Right Type.Equal
-    | TInt -> Either.Left (fun acc -> StructNew (TMap.boxed_int_tid, Explicit) ^+ get_val acc)
-    | TBool -> Either.Left (fun acc -> RefI31 ^+ get_val acc)
-    | TFloat -> Either.Left (fun acc -> StructNew (TMap.boxed_float_tid, Explicit) ^+ get_val acc)
-    | _ -> Either.Left (get_val)
-  (* get_val is affine *)
-  and maybe_do_box : type a b. tmap -> t -> (a, b) box -> instr_conv -> (instr_conv, (a, b) Type.eq) Either.t =
-    fun tm new_meta box get_val ->
-    let open Wasm.Instruction in match box with
-    | BNone -> Either.Right Type.Equal
-    | BClosed (_, BLnone, BNone) -> Either.Right Type.Equal
-    | BClosed (_, BLnil, BNone) -> Either.Right Type.Equal
-    | BClosed (_, BLcons (BNone, BLnil), BNone) -> Either.Right Type.Equal
-    | BClosed (TClosed (targs, tret), bargs, bret) ->
-        let targs, tret, convfid = add_unspecialization tm (g_of_t new_meta) targs tret bargs bret in
-        add_export_function (g_of_t new_meta) convfid;
-        let new_ctid = TMap.recid_of_type tm (TClosed (targs, tret)) in
-        Either.Left (fun acc -> StructNew (new_ctid, Explicit) ^+ get_val (RefFunc (Int32.add (fun_offset (g_of_t new_meta)) convfid) ^+ acc))
-    | BCont _ -> failwith "TODO maybe_do_box BCont"
-    | BTuple _ -> Either.Left get_val (* Tuples always have their values boxed *)
-    | BBox t -> do_box tm t get_val
-  
   (* Warning: not the same ABI (the closure content is not wrapped again) *)
   (* TODO: add caching *)
-  and add_specialization : type a b c d. tmap -> g -> a typ_list -> b typ -> (a, c) box_list -> (b, d) box -> int32 =
-    fun tm glob targs tret bargs bret ->
-    let fref, fid = add_function glob in
+  and add_specialization : type a b c d. tmap -> t -> a typ_list -> b typ -> (a, c) box_list -> (b, d) box -> int32 =
+    fun tm genv targs tret bargs bret ->
+    let fref, fid = add_function genv in
     let ftid = TMap.recid_of_functyp tm targs tret in
-    glob.exps <- Int32Map.add fid false glob.exps;
+    genv.exps <- Int32Map.add fid false genv.exps;
     let clvid, fargs =
       let rec inner : type a b. a typ_list -> (a, b) box_list -> int32 * b typ_list = fun targs bargs -> match targs, bargs with
         | TLnil, BLnone -> 0l, TLnil
@@ -599,7 +538,7 @@ end = struct
     let inner_ftid = TMap.recid_of_type tm (TClosed (fargs, fret)) in
     let inner_fid = TMap.recid_of_functyp tm fargs fret in
     let inner_fval = Wasm.Type.(RefT (NoNull, VarHT inner_ftid)) in
-    let new_meta = extend glob (Int32.succ clvid) [inner_fval] in
+    let lenv = LEnv.extend genv (Int32.succ clvid) [inner_fval] in
     let conv_closure = nlist_of_list Wasm.Instruction.[
       LocalSet (Int32.succ clvid);
       RefCast Wasm.Type.(NoNull, VarHT inner_ftid);
@@ -612,7 +551,7 @@ end = struct
         | TLnil, _ -> acc
         | TLcons (_, ttl), BLnone -> inner ttl BLnone (Int32.succ i) (LocalGet i ^+ acc)
         | TLcons (_, ttl), BLcons (bhd, btl) ->
-          let arg = match maybe_do_box tm new_meta bhd (fun acc -> LocalGet i ^+ acc) with
+          let arg = match LEnv.maybe_do_box tm lenv bhd (fun acc -> LocalGet i ^+ acc) with
             | Either.Right Type.Equal -> LocalGet i ^+ acc
             | Either.Left arg -> arg acc
           in inner ttl btl (Int32.succ i) arg in
@@ -623,76 +562,21 @@ end = struct
         StructGet (inner_ftid, 0l, None) ^+ LocalGet (Int32.succ clvid) ^+
         StructGet (inner_ftid, 1l, None) ^+ LocalGet (Int32.succ clvid) ^+
         load_args @+ acc) in
-      match maybe_do_unbox tm new_meta bret do_call with
+      match LEnv.maybe_do_unbox tm lenv bret do_call with
       | Either.Right Type.Equal -> do_call empty_nlist
       | Either.Left conv -> conv empty_nlist in
     fref := Some Wasm.{
       fn_name = None;
       fn_type = ftid;
-      fn_locals = wasm_locals tm new_meta;
+      fn_locals = LEnv.wasm_locals tm lenv;
       fn_code = convert_nlist do_unbox;
     };
     fid
   
-  (* get_val is affine and only called on the accumulator *)
-  and do_unbox : type a. tmap -> a typ -> instr_conv -> (instr_conv, (a, unit) Type.eq) Either.t =
-    fun tm box get_val ->
-    let open Wasm.Instruction in match box with
-    | TVar -> Either.Right Type.Equal
-    | TInt -> Either.Left (fun acc ->
-        StructGet (TMap.boxed_int_tid, 0l, None) ^+ RefCast Wasm.Type.(NoNull, VarHT TMap.boxed_int_tid) ^+ get_val acc)
-    | TBool -> Either.Left (fun acc -> I31Get Wasm.Pack.ZX ^+ RefCast Wasm.Type.(NoNull, I31HT) ^+ get_val acc)
-    | TFloat -> Either.Left (fun acc ->
-        StructGet (TMap.boxed_float_tid, 0l, None) ^+ RefCast Wasm.Type.(NoNull, VarHT TMap.boxed_float_tid) ^+ get_val acc)
-    | (TTuple 0) -> Either.Left (fun acc -> RefNull Wasm.Type.NoneHT ^+ Drop ^+ get_val acc)
-        (* fun acc -> RefCast Wasm.Type.(Null, NoneHT) ^+ get_val acc) *)
-    | TList _ -> Either.Left (fun acc -> RefCast Wasm.Type.(Null, VarHT TMap.list_tid) ^+ get_val acc)
-    | t -> let tid = TMap.recid_of_type tm t in Either.Left (fun acc -> RefCast Wasm.Type.(NoNull, VarHT tid) ^+ get_val acc)
-  (* get_val is affine *)
-  and maybe_do_unbox : type a b. tmap -> t -> (a, b) box -> instr_conv -> (instr_conv, (a, b) Type.eq) Either.t =
-    fun tm new_meta box get_val ->
-    let open Wasm.Instruction in match box with
-    | BNone -> Either.Right Type.Equal
-    | BClosed (TClosed (targs, tret) as tsrc, bargs, bret) ->
-        let canon_box : type a b. (a, b) box -> ((a, b) box, (a, b) Type.eq) Either.t = function
-          | BNone -> Either.Right Type.Equal
-          | BBox TVar -> Either.Right Type.Equal
-          | b -> Either.Left b in
-        let rec canon_box_list : type a b. (a, b) box_list -> ((a, b) box_list, (a, b) Type.eq) Either.t = function
-          | BLnone -> Either.Right Type.Equal
-          | BLnil -> Either.Right Type.Equal
-          | BLcons (bhd, btl) -> begin match canon_box bhd, canon_box_list btl with
-              | Either.Left bhd, Either.Left btl -> Either.Left (BLcons (bhd, btl))
-              | Either.Left bhd, Either.Right Type.Equal -> Either.Left (BLcons (bhd, BLnone))
-              | Either.Right Type.Equal, Either.Left btl -> Either.Left (BLcons (BNone, btl))
-              | Either.Right Type.Equal, Either.Right Type.Equal -> Either.Right Type.Equal
-            end in
-        begin match canon_box_list bargs, canon_box bret with
-        | Either.Right Type.Equal, Either.Right Type.Equal -> Either.Right Type.Equal
-        | Either.Left bargs, Either.Right Type.Equal ->
-            let convfid = add_specialization tm (g_of_t new_meta) targs tret bargs BNone in
-            add_export_function (g_of_t new_meta) convfid;
-            let new_ctid = TMap.recid_of_type tm tsrc in
-            Either.Left (fun acc -> StructNew (new_ctid, Explicit) ^+ get_val (RefFunc (Int32.add (fun_offset (g_of_t new_meta)) convfid) ^+ acc))
-        | Either.Right Type.Equal, Either.Left bret ->
-            let convfid = add_specialization tm (g_of_t new_meta) targs tret BLnone bret in
-            add_export_function (g_of_t new_meta) convfid;
-            let new_ctid = TMap.recid_of_type tm tsrc in
-            Either.Left (fun acc -> StructNew (new_ctid, Explicit) ^+ get_val (RefFunc (Int32.add (fun_offset (g_of_t new_meta)) convfid) ^+ acc))
-        | Either.Left bargs, Either.Left bret ->
-            let convfid = add_specialization tm (g_of_t new_meta) targs tret bargs bret in
-            add_export_function (g_of_t new_meta) convfid;
-            let new_ctid = TMap.recid_of_type tm tsrc in
-            Either.Left (fun acc -> StructNew (new_ctid, Explicit) ^+ get_val (RefFunc (Int32.add (fun_offset (g_of_t new_meta)) convfid) ^+ acc))
-      end
-    | BCont _ -> failwith "TODO maybe_do_unbox BCont"
-    | BTuple _ -> Either.Left get_val (* Tuples always have their values boxed *)
-    | BBox t -> do_unbox tm t get_val
-  
-  let find_list_concat (tm : tmap) (glob : g) : int32 = match glob.list_concat with
+  let find_list_concat (tm : tmap) (genv : t) : int32 = match genv.list_concat with
     | Some i -> i
     | None ->
-        let fid = glob.nfuns in
+        let fid = genv.nfuns in
         let ftid = TMap.recid_of_exported_type tm (TLcons (TList TVar, TLcons (TList TVar, TLnil))) (TList TVar) in
         let f = Wasm.{
           fn_name = None; fn_type = ftid; fn_locals = [||]; fn_code = Instruction.[|
@@ -704,25 +588,25 @@ end = struct
               RefAsNonNull;
               StructGet (TMap.list_tid, 1l, None);
               LocalGet 1l;
-              Call (Int32.add (fun_offset glob) fid);
+              Call (Int32.add (fun_offset genv) fid);
               StructNew (TMap.list_tid, Explicit);
               Return;
             |]);
             LocalGet 1l;
           |]
         } in
-        glob.nfuns <- Int32.succ fid;
-        glob.funs <- ref (Some f) :: glob.funs;
-        glob.list_concat <- Some fid;
+        genv.nfuns <- Int32.succ fid;
+        genv.funs <- ref (Some f) :: genv.funs;
+        genv.list_concat <- Some fid;
         fid
   
-  let rec find_eq_fun : type a. tmap -> g -> a typ -> int32 = fun tm glob t ->
-    match TypeMap.find_opt (Type t) glob.eqfuns with
+  let rec find_eq_fun : type a. tmap -> t -> a typ -> int32 = fun tm genv t ->
+    match TypeMap.find_opt (Type t) genv.eqfuns with
     | Some i -> i
     | None ->
-        let fref, funid = add_function glob in
-        let eqfuns = TypeMap.add (Type t) funid glob.eqfuns in
-        glob.eqfuns <- eqfuns;
+        let fref, funid = add_function genv in
+        let eqfuns = TypeMap.add (Type t) funid genv.eqfuns in
+        genv.eqfuns <- eqfuns;
         let ft = TMap.recid_of_exported_type tm (TLcons (t, TLcons (t, TLnil))) TBool in
         let () = match t with
           | TTuple 0 ->
@@ -754,17 +638,17 @@ end = struct
                 fn_code = Instruction.[|LocalGet 0l; LocalGet 1l; Relop (Value.F64 FloatOp.Eq)|];
               }
           | TList t ->
-              let recid = find_eq_fun tm glob t in
-              let new_meta = extend glob 3l Wasm.Type.[RefT (NoNull, VarHT TMap.list_tid); RefT (NoNull, VarHT TMap.list_tid)] in
+              let recid = find_eq_fun tm genv t in
+              let lenv = LEnv.extend genv 3l Wasm.Type.[RefT (NoNull, VarHT TMap.list_tid); RefT (NoNull, VarHT TMap.list_tid)] in
               let unbox i =
                 let get_val = Wasm.Instruction.(fun acc -> StructGet (TMap.list_tid, 0l, None) ^+ LocalGet i ^+ acc) in
-                match do_unbox tm t get_val with
+                match LEnv.do_unbox tm t get_val with
                 | Either.Left v -> v
                 | Either.Right Type.Equal -> get_val in
               fref := Some Wasm.{
                 fn_type = ft;
                 fn_name = None;
-                fn_locals = wasm_locals tm new_meta;
+                fn_locals = LEnv.wasm_locals tm lenv;
                 fn_code = Type.(Value.(Instruction.[|
                   Block (ValBlockType None, [|
                     Block (ValBlockType None, convert_nlist (
@@ -773,12 +657,12 @@ end = struct
                         StructGet (TMap.list_tid, 1l, None);
                         LocalGet 3l;
                         StructGet (TMap.list_tid, 1l, None);
-                        ReturnCall (Int32.add (fun_offset glob) funid);
+                        ReturnCall (Int32.add (fun_offset genv) funid);
                       |], [|
                         Const (I32 I32.zero);
                         Return;
                       |]) ^+
-                      Call (Int32.add (fun_offset glob) recid) ^+
+                      Call (Int32.add (fun_offset genv) recid) ^+
                       unbox 3l (
                       unbox 2l (nlist_of_list [
                       LocalSet 3l;
@@ -796,10 +680,133 @@ end = struct
                   Const (I32 I32.zero);
                 |]));
               }
-          | _ -> failwith "TODO NewMetadata.find_eq_fun" in
+          | _ -> failwith "TODO GEnv.find_eq_fun" in
         funid
 end
-type new_meta = NewMetadata.t
+and LEnv : sig
+  type t
+  
+  val to_genv : t -> GEnv.t
+  
+  val extend : GEnv.t -> int32 -> Wasm.Type.val_type list -> t
+  val wasm_locals : tmap -> t -> Wasm.Type.val_type array
+  
+  val mark_recursive : t -> unit
+  val is_recursive : t -> bool
+  
+  val add_local : tmap -> t -> 'a typ -> int32
+  (* val add_raw_local : t -> Wasm.Type.val_type -> int32 *)
+  
+  val maybe_do_box : tmap -> t -> ('a, 'b) box -> instr_conv -> (instr_conv, ('a, 'b) Type.eq) Either.t
+  val do_box : tmap -> 'a typ -> instr_conv -> (instr_conv, ('a, unit) Type.eq) Either.t
+  val maybe_do_unbox : tmap -> t -> ('a, 'b) box -> instr_conv -> (instr_conv, ('a, 'b) Type.eq) Either.t
+  val do_unbox : tmap -> 'a typ -> instr_conv -> (instr_conv, ('a, unit) Type.eq) Either.t
+end = struct
+  type t = GEnv.t * (Wasm.Type.val_type list * int32) ref * bool ref
+  
+  let to_genv (genv, _, _ : t) : GEnv.t = genv
+  
+  let extend (genv : GEnv.t) (nparams : int32) (base : Wasm.Type.val_type list) : t =
+    let rec inner genv base acc n : t = match base with
+      | [] -> genv, ref (acc, n), ref false
+      | hd :: tl -> inner genv tl (hd :: acc) (Int32.succ n)
+    in inner genv base [] nparams
+  let wasm_locals (_ : tmap) (_, { contents = (l, _) }, _ : t) : Wasm.Type.val_type array =
+    Array.of_list (List.rev l)
+  
+  let mark_recursive (_, _, recursive : t) : unit = recursive := true
+  let is_recursive (_, _, recursive : t) : bool = !recursive
+  
+  let add_raw_local (_, lenv, _ : t) (t : Wasm.Type.val_type) : int32 =
+    let loc, i = !lenv in
+    lenv := t :: loc, Int32.succ i;
+    i
+  let add_local (tm : tmap) (lenv : t) (t : 'a typ) : int32 =
+    add_raw_local lenv (TMap.val_of_type tm t)
+  
+  (* get_val is affine and only called on the accumulator *)
+  let rec do_box : type a. tmap -> a typ -> instr_conv -> (instr_conv, (a, unit) Type.eq) Either.t =
+    fun _tm box get_val ->
+    let open Wasm.Instruction in match box with
+    | TVar -> Either.Right Type.Equal
+    | TInt -> Either.Left (fun acc -> StructNew (TMap.boxed_int_tid, Explicit) ^+ get_val acc)
+    | TBool -> Either.Left (fun acc -> RefI31 ^+ get_val acc)
+    | TFloat -> Either.Left (fun acc -> StructNew (TMap.boxed_float_tid, Explicit) ^+ get_val acc)
+    | _ -> Either.Left (get_val)
+  (* get_val is affine *)
+  and maybe_do_box : type a b. tmap -> t -> (a, b) box -> instr_conv -> (instr_conv, (a, b) Type.eq) Either.t =
+    fun tm lenv box get_val ->
+    let open Wasm.Instruction in match box with
+    | BNone -> Either.Right Type.Equal
+    | BClosed (_, BLnone, BNone) -> Either.Right Type.Equal
+    | BClosed (_, BLnil, BNone) -> Either.Right Type.Equal
+    | BClosed (_, BLcons (BNone, BLnil), BNone) -> Either.Right Type.Equal
+    | BClosed (TClosed (targs, tret), bargs, bret) ->
+        let targs, tret, convfid = GEnv.add_unspecialization tm (to_genv lenv) targs tret bargs bret in
+        GEnv.add_export_function (to_genv lenv) convfid;
+        let new_ctid = TMap.recid_of_type tm (TClosed (targs, tret)) in
+        Either.Left (fun acc -> StructNew (new_ctid, Explicit) ^+ get_val (RefFunc (Int32.add (GEnv.fun_offset (to_genv lenv)) convfid) ^+ acc))
+    | BCont _ -> failwith "TODO maybe_do_box BCont"
+    | BTuple _ -> Either.Left get_val (* Tuples always have their values boxed *)
+    | BBox t -> do_box tm t get_val
+  
+  (* get_val is affine and only called on the accumulator *)
+  and do_unbox : type a. tmap -> a typ -> instr_conv -> (instr_conv, (a, unit) Type.eq) Either.t =
+    fun tm box get_val ->
+    let open Wasm.Instruction in match box with
+    | TVar -> Either.Right Type.Equal
+    | TInt -> Either.Left (fun acc ->
+        StructGet (TMap.boxed_int_tid, 0l, None) ^+ RefCast Wasm.Type.(NoNull, VarHT TMap.boxed_int_tid) ^+ get_val acc)
+    | TBool -> Either.Left (fun acc -> I31Get Wasm.Pack.ZX ^+ RefCast Wasm.Type.(NoNull, I31HT) ^+ get_val acc)
+    | TFloat -> Either.Left (fun acc ->
+        StructGet (TMap.boxed_float_tid, 0l, None) ^+ RefCast Wasm.Type.(NoNull, VarHT TMap.boxed_float_tid) ^+ get_val acc)
+    | (TTuple 0) -> Either.Left (fun acc -> RefNull Wasm.Type.NoneHT ^+ Drop ^+ get_val acc)
+        (* fun acc -> RefCast Wasm.Type.(Null, NoneHT) ^+ get_val acc) *)
+    | TList _ -> Either.Left (fun acc -> RefCast Wasm.Type.(Null, VarHT TMap.list_tid) ^+ get_val acc)
+    | t -> let tid = TMap.recid_of_type tm t in Either.Left (fun acc -> RefCast Wasm.Type.(NoNull, VarHT tid) ^+ get_val acc)
+  (* get_val is affine *)
+  and maybe_do_unbox : type a b. tmap -> t -> (a, b) box -> instr_conv -> (instr_conv, (a, b) Type.eq) Either.t =
+    fun tm lenv box get_val ->
+    let open Wasm.Instruction in match box with
+    | BNone -> Either.Right Type.Equal
+    | BClosed (TClosed (targs, tret) as tsrc, bargs, bret) ->
+        let canon_box : type a b. (a, b) box -> ((a, b) box, (a, b) Type.eq) Either.t = function
+          | BNone -> Either.Right Type.Equal
+          | BBox TVar -> Either.Right Type.Equal
+          | b -> Either.Left b in
+        let rec canon_box_list : type a b. (a, b) box_list -> ((a, b) box_list, (a, b) Type.eq) Either.t = function
+          | BLnone -> Either.Right Type.Equal
+          | BLnil -> Either.Right Type.Equal
+          | BLcons (bhd, btl) -> begin match canon_box bhd, canon_box_list btl with
+              | Either.Left bhd, Either.Left btl -> Either.Left (BLcons (bhd, btl))
+              | Either.Left bhd, Either.Right Type.Equal -> Either.Left (BLcons (bhd, BLnone))
+              | Either.Right Type.Equal, Either.Left btl -> Either.Left (BLcons (BNone, btl))
+              | Either.Right Type.Equal, Either.Right Type.Equal -> Either.Right Type.Equal
+            end in
+        begin match canon_box_list bargs, canon_box bret with
+        | Either.Right Type.Equal, Either.Right Type.Equal -> Either.Right Type.Equal
+        | Either.Left bargs, Either.Right Type.Equal ->
+            let convfid = GEnv.add_specialization tm (to_genv lenv) targs tret bargs BNone in
+            GEnv.add_export_function (to_genv lenv) convfid;
+            let new_ctid = TMap.recid_of_type tm tsrc in
+            Either.Left (fun acc -> StructNew (new_ctid, Explicit) ^+ get_val (RefFunc (Int32.add (GEnv.fun_offset (to_genv lenv)) convfid) ^+ acc))
+        | Either.Right Type.Equal, Either.Left bret ->
+            let convfid = GEnv.add_specialization tm (to_genv lenv) targs tret BLnone bret in
+            GEnv.add_export_function (to_genv lenv) convfid;
+            let new_ctid = TMap.recid_of_type tm tsrc in
+            Either.Left (fun acc -> StructNew (new_ctid, Explicit) ^+ get_val (RefFunc (Int32.add (GEnv.fun_offset (to_genv lenv)) convfid) ^+ acc))
+        | Either.Left bargs, Either.Left bret ->
+            let convfid = GEnv.add_specialization tm (to_genv lenv) targs tret bargs bret in
+            GEnv.add_export_function (to_genv lenv) convfid;
+            let new_ctid = TMap.recid_of_type tm tsrc in
+            Either.Left (fun acc -> StructNew (new_ctid, Explicit) ^+ get_val (RefFunc (Int32.add (GEnv.fun_offset (to_genv lenv)) convfid) ^+ acc))
+      end
+    | BCont _ -> failwith "TODO maybe_do_unbox BCont"
+    | BTuple _ -> Either.Left get_val (* Tuples always have their values boxed *)
+    | BBox t -> do_unbox tm t get_val
+end
+type genv = GEnv.t
+type lenv = LEnv.t
 
 let convert_global (tm : tmap) ((_, Type t, name) : 'a * anytyp * string option) : Wasm.global =
   let init =
@@ -837,36 +844,36 @@ let convert_globals (tm : tmap) (gs : (mvarid * anytyp * string option) list) (t
   in let ret = inner gs in Array.of_list ret
 
 (* get_val is affine *)
-let do_box (type a b) (tm : tmap) (new_meta : new_meta) (box : (a, b) box) (get_val : instr_conv) : instr_conv =
-  match NewMetadata.maybe_do_box tm new_meta box get_val with
+let do_box (type a b) (tm : tmap) (lenv : lenv) (box : (a, b) box) (get_val : instr_conv) : instr_conv =
+  match LEnv.maybe_do_box tm lenv box get_val with
   | Either.Right Type.Equal -> get_val
   | Either.Left v -> v
 
 (* get_val is affine *)
 (* If box is BBox _, get_val is called on the accumulator *)
-let do_unbox (type a b) (tm : tmap) (new_meta : new_meta) (box : (a, b) box) (get_val : instr_conv) : instr_conv =
-  match NewMetadata.maybe_do_unbox tm new_meta box get_val with
+let do_unbox (type a b) (tm : tmap) (lenv : lenv) (box : (a, b) box) (get_val : instr_conv) : instr_conv =
+  match LEnv.maybe_do_unbox tm lenv box get_val with
   | Either.Left v -> v
   | Either.Right Type.Equal -> get_val
 
 (* get_val is affine *)
 let really_box (type a) (tm : tmap) (src : a typ) (get_val : instr_conv) : instr_conv =
-  match NewMetadata.do_box tm src get_val with
+  match LEnv.do_box tm src get_val with
   | Either.Left v -> v
   | Either.Right Type.Equal -> get_val
 
 (* get_val is affine and called on the accumulator *)
 let really_unbox (type a) (tm : tmap) (src : a typ) (get_val : instr_conv) : instr_conv =
-  match NewMetadata.do_unbox tm src get_val with
+  match LEnv.do_unbox tm src get_val with
   | Either.Left v -> v
   | Either.Right Type.Equal -> get_val
 
-let convert_unop (type a b) (_ : tmap) (_ : new_meta) (op : (a, b) unop) (arg : instr_conv) : instr_conv =
+let convert_unop (type a b) (_ : tmap) (_ : lenv) (op : (a, b) unop) (arg : instr_conv) : instr_conv =
   let open Wasm in let open Instruction in let open Value in match op with
     | UONot -> fun acc -> Testop (I32 IntOp.Eqz) ^+ arg acc
     | UONegI -> fun acc -> Binop (I64 IntOp.Sub) ^+ arg (Const (I64 I64.zero) ^+ acc)
     | UONegF -> fun acc -> Unop (F64 FloatOp.Neg) ^+ arg acc
-let convert_binop (type a b c) (tm : tmap) (new_meta : new_meta) (op : (a, b, c) binop) (arg1 : instr_conv) (arg2 : instr_conv) : instr_conv =
+let convert_binop (type a b c) (tm : tmap) (lenv : lenv) (op : (a, b, c) binop) (arg1 : instr_conv) (arg2 : instr_conv) : instr_conv =
   let open Wasm in let open Instruction in let open Value in match op with
   | BOAddI -> fun acc -> Binop (I64   IntOp.Add)  ^+ arg2 (arg1 acc)
   | BOAddF -> fun acc -> Binop (F64 FloatOp.Add)  ^+ arg2 (arg1 acc)
@@ -883,8 +890,8 @@ let convert_binop (type a b c) (tm : tmap) (new_meta : new_meta) (op : (a, b, c)
         | TBool -> fun acc -> Relop (I32 IntOp.Eq) ^+ arg2 (arg1 acc)
         | TFloat -> fun acc -> Relop (F64 FloatOp.Eq) ^+ arg2 (arg1 acc)
         | _ ->
-            let fid = NewMetadata.find_eq_fun tm (NewMetadata.g_of_t new_meta) t in
-            fun acc -> Call (Int32.add (NewMetadata.fun_offset (NewMetadata.g_of_t new_meta)) fid) ^+ arg2 (arg1 acc)
+            let fid = GEnv.find_eq_fun tm (LEnv.to_genv lenv) t in
+            fun acc -> Call (Int32.add (GEnv.fun_offset (LEnv.to_genv lenv)) fid) ^+ arg2 (arg1 acc)
     end
   | BONe t -> begin match t with
         | TTuple 0 -> fun acc -> Const (I32 I32.zero) ^+ Drop ^+ arg2 (Drop ^+ arg1 acc)
@@ -892,8 +899,8 @@ let convert_binop (type a b c) (tm : tmap) (new_meta : new_meta) (op : (a, b, c)
         | TBool -> fun acc -> Relop (I32 IntOp.Ne) ^+ arg2 (arg1 acc)
         | TFloat -> fun acc -> Relop (F64 FloatOp.Ne) ^+ arg2 (arg1 acc)
         | _ ->
-            let fid = NewMetadata.find_eq_fun tm (NewMetadata.g_of_t new_meta) t in
-            fun acc -> Testop (I32 IntOp.Eqz) ^+ Call (Int32.add (NewMetadata.fun_offset (NewMetadata.g_of_t new_meta)) fid) ^+ arg2 (arg1 acc)
+            let fid = GEnv.find_eq_fun tm (LEnv.to_genv lenv) t in
+            fun acc -> Testop (I32 IntOp.Eqz) ^+ Call (Int32.add (GEnv.fun_offset (LEnv.to_genv lenv)) fid) ^+ arg2 (arg1 acc)
     end
   | BOLe t -> begin
       match t with
@@ -916,9 +923,9 @@ let convert_binop (type a b c) (tm : tmap) (new_meta : new_meta) (op : (a, b, c)
       | _ -> raise (internal_error "Unknown binary operation Gt on non-integer")
     end
   | BOConcat ->
-      let tmparg1 = NewMetadata.add_local tm new_meta TString in
-      let tmparg2 = NewMetadata.add_local tm new_meta TString in
-      let tmpret = NewMetadata.add_local tm new_meta TString in
+      let tmparg1 = LEnv.add_local tm lenv TString in
+      let tmparg2 = LEnv.add_local tm lenv TString in
+      let tmpret = LEnv.add_local tm lenv TString in
       fun acc ->
         LocalGet tmpret ^+
         ArrayCopy (TMap.string_tid, TMap.string_tid) ^+
@@ -941,8 +948,8 @@ let convert_binop (type a b c) (tm : tmap) (new_meta : new_meta) (op : (a, b, c)
       let arg1 = really_box tm t arg1 in
       fun acc -> StructNew (TMap.list_tid, Explicit) ^+ arg2 (arg1 acc)
   | BOConcatList _ ->
-      let fid = NewMetadata.find_list_concat tm (NewMetadata.g_of_t new_meta) in
-      fun acc -> Call (Int32.add (NewMetadata.fun_offset (NewMetadata.g_of_t new_meta)) fid) ^+ arg2 (arg1 acc)
+      let fid = GEnv.find_list_concat tm (LEnv.to_genv lenv) in
+      fun acc -> Call (Int32.add (GEnv.fun_offset (LEnv.to_genv lenv)) fid) ^+ arg2 (arg1 acc)
 
 type 'a anybox_list = AnyBoxList : ('a, 'b) box_list -> 'a anybox_list
 
@@ -994,14 +1001,14 @@ let convert_get_var' (loc : locality) (vid : int32) (cinfo : clos_info) : instr_
 let convert_get_var (loc : locality) (vid : 'a varid) (cinfo : clos_info) : instr_conv =
   let _, vid = (vid : _ varid :> _ typ * int32) in convert_get_var' loc vid cinfo
 let rec convert_block : type a b. _ -> _ -> _ -> a block -> (a, b) box -> _ -> _ -> instr_conv =
-  fun (tm : tmap) (new_meta : new_meta) (procinfo : procinfo)
+  fun (tm : tmap) (lenv : lenv) (procinfo : procinfo)
       ((ass, e) : a block) (box : (a, b) box) (is_last : last_info) (cinfo : clos_info) ->
   let open Wasm.Instruction in
   let rec inner (ass : assign list) (facc : instr_conv) : instr_conv = match ass with
-    | [] -> let e = convert_expr tm new_meta procinfo e box is_last cinfo in fun acc -> e (facc acc)
+    | [] -> let e = convert_expr tm lenv procinfo e box is_last cinfo in fun acc -> e (facc acc)
     | Assign (l, v, e) :: tl ->
         let _, v = (v : _ varid :> _ typ * int32) in
-        let e = convert_expr tm new_meta procinfo e BNone None cinfo in
+        let e = convert_expr tm lenv procinfo e BNone None cinfo in
         inner tl (fun acc -> (match l with
           | Global -> GlobalSet v
           | Local StorVariable -> LocalSet v
@@ -1009,7 +1016,7 @@ let rec convert_block : type a b. _ -> _ -> _ -> a block -> (a, b) box -> _ -> _
           ) ^+ e (facc acc))
   in inner ass Fun.id
 and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> instr_conv =
-  fun (tm : tmap) (new_meta : new_meta) (procinfo : procinfo)
+  fun (tm : tmap) (lenv : lenv) (procinfo : procinfo)
       (e : a expr) (box : (a, b) box) (is_last : last_info) (cinfo : clos_info) ->
   let can_early_ret = (match box with BNone -> true | _ -> false) && (Option.is_some is_last) in
   let open Wasm.Instruction in match e with
@@ -1018,38 +1025,38 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
       let ctid = match cinfo with None -> raise (internal_error "Closure conversion without closure info") | Some (ctid, _) -> ctid in
       fun acc -> RefCast Wasm.Type.(NoNull, VarHT ctid) ^+ LocalGet (src :> int32) ^+ acc
   | EIgnore (_, e) ->
-      let e = convert_expr tm new_meta procinfo e BNone None cinfo in
+      let e = convert_expr tm lenv procinfo e BNone None cinfo in
       fun acc -> RefNull Wasm.Type.NoneHT ^+ Drop ^+ e acc
-  | EConstInt i -> do_box tm new_meta box (fun acc -> Const Wasm.Value.(I64 (I64.of_bits i)) ^+ acc)
-  | EConstBool b -> do_box tm new_meta box (fun acc -> Const Wasm.Value.(I32 (if b then I32.one else I32.zero)) ^+ acc)
-  | EConstFloat f -> do_box tm new_meta box (fun acc -> Const Wasm.Value.(F64 (F64.of_float f)) ^+ acc)
-  | EConstString s -> do_box tm new_meta box (fun acc ->
+  | EConstInt i -> do_box tm lenv box (fun acc -> Const Wasm.Value.(I64 (I64.of_bits i)) ^+ acc)
+  | EConstBool b -> do_box tm lenv box (fun acc -> Const Wasm.Value.(I32 (if b then I32.one else I32.zero)) ^+ acc)
+  | EConstFloat f -> do_box tm lenv box (fun acc -> Const Wasm.Value.(F64 (F64.of_float f)) ^+ acc)
+  | EConstString s -> do_box tm lenv box (fun acc ->
         ArrayNewFixed (TMap.string_tid, Int32.of_int (String.length s)) ^+
         String.fold_left (fun acc c -> Const Wasm.Value.(I32 (I32.of_int_s (Char.code c))) ^+ acc) acc s)
   | EUnop (op, e) ->
-      let arg = convert_expr tm new_meta procinfo e BNone None cinfo in
-      let v = convert_unop tm new_meta op arg in
-      do_box tm new_meta box v
+      let arg = convert_expr tm lenv procinfo e BNone None cinfo in
+      let v = convert_unop tm lenv op arg in
+      do_box tm lenv box v
   | EBinop (BOEq (TList _), e, EListNil _) ->
-      let arg1 = convert_expr tm new_meta procinfo e BNone None cinfo in
-      do_box tm new_meta box (fun acc -> RefIsNull ^+ arg1 acc)
+      let arg1 = convert_expr tm lenv procinfo e BNone None cinfo in
+      do_box tm lenv box (fun acc -> RefIsNull ^+ arg1 acc)
   | EBinop (BOEq (TList _), EListNil _, e) ->
-      let arg1 = convert_expr tm new_meta procinfo e BNone None cinfo in
-      do_box tm new_meta box (fun acc -> RefIsNull ^+ arg1 acc)
+      let arg1 = convert_expr tm lenv procinfo e BNone None cinfo in
+      do_box tm lenv box (fun acc -> RefIsNull ^+ arg1 acc)
   | EBinop (BONe (TList _), e, EListNil _) ->
-      let arg1 = convert_expr tm new_meta procinfo e BNone None cinfo in
-      do_box tm new_meta box (fun acc -> Testop (Wasm.Value.I32 IntOp.Eqz) ^+ RefIsNull ^+ arg1 acc)
+      let arg1 = convert_expr tm lenv procinfo e BNone None cinfo in
+      do_box tm lenv box (fun acc -> Testop (Wasm.Value.I32 IntOp.Eqz) ^+ RefIsNull ^+ arg1 acc)
   | EBinop (BONe (TList _), EListNil _, e) ->
-      let arg1 = convert_expr tm new_meta procinfo e BNone None cinfo in
-      do_box tm new_meta box (fun acc -> Testop (Wasm.Value.I32 IntOp.Eqz) ^+ RefIsNull ^+ arg1 acc)
+      let arg1 = convert_expr tm lenv procinfo e BNone None cinfo in
+      do_box tm lenv box (fun acc -> Testop (Wasm.Value.I32 IntOp.Eqz) ^+ RefIsNull ^+ arg1 acc)
   | EBinop (op, e1, e2) ->
-      let arg1 = convert_expr tm new_meta procinfo e1 BNone None cinfo in
-      let arg2 = convert_expr tm new_meta procinfo e2 BNone None cinfo in
-      let v = convert_binop tm new_meta op arg1 arg2 in
-      do_box tm new_meta box v
-  | EVariable (loc, vid) -> do_box tm new_meta box (convert_get_var loc vid cinfo)
+      let arg1 = convert_expr tm lenv procinfo e1 BNone None cinfo in
+      let arg2 = convert_expr tm lenv procinfo e2 BNone None cinfo in
+      let v = convert_binop tm lenv op arg1 arg2 in
+      do_box tm lenv box v
+  | EVariable (loc, vid) -> do_box tm lenv box (convert_get_var loc vid cinfo)
   | ETuple (TLnil, _, ELnil) ->
-      do_box tm new_meta box (fun acc -> RefNull Wasm.Type.NoneHT ^+ acc)
+      do_box tm lenv box (fun acc -> RefNull Wasm.Type.NoneHT ^+ acc)
   | ETuple (ts, n, es) ->
       let tid = TMap.recid_of_type tm (TTuple n) in
       let AnyBoxList bcontent =
@@ -1058,38 +1065,38 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
           | TLcons (thd, ttl) -> let AnyBoxList btl = inner ttl in AnyBoxList (BLcons (BBox thd, btl)) in
         inner ts in
       begin match box with
-        | BNone | BBox _ -> do_box tm new_meta box (convert_new_struct tm new_meta procinfo es bcontent tid false cinfo)
-        | BTuple _ -> convert_new_struct tm new_meta procinfo es bcontent tid false cinfo
+        | BNone | BBox _ -> do_box tm lenv box (convert_new_struct tm lenv procinfo es bcontent tid false cinfo)
+        | BTuple _ -> convert_new_struct tm lenv procinfo es bcontent tid false cinfo
       end
   | EExtract (e, (_, n, i, t)) ->
-      let e = convert_expr tm new_meta procinfo e BNone None cinfo in
+      let e = convert_expr tm lenv procinfo e BNone None cinfo in
       let tid = TMap.recid_of_type tm (TTuple n) in
-      do_box tm new_meta box (really_unbox tm t (fun acc -> StructGet (tid, Int32.of_int i, None) ^+ (e acc)))
+      do_box tm lenv box (really_unbox tm t (fun acc -> StructGet (tid, Int32.of_int i, None) ^+ (e acc)))
   | EVariant (tagid, targ, arg) ->
-      let arg = convert_expr tm new_meta procinfo arg (BBox targ) None cinfo in
-      do_box tm new_meta box (fun acc ->
+      let arg = convert_expr tm lenv procinfo arg (BBox targ) None cinfo in
+      do_box tm lenv box (fun acc ->
         StructNew (TMap.variant_tid, Explicit) ^+
         arg (Const Wasm.Value.(I32 (I32.of_int_u (tagid :> int))) ^+ acc))
   | ECase (v, _, [_, Type btyp, bid, blk], None) -> (* Optimization: assume value has the correct tag *)
-      let v = convert_expr tm new_meta procinfo v BNone None cinfo in
+      let v = convert_expr tm lenv procinfo v BNone None cinfo in
       let unbox = really_unbox tm btyp (fun acc -> StructGet (TMap.variant_tid, 1l, None) ^+ v acc) in
-      let blk = convert_block tm new_meta procinfo blk BNone is_last cinfo in
-      do_box tm new_meta box (fun acc -> blk (LocalSet (bid :> int32) ^+ unbox acc))
+      let blk = convert_block tm lenv procinfo blk BNone is_last cinfo in
+      do_box tm lenv box (fun acc -> blk (LocalSet (bid :> int32) ^+ unbox acc))
   | ECase (v, _, [], None) -> (* Optimization: get the value, then unreachable *)
-      let v = convert_expr tm new_meta procinfo v BNone None cinfo in
-      do_box tm new_meta box (fun acc -> Unreachable ^+ v acc)
+      let v = convert_expr tm lenv procinfo v BNone None cinfo in
+      do_box tm lenv box (fun acc -> Unreachable ^+ v acc)
   | ECase (v, _, [], Some (bid, blk)) -> (* Optimization: get the value, then evaluate the default branch *)
-      let v = convert_expr tm new_meta procinfo v BNone None cinfo in
-      let blk = convert_block tm new_meta procinfo blk BNone is_last cinfo in
-      do_box tm new_meta box (fun acc -> blk (LocalSet (bid :> int32) ^+ v acc))
+      let v = convert_expr tm lenv procinfo v BNone None cinfo in
+      let blk = convert_block tm lenv procinfo blk BNone is_last cinfo in
+      do_box tm lenv box (fun acc -> blk (LocalSet (bid :> int32) ^+ v acc))
   | ECase (v, t, cs, od) ->
       let loc, vid, stgv = match v with
         | EVariable (loc, vid) ->
             let _, vid = (vid : _ varid :> _ * int32) in
             loc, vid, (fun acc -> LocalGet vid ^+ acc)
         | _ ->
-            let tmpvar = NewMetadata.add_local tm new_meta TVariant in
-            let v = convert_expr tm new_meta procinfo v BNone None cinfo in
+            let tmpvar = LEnv.add_local tm lenv TVariant in
+            let v = convert_expr tm lenv procinfo v BNone None cinfo in
             Local StorVariable, tmpvar, (fun acc -> LocalTee tmpvar ^+ v acc)
       in
       let branches, ncases, min_id =
@@ -1128,7 +1135,7 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
           let new_block =
             LocalSet (bid : mvarid :> int32) ^+
             unbox block_content in
-          let blk = convert_block tm new_meta procinfo blk BNone (incr_depth_n is_last (Int32.succ br)) cinfo in
+          let blk = convert_block tm lenv procinfo blk BNone (incr_depth_n is_last (Int32.succ br)) cinfo in
           Br br ^+ blk new_block, depth)
         (block_content, 0l) cs in
       let block_content =
@@ -1136,51 +1143,51 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
         match od with
         | None -> Unreachable ^+ block_content
         | Some (bid, blk) ->
-          let blk = convert_block tm new_meta procinfo blk BNone (incr_depth is_last) cinfo in
+          let blk = convert_block tm lenv procinfo blk BNone (incr_depth is_last) cinfo in
             blk (LocalSet (bid :> int32) ^+ convert_get_var' loc vid cinfo block_content) in
       let tret = TMap.val_of_type tm t in
       let block_content = convert_nlist block_content in
       fun acc -> Block (Wasm.Type.ValBlockType (Some tret), block_content) ^+ acc
-  | EListNil _ -> do_box tm new_meta box (fun acc -> RefNull Wasm.Type.(VarHT TMap.list_tid) ^+ acc)
+  | EListNil _ -> do_box tm lenv box (fun acc -> RefNull Wasm.Type.(VarHT TMap.list_tid) ^+ acc)
   | EListHd (l, t) ->
-      let l = convert_expr tm new_meta procinfo l BNone None cinfo in
-      do_box tm new_meta box (really_unbox tm t (fun acc -> StructGet (TMap.list_tid, 0l, None) ^+ l acc))
+      let l = convert_expr tm lenv procinfo l BNone None cinfo in
+      do_box tm lenv box (really_unbox tm t (fun acc -> StructGet (TMap.list_tid, 0l, None) ^+ l acc))
   | EListTl (_, l) ->
-      let l = convert_expr tm new_meta procinfo l BNone None cinfo in
-      do_box tm new_meta box (fun acc -> StructGet (TMap.list_tid, 1l, None) ^+ l acc)
+      let l = convert_expr tm lenv procinfo l BNone None cinfo in
+      do_box tm lenv box (fun acc -> StructGet (TMap.list_tid, 1l, None) ^+ l acc)
   | EClose (f, bcl, cls) ->
       let targs, tret, clts, fid = (f : _ funcid :> _ * _ * _ * int32) in
-      NewMetadata.add_export_function (NewMetadata.g_of_t new_meta) fid;
+      GEnv.add_export_function (LEnv.to_genv lenv) fid;
       let fctid = TMap.recid_of_type tm (TClosArg clts) in
       let new_ctid = TMap.recid_of_type tm (TClosed (targs, tret)) in
-      let gen_new_struct = convert_new_struct tm new_meta procinfo cls bcl fctid false cinfo in
-      do_box tm new_meta box (fun acc ->
+      let gen_new_struct = convert_new_struct tm lenv procinfo cls bcl fctid false cinfo in
+      do_box tm lenv box (fun acc ->
         StructNew (new_ctid, Explicit) ^+
         gen_new_struct (
-        RefFunc (Int32.add (NewMetadata.fun_offset (NewMetadata.g_of_t new_meta)) fid) ^+
+        RefFunc (Int32.add (GEnv.fun_offset (LEnv.to_genv lenv)) fid) ^+
         acc))
   | ERawClose (f, cl) ->
       let targs, tret, _, fid = (f : _ funcid :> _ * _ * _ * int32) in
-      NewMetadata.add_export_function (NewMetadata.g_of_t new_meta) fid;
+      GEnv.add_export_function (LEnv.to_genv lenv) fid;
       let new_ctid = TMap.recid_of_type tm (TClosed (targs, tret)) in
-      let get_cl = convert_expr tm new_meta procinfo cl BNone None cinfo in
-      do_box tm new_meta box (fun acc ->
+      let get_cl = convert_expr tm lenv procinfo cl BNone None cinfo in
+      do_box tm lenv box (fun acc ->
         StructNew (new_ctid, Explicit) ^+
         get_cl (
-        RefFunc (Int32.add (NewMetadata.fun_offset (NewMetadata.g_of_t new_meta)) fid) ^+
+        RefFunc (Int32.add (GEnv.fun_offset (LEnv.to_genv lenv)) fid) ^+
         acc))
   | ESpecialize (e, _, BLnone, BNone) -> begin match box with (* Update the type to ignore generalizations *)
-      | BNone -> convert_expr tm new_meta procinfo e BNone is_last cinfo
-      | BClosed (TClosed (targs, tret), bargs, bret) -> convert_expr tm new_meta procinfo e (BClosed (TClosed (targs, tret), bargs, bret)) is_last cinfo
-      | BBox (TClosed (bargs, bret)) -> convert_expr tm new_meta procinfo e (BBox (TClosed (bargs, bret))) is_last cinfo
+      | BNone -> convert_expr tm lenv procinfo e BNone is_last cinfo
+      | BClosed (TClosed (targs, tret), bargs, bret) -> convert_expr tm lenv procinfo e (BClosed (TClosed (targs, tret), bargs, bret)) is_last cinfo
+      | BBox (TClosed (bargs, bret)) -> convert_expr tm lenv procinfo e (BBox (TClosed (bargs, bret))) is_last cinfo
     end
   | ESpecialize (e, tdst, bargs, bret) ->
-      do_box tm new_meta box (do_unbox tm new_meta (BClosed (tdst, bargs, bret)) (convert_expr tm new_meta procinfo e BNone None cinfo))
+      do_box tm lenv box (do_unbox tm lenv (BClosed (tdst, bargs, bret)) (convert_expr tm lenv procinfo e BNone None cinfo))
   | ECallRawHandler (fid, _, contarg, targ, arg, tiargs, iargs, hdlarg, _) ->
       let fid = (fid :> int32) in
-      let arg = convert_expr tm new_meta procinfo arg (BBox targ) None cinfo in
-      let iargs = convert_exprs tm new_meta procinfo iargs BLnone cinfo in
-      let contarg = convert_expr tm new_meta procinfo contarg BNone None cinfo in
+      let arg = convert_expr tm lenv procinfo arg (BBox targ) None cinfo in
+      let iargs = convert_exprs tm lenv procinfo iargs BLnone cinfo in
+      let contarg = convert_expr tm lenv procinfo contarg BNone None cinfo in
       begin match is_last with
       | Some (refid, jmplv) when can_early_ret && Int32.equal fid (refid :> int32) ->
           let set_args =
@@ -1188,23 +1195,23 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
               | TLnil -> Fun.id
               | TLcons (_, ts) -> let set_tl = inner (Int32.succ narg) ts in fun acc -> LocalSet narg ^+ set_tl acc in
             inner 2l tiargs in
-          do_box tm new_meta box (fun acc -> Br jmplv ^+ contarg (arg (set_args (iargs acc))))
+          do_box tm lenv box (fun acc -> Br jmplv ^+ contarg (arg (set_args (iargs acc))))
       | _ ->
-          let hdlarg = convert_expr tm new_meta procinfo hdlarg BNone None cinfo in
-          do_box tm new_meta box
+          let hdlarg = convert_expr tm lenv procinfo hdlarg BNone None cinfo in
+          do_box tm lenv box
             (fun acc ->
-              (if can_early_ret then ReturnCall (Int32.add (NewMetadata.fun_offset (NewMetadata.g_of_t new_meta)) fid)
-               else Call (Int32.add (NewMetadata.fun_offset (NewMetadata.g_of_t new_meta)) fid)) ^+
+              (if can_early_ret then ReturnCall (Int32.add (GEnv.fun_offset (LEnv.to_genv lenv)) fid)
+               else Call (Int32.add (GEnv.fun_offset (LEnv.to_genv lenv)) fid)) ^+
               hdlarg (iargs (arg (contarg acc))))
     end
   | ECallClosed (ESpecialize (EClose (f, bcl, cls), _, bargs, bret), args, _) ->
       let targs, _, clts, fid = (f : _ funcid :> _ * _ * _ * int32) in
       let fcid = TMap.recid_of_type tm (TClosArg clts) in
-      let args = convert_exprs tm new_meta procinfo args bargs cinfo in
-      let gen_new_struct = convert_new_struct tm new_meta procinfo cls bcl fcid false cinfo in
+      let args = convert_exprs tm lenv procinfo args bargs cinfo in
+      let gen_new_struct = convert_new_struct tm lenv procinfo cls bcl fcid false cinfo in
       begin match is_last with
       | Some (refid, jmplv) when can_early_ret && Int32.equal fid (refid :> int32) ->
-          NewMetadata.mark_recursive new_meta;
+          LEnv.mark_recursive lenv;
           let set_args acc =
             let rec inner : type a. a typ_list -> _ = fun targs nargs -> match targs with
               | TLnil -> Int.succ nargs
@@ -1213,21 +1220,21 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
             (nargs, List.init nargs (fun i -> LocalSet (Int32.of_int i))) @+ acc in
           fun acc -> Br jmplv ^+ generate_yield procinfo (set_args (gen_new_struct (args acc)))
       | _ ->
-          let unbox = do_unbox tm new_meta bret (fun acc ->
+          let unbox = do_unbox tm lenv bret (fun acc ->
               (if can_early_ret && (match bret with BNone -> true | _ -> false)
-               then ReturnCall (Int32.add (NewMetadata.fun_offset (NewMetadata.g_of_t new_meta)) fid)
-               else Call (Int32.add (NewMetadata.fun_offset (NewMetadata.g_of_t new_meta)) fid)) ^+
+               then ReturnCall (Int32.add (GEnv.fun_offset (LEnv.to_genv lenv)) fid)
+               else Call (Int32.add (GEnv.fun_offset (LEnv.to_genv lenv)) fid)) ^+
               generate_yield procinfo (gen_new_struct (args acc))) in
-          do_box tm new_meta box unbox
+          do_box tm lenv box unbox
     end
   | ECallClosed (EClose (f, bcl, cls), args, _) ->
       let targs, _, clts, fid = (f : _ funcid :> _ * _ * _ * int32) in
       let fcid = TMap.recid_of_type tm (TClosArg clts) in
-      let args = convert_exprs tm new_meta procinfo args BLnone cinfo in
-      let gen_new_struct = convert_new_struct tm new_meta procinfo cls bcl fcid false cinfo in
+      let args = convert_exprs tm lenv procinfo args BLnone cinfo in
+      let gen_new_struct = convert_new_struct tm lenv procinfo cls bcl fcid false cinfo in
       begin match is_last with
       | Some (refid, jmplv) when can_early_ret && Int32.equal fid (refid :> int32) ->
-          NewMetadata.mark_recursive new_meta;
+          LEnv.mark_recursive lenv;
           let set_args acc =
             let rec inner : type a. a typ_list -> _ = fun targs nargs -> match targs with
               | TLnil -> Int.succ nargs
@@ -1236,19 +1243,19 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
             (nargs, List.init nargs (fun i -> LocalSet (Int32.of_int i))) @+ acc in
           fun acc -> Br jmplv ^+ generate_yield procinfo (set_args (gen_new_struct (args acc)))
       | _ ->
-          do_box tm new_meta box (fun acc ->
-              (if can_early_ret then ReturnCall (Int32.add (NewMetadata.fun_offset (NewMetadata.g_of_t new_meta)) fid)
-               else Call (Int32.add (NewMetadata.fun_offset (NewMetadata.g_of_t new_meta)) fid)) ^+
+          do_box tm lenv box (fun acc ->
+              (if can_early_ret then ReturnCall (Int32.add (GEnv.fun_offset (LEnv.to_genv lenv)) fid)
+               else Call (Int32.add (GEnv.fun_offset (LEnv.to_genv lenv)) fid)) ^+
               generate_yield procinfo (gen_new_struct (args acc)))
     end
   | ECallClosed (ESpecialize (ERawClose (f, cl), _, bargs, bret), args, _) ->
       let targs, _, _, fid = (f : _ funcid :> _ * _ * _ * int32) in
-      let args = convert_exprs tm new_meta procinfo args bargs cinfo in
-      let get_cl = convert_expr tm new_meta procinfo cl BNone None cinfo in
+      let args = convert_exprs tm lenv procinfo args bargs cinfo in
+      let get_cl = convert_expr tm lenv procinfo cl BNone None cinfo in
       let can_early_ret = can_early_ret && (match bret with BNone -> true | _ -> false) in
       begin match is_last with
       | Some (refid, jmplv) when can_early_ret && Int32.equal fid (refid :> int32) ->
-          NewMetadata.mark_recursive new_meta;
+          LEnv.mark_recursive lenv;
           let set_args acc =
             let rec inner : type a. a typ_list -> _ = fun targs nargs -> match targs with
               | TLnil -> Int.succ nargs
@@ -1257,19 +1264,19 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
             (nargs, List.init nargs (fun i -> LocalSet (Int32.of_int i))) @+ acc in
           fun acc -> Br jmplv ^+ generate_yield procinfo (set_args (get_cl (args acc)))
       | _ ->
-          let unbox = do_unbox tm new_meta bret (fun acc ->
-              (if can_early_ret then ReturnCall (Int32.add (NewMetadata.fun_offset (NewMetadata.g_of_t new_meta)) fid)
-               else Call (Int32.add (NewMetadata.fun_offset (NewMetadata.g_of_t new_meta)) fid)) ^+
+          let unbox = do_unbox tm lenv bret (fun acc ->
+              (if can_early_ret then ReturnCall (Int32.add (GEnv.fun_offset (LEnv.to_genv lenv)) fid)
+               else Call (Int32.add (GEnv.fun_offset (LEnv.to_genv lenv)) fid)) ^+
               generate_yield procinfo (get_cl (args acc))) in
-          do_box tm new_meta box unbox
+          do_box tm lenv box unbox
     end
   | ECallClosed (ERawClose (f, cl), args, _) ->
       let targs, _, _, fid = (f : _ funcid :> _ * _ * _ * int32) in
-      let args = convert_exprs tm new_meta procinfo args BLnone cinfo in
-      let get_cl = convert_expr tm new_meta procinfo cl BNone None cinfo in
+      let args = convert_exprs tm lenv procinfo args BLnone cinfo in
+      let get_cl = convert_expr tm lenv procinfo cl BNone None cinfo in
       begin match is_last with
       | Some (refid, jmplv) when can_early_ret && Int32.equal fid (refid :> int32) ->
-          NewMetadata.mark_recursive new_meta;
+          LEnv.mark_recursive lenv;
           let set_args acc =
             let rec inner : type a. a typ_list -> _ = fun targs nargs -> match targs with
               | TLnil -> Int.succ nargs
@@ -1278,9 +1285,9 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
             (nargs, List.init nargs (fun i -> LocalSet (Int32.of_int i))) @+ acc in
           fun acc -> Br jmplv ^+ generate_yield procinfo (set_args (get_cl (args acc)))
       | _ ->
-          do_box tm new_meta box (fun acc ->
-              (if can_early_ret then ReturnCall (Int32.add (NewMetadata.fun_offset (NewMetadata.g_of_t new_meta)) fid)
-               else Call (Int32.add (NewMetadata.fun_offset (NewMetadata.g_of_t new_meta)) fid)) ^+
+          do_box tm lenv box (fun acc ->
+              (if can_early_ret then ReturnCall (Int32.add (GEnv.fun_offset (LEnv.to_genv lenv)) fid)
+               else Call (Int32.add (GEnv.fun_offset (LEnv.to_genv lenv)) fid)) ^+
               generate_yield procinfo (get_cl (args acc)))
     end
   | ECallClosed (ESpecialize (e, _, bargs, bret), args, _) ->
@@ -1291,22 +1298,22 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
             t, getv, getv
         | _ ->
             let t = typ_of_expr e in
-            let e = convert_expr tm new_meta procinfo e BNone None cinfo in
-            let vid = NewMetadata.add_local tm new_meta t in
+            let e = convert_expr tm lenv procinfo e BNone None cinfo in
+            let vid = LEnv.add_local tm lenv t in
             t, (fun acc -> LocalGet vid ^+ acc), (fun acc -> LocalTee vid ^+ e acc) in
       (* TODO: optimize the next two lines (caching is possible) *)
       let vtid = TMap.recid_of_type tm t in
       let fid = TMap.recid_of_functyp tm targs tret in
-      let args = convert_exprs tm new_meta procinfo args bargs cinfo in
+      let args = convert_exprs tm lenv procinfo args bargs cinfo in
       let can_early_ret = can_early_ret && (match bret with BNone -> true | _ -> false) in
-      let unbox = do_unbox tm new_meta bret (fun acc ->
+      let unbox = do_unbox tm lenv bret (fun acc ->
           (if can_early_ret then ReturnCallRef fid
            else CallRef fid) ^+
           generate_yield procinfo (
           StructGet (vtid, 0l, None) ^+ getv (
           StructGet (vtid, 1l, None) ^+ etee (
           args acc)))) in
-      do_box tm new_meta box unbox
+      do_box tm lenv box unbox
   | ECallClosed (e, args, _) ->
       let TClosed (targs, tret) as t, getv, etee = match e with
         | EVariable (loc, vid) ->
@@ -1315,14 +1322,14 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
             t, getv, getv
         | _ ->
             let t = typ_of_expr e in
-            let e = convert_expr tm new_meta procinfo e BNone None cinfo in
-            let vid = NewMetadata.add_local tm new_meta t in
+            let e = convert_expr tm lenv procinfo e BNone None cinfo in
+            let vid = LEnv.add_local tm lenv t in
             t, (fun acc -> LocalGet vid ^+ acc), (fun acc -> LocalTee vid ^+ e acc) in
       (* TODO: optimize the next two lines (caching is possible) *)
       let vtid = TMap.recid_of_type tm t in
       let fid = TMap.recid_of_functyp tm targs tret in
-      let args = convert_exprs tm new_meta procinfo args BLnone cinfo in
-      do_box tm new_meta box (fun acc ->
+      let args = convert_exprs tm lenv procinfo args BLnone cinfo in
+      do_box tm lenv box (fun acc ->
           (if can_early_ret then ReturnCallRef fid
            else CallRef fid) ^+
           generate_yield procinfo (
@@ -1330,16 +1337,16 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
           StructGet (vtid, 1l, None) ^+ etee (
           args acc))))
   | ECond (e, rt, t, f) ->
-      let ti = convert_block tm new_meta procinfo t box (incr_depth is_last) cinfo empty_nlist in
-      let fi = convert_block tm new_meta procinfo f box (incr_depth is_last) cinfo empty_nlist in
-      let ei = convert_expr tm new_meta procinfo e BNone None cinfo in
+      let ti = convert_block tm lenv procinfo t box (incr_depth is_last) cinfo empty_nlist in
+      let fi = convert_block tm lenv procinfo f box (incr_depth is_last) cinfo empty_nlist in
+      let ei = convert_expr tm lenv procinfo e BNone None cinfo in
       let rt' = TMap.oval_of_type tm rt in
       fun acc -> If (Wasm.Type.(ValBlockType rt'), convert_nlist ti, convert_nlist fi) ^+ ei acc
   | EDo (eid, tret, args) ->
       let targs, n, eid = (eid : _ effectid :> _ * int * int32) in
       let args = match targs, args with
         | TLnil, ELnil -> fun acc -> RefNull Wasm.Type.NoneHT ^+ acc
-        | TLcons (targ, TLnil), ELcons (arg, ELnil) -> convert_expr tm new_meta procinfo arg (BBox targ) None cinfo
+        | TLcons (targ, TLnil), ELcons (arg, ELnil) -> convert_expr tm lenv procinfo arg (BBox targ) None cinfo
         | TLcons (_, TLcons (_, _)), ELcons (_, ELcons (_, _)) ->
             let tid = TMap.recid_of_type tm (TTuple n) in
             let AnyBoxList bcontent =
@@ -1347,69 +1354,69 @@ and convert_expr : type a b. _ -> _ -> _ -> a expr -> (a, b) box -> _ -> _ -> in
                 | TLnil -> AnyBoxList BLnil
                 | TLcons (thd, ttl) -> let AnyBoxList btl = inner ttl in AnyBoxList (BLcons (BBox thd, btl)) in
               inner targs in
-            convert_new_struct tm new_meta procinfo args bcontent tid false cinfo in
+            convert_new_struct tm lenv procinfo args bcontent tid false cinfo in
       let ret = really_unbox tm tret (fun acc -> Suspend eid ^+ generate_yield procinfo (args acc)) in
-      do_box tm new_meta box ret
+      do_box tm lenv box ret
   | EShallowHandle _ -> failwith "TODO: convert_expr EShallowHandle"
   | EDeepHandle (contid, contargs, hdlid, hdlargs, iargs) ->
       let _, _, thdlcl, hdlid = (hdlid : _ funcid :> _ * _ * _ * int32) in
       let hdlcid = TMap.recid_of_type tm (TClosArg thdlcl) in
-      let gen_hdl_struct = convert_new_struct tm new_meta procinfo hdlargs BLnone hdlcid false cinfo in
-      let iargs = convert_exprs tm new_meta procinfo iargs BLnone cinfo in
+      let gen_hdl_struct = convert_new_struct tm lenv procinfo hdlargs BLnone hdlcid false cinfo in
+      let iargs = convert_exprs tm lenv procinfo iargs BLnone cinfo in
       let _, tcret, tcontcl, contid = (contid : _ funcid :> _ * _ * _ * int32) in
-      NewMetadata.add_export_function (NewMetadata.g_of_t new_meta) contid;
+      GEnv.add_export_function (LEnv.to_genv lenv) contid;
       let contcid = TMap.recid_of_type tm (TClosArg tcontcl) in
-      let gen_cont_struct = convert_new_struct tm new_meta procinfo contargs BLnone contcid false cinfo in
+      let gen_cont_struct = convert_new_struct tm lenv procinfo contargs BLnone contcid false cinfo in
       let tcontid = TMap.recid_of_type tm (TCont tcret) in
-      do_box tm new_meta box (fun acc ->
-        (if can_early_ret then ReturnCall (Int32.add (NewMetadata.fun_offset (NewMetadata.g_of_t new_meta)) hdlid)
-         else Call (Int32.add (NewMetadata.fun_offset (NewMetadata.g_of_t new_meta)) hdlid)) ^+
+      do_box tm lenv box (fun acc ->
+        (if can_early_ret then ReturnCall (Int32.add (GEnv.fun_offset (LEnv.to_genv lenv)) hdlid)
+         else Call (Int32.add (GEnv.fun_offset (LEnv.to_genv lenv)) hdlid)) ^+
         gen_hdl_struct (
         iargs (
         gen_cont_struct (
         ContNew tcontid ^+
-        RefFunc (Int32.add (NewMetadata.fun_offset (NewMetadata.g_of_t new_meta)) contid) ^+
+        RefFunc (Int32.add (GEnv.fun_offset (LEnv.to_genv lenv)) contid) ^+
         acc))))
 and convert_exprs : type a b. _ -> _ -> _ -> a expr_list -> (a, b) box_list -> _ -> instr_conv =
-  fun (tm : tmap) (new_meta : new_meta) (procinfo : procinfo)
+  fun (tm : tmap) (lenv : lenv) (procinfo : procinfo)
       (es : a expr_list) box (cinfo : clos_info) -> match box, es with
   | _, ELnil -> Fun.id
   | BLnone, ELcons (ehd, etl) ->
-      let f = convert_expr tm new_meta procinfo ehd BNone None cinfo in
-      let f2 = convert_exprs tm new_meta procinfo etl BLnone cinfo in
+      let f = convert_expr tm lenv procinfo ehd BNone None cinfo in
+      let f2 = convert_exprs tm lenv procinfo etl BLnone cinfo in
       fun acc -> f2 (f acc)
   | BLcons (bhd, btl), ELcons (ehd, etl) ->
-      let f = convert_expr tm new_meta procinfo ehd bhd None cinfo in
-      let f2 = convert_exprs tm new_meta procinfo etl btl cinfo in
+      let f = convert_expr tm lenv procinfo ehd bhd None cinfo in
+      let f2 = convert_exprs tm lenv procinfo etl btl cinfo in
       fun acc -> f2 (f acc)
 and convert_new_struct : type a b. _ -> _ -> _ -> a expr_list -> (a, b) box_list -> _ -> _ -> _ -> instr_conv =
-  fun (tm : tmap) (new_meta : new_meta) (procinfo : procinfo)
+  fun (tm : tmap) (lenv : lenv) (procinfo : procinfo)
       (cls : a expr_list) box (fcid : int32) (needs_exact_id : bool) (cinfo : clos_info) ->
   let open Wasm.Instruction in
   match cls with
   | ELnil -> fun acc -> RefNull Wasm.Type.(if needs_exact_id then VarHT fcid else NoneHT) ^+ acc
-  | ELcons _ -> let f = convert_exprs tm new_meta procinfo cls box cinfo in fun acc -> StructNew (fcid, Explicit) ^+ f acc
+  | ELcons _ -> let f = convert_exprs tm lenv procinfo cls box cinfo in fun acc -> StructNew (fcid, Explicit) ^+ f acc
 
 (* These two functions return the instructions in reverse order *)
-let convert_anyblock (tm : tmap) (new_meta : new_meta) (procinfo : procinfo)
+let convert_anyblock (tm : tmap) (lenv : lenv) (procinfo : procinfo)
                      (b : 'a block) (is_last : mfunid option) (cinfo : clos_info) : Wasm.instr nlist =
-  let b = convert_block tm new_meta procinfo b BNone (Option.map (fun fid -> (fid, 0l)) is_last) cinfo in b empty_nlist
+  let b = convert_block tm lenv procinfo b BNone (Option.map (fun fid -> (fid, 0l)) is_last) cinfo in b empty_nlist
 let convert_finisher : type a b. _ -> _ -> _ -> (a, b) finisher -> _ =
-  fun (tm : tmap) (new_meta : new_meta) (procinfo : procinfo)
+  fun (tm : tmap) (lenv : lenv) (procinfo : procinfo)
       (f : (a, b) finisher) (is_last : last_info) (cinfo : clos_info) : Wasm.instr nlist ->
   match f with
   | FId _ -> empty_nlist
   | FMap (v, _, b) ->
       let _, v = (v : _ varid :> _ * int32) in
-      let b = convert_block tm new_meta procinfo b BNone is_last cinfo in
+      let b = convert_block tm lenv procinfo b BNone is_last cinfo in
       b (nlist_of_list Wasm.Instruction.[LocalSet v])
 
-let convert_hdl (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (type a b c) (f : (a, c, b) fhandler) : Wasm.fundef =
+let convert_hdl (tm : tmap) (genv : GEnv.t) (procinfo : procinfo) (type a b c) (f : (a, c, b) fhandler) : Wasm.fundef =
   let tis = f.fh_tis in
   let nargs =
     let rec inner : type a. a typ_list -> int32 -> int32 = fun ts n -> match ts with TLnil -> n | TLcons (_, ts) -> inner ts (Int32.succ n) in
     inner tis 3l in
-  let new_meta = NewMetadata.extend glob nargs (List.map (fun (Type t) -> TMap.val_of_type tm t) f.fh_locals) in
+  let lenv = LEnv.extend genv nargs (List.map (fun (Type t) -> TMap.val_of_type tm t) f.fh_locals) in
   let (tcont, contidx), contcl = (f.fh_contarg : _ varid * mvarid :> (_ * int32) * int32) in
   let tret = match f.fh_finisher with FId t -> (t : b typ) | FMap (_, t, _) -> t in
   let contid, fun_typ = TMap.recids_of_handler tm tcont tis tret in
@@ -1426,7 +1433,7 @@ let convert_hdl (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (type a
         | [] -> len, convert_straight_nlist acc
         | Handler (eid, _, _, _) :: tl -> inner tl (Int32.succ len) ((let _, _, eid = (eid : _ effectid :> _ * _ * int32) in eid, OnLabel len) ^+ acc)
       in inner f.fh_handlers 0l empty_nlist in
-    let code = convert_finisher tm new_meta procinfo f.fh_finisher (Some (f.fh_id, nblocks)) cinfo in
+    let code = convert_finisher tm lenv procinfo f.fh_finisher (Some (f.fh_id, nblocks)) cinfo in
     let code = Return ^+ code @+ nlist_of_list [Resume (contid, handlers)] in
     let rec do_cases nblocks (cases : _ handler list) code = match cases with
       | [] -> code
@@ -1436,7 +1443,7 @@ let convert_hdl (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (type a
           let eargs, _, _ = (eid : _ effectid :> _ * _ * _) in
           let blkid = TMap.recid_of_handler_block tm contid eargs in
           let code = nlist_of_list Wasm.Instruction.[LocalSet vcid; Block (Wasm.Type.VarBlockType blkid, convert_nlist code)] in
-          let blk = convert_block tm new_meta procinfo blk BNone (Some (f.fh_id, nblocks)) cinfo in
+          let blk = convert_block tm lenv procinfo blk BNone (Some (f.fh_id, nblocks)) cinfo in
           let code = match vars with
             | VLnil -> Drop ^+ code
             | VLcons (v, VLnil) ->
@@ -1450,7 +1457,7 @@ let convert_hdl (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (type a
                     | VLcons (_, vtl) -> inner vtl (Int.succ acc) in
                   inner vars 0 in
                 let tid = TMap.recid_of_type tm (TTuple n) in
-                let tmpv = NewMetadata.add_local tm new_meta (TTuple n) in
+                let tmpv = LEnv.add_local tm lenv (TTuple n) in
                 let rec acc_vars : type a. a varid_list -> _ = fun (vars : a varid_list) i acc -> match vars with
                   | VLnil -> acc
                   | VLcons (vhd, vtl) ->
@@ -1473,13 +1480,13 @@ let convert_hdl (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (type a
   in Wasm.{
     fn_name = None;
     fn_type = fun_typ;
-    fn_locals = NewMetadata.wasm_locals tm new_meta;
+    fn_locals = LEnv.wasm_locals tm lenv;
     fn_code = convert_straight_nlist (
       convert_clos (nlist_of_list [
       LocalGet contcl; LocalGet contidx; Loop (Wasm.Type.VarBlockType finalblk, convert_nlist code)]));
   }
 
-let convert_builtin (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (_fid : mfunid)
+let convert_builtin (tm : tmap) (genv : GEnv.t) (procinfo : procinfo) (_fid : mfunid)
                     (type g a b) (fb : (g, a, b) fbuiltin) : Wasm.fundef = match fb with
   | FBHere ->
     let fun_typ = TMap.recid_of_functyp tm TLnil TSpawnLocation in
@@ -1711,7 +1718,7 @@ let convert_builtin (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (_f
         StructNew (TMap.pid_list_tid, Explicit) ^+
         GlobalGet angels_vid ^+
         save_process 3l @@ nlist_of_list [
-        Suspend (Int32.add (NewMetadata.effect_offset glob) (TMap.spawn_offset tm));
+        Suspend (Int32.add (GEnv.effect_offset genv) (TMap.spawn_offset tm));
         LocalGet 1l;
       ];
     }
@@ -1724,7 +1731,7 @@ let convert_builtin (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (_f
       fn_locals = (match oadd_loc with None -> [||] | Some add_loc -> [|add_loc|]);
       fn_code = let open Instruction in convert_nlist @@
         save_process 3l @@ nlist_of_list [
-        Suspend (Int32.add (NewMetadata.effect_offset glob) (TMap.spawn_offset tm));
+        Suspend (Int32.add (GEnv.effect_offset genv) (TMap.spawn_offset tm));
         LocalGet 1l;
       ];
     }
@@ -1737,14 +1744,14 @@ let convert_builtin (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (_f
       fn_locals = (match oadd_loc with None -> [||] | Some add_loc -> [|add_loc|]);
       fn_code = let open Type in let open Instruction in convert_nlist @@
         save_process 2l @@ nlist_of_list [
-        Suspend (Int32.add (NewMetadata.effect_offset glob) (TMap.wait_offset tm));
+        Suspend (Int32.add (GEnv.effect_offset genv) (TMap.wait_offset tm));
         BrOnCastFail (0l, (Null, EqHT), (NoNull, VarHT TMap.pid_active_tid));
         StructGet (TMap.pid_tid, 1l, None);
         LocalGet 0l;
       ];
     }
 
-let convert_fun_aux (tm : tmap) (new_meta : new_meta) (procinfo : procinfo) (ft : int32) (f : 'a block)
+let convert_fun_aux (tm : tmap) (lenv : lenv) (procinfo : procinfo) (ft : int32) (f : 'a block)
     (init_dest : (bool * Wasm.instr nlist, mfunid * 'a typ) Either.t) (closid : (anytyp_list * mvarid) option) : int32 option * Wasm.fundef =
   let clostid, cinfo = match closid with
     | None -> None, None
@@ -1752,37 +1759,37 @@ let convert_fun_aux (tm : tmap) (new_meta : new_meta) (procinfo : procinfo) (ft 
     | Some (TypeList ct, cid) ->
         let ctid = TMap.recid_of_type tm (TClosArg ct) in
         Some ctid, Some (ctid, cid) in
-  let code = convert_anyblock tm new_meta procinfo f (match init_dest with Either.Left _ -> None | Either.Right (fid, _) -> Some fid) cinfo in
+  let code = convert_anyblock tm lenv procinfo f (match init_dest with Either.Left _ -> None | Either.Right (fid, _) -> Some fid) cinfo in
   clostid, Wasm.{
     fn_name = (match init_dest with Either.Left (true, _) -> Some "main" | Either.Left (false, _) | Either.Right _ -> None);
     fn_type = ft;
-    fn_locals = NewMetadata.wasm_locals tm new_meta;
+    fn_locals = LEnv.wasm_locals tm lenv;
     fn_code = (match init_dest with
       | Either.Left (_, app_code) -> convert_nlist (app_code @+ code)
-      | Either.Right (_, tret) when NewMetadata.is_recursive new_meta ->
+      | Either.Right (_, tret) when LEnv.is_recursive lenv ->
           let tret = TMap.val_of_type tm tret in
           Wasm.(Instruction.[|Loop (Type.(ValBlockType (Some tret)), convert_nlist code)|])
       | Either.Right _ -> convert_nlist code);
   }
 
-let convert_fun (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (f : ('a, 'b) func') : int32 option * Wasm.fundef =
+let convert_fun (tm : tmap) (genv : GEnv.t) (procinfo : procinfo) (f : ('a, 'b) func') : int32 option * Wasm.fundef =
   let fun_typ = TMap.recid_of_functyp tm f.fun_args f.fun_ret in
   let nparams =
     let rec inner : type a. a typ_list -> _ = fun tl acc -> match tl with
       | TLnil -> acc
       | TLcons (_, tl) -> inner tl (Int32.succ acc) in
     inner f.fun_args 1l in
-  let new_meta = NewMetadata.extend glob nparams (List.map (fun (Type t) -> TMap.val_of_type tm t) f.fun_locals) in
+  let lenv = LEnv.extend genv nparams (List.map (fun (Type t) -> TMap.val_of_type tm t) f.fun_locals) in
   convert_fun_aux
-    tm new_meta procinfo fun_typ f.fun_block
+    tm lenv procinfo fun_typ f.fun_block
     (Either.Right (f.fun_id, f.fun_ret)) f.fun_converted_closure
-let convert_fst (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo) (f : 'b fstart) : int32 option * Wasm.fundef =
+let convert_fst (tm : tmap) (genv : GEnv.t) (procinfo : procinfo) (f : 'b fstart) : int32 option * Wasm.fundef =
   let fun_typ = TMap.recid_of_cfunctyp tm f.fst_ret in
-  let new_meta = NewMetadata.extend glob 1l (List.map (fun (Type t) -> TMap.val_of_type tm t) f.fst_locals) in
+  let lenv = LEnv.extend genv 1l (List.map (fun (Type t) -> TMap.val_of_type tm t) f.fst_locals) in
   convert_fun_aux
-    tm new_meta procinfo fun_typ f.fst_block
+    tm lenv procinfo fun_typ f.fst_block
     (Either.Right (f.fst_id, f.fst_ret)) f.fst_converted_closure
-let convert_fun_step2 (tm : tmap) (glob : NewMetadata.g) (f, clostyp : func * int32 option) : Wasm.fundef option = match f with
+let convert_fun_step2 (tm : tmap) (genv : GEnv.t) (f, clostyp : func * int32 option) : Wasm.fundef option = match f with
   | FContinuationStart _ | FHandler _ | FBuiltin _ -> None
   | FFunction f ->
   match f.fun_export_data with
@@ -1797,31 +1804,31 @@ let convert_fun_step2 (tm : tmap) (glob : NewMetadata.g) (f, clostyp : func * in
         fn_type;
         fn_locals = [||];
         fn_code = convert_nlist Wasm.Instruction.(
-          ReturnCall (Int32.add (NewMetadata.fun_offset glob) (f.fun_id :> int32)) ^+
+          ReturnCall (Int32.add (GEnv.fun_offset genv) (f.fun_id :> int32)) ^+
           RefNull clostyp ^+
           let rec inner : type a. _ -> _ -> a typ_list -> _ = fun i acc (ls : a typ_list) -> match ls with
             | TLnil -> acc
             | TLcons (_, ls) -> inner (Int32.succ i) (LocalGet i ^+ acc) ls
           in inner 0l empty_nlist f.fun_args);
       }
-let convert_funs (tm : tmap) (glob : NewMetadata.g) (procinfo : procinfo)
-                 (fs : func list) (is : NewMetadata.g -> Wasm.fundef list) : Wasm.fundef list =
-  let [@tail_mod_cons] rec inner glob fs acc = match fs with
-    | [] -> is glob @ List.filter_map (convert_fun_step2 tm glob) acc
+let convert_funs (tm : tmap) (genv : GEnv.t) (procinfo : procinfo)
+                 (fs : func list) (is : GEnv.t -> Wasm.fundef list) : Wasm.fundef list =
+  let [@tail_mod_cons] rec inner genv fs acc = match fs with
+    | [] -> is genv @ List.filter_map (convert_fun_step2 tm genv) acc
     | hd :: tl ->
         let _fid, fhd, acc = match hd with
           | FFunction hd ->
-              let ctid, fhd = convert_fun tm glob procinfo hd in (hd.fun_id :> int32), fhd, ((FFunction hd, ctid) :: acc)
+              let ctid, fhd = convert_fun tm genv procinfo hd in (hd.fun_id :> int32), fhd, ((FFunction hd, ctid) :: acc)
           | FContinuationStart hd ->
-              let ctid, fhd = convert_fst tm glob procinfo hd in (hd.fst_id :> int32), fhd, ((FContinuationStart hd, ctid) :: acc)
+              let ctid, fhd = convert_fst tm genv procinfo hd in (hd.fst_id :> int32), fhd, ((FContinuationStart hd, ctid) :: acc)
           | FHandler hd ->
-              let fhd = convert_hdl tm glob procinfo hd in (hd.fh_id :> int32), fhd, acc
+              let fhd = convert_hdl tm genv procinfo hd in (hd.fh_id :> int32), fhd, acc
           | FBuiltin (fid, hd) ->
-              let fhd = convert_builtin tm glob procinfo fid hd in (fid :> int32), fhd, acc in
-        fhd :: inner glob tl acc
-  in inner glob fs []
+              let fhd = convert_builtin tm genv procinfo fid hd in (fid :> int32), fhd, acc in
+        fhd :: inner genv tl acc
+  in inner genv fs []
 
-let convert_effects (tm : tmap) (es : EffectIDSet.t) (has_sched_effects : bool) : int32 list =
+let convert_effects (tm : tmap) (es : EffectIDSet.t) : int32 list =
   let es = EffectIDSet.elements es in
   let generic_tid =
     let open Wasm.Type in
@@ -1830,7 +1837,7 @@ let convert_effects (tm : tmap) (es : EffectIDSet.t) (has_sched_effects : bool) 
   let [@tail_mod_cons] rec map_append f l1 l2 = match l1 with
     | [] -> l2
     | hd :: tl -> f hd :: map_append f tl l2 in
-  map_append convert_effect es (if has_sched_effects then TMap.sched_effects tm else [])
+  map_append convert_effect es (TMap.sched_effects tm)
 
 type backend =
   | BackendNone
@@ -1962,30 +1969,30 @@ let prepare_imports (tm : tmap) (typ : Types.datatype) : Wasm.import array * int
     imports_ret.(nimports - 1 - i) <- { module_name = mn; item_name = fn; desc = FuncImport tid } in
   List.iteri convert_import imports;
   imports_ret, Some paux
-let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (paux : int32 option printer_aux option) (gid : int32)
+let generate_printer (tm : tmap) (genv : GEnv.t) (typ : Types.datatype) (paux : int32 option printer_aux option) (gid : int32)
     (tags : tagid Env.String.t) : Wasm.instr nlist =
   let open Wasm in let open Type in let open Value in let open Instruction in
   match paux with None -> nlist_of_list [GlobalSet gid] | Some paux ->
   let convert_printer (p : (instr nlist, int32) Either.t) : instr_conv = match p with
     | Either.Left il -> fun acc -> il @+ acc
-    | Either.Right fid -> fun acc -> Call (Int32.add (NewMetadata.fun_offset glob) fid) ^+ acc in
+    | Either.Right fid -> fun acc -> Call (Int32.add (GEnv.fun_offset genv) fid) ^+ acc in
   let add_string s code =
     String.fold_left (fun acc c -> Call (Option.get paux.paux_putc) ^+ Const (I32 (I32.of_int_s (Char.code c))) ^+ acc) code s in
-  let rec inner glob typ (sm : int32 Utility.stringmap) : int32 Utility.stringmap * (instr nlist, int32) Either.t = match typ with
+  let rec inner genv typ (sm : int32 Utility.stringmap) : int32 Utility.stringmap * (instr nlist, int32) Either.t = match typ with
     | Types.Not_typed -> failwith "TODO Irtowasm.generate_printer.inner Not_typed"
     | Types.Var _ -> failwith "TODO Irtowasm.generate_printer.inner Var"
-    | Types.Recursive (_, _, t) -> inner glob t sm (* Assume this is fine *)
-    | Types.Alias (_, _, t) -> inner glob t sm
+    | Types.Recursive (_, _, t) -> inner genv t sm (* Assume this is fine *)
+    | Types.Alias (_, _, t) -> inner genv t sm
     | Types.Application (at, ts) ->
         if Types.Abstype.equal at Types.list then
-          let sm, innerp = inner glob (snd (List.hd ts)) sm in
+          let sm, innerp = inner genv (snd (List.hd ts)) sm in
           let innerp = convert_printer innerp in
           let Type t = match ts with
             | [CommonTypes.PrimaryKind.Type, t] -> convert_datatype t
             | _ -> raise (internal_error "Invalid type application in generate_printer") in
           let unbox =
             really_unbox tm t (fun acc -> StructGet (TMap.list_tid, 0l, None) ^+ LocalGet 1l ^+ acc) in
-          let fref, fid = NewMetadata.add_function glob in
+          let fref, fid = GEnv.add_function genv in
           fref := Some {
             fn_name = None;
             fn_type = TMap.recid_of_sub_type tm (SubT (Final, [||], DefFuncT (FuncT ([|RefT (Null, VarHT TMap.list_tid)|], [||]))));
@@ -2015,8 +2022,8 @@ let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (
         | None ->
             let Type t = convert_datatype typ in
             let tv = TMap.val_of_type tm t in
-            let fref, fid = NewMetadata.add_function glob in
-            let sm, innerp = inner glob (ra.r_unwind ra.r_args ra.r_dual) (Utility.StringMap.add ra.r_unique_name fid sm) in
+            let fref, fid = GEnv.add_function genv in
+            let sm, innerp = inner genv (ra.r_unwind ra.r_args ra.r_dual) (Utility.StringMap.add ra.r_unique_name fid sm) in
             let innerp = convert_printer innerp in
             let funtid = TMap.recid_of_sub_type tm (SubT (Final, [||], DefFuncT (FuncT ([|tv|], [||])))) in
             fref := Some {
@@ -2030,7 +2037,7 @@ let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (
             };
             sm, Either.Right fid
       end
-    | Types.Meta t -> inner glob (Unionfind.find t) sm
+    | Types.Meta t -> inner genv (Unionfind.find t) sm
     | Types.Primitive CommonTypes.Primitive.Bool ->
         sm, Either.Left (nlist_of_list Instruction.[
           Call (Option.get paux.paux_putc); Const (I32 (I32.of_int_s (Char.code 'e')));
@@ -2047,8 +2054,8 @@ let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (
         ])
     | Types.Primitive CommonTypes.Primitive.Int ->
         let funtid = TMap.recid_of_sub_type tm Type.(SubT (Final, [||], DefFuncT (FuncT ([|NumT I64T|], [||])))) in
-        let auxfref, auxfunid = NewMetadata.add_function glob in
-        let fref, funid = NewMetadata.add_function glob in
+        let auxfref, auxfunid = GEnv.add_function genv in
+        let fref, funid = GEnv.add_function genv in
         auxfref := Some { fn_name = None; fn_type = funtid; fn_locals = [||]; fn_code = [|
           LocalGet 0l;
           Testop (I64 IntOp.Eqz);
@@ -2062,7 +2069,7 @@ let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (
             LocalGet 0l;
             Const (I64 (I64.of_bits 10L));
             Binop (I64 IntOp.DivU);
-            Call (Int32.add (NewMetadata.fun_offset glob) auxfunid);
+            Call (Int32.add (GEnv.fun_offset genv) auxfunid);
             LocalGet 0l;
             Const (I64 (I64.of_bits 10L));
             Binop (I64 IntOp.RemU);
@@ -2090,14 +2097,14 @@ let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (
             LocalGet 0l;
             Binop (I64 IntOp.Sub);
           |]);
-          Call (Int32.add (NewMetadata.fun_offset glob) auxfunid);
+          Call (Int32.add (GEnv.fun_offset genv) auxfunid);
         |]};
         sm, Either.Right funid
     | Types.Primitive CommonTypes.Primitive.Float -> failwith "TODO Irtowasm.generate_printer.inner Primitive Float"
     | Types.Primitive CommonTypes.Primitive.String ->
         let funtid = TMap.recid_of_sub_type tm Type.(SubT (Final, [||],
               DefFuncT (FuncT ([|RefT (NoNull, VarHT TMap.string_tid)|], [||])))) in
-        let fref, funid = NewMetadata.add_function glob in
+        let fref, funid = GEnv.add_function genv in
         fref := Some { fn_name = None; fn_type = funtid; fn_locals = Type.[|NumT I32T|]; fn_code = [|
           Const (I32 (I32.of_int_s (Char.code '"'))); Call (Option.get paux.paux_putc);
           LocalGet 0l;
@@ -2129,8 +2136,8 @@ let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (
           | RefT (NoNull, VarHT tid) -> tid (* Anything else *)
           | _ -> raise (internal_error "Invalid type conversion") in
         let funtid = TMap.recid_of_sub_type tm Type.(SubT (Final, [||], DefFuncT (FuncT ([|tv|], [||])))) in
-        let fref, funid = NewMetadata.add_function glob in
-        let sm, fields = Utility.StringMap.fold (fun n t (sm, acc) -> let sm, p = inner glob t sm in sm, (n, p) :: acc) fsm (sm, []) in
+        let fref, funid = GEnv.add_function genv in
+        let sm, fields = Utility.StringMap.fold (fun n t (sm, acc) -> let sm, p = inner genv t sm in sm, (n, p) :: acc) fsm (sm, []) in
         let is_tuple =
           let rec inner acc fields = match fields with
             | [] -> Some (List.rev acc)
@@ -2162,7 +2169,7 @@ let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (
         sm, Either.Right funid
     | Types.Record _ -> failwith "TODO Irtowasm.generate_printer.inner Record"
     | Types.Variant (Types.Row (fsm, _, _)) ->
-        let fref, fid = NewMetadata.add_function glob in
+        let fref, fid = GEnv.add_function genv in
         let funtid = TMap.recid_of_sub_type tm (SubT (Final, [||], DefFuncT (FuncT ([|RefT (NoNull, VarHT TMap.variant_tid)|], [||])))) in
         let sm, cs = Utility.StringMap.fold (fun n t (sm, cs) -> match Env.String.find_opt n tags with
           | None -> sm, cs
@@ -2171,9 +2178,9 @@ let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (
               | Types.Present Types.Record (Types.Row (fsm, _, _)) when Utility.StringMap.is_empty fsm ->
                   sm, (n, id, Type (TTuple 0), Either.Left (nlist_of_list [Drop])) :: cs
               | Types.Record _
-              | Types.Present Types.Record _ -> let sm, p = inner glob t sm in sm, (n, id, Wasmuir.convert_datatype t, p) :: cs
+              | Types.Present Types.Record _ -> let sm, p = inner genv t sm in sm, (n, id, Wasmuir.convert_datatype t, p) :: cs
               | _ ->
-                  let sm, p = inner glob t sm in
+                  let sm, p = inner genv t sm in
                   let p = Either.Left (add_string ")" (convert_printer p (add_string "(" empty_nlist))) in
                   sm, (n, id, Wasmuir.convert_datatype t, p) :: cs) fsm (sm, []) in
         let branches, ncases, min_id =
@@ -2225,20 +2232,20 @@ let generate_printer (tm : tmap) (glob : NewMetadata.g) (typ : Types.datatype) (
     | Types.Variant _ -> failwith "TODO Irtowasm.generate_printer.inner Variant"
     | Types.Table _ -> failwith "TODO Irtowasm.generate_printer.inner Table"
     | Types.Lens _ -> failwith "TODO Irtowasm.generate_printer.inner Lens"
-    | Types.ForAll (_, t) -> inner glob t sm
+    | Types.ForAll (_, t) -> inner genv t sm
     | Types.Effect _ -> failwith "TODO Irtowasm.generate_printer.inner Effect"
     | Types.Operation _ -> failwith "TODO Irtowasm.generate_printer.inner Operation"
     | Types.Row _ -> failwith "TODO Irtowasm.generate_printer.inner Row"
     | Types.Closed -> failwith "TODO Irtowasm.generate_printer.inner Closed"
     | Types.Absent -> failwith "TODO Irtowasm.generate_printer.inner Absent"
-    | Types.Present t -> inner glob t sm
+    | Types.Present t -> inner genv t sm
     | Types.Input _ -> failwith "TODO Irtowasm.generate_printer.inner Input"
     | Types.Output _ -> failwith "TODO Irtowasm.generate_printer.inner Output"
     | Types.Select _ -> failwith "TODO Irtowasm.generate_printer.inner Select"
     | Types.Choice _ -> failwith "TODO Irtowasm.generate_printer.inner Choice"
     | Types.Dual _ -> failwith "TODO Irtowasm.generate_printer.inner Dual"
     | Types.End -> failwith "TODO Irtowasm.generate_printer.inner End" in
-  let _, innerp = inner glob typ Utility.StringMap.empty in
+  let _, innerp = inner genv typ Utility.StringMap.empty in
   let code = nlist_of_list [GlobalGet gid; GlobalSet gid] in
   let code = convert_printer innerp code in
   let code = add_string (Types.string_of_datatype typ) (add_string " : " code) in
@@ -2251,12 +2258,12 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
     let cg = convert_global tm (0, Type m.mod_main, Some "_init_result") in
     cg in
   let imports, paux = prepare_imports tm main_typ in
-  let glob =
+  let genv =
     let mainid = m.mod_nfuns in
     let nfuns = Int32.succ mainid in
     let neffects = m.mod_neffs in
     let nglob = Int32.succ m.mod_nglobals in
-    NewMetadata.empty_global ~nimports:(Int32.of_int (Array.length imports)) ~nfuns ~neffects ~nglob in
+    GEnv.empty_global ~nimports:(Int32.of_int (Array.length imports)) ~nfuns ~neffects ~nglob in
   let procinfo, main_tid, generate_exit_code, mainid =
     if m.mod_process_level = PL_NoProcess then None, TMap.main_func_type, Fun.id, m.mod_nfuns
     else begin
@@ -2269,7 +2276,7 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
       let self_ctid = TMap.recid_of_sub_type tm (SubT (Final, [||], DefContT (ContT (VarHT self_ftid)))) in
       let self_bt = TMap.recid_of_sub_type tm (SubT (Final, [||], DefFuncT (
         FuncT ([|RefT (NoNull, VarHT self_ctid)|], [|RefT (Null, EqHT)|])))) in
-      let spawn_eid = Int32.add (NewMetadata.effect_offset glob) (TMap.spawn_offset tm) in
+      let spawn_eid = Int32.add (GEnv.effect_offset genv) (TMap.spawn_offset tm) in
       let spawn_cbid = TMap.recid_of_type tm (TClosed (TLnil, TVar)) in
       let spawn_ctid =
         if wasm_yield_is_switch then
@@ -2279,15 +2286,15 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
         else self_ctid in
       let spawn_bt = TMap.recid_of_sub_type tm (SubT (Final, [||], DefFuncT (
         FuncT ([||], [|RefT (NoNull, VarHT spawn_cbid); RefT (NoNull, VarHT spawn_ctid)|])))) in
-      let yield_eid = Int32.add (NewMetadata.effect_offset glob) (TMap.yield_offset tm) in
-      let wait_eid = Int32.add (NewMetadata.effect_offset glob) (TMap.wait_offset tm) in
+      let yield_eid = Int32.add (GEnv.effect_offset genv) (TMap.yield_offset tm) in
+      let wait_eid = Int32.add (GEnv.effect_offset genv) (TMap.wait_offset tm) in
       let wait_bt = TMap.recid_of_sub_type tm (SubT (Final, [||], DefFuncT (
         FuncT ([||], [|RefT (NoNull, VarHT TMap.pid_active_tid); RefT (NoNull, VarHT TMap.process_waiting_tid)|])))) in
-      let exit_eid = Int32.add (NewMetadata.effect_offset glob) (TMap.exit_offset tm) in
+      let exit_eid = Int32.add (GEnv.effect_offset genv) (TMap.exit_offset tm) in
       let exit_ftid = TMap.recid_of_sub_type tm (SubT (Final, [||], DefFuncT (FuncT ([|RefT (Null, EqHT)|], [|RefT (Null, EqHT)|])))) in
       let exit_ctid = TMap.recid_of_sub_type tm (SubT (Final, [||], DefContT (ContT (VarHT exit_ftid)))) in
-      let procinfo_vid = NewMetadata.add_global tm glob None TInt [|Const (I64 (I64.of_bits Int64.zero))|] in
-      let angels_vid = if needs_angels then NewMetadata.add_raw_global glob (
+      let procinfo_vid = GEnv.add_global tm genv None TInt [|Const (I64 (I64.of_bits Int64.zero))|] in
+      let angels_vid = if needs_angels then GEnv.add_raw_global genv (
         (GlobalT (Var, RefT (Null, VarHT TMap.pid_list_tid))),
         [|RefNull (VarHT TMap.pid_list_tid)|],
         None) else 0l in
@@ -2348,14 +2355,14 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
             |]);
           ]))) in
         if wasm_yield_is_switch then
-          let all_vid = NewMetadata.add_raw_global glob
+          let all_vid = GEnv.add_raw_global genv
               (GlobalT (Var, RefT (NoNull, VarHT TMap.process_list_tid)), [|
                 StructNew (TMap.pid_tid, Implicit);
                 RefNull (VarHT TMap.process_active_tid);
                 RefNull (VarHT TMap.process_list_tid);
                 StructNew (TMap.process_list_tid, Explicit);
               |], None) in
-          let cache_vid = NewMetadata.add_raw_global glob
+          let cache_vid = GEnv.add_raw_global genv
               (GlobalT (Var, RefT (NoNull, VarHT TMap.process_list_tid)), [|
                 StructNew (TMap.pid_tid, Implicit);
                 RefNull (VarHT TMap.process_active_tid);
@@ -2367,7 +2374,7 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
           let cache_set, cache_get, cache_tee =
               GlobalSet cache_vid, GlobalGet cache_vid, fun acc -> GlobalGet cache_vid ^+ GlobalSet cache_vid ^+ acc in
           let do_select = do_select None (all_set, all_get) (cache_set, cache_get, cache_tee) in
-          let switch_proc_ref, switch_proc_fid = NewMetadata.add_function glob in
+          let switch_proc_ref, switch_proc_fid = GEnv.add_function genv in
           switch_proc_ref := Some {
               fn_name = None;
               fn_type = TMap.main_func_type;
@@ -2378,7 +2385,7 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
                   (fun _ acc -> If (ValBlockType None, [|Const (I32 I32.zero); Return|], [||]) ^+ acc);
               |]
             };
-          (fun b acc -> (if b then (^+) (Br 0l) else Fun.id) @@ Call (Int32.add (NewMetadata.fun_offset glob) switch_proc_fid) ^+ acc),
+          (fun b acc -> (if b then (^+) (Br 0l) else Fun.id) @@ Call (Int32.add (GEnv.fun_offset genv) switch_proc_fid) ^+ acc),
             all_set, all_get, all_tee, cache_set, cache_get, cache_tee, 8
         else
           let all_vid, cache_vid = 7l, 8l in
@@ -2389,14 +2396,14 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
             all_set, all_get, all_tee, cache_set, cache_get, cache_tee, 9 in
       let do_yield_fun, oadd_loc, do_update =
         if wasm_yield_is_switch then
-          let tmp_vid = NewMetadata.add_raw_global glob
+          let tmp_vid = GEnv.add_raw_global genv
               (GlobalT (Var, RefT (NoNull, VarHT TMap.process_list_tid)), [|
                 StructNew (TMap.pid_tid, Implicit);
                 RefNull (VarHT TMap.process_active_tid);
                 RefNull (VarHT TMap.process_list_tid);
                 StructNew (TMap.process_list_tid, Explicit);
               |], None) in
-          let yield_ref, yield_fun = NewMetadata.add_function glob in
+          let yield_ref, yield_fun = GEnv.add_function genv in
           let oadd_loc, do_update =
             Some (RefT (NoNull, VarHT TMap.process_active_tid)),
             (fun tmp2_vid acc ->
@@ -2454,7 +2461,7 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
           acc in
         if Settings.get optimize_size then
           let check_yield_fun =
-            let fref, fid = NewMetadata.add_function glob in
+            let fref, fid = GEnv.add_function genv in
             fref := Some {
               fn_name = None;
               fn_type = TMap.main_func_type;
@@ -2462,14 +2469,14 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
               fn_code = convert_nlist (do_check_yield empty_nlist)
             };
             fid in
-          fun acc -> Call (Int32.add (NewMetadata.fun_offset glob) check_yield_fun) ^+ acc
+          fun acc -> Call (Int32.add (GEnv.fun_offset genv) check_yield_fun) ^+ acc
         else do_check_yield in
       let self =
         if wasm_yield_is_switch then fun acc -> StructGet (TMap.process_list_tid, 0l, None) ^+ cache_get ^+ acc
-        else fun acc -> Suspend (Int32.add (NewMetadata.effect_offset glob) (TMap.self_offset tm)) ^+ acc in
+        else fun acc -> Suspend (Int32.add (GEnv.effect_offset genv) (TMap.self_offset tm)) ^+ acc in
       let procinfo = Some (angels_vid, check_yield_fun, do_yield_fun, oadd_loc, do_update, self) in
       (* Wrap the main function *)
-      NewMetadata.add_export_function glob m.mod_nfuns;
+      GEnv.add_export_function genv m.mod_nfuns;
       let generate_exit_code =
         if needs_angels then
           let angel_list = procinfo_angels_vid procinfo in fun trf ->
@@ -2479,7 +2486,7 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
             Loop (ValBlockType None, [|
               Block (ValBlockType (Some (RefT (Null, EqHT))), convert_nlist @@
                 do_update 0l @@ nlist_of_list [
-                Suspend (Int32.add (NewMetadata.effect_offset glob) (TMap.wait_offset tm));
+                Suspend (Int32.add (GEnv.effect_offset genv) (TMap.wait_offset tm));
                 (* Angel has not returned *)
                 BrOnCastFail (0l, (Null, EqHT), (NoNull, VarHT TMap.pid_active_tid)); (* Already done? *)
                 StructGet (TMap.pid_tid, 1l, None);
@@ -2497,7 +2504,7 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
             |]);
           |]) ^+ trf
         else fun trf -> Suspend exit_eid ^+ trf in
-      let initref, mainid = NewMetadata.add_function glob in
+      let initref, mainid = GEnv.add_function genv in
       let locals, loc2off = if wasm_yield_is_switch then [|
           NumT I32T;                                     (*         0: next pid *)
           RefT (Null, EqHT);                             (*         1: boxed value *)
@@ -2538,7 +2545,7 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
                             yield_eid, OnSwitch; wait_eid, OnLabel 1l;
                             exit_eid, OnLabel 4l;
                           |] else
-                            let self_eid = Int32.add (NewMetadata.effect_offset glob) (TMap.self_offset tm) in
+                            let self_eid = Int32.add (GEnv.effect_offset genv) (TMap.self_offset tm) in
                             [|
                               self_eid, OnLabel 0l; spawn_eid, OnLabel 2l;
                               yield_eid, OnLabel 4l; wait_eid, OnLabel 3l;
@@ -2653,8 +2660,8 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
                           [|RefT (NoNull, VarHT spawn_cbid); RefT (Null, VarHT TMap.process_active_tid)|],
                           [|RefT (Null, EqHT)|]
                         )))) in
-                      let spawn_aux_ref, spawn_aux_fid = NewMetadata.add_function glob in
-                      NewMetadata.add_export_function glob spawn_aux_fid;
+                      let spawn_aux_ref, spawn_aux_fid = GEnv.add_function genv in
+                      GEnv.add_export_function genv spawn_aux_fid;
                       spawn_aux_ref := Some {
                         fn_name = None;
                         fn_type = spawn_cbfid;
@@ -2670,7 +2677,7 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
                         ];
                       };
                       let spawn_cbcid = TMap.recid_of_sub_type tm (SubT (Final, [||], DefContT (ContT (VarHT spawn_cbfid)))) in [|
-                      RefFunc (Int32.add (NewMetadata.fun_offset glob) spawn_aux_fid);
+                      RefFunc (Int32.add (GEnv.fun_offset genv) spawn_aux_fid);
                       ContNew spawn_cbcid;
                       ContBind (spawn_cbcid, TMap.process_active_tid);
                     |] else
@@ -2732,7 +2739,7 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
           StructNew (TMap.process_list_tid, Explicit);
           RefNull (VarHT TMap.process_list_tid); (* Next processes *)
           ContNew TMap.process_active_tid;
-          RefFunc (Int32.add (NewMetadata.fun_offset glob) m.mod_nfuns); (* Wrapper function *)
+          RefFunc (Int32.add (GEnv.fun_offset genv) m.mod_nfuns); (* Wrapper function *)
           StructNew (TMap.pid_tid, Explicit);
           StructNew (TMap.pid_active_tid, Explicit);
           RefNull (VarHT TMap.waiting_list_tid); (* Processes waiting on main *)
@@ -2748,18 +2755,18 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
       };
       procinfo, TMap.process_active_ftid, generate_exit_code, mainid
     end in
-  let glob, main =
-    let new_meta = NewMetadata.extend glob 0l (List.map (fun (Type t) -> TMap.val_of_type tm t) m.mod_locals) in
-    let main_code = generate_printer tm glob main_typ paux m.mod_nglobals m.mod_tags in
+  let genv, main =
+    let lenv = LEnv.extend genv 0l (List.map (fun (Type t) -> TMap.val_of_type tm t) m.mod_locals) in
+    let main_code = generate_printer tm genv main_typ paux m.mod_nglobals m.mod_tags in
     let main_code = generate_exit_code main_code in
     let is_init = (Option.is_none procinfo, main_code) in
-    let _, main = convert_fun_aux tm new_meta procinfo main_tid m.mod_block (Either.Left is_init) None in
-    glob, main in
-  let funs = convert_funs tm glob procinfo m.mod_funs (fun glob -> main :: NewMetadata.wasm_funs glob) in
-  let globals = NewMetadata.wasm_globals glob in
-  let elems = NewMetadata.wasm_elems glob in
+    let _, main = convert_fun_aux tm lenv procinfo main_tid m.mod_block (Either.Left is_init) None in
+    genv, main in
+  let funs = convert_funs tm genv procinfo m.mod_funs (fun genv -> main :: GEnv.wasm_funs genv) in
+  let globals = GEnv.wasm_globals genv in
+  let elems = GEnv.wasm_elems genv in
   let globals = convert_globals tm m.mod_global_vars (main_res :: globals) in
-  let tags = convert_effects tm m.mod_effs (Option.is_some procinfo) in
+  let tags = convert_effects tm m.mod_effs in
   let types = TMap.to_wasm tm in
   let tags = Array.of_list tags in
   let elems = Array.of_list elems in
@@ -2771,5 +2778,5 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
     funs;
     imports;
     elems;
-    init = if use_init () then Some (Int32.add (NewMetadata.fun_offset glob) mainid) else None
+    init = if use_init () then Some (Int32.add (GEnv.fun_offset genv) mainid) else None
   }
