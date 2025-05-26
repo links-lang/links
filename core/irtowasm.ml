@@ -28,6 +28,12 @@ open Wasmuir
  * Updates to those structures are usually made in-place.
  *****************************************************************************)
 
+let wasm_prefer_globals
+  = Settings.(flag ~default:true "wasm_prefer_globals"
+              |> synopsis "Prefer the use of global variables instead of local variables"
+              |> convert parse_bool
+              |> sync)
+
 (* TODO: use cont.bind instead of struct.new *)
 
 (* TODO: make it so that TTuple TLnil becomes nothing *)
@@ -307,17 +313,39 @@ end = struct
   
   let to_wasm (env : t) : Wasm.Type.rec_type array = Array.of_list (List.rev (env.reftyps))
   
-  let spawn_offset (_ : t) : int32 = 0l
-  let self_offset (env : t) : int32 = if env.use_switch then raise (internal_error "$self offset while using switch") else 1l
-  let yield_offset (env : t) : int32 = if env.use_switch then 1l else 2l
-  let wait_offset (env : t) : int32 = if env.use_switch then 2l else 3l
-  let exit_offset (env : t) : int32 = if env.use_switch then 3l else 4l
+  let spawn_offset (_ : t) : int32 =
+    if Settings.get wasm_prefer_globals then raise (internal_error "$spawn offset while using globals") else
+    0l
+  let self_offset (env : t) : int32 =
+    if Settings.get wasm_prefer_globals then raise (internal_error "$self offset while using globals") else
+    if env.use_switch then raise (internal_error "$self offset while using switch") else
+    1l
+  let yield_offset (env : t) : int32 =
+    if Settings.get wasm_prefer_globals then
+      0l
+    else
+      if env.use_switch then 1l else
+      2l
+  let wait_offset (env : t) : int32 =
+    if Settings.get wasm_prefer_globals then
+      1l
+    else
+      if env.use_switch then 2l else
+      3l
+  let exit_offset (env : t) : int32 =
+    if Settings.get wasm_prefer_globals then
+      2l
+    else
+      if env.use_switch then 3l else
+      4l
   let sched_effects (env : t) : int32 list = let open Wasm.Type in
     if env.process_level = PL_NoProcess then [] else
-    let spawn_tid = recid_of_sub_type env (SubT (Final, [||], DefFuncT (FuncT (
-        [|RefT (NoNull, VarHT (recid_of_type env (TClosed (TLnil, TVar))))|],
-        (if env.use_switch then [|RefT (NoNull, VarHT pid_tid); RefT (Null, VarHT process_active_tid)|] else [|RefT (NoNull, VarHT pid_tid)|])
-      )))) in
+    let spawn_tid =
+      if Settings.get wasm_prefer_globals then 0l
+      else recid_of_sub_type env (SubT (Final, [||], DefFuncT (FuncT (
+          [|RefT (NoNull, VarHT (recid_of_type env (TClosed (TLnil, TVar))))|],
+          (if env.use_switch then [|RefT (NoNull, VarHT pid_tid); RefT (Null, VarHT process_active_tid)|] else [|RefT (NoNull, VarHT pid_tid)|])
+        )))) in
     let self_tid =
       if env.use_switch then 0l
       else recid_of_sub_type env (SubT (Final, [||], DefFuncT (FuncT ([||], [|RefT (NoNull, VarHT pid_tid)|])))) in
@@ -330,7 +358,11 @@ end = struct
         (if env.use_switch then [|RefT (Null, EqHT); RefT (Null, VarHT process_active_tid)|] else [|RefT (Null, EqHT)|])
       )))) in
     let exit_tid = recid_of_sub_type env (SubT (Final, [||], DefFuncT (FuncT ([||], [|RefT (Null, EqHT)|])))) in
-    if env.use_switch then [
+    if Settings.get wasm_prefer_globals then [
+      yield_tid;
+      wait_tid;
+      exit_tid;
+    ] else if env.use_switch then [
       spawn_tid;
       yield_tid;
       wait_tid;
@@ -959,30 +991,35 @@ let optimize_size
               |> convert parse_bool
               |> sync)
 
-(* angel threads list variable ID, maybe yield function, select next process, added local variable, post-suspend *)
-type procinfo = (int32 * instr_conv * instr_conv * Wasm.Type.val_type option * (int32 -> instr_conv) * instr_conv) option
+(* angel threads list variable ID, maybe yield function, select next process, added local variable, post-suspend, spawn process *)
+type procinfo = (int32 * instr_conv * instr_conv * Wasm.Type.val_type option * (int32 -> instr_conv) * (int32 -> int32 -> instr_conv) * instr_conv) option
 let gbl_count_reset = 100L (* Yield every [gbl_count_reset] calls *)
 let generate_yield (procinfo : procinfo) : instr_conv = match procinfo with
   | None -> Fun.id
-  | Some (_, yield_fun, _, _, _, _) -> yield_fun
+  | Some (_, yield_fun, _, _, _, _, _) -> yield_fun
 
 let procinfo_angels_vid (procinfo : procinfo) : int32 = match procinfo with
   | None -> raise (internal_error "Requesting angels vid, but module is actorless")
-  | Some (angels_vid, _, _, _, _, _) -> angels_vid
+  | Some (angels_vid, _, _, _, _, _, _) -> angels_vid
 
 let procinfo_switch_process (procinfo : procinfo) : instr_conv = match procinfo with
   | None -> raise (internal_error "Requesting process switching instr_conv, but module is actorless")
-  | Some (_, _, switch_process, _, _, _) -> switch_process
+  | Some (_, _, switch_process, _, _, _, _) -> switch_process
 
 let procinfo_save_process (procinfo : procinfo) : Wasm.Type.val_type option * (int32 -> instr_conv) =
   match procinfo with
   | None -> raise (internal_error "Requesting process saving instr_conv, but module is actorless")
-  | Some (_, _, _, oadd_loc, save_process, _) -> oadd_loc, save_process
+  | Some (_, _, _, oadd_loc, save_process, _, _) -> oadd_loc, save_process
+
+let procinfo_spawn_process (procinfo : procinfo) : Wasm.Type.val_type option * (int32 -> int32 -> instr_conv) =
+  match procinfo with
+  | None -> raise (internal_error "Requesting process spawning instr_conv, but module is actorless")
+  | Some (_, _, _, oadd_loc, _, spawn_process, _) -> oadd_loc, spawn_process
 
 let procinfo_self (procinfo : procinfo) : instr_conv =
   match procinfo with
   | None -> raise (internal_error "Requesting self process instr_conv, but module is actorless")
-  | Some (_, _, _, _, _, self) -> self
+  | Some (_, _, _, _, _, _, self) -> self
 
 type last_info = (mfunid * int32) option
 let incr_depth_n (is_last : last_info) (depth : int32) : last_info = match is_last with
@@ -1706,7 +1743,7 @@ let convert_builtin (tm : tmap) (genv : genv) (procinfo : procinfo) (_fid : mfun
   | FBSpawnAngelAt ->
     let fun_typ = TMap.recid_of_functyp tm (TLcons (TSpawnLocation, TLcons (TClosed (TLnil, TVar), TLnil))) TProcess in
     let angels_vid = procinfo_angels_vid procinfo in
-    let oadd_loc, save_process = procinfo_save_process procinfo in
+    let oadd_loc, spawn_process = procinfo_spawn_process procinfo in
     Wasm.{
       fn_name = None;
       fn_type = fun_typ;
@@ -1717,23 +1754,17 @@ let convert_builtin (tm : tmap) (genv : genv) (procinfo : procinfo) (_fid : mfun
         GlobalSet angels_vid ^+
         StructNew (TMap.pid_list_tid, Explicit) ^+
         GlobalGet angels_vid ^+
-        save_process 3l @@ nlist_of_list [
-        Suspend (Int32.add (GEnv.effect_offset genv) (TMap.spawn_offset tm));
-        LocalGet 1l;
-      ];
+        spawn_process 3l 1l empty_nlist;
     }
   | FBSpawnAt ->
     let fun_typ = TMap.recid_of_functyp tm (TLcons (TSpawnLocation, TLcons (TClosed (TLnil, TVar), TLnil))) TProcess in
-    let oadd_loc, save_process = procinfo_save_process procinfo in
+    let oadd_loc, spawn_process = procinfo_spawn_process procinfo in
     Wasm.{
       fn_name = None;
       fn_type = fun_typ;
       fn_locals = (match oadd_loc with None -> [||] | Some add_loc -> [|add_loc|]);
-      fn_code = let open Instruction in convert_nlist @@
-        save_process 3l @@ nlist_of_list [
-        Suspend (Int32.add (GEnv.effect_offset genv) (TMap.spawn_offset tm));
-        LocalGet 1l;
-      ];
+      fn_code = convert_nlist @@
+        spawn_process 3l 1l empty_nlist;
     }
   | FBWait ->
     let fun_typ = TMap.recid_of_functyp tm (TLcons (TProcess, TLnil)) TVar in
@@ -2276,7 +2307,6 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
       let self_ctid = TMap.recid_of_sub_type tm (SubT (Final, [||], DefContT (ContT (VarHT self_ftid)))) in
       let self_bt = TMap.recid_of_sub_type tm (SubT (Final, [||], DefFuncT (
         FuncT ([|RefT (NoNull, VarHT self_ctid)|], [|RefT (Null, EqHT)|])))) in
-      let spawn_eid = Int32.add (GEnv.effect_offset genv) (TMap.spawn_offset tm) in
       let spawn_cbid = TMap.recid_of_type tm (TClosed (TLnil, TVar)) in
       let spawn_ctid =
         if wasm_yield_is_switch then
@@ -2298,8 +2328,138 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
         (GlobalT (Var, RefT (Null, VarHT TMap.pid_list_tid))),
         [|RefNull (VarHT TMap.pid_list_tid)|],
         None) else 0l in
-      let select_next_process, _all_set, _all_get, all_tee, cache_set, cache_get, _cache_tee, nlocals =
-        let do_select = fun vbt (_all_set, all_get) (cache_set, cache_get, cache_tee) on_selected on_selected_if ->
+      let locals,
+          (nextpid_set, nextpid_get, _nextpid_tee),
+          (bval_set, bval_get, _bval_tee),
+          (selfct_set, selfct_get, _selfct_tee),
+          (spawnct_set, spawnct_get, _spawnct_tee),
+          (spawncb_set, spawncb_get, _spawncb_tee),
+          (yieldct_set, yieldct_get, _yieldct_tee),
+          (waitct_set, waitct_get, _waitct_tee),
+          (pid_set, pid_get, _pid_tee),
+          (_all_set, all_get, all_tee),
+          (cache_set, cache_get, cache_tee) =
+        let global_sgt vid = GlobalSet vid, GlobalGet vid, fun acc -> GlobalGet vid ^+ GlobalSet vid ^+ acc in
+        let local_sgt vid = LocalSet vid, LocalGet vid, fun acc -> LocalTee vid ^+ acc in
+        let fail_sgt = Unreachable, Unreachable, fun _ -> raise (internal_error "Tried to tee an invalid variable") in
+        match Settings.get wasm_prefer_globals, wasm_yield_is_switch with
+        | true, true ->
+            let nextpid_vid = GEnv.add_raw_global genv (GlobalT (Var, NumT I32T), [|Const (I32 I32.one)|], None) in
+            let all_vid = GEnv.add_raw_global genv
+                (GlobalT (Var, RefT (NoNull, VarHT TMap.process_list_tid)), [|
+                  StructNew (TMap.pid_tid, Implicit);
+                  RefNull (VarHT TMap.process_active_tid);
+                  RefNull (VarHT TMap.process_list_tid);
+                  StructNew (TMap.process_list_tid, Explicit);
+                |], None) in
+            let cache_vid = GEnv.add_raw_global genv
+                (GlobalT (Var, RefT (NoNull, VarHT TMap.process_list_tid)), [|
+                  StructNew (TMap.pid_tid, Implicit);
+                  RefNull (VarHT TMap.process_active_tid);
+                  RefNull (VarHT TMap.process_list_tid);
+                  StructNew (TMap.process_list_tid, Explicit);
+                |], None) in
+            [|
+              RefT (Null, EqHT);                             (* 0: boxed value *)
+              RefT (NoNull, VarHT TMap.process_waiting_tid); (* 1: $wait continuation *)
+              RefT (NoNull, VarHT TMap.pid_active_tid);      (* 2: $spawn/$wait PID / main/returned process PID *)
+            |],
+            global_sgt nextpid_vid, (* next pid *)
+            local_sgt 0l,           (* boxed value *)
+            fail_sgt,               (* $self effect continuation *)
+            fail_sgt,               (* $spawn effect continuation *)
+            fail_sgt,               (* $spawn callback *)
+            fail_sgt,               (* $yield continuation *)
+            local_sgt 1l,           (* $wait continuation *)
+            local_sgt 2l,           (* $spawn/$wait PID / main/returned process PID *)
+            global_sgt all_vid,     (* all active and zombie processes *)
+            global_sgt cache_vid    (* active processes cache *)
+        | true, false ->
+            let nextpid_vid = GEnv.add_raw_global genv (GlobalT (Var, NumT I32T), [|Const (I32 I32.one)|], None) in
+            let cache_vid = GEnv.add_raw_global genv
+                (GlobalT (Var, RefT (NoNull, VarHT TMap.process_list_tid)), [|
+                  StructNew (TMap.pid_tid, Implicit);
+                  RefNull (VarHT TMap.process_active_tid);
+                  RefNull (VarHT TMap.process_list_tid);
+                  StructNew (TMap.process_list_tid, Explicit);
+                |], None) in
+            [|
+              RefT (Null, EqHT);                             (* 0: boxed value *)
+              RefT (NoNull, VarHT TMap.process_active_tid);  (* 1: $yield continuation *)
+              RefT (NoNull, VarHT TMap.process_waiting_tid); (* 2: $wait continuation *)
+              RefT (NoNull, VarHT TMap.pid_active_tid);      (* 3: $spawn/$wait PID / main/returned process PID *)
+              RefT (NoNull, VarHT TMap.process_list_tid);    (* 4: all active and zombie processes *)
+            |],
+            global_sgt nextpid_vid, (* next pid *)
+            local_sgt 0l,           (* boxed value *)
+            fail_sgt,               (* $self effect continuation *)
+            fail_sgt,               (* $spawn effect continuation *)
+            fail_sgt,               (* $spawn callback *)
+            local_sgt 1l,           (* $yield continuation *)
+            local_sgt 2l,           (* $wait continuation *)
+            local_sgt 3l,           (* $spawn/$wait PID / main/returned process PID *)
+            local_sgt 4l,           (* all active and zombie processes *)
+            global_sgt cache_vid    (* active processes cache *)
+        | false, true ->
+            let all_vid = GEnv.add_raw_global genv
+                (GlobalT (Var, RefT (NoNull, VarHT TMap.process_list_tid)), [|
+                  StructNew (TMap.pid_tid, Implicit);
+                  RefNull (VarHT TMap.process_active_tid);
+                  RefNull (VarHT TMap.process_list_tid);
+                  StructNew (TMap.process_list_tid, Explicit);
+                |], None) in
+            let cache_vid = GEnv.add_raw_global genv
+                (GlobalT (Var, RefT (NoNull, VarHT TMap.process_list_tid)), [|
+                  StructNew (TMap.pid_tid, Implicit);
+                  RefNull (VarHT TMap.process_active_tid);
+                  RefNull (VarHT TMap.process_list_tid);
+                  StructNew (TMap.process_list_tid, Explicit);
+                |], None) in
+            [|
+              NumT I32T;                                     (* 0: next pid *)
+              RefT (Null, EqHT);                             (* 1: boxed value *)
+              RefT (NoNull, VarHT self_ctid);                (* 2: $self effect continuation *)
+              RefT (NoNull, VarHT spawn_ctid);               (* 3: $spawn effect continuation *)
+              RefT (NoNull, VarHT spawn_cbid);               (* 4: $spawn callback *)
+              RefT (NoNull, VarHT TMap.process_active_tid);  (* 5: $yield continuation *)
+              RefT (NoNull, VarHT TMap.process_waiting_tid); (* 6: $wait continuation *)
+              RefT (NoNull, VarHT TMap.pid_active_tid);      (* 7: $spawn/$wait PID / main/returned process PID *)
+            |],
+            local_sgt 0l,           (* next pid *)
+            local_sgt 1l,           (* boxed value *)
+            local_sgt 2l,           (* $self effect continuation *)
+            local_sgt 3l,           (* $spawn effect continuation *)
+            local_sgt 4l,           (* $spawn callback *)
+            local_sgt 5l,           (* $yield continuation *)
+            local_sgt 6l,           (* $wait continuation *)
+            local_sgt 7l,           (* $spawn/$wait PID / main/returned process PID *)
+            global_sgt all_vid,     (* all active and zombie processes *)
+            global_sgt cache_vid    (* active processes cache *)
+        | false, false ->
+            [|
+              NumT I32T;                                     (* 0: next pid *)
+              RefT (Null, EqHT);                             (* 1: boxed value *)
+              RefT (NoNull, VarHT self_ctid);                (* 2: $self/$spawn effect continuation *)
+              RefT (NoNull, VarHT spawn_cbid);               (* 3: $spawn callback *)
+              RefT (NoNull, VarHT TMap.process_active_tid);  (* 4: $yield continuation *)
+              RefT (NoNull, VarHT TMap.process_waiting_tid); (* 5: $wait continuation *)
+              RefT (NoNull, VarHT TMap.pid_active_tid);      (* 6: $spawn/$wait PID / main/returned process PID *)
+              RefT (NoNull, VarHT TMap.process_list_tid);    (* 7: all active and zombie processes *)
+              RefT (NoNull, VarHT TMap.process_list_tid);    (* 8: active processes cache *)
+            |],
+            local_sgt 0l,           (* next pid *)
+            local_sgt 1l,           (* boxed value *)
+            local_sgt 2l,           (* $self effect continuation *)
+            local_sgt 2l,           (* $spawn effect continuation *)
+            local_sgt 3l,           (* $spawn callback *)
+            local_sgt 4l,           (* $yield continuation *)
+            local_sgt 5l,           (* $wait continuation *)
+            local_sgt 6l,           (* $spawn/$wait PID / main/returned process PID *)
+            local_sgt 7l,           (* all active and zombie processes *)
+            local_sgt 8l            (* active processes cache *)
+        in
+      let select_next_process =
+        let do_select = fun vbt on_selected on_selected_if ->
           (* Load the next active process
             An active process is a process in the process list that has a non-Null continuation.
             An inactive process is a process in the process list with a Null continuation.
@@ -2355,25 +2515,7 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
             |]);
           ]))) in
         if wasm_yield_is_switch then
-          let all_vid = GEnv.add_raw_global genv
-              (GlobalT (Var, RefT (NoNull, VarHT TMap.process_list_tid)), [|
-                StructNew (TMap.pid_tid, Implicit);
-                RefNull (VarHT TMap.process_active_tid);
-                RefNull (VarHT TMap.process_list_tid);
-                StructNew (TMap.process_list_tid, Explicit);
-              |], None) in
-          let cache_vid = GEnv.add_raw_global genv
-              (GlobalT (Var, RefT (NoNull, VarHT TMap.process_list_tid)), [|
-                StructNew (TMap.pid_tid, Implicit);
-                RefNull (VarHT TMap.process_active_tid);
-                RefNull (VarHT TMap.process_list_tid);
-                StructNew (TMap.process_list_tid, Explicit);
-              |], None) in
-          let all_set, all_get, all_tee =
-              GlobalSet all_vid, GlobalGet all_vid, fun acc -> GlobalGet all_vid ^+ GlobalSet all_vid ^+ acc in
-          let cache_set, cache_get, cache_tee =
-              GlobalSet cache_vid, GlobalGet cache_vid, fun acc -> GlobalGet cache_vid ^+ GlobalSet cache_vid ^+ acc in
-          let do_select = do_select None (all_set, all_get) (cache_set, cache_get, cache_tee) in
+          let do_select = do_select None in
           let switch_proc_ref, switch_proc_fid = GEnv.add_function genv in
           switch_proc_ref := Some {
               fn_name = None;
@@ -2385,15 +2527,10 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
                   (fun _ acc -> If (ValBlockType None, [|Const (I32 I32.zero); Return|], [||]) ^+ acc);
               |]
             };
-          (fun b acc -> (if b then (^+) (Br 0l) else Fun.id) @@ Call (Int32.add (GEnv.fun_offset genv) switch_proc_fid) ^+ acc),
-            all_set, all_get, all_tee, cache_set, cache_get, cache_tee, 8
+          (fun b acc -> (if b then (^+) (Br 0l) else Fun.id) @@ Call (Int32.add (GEnv.fun_offset genv) switch_proc_fid) ^+ acc)
         else
-          let all_vid, cache_vid = 7l, 8l in
-          let all_set, all_get, all_tee = LocalSet all_vid, LocalGet all_vid, fun acc -> LocalTee all_vid ^+ acc in
-          let cache_set, cache_get, cache_tee = LocalSet cache_vid, LocalGet cache_vid, fun acc -> LocalTee cache_vid ^+ acc in
-          let do_select = do_select (Some (RefT (NoNull, VarHT exit_ctid))) (all_set, all_get) (cache_set, cache_get, cache_tee) in
-          (fun _ acc -> do_select (fun d acc -> Br (Int32.succ d) ^+ acc) (fun d acc -> BrIf (Int32.succ d) ^+ acc) ^+ acc),
-            all_set, all_get, all_tee, cache_set, cache_get, cache_tee, 9 in
+          let do_select = do_select (Some (RefT (NoNull, VarHT exit_ctid))) in
+          (fun _ acc -> do_select (fun d acc -> Br (Int32.succ d) ^+ acc) (fun d acc -> BrIf (Int32.succ d) ^+ acc) ^+ acc) in
       let do_yield_fun, oadd_loc, do_update =
         if wasm_yield_is_switch then
           let tmp_vid = GEnv.add_raw_global genv
@@ -2472,9 +2609,99 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
           fun acc -> Call (Int32.add (GEnv.fun_offset genv) check_yield_fun) ^+ acc
         else do_check_yield in
       let self =
-        if wasm_yield_is_switch then fun acc -> StructGet (TMap.process_list_tid, 0l, None) ^+ cache_get ^+ acc
+        if Settings.get wasm_prefer_globals || wasm_yield_is_switch then fun acc -> StructGet (TMap.process_list_tid, 0l, None) ^+ cache_get ^+ acc
         else fun acc -> Suspend (Int32.add (GEnv.effect_offset genv) (TMap.self_offset tm)) ^+ acc in
-      let procinfo = Some (angels_vid, check_yield_fun, do_yield_fun, oadd_loc, do_update, self) in
+      let spawn_process =
+        if Settings.get wasm_prefer_globals then
+          let do_fun cb_vid acc =
+            let acc =
+              LocalGet cb_vid ^+
+              (* Create the continuation *)
+              StructNew (TMap.pid_tid, Explicit) ^+
+              StructNew (TMap.pid_active_tid, Explicit) ^+
+              RefNull (VarHT TMap.waiting_list_tid) ^+
+              RefNull (VarHT TMap.list_tid) ^+
+              RefNull (VarHT TMap.list_tid) ^+
+              Const (I32 I32.zero) ^+
+              nextpid_set ^+
+              Binop (I32 IntOp.Add) ^+
+              Const (I32 I32.one) ^+
+              nextpid_get ^+
+              nextpid_get ^+
+              (* Create a new PID *)
+              cache_get ^+
+              (* We will insert the new process just after the current process *)
+              acc
+            in
+              StructGet (TMap.process_list_tid, 0l, None) ^+
+              StructGet (TMap.process_list_tid, 2l, None) ^+
+              cache_get ^+
+              (* Finally, return the new PID *)
+              StructSet (TMap.process_list_tid, 2l) ^+
+              (* The stack is now [cached_process_list new_process_list_tail] *)
+              StructNew (TMap.process_list_tid, Explicit) ^+
+              StructGet (TMap.process_list_tid, 2l, None) ^+
+              cache_get ^+
+              (* Finish adding the process to the process list *)
+            let spawned_cbfid = TMap.recid_of_functyp tm TLnil TVar in
+            if wasm_yield_is_switch then
+              let spawn_cbfid = TMap.recid_of_sub_type tm (SubT (Final, [||], DefFuncT (FuncT (
+                  [|RefT (NoNull, VarHT spawn_cbid); RefT (Null, VarHT TMap.process_active_tid)|],
+                  [|RefT (Null, EqHT)|]
+                )))) in
+              let spawn_aux_ref, spawn_aux_fid = GEnv.add_function genv in
+              GEnv.add_export_function genv spawn_aux_fid;
+              spawn_aux_ref := Some {
+                fn_name = None;
+                fn_type = spawn_cbfid;
+                fn_locals = (match oadd_loc with None -> assert false | Some add_loc -> [|add_loc|]);
+                fn_code = convert_nlist @@
+                  ReturnCallRef spawned_cbfid ^+
+                  StructGet (spawn_cbid, 0l, None) ^+
+                  LocalGet 0l ^+
+                  StructGet (spawn_cbid, 1l, None) ^+
+                  LocalGet 0l ^+
+                  do_update 2l @@ nlist_of_list [
+                  LocalGet 1l;
+                ];
+              };
+              let spawn_cbcid = TMap.recid_of_sub_type tm (SubT (Final, [||], DefContT (ContT (VarHT spawn_cbfid)))) in
+              ContBind (spawn_cbcid, TMap.process_active_tid) ^+
+              ContNew spawn_cbcid ^+
+              RefFunc (Int32.add (GEnv.fun_offset genv) spawn_aux_fid) ^+
+              acc
+            else
+              let spawn_cbcid = TMap.recid_of_sub_type tm (SubT (Final, [||], DefContT (ContT (VarHT spawned_cbfid)))) in
+              ContBind (spawn_cbcid, TMap.process_active_tid) ^+
+              ContNew spawn_cbcid ^+
+              StructGet (spawn_cbid, 0l, None) ^+
+              LocalGet cb_vid ^+
+              StructGet (spawn_cbid, 1l, None) ^+
+              acc in
+          if Settings.get optimize_size && (match m.mod_process_level with PL_MultiAngel | PL_MultiAngelWait -> true | _ -> false) then
+            let rfid = ref None in
+            fun _ cb_vid -> match !rfid with
+              | Some fid -> fun acc -> Call fid ^+ LocalGet cb_vid ^+ acc
+              | None ->
+                  let fref, fid = GEnv.add_function genv in
+                  let arg_tid = TMap.recid_of_type tm (TClosed (TLnil, TVar)) in
+                  let ftid = TMap.recid_of_sub_type tm (SubT (Final, [||], DefFuncT (FuncT (
+                    [|RefT (NoNull, VarHT arg_tid)|], [|RefT (NoNull, VarHT TMap.pid_tid)|])))) in
+                  rfid := Some fid;
+                  fref := Some {
+                    fn_name = None;
+                    fn_type = ftid;
+                    fn_locals = [||];
+                    fn_code = convert_nlist (do_fun 0l empty_nlist);
+                  };
+                  fun acc -> Call fid ^+ acc
+          else fun _ -> do_fun
+        else fun vid cb_vid acc ->
+          do_update vid @@
+          Suspend (Int32.add (GEnv.effect_offset genv) (TMap.spawn_offset tm)) ^+
+          LocalGet cb_vid ^+
+          acc in
+      let procinfo = Some (angels_vid, check_yield_fun, do_yield_fun, oadd_loc, do_update, spawn_process, self) in
       (* Wrap the main function *)
       GEnv.add_export_function genv m.mod_nfuns;
       let generate_exit_code =
@@ -2505,154 +2732,140 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
           |]) ^+ trf
         else fun trf -> Suspend exit_eid ^+ trf in
       let initref, mainid = GEnv.add_function genv in
-      let locals, loc2off = if wasm_yield_is_switch then [|
-          NumT I32T;                                     (*         0: next pid *)
-          RefT (Null, EqHT);                             (*         1: boxed value *)
-          RefT (NoNull, VarHT self_ctid);                (*         2: $self effect continuation *)
-          RefT (NoNull, VarHT spawn_ctid);               (* loc2off+2: $spawn effect continuation *)
-          RefT (NoNull, VarHT spawn_cbid);               (* loc2off+3: $spawn callback *)
-          RefT (NoNull, VarHT TMap.process_active_tid);  (* loc2off+4: $yield continuation *)
-          RefT (NoNull, VarHT TMap.process_waiting_tid); (* loc2off+5: $wait continuation *)
-          RefT (NoNull, VarHT TMap.pid_active_tid);      (* loc2off+6: $spawn/$wait PID / main/returned process PID *)
-        |], 1l else [|
-          NumT I32T;                                     (* 0: next pid *)
-          RefT (Null, EqHT);                             (* 1: boxed value *)
-          RefT (NoNull, VarHT self_ctid);                (* 2: $self/$spawn effect continuation *)
-          RefT (NoNull, VarHT spawn_cbid);               (* 3: $spawn callback *)
-          RefT (NoNull, VarHT TMap.process_active_tid);  (* 4: $yield continuation *)
-          RefT (NoNull, VarHT TMap.process_waiting_tid); (* 5: $wait continuation *)
-          RefT (NoNull, VarHT TMap.pid_active_tid);      (* 6: $spawn/$wait PID / main/returned process PID *)
-          RefT (NoNull, VarHT TMap.process_list_tid);    (* 7: all active and zombie processes *)
-          RefT (NoNull, VarHT TMap.process_list_tid);    (* 8: active processes cache *)
-        |], 0l in
-      assert (Array.length locals = nlocals);
       initref := Some {
         fn_name = Some "main";
         fn_type = TMap.main_func_type;
         fn_locals = locals;
         fn_code = convert_nlist @@
           Drop ^+
-          Block (ValBlockType (Some (RefT (NoNull, VarHT exit_ctid))), [|
+          Block (ValBlockType (Some (RefT (NoNull, VarHT exit_ctid))), [|                (* $exit *)
             Loop (ValBlockType (Some (RefT (NoNull, VarHT exit_ctid))), convert_nlist @@
               select_next_process true @@ nlist_of_list [
-                let content = fun top_block yield_block_offset ->
-                  Block (top_block, [|                                                                  (* Load next process / $yield *)
-                    Block (VarBlockType wait_bt, Array.concat [[|                                       (* $wait *)
-                      Block (VarBlockType spawn_bt,                                                     (* $spawn *)
-                        let labels =
-                          if wasm_yield_is_switch then [|
-                            spawn_eid, OnLabel 0l;
-                            yield_eid, OnSwitch; wait_eid, OnLabel 1l;
-                            exit_eid, OnLabel 4l;
-                          |] else
-                            let self_eid = Int32.add (GEnv.effect_offset genv) (TMap.self_offset tm) in
-                            [|
-                              self_eid, OnLabel 0l; spawn_eid, OnLabel 2l;
-                              yield_eid, OnLabel 4l; wait_eid, OnLabel 3l;
-                              exit_eid, OnLabel 7l;
-                            |] in
-                        let check_run = fun yield_block_offset ->
-                          (* Process returned, boxed return value is the only value in the stack *)
-                          Resume (TMap.process_active_tid, labels) ^+
-                          StructGet (TMap.process_list_tid, 1l, None) ^+
-                          cache_get ^+
-                          (if wasm_yield_is_switch
-                          then (^+) (RefNull (VarHT TMap.process_active_tid))
-                          else Fun.id) @@ nlist_of_list [
-                          GlobalSet procinfo_vid;
-                          Const (I64 (I64.of_bits (Int64.pred gbl_count_reset)));
-                          (* OK, reset yield timer then resume process *)
-                          BrIf (Int32.add 2l yield_block_offset); (* Blocked *)
-                          StructGet (TMap.pid_active_tid, 0l, Some Pack.ZX);
-                          RefCast (NoNull, VarHT TMap.pid_active_tid);
-                          StructGet (TMap.pid_tid, 1l, None);
-                          StructGet (TMap.process_list_tid, 0l, None);
-                          cache_get;
-                          (* Run the process pointed by the iterator if it is unblocked *)
-                        ] in Array.append (
-                        if wasm_yield_is_switch then convert_nlist @@ (* (returned) *)
-                          check_run 0l
-                        else [|
-                        Block (ValBlockType (Some (RefT (Null, EqHT))), [|                              (* (returned) *)
-                          Block (ValBlockType (Some (RefT (NoNull, VarHT self_ctid))), convert_nlist @@ (* $self *)
-                            Br 1l ^+
-                            check_run (Int32.add 2l yield_block_offset)
-                          );
-                          Loop (VarBlockType self_bt, [| (* $self: allow repeats *)
-                            LocalSet 2l;
-                            cache_get;
-                            StructGet (TMap.process_list_tid, 0l, None);
-                            LocalGet 2l;
-                            Resume (self_ctid, labels);
-                            (* Process returned, boxed return value is the only value in the stack *)
-                            Br 1l;
-                          |]);
-                        |]);
-                        |]) [|
-                        LocalSet 1l;
+              Block (ValBlockType None,                                                  (* Load next process *)
+                let content block_offset =
+                    let labels =
+                      match Settings.get wasm_prefer_globals, wasm_yield_is_switch with
+                      | true, true -> [| wait_eid, OnLabel 0l; exit_eid, OnLabel 3l; |]
+                      | true, false -> [| wait_eid, OnLabel 0l; yield_eid, OnLabel 1l; exit_eid, OnLabel 4l; |]
+                      | false, true ->
+                          let spawn_eid = Int32.add (GEnv.effect_offset genv) (TMap.spawn_offset tm) in
+                          [|
+                            spawn_eid, OnLabel 0l; wait_eid, OnLabel 1l;
+                            yield_eid, OnSwitch; exit_eid, OnLabel 4l;
+                          |]
+                      | false, false ->
+                          let self_eid = Int32.add (GEnv.effect_offset genv) (TMap.self_offset tm) in
+                          let spawn_eid = Int32.add (GEnv.effect_offset genv) (TMap.spawn_offset tm) in
+                          [|
+                            self_eid, OnLabel 0l; spawn_eid, OnLabel 2l;
+                            wait_eid, OnLabel 3l; yield_eid, OnLabel 4l;
+                            exit_eid, OnLabel 7l;
+                          |] in
+                    let check_run = fun block_offset ->
+                      (* Process returned, boxed return value is the only value in the stack *)
+                      Resume (TMap.process_active_tid, labels) ^+
+                      StructGet (TMap.process_list_tid, 1l, None) ^+
+                      cache_get ^+
+                      (if wasm_yield_is_switch
+                      then (^+) (RefNull (VarHT TMap.process_active_tid))
+                      else Fun.id) @@ nlist_of_list [
+                      GlobalSet procinfo_vid;
+                      Const (I64 (I64.of_bits (Int64.pred gbl_count_reset)));
+                      (* OK, reset yield timer then resume process *)
+                      BrIf block_offset; (* Blocked *)
+                      StructGet (TMap.pid_active_tid, 0l, Some Pack.ZX);
+                      RefCast (NoNull, VarHT TMap.pid_active_tid);
+                      StructGet (TMap.pid_tid, 1l, None);
+                      StructGet (TMap.process_list_tid, 0l, None);
+                      cache_get;
+                      (* Run the process pointed by the iterator if it is unblocked *)
+                    ] in Array.append (
+                    if Settings.get wasm_prefer_globals || wasm_yield_is_switch then convert_nlist @@ (* (returned) *)
+                      check_run block_offset
+                    else [|
+                    Block (ValBlockType (Some (RefT (Null, EqHT))), [|                              (* (returned) *)
+                      Block (ValBlockType (Some (RefT (NoNull, VarHT self_ctid))), convert_nlist @@ (* $self *)
+                        Br 1l ^+
+                        check_run (Int32.add 2l block_offset)
+                      );
+                      Loop (VarBlockType self_bt, [| (* $self: allow repeats *)
+                        selfct_set;
                         cache_get;
                         StructGet (TMap.process_list_tid, 0l, None);
-                        StructGet (TMap.pid_tid, 1l, None);
-                        RefCast (NoNull, VarHT TMap.pid_active_tid);
-                        LocalSet (Int32.add loc2off 6l);
-                        (* Unwait all waiting processes *)
-                        Block (ValBlockType (Some (RefT (NoNull, VarHT TMap.process_list_tid))), [|
-                          Loop (ValBlockType (Some (RefT (NoNull, VarHT TMap.process_list_tid))), [|
-                            cache_get;
-                            LocalGet (Int32.add loc2off 6l);
-                            StructGet (TMap.pid_active_tid, 3l, None);
-                            BrOnNull 1l;
-                            StructGet (TMap.waiting_list_tid, 0l, None); (* PID *)
-                            LocalGet 1l;
-                            LocalGet (Int32.add loc2off 6l);
-                            StructGet (TMap.pid_active_tid, 3l, None);
-                            RefAsNonNull;
-                            StructGet (TMap.waiting_list_tid, 1l, None); (* Waiting continuation *)
-                            ContBind (TMap.process_waiting_tid, TMap.process_active_tid); (* Active continuation *)
-                            cache_get;
-                            StructGet (TMap.process_list_tid, 2l, None); (* Old tail *)
-                            StructNew (TMap.process_list_tid, Explicit); (* New tail *)
-                            StructSet (TMap.process_list_tid, 2l);
-                            (* Pop in the waiting list *)
-                            LocalGet (Int32.add loc2off 6l);
-                            LocalGet (Int32.add loc2off 6l);
-                            StructGet (TMap.pid_active_tid, 3l, None);
-                            RefAsNonNull;
-                            StructGet (TMap.waiting_list_tid, 2l, None);
-                            StructSet (TMap.pid_active_tid, 3l);
-                            Br 0l;
-                          |]);
-                        |]);
-                        (* Update the PID *)
-                        StructGet (TMap.process_list_tid, 0l, None);
-                        LocalGet 1l;
-                        StructSet (TMap.pid_tid, 1l);
-                        (* Update the process (remove the continuation) *)
-                        cache_get;
-                        RefNull (VarHT TMap.process_active_tid);
-                        StructSet (TMap.process_list_tid, 1l);
-                        Br (Int32.add 2l yield_block_offset); (* Go to the next active process *)
+                        selfct_get;
+                        Resume (self_ctid, labels);
+                        (* Process returned, boxed return value is the only value in the stack *)
+                        Br 1l;
                       |]);
+                    |]);
+                  |]) [|
+                    bval_set;
+                    cache_get;
+                    StructGet (TMap.process_list_tid, 0l, None);
+                    StructGet (TMap.pid_tid, 1l, None);
+                    RefCast (NoNull, VarHT TMap.pid_active_tid);
+                    pid_set;
+                    (* Unwait all waiting processes *)
+                    Block (ValBlockType (Some (RefT (NoNull, VarHT TMap.process_list_tid))), [|
+                      Loop (ValBlockType (Some (RefT (NoNull, VarHT TMap.process_list_tid))), [|
+                        cache_get;
+                        pid_get;
+                        StructGet (TMap.pid_active_tid, 3l, None);
+                        BrOnNull 1l;
+                        StructGet (TMap.waiting_list_tid, 0l, None); (* PID *)
+                        bval_get;
+                        pid_get;
+                        StructGet (TMap.pid_active_tid, 3l, None);
+                        RefAsNonNull;
+                        StructGet (TMap.waiting_list_tid, 1l, None); (* Waiting continuation *)
+                        ContBind (TMap.process_waiting_tid, TMap.process_active_tid); (* Active continuation *)
+                        cache_get;
+                        StructGet (TMap.process_list_tid, 2l, None); (* Old tail *)
+                        StructNew (TMap.process_list_tid, Explicit); (* New tail *)
+                        StructSet (TMap.process_list_tid, 2l);
+                        (* Pop in the waiting list *)
+                        pid_get;
+                        pid_get;
+                        StructGet (TMap.pid_active_tid, 3l, None);
+                        RefAsNonNull;
+                        StructGet (TMap.waiting_list_tid, 2l, None);
+                        StructSet (TMap.pid_active_tid, 3l);
+                        Br 0l;
+                      |]);
+                    |]);
+                    (* Update the PID *)
+                    StructGet (TMap.process_list_tid, 0l, None);
+                    bval_get;
+                    StructSet (TMap.pid_tid, 1l);
+                    (* Update the process (remove the continuation) *)
+                    cache_get;
+                    RefNull (VarHT TMap.process_active_tid);
+                    StructSet (TMap.process_list_tid, 1l);
+                    Br block_offset; (* Go to the next active process *)
+                  |] in
+                let content =
+                  if Settings.get wasm_prefer_globals then fun block_offset -> content block_offset
+                  else fun block_offset -> Array.concat [[|
+                      Block (VarBlockType spawn_bt, content (Int32.add 1l block_offset)); (* $spawn *)
                       (* stack is [callback_function continuation] *)
-                      LocalSet (Int32.add loc2off 2l);
-                      LocalSet (Int32.add loc2off 3l);
+                      spawnct_set;
+                      spawncb_set;
                       (* We will insert the new process just after the current process *)
                       cache_get;
                       (* Create a new PID *)
-                      LocalGet 0l;
-                      LocalGet 0l;
+                      nextpid_get;
+                      nextpid_get;
                       Const (I32 I32.one);
                       Binop (I32 IntOp.Add);
-                      LocalSet 0l;
+                      nextpid_set;
                       Const (I32 I32.zero);
                       RefNull (VarHT TMap.list_tid);
                       RefNull (VarHT TMap.list_tid);
                       RefNull (VarHT TMap.waiting_list_tid);
                       StructNew (TMap.pid_active_tid, Explicit);
-                      LocalTee (Int32.add loc2off 6l);
                       StructNew (TMap.pid_tid, Explicit);
                       (* Create the continuation *)
-                      LocalGet (Int32.add loc2off 3l);
+                      spawncb_get;
                     |]; (
                     let spawned_cbfid = TMap.recid_of_functyp tm TLnil TVar in
                     if wasm_yield_is_switch then
@@ -2673,7 +2886,7 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
                           StructGet (spawn_cbid, 1l, None) ^+
                           LocalGet 0l ^+
                           do_update 2l @@ nlist_of_list [
-                          LocalGet 1l;
+                          bval_get;
                         ];
                       };
                       let spawn_cbcid = TMap.recid_of_sub_type tm (SubT (Final, [||], DefContT (ContT (VarHT spawn_cbfid)))) in [|
@@ -2683,7 +2896,7 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
                     |] else
                       let spawn_cbcid = TMap.recid_of_sub_type tm (SubT (Final, [||], DefContT (ContT (VarHT spawned_cbfid)))) in [|
                       StructGet (spawn_cbid, 1l, None);
-                      LocalGet (Int32.add loc2off 3l);
+                      spawncb_get;
                       StructGet (spawn_cbid, 0l, None);
                       ContNew spawn_cbcid;
                       ContBind (spawn_cbcid, TMap.process_active_tid);
@@ -2699,39 +2912,40 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
                       cache_get; (* Get the child PID *)
                       StructGet (TMap.process_list_tid, 2l, None);
                       StructGet (TMap.process_list_tid, 0l, None);
-                      LocalGet (Int32.add loc2off 2l); (* Continuation *)
+                      spawnct_get; (* Continuation *)
                       ContBind (spawn_ctid, TMap.process_active_tid); (* Bind the continuation argument *)
                       StructSet (TMap.process_list_tid, 1l); (* Update in the process list *)
-                      Br (Int32.add 2l yield_block_offset); (* Resume the current process *)
-                    |]]);
+                      Br block_offset; (* Resume the current process *)
+                    |]] in
+                let content block_offset = [|                                          (* ($yield) *)
+                    Block (VarBlockType wait_bt, content (Int32.add 1l block_offset)); (* $wait *)
                     (* Set continuation of self to Null and add the current process to the list of waiting processes *)
-                    LocalSet (Int32.add loc2off 5l);
-                    LocalSet (Int32.add loc2off 6l);
+                    waitct_set;
+                    pid_set;
                     cache_get;
                     RefNull (VarHT TMap.process_active_tid);
                     StructSet (TMap.process_list_tid, 1l);
-                    LocalGet (Int32.add loc2off 6l);
+                    pid_get;
                     cache_get;
                     StructGet (TMap.process_list_tid, 0l, None);
-                    LocalGet (Int32.add loc2off 5l);
-                    LocalGet (Int32.add loc2off 6l);
+                    waitct_get;
+                    pid_get;
                     StructGet (TMap.pid_active_tid, 3l, None);
                     StructNew (TMap.waiting_list_tid, Explicit);
                     StructSet (TMap.pid_active_tid, 3l);
-                    Br (Int32.add 0l yield_block_offset); (* Go to the next active process *)
-                  |]) in
-                let hd = if wasm_yield_is_switch then content (ValBlockType None) 0l
-                else
-                  Block (ValBlockType None, [| (* Load next process *)
-                    content (ValBlockType (Some (RefT (NoNull, VarHT TMap.process_active_tid)))) 1l;
-                    (* Update the current process *)
-                    LocalSet (Int32.add loc2off 4l);
-                    cache_get;
-                    LocalGet (Int32.add loc2off 4l);
-                    StructSet (TMap.process_list_tid, 1l);
-                    Br 0l; (* Go to the next active process *)
-                  |]) in
-                hd
+                    Br (Int32.add 0l block_offset); (* Go to the next active process *)
+                  |] in
+                if wasm_yield_is_switch then content 0l
+                else [| (* Load next process *)
+                  Block (ValBlockType (Some (RefT (NoNull, VarHT TMap.process_active_tid))), content 1l);
+                  (* Update the current process *)
+                  yieldct_set;
+                  cache_get;
+                  yieldct_get;
+                  StructSet (TMap.process_list_tid, 1l);
+                  Br 0l; (* Go to the next active process *)
+                |]
+              )
             ]);
           |]) ^+
           cache_set ^+ (* Process list iterator *)
@@ -2748,7 +2962,7 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
           Const (I32 I32.zero); (* Unblocked by default *)
           Const (I32 I32.zero); (* PID *)
           (* Create main process *)
-          LocalSet 0l;
+          nextpid_set;
           Const (I32 I32.one);
           (* Next PID *)
         ];
