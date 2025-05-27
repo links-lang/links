@@ -1323,22 +1323,20 @@ end = struct
       let c = Int.compare i1 i2 in if c <> 0 then c else String.compare n1 n2
   end)
   
-  type 'a realt = {
+  type commont = {
     nargs   : int32;
-    args    : 'a typ_list;
     nlocs   : int32;
     locs    : anytyp_list;
-    varmap  : anyvarid Env.Int.t;
+    varmap  : (local_storage * anyvarid) Env.Int.t;
+  }
+  type 'a realt' = {
+    args    : 'a typ_list;
     cvarmap : anyvarid Env.String.t;
     clos    : mvarid * anytyp_list * bool; (* true if closure has been converted *)
     cbid    : var option;
   }
-  type subt = {
+  type subt' = {
     base           : anyt;
-    nargs          : int32;
-    nlocs          : int32;
-    locs           : anytyp_list;
-    varmap         : (local_storage * anyvarid) Env.Int.t;
     contmap        : (anytyp * anyvarid * mfunid * anytyp * mvarid * anytyp_list) Env.Int.t;
     nclos          : int32;
     clos           : anyexpr_list;
@@ -1347,8 +1345,11 @@ end = struct
     mutable contid : (anyvarid * mvarid * mfunid * anytyp * mvarid) option;
     mutable contv  : (Types.t, anytyp) Either.t * var;
   }
-  and 'a t = ('a realt, subt) Either.t
+  and 'a t = commont * ('a realt', subt') Either.t
   and anyt = AT : 'a t -> anyt
+  
+  type 'a realt = commont * 'a realt'
+  type subt = commont * subt'
   
   (* Similar to rev_append args tl, but works on anytyp_lists *)
   let rec extract_to_list (TypeList args : anytyp_list) (acc : anytyp list) : anytyp list = match args with
@@ -1367,16 +1368,17 @@ end = struct
       | TLcons (thd, ttl), ELcons (ehd, etl) -> inner ttl etl (TLcons (thd, tacc)) (ELcons (ehd, eacc))
     in inner typs exprs TLnil ELnil
   
-  let toplevel : unit realt = {
+  let toplevel : unit realt = ({
     nargs = 0l;
-    args = TLnil;
     nlocs = 0l;
     locs = TypeList TLnil;
     varmap = Env.Int.empty;
+  }, {
+    args = TLnil;
     cvarmap = Env.String.empty;
     clos = Int32.minus_one, TypeList TLnil, true;
     cbid = None;
-  }
+  })
   let create_sub (base : 'a t) (is_handler : (binder * value) list option) : subt =
     let varmap, nargs, its = match is_handler with
       | None -> Env.Int.empty, 1l, TypeList TLnil
@@ -1388,12 +1390,13 @@ end = struct
                 let its = TypeList (TLcons (t, its)) in
                 inner bvs (Env.Int.bind (Var.var_of_binder bhd) (StorVariable, VarID (t, nargs)) varmap) (Int32.succ nargs) its in
           inner bvs Env.Int.empty 2l (TypeList TLnil) in
-    {
-      base = AT base;
+    ({
       nargs;
       nlocs = 0l;
       locs = TypeList TLnil;
       varmap;
+    }, {
+      base = AT base;
       contmap = Env.Int.empty;
       nclos = 0l;
       clos = ExprList (TLnil, ELnil);
@@ -1401,33 +1404,34 @@ end = struct
       its;
       contid = None;
       contv = (Either.Left Types.Not_typed, ~-1);
-    }
+    })
   
-  let of_real (env : 'a realt) : 'a t = Either.Left env
-  let of_sub (env : subt) : unit t = Either.Right env
-  let to_real (env : 'a t) : 'a realt = match env with Either.Left env -> env | Either.Right _ -> raise (internal_error "Invalid local environment kind")
-  let to_sub (env : unit t) : subt = match env with Either.Right env -> env | Either.Left _ -> raise (internal_error "Invalid local environment kind")
+  let of_real (common, env : 'a realt) : 'a t = common, Either.Left env
+  let of_sub (common, env : subt) : unit t = common, Either.Right env
+  let to_real (common, env : 'a t) : 'a realt =
+    common, match env with Either.Left env -> env | Either.Right _ -> raise (internal_error "Invalid local environment kind")
+  let to_sub (common, env : unit t) : subt =
+    common, match env with Either.Right env -> env | Either.Left _ -> raise (internal_error "Invalid local environment kind")
   
-  
-  let get_closure (env : subt) : subt * (mvarid * mvarid) option * anyexpr_list =
+  let get_closure (common, env : subt) : subt * (mvarid * mvarid) option * anyexpr_list =
     let cexpr = extract_exprs env.clos in
     let oconv, nlocs, locs = match cexpr with
-      | ExprList (TLnil, ELnil) -> None, env.nlocs, env.locs
+      | ExprList (TLnil, ELnil) -> None, common.nlocs, common.locs
       | ExprList (cts, _) ->
-        Some (Int32.pred env.nargs, Int32.add env.nargs env.nlocs),
-          Int32.succ env.nlocs,
-          (let TypeList tl = env.locs in TypeList (TLcons (TClosArg cts, tl)))
-    in { env with nlocs; locs }, oconv, cexpr
+        Some (Int32.pred common.nargs, Int32.add common.nargs common.nlocs),
+          Int32.succ common.nlocs,
+          (let TypeList tl = common.locs in TypeList (TLcons (TClosArg cts, tl)))
+    in ({ common with nlocs; locs }, env), oconv, cexpr
   
-  let args_typ (env : 'a realt) : 'a typ_list * anytyp_list =
+  let args_typ (_, env : 'a realt) : 'a typ_list * anytyp_list =
     env.args, (let (_, cat, _) = env.clos in cat)
-  let rec find_continuation : type a. a t -> _ -> (a t * _) option = fun (env : a t) (v : var)
+  let rec find_continuation : type a. a t -> _ -> (a t * _) option = fun (common, env : a t) (v : var)
       : (a t * (local_storage * anytyp * anyvarid * mfunid * anytyp * local_storage * mvarid * anytyp_list)) option ->
     match env with
     | Either.Left _ -> None
     | Either.Right ({ base = AT base; its; contid; contv = targ, contv; contmap; _ } as env) -> begin match Env.Int.find_opt v contmap with
         | Some (targ, VarID (t, cid), hdlfid, thdlret, hdlcid, its) ->
-            Some (Either.Right env, (StorClosure, targ, VarID (t, cid), hdlfid, thdlret, StorClosure, hdlcid, its))
+            Some ((common, Either.Right env), (StorClosure, targ, VarID (t, cid), hdlfid, thdlret, StorClosure, hdlcid, its))
         | None -> begin match
               match contid with None -> None | Some (VarID (t, cid), _, hdlfid, thdlret, hdlcid) ->
                 if Var.equal_var v contv then
@@ -1445,7 +1449,7 @@ end = struct
                           targ in
                         { env with contv = Either.Right targ, contv }, targ
                     | Either.Right targ -> env, targ in
-                  Some (Either.Right env, (StorVariable, targ, VarID (t, cid),
+                  Some ((common, Either.Right env), (StorVariable, targ, VarID (t, cid),
                         hdlfid, thdlret, StorVariable, hdlcid, its))
                 else None
               with Some v -> Some v | None ->
@@ -1460,12 +1464,12 @@ end = struct
                   ExprList (TLcons (TClosArg TLnil, TLcons (TCont t, tl)),
                             ELcons (EVariable (Local hdlcloc, (TClosArg TLnil, hdlbcid)), ELcons (EVariable (Local loc, (TCont t, bid)), es))) in
                 let contmap = Env.Int.bind v (targ, VarID (t, cid), hdlfid, thdlret, hdlcid, its) env.contmap in
-                Some (Either.Right { env with base = AT base; nclos; clos; contmap }, (StorClosure, targ, VarID (t, cid),
+                Some ((common, Either.Right { env with base = AT base; nclos; clos; contmap }), (StorClosure, targ, VarID (t, cid),
                       hdlfid, thdlret, StorClosure, hdlcid, its))
           end
         end
   
-  type args = int32 * anytyp_list * anyvarid Env.Int.t
+  type args = int32 * anytyp_list * (local_storage * anyvarid) Env.Int.t
   type anyrealt = AR : 'a realt -> anyrealt
   
   let no_arg : args = 0l, TypeList TLnil, Env.Int.empty
@@ -1475,7 +1479,7 @@ end = struct
     let Type argt = convert_type (Var.type_of_binder argbind) in
     Int32.succ nargs,
       TypeList (TLcons (argt, args)),
-      Env.Int.bind (Var.var_of_binder argbind) (VarID (argt, nargs)) map
+      Env.Int.bind (Var.var_of_binder argbind) (StorVariable, VarID (argt, nargs)) map
   
   (* TODO: optimize closure arguments by giving the function reference and the continuation in two distinct closure members *)
   let env_of_args (nargs, args, varmap : args) (closure : binder option) : anyrealt * anygeneralization =
@@ -1502,30 +1506,34 @@ end = struct
     in let cvarmap, cbid, cat, gcl = add_all_clos closure in
     let TypeList args = extract_args args (TypeList TLnil) in
     let nargs = Int32.succ nargs in
-    AR {
+    AR ({
       nargs;
-      args;
       nlocs = 0l;
       locs = TypeList TLnil;
-      varmap; cvarmap;
+      varmap;
+    }, {
+      args;
+      cvarmap;
       clos = closid, cat, false;
       cbid;
-    }, gcl
+    }), gcl
   
-  let add_closure (env : 'a realt) : 'a realt * (mvarid * mvarid * anytyp_list) option =
+  let add_closure (common, env : 'a realt) : 'a realt * (mvarid * mvarid * anytyp_list) option =
     let acid, TypeList cat = match env.clos with
       | _, _, true -> raise (internal_error "Double add_closure call")
       | acid, cat, false -> acid, cat
     in match cat with
-    | TLnil -> { env with clos = acid, TypeList cat, true; }, None
-    | TLcons _ -> let ccid = Int32.add env.nargs env.nlocs in
-    { env with
-      nlocs = Int32.succ env.nlocs;
-      locs = (let TypeList tl = env.locs in TypeList (TLcons (TClosArg cat, tl)));
-      clos = ccid, TypeList cat, true;
-    }, Some (acid, ccid, TypeList cat)
+    | TLnil -> (common, { env with clos = acid, TypeList cat, true; }), None
+    | TLcons _ ->
+        let ccid = Int32.add common.nargs common.nlocs in
+        ({ common with
+          nlocs = Int32.succ common.nlocs;
+          locs = (let TypeList tl = common.locs in TypeList (TLcons (TClosArg cat, tl)));
+        }, { env with
+          clos = ccid, TypeList cat, true;
+        }), Some (acid, ccid, TypeList cat)
   
-  let add_sub_to_env (env : subt) (base : 'a t) (loc : local_storage) (VarID (t, bid) : anyvarid) : subt * anyvarid =
+  let add_sub_to_env (env : subt') (base : 'a t) (loc : local_storage) (VarID (t, bid) : anyvarid) : subt' * anyvarid =
     let cid = env.nclos in
     let nclos = Int32.succ cid in
     let clos =
@@ -1534,98 +1542,80 @@ end = struct
                 ELcons (EVariable (Local loc, (t, bid)), es)) in
     { env with base = AT base; nclos; clos }, VarID (t, cid)
   
-  let add_local (env : 'a t) (Type t : anytyp) : 'a t * mvarid = match env with
-    | Either.Left env ->
-        let vidx = Int32.add env.nargs env.nlocs in
-        Either.Left { env with
-          nlocs = Int32.succ env.nlocs;
-          locs = (let TypeList tl = env.locs in TypeList (TLcons (t, tl)));
-        }, vidx
-    | Either.Right env ->
-        let vidx = Int32.add env.nargs env.nlocs in
-        Either.Right { env with
-          nlocs = Int32.succ env.nlocs;
-          locs = (let TypeList tl = env.locs in TypeList (TLcons (t, tl)));
-        }, vidx
-  let add_var (env : 'a t) (b : binder) (t : 'b typ) : 'a t * 'b varid = match env with
-    | Either.Left env ->
-        let vidx = Int32.add env.nargs env.nlocs in
-        let v = t, vidx in
-        Either.Left { env with
-          nlocs = Int32.succ env.nlocs;
-          locs = (let TypeList tl = env.locs in TypeList (TLcons (t, tl)));
-          varmap = Env.Int.bind (Var.var_of_binder b) (VarID v) env.varmap;
-        }, v
-    | Either.Right env ->
-        let vidx = Int32.add env.nargs env.nlocs in
-        let v = t, vidx in
-        Either.Right { env with
-          nlocs = Int32.succ env.nlocs;
-          locs = (let TypeList tl = env.locs in TypeList (TLcons (t, tl)));
-          varmap = Env.Int.bind (Var.var_of_binder b) (StorVariable, VarID v) env.varmap;
-        }, v
-  let rec find_var : type a. a t -> _ -> (a t * _ * _) option =
-    fun (env : a t) (v : var) : (a t * local_storage * anyvarid) option -> match env with
-    | Either.Left env' -> Option.map (fun i -> env, StorVariable, i) (Env.Int.find_opt v env'.varmap)
-    | Either.Right env' -> begin match Env.Int.find_opt v env'.varmap with
-        | Some (loc, i) -> Some (env, loc, i)
-        | None -> begin
-            let AT base = env'.base in
+  let add_local (common, env : 'a t) (Type t : anytyp) : 'a t * mvarid =
+    let vidx = Int32.add common.nargs common.nlocs in
+    ({ common with
+      nlocs = Int32.succ common.nlocs;
+      locs = (let TypeList tl = common.locs in TypeList (TLcons (t, tl)));
+    }, env), vidx
+  let add_var (common, env : 'a t) (b : binder) (t : 'b typ) : 'a t * 'b varid =
+    let vidx = Int32.add common.nargs common.nlocs in
+    let v = t, vidx in
+    ({ common with
+      nlocs = Int32.succ common.nlocs;
+      locs = (let TypeList tl = common.locs in TypeList (TLcons (t, tl)));
+      varmap = Env.Int.bind (Var.var_of_binder b) (StorVariable, VarID v) common.varmap;
+    }, env), v
+  let rec find_var : type a. a t -> var -> (a t * local_storage * anyvarid) option = fun (common, env) v ->
+    match Env.Int.find_opt v common.varmap with
+    | Some (loc, i) -> Some ((common, env), loc, i)
+    | None -> begin match env with
+        | Either.Left _ -> None
+        | Either.Right env -> begin
+            let AT base = env.base in
             match find_var base v with
             | Some (base, loc, bid) ->
-                let env, cid = add_sub_to_env env' base loc bid in
-                let varmap = Env.Int.bind v (StorClosure, cid) env.varmap in
-                Some (Either.Right { env with base = AT base; varmap }, StorClosure, cid)
+                let env, cid = add_sub_to_env env base loc bid in
+                let varmap = Env.Int.bind v (StorClosure, cid) common.varmap in
+                Some (({ common with varmap }, Either.Right { env with base = AT base }), StorClosure, cid)
             | None -> None
           end
       end
-  let rec find_closure : type a. a t -> _ -> _ -> (a t * _ * _) option =
-    fun (env : a t) (v : var) (n : string) : (a t * local_storage * anyvarid) option -> match env with
+  let rec find_closure : type a. a t -> var -> string -> (a t * local_storage * anyvarid) option = fun (common, env) v n -> match env with
     | Either.Left env -> begin match env.cbid with
         | None -> None
-        | Some cbid -> if Int.equal cbid v then Some (Either.Left env, StorClosure, Env.String.find n env.cvarmap) else None
+        | Some cbid -> if Int.equal cbid v then Some ((common, Either.Left env), StorClosure, Env.String.find n env.cvarmap) else None
       end
     | Either.Right env -> begin match IntString.find_opt (v, n) env.cvarmap with
-        | Some (loc, ret) -> Some (Either.Right env, loc, ret)
+        | Some (loc, ret) -> Some ((common, Either.Right env), loc, ret)
         | None -> begin
             let AT base = env.base in
             match find_closure base v n with
             | Some (base, loc, bid) ->
                 let env, cid = add_sub_to_env env base loc bid in
                 let cvarmap = IntString.bind (v, n) (StorClosure, cid) env.cvarmap in
-                Some (Either.Right { env with base = AT base; cvarmap }, StorClosure, cid)
+                Some ((common, Either.Right { env with base = AT base; cvarmap }), StorClosure, cid)
             | None -> None
           end
       end
-  let rec find_raw_closure : type a. a t -> _ -> (a t * _ * _) option =
-    fun (env : a t) (v : var) : (a t * local_storage * abs_closure_content varid) option -> match env with
+  let rec find_raw_closure : type a. a t -> var -> (a t * local_storage * abs_closure_content varid) option = fun (common, env) v -> match env with
     | Either.Left env -> begin match env.cbid with
         | None -> None
-        | Some cbid -> if Int.equal cbid v then Some (Either.Left env, StorVariable, (TAbsClosArg, Int32.pred env.nargs)) else None
+        | Some cbid -> if Int.equal cbid v then Some ((common, Either.Left env), StorVariable, (TAbsClosArg, Int32.pred common.nargs)) else None
       end
-    | Either.Right env -> begin match Env.Int.find_opt v env.varmap with
-        | Some (loc, VarID (TAbsClosArg, i)) -> Some (Either.Right env, loc, (TAbsClosArg, i))
+    | Either.Right env -> begin match Env.Int.find_opt v common.varmap with
+        | Some (loc, VarID (TAbsClosArg, i)) -> Some ((common, Either.Right env), loc, (TAbsClosArg, i))
         | Some (_, VarID (_, _)) -> failwith "TODO: LEnv.find_raw_closure with non-TAbsClosArg"
         | None -> begin
             let AT base = env.base in
             match find_raw_closure base v with
             | Some (base, loc, bid) ->
                 let env, cid = add_sub_to_env env base loc (VarID bid) in
-                let varmap = Env.Int.bind v (StorClosure, cid) env.varmap in
+                let varmap = Env.Int.bind v (StorClosure, cid) common.varmap in
                 let vid = match cid with
                   | VarID (TAbsClosArg, vid) -> vid
                   | _ -> failwith "TODO: LEnv.find_raw_closure with non-TAbsClosArg" in
-                Some (Either.Right { env with base = AT base; varmap }, StorClosure, (TAbsClosArg, vid))
+                Some (({ common with varmap }, Either.Right { env with base = AT base }), StorClosure, (TAbsClosArg, vid))
             | None -> None
           end
       end
   
-  let add_freevar (env : subt) (Type t : anytyp) : subt * mvarid =
-    let vidx = Int32.add env.nargs env.nlocs in
-    { env with
-      nlocs = Int32.succ env.nlocs;
-      locs = (let TypeList tl = env.locs in TypeList (TLcons (t, tl)));
-    }, vidx
+  let add_freevar (common, env : subt) (Type t : anytyp) : subt * mvarid =
+    let vidx = Int32.add common.nargs common.nlocs in
+    ({ common with
+      nlocs = Int32.succ common.nlocs;
+      locs = (let TypeList tl = common.locs in TypeList (TLcons (t, tl)));
+    }, env), vidx
   let set_handler_args (env : subt) (b : binder) : subt * anyvarid_list =
     let TypeList (type v) (eargs : v typ_list) = convert_type_list (Var.type_of_binder b) in
     match eargs with
@@ -1641,13 +1631,13 @@ end = struct
             | TLnil -> VLnil
             | TLcons (thd, ttl) ->
                 let i = i + 1 in
-                let env', vid = add_freevar !env (Type thd) in
-                let cvarmap = IntString.bind (argsb, string_of_int i) (StorVariable, VarID (thd, vid)) env'.cvarmap in
-                env := { env' with cvarmap }; VLcons ((thd, vid), inner ttl i)
+                let (common, senv), vid = add_freevar !env (Type thd) in
+                let cvarmap = IntString.bind (argsb, string_of_int i) (StorVariable, VarID (thd, vid)) senv.cvarmap in
+                env := (common, { senv with cvarmap }); VLcons ((thd, vid), inner ttl i)
           in let ret = inner eargs 0 in !env, ret in
         env, VarIDList (eargs, vargs)
   (* Modifies in-place the environment *)
-  let add_cont (env : subt) (Type tcontret : anytyp) (hdlfid : mfunid) (thdlret : anytyp) : subt * mvarid =
+  let add_cont (common, env : subt) (Type tcontret : anytyp) (hdlfid : mfunid) (thdlret : anytyp) : subt * mvarid =
     match env.contid with
     | Some _ -> raise (internal_error "Cannot add multiple continuations")
     | None ->
@@ -1655,14 +1645,14 @@ end = struct
         let env, ccid = env, 1l in (* Argument of the continuation argument *)
         let env, hcid = env, 2l in (* Closure of the current handler function *)
         env.contid <- Some (VarID (tcontret, id), ccid, hdlfid, thdlret, hcid);
-        env, id
-  let set_continuation (env : subt) (b : binder) : subt = match env.contid with
+        (common, env), id
+  let set_continuation (common, env : subt) (b : binder) : subt = match env.contid with
     | None -> raise (internal_error "Cannot set missing continuation")
-    | Some _ -> env.contv <- (Either.Left (Var.type_of_binder b), Var.var_of_binder b); env
+    | Some _ -> env.contv <- (Either.Left (Var.type_of_binder b), Var.var_of_binder b); (common, env)
   
-  let locals_of_env (env : 'a realt) : anytyp list = extract_to_list env.locs []
+  let locals_of_env (common, _ : 'a realt) : anytyp list = extract_to_list common.locs []
   
-  let compile (env : 'a realt) (fid : mfunid) (export_name : string option) (tret : 'b typ) (b : 'b block) : ('a, 'b) func' =
+  let compile (common, env : 'a realt) (fid : mfunid) (export_name : string option) (tret : 'b typ) (b : 'b block) : ('a, 'b) func' =
     let closid, clt, has_converted_closure = env.clos in
     let export_data = match export_name with
       | Some name -> Some name
@@ -1674,20 +1664,20 @@ end = struct
       fun_converted_closure = convclos;
       fun_args = env.args;
       fun_ret = tret;
-      fun_locals = extract_to_list env.locs [];
+      fun_locals = extract_to_list common.locs [];
       fun_block = b;
     }
   
-  let compile_cont_start (env : subt) (fid : mfunid) (tret : 'b typ) (b : 'b block) (cclosid : (anytyp_list * mvarid) option) : 'b fstart =
+  let compile_cont_start (common, _ : subt) (fid : mfunid) (tret : 'b typ) (b : 'b block) (cclosid : (anytyp_list * mvarid) option) : 'b fstart =
     {
       fst_id = fid;
       fst_converted_closure = cclosid;
       fst_ret = tret;
-      fst_locals = extract_to_list env.locs [];
+      fst_locals = extract_to_list common.locs [];
       fst_block = b;
     }
   
-  let compile_handler (type b d) (env : subt) (fid : mfunid) (oabsconc : (mvarid * mvarid) option)
+  let compile_handler (type b d) (common, env : subt) (fid : mfunid) (oabsconc : (mvarid * mvarid) option)
                       (onret : (b, d) finisher) (ondo : (b, d) handler list) : anyfhandler =
     let contarg, argcontidx = match env.contid with
       | Some (VarID (_, i), j, _, _, _) -> i, j
@@ -1698,7 +1688,7 @@ end = struct
       fh_contarg  = (TCont tcont, contarg), argcontidx;
       fh_tis      = tis;
       fh_closure  = Option.map (fun (absid, concid) -> absid, (TypeList clostyp, concid)) oabsconc;
-      fh_locals   = extract_to_list env.locs [];
+      fh_locals   = extract_to_list common.locs [];
       fh_finisher = onret;
       fh_handlers = ondo;
       fh_id       = fid;
