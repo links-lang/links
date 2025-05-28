@@ -129,6 +129,7 @@ and 'a expr =
   | EClose : ('a, 'b, 'c, 'ga, 'gc) funcid * ('d, 'c) box_list * 'd expr_list -> ('ga * 'a -> 'b) expr
   | ERawClose : ('a, 'b, 'c, 'ga, 'gc) funcid * abs_closure_content expr -> ('ga * 'a -> 'b) expr
   | ESpecialize : ('ga * 'a -> 'b) expr * ('gc, 'ga) specialization * ('c, 'a) box_list * ('d, 'b) box -> ('gc * 'c -> 'd) expr
+  | EResume : 'a typ * 'a continuation expr * 'b typ * 'b expr -> 'a expr
   | ECallRawHandler : mfunid * 'a typ * 'a continuation expr * 'b typ * 'b expr * 'c typ_list * 'c expr_list *
                       abs_closure_content expr * 'd typ -> 'd expr
   (* ^ Internal use only: pass the arguments in a struct without modification (no closure de/construction) *)

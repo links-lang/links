@@ -248,6 +248,7 @@ and _ expr =
   | EClose : ('a, 'b, 'c) funcid * ('d, 'c) box_list * 'd expr_list -> ('g * 'a -> 'b) expr
   | ERawClose : ('a, 'b, 'c) funcid * abs_closure_content expr -> ('g * 'a -> 'b) expr
   | ESpecialize : (_ * 'c -> 'd) expr * ('g * 'a -> 'b) typ * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b) expr
+  | EResume : 'a continuation typ * 'a continuation expr * 'b typ * 'b expr -> 'a expr
   | ECallRawHandler : mfunid * 'c continuation typ * 'c continuation expr * 'a typ * 'a expr * 'd typ_list * 'd expr_list *
                       abs_closure_content expr * 'b typ -> 'b expr
   | ECallClosed : ('g * 'a -> 'b) expr * 'a expr_list * 'b typ -> 'b expr
@@ -339,6 +340,7 @@ and [@tail_mod_cons] convert_expr : type a. a Wasmir.expr -> a expr =
         TClosed (convert_typ_list (Wasmir.src_of_box_list bargs), convert_typ (Wasmir.src_of_box bret)),
         convert_box_list bargs,
         convert_box bret)
+  | Wasmir.EResume (tc, c, ta, a) -> EResume (TCont (convert_typ tc), convert_expr c, convert_typ ta, (convert_expr[@tailcall]) a)
   | Wasmir.ECallRawHandler (f, tc, c, ta, a, ti, i, cl, tr) ->
       ECallRawHandler (f, TCont (convert_typ tc), convert_expr c, convert_typ ta, (convert_expr[@tailcall]) a,
                        convert_typ_list ti, convert_expr_list i, convert_expr cl, convert_typ tr)
@@ -349,7 +351,7 @@ and [@tail_mod_cons] convert_expr : type a. a Wasmir.expr -> a expr =
         convert_block t, (convert_block[@tailcall false]) f) (* For some reason this one cannot be @tailcall-ed *)
   | Wasmir.EDo (e, t, v) -> EDo (convert_effectid e, convert_typ t, (convert_expr_list[@tailcall]) v)
   | Wasmir.EShallowHandle (f, e, d, h) ->
-      EShallowHandle (convert_funcid f, convert_expr_list e, convert_finisher d, List.map (convert_handler) h)
+      EShallowHandle (convert_funcid f, convert_expr_list e, convert_finisher d, List.map convert_handler h)
   | Wasmir.EDeepHandle (c, cl, h, a, i) ->
       EDeepHandle (convert_funcid c, convert_expr_list cl, convert_funcid h, (convert_expr_list[@tailcall]) a, convert_expr_list i)
 and convert_handler : type a b. (a, b) Wasmir.handler -> (a, b) handler =
@@ -396,6 +398,7 @@ let typ_of_expr : type a. a expr -> a typ = function
   | EClose ((args, ret, _, _), _, _) -> TClosed (args, ret)
   | ERawClose ((args, ret, _, _), _) -> TClosed (args, ret)
   | ESpecialize (_, t, _, _) -> t
+  | EResume (TCont t, _, _, _) -> t
   | ECallRawHandler (_, _, _, _, _, _, _, _, t) -> t
   | ECallClosed (_, _, t) -> t
   | ECond (_, t, _, _) -> t
