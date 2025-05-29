@@ -68,8 +68,6 @@ module TMap : sig
   val recid_of_functyp : t -> 'a typ_list -> 'b typ -> int32
   val recid_of_cfunctyp : t -> 'b typ -> int32
   
-  val oval_of_type : t -> 'a typ -> Wasm.Type.val_type option
-  
   val recids_of_handler : t -> 'a continuation typ -> 'c typ_list -> 'b typ -> int32 * int32
   val recid_of_shallow_handler_block : t -> int32 -> 'a typ_list -> int32
   val recid_of_deep_handler_block : t -> int32 -> 'a typ_list -> int32
@@ -199,7 +197,8 @@ end = struct
           env.nrefs <- nrefs; env.reftyps <- Wasm.Type.RecT [|t|] :: env.reftyps; tidx in
     inner env env.reftyps env.nrefs
   
-  let rec val_of_type : type a. t -> a typ -> Wasm.Type.val_type = fun (env : t) (t : a typ) : Wasm.Type.val_type ->
+  (* TODO: optimize ()s away? -> return a val_type option instead *)
+  let rec val_of_type : type a. t -> a typ -> Wasm.Type.val_type = fun env t ->
     let open Wasm.Type in match t with
     | TTuple 0 -> RefT (Null, NoneHT)
     | TInt -> NumT I64T
@@ -217,22 +216,21 @@ end = struct
     | TSpawnLocation -> RefT (Null, NoneHT) (* SpawnLocation is isomorphic to an empty tuple for now *)
     | TProcess -> RefT (Null, VarHT pid_tid)
   
-  and [@tail_mod_cons] val_list_of_type_list : type a. t -> a typ_list -> Wasm.Type.val_type list =
-    fun (env : t) (tl : a typ_list) : Wasm.Type.val_type list ->
+  and [@tail_mod_cons] val_list_of_type_list : type a. t -> a typ_list -> Wasm.Type.val_type list = fun env tl ->
     match tl with
     | TLnil -> []
     | TLcons (hd, tl) -> let hd = val_of_type env hd in hd :: val_list_of_type_list env tl
   
-  and recid_of_type : type a. t -> a typ -> int32 = fun (env : t) (t : a typ) : int32 ->
+  and recid_of_type : type a. t -> a typ -> int32 = fun env t ->
     match TypeMap.find_opt (Type t) env.cenv with
     | Some tid -> tid
     | None ->
         let st =
           let open Wasm.Type in match t with
-          | TTuple 0 -> failwith "TODO: TMap.recid_of_type TTuple 0"
-          | TInt -> failwith "TODO: TMap.recid_of_type TInt"
-          | TBool -> failwith "TODO: TMap.recid_of_type TBool"
-          | TFloat -> failwith "TODO: TMap.recid_of_type TFloat" (* cached *)
+          | TTuple 0 -> raise (internal_error "recid_of_type called with TTuple 0")
+          | TInt -> raise (internal_error "recid_of_type called with TInt")
+          | TBool -> raise (internal_error "recid_of_type called with TBool")
+          | TFloat -> raise (internal_error "recid_of_type called with TFloat")
           | TString -> Some string_typ (* cached *)
           | TClosed (args, ret) ->
               let ftyp = recid_of_functyp env args ret in
@@ -240,7 +238,7 @@ end = struct
                 FieldT (Cons, ValStorageT (RefT (NoNull, VarHT ftyp)));
                 FieldT (Cons, ValStorageT (RefT (Null, StructHT)));
               |])))
-          | TAbsClosArg -> failwith "TODO: TMap.recid_of_type TAbsClosArg"
+          | TAbsClosArg -> raise (internal_error "recid_of_type called with TAbsClosArg")
           | TClosArg TLnil -> None (* Never actually used, so we can safely return garbage *)
           | TClosArg clos ->
               let clos = val_list_of_type_list env clos in
@@ -252,8 +250,8 @@ end = struct
               Some (SubT (Final, [||], DefStructT (StructT (Array.make n (FieldT (Cons, ValStorageT (RefT (Null, EqHT))))))))
           | TVariant -> Some variant_typ (* cached *)
           | TList _ -> Some list_typ
-          | TVar -> failwith "TODO: TMap.recid_of_type TVar"
-          | TSpawnLocation -> failwith "TODO: TMap.recid_of_type TSpawnLocation"
+          | TVar -> raise (internal_error "recid_of_type called with TVar")
+          | TSpawnLocation -> raise (internal_error "recid_of_type called with TSpawnLocation")
           | TProcess -> Some pid_typ (* cached *) in
         begin match st with
         | None -> Int32.minus_one
@@ -263,7 +261,7 @@ end = struct
             tid
       end
   
-  and recid_of_functyp : type a b. t -> a typ_list -> b typ -> int32 = fun (env : t) (args : a typ_list) (ret : b typ) : int32 ->
+  and recid_of_functyp : type a b. t -> a typ_list -> b typ -> int32 = fun env args ret ->
     let open Wasm.Type in
     let args = val_list_of_type_list env args in
     let args = Array.of_list (args @ [RefT (Null, StructHT)]) in
@@ -271,15 +269,11 @@ end = struct
     let t = SubT (Final, [||], DefFuncT (FuncT (args, [|ret|]))) in
     recid_of_sub_type env t
   
-  and recid_of_cfunctyp : type b. t -> b typ -> int32 = fun (env : t) (ret : b typ) : int32 ->
+  and recid_of_cfunctyp : type b. t -> b typ -> int32 = fun env ret ->
     let ret = val_of_type env ret in
     let open Wasm.Type in
     let t = SubT (Final, [||], DefFuncT (FuncT ([|RefT (Null, EqHT)|], [|ret|]))) in
     recid_of_sub_type env t
-  
-  (* TODO: optimize ()s away? *)
-  let oval_of_type (env : t) (t : 'a typ) : Wasm.Type.val_type option =
-    Some (val_of_type env t)
   
   let recids_of_handler (env : t) (TCont cret : 'a continuation typ) (tis : 'c typ_list) (tret : 'b typ) : int32 * int32 =
     let open Wasm.Type in
@@ -304,14 +298,15 @@ end = struct
     recid_of_sub_type env (SubT (Final, [||], DefFuncT (FuncT ([|RefT (Null, EqHT); RefT (NoNull, VarHT contid)|], [|eret|]))))
   
   let recid_of_exported_type (env : t) (targs : 'a typ_list) (tret : 'b typ) : int32 =
-    match TypeMap.find_opt (Type (TClosed (targs, tret))) env.eenv with
+    let key = Type (TClosed (targs, tret)) in
+    match TypeMap.find_opt key env.eenv with
     | Some n -> n | None ->
         let open Wasm.Type in
-        let targs' = val_list_of_type_list env targs in
-        let targs' = Array.of_list targs' in
-        let tret' = val_of_type env tret in
-        let ret = recid_of_sub_type env (SubT (Final, [||], DefFuncT (FuncT (targs', [|tret'|])))) in
-        env.eenv <- TypeMap.add (Type (TClosed (targs, tret))) ret env.eenv;
+        let targs = val_list_of_type_list env targs in
+        let targs = Array.of_list targs in
+        let tret = val_of_type env tret in
+        let ret = recid_of_sub_type env (SubT (Final, [||], DefFuncT (FuncT (targs, [|tret|])))) in
+        env.eenv <- TypeMap.add key ret env.eenv;
         ret
   
   let to_wasm (env : t) : Wasm.Type.rec_type array = Array.of_list (List.rev (env.reftyps))
@@ -495,7 +490,7 @@ end = struct
     add_raw_global genv (Wasm.Type.(GlobalT (Var, TMap.val_of_type tm t)), init, oname)
   
   (* Warning: not the same ABI (the closure content is not wrapped again) *)
-  (* TODO: add caching *)
+  (* TODO: add unspecialization caching *)
   let add_unspecialization : type a b c d. tmap -> t -> a typ_list -> b typ -> (a, c) box_list -> (b, d) box -> c typ_list * d typ * int32 =
     fun tm genv targs tret bargs bret ->
     let fref, fid = add_function genv in
@@ -552,7 +547,7 @@ end = struct
     fargs, fret, fid
   
   (* Warning: not the same ABI (the closure content is not wrapped again) *)
-  (* TODO: add caching *)
+  (* TODO: add specialization caching *)
   let add_specialization : type a b c d. tmap -> t -> a typ_list -> b typ -> (a, c) box_list -> (b, d) box -> int32 =
     fun tm genv targs tret bargs bret ->
     let fref, fid = add_function genv in
@@ -844,39 +839,38 @@ type genv = GEnv.t
 type lenv = LEnv.t
 
 let convert_global (tm : tmap) ((_, Type t, name) : 'a * anytyp * string option) : Wasm.global =
-  let init =
-    let open Wasm.Instruction in match t with
-    | TTuple 0 -> [|RefNull Wasm.Type.NoneHT|]
-    | TInt -> [|Const (Wasm.Value.(I64 I64.zero))|]
-    | TBool -> [|Const (Wasm.Value.(I32 I32.zero))|]
-    | TFloat -> [|Const (Wasm.Value.(F64 (F64.of_float 0.)))|]
-    | TString -> [|ArrayNewFixed (TMap.string_tid, 0l)|]
-    | TClosed _ -> let idx = TMap.recid_of_type tm t in [|RefNull Wasm.Type.(VarHT idx)|]
+  let open Wasm in let open Value in let open Type in let open Instruction in
+  match
+    match t with
+    | TInt -> Either.Right [|Const (I64 I64.zero)|]
+    | TBool -> Either.Right [|Const (I32 I32.zero)|]
+    | TFloat -> Either.Right [|Const (F64 F64.zero)|]
+    | TString -> Either.Right [|ArrayNewFixed (TMap.string_tid, 0l)|]
+    | TClosed _ ->
+        let idx = TMap.recid_of_type tm t in
+        Either.Left (GlobalT (Var, RefT (Null, VarHT idx)), [|RefNull (VarHT idx)|], name)
     | TAbsClosArg -> raise (internal_error "Unexpected global of IR type AbsClosArg")
     | TClosArg _ -> raise (internal_error "Unexpected global of IR type ClosArg")
-    | TCont _ -> failwith "TODO: convert_global TCont"
-    | TTuple _ -> let idx = TMap.recid_of_type tm t in [|StructNew (idx, Implicit)|]
-    | TVariant -> [|
-          Const (Wasm.Value.(I32 I32.zero));
-          RefNull Wasm.Type.NoneHT;
-          StructNew (TMap.variant_tid, Explicit)
-        |]
-    | TList _ -> [|RefNull Wasm.Type.(VarHT TMap.list_tid)|]
+    | TCont _ -> failwith "TODO: convert_oglobal TCont"
+    | TTuple 0 -> Either.Right [|RefNull NoneHT|]
+    | TTuple _ ->
+        let idx = TMap.recid_of_type tm t in
+        Either.Left (GlobalT (Var, RefT (NoNull, VarHT idx)), [|StructNew (idx, Implicit)|], name)
+    | TVariant -> Either.Right [|Const (I32 I32.zero); RefNull NoneHT; StructNew (TMap.variant_tid, Explicit)|]
+    | TList _ -> Either.Right [|RefNull (VarHT TMap.list_tid)|]
     | TVar -> raise (internal_error "Unexpected global of IR type Var")
-    | TSpawnLocation -> [|RefNull Wasm.Type.NoneHT|]
-    | TProcess -> [|StructNew (TMap.pid_tid, Implicit)|] in
-  let t = match t with
-    | TClosed _ -> begin let open Wasm.Type in match TMap.val_of_type tm t with
-        | RefT (NoNull, ht) -> RefT (Null, ht)
-        | _ -> raise (internal_error "Unexpected val_of_type of TClosed")
-      end
-    | _ -> TMap.val_of_type tm t in
-  Wasm.(Type.(GlobalT (Var, t)), init, name)
+    | TSpawnLocation -> Either.Right [|RefNull NoneHT|]
+    | TProcess -> Either.Right [|StructNew (TMap.pid_tid, Implicit)|]
+  with
+  | Either.Left ret -> ret
+  | Either.Right init ->
+      let t = TMap.val_of_type tm t in
+      (GlobalT (Var, t), init, name)
 let convert_globals (tm : tmap) (gs : (mvarid * anytyp * string option) list) (tl : Wasm.global list) : Wasm.global array =
   let [@tail_mod_cons] rec inner gs = match gs with
     | [] -> tl
-    | hd :: tl -> let hd = convert_global tm hd in hd :: inner tl
-  in let ret = inner gs in Array.of_list ret
+    | hd :: tl -> let hd = convert_global tm hd in hd :: inner tl in
+  let ret = inner gs in Array.of_list ret
 
 (* get_val is affine *)
 let do_box (type a b) (tm : tmap) (lenv : lenv) (box : (a, b) box) (get_val : instr_conv) : instr_conv =
@@ -1384,8 +1378,8 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
       let ti = convert_block tm lenv procinfo t box (incr_depth is_last) cinfo empty_nlist in
       let fi = convert_block tm lenv procinfo f box (incr_depth is_last) cinfo empty_nlist in
       let ei = convert_expr tm lenv procinfo e BNone None cinfo in
-      let rt' = TMap.oval_of_type tm rt in
-      fun acc -> If (Wasm.Type.(ValBlockType rt'), convert_nlist ti, convert_nlist fi) ^+ ei acc
+      let rt' = TMap.val_of_type tm rt in
+      fun acc -> If (Wasm.Type.(ValBlockType (Some rt')), convert_nlist ti, convert_nlist fi) ^+ ei acc
   | EDo (eid, tret, args) ->
       let targs, n, eid = (eid : _ effectid :> _ * int * int32) in
       let args = match targs, args with
@@ -1916,8 +1910,14 @@ let convert_fun_step2 (tm : tmap) (genv : genv) (f, clostyp : func * int32 optio
       }
 let convert_funs (tm : tmap) (genv : genv) (procinfo : procinfo)
                  (fs : func list) (is : genv -> Wasm.fundef list) : Wasm.fundef list =
+  let rec filter_map_rev_append f acc l = match l with
+    | [] -> acc
+    | x :: l ->
+        match f x with
+        | None -> filter_map_rev_append f acc l
+        | Some v -> filter_map_rev_append f (v :: acc) l in
   let [@tail_mod_cons] rec inner genv fs acc = match fs with
-    | [] -> is genv @ List.filter_map (convert_fun_step2 tm genv) acc
+    | [] -> is genv @ filter_map_rev_append (convert_fun_step2 tm genv) [] acc
     | hd :: tl ->
         let _fid, fhd, acc = match hd with
           | FFunction hd ->
@@ -2072,10 +2072,10 @@ let prepare_imports (tm : tmap) (typ : Types.datatype) : Wasm.import array * int
     imports_ret.(nimports - 1 - i) <- { module_name = mn; item_name = fn; desc = FuncImport tid } in
   List.iteri convert_import imports;
   imports_ret, Some paux
-let generate_printer (tm : tmap) (genv : genv) (typ : Types.datatype) (paux : int32 option printer_aux option) (gid : int32)
+let generate_printer (tm : tmap) (genv : genv) (typ : Types.datatype) (paux : int32 option printer_aux option) (ogid : int32 option)
     (tags : tagid Env.String.t) : Wasm.instr nlist =
   let open Wasm in let open Type in let open Value in let open Instruction in
-  match paux with None -> nlist_of_list [GlobalSet gid] | Some paux ->
+  match paux with None -> nlist_of_list (match ogid with None -> [] | Some gid -> [GlobalSet gid]) | Some paux ->
   let convert_printer (p : (instr nlist, int32) Either.t) : instr_conv = match p with
     | Either.Left il -> fun acc -> il @+ acc
     | Either.Right fid -> fun acc -> Call (Int32.add (GEnv.fun_offset genv) fid) ^+ acc in
@@ -2349,7 +2349,7 @@ let generate_printer (tm : tmap) (genv : genv) (typ : Types.datatype) (paux : in
     | Types.Dual _ -> failwith "TODO Irtowasm.generate_printer.inner Dual"
     | Types.End -> failwith "TODO Irtowasm.generate_printer.inner End" in
   let _, innerp = inner genv typ Utility.StringMap.empty in
-  let code = nlist_of_list [GlobalGet gid; GlobalSet gid] in
+  let code = nlist_of_list (match ogid with None -> [] | Some gid -> [GlobalGet gid; GlobalSet gid]) in
   let code = convert_printer innerp code in
   let code = add_string (Types.string_of_datatype typ) (add_string " : " code) in
   Call (Option.get paux.paux_putc) ^+ Const (I32 (I32.of_int_s (Char.code '\n'))) ^+ code
@@ -2357,15 +2357,15 @@ let generate_printer (tm : tmap) (genv : genv) (typ : Types.datatype) (paux : in
 let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
   let wasm_yield_is_switch = Settings.get wasm_yield_is_switch in
   let tm = generate_type_map m in
-  let main_res =
+  let main_res, main_gid =
     let cg = convert_global tm (0, Type m.mod_main, Some "_init_result") in
-    cg in
+    Some cg, Some m.mod_nglobals in
   let imports, paux = prepare_imports tm main_typ in
   let genv =
     let mainid = m.mod_nfuns in
     let nfuns = Int32.succ mainid in
     let neffects = m.mod_neffs in
-    let nglob = Int32.succ m.mod_nglobals in
+    let nglob = Option.fold ~none:m.mod_nglobals ~some:(fun _ -> Int32.succ m.mod_nglobals) main_res in
     GEnv.empty_global ~nimports:(Int32.of_int (Array.length imports)) ~nfuns ~neffects ~nglob in
   let procinfo, main_tid, generate_exit_code, mainid =
     if m.mod_process_level = PL_NoProcess then None, TMap.main_func_type, Fun.id, m.mod_nfuns
@@ -3043,7 +3043,7 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
     end in
   let genv, main =
     let lenv = LEnv.extend genv 0l (List.map (fun (Type t) -> TMap.val_of_type tm t) m.mod_locals) in
-    let main_code = generate_printer tm genv main_typ paux m.mod_nglobals m.mod_tags in
+    let main_code = generate_printer tm genv main_typ paux main_gid m.mod_tags in
     let main_code = generate_exit_code main_code in
     let is_init = (Option.is_none procinfo, main_code) in
     let _, main = convert_fun_aux tm lenv procinfo main_tid m.mod_block (Either.Left is_init) None in
@@ -3051,7 +3051,7 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
   let funs = convert_funs tm genv procinfo m.mod_funs (fun genv -> main :: GEnv.wasm_funs genv) in
   let globals = GEnv.wasm_globals genv in
   let elems = GEnv.wasm_elems genv in
-  let globals = convert_globals tm m.mod_global_vars (main_res :: globals) in
+  let globals = convert_globals tm m.mod_global_vars (Option.fold ~none:globals ~some:(fun gbl -> gbl :: globals) main_res) in
   let tags = convert_effects tm m.mod_effs in
   let types = TMap.to_wasm tm in
   let tags = Array.of_list tags in

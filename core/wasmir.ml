@@ -1039,9 +1039,9 @@ end = struct
   
   let apply_type (at : Types.Abstype.t) (ts : anytyp list)
       (normal : anytyp -> 'a) (func : tyvar list -> Types.typ -> Types.typ -> Types.typ -> 'a)
-      (row : Types.field_spec_map -> Types.meta_row_var -> bool -> 'a) : 'a =
+      (record : Types.field_spec_map -> Types.meta_row_var -> bool -> 'a) : 'a =
     let is at2 = Types.Abstype.compare at at2 = 0 in
-    ignore (func, row);
+    ignore (func, record);
     if is Types.list then match ts with
       | [Type t] -> normal (Type (TList t))
       | _ -> raise (internal_error ("Unknown abstract type " ^ (Types.Abstype.show at)))
@@ -1140,7 +1140,7 @@ let _to_typelist (conv : Types.typ -> anytyp) (ts : Types.typ name_map) : anynam
 let rec _convert_type : type a. (_ -> a) -> (_ -> _ -> _ -> _ -> a) -> (_ -> _ -> _ -> a) -> _ -> a =
   fun (normal : anytyp -> a)
     (func : tyvar list -> Types.typ -> Types.typ -> Types.typ -> a)
-    (row : Types.field_spec_map -> Types.meta_row_var -> bool -> a)
+    (record : Types.field_spec_map -> Types.meta_row_var -> bool -> a)
     (t : Types.typ) : a -> match t with
   | Types.Not_typed -> failwith "TODO _convert_type Not_typed"
   (* FIXME: what's the difference? *)
@@ -1148,14 +1148,14 @@ let rec _convert_type : type a. (_ -> a) -> (_ -> _ -> _ -> _ -> a) -> (_ -> _ -
   | Types.Var (id, (CommonTypes.PrimaryKind.Type, (_, _)), `Rigid) ->
       normal (Type (TVar id))
   | Types.Var _ -> failwith "TODO _convert_type Var [non-type]"
-  | Types.Recursive (_, _, t) -> _convert_type normal func row t
+  | Types.Recursive (_, _, t) -> _convert_type normal func record t
       (* Note: recursive types should always be broken by a Variant, otherwise we have an infinite object *)
-  | Types.Alias (_, _, t) -> _convert_type normal func row t
+  | Types.Alias (_, _, t) -> _convert_type normal func record t
   | Types.Application (at, ts) ->
       let ts = List.filter_map (fun (k, t) -> if k = CommonTypes.PrimaryKind.Type then Some (convert_type t) else None) ts in
-      Builtins.apply_type at ts normal func row
-  | Types.RecursiveApplication ra -> _convert_type normal func row Types.(ra.r_unwind ra.r_args ra.r_dual)
-  | Types.Meta t -> _convert_type normal func row (Unionfind.find t)
+      Builtins.apply_type at ts normal func record
+  | Types.RecursiveApplication ra -> _convert_type normal func record Types.(ra.r_unwind ra.r_args ra.r_dual)
+  | Types.Meta t -> _convert_type normal func record (Unionfind.find t)
   | Types.Primitive CommonTypes.Primitive.Bool -> normal (Type TBool)
   | Types.Primitive CommonTypes.Primitive.Int -> normal (Type TInt)
   | Types.Primitive CommonTypes.Primitive.Float -> normal (Type TFloat)
@@ -1163,7 +1163,8 @@ let rec _convert_type : type a. (_ -> a) -> (_ -> _ -> _ -> _ -> a) -> (_ -> _ -
   | Types.Primitive _ -> failwith "TODO _convert_type Primitive"
   | Types.Function (args, eff, ret) -> func [] args eff ret
   | Types.Lolli (args, eff, ret) -> func [] args eff ret (* Assume Lolli and Function are the same thing *)
-  | Types.Record t -> _convert_type normal func row t
+  | Types.(Record (Row (fsm, mrv, b))) -> record fsm mrv b
+  | Types.Record _ -> raise (internal_error "_convert_type called on a Record without Row")
   | Types.Variant _ -> normal (Type TVariant)
   | Types.Table _ -> failwith "TODO _convert_type Table"
   | Types.Lens _ -> failwith "TODO _convert_type Lens"
@@ -1172,10 +1173,10 @@ let rec _convert_type : type a. (_ -> a) -> (_ -> _ -> _ -> _ -> a) -> (_ -> _ -
   | Types.ForAll _ -> failwith "TODO _convert_type ForAll without Function or Lolli"
   | Types.Effect _ -> failwith "TODO _convert_type Effect"
   | Types.Operation _ -> failwith "TODO _convert_type Operation"
-  | Types.Row (fsm, mrv, b) -> row fsm mrv b
+  | Types.Row _ -> raise (internal_error "_convert_type called on a raw Row")
   | Types.Closed -> failwith "TODO _convert_type Closed"
   | Types.Absent -> failwith "TODO _convert_type Absent"
-  | Types.Present t -> _convert_type normal func row t
+  | Types.Present t -> _convert_type normal func record t
   | Types.Input _ -> failwith "TODO _convert_type Input"
   | Types.Output _ -> failwith "TODO _convert_type Output"
   | Types.Select _ -> failwith "TODO _convert_type Select"
@@ -1452,7 +1453,7 @@ end = struct
                             | TypeList (TLcons (t, TLnil)) -> Type t
                             | TypeList TLnil -> raise (internal_error "Unexpected handler type: no argument")
                             | TypeList (TLcons (_, TLcons _)) -> raise (internal_error "Unexpected handler type: too many arguments"))
-                    (fun _ _ _ -> raise (internal_error "Expected a function type, got a row type"))
+                    (fun _ _ _ -> raise (internal_error "Expected a function type, got a record type"))
                     ntarg in
                   targ := Either.Right ntarg;
                   ntarg
@@ -1463,7 +1464,7 @@ end = struct
             Some ((common, env), (StorVariable, targ, cid, odeep))
         | None -> begin match env with
             | Either.Left _ -> None
-            | Either.Right ({ base; _ } as env) -> begin match find_continuation base v with
+            | Either.Right env -> begin match find_continuation env.base v with
                 | None -> None
                 | Some (base, (loc, targ, VarID (t, bid), odeep)) ->
                     let cid = env.nclos in
@@ -1512,8 +1513,8 @@ end = struct
             | Types.ForAll (tvs, t) -> tvs, t
             | t -> [], t in
           let nm = _convert_type
-              (fun _ -> raise (internal_error "Expected a row type, got another type"))
-              (fun _ _ _ -> raise (internal_error "Expected a row type, got a function type"))
+              (fun _ -> raise (internal_error "Expected a record type, got another type"))
+              (fun _ _ _ -> raise (internal_error "Expected a record type, got a function type"))
               (fun fsm _ _ -> sort_name_map fsm)
               t in
           let cbid = Var.var_of_binder bclos in
@@ -1881,7 +1882,7 @@ end = struct
         _convert_type
           (fun _ -> raise (internal_error "Invalid type: expected a function type, got another type"))
           (fun _ _ _ ret -> convert_type ret)
-          (fun _ _ _ -> raise (internal_error "Invalid type: expected a function type, got a row type"))
+          (fun _ _ _ -> raise (internal_error "Invalid type: expected a function type, got a record type"))
           t in
       let ga, tret =
         let rec inner : type a. a generalization -> _ = fun raw_ga tvs acc map -> match raw_ga, tvs with
