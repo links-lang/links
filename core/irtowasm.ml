@@ -294,14 +294,13 @@ end = struct
     | TProcess -> Some (RefT (Null, VarHT pid_tid))
   
   and val_list_of_type_list : type a. t -> a typ_list -> emap -> Wasm.Type.val_type list = fun env tl emap ->
-    let rec inner : type a. t -> a typ_list -> Wasm.Type.val_type list -> emap -> Wasm.Type.val_type list =
-      fun env tl accv emap ->
+    let [@tail_mod_cons] rec inner : type a. t -> a typ_list -> emap -> Wasm.Type.val_type list = fun env tl emap ->
       match tl with
-      | TLnil -> List.rev accv
+      | TLnil -> []
       | TLcons (hd, tl) -> match val_of_type env hd with
-          | None -> ignore (ErasableIDMap.add_erased emap); inner env tl accv emap
-          | Some hd -> ignore (ErasableIDMap.add_concrete emap); inner env tl (hd :: accv) emap in
-    inner env tl [] emap
+          | None -> ignore (ErasableIDMap.add_erased emap); inner env tl emap
+          | Some hd -> ignore (ErasableIDMap.add_concrete emap); hd :: inner env tl emap in
+    inner env tl emap
   
   and recid_of_type : type a. t -> a typ -> int32 = fun env t ->
     match TypeMap.find_opt (Type t) env.cenv with
@@ -408,15 +407,15 @@ end = struct
     | None -> Wasm.Type.(RefT (Null, NoneHT))
     | Some t -> t
   let full_val_list_of_type_list : type a. t -> a typ_list -> emap -> Wasm.Type.val_type list = fun env tl emap ->
-    let rec inner : type a. t -> a typ_list -> Wasm.Type.val_type list -> emap -> Wasm.Type.val_type list =
-      fun env tl accv emap ->
+    let [@tail_mod_cons] rec inner : type a. t -> a typ_list -> emap -> Wasm.Type.val_type list = fun env tl emap ->
       match tl with
-      | TLnil -> List.rev accv
-      | TLcons (hd, tl) -> ignore (ErasableIDMap.add_concrete emap);
-          match val_of_type env hd with
-          | None -> inner env tl Wasm.Type.(RefT (Null, NoneHT) :: accv) emap
-          | Some hd -> inner env tl (hd :: accv) emap in
-    inner env tl [] emap
+      | TLnil -> []
+      | TLcons (hd, tl) ->
+          let hd = match val_of_type env hd with
+            | None -> ignore (ErasableIDMap.add_erased emap); Wasm.Type.(RefT (Null, NoneHT))
+            | Some hd -> ignore (ErasableIDMap.add_concrete emap); hd in
+          hd :: inner env tl emap in
+    inner env tl emap
   let recid_of_exported_type (env : t) (targs : 'a typ_list) (tret : 'b typ) : int32 * emap =
     let key = Type (TClosed (targs, tret)) in
     let (n, m) = match TypeMap.find_opt key env.eenv with
@@ -1420,7 +1419,7 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
               generate_yield procinfo (get_cl (args acc)))
     end
   | ECallClosed (ESpecialize (e, _, bargs, bret), args, _) ->
-      let TClosed (targs, tret) as t, getv, etee = match e with
+      let TClosed (targs, tret), getv, etee = match e with
         | EVariable (loc, vid) ->
             let t, vid = (vid : _ varid :> _ * int32) in
             let getv = convert_get_var' lenv loc vid cinfo in
@@ -1430,9 +1429,7 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
             let e = convert_expr tm lenv procinfo e BNone None cinfo in
             let vid = LEnv.add_local tm lenv t in
             t, (fun acc -> LEnv.local_get lenv vid ^+ acc), (fun acc -> LEnv.local_tee lenv vid ^+ e acc) in
-      (* TODO: optimize the next two lines (caching is possible) *)
-      let vtid = TMap.recid_of_type tm t in
-      let fid, _ = TMap.recid_of_functyp tm targs tret in
+      let vtid, fid, _ = TMap.recid_of_closed tm targs tret in
       let args = convert_exprs tm lenv procinfo args bargs cinfo in
       let can_early_ret = can_early_ret && (match bret with BNone -> true | _ -> false) in
       let unbox = do_unbox tm lenv bret (fun acc ->
@@ -1444,7 +1441,7 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
           args acc)))) in
       do_box tm lenv box unbox
   | ECallClosed (e, args, _) ->
-      let TClosed (targs, tret) as t, getv, etee = match e with
+      let TClosed (targs, tret), getv, etee = match e with
         | EVariable (loc, vid) ->
             let t, vid = (vid : _ varid :> _ * int32) in
             let getv = convert_get_var' lenv loc vid cinfo in
@@ -1454,9 +1451,7 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
             let e = convert_expr tm lenv procinfo e BNone None cinfo in
             let vid = LEnv.add_local tm lenv t in
             t, (fun acc -> LEnv.local_get lenv vid ^+ acc), (fun acc -> LEnv.local_tee lenv vid ^+ e acc) in
-      (* TODO: optimize the next two lines (caching is possible) *)
-      let vtid = TMap.recid_of_type tm t in
-      let fid, _ = TMap.recid_of_functyp tm targs tret in
+      let vtid, fid, _ = TMap.recid_of_closed tm targs tret in
       let args = convert_exprs tm lenv procinfo args BLnone cinfo in
       do_box tm lenv box (fun acc ->
           (if can_early_ret then ReturnCallRef fid
