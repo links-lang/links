@@ -1722,3 +1722,60 @@ end = struct
     | None -> raise (not_found "pop_min" q)
     | Some ret -> ret
 end
+
+(* Resizable constant-value arrays aka vectors *)
+(* Requires uniqueness: pushing two values on the same vector will override the first value (unless the internal buffer got extended) *)
+module Vector : sig
+  type 'a t
+  
+  val empty : 'a t
+  val of_list : 'a list -> 'a t
+  val of_rev_list : 'a list -> 'a t
+  val of_array : 'a array -> 'a t
+  val copy : 'a t -> 'a t
+  
+  val size : 'a t -> int
+  
+  val push_back : 'a t -> 'a -> 'a t
+  
+  val get : 'a t -> int -> 'a
+  val (.!()) : 'a t -> int -> 'a
+end = struct
+  type 'a t = {
+    buf : 'a array;
+    size : int;
+  }
+  
+  let empty : 'a t = { buf = [||]; size = 0 }
+  let of_list (l : 'a list) : 'a t =
+    let buf = Array.of_list l in
+    { buf; size = Array.length buf }
+  let of_rev_list (l : 'a list) : 'a t = match l with
+    | [] -> empty
+    | d :: tl ->
+        let size = List.length l in
+        let buf = Array.make size d in
+        List.iteri (fun i v -> buf.(size - i - 2) <- v) tl;
+        { buf; size }
+  let of_array (buf : 'a array) : 'a t =
+    { buf; size = Array.length buf }
+  let copy (s : 'a t) : 'a t =
+    { buf = Array.copy s.buf; size = s.size }
+  
+  let size ({ size; _ } : 'a t) : int = size
+  
+  let extend (s : 'a t) (x : 'a) : 'a t =
+    if Array.length s.buf = 0
+    then { buf = Array.make 4 x; size = 0 }
+    else
+      let buf = Array.append s.buf s.buf in
+      { s with buf }
+  
+  let push_back (s : 'a t) (x : 'a) : 'a t =
+    let s = if s.size < Array.length s.buf then s else extend s x in
+    s.buf.(s.size) <- x;
+    { s with size = s.size + 1 }
+  
+  let get (s : 'a t) (i : int) : 'a = s.buf.(i)
+  let (.!()) = get
+end
