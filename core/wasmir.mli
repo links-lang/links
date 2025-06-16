@@ -72,16 +72,23 @@ type ('a, 'b, 'r) binop =
   | BOCons : 'a typ -> ('a, llist, llist) binop
   | BOConcatList : 'a typ -> (llist, llist, llist) binop
 
-type local_storage = StorVariable | StorClosure
-type locality = Global | Local of local_storage
-type 'a varid = private ('a typ * mvarid)
-type ('a, 'b, 'c, 'ga, 'gc) funcid = private ('ga generalization * 'gc generalization * 'a typ_list * 'b typ * 'c typ_list * mfunid)
+type locst_var = private LSVar
+type locst_clos = private LSCl
+type global_storage = private LGlob
+type !'a local_storage =
+  | StorVariable : locst_var local_storage
+  | StorClosure : locst_clos local_storage
+type !'a locality =
+  | Global : global_storage locality
+  | Local : 'a local_storage -> 'a local_storage locality
+type (!'l, !'a) varid = private ('a typ * 'l locality * mvarid)
+type (!'a, !'b, !'c, !'ga, !'gc) funcid = private ('ga generalization * 'gc generalization * 'a typ_list * 'b typ * 'c typ_list * mfunid)
   (* Top abstraction, closure abstraction, arguments type, return type, closure type, closure type ID, module-level function ID *)
-type 'a effectid = private ('a typ_list * meffid)
+type !'a effectid = private ('a typ_list * meffid)
 
-type 'a varid_list =
+type !'a varid_list =
   | VLnil : unit varid_list
-  | VLcons : 'a varid * 'b varid_list -> ('a * 'b) varid_list
+  | VLcons : (locst_var local_storage, 'a) varid * 'b varid_list -> ('a * 'b) varid_list
 
 type (!'a, !'b) box =
   | BNone : 'a typ * 'a typ -> ('a, 'a) box
@@ -105,9 +112,9 @@ type (!'a, !'b) specialization =
 
 type ('a, 'b) finisher =
   | FId : 'a typ -> ('a, 'a) finisher
-  | FMap of 'a varid * 'b typ * 'b block
+  | FMap : (locst_var local_storage, 'a) varid * 'b typ * 'b block -> ('a, 'b) finisher
 and 'a block = assign list * 'a expr
-and assign = Assign : locality * 'a varid * 'a expr -> assign
+and assign = Assign : ('l, 'a) varid * 'a expr -> assign
 and 'a expr =
   | EUnreachable : 'a typ -> 'a expr
   | EConvertClosure : mvarid * 'a closure_content typ -> 'a closure_content expr
@@ -118,7 +125,7 @@ and 'a expr =
   | EConstString : string -> string expr
   | EUnop : ('a, 'b) unop * 'a expr -> 'b expr
   | EBinop : ('a, 'b, 'c) binop * 'a expr * 'b expr -> 'c expr
-  | EVariable : locality * 'a varid -> 'a expr
+  | EVariable : ('l, 'a) varid -> 'a expr
   | ETuple : 'a named_typ_list * 'a expr_list -> 'a list expr
   | EExtract : 'a list expr * ('a, 'b) extract_typ -> 'b expr
   | EVariant : tagid * 'a typ * 'a expr -> variant expr
@@ -142,7 +149,7 @@ and 'a expr =
                   ('b continuation * ('c closure_content * 'f), 'd, 'e, unit, unit) funcid * 'e expr_list * 'f expr_list -> 'd expr
 and ('a, 'b) handler = (* The continuation itself returns 'a, the handler returns 'b *)
   (* Note: we lose the information that the continuation takes 'b as parameter(s) *)
-  | Handler : 'a effectid * 'd continuation varid * 'a varid_list * 'c block -> ('d, 'c) handler
+  | Handler : 'a effectid * (locst_var local_storage, 'd continuation) varid * 'a varid_list * 'c block -> ('d, 'c) handler
 and 'a expr_list =
   | ELnil : unit expr_list
   | ELcons : 'a expr * 'b expr_list -> ('a * 'b) expr_list
@@ -166,7 +173,7 @@ type 'b fstart = {
   fst_block            : 'b block;
 }
 type ('a, 'c, 'b) fhandler = {
-  fh_contarg : 'a continuation varid * mvarid;
+  fh_contarg : (locst_var local_storage, 'a continuation) varid * mvarid;
   fh_tis     : 'c typ_list;
   fh_closure : (mvarid * (anytyp_list * mvarid)) option;
   fh_locals  : anytyp list;

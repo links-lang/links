@@ -1114,7 +1114,7 @@ let incr_depth_n (is_last : last_info) (depth : int32) : last_info = match is_la
   | Some (refid, jmplv) -> Some (refid, Int32.add jmplv depth)
 let incr_depth (is_last : last_info) : last_info = incr_depth_n is_last 1l
 type clos_info = (int32 * mvarid) option (* Closure type ID, closure ID *)
-let convert_get_var' (lenv : lenv) (loc : locality) (vid : int32) (cinfo : clos_info) : instr_conv =
+let convert_get_var' : type l. lenv -> l locality -> int32 -> clos_info -> instr_conv = fun lenv loc vid cinfo ->
   let open Wasm.Instruction in match loc with
   | Global -> fun acc -> GEnv.global_get (LEnv.to_genv lenv) vid ^+ acc
   | Local StorVariable -> fun acc -> LEnv.local_get lenv vid ^+ acc
@@ -1122,15 +1122,15 @@ let convert_get_var' (lenv : lenv) (loc : locality) (vid : int32) (cinfo : clos_
     | None -> raise (internal_error "Variable stored in non-existent closure")
     | Some (ctid, cid) -> fun acc -> StructGet (ctid, vid, None) ^+ LEnv.local_get lenv (cid :> int32) ^+ acc
     end
-let convert_get_var (lenv : lenv) (loc : locality) (vid : 'a varid) (cinfo : clos_info) : instr_conv =
-  let _, vid = (vid : _ varid :> _ typ * int32) in convert_get_var' lenv loc vid cinfo
+let convert_get_var (lenv : lenv) (vid : ('l, 'a) varid) (cinfo : clos_info) : instr_conv =
+  let _, loc, vid = (vid : _ varid :> _ typ * _ * int32) in convert_get_var' lenv loc vid cinfo
 let rec convert_block : type a b. _ -> _ -> _ -> a block -> (a, b) box -> _ -> _ -> instr_conv =
   fun (tm : tmap) (lenv : lenv) (procinfo : procinfo)
       ((ass, e) : a block) (box : (a, b) box) (is_last : last_info) (cinfo : clos_info) ->
   let rec inner (ass : assign list) (facc : instr_conv) : instr_conv = match ass with
     | [] -> let e = convert_expr tm lenv procinfo e box is_last cinfo in fun acc -> e (facc acc)
-    | Assign (l, v, e) :: tl ->
-        let _, v = (v : _ varid :> _ typ * int32) in
+    | Assign (v, e) :: tl ->
+        let _, l, v = (v : _ varid :> _ typ * _ * int32) in
         let e = convert_expr tm lenv procinfo e BNone None cinfo in
         inner tl (fun acc -> (match l with
           | Global -> GEnv.global_set (LEnv.to_genv lenv) v
@@ -1177,7 +1177,7 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
       let arg2 = convert_expr tm lenv procinfo e2 BNone None cinfo in
       let v = convert_binop tm lenv op arg1 arg2 in
       do_box tm lenv box v
-  | EVariable (loc, vid) -> do_box tm lenv box (convert_get_var lenv loc vid cinfo)
+  | EVariable vid -> do_box tm lenv box (convert_get_var lenv vid cinfo)
   | ETuple (TLnil, _, ELnil) ->
       do_box tm lenv box Fun.id
   | ETuple (ts, n, es) ->
@@ -1213,15 +1213,14 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
       let blk = convert_block tm lenv procinfo blk BNone is_last cinfo in
       do_box tm lenv box (fun acc -> blk (LEnv.local_set lenv (bid :> int32) ^+ v acc))
   | ECase (v, t, cs, od) ->
-      let loc, vid, stgv = match v with
-        | EVariable (loc, vid) ->
-            let _, vid = (vid : _ varid :> _ * int32) in
-            loc, vid, (fun acc -> LEnv.local_get lenv vid ^+ acc)
+      let getv, etee = match e with
+        | EVariable vid ->
+            let getv = convert_get_var lenv vid cinfo in
+            getv, getv
         | _ ->
-            let tmpvar = LEnv.add_local tm lenv TVariant in
+            let vid = LEnv.add_local tm lenv TVariant in
             let v = convert_expr tm lenv procinfo v BNone None cinfo in
-            Local StorVariable, tmpvar, (fun acc -> LEnv.local_tee lenv tmpvar ^+ v acc)
-      in
+            (fun acc -> LEnv.local_get lenv vid ^+ acc), (fun acc -> LEnv.local_tee lenv vid ^+ v acc) in
       let branches, ncases, min_id =
         List.fold_left
           (fun (branches, ncases, min_id) (id, _, _, _) ->
@@ -1237,7 +1236,7 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
       let min_id = if min_id <= 3 then 0 else min_id in
       let block_content =
         StructGet (TMap.variant_tid, 0l, None) ^+
-        stgv empty_nlist in
+        etee empty_nlist in
       let block_content =
         if min_id = 0 then BrTable (Array.map (Option.value ~default:ncases) branches, ncases) ^+ block_content
         else
@@ -1254,7 +1253,7 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
           let br = Int32.sub ncases depth in
           let depth = Int32.succ depth in
           let block_content = nlist_of_list [Block (Wasm.Type.ValBlockType None, convert_nlist block_content)] in
-          let unbox = really_unbox tm btyp (fun acc -> StructGet (TMap.variant_tid, 1l, None) ^+ convert_get_var' lenv loc vid cinfo acc) in
+          let unbox = really_unbox tm btyp (fun acc -> StructGet (TMap.variant_tid, 1l, None) ^+ getv acc) in
           let new_block =
             LEnv.local_set lenv (bid : mvarid :> int32) ^+
             unbox block_content in
@@ -1267,7 +1266,7 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
         | None -> Unreachable ^+ block_content
         | Some (bid, blk) ->
           let blk = convert_block tm lenv procinfo blk BNone (incr_depth is_last) cinfo in
-            blk (LEnv.local_set lenv (bid :> int32) ^+ convert_get_var' lenv loc vid cinfo block_content) in
+            blk (LEnv.local_set lenv (bid :> int32) ^+ getv block_content) in
       let tret = TMap.val_of_type tm t in
       let block_content = convert_nlist block_content in
       fun acc -> Block (Wasm.Type.ValBlockType tret, block_content) ^+ acc
@@ -1420,9 +1419,9 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
     end
   | ECallClosed (ESpecialize (e, _, bargs, bret), args, _) ->
       let TClosed (targs, tret), getv, etee = match e with
-        | EVariable (loc, vid) ->
-            let t, vid = (vid : _ varid :> _ * int32) in
-            let getv = convert_get_var' lenv loc vid cinfo in
+        | EVariable vid ->
+            let t = typ_of_varid vid in
+            let getv = convert_get_var lenv vid cinfo in
             t, getv, getv
         | _ ->
             let t = typ_of_expr e in
@@ -1442,9 +1441,9 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
       do_box tm lenv box unbox
   | ECallClosed (e, args, _) ->
       let TClosed (targs, tret), getv, etee = match e with
-        | EVariable (loc, vid) ->
-            let t, vid = (vid : _ varid :> _ * int32) in
-            let getv = convert_get_var' lenv loc vid cinfo in
+        | EVariable vid ->
+            let t = typ_of_varid vid in
+            let getv = convert_get_var lenv vid cinfo in
             t, getv, getv
         | _ ->
             let t = typ_of_expr e in
@@ -1507,7 +1506,7 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
           | [] -> code
           | Handler (eid, vcid, vars, blk) :: tl ->
               let nblocks = Int32.pred nblocks in
-              let _, vcid = (vcid : _ varid :> _ * int32) in
+              let _, _, vcid = (vcid : _ varid :> _ * _ * int32) in
               let eargs, _, _ = (eid : _ effectid :> _ * _ * _) in
               let blkid = TMap.recid_of_shallow_handler_block tm tcontid eargs in
               let code = nlist_of_list Wasm.Instruction.[LEnv.local_set lenv vcid; Block (Wasm.Type.VarBlockType blkid, convert_nlist code)] in
@@ -1515,7 +1514,7 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
               let code = match vars with
                 | VLnil -> Drop ^+ code
                 | VLcons (v, VLnil) ->
-                    let t, v = (v : _ varid :> _ * int32) in
+                    let t, _, v = (v : _ varid :> _ * _ * int32) in
                     let unbox = really_unbox tm t (fun acc -> acc) in
                     LEnv.local_set lenv v ^+ unbox code
                 | VLcons (_, VLcons (_, _)) ->
@@ -1529,7 +1528,7 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
                     let rec acc_vars : type a. a varid_list -> _ = fun (vars : a varid_list) i acc -> match vars with
                       | VLnil -> acc
                       | VLcons (vhd, vtl) ->
-                          let t, v = (vhd : _ varid :> _ * int32) in
+                          let t, _, v = (vhd : _ varid :> _ * _ * int32) in
                           acc_vars vtl (Int32.succ i) ((Type t, v, i) :: acc) in
                     let rec convert_back acc code = match acc with
                       | [] -> raise (internal_error "Invalid convert_back argument")
@@ -1591,7 +1590,7 @@ and convert_finisher : type a b. tmap -> lenv -> procinfo -> (a, b) finisher -> 
   match f with
   | FId _ -> Fun.id
   | FMap (v, _, b) ->
-      let _, v = (v : _ varid :> _ * int32) in
+      let _, _, v = (v : _ varid :> _ * _ * int32) in
       let b = convert_block tm lenv procinfo b BNone is_last cinfo in
       fun acc -> b (LEnv.local_set lenv v ^+ acc)
 
@@ -1602,7 +1601,7 @@ let convert_anyblock (tm : tmap) (lenv : lenv) (procinfo : procinfo)
 
 let convert_hdl (tm : tmap) (genv : genv) (procinfo : procinfo) (type a b c) (f : (a, c, b) fhandler) : Wasm.fundef =
   let tis = f.fh_tis in
-  let (tcont, contidx), contcl = (f.fh_contarg : _ varid * mvarid :> (_ * int32) * int32) in
+  let (tcont, _, contidx), contcl = (f.fh_contarg : _ varid * mvarid :> (_ * _ * int32) * int32) in
   let tret = match f.fh_finisher with FId t -> (t : b typ) | FMap (_, t, _) -> t in
   let contid, fun_typ, emap = TMap.recids_of_handler tm tcont tis tret in
   let lenv = LEnv.extend genv emap (List.map (fun (Type t) -> TMap.val_of_type tm t) f.fh_locals) in
@@ -1630,7 +1629,7 @@ let convert_hdl (tm : tmap) (genv : genv) (procinfo : procinfo) (type a b c) (f 
       | [] -> code
       | Handler (eid, vcid, vars, blk) :: tl ->
           let nblocks = Int32.pred nblocks in
-          let _, vcid = (vcid : _ varid :> _ * int32) in
+          let _, _, vcid = (vcid : _ varid :> _ * _ * int32) in
           let eargs, _, _ = (eid : _ effectid :> _ * _ * _) in
           let blkid = TMap.recid_of_deep_handler_block tm contid eargs in
           let code = nlist_of_list Wasm.Instruction.[LEnv.local_set lenv vcid; Block (Wasm.Type.VarBlockType blkid, convert_nlist code)] in
@@ -1638,7 +1637,7 @@ let convert_hdl (tm : tmap) (genv : genv) (procinfo : procinfo) (type a b c) (f 
           let code = match vars with
             | VLnil -> Drop ^+ code
             | VLcons (v, VLnil) ->
-                let t, v = (v : _ varid :> _ * int32) in
+                let t, _, v = (v : _ varid :> _ * _ * int32) in
                 let unbox = really_unbox tm t (fun acc -> acc) in
                 LEnv.local_set lenv v ^+ unbox code
             | VLcons (_, VLcons (_, _)) ->
@@ -1652,7 +1651,7 @@ let convert_hdl (tm : tmap) (genv : genv) (procinfo : procinfo) (type a b c) (f 
                 let rec acc_vars : type a. a varid_list -> _ = fun (vars : a varid_list) i acc -> match vars with
                   | VLnil -> acc
                   | VLcons (vhd, vtl) ->
-                      let t, v = (vhd : _ varid :> _ * int32) in
+                      let t, _, v = (vhd : _ varid :> _ * _ * int32) in
                       acc_vars vtl (Int32.succ i) ((Type t, v, i) :: acc) in
                 let rec convert_back acc code = match acc with
                   | [] -> raise (internal_error "Invalid convert_back argument")

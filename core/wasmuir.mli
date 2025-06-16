@@ -55,16 +55,25 @@ type ('a, 'b, 'r) binop =
   | BOCons : 'a typ -> ('a, llist, llist) binop
   | BOConcatList : 'a typ -> ( llist, llist, llist) binop
 
-type local_storage = StorVariable | StorClosure
-type locality = Global | Local of local_storage
-type 'a varid = private ('a typ * mvarid)
-type ('a, 'b, 'c) funcid = private ('a typ_list * 'b typ * 'c typ_list * mfunid)
+type locst_var = Wasmir.locst_var = private LSVar
+type locst_clos = Wasmir.locst_clos = private LSCl
+type global_storage = Wasmir.global_storage = private LGlob
+type !'a local_storage = 'a Wasmir.local_storage =
+  | StorVariable : locst_var local_storage
+  | StorClosure : locst_clos local_storage
+type !'a locality = 'a Wasmir.locality =
+  | Global : global_storage locality
+  | Local : 'a local_storage -> 'a local_storage locality
+type (!'l, !'a) varid = private ('a typ * 'l locality * mvarid)
+type (!'a, !'b, !'c) funcid = private ('a typ_list * 'b typ * 'c typ_list * mfunid)
   (* Function type, closure type, closure type ID, module-level function ID *)
-type 'a effectid = private ('a typ_list * int * meffid)
+type !'a effectid = private ('a typ_list * int * meffid)
 
-type 'a varid_list =
+val typ_of_varid : ('l, 'a) varid -> 'a typ
+
+type !'a varid_list =
   | VLnil : unit varid_list
-  | VLcons : 'a varid * 'b varid_list -> ('a * 'b) varid_list
+  | VLcons : (locst_var local_storage, 'a) varid * 'b varid_list -> ('a * 'b) varid_list
 
 type (!_, !_) box =
   | BNone : ('a, 'a) box
@@ -81,9 +90,9 @@ val dst_of_box : 'a typ -> ('a, 'b) box -> 'b typ
 
 type (_, _) finisher =
   | FId : 'a typ -> ('a, 'a) finisher
-  | FMap : 'a varid * 'b typ * 'b block -> ('a, 'b) finisher
+  | FMap : (locst_var local_storage, 'a) varid * 'b typ * 'b block -> ('a, 'b) finisher
 and 'a block = assign list * 'a expr
-and assign = Assign : locality * 'a varid * 'a expr -> assign
+and assign = Assign : ('l, 'a) varid * 'a expr -> assign
 and _ expr =
   | EUnreachable : 'a typ -> 'a expr
   | EConvertClosure : mvarid * 'a closure_content typ -> 'a closure_content expr
@@ -94,14 +103,14 @@ and _ expr =
   | EConstString : string -> string expr
   | EUnop : ('a, 'b) unop * 'a expr -> 'b expr
   | EBinop : ('a, 'b, 'c) binop * 'a expr * 'b expr -> 'c expr
-  | EVariable : locality * 'a varid -> 'a expr
+  | EVariable : ('l, 'a) varid -> 'a expr
   | ETuple : 'a typ_list * int * 'a expr_list -> 'a list expr
   | EExtract : 'a list expr * ('a, 'b) extract_typ -> 'b expr
   | EVariant : tagid * 'a typ * 'a expr -> variant expr
-  | ECase : variant expr * 'a typ * (tagid * anytyp * mvarid * 'a block) list * (mvarid * 'a block) option -> 'a expr
   | EListNil : 'a typ -> llist expr
   | EListHd : llist expr * 'a typ -> 'a expr
   | EListTl : 'a typ * llist expr -> llist expr
+  | ECase : variant expr * 'a typ * (tagid * anytyp * mvarid * 'a block) list * (mvarid * 'a block) option -> 'a expr
   | EClose : ('a, 'b, 'c) funcid * ('d, 'c) box_list * 'd expr_list -> ('g * 'a -> 'b) expr
   | ERawClose : ('a, 'b, 'c) funcid * abs_closure_content expr -> ('g * 'a -> 'b) expr
   | ESpecialize : (_ * 'c -> 'd) expr * ('g * 'a -> 'b) typ * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b) expr
@@ -115,7 +124,7 @@ and _ expr =
   | EDeepHandle : (unit, 'b, 'c) funcid * 'c expr_list *
                   ('b continuation * ('c closure_content * 'f), 'd, 'e) funcid * 'e expr_list * 'f expr_list -> 'd expr
 and (_, _) handler =
-  | Handler : 'a effectid * 'd continuation varid * 'a varid_list * 'c block -> ('d, 'c) handler
+  | Handler : 'a effectid * (locst_var local_storage, 'd continuation) varid * 'a varid_list * 'c block -> ('d, 'c) handler
 and _ expr_list =
   | ELnil : unit expr_list
   | ELcons : 'a expr * 'b expr_list -> ('a * 'b) expr_list
@@ -139,7 +148,7 @@ type 'b fstart = {
   fst_block            : 'b block;
 }
 type ('a, 'c, 'b) fhandler = {
-  fh_contarg : 'a continuation varid * mvarid;
+  fh_contarg : (locst_var local_storage, 'a continuation) varid * mvarid;
   fh_tis     : 'c typ_list;
   fh_closure : (mvarid * (anytyp_list * mvarid)) option;
   fh_locals  : anytyp list;

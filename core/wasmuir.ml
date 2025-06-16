@@ -147,19 +147,24 @@ type ('a, 'b, 'r) binop =
   | BOCons : 'a typ -> ('a, llist, llist) binop
   | BOConcatList : 'a typ -> ( llist, llist, llist) binop
 
-type local_storage = Wasmir.local_storage =
-  | StorVariable
-  | StorClosure
-type locality = Wasmir.locality =
-  | Global
-  | Local of local_storage
-type 'a varid = 'a typ * mvarid
-type ('a, 'b, 'c) funcid = 'a typ_list * 'b typ * 'c typ_list * mfunid
-type 'a effectid = 'a typ_list * int * meffid
+type locst_var = Wasmir.locst_var = private LSVar
+type locst_clos = Wasmir.locst_clos = private LSCl
+type global_storage = Wasmir.global_storage = private LGlob
+type !'a local_storage = 'a Wasmir.local_storage =
+  | StorVariable : locst_var local_storage
+  | StorClosure : locst_clos local_storage
+type !'a locality = 'a Wasmir.locality =
+  | Global : global_storage locality
+  | Local : 'a local_storage -> 'a local_storage locality
+type (!'l, !'a) varid = 'a typ * 'l locality * mvarid
+type (!'a, !'b, !'c) funcid = 'a typ_list * 'b typ * 'c typ_list * mfunid
+type !'a effectid = 'a typ_list * int * meffid
 
-let convert_varid (v : 'a Wasmir.varid) : 'a varid =
-  let t, v = (v : 'a Wasmir.varid :> _ * _) in
-  (convert_typ t, v)
+let typ_of_varid ((t, _, _) : ('l, 'a) varid) : 'a typ = t
+
+let convert_varid (v : ('l, 'a) Wasmir.varid) : ('l, 'a) varid =
+  let t, l, v = (v : ('l, 'a) Wasmir.varid :> _ * _ * _) in
+  (convert_typ t, l, v)
 let convert_funcid (f : ('a, 'b, 'c, 'ga, 'gc) Wasmir.funcid) : ('a, 'b, 'c) funcid =
   let _, _, targs, tret, tc, i = (f : ('a, 'b, 'c, 'ga, 'gc) Wasmir.funcid :> _ * _ * _ * _ * _ * _) in
   (convert_typ_list targs, convert_typ tret, convert_typ_list tc, i)
@@ -167,9 +172,9 @@ let convert_effectid (e : 'a Wasmir.effectid) : 'a effectid =
   let targs, e = (e : 'a Wasmir.effectid :> _ * _) in
   (convert_typ_list targs, convert_typ_list_int targs, e)
 
-type 'a varid_list =
+type !'a varid_list =
   | VLnil : unit varid_list
-  | VLcons : 'a varid * 'b varid_list -> ('a * 'b) varid_list
+  | VLcons : (locst_var local_storage, 'a) varid * 'b varid_list -> ('a * 'b) varid_list
 
 let [@tail_mod_cons] rec convert_varid_list : type a. a Wasmir.varid_list -> a varid_list = function
   | Wasmir.VLnil -> VLnil
@@ -224,9 +229,9 @@ and [@tail_mod_cons] dst_of_box_list : type a b. a typ_list -> (a, b) box_list -
 
 type (_, _) finisher =
   | FId : 'a typ -> ('a, 'a) finisher
-  | FMap : 'a varid * 'b typ * 'b block -> ('a, 'b) finisher
+  | FMap : (locst_var local_storage, 'a) varid * 'b typ * 'b block -> ('a, 'b) finisher
 and 'a block = assign list * 'a expr
-and assign = Assign : locality * 'a varid * 'a expr -> assign
+and assign = Assign : ('l, 'a) varid * 'a expr -> assign
 and _ expr =
   | EUnreachable : 'a typ -> 'a expr
   | EConvertClosure : mvarid * 'a closure_content typ -> 'a closure_content expr
@@ -237,14 +242,14 @@ and _ expr =
   | EConstString : string -> string expr
   | EUnop : ('a, 'b) unop * 'a expr -> 'b expr
   | EBinop : ('a, 'b, 'c) binop * 'a expr * 'b expr -> 'c expr
-  | EVariable : locality * 'a varid -> 'a expr
+  | EVariable : ('l, 'a) varid -> 'a expr
   | ETuple : 'a typ_list * int * 'a expr_list -> 'a list expr
   | EExtract : 'a list expr * ('a, 'b) extract_typ -> 'b expr
   | EVariant : tagid * 'a typ * 'a expr -> variant expr
-  | ECase : variant expr * 'a typ * (tagid * anytyp * mvarid * 'a block) list * (mvarid * 'a block) option -> 'a expr
   | EListNil : 'a typ -> llist expr
   | EListHd : llist expr * 'a typ -> 'a expr
   | EListTl : 'a typ * llist expr -> llist expr
+  | ECase : variant expr * 'a typ * (tagid * anytyp * mvarid * 'a block) list * (mvarid * 'a block) option -> 'a expr
   | EClose : ('a, 'b, 'c) funcid * ('d, 'c) box_list * 'd expr_list -> ('g * 'a -> 'b) expr
   | ERawClose : ('a, 'b, 'c) funcid * abs_closure_content expr -> ('g * 'a -> 'b) expr
   | ESpecialize : (_ * 'c -> 'd) expr * ('g * 'a -> 'b) typ * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b) expr
@@ -258,7 +263,7 @@ and _ expr =
   | EDeepHandle : (unit, 'b, 'c) funcid * 'c expr_list *
                   ('b continuation * ('c closure_content * 'f), 'd, 'e) funcid * 'e expr_list * 'f expr_list -> 'd expr
 and (_, _) handler =
-  | Handler : 'a effectid * 'd continuation varid * 'a varid_list * 'c block -> ('d, 'c) handler
+  | Handler : 'a effectid * (locst_var local_storage, 'd continuation) varid * 'a varid_list * 'c block -> ('d, 'c) handler
 and _ expr_list =
   | ELnil : unit expr_list
   | ELcons : 'a expr * 'b expr_list -> ('a * 'b) expr_list
@@ -270,8 +275,8 @@ let rec convert_finisher : type a b. (a, b) Wasmir.finisher -> (a, b) finisher =
   | Wasmir.FMap (v, t, b) -> FMap (convert_varid v, convert_typ t, convert_block b)
 and [@tail_mod_cons] convert_block : type a. a Wasmir.block -> a block =
   fun (ass, e : a Wasmir.block) ->
-  let convert_assign (Wasmir.Assign (loc, v, e) : Wasmir.assign) : assign =
-    Assign (loc, convert_varid v, convert_expr e)
+  let convert_assign (Wasmir.Assign (v, e) : Wasmir.assign) : assign =
+    Assign (convert_varid v, convert_expr e)
   in (List.map convert_assign ass, convert_expr e)
 and [@tail_mod_cons] convert_expr : type a. a Wasmir.expr -> a expr =
   fun (e : a Wasmir.expr) -> match e with
@@ -307,10 +312,13 @@ and [@tail_mod_cons] convert_expr : type a. a Wasmir.expr -> a expr =
       | Wasmir.BOCons t -> EBinop (BOCons (convert_typ t), convert_expr arg1, (convert_expr[@tailcall]) arg2)
       | Wasmir.BOConcatList t -> EBinop (BOConcatList (convert_typ t), convert_expr arg1, (convert_expr[@tailcall]) arg2)
     end
-  | Wasmir.EVariable (loc, v) -> EVariable (loc, convert_varid v)
+  | Wasmir.EVariable v -> EVariable (convert_varid v)
   | Wasmir.ETuple (ts, es) -> ETuple (convert_named_typ_list ts, convert_named_typ_list_int ts, (convert_expr_list[@tailcall]) es)
   | Wasmir.EExtract (e, f) -> EExtract (convert_expr e, convert_extract_typ f)
   | Wasmir.EVariant (tag, t, e) -> EVariant (tag, convert_typ t, (convert_expr[@tailcall]) e)
+  | Wasmir.EListNil t -> EListNil (convert_typ t)
+  | Wasmir.EListHd (e, t) -> EListHd ((convert_expr[@tailcall]) e, convert_typ t)
+  | Wasmir.EListTl (t, e) -> EListTl (convert_typ t, (convert_expr[@tailcall]) e)
   | Wasmir.ECase (e, t, l, d) ->
       let convert_l (l : (tagid * Wasmir.anytyp * mvarid * _ Wasmir.block) list) =
         let convert (i, t, v, b) = i, convert_anytyp t, v, convert_block b
@@ -319,9 +327,6 @@ and [@tail_mod_cons] convert_expr : type a. a Wasmir.expr -> a expr =
         let convert (i, b) = i, convert_block b
         in Option.map convert o
       in ECase ((convert_expr[@tailcall]) e, convert_typ t, convert_l l, convert_d d)
-  | Wasmir.EListNil t -> EListNil (convert_typ t)
-  | Wasmir.EListHd (e, t) -> EListHd ((convert_expr[@tailcall]) e, convert_typ t)
-  | Wasmir.EListTl (t, e) -> EListTl (convert_typ t, (convert_expr[@tailcall]) e)
   | Wasmir.EClose (f, b, cl) -> EClose (convert_funcid f, convert_box_list b, (convert_expr_list[@tailcall]) cl)
   | Wasmir.ERawClose (f, cl) -> ERawClose (convert_funcid f, convert_expr cl)
   | Wasmir.(ESpecialize (ESpecialize (e, s1, bargs1, bret1), s2, bargs2, bret2)) ->
@@ -387,7 +392,7 @@ let typ_of_expr : type a. a expr -> a typ = function
   | EBinop (BOConcat, _, _) -> TString
   | EBinop (BOCons t, _, _) -> TList t
   | EBinop (BOConcatList t, _, _) -> TList t
-  | EVariable (_, (t, _)) -> t
+  | EVariable (t, _, _) -> t
   | EVariant _ -> TVariant
   | ECase (_, t, _, _) -> t
   | ETuple (_, n, _) -> TTuple n
@@ -424,7 +429,7 @@ type 'b fstart = {
   fst_block            : 'b block;
 }
 type ('a, 'c, 'b) fhandler = {
-  fh_contarg : 'a continuation varid * mvarid;
+  fh_contarg : (locst_var local_storage, 'a continuation) varid * mvarid;
   fh_tis     : 'c typ_list;
   fh_closure : (mvarid * (anytyp_list * mvarid)) option;
   fh_locals  : anytyp list;
@@ -489,21 +494,18 @@ let convert_fstart (f : 'b Wasmir.fstart) : 'b fstart = {
   fst_block             = convert_block f.Wasmir.fst_block;
 }
 let convert_fhandler (f : ('a, 'c, 'b) Wasmir.fhandler) : ('a, 'c, 'b) fhandler =
-  let convert_contarg (c, a : 'a Wasmir.continuation Wasmir.varid * mvarid) =
-    let t, c = (c : _ Wasmir.varid :> _ * _) in
-    (convert_typ t, c), a
-  in
+  let convert_contarg (c, a : (locst_var local_storage, 'a continuation) Wasmir.varid * mvarid) = convert_varid c, a in
   let convert_closure (o : (mvarid * (Wasmir.anytyp_list * Wasmir.mvarid)) option) =
-    Option.map (fun (a, (l, c)) -> a, (convert_anytyp_list l, c)) o
-  in {
-  fh_contarg  = convert_contarg f.Wasmir.fh_contarg;
-  fh_tis      = convert_typ_list f.Wasmir.fh_tis;
-  fh_closure  = convert_closure f.Wasmir.fh_closure;
-  fh_locals   = List.map convert_anytyp f.Wasmir.fh_locals;
-  fh_finisher = convert_finisher f.Wasmir.fh_finisher;
-  fh_handlers = List.map convert_handler f.Wasmir.fh_handlers;
-  fh_id       = f.Wasmir.fh_id;
-}
+    Option.map (fun (a, (l, c)) -> a, (convert_anytyp_list l, c)) o in
+  {
+    fh_contarg  = convert_contarg f.Wasmir.fh_contarg;
+    fh_tis      = convert_typ_list f.Wasmir.fh_tis;
+    fh_closure  = convert_closure f.Wasmir.fh_closure;
+    fh_locals   = List.map convert_anytyp f.Wasmir.fh_locals;
+    fh_finisher = convert_finisher f.Wasmir.fh_finisher;
+    fh_handlers = List.map convert_handler f.Wasmir.fh_handlers;
+    fh_id       = f.Wasmir.fh_id;
+  }
 let convert_func (f : Wasmir.func) : func = match f with
   | Wasmir.FFunction f -> FFunction (convert_func' f)
   | Wasmir.FContinuationStart f -> FContinuationStart (convert_fstart f)
