@@ -1,4 +1,3 @@
-1
 (** JavaScript generation *)
 open Utility
 open CommonTypes
