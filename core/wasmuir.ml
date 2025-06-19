@@ -194,7 +194,7 @@ type (!_, !_) conv_box_list =
   | CBLnone : ('a, 'a) box_list -> ('a, 'a) conv_box_list
   | CBLcons : ('a, 'c) box * ('b, 'd) box_list -> ('a * 'b, 'c * 'd) conv_box_list
 
-let [@tail_mod_cons] rec convert_box : type a b. (a, b) Wasmir.box -> (a, b) box = fun (b : (a, b) Wasmir.box) : (a, b) box -> match b with
+let [@tail_mod_cons] rec convert_box : type a b. (a, b) Wasmir.box -> (a, b) box = fun b -> match b with
   | Wasmir.BNone (_, _) -> BNone
   | Wasmir.BClosed (_, bargs, bret) ->
       let targs = Wasmir.src_of_box_list bargs in

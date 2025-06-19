@@ -90,7 +90,6 @@ let pp_typ_list (type a) fmt (tl : a typ_list) = match tl with
 
 type anytyp = Type : 'a typ -> anytyp
 type anytyp_list = TypeList : 'a typ_list -> anytyp_list
-type anynamed_typ_list = NamedTypeList : 'a named_typ_list -> anynamed_typ_list
 
 type (!'a, !'b) extract_typ_check =
   | ExtractO : ('a * 'b, 'a) extract_typ_check
@@ -187,13 +186,13 @@ and (!'a, !'b) box_list =
   | BLnil : (unit, unit) box_list
   | BLcons : ('a, 'b) box * ('c, 'd) box_list -> ('a * 'c, 'b * 'd) box_list
 
-let rec src_of_box : 'a 'b. ('a, 'b) box -> 'a typ = fun (type a b) (b : (a, b) box) : a typ -> match b with
+let rec src_of_box : type a b. (a, b) box -> a typ = fun b -> match b with
   | BNone (src, _) -> src
   | BClosed (gen, bargs, bret) -> TClosed (gen, src_of_box_list bargs, src_of_box bret)
   | BCont bret -> TCont (src_of_box bret)
   | BTuple (src, _) -> TTuple src
   | BBox (src, _) -> src
-and src_of_box_list : 'a 'b. ('a, 'b) box_list -> 'a typ_list = fun (type a b) (b : (a, b) box_list) : a typ_list -> match b with
+and src_of_box_list : type a b. (a, b) box_list -> a typ_list = fun b -> match b with
   | BLnil -> TLnil
   | BLcons (hd, tl) -> TLcons (src_of_box hd, src_of_box_list tl)
 
@@ -479,6 +478,7 @@ type anymodule = Module : 'a modu -> anymodule
 type anyblock = Block : 'a typ * 'a block -> anyblock
 type anyexpr = Expr : 'a typ * 'a expr -> anyexpr
 type anyexpr_list = ExprList : 'a typ_list * 'a expr_list -> anyexpr_list
+type anynamed_expr_list = NamedExprList : 'a named_typ_list * 'a expr_list -> anynamed_expr_list
 
 let internal_error message = Errors.internal_error ~filename:"wasmir.ml" ~message
 
@@ -1068,72 +1068,30 @@ end
 let sort_name_map (nm : 'a name_map) : (string * 'a) list =
   Utility.StringMap.bindings nm (* Since binding names are unique, there is no issue with using the given list *)
 
-let rec override_box_src : 'a 'b. 'a typ -> ('a, 'b) box -> ('a, 'b) box =
-  fun (type a b) (src : a typ) (b : (a, b) box) : (a, b) box -> match b with
-  | BNone (_, dst) -> BNone (src, dst)
-  | BClosed (_, bargs, bret) -> begin match src with
-      | TClosed (g, targs, tret) -> BClosed (g, override_box_list_src targs bargs, override_box_src tret bret)
-    end
-  | BCont bret -> begin match src with
-      | TCont tret -> BCont (override_box_src tret bret)
-    end
-  | BTuple (_, dst) -> begin match src with
-      | TTuple src -> BTuple (src, dst)
-    end
-  | BBox (_, id) -> BBox (src, id)
-and override_box_list_src : 'a 'b. 'a typ_list -> ('a, 'b) box_list -> ('a, 'b) box_list =
-  fun (type a b) (src : a typ_list) (b : (a, b) box_list) : (a, b) box_list -> match b with
-  | BLnil -> BLnil
-  | BLcons (bhd, btl) -> begin match src with
-      | TLcons (thd, ttl) -> BLcons (override_box_src thd bhd, override_box_list_src ttl btl)
-    end
+let [@tail_mod_cons] rec blnone_of_typ_lists : type a. a typ_list -> a typ_list -> (a, a) box_list = fun ts1 ts2 -> match ts1, ts2 with
+  | TLnil, TLnil -> BLnil
+  | TLcons (hd1, tl1), TLcons (hd2, tl2) -> BLcons (BNone (hd1, hd2), blnone_of_typ_lists tl1 tl2)
 
-let rec override_box_dst : 'a 'b. ('a, 'b) box -> 'b typ -> ('a, 'b) box =
-  fun (type a b) (b : (a, b) box) (dst : b typ) : (a, b) box -> match b with
-  | BNone (src, _) -> BNone (src, dst)
-  | BClosed (g, bargs, bret) -> begin match dst with
-      | TClosed (_, targs, tret) -> BClosed (g, override_box_list_dst bargs targs, override_box_dst bret tret)
-    end
-  | BCont bret -> begin match dst with
-      | TCont tret -> BCont (override_box_dst bret tret)
-    end
-  | BTuple (src, _) -> begin match dst with
-      | TTuple dst -> BTuple (src, dst)
-    end
-  | BBox (src, _) -> begin match dst with
-      | TVar id -> BBox (src, id)
-    end
-and override_box_list_dst : 'a 'b. ('a, 'b) box_list -> 'b typ_list -> ('a, 'b) box_list =
-  fun (type a b) (b : (a, b) box_list) (dst : b typ_list) : (a, b) box_list -> match b with
-  | BLnil -> BLnil
-  | BLcons (bhd, btl) -> begin match dst with
-      | TLcons (thd, ttl) -> BLcons (override_box_dst bhd thd, override_box_list_dst btl ttl)
-    end
-
-let rec compose_box : 'a 'b 'c. ('a, 'b) box -> ('b, 'c) box -> ('a, 'c) box =
-  fun (type a b c) (boxab : (a, b) box) (boxbc : (b, c) box) : (a, c) box -> match boxab with
-  | BNone (src, _) -> override_box_src src boxbc
-  | BClosed (g, bargs1, bret1) -> begin match boxbc with
-    | BNone (_, dst) -> override_box_dst boxab dst
-    | BClosed (_, bargs2, bret2) -> BClosed (g, compose_box_list bargs1 bargs2, compose_box bret1 bret2)
-    | BBox (_, tid) -> BBox (src_of_box boxab, tid)
-    end
-  | BCont bret1 -> begin match boxbc with
-    | BNone (_, dst) -> override_box_dst boxab dst
-    | BCont bret2 -> BCont (compose_box bret1 bret2)
-    | BBox (_, tid) -> BBox (src_of_box boxab, tid)
-    end
-  | BTuple (src, _) -> begin match boxbc with
-    | BNone (_, TTuple dst) -> BTuple (src, dst)
-    | BTuple (_, dst) -> BTuple (src, dst)
-    | BBox (_, tid) -> BBox (TTuple src, tid)
-    end
-  | BBox (src, _) -> begin match boxbc with
-    | BNone (_, dst) -> override_box_dst boxab dst
-    | BBox (_, tid) -> BBox (src, tid)
-    end
-and compose_box_list : 'a 'b 'c. ('a, 'b) box_list -> ('b, 'c) box_list -> ('a, 'c) box_list =
-  fun (type a b c) (bsab : (a, b) box_list) (bsbc : (b, c) box_list) : (a, c) box_list -> match bsab with
+let [@tail_mod_cons] rec compose_box : type a b c. (a, b) box -> (b, c) box -> (a, c) box = fun boxab boxbc -> match boxab, boxbc with
+  | BNone (src, _), BNone (_, dst) -> BNone (src, dst)
+  | BNone (TClosed (g, targs1, tret1), TClosed (_, targs2, tret2)), BClosed (_, bargs, bret) ->
+      BClosed (g, compose_box_list (blnone_of_typ_lists targs1 targs2) bargs, compose_box (BNone (tret1, tret2)) bret)
+  | BNone (TCont tret1, TCont tret2), BCont bret -> BCont (compose_box (BNone (tret1, tret2)) bret)
+  | BNone (TTuple src, _), BTuple (_, dst) -> BTuple (src, dst)
+  | BNone (src, _), BBox (_, tid) -> BBox (src, tid)
+  | BClosed (g, bargs, bret), BNone (TClosed (_, targs1, tret1), TClosed (_, targs2, tret2)) ->
+      BClosed (g, compose_box_list bargs (blnone_of_typ_lists targs1 targs2), compose_box bret (BNone (tret1, tret2)))
+  | BClosed (g, bargs1, bret1), BClosed (_, bargs2, bret2) -> BClosed (g, compose_box_list bargs1 bargs2, compose_box bret1 bret2)
+  | BClosed _, BBox (_, tid) -> BBox (src_of_box boxab, tid)
+  | BCont bret, BNone (TCont dst1, TCont dst2) -> BCont (compose_box bret (BNone (dst1, dst2)))
+  | BCont bret1, BCont bret2 -> BCont (compose_box bret1 bret2)
+  | BCont _, BBox (_, tid) -> BBox (src_of_box boxab, tid)
+  | BTuple (src, _), BNone (_, TTuple dst) -> BTuple (src, dst)
+  | BTuple (src, _), BTuple (_, dst) -> BTuple (src, dst)
+  | BTuple (src, _), BBox (_, tid) -> BBox (TTuple src, tid)
+  | BBox (src, _), BNone (_, TVar tid) -> BBox (src, tid)
+  | BBox (src, _), BBox (_, tid) -> BBox (src, tid)
+and compose_box_list : type a b c. (a, b) box_list -> (b, c) box_list -> (a, c) box_list = fun bsab bsbc -> match bsab with
   | BLnil -> (match bsbc with BLnil -> BLnil)
   | BLcons (hd1, tl1) -> (match bsbc with BLcons (hd2, tl2) -> BLcons (compose_box hd1 hd2, compose_box_list tl1 tl2))
 
@@ -1142,6 +1100,7 @@ let rec generalize_of_tyvars (tvs : tyvar list) : anygeneralization = match tvs 
   | (hd, (CommonTypes.PrimaryKind.Type, _)) :: tl -> let AG tl = generalize_of_tyvars tl in AG (Gcons (hd, tl))
   | _ :: tl -> generalize_of_tyvars tl
 
+type anynamed_typ_list = NamedTypeList : 'a named_typ_list -> anynamed_typ_list
 let _to_typelist (conv : Types.typ -> anytyp) (ts : Types.typ name_map) : anynamed_typ_list =
   let rec inner l = match l with
     | [] -> NamedTypeList NTLnil
@@ -1216,8 +1175,8 @@ and convert_type_list (t : Types.typ) : anytyp_list =
     (fun fsm _ _ ->
         let rec inner l = match l with
           | [] -> TypeList TLnil
-          | (_, hd) :: tl -> let Type hd = convert_type hd in let TypeList tl = inner tl in TypeList (TLcons (hd, tl))
-        in inner (sort_name_map fsm))
+          | (_, hd) :: tl -> let Type hd = convert_type hd in let TypeList tl = inner tl in TypeList (TLcons (hd, tl)) in
+        inner (sort_name_map fsm))
     t
 
 let rec box_list_none : type a b. (a, b) box_list -> ((a, b) Type.eq * a typ_list * b typ_list) option = function
@@ -1229,9 +1188,9 @@ let rec box_list_none : type a b. (a, b) box_list -> ((a, b) Type.eq * a typ_lis
   | BLcons _ -> None
 
 module TVarMap = Types.TypeVarMap
-type 'a specialize = Spec : 'a typ * ('a, 'b) box -> 'b specialize
-type 'a specialize_list = SpecL : 'a typ_list * ('a, 'b) box_list -> 'b specialize_list
-let rec specialize_typ : type a. _ -> a typ -> a specialize = fun tmap t -> match t with
+type _ specialize = Spec : 'a typ * ('a, 'b) box -> 'b specialize
+type _ specialize_list = SpecL : 'a typ_list * ('a, 'b) box_list -> 'b specialize_list
+let rec specialize_typ : type a. anytyp TVarMap.t -> a typ -> a specialize = fun tmap t -> match t with
   | TInt -> Spec (TInt, BNone (t, t))
   | TBool -> Spec (TBool, BNone (t, t))
   | TFloat -> Spec (TFloat, BNone (t, t))
@@ -1264,13 +1223,13 @@ let rec specialize_typ : type a. _ -> a typ -> a specialize = fun tmap t -> matc
     end
   | TSpawnLocation -> Spec (TSpawnLocation, BNone (t, t))
   | TProcess -> Spec (TProcess, BNone (t, t))
-and specialize_typ_list : type a. _ -> a typ_list -> a specialize_list = fun tmap ts -> match ts with
+and specialize_typ_list : type a. anytyp TVarMap.t -> a typ_list -> a specialize_list = fun tmap ts -> match ts with
   | TLnil -> SpecL (TLnil, BLnil)
   | TLcons (hd, tl) ->
       let Spec (hd, bhd) = specialize_typ tmap hd in
       let SpecL (tl, btl) = specialize_typ_list tmap tl in
       SpecL (TLcons (hd, tl), BLcons (bhd, btl))
-and specialize_typ_named_list : type a. _ -> a named_typ_list -> anynamed_typ_list = fun tmap ts -> match ts with
+and specialize_typ_named_list : type a. anytyp TVarMap.t -> a named_typ_list -> anynamed_typ_list = fun tmap ts -> match ts with
   | NTLnil -> NamedTypeList NTLnil
   | NTLcons (n, hd, tl) ->
       let Spec (hd, _) = specialize_typ tmap hd in
@@ -2234,15 +2193,13 @@ and of_value (ge : ('pi, 'pa) genv) (le: 'args lenv) (v : value) : ('pi, 'pa) ge
   | Extend (nm, None) ->
       let sorted = sort_name_map nm in
       let rec inner ge le sorted = match sorted with
-        | [] -> ge, le, Expr (TTuple NTLnil, ETuple (NTLnil, ELnil))
-        | (n, hd) :: tl -> begin
+        | [] -> ge, le, NamedExprList (NTLnil, ELnil)
+        | (n, hd) :: tl ->
             let ge, le, Expr (thd, ehd) = of_value ge le hd in
-            match inner ge le tl with
-            | ge, le, Expr (TTuple ttl, ETuple (_, etl)) ->
-                ge, le, Expr (TTuple (NTLcons (n, thd, ttl)), ETuple (NTLcons (n, thd, ttl), ELcons (ehd, etl)))
-            | _ -> assert false
-          end
-      in inner ge le sorted
+            let ge, le, NamedExprList (ttl, etl) = inner ge le tl in
+            ge, le, NamedExprList (NTLcons (n, thd, ttl), ELcons (ehd, etl)) in
+      let ge, le, NamedExprList (ntl, el) = inner ge le sorted in
+      ge, le, Expr (TTuple ntl, ETuple (ntl, el))
   | Extend (_, Some _) -> failwith "TODO: of_value Extend Some"
   | Project (n, v) -> begin match
       match v with
@@ -2256,7 +2213,7 @@ and of_value (ge : ('pi, 'pa) genv) (le: 'args lenv) (v : value) : ('pi, 'pa) ge
         match t with
         | TTuple nt ->
             let Extract (type b) ((i, ft, c) : _ * _ * (_, b) extract_typ_check) =
-              let rec inner : 'a. 'a named_typ_list -> 'a any_extract = fun (type a) (nt : a named_typ_list) : a any_extract -> match nt with
+              let rec inner : type a. a named_typ_list -> a any_extract = fun nt -> match nt with
                 | NTLnil -> raise (internal_error "Missing field from type")
                 | NTLcons (fn, ft, tl) ->
                     if String.equal n fn then Extract (0, ft, ExtractO) else

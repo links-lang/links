@@ -1181,20 +1181,19 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
   | ETuple (TLnil, _, ELnil) ->
       do_box tm lenv box Fun.id
   | ETuple (ts, n, es) ->
-      let tid = TMap.recid_of_type tm (TTuple n) in
       let AnyBoxList bcontent =
         let rec inner : type a. a typ_list -> a anybox_list = function
           | TLnil -> AnyBoxList BLnil
           | TLcons (thd, ttl) -> let AnyBoxList btl = inner ttl in AnyBoxList (BLcons (BBox thd, btl)) in
         inner ts in
       begin match box with
-        | BNone | BBox _ -> do_box tm lenv box (convert_new_struct tm lenv procinfo es bcontent tid false cinfo)
-        | BTuple _ -> convert_new_struct tm lenv procinfo es bcontent tid false cinfo
+        | BNone | BBox _ -> do_box tm lenv box (convert_new_record tm lenv procinfo es bcontent n cinfo)
+        | BTuple _ -> convert_new_record tm lenv procinfo es bcontent n cinfo
       end
   | EExtract (e, (_, n, i, t)) ->
       let e = convert_expr tm lenv procinfo e BNone None cinfo in
       let tid = TMap.recid_of_type tm (TTuple n) in
-      do_box tm lenv box (really_unbox tm t (fun acc -> StructGet (tid, Int32.of_int i, None) ^+ (e acc)))
+      do_box tm lenv box (really_unbox tm t (fun acc -> StructGet (tid, Int32.of_int i, None) ^+ e acc))
   | EVariant (tagid, targ, arg) ->
       let arg = convert_expr tm lenv procinfo arg (BBox targ) None cinfo in
       do_box tm lenv box (fun acc ->
@@ -1280,9 +1279,8 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
   | EClose (f, bcl, cls) ->
       let targs, tret, clts, fid = (f : _ funcid :> _ * _ * _ * int32) in
       GEnv.add_export_function (LEnv.to_genv lenv) fid;
-      let fctid = TMap.recid_of_type tm (TClosArg clts) in
       let new_ctid = TMap.recid_of_type tm (TClosed (targs, tret)) in
-      let gen_new_struct = convert_new_struct tm lenv procinfo cls bcl fctid false cinfo in
+      let gen_new_struct = convert_new_closure tm lenv procinfo clts cls bcl cinfo in
       do_box tm lenv box (fun acc ->
         StructNew (new_ctid, Explicit) ^+
         gen_new_struct (
@@ -1333,9 +1331,8 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
     end
   | ECallClosed (ESpecialize (EClose (f, bcl, cls), _, bargs, bret), args, _) ->
       let targs, _, clts, fid = (f : _ funcid :> _ * _ * _ * int32) in
-      let fcid = TMap.recid_of_type tm (TClosArg clts) in
       let args = convert_exprs tm lenv procinfo args bargs cinfo in
-      let gen_new_struct = convert_new_struct tm lenv procinfo cls bcl fcid false cinfo in
+      let gen_new_struct = convert_new_closure tm lenv procinfo clts cls bcl cinfo in
       begin match is_last with
       | Some (refid, jmplv) when can_early_ret && Int32.equal fid (refid :> int32) ->
           LEnv.mark_recursive lenv;
@@ -1356,9 +1353,8 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
     end
   | ECallClosed (EClose (f, bcl, cls), args, _) ->
       let targs, _, clts, fid = (f : _ funcid :> _ * _ * _ * int32) in
-      let fcid = TMap.recid_of_type tm (TClosArg clts) in
       let args = convert_exprs tm lenv procinfo args BLnone cinfo in
-      let gen_new_struct = convert_new_struct tm lenv procinfo cls bcl fcid false cinfo in
+      let gen_new_struct = convert_new_closure tm lenv procinfo clts cls bcl cinfo in
       begin match is_last with
       | Some (refid, jmplv) when can_early_ret && Int32.equal fid (refid :> int32) ->
           LEnv.mark_recursive lenv;
@@ -1471,20 +1467,18 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
         | TLnil, ELnil -> fun acc -> RefNull Wasm.Type.NoneHT ^+ acc
         | TLcons (targ, TLnil), ELcons (arg, ELnil) -> convert_expr tm lenv procinfo arg (BBox targ) None cinfo
         | TLcons (_, TLcons (_, _)), ELcons (_, ELcons (_, _)) ->
-            let tid = TMap.recid_of_type tm (TTuple n) in
             let AnyBoxList bcontent =
               let rec inner : type a. a typ_list -> a anybox_list = function
                 | TLnil -> AnyBoxList BLnil
                 | TLcons (thd, ttl) -> let AnyBoxList btl = inner ttl in AnyBoxList (BLcons (BBox thd, btl)) in
               inner targs in
-            convert_new_struct tm lenv procinfo args bcontent tid false cinfo in
+            convert_new_record tm lenv procinfo args bcontent n cinfo in
       let ret = really_unbox tm tret (fun acc -> Suspend eid ^+ generate_yield procinfo (args acc)) in
       do_box tm lenv box ret
   | EShallowHandle (contid, contargs, f, cs) ->
       let _, tcret, tcontcl, contid = (contid : _ funcid :> _ * _ * _ * int32) in
       GEnv.add_export_function (LEnv.to_genv lenv) contid;
-      let contcid = TMap.recid_of_type tm (TClosArg tcontcl) in
-      let gen_cont_struct = convert_new_struct tm lenv procinfo contargs BLnone contcid false cinfo in
+      let gen_cont_struct = convert_new_closure tm lenv procinfo tcontcl contargs BLnone cinfo in
       let tcontid = TMap.recid_of_type tm (TCont tcret) in
       let code =
         let nblocks, handlers =
@@ -1549,13 +1543,11 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
         acc)
   | EDeepHandle (contid, contargs, hdlid, hdlargs, iargs) ->
       let _, _, thdlcl, hdlid = (hdlid : _ funcid :> _ * _ * _ * int32) in
-      let hdlcid = TMap.recid_of_type tm (TClosArg thdlcl) in
-      let gen_hdl_struct = convert_new_struct tm lenv procinfo hdlargs BLnone hdlcid false cinfo in
+      let gen_hdl_struct = convert_new_closure tm lenv procinfo thdlcl hdlargs BLnone cinfo in
       let iargs = convert_exprs tm lenv procinfo iargs BLnone cinfo in
       let _, tcret, tcontcl, contid = (contid : _ funcid :> _ * _ * _ * int32) in
       GEnv.add_export_function (LEnv.to_genv lenv) contid;
-      let contcid = TMap.recid_of_type tm (TClosArg tcontcl) in
-      let gen_cont_struct = convert_new_struct tm lenv procinfo contargs BLnone contcid false cinfo in
+      let gen_cont_struct = convert_new_closure tm lenv procinfo tcontcl contargs BLnone cinfo in
       let tcontid = TMap.recid_of_type tm (TCont tcret) in
       do_box tm lenv box (fun acc ->
         (if can_early_ret then ReturnCall (Int32.add (GEnv.fun_offset (LEnv.to_genv lenv)) hdlid)
@@ -1566,9 +1558,8 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
         ContNew tcontid ^+
         RefFunc (Int32.add (GEnv.fun_offset (LEnv.to_genv lenv)) contid) ^+
         acc))))
-and convert_exprs : type a b. _ -> _ -> _ -> a expr_list -> (a, b) box_list -> _ -> instr_conv =
-  fun (tm : tmap) (lenv : lenv) (procinfo : procinfo)
-      (es : a expr_list) box (cinfo : clos_info) -> match box, es with
+and convert_exprs : type a b. tmap -> lenv -> procinfo -> a expr_list -> (a, b) box_list -> clos_info -> instr_conv =
+  fun tm lenv procinfo es box cinfo -> match box, es with
   | _, ELnil -> Fun.id
   | BLnone, ELcons (ehd, etl) ->
       let f = convert_expr tm lenv procinfo ehd BNone None cinfo in
@@ -1578,13 +1569,23 @@ and convert_exprs : type a b. _ -> _ -> _ -> a expr_list -> (a, b) box_list -> _
       let f = convert_expr tm lenv procinfo ehd bhd None cinfo in
       let f2 = convert_exprs tm lenv procinfo etl btl cinfo in
       fun acc -> f2 (f acc)
-and convert_new_struct : type a b. _ -> _ -> _ -> a expr_list -> (a, b) box_list -> _ -> _ -> _ -> instr_conv =
-  fun (tm : tmap) (lenv : lenv) (procinfo : procinfo)
-      (cls : a expr_list) box (fcid : int32) (needs_exact_id : bool) (cinfo : clos_info) ->
+and convert_new_closure : type a b. tmap -> lenv -> procinfo -> b typ_list -> a expr_list -> (a, b) box_list -> clos_info -> instr_conv =
+  fun tm lenv procinfo ts es box cinfo ->
+  let open Wasm.Instruction in
+  match es with
+  | ELnil -> fun acc -> RefNull Wasm.Type.NoneHT ^+ acc
+  | ELcons _ ->
+      let fcid = TMap.recid_of_type tm (TClosArg ts) in
+      let f = convert_exprs tm lenv procinfo es box cinfo in
+      fun acc -> StructNew (fcid, Explicit) ^+ f acc
+and convert_new_record : type a b. tmap -> lenv -> procinfo -> a expr_list -> (a, b) box_list -> int -> clos_info -> instr_conv =
+  fun tm lenv procinfo cls box n cinfo ->
   let open Wasm.Instruction in
   match cls with
-  | ELnil -> fun acc -> RefNull Wasm.Type.(if needs_exact_id then VarHT fcid else NoneHT) ^+ acc
-  | ELcons _ -> let f = convert_exprs tm lenv procinfo cls box cinfo in fun acc -> StructNew (fcid, Explicit) ^+ f acc
+  | ELnil -> fun acc -> RefNull Wasm.Type.NoneHT ^+ acc
+  | ELcons _ ->
+      let tid = TMap.recid_of_type tm (TTuple n) in
+      let f = convert_exprs tm lenv procinfo cls box cinfo in fun acc -> StructNew (tid, Explicit) ^+ f acc
 and convert_finisher : type a b. tmap -> lenv -> procinfo -> (a, b) finisher -> last_info -> clos_info -> instr_conv =
   fun tm lenv procinfo f is_last cinfo ->
   match f with
