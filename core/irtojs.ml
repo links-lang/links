@@ -712,9 +712,9 @@ module Higher_Order_Continuation : CONTINUATION = struct
            bind
              (fun code -> bs (Bind (k, v, code)))
              (fun kappas -> ks (Cons (Var k, kappas))) kappas
-  in
-  let bs, ks, seed = bind Code.MetaContinuation.identity (fun kappas -> kappas) kappas in
-  bs (body (ks (reflect seed)))
+    in
+    let bs, ks, seed = bind Code.MetaContinuation.identity (fun kappas -> kappas) kappas in
+    bs (body (ks (reflect seed)))
 
   let apply ?(strategy=`Yield) k arg =
     let open Code in
