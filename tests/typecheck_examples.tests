@@ -61,7 +61,6 @@ filemode : true
 Typecheck example file examples/church.links
 examples/church.links
 filemode : true
-ignore : broken example
 
 Typecheck example file examples/citations.links
 examples/citations.links
@@ -459,7 +458,6 @@ filemode : true
 Typecheck example file examples/sessions/counter.links
 examples/sessions/counter.links
 filemode : true
-ignore : broken example
 
 Typecheck example file examples/sessions/draggable-boring.links
 examples/sessions/draggable-boring.links
@@ -663,7 +661,6 @@ filemode : true
 Typecheck example file examples/toggle.links
 examples/toggle.links
 filemode : true
-ignore : broken example
 
 Typecheck example file examples/validate.links
 examples/validate.links
@@ -772,4 +769,3 @@ filemode : true
 Typecheck example file examples/mvu/changePage.links
 examples/mvu/changePage.links
 filemode : true
-

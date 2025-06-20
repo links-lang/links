@@ -535,8 +535,6 @@ let renamer : Epithet.t ref = ref Epithet.empty
 let desugar_program : Sugartypes.program -> Sugartypes.program
   = fun program ->
   let interacting = Basicsettings.System.is_interacting () in
-  (* TODO move to this logic to the loader. *)
-  let program = Chaser.add_dependencies program in
   let program = DesugarAlienBlocks.transform_alien_blocks program in
   (* Printf.fprintf stderr "Before elaboration:\n%s\n%!" (Sugartypes.show_program program); *)
   let renamer', scope' = if interacting then !renamer, !scope else Epithet.empty, Scope.empty in
@@ -549,7 +547,6 @@ let desugar_program : Sugartypes.program -> Sugartypes.program
 
 let desugar_sentence : Sugartypes.sentence -> Sugartypes.sentence
   = fun sentence ->
-  let sentence = Chaser.add_dependencies_sentence sentence in
   let sentence = DesugarAlienBlocks.sentence sentence in
   let visitor = desugar ~toplevel:true !renamer !scope in
   let result = visitor#sentence sentence in

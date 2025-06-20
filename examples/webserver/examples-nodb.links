@@ -22,10 +22,10 @@ fun main() {
   addStaticRoute("/examples/", "examples/", [("links", "text/plain")]);
   addStaticRoute("/examplessrc/", "examples/", [("links", "text/plain")]);
 
-  addRoute("/examples/draggable.links", fun(_) {Draggable.main()});
-  addRoute("/examples/progress.links", fun(_) {Progress.main()});
+  addRoute("/examples/draggable.links", fun(_) {Draggable.mainPage((), ())});
+  addRoute("/examples/progress.links", Progress.mainPage);
 
-  addRoute("/examples/buttons.links", fun(_) {Buttons.main()});
+  addRoute("/examples/buttons.links", Buttons.mainpage);
   addRoute("/examples/formsTest.links", fun(_) {FormsTest.main()});
 
   addRoute("/examples/validate.links", fun(_) {Validate.main()});
