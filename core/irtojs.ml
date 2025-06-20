@@ -706,12 +706,12 @@ module Higher_Order_Continuation : CONTINUATION = struct
            let k = gensym ~prefix:"_kappa" () in
            (fun code -> bs (Bind (k, v, code))), ks, Var k
         | Cons ((Var _) as v, kappas) ->
-           bind bs (fun kappas -> Cons (v, kappas)) kappas
+           bind bs (fun kappas -> ks (Cons (v, kappas))) kappas
         | Cons (v, kappas) ->
            let k = gensym ~prefix:"_kappa" () in
            bind
              (fun code -> bs (Bind (k, v, code)))
-             (fun kappas -> Cons (Var k, kappas)) kappas
+             (fun kappas -> ks (Cons (Var k, kappas))) kappas
   in
   let bs, ks, seed = bind Code.MetaContinuation.identity (fun kappas -> kappas) kappas in
   bs (body (ks (reflect seed)))
