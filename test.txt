@@ -1,0 +1,7 @@
+(function() {
+  return _$K.apply(_$List.cons(function(x, ks) {
+    
+  }, _$List.cons(function(z, ks) { let tag = z._label;  }, _$List.nil)), (i64.const 41)
+ (i64.const 1)
+ (i64.add));
+})()

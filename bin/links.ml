@@ -117,6 +117,16 @@ let run : string list -> string list -> unit
            handle_errors (lazy (Driver.Phases.compile_js_only context file output_file)); context)
         file_list)
 
+    | Some CompileWasm ->
+      (* TODO(dhil): The following might behave unexpectedly if
+         |file_list| > 1 as the output file is repeatedly
+         overwritten. We need a better design here. *)
+      ignore(for_each context'
+        (fun context file ->
+           let output_file = val_of (Settings.get output_file) in
+           handle_errors (lazy (Driver.Phases.compile_wasm_only context file output_file)); context)
+        file_list)
+
 let main () =
   (* Attempt to synchronise all settings. If any setting commands are
      left unhandled, then error and exit. *)

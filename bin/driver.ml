@@ -5,7 +5,7 @@ open Utility
 
 (** Name of the file containing the prelude code. *)
 let prelude_file =
-  Settings.(option ~default: (Some Linkspath.prelude) "prelude"
+  Settings.(option ~default: (Some "fake_prelude.links") "prelude" (* Some Linkspath.prelude *)
             |> synopsis "The Links prelude source file"
             |> to_string from_string_option
             |> convert (Sys.expand ->- some)
@@ -258,6 +258,51 @@ module Phases = struct
           ffi_files;
         (* Emit the JavaScript code produced by irtojs. *)
         Js_CodeGen.output oc code;
+        close_out oc
+      with Sys_error reason ->
+        close_out oc; raise (Errors.object_file_write_error object_file reason)
+
+let compile_wasm_only : Context.t -> string -> string -> unit
+    = fun initial_context source_file object_file ->
+      (* Process source file (and its dependencies. *)
+      let result =
+        Parse.run initial_context source_file
+        |> Desugar.run
+        |> (fun result -> if Settings.get typecheck_only then exit 0 else result)
+        |> Compile.IR.run
+        |> Transform.run
+      in
+      let context, program = result.Backend.context, result.Backend.program in
+      (* let valenv    = Context.value_environment context in *)
+      let nenv  = Context.name_environment context in
+      (* let tenv      = Context.typing_environment context in *)
+      let venv =
+        Env.String.fold
+        (fun name v venv -> Env.Int.bind v name venv)
+        nenv
+        Env.Int.empty
+      in
+      (* let tenv = Var.varify_env (nenv, tenv.Types.var_env) in *)
+      let open Irtowasm in
+      let _venv', code =
+        let program' =
+          let (bs, tc) = program in
+          (* TODO(dhil): This is a slight hack. We shouldn't need to
+             use the webserver to retrieve the prelude, alas, the
+             current infrastructure does not let us get hold of the
+             prelude bindings by other means. *)
+          (Webserver.get_prelude () @ bs, tc)
+        in
+        Compiler.generate_program venv program'
+      in
+      (* Prepare object file. *)
+      let oc =
+        try open_out object_file
+        with Sys_error reason -> raise (Errors.cannot_open_file object_file reason)
+      in
+      try
+        (* Emit the JavaScript code produced by irtojs. *)
+        Wasm_CodeGen.output oc code;
         close_out oc
       with Sys_error reason ->
         close_out oc; raise (Errors.object_file_write_error object_file reason)
