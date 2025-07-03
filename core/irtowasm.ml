@@ -1212,14 +1212,14 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
       let blk = convert_block tm lenv procinfo blk BNone is_last cinfo in
       do_box tm lenv box (fun acc -> blk (LEnv.local_set lenv (bid :> int32) ^+ v acc))
   | ECase (v, t, cs, od) ->
-      let getv, etee = match e with
+      let vt, e2 = match v with
         | EVariable vid ->
             let getv = convert_get_var lenv vid cinfo in
-            getv, getv
+            Some Wasm.Type.(RefT (NoNull, VarHT TMap.variant_tid)), (fun acc -> getv (getv acc))
         | _ ->
             let vid = LEnv.add_local tm lenv TVariant in
             let v = convert_expr tm lenv procinfo v BNone None cinfo in
-            (fun acc -> LEnv.local_get lenv vid ^+ acc), (fun acc -> LEnv.local_tee lenv vid ^+ v acc) in
+            Some Wasm.Type.(RefT (NoNull, VarHT TMap.variant_tid)), (fun acc -> LEnv.local_get lenv vid ^+ LEnv.local_tee lenv vid ^+ v acc) in
       let branches, ncases, min_id =
         List.fold_left
           (fun (branches, ncases, min_id) (id, _, _, _) ->
@@ -1235,7 +1235,7 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
       let min_id = if min_id <= 3 then 0 else min_id in
       let block_content =
         StructGet (TMap.variant_tid, 0l, None) ^+
-        etee empty_nlist in
+        e2 empty_nlist in
       let block_content =
         if min_id = 0 then BrTable (Array.map (Option.value ~default:ncases) branches, ncases) ^+ block_content
         else
@@ -1251,8 +1251,8 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
         (fun (block_content, depth) (_, Type btyp, bid, blk) ->
           let br = Int32.sub ncases depth in
           let depth = Int32.succ depth in
-          let block_content = nlist_of_list [Block (Wasm.Type.ValBlockType None, convert_nlist block_content)] in
-          let unbox = really_unbox tm btyp (fun acc -> StructGet (TMap.variant_tid, 1l, None) ^+ getv acc) in
+          let block_content = nlist_of_list [Block (Wasm.Type.ValBlockType vt, convert_nlist block_content)] in
+          let unbox = really_unbox tm btyp (fun acc -> StructGet (TMap.variant_tid, 1l, None) ^+ acc) in
           let new_block =
             LEnv.local_set lenv (bid : mvarid :> int32) ^+
             unbox block_content in
@@ -1260,12 +1260,12 @@ and convert_expr : type a b. tmap -> lenv -> procinfo -> a expr -> (a, b) box ->
           Br br ^+ blk new_block, depth)
         (block_content, 0l) cs in
       let block_content =
-        let block_content = nlist_of_list [Block (Wasm.Type.ValBlockType None, convert_nlist block_content)] in
+        let block_content = nlist_of_list [Block (Wasm.Type.ValBlockType vt, convert_nlist block_content)] in
         match od with
         | None -> Unreachable ^+ block_content
         | Some (bid, blk) ->
           let blk = convert_block tm lenv procinfo blk BNone (incr_depth is_last) cinfo in
-            blk (LEnv.local_set lenv (bid :> int32) ^+ getv block_content) in
+            blk (LEnv.local_set lenv (bid :> int32) ^+ block_content) in
       let tret = TMap.val_of_type tm t in
       let block_content = convert_nlist block_content in
       fun acc -> Block (Wasm.Type.ValBlockType tret, block_content) ^+ acc
