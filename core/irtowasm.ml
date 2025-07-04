@@ -299,7 +299,7 @@ end = struct
     | TList _ -> Some (RefT (Null, VarHT list_tid))
     | TVar -> Some tvar_val_type
     | TSpawnLocation -> None (* SpawnLocation is isomorphic to an empty tuple for now *)
-    | TProcess -> Some (RefT (Null, VarHT pid_tid))
+    | TProcess -> Some (RefT (NoNull, VarHT pid_tid))
   
   and val_list_of_type_list : type a. t -> a typ_list -> emap -> Wasm.Type.val_type list = fun env tl emap ->
     let [@tail_mod_cons] rec inner : type a. t -> a typ_list -> emap -> Wasm.Type.val_type list = fun env tl emap ->
@@ -320,30 +320,26 @@ end = struct
           | TInt -> raise (internal_error "recid_of_type called with TInt")
           | TBool -> raise (internal_error "recid_of_type called with TBool")
           | TFloat -> raise (internal_error "recid_of_type called with TFloat")
-          | TString -> Some string_typ (* cached *)
-          | TClosed (args, ret) -> let _, st = sub_of_closed env args ret in Some st
+          | TString -> string_typ (* cached *)
+          | TClosed (args, ret) -> let _, st = sub_of_closed env args ret in st
           | TAbsClosArg -> raise (internal_error "recid_of_type called with TAbsClosArg")
-          | TClosArg TLnil -> None (* Never actually used, so we can safely return garbage *)
+          | TClosArg TLnil -> raise (internal_error "recid_of_type called with TClosArg TLnil")
           | TClosArg clos ->
               let clos = val_list_of_type_list env clos (ErasableIDMap.empty ()) in
-              Some (SubT (Final, [||], DefStructT (StructT (Array.map (fun t -> FieldT (Cons, ValStorageT t)) (Array.of_list clos)))))
+              SubT (Final, [||], DefStructT (StructT (Array.map (fun t -> FieldT (Cons, ValStorageT t)) (Array.of_list clos))))
           | TCont cret ->
               let ftyp, _ = recid_of_cfunctyp env cret in
-              Some (SubT (Final, [||], DefContT (ContT (VarHT ftyp))))
+              SubT (Final, [||], DefContT (ContT (VarHT ftyp)))
           | TTuple n ->
-              Some (SubT (Final, [||], DefStructT (StructT (Array.make n (FieldT (Cons, ValStorageT (RefT (Null, EqHT))))))))
-          | TVariant -> Some variant_typ (* cached *)
-          | TList _ -> Some list_typ
+              SubT (Final, [||], DefStructT (StructT (Array.make n (FieldT (Cons, ValStorageT (RefT (Null, EqHT)))))))
+          | TVariant -> variant_typ (* cached *)
+          | TList _ -> list_typ
           | TVar -> raise (internal_error "recid_of_type called with TVar")
           | TSpawnLocation -> raise (internal_error "recid_of_type called with TSpawnLocation")
-          | TProcess -> Some pid_typ (* cached *) in
-        begin match st with
-        | None -> Int32.minus_one
-        | Some st ->
-            let tid = recid_of_sub_type env st in
-            env.cenv <- TypeMap.add (Type t) tid env.cenv;
-            tid
-      end
+          | TProcess -> pid_typ (* cached *) in
+        let tid = recid_of_sub_type env st in
+        env.cenv <- TypeMap.add (Type t) tid env.cenv;
+        tid
   
   and recid_of_closed : type a b. t -> a typ_list -> b typ -> int32 * int32 = fun env targs tret ->
     let t = Type (TClosed (targs, tret)) in
@@ -625,7 +621,7 @@ end = struct
   let add_raw_global (genv : t) (g : Wasm.global) : ekey =
     let i = ErasableIDMap.add_concrete genv.gblmap in
     genv.gbls <- g :: genv.gbls;
-    i
+    ErasableIDMap.find genv.gblmap i |> Option.get
   let add_global (tm : TMap.t) (genv : t) (oname : string option) (t : 'a typ) (init : Wasm.instrs) : ekey = match TMap.val_of_type tm t with
     | None -> ErasableIDMap.add_erased genv.gblmap
     | Some t -> add_raw_global genv (Wasm.Type.(GlobalT (Var, t)), init, oname)
@@ -1801,7 +1797,6 @@ let convert_builtin (tm : tmap) (genv : genv) (procinfo : procinfo) (_fid : mfun
           StructGet (TMap.pid_tid, 1l, None);
           BrOnCast (0l, (Null, EqHT), (NoNull, VarHT TMap.pid_active_tid));
           Drop;
-          RefNull NoneHT;
           Return;
         |]);
         LocalTee 3l;
@@ -1814,7 +1809,6 @@ let convert_builtin (tm : tmap) (genv : genv) (procinfo : procinfo) (_fid : mfun
         StructGet (TMap.pid_active_tid, 1l, None);
         StructNew (TMap.list_tid, Explicit);
         StructSet (TMap.pid_active_tid, 1l);
-        RefNull NoneHT;
       |];
     }
   | FBSpawnAngelAt ->
@@ -2404,7 +2398,7 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
       let self_ctid = TMap.recid_of_sub_type tm (SubT (Final, [||], DefContT (ContT (VarHT self_ftid)))) in
       let self_bt = TMap.recid_of_sub_type tm (SubT (Final, [||], DefFuncT (
         FuncT ([|RefT (NoNull, VarHT self_ctid)|], [|RefT (Null, EqHT)|])))) in
-      let spawn_cbid = TMap.recid_of_type tm (TClosed (TLnil, TVar)) in
+      let spawn_cbid, spawned_cbfid = TMap.recid_of_closed tm TLnil TVar in
       let spawn_ctid =
         if wasm_yield_is_switch then
           let ftid = TMap.recid_of_sub_type tm (SubT (Final, [||], DefFuncT (
@@ -2515,21 +2509,19 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
             [|
               NumT I32T;                                     (* 0: next pid *)
               RefT (Null, EqHT);                             (* 1: boxed value *)
-              RefT (NoNull, VarHT self_ctid);                (* 2: $self effect continuation *)
-              RefT (NoNull, VarHT spawn_ctid);               (* 3: $spawn effect continuation *)
-              RefT (NoNull, VarHT spawn_cbid);               (* 4: $spawn callback *)
-              RefT (NoNull, VarHT TMap.process_active_tid);  (* 5: $yield continuation *)
-              RefT (NoNull, VarHT TMap.process_waiting_tid); (* 6: $wait continuation *)
-              RefT (NoNull, VarHT TMap.pid_active_tid);      (* 7: $spawn/$wait PID / main/returned process PID *)
+              RefT (NoNull, VarHT spawn_ctid);               (* 2: $spawn effect continuation *)
+              RefT (NoNull, VarHT spawn_cbid);               (* 3: $spawn callback *)
+              RefT (NoNull, VarHT TMap.process_waiting_tid); (* 4: $wait continuation *)
+              RefT (NoNull, VarHT TMap.pid_active_tid);      (* 5: $spawn/$wait PID / main/returned process PID *)
             |],
             local_sgt 0l,           (* next pid *)
             local_sgt 1l,           (* boxed value *)
-            local_sgt 2l,           (* $self effect continuation *)
-            local_sgt 3l,           (* $spawn effect continuation *)
-            local_sgt 4l,           (* $spawn callback *)
-            local_sgt 5l,           (* $yield continuation *)
-            local_sgt 6l,           (* $wait continuation *)
-            local_sgt 7l,           (* $spawn/$wait PID / main/returned process PID *)
+            fail_sgt,               (* $self effect continuation *)
+            local_sgt 2l,           (* $spawn effect continuation *)
+            local_sgt 3l,           (* $spawn callback *)
+            fail_sgt,               (* $yield continuation *)
+            local_sgt 4l,           (* $wait continuation *)
+            local_sgt 5l,           (* $spawn/$wait PID / main/returned process PID *)
             global_sgt all_vid,     (* all active and zombie processes *)
             global_sgt cache_vid    (* active processes cache *)
         | false, false ->
@@ -2678,7 +2670,7 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
               StructSet (TMap.process_list_tid, 1l);
             |];
           };
-          (fun acc -> Call yield_fun ^+ acc), oadd_loc, do_update
+          (fun acc -> Call (Int32.add (GEnv.fun_offset genv) yield_fun) ^+ acc), oadd_loc, do_update
         else (fun acc -> Suspend yield_eid ^+ acc), None, (fun _ acc -> acc) in
       let check_yield_fun =
         let do_check_yield = fun acc ->
@@ -2740,7 +2732,6 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
               StructGet (TMap.process_list_tid, 2l, None) ^+
               cache_get ^+
               (* Finish adding the process to the process list *)
-            let spawned_cbfid, _ = TMap.recid_of_functyp tm TLnil TVar in
             if wasm_yield_is_switch then
               let spawn_cbfid = TMap.recid_of_sub_type tm (SubT (Final, [||], DefFuncT (FuncT (
                   [|RefT (NoNull, VarHT spawn_cbid); RefT (Null, VarHT TMap.process_active_tid)|],
@@ -2755,6 +2746,8 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
                 fn_code = convert_nlist @@
                   ReturnCallRef spawned_cbfid ^+
                   RefCast (NoNull, VarHT spawned_cbfid) ^+
+                  StructGet (spawn_cbid, 0l, None) ^+
+                  LocalGet 0l ^+
                   StructGet (spawn_cbid, 1l, None) ^+
                   LocalGet 0l ^+
                   StructGet (spawn_cbid, 2l, None) ^+
@@ -2773,6 +2766,8 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
               ContBind (spawn_cbcid, TMap.process_active_tid) ^+
               ContNew spawn_cbcid ^+
               RefCast (NoNull, VarHT spawned_cbfid) ^+
+              StructGet (spawn_cbid, 0l, None) ^+
+              local_get cb_vid ^+
               StructGet (spawn_cbid, 1l, None) ^+
               local_get cb_vid ^+
               StructGet (spawn_cbid, 2l, None) ^+
@@ -2783,6 +2778,7 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
               | Some fid -> fun acc -> Call fid ^+ local_get cb_vid ^+ acc
               | None ->
                   let fref, fid = GEnv.add_function genv in
+                  let fid = Int32.add (GEnv.fun_offset genv) fid in
                   let arg_tid = TMap.recid_of_type tm (TClosed (TLnil, TVar)) in
                   let ftid = TMap.recid_of_sub_type tm (SubT (Final, [||], DefFuncT (FuncT (
                     [|RefT (NoNull, VarHT arg_tid)|], [|RefT (NoNull, VarHT TMap.pid_tid)|])))) in
@@ -2844,7 +2840,7 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
                 let content block_offset =
                     let labels =
                       match wasm_prefer_globals, wasm_yield_is_switch with
-                      | true, true -> [| wait_eid, OnLabel 0l; exit_eid, OnLabel 3l; |]
+                      | true, true -> [| wait_eid, OnLabel 0l; yield_eid, OnSwitch; exit_eid, OnLabel 3l; |]
                       | true, false -> [| wait_eid, OnLabel 0l; yield_eid, OnLabel 1l; exit_eid, OnLabel 4l; |]
                       | false, true ->
                           let spawn_eid = Int32.add (GEnv.effect_offset genv) (TMap.spawn_offset tm) in
@@ -2966,7 +2962,6 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
                       (* Create the continuation *)
                       spawncb_get;
                     |]; (
-                    let spawned_cbfid, _ = TMap.recid_of_functyp tm TLnil TVar in
                     if wasm_yield_is_switch then
                       let spawn_cbfid = TMap.recid_of_sub_type tm (SubT (Final, [||], DefFuncT (FuncT (
                           [|RefT (NoNull, VarHT spawn_cbid); RefT (Null, VarHT TMap.process_active_tid)|],
@@ -2981,6 +2976,8 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
                         fn_code = convert_nlist @@
                           ReturnCallRef spawned_cbfid ^+
                           RefCast (NoNull, VarHT spawned_cbfid) ^+
+                          StructGet (spawn_cbid, 0l, None) ^+
+                          LocalGet 0l ^+
                           StructGet (spawn_cbid, 1l, None) ^+
                           LocalGet 0l ^+
                           StructGet (spawn_cbid, 2l, None) ^+
@@ -2998,6 +2995,8 @@ let compile (m : 'a modu) (main_typ : Types.datatype) : Wasm.module_ =
                       StructGet (spawn_cbid, 2l, None);
                       spawncb_get;
                       StructGet (spawn_cbid, 1l, None);
+                      spawncb_get;
+                      StructGet (spawn_cbid, 0l, None);
                       RefCast (NoNull, VarHT spawned_cbfid);
                       ContNew spawn_cbcid;
                       ContBind (spawn_cbcid, TMap.process_active_tid);
