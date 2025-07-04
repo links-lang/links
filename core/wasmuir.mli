@@ -86,6 +86,7 @@ and (!_, !_) box_list =
   | BLnil : (unit, unit) box_list
   | BLcons : ('a, 'c) box * ('b, 'd) box_list -> ('a * 'b, 'c * 'd) box_list
 
+val src_of_box : ('a, 'b) box -> 'b typ -> 'a typ
 val dst_of_box : 'a typ -> ('a, 'b) box -> 'b typ
 
 type (_, _) finisher =

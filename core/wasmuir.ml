@@ -214,18 +214,27 @@ and convert_box_list : type a b. (a, b) Wasmir.box_list -> (a, b) box_list = fun
   | CBLnone _ -> BLnone
   | CBLcons (hd, tl) -> BLcons (hd, tl)
 
-let [@tail_mod_cons] rec dst_of_box : type a b. a typ -> (a, b) box -> b typ =
-  fun src box -> match src, box with
-  | _, BNone -> src
-  | TClosed (targs, tret), BClosed (_, bargs, bret) -> TClosed ((dst_of_box_list[@tailcall]) targs bargs, dst_of_box tret bret)
-  | TCont tret, BCont bret -> TCont (dst_of_box tret bret)
-  | TTuple n, BTuple _ -> TTuple n
-  | _, BBox _ -> TVar
-and [@tail_mod_cons] dst_of_box_list : type a b. a typ_list -> (a, b) box_list -> b typ_list =
-  fun (t : a typ_list) (bs : (a, b) box_list) : b typ_list -> match t, bs with
-  | _, BLnone -> t
-  | _, BLnil -> t
-  | TLcons (thd, ttl), BLcons (hd, tl) -> TLcons (dst_of_box thd hd, (dst_of_box_list[@tailcall]) ttl tl)
+let [@tail_mod_cons] rec src_of_box : type a b. (a, b) box -> b typ -> a typ = fun box dst -> match box, dst with
+  | BNone, _ -> dst
+  | BClosed (_, bargs, bret), TClosed (targs, tret) -> TClosed ((src_of_box_list[@tailcall]) bargs targs, src_of_box bret tret)
+  | BCont bret, TCont tret -> TCont (src_of_box bret tret)
+  | BTuple _, TTuple n -> TTuple n
+  | BBox src, _ -> src
+and [@tail_mod_cons] src_of_box_list : type a b. (a, b) box_list -> b typ_list -> a typ_list = fun bs dsts -> match bs, dsts with
+  | BLnone, _ -> dsts
+  | BLnil, _ -> dsts
+  | BLcons (hd, tl), TLcons (thd, ttl) -> TLcons (src_of_box hd thd, (src_of_box_list[@tailcall]) tl ttl)
+
+let [@tail_mod_cons] rec dst_of_box : type a b. a typ -> (a, b) box -> b typ = fun src box -> match box, src with
+  | BNone, _ -> src
+  | BClosed (_, bargs, bret), TClosed (targs, tret) -> TClosed ((dst_of_box_list[@tailcall]) targs bargs, dst_of_box tret bret)
+  | BCont bret, TCont tret -> TCont (dst_of_box tret bret)
+  | BTuple n, TTuple _ -> TTuple n
+  | BBox _, _ -> TVar
+and [@tail_mod_cons] dst_of_box_list : type a b. a typ_list -> (a, b) box_list -> b typ_list = fun srcs bs -> match bs, srcs with
+  | BLnone, _ -> srcs
+  | BLnil, _ -> srcs
+  | BLcons (hd, tl), TLcons (thd, ttl) -> TLcons (dst_of_box thd hd, (dst_of_box_list[@tailcall]) ttl tl)
 
 type (_, _) finisher =
   | FId : 'a typ -> ('a, 'a) finisher
