@@ -823,7 +823,7 @@ fun main_page(_) {
 sig main: () ~> ()
 fun main() {
     addRoute("/", main_page);
-    addStaticRoute("/js", "js", [("js", "text/javascript")]);
+    addStaticRoute("/js", "examples/handlers/js", [("js", "text/javascript")]);
     servePages()
 }
 
