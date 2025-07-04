@@ -809,7 +809,6 @@ end = struct
   and maybe_do_box : type a b. TMap.t -> t -> (a, b) box -> (instr_conv -> instr_conv) option = fun tm _ box -> match box with
     | BNone -> None
     | BClosed _ -> None (* Always boxed *)
-    | BCont _ -> failwith "TODO maybe_do_box BCont"
     | BTuple _ -> None (* Tuples always have their values boxed *)
     | BBox t -> do_box tm t
   
@@ -829,7 +828,6 @@ end = struct
   and maybe_do_unbox : type a b. TMap.t -> t -> (a, b) box -> (instr_conv -> instr_conv) option = fun tm _ box -> match box with
     | BNone -> None
     | BClosed _ -> None (* Always boxed *)
-    | BCont _ -> failwith "TODO maybe_do_unbox BCont"
     | BTuple _ -> None (* Tuples always have their values boxed *)
     | BBox t -> do_unbox tm t
 end

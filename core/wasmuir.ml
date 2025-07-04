@@ -183,7 +183,6 @@ let [@tail_mod_cons] rec convert_varid_list : type a. a Wasmir.varid_list -> a v
 type (!_, !_) box =
   | BNone : ('a, 'a) box
   | BClosed : ('g * 'a -> 'b) typ * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b, 'g * 'c -> 'd) box
-  | BCont : ('a, 'b) box -> ('a continuation, 'b continuation) box
   | BTuple : int -> ('a list, 'b list) box
   | BBox : 'a typ -> ('a, unit) box
 and (!_, !_) box_list =
@@ -200,7 +199,6 @@ let [@tail_mod_cons] rec convert_box : type a b. (a, b) Wasmir.box -> (a, b) box
       let targs = Wasmir.src_of_box_list bargs in
       let tret = Wasmir.src_of_box bret in
       BClosed (TClosed (convert_typ_list targs, convert_typ tret), convert_box_list bargs, (convert_box[@tailcall]) bret)
-  | Wasmir.BCont bret -> BCont (convert_box bret)
   | Wasmir.BTuple (src, _) -> BTuple (convert_named_typ_list_int src)
   | Wasmir.BBox (src, _) -> BBox (convert_typ src)
 and convert_box_list : type a b. (a, b) Wasmir.box_list -> (a, b) box_list = fun b ->
@@ -217,7 +215,6 @@ and convert_box_list : type a b. (a, b) Wasmir.box_list -> (a, b) box_list = fun
 let [@tail_mod_cons] rec src_of_box : type a b. (a, b) box -> b typ -> a typ = fun box dst -> match box, dst with
   | BNone, _ -> dst
   | BClosed (_, bargs, bret), TClosed (targs, tret) -> TClosed ((src_of_box_list[@tailcall]) bargs targs, src_of_box bret tret)
-  | BCont bret, TCont tret -> TCont (src_of_box bret tret)
   | BTuple _, TTuple n -> TTuple n
   | BBox src, _ -> src
 and [@tail_mod_cons] src_of_box_list : type a b. (a, b) box_list -> b typ_list -> a typ_list = fun bs dsts -> match bs, dsts with
@@ -228,7 +225,6 @@ and [@tail_mod_cons] src_of_box_list : type a b. (a, b) box_list -> b typ_list -
 let [@tail_mod_cons] rec dst_of_box : type a b. a typ -> (a, b) box -> b typ = fun src box -> match box, src with
   | BNone, _ -> src
   | BClosed (_, bargs, bret), TClosed (targs, tret) -> TClosed ((dst_of_box_list[@tailcall]) targs bargs, dst_of_box tret bret)
-  | BCont bret, TCont tret -> TCont (dst_of_box tret bret)
   | BTuple n, TTuple _ -> TTuple n
   | BBox _, _ -> TVar
 and [@tail_mod_cons] dst_of_box_list : type a b. a typ_list -> (a, b) box_list -> b typ_list = fun srcs bs -> match bs, srcs with

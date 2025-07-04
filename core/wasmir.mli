@@ -93,7 +93,6 @@ type !'a varid_list =
 type (!'a, !'b) box =
   | BNone : 'a typ * 'a typ -> ('a, 'a) box
   | BClosed : 'g generalization * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b, 'g * 'c -> 'd) box
-  | BCont : ('b, 'd) box -> ('b continuation, 'd continuation) box
   | BTuple : 'a named_typ_list * 'b named_typ_list -> ('a list, 'b list) box
   | BBox : 'a typ * tvarid -> ('a, unit) box
 and (!'a, !'b) box_list =

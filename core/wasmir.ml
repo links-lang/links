@@ -179,7 +179,6 @@ type !'a varid_list =
 type (!'a, !'b) box =
   | BNone : 'a typ * 'a typ -> ('a, 'a) box
   | BClosed : 'g generalization * ('a, 'c) box_list * ('b, 'd) box -> ('g * 'a -> 'b, 'g * 'c -> 'd) box
-  | BCont : ('b, 'd) box -> ('b continuation, 'd continuation) box
   | BTuple : 'a named_typ_list * 'b named_typ_list -> ('a list, 'b list) box
   | BBox : 'a typ * tvarid -> ('a, unit) box
 and (!'a, !'b) box_list =
@@ -189,7 +188,6 @@ and (!'a, !'b) box_list =
 let rec src_of_box : type a b. (a, b) box -> a typ = fun b -> match b with
   | BNone (src, _) -> src
   | BClosed (gen, bargs, bret) -> TClosed (gen, src_of_box_list bargs, src_of_box bret)
-  | BCont bret -> TCont (src_of_box bret)
   | BTuple (src, _) -> TTuple src
   | BBox (src, _) -> src
 and src_of_box_list : type a b. (a, b) box_list -> a typ_list = fun b -> match b with
@@ -304,7 +302,6 @@ let pp_specialization : type a b. _ -> (a, b) specialization -> _ = fun fmt : ((
 let rec pp_box : type a b. _ -> (a, b) box -> _ = fun fmt : ((a, b) box -> _) -> function
   | BNone _ -> Format.fprintf fmt "<>"
   | BClosed (g, bargs, bret) -> Format.fprintf fmt "(%a[%a] -> %a)" pp_generalization g pp_box_list bargs pp_box bret
-  | BCont bret -> Format.fprintf fmt "~> %a" pp_box bret
   | BTuple _ -> Format.fprintf fmt "<tuple>"
   | BBox (t, i) -> Format.fprintf fmt "%a ~ %u" pp_typ t i
 and pp_box_list : type a b. _ -> (a, b) box_list -> _ = fun fmt : ((a, b) box_list -> _) -> function
@@ -1076,16 +1073,12 @@ let [@tail_mod_cons] rec compose_box : type a b c. (a, b) box -> (b, c) box -> (
   | BNone (src, _), BNone (_, dst) -> BNone (src, dst)
   | BNone (TClosed (g, targs1, tret1), TClosed (_, targs2, tret2)), BClosed (_, bargs, bret) ->
       BClosed (g, compose_box_list (blnone_of_typ_lists targs1 targs2) bargs, compose_box (BNone (tret1, tret2)) bret)
-  | BNone (TCont tret1, TCont tret2), BCont bret -> BCont (compose_box (BNone (tret1, tret2)) bret)
   | BNone (TTuple src, _), BTuple (_, dst) -> BTuple (src, dst)
   | BNone (src, _), BBox (_, tid) -> BBox (src, tid)
   | BClosed (g, bargs, bret), BNone (TClosed (_, targs1, tret1), TClosed (_, targs2, tret2)) ->
       BClosed (g, compose_box_list bargs (blnone_of_typ_lists targs1 targs2), compose_box bret (BNone (tret1, tret2)))
   | BClosed (g, bargs1, bret1), BClosed (_, bargs2, bret2) -> BClosed (g, compose_box_list bargs1 bargs2, compose_box bret1 bret2)
   | BClosed _, BBox (_, tid) -> BBox (src_of_box boxab, tid)
-  | BCont bret, BNone (TCont dst1, TCont dst2) -> BCont (compose_box bret (BNone (dst1, dst2)))
-  | BCont bret1, BCont bret2 -> BCont (compose_box bret1 bret2)
-  | BCont _, BBox (_, tid) -> BBox (src_of_box boxab, tid)
   | BTuple (src, _), BNone (_, TTuple dst) -> BTuple (src, dst)
   | BTuple (src, _), BTuple (_, dst) -> BTuple (src, dst)
   | BTuple (src, _), BBox (_, tid) -> BBox (TTuple src, tid)
@@ -1208,11 +1201,7 @@ let rec specialize_typ : type a. anytyp TVarMap.t -> a typ -> a specialize = fun
       | Some (Type.Equal, sb, db) -> Spec (TClosArg ts, BNone (TClosArg sb, TClosArg db))
       | None -> raise (internal_error "Cannot box in closure argument yet")
     end
-  | TCont tret -> begin let Spec (tret, bret) = specialize_typ tmap tret in
-      match bret with
-      | BNone (sret, dret) -> Spec (TCont tret, BNone (TCont sret, TCont dret))
-      | _ -> Spec (TCont tret, BCont bret)
-    end
+  | TCont _ -> raise (internal_error "Cannot specialize a continuation")
   | TTuple ts -> let NamedTypeList sts = specialize_typ_named_list tmap ts in Spec (TTuple sts, BTuple (sts, ts))
   | TVariant -> Spec (TVariant, BNone (t, t))
   | TList tc -> Spec (TList tc, BNone (t, t))
