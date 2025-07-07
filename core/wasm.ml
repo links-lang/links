@@ -127,9 +127,8 @@ module Type = struct
     | ExternHT | NoExternHT
     | ContHT | NoContHT
     | VarHT of var
-    | BotHT
   and ref_type = null * heap_type
-  and val_type = NumT of num_type | VecT of vec_type | RefT of ref_type | BotT
+  and val_type = NumT of num_type | VecT of vec_type | RefT of ref_type
   and result_type = val_type array
   and storage_type = ValStorageT of val_type | PackStorageT of Pack.pack_size
   and field_type = FieldT of mut * storage_type
@@ -183,13 +182,11 @@ module Type = struct
     | ContHT -> "cont"
     | NoContHT -> "nocont"
     | VarHT v -> string_of_var v
-    | BotHT -> "something"
   and string_of_ref_type (n, h) = "(ref " ^ string_of_null n ^ string_of_heap_type h ^ ")"
   and string_of_val_type = function
     | NumT t -> string_of_num_type t
     | VecT t -> string_of_vec_type t
     | RefT t -> string_of_ref_type t
-    | BotT -> "bot"
   and string_of_storage_type = function
     | ValStorageT vt -> string_of_val_type vt
     | PackStorageT ps -> "i" ^ Pack.pack_size ps
@@ -259,16 +256,14 @@ module Type = struct
     | ContHT -> Atom "cont"
     | NoContHT -> Atom "nocont"
     | VarHT v -> sexpr_of_var v
-    | BotHT -> Atom "something"
   and sexpr_of_ref_type (n, h) = let open Sexpr in
     match sexpr_of_heap_type h with
     | Atom s -> LongNode ("ref", sexpr_of_null n @ [Atom s], [])
     | sh -> LongNode ("ref", sexpr_of_null n, [sh])
-  and sexpr_of_val_type = let open Sexpr in function
+  and sexpr_of_val_type = function
     | NumT t -> sexpr_of_num_type t
     | VecT t -> sexpr_of_vec_type t
     | RefT t -> sexpr_of_ref_type t
-    | BotT -> Atom "bot"
   and sexpr_of_storage_type = let open Sexpr in function
     | ValStorageT vt -> sexpr_of_val_type vt
     | PackStorageT ps -> Atom ("i" ^ string_of_int (8 * Pack.packed_size ps))

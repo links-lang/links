@@ -1,5 +1,3 @@
-let internal_error message = Errors.internal_error ~filename:"wasm_CodeGen.ml" ~message
-
 open Wasm
 open Wasm.Type
 open Wasm.Instruction
@@ -61,7 +59,6 @@ let ovalue_heap_type t = match t with
   | ContHT     -> Ok 0x67 (* s8 -0x18 = 0b01100111 *)
   | NoContHT   -> Ok 0x75 (* s8 -0x0B = 0b01110101 *)
   | VarHT v -> Error v
-  | BotHT -> raise (internal_error "invalid heap type BotHT")
 let rec generate_heap_type buf t = match ovalue_heap_type t with
   | Ok v -> Buffer.add_uint8 buf v
   | Error v -> generate_s 33 buf (Int64.of_int32 v)
@@ -74,7 +71,6 @@ and generate_val_type buf t = match t with
   | NumT nt -> generate_num_type buf nt
   | VecT vt -> generate_vec_type buf vt
   | RefT rt -> generate_ref_type buf rt
-  | BotT -> raise (internal_error "invalid value type BotT")
 and generate_result_type buf t = generate_u 32 buf (Int64.of_int (Array.length t)); Array.iter (generate_val_type buf) t
 and generate_storage_type buf t = match t with
   | ValStorageT vt -> generate_val_type buf vt

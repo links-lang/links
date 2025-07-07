@@ -54,9 +54,8 @@ module Type : sig
     | ExternHT | NoExternHT
     | ContHT | NoContHT
     | VarHT of var
-    | BotHT
   and ref_type = null * heap_type
-  and val_type = NumT of num_type | VecT of vec_type | RefT of ref_type | BotT
+  and val_type = NumT of num_type | VecT of vec_type | RefT of ref_type
   and result_type = val_type array
   and storage_type = ValStorageT of val_type | PackStorageT of Pack.pack_size
   and field_type = FieldT of mut * storage_type
