@@ -145,6 +145,7 @@ let simplify_type_structure : transforms
 let pipeline : transformer array
   = [| only_if optimise (measure (collapse "optimisations" optimisations))
      ; only_if IrCheck.typecheck (collapse "typechecking" typechecking)
+     ; (module Irtocps)
      ; (module Closures)
      ; (module PerformEffect(struct
                    let name = "build_tables"
