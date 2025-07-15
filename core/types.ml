@@ -61,6 +61,13 @@ let list     = {
   arity      = [pk_type, (lin_unl, res_any)] ;
 }
 
+(* Type of continuations for TODO L1 *)
+let continuation = {
+  Abstype.id = "Continuation" ;
+  name       = "Continuation" ;
+  arity      = [] ;
+}
+
 (* WR: used by DB queries *)
 let mapentry = {
   Abstype.id = "MapEntry" ;

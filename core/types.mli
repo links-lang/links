@@ -86,6 +86,7 @@ end
 
 val process      : Abstype.t
 val list         : Abstype.t
+val continuation : Abstype.t
 val mapentry     : Abstype.t
 val event        : Abstype.t
 val dom_node     : Abstype.t

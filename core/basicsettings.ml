@@ -67,21 +67,18 @@ end
 module System = struct
   type mode = Interactive
             | Compile
-            | CompileWasm
             | Web
   let mode =
     let parse_mode s =
       match String.lowercase_ascii s with
       | "interact"    -> Some Interactive
       | "compile"     -> Some Compile
-      | "compile_wasm" -> Some CompileWasm
       | "web"         -> Some Web
       | _ -> raise (Invalid_argument (Printf.sprintf "Unrecognised mode '%s'" s))
     in
     let string_of_mode = function
       | Some Interactive -> "interact"
       | Some Compile -> "compile"
-      | Some CompileWasm -> "compile_wasm"
       | Some Web -> "web"
       | None -> "<none>"
     in
@@ -91,7 +88,7 @@ module System = struct
               |> convert parse_mode
               |> hidden
               |> to_string string_of_mode
-              |> hint "<compile|compile_wasm|interact|web>"
+              |> hint "<compile|interact|web>"
               |> CLI.(add (long "mode"))
               |> sync)
 

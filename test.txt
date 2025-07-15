@@ -1,7 +1,7 @@
 (function() {
-  return _$K.apply(_$List.cons(function(x, ks) {
-    
-  }, _$List.cons(function(z, ks) { let tag = z._label;  }, _$List.nil)), (i64.const 41)
- (i64.const 1)
- (i64.add));
+  function _fun__g1_256(_255, __kappa) { let x_254 = _255; return _$K.apply(__kappa, x_254 (i64.const 1)
+ i64.add); }
+  let v_257 = _fun__g1_256;
+  let it_258 = v_257;
+  return _$K.apply(_$List.cons(function(x, ks) {  }, _$List.cons(function(z, ks) { let tag = z._label;  }, _$List.nil)), it_258);
 })()
