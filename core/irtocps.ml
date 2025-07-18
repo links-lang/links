@@ -26,7 +26,7 @@ module Code = struct
   end
 
   module Aux = struct
-    let apply f args = print_endline "Aux.apply"; Ir.Apply (f, args)
+    let apply f args = Ir.Apply (f, args)
     let apply_pure f args = Ir.ApplyPure (f, args)
 
     let project record label =
@@ -57,8 +57,8 @@ end
 (** IR variable environment *)
 module VEnv = Env.Int
 
-(** Type of environments mapping IR variables to source variables *)
-type venv = string VEnv.t
+(** Type of environments mapping IR variables to source variables and their types *)
+type venv = (string * Types.typ) VEnv.t
 
 (** Continuation parameter name (convention) *)
 let __kappa = Code.ObjectContinuation.__kappa
@@ -218,7 +218,7 @@ module type CONTINUATION = sig
   (* Continuation name binding. *)
   val bind : t -> (t -> Ir.tail_computation) -> Ir.tail_computation
 
-  val apply : t -> Ir.value -> Ir.binding list * Ir.tail_computation
+  val apply : t -> Ir.value -> Types.typ -> Types.typ -> Ir.tail_computation
 
   (* Augments a function [Fn] with a continuation parameter and
      reflects the result as a continuation. The continuation parameter
@@ -227,6 +227,8 @@ module type CONTINUATION = sig
 
   (* Generates a string dump of the continuation, for debugging purposes. *)
   val to_string : t -> string
+
+  val builtins : Ir.binding list
 end
 
 (* The higher-order continuation structure for effect handlers
@@ -279,13 +281,10 @@ module Higher_Order_Continuation : CONTINUATION = struct
   let reflect x = Reflect x
   let rec reify = function
   | Cons (v, vs) ->
-    print_endline "reify: Cons";
     cons v (reify vs)
   | Reflect v ->
-    print_endline "reify: Reflect";
     v
   | Identity ->
-    print_endline "reify: Identity";
     reify toplevel
 
   let identity = Identity
@@ -332,15 +331,22 @@ module Higher_Order_Continuation : CONTINUATION = struct
   (* placeholder bind *)
   let bind x f = f x
 
-  let apply k arg =
-    print_endline "K.apply";
-    let open Code in
-    let _K_apply_bind, _K_apply = Var.fresh_var (Var.make_local_info (Types.Not_typed, "_K_apply")) in
-    let _ks_bind, _ks = Var.fresh_var (Var.make_local_info (Types.Not_typed, "_ks")) in
-    let _arg_bind, _arg = Var.fresh_var (Var.make_local_info (Types.Not_typed, "_arg")) in
-    let _k_bind, _k = Var.fresh_var (Var.make_local_info (Types.Not_typed, "_k")) in
-    let _ks2_bind, _ks2 = Var.fresh_var (Var.make_local_info (Types.Not_typed, "_ks2")) in
-    print_endline "K.apply: Variables bound";
+  let builtins, _K_apply =
+    let open Types in
+    let open Var in
+    let _tcontinuation = Meta (Unionfind.fresh (Application (continuation,[]))) in
+    let kind = (PrimaryKind.Type, (Linearity.Any, Restriction.Any)) in
+    let _tretid, _targid = fresh_raw_variable (), fresh_raw_variable () in
+    let _tret = make_rigid_type_variable _tretid (Linearity.Any, Restriction.Any) in (* Not sure about all that *)
+    let _targ = make_rigid_type_variable _targid (Linearity.Any, Restriction.Any) in
+    let _K_apply_bind, _K_apply = fresh_var (make_local_info (
+      ForAll ([(_targid, kind); (_tretid, kind)], Function (Record (Row (Utility.StringMap.of_list ["1", Present _tcontinuation; "2", Present _targ], closed_row_var, false)), make_empty_closed_row (), _tret)),
+      "_K_apply"
+    )) in
+    let _ks_bind, _ks = fresh_var (make_local_info (_tcontinuation, "_ks")) in
+    let _arg_bind, _arg = fresh_var (make_local_info (_targ, "_arg")) in
+    let _k_bind, _k = fresh_var (make_local_info (Function(Record (Row (Utility.StringMap.of_list ["1", Present _targ], closed_row_var, false)), make_empty_closed_row (), _tret), "_k")) in
+    let _ks2_bind, _ks2 = fresh_var (make_local_info (_tcontinuation, "_ks2")) in
     let open Ir in
     [Ir.Rec [{
       fn_binder = _K_apply_bind;
@@ -351,8 +357,10 @@ module Higher_Order_Continuation : CONTINUATION = struct
       fn_closure = None;
       fn_location = CommonTypes.Location.Unknown; (* TODO L1: check which CommonTypes.Location.t is preferred *)
       fn_unsafe = false
-    }]],
-    Aux.apply (Ir.Variable _K_apply) [reify k; arg]
+    }]], _K_apply
+  
+  let apply (ks: t) arg targ tret =
+    Code.Aux.apply (Ir.TApp ((Ir.Variable _K_apply), [(PrimaryKind.Type, targ); (PrimaryKind.Type, tret)])) [reify ks; arg]
     (*
     function(ks, arg) {
        const k = _$List.head(ks);
@@ -398,7 +406,7 @@ module Higher_Order_Continuation : CONTINUATION = struct
 end
 
 module type CPS_Compiler_sig = sig
-  val generate_program : venv -> Ir.computation -> venv * Ir.computation
+  val generate_program : venv -> Ir.computation -> Types.typ -> venv * Ir.computation
 end
 
 (** [generate]
@@ -419,7 +427,7 @@ end = functor (K : CONTINUATION) -> struct
   (* let project = Code.Aux.project *)
   let return x = Ir.Return x
 
-  let rec generate_value _env : Ir.value -> Ir.value =
+  let rec generate_value _env : Ir.value -> Ir.value * Types.typ =
     (* let open Code in
     let open Code.Constructors in
     let gv v = generate_value env v in
@@ -500,48 +508,54 @@ end = functor (K : CONTINUATION) -> struct
       closure
     | Ir.Coerce (v, _) -> gv v
     | _ -> failwith "Not supported stuff" *)
-    function v -> print_endline "generate_value"; v
+    function v -> v, Types.Not_typed (* TODO L1: find the type of a value here *)
 
 
-  let rec generate_tail_computation : venv -> Ir.tail_computation -> continuation -> Ir.binding list * Ir.tail_computation =
-    fun env tc kappa ->
-    print_endline "generate_tail_computation";
+  let rec generate_tail_computation : venv -> Ir.tail_computation -> continuation -> Types.typ -> Ir.binding list * Ir.tail_computation =
+    fun env tc kappa tret ->
     let open Code in
     let gv v = generate_value env v in
-    let gc c kappa = snd (generate_computation env c kappa) in
+    let gc c kappa typ = snd (generate_computation env c kappa typ) in
     match (tc : Ir.tail_computation) with
     | Ir.Return v ->
-      K.apply kappa (gv v)
+      let v', targ = gv v in
+      [], K.apply kappa v' targ tret
     | Ir.Apply (f, vs) ->
       let f = strip_poly f in
       begin
         match f with
         | Ir.Variable f ->
-          let f_name = VEnv.find f env in
+          let ftype = snd (VEnv.find f env) in 
           begin
             match vs with
-            | [l; r] when StringOp.is f_name ->
+            (**| [l; r] when StringOp.is f_name ->
                let l = gv l in
                let r = gv r in
-               K.apply kappa (StringOp.gen f_name [l; r])
+               [], K.apply kappa (StringOp.gen f_name [l; r])
             | [l; r] when Comparison.is f_name ->
                let l = gv l in
                let r = gv r in
-               K.apply kappa (Comparison.gen f_name [l; r])
+               [], K.apply kappa (Comparison.gen f_name [l; r])
             | vs when Arithmetic.is f_name ->
-              K.apply kappa (Arithmetic.gen f_name (List.map gv vs))
+              [], K.apply kappa (Arithmetic.gen f_name (List.map gv vs))
             | vs when ListPrim.is f_name ->
-              K.apply kappa Aux.value_placeholder (* (ListPrim.gen f_name (List.map gv vs)) *)
+              [], K.apply kappa Aux.value_placeholder *) (* (ListPrim.gen f_name (List.map gv vs)) *)
             | _ ->
               (* if Lib.is_primitive f_name
               && not (Location.is_server (Lib.primitive_location f_name))
               then *)
-                [], Aux.tail_comp_placeholder
-                (* let arg = apply (Var ("_" ^ f_name)) (List.map gv vs) in
-                (K.apply kappa arg) *)
+                let values = List.map (fun x -> fst (gv x)) vs in
+                let arg_tc = apply (Ir.Variable f) values in
+                let arg_typ = match ftype with
+                  | Types.Function (_,_,ftret) -> ftret
+                  | _ -> failwith "Trying to apply a non-function type"
+                in
+                let _arg_bind, _arg = Var.fresh_var (Var.make_local_info (arg_typ, "_arg")) in
+                [Ir.Let (_arg_bind, ([], arg_tc))], K.apply kappa (Ir.Variable _arg) arg_typ tret
           end
         | _ ->
-          [], Aux.tail_comp_placeholder
+          let f', tf = gv f in
+          [], apply f ((List.map (fun x -> fst (gv x)) vs) @ [K.reify kappa])
           (* (apply (gv f) ((List.map gv vs) @ [K.reify kappa])) *)
       end
     | Ir.Special special ->
@@ -574,7 +588,6 @@ end = functor (K : CONTINUATION) -> struct
 
   and generate_special env : Ir.special -> continuation -> Ir.binding list * Ir.tail_computation
     = fun sp kappa ->
-      print_endline "generate_special";
       let module Var' = Var in
       let open Code in
       let gv v = generate_value env v in
@@ -713,9 +726,8 @@ end = functor (K : CONTINUATION) -> struct
          end *)
       | _ -> failwith "Not supported stuff"
 
-  and generate_computation : venv -> Ir.computation -> continuation -> (venv * Ir.computation) =
-    fun env (bs, tc) kappa ->
-      print_endline "generate_computation";
+  and generate_computation : venv -> Ir.computation -> continuation -> Types.typ -> (venv * Ir.computation) =
+    fun env (bs, tc) kappa typ ->
       let rec gbs : venv -> continuation -> Ir.binding list -> venv * Ir.computation =
         fun env kappa ->
           let open Code in
@@ -745,10 +757,8 @@ end = functor (K : CONTINUATION) -> struct
              (env', LetRec (List.map (generate_function env fs) defs, rest))
           | Ir.Module _ :: bs
           | Ir.Alien _ :: bs -> gbs env kappa bs *)
-(* | [] *)| _ ->  (print_endline "will generate tail_comp";
-                  let bindings, tc = generate_tail_computation env tc kappa in
-                  print_endline "generated tail_comp";
-                  (env, (bindings, tc)))
+(* | [] *)| _ ->  let bindings, tc = generate_tail_computation env tc kappa typ in
+                  (env, (K.builtins @ bindings, tc))
       in
       gbs env kappa bs
 
@@ -759,7 +769,7 @@ end = functor (K : CONTINUATION) -> struct
       let Ir.{fn_binder = fb; fn_tyvars = _; fn_params = xsb; fn_body; fn_closure = zb;
                         fn_location; fn_unsafe = _} = fundef
       in
-      let (_, f_name) = name_binder fb in (* TODO L1: Weird not to use the first agument f *)
+      let (_, f_name) = name_binder fb in
       assert (f_name <> "");
       (* prerr_endline ("f_name: "^f_name); *)
       (* optionally add an additional closure environment argument *)
@@ -784,9 +794,8 @@ end = functor (K : CONTINUATION) -> struct
        body,
        fn_location) *)
 
-  let generate_program venv comp =
-    print_endline "generate_program";
-    let (env, code) = generate_computation venv comp K.toplevel in
+  let generate_program venv comp typ =
+    let (env, code) = generate_computation venv comp K.toplevel typ in
     (env, code)
 end
 
@@ -797,16 +806,19 @@ module Compiler = CPS_Compiler(Continuation)
 
 open IrTransform
 let program state program =
-  print_endline "Computing envs for CPS";
   let nenv  = Context.name_environment state.context in
   let venv =
         Env.String.fold
-        (fun name v venv -> Env.Int.bind v name venv)
+        (fun name v venv -> begin
+          match Env.String.find_opt name Lib.type_env with
+          | Some t -> Env.Int.bind v (name, t) venv
+          | None -> failwith "A default variable is not a builtin"
+        end) (* TODO L1: Find the type of base variables here... *)
         nenv
         Env.Int.empty
   in
-  print_endline "Starting CPS transform";
-  let venv', program' = Compiler.generate_program venv program in
+  print_endline "\n\nStarting CPS transform";
+  let venv', program' = Compiler.generate_program venv program state.datatype in
   print_endline "Finished CPS transform";
   IrTransform.Result {state; program=program'}
 

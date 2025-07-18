@@ -5,7 +5,7 @@ open Utility
 
 (** Name of the file containing the prelude code. *)
 let prelude_file =
-  Settings.(option ~default: (Some "fake_prelude.links") "prelude" (* Some Linkspath.prelude *)
+  Settings.(option ~default: (Some "test.links") "prelude" (* Some Linkspath.prelude *)
             |> synopsis "The Links prelude source file"
             |> to_string from_string_option
             |> convert (Sys.expand ->- some)

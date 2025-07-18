@@ -5,7 +5,7 @@ open Utility
 module VEnv = Env.Int
 
 (** Type of environments mapping IR variables to object variables *)
-type venv = string VEnv.t
+type venv = (string * Types.typ) VEnv.t
 
 (** Intermediate language *)
 module Code: sig
@@ -16,7 +16,7 @@ module Code: sig
 end
 
 module type CPS_Compiler_sig = sig
-  val generate_program : venv -> Ir.computation -> venv * Ir.computation
+  val generate_program : venv -> Ir.computation -> Types.typ -> venv * Ir.computation
 end
 
 module Compiler : CPS_Compiler_sig
