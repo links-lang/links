@@ -801,7 +801,7 @@ end = struct
             env, acc, Expr (TInt, EBinop (BORemI, argl, argr))
         | _, _, _ -> raise (internal_error ("Invalid usage of builtin 'mod'"))
       end
-    | "$$hd" -> begin match tyargs, targs, args with
+    | "hd" | "$$hd" -> begin match tyargs, targs, args with
         | [], _, _ -> failwith "TODO $$hd without TApp"
         | [CommonTypes.PrimaryKind.Type, t; CommonTypes.PrimaryKind.Row, _], TLcons (argt, TLnil), ELcons (arg, ELnil) ->
             let Type t = convert_type t in
@@ -809,7 +809,7 @@ end = struct
             env, acc, Expr (t, EListHd (arg, t))
         | _, _, _ -> raise (internal_error ("Invalid usage of builtin '$$hd'"))
       end
-    | "$$tl" -> begin match tyargs, targs, args with
+    | "tl" | "$$tl" -> begin match tyargs, targs, args with
         | [], _, _ -> failwith "TODO $$tl without TApp"
         | [CommonTypes.PrimaryKind.Type, t; CommonTypes.PrimaryKind.Row, _], TLcons (argt, TLnil), ELcons (arg, ELnil) ->
             let Type t = convert_type t in
