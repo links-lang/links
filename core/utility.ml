@@ -1087,6 +1087,23 @@ let pair_fresh_names ?prefix:pfx list =
 let refresh_names =
   graph_func (fun x -> gensym ~prefix:x ())
 
+(** Generates an opaque unique identity.  TODO(dhil): reconcile the
+   above (legacy) gensym with this. *)
+module Gensym: sig
+  type t
+  val gensym : unit -> t (* generates a unique identity *)
+  val to_string : t -> string (* string representation; used in codegen *)
+  val equal : t -> t -> bool (* decides whether two identities are the same *)
+  val pp : Format.formatter -> 'a -> unit
+end = struct
+  type t = exn
+  let gensym () =
+    let exception E in E
+  let to_string exn = Printf.sprintf "%d" (Hashtbl.hash exn)
+  let equal exn exn' = exn == exn'
+  let pp fmt exn = Format.fprintf fmt "%s" (to_string exn)
+end
+
 (** Return [true] if any element of the given list is [true] *)
 let any_true = List.exists identity
 

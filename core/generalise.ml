@@ -30,6 +30,7 @@ let rec get_type_args : gen_kind -> TypeVarSet.t -> datatype -> type_arg list =
         | Not_typed -> raise (internal_error "Not_typed encountered in get_type_args")
         | (Var _ | Recursive _) ->
            failwith ("freestanding Var / Recursive not implemented yet (must be inside Meta)")
+        | Abstract _abs -> []
         | Alias (_, (_, _, ts, _), t) ->
            concat_map (get_type_arg_type_args kind bound_vars) ts @ gt t
         | Application (_, args) ->

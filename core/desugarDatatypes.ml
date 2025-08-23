@@ -79,6 +79,7 @@ module Desugar = struct
       let open Datatype in
       (* let z = *)
       match t with
+        | Datatype.Abstract abs -> Types.Abstract abs
         | TypeVar stv ->
            let point = SugarTypeVar.get_resolved_type_exn stv in
            Meta point
